@@ -42,7 +42,11 @@ import ToolModuleKit
     private let searchField = NSSearchField()
     private let onlyInImage = NSButton(checkboxWithTitle: "Only CPUIDs in this image",
                                        target: nil, action: nil)
-    private let statusLabel = NSTextField(labelWithString: "")
+    /// Wraps rather than truncates: a line naming the file being fetched runs
+    /// past the room beside the buttons, and one that could only be one line
+    /// long either lost its end or — wanting the whole width — widened the
+    /// sheet for as long as it was up.
+    private let statusLabel = ToolWrappingLabel(string: "")
     private let addButton = NSButton()
     private let progress = NSProgressIndicator()
 
@@ -116,7 +120,6 @@ import ToolModuleKit
 
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.textColor = .secondaryLabelColor
-        statusLabel.lineBreakMode = .byTruncatingTail
 
         progress.style = .spinning
         progress.controlSize = .small
@@ -143,13 +146,15 @@ import ToolModuleKit
         filters.spacing = 8
         searchField.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let spacer = NSView()
-        let buttons = NSStackView(views: [progress, statusLabel, spacer, chooseFile,
+        // The status takes whatever width the buttons leave, and a line that
+        // needs more wraps. The row lines up on the last line, so the buttons
+        // stay on the sheet's bottom edge and the extra lines rise into the gap
+        // above them — the table gives up that height, the sheet does not grow.
+        let buttons = NSStackView(views: [progress, statusLabel, chooseFile,
                                           cancel, addButton])
         buttons.orientation = .horizontal
+        buttons.alignment = .lastBaseline
         buttons.spacing = 8
-        statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let stack = NSStackView(views: [title, source, filters, scrollView, buttons])
         stack.orientation = .vertical

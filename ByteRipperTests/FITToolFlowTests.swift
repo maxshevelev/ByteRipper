@@ -781,6 +781,60 @@ final class FITToolFlowTests: XCTestCase {
                       "no vendor picker: there is nothing to pick")
     }
 
+    /// A status line longer than the room beside the buttons — the file being
+    /// fetched, a download that failed — wraps there. It used to be one line
+    /// that insisted on its whole width, and the sheet widened for as long as
+    /// it was up.
+    func testALongStatusWrapsInsteadOfWideningTheForm() throws {
+        let failure = "The download of cpu906EA_plat02_ver000000B4_2021-01-01_PRD_55667788.bin "
+            + "stopped: the connection to github.com was lost before the whole file arrived."
+        FITToolSession.microcodeSource = FakeMicrocodeSource(downloadFailure: failure)
+        _ = try open(FITTestImage.make())
+        let loaded = expectation(description: "the catalogue arrives")
+        try session().withCatalogueSeam { loaded.fulfill() }
+        try button("Add Microcode…").performClick(nil)
+        wait(for: [loaded], timeout: 5)
+
+        let sheet = try XCTUnwrap(try session().viewController.presentedViewControllers?.first)
+        let sheetWindow = try XCTUnwrap(sheet.view.window, "the form is on screen as a sheet")
+        sheet.view.layoutSubtreeIfNeeded()
+        let width = sheetWindow.frame.width
+        let table = try XCTUnwrap(descendants(of: sheet.view, NSTableView.self).first)
+        let scroll = try XCTUnwrap(table.enclosingScrollView)
+        let tableHeight = scroll.frame.height
+        let cancel = try XCTUnwrap(descendants(of: sheet.view, NSButton.self)
+            .first { $0.title == "Cancel" })
+        let buttonY = cancel.frame.minY
+
+        table.selectRowIndexes([1], byExtendingSelection: false)
+        let add = try XCTUnwrap(descendants(of: sheet.view, NSButton.self)
+            .first { $0.title == "Add" || $0.title == "Replace" })
+        add.performClick(nil)
+        let said = expectation(for: NSPredicate { [self] _, _ in
+            descendants(of: sheet.view, NSTextField.self).contains { $0.stringValue == failure }
+        }, evaluatedWith: nil)
+        wait(for: [said], timeout: 5)
+        sheet.view.layoutSubtreeIfNeeded()
+
+        let status = try XCTUnwrap(descendants(of: sheet.view, NSTextField.self)
+            .first { $0.stringValue == failure })
+        XCTAssertEqual(sheetWindow.frame.width, width, accuracy: 0.5,
+                       "the sheet keeps its width whatever the line says")
+        XCTAssertGreaterThan(status.frame.height, 2 * (status.font?.pointSize ?? 11),
+                             "the line wraps rather than running on: \(status.frame)")
+        let chooseFile = try XCTUnwrap(descendants(of: sheet.view, NSButton.self)
+            .first { $0.title == "Choose File…" })
+        // Alignment rects, not frames: a push button's frame reaches past its
+        // bezel into the stack's spacing.
+        XCTAssertLessThanOrEqual(status.alignmentRect(forFrame: status.frame).maxX,
+                                 chooseFile.alignmentRect(forFrame: chooseFile.frame).minX,
+                                 "the line stays beside the buttons, not under them")
+        XCTAssertEqual(cancel.frame.minY, buttonY, accuracy: 0.5,
+                       "the buttons stay on the bottom edge")
+        XCTAssertLessThan(scroll.frame.height, tableHeight,
+                          "the extra lines take their height from the table")
+    }
+
     // MARK: - Replacing a row
 
     /// The row's "Replace Microcode": the component the row names is swapped for
@@ -1370,6 +1424,10 @@ enum FITTestImage {
 
 /// A catalogue of two, and no network.
 private struct FakeMicrocodeSource: MicrocodeSource {
+    /// What a download fails with, for the paths that keep the form up and
+    /// say why; nil, and every download lands.
+    var downloadFailure: String?
+
     func catalogue() async throws -> [MicrocodeCatalogueEntry] {
         [
             "Intel/cpu806EA_plat02_ver000000F0_2019-07-15_PRD_11223344.bin",
@@ -1380,7 +1438,11 @@ private struct FakeMicrocodeSource: MicrocodeSource {
     }
 
     func download(_ entry: MicrocodeCatalogueEntry) async throws -> [UInt8] {
-        FITTestImage.microcode(
+        if let downloadFailure {
+            throw NSError(domain: "FakeMicrocodeSource", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: downloadFailure])
+        }
+        return FITTestImage.microcode(
             signature: entry.cpuid ?? 0,
             revision: UInt32(entry.revisionText, radix: 16) ?? 0
         )
