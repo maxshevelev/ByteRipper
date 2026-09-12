@@ -651,7 +651,7 @@ comment on `isFixed` changes to say so.
   runs off the main actor with the rest of `resolveAddresses`, and it is
   measured on a large dump before it is accepted.
 - **The DXE root volume.** The first DXE Core usually sits inside an LZMA
-  section, which `UEFIImage` does not open (`Design/TODO.md`). Where it cannot
+  section, which `UEFIImage` does not open yet (`COMPRESSED_SECTIONS.md`). Where it cannot
   be seen, a post-IBB or AMI v1 range is recorded with `range == nil` and a
   diagnostic, and the panels say the range exists but cannot be placed. No
   guessing at "the biggest volume" or "the volume after PEI".

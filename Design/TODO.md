@@ -186,6 +186,7 @@ the day a tool-module needs it.
   modern image from one leaf into a tree of hundreds of files. It is also the
   point at which a node stops being a range of the file, so it needs an answer
   about what an edit inside a decompressed buffer even means.
+  `UEFI/COMPRESSED_SECTIONS.md` works out both.
 - **Boot Guard protected ranges** (`UEFI/BOOT_GUARD_PROTECTED_RANGES.md`). The vendor
   hash files are four structures across three vendors, and the ranges they list
   together with the IBB from the Boot Policy are the regions an edit must not
