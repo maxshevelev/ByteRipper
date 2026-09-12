@@ -27,6 +27,13 @@ import AppKit
         // width up readily and never let the height be squeezed.
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         setContentCompressionResistancePriority(.required, for: .vertical)
+        // And take up any width on offer. Once it has wrapped, its intrinsic
+        // width is the narrow width it wrapped at, and a hugging priority equal
+        // to the stack view's own — both `.defaultLow` — is a tie the engine
+        // settles by keeping the last answer: a panel dragged narrow and then
+        // wide again left the value in its narrow column, with the rest of the
+        // row empty beside it.
+        setContentHuggingPriority(.defaultLow - 1, for: .horizontal)
         translatesAutoresizingMaskIntoConstraints = false
     }
 

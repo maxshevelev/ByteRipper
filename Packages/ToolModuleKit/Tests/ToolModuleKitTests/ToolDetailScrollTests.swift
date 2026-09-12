@@ -118,6 +118,45 @@ final class ToolDetailScrollTests: XCTestCase {
                        + "opens at its first field")
     }
 
+    /// One Field/Value line the way the panels build it: a fixed name column
+    /// and a value that wraps inside what is left of the list's width.
+    private func fieldRow(in scroll: ToolDetailScroll, value text: String) -> ToolWrappingLabel {
+        let label = NSTextField(labelWithString: "GUID")
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.widthAnchor.constraint(equalToConstant: 80).isActive = true
+        let value = ToolWrappingLabel(string: text)
+        let row = NSStackView(views: [label, value])
+        row.orientation = .horizontal
+        row.alignment = .firstBaseline
+        row.spacing = 6
+        row.translatesAutoresizingMaskIntoConstraints = false
+        scroll.content.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: scroll.content.widthAnchor).isActive = true
+        return value
+    }
+
+    /// A panel dragged narrow wraps a long value into a tall, thin column; one
+    /// dragged wide again gives the value the room back. It used to stay in the
+    /// column it had wrapped at, with the rest of the row empty beside it.
+    func testAValueWrappedInANarrowPanelUnwrapsWhenThePanelWidens() {
+        let scroll = self.scroll()
+        scroll.prepareForRows(subject: "row")
+        let value = fieldRow(in: scroll, value: String(repeating: "8C8CE578-8A3D-4F1C ", count: 3))
+        scroll.layoutSubtreeIfNeeded()
+
+        scroll.frame.size.width = 160
+        scroll.layoutSubtreeIfNeeded()
+        let narrow = value.frame
+
+        scroll.frame.size.width = 900
+        scroll.layoutSubtreeIfNeeded()
+
+        XCTAssertGreaterThan(value.frame.width, 700,
+                             "the value takes the whole of the wider list: \(value.frame)")
+        XCTAssertLessThan(value.frame.height, narrow.height,
+                          "and needs fewer lines in it")
+    }
+
     func testThePlaceholderAndTheRowsAreNeverBothOnScreen() {
         let scroll = self.scroll()
         scroll.prepareForRows(subject: "row")
