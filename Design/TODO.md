@@ -162,8 +162,9 @@ file — the hash stops matching and the platform will not start. The panel says
 so after every add, because saying so is all it can do.
 
 **Why it is not done.** The ranges live in structures `UEFIImage` does not read
-yet (§10.4 of `UEFI_IMAGE_FORMAT.md`: four vendor hash file layouts across three
-vendors, plus the Boot Policy manifest). See the entry below.
+yet (`UEFI/BOOT_GUARD_PROTECTED_RANGES.md`: the Boot Policy manifest, four vendor
+hash file layouts across three vendors, and the Insyde Flash Device Map). See
+the entry below.
 
 **How.** Once the parse produces them, the placement search takes a list of
 forbidden ranges and skips any candidate that touches one, and the notice after
@@ -185,7 +186,7 @@ the day a tool-module needs it.
   modern image from one leaf into a tree of hundreds of files. It is also the
   point at which a node stops being a range of the file, so it needs an answer
   about what an edit inside a decompressed buffer even means.
-- **Boot Guard protected ranges** (§10.4 of `UEFI_IMAGE_FORMAT.md`). The vendor
+- **Boot Guard protected ranges** (`UEFI/BOOT_GUARD_PROTECTED_RANGES.md`). The vendor
   hash files are four structures across three vendors, and the ranges they list
   together with the IBB from the Boot Policy are the regions an edit must not
   touch. Until this exists, `isFixed` tells the truth about the VTF, microcode,

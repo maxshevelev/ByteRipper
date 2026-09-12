@@ -1004,7 +1004,9 @@ typedef struct {
 
 The ranges listed in these files, together with the IBB described in the Boot
 Policy, make up the list of areas that Boot Guard will break if they are
-changed.
+changed. The whole of it — the Boot Policy manifest, the Insyde Flash Device
+Map, how each list's addresses become offsets, the hash checks and the marking
+of the tree — is in `BOOT_GUARD_PROTECTED_RANGES.md`.
 
 5. **Checking the bases of TE images** — the `StrippedSize` field of a TE section
    sometimes holds an adjusted base; comparing it with the actual address reveals
