@@ -130,10 +130,19 @@ public final class LazyUEFITree {
         case invalidated
     }
 
-    public init(_ source: any ByteSource, limits: UEFIParser.Limits = .init()) {
+    /// What the bytes at offset 0 are, when the tree was told
+    /// (`UEFIRootLayout`) — `.image` for a whole file.
+    public nonisolated let layout: UEFIRootLayout
+
+    public init(
+        _ source: any ByteSource,
+        limits: UEFIParser.Limits = .init(),
+        layout: UEFIRootLayout = .image
+    ) {
         self.source = source
         self.reader = ImageReader(source)
         self.limits = limits
+        self.layout = layout
         build()
     }
 
@@ -577,9 +586,10 @@ public final class LazyUEFITree {
         let capturedReader = reader
         let capturedLimits = limits
         let capturedGeneration = generation
+        let capturedLayout = layout
         Task.detached(priority: .userInitiated) { [weak self] in
             let result = TreeMaterialization.roots(
-                reader: capturedReader, limits: capturedLimits
+                reader: capturedReader, limits: capturedLimits, layout: capturedLayout
             )
             await self?.completeBuild(result, expectedGeneration: capturedGeneration)
         }

@@ -52,6 +52,7 @@ public enum UEFIParser {
     public static func parse(
         _ source: ByteSource,
         limits: Limits = Limits(),
+        layout: UEFIRootLayout = .image,
         progress: (@Sendable (Double) -> Void)? = nil
     ) -> UEFIImage {
         let reader = ImageReader(source)
@@ -59,7 +60,9 @@ public enum UEFIParser {
             ProgressSink(total: reader.count, report: { report($0) })
         }
 
-        let built = TreeMaterialization.roots(reader: reader, limits: limits, progress: sink)
+        let built = TreeMaterialization.roots(
+            reader: reader, limits: limits, layout: layout, progress: sink
+        )
         var roots = built.nodes
         var diagnostics = built.diagnostics
         TreeMaterialization.materializeAll(

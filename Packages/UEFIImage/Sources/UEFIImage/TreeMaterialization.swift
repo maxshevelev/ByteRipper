@@ -33,14 +33,51 @@ enum TreeMaterialization {
     /// whole file: nothing announces the structures in a plain chip dump but
     /// the signatures inside it, so they have to be looked for before there is
     /// anything to show. It is why a caller builds this off the main actor.
+    ///
+    /// `layout` is what the bytes are when that is known from outside them — a
+    /// part of another image opened on its own (`UEFIRootLayout`). A layout the
+    /// bytes do not bear out falls back to reading them as an image, with the
+    /// failed attempt's complaints left out.
     static func roots(
         reader: ImageReader,
         limits: UEFIParser.Limits,
+        layout: UEFIRootLayout = .image,
         progress: ProgressSink? = nil
     ) -> Result {
+        guard reader.count > 0 else { return Result(nodes: [], diagnostics: []) }
         let parser = Parser(reader: reader, limits: limits, progress: progress)
-        let nodes = reader.count == 0 ? [] : parser.parseTopLevel(reader.all, depth: 0)
-        return Result(nodes: nodes, diagnostics: parser.diagnostics)
+        let empty = Parser.defaultEmptyByte
+        switch layout {
+        case .image:
+            break
+        case .volume:
+            if let volume = parser.parseVolume(at: 0, limit: reader.count, depth: 0) {
+                let nodes = [volume] + parser.padding(
+                    from: volume.range.upperBound, to: reader.count, emptyByte: empty
+                )
+                return Result(nodes: nodes, diagnostics: parser.diagnostics)
+            }
+        case .file(let ffsVersion, let volumeRevision):
+            if let file = parser.parseFile(
+                at: 0, limit: reader.count, ffsVersion: ffsVersion,
+                volumeRevision: volumeRevision, depth: 0
+            ) {
+                let nodes = [file.node] + parser.padding(
+                    from: file.size, to: reader.count, emptyByte: empty
+                )
+                return Result(nodes: nodes, diagnostics: parser.diagnostics)
+            }
+        case .sections(let ffsVersion):
+            let nodes = parser.walkSections(
+                reader.all, ffsVersion: ffsVersion, emptyByte: empty, depth: 0
+            )
+            return Result(nodes: nodes, diagnostics: parser.diagnostics)
+        }
+        let image = layout == .image
+            ? parser
+            : Parser(reader: reader, limits: limits, progress: progress)
+        let nodes = image.parseTopLevel(reader.all, depth: 0)
+        return Result(nodes: nodes, diagnostics: image.diagnostics)
     }
 
     /// One collapsed node's children, parsed at the depth the node itself
