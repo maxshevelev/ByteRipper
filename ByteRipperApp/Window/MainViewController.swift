@@ -2,6 +2,7 @@ import Cocoa
 import UniformTypeIdentifiers
 import ByteRipperCore
 import ToolModuleKit
+import UEFIImage
 import ALSplitView
 
 /// Whether each diff-navigation action currently has a block to go to (§10.3).
@@ -1021,6 +1022,11 @@ final class MainViewController: NSViewController {
             wireBookmarkDoubleClick(pane, for: paneModel)
             // Close button: closing the last file returns to empty mode (§3.5).
             pane.onClose = { [weak self] in self?.closePane(at: 0) }
+            // The link to a parent document, in a tab opened from a part of one.
+            pane.onRevealOrigin = { [weak self, weak paneModel] in
+                guard let paneModel else { return }
+                self?.revealOrigin(of: paneModel)
+            }
             // The panel closed itself; the bar's toggle follows (§11).
             pane.onSearchResultsClose = { [weak self] _ in
                 self?.syncFindBarToActivePane()
@@ -1159,6 +1165,14 @@ final class MainViewController: NSViewController {
             }
             pane1View.onClose = { [weak self] in self?.closePane(at: 0) }
             pane2View.onClose = { [weak self] in self?.closePane(at: 1) }
+            pane1View.onRevealOrigin = { [weak self] in
+                guard let self else { return }
+                self.revealOrigin(of: self.windowModel.pane1)
+            }
+            pane2View.onRevealOrigin = { [weak self] in
+                guard let self else { return }
+                self.revealOrigin(of: self.windowModel.pane2)
+            }
             // Closing a pane's Search All panel stops that search (§11). The
             // bar's toggle is re-read rather than turned off: in comparison
             // mode the panel that closed may be the *other* pane's, and the
@@ -1653,10 +1667,55 @@ final class MainViewController: NSViewController {
     /// `ToolHost.openInNewTab` — the untitled copy Open Zone in a New Tab
     /// makes, of bytes that are not a range of this file. The window's
     /// bookmarks stay behind: their offsets are the dump's, not these bytes'.
-    func openBytesInNewTabForTool(_ bytes: [UInt8], named name: String) {
+    func openBytesInNewTabForTool(
+        _ bytes: [UInt8], named name: String, from pane: PaneViewModel,
+        source: Range<UInt64>, layout: UEFIRootLayout
+    ) {
         guard let tab = makeSiblingTab?() else { return }
-        tab.windowModel.pane1.openBytes(bytes, named: name)
+        tab.windowModel.pane1.openBytes(
+            bytes,
+            named: name,
+            origin: DocumentOrigin(
+                parent: pane, source: source,
+                partName: Self.partName(ofTab: name, parent: pane.status.fileName),
+                layout: layout
+            )
+        )
         tab.apply(mode: .singleFile)
+    }
+
+    /// What a tool-module's tab is a part of, for the link's tooltip: its name
+    /// without the dump's stem in front and the extension behind —
+    /// `bios_LZMA section.bin` from `bios.rom` is "LZMA section".
+    static func partName(ofTab name: String, parent: String) -> String {
+        var part = (name as NSString).deletingPathExtension
+        let stem = (parent as NSString).deletingPathExtension + "_"
+        if part.hasPrefix(stem), part.count > stem.count { part.removeFirst(stem.count) }
+        return part
+    }
+
+    /// The link in a tab's header was clicked: the parent's window comes to the
+    /// front with the source selected in its dump (`UPDATE_IN_PARENT.md` §2.2).
+    /// Nothing happens once the parent is gone.
+    func revealOrigin(of pane: PaneViewModel) {
+        guard let origin = pane.origin, origin.state != .parentClosed,
+              let parent = origin.parent,
+              let owner = Self.controller(holding: parent, among: openDocuments?.controllers ?? [])
+        else { return }
+        owner.view.window?.makeKeyAndOrderFront(nil)
+        owner.revealForTool(origin.sourceRange, in: parent, select: true)
+    }
+
+    /// The window whose panes include `pane`: among the registry's windows, then
+    /// among every window the app has — a window made outside the registry
+    /// holds panes too.
+    private static func controller(
+        holding pane: PaneViewModel, among known: [MainViewController]
+    ) -> MainViewController? {
+        let windows = NSApp.windows.compactMap { $0.contentViewController as? MainViewController }
+        return (known + windows).first {
+            $0.windowModel.pane1 === pane || $0.windowModel.pane2 === pane
+        }
     }
 
     /// Takes the dump to `range` for a tool-module — the same reveal a bookmark
@@ -4621,10 +4680,17 @@ final class MainViewController: NSViewController {
             return
         }
         guard let tab = makeSiblingTab?() else { return }
+        // Linked back to the zone, and told what the bytes are when the file's
+        // UEFI tree knows (`Design/UEFI/UPDATE_IN_PARENT.md` §2.1).
+        let layout = pane.uefiState.tree.map {
+            UEFIRootLayout.forFileRange(zone.range, in: $0.image())
+        } ?? .image
         tab.windowModel.pane1.openBytes(
             bytes,
             named: zoneExportName(fileName: pane.status.fileName,
-                                  zoneName: zone.name, range: zone.range)
+                                  zoneName: zone.name, range: zone.range),
+            origin: DocumentOrigin(parent: pane, source: zone.range,
+                                   partName: zone.name, layout: layout)
         )
         tab.windowModel.bookmarkStore.seed(windowModel.bookmarkStore.bookmarks)
         tab.apply(mode: .singleFile)

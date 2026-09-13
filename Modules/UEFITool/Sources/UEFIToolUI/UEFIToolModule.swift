@@ -647,10 +647,28 @@ private struct ChecksumPass: Sendable {
     ///
     /// Public for the same reason as `exportDecompressed(for:)`.
     public func openDecompressedInNewTab(for nodeID: NodeID) {
+        // What the tab is linked to, and what its bytes are: a whole body is a
+        // run of sections; one node's bytes are that node.
+        var layout = UEFIRootLayout.image
+        var source: Range<UInt64>?
+        if let tree, tree.isReady {
+            let image = tree.image()
+            if let node = image.node(nodeID), let export = UEFIPresenter.decompressedExport(for: node) {
+                layout = export.range == nil ? .decompressedBody : UEFIRootLayout.of(node, in: image)
+                source = UEFIPresenter.fileSource(of: node, in: image)
+            }
+        }
+        let chosenLayout = layout
+        let chosenSource = source
         withDecompressedBytes(of: nodeID, nothing: "There is nothing decompressed to open here.") {
             [weak self] export, bytes in
-            guard let self else { return }
-            self.host.openInNewTab(bytes, named: export.tabName(fileName: self.host.fileName))
+            guard let self, let source = chosenSource else { return }
+            let name = export.tabName(fileName: self.host.fileName)
+            if let provider = self.treeProvider {
+                provider.openInNewTab(bytes, named: name, linkedTo: source, layout: chosenLayout)
+            } else {
+                self.host.openInNewTab(bytes, named: name, linkedTo: source)
+            }
         }
     }
 

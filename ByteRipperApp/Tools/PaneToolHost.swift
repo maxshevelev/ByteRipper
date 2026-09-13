@@ -113,8 +113,16 @@ import MEFirmware
         return owner.exportFileForTool(bytes, suggestedName: suggestedName)
     }
 
-    func openInNewTab(_ bytes: [UInt8], named name: String) {
-        owner?.openBytesInNewTabForTool(bytes, named: name)
+    func openInNewTab(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>) {
+        openInNewTab(bytes, named: name, linkedTo: source, layout: .image)
+    }
+
+    /// `UEFITreeProviding`'s form: the same tab, told what its bytes are.
+    func openInNewTab(
+        _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>, layout: UEFIRootLayout
+    ) {
+        guard let pane, let owner else { return }
+        owner.openBytesInNewTabForTool(bytes, named: name, from: pane, source: source, layout: layout)
     }
 }
 
@@ -126,7 +134,10 @@ import MEFirmware
 extension PaneToolHost: UEFITreeProviding {
     func uefiTree() -> LazyUEFITree? {
         guard let storage = pane?.document?.storage else { return nil }
-        return pane?.uefiState.tree(makeSource: { LiveDocumentByteSource(storage: storage) })
+        return pane?.uefiState.tree(
+            makeSource: { LiveDocumentByteSource(storage: storage) },
+            layout: pane?.origin?.layout ?? .image
+        )
     }
 
     func openUEFIRows() -> Set<NodeID> {

@@ -68,10 +68,12 @@ import Foundation
     /// the write fails.
     func exportFile(_ bytes: [UInt8], suggestedName: String) async -> Bool
 
-    /// Opens bytes that are not a range of this file — what a compressed
+    /// Opens bytes taken out of this file — a part of it, or what a compressed
     /// section decompressed to — in a tab of their own: an untitled copy the
-    /// user can study as a file, which editing cannot reach back into the dump.
-    func openInNewTab(_ bytes: [UInt8], named name: String)
+    /// user can study as a file, which editing cannot reach back into the dump,
+    /// linked to `source`, the bytes of this file they came out of
+    /// (`Design/UEFI/UPDATE_IN_PARENT.md` §2).
+    func openInNewTab(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>)
 }
 
 /// Bytes that do not change under the reader, from any thread.

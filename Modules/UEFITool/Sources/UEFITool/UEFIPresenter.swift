@@ -123,6 +123,18 @@ public enum UEFIPresenter {
         return nil
     }
 
+    /// Where a node's bytes are held in the file: its own range, or — for a
+    /// node inside a compressed section — the outermost section's. What a tab
+    /// opened from the node is linked to (`UPDATE_IN_PARENT.md` §2.1).
+    public static func fileSource(of node: UEFINode, in image: UEFIImage) -> Range<UInt64>? {
+        if let range = node.fileRange { return range }
+        guard let outermost = node.space.outermostSection,
+              let section = image.innermostNode(containing: outermost),
+              section.header.lowerBound == outermost
+        else { return nil }
+        return section.fileRange
+    }
+
     /// A node's path as a zone id: `1.2.0`. Stable across a re-parse of the same
     /// image — which is what lets a selection survive the re-read an edit causes
     /// — and the route a diagnostic about a node three levels down needs.

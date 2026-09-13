@@ -319,6 +319,18 @@ applied.
 
 ## 9. Order of work
 
+**Status, 2026-09-13.** Step 1 is in. `UEFIRootLayout` (image, volume, file,
+sections) is read by `TreeMaterialization.roots`, `LazyUEFITree` and
+`UEFIParser.parse`, falling back to an image when the bytes do not bear it out;
+`UEFIRootLayout.of`, `ofBody` and `forFileRange` derive it from the parent's
+tree. The app's `DocumentOrigin` holds the parent pane and document weakly, the
+source range, the part's name, the layout and a SHA-256 of the source; its state
+is re-checked only when the parent's `contentGeneration` moved, and the header
+redraws on the parent's `contentDidChangeNotification`. Zone tabs and the UEFI
+module's decompressed tabs carry one (`ToolHost.openInNewTab(_:named:linkedTo:)`,
+`UEFITreeProviding.openInNewTab(_:named:linkedTo:layout:)`). Not in yet: the
+baseline (§2.1), which arrives with the command that needs it (step 2).
+
 1. **The link.** An origin on a pane's document for zone tabs and decompressed
    tabs, with what the bytes are (§2.1) — read by `UEFIImage` as the root of the
    tab's tree, so UEFI Structure shows a decompressed body's sections; the `link`

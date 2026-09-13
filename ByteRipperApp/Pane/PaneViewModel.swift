@@ -74,7 +74,19 @@ enum PaneSaveError: Error {
 /// AppKit, keeping the editing rules unit-testable.
 @MainActor
 final class PaneViewModel: HexViewDataSource {
-    private(set) var document: BinaryDocument?
+    private(set) var document: BinaryDocument? {
+        // Content replaced wholesale — another file opened into the pane, a
+        // close — is no longer the part a link was about.
+        didSet { if document !== oldValue { origin = nil } }
+    }
+    /// Where this pane's bytes came from when they are a part of another open
+    /// document (`DocumentOrigin`, `Design/UEFI/UPDATE_IN_PARENT.md` §2); nil
+    /// for a file of its own.
+    private(set) var origin: DocumentOrigin?
+    /// Bumped by every change to the bytes — an edit, an undo, a revert — so a
+    /// tab linked to this pane hashes its source again only when something
+    /// could have changed it.
+    private(set) var contentGeneration = 0
     /// Disk bytes as of the last open/save/revert — the "saved" reference for
     /// modified-byte detection. Recreated whenever the on-disk content is known
     /// to have changed (save, save as, revert) so a stale chunk cache can't
@@ -211,7 +223,25 @@ final class PaneViewModel: HexViewDataSource {
     /// correct even while the tool panel is on None.
     private func signalEdit(_ edit: DiffEdit) {
         uefiState.invalidate(edit)
+        contentGeneration += 1
         onEdit?(edit)
+        announceContentChange()
+    }
+
+    /// The same, for a change the coordinator cannot take as a `DiffEdit`:
+    /// undo, redo, a revert, content replaced wholesale.
+    private func signalFullInvalidation() {
+        contentGeneration += 1
+        if let onFullInvalidation { onFullInvalidation() }
+        announceContentChange()
+    }
+
+    /// Posted when this pane's bytes changed or it closed — what a tab linked
+    /// to it (`DocumentOrigin`) listens for, to redraw its link.
+    static let contentDidChangeNotification = Notification.Name("PaneViewModelContentDidChange")
+
+    private func announceContentChange() {
+        NotificationCenter.default.post(name: Self.contentDidChangeNotification, object: self)
     }
 
     /// Fired after an edit that the coordinator cannot represent as a
@@ -590,7 +620,7 @@ final class PaneViewModel: HexViewDataSource {
         // Opening a new file replaces the storage wholesale, like a revert —
         // the comparison must re-read, even when the mode is unchanged (both
         // panes already open), which is the one path that skips `apply(mode:)`.
-        onFullInvalidation?()
+        signalFullInvalidation()
         // Announce the new document so the header glyph/name and the hex view
         // update immediately, not only on the next user action. Without
         // scrolling: the viewport stays on the offsets the reader was looking
@@ -627,7 +657,7 @@ final class PaneViewModel: HexViewDataSource {
         changeWatcher = nil
         // A new document replaces the storage wholesale, like a revert — the
         // comparison must re-read even when the mode is unchanged.
-        onFullInvalidation?()
+        signalFullInvalidation()
         notify()
         notifyCompanionContentFullyChanged()
     }
@@ -639,7 +669,10 @@ final class PaneViewModel: HexViewDataSource {
     /// its own. The bytes are already read by the time they arrive: reading a
     /// range out of a document is the reader's business, and a pane that took a
     /// range and a source would have to know about both.
-    func openBytes(_ bytes: [UInt8], named name: String?) {
+    ///
+    /// `origin` links the pane back to where the bytes were taken from
+    /// (`DocumentOrigin`).
+    func openBytes(_ bytes: [UInt8], named name: String?, origin: DocumentOrigin? = nil) {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(name ?? "Untitled")
         let doc = BinaryDocument(
@@ -648,6 +681,8 @@ final class PaneViewModel: HexViewDataSource {
             readOnly: false
         )
         document = doc
+        // After the document: replacing it is what clears a link.
+        self.origin = origin
         // Nothing on disk to compare against, so no byte reads as modified (§6)
         // until it is saved and edited.
         savedStorage = nil
@@ -661,7 +696,7 @@ final class PaneViewModel: HexViewDataSource {
         uefiState.reset()
         changeWatcher?.stop()
         changeWatcher = nil
-        onFullInvalidation?()
+        signalFullInvalidation()
         notify()
         notifyCompanionContentFullyChanged()
     }
@@ -737,7 +772,7 @@ final class PaneViewModel: HexViewDataSource {
         changeWatcher = nil
         // A new document replaces the storage wholesale, like a revert — the
         // comparison must re-read even when the mode is unchanged.
-        onFullInvalidation?()
+        signalFullInvalidation()
         notify()
         notifyCompanionContentFullyChanged()
     }
@@ -761,6 +796,8 @@ final class PaneViewModel: HexViewDataSource {
         segmentUndoStack.removeAll()
         segmentRedoStack.removeAll()
         pendingSegmentSnapshot = nil
+        // A tab linked to this pane shows its link as broken.
+        announceContentChange()
     }
 
     func save() throws {
@@ -827,7 +864,7 @@ final class PaneViewModel: HexViewDataSource {
         // shows the file as it was before the revert.
         uefiState.reset()
         // Revert replaces the storage wholesale; the comparison must re-read.
-        onFullInvalidation?()
+        signalFullInvalidation()
         doc.setSelection(.empty(at: min(caret, doc.size), fileSize: doc.size))
         // Without scrolling. A reload is not a navigation — the reader asked
         // for the bytes back, not to be taken somewhere — so the viewport stays

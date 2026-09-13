@@ -23,4 +23,12 @@ public protocol UEFITreeProviding: AnyObject {
     /// are still read, so putting them back costs nothing.
     func openUEFIRows() -> Set<NodeID>
     func setOpenUEFIRows(_ rows: Set<NodeID>)
+
+    /// Opens `bytes` — a part of this file, or what a compressed section in it
+    /// decompressed to — in a tab of their own, linked to `source`, the bytes
+    /// of this file they came out of, and read by a UEFI panel there as
+    /// `layout` (`Design/UEFI/UPDATE_IN_PARENT.md` §2).
+    func openInNewTab(
+        _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>, layout: UEFIRootLayout
+    )
 }

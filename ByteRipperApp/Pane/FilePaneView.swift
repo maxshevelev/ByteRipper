@@ -90,6 +90,17 @@ final class FilePaneView: NSView {
     /// pane tracks it for tests and VoiceOver.
     private(set) var documentSymbolName = "document"
     private let lockLabel = NSTextField(labelWithString: "")
+    /// The link to the document this pane's bytes were taken out of: a `link`
+    /// symbol and the parent's name after the title, grey when the link is
+    /// broken (`Design/UEFI/UPDATE_IN_PARENT.md` §2.2). Internal so a test can
+    /// read what it says.
+    let linkButton = NSButton()
+    /// Collapses the link to nothing on a pane that has none.
+    private var linkCollapsed: NSLayoutConstraint?
+    /// Refreshes the link when the parent's bytes change or it closes.
+    private var parentChangeObserver: NSObjectProtocol?
+    /// A click on the link: show the source in the parent.
+    var onRevealOrigin: (() -> Void)?
     /// The status bar's main readout. Internal (not private) so a test can read
     /// the rendered string, the way `typingModeLabel` is.
     let statusLabel = NSTextField(labelWithString: "")
@@ -333,12 +344,31 @@ final class FilePaneView: NSView {
         header.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         header.addSubview(documentIcon)
         header.addSubview(titleLabel)
+        header.addSubview(linkButton)
         header.addSubview(lockLabel)
         header.addSubview(closeButton)
         documentIcon.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        linkButton.translatesAutoresizingMaskIntoConstraints = false
         lockLabel.translatesAutoresizingMaskIntoConstraints = false
         closeButton.translatesAutoresizingMaskIntoConstraints = false
+        // The link to a parent document (§2.2 of UPDATE_IN_PARENT.md): a
+        // borderless button, so a click on it is its own — the header routes
+        // every other click to itself. It gives way before the pane's own
+        // title does, and collapses to nothing while there is no link.
+        linkButton.isBordered = false
+        linkButton.imagePosition = .imageLeading
+        linkButton.imageHugsTitle = true
+        linkButton.font = .systemFont(ofSize: 11)
+        (linkButton.cell as? NSButtonCell)?.lineBreakMode = .byTruncatingMiddle
+        linkButton.target = self
+        linkButton.action = #selector(linkTapped)
+        linkButton.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        linkButton.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
+        linkButton.isHidden = true
+        let collapsed = linkButton.widthAnchor.constraint(equalToConstant: 0)
+        collapsed.isActive = true
+        linkCollapsed = collapsed
         // The horizontal chain is breakable end to end: a pane dragged to zero
         // is squeezed below the ~34pt the insets and spacings need, and a
         // required link in the chain would floor the pane (the least-squares
@@ -347,7 +377,8 @@ final class FilePaneView: NSView {
         let headerChain: [NSLayoutConstraint] = [
             documentIcon.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 10),
             titleLabel.leadingAnchor.constraint(equalTo: documentIcon.trailingAnchor, constant: 6),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: lockLabel.leadingAnchor, constant: -6),
+            linkButton.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 6),
+            linkButton.trailingAnchor.constraint(lessThanOrEqualTo: lockLabel.leadingAnchor, constant: -6),
             lockLabel.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -6),
             closeButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -6),
         ]
@@ -355,6 +386,7 @@ final class FilePaneView: NSView {
         NSLayoutConstraint.activate([
             documentIcon.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            linkButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             lockLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             closeButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             header.heightAnchor.constraint(equalToConstant: Self.headerHeight),
@@ -579,6 +611,9 @@ final class FilePaneView: NSView {
         }
         if let wordSizeObserver {
             NotificationCenter.default.removeObserver(wordSizeObserver)
+        }
+        if let parentChangeObserver {
+            NotificationCenter.default.removeObserver(parentChangeObserver)
         }
     }
 
@@ -924,6 +959,7 @@ final class FilePaneView: NSView {
         let fits = bounds.width >= Self.trailingChromeMinWidth
         closeButton.isHidden = !fits
         lockLabel.isHidden = !fits
+        linkButton.isHidden = !fits || viewModel.origin == nil
         statusStack.isHidden = !fits
     }
 
@@ -1274,9 +1310,62 @@ final class FilePaneView: NSView {
             documentIcon.setAccessibilityLabel(status.isDirty ? "Modified file" : "File document")
         }
         lockLabel.stringValue = status.isReadOnly ? "🔒 Read-Only" : ""
+        updateLink()
         // VoiceOver names the grid after its file (§15).
         hexView.accessibilityTitle = "Hex dump — \(status.fileName)"
         onHeaderChanged?()
+    }
+
+    /// The parent whose changes `parentChangeObserver` is listening for.
+    private weak var observedParent: PaneViewModel?
+
+    /// The link to a parent document (`Design/UEFI/UPDATE_IN_PARENT.md` §2.2):
+    /// the `link` symbol and the parent's name while the pane has one, grey
+    /// with the reason under the pointer once it is broken, nothing otherwise.
+    private func updateLink() {
+        guard let origin = viewModel.origin else {
+            linkButton.isHidden = true
+            linkCollapsed?.isActive = true
+            linkButton.image = nil
+            linkButton.title = ""
+            linkButton.toolTip = nil
+            observeParent(nil)
+            return
+        }
+        let tint: NSColor = origin.state == .intact ? .secondaryLabelColor : .tertiaryLabelColor
+        linkButton.image = NSImage(systemSymbolName: "link", accessibilityDescription: nil)
+        linkButton.contentTintColor = tint
+        linkButton.attributedTitle = NSAttributedString(string: origin.parentName, attributes: [
+            .font: NSFont.systemFont(ofSize: 11),
+            .foregroundColor: tint
+        ])
+        linkButton.toolTip = origin.explanation
+        linkButton.setAccessibilityLabel(origin.explanation)
+        linkCollapsed?.isActive = false
+        linkButton.isHidden = bounds.width < Self.trailingChromeMinWidth
+        observeParent(origin.parent)
+    }
+
+    /// Listens to the parent — its bytes changing, its closing — so the link
+    /// greys out, or comes back, the moment that happens there.
+    private func observeParent(_ parent: PaneViewModel?) {
+        guard parent !== observedParent || (parent != nil && parentChangeObserver == nil) else { return }
+        if let parentChangeObserver {
+            NotificationCenter.default.removeObserver(parentChangeObserver)
+        }
+        parentChangeObserver = nil
+        observedParent = parent
+        guard let parent else { return }
+        // No queue: posted on the main thread, handled before the post returns.
+        parentChangeObserver = NotificationCenter.default.addObserver(
+            forName: PaneViewModel.contentDidChangeNotification, object: parent, queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateLink() }
+        }
+    }
+
+    @objc private func linkTapped() {
+        onRevealOrigin?()
     }
 
     private func updateStatus() {

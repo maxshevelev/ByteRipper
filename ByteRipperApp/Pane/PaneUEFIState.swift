@@ -38,9 +38,11 @@ import ByteRipperCore
     /// through to the document's actual storage rather than a frozen
     /// snapshot — so nothing here ever needs to hand the tree fresher bytes;
     /// `invalidate` only ever needs to say which memoized subtrees to forget.
-    func tree(makeSource: () -> any ByteSource) -> LazyUEFITree? {
+    /// `layout` is what the bytes are when the pane holds a part of another
+    /// file (`DocumentOrigin.layout`); it is read when the tree is built.
+    func tree(makeSource: () -> any ByteSource, layout: UEFIRootLayout = .image) -> LazyUEFITree? {
         if let tree { return tree }
-        let newTree = LazyUEFITree(makeSource())
+        let newTree = LazyUEFITree(makeSource(), layout: layout)
         tree = newTree
         return newTree
     }

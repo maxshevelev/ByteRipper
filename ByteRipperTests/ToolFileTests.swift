@@ -136,9 +136,13 @@ final class ToolFileTests: XCTestCase {
         defer { tab.windowModel.pane1.close() }
         controller.makeSiblingTab = { tab }
 
-        host.openInNewTab([0x01, 0x02, 0x03], named: "bios_Body.bin")
+        host.openInNewTab([0x01, 0x02, 0x03], named: "bios_Body.bin", linkedTo: 0x10..<0x20)
 
         XCTAssertEqual(tab.windowModel.pane1.fileSize, 3)
+        let origin = try XCTUnwrap(tab.windowModel.pane1.origin, "linked back to the dump")
+        XCTAssertTrue(origin.parent === controller.windowModel.pane1)
+        XCTAssertEqual(origin.sourceRange, 0x10..<0x20)
+        XCTAssertEqual(origin.state, .intact)
         XCTAssertTrue(tab.windowModel.pane1.isUntitled,
                       "a copy, so editing it cannot reach back into the dump")
         XCTAssertTrue(tab.windowModel.pane1.status.fileName.hasSuffix("bios_Body.bin"),

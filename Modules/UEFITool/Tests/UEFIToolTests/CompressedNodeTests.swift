@@ -117,6 +117,11 @@ final class CompressedNodeTests: XCTestCase {
         XCTAssertEqual(bytes.tabName(fileName: "bios.rom"), "bios_Inner.bin",
                        "named after the dump it came out of, then what it is")
         XCTAssertEqual(bytes.tabName(fileName: ""), "Inner.bin")
+        XCTAssertEqual(UEFIPresenter.fileSource(of: built.inner, in: built.image),
+                       built.section.fileRange,
+                       "a tab from inside is linked to the compressed section holding it")
+        XCTAssertEqual(UEFIPresenter.fileSource(of: built.section, in: built.image),
+                       built.section.fileRange)
 
         XCTAssertNil(UEFIPresenter.decompressedExport(for: TestUEFI.file().node),
                      "a node of the file has nothing decompressed to save")
