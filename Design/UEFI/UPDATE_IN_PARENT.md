@@ -354,6 +354,21 @@ compressor is not vendored — the round trip stands in for the fallback it was
 for. `FirmwareCompressionTestSupport` is now a thin wrapper over the product,
 and `CLAUDE.md`'s exception names encoders too.
 
+Step 4 is in: `UEFIRebuild.plan(_:at:in:limits:)` in `UEFIImage`. It parses
+the whole file, puts the part at a `Target` (a space, and a node's range or the
+whole buffer), normalizes the part itself (a file's size, checksums and tail; a
+section's size), and climbs: sections laid out again four-byte aligned with
+their size and a valid CRC32 put right, files with theirs, volumes with the move
+of §6.3, compressed sections compressed again like the original with
+`UncompressedLength` updated, until the file is reached. It hands back one run
+of bytes, only after the rebuilt image parses with no new damage and the part
+reads back (§8). Where the code differs from §6: growth takes room from the
+trailing free space, or from the empty pad file in front of the Volume Top File;
+empty pad files in the middle of a volume are not reclaimed yet. Apple's CRC32
+and free-space offset are not recomputed. A moved node or descendant that is
+`isFixed` (the VTF, a FIT target, `FFS_ATTRIB_FIXED`) refuses, and so does a
+moved SEC, PEI Core, PEIM or combined file in a volume of the file itself.
+
 1. **The link.** An origin on a pane's document for zone tabs and decompressed
    tabs, with what the bytes are (§2.1) — read by `UEFIImage` as the root of the
    tab's tree, so UEFI Structure shows a decompressed body's sections; the `link`
