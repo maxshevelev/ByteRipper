@@ -725,10 +725,11 @@ struct FITParkedState: ToolSessionState {
         guard let table = await placementTable(in: tree) else { return .failure(.noTable) }
         let image = tree.image()
         let addressDiff = image.addressDiff ?? (0x1_0000_0000 &- reader.count)
+        let ranges = await protectedRanges(of: tree)
         return await Task.detached(priority: .userInitiated) {
             FITEditor.addOrReplaceMicrocode(
                 component, in: table, image: image, reader: reader,
-                addressDiff: addressDiff
+                addressDiff: addressDiff, protected: ranges
             )
         }.value
     }
@@ -744,20 +745,40 @@ struct FITParkedState: ToolSessionState {
         guard let table = await placementTable(in: tree) else { return .failure(.noTable) }
         let image = tree.image()
         let addressDiff = image.addressDiff ?? (0x1_0000_0000 &- reader.count)
+        let ranges = await protectedRanges(of: tree)
         return await Task.detached(priority: .userInitiated) {
             FITEditor.replaceMicrocode(
                 at: index, component, in: table, image: image, reader: reader,
-                addressDiff: addressDiff
+                addressDiff: addressDiff, protected: ranges
             )
         }.value
     }
 
-    /// What the panel says afterwards. The Boot Guard caveat is on all three:
-    /// a component written into a protected range breaks its hash whether it
-    /// arrived in new space or over an old one.
+    /// The image's protected ranges, read by the pane's tree
+    /// (`BOOT_GUARD_PROTECTED_RANGES.md` §9.4) — once per edit of the file,
+    /// and at once when already read.
+    private func protectedRanges(of tree: LazyUEFITree) async -> ProtectedRanges? {
+        await withCheckedContinuation { continuation in
+            tree.resolveProtectedRanges { continuation.resume() }
+        }
+        return tree.protectedRanges
+    }
+
+    /// What checking the protected ranges found, said after every edit: a
+    /// component written into one breaks its hash whether it arrived in new
+    /// space or over an old one.
+    private static func protectionNote(_ warnings: [String]?) -> String {
+        guard let warnings else { return " Boot Guard and vendor protected ranges were not checked." }
+        guard !warnings.isEmpty else {
+            return " Nothing was written inside a Boot Guard or vendor protected range."
+        }
+        return " " + warnings.joined(separator: " ")
+    }
+
+    /// What the panel says afterwards, with what the protected ranges said.
     private static func note(for outcome: FITEditOutcome, describedAs description: String) -> String {
         let at = "0x" + String(outcome.range.lowerBound, radix: 16, uppercase: true)
-        let caveat = " Boot Guard ranges are not checked — this tool cannot read them yet."
+        let caveat = protectionNote(outcome.protectionWarnings)
         guard let replaced = outcome.replaced else {
             return "Added \(description) at \(at)." + caveat
         }
@@ -782,9 +803,11 @@ struct FITParkedState: ToolSessionState {
         // same mapping every other address here does.
         let image = tree.image()
         let addressDiff = image.addressDiff ?? (0x1_0000_0000 &- reader.count)
+        let ranges = await protectedRanges(of: tree)
         return await Task.detached(priority: .userInitiated) {
             FITEditor.removeMicrocode(
-                index, from: table, image: image, in: reader, addressDiff: addressDiff
+                index, from: table, image: image, in: reader, addressDiff: addressDiff,
+                protected: ranges
             )
         }.value
     }
@@ -817,8 +840,7 @@ struct FITParkedState: ToolSessionState {
             parts.append("0x" + String(erased.count, radix: 16, uppercase: true)
                 + " bytes erased at the end of the run")
         }
-        return parts.joined(separator: "; ") + "."
-            + " Boot Guard ranges are not checked — this tool cannot read them yet."
+        return parts.joined(separator: "; ") + "." + protectionNote(outcome.protectionWarnings)
     }
 
     /// The second defect of §11, and the one a tool can put right on its own:

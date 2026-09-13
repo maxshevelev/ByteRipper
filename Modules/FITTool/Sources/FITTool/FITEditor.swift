@@ -35,6 +35,9 @@ public enum FITEditProblem: Equatable, Sendable, Error {
     case noSuchEntry
     /// Nothing to add to.
     case noTable
+    /// The change writes inside the Boot Guard IBB, which the processor checks
+    /// before the firmware runs (`BOOT_GUARD_PROTECTED_RANGES.md` §9.4).
+    case insideProtectedRange(name: String, at: UInt64)
 
     public var message: String {
         switch self {
@@ -62,6 +65,10 @@ public enum FITEditProblem: Equatable, Sendable, Error {
             return "That entry is no longer in the table."
         case .noTable:
             return "There is no FIT table in this file to change."
+        case .insideProtectedRange(let name, let at):
+            return "The change writes at 0x" + String(at, radix: 16, uppercase: true)
+                + " inside a " + name + ": the processor checks it before the firmware runs,"
+                + " and with Boot Guard enforced the platform would not start. Nothing was changed."
         }
     }
 }
@@ -87,6 +94,10 @@ public struct FITEditOutcome: Equatable, Sendable {
     /// How many components behind it moved, because the new one is a different
     /// size from the old.
     public var moved: Int = 0
+    /// What the change breaks in the firmware-checked ranges it writes into.
+    /// Nil when no ranges were given to check against; empty when it writes
+    /// into none.
+    public var protectionWarnings: [String]?
 }
 
 /// What a removal came to.
@@ -96,6 +107,8 @@ public struct FITRemovalOutcome: Equatable, Sendable {
     public var moved: Int
     /// The bytes the move freed at the end of the run, now erased.
     public var erased: Range<UInt64>?
+    /// As on `FITEditOutcome`.
+    public var protectionWarnings: [String]?
 }
 
 /// Where a new component would go.
@@ -263,12 +276,17 @@ public enum FITEditor {
     /// wherever a new one would, and the row that named the old one is
     /// repointed. The old bytes are left where they are either way: erasing
     /// them is the risk §10 step 5 warns about.
+    ///
+    /// `protected` is the image's Boot Guard and vendor protected ranges: a
+    /// change that writes inside the IBB is refused, one inside another range
+    /// is carried out and said (§9.4 of `BOOT_GUARD_PROTECTED_RANGES.md`).
     public static func addOrReplaceMicrocode(
         _ component: [UInt8],
         in table: FITTable,
         image: UEFIImage?,
         reader: ImageReader,
-        addressDiff: UInt64
+        addressDiff: UInt64,
+        protected: ProtectedRanges? = nil
     ) -> Result<(ToolTransaction, FITEditOutcome), FITEditProblem> {
         let header: MicrocodeHeader
         switch microcode(in: component) {
@@ -282,11 +300,16 @@ public enum FITEditor {
         guard let row = rowNaming(header.processorSignature, matching: header, in: table),
               case .microcode = row.target
         else {
-            return addingNewRow(bytes, for: header, to: table, image: image,
-                                reader: reader, addressDiff: addressDiff)
+            return checkingProtection(
+                addingNewRow(bytes, for: header, to: table, image: image, reader: reader, addressDiff: addressDiff),
+                reader: reader, protected: protected
+            ) { $0.protectionWarnings = $1 }
         }
-        return replacing(row, with: bytes, header: header, in: table, image: image,
-                         reader: reader, addressDiff: addressDiff)
+        return checkingProtection(
+            replacing(row, with: bytes, header: header, in: table, image: image,
+                      reader: reader, addressDiff: addressDiff),
+            reader: reader, protected: protected
+        ) { $0.protectionWarnings = $1 }
     }
 
     /// Swaps the microcode a specific row names for another, whatever the new
@@ -307,7 +330,8 @@ public enum FITEditor {
         in table: FITTable,
         image: UEFIImage?,
         reader: ImageReader,
-        addressDiff: UInt64
+        addressDiff: UInt64,
+        protected: ProtectedRanges? = nil
     ) -> Result<(ToolTransaction, FITEditOutcome), FITEditProblem> {
         let header: MicrocodeHeader
         switch microcode(in: component) {
@@ -319,8 +343,66 @@ public enum FITEditor {
         guard index > 0, index < table.rows.count else { return .failure(.noSuchEntry) }
         let row = table.rows[index]
         guard case .microcode = row.target else { return .failure(.noSuchEntry) }
-        return replacing(row, with: bytes, header: header, in: table, image: image,
-                         reader: reader, addressDiff: addressDiff)
+        return checkingProtection(
+            replacing(row, with: bytes, header: header, in: table, image: image,
+                      reader: reader, addressDiff: addressDiff),
+            reader: reader, protected: protected
+        ) { $0.protectionWarnings = $1 }
+    }
+
+    // MARK: - Protected ranges (BOOT_GUARD_PROTECTED_RANGES.md §9.4)
+
+    /// A finished edit, checked against the image's protected ranges by the
+    /// bytes it actually changes — the component's new place, the run moved
+    /// behind it, the table's rows, a grown file's header — which is every
+    /// candidate the placement could have picked. A change inside the IBB is
+    /// refused; one inside a range the firmware checks is carried out and
+    /// said, since whether that breaks a boot is the firmware's call.
+    private static func checkingProtection<Outcome>(
+        _ result: Result<(ToolTransaction, Outcome), FITEditProblem>,
+        reader: ImageReader,
+        protected: ProtectedRanges?,
+        record: (inout Outcome, [String]) -> Void
+    ) -> Result<(ToolTransaction, Outcome), FITEditProblem> {
+        guard let protected, case .success(let (transaction, found)) = result else { return result }
+        var outcome = found
+        let changed = changedRuns(of: transaction, in: reader)
+        var warnings: [String] = []
+        for range in protected.ranges {
+            guard let span = range.range,
+                  let hit = changed.first(where: { $0.overlaps(span) })
+            else { continue }
+            let at = max(hit.lowerBound, span.lowerBound)
+            if range.kind.isIBB {
+                return .failure(.insideProtectedRange(name: range.kind.name, at: at))
+            }
+            let warning = "It writes at 0x" + String(at, radix: 16, uppercase: true) + " inside a "
+                + range.kind.name + ": the hash the firmware checks it against no longer matches."
+            if !warnings.contains(warning) { warnings.append(warning) }
+        }
+        record(&outcome, warnings)
+        return .success((transaction, outcome))
+    }
+
+    /// The runs of bytes a transaction changes, against the file as it is.
+    private static func changedRuns(of transaction: ToolTransaction, in reader: ImageReader) -> [Range<UInt64>] {
+        var runs: [Range<UInt64>] = []
+        for write in transaction.writes {
+            let current = reader.bytes(at: write.offset, count: UInt64(write.bytes.count)) ?? []
+            var start: Int?
+            for index in write.bytes.indices {
+                let differs = index >= current.count || write.bytes[index] != current[index]
+                if differs, start == nil { start = index }
+                if !differs, let first = start {
+                    runs.append((write.offset + UInt64(first))..<(write.offset + UInt64(index)))
+                    start = nil
+                }
+            }
+            if let first = start {
+                runs.append((write.offset + UInt64(first))..<(write.offset + UInt64(write.bytes.count)))
+            }
+        }
+        return runs
     }
 
     /// The shared half of a replacement: lay the run down again with the row's
@@ -555,17 +637,19 @@ public enum FITEditor {
     /// the compaction stops at the first thing that is.
     ///
     /// Moving a component changes its address, which anything outside the FIT
-    /// that named it will not know about. Boot Guard is the one that matters,
-    /// and this tool cannot read its ranges (`Design/TODO.md`). What it *can*
-    /// put right it does: a run inside an FFS file leaves that file's checksums
-    /// describing what used to be there, and those are recomputed into the same
+    /// that named it will not know about. Boot Guard is the one that matters:
+    /// given the image's protected ranges, a removal that would move bytes
+    /// inside the IBB is refused, as an addition is. What it *can* put right it
+    /// does: a run inside an FFS file leaves that file's checksums describing
+    /// what used to be there, and those are recomputed into the same
     /// transaction.
     public static func removeMicrocode(
         _ index: Int,
         from table: FITTable,
         image: UEFIImage?,
         in reader: ImageReader,
-        addressDiff: UInt64
+        addressDiff: UInt64,
+        protected: ProtectedRanges? = nil
     ) -> Result<(ToolTransaction, FITRemovalOutcome), FITEditProblem> {
         guard index > 0 else { return .failure(.cannotRemoveTheHeader) }
         guard index < table.rows.count else { return .failure(.noSuchEntry) }
@@ -628,13 +712,16 @@ public enum FITEditor {
             )
         writes.append(ToolTransaction.Write(offset: table.range.lowerBound, bytes: assembled))
 
-        return .success((
-            withContainerRepairs(
-                ToolTransaction(name: "Remove Microcode", writes: writes),
-                image: image, reader: reader
-            ),
-            FITRemovalOutcome(entryIndex: index, moved: moved, erased: erased)
-        ))
+        return checkingProtection(
+            .success((
+                withContainerRepairs(
+                    ToolTransaction(name: "Remove Microcode", writes: writes),
+                    image: image, reader: reader
+                ),
+                FITRemovalOutcome(entryIndex: index, moved: moved, erased: erased)
+            )),
+            reader: reader, protected: protected
+        ) { $0.protectionWarnings = $1 }
     }
 
     /// The run of microcodes, laid out again from where one of them was.
