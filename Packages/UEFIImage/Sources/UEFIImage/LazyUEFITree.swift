@@ -71,6 +71,13 @@ public final class LazyUEFITree {
     /// answer for an image that genuinely has no VTF.
     public private(set) var addressesResolved = false
 
+    /// The Boot Guard and vendor protected ranges, once
+    /// `resolveProtectedRanges` has read them (`BOOT_GUARD_PROTECTED_RANGES.md`
+    /// §9.2). Nil until then, and again after an edit.
+    public private(set) var protectedRanges: ProtectedRanges?
+    private var isReadingProtectedRanges = false
+    private var protectedRangeCallbacks: [@MainActor () -> Void] = []
+
     /// Whether the top level is there yet. False only between `init` and the
     /// end of the background build — which on a plain chip dump is a scan of
     /// the whole file, and on an Intel image is instant.
@@ -126,6 +133,9 @@ public final class LazyUEFITree {
         /// The VTF descent landed: the mapping is known, and the chain it
         /// opened on the way is now part of the tree.
         case addressesResolved
+        /// The protected ranges have been read. The tree itself did not grow:
+        /// the reading opened a copy of it.
+        case protectedRangesRead
         /// An edit dropped memoized subtrees; everything below is suspect.
         case invalidated
     }
@@ -204,9 +214,10 @@ public final class LazyUEFITree {
         let image = UEFIImage(
             size: reader.count,
             roots: roots,
-            diagnostics: diagnostics,
+            diagnostics: diagnostics + (protectedRanges?.diagnostics ?? []),
             addressDiff: addressDiff,
-            resetVector: resetVector
+            resetVector: resetVector,
+            protectedRanges: protectedRanges
         )
         // Kept until the tree next changes: building one copies every node
         // materialized so far, and a panel asks for it on every selection.
@@ -483,6 +494,58 @@ public final class LazyUEFITree {
         cachedImage = nil
     }
 
+    /// Reads the Boot Guard and vendor protected ranges, then calls `done` —
+    /// immediately when they have been read since the last edit
+    /// (`BOOT_GUARD_PROTECTED_RANGES.md` §9.2).
+    ///
+    /// The mapping first, since most of the lists name physical addresses.
+    /// Then, off the main actor, a copy of the tree is opened as far as the
+    /// lists need — every volume's files, and the compressed sections only
+    /// when the DXE root volume cannot be found without them — and read. The
+    /// copy is dropped: writing it back wholesale would throw away a branch
+    /// opened meanwhile, the same reason `descendToTheLastNode` goes through
+    /// `expand`. What it decoded stays in the shared buffers, so the branch a
+    /// reader opens next is not decoded twice.
+    public func resolveProtectedRanges(_ done: @escaping @MainActor () -> Void) {
+        if protectedRanges != nil {
+            done()
+            return
+        }
+        protectedRangeCallbacks.append(done)
+        guard !isReadingProtectedRanges else { return }
+        isReadingProtectedRanges = true
+        let requested = generation
+        resolveAddresses { [weak self] in
+            // An edit landed meanwhile: it has already told the callers.
+            guard let self, self.isReadingProtectedRanges, self.generation == requested else { return }
+            let roots = self.roots
+            let size = self.reader.count
+            let addressDiff = self.addressDiff
+            let resetVector = self.resetVector
+            let reader = self.reader
+            let limits = self.limits
+            let buffers = self.buffers
+            Task.detached(priority: .utility) { [weak self] in
+                let ranges = TreeMaterialization.protectedRanges(
+                    roots: roots, size: size, addressDiff: addressDiff, resetVector: resetVector,
+                    reader: reader, limits: limits, buffers: buffers
+                )
+                await self?.landProtectedRanges(ranges, expectedGeneration: requested)
+            }
+        }
+    }
+
+    private func landProtectedRanges(_ ranges: ProtectedRanges, expectedGeneration: Int) {
+        guard generation == expectedGeneration, isReadingProtectedRanges else { return }
+        isReadingProtectedRanges = false
+        protectedRanges = ranges
+        cachedImage = nil
+        let waiting = protectedRangeCallbacks
+        protectedRangeCallbacks.removeAll()
+        announce(.protectedRangesRead)
+        for callback in waiting { callback() }
+    }
+
     private func findNode(
         in nodes: [UEFINode], where matches: (UEFINode) -> Bool
     ) -> UEFINode? {
@@ -533,6 +596,11 @@ public final class LazyUEFITree {
         fixedAnchor = nil
         isResolvingAddresses = false
         addressCallbacks.removeAll()
+        // The ranges were read off bytes that may have just been typed over.
+        let abandonedRanges = protectedRangeCallbacks
+        protectedRanges = nil
+        isReadingProtectedRanges = false
+        protectedRangeCallbacks.removeAll()
         // The diagnostics of the subtrees being dropped go with them; what is
         // left is re-collected as those subtrees are expanded again.
         diagnostics.removeAll()
@@ -556,6 +624,7 @@ public final class LazyUEFITree {
             for callback in callbacks { callback([]) }
         }
         for callback in abandonedAddresses { callback() }
+        for callback in abandonedRanges { callback() }
     }
 
     // MARK: - Observers

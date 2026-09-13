@@ -55,6 +55,25 @@ final class LazyUEFITreeTests: XCTestCase {
         }
     }
 
+    private func resolvedRanges(_ tree: LazyUEFITree) async {
+        await withCheckedContinuation { continuation in
+            tree.resolveProtectedRanges { continuation.resume() }
+        }
+    }
+
+    /// An image whose Boot Policy names one IBB segment and the post-IBB range,
+    /// with the DXE Core inside an LZMA section.
+    private func bootGuardImage() -> (image: BootGuardImage, segment: Range<UInt64>) {
+        var image = BootGuardImage(dxeCoreCompressed: true)
+        let segment = image.ibb.lowerBound..<(image.ibb.lowerBound + 0x100)
+        image.install(policy: TestBootGuard.bootPolicyV1(
+            segments: [.init(base: image.address(segment.lowerBound), size: 0x100)],
+            ibbHash: image.sha256(segment),
+            postIbbHash: image.sha256(BootGuardImage.dxeVolume)
+        ))
+        return (image, segment)
+    }
+
     private func chain(_ tree: LazyUEFITree, containing offset: UInt64) async -> [UEFINode] {
         await withCheckedContinuation { continuation in
             tree.materialize(containing: offset) { continuation.resume(returning: $0) }
@@ -437,5 +456,60 @@ final class LazyUEFITreeTests: XCTestCase {
         let (a, b) = await (first, second)
         XCTAssertEqual(a.filter { $0.kind == .volume }.count, 2)
         XCTAssertEqual(b.filter { $0.kind == .volume }.count, 2)
+    }
+
+    // MARK: - Protected ranges
+
+    /// Read over a copy of the tree: the same ranges a whole parse finds —
+    /// through the compressed section the DXE Core is in — while the tree the
+    /// reader sees has opened nothing for them (`BOOT_GUARD_PROTECTED_RANGES.md` §9.2).
+    func testProtectedRangesAreReadWithoutOpeningTheTree() async throws {
+        let (image, _) = bootGuardImage()
+        let tree = await built(image.bytes)
+        await resolvedAddresses(tree)
+        let before = tree.rootNodes
+
+        await resolvedRanges(tree)
+
+        let ranges = try XCTUnwrap(tree.protectedRanges)
+        XCTAssertEqual(ranges.ranges.map(\.kind), [.ibb, .postIbb])
+        XCTAssertEqual(ranges.ranges.map(\.verdict), [.matches, .matches])
+        XCTAssertEqual(ranges, UEFIParser.parse(image.bytes).protectedRanges)
+        XCTAssertEqual(tree.image().protectedRanges, ranges)
+        XCTAssertEqual(tree.rootNodes, before, "the reading opened a copy")
+    }
+
+    /// An edit drops what was read off the bytes it changed, tells whoever
+    /// was waiting, and the next reading sees the new bytes.
+    func testAnEditForgetsTheRangesAndTheNextReadingSeesIt() async throws {
+        let (image, segment) = bootGuardImage()
+        let source = MutableByteSource(image.bytes)
+        let tree = await built(source)
+        await resolvedRanges(tree)
+        XCTAssertEqual(tree.protectedRanges?.ranges.first?.verdict, .matches)
+
+        var told = false
+        tree.resolveProtectedRanges { told = true }
+        XCTAssertTrue(told, "already read: answered at once")
+
+        source.overwrite(at: segment.lowerBound, with: [0x00])
+        tree.invalidate(editedRange: segment.lowerBound..<(segment.lowerBound + 1), sizeDelta: 0)
+        XCTAssertNil(tree.protectedRanges)
+        XCTAssertNil(tree.image().protectedRanges)
+
+        await resolvedRanges(tree)
+        XCTAssertEqual(tree.protectedRanges?.ranges.first?.verdict, .mismatch)
+    }
+
+    func testAReadingAnEditOvertakesStillAnswersItsCaller() async {
+        let (image, segment) = bootGuardImage()
+        let tree = await built(image.bytes)
+
+        var told = false
+        tree.resolveProtectedRanges { told = true }
+        tree.invalidate(editedRange: segment, sizeDelta: 0)
+
+        XCTAssertTrue(told)
+        XCTAssertNil(tree.protectedRanges)
     }
 }

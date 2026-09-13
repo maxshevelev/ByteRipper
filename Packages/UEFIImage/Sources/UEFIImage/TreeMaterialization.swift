@@ -232,6 +232,9 @@ enum TreeMaterialization {
     /// Opens every collapsed node there is, depth first — the whole tree, as
     /// the parser would have built it in one pass if it opened everything on
     /// the way down.
+    ///
+    /// `opensCompressed: false` leaves compressed sections shut: every volume's
+    /// files and sections, and nothing that has to be decoded to be read.
     static func materializeAll(
         _ nodes: inout [UEFINode],
         under parent: NodeID = .root,
@@ -239,21 +242,62 @@ enum TreeMaterialization {
         limits: UEFIParser.Limits,
         buffers: DecompressedBuffers,
         diagnostics: inout [UEFIDiagnostic],
+        opensCompressed: Bool = true,
         progress: ProgressSink? = nil
     ) {
         for index in nodes.indices {
             let id = parent.child(index)
-            if nodes[index].isExpandable {
+            if nodes[index].isExpandable, opensCompressed || nodes[index].kind != .section {
                 expand(
                     &nodes[index], at: id, reader: reader, limits: limits,
                     buffers: buffers, diagnostics: &diagnostics, progress: progress
                 )
             }
             materializeAll(
-                &nodes[index].children, under: id, reader: reader,
-                limits: limits, buffers: buffers, diagnostics: &diagnostics, progress: progress
+                &nodes[index].children, under: id, reader: reader, limits: limits,
+                buffers: buffers, diagnostics: &diagnostics, opensCompressed: opensCompressed,
+                progress: progress
             )
         }
+    }
+
+    /// The protected ranges of the image `roots` are the top of
+    /// (`BOOT_GUARD_PROTECTED_RANGES.md` §9.2), read over a copy of the tree
+    /// opened as far as the lists need.
+    ///
+    /// Every volume's files, because the vendor hash files are among them —
+    /// and compressed sections only when a range that starts at the DXE root
+    /// volume could not be placed without them, since the DXE Core usually sits
+    /// inside an LZMA section and decoding one is megabytes of work.
+    static func protectedRanges(
+        roots: [UEFINode],
+        size: UInt64,
+        addressDiff: UInt64?,
+        resetVector: ResetVector?,
+        reader: ImageReader,
+        limits: UEFIParser.Limits,
+        buffers: DecompressedBuffers
+    ) -> ProtectedRanges {
+        var nodes = roots
+        // What the copy's parse finds is the tree's to report when a reader
+        // opens those branches, not this reading's.
+        var discarded: [UEFIDiagnostic] = []
+        let readers = SpaceReaders(file: reader, buffers: buffers, limit: limits.maxDecompressedSize)
+        func read() -> ProtectedRanges {
+            ProtectedRanges.read(
+                UEFIImage(size: size, roots: nodes, addressDiff: addressDiff, resetVector: resetVector),
+                readers: readers
+            )
+        }
+        materializeAll(&nodes, reader: reader, limits: limits, buffers: buffers,
+                       diagnostics: &discarded, opensCompressed: false)
+        let shallow = read()
+        let needsTheDXECore = shallow.ranges.contains {
+            ($0.kind == .postIbb || $0.kind == .amiV1) && $0.range == nil
+        }
+        guard needsTheDXECore else { return shallow }
+        materializeAll(&nodes, reader: reader, limits: limits, buffers: buffers, diagnostics: &discarded)
+        return read()
     }
 
     /// Ids are stamped relative to `parent` the same way `UEFIImage` stamps a
