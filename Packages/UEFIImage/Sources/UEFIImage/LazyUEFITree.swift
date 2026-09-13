@@ -37,9 +37,18 @@ public final class LazyUEFITree {
     /// from exactly the content this tree was built against.
     public nonisolated let source: any ByteSource
     public nonisolated var imageReader: ImageReader { ImageReader(source) }
+    /// Readers for every space this tree's nodes are in, over the same buffers
+    /// its expansions decoded — reachable without the main actor, like
+    /// `imageReader`, for a pass that reads nodes off it.
+    public nonisolated var spaceReaders: SpaceReaders {
+        SpaceReaders(file: imageReader, buffers: buffers, limit: limits.maxDecompressedSize)
+    }
 
     private let reader: ImageReader
-    private let limits: UEFIParser.Limits
+    private nonisolated let limits: UEFIParser.Limits
+    /// What the compressed sections opened so far decompressed to, shared by
+    /// every background expansion of this tree.
+    private nonisolated let buffers = DecompressedBuffers()
 
     /// The whole tree materialized so far. A closed container's own `children`
     /// is `[]` with `isExpandable == true` until an expansion fills it in, at
@@ -263,9 +272,11 @@ public final class LazyUEFITree {
         let capturedGeneration = generation
         let capturedReader = reader
         let capturedLimits = limits
+        let capturedBuffers = buffers
         Task.detached(priority: .userInitiated) { [weak self] in
             let result = TreeMaterialization.children(
-                of: target, reader: capturedReader, limits: capturedLimits
+                of: target, reader: capturedReader, limits: capturedLimits,
+                buffers: capturedBuffers
             )
             await self?.completeExpansion(
                 id, result: result, expectedGeneration: capturedGeneration
@@ -296,13 +307,21 @@ public final class LazyUEFITree {
         done: @escaping @MainActor ([UEFINode]) -> Void
     ) {
         let siblings = parent.path.isEmpty ? roots : children(of: parent)
-        guard let index = siblings.firstIndex(where: { $0.range.contains(offset) }) else {
+        // A file offset: never a reason to go inside a compressed section.
+        guard let index = siblings.firstIndex(where: { $0.fileRange?.contains(offset) ?? false }) else {
             done(chain)
             return
         }
         let id = parent.child(index)
         let found = siblings[index]
         let chain = chain + [found]
+        // A byte of the file inside a compressed stream is no one byte of what
+        // it decompresses to, so the chain ends at the section — and a reveal
+        // never pays for decoding it (`COMPRESSED_SECTIONS.md` §5.3).
+        if found.kind == .section, found.isExpandable {
+            done(chain)
+            return
+        }
         guard found.children.isEmpty, found.isExpandable else {
             step(containing: offset, from: id, chain: chain, done: done)
             return
@@ -375,7 +394,7 @@ public final class LazyUEFITree {
         from parent: NodeID, _ done: @escaping @MainActor () -> Void
     ) {
         let siblings = parent.path.isEmpty ? roots : children(of: parent)
-        guard let index = siblings.indices.max(by: {
+        guard let index = siblings.indices.filter({ siblings[$0].space == .file }).max(by: {
             siblings[$0].range.upperBound < siblings[$1].range.upperBound
         }) else {
             done()
@@ -387,7 +406,10 @@ public final class LazyUEFITree {
             descendToTheLastNode(from: id, done)
             return
         }
-        guard node.isExpandable else {
+        // A compressed section holds no Volume Top File worth anchoring on —
+        // its address is wherever the decompressor put it — so the descent
+        // does not decode one looking.
+        guard node.isExpandable, node.kind != .section else {
             done()
             return
         }
@@ -409,7 +431,9 @@ public final class LazyUEFITree {
         landAddresses(
             second,
             anchor: anchor.flatMap { top in
-                findNode(in: roots) { $0.range.upperBound == top && $0.guid == KnownGUIDs.volumeTopFile }
+                findNode(in: roots) {
+                    $0.fileRange?.upperBound == top && $0.guid == KnownGUIDs.volumeTopFile
+                }
             }?.range.lowerBound,
             diagnostics: parser.diagnostics
         )
@@ -507,8 +531,10 @@ public final class LazyUEFITree {
 
         if sizeDelta == 0 {
             roots = LazyUEFITree.collapsingOverlapping(roots, range: editedRange)
+            buffers.drop(overlapping: editedRange)
         } else {
             roots = LazyUEFITree.collapsingFrom(roots, offset: editedRange.lowerBound)
+            buffers.drop(from: editedRange.lowerBound)
         }
         // An edit that lands before the top level is even there has just made
         // the build in flight stale — its result is dropped by the generation
@@ -614,11 +640,13 @@ public final class LazyUEFITree {
         return result
     }
 
-    /// True for the two kinds this tree ever leaves collapsed. Every other
-    /// kind's children, once computed, stay computed until an ancestor gate
-    /// point above it is itself collapsed.
+    /// True for what this tree ever leaves collapsed: a volume, a region, and a
+    /// compressed section that was opened — told by children in a space of
+    /// their own. Every other kind's children, once computed, stay computed
+    /// until an ancestor gate point above it is itself collapsed.
     private static func isGatePoint(_ node: UEFINode) -> Bool {
         node.kind == .volume || node.kind == .region
+            || (node.kind == .section && node.children.contains { $0.space != node.space })
     }
 
     /// Collapses the narrowest already-materialized gate point(s) overlapping
@@ -635,7 +663,10 @@ public final class LazyUEFITree {
         _ node: UEFINode, range: Range<UInt64>
     ) -> (node: UEFINode, changed: Bool) {
         var node = node
-        guard node.range.overlaps(range), !node.children.isEmpty else { return (node, false) }
+        // An edit is a range of the file. A node inside a compressed section
+        // is not, and goes with the section that holds it.
+        guard node.fileRange?.overlaps(range) ?? false, !node.children.isEmpty
+        else { return (node, false) }
         let results = node.children.map { collapseOneOverlapping($0, range: range) }
         if results.contains(where: \.changed) {
             node.children = results.map(\.node)
@@ -662,7 +693,9 @@ public final class LazyUEFITree {
         _ node: UEFINode, offset: UInt64
     ) -> (node: UEFINode, changed: Bool) {
         var node = node
-        guard node.range.upperBound > offset, !node.children.isEmpty else { return (node, false) }
+        guard let fileRange = node.fileRange, fileRange.upperBound > offset,
+              !node.children.isEmpty
+        else { return (node, false) }
         let results = node.children.map { collapseOneFrom($0, offset: offset) }
         if results.contains(where: \.changed) {
             node.children = results.map(\.node)

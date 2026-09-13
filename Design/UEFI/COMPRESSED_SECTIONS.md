@@ -352,6 +352,10 @@ The rules that follow:
 
 ### 5.3. What the panels do with such a node
 
+- **The tree.** A node inside wears the decompressed rail, and the section
+  holding it the compressed badge and, while its row is open, the start of
+  that rail
+  (`Design/ROW_MARKS.md` §5.1).
 - **Zones.** A node inside publishes the zone of its outermost compressed
   section — the bytes that actually hold it — named after both
   (`"MyDriver (in LZMA section)"`), and that zone is the focus. Picking that
@@ -453,9 +457,11 @@ SKU) can then read LZMA modules too.
 
 `ToolHost.exportFile(_:suggestedName:)` already exists. A compressed section,
 or a node inside one, gets "Export Decompressed Body…" in the tree's context
-menu. Opening the buffer in a new untitled pane instead would need a new host
-call, backed by the untitled copy `BinaryDocument` already makes for
-Duplicate; that is optional and not part of the first step.
+menu, and beside it "Open Decompressed Body in New Tab" ("… Bytes …" for a node
+inside). That one goes through `ToolHost.openInNewTab(_:named:)`: the app opens
+the bytes as an untitled copy in a sibling tab, the way Open Zone in a New Tab
+does, named `<dump stem>_<node>.bin`, and without the window's bookmarks, whose
+offsets are the dump's.
 
 ### 8.3. Search
 
@@ -497,6 +503,29 @@ section's, its detail names the space, and "Fix Checksum" is not offered.
 ---
 
 ## 10. Order of work
+
+**Status, 2026-09-13.** Steps 1–7 are in; step 8 is not, since no dump at hand
+has needed Brotli, GZip or Zlib. Where the code differs from the text above:
+
+- The decoders sit in `CLZMA` and `CTiano`, with their encoders in
+  `Tests/CLZMAEncoder` and `Tests/CTianoEncoder` behind a
+  `FirmwareCompressionTestSupport` product — a product, not a test-only target,
+  so that `UEFIImage`, `UEFITool` and `MEFirmware` tests can build compressed
+  data too.
+- `FirmwareDecompression.tiano` returns both readings; `UEFIImage` picks one by
+  walking each as sections, and keeps Tiano when neither walks cleanly (no
+  separate "cannot tell" diagnostic).
+- The diagnostics are `decompressionFailed`, `decompressedTooLarge`,
+  `decompressedSizeMismatch` and `processingRequiredNotSet`; the informational
+  "not decoded" one was left out — the section's name already says its
+  algorithm. A diagnostic inside a buffer carries `inside`
+  (`UEFIDiagnostic.InnerLocation`).
+- A lazy tree reads every space through `SpaceReaders`; the UEFI panel's
+  detail, checksum pass and export use it.
+- `MEFirmware` reports LZMA modules that do not decompress, or whose hash does
+  not match, as Issue id 19.
+- No fixture comes from a real image: every compressed test input is built by
+  the reference encoders. §11's open questions stand.
 
 1. `FirmwareCompression` with LZMA and LZMA + x86, and its tests.
 2. `ByteSpace`, `fileRange`, and the migration of every consumer in §5.1 —

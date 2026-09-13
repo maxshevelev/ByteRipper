@@ -135,9 +135,13 @@ enum TestImage {
 
     /// A compression section, whose header says how big the body gets and how
     /// it was squeezed (§6.2).
-    static func compressionSection(algorithm: UInt8, body: [UInt8]) -> [UInt8] {
+    static func compressionSection(
+        algorithm: UInt8,
+        body: [UInt8],
+        uncompressedLength: UInt32? = nil
+    ) -> [UInt8] {
         var extra = BinaryWriter()
-        extra.u32(UInt32(body.count) * 3)
+        extra.u32(uncompressedLength ?? UInt32(body.count) * 3)
         extra.u8(algorithm)
         return section(type: Section.compression, body: body, extra: extra.bytes)
     }
@@ -148,12 +152,13 @@ enum TestImage {
     static func guidedSection(
         guid: EFIGUID,
         body: [UInt8],
-        vendorHeader: [UInt8] = []
+        vendorHeader: [UInt8] = [],
+        attributes: UInt16 = 0
     ) -> [UInt8] {
         var extra = BinaryWriter()
         extra.guid(guid)
         extra.u16(UInt16(4 + Section.guidDefinedHeaderSize) + UInt16(vendorHeader.count))
-        extra.u16(0)                                  // Attributes
+        extra.u16(attributes)
         extra.raw(vendorHeader)
         return section(type: Section.guidDefined, body: body, extra: extra.bytes)
     }

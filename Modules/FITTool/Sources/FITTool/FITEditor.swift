@@ -180,7 +180,8 @@ public enum FITEditor {
         var below = chain[elementIndex]
         for ancestor in chain[..<elementIndex].reversed() {
             for child in ancestor.children
-            where child.range.lowerBound >= below.range.upperBound && isSpare(child, reader) {
+            where child.space == .file
+                && child.range.lowerBound >= below.range.upperBound && isSpare(child, reader) {
                 // Inside a volume, only the space *directly* behind the element
                 // is usable. A component dropped anywhere else in a volume's
                 // free space is met by that volume's own walk as a file that is
@@ -682,7 +683,8 @@ public enum FITEditor {
                 ?? chain.dropLast().last
         else { return nil }
         var covered = file.range.upperBound
-        for child in parent.children where child.range.lowerBound >= file.range.upperBound {
+        for child in parent.children
+        where child.space == .file && child.range.lowerBound >= file.range.upperBound {
             guard child.range.lowerBound == covered, isSpare(child, reader) else { break }
             covered = child.range.upperBound
         }

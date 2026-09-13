@@ -128,6 +128,16 @@ public enum UEFIDetail {
         if let guid = node.guid {
             fields.append(.init("GUID", guidText(guid)))
         }
+        // Inside a compressed section the ranges below are offsets into what it
+        // decompresses to, and this says which section that is.
+        if case .decompressed(let chain) = node.space, let outermost = chain.first {
+            let section = image.innermostNode(containing: outermost)
+                .flatMap { $0.header.lowerBound == outermost ? $0.name : nil }
+                ?? "Compressed section"
+            var text = "\(section) at \(hex(outermost))"
+            if chain.count > 1 { text += ", \(chain.count) compressed sections deep" }
+            fields.append(.init("Decompressed from", text))
+        }
         fields.append(.init("Header", rangeText(node.header)))
         fields.append(.init("Body", rangeText(node.body)))
         if !node.tail.isEmpty {

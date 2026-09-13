@@ -47,8 +47,11 @@ public enum UEFIChecksumCheck {
     public static func volumeRevision(of node: UEFINode, in image: UEFIImage) -> UInt8? {
         // The innermost volume covering the node: `allNodes` runs outermost
         // first, so the last containing volume is the deepest one.
+        // In the node's own space: a volume in the file and a file in a
+        // decompressed buffer share no offsets worth comparing.
         image.allNodes.reversed().first { candidate in
-            candidate.kind == .volume && candidate.range.contains(node.header.lowerBound)
+            candidate.kind == .volume && candidate.space == node.space
+                && candidate.range.contains(node.header.lowerBound)
         }?.subtype
     }
 
@@ -95,11 +98,26 @@ public enum UEFIChecksumCheck {
         only: Set<NodeID>? = nil,
         reader: ImageReader
     ) -> [NodeID: [ChecksumRepair]] {
+        repairs(in: image, only: only, readers: SpaceReaders(file: reader))
+    }
+
+    /// The same, with each node read from its own space: a file inside a
+    /// compressed section is checked against the buffer the section
+    /// decompresses to, and its repairs are offsets into that buffer — good
+    /// for a flag and for a "should be", never for a write
+    /// (`COMPRESSED_SECTIONS.md` §5.3).
+    public static func repairs(
+        in image: UEFIImage,
+        only: Set<NodeID>? = nil,
+        readers: SpaceReaders
+    ) -> [NodeID: [ChecksumRepair]] {
         var result: [NodeID: [ChecksumRepair]] = [:]
         for node in image.allNodes {
             guard node.kind == .volume || node.kind == .file || node.kind == .microcode
             else { continue }
             if let only, !only.contains(node.id) { continue }
+            // A section on the way in that no longer decodes has nothing to read.
+            guard let reader = readers.reader(for: node.space) else { continue }
             let revision = node.kind == .file ? volumeRevision(of: node, in: image) : nil
             let nodeRepairs = repairs(for: node, volumeRevision: revision, in: reader)
             guard !nodeRepairs.isEmpty else { continue }

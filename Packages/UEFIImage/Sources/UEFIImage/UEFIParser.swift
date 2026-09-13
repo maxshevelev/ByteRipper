@@ -15,9 +15,15 @@ public enum UEFIParser {
         /// Volume, file, section, volume again — real images nest eight or ten
         /// deep, and a corrupt one nests forever (§11).
         public var maxDepth: Int
+        /// The most a compressed section may decompress to. The size comes
+        /// from an untrusted header (`COMPRESSED_SECTIONS.md` §3.1): a DXE
+        /// volume is tens of megabytes, so a section that claims more than this
+        /// is reported and kept whole rather than allocated.
+        public var maxDecompressedSize: UInt64
 
-        public init(maxDepth: Int = 16) {
+        public init(maxDepth: Int = 16, maxDecompressedSize: UInt64 = 128 * 1024 * 1024) {
             self.maxDepth = maxDepth
+            self.maxDecompressedSize = maxDecompressedSize
         }
     }
 
@@ -57,7 +63,8 @@ public enum UEFIParser {
         var roots = built.nodes
         var diagnostics = built.diagnostics
         TreeMaterialization.materializeAll(
-            &roots, reader: reader, limits: limits, diagnostics: &diagnostics, progress: sink
+            &roots, reader: reader, limits: limits, buffers: DecompressedBuffers(),
+            diagnostics: &diagnostics, progress: sink
         )
 
         let parser = Parser(reader: reader, limits: limits)

@@ -70,10 +70,14 @@ public struct UEFIImage: Sendable {
     /// the file in it, then the section in that. Empty when the offset falls in
     /// a gap nothing claimed, which after a full parse should not happen:
     /// everything unparsed is still padding (§11).
+    ///
+    /// `offset` is into the file, so the chain ends at a compressed section:
+    /// what is inside has offsets into a buffer, and a buffer offset that
+    /// happens to cover `offset` says nothing about it.
     public func nodes(containing offset: UInt64) -> [UEFINode] {
         var chain: [UEFINode] = []
         var nodes = roots
-        while let node = nodes.first(where: { $0.range.contains(offset) }) {
+        while let node = nodes.first(where: { $0.fileRange?.contains(offset) ?? false }) {
             chain.append(node)
             nodes = node.children
         }

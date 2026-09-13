@@ -162,11 +162,13 @@ extension Parser {
     /// finished and the second pass runs before that.
     func markFixed(_ nodes: inout [UEFINode], at offset: UInt64) {
         for index in nodes.indices {
-            if nodes[index].range.lowerBound == offset {
+            // A file offset, like every anchor this pass works out.
+            guard let fileRange = nodes[index].fileRange else { continue }
+            if fileRange.lowerBound == offset {
                 nodes[index].isFixed = true
                 return
             }
-            if nodes[index].range.contains(offset) {
+            if fileRange.contains(offset) {
                 markFixed(&nodes[index].children, at: offset)
                 return
             }

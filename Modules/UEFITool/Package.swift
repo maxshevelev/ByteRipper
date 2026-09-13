@@ -28,7 +28,9 @@ let package = Package(
         .package(path: "../../Packages/AppPalette"),
         .package(path: "../../Packages/UEFIImage"),
         .package(path: "../../Packages/UEFIContentSource"),
-        .package(path: "../../Packages/FreshData")
+        .package(path: "../../Packages/FreshData"),
+        // Only for the tests, to build a compressed section byte by byte.
+        .package(path: "../../Packages/FirmwareCompression")
     ],
     targets: [
         .target(name: "UEFITool", dependencies: [
@@ -44,6 +46,11 @@ let package = Package(
             .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "UEFIContentSource", package: "UEFIContentSource")
         ]),
-        .testTarget(name: "UEFIToolTests", dependencies: ["UEFITool"])
+        .testTarget(name: "UEFIToolTests", dependencies: [
+            "UEFITool",
+            .product(name: "ToolModuleKit", package: "ToolModuleKit"),
+            .product(name: "UEFIImage", package: "UEFIImage"),
+            .product(name: "FirmwareCompressionTestSupport", package: "FirmwareCompression")
+        ])
     ]
 )

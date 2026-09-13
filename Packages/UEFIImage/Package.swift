@@ -4,10 +4,12 @@
 //
 //  A shared package, not a tool-module: the structure browser and the FIT
 //  editor both need the same tree, and parsing an image twice in two packages
-//  is how the two would drift apart. It depends on nothing — not on
-//  `ToolModuleKit`, not on the app — because a parser that can be run by
+//  is how the two would drift apart. It depends on no part of the app — not on
+//  `ToolModuleKit`, not on the app itself — because a parser that can be run by
 //  `swift test` over a hand-built image is a parser whose diagnostics can be
-//  pinned down without a window.
+//  pinned down without a window. The one package it links is
+//  `FirmwareCompression`, for the compressed sections most of an image's DXE
+//  volume sits inside (`Design/UEFI/COMPRESSED_SECTIONS.md`).
 //
 //  `Design/UEFI/UEFI_IMAGE_FORMAT.md` is the specification this follows, and
 //  its section numbers are quoted throughout.
@@ -28,11 +30,21 @@ let package = Package(
     products: [
         .library(name: "UEFIImage", targets: ["UEFIImage"])
     ],
+    dependencies: [
+        .package(path: "../FirmwareCompression")
+    ],
     targets: [
-        .target(name: "UEFIImage"),
+        .target(name: "UEFIImage", dependencies: [
+            .product(name: "FirmwareCompression", package: "FirmwareCompression")
+        ]),
         .testTarget(
             name: "UEFIImageTests",
-            dependencies: ["UEFIImage"]
+            dependencies: [
+                "UEFIImage",
+                .product(name: "FirmwareCompression", package: "FirmwareCompression"),
+                // The encoders, to build a compressed section byte by byte.
+                .product(name: "FirmwareCompressionTestSupport", package: "FirmwareCompression")
+            ]
         )
     ]
 )

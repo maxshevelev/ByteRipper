@@ -60,25 +60,58 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         /// Two flash regions covering the same bytes: a descriptor nobody can
         /// trust (§2.2).
         case overlappingRegions
+        /// A compressed section this parser decodes did not decode
+        /// (`COMPRESSED_SECTIONS.md` §3.5): the data ended first, or is not the
+        /// algorithm's. The section is kept whole.
+        case decompressionFailed(algorithm: String, truncated: Bool)
+        /// A compressed section declares more than `UEFIParser.Limits` lets a
+        /// parse allocate. Kept whole, never allocated.
+        case decompressedTooLarge(algorithm: String, declared: UInt64)
+        /// A compression section's `UncompressedLength` is not the size that
+        /// came out of it.
+        case decompressedSizeMismatch(stored: UInt64, computed: UInt64)
+        /// A compressed GUID-defined section without `PROCESSING_REQUIRED` in
+        /// its attributes (§6.3).
+        case processingRequiredNotSet
 
         public var severity: Severity {
             switch self {
             case .truncated, .zeroSize, .recursionLimit:
                 return .error
             case .checksumMismatch, .sizeMismatch, .unknownFileSystem,
-                 .unknownType, .addressesUnknown, .overlappingRegions:
+                 .unknownType, .addressesUnknown, .overlappingRegions,
+                 .decompressionFailed, .decompressedTooLarge,
+                 .decompressedSizeMismatch, .processingRequiredNotSet:
                 return .warning
             }
         }
     }
 
-    public var kind: Kind
-    /// Where in the image, absolute.
-    public var offset: UInt64
+    /// Where a diagnostic raised inside a compressed section really is: an
+    /// offset in the buffer that section decompresses to.
+    public struct InnerLocation: Equatable, Sendable {
+        public var space: ByteSpace
+        public var offset: UInt64
 
-    public init(_ kind: Kind, at offset: UInt64) {
+        public init(space: ByteSpace, offset: UInt64) {
+            self.space = space
+            self.offset = offset
+        }
+    }
+
+    public var kind: Kind
+    /// Where in the image, absolute. For a diagnostic raised inside a
+    /// compressed section, the outermost compressed section's header — the
+    /// bytes of the file that hold the trouble, and the most the dump can show
+    /// (`COMPRESSED_SECTIONS.md` §5.3).
+    public var offset: UInt64
+    /// Where inside, when the trouble is in a decompressed buffer.
+    public var inside: InnerLocation?
+
+    public init(_ kind: Kind, at offset: UInt64, inside: InnerLocation? = nil) {
         self.kind = kind
         self.offset = offset
+        self.inside = inside
     }
 
     public var severity: Severity { kind.severity }
@@ -86,6 +119,12 @@ public struct UEFIDiagnostic: Equatable, Sendable {
     /// One line, for a tool-module's own list. The host never sees these — where
     /// a tool-module's diagnostics go is its panel (`Design/TOOL_MODULES_PLAN.md`).
     public var message: String {
+        guard let inside else { return kindMessage }
+        return kindMessage + " (at \(hex(inside.offset)) in what the compressed section at "
+            + "\(hex(offset)) decompresses to)"
+    }
+
+    private var kindMessage: String {
         switch kind {
         case .truncated(let structure):
             return "\(structure.label) runs past the end of the image"
@@ -105,7 +144,27 @@ public struct UEFIDiagnostic: Equatable, Sendable {
             return "the volume top file ends past the top of the address space"
         case .overlappingRegions:
             return "this flash region overlaps the one before it"
+        case .decompressionFailed(let algorithm, let truncated):
+            return truncated
+                ? "\(algorithm) data ends before it has decompressed"
+                : "\(algorithm) data does not decompress"
+        case .decompressedTooLarge(let algorithm, let declared):
+            return "\(algorithm) data says it decompresses to \(hex(declared)) bytes, "
+                + "more than a parse allocates"
+        case .decompressedSizeMismatch(let stored, let computed):
+            return "compressed section says it decompresses to \(hex(stored)) bytes, "
+                + "it came to \(hex(computed))"
+        case .processingRequiredNotSet:
+            return "compressed GUID-defined section does not have PROCESSING_REQUIRED set"
         }
+    }
+
+    /// This diagnostic — raised at an offset in `space` by a parser that only
+    /// knew the buffer it was reading — located the way every diagnostic is:
+    /// at bytes of the file, with the inside offset kept.
+    func located(in space: ByteSpace) -> UEFIDiagnostic {
+        guard let outermost = space.outermostSection else { return self }
+        return UEFIDiagnostic(kind, at: outermost, inside: InnerLocation(space: space, offset: offset))
     }
 
     private func hex(_ value: UInt64) -> String {

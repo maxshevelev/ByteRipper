@@ -10,6 +10,11 @@ import Foundation
 /// a node says where a structure is, so writing to it is writing to the file
 /// rather than to a copy of it that has to be put back.
 ///
+/// The ranges are in the node's `space`: the file for nearly everything, the
+/// buffer a compressed section decompresses to for what was found inside one.
+/// Ranges in two spaces are never compared, and anything that means "bytes of
+/// the file" asks for `fileRange`, which a node inside has none of.
+///
 /// `header` / `body` / `tail` are contiguous and non-overlapping, and the split
 /// is the whole shape of this format: almost every level is a header followed
 /// by a body that the next level parses. `tail` is used only by FFSv1 files
@@ -46,10 +51,15 @@ public struct UEFINode: Identifiable, Hashable, Sendable {
     /// points at, anything a Boot Guard range covers, a file marked
     /// `FFS_ATTRIB_FIXED`.
     public var isFixed: Bool
+    /// Which bytes `header`, `body` and `tail` are in (`ByteSpace`).
+    public var space: ByteSpace
+    /// For a section whose body is compressed: the algorithm, and whether this
+    /// parser opens it. Nil for everything else.
+    public var compression: SectionCompression?
     /// Lies inside a compressed container, so its absolute address means
     /// nothing — the decompressor puts it wherever it likes. Every address
     /// check skips these.
-    public var isCompressed: Bool
+    public var isCompressed: Bool { space != .file }
     /// Nothing but the erase byte: free space, or padding that was never used.
     public var isErased: Bool
     /// True when this container's children have not been computed yet but
@@ -79,7 +89,8 @@ public struct UEFINode: Identifiable, Hashable, Sendable {
         body: Range<UInt64>,
         tail: Range<UInt64>? = nil,
         isFixed: Bool = false,
-        isCompressed: Bool = false,
+        space: ByteSpace = .file,
+        compression: SectionCompression? = nil,
         isErased: Bool = false,
         isExpandable: Bool = false,
         childDepth: Int = 0,
@@ -94,7 +105,8 @@ public struct UEFINode: Identifiable, Hashable, Sendable {
         self.body = body
         self.tail = tail ?? (body.upperBound..<body.upperBound)
         self.isFixed = isFixed
-        self.isCompressed = isCompressed
+        self.space = space
+        self.compression = compression
         self.isErased = isErased
         self.isExpandable = isExpandable
         self.childDepth = childDepth
@@ -124,12 +136,34 @@ public struct UEFINode: Identifiable, Hashable, Sendable {
         return header.lowerBound..<max(header.lowerBound, end)
     }
 
+    /// Everything the node covers, as bytes of the file — nil for a node inside
+    /// a compressed section, whose ranges are into a buffer. What looks a node
+    /// up by a file offset, draws it over the dump or writes to it asks for
+    /// this, and so has to say what it does with a node that has none.
+    public var fileRange: Range<UInt64>? {
+        space == .file ? range : nil
+    }
+
     /// This node and all of its descendants, outermost first — the order a
     /// reader meets them in.
     public var flattened: [UEFINode] {
         [self] + children.flatMap(\.flattened)
     }
 
+}
+
+/// What a compressed section says about its body: the algorithm, by the name a
+/// panel shows, and whether this parser decodes it
+/// (`Design/UEFI/COMPRESSED_SECTIONS.md`). A section that decodes but has
+/// neither children nor anything left to open did not decompress.
+public struct SectionCompression: Hashable, Sendable {
+    public var algorithm: String
+    public var decodes: Bool
+
+    public init(algorithm: String, decodes: Bool) {
+        self.algorithm = algorithm
+        self.decodes = decodes
+    }
 }
 
 /// What an element *is*. No associated values: the fields behind each kind stay

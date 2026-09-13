@@ -144,6 +144,11 @@ extension Parser {
         var guid: EFIGUID?
         var bodyStart = offset + headerSize
         var readsBodyAsSections = false
+        // A compressed section this parser decodes is left closed, the way a
+        // volume is: decoding one is megabytes of work nobody asked for until
+        // its row is opened (`COMPRESSED_SECTIONS.md` §6.1).
+        var decodable = false
+        var compression: SectionCompression?
 
         switch type {
         case Section.disposable:
@@ -154,6 +159,13 @@ extension Parser {
             if let algorithm = reader.uint8(at: offset + headerSize + 4) {
                 readsBodyAsSections = algorithm == Section.notCompressed
                 name = compressionName(algorithm)
+                decodable = CompressedSection.algorithm(compressionType: algorithm) != nil
+                if algorithm != Section.notCompressed {
+                    compression = SectionCompression(
+                        algorithm: CompressedSection.algorithmName(compressionType: algorithm),
+                        decodes: decodable
+                    )
+                }
             }
 
         case Section.guidDefined:
@@ -171,6 +183,20 @@ extension Parser {
             if let guid, let known = KnownGUIDs.guidedSection(guid) {
                 name = "\(known.name) section"
                 readsBodyAsSections = !known.transformsBody
+            }
+            if let guid {
+                decodable = CompressedSection.algorithm(guid: guid) != nil
+                if let algorithm = CompressedSection.algorithmName(guid: guid) {
+                    compression = SectionCompression(algorithm: algorithm, decodes: decodable)
+                }
+                // A compressed body has to be processed before it is read, and
+                // the section is meant to say so (§6.3). Reported, and decoded
+                // all the same.
+                if CompressedSection.isCompressed(guid: guid),
+                   let attributes = reader.uint16(at: offset + headerSize + 18),
+                   attributes & CompressedSection.processingRequired == 0 {
+                    note(.processingRequiredNotSet, at: offset)
+                }
             }
 
         default:
@@ -204,6 +230,9 @@ extension Parser {
             guid: guid,
             header: offset..<bodyStart,
             body: body,
+            compression: compression,
+            isExpandable: decodable && !body.isEmpty,
+            childDepth: depth + 1,
             children: children
         )
     }
@@ -212,7 +241,8 @@ extension Parser {
         switch algorithm {
         case Section.notCompressed: return "Uncompressed section"
         case 0x01: return "Tiano compressed section"
-        case 0x02: return "Customized compressed section"
+        // EDK2 calls it customized; every image that uses it means LZMA.
+        case 0x02: return "LZMA compressed section"
         case 0x86: return "LZMA with x86 filter section"
         default: return String(format: "Compressed section (type 0x%02X)", algorithm)
         }

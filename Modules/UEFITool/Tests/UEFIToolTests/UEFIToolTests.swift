@@ -289,7 +289,7 @@ final class UEFIDetailTests: XCTestCase {
     func testACompressedNodeHasNoAddress() {
         let built = TestUEFI.file()
         var node = built.node
-        node.isCompressed = true
+        node.space = .decompressed(chain: [0])
         let detail = UEFIDetail.build(for: node, image: built.image, reader: built.reader)
 
         XCTAssertNil(field(detail, "Address"))

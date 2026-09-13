@@ -179,14 +179,11 @@ parameter and a filter; the work is all in the parse.
 up. Each is a leaf node with its bytes intact today, and each becomes a subtree
 the day a tool-module needs it.
 
-- **Compressed sections.** Tiano, LZMA (three vendor GUIDs of it), Brotli, GZip
-  and Zlib, none of them in the system libraries. A section names its algorithm
-  and keeps its body whole. Implementing one of them — LZMA is the one that
-  matters, it holds the DXE volume in most images — turns roughly half of a
-  modern image from one leaf into a tree of hundreds of files. It is also the
-  point at which a node stops being a range of the file, so it needs an answer
-  about what an edit inside a decompressed buffer even means.
-  `UEFI/COMPRESSED_SECTIONS.md` works out both.
+- **Compressed sections: Brotli, GZip and Zlib.** LZMA (all three vendor GUIDs
+  and the x86 filter) and Tiano / EFI 1.1 now open, read-only, with the nodes
+  inside in a space of their own (`UEFI/COMPRESSED_SECTIONS.md`). The other
+  three still name their algorithm and keep their body whole — to be added the
+  day a dump needs one (§10 there).
 - **Boot Guard protected ranges** (`UEFI/BOOT_GUARD_PROTECTED_RANGES.md`). The vendor
   hash files are four structures across three vendors, and the ranges they list
   together with the IBB from the Boot Policy are the regions an edit must not

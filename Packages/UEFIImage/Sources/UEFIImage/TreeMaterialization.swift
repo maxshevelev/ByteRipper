@@ -47,35 +47,127 @@ enum TreeMaterialization {
     /// recorded when it was left closed (`UEFINode.childDepth`) — so a node
     /// expanded now lands exactly where an all-at-once parse would have put
     /// it, recursion limit included.
+    ///
+    /// `reader` is the file's. A node inside a compressed section is read from
+    /// the buffer its space names, which `buffers` holds or decodes.
     static func children(
         of node: UEFINode,
         reader: ImageReader,
         limits: UEFIParser.Limits,
+        buffers: DecompressedBuffers,
         progress: ProgressSink? = nil
     ) -> Result {
         guard node.isExpandable else { return Result(nodes: [], diagnostics: []) }
-        let parser = Parser(reader: reader, limits: limits, progress: progress)
+        let spaceReader: ImageReader
+        switch buffers.reader(for: node.space, file: reader, limit: limits.maxDecompressedSize) {
+        case .success(let found):
+            spaceReader = found
+        case .failure:
+            // The section holding this node no longer decodes. The expansion
+            // that failed to open it has already said so, at the section.
+            return Result(nodes: [], diagnostics: [])
+        }
+        // Progress is a fraction of the file, which a buffer's offsets are not.
+        let parser = Parser(
+            reader: spaceReader, limits: limits,
+            progress: node.space == .file ? progress : nil
+        )
+        let nodes: [UEFINode]
         switch node.kind {
         case .volume:
             guard let header = parser.readVolumeHeader(at: node.header.lowerBound) else {
-                return Result(nodes: [], diagnostics: parser.diagnostics)
+                return Result(
+                    nodes: [],
+                    diagnostics: parser.diagnostics.map { $0.located(in: node.space) }
+                )
             }
-            return Result(
-                nodes: parser.volumeChildren(header, body: node.body, depth: node.childDepth),
-                diagnostics: parser.diagnostics
-            )
+            nodes = parser.volumeChildren(header, body: node.body, depth: node.childDepth)
         case .region:
-            return Result(
-                nodes: parser.scanRawArea(
-                    node.body, emptyByte: Parser.defaultEmptyByte, depth: node.childDepth
-                ),
-                diagnostics: parser.diagnostics
+            nodes = parser.scanRawArea(
+                node.body, emptyByte: Parser.defaultEmptyByte, depth: node.childDepth
+            )
+        case .section:
+            return decompressedChildren(
+                of: node, in: spaceReader, file: reader, limits: limits, buffers: buffers
             )
         default:
             // Nothing else is ever left collapsed, so this is unreachable in
             // practice — and answering "no children" is the honest reading of
             // a node the parser did not gate.
             return Result(nodes: [], diagnostics: [])
+        }
+        return Result(
+            nodes: stamping(nodes, space: node.space),
+            diagnostics: parser.diagnostics.map { $0.located(in: node.space) }
+        )
+    }
+
+    /// A compressed section's children: its body decoded, and the decoded
+    /// bytes walked as the run of sections they are — by the same
+    /// `walkSections` a file's body goes through, over a reader of the buffer
+    /// (`COMPRESSED_SECTIONS.md` §6.1).
+    ///
+    /// FFSv3's rules inside: a buffer has no volume of its own to say which
+    /// revision it follows, and the extended section size is the one thing the
+    /// two revisions read differently.
+    private static func decompressedChildren(
+        of section: UEFINode,
+        in parentReader: ImageReader,
+        file: ImageReader,
+        limits: UEFIParser.Limits,
+        buffers: DecompressedBuffers
+    ) -> Result {
+        let childSpace = section.space.inside(sectionAt: section.header.lowerBound)
+        let buffer: ImageReader
+        switch buffers.reader(for: childSpace, file: file, limit: limits.maxDecompressedSize) {
+        case .success(let found):
+            buffer = found
+        case .failure(let problem):
+            let algorithm = problem.algorithm?.name ?? "Compressed"
+            let kind: UEFIDiagnostic.Kind
+            switch problem.failure {
+            case .tooLarge(let declared):
+                kind = .decompressedTooLarge(algorithm: algorithm, declared: declared)
+            case .truncated:
+                kind = .decompressionFailed(algorithm: algorithm, truncated: true)
+            case .corrupt:
+                kind = .decompressionFailed(algorithm: algorithm, truncated: false)
+            }
+            return Result(
+                nodes: [],
+                diagnostics: [UEFIDiagnostic(kind, at: problem.section).located(in: problem.space)]
+            )
+        }
+
+        var diagnostics: [UEFIDiagnostic] = []
+        if let declared = CompressedSection.locate(
+            at: section.header.lowerBound, in: parentReader
+        )?.declaredLength, declared != buffer.count {
+            diagnostics.append(UEFIDiagnostic(
+                .decompressedSizeMismatch(stored: declared, computed: buffer.count),
+                at: section.header.lowerBound
+            ).located(in: section.space))
+        }
+
+        let parser = Parser(reader: buffer, limits: limits)
+        let nodes = parser.walkSections(
+            buffer.all, ffsVersion: 3, emptyByte: Parser.defaultEmptyByte,
+            depth: section.childDepth
+        )
+        diagnostics += parser.diagnostics.map { $0.located(in: childSpace) }
+        return Result(nodes: stamping(nodes, space: childSpace), diagnostics: diagnostics)
+    }
+
+    /// Puts `space` on every node a parse over that space's reader built. The
+    /// parser itself never knows which space it is reading: a buffer is one
+    /// more `ByteSource` to it.
+    static func stamping(_ nodes: [UEFINode], space: ByteSpace) -> [UEFINode] {
+        guard space != .file else { return nodes }
+        return nodes.map { node in
+            var stamped = node
+            stamped.space = space
+            stamped.children = stamping(node.children, space: space)
+            return stamped
         }
     }
 
@@ -88,11 +180,12 @@ enum TreeMaterialization {
         at id: NodeID,
         reader: ImageReader,
         limits: UEFIParser.Limits,
+        buffers: DecompressedBuffers,
         diagnostics: inout [UEFIDiagnostic],
         progress: ProgressSink? = nil
     ) {
         let result = children(
-            of: node, reader: reader, limits: limits, progress: progress
+            of: node, reader: reader, limits: limits, buffers: buffers, progress: progress
         )
         node.children = stampIDs(result.nodes, under: id)
         node.isExpandable = false
@@ -107,6 +200,7 @@ enum TreeMaterialization {
         under parent: NodeID = .root,
         reader: ImageReader,
         limits: UEFIParser.Limits,
+        buffers: DecompressedBuffers,
         diagnostics: inout [UEFIDiagnostic],
         progress: ProgressSink? = nil
     ) {
@@ -115,12 +209,12 @@ enum TreeMaterialization {
             if nodes[index].isExpandable {
                 expand(
                     &nodes[index], at: id, reader: reader, limits: limits,
-                    diagnostics: &diagnostics, progress: progress
+                    buffers: buffers, diagnostics: &diagnostics, progress: progress
                 )
             }
             materializeAll(
                 &nodes[index].children, under: id, reader: reader,
-                limits: limits, diagnostics: &diagnostics, progress: progress
+                limits: limits, buffers: buffers, diagnostics: &diagnostics, progress: progress
             )
         }
     }

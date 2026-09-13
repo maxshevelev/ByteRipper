@@ -103,16 +103,17 @@ final class SectionParseTests: XCTestCase {
         XCTAssertEqual(outer.children.map(\.name), ["PE32 image"])
     }
 
-    /// What this parser will not do is decompress. The section says which
-    /// algorithm it is and keeps its body whole — no third-party code, and no
-    /// pretending the contents are readable.
-    func testACompressedSectionIsALeafThatNamesItsAlgorithm() {
+    /// A compressed section whose body does not decode names its algorithm and
+    /// keeps its body whole — no pretending the contents are readable. The
+    /// sections that do decode are `CompressedSectionTests`.
+    func testACompressedSectionThatDoesNotDecodeIsALeafThatNamesItsAlgorithm() {
         let node = file([TestImage.compressionSection(
             algorithm: 0x86, body: [UInt8](repeating: 0x5A, count: 32)
         )])
 
         XCTAssertEqual(node.children[0].name, "LZMA with x86 filter section")
         XCTAssertTrue(node.children[0].children.isEmpty)
+        XCTAssertFalse(node.children[0].isExpandable, "it was tried, and there is nothing in it")
         XCTAssertEqual(node.children[0].body, 0x69..<0x89)
     }
 
