@@ -1735,8 +1735,13 @@ final class MainViewController: NSViewController {
             let handle = UpdateHandle()
             let operation = beginUpdateOperation(in: parent, for: origin, handle: handle)
             let task = Task { [weak self] in
+                // The parent's protected ranges, read by its tree: a change
+                // inside the IBB is refused and one inside a range the
+                // firmware checks is said (`UPDATE_IN_PARENT.md` §6.4).
+                operation.rename("Reading the protected ranges of “\(origin.parentName)”")
+                let protected = await self?.protectedRanges(of: parent)?.rebuildRanges
                 let result = await Task.detached(priority: .userInitiated) {
-                    UEFIRebuild.plan(bytes, at: target, in: file) { progress in
+                    UEFIRebuild.plan(bytes, at: target, in: file, protected: protected) { progress in
                         operation.rename(progress.phase)
                         operation.report(progress.fraction)
                     }
@@ -1765,13 +1770,33 @@ final class MainViewController: NSViewController {
                                            tabBytes: bytes, sourceBytes: source,
                                            sourceRange: plan.source, named: stepName)
                     else { return }
-                    self.presentAlert(title: "Updated “\(origin.parentName)”",
-                                      message: plan.warnings.joined(separator: "\n\n"))
+                    self.presentAlert(
+                        title: "Updated “\(origin.parentName)”",
+                        message: plan.warnings.isEmpty
+                            ? "Nothing was written inside a Boot Guard or vendor protected range."
+                            : plan.warnings.joined(separator: "\n\n")
+                    )
                 }
             }
             handle.task = task
             return task
         }
+    }
+
+    /// The protected ranges of a pane's file, read by its shared tree — which
+    /// is built for it when no panel has asked for one yet
+    /// (`BOOT_GUARD_PROTECTED_RANGES.md` §9.2). Nil when there is no file.
+    private func protectedRanges(of pane: PaneViewModel) async -> ProtectedRanges? {
+        guard let storage = pane.document?.storage,
+              let tree = pane.uefiState.tree(
+                  makeSource: { LiveDocumentByteSource(storage: storage) },
+                  layout: pane.origin?.layout ?? .image
+              )
+        else { return nil }
+        await withCheckedContinuation { continuation in
+            tree.resolveProtectedRanges { continuation.resume() }
+        }
+        return tree.protectedRanges
     }
 
     /// What the (×) of an update reaches the update through.

@@ -394,12 +394,11 @@ Step 7 is in on the planner's side: `UEFIRebuild.plan(…, protected:)` takes th
 file's `ProtectedRange`s (IBB or vendor hash, a file range and a name) and checks
 the bytes the rebuild actually changes against them — a change inside the IBB
 refuses, one inside a vendor hash range becomes a warning, and the "not
-checked" caveat goes when the ranges were given. **The ranges themselves are not
-read yet:** that is the Boot Guard work (`BOOT_GUARD_PROTECTED_RANGES.md` §9 —
-the Boot Policy Manifest's IBB segments, the AMI, Phoenix and Insyde lists),
-which has not started. Until it lands the app passes no ranges, and every update
-still says they were not checked; when it lands, the app hands its ranges to the
-planner and nothing else changes.
+checked" caveat goes when the ranges were given. The ranges are read now
+(`BOOT_GUARD_PROTECTED_RANGES.md` §9): before it plans, the app reads the
+parent's through the parent's tree (`LazyUEFITree.resolveProtectedRanges`) and
+hands the planner `ProtectedRanges.rebuildRanges`, so an update says what it
+wrote into, or that it wrote into no protected range at all.
 
 **Progress.** Compressing a DXE volume again takes seconds, so an update that
 goes through the planner is shown where it lands: the parent's tab comes to the

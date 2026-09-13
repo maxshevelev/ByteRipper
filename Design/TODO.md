@@ -153,29 +153,9 @@ subsection.
 **Cost.** 6–10 hours, nearly all of it in deciding the three questions and in
 the tests that hold the answers.
 
-### Boot Guard, before a component is written into a protected range
-
-**What.** The one check the FIT tool cannot make. Adding a microcode puts bytes
-somewhere in the image; if that somewhere is covered by a Boot Guard protected
-range — the IBB described in the Boot Policy, or a range listed in a vendor hash
-file — the hash stops matching and the platform will not start. The panel says
-so after every add, because saying so is all it can do.
-
-**Why it is not done.** The ranges live in structures `UEFIImage` does not read
-yet (`UEFI/BOOT_GUARD_PROTECTED_RANGES.md`: the Boot Policy manifest, four vendor
-hash file layouts across three vendors, and the Insyde Flash Device Map). See
-the entry below.
-
-**How.** Once the parse produces them, the placement search takes a list of
-forbidden ranges and skips any candidate that touches one, and the notice after
-an add changes from a warning to a statement. The FIT tool's side of it is a
-parameter and a filter; the work is all in the parse.
-
-**Cost.** 6–10 hours in `UEFIImage`, an hour in `FITTool`.
-
 ### What `UEFIImage` leaves unread
 
-**What.** Four parts of the image format the parser recognises but does not open
+**What.** Three parts of the image format the parser recognises but does not open
 up. Each is a leaf node with its bytes intact today, and each becomes a subtree
 the day a tool-module needs it.
 
@@ -184,11 +164,6 @@ the day a tool-module needs it.
   inside in a space of their own (`UEFI/COMPRESSED_SECTIONS.md`). The other
   three still name their algorithm and keep their body whole — to be added the
   day a dump needs one (§10 there).
-- **Boot Guard protected ranges** (`UEFI/BOOT_GUARD_PROTECTED_RANGES.md`). The vendor
-  hash files are four structures across three vendors, and the ranges they list
-  together with the IBB from the Boot Policy are the regions an edit must not
-  touch. Until this exists, `isFixed` tells the truth about the VTF, microcode,
-  regions and files marked fixed, and stays silent about Boot Guard.
 - **The flash descriptor's innards** — the masters section, the straps, the VSCC
   table, the OEM section. The region map is parsed because it is the map of the
   whole image; the rest is descriptor configuration nobody has asked to see.

@@ -221,7 +221,11 @@ they hover over one.
 Each step that starts drawing a mark adds it to that panel's legend in the same
 change (§6).
 
-**Status, 2026-09-13.** Steps 1 and 2 are in. Where the code differs from the
+**Status, 2026-09-13.** Steps 1 and 2 are in, and step 5 for the UEFI tree
+alone: its background, `shield.lefthalf.filled`, `lock.shield` on the AMI and
+Phoenix hash files and the Insyde flash device map, the hash problems, and the
+four marks in its legend. The FIT table and the ME tree take theirs with steps 3
+and 4, which draw no marks yet. Where the code differs from the
 text: a compressed section carries `UEFINode.compression` (algorithm, and
 whether it decodes), set by the parser, which is what the badge is read from;
 the legend's lines are plain views with every edge constrained rather than

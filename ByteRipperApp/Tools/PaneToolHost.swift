@@ -160,7 +160,7 @@ extension PaneToolHost: UEFITreeProviding {
 /// currently in the file rather than a point-in-time snapshot. This is what
 /// lets `LazyUEFITree.invalidate` be told only which memoized subtrees to
 /// forget, never handed fresher bytes of its own.
-private struct LiveDocumentByteSource: ByteSource {
+struct LiveDocumentByteSource: ByteSource {
     let storage: any ByteRipperCore.ByteStorage
     var byteCount: UInt64 { storage.size }
     func bytes(in range: Range<UInt64>) -> [UInt8] {

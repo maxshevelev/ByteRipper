@@ -585,6 +585,41 @@ separate piece of work for the ME Analyzer tool-module.
 
 ## 9. The plan for this project
 
+**Status, 2026-09-13.** §9.1–§9.4 and §9.6 are in; §9.5 is not. Where the code
+differs from the text below:
+
+- `ProtectedRange` carries `digests: [Digest]` rather than one `algorithm` and
+  `expected` — a v2 IBB stores a digest per algorithm — and its own `verdict`,
+  shared by every range one digest covers (an IBB's segments, an AMI v3 table's
+  four). `ProtectedRanges` holds the list, `obbDigests` and the reading's
+  diagnostics; `UEFIImage.protectedRanges` is nil until they are read.
+- `UEFIParser.parse` reads them (`readsProtectedRanges: false` skips it, which
+  the rebuild planner's own parses do). `LazyUEFITree.resolveProtectedRanges`
+  reads them over a *copy* of the tree, off the main actor, after the mapping:
+  every volume's files, and compressed sections only when a post-IBB or AMI v1
+  range cannot be placed without them. §9.2's second constraint is gone —
+  compressed sections decode now (`COMPRESSED_SECTIONS.md`) — so a DXE Core
+  inside an LZMA section places its range. The copy is dropped rather than
+  written back, so a branch opened meanwhile survives; what it decoded stays in
+  the tree's buffers. The cost on a large dump has not been measured: no dump is
+  in the repository, and the UEFI panel asks for the ranges half a second after
+  an edit rather than on every keystroke.
+- The Insyde FDM is two node kinds, `flashDeviceMapStore` and
+  `flashDeviceMapEntry`. A revision past 4 and an unknown entry layout are
+  reported with `unknownRevision` and `unknownFlashDeviceMapEntries`.
+- `UEFINode.isFixed` is not set for covered nodes; the query is the answer.
+- The FIT editor checks a finished transaction by the bytes it changes, which
+  covers every place the run can grow into, the moves behind it and the table's
+  rows: inside the IBB it is refused (`insideProtectedRange`), inside another
+  range it is made and said. The rebuild planner gets the same ranges through
+  `ProtectedRanges.rebuildRanges`, and the app hands it the parent's.
+- The UEFI tree draws the background, the partly-protected and holds-checks
+  badges, and a hash that does not match — an error, or a caution for the IBB
+  (§6.1). The FIT table and the ME tree do not yet: they have no row marks at
+  all until steps 3 and 4 of `ROW_MARKS.md`.
+- §9.5: `ZoneKind` still has one case. A zone of its own kind needs the dump to
+  draw it, which is a change of its own.
+
 ### 9.1. `UEFIImage`
 
 A new step in the second pass, after `addressDiff` and the reset vector
