@@ -24,6 +24,7 @@ colour is *for*:
   Zone<Which>         a tool-module's zone outline over the dump
   Segment<N>          the tint of the Nth piece of a partition
   Difference<What>    the comparison's own fills — a byte that differs
+  Row<Mark>           a mark a firmware panel draws on a row (Design/ROW_MARKS.md)
 
 Each family's colours land in that family's `Sets` namespace, and the family
 itself gives them the names callers use — `SemanticColors.Sets.good` is the
@@ -64,6 +65,7 @@ FAMILIES = [
     ("Zone", "ZoneColors"),
     ("Segment", "SegmentTints"),
     ("Difference", "DifferenceColors"),
+    ("Row", "RowMarks"),
 ]
 
 

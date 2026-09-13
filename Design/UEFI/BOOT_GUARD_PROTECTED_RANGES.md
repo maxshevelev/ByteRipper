@@ -658,9 +658,11 @@ comment on `isFixed` changes to say so.
 
 ### 9.3. The UEFI Structure tool-module
 
-- The outline draws the marking as a row background: tints from `AppPalette`
-  that read in both appearances. Background, not text colour — red text is
-  the project's "modified, unsaved" state.
+- The outline draws the marking as a row background, with the partial marking
+  as a badge — and so do the FIT table and the ME tree, by the same rules. The
+  channels, colours and symbols are reserved in `Design/ROW_MARKS.md`.
+  Background, not text colour — red text is the project's "modified, unsaved"
+  state.
 - The detail gains a "Protected by" block naming each range that touches the
   node: kind, file range, where the list is, and the hash verdict.
 - A switch for the marking, off the panel's menu, remembered like the panel's

@@ -33,9 +33,29 @@ public enum UEFIPresenter {
     /// Still only this node, never its children: a UEFI parse is a tree of
     /// thousands of nodes and drawing them all is how the hex view stops being
     /// readable.
-    public static func zones(for node: UEFINode?) -> ZoneMap {
+    ///
+    /// A node inside a compressed section is not a range of the file, and its
+    /// buffer offsets drawn over the dump would outline unrelated bytes. What
+    /// it publishes is the section that holds it — the bytes that really are
+    /// it — named after both, and picking that zone brings back the section,
+    /// which is all the file can say (`COMPRESSED_SECTIONS.md` §5.3). `image`
+    /// is where that section is found; without it such a node publishes
+    /// nothing.
+    public static func zones(for node: UEFINode?, in image: UEFIImage? = nil) -> ZoneMap {
         guard let node else { return .empty }
-        let whole = Zone(id: zoneID(for: node.id), name: node.name, range: node.range)
+        guard let outermost = node.space.outermostSection else {
+            return zones(of: node, named: node.name)
+        }
+        guard let image,
+              let section = image.innermostNode(containing: outermost),
+              section.space == .file, section.header.lowerBound == outermost
+        else { return .empty }
+        let name = node.name.isEmpty ? "Compressed" : node.name
+        return zones(of: section, named: "\(name) (in \(section.name))")
+    }
+
+    private static func zones(of node: UEFINode, named name: String) -> ZoneMap {
+        let whole = Zone(id: zoneID(for: node.id), name: name, range: node.range)
 
         // A node with no header of its own — padding, free space, data nobody
         // claimed — is all body, and a node with no body has none to draw.
@@ -54,6 +74,53 @@ public enum UEFIPresenter {
         // lanes read (`ZoneMap.normalized`). The body is the focus: it is what
         // the node holds, and what is in front of it is the header.
         return ZoneMap(zones: [whole, body], focus: body.id)
+    }
+
+    /// What "Export Decompressed…" saves, and "Open Decompressed… in New Tab"
+    /// opens, for a node (`COMPRESSED_SECTIONS.md` §8.2).
+    public struct DecompressedExport: Equatable, Sendable {
+        /// The buffer to read.
+        public var space: ByteSpace
+        /// The part of it to save, or nil for all of it.
+        public var range: Range<UInt64>?
+        public var suggestedName: String
+        public var menuTitle: String
+        public var openTitle: String
+
+        /// The new tab's name: the dump it came out of, then what it is —
+        /// `bios_LZMA compressed section.bin` — the way a zone's tab is named.
+        public func tabName(fileName: String) -> String {
+            let stem = (fileName as NSString).deletingPathExtension
+            return stem.isEmpty ? suggestedName : "\(stem)_\(suggestedName)"
+        }
+    }
+
+    /// A compressed section that opened exports everything it decompressed
+    /// to; a node inside one exports its own bytes from that buffer. Nothing
+    /// else has anything decompressed to save — its bytes are the file's, and
+    /// the dump already exports those.
+    public static func decompressedExport(for node: UEFINode) -> DecompressedExport? {
+        let base = (node.name.isEmpty ? "decompressed" : node.name)
+            .map { "/:".contains($0) ? "_" : $0 }
+        if node.kind == .section, node.children.contains(where: { $0.space != node.space }) {
+            return DecompressedExport(
+                space: node.space.inside(sectionAt: node.header.lowerBound),
+                range: nil,
+                suggestedName: String(base) + ".bin",
+                menuTitle: "Export Decompressed Body…",
+                openTitle: "Open Decompressed Body in New Tab"
+            )
+        }
+        if node.space != .file {
+            return DecompressedExport(
+                space: node.space,
+                range: node.range,
+                suggestedName: String(base) + ".bin",
+                menuTitle: "Export Decompressed Bytes…",
+                openTitle: "Open Decompressed Bytes in New Tab"
+            )
+        }
+        return nil
     }
 
     /// A node's path as a zone id: `1.2.0`. Stable across a re-parse of the same

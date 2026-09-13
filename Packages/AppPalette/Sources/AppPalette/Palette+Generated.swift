@@ -87,3 +87,23 @@ public extension DifferenceColors.Sets {
     /// Every difference colour set in the catalogue, in its own order.
     static let all = [fill]
 }
+
+public extension RowMarks.Sets {
+    static let decompressed = PaletteColor(
+        name: "RowDecompressed",
+        light: (0.345, 0.337, 0.839, 1.000),
+        dark: (0.490, 0.478, 1.000, 1.000))
+
+    static let protectedFirmware = PaletteColor(
+        name: "RowProtectedFirmware",
+        light: (0.196, 0.678, 0.902, 0.140),
+        dark: (0.392, 0.824, 1.000, 0.200))
+
+    static let protectedIBB = PaletteColor(
+        name: "RowProtectedIBB",
+        light: (1.000, 0.176, 0.333, 0.140),
+        dark: (1.000, 0.216, 0.373, 0.240))
+
+    /// Every row colour set in the catalogue, in its own order.
+    static let all = [decompressed, protectedFirmware, protectedIBB]
+}

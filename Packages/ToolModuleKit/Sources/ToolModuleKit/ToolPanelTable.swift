@@ -74,10 +74,14 @@ import AppPalette
     /// taller than its row, and a view does not clip its drawing: the second
     /// line lands on the rows above and below (measured, in the UEFI tree —
     /// half a GUID over its neighbour's name, the disclosure arrow buried).
+    ///
+    /// `badges` adds the two role-badge slots of `Design/ROW_MARKS.md`, after
+    /// the warning and against the text.
     public static func makeCell(
         identifier: NSUserInterfaceItemIdentifier,
         warning: Bool = false,
-        marker: Bool = false
+        marker: Bool = false,
+        badges: Bool = false
     ) -> NSTableCellView {
         let cell = NSTableCellView()
         cell.identifier = identifier
@@ -94,7 +98,7 @@ import AppPalette
         cell.textField = field
 
         let content: NSView
-        if warning || marker {
+        if warning || marker || badges {
             var leading: [NSView] = []
             if marker {
                 // Ahead of the warning: a row's "latest" verdict is what the
@@ -107,6 +111,10 @@ import AppPalette
                 let triangle = makeWarning()
                 cell.imageView = triangle
                 leading.append(triangle)
+            }
+            if badges {
+                // Against the text: a badge describes the thing the text names.
+                leading += badgeTags.map(makeBadge)
             }
             let row = NSStackView(views: leading + [field])
             row.orientation = .horizontal
@@ -144,15 +152,76 @@ import AppPalette
     public static func setWarning(
         _ shown: Bool, on cell: NSTableCellView, explanation: String? = nil
     ) {
-        guard let triangle = cell.imageView else { return }
+        setProblem(shown ? .error(explanation.map { [$0] } ?? []) : nil, on: cell)
+    }
+
+    /// Shows `problem` in `cell`'s warning slot — the red octagon for an error,
+    /// the orange circle for a caution — with every line of it as what the
+    /// pointer reads, or hides the slot for nil.
+    public static func setProblem(_ problem: ToolRowMarks.Problem?, on cell: NSTableCellView) {
+        guard let icon = cell.imageView else { return }
         // A hidden arranged view is detached from the stack, so a clean row's
-        // text starts where it would with no warning at all rather than a
-        // triangle's width in.
-        triangle.isHidden = !shown
-        triangle.symbolConfiguration = .init(
-            pointSize: ToolPanelFont.size, weight: .regular
+        // text starts where it would with no warning at all rather than an
+        // icon's width in.
+        guard let problem else {
+            icon.isHidden = true
+            icon.toolTip = nil
+            return
+        }
+        let mark: ToolRowMark = problem.isError ? .error : .caution
+        icon.image = NSImage(
+            systemSymbolName: mark.symbol ?? "",
+            accessibilityDescription: problem.isError ? "Invalid" : "Caution"
         )
-        triangle.toolTip = explanation
+        icon.image?.isTemplate = true
+        icon.contentTintColor = mark.tint
+        icon.symbolConfiguration = .init(pointSize: ToolPanelFont.size, weight: .regular)
+        icon.toolTip = problem.lines.isEmpty ? nil : problem.lines.joined(separator: "\n")
+        icon.isHidden = false
+    }
+
+    /// The tags the two role-badge slots wear, leading first.
+    public static let badgeTags = [6_002, 6_003]
+
+    /// Draws `roles` into `cell`'s badge slots, hiding the slots it does not
+    /// need. Set per row, like the warning: cells are recycled.
+    public static func setBadges(_ roles: [ToolRowMarks.Role], on cell: NSTableCellView) {
+        for (index, tag) in badgeTags.enumerated() {
+            guard let badge = cell.viewWithTag(tag) as? NSImageView else { continue }
+            guard index < roles.count else {
+                badge.isHidden = true
+                badge.image = nil
+                badge.toolTip = nil
+                continue
+            }
+            let role = roles[index]
+            badge.image = NSImage(systemSymbolName: role.mark.symbol ?? "",
+                                  accessibilityDescription: role.toolTip)
+            badge.image?.isTemplate = true
+            badge.contentTintColor = role.mark.tint
+            badge.symbolConfiguration = .init(pointSize: ToolPanelFont.size, weight: .regular)
+            badge.toolTip = role.toolTip
+            badge.isHidden = false
+        }
+    }
+
+    /// Everything a row's marks put in its named cell: the problem, the badges,
+    /// and the background and rail in words as the cell's tooltip. The paint
+    /// itself is the row view's (`ToolPanelRowView`).
+    public static func dress(_ cell: NSTableCellView, with marks: ToolRowMarks) {
+        setProblem(marks.problem, on: cell)
+        setBadges(marks.roles, on: cell)
+        cell.toolTip = marks.summary
+    }
+
+    private static func makeBadge(tag: Int) -> NSImageView {
+        let badge = NSImageView()
+        badge.tag = tag
+        badge.isHidden = true
+        badge.imageScaling = .scaleProportionallyUpOrDown
+        badge.setContentCompressionResistancePriority(.required, for: .horizontal)
+        badge.translatesAutoresizingMaskIntoConstraints = false
+        return badge
     }
 
     /// The warning a flagged row wears: a red triangle in an image view of its

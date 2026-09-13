@@ -151,6 +151,12 @@ private struct ChecksumPass: Sendable {
         controller.onFixChecksum = { [weak self] nodeID in
             self?.fixChecksum(for: nodeID)
         }
+        controller.onExportDecompressed = { [weak self] nodeID in
+            self?.exportDecompressed(for: nodeID)
+        }
+        controller.onOpenDecompressed = { [weak self] nodeID in
+            self?.openDecompressedInNewTab(for: nodeID)
+        }
         controller.onOpenRowsChanged = { [weak self] in self?.rememberOpenRows() }
     }
 
@@ -375,11 +381,11 @@ private struct ChecksumPass: Sendable {
         guard !fresh.isEmpty else { return }
         checkedIDs.formUnion(fresh)
 
-        let reader = tree.imageReader
+        let readers = tree.spaceReaders
         let generation = self.generation
         checksumPassesInFlight += 1
         Task { [weak self] in
-            let pass = await UEFIToolSession.checksums(in: image, only: fresh, reader: reader)
+            let pass = await UEFIToolSession.checksums(in: image, only: fresh, readers: readers)
             guard let self else { return }
             self.checksumPassesInFlight -= 1
             defer { if self.checksumPassesInFlight == 0 { self.drainChecksumWaiters() } }
@@ -401,10 +407,10 @@ private struct ChecksumPass: Sendable {
     private nonisolated static func checksums(
         in image: UEFIImage,
         only ids: Set<NodeID>,
-        reader: ImageReader
+        readers: SpaceReaders
     ) async -> ChecksumPass {
         await Task.detached(priority: .utility) {
-            let nodeRepairs = UEFIChecksumCheck.repairs(in: image, only: ids, reader: reader)
+            let nodeRepairs = UEFIChecksumCheck.repairs(in: image, only: ids, readers: readers)
             return ChecksumPass(
                 nodeRepairs: nodeRepairs,
                 badChecksums: UEFIChecksumCheck.fields(of: nodeRepairs, in: image)
@@ -448,11 +454,15 @@ private struct ChecksumPass: Sendable {
             tree.resolveAddresses {}
         }
         let image = tree.image()
-        let reader = tree.imageReader
+        let readers = tree.spaceReaders
         let node = focus.flatMap { image.node($0) }
         let detail = node.map {
+            // From the node's own space. A section on the way in that no
+            // longer decodes leaves nothing to read, and the header fields go
+            // with it rather than being read off the file at buffer offsets.
             UEFIDetail.build(
-                for: $0, image: image, reader: reader,
+                for: $0, image: image,
+                reader: readers.reader(for: $0.space) ?? ImageReader([UInt8]()),
                 repairs: nodeRepairs[$0.id] ?? []
             )
         } ?? .empty
@@ -461,7 +471,7 @@ private struct ChecksumPass: Sendable {
             badChecksums: checksumProblems, canWrite: !host.isReadOnly, isBuilding: false,
             rowsChanged: rowsChanged
         )
-        if publish { host.publish(UEFIPresenter.zones(for: node)) }
+        if publish { host.publish(UEFIPresenter.zones(for: node, in: image)) }
     }
 
     // MARK: - What the panel asks for
@@ -559,6 +569,13 @@ private struct ChecksumPass: Sendable {
             fail("Could not read the file.")
             return
         }
+        // The file holds these bytes compressed. The repair is an offset into
+        // a buffer, and writing it would mean compressing the section again —
+        // which this panel does not do (`COMPRESSED_SECTIONS.md` §7).
+        guard node.space == .file else {
+            fail("This checksum is inside a compressed section, which the file holds compressed.")
+            return
+        }
         let revision = UEFIChecksumCheck.volumeRevision(of: node, in: image)
         let reader = tree.imageReader
         controller.showBusy()
@@ -601,6 +618,76 @@ private struct ChecksumPass: Sendable {
                 for: node, volumeRevision: volumeRevision, in: reader
             )
             return repairs.isEmpty ? nil : repairs
+        }.value
+    }
+
+    // MARK: - Export
+
+    /// Saves what a compressed section decompressed to — or one node's bytes
+    /// from inside it — to a file the user picks (`COMPRESSED_SECTIONS.md`
+    /// §8.2). The buffer is read off the main actor: it may have to be decoded
+    /// again, and it is megabytes.
+    ///
+    /// Public because a right-click cannot be simulated — the level the app's
+    /// tests drive, like `fixChecksum(for:)`.
+    public func exportDecompressed(for nodeID: NodeID) {
+        withDecompressedBytes(of: nodeID, nothing: "There is nothing decompressed to export here.") {
+            [weak self] export, bytes in
+            guard let self,
+                  await self.host.exportFile(bytes, suggestedName: export.suggestedName)
+            else { return }
+            self.noticeAnswersTheUser = true
+            self.controller.say("Exported \(bytes.count) bytes.")
+        }
+    }
+
+    /// Opens the same bytes the export saves in a tab of their own, so the
+    /// reader studies a decompressed body as a file — its own offsets from
+    /// zero, the hex view's search and zones — without saving it first.
+    ///
+    /// Public for the same reason as `exportDecompressed(for:)`.
+    public func openDecompressedInNewTab(for nodeID: NodeID) {
+        withDecompressedBytes(of: nodeID, nothing: "There is nothing decompressed to open here.") {
+            [weak self] export, bytes in
+            guard let self else { return }
+            self.host.openInNewTab(bytes, named: export.tabName(fileName: self.host.fileName))
+        }
+    }
+
+    /// Reads what a node has decompressed off the main actor, then hands it to
+    /// `use` back on it; says so in red when there is nothing to read.
+    private func withDecompressedBytes(
+        of nodeID: NodeID,
+        nothing: String,
+        then use: @escaping @MainActor (UEFIPresenter.DecompressedExport, [UInt8]) async -> Void
+    ) {
+        guard let tree, tree.isReady, let node = tree.image().node(nodeID),
+              let export = UEFIPresenter.decompressedExport(for: node)
+        else {
+            fail(nothing)
+            return
+        }
+        let readers = tree.spaceReaders
+        controller.showBusy()
+        Task { [weak self] in
+            let bytes = await UEFIToolSession.decompressedBytes(export, readers: readers)
+            guard let self else { return }
+            self.controller.endBusy()
+            guard let bytes else {
+                self.fail("The section no longer decompresses.")
+                return
+            }
+            await use(export, bytes)
+        }
+    }
+
+    private nonisolated static func decompressedBytes(
+        _ export: UEFIPresenter.DecompressedExport,
+        readers: SpaceReaders
+    ) async -> [UInt8]? {
+        await Task.detached(priority: .userInitiated) {
+            guard let reader = readers.reader(for: export.space) else { return nil }
+            return reader.bytes(export.range ?? reader.all)
         }.value
     }
 

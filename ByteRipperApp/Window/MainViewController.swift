@@ -1649,6 +1649,16 @@ final class MainViewController: NSViewController {
         }
     }
 
+    /// Opens bytes a tool-module hands over in a tab of their own, for
+    /// `ToolHost.openInNewTab` — the untitled copy Open Zone in a New Tab
+    /// makes, of bytes that are not a range of this file. The window's
+    /// bookmarks stay behind: their offsets are the dump's, not these bytes'.
+    func openBytesInNewTabForTool(_ bytes: [UInt8], named name: String) {
+        guard let tab = makeSiblingTab?() else { return }
+        tab.windowModel.pane1.openBytes(bytes, named: name)
+        tab.apply(mode: .singleFile)
+    }
+
     /// Takes the dump to `range` for a tool-module — the same reveal a bookmark
     /// or a search result gets, in the pane the session is bound to rather than
     /// in the active one.

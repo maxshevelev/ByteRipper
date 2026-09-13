@@ -112,6 +112,10 @@ import MEFirmware
         guard let owner else { return false }
         return owner.exportFileForTool(bytes, suggestedName: suggestedName)
     }
+
+    func openInNewTab(_ bytes: [UInt8], named name: String) {
+        owner?.openBytesInNewTabForTool(bytes, named: name)
+    }
 }
 
 /// The seam a UEFI-aware tool-module (`UEFITool`, `MEATool`) reaches through

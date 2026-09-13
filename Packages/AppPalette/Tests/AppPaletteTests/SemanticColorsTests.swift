@@ -51,6 +51,18 @@ final class SemanticColorsTests: XCTestCase {
         }
     }
 
+    /// A protection mark is a wash behind a row's text and its selection, so it
+    /// has to be faint enough to read through; the decompressed rail is a bar
+    /// beside them and is solid.
+    func testRowMarkBackgroundsAreWashesAndTheRailIsSolid() {
+        for set in [RowMarks.Sets.protectedIBB, RowMarks.Sets.protectedFirmware] {
+            XCTAssertLessThan(set.light.alpha, 0.3, "\(set.name) covers a row's text")
+            XCTAssertLessThan(set.dark.alpha, 0.3, "\(set.name) covers a row's text")
+        }
+        XCTAssertEqual(RowMarks.Sets.decompressed.light.alpha, 1)
+        XCTAssertEqual(RowMarks.Sets.decompressed.dark.alpha, 1)
+    }
+
     /// A difference is a wash over the dump's own layers, so it has to let them
     /// through: an opaque fill would hide the byte it is marking.
     func testTheDifferenceFillIsAWash() {

@@ -67,6 +67,11 @@ import Foundation
     /// Offers bytes to the user as a file to save. False when they cancel or
     /// the write fails.
     func exportFile(_ bytes: [UInt8], suggestedName: String) async -> Bool
+
+    /// Opens bytes that are not a range of this file — what a compressed
+    /// section decompressed to — in a tab of their own: an untitled copy the
+    /// user can study as a file, which editing cannot reach back into the dump.
+    func openInNewTab(_ bytes: [UInt8], named name: String)
 }
 
 /// Bytes that do not change under the reader, from any thread.

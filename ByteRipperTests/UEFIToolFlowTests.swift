@@ -713,7 +713,8 @@ final class UEFIToolFlowTests: XCTestCase {
                       "the placeholder is on screen, not below the fold: "
                       + "\(text) is not inside \(scroll.documentVisibleRect)")
         XCTAssertFalse(anyAmbiguousLayout(under: panel),
-                       "no view in the panel is left without a size the engine can solve")
+                       "no view in the panel is left without a size the engine can solve: "
+                       + "\(ambiguousViews(under: panel))")
     }
 
     /// A descriptor says more about itself than a header's worth of rows, and

@@ -127,4 +127,22 @@ final class ToolFileTests: XCTestCase {
 
         XCTAssertFalse(wrote)
     }
+
+    /// Bytes that are not a range of the file — a decompressed body — open as
+    /// an untitled copy in a tab beside the window, under the name given.
+    func testBytesOpenInATabOfTheirOwn() throws {
+        let (host, controller) = try makeHost()
+        let tab = MainViewController()
+        defer { tab.windowModel.pane1.close() }
+        controller.makeSiblingTab = { tab }
+
+        host.openInNewTab([0x01, 0x02, 0x03], named: "bios_Body.bin")
+
+        XCTAssertEqual(tab.windowModel.pane1.fileSize, 3)
+        XCTAssertTrue(tab.windowModel.pane1.isUntitled,
+                      "a copy, so editing it cannot reach back into the dump")
+        XCTAssertTrue(tab.windowModel.pane1.status.fileName.hasSuffix("bios_Body.bin"),
+                      tab.windowModel.pane1.status.fileName)
+        XCTAssertEqual(controller.windowModel.pane1.fileSize, 0x40, "the dump is left as it was")
+    }
 }

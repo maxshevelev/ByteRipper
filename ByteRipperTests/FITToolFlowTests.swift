@@ -1457,4 +1457,16 @@ extension XCTestCase {
         if root.hasAmbiguousLayout { return true }
         return root.subviews.contains { anyAmbiguousLayout(under: $0) }
     }
+
+    /// Which views under `root` are ambiguous, by type and with their parent's
+    /// type — what a failed `anyAmbiguousLayout` check says, so the view to
+    /// fix is named rather than searched for.
+    @MainActor func ambiguousViews(under root: NSView) -> [String] {
+        let contents = root.subviews.map { "\(type(of: $0))" }.joined(separator: ", ")
+        let here = root.hasAmbiguousLayout
+            ? ["\(type(of: root))[\(contents)]\(root.isHidden ? " hidden" : "") "
+                + "\(root.frame) in \(root.superview.map { "\(type(of: $0))" } ?? "nothing")"]
+            : []
+        return here + root.subviews.flatMap { ambiguousViews(under: $0) }
+    }
 }

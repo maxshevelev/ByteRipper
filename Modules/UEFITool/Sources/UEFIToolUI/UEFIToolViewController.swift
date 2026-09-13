@@ -23,6 +23,11 @@ import UEFITool
     var onRevealAtCaret: (() -> Void)?
     /// A flagged node's Fix Checksum menu item was chosen.
     var onFixChecksum: ((NodeID) -> Void)?
+    /// An opened compressed section's — or a node inside one's — export item
+    /// was chosen.
+    var onExportDecompressed: ((NodeID) -> Void)?
+    /// The same node's Open Decompressed … in New Tab item was chosen.
+    var onOpenDecompressed: ((NodeID) -> Void)?
     /// A row was opened or shut. What is open belongs to the file rather than
     /// to this panel, so the session writes it through to where the tree
     /// lives (`UEFITreeProviding.setOpenUEFIRows`).
@@ -118,6 +123,12 @@ import UEFITool
     private let revealButton = NSButton()
     private let outline = UEFIOutlineView()
     private let outlineScroll = NSScrollView()
+    /// The tree and its legend, as one pane of the splitter: the legend
+    /// explains the rows, and opens into the tree's room rather than the
+    /// detail's.
+    private let treePane = NSView()
+    private let legend = ToolRowMarksLegend(panel: "UEFIStructure", marks: UEFITreeMarks.legendMarks)
+    private static let rowViewIdentifier = NSUserInterfaceItemIdentifier("uefiRow")
     private let detail = ToolDetailScroll()
     private let splitter = ALSplitView()
     private let noticeLabel = NSTextField(labelWithString: "")
@@ -206,7 +217,20 @@ import UEFITool
         splitter.isVertical = false
         splitter.dividerThickness = 1
         splitter.translatesAutoresizingMaskIntoConstraints = false
-        splitter.addPane(outlineScroll)
+        treePane.translatesAutoresizingMaskIntoConstraints = false
+        treePane.addSubview(outlineScroll)
+        treePane.addSubview(legend)
+        NSLayoutConstraint.activate([
+            outlineScroll.topAnchor.constraint(equalTo: treePane.topAnchor),
+            outlineScroll.leadingAnchor.constraint(equalTo: treePane.leadingAnchor),
+            outlineScroll.trailingAnchor.constraint(equalTo: treePane.trailingAnchor),
+            legend.topAnchor.constraint(equalTo: outlineScroll.bottomAnchor, constant: 4),
+            legend.leadingAnchor.constraint(equalTo: treePane.leadingAnchor),
+            legend.trailingAnchor.constraint(equalTo: treePane.trailingAnchor),
+            legend.bottomAnchor.constraint(equalTo: treePane.bottomAnchor)
+        ])
+        legend.onShowMarkingsChanged = { [weak self] _ in self?.updateRowMarks() }
+        splitter.addPane(treePane)
         splitter.addPane(detail)
         splitter.setPaneLayout(.fill, at: 0)
         splitter.setPaneLayout(.proportional(1.0 / 3), at: 1)
@@ -431,6 +455,7 @@ import UEFITool
             let rowsChanged = self.queuedRefresh ?? false
             self.queuedRefresh = nil
             self.refreshTheOutline(rowsChanged: rowsChanged)
+            self.updateRowMarks()
         }
     }
 
@@ -936,11 +961,12 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             let cell = outlineView.makeView(withIdentifier: identifier, owner: self)
                 as? NSTableCellView
                 ?? ToolPanelTable.makeCell(identifier: identifier,
-                                           warning: identifier == Column.name)
+                                           warning: identifier == Column.name,
+                                       badges: identifier == Column.name)
             cell.textField?.stringValue = identifier == Column.name ? "Loading…" : ""
             cell.textField?.font = ToolPanelFont.body()
             if identifier == Column.name {
-                ToolPanelTable.setWarning(false, on: cell)
+                ToolPanelTable.dress(cell, with: .none)
             }
             return cell
         }
@@ -948,29 +974,65 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         let cell = outlineView.makeView(withIdentifier: identifier, owner: self)
             as? NSTableCellView
             ?? ToolPanelTable.makeCell(identifier: identifier,
-                                       warning: identifier == Column.name)
+                                       warning: identifier == Column.name,
+                                       badges: identifier == Column.name)
         cell.textField?.stringValue = text(for: node, in: identifier)
         // Set per row, not once when the cell is made: a reused cell carries
         // the font it was made with, and the zoom moves under it.
         cell.textField?.font = ToolPanelFont.body()
-        // The Name column wears the warning: a node whose checksums do not
-        // check out, with what is wrong under the pointer.
+        // The Name column wears the row's icons: its problem, with what is
+        // wrong under the pointer, and its badges (`Design/ROW_MARKS.md`).
         if identifier == Column.name {
-            let bad = badChecksums[node.id] ?? []
-            ToolPanelTable.setWarning(!bad.isEmpty, on: cell,
-                                      explanation: bad.isEmpty ? nil : warningText(for: bad))
+            ToolPanelTable.dress(cell, with: marks(for: node))
         }
         return cell
     }
 
-    /// What the pointer reads on a flagged row's triangle: which of the node's
-    /// checksums is wrong, since "invalid" alone leaves the reader to open the
-    /// detail to find out.
-    private func warningText(for fields: Set<UEFIChecksumField>) -> String {
-        let names = fields.map(\.label).sorted()
-        return names.count == 1
-            ? "Invalid \(names[0]) checksum"
-            : "Invalid checksums: \(names.joined(separator: ", "))"
+    /// What a row wears besides its name, decided in the pure target.
+    private func marks(for node: UEFINode) -> ToolRowMarks {
+        guard let image else { return .none }
+        return UEFITreeMarks.marks(for: node, in: image, badChecksums: badChecksums[node.id] ?? [],
+                                   isOpen: outline.isItemExpanded(row(node.id)))
+    }
+
+    /// One row's marks again, on its row view and its Name cell — what a row
+    /// opening or shutting changes: a compressed section wears the rail only
+    /// while it is open on its subtree.
+    private func updateMarks(ofItem item: Any?) {
+        guard let item, let node = node(of: item) else { return }
+        let index = outline.row(forItem: item)
+        guard index >= 0 else { return }
+        let marks = marks(for: node)
+        (outline.rowView(atRow: index, makeIfNecessary: false) as? ToolPanelRowView)?.marks = marks
+        let column = outline.column(withIdentifier: Column.name)
+        if column >= 0,
+           let cell = outline.view(atColumn: column, row: index, makeIfNecessary: false) as? NSTableCellView {
+            ToolPanelTable.dress(cell, with: marks)
+        }
+    }
+
+    /// The row views that are on screen, given their background and rail
+    /// again. Reloading cells does not reach a row view, so a show that only
+    /// re-renders the cells — a checksum pass, a branch opening — ends here.
+    private func updateRowMarks() {
+        outline.enumerateAvailableRowViews { rowView, row in
+            guard let rowView = rowView as? ToolPanelRowView else { return }
+            rowView.showsMarkings = legend.showsMarkings
+            rowView.marks = outline.item(atRow: row).flatMap { node(of: $0) }
+                .map { marks(for: $0) } ?? .none
+        }
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        let rowView = outlineView.makeView(withIdentifier: Self.rowViewIdentifier, owner: self)
+            as? ToolPanelRowView ?? {
+                let created = ToolPanelRowView()
+                created.identifier = Self.rowViewIdentifier
+                return created
+            }()
+        rowView.showsMarkings = legend.showsMarkings
+        rowView.marks = node(of: item).map { marks(for: $0) } ?? .none
+        return rowView
     }
 
     private func text(
@@ -986,33 +1048,57 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         }
     }
 
-    /// The menu a right-click asks for: one Fix Checksum item on the node under
-    /// the pointer when its checksum is wrong, and nothing at all on any other
-    /// row. The item greys out on a read-only file rather than vanishing, so
-    /// the menu still says what fixing would do.
+    /// The menu a right-click asks for, from what the node under the pointer
+    /// offers: Fix Checksum when its checksum is wrong, an export when it is —
+    /// or is inside — a compressed section that opened, and nothing at all on
+    /// any other row. Fix greys out on a read-only file rather than vanishing,
+    /// so the menu still says what fixing would do. It is never offered inside
+    /// a compressed section: the file holds those bytes compressed.
     private func contextMenu(for event: NSEvent) -> NSMenu? {
         let point = outline.convert(event.locationInWindow, from: nil)
         let row = outline.row(at: point)
         guard row >= 0,
               let clicked = outline.item(atRow: row),
-              let node = node(of: clicked),
-              !(badChecksums[node.id]?.isEmpty ?? true)
+              let node = node(of: clicked)
         else { return nil }
 
-        let item = NSMenuItem(
-            title: "Fix Checksum",
-            action: #selector(fixChecksumClicked(_:)),
-            keyEquivalent: ""
-        )
-        item.target = self
-        item.isEnabled = canWrite
-        // The node the click was on, read back when the item fires — by id, not
-        // by node: a parse between the click and the action re-reads the tree,
-        // and the id is what still points at the node.
-        item.representedObject = node.id
+        var items: [NSMenuItem] = []
+        if !(badChecksums[node.id]?.isEmpty ?? true), node.space == .file {
+            let item = NSMenuItem(
+                title: "Fix Checksum",
+                action: #selector(fixChecksumClicked(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.isEnabled = canWrite
+            // The node the click was on, read back when the item fires — by id,
+            // not by node: a parse between the click and the action re-reads
+            // the tree, and the id is what still points at the node.
+            item.representedObject = node.id
+            items.append(item)
+        }
+        if let export = UEFIPresenter.decompressedExport(for: node) {
+            let open = NSMenuItem(
+                title: export.openTitle,
+                action: #selector(openDecompressedClicked(_:)),
+                keyEquivalent: ""
+            )
+            open.target = self
+            open.representedObject = node.id
+            items.append(open)
+            let item = NSMenuItem(
+                title: export.menuTitle,
+                action: #selector(exportClicked(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = node.id
+            items.append(item)
+        }
+        guard !items.isEmpty else { return nil }
         let menu = NSMenu()
         menu.autoenablesItems = false
-        menu.addItem(item)
+        items.forEach(menu.addItem)
         return menu
     }
 
@@ -1021,12 +1107,25 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         onFixChecksum?(nodeID)
     }
 
+    @objc private func exportClicked(_ sender: NSMenuItem) {
+        guard let nodeID = sender.representedObject as? NodeID else { return }
+        onExportDecompressed?(nodeID)
+    }
+
+    @objc private func openDecompressedClicked(_ sender: NSMenuItem) {
+        guard let nodeID = sender.representedObject as? NodeID else { return }
+        onOpenDecompressed?(nodeID)
+    }
+
     func outlineViewItemDidExpand(_ notification: Notification) {
+        // Before the guard: a row the panel opens itself changes its rail too.
+        updateMarks(ofItem: notification.userInfo?["NSObject"])
         guard !isShowingState else { return }
         onOpenRowsChanged?()
     }
 
     func outlineViewItemDidCollapse(_ notification: Notification) {
+        updateMarks(ofItem: notification.userInfo?["NSObject"])
         guard !isShowingState else { return }
         onOpenRowsChanged?()
     }

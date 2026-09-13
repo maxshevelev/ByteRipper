@@ -14,8 +14,9 @@ every tool-module has), the outline, the splitter, the detail, the one zone per
 selected node, and the app wiring (registry + `project.yml`).
 
 **Not in scope.** Editing the image (this tool reads; the FIT tool writes),
-decompressing compressed sections (the parser keeps them whole, §6), and
-persistence beyond the session's parked selection.
+editing inside a compressed section (the parser opens them read-only —
+`UEFI/COMPRESSED_SECTIONS.md` §7), and persistence beyond the session's parked
+selection.
 
 ## What it shows
 
@@ -83,6 +84,13 @@ The offsets and the name tables (`FFS.typeName`, `Section.typeName`,
 `KnownGUIDs`, `FlashRegionType.label`, `MicrocodeHeader.date`) all live in
 `UEFIImage`; the detail builder reads them through the reader and does not
 re-derive a single one.
+
+## Marking the tree
+
+The tree marks its rows the way every firmware panel does — a background for
+Boot Guard protection, a rail for decompressed bytes, a problem icon, role
+badges — as `Design/ROW_MARKS.md` sets out. What each channel means in this
+tree is §5.1 there.
 
 ## Where the decisions live
 

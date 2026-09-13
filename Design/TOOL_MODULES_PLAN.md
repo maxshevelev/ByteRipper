@@ -474,6 +474,12 @@ adapter from `ToolContentReader` to `ByteSource` that lives in the tool-module
 because neither package is allowed to know about the other. When a second
 tool-module needs the same ten lines, they move to a shared package.
 
+**Row marks.** The table's rows are marked the way every firmware panel's are
+(`Design/ROW_MARKS.md`): the "latest" verdict and the validator's problem where
+they are today, `lock.shield` on the Key Manifest and Boot Policy rows, and —
+once the protected ranges are read — a background for the component a row points
+at (§5.2 there).
+
 ## Open questions
 
 - ~~**Does a click on a zone in the dump reach the tool-module?**~~ Answered

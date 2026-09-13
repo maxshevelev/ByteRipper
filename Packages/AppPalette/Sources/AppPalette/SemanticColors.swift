@@ -52,6 +52,7 @@ public enum SemanticColors {
     /// app suite checks the catalogue against.
     public static var everySet: [PaletteColor] {
         Sets.all + ZoneColors.Sets.all + SegmentTints.Sets.all + DifferenceColors.Sets.all
+            + RowMarks.Sets.all
     }
 }
 
@@ -105,4 +106,24 @@ public enum DifferenceColors {
     /// its alpha is part of the colour, because the byte's own text and the
     /// piece's tint have to stay readable under it.
     public static let fill = Sets.fill.color
+}
+
+/// The marks a firmware panel draws on a row besides its text
+/// (`Design/ROW_MARKS.md`): what an edit there breaks, and where its bytes live.
+///
+/// Rose and cyan are washes behind a row, so the row's own text and its
+/// selection stay readable through them; indigo is a solid bar at the row's
+/// edge, and also tints the badge of what decodes into it.
+public enum RowMarks {
+    public enum Sets {}
+
+    /// Background: the row's bytes lie wholly inside the Boot Guard IBB.
+    public static let protectedIBB = Sets.protectedIBB.color
+
+    /// Background: the row's bytes lie wholly inside ranges the firmware
+    /// checks at boot — post-IBB, PMDA, vendor hash files.
+    public static let protectedFirmware = Sets.protectedFirmware.color
+
+    /// The rail: the row's bytes came out of a decompressed buffer.
+    public static let decompressed = Sets.decompressed.color
 }
