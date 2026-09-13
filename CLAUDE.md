@@ -5,7 +5,10 @@ Project: macOS GUI tool to visually compare and edit two binary files.
 Stack:
 - Xcode project written in Swift.
 - macOS 14+.
-- No third-party dependencies unless absolutely unavoidable.
+- No third-party dependencies unless absolutely unavoidable. The one exception
+  is decoders for published formats (`Packages/FirmwareCompression`): the
+  reference C sources, vendored unmodified as a C target, with their origin and
+  version written down beside them.
 - Swift Concurrency.
 - UI on MainActor.
 - Long-running operations in background.
@@ -21,7 +24,8 @@ Packages:
   remote dependencies, and each package is listed in `packages:` in
   `project.yml` — including one only a tool-module links, so Xcode can see it.
 - `Packages/<Name>` — a shared library: one target `<Name>`, one product
-  `<Name>`, tests in `Tests/<Name>Tests`.
+  `<Name>`, tests in `Tests/<Name>Tests`. Vendored C sits in extra targets
+  behind it that are not products.
 - `Modules/<Name>` — a tool-module: two targets, `<Name>` (pure, no AppKit) and
   `<Name>UI` (the view controller and the `ToolModule` conformance), and a
   product for each. The tests cover the pure target; the host is tried in the

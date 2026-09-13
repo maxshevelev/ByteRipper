@@ -42,6 +42,10 @@ packages:
   # flow tests build a UEFI image by hand and so import it directly.
   UEFIImage:
     path: Packages/UEFIImage
+  # The decoders for compressed firmware data, vendored C behind a Swift API.
+  # UEFIImage and MEFirmware link it; no target here does.
+  FirmwareCompression:
+    path: Packages/FirmwareCompression
   # The ME/engine analysis engine. MEATool consumes it; the app's flow tests
   # install a stub `MEADataSource` and so import it directly.
   MEFirmware:
