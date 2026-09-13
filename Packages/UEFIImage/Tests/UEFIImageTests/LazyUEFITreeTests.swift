@@ -466,10 +466,10 @@ final class LazyUEFITreeTests: XCTestCase {
     func testProtectedRangesAreReadWithoutOpeningTheTree() async throws {
         let (image, _) = bootGuardImage()
         let tree = await built(image.bytes)
-        await resolvedAddresses(tree)
         let before = tree.rootNodes
 
         await resolvedRanges(tree)
+        XCTAssertFalse(tree.addressesResolved, "the copy worked the mapping out for itself")
 
         let ranges = try XCTUnwrap(tree.protectedRanges)
         XCTAssertEqual(ranges.ranges.map(\.kind), [.ibb, .postIbb])

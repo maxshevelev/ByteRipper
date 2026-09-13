@@ -269,11 +269,16 @@ enum TreeMaterialization {
     /// and compressed sections only when a range that starts at the DXE root
     /// volume could not be placed without them, since the DXE Core usually sits
     /// inside an LZMA section and decoding one is megabytes of work.
+    ///
+    /// `addressesKnown` false works the mapping out on the copy, by the same
+    /// second pass a whole parse runs — so the tree's own branches on the way
+    /// to the Volume Top File are not opened for it.
     static func protectedRanges(
         roots: [UEFINode],
         size: UInt64,
-        addressDiff: UInt64?,
-        resetVector: ResetVector?,
+        addressDiff knownDiff: UInt64?,
+        resetVector knownVector: ResetVector?,
+        addressesKnown: Bool,
         reader: ImageReader,
         limits: UEFIParser.Limits,
         buffers: DecompressedBuffers
@@ -283,6 +288,8 @@ enum TreeMaterialization {
         // opens those branches, not this reading's.
         var discarded: [UEFIDiagnostic] = []
         let readers = SpaceReaders(file: reader, buffers: buffers, limit: limits.maxDecompressedSize)
+        var addressDiff = knownDiff
+        var resetVector = knownVector
         func read() -> ProtectedRanges {
             ProtectedRanges.read(
                 UEFIImage(size: size, roots: nodes, addressDiff: addressDiff, resetVector: resetVector),
@@ -291,6 +298,11 @@ enum TreeMaterialization {
         }
         materializeAll(&nodes, reader: reader, limits: limits, buffers: buffers,
                        diagnostics: &discarded, opensCompressed: false)
+        if !addressesKnown, !nodes.isEmpty {
+            let second = Parser(reader: reader, limits: limits).runSecondPass(&nodes)
+            addressDiff = second.addressDiff
+            resetVector = second.resetVector
+        }
         let shallow = read()
         let needsTheDXECore = shallow.ranges.contains {
             ($0.kind == .postIbb || $0.kind == .amiV1) && $0.range == nil

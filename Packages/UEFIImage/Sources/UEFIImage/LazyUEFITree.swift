@@ -498,14 +498,15 @@ public final class LazyUEFITree {
     /// immediately when they have been read since the last edit
     /// (`BOOT_GUARD_PROTECTED_RANGES.md` §9.2).
     ///
-    /// The mapping first, since most of the lists name physical addresses.
-    /// Then, off the main actor, a copy of the tree is opened as far as the
-    /// lists need — every volume's files, and the compressed sections only
-    /// when the DXE root volume cannot be found without them — and read. The
-    /// copy is dropped: writing it back wholesale would throw away a branch
-    /// opened meanwhile, the same reason `descendToTheLastNode` goes through
-    /// `expand`. What it decoded stays in the shared buffers, so the branch a
-    /// reader opens next is not decoded twice.
+    /// Off the main actor, a copy of the tree is opened as far as the lists
+    /// need — every volume's files, and the compressed sections only when the
+    /// DXE root volume cannot be found without them — and read, with the
+    /// mapping the tree has or, when it has none yet, the one the copy works
+    /// out. Nothing in the tree the reader sees is opened: a branch read here
+    /// would make the next click on its row open at once, before the reader
+    /// asked. The copy is dropped rather than written back, which would throw
+    /// away a branch opened meanwhile; what it decoded stays in the shared
+    /// buffers, so the branch a reader opens next is not decoded twice.
     public func resolveProtectedRanges(_ done: @escaping @MainActor () -> Void) {
         if protectedRanges != nil {
             done()
@@ -515,11 +516,12 @@ public final class LazyUEFITree {
         guard !isReadingProtectedRanges else { return }
         isReadingProtectedRanges = true
         let requested = generation
-        resolveAddresses { [weak self] in
+        whenReady { [weak self] in
             // An edit landed meanwhile: it has already told the callers.
             guard let self, self.isReadingProtectedRanges, self.generation == requested else { return }
             let roots = self.roots
             let size = self.reader.count
+            let addressesKnown = self.addressesResolved
             let addressDiff = self.addressDiff
             let resetVector = self.resetVector
             let reader = self.reader
@@ -528,7 +530,7 @@ public final class LazyUEFITree {
             Task.detached(priority: .utility) { [weak self] in
                 let ranges = TreeMaterialization.protectedRanges(
                     roots: roots, size: size, addressDiff: addressDiff, resetVector: resetVector,
-                    reader: reader, limits: limits, buffers: buffers
+                    addressesKnown: addressesKnown, reader: reader, limits: limits, buffers: buffers
                 )
                 await self?.landProtectedRanges(ranges, expectedGeneration: requested)
             }
