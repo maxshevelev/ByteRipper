@@ -198,6 +198,7 @@ public struct ProtectedRanges: Equatable, Sendable {
         let reading = ProtectedRangeReading(image: image, file: readers.file)
         reading.readBootPolicies()
         reading.readVendorHashFiles()
+        reading.readFlashDeviceMaps()
         return reading.finish()
     }
 }
@@ -710,6 +711,31 @@ final class ProtectedRangeReading {
             if !group.members.isEmpty || group.incomplete { groups.append(group) }
         default:
             note(.unknownVendorHashFileSize(size), at: start)
+        }
+    }
+
+    // MARK: - The Insyde flash device map (§5.3)
+
+    func readFlashDeviceMaps() {
+        for store in nodes where store.kind == .flashDeviceMapStore && store.space == .file {
+            guard let base = file.uint64(at: store.header.lowerBound + FlashDeviceMap.baseAddressOffset) else {
+                continue
+            }
+            for entry in store.children where entry.kind == .flashDeviceMapEntry {
+                let at = entry.header.lowerBound
+                guard let offset = file.uint64(at: at + FlashDeviceMap.regionOffsetOffset),
+                      let size = file.uint64(at: at + FlashDeviceMap.regionSizeOffset),
+                      let attributes = file.uint32(at: at + FlashDeviceMap.attributesOffset),
+                      let hash = file.bytes(at: at + FlashDeviceMap.hashOffset, count: 32)
+                else { continue }
+                // UEFITool looks at MODIFIABLE alone: an entry marked IGNORED
+                // and not MODIFIABLE is still a range. Followed until a real
+                // image says otherwise (§5.3).
+                guard attributes & FlashDeviceMap.modifiable == 0 else { continue }
+                let address = UInt32(truncatingIfNeeded: base) &+ UInt32(truncatingIfNeeded: offset)
+                addSingle(.insyde, physical(address, UInt32(truncatingIfNeeded: size)),
+                          digest: .init(algorithm: TCGHash.sha256, bytes: hash), source: entry.header)
+            }
         }
     }
 

@@ -180,6 +180,8 @@ public enum UEFITreeDisplay {
         case .sysFEntry: return UEFITypes.typeName(UEFITypes.Item.sysFEntry.rawValue)
         case .evsaEntry: return UEFITypes.typeName(UEFITypes.Item.evsaEntry.rawValue)
         case .flashMapEntry: return UEFITypes.typeName(UEFITypes.Item.phoenixFlashMapEntry.rawValue)
+        case .flashDeviceMapStore: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapStore.rawValue)
+        case .flashDeviceMapEntry: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue)
         case .padding: return "Padding"
         case .freeSpace: return "Free space"
         case .nonUEFIData: return "Non-UEFI data"

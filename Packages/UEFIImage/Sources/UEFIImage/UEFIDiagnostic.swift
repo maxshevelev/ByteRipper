@@ -41,6 +41,8 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case bootPolicy
         /// A Phoenix or AMI vendor hash table (§5).
         case vendorHashFile
+        /// An Insyde H2O Flash Device Map (§5.3).
+        case flashDeviceMap
     }
 
     public enum Kind: Equatable, Sendable {
@@ -93,6 +95,12 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case unsupportedHashAlgorithm(UInt16)
         /// An AMI hash table of a size no known version has (§5.2).
         case unknownVendorHashFileSize(UInt64)
+        /// A structure of a revision later than any this parser reads; it is
+        /// skipped.
+        case unknownRevision(Structure, UInt8)
+        /// A flash device map whose entries are of a size or format nobody has
+        /// described; the store is kept whole.
+        case unknownFlashDeviceMapEntries(size: UInt32, format: UInt8)
 
         public var severity: Severity {
             switch self {
@@ -104,7 +112,8 @@ public struct UEFIDiagnostic: Equatable, Sendable {
                  .decompressedSizeMismatch, .processingRequiredNotSet,
                  .protectedRangeOutsideImage, .protectedRangeNotPlaced,
                  .protectedRangeHashMismatch, .unsupportedHashAlgorithm,
-                 .unknownVendorHashFileSize:
+                 .unknownVendorHashFileSize, .unknownRevision,
+                 .unknownFlashDeviceMapEntries:
                 return .warning
             }
         }
@@ -190,6 +199,11 @@ public struct UEFIDiagnostic: Equatable, Sendable {
             return "\(TCGHash.name(algorithm)) digests are not computed by this tool"
         case .unknownVendorHashFileSize(let size):
             return "AMI vendor hash table of \(hex(size)) bytes is of no known version"
+        case .unknownRevision(let structure, let revision):
+            return "\(structure.label) revision \(hex(UInt64(revision))) is later than any this parser reads"
+        case .unknownFlashDeviceMapEntries(let size, let format):
+            return "Insyde flash device map entries of \(hex(UInt64(size))) bytes in format "
+                + "\(hex(UInt64(format))) are of no known layout"
         }
     }
 
@@ -223,6 +237,7 @@ extension UEFIDiagnostic.Structure {
         case .nvramStore: return "NVRAM store"
         case .bootPolicy: return "Boot Policy Manifest"
         case .vendorHashFile: return "vendor hash table"
+        case .flashDeviceMap: return "Insyde flash device map"
         }
     }
 }

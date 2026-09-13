@@ -257,6 +257,8 @@ final class Parser {
             return parseVolume(at: offset - FV.signatureOffset, limit: range.upperBound, depth: depth)
         case Microcode.headerType:
             return parseMicrocode(at: offset, limit: range.upperBound)
+        case FlashDeviceMap.signature:
+            return parseFlashDeviceMap(at: offset, limit: range.upperBound)
         default:
             return nil
         }

@@ -32,6 +32,8 @@ extension UEFINode {
         case .sysFEntry: return UEFITypes.Item.sysFEntry.rawValue
         case .evsaEntry: return UEFITypes.Item.evsaEntry.rawValue
         case .flashMapEntry: return UEFITypes.Item.phoenixFlashMapEntry.rawValue
+        case .flashDeviceMapStore: return UEFITypes.Item.insydeFlashDeviceMapStore.rawValue
+        case .flashDeviceMapEntry: return UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue
         case .padding: return UEFITypes.Item.padding.rawValue
         case .freeSpace: return UEFITypes.Item.freeSpace.rawValue
         // Data nobody claimed is a run of bytes with a type, not a structure, so
@@ -70,6 +72,9 @@ extension UEFINode {
         // byte is not on the node, the parser worked it out from the header.
         case .slicData, .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry:
             return subtype
+        // UEFITool names no subtypes for the flash device map.
+        case .flashDeviceMapStore, .flashDeviceMapEntry:
+            return nil
         case .padding:
             return Self.paddingSubtype(of: self)
         case .freeSpace:

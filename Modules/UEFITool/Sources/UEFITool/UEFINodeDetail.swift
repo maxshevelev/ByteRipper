@@ -327,6 +327,37 @@ public enum UEFIDetail {
                 ))
             }
 
+        case .flashDeviceMapStore:
+            // `INSYDE_FLASH_DEVICE_MAP_HEADER` (BOOT_GUARD_PROTECTED_RANGES.md §5.3).
+            if let size = reader.uint32(at: h + 4) { fields.append(.init("Size", sizeText(size))) }
+            if let dataOffset = reader.uint32(at: h + 8) { fields.append(.init("Data offset", hex(dataOffset))) }
+            if let entrySize = reader.uint32(at: h + 12) { fields.append(.init("Entry size", sizeText(entrySize))) }
+            if let format = reader.uint8(at: h + 16) { fields.append(.init("Entry format", hex(format))) }
+            if let revision = reader.uint8(at: h + 17) { fields.append(.init("Revision", hex(revision))) }
+            if let extensions = reader.uint8(at: h + 18) { fields.append(.init("Extensions", "\(extensions)")) }
+            if let checksum = reader.uint8(at: h + 19), let header = reader.bytes(at: h, count: 0x1C) {
+                let expected = 0 &- (Checksums.sum8(header) &- checksum)
+                fields.append(.init("Checksum", expected == checksum ? "\(hex(checksum)), valid" : "\(hex(checksum)), should be \(hex(expected))"))
+            }
+            if let base = reader.uint64(at: h + 20) { fields.append(.init("Flash device base address", hex(base))) }
+
+        case .flashDeviceMapEntry:
+            // The region type GUID is the common "GUID" field.
+            if let regionID = reader.bytes(at: h + 16, count: 16) {
+                fields.append(.init("Region ID", regionID.map { String(format: "%02X", $0) }.joined()))
+            }
+            if let offset = reader.uint64(at: h + 32) { fields.append(.init("Region offset", hex(offset))) }
+            if let size = reader.uint64(at: h + 40) { fields.append(.init("Region size", hex(size))) }
+            if let attributes = reader.uint32(at: h + 48) {
+                var words: [String] = []
+                if attributes & 0x1 != 0 { words.append("modifiable") }
+                if attributes & 0x2 != 0 { words.append("ignored") }
+                fields.append(.init("Attributes", words.isEmpty ? hex(attributes) : "\(hex(attributes)) (\(words.joined(separator: ", ")))"))
+            }
+            if let hash = reader.bytes(at: h + 52, count: 32) {
+                fields.append(.init("Hash", hash.map { String(format: "%02X", $0) }.joined()))
+            }
+
         case .flashMapStore:
             // A Phoenix flash map names its regions in an entry count and a
             // reserved dword before the entries themselves (§9).
@@ -634,6 +665,8 @@ public enum UEFIDetail {
         case .sysFEntry: return UEFITypes.typeName(UEFITypes.Item.sysFEntry.rawValue)
         case .evsaEntry: return UEFITypes.typeName(UEFITypes.Item.evsaEntry.rawValue)
         case .flashMapEntry: return UEFITypes.typeName(UEFITypes.Item.phoenixFlashMapEntry.rawValue)
+        case .flashDeviceMapStore: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapStore.rawValue)
+        case .flashDeviceMapEntry: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue)
         case .padding: return "Padding"
         case .freeSpace: return "Free space"
         case .nonUEFIData: return "Non-UEFI data"

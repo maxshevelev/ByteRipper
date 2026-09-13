@@ -205,6 +205,11 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     case sysFEntry
     case evsaEntry
     case flashMapEntry
+    /// An Insyde H2O Flash Device Map, found by the raw-area scan, and one of
+    /// its entries — the ranges it names are protected
+    /// (`BOOT_GUARD_PROTECTED_RANGES.md` §5.3).
+    case flashDeviceMapStore
+    case flashDeviceMapEntry
     /// Space between elements that belongs to no structure.
     case padding
     /// The unused tail of a volume's body (§5.8).

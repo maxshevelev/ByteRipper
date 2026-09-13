@@ -190,6 +190,41 @@ enum TestBootGuard {
         )
     }
 
+    typealias MapEntry = (offset: UInt64, size: UInt64, attributes: UInt32, hash: [UInt8])
+
+    /// An Insyde flash device map, its header checksum right.
+    static func flashDeviceMap(
+        base: UInt64,
+        entries: [MapEntry],
+        entrySize: UInt32 = 0x54,
+        format: UInt8 = 0,
+        revision: UInt8 = 3
+    ) -> [UInt8] {
+        var body = BinaryWriter()
+        for (index, entry) in entries.enumerated() {
+            body.guid(KnownGUIDs.guid(String(format: "FD000000-0000-4000-8000-%012X", UInt32(index + 1))))
+            let regionID = Array("REGION\(index)".utf8)
+            body.raw(regionID + [UInt8](repeating: 0, count: 16 - regionID.count))
+            body.u64(entry.offset)
+            body.u64(entry.size)
+            body.u32(entry.attributes)
+            body.raw(entry.hash)
+        }
+        var header = BinaryWriter()
+        header.u32(FlashDeviceMap.signature)
+        header.u32(UInt32(FlashDeviceMap.headerSize) + UInt32(body.bytes.count))
+        header.u32(UInt32(FlashDeviceMap.headerSize))   // DataOffset
+        header.u32(entrySize)
+        header.u8(format)
+        header.u8(revision)
+        header.u8(0)                                     // ExtensionCount
+        header.u8(0)                                     // Checksum, filled in below
+        header.u64(base)
+        var bytes = header.bytes
+        bytes[FlashDeviceMap.checksumOffset] = 0 &- Checksums.sum8(bytes)
+        return bytes + body.bytes
+    }
+
     static func phoenixFile(entries: [Entry]) -> [UInt8] {
         var writer = BinaryWriter()
         writer.u64(BootPolicy.phoenixSignature)
@@ -286,6 +321,18 @@ struct BootGuardImage {
 
     var ranges: ProtectedRanges {
         UEFIParser.parse(bytes).protectedRanges!
+    }
+}
+
+private extension UEFIDiagnostic {
+    var structureIsFlashDeviceMap: Bool {
+        switch kind {
+        case .truncated(.flashDeviceMap), .checksumMismatch(.flashDeviceMap, _, _),
+             .unknownRevision(.flashDeviceMap, _), .unknownFlashDeviceMapEntries:
+            return true
+        default:
+            return false
+        }
     }
 }
 
@@ -533,6 +580,63 @@ final class ProtectedRangesTests: XCTestCase {
         XCTAssertTrue(ranges.diagnostics.contains {
             $0.kind == .protectedRangeNotPlaced(ProtectedRange.Kind.amiV2.name)
         })
+    }
+
+    // MARK: - The Insyde flash device map (§5.3)
+
+    /// The store at the start of a 64 KiB image with no descriptor, then a
+    /// volume ending in the Volume Top File.
+    private func mapImage(_ store: [UInt8]) -> [UInt8] {
+        store + [UInt8](repeating: 0xFF, count: 0x1000 - store.count)
+            + TestImage.volume(length: 0xF000, lastFile: TestImage.volumeTopFile(size: 0x100))
+    }
+
+    func testAFlashDeviceMapIsAFixedNodeWithItsEntries() throws {
+        let store = Build.flashDeviceMap(base: 0xFFFF_0000, entries: [
+            (0x3000, 0x100, 0, Build.zero32), (0x4000, 0x100, 1, Build.zero32)
+        ])
+        let parsed = UEFIParser.parse(mapImage(store))
+
+        let node = try XCTUnwrap(parsed.allNodes.first { $0.kind == .flashDeviceMapStore })
+        XCTAssertEqual(node.range, 0..<UInt64(store.count))
+        XCTAssertTrue(node.isFixed)
+        XCTAssertEqual(node.children.map(\.kind), [.flashDeviceMapEntry, .flashDeviceMapEntry])
+        XCTAssertEqual(node.uefiItemType, UEFITypes.Item.insydeFlashDeviceMapStore.rawValue)
+        XCTAssertFalse(parsed.diagnostics.contains { $0.structureIsFlashDeviceMap }, "\(parsed.diagnostics)")
+    }
+
+    /// An entry names a range unless it is modifiable — and one marked ignored
+    /// but not modifiable still does, as in UEFITool.
+    func testEveryEntryThatIsNotModifiableIsARange() throws {
+        let erased = Build.sha256([UInt8](repeating: 0xFF, count: 0x100))
+        let store = Build.flashDeviceMap(base: 0xFFFF_0000, entries: [
+            (0x3000, 0x100, 0, erased),
+            (0x4000, 0x100, 1, erased),
+            (0x5000, 0x100, 2, [UInt8](repeating: 7, count: 32))
+        ])
+
+        let ranges = try XCTUnwrap(UEFIParser.parse(mapImage(store)).protectedRanges)
+        XCTAssertEqual(ranges.ranges.map(\.kind), [.insyde, .insyde])
+        XCTAssertEqual(ranges.ranges.map(\.range), [0x3000..<0x3100, 0x5000..<0x5100])
+        XCTAssertEqual(ranges.ranges.map(\.verdict), [.matches, .mismatch])
+    }
+
+    func testAFlashDeviceMapOfAnUnknownEntryFormatIsALeafAndReported() throws {
+        let store = Build.flashDeviceMap(base: 0xFFFF_0000, entries: [(0x3000, 0x100, 0, Build.zero32)], format: 1)
+        let parsed = UEFIParser.parse(mapImage(store))
+
+        let node = try XCTUnwrap(parsed.allNodes.first { $0.kind == .flashDeviceMapStore })
+        XCTAssertEqual(node.children, [])
+        XCTAssertTrue(parsed.diagnostics.contains { $0.kind == .unknownFlashDeviceMapEntries(size: 0x54, format: 1) })
+        XCTAssertEqual(parsed.protectedRanges?.ranges, [])
+    }
+
+    func testAFlashDeviceMapOfALaterRevisionIsSkippedAndReported() {
+        let store = Build.flashDeviceMap(base: 0xFFFF_0000, entries: [(0x3000, 0x100, 0, Build.zero32)], revision: 5)
+        let parsed = UEFIParser.parse(mapImage(store))
+
+        XCTAssertFalse(parsed.allNodes.contains { $0.kind == .flashDeviceMapStore })
+        XCTAssertTrue(parsed.diagnostics.contains { $0.kind == .unknownRevision(.flashDeviceMap, 5) })
     }
 
     // MARK: - Marking (§7.3)
