@@ -390,6 +390,17 @@ the longer volume, and the section around it takes the new size as any other
 section would. A block map of more than one entry, a volume in a region or at the
 top of a space, and a volume with data after its free space still refuse.
 
+Step 7 is in on the planner's side: `UEFIRebuild.plan(…, protected:)` takes the
+file's `ProtectedRange`s (IBB or vendor hash, a file range and a name) and checks
+the bytes the rebuild actually changes against them — a change inside the IBB
+refuses, one inside a vendor hash range becomes a warning, and the "not
+checked" caveat goes when the ranges were given. **The ranges themselves are not
+read yet:** that is the Boot Guard work (`BOOT_GUARD_PROTECTED_RANGES.md` §9 —
+the Boot Policy Manifest's IBB segments, the AMI, Phoenix and Insyde lists),
+which has not started. Until it lands the app passes no ranges, and every update
+still says they were not checked; when it lands, the app hands its ranges to the
+planner and nothing else changes.
+
 1. **The link.** An origin on a pane's document for zone tabs and decompressed
    tabs, with what the bytes are (§2.1) — read by `UEFIImage` as the root of the
    tab's tree, so UEFI Structure shows a decompressed body's sections; the `link`

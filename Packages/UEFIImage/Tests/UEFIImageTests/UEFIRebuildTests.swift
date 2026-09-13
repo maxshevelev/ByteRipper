@@ -332,6 +332,51 @@ final class UEFIRebuildTests: XCTestCase {
         let message = try XCTUnwrap(refusal(big, at: .init(space: .file, range: node.range), in: image))
         XCTAssertTrue(message.contains("free"), message)
     }
+
+    // MARK: - Protected ranges (§6.4)
+
+    /// A file with the last byte of its body flipped: a change at the body's
+    /// end, and one at its checksum in the header.
+    private func editedFile() -> (image: [UInt8], edited: [UInt8], target: UEFIRebuild.Target, body: Range<UInt64>) {
+        let image = TestImage.volume(length: 0x400, files: [fileA])
+        let node = UEFIParser.parse(image).roots[0].children[0]
+        var edited = bytes(image, node.range)
+        edited[edited.count - 1] ^= 0xFF
+        return (image, edited, .init(space: .file, range: node.range), node.body)
+    }
+
+    func testAChangeInsideTheIBBIsRefused() {
+        let (image, edited, target, body) = editedFile()
+        let ibb = UEFIRebuild.ProtectedRange(kind: .ibb, range: body, name: "IBB segment 1")
+
+        guard case .failure(let refusal) = UEFIRebuild.plan(edited, at: target, in: image, protected: [ibb]) else {
+            return XCTFail("a change inside the IBB was planned")
+        }
+        XCTAssertTrue(refusal.message.contains("IBB segment 1"), refusal.message)
+    }
+
+    func testAChangeInsideAVendorHashIsWarnedAbout() {
+        let (image, edited, target, body) = editedFile()
+        let hash = UEFIRebuild.ProtectedRange(kind: .vendorHash, range: body, name: "AMI hash of DXE")
+
+        guard case .success(let plan) = UEFIRebuild.plan(edited, at: target, in: image, protected: [hash]) else {
+            return XCTFail("refused")
+        }
+        XCTAssertTrue(plan.warnings.contains { $0.contains("AMI hash of DXE") }, "\(plan.warnings)")
+        XCTAssertFalse(plan.warnings.contains(UEFIRebuild.rangesNotChecked), "they were checked")
+    }
+
+    /// Ranges the change does not write into say nothing — nor does a range
+    /// that only sits between two changed bytes it does not contain.
+    func testRangesTheChangeDoesNotTouchSayNothing() {
+        let (image, edited, target, _) = editedFile()
+        let far = UEFIRebuild.ProtectedRange(kind: .ibb, range: 0x300..<0x380, name: "IBB segment 2")
+
+        guard case .success(let plan) = UEFIRebuild.plan(edited, at: target, in: image, protected: [far]) else {
+            return XCTFail("refused")
+        }
+        XCTAssertEqual(plan.warnings, [])
+    }
 }
 
 private extension ByteSpace {

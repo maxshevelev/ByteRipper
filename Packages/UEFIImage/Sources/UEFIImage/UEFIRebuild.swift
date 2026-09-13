@@ -60,17 +60,45 @@ public enum UEFIRebuild {
         }
     }
 
-    /// Said with every plan until the protected ranges are read (§6.4).
+    /// A run of the file whose hash something checks
+    /// (`BOOT_GUARD_PROTECTED_RANGES.md` §2) — what a change must not touch
+    /// unknowingly (§6.4).
+    public struct ProtectedRange: Hashable, Sendable {
+        public enum Kind: Hashable, Sendable {
+            /// Part of the Boot Guard IBB: checked before the firmware runs.
+            case ibb
+            /// Covered by a hash the firmware itself checks: AMI, Phoenix,
+            /// Insyde, a PMDA list.
+            case vendorHash
+        }
+
+        public var kind: Kind
+        public var range: Range<UInt64>
+        public var name: String
+
+        public init(kind: Kind, range: Range<UInt64>, name: String) {
+            self.kind = kind
+            self.range = range
+            self.name = name
+        }
+    }
+
+    /// Said with a plan the protected ranges were not given for (§6.4).
     public static let rangesNotChecked =
         "Boot Guard and vendor protected ranges were not checked: an edit inside one stops the platform starting."
 
     /// What writing `replacement` back at `target` takes, over the whole of
     /// `file`.
+    ///
+    /// - Parameter protected: the file's protected ranges, when they have been
+    ///   read. A change to a byte inside the IBB is refused and one inside a
+    ///   vendor hash range is warned about; nil says they were not checked.
     public static func plan(
         _ replacement: [UInt8],
         at target: Target,
         in file: [UInt8],
-        limits: UEFIParser.Limits = .init()
+        limits: UEFIParser.Limits = .init(),
+        protected: [ProtectedRange]? = nil
     ) -> Result<Plan, Refusal> {
         let image = UEFIParser.parse(file, limits: limits)
         let context = Context(file: file, image: image, limits: limits)
@@ -80,20 +108,63 @@ public enum UEFIRebuild {
                 throw Refusal("The rebuilt image is not the size of the file. Nothing was changed.")
             }
             try verify(rebuilt, against: image, target: target, expected: context.targetBytes, limits: limits)
-            let warnings = context.warnings + [rangesNotChecked]
+            let changes = changedRuns(rebuilt, file)
+            var warnings = context.warnings
+            if let protected {
+                warnings += try protectionWarnings(changes, protected)
+            } else {
+                warnings.append(rangesNotChecked)
+            }
             let source = context.fileSource ?? 0..<0
-            guard let first = rebuilt.indices.first(where: { rebuilt[$0] != file[$0] }),
-                  let last = rebuilt.indices.last(where: { rebuilt[$0] != file[$0] })
-            else {
+            guard let first = changes.first?.lowerBound, let last = changes.last?.upperBound else {
                 return .success(Plan(offset: 0, bytes: [], warnings: warnings, source: source))
             }
-            return .success(Plan(offset: UInt64(first), bytes: Array(rebuilt[first...last]),
+            return .success(Plan(offset: first, bytes: Array(rebuilt[Int(first)..<Int(last)]),
                                  warnings: warnings, source: source))
         } catch let refusal as Refusal {
             return .failure(refusal)
         } catch {
             return .failure(Refusal("\(error)"))
         }
+    }
+
+    // MARK: - Protected ranges (§6.4)
+
+    /// The runs of bytes the rebuild changes — what a hash over the file sees,
+    /// as opposed to the span written, which also rewrites bytes as they were.
+    static func changedRuns(_ rebuilt: [UInt8], _ file: [UInt8]) -> [Range<UInt64>] {
+        var runs: [Range<UInt64>] = []
+        var start: Int?
+        for index in file.indices {
+            if rebuilt[index] != file[index] {
+                if start == nil { start = index }
+            } else if let run = start {
+                runs.append(UInt64(run)..<UInt64(index))
+                start = nil
+            }
+        }
+        if let run = start { runs.append(UInt64(run)..<UInt64(file.count)) }
+        return runs
+    }
+
+    /// A change inside the IBB refuses; one inside a vendor hash range is
+    /// something the reader has to know.
+    static func protectionWarnings(_ runs: [Range<UInt64>], _ protected: [ProtectedRange]) throws -> [String] {
+        var warnings: [String] = []
+        for range in protected {
+            guard let hit = runs.first(where: { $0.overlaps(range.range) }) else { continue }
+            switch range.kind {
+            case .ibb:
+                throw Refusal(
+                    "The change writes at 0x\(hex(max(hit.lowerBound, range.range.lowerBound))) inside “\(range.name)”, part of the Boot Guard IBB: the processor checks it before the firmware runs, and an edit there stops the platform starting (§6.4 of UPDATE_IN_PARENT.md). Nothing was changed."
+                )
+            case .vendorHash:
+                warnings.append(
+                    "The change writes inside “\(range.name)”: the hash the firmware checks it against no longer matches."
+                )
+            }
+        }
+        return warnings
     }
 
     // MARK: - Verifying (§8)
