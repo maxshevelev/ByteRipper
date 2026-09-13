@@ -247,6 +247,47 @@ final class MEACuratorTests: XCTestCase {
         XCTAssertEqual(man.subtitle, "0x284 (644 bytes)")
     }
 
+    /// A `$CPD` entry's size is the uncompressed size; an LZMA module's bytes
+    /// on flash are its `.met`'s compressed size, and that is what the row
+    /// reveals.
+    func testLZMAModuleRangeIsItsMetCompressedSize() throws {
+        let a = try analysis(["codePartition": cpdJSON(modules: [
+            ["id": 0, "name": "kernel", "offset": 0x400, "isHuffman": false, "size": 0x9000],
+            metJSON(owner: "kernel", compression: 2, compressedSize: 0x3A10),
+        ])])
+        let modules = try XCTUnwrap(child("Modules", of: MEACurator.present(a)[1]))
+        let kernel = try XCTUnwrap(child("kernel", of: modules))
+        XCTAssertEqual(kernel.range, 0x1400..<0x4E10)
+        XCTAssertEqual(kernel.subtitle, "0x1400 · 0x3A10")
+        XCTAssertEqual(field("Size", in: kernel), "0x9000 (36864 bytes)",
+                       "the uncompressed size stays in the detail")
+        XCTAssertEqual(field("Compression", in: kernel), "LZMA")
+        XCTAssertEqual(field("Compressed Size", in: kernel), "0x3A10 (14864 bytes)")
+    }
+
+    func testUncompressedMetKeepsTheEntrySize() throws {
+        let a = try analysis(["codePartition": cpdJSON(modules: [
+            ["id": 0, "name": "kernel", "offset": 0x400, "isHuffman": false, "size": 0x9000],
+            metJSON(owner: "kernel", compression: 0, compressedSize: 0x9000),
+        ])])
+        let modules = try XCTUnwrap(child("Modules", of: MEACurator.present(a)[1]))
+        let kernel = try XCTUnwrap(child("kernel", of: modules))
+        XCTAssertEqual(kernel.range, 0x1400..<0xA400)
+        XCTAssertEqual(kernel.subtitle, "0x1400 · 0x9000")
+        XCTAssertNil(field("Compressed Size", in: kernel))
+    }
+
+    func testHuffmanModuleWithMetStillGetsNoRange() throws {
+        let a = try analysis(["codePartition": cpdJSON(modules: [
+            ["id": 0, "name": "kernel", "offset": 0x400, "isHuffman": true, "size": 0x9000],
+            metJSON(owner: "kernel", compression: 1, compressedSize: 0x3A10),
+        ])])
+        let modules = try XCTUnwrap(child("Modules", of: MEACurator.present(a)[1]))
+        let kernel = try XCTUnwrap(child("kernel", of: modules))
+        XCTAssertNil(kernel.range)
+        XCTAssertEqual(kernel.subtitle, "0x9000 (36864 bytes)")
+    }
+
     func testManifestFields() throws {
         let a = try analysis(["manifest": manifestJSON()])
         let roots = MEACurator.present(a)
@@ -373,7 +414,20 @@ final class MEACuratorTests: XCTestCase {
                       "size": 0x125000, "empty": false]]]
     }
 
-    private func cpdJSON(ext: Int? = nil) -> [String: Any] {
+    /// A `.met` companion for `owner`, whose body is a chain led by its
+    /// `CSE_Ext_0A` Module Attributes block.
+    private func metJSON(owner: String, compression: Int,
+                         compressedSize: Int) -> [String: Any] {
+        ["id": 1, "name": owner + ".met", "offset": 0x200, "isHuffman": false, "size": 0x60,
+         "extensions": [["id": 0, "tag": 0x0A, "size": 0x60, "offset": 0x1200,
+                         "moduleAttributes": ["compression": compression, "encryption": 0,
+                                              "uncompressedSize": 0x9000,
+                                              "compressedSize": compressedSize,
+                                              "deviceID": 0, "vendorID": 0x8086,
+                                              "moduleHash": "AB"]]]]
+    }
+
+    private func cpdJSON(ext: Int? = nil, modules: [[String: Any]]? = nil) -> [String: Any] {
         // Extension offsets are already absolute in the model, like the module
         // base; 0x1000 is this fixture's $CPD base.
         var extensions: [[String: Any]] = [
@@ -386,8 +440,8 @@ final class MEACuratorTests: XCTestCase {
         }
         return ["name": "FTPR", "offset": 0x1000, "headerVersion": 1,
                 "headerLength": 0x10, "entryCount": 1, "checksumValid": true,
-                "modules": [["id": 0, "name": "$MN2", "offset": 0x10,
-                             "isHuffman": false, "size": 0x284]],
+                "modules": modules ?? [["id": 0, "name": "$MN2", "offset": 0x10,
+                                        "isHuffman": false, "size": 0x284]],
                 "extensions": extensions]
     }
 

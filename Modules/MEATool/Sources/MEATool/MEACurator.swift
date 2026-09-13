@@ -199,14 +199,30 @@ public enum MEACurator {
         if !cp.modules.isEmpty {
             let moduleRows = cp.modules.map { m -> MEANode in
                 let absolute = cp.offset + m.offset
+                let attrs = moduleAttributes(of: m, in: cp)
                 var fields: [MEAField] = []
                 append(&fields, "Name", m.name)
                 append(&fields, "Offset in $CPD", MEAText.offset(m.offset))
                 append(&fields, "Size", MEAText.size(m.size))
                 append(&fields, "Huffman", MEAText.yesNo(m.isHuffman))
-                // Only non-Huffman modules stand for real bytes: a compressed
-                // module's stored size is the packed size, and the decompressed
-                // body sits elsewhere — no reliable range to reveal.
+                // A $CPD entry's size is always the *uncompressed* size
+                // (MEA.py's 0x0A branch); the bytes on flash are the paired
+                // `.met`'s compressed size. An LZMA module is one contiguous
+                // stream from its offset, so that is the range it stands for.
+                if let attrs, attrs.compression == 2 {
+                    append(&fields, "Compression", "LZMA")
+                    append(&fields, "Compressed Size", MEAText.size(attrs.compressedSize))
+                    return MEANode(path: [],
+                                   title: m.name.isEmpty ? "(module \(m.id))" : m.name,
+                                   subtitle: MEAText.range(absolute, attrs.compressedSize),
+                                   range: MEAText.rangeValue(absolute, attrs.compressedSize),
+                                   fields: fields,
+                                   isEmptySection: attrs.compressedSize == 0)
+                }
+                // A Huffman module is a chunk table plus chunks, not one stream
+                // of known length from its offset — no reliable range to
+                // reveal. Anything else with no `.met` saying otherwise is
+                // stored as is.
                 return MEANode(path: [],
                                title: m.name.isEmpty ? "(module \(m.id))" : m.name,
                                subtitle: m.isHuffman
@@ -229,6 +245,17 @@ public enum MEACurator {
         return MEANode(path: [], title: "Code Partition ($CPD)",
                        subtitle: "\(cp.name) · \(cp.headerVersion == 1 ? "R1" : "R2")",
                        fields: header, children: children)
+    }
+
+    /// The `CSE_Ext_0A` Module Attributes of a module's `.met` companion —
+    /// paired by name the way the analyzer's Huffman check pairs them.
+    private static func moduleAttributes(of module: CPDModule,
+                                         in cp: CodePartition) -> ModuleAttributesExtension? {
+        cp.modules
+            .first(where: { $0.name == module.name + ".met" })?
+            .extensions?
+            .compactMap(\.moduleAttributes)
+            .first
     }
 
     private static func extensionRow(_ ext: CPDExtension) -> MEANode {
