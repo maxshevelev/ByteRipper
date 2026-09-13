@@ -106,7 +106,10 @@ public enum UEFIRebuild {
     ) -> Result<Plan, Refusal> {
         let report = Reporter(progress)
         report.phase("Reading the structure of the image")
-        let image = UEFIParser.parse(file, limits: limits) { report.fraction(Reporter.reading * $0) }
+        // The ranges are the caller's to give (`protected`), not this parse's.
+        let image = UEFIParser.parse(file, limits: limits, readsProtectedRanges: false) {
+            report.fraction(Reporter.reading * $0)
+        }
         var compressions = 0
         if case .decompressed(let chain) = target.space { compressions = chain.count }
         let context = Context(file: file, image: image, limits: limits,
@@ -252,7 +255,9 @@ public enum UEFIRebuild {
         progress: @escaping @Sendable (Double) -> Void
     ) throws {
         let before = damageCounts(original)
-        let after = damageCounts(UEFIParser.parse(rebuilt, limits: limits, progress: progress))
+        let after = damageCounts(UEFIParser.parse(
+            rebuilt, limits: limits, readsProtectedRanges: false, progress: progress
+        ))
         for (kind, count) in after where count > before[kind, default: 0] {
             throw Refusal(
                 "Putting it back would leave the image with a new \(kind) — a fault in the rebuild, not in the edit. Nothing was changed."

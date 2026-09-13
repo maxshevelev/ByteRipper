@@ -44,6 +44,14 @@ public enum KnownGUIDs {
     public static let amdMicrocode = guid("DE3E049C-A218-4891-8658-5FC0FA84C788")
     public static let amdCompressedRawFile = guid("20BC8AC9-94D1-4208-AB28-5D673FD73487")
 
+    /// The DXE Core, whose outermost volume is where the ranges with no address
+    /// of their own start (`BOOT_GUARD_PROTECTED_RANGES.md` §3).
+    public static let dxeCore = guid("D6A2CB7F-6A18-4E2F-B43B-9920A733700A")
+    public static let amiDxeCore = guid("5AE3F37E-4EAE-41AE-8240-35465B5E81EB")
+    /// The vendor hash files (§5).
+    public static let phoenixHashFile = guid("389CC6F2-1EA8-467B-AB8A-78E769AE2A15")
+    public static let amiHashFile = guid("CBC91F44-A4BC-4A5B-8696-703451D0B053")
+
     /// Names for the volumes, files and sections worth naming. Everything else
     /// is shown by its type, which is more useful than a GUID nobody knows.
     public static func name(of guid: EFIGUID) -> String? { names[guid] }
@@ -63,13 +71,13 @@ public enum KnownGUIDs {
         guid("00504624-8A59-4EEB-BD0F-6B36E96128E0"): "NVRAM additional store",
 
         volumeTopFile: "Volume Top File",
-        guid("D6A2CB7F-6A18-4E2F-B43B-9920A733700A"): "DXE Core",
-        guid("5AE3F37E-4EAE-41AE-8240-35465B5E81EB"): "AMI DXE Core",
+        dxeCore: "DXE Core",
+        amiDxeCore: "AMI DXE Core",
         guid("1B45CC0A-156A-428A-AF62-49864DA0E6E6"): "PEI apriori",
         guid("FC510EE7-FFDC-11D4-BD41-0080C73C8881"): "DXE apriori",
         guid("E4536585-7909-4A60-B5C6-ECDEA6EBFB54"): "AMI padding file",
-        guid("389CC6F2-1EA8-467B-AB8A-78E769AE2A15"): "Phoenix vendor hash file",
-        guid("CBC91F44-A4BC-4A5B-8696-703451D0B053"): "AMI vendor hash file",
+        phoenixHashFile: "Phoenix vendor hash file",
+        amiHashFile: "AMI vendor hash file",
         amdCompressedRawFile: "AMD compressed raw file",
         amdMicrocode: "AMD microcode"
     ]

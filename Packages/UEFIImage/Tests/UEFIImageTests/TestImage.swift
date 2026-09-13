@@ -257,7 +257,9 @@ enum TestImage {
         if let lastFile {
             // Flush against the end of the volume, the way a Volume Top File
             // is — with a pad file covering the space in front of it, which is
-            // how a real volume reaches one (§5.7).
+            // how a real volume reaches one (§5.7). The pad file sits on the
+            // eight-byte boundary a file walk looks for it at.
+            volume.pad(to: alignUp(volume.count, to: 8)!, with: emptyByte)
             let start = length - UInt64(lastFile.count)
             let gap = start - volume.count
             if gap >= FFS.headerSize {

@@ -49,10 +49,15 @@ public enum UEFIParser {
     /// means and announces it itself. It is `@Sendable` because a caller runs
     /// the parse off its main actor and must be able to hand the callback
     /// across to the scanning thread.
+    ///
+    /// `readsProtectedRanges` reads the Boot Guard and vendor protected ranges
+    /// and hashes them (`BOOT_GUARD_PROTECTED_RANGES.md` §9.1) — which hashes
+    /// megabytes, so a caller that has no use for them says so.
     public static func parse(
         _ source: ByteSource,
         limits: Limits = Limits(),
         layout: UEFIRootLayout = .image,
+        readsProtectedRanges: Bool = true,
         progress: (@Sendable (Double) -> Void)? = nil
     ) -> UEFIImage {
         let reader = ImageReader(source)
@@ -65,20 +70,24 @@ public enum UEFIParser {
         )
         var roots = built.nodes
         var diagnostics = built.diagnostics
+        let buffers = DecompressedBuffers()
         TreeMaterialization.materializeAll(
-            &roots, reader: reader, limits: limits, buffers: DecompressedBuffers(),
+            &roots, reader: reader, limits: limits, buffers: buffers,
             diagnostics: &diagnostics, progress: sink
         )
 
         let parser = Parser(reader: reader, limits: limits)
         let second = roots.isEmpty ? Parser.SecondPass() : parser.runSecondPass(&roots)
-        return UEFIImage(
+        let image = UEFIImage(
             size: reader.count,
             roots: roots,
             diagnostics: diagnostics + parser.diagnostics,
             addressDiff: second.addressDiff,
             resetVector: second.resetVector
         )
+        guard readsProtectedRanges else { return image }
+        let readers = SpaceReaders(file: reader, buffers: buffers, limit: limits.maxDecompressedSize)
+        return image.adding(ProtectedRanges.read(image, readers: readers))
     }
 }
 

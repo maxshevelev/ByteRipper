@@ -22,19 +22,56 @@ public struct UEFIImage: Sendable {
     /// The image's own statement of where it is loaded, when the second pass
     /// got far enough to read it (§5.7).
     public let resetVector: ResetVector?
+    /// The Boot Guard and vendor protected ranges, once they have been read
+    /// (`BOOT_GUARD_PROTECTED_RANGES.md` §9.1). Nil means not read — which is
+    /// not the same as an image that names none.
+    public let protectedRanges: ProtectedRanges?
 
     public init(
         size: UInt64,
         roots: [UEFINode],
         diagnostics: [UEFIDiagnostic] = [],
         addressDiff: UInt64? = nil,
-        resetVector: ResetVector? = nil
+        resetVector: ResetVector? = nil,
+        protectedRanges: ProtectedRanges? = nil
+    ) {
+        self.init(
+            size: size,
+            stampedRoots: UEFIImage.stampingIDs(roots, under: NodeID()),
+            diagnostics: diagnostics,
+            addressDiff: addressDiff,
+            resetVector: resetVector,
+            protectedRanges: protectedRanges
+        )
+    }
+
+    private init(
+        size: UInt64,
+        stampedRoots: [UEFINode],
+        diagnostics: [UEFIDiagnostic],
+        addressDiff: UInt64?,
+        resetVector: ResetVector?,
+        protectedRanges: ProtectedRanges?
     ) {
         self.size = size
-        self.roots = UEFIImage.stampingIDs(roots, under: NodeID())
+        self.roots = stampedRoots
         self.diagnostics = diagnostics
         self.addressDiff = addressDiff
         self.resetVector = resetVector
+        self.protectedRanges = protectedRanges
+    }
+
+    /// This image with its protected ranges read, and what reading them had
+    /// to say added to its diagnostics — the tree as it is, ids and all.
+    public func adding(_ ranges: ProtectedRanges) -> UEFIImage {
+        UEFIImage(
+            size: size,
+            stampedRoots: roots,
+            diagnostics: diagnostics + ranges.diagnostics,
+            addressDiff: addressDiff,
+            resetVector: resetVector,
+            protectedRanges: ranges
+        )
     }
 
     /// Ids are stamped here, at the end, rather than threaded through the

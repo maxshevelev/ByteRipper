@@ -36,6 +36,11 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         /// An NVRAM store: the VSS / VSS2 / FTW and the rest that make up an
         /// NVRAM volume body (§9).
         case nvramStore
+        /// An Intel Boot Guard Boot Policy Manifest
+        /// (`BOOT_GUARD_PROTECTED_RANGES.md` §4).
+        case bootPolicy
+        /// A Phoenix or AMI vendor hash table (§5).
+        case vendorHashFile
     }
 
     public enum Kind: Equatable, Sendable {
@@ -73,6 +78,21 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         /// A compressed GUID-defined section without `PROCESSING_REQUIRED` in
         /// its attributes (§6.3).
         case processingRequiredNotSet
+        /// A protected range, or the manifest naming it, is not in this image
+        /// (`BOOT_GUARD_PROTECTED_RANGES.md` §3). Dropped, never used
+        /// unconverted.
+        case protectedRangeOutsideImage(String)
+        /// A list names a range the image cannot place: a physical address
+        /// with no Volume Top File, or no DXE Core volume to start from (§9.2).
+        case protectedRangeNotPlaced(String)
+        /// The bytes of a protected range do not hash to the stored digest
+        /// (§6). A warning for every kind: for the IBB the reference
+        /// implementation never makes the comparison (§6.1).
+        case protectedRangeHashMismatch(String)
+        /// A digest stored with an algorithm this tool does not compute.
+        case unsupportedHashAlgorithm(UInt16)
+        /// An AMI hash table of a size no known version has (§5.2).
+        case unknownVendorHashFileSize(UInt64)
 
         public var severity: Severity {
             switch self {
@@ -81,7 +101,10 @@ public struct UEFIDiagnostic: Equatable, Sendable {
             case .checksumMismatch, .sizeMismatch, .unknownFileSystem,
                  .unknownType, .addressesUnknown, .overlappingRegions,
                  .decompressionFailed, .decompressedTooLarge,
-                 .decompressedSizeMismatch, .processingRequiredNotSet:
+                 .decompressedSizeMismatch, .processingRequiredNotSet,
+                 .protectedRangeOutsideImage, .protectedRangeNotPlaced,
+                 .protectedRangeHashMismatch, .unsupportedHashAlgorithm,
+                 .unknownVendorHashFileSize:
                 return .warning
             }
         }
@@ -156,6 +179,17 @@ public struct UEFIDiagnostic: Equatable, Sendable {
                 + "it came to \(hex(computed))"
         case .processingRequiredNotSet:
             return "compressed GUID-defined section does not have PROCESSING_REQUIRED set"
+        case .protectedRangeOutsideImage(let name):
+            return "\(name) lies outside the image"
+        case .protectedRangeNotPlaced(let name):
+            return "\(name) cannot be placed: the image has no volume top file to map its address, "
+                + "or no DXE Core volume for it to start at"
+        case .protectedRangeHashMismatch(let name):
+            return "\(name) does not match its hash: with the protection active, the image may refuse to boot"
+        case .unsupportedHashAlgorithm(let algorithm):
+            return "\(TCGHash.name(algorithm)) digests are not computed by this tool"
+        case .unknownVendorHashFileSize(let size):
+            return "AMI vendor hash table of \(hex(size)) bytes is of no known version"
         }
     }
 
@@ -187,6 +221,8 @@ extension UEFIDiagnostic.Structure {
         case .microcodeHeader: return "microcode header"
         case .resetVector: return "reset vector"
         case .nvramStore: return "NVRAM store"
+        case .bootPolicy: return "Boot Policy Manifest"
+        case .vendorHashFile: return "vendor hash table"
         }
     }
 }
