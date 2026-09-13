@@ -294,6 +294,44 @@ final class UEFIRebuildTests: XCTestCase {
         XCTAssertEqual(plan.source.lowerBound, section.range.lowerBound)
         XCTAssertGreaterThan(plan.source.count, section.range.count)
     }
+
+    // MARK: - A volume a section holds (§6.5)
+
+    /// A file that outgrows the volume a firmware volume image section holds
+    /// grows that volume by whole blocks, and the section, the compressed
+    /// stream and the files around them follow.
+    func testAVolumeASectionHoldsGrowsByWholeBlocks() throws {
+        let small = TestImage.file(guid: otherGUID, body: [UInt8](repeating: 0x11, count: 0x40))
+        let inner = TestImage.volume(length: 0x100, files: [small])
+        let held = sections([TestImage.section(type: Section.firmwareVolumeImage, body: inner)])
+        let (image, section) = compressedImage(lzma(held))
+        let file = try XCTUnwrap(UEFIParser.parse(image).allNodes.first {
+            $0.space == .inside(section) && $0.kind == .file
+        })
+        let big = TestImage.file(guid: otherGUID, body: [UInt8](repeating: 0x22, count: 0x180))
+
+        let rebuilt = try plan(big, at: .init(space: .inside(section), range: file.range), in: image)
+
+        let after = UEFIParser.parse(rebuilt)
+        XCTAssertEqual(damage(after), [])
+        let volume = try XCTUnwrap(after.allNodes.first { $0.space == .inside(section) && $0.kind == .volume })
+        XCTAssertEqual(volume.range.count, 0x200, "0x48 + 0x198 takes two blocks of 0x100")
+        let grown = try XCTUnwrap(after.allNodes.first { $0.space == .inside(section) && $0.kind == .file })
+        XCTAssertEqual(bytes(try XCTUnwrap(buffer(of: section, in: rebuilt)), grown.body),
+                       [UInt8](repeating: 0x22, count: 0x180))
+        let files = after.roots[0].children.filter { $0.kind == .file }
+        XCTAssertEqual(bytes(rebuilt, files[1].body), [UInt8](repeating: 0x42, count: 40))
+    }
+
+    /// A volume at the top of the file does not grow, however it is laid out.
+    func testAVolumeAtTheTopOfTheFileDoesNotGrow() throws {
+        let image = TestImage.volume(length: 0x100, files: [fileA])
+        let node = UEFIParser.parse(image).roots[0].children[0]
+        let big = TestImage.file(body: [UInt8](repeating: 0x22, count: 0x180))
+
+        let message = try XCTUnwrap(refusal(big, at: .init(space: .file, range: node.range), in: image))
+        XCTAssertTrue(message.contains("free"), message)
+    }
 }
 
 private extension ByteSpace {

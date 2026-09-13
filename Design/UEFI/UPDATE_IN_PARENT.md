@@ -382,6 +382,14 @@ the link to the part's new range (`Plan.source`) and fingerprint, and says what
 the plan warns about in an alert. Without a target, a copy still goes back at
 its own length and a decompressed body is refused.
 
+Step 6 is in. A volume whose direct parent is a section, and whose free space
+runs to its end, grows when the change needs more room than it has: by whole
+blocks of its block map's one entry, with `FvLength`, `NumBlocks` and the header
+checksum rewritten and the new blocks erased; the layout is then done again in
+the longer volume, and the section around it takes the new size as any other
+section would. A block map of more than one entry, a volume in a region or at the
+top of a space, and a volume with data after its free space still refuse.
+
 1. **The link.** An origin on a pane's document for zone tabs and decompressed
    tabs, with what the bytes are (§2.1) — read by `UEFIImage` as the root of the
    tab's tree, so UEFI Structure shows a decompressed body's sections; the `link`

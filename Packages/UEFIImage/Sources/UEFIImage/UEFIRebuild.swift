@@ -307,8 +307,11 @@ public enum UEFIRebuild {
                                       volumeRevision: volumeRevision(upper),
                                       ffsVersion: ffsVersion(upper, space: space))
             case .volume:
+                // Only a volume a section holds can grow: one in a region, or at
+                // the top of a space, is where the flash map is (§6.5, §7).
+                let at = path.firstIndex { $0.id == parent.id } ?? 0
                 return try rebuildVolume(parent, replacing: child, with: new, bytes: bytes, space: space,
-                                         isNested: path.first?.id != parent.id)
+                                         isNested: at > 0 && path[at - 1].kind == .section)
             default:
                 guard UInt64(new.count) == child.range.count else {
                     let verb = UInt64(new.count) > child.range.count ? "grow" : "shrink"
@@ -471,14 +474,62 @@ public enum UEFIRebuild {
             return out
         }
 
-        /// Filled in by §6.5; until then a volume that runs out of room refuses.
+        /// A volume a section holds, grown by whole blocks until the change fits
+        /// (§6.5): `FvLength`, the block map's one entry and the header checksum
+        /// rewritten, the new blocks erased, and the layout done again in the
+        /// longer volume — whose free space now runs to its new end.
         func grownVolume(
             _ volume: UEFINode, replacing child: UEFINode, with new: [UInt8],
             bytes: [UInt8], space: ByteSpace, needed: UInt64
         ) throws -> [UInt8] {
-            throw Refusal(
-                "“\(volume.name)” has no room for 0x\(hex(needed)) more bytes (§6.3 of UPDATE_IN_PARENT.md)."
-            )
+            let start = Int(volume.range.lowerBound)
+            let end = Int(volume.range.upperBound)
+            let headerLength = Int(bytes[start + 0x30]) | Int(bytes[start + 0x31]) << 8
+            let map = start + Int(FV.headerSize)
+            guard headerLength == Int(FV.headerSize + 2 * FV.blockMapEntrySize),
+                  end - start >= headerLength,
+                  Bytes.u32(bytes, map + 8) == 0, Bytes.u32(bytes, map + 12) == 0
+            else {
+                throw Refusal(
+                    "“\(volume.name)” has no room for 0x\(hex(needed)) more bytes, and its block map is not one a new size can be written into (§6.5 of UPDATE_IN_PARENT.md)."
+                )
+            }
+            let blockLength = UInt64(Bytes.u32(bytes, map + 4))
+            let length = UInt64(volume.range.count)
+            guard blockLength > 0, length % blockLength == 0 else {
+                throw Refusal(
+                    "“\(volume.name)” has no room for 0x\(hex(needed)) more bytes, and its size is not a whole number of its blocks (§6.5 of UPDATE_IN_PARENT.md)."
+                )
+            }
+            let extra = (needed + blockLength - 1) / blockLength * blockLength
+            let newLength = length + extra
+            guard newLength / blockLength <= UInt64(UInt32.max) else {
+                throw Refusal("“\(volume.name)” would need more blocks than its block map can count.")
+            }
+            let empty: UInt8 = (Bytes.u32(bytes, start + 0x2C) & FV.erasePolarity) != 0 ? 0xFF : 0x00
+
+            var longer = Array(bytes[start..<end]) + [UInt8](repeating: empty, count: Int(extra))
+            Bytes.put(newLength, count: 8, at: 0x20, in: &longer)
+            Bytes.put32(UInt32(newLength / blockLength), at: Int(FV.headerSize), in: &longer)
+            longer = Bytes.volumeHeaderChecksummed(longer)
+            let grownBytes = Array(bytes[..<start]) + longer + Array(bytes[end...])
+
+            var bigger = volume
+            bigger.body = volume.body.lowerBound..<(volume.body.upperBound + extra)
+            if let last = bigger.children.lastIndex(where: { $0.space == space }),
+               bigger.children[last].kind == .freeSpace {
+                let free = bigger.children[last].body
+                bigger.children[last].body = free.lowerBound..<bigger.body.upperBound
+            } else {
+                var tail = UEFINode(kind: .freeSpace, name: "Free space",
+                                    range: volume.body.upperBound..<bigger.body.upperBound, isErased: true)
+                tail.space = space
+                tail.id = NodeID([-1])
+                bigger.children.append(tail)
+            }
+            warnings.append("“\(volume.name)” grew by 0x\(hex(extra)) bytes to make room.")
+            return try rebuildVolume(bigger, replacing: child, with: new, bytes: grownBytes, space: space,
+                                     isNested: false)
         }
 
         func isVolumeTop(_ node: UEFINode) -> Bool {
