@@ -594,6 +594,9 @@ final class MainViewController: NSViewController {
     /// alert (its title and its two buttons — the operation's verb and Cancel)
     /// and decides. Returns the alert's response (§22.2).
     var joinConfirm: ((NSAlert) -> NSApplication.ModalResponse)?
+    /// Where Update in Parent's "the source changed there" question goes: the
+    /// test captures the alert and decides (`UPDATE_IN_PARENT.md` §3).
+    var updateConfirm: ((NSAlert) -> NSApplication.ModalResponse)?
     /// Where the Save All confirmation goes: the test captures the alert (its
     /// preview names every part, and it names every file that would be replaced)
     /// and decides. Returns the alert's response.
@@ -1669,7 +1672,7 @@ final class MainViewController: NSViewController {
     /// bookmarks stay behind: their offsets are the dump's, not these bytes'.
     func openBytesInNewTabForTool(
         _ bytes: [UInt8], named name: String, from pane: PaneViewModel,
-        source: Range<UInt64>, layout: UEFIRootLayout
+        source: Range<UInt64>, layout: UEFIRootLayout, kind: DocumentOrigin.Kind
     ) {
         guard let tab = makeSiblingTab?() else { return }
         tab.windowModel.pane1.openBytes(
@@ -1678,10 +1681,77 @@ final class MainViewController: NSViewController {
             origin: DocumentOrigin(
                 parent: pane, source: source,
                 partName: Self.partName(ofTab: name, parent: pane.status.fileName),
-                layout: layout
+                layout: layout, kind: kind, content: bytes
             )
         )
         tab.apply(mode: .singleFile)
+    }
+
+    // MARK: - Update in Parent
+
+    /// File ▸ Update in Parent: the active tab's bytes go back where they were
+    /// taken from (`Design/UEFI/UPDATE_IN_PARENT.md` §3).
+    @objc func updateInParent() {
+        performUpdateInParent(of: activePane)
+    }
+
+    /// The pane header's Update in Parent: the same, for that pane.
+    @objc func updatePaneInParent(_ sender: Any?) {
+        guard let pane = pane(from: sender) else { return }
+        performUpdateInParent(of: pane)
+    }
+
+    /// Puts `pane`'s bytes back into the document they came out of, as one
+    /// undo step there named after the tab. The parent becomes dirty; nothing
+    /// is written to disk. What cannot be put back is said, and nothing moves.
+    func performUpdateInParent(of pane: PaneViewModel) {
+        guard let origin = pane.origin, origin.hasChanges(in: pane) else { return }
+        switch origin.planUpdate(from: pane) {
+        case .refused(let title, let message):
+            presentAlert(title: title, message: message)
+        case .overwrite(let offset, let bytes, let confirm):
+            guard let parent = origin.parent else { return }
+            if confirm, !confirmOverwritingChangedSource(of: origin) { return }
+            // Adopted first, so the change notice the write posts finds the
+            // link intact and nothing left to put back.
+            let snapshot = origin.adopt(bytes)
+            do {
+                try parent.applyToolWrites([(offset: offset, bytes: bytes)],
+                                           named: "Update from \(pane.status.fileName)")
+            } catch {
+                origin.restore(snapshot)
+                presentFileError("Could not update “\(origin.parentName)”.", error,
+                                 url: parent.document?.url)
+            }
+        }
+    }
+
+    /// The source changed in the parent after the tab was opened: overwriting
+    /// those changes is the reader's call.
+    private func confirmOverwritingChangedSource(of origin: DocumentOrigin) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "“\(origin.partName)” has changed in \(origin.parentName)"
+        alert.informativeText = "Its bytes there are no longer the ones this tab was opened from. "
+            + "Updating overwrites those changes with this tab's bytes."
+        alert.addButton(withTitle: "Overwrite")
+        alert.addButton(withTitle: "Cancel")
+        if let updateConfirm {
+            return updateConfirm(alert) == .alertFirstButtonReturn
+        }
+        // Cancel in tests.
+        return Self.presentModal(alert, defaultInTest: .alertSecondButtonReturn)
+            == .alertFirstButtonReturn
+    }
+
+    /// The Update in Parent items: named after the parent, enabled while there
+    /// is something to put back into a parent that is still open.
+    private func validateUpdateInParent(_ item: NSMenuItem, for pane: PaneViewModel?) -> Bool {
+        guard let pane, let origin = pane.origin else {
+            item.title = "Update in Parent"
+            return false
+        }
+        item.title = "Update in “\(origin.parentName)”"
+        return pane.isOpen && origin.state != .parentClosed && origin.hasChanges(in: pane)
     }
 
     /// What a tool-module's tab is a part of, for the link's tooltip: its name
@@ -4266,6 +4336,9 @@ final class MainViewController: NSViewController {
         // name is its file's.
         add("Rename", #selector(renamePaneDocument(_:)), "")
         add("Revert to Saved", #selector(revertPaneDocument(_:)), "")
+        // Update in Parent (`Design/UEFI/UPDATE_IN_PARENT.md` §3): with the
+        // Saves, for a tab opened from a part of another document.
+        add("Update in Parent", #selector(updatePaneInParent(_:)), "")
         menu.addItem(.separator())
         // The join twins (§22.1): beside the file-scoped commands, acting on
         // THIS pane (the menu's representedObject) rather than the active one.
@@ -4690,7 +4763,8 @@ final class MainViewController: NSViewController {
             named: zoneExportName(fileName: pane.status.fileName,
                                   zoneName: zone.name, range: zone.range),
             origin: DocumentOrigin(parent: pane, source: zone.range,
-                                   partName: zone.name, layout: layout)
+                                   partName: zone.name, layout: layout,
+                                   kind: .copy, content: bytes)
         )
         tab.windowModel.bookmarkStore.seed(windowModel.bookmarkStore.bookmarks)
         tab.apply(mode: .singleFile)
@@ -6818,6 +6892,10 @@ extension MainViewController: NSMenuItemValidation {
             // what it will do (§21.3) — "Merge S1 into S0", not a bare "Merge".
             menuItem.title = piece.map { $0.mergeTitle } ?? "Merge"
             return piece != nil && pane.segmentStore.current.pieces.count > 1
+        case #selector(updateInParent):
+            return validateUpdateInParent(menuItem, for: activePane)
+        case #selector(updatePaneInParent(_:)):
+            return validateUpdateInParent(menuItem, for: pane(from: menuItem))
         case #selector(revertDocument):
             // Nothing on disk to revert an untitled document to.
             return activePane.isOpen && !activePane.isUntitled

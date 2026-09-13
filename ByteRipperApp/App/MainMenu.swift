@@ -205,6 +205,10 @@ enum MainMenu {
         add("Save", #selector(MainViewController.saveDocument), "s")
         add("Save As…", #selector(MainViewController.saveDocumentAs), "S")
         add("Revert to Saved", #selector(MainViewController.revertDocument), "")
+        // Update in Parent (`Design/UEFI/UPDATE_IN_PARENT.md` §3): a tab opened
+        // from a part of another document puts its bytes back there. With the
+        // Saves, because it is the third place a document's changes can go.
+        add("Update in Parent", #selector(MainViewController.updateInParent), "")
         fileMenu.addItem(.separator())
         // The join commands (§22.1): bring a second file's bytes into the active
         // pane, at one end or the other. They act on the active pane, like the

@@ -5,7 +5,7 @@ import UEFIImage
 
 /// Where an untitled tab's bytes came from: a part of another open document — a
 /// zone, or what a compressed section decompressed to
-/// (`Design/UEFI/UPDATE_IN_PARENT.md` §2).
+/// (`Design/UEFI/UPDATE_IN_PARENT.md` §2) — and the way back (§3).
 ///
 /// The parent is held weakly, by its pane and by the document the pane had at
 /// the time: a pane that closed, or has opened another file since, is no longer
@@ -21,6 +21,25 @@ import UEFIImage
         case sourceChanged
     }
 
+    /// How the tab's bytes stand to the source.
+    enum Kind: Equatable {
+        /// The source's own bytes, copied out: a zone, a part a tool-module
+        /// took. They go back as they are.
+        case copy
+        /// What the source decompresses to. Putting it back means compressing
+        /// it again (§5), which is not done yet.
+        case decompressed
+    }
+
+    /// What putting the tab back would do, or why it cannot — decided before a
+    /// byte is written.
+    enum Update: Equatable {
+        /// `bytes` over the parent at `offset`; `confirm` when the source has
+        /// changed there since, and the overwrite has to be asked for.
+        case overwrite(offset: UInt64, bytes: [UInt8], confirm: Bool)
+        case refused(title: String, message: String)
+    }
+
     private(set) weak var parent: PaneViewModel?
     private weak var parentDocument: BinaryDocument?
     /// The source's bytes in the parent's file: the zone, or the outermost
@@ -31,21 +50,37 @@ import UEFIImage
     /// What the bytes are, for a tool-module opened on the tab (§2.1): a
     /// decompressed body is a run of sections, not an image to scan.
     let layout: UEFIRootLayout
+    let kind: Kind
 
-    private let fingerprint: SHA256.Digest?
+    /// The source's bytes as last taken out or put back.
+    private var fingerprint: SHA256.Digest?
+    /// The tab's content as last taken out or put back — what "has changes to
+    /// put back" is measured against (§2.1).
+    private var baseline: SHA256.Digest
     private var lastParentName: String
-    /// The last verdict, and the parent's content generation it was reached
-    /// at: the source is hashed again only after the parent's bytes changed.
+    /// The last verdicts, with the content generation each was reached at: a
+    /// side is hashed again only after its bytes could have changed.
     private var checked: (generation: Int, state: State)?
+    private var childChecked: (generation: Int, changed: Bool)?
 
-    init?(parent: PaneViewModel, source: Range<UInt64>, partName: String, layout: UEFIRootLayout) {
+    /// - Parameter content: the tab's bytes as it opens with them.
+    init?(
+        parent: PaneViewModel,
+        source: Range<UInt64>,
+        partName: String,
+        layout: UEFIRootLayout,
+        kind: Kind = .copy,
+        content: [UInt8]
+    ) {
         guard let document = parent.document else { return nil }
         self.parent = parent
         parentDocument = document
         sourceRange = source
         self.partName = partName
         self.layout = layout
+        self.kind = kind
         fingerprint = Self.digest(of: source, in: document)
+        baseline = SHA256.hash(data: content)
         lastParentName = parent.status.fileName
         checked = (parent.contentGeneration, fingerprint == nil ? .sourceChanged : .intact)
     }
@@ -81,10 +116,90 @@ import UEFIImage
         }
     }
 
+    /// Whether `child` — the tab this origin belongs to — holds anything the
+    /// parent does not have back yet.
+    func hasChanges(in child: PaneViewModel) -> Bool {
+        guard let document = child.document else { return false }
+        let generation = child.contentGeneration
+        if let childChecked, childChecked.generation == generation { return childChecked.changed }
+        let changed = (try? document.read(at: 0, length: Int(document.size)))
+            .map { SHA256.hash(data: $0) != baseline } ?? true
+        childChecked = (generation, changed)
+        return changed
+    }
+
+    /// What Update in Parent would do with `child`'s bytes (§3, §4.1): the same
+    /// length back over the source, or a refusal that says why in numbers.
+    func planUpdate(from child: PaneViewModel) -> Update {
+        guard let parent, state != .parentClosed else {
+            return .refused(
+                title: "The parent is closed",
+                message: "“\(parentName)” is no longer open, so there is nothing to put “\(partName)” back into."
+            )
+        }
+        guard kind == .copy else {
+            return .refused(
+                title: "This cannot be put back yet",
+                message: "These bytes were decompressed from “\(partName)” in \(parentName). "
+                    + "Putting them back means compressing them again, which ByteRipper does not do yet."
+            )
+        }
+        guard !parent.status.isReadOnly else {
+            return .refused(
+                title: "“\(parentName)” is read-only",
+                message: "Its bytes cannot be changed, so “\(partName)” cannot be put back into it."
+            )
+        }
+        guard let document = child.document,
+              let bytes = try? document.read(at: 0, length: Int(document.size))
+        else {
+            return .refused(title: "The tab could not be read", message: "Nothing was changed in \(parentName).")
+        }
+        guard UInt64(bytes.count) == UInt64(sourceRange.count) else {
+            return .refused(
+                title: "The length changed",
+                message: "“\(partName)” is \(Self.hex(sourceRange.count)) bytes in \(parentName), "
+                    + "and this tab is \(Self.hex(bytes.count)). A part goes back only at its own length: "
+                    + "the bytes after it in the file are not this tab's to move."
+            )
+        }
+        return .overwrite(offset: sourceRange.lowerBound, bytes: bytes, confirm: state == .sourceChanged)
+    }
+
+    /// The link's verdicts before an update, to put back if the write fails.
+    struct Snapshot {
+        fileprivate let fingerprint: SHA256.Digest?
+        fileprivate let baseline: SHA256.Digest
+    }
+
+    /// Takes `bytes` as what the tab and the parent's source both hold — called
+    /// just before they are written, so the change notice the write posts
+    /// already finds the link intact and nothing left to put back.
+    func adopt(_ bytes: [UInt8]) -> Snapshot {
+        let snapshot = Snapshot(fingerprint: fingerprint, baseline: baseline)
+        let digest = SHA256.hash(data: bytes)
+        fingerprint = digest
+        baseline = digest
+        checked = nil
+        childChecked = nil
+        return snapshot
+    }
+
+    func restore(_ snapshot: Snapshot) {
+        fingerprint = snapshot.fingerprint
+        baseline = snapshot.baseline
+        checked = nil
+        childChecked = nil
+    }
+
     private static func digest(of range: Range<UInt64>, in document: BinaryDocument) -> SHA256.Digest? {
         guard range.upperBound <= document.size,
               let bytes = try? document.read(at: range.lowerBound, length: Int(range.count))
         else { return nil }
         return SHA256.hash(data: bytes)
+    }
+
+    private static func hex<T: BinaryInteger>(_ value: T) -> String {
+        "0x" + String(value, radix: 16, uppercase: true)
     }
 }

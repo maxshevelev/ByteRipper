@@ -184,4 +184,111 @@ final class LinkedTabTests: XCTestCase {
         // The dump is all 0xAA: no node covers the zone, so it is an image.
         XCTAssertEqual(tab.windowModel.pane1.origin?.layout, .image)
     }
+
+    // MARK: - Update in Parent (§3)
+
+    private func byte(at offset: UInt64, of controller: MainViewController) throws -> UInt8 {
+        try XCTUnwrap(controller.windowModel.pane1.document?.read(at: offset, length: 1).first)
+    }
+
+    private func patch(_ tab: MainViewController, at offset: UInt64, with value: UInt8) throws {
+        try tab.windowModel.pane1.applyToolWrites([(offset: offset, bytes: [value])], named: "Patch")
+    }
+
+    /// The tab's bytes go back over the zone as one undo step in the parent,
+    /// named after the tab, and the link then has nothing left to put back.
+    func testUpdatingAZoneWritesTheTabBackAsOneUndoStep() throws {
+        let (parent, tab) = try openZoneTab()
+        let pane = tab.windowModel.pane1
+        let origin = try XCTUnwrap(pane.origin)
+        try patch(tab, at: 0x10, with: 0x55)
+        XCTAssertTrue(origin.hasChanges(in: pane))
+
+        tab.performUpdateInParent(of: pane)
+
+        XCTAssertEqual(try byte(at: 0x110, of: parent), 0x55)
+        XCTAssertEqual(parent.windowModel.pane1.undoLabel, "Update from \(pane.status.fileName)")
+        XCTAssertTrue(parent.windowModel.pane1.status.isDirty, "written to the parent, not to its file")
+        XCTAssertEqual(origin.state, .intact)
+        XCTAssertFalse(origin.hasChanges(in: pane))
+        XCTAssertEqual(try link(in: tab).toolTip?.contains("Click to show"), true,
+                       "the header shows the link intact after the parent's own change")
+
+        _ = try parent.windowModel.pane1.undo()
+        XCTAssertEqual(try byte(at: 0x110, of: parent), 0xAA)
+        XCTAssertEqual(origin.state, .sourceChanged, "the parent no longer holds what the tab put back")
+    }
+
+    /// Offered in the header's menu, named after the parent, and enabled only
+    /// when there is something to put back.
+    func testTheCommandIsOfferedWhenThereIsSomethingToPutBack() throws {
+        let (parent, tab) = try openZoneTab()
+        let pane = tab.windowModel.pane1
+        let menu = tab.makePaneMenu(for: pane)
+        let item = try XCTUnwrap(menu.items.first {
+            $0.action == #selector(MainViewController.updatePaneInParent(_:))
+        })
+
+        XCTAssertFalse(tab.validateMenuItem(item), "nothing changed yet")
+        XCTAssertEqual(item.title, "Update in “\(parent.windowModel.pane1.status.fileName)”")
+
+        try patch(tab, at: 0, with: 0x01)
+        XCTAssertTrue(tab.validateMenuItem(item))
+
+        parent.windowModel.pane1.close()
+        XCTAssertFalse(tab.validateMenuItem(item), "no parent to put it back into")
+    }
+
+    func testALengthChangeIsRefused() throws {
+        let parent = try makeController(opening: [UInt8](repeating: 0xAA, count: 0x100))
+        let tab = try makeController()
+        parent.makeSiblingTab = { tab }
+        try host(parent).openInNewTab([0x01, 0x02, 0x03], named: "part.bin", linkedTo: 0x10..<0x20)
+        try patch(tab, at: 0, with: 0x09)
+
+        tab.performUpdateInParent(of: tab.windowModel.pane1)
+
+        XCTAssertEqual(tab.lastAlertTitle, "The length changed")
+        XCTAssertEqual(try byte(at: 0x10, of: parent), 0xAA, "nothing was written")
+    }
+
+    /// A source edited in the parent since is overwritten only when the reader
+    /// says so.
+    func testAChangedSourceIsOverwrittenOnlyWhenConfirmed() throws {
+        let (parent, tab) = try openZoneTab()
+        let pane = tab.windowModel.pane1
+        try host(parent).apply(ToolTransaction(name: "Meanwhile", offset: 0x150, bytes: [0x77]))
+        try patch(tab, at: 0x10, with: 0x55)
+        var asked: String?
+
+        tab.updateConfirm = { alert in
+            asked = alert.messageText
+            return .alertSecondButtonReturn
+        }
+        tab.performUpdateInParent(of: pane)
+        XCTAssertEqual(asked, "“FFSv2” has changed in \(parent.windowModel.pane1.status.fileName)")
+        XCTAssertEqual(try byte(at: 0x110, of: parent), 0xAA, "cancelled")
+        XCTAssertEqual(try byte(at: 0x150, of: parent), 0x77)
+
+        tab.updateConfirm = { _ in .alertFirstButtonReturn }
+        tab.performUpdateInParent(of: pane)
+        XCTAssertEqual(try byte(at: 0x110, of: parent), 0x55)
+        XCTAssertEqual(try byte(at: 0x150, of: parent), 0xAA, "the tab's bytes, the parent's change overwritten")
+        XCTAssertEqual(pane.origin?.state, .intact)
+    }
+
+    /// A decompressed body goes back only once it can be compressed again.
+    func testADecompressedBodyIsNotPutBackYet() throws {
+        let parent = try makeController(opening: [UInt8](repeating: 0xFF, count: 0x100))
+        let tab = try makeController()
+        parent.makeSiblingTab = { tab }
+        try host(parent).openInNewTab([UInt8](repeating: 0, count: 0x60), named: "body.bin",
+                                      linkedTo: 0x20..<0x80, layout: .decompressedBody)
+        try patch(tab, at: 0, with: 0x01)
+
+        tab.performUpdateInParent(of: tab.windowModel.pane1)
+
+        XCTAssertEqual(tab.lastAlertTitle, "This cannot be put back yet")
+        XCTAssertEqual(try byte(at: 0x20, of: parent), 0xFF)
+    }
 }

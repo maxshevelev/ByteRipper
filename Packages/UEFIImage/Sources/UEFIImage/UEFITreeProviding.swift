@@ -24,10 +24,11 @@ public protocol UEFITreeProviding: AnyObject {
     func openUEFIRows() -> Set<NodeID>
     func setOpenUEFIRows(_ rows: Set<NodeID>)
 
-    /// Opens `bytes` — a part of this file, or what a compressed section in it
-    /// decompressed to — in a tab of their own, linked to `source`, the bytes
-    /// of this file they came out of, and read by a UEFI panel there as
-    /// `layout` (`Design/UEFI/UPDATE_IN_PARENT.md` §2).
+    /// Opens `bytes` — what a compressed section of this file, or a node inside
+    /// one, decompressed to — in a tab of their own, linked to `source`, the
+    /// compressed bytes of this file they came out of, and read by a UEFI panel
+    /// there as `layout` (`Design/UEFI/UPDATE_IN_PARENT.md` §2). Bytes copied
+    /// out as they are go through `ToolHost.openInNewTab(_:named:linkedTo:)`.
     func openInNewTab(
         _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>, layout: UEFIRootLayout
     )

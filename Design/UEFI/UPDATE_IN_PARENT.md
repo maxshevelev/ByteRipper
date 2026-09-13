@@ -98,8 +98,9 @@ parent.
   selected in the UEFI tree.
 - **Broken.** The symbol greys out and the tooltip says why when the parent is
   closed, or the fingerprint no longer matches (the source was edited or the
-  parent re-read from disk). A broken link offers no update; the tab stays a
-  perfectly good untitled document.
+  parent re-read from disk). A link whose parent is closed offers no update;
+  one whose source changed asks before overwriting it (§3). Either way the tab
+  stays a perfectly good untitled document.
 - The name of the parent follows the parent: a Save As of the parent renames it
   in the child's header.
 
@@ -328,8 +329,19 @@ source range, the part's name, the layout and a SHA-256 of the source; its state
 is re-checked only when the parent's `contentGeneration` moved, and the header
 redraws on the parent's `contentDidChangeNotification`. Zone tabs and the UEFI
 module's decompressed tabs carry one (`ToolHost.openInNewTab(_:named:linkedTo:)`,
-`UEFITreeProviding.openInNewTab(_:named:linkedTo:layout:)`). Not in yet: the
-baseline (§2.1), which arrives with the command that needs it (step 2).
+`UEFITreeProviding.openInNewTab(_:named:linkedTo:layout:)`).
+
+Step 2 is in. File ▸ Update in Parent and the pane header's twin, titled
+"Update in “<parent>”" and enabled while the tab differs from its baseline and
+the parent is open. `DocumentOrigin` carries a kind — `copy` (a zone, bytes a
+tool-module took as they are, through `ToolHost.openInNewTab`) or `decompressed`
+(through `UEFITreeProviding.openInNewTab`) — and a baseline hash of the tab, and
+decides the update itself (`planUpdate`): a copy of the same length goes back
+over the source as one undo step "Update from <tab>" in the parent; a changed
+source asks first (`MainViewController.updateConfirm` in tests); another length,
+a read-only parent, a closed parent and a decompressed body are refused with the
+reason. Baseline and fingerprint move before the write (`adopt`) and back if it
+fails (`restore`).
 
 1. **The link.** An origin on a pane's document for zone tabs and decompressed
    tabs, with what the bytes are (§2.1) — read by `UEFIImage` as the root of the
