@@ -14,8 +14,9 @@ import Foundation
 /// they throttle (skipping updates that move the bar by less than ~1%) and hop
 /// to the main actor to touch state. `cancel()` runs on main (button target).
 final class BackgroundOperation: @unchecked Sendable {
-    /// Short present-tense label, e.g. "Searching…" or "Indexing…".
-    let name: String
+    /// Short present-tense label, e.g. "Searching…" or "Indexing…" — relabelled
+    /// by `rename(_:)` as a long operation moves from one phase to the next.
+    private(set) var name: String
     /// Whether progress is indeterminate (no fraction). Kept as a design seam
     /// for operations without a known size; today everything reports [0, 1].
     let isIndeterminate: Bool
@@ -29,6 +30,8 @@ final class BackgroundOperation: @unchecked Sendable {
     private(set) var progress: Double = 0
     /// Fired on main with each dispatched progress update.
     var onProgress: ((Double) -> Void)?
+    /// Fired on main when the label changes.
+    var onRename: ((String) -> Void)?
     /// Fired once on main when the operation completes (`finish`); the status
     /// bar uses it to hide the indicator.
     var onFinish: (() -> Void)?
@@ -36,12 +39,33 @@ final class BackgroundOperation: @unchecked Sendable {
     /// The last fraction dispatched to main, for the ~1% throttle. Guarded by
     /// `lock` because `report` runs on the operation's background thread.
     private var lastReportedFraction: Double = 0
+    /// The last label dispatched to main, so a phase reported with every
+    /// fraction hops to main once. Guarded by `lock`.
+    private var lastName: String
     private let lock = NSLock()
 
     init(name: String, indeterminate: Bool = false, onCancel: @escaping () -> Void) {
         self.name = name
+        self.lastName = name
         self.isIndeterminate = indeterminate
         self.cancelAction = onCancel
+    }
+
+    /// Thread-safe relabel: what the operation is doing now. Dispatches to
+    /// main only when the label actually changes.
+    func rename(_ newName: String) {
+        lock.lock()
+        guard newName != lastName else {
+            lock.unlock()
+            return
+        }
+        lastName = newName
+        lock.unlock()
+        Task { @MainActor in
+            guard self.isActive else { return }
+            self.name = newName
+            self.onRename?(newName)
+        }
     }
 
     /// Thread-safe progress update. Clamps `fraction` to [0, 1] and dispatches

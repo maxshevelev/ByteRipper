@@ -1732,11 +1732,19 @@ final class MainViewController: NSViewController {
             else { return nil }
             if confirm, !confirmOverwritingChangedSource(of: origin) { return nil }
             let generation = parent.contentGeneration
-            return Task { [weak self] in
+            let handle = UpdateHandle()
+            let operation = beginUpdateOperation(in: parent, for: origin, handle: handle)
+            let task = Task { [weak self] in
                 let result = await Task.detached(priority: .userInitiated) {
-                    UEFIRebuild.plan(bytes, at: target, in: file)
+                    UEFIRebuild.plan(bytes, at: target, in: file) { progress in
+                        operation.rename(progress.phase)
+                        operation.report(progress.fraction)
+                    }
                 }.value
-                guard let self else { return }
+                operation.finish()
+                // Abandoned from the status bar: nothing was written, and
+                // nothing will be.
+                guard let self, !Task.isCancelled else { return }
                 switch result {
                 case .failure(let refusal):
                     self.presentAlert(title: "“\(origin.partName)” cannot be put back", message: refusal.message)
@@ -1761,7 +1769,37 @@ final class MainViewController: NSViewController {
                                       message: plan.warnings.joined(separator: "\n\n"))
                 }
             }
+            handle.task = task
+            return task
         }
+    }
+
+    /// What the (×) of an update reaches the update through.
+    private final class UpdateHandle {
+        var task: Task<Void, Never>?
+        weak var operation: BackgroundOperation?
+    }
+
+    /// Where an update is seen while it is worked out: the parent's tab comes
+    /// to the front — the change lands there — and its status bar says what is
+    /// being done, with a (×) that abandons it. Nothing is written until the
+    /// plan is done, so abandoning costs nothing.
+    private func beginUpdateOperation(
+        in parent: PaneViewModel, for origin: DocumentOrigin, handle: UpdateHandle
+    ) -> BackgroundOperation {
+        let owner = Self.controller(holding: parent, among: openDocuments?.controllers ?? []) ?? self
+        owner.view.window?.makeKeyAndOrderFront(nil)
+        let operation = BackgroundOperation(
+            name: "Updating “\(origin.parentName)” from “\(origin.partName)”…"
+        ) { [handle] in
+            handle.task?.cancel()
+            // The plan cannot be stopped halfway, but its result is thrown
+            // away, so the bar goes now rather than when it finishes.
+            handle.operation?.finish()
+        }
+        handle.operation = operation
+        owner.filePaneView(for: parent)?.beginOperation(operation, revealImmediately: true)
+        return operation
     }
 
     /// Writes an update into the parent as one undo step, with the link moved

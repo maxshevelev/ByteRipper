@@ -864,6 +864,8 @@ final class FilePaneView: NSView {
 
     /// The operation currently shown in this pane's status bar, or nil.
     private var currentOperation: BackgroundOperation?
+    /// The same, for a test to see which pane a long operation landed on.
+    var shownOperation: BackgroundOperation? { currentOperation }
     /// Token cancelling a delayed `beginOperation` reveal, so an operation that
     /// finishes before the debounce elapses never shows its bar.
     private var operationShowWorkItem: DispatchWorkItem?
@@ -893,6 +895,10 @@ final class FilePaneView: NSView {
         op.onFinish = { [weak self] in
             guard let self, self.currentOperation === op else { return }
             self.endOperation()
+        }
+        op.onRename = { [weak self] name in
+            guard let self, self.currentOperation === op else { return }
+            self.operationView.nameLabel.stringValue = name
         }
         if revealImmediately {
             operationView.isHidden = false

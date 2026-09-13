@@ -319,7 +319,19 @@ final class LinkedTabTests: XCTestCase {
 
         // The raw section's first payload byte.
         try patch(tab, at: 0x34, with: 0x00)
-        await tab.performUpdateInParent(of: pane)?.value
+        let update = tab.performUpdateInParent(of: pane)
+        // The work lands in the parent, and its status bar shows it while it
+        // runs — not the tab's.
+        let parentView = try XCTUnwrap(parent.filePaneView(for: parent.windowModel.pane1))
+        let operation = try XCTUnwrap(parentView.shownOperation, "the parent's status bar shows the update")
+        XCTAssertFalse(parentView.operationView.isHidden)
+        XCTAssertTrue(parentView.operationView.nameLabel.stringValue.contains("MyDriver"),
+                      parentView.operationView.nameLabel.stringValue)
+        XCTAssertNil(tab.filePaneView(for: pane)?.shownOperation)
+        await update?.value
+        for _ in 0..<200 where operation.isActive { await Task.yield() }
+        XCTAssertFalse(operation.isActive, "gone when the update is done")
+        XCTAssertTrue(parentView.operationView.isHidden)
 
         XCTAssertEqual(try byte(at: 0x48 + 0x34, of: parent), 0x00)
         let bytes = try XCTUnwrap(parent.windowModel.pane1.document?.read(at: 0, length: 0x1000))

@@ -401,6 +401,17 @@ which has not started. Until it lands the app passes no ranges, and every update
 still says they were not checked; when it lands, the app hands its ranges to the
 planner and nothing else changes.
 
+**Progress.** Compressing a DXE volume again takes seconds, so an update that
+goes through the planner is shown where it lands: the parent's tab comes to the
+front, and its status bar carries the operation (§14.4 of the requirements) —
+a label naming the phase, a determinate bar and a (×) that abandons the update
+before anything is written. `UEFIRebuild.plan(…, progress:)` reports
+`Progress(phase:fraction:)`: "Reading the structure of the image" up to 0.2, one
+"Compressing “<section>” again (<size>)" per compressed section on the way out
+sharing the bar up to 0.8 — fed by the LZMA encoder's own progress callback,
+which `clzma_encode` now takes — and "Checking the rebuilt image" to 1.
+`BackgroundOperation.rename(_:)` relabels the strip as the phases change.
+
 1. **The link.** An origin on a pane's document for zone tabs and decompressed
    tabs, with what the bytes are (§2.1) — read by `UEFIImage` as the root of the
    tab's tree, so UEFI Structure shows a decompressed body's sections; the `link`
