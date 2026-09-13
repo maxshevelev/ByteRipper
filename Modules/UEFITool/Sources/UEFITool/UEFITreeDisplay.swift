@@ -109,6 +109,12 @@ public enum UEFITreeDisplay {
     public static func summary(of image: UEFIImage?) -> String {
         guard let image else { return "" }
         guard !image.roots.isEmpty else { return "Nothing here looks like a firmware image." }
+        // The image names protected ranges at all: the one thing about it
+        // that says some edits are not free (`BOOT_GUARD_PROTECTED_RANGES.md` §9.3).
+        if let ranges = image.protectedRanges, !ranges.ranges.isEmpty {
+            let count = ranges.ranges.count
+            return titleLead(of: image) + " · \(count) protected range\(count == 1 ? "" : "s")"
+        }
         return titleLead(of: image)
     }
 

@@ -435,6 +435,11 @@ import UEFITool
             ?? UEFITreeDisplay.PresentedImage(title: nil, rows: [])
         summaryLabel.stringValue = UEFITreeDisplay.summary(of: image)
         updateSummaryEmphasis()
+        // What the protected ranges in the summary cannot say (§8).
+        if let ranges = image?.protectedRanges, !ranges.ranges.isEmpty {
+            summaryLabel.toolTip = [summaryLabel.toolTip, UEFIDetail.protectionCaveat]
+                .compactMap { $0 }.joined(separator: "\n\n")
+        }
         renderDetail(detail, subject: focus?.description ?? "")
         queueRefresh(rowsChanged: rowsChanged)
     }

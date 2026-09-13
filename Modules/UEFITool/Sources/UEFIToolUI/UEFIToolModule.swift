@@ -120,6 +120,9 @@ private struct ChecksumPass: Sendable {
 
     /// Listening for a newer `guids.csv`. Cancelled in `stop()`.
     private var guidsWatch: Task<Void, Never>?
+    /// The protected ranges asked for, a moment after an edit. Cancelled by the
+    /// next edit, and in `stop()`.
+    private var rangesRequest: Task<Void, Never>?
     /// Whether the line under the tree is an answer to something the user asked
     /// for — a fix that wrote, or a refusal. Such a line survives the re-read
     /// its own write caused and is wiped by the next re-read that is not its
@@ -203,6 +206,8 @@ private struct ChecksumPass: Sendable {
         observation = nil
         guidsWatch?.cancel()
         guidsWatch = nil
+        rangesRequest?.cancel()
+        rangesRequest = nil
     }
 
     public var parkedState: (any ToolSessionState)? { UEFIParkedState(focus: focus) }
@@ -273,6 +278,7 @@ private struct ChecksumPass: Sendable {
             // is announced — coming back to a panel and finding the tree shut
             // is coming back to a panel that forgot.
             self.controller.restoreOpenRows(self.treeProvider?.openUEFIRows() ?? [])
+            self.requestProtectedRanges(after: 0)
             // `onDisplay` means "the panel is showing this file": the top
             // level, and its own checksums read. A branch opened later brings
             // its own pass, announced through `onChecksums`.
@@ -307,15 +313,30 @@ private struct ChecksumPass: Sendable {
                 nodeRepairs = [:]
                 checksumProblems = [:]
                 askedForAddresses = false
+                // Not on every keystroke: a reading opens every volume's files.
+                requestProtectedRanges(after: 0.5)
             }
             verifyNewChecksums()
             show(publish: true, rowsChanged: true)
-        case .expanded, .addressesResolved:
+        case .expanded, .addressesResolved, .protectedRangesRead:
             // A branch appearing does not move the rows on screen: the panel
             // opens the row it was asked to open, itself, when the branch is
             // there. What changes here is what the rows *say*.
             verifyNewChecksums()
             show(rowsChanged: false)
+        }
+    }
+
+    /// The protected ranges the rows are marked with
+    /// (`BOOT_GUARD_PROTECTED_RANGES.md` §9.3), read by the tree off the main
+    /// actor. When it lands the tree says so, and the rows are drawn again.
+    private func requestProtectedRanges(after delay: TimeInterval) {
+        rangesRequest?.cancel()
+        guard let tree else { return }
+        rangesRequest = Task { [weak self, weak tree] in
+            if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            guard !Task.isCancelled, let self, let tree, self.tree === tree else { return }
+            tree.resolveProtectedRanges {}
         }
     }
 

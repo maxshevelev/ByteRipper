@@ -5,15 +5,18 @@ import UEFIImage
 /// What a row of the UEFI tree wears besides its name (`Design/ROW_MARKS.md`
 /// §5.1), decided here so it is tested without a window.
 ///
-/// Today that is the rail for every node inside a compressed section and for
-/// the section itself while its row is open,
-/// the compressed badge on a compressed section, and the problem icon for a wrong
-/// checksum or a section that did not decompress. The Boot Guard background and
-/// badges join when the protected ranges are read.
+/// The rail for every node inside a compressed section and for the section
+/// itself while its row is open, the compressed badge on a compressed section,
+/// and the problem icon for a wrong checksum or a section that did not
+/// decompress. Once the tree's protected ranges have been read, the Boot Guard
+/// background, the partly-protected badge, the badge on what holds a list of
+/// ranges, and a protected range whose hash does not match
+/// (`UEFI/BOOT_GUARD_PROTECTED_RANGES.md` §9.3).
 public enum UEFITreeMarks {
     /// Every mark this tree draws — what its legend lists.
     public static let legendMarks: [ToolRowMark] = [
-        .decompressed, .error, .caution, .compressed, .compressedUndecoded
+        .protectedIBB, .protectedFirmware, .decompressed, .error, .caution,
+        .compressed, .compressedUndecoded, .holdsChecks, .partlyProtected
     ]
 
     /// - Parameters:
@@ -52,7 +55,26 @@ public enum UEFITreeMarks {
             }
         }
 
+        if let holds = holdsChecks(node) {
+            roles.append(.holdsChecks(holds))
+        }
+        var protection: ToolRowMarks.Protection?
+        if let ranges = image.protectedRanges {
+            switch ranges.protection(of: node, in: image) {
+            case .ibb: protection = .ibb
+            case .protected: protection = .firmware
+            // Tinting a region for bytes it mostly is not would say the wrong
+            // thing; the badge says "some of this" (ROW_MARKS.md §2).
+            case .partial: roles.append(.partlyProtected)
+            case nil: break
+            }
+            let hashes = hashProblems(of: node, in: image, ranges: ranges)
+            errors += hashes.errors
+            cautions += hashes.cautions
+        }
+
         return ToolRowMarks(
+            protection: protection,
             decompressedFrom: decompressedFrom(node, in: image),
             opensDecompressed: opens,
             problem: .worst(errors: errors, cautions: cautions),
@@ -67,6 +89,63 @@ public enum UEFITreeMarks {
         return names.count == 1
             ? "Invalid \(names[0]) checksum"
             : "Invalid checksums: \(names.joined(separator: ", "))"
+    }
+
+    /// The words on the badge of a node that holds a list of protected ranges
+    /// — nil for every other node.
+    public static func holdsChecks(_ node: UEFINode) -> String? {
+        guard node.space == .file else { return nil }
+        switch node.kind {
+        case .file where node.guid == KnownGUIDs.amiHashFile:
+            return "Holds the AMI vendor hash table: ranges the firmware checks at boot"
+        case .file where node.guid == KnownGUIDs.phoenixHashFile:
+            return "Holds the Phoenix vendor hash table: ranges the firmware checks at boot"
+        case .flashDeviceMapStore:
+            return "Holds the Insyde flash device map: ranges the firmware checks at boot"
+        default:
+            return nil
+        }
+    }
+
+    /// A protected range whose hash does not check out, on the node it starts
+    /// at and on the node holding the list that names it (§6.2). An IBB that
+    /// does not match is a caution, not an error: the reference implementation
+    /// never makes that comparison, and until it is confirmed against boards
+    /// known to boot it is not a verdict (§6.1).
+    private static func hashProblems(
+        of node: UEFINode, in image: UEFIImage, ranges: ProtectedRanges
+    ) -> (errors: [String], cautions: [String]) {
+        guard let fileRange = node.fileRange, !fileRange.isEmpty else { return ([], []) }
+        let holdsList = holdsChecks(node) != nil
+        var errors: [String] = []
+        var cautions: [String] = []
+        for range in ranges.ranges {
+            let startsHere = range.range.map {
+                $0.lowerBound == fileRange.lowerBound && fileRange.upperBound <= $0.upperBound
+            } ?? false
+            let namesIt = holdsList && fileRange.contains(range.source.lowerBound)
+            guard startsHere || namesIt else { continue }
+            switch range.verdict {
+            case .mismatch:
+                let text = "\(range.kind.name)\(at(range)) does not match its hash"
+                if range.kind.isIBB { cautions.append(text) } else { errors.append(text) }
+            case .unsupported(let algorithm):
+                cautions.append("\(range.kind.name)\(at(range)) could not be checked: "
+                                + "\(TCGHash.name(algorithm)) is not computed here")
+            case .matches, .unchecked:
+                break
+            }
+        }
+        return (unique(errors), unique(cautions))
+    }
+
+    private static func at(_ range: ProtectedRange) -> String {
+        range.range.map { " at 0x" + String($0.lowerBound, radix: 16, uppercase: true) } ?? ""
+    }
+
+    private static func unique(_ lines: [String]) -> [String] {
+        var seen: Set<String> = []
+        return lines.filter { seen.insert($0).inserted }
     }
 
     /// The rail's words: which section the node's bytes came out of.

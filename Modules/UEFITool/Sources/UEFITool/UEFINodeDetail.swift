@@ -106,15 +106,66 @@ public enum UEFIDetail {
         var fields = commonFields(for: node, image: image)
         fields += headerFields(for: node, reader: reader, repairs: repairs)
         let title = node.name.isEmpty ? kindLabel(node.kind) : node.name
+        var tables: [UEFIDetailTable] = []
 
         // A descriptor says more about itself than a header's worth of fields,
         // and two of the things it says are grids.
-        guard node.kind == .flashDescriptor,
-              let descriptor = DescriptorInfo.read(at: node.header.lowerBound, in: reader)
-        else { return UEFINodeDetail(title: title, fields: fields) }
-        fields += descriptorFields(descriptor)
-        return UEFINodeDetail(title: title, fields: fields,
-                              tables: descriptorTables(descriptor))
+        if node.kind == .flashDescriptor,
+           let descriptor = DescriptorInfo.read(at: node.header.lowerBound, in: reader) {
+            fields += descriptorFields(descriptor)
+            tables += descriptorTables(descriptor)
+        }
+
+        if let ranges = image.protectedRanges {
+            let touching = ranges.ranges(touching: node, in: image)
+            if !touching.isEmpty {
+                fields.append(.init("Protection", protectionCaveat))
+                tables.append(protectedByTable(touching))
+            }
+        }
+        return UEFINodeDetail(title: title, fields: fields, tables: tables)
+    }
+
+    // MARK: - Protected ranges
+
+    /// What the image cannot say (`BOOT_GUARD_PROTECTED_RANGES.md` §8): the
+    /// Boot Guard profile is in the PCH's fuses, not in the BIOS region.
+    public static let protectionCaveat =
+        "Whether Boot Guard is enforced is set in the chipset's fuses, not in this image: "
+        + "the marks say what an edit would break if it is. Vendor hashes are checked by the firmware itself."
+
+    /// Every range that shares a byte with the node: what it is, where it is,
+    /// where the list naming it is, and what hashing it found (§9.3).
+    static func protectedByTable(_ ranges: [ProtectedRange]) -> UEFIDetailTable {
+        UEFIDetailTable(
+            title: "Protected by",
+            symbol: "lock.shield",
+            columns: ["Range", "Kind", "Listed at", "Hash"],
+            rows: ranges.map { range in
+                [
+                    .init(range.range.map { "\(hex($0.lowerBound))–\(hex($0.upperBound))" } ?? "Not placed"),
+                    .init(range.kind.name),
+                    .init(hex(range.source.lowerBound)),
+                    verdictCell(range)
+                ]
+            }
+        )
+    }
+
+    private static func verdictCell(_ range: ProtectedRange) -> UEFIDetailTable.Cell {
+        let algorithms = range.digests.map(\.algorithmName).joined(separator: ", ")
+        switch range.verdict {
+        case .matches:
+            return .init("\(algorithms) matches", tone: .yes)
+        case .mismatch:
+            // An IBB mismatch is not a verdict yet (§6.1).
+            return .init(range.kind.isIBB ? "\(algorithms) differs (unconfirmed)" : "\(algorithms) differs",
+                         tone: .no)
+        case .unsupported(let algorithm):
+            return .init("\(TCGHash.name(algorithm)) not computed")
+        case .unchecked:
+            return .init("Not checked")
+        }
     }
 
     // MARK: - The fields every node has
