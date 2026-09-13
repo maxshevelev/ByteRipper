@@ -6,7 +6,8 @@ Stack:
 - Xcode project written in Swift.
 - macOS 14+.
 - No third-party dependencies unless absolutely unavoidable. The one exception
-  is decoders for published formats (`Packages/FirmwareCompression`): the
+  is decoders and encoders for published formats
+  (`Packages/FirmwareCompression`): the
   reference C sources, vendored unmodified as a C target, with their origin and
   version written down beside them.
 - Swift Concurrency.

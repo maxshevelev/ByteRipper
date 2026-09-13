@@ -343,6 +343,17 @@ a read-only parent, a closed parent and a decompressed body are refused with the
 reason. Baseline and fingerprint move before the write (`adopt`) and back if it
 fails (`restore`).
 
+Step 3 is in. `CLZMAEncoder` and `CTianoEncoder` moved from `Tests/` to
+`Sources/` behind the `FirmwareCompression` product, and
+`FirmwareCompression.compress(_:as:dictionarySize:legacyPrefix:)` and
+`compress(_:like:from:)` write every variant the decoders read, decoding each
+stream back before returning it (`roundTripFailed` otherwise). LZMA is encoded
+with the old UEFITool's settings (level 9, `fb` 273); the Tiano compressor runs
+under a lock, since it keeps state in statics. UEFITool's legacy Tiano
+compressor is not vendored — the round trip stands in for the fallback it was
+for. `FirmwareCompressionTestSupport` is now a thin wrapper over the product,
+and `CLAUDE.md`'s exception names encoders too.
+
 1. **The link.** An origin on a pane's document for zone tabs and decompressed
    tabs, with what the bytes are (§2.1) — read by `UEFIImage` as the root of the
    tab's tree, so UEFI Structure shows a decompressed body's sections; the `link`

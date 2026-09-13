@@ -1,8 +1,8 @@
 #ifndef CTIANO_ENCODER_H
 #define CTIANO_ENCODER_H
 
-// Test support only: EDK2's Tiano / EFI 1.1 compressor. Not reentrant — it
-// keeps its state in file-level statics.
+// EDK2's Tiano / EFI 1.1 compressor. Not reentrant — it keeps its state in
+// file-level statics — so `FirmwareCompression` calls it under a lock.
 
 #include <stdint.h>
 

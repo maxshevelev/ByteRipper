@@ -13,10 +13,8 @@ Schlej; all three files are under the BSD licence stated in their headers
 `CTiano.c` and `include/CTiano.h` are this project's: two plain-C functions over
 the decompressor, so none of the porting macros reach Swift.
 
-The compressor (`EfiTianoCompress.c`, `.h`) is under `Tests/CTianoEncoder`,
-copied from the same place, and is linked only by the package's tests. It keeps
-its state in file-level statics, so it is not reentrant — which a test that
-encodes one fixture at a time never notices.
+The compressor (`EfiTianoCompress.c`, `.h`) is under `Sources/CTianoEncoder`,
+copied from the same place.
 
 To update: copy the same files from a newer UEFITool over these, keep them
 unmodified, and change the commit above.

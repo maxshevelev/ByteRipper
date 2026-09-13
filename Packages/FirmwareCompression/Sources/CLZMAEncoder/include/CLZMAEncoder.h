@@ -1,9 +1,9 @@
 #ifndef CLZMA_ENCODER_H
 #define CLZMA_ENCODER_H
 
-// Test support only: the LZMA SDK's encoder, writing the layout EDK2 writes —
-// five property bytes, the uncompressed size as eight little-endian bytes, the
-// stream with no end mark.
+// The LZMA SDK's encoder, writing the layout EDK2 writes — five property bytes,
+// the uncompressed size as eight little-endian bytes, the stream with no end
+// mark. Called through `FirmwareCompression`, which checks what it wrote.
 
 #include <stddef.h>
 #include <stdint.h>

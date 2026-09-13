@@ -28,7 +28,10 @@ int clzma_encode(const uint8_t *source, size_t sourceLength,
     CLzmaEncProps properties;
     LzmaEncProps_Init(&properties);
     properties.dictSize = dictionarySize;
-    properties.level = 5;
+    // What the old UEFITool compressed sections with: a stream put back into a
+    // volume has to fit the room the old one left, so the smallest it can be.
+    properties.level = 9;
+    properties.fb = 273;
 
     SizeT propertiesSize = LZMA_PROPS_SIZE;
     SizeT streamLength = *destinationLength - header;

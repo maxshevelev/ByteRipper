@@ -17,8 +17,7 @@ Only what decoding needs is here:
 | `7zTypes.h`, `Compiler.h`, `Precomp.h`, `CpuArch.h` | what those include |
 
 The encoder (`LzmaEnc.c`, `LzFind.c`, `CpuArch.c` and their headers) is under
-`Tests/CLZMAEncoder/SDK`, copied from the same place, and is linked only by the
-package's tests.
+`Sources/CLZMAEncoder/SDK`, copied from the same place.
 
 To update: copy the same files from a newer SDK over these, keep them
 unmodified, and change the version above.

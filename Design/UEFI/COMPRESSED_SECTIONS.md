@@ -252,7 +252,8 @@ Packages/FirmwareCompression/
   Sources/FirmwareCompression/
                              the Swift API; the only target anyone imports
   Tests/FirmwareCompressionTests/
-  Tests/CLZMAEncoder/        LzmaEnc.c + LzFind.c, test support only
+  Sources/CLZMAEncoder/      LzmaEnc.c + LzFind.c, behind the product since
+                             Update in Parent (UPDATE_IN_PARENT.md §5)
 ```
 
 ```swift
@@ -507,11 +508,11 @@ section's, its detail names the space, and "Fix Checksum" is not offered.
 **Status, 2026-09-13.** Steps 1–7 are in; step 8 is not, since no dump at hand
 has needed Brotli, GZip or Zlib. Where the code differs from the text above:
 
-- The decoders sit in `CLZMA` and `CTiano`, with their encoders in
-  `Tests/CLZMAEncoder` and `Tests/CTianoEncoder` behind a
-  `FirmwareCompressionTestSupport` product — a product, not a test-only target,
-  so that `UEFIImage`, `UEFITool` and `MEFirmware` tests can build compressed
-  data too.
+- The decoders sit in `CLZMA` and `CTiano`, with their encoders beside them in
+  `CLZMAEncoder` and `CTianoEncoder` — test support at first, behind the
+  product since Update in Parent needed them (`UPDATE_IN_PARENT.md` §5). A
+  `FirmwareCompressionTestSupport` product wraps them for the `UEFIImage`,
+  `UEFITool` and `MEFirmware` tests.
 - `FirmwareDecompression.tiano` returns both readings; `UEFIImage` picks one by
   walking each as sections, and keeps Tiano when neither walks cleanly (no
   separate "cannot tell" diagnostic).
