@@ -166,7 +166,8 @@ final class LinkedTabTests: XCTestCase {
         }
 
         parentHost.openInNewTab(section("Drv") + section("Set"), named: "bios_Body.bin",
-                                linkedTo: 0x20..<0x80, layout: .decompressedBody)
+                                linkedTo: 0x20..<0x80, layout: .decompressedBody,
+                                part: .init(space: .decompressed(chain: [0x20])))
 
         XCTAssertEqual(tab.windowModel.pane1.origin?.layout, .decompressedBody)
         let tree = try XCTUnwrap(try host(tab).uefiTree())
@@ -277,18 +278,55 @@ final class LinkedTabTests: XCTestCase {
         XCTAssertEqual(pane.origin?.state, .intact)
     }
 
-    /// A decompressed body goes back only once it can be compressed again.
-    func testADecompressedBodyIsNotPutBackYet() throws {
+    /// A decompressed body goes back through the rebuild planner; one whose
+    /// section is not in the parent any more is refused with the reason, and
+    /// nothing is written.
+    func testADecompressedBodyWhoseSectionIsGoneIsRefused() async throws {
         let parent = try makeController(opening: [UInt8](repeating: 0xFF, count: 0x100))
         let tab = try makeController()
         parent.makeSiblingTab = { tab }
         try host(parent).openInNewTab([UInt8](repeating: 0, count: 0x60), named: "body.bin",
-                                      linkedTo: 0x20..<0x80, layout: .decompressedBody)
+                                      linkedTo: 0x20..<0x80, layout: .decompressedBody,
+                                      part: .init(space: .decompressed(chain: [0x20])))
         try patch(tab, at: 0, with: 0x01)
 
-        tab.performUpdateInParent(of: tab.windowModel.pane1)
+        await tab.performUpdateInParent(of: tab.windowModel.pane1)?.value
 
-        XCTAssertEqual(tab.lastAlertTitle, "This cannot be put back yet")
+        XCTAssertEqual(tab.lastAlertTitle, "“body” cannot be put back")
         XCTAssertEqual(try byte(at: 0x20, of: parent), 0xFF)
+    }
+
+    /// A zone that is a file of the image goes back through the planner, which
+    /// puts the file's checksums right around the edit.
+    func testAZoneThatIsAFileGoesBackWithItsChecksumsRight() async throws {
+        let parent = try makeController(opening: UEFITestImage.make())
+        let parentHost = try host(parent)
+        let tree = try XCTUnwrap(parentHost.uefiTree())
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            tree.whenReady { done.resume() }
+        }
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            tree.expand(NodeID.root.child(0)) { _ in done.resume() }
+        }
+        parentHost.publish(ZoneMap(zones: [Zone(id: "0.0", name: "MyDriver", range: 0x48..<0x8C)]))
+        let menu = parent.makeOffsetMenu(for: parent.windowModel.pane1, offset: 0x50)
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Open Zone “MyDriver” in a New Tab" })
+        let tab = try makeController()
+        parent.makeSiblingTab = { tab }
+        _ = item.target?.perform(item.action, with: item)
+        let pane = tab.windowModel.pane1
+        XCTAssertEqual(pane.origin?.rebuildTarget, .init(space: .file, range: 0x48..<0x8C))
+
+        // The raw section's first payload byte.
+        try patch(tab, at: 0x34, with: 0x00)
+        await tab.performUpdateInParent(of: pane)?.value
+
+        XCTAssertEqual(try byte(at: 0x48 + 0x34, of: parent), 0x00)
+        let bytes = try XCTUnwrap(parent.windowModel.pane1.document?.read(at: 0, length: 0x1000))
+        let checksums = UEFIParser.parse(bytes).diagnostics.filter { "\($0.kind)".hasPrefix("checksumMismatch") }
+        XCTAssertEqual(checksums, [], "the file's checksums were put right")
+        XCTAssertEqual(tab.lastAlertTitle, "Updated “\(parent.windowModel.pane1.status.fileName)”")
+        XCTAssertEqual(pane.origin?.state, .intact)
+        XCTAssertEqual(pane.origin?.hasChanges(in: pane), false)
     }
 }

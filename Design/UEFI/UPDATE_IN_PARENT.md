@@ -369,6 +369,19 @@ and free-space offset are not recomputed. A moved node or descendant that is
 `isFixed` (the VTF, a FIT target, `FFS_ATTRIB_FIXED`) refuses, and so does a
 moved SEC, PEI Core, PEIM or combined file in a volume of the file itself.
 
+Step 5 is in, without the `ToolRebuilder` protocol of §4.2: the planner has one
+implementation and the app already imports `UEFIImage`, so a seam in between
+would have nothing on its other side. Instead `DocumentOrigin` carries a
+`rebuildTarget` — set by the UEFI module for a decompressed tab
+(`UEFITreeProviding.openInNewTab(_:named:linkedTo:layout:part:)`, the export's
+space and range) and by the app for a zone that is exactly a volume, a file or a
+section of the parent's tree (`UEFIRebuild.target(forFileRange:in:)`). An
+update with a target runs `UEFIRebuild.plan` off the main actor, refuses if the
+parent changed meanwhile, writes the one run of bytes as one undo step, moves
+the link to the part's new range (`Plan.source`) and fingerprint, and says what
+the plan warns about in an alert. Without a target, a copy still goes back at
+its own length and a decompressed body is refused.
+
 1. **The link.** An origin on a pane's document for zone tabs and decompressed
    tabs, with what the bytes are (§2.1) — read by `UEFIImage` as the root of the
    tab's tree, so UEFI Structure shows a decompressed body's sections; the `link`

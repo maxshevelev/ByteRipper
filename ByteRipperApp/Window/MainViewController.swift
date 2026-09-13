@@ -1672,7 +1672,8 @@ final class MainViewController: NSViewController {
     /// bookmarks stay behind: their offsets are the dump's, not these bytes'.
     func openBytesInNewTabForTool(
         _ bytes: [UInt8], named name: String, from pane: PaneViewModel,
-        source: Range<UInt64>, layout: UEFIRootLayout, kind: DocumentOrigin.Kind
+        source: Range<UInt64>, layout: UEFIRootLayout, kind: DocumentOrigin.Kind,
+        part: UEFIRebuild.Target?
     ) {
         guard let tab = makeSiblingTab?() else { return }
         tab.windowModel.pane1.openBytes(
@@ -1681,7 +1682,7 @@ final class MainViewController: NSViewController {
             origin: DocumentOrigin(
                 parent: pane, source: source,
                 partName: Self.partName(ofTab: name, parent: pane.status.fileName),
-                layout: layout, kind: kind, content: bytes
+                layout: layout, kind: kind, rebuildTarget: part, content: bytes
             )
         )
         tab.apply(mode: .singleFile)
@@ -1704,25 +1705,81 @@ final class MainViewController: NSViewController {
     /// Puts `pane`'s bytes back into the document they came out of, as one
     /// undo step there named after the tab. The parent becomes dirty; nothing
     /// is written to disk. What cannot be put back is said, and nothing moves.
-    func performUpdateInParent(of pane: PaneViewModel) {
-        guard let origin = pane.origin, origin.hasChanges(in: pane) else { return }
+    ///
+    /// A part the image's structure is laid out again around — a decompressed
+    /// body, a zone that is a volume, a file or a section — goes through the
+    /// rebuild planner off the main actor (§6); the task is handed back for
+    /// whoever has to wait on it.
+    @discardableResult
+    func performUpdateInParent(of pane: PaneViewModel) -> Task<Void, Never>? {
+        guard let origin = pane.origin, origin.hasChanges(in: pane) else { return nil }
+        let stepName = "Update from \(pane.status.fileName)"
         switch origin.planUpdate(from: pane) {
         case .refused(let title, let message):
             presentAlert(title: title, message: message)
+            return nil
+
         case .overwrite(let offset, let bytes, let confirm):
-            guard let parent = origin.parent else { return }
-            if confirm, !confirmOverwritingChangedSource(of: origin) { return }
-            // Adopted first, so the change notice the write posts finds the
-            // link intact and nothing left to put back.
-            let snapshot = origin.adopt(bytes)
-            do {
-                try parent.applyToolWrites([(offset: offset, bytes: bytes)],
-                                           named: "Update from \(pane.status.fileName)")
-            } catch {
-                origin.restore(snapshot)
-                presentFileError("Could not update “\(origin.parentName)”.", error,
-                                 url: parent.document?.url)
+            guard let parent = origin.parent else { return nil }
+            if confirm, !confirmOverwritingChangedSource(of: origin) { return nil }
+            _ = writeUpdate(bytes, at: offset, into: parent, for: origin, tabBytes: bytes,
+                            sourceBytes: bytes, sourceRange: origin.sourceRange, named: stepName)
+            return nil
+
+        case .rebuild(let target, let bytes, let confirm):
+            guard let parent = origin.parent, let document = parent.document,
+                  let file = try? document.read(at: 0, length: Int(document.size))
+            else { return nil }
+            if confirm, !confirmOverwritingChangedSource(of: origin) { return nil }
+            let generation = parent.contentGeneration
+            return Task { [weak self] in
+                let result = await Task.detached(priority: .userInitiated) {
+                    UEFIRebuild.plan(bytes, at: target, in: file)
+                }.value
+                guard let self else { return }
+                switch result {
+                case .failure(let refusal):
+                    self.presentAlert(title: "“\(origin.partName)” cannot be put back", message: refusal.message)
+                case .success(let plan):
+                    // Worked out over the bytes as they were when asked.
+                    guard parent.contentGeneration == generation, parent.document === document else {
+                        self.presentAlert(
+                            title: "“\(origin.parentName)” changed",
+                            message: "It changed while the update was being worked out. Nothing was written."
+                        )
+                        return
+                    }
+                    var rebuilt = file
+                    rebuilt.replaceSubrange(Int(plan.offset)..<(Int(plan.offset) + plan.bytes.count),
+                                            with: plan.bytes)
+                    let source = Array(rebuilt[Int(plan.source.lowerBound)..<Int(plan.source.upperBound)])
+                    guard self.writeUpdate(plan.bytes, at: plan.offset, into: parent, for: origin,
+                                           tabBytes: bytes, sourceBytes: source,
+                                           sourceRange: plan.source, named: stepName)
+                    else { return }
+                    self.presentAlert(title: "Updated “\(origin.parentName)”",
+                                      message: plan.warnings.joined(separator: "\n\n"))
+                }
             }
+        }
+    }
+
+    /// Writes an update into the parent as one undo step, with the link moved
+    /// on first — so the change notice the write posts finds the link intact
+    /// and nothing left to put back — and moved back if the write fails.
+    private func writeUpdate(
+        _ bytes: [UInt8], at offset: UInt64, into parent: PaneViewModel, for origin: DocumentOrigin,
+        tabBytes: [UInt8], sourceBytes: [UInt8], sourceRange: Range<UInt64>, named name: String
+    ) -> Bool {
+        let snapshot = origin.adopt(tabBytes: tabBytes, sourceBytes: sourceBytes, sourceRange: sourceRange)
+        guard !bytes.isEmpty else { return true }
+        do {
+            try parent.applyToolWrites([(offset: offset, bytes: bytes)], named: name)
+            return true
+        } catch {
+            origin.restore(snapshot)
+            presentFileError("Could not update “\(origin.parentName)”.", error, url: parent.document?.url)
+            return false
         }
     }
 
@@ -4763,8 +4820,13 @@ final class MainViewController: NSViewController {
             named: zoneExportName(fileName: pane.status.fileName,
                                   zoneName: zone.name, range: zone.range),
             origin: DocumentOrigin(parent: pane, source: zone.range,
-                                   partName: zone.name, layout: layout,
-                                   kind: .copy, content: bytes)
+                                   partName: zone.name, layout: layout, kind: .copy,
+                                   // A zone that is a volume, a file or a section
+                                   // goes back through the rebuild planner (§6).
+                                   rebuildTarget: pane.uefiState.tree.flatMap {
+                                       UEFIRebuild.target(forFileRange: zone.range, in: $0.image())
+                                   },
+                                   content: bytes)
         )
         tab.windowModel.bookmarkStore.seed(windowModel.bookmarkStore.bookmarks)
         tab.apply(mode: .singleFile)

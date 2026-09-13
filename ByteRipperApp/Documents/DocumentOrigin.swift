@@ -26,8 +26,7 @@ import UEFIImage
         /// The source's own bytes, copied out: a zone, a part a tool-module
         /// took. They go back as they are.
         case copy
-        /// What the source decompresses to. Putting it back means compressing
-        /// it again (§5), which is not done yet.
+        /// What the source decompresses to: it goes back compressed again.
         case decompressed
     }
 
@@ -37,20 +36,27 @@ import UEFIImage
         /// `bytes` over the parent at `offset`; `confirm` when the source has
         /// changed there since, and the overwrite has to be asked for.
         case overwrite(offset: UInt64, bytes: [UInt8], confirm: Bool)
+        /// `bytes` through the rebuild planner (§6) — a decompressed body, or a
+        /// zone that is a structure of the image, of whatever length.
+        case rebuild(target: UEFIRebuild.Target, bytes: [UInt8], confirm: Bool)
         case refused(title: String, message: String)
     }
 
     private(set) weak var parent: PaneViewModel?
     private weak var parentDocument: BinaryDocument?
     /// The source's bytes in the parent's file: the zone, or the outermost
-    /// compressed section a decompressed body came out of.
-    let sourceRange: Range<UInt64>
+    /// compressed section a decompressed body came out of. It moves with an
+    /// update that changed its length.
+    private(set) var sourceRange: Range<UInt64>
     /// What the part is called there — the zone's or the section's name.
     let partName: String
     /// What the bytes are, for a tool-module opened on the tab (§2.1): a
     /// decompressed body is a run of sections, not an image to scan.
     let layout: UEFIRootLayout
     let kind: Kind
+    /// Where the bytes go back to through the rebuild planner, when the part is
+    /// something the image's structure can be laid out again around.
+    let rebuildTarget: UEFIRebuild.Target?
 
     /// The source's bytes as last taken out or put back.
     private var fingerprint: SHA256.Digest?
@@ -70,6 +76,7 @@ import UEFIImage
         partName: String,
         layout: UEFIRootLayout,
         kind: Kind = .copy,
+        rebuildTarget: UEFIRebuild.Target? = nil,
         content: [UInt8]
     ) {
         guard let document = parent.document else { return nil }
@@ -79,6 +86,7 @@ import UEFIImage
         self.partName = partName
         self.layout = layout
         self.kind = kind
+        self.rebuildTarget = rebuildTarget
         fingerprint = Self.digest(of: source, in: document)
         baseline = SHA256.hash(data: content)
         lastParentName = parent.status.fileName
@@ -128,20 +136,14 @@ import UEFIImage
         return changed
     }
 
-    /// What Update in Parent would do with `child`'s bytes (§3, §4.1): the same
-    /// length back over the source, or a refusal that says why in numbers.
+    /// What Update in Parent would do with `child`'s bytes (§3, §4): through
+    /// the rebuild planner when the part is a structure of the image, the same
+    /// length back over the source otherwise, or a refusal that says why.
     func planUpdate(from child: PaneViewModel) -> Update {
         guard let parent, state != .parentClosed else {
             return .refused(
                 title: "The parent is closed",
                 message: "“\(parentName)” is no longer open, so there is nothing to put “\(partName)” back into."
-            )
-        }
-        guard kind == .copy else {
-            return .refused(
-                title: "This cannot be put back yet",
-                message: "These bytes were decompressed from “\(partName)” in \(parentName). "
-                    + "Putting them back means compressing them again, which ByteRipper does not do yet."
             )
         }
         guard !parent.status.isReadOnly else {
@@ -154,6 +156,16 @@ import UEFIImage
               let bytes = try? document.read(at: 0, length: Int(document.size))
         else {
             return .refused(title: "The tab could not be read", message: "Nothing was changed in \(parentName).")
+        }
+        if let rebuildTarget {
+            return .rebuild(target: rebuildTarget, bytes: bytes, confirm: state == .sourceChanged)
+        }
+        guard kind == .copy else {
+            return .refused(
+                title: "This cannot be put back",
+                message: "These bytes were decompressed from “\(partName)” in \(parentName), "
+                    + "and where they belong in it was not recorded when the tab was opened."
+            )
         }
         guard UInt64(bytes.count) == UInt64(sourceRange.count) else {
             return .refused(
@@ -170,16 +182,18 @@ import UEFIImage
     struct Snapshot {
         fileprivate let fingerprint: SHA256.Digest?
         fileprivate let baseline: SHA256.Digest
+        fileprivate let sourceRange: Range<UInt64>
     }
 
-    /// Takes `bytes` as what the tab and the parent's source both hold — called
-    /// just before they are written, so the change notice the write posts
-    /// already finds the link intact and nothing left to put back.
-    func adopt(_ bytes: [UInt8]) -> Snapshot {
-        let snapshot = Snapshot(fingerprint: fingerprint, baseline: baseline)
-        let digest = SHA256.hash(data: bytes)
-        fingerprint = digest
-        baseline = digest
+    /// Takes `tabBytes` as what the tab holds and `sourceBytes` at
+    /// `sourceRange` as what the parent will — called just before the write, so
+    /// the change notice it posts already finds the link intact and nothing
+    /// left to put back. Hands back what to restore if the write fails.
+    func adopt(tabBytes: [UInt8], sourceBytes: [UInt8], sourceRange newRange: Range<UInt64>) -> Snapshot {
+        let snapshot = Snapshot(fingerprint: fingerprint, baseline: baseline, sourceRange: sourceRange)
+        fingerprint = SHA256.hash(data: sourceBytes)
+        baseline = SHA256.hash(data: tabBytes)
+        sourceRange = newRange
         checked = nil
         childChecked = nil
         return snapshot
@@ -188,6 +202,7 @@ import UEFIImage
     func restore(_ snapshot: Snapshot) {
         fingerprint = snapshot.fingerprint
         baseline = snapshot.baseline
+        sourceRange = snapshot.sourceRange
         checked = nil
         childChecked = nil
     }

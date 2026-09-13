@@ -117,17 +117,18 @@ import MEFirmware
     func openInNewTab(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>) {
         guard let pane, let owner else { return }
         owner.openBytesInNewTabForTool(bytes, named: name, from: pane, source: source,
-                                       layout: .image, kind: .copy)
+                                       layout: .image, kind: .copy, part: nil)
     }
 
     /// `UEFITreeProviding`'s form: what the source decompresses to, told what
-    /// its bytes are.
+    /// its bytes are and where they go back to.
     func openInNewTab(
-        _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>, layout: UEFIRootLayout
+        _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>,
+        layout: UEFIRootLayout, part: UEFIRebuild.Target
     ) {
         guard let pane, let owner else { return }
         owner.openBytesInNewTabForTool(bytes, named: name, from: pane, source: source,
-                                       layout: layout, kind: .decompressed)
+                                       layout: layout, kind: .decompressed, part: part)
     }
 }
 

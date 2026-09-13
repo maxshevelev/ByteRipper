@@ -268,6 +268,32 @@ final class UEFIRebuildTests: XCTestCase {
             XCTAssertEqual(decoded.bytes, edited)
         }
     }
+
+    // MARK: - What a link follows
+
+    /// A zone is something to rebuild around only when it is exactly a volume,
+    /// a file or a section.
+    func testAZoneIsATargetWhenItIsAStructure() {
+        let image = TestImage.volume(length: 0x400, files: [fileA])
+        let parsed = UEFIParser.parse(image)
+        let file = parsed.roots[0].children[0]
+
+        XCTAssertEqual(UEFIRebuild.target(forFileRange: file.range, in: parsed),
+                       .init(space: .file, range: file.range))
+        XCTAssertNil(UEFIRebuild.target(forFileRange: 0x50..<0x60, in: parsed))
+    }
+
+    /// The plan says where the part is held once written: for a body, the
+    /// compressed section's new range, grown with it.
+    func testThePlanSaysWhereThePartIsHeldAfterwards() throws {
+        let (image, section) = compressedImage(lzma(driver()))
+        guard case .success(let plan) = UEFIRebuild.plan(driver(extra: 600), at: .init(space: .inside(section)),
+                                                         in: image)
+        else { return XCTFail("refused") }
+
+        XCTAssertEqual(plan.source.lowerBound, section.range.lowerBound)
+        XCTAssertGreaterThan(plan.source.count, section.range.count)
+    }
 }
 
 private extension ByteSpace {

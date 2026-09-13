@@ -36,6 +36,20 @@ public enum UEFIRebuild {
         public var offset: UInt64
         public var bytes: [UInt8]
         public var warnings: [String]
+        /// Where the part is held in the file once the plan is written: the
+        /// node's new range, or the outermost compressed section's — which a
+        /// link to the part follows from then on.
+        public var source: Range<UInt64>
+    }
+
+    /// The part a zone of the file is, when a structure the planner can lay
+    /// out again — a volume, a file or a section — covers exactly that range.
+    public static func target(forFileRange range: Range<UInt64>, in image: UEFIImage) -> Target? {
+        let kinds: Set<UEFINodeKind> = [.volume, .file, .section]
+        guard image.allNodes.contains(where: { $0.fileRange == range && kinds.contains($0.kind) }) else {
+            return nil
+        }
+        return Target(space: .file, range: range)
     }
 
     public struct Refusal: Error, Equatable, Sendable {
@@ -67,13 +81,14 @@ public enum UEFIRebuild {
             }
             try verify(rebuilt, against: image, target: target, expected: context.targetBytes, limits: limits)
             let warnings = context.warnings + [rangesNotChecked]
+            let source = context.fileSource ?? 0..<0
             guard let first = rebuilt.indices.first(where: { rebuilt[$0] != file[$0] }),
                   let last = rebuilt.indices.last(where: { rebuilt[$0] != file[$0] })
             else {
-                return .success(Plan(offset: 0, bytes: [], warnings: warnings))
+                return .success(Plan(offset: 0, bytes: [], warnings: warnings, source: source))
             }
             return .success(Plan(offset: UInt64(first), bytes: Array(rebuilt[first...last]),
-                                 warnings: warnings))
+                                 warnings: warnings, source: source))
         } catch let refusal as Refusal {
             return .failure(refusal)
         } catch {
@@ -136,6 +151,10 @@ public enum UEFIRebuild {
         /// The target's bytes as they will read back — the replacement with
         /// its own sizes and checksums put right.
         var targetBytes: [UInt8] = []
+        /// The first range of the file this rebuild puts new bytes at — the
+        /// target itself, or the outermost compressed section holding it — as it
+        /// stands afterwards.
+        var fileSource: Range<UInt64>?
         private var isTarget = true
 
         init(file: [UInt8], image: UEFIImage, limits: UEFIParser.Limits) {
@@ -149,6 +168,10 @@ public enum UEFIRebuild {
         /// it put right.
         func put(_ replacement: [UInt8], at target: Target) throws -> [UInt8] {
             let space = target.space
+            // Normalizing a node keeps its length, so this is its range after.
+            if space == .file, fileSource == nil, let range = target.range {
+                fileSource = range.lowerBound..<(range.lowerBound + UInt64(replacement.count))
+            }
             let original = try bytes(of: space)
             let newSpace: [UInt8]
             // The file is never replaced whole: even a volume that fills it is a
