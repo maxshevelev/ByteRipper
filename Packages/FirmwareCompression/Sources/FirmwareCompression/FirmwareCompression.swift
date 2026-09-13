@@ -25,6 +25,13 @@ public enum FirmwareCompression {
         case missingLegacyPrefix
     }
 
+    /// How far an encode has got, from 0 to 1: the encoding up to
+    /// `encodedShare`, the decode that checks it after.
+    public typealias Progress = @Sendable (Double) -> Void
+
+    /// The part of the progress bar the encoding takes; the check is the rest.
+    public static let encodedShare = 0.8
+
     /// The LZMA dictionary used when the caller has none to keep: 8 MiB, more
     /// than the distance between any two matches in a section of a flash image.
     public static let defaultDictionarySize: UInt32 = 1 << 23
@@ -36,32 +43,38 @@ public enum FirmwareCompression {
     ///     by Tiano and EFI 1.1.
     ///   - legacyPrefix: the four bytes an Intel legacy stream starts with —
     ///     required for that variant, ignored by the others.
+    ///   - progress: called on the encoding thread as the work goes. The LZMA
+    ///     encoder reports as it reads; Tiano reports only when it is done.
     public static func compress(
         _ bytes: [UInt8],
         as variant: FirmwareDecompression.Variant,
         dictionarySize: UInt32 = defaultDictionarySize,
-        legacyPrefix: [UInt8]? = nil
+        legacyPrefix: [UInt8]? = nil,
+        progress: Progress? = nil
     ) throws -> [UInt8] {
         guard UInt64(bytes.count) <= UInt64(UInt32.max / 2) else {
             throw Failure.tooLarge(UInt64(bytes.count))
         }
+        progress?(0)
         let stream: [UInt8]
         switch variant {
         case .lzma:
-            stream = try lzma(bytes, dictionarySize: dictionarySize)
+            stream = try lzma(bytes, dictionarySize: dictionarySize, progress: progress)
         case .lzmaIntelLegacy:
             guard let legacyPrefix, legacyPrefix.count == FirmwareDecompression.lzmaIntelLegacyPrefix else {
                 throw Failure.missingLegacyPrefix
             }
-            stream = legacyPrefix + (try lzma(bytes, dictionarySize: dictionarySize))
+            stream = legacyPrefix + (try lzma(bytes, dictionarySize: dictionarySize, progress: progress))
         case .lzmaX86:
-            stream = try lzma(x86Filter(bytes), dictionarySize: dictionarySize)
+            stream = try lzma(x86Filter(bytes), dictionarySize: dictionarySize, progress: progress)
         case .tiano:
             stream = try tiano(bytes, tiano: true)
         case .efi11:
             stream = try tiano(bytes, tiano: false)
         }
+        progress?(encodedShare)
         guard decodes(stream, as: variant, to: bytes) else { throw Failure.roundTripFailed }
+        progress?(1)
         return stream
     }
 
@@ -71,7 +84,8 @@ public enum FirmwareCompression {
     public static func compress(
         _ bytes: [UInt8],
         like original: FirmwareDecompression.Decoded,
-        from stream: [UInt8]
+        from stream: [UInt8],
+        progress: Progress? = nil
     ) throws -> [UInt8] {
         let prefix = original.variant == .lzmaIntelLegacy
             ? Array(stream.prefix(FirmwareDecompression.lzmaIntelLegacyPrefix))
@@ -80,7 +94,8 @@ public enum FirmwareCompression {
             bytes,
             as: original.variant,
             dictionarySize: original.dictionarySize ?? defaultDictionarySize,
-            legacyPrefix: prefix
+            legacyPrefix: prefix,
+            progress: progress
         )
     }
 
@@ -97,17 +112,40 @@ public enum FirmwareCompression {
 
     // MARK: - Encoding
 
+    /// What the C encoder's progress function reaches its caller's closure
+    /// through.
+    private final class ProgressBox {
+        let report: (UInt64) -> Void
+
+        init(report: @escaping (UInt64) -> Void) {
+            self.report = report
+        }
+    }
+
     /// The LZMA SDK's encoder in EDK2's layout: five property bytes, the size
     /// in eight, the stream with no end mark.
-    private static func lzma(_ bytes: [UInt8], dictionarySize: UInt32) throws -> [UInt8] {
+    private static func lzma(_ bytes: [UInt8], dictionarySize: UInt32, progress: Progress?) throws -> [UInt8] {
         // An empty array has no base address to hand the encoder.
         let input = bytes.isEmpty ? [UInt8(0)] : bytes
         var output = [UInt8](repeating: 0, count: bytes.count + bytes.count / 3 + 256)
         var length = output.count
-        let result = input.withUnsafeBufferPointer { source in
-            output.withUnsafeMutableBufferPointer { destination in
-                clzma_encode(source.baseAddress, bytes.count,
-                             destination.baseAddress, &length, dictionarySize)
+        let total = Double(max(bytes.count, 1))
+        let box = progress.map { report in
+            ProgressBox { processed in report(min(Double(processed) / total, 1) * encodedShare) }
+        }
+        let context = box.map { Unmanaged.passUnretained($0).toOpaque() }
+        let result = withExtendedLifetime(box) {
+            input.withUnsafeBufferPointer { source in
+                output.withUnsafeMutableBufferPointer { destination in
+                    clzma_encode(
+                        source.baseAddress, bytes.count, destination.baseAddress, &length, dictionarySize,
+                        context,
+                        context == nil ? nil : { context, processed in
+                            guard let context else { return }
+                            Unmanaged<ProgressBox>.fromOpaque(context).takeUnretainedValue().report(processed)
+                        }
+                    )
+                }
             }
         }
         guard result == 0 else { throw Failure.encoderFailed(code: result) }

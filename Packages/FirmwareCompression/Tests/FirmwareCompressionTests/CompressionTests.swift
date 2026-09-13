@@ -93,6 +93,24 @@ final class CompressionTests: XCTestCase {
         }
     }
 
+    /// An encode says how far it has got: forward only, the encoder's share
+    /// first, and all the way when the check is done.
+    func testAnEncodeReportsItsProgress() throws {
+        let seen = NSLock()
+        var fractions: [Double] = []
+        _ = try FirmwareCompression.compress(sample(count: 400_000), as: .lzma) { fraction in
+            seen.lock()
+            fractions.append(fraction)
+            seen.unlock()
+        }
+
+        XCTAssertEqual(fractions.first, 0)
+        XCTAssertEqual(fractions.last, 1)
+        XCTAssertEqual(fractions, fractions.sorted(), "never backwards")
+        XCTAssertTrue(fractions.contains { $0 > 0 && $0 < FirmwareCompression.encodedShare },
+                      "the encoder reports along the way: \(fractions)")
+    }
+
     /// EDK2's compressor keeps its state in statics; encodes from several
     /// threads at once still each come back whole.
     func testTianoEncodesFromSeveralThreadsAtOnce() {

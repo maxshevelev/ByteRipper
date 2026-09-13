@@ -17,9 +17,28 @@ static void encoder_free(ISzAllocPtr allocator, void *address) {
 
 static const ISzAlloc encoder_allocator = { encoder_alloc, encoder_free };
 
+// The SDK's progress interface with the caller's function behind it. The
+// interface is the first member, so the pointer the SDK hands back is this.
+typedef struct {
+    ICompressProgress interface;
+    void *context;
+    clzma_progress progress;
+} progress_adapter;
+
+static SRes adapter_progress(ICompressProgressPtr pointer, UInt64 inSize, UInt64 outSize) {
+    const progress_adapter *adapter = (const progress_adapter *)pointer;
+    (void)outSize;
+    if (inSize != (UInt64)(Int64)-1) {
+        adapter->progress(adapter->context, inSize);
+    }
+    return SZ_OK;
+}
+
 int clzma_encode(const uint8_t *source, size_t sourceLength,
                  uint8_t *destination, size_t *destinationLength,
-                 uint32_t dictionarySize) {
+                 uint32_t dictionarySize,
+                 void *context, clzma_progress progress) {
+    progress_adapter adapter = { { adapter_progress }, context, progress };
     const size_t header = LZMA_PROPS_SIZE + 8;
     if (*destinationLength < header) {
         return SZ_ERROR_OUTPUT_EOF;
@@ -38,7 +57,8 @@ int clzma_encode(const uint8_t *source, size_t sourceLength,
     SRes result = LzmaEncode(destination + header, &streamLength,
                              source, sourceLength,
                              &properties, destination, &propertiesSize,
-                             0, NULL, &encoder_allocator, &encoder_allocator);
+                             0, progress ? &adapter.interface : NULL,
+                             &encoder_allocator, &encoder_allocator);
 
     uint64_t size = sourceLength;
     for (size_t index = 0; index < 8; index++) {

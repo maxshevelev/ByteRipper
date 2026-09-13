@@ -93,21 +93,34 @@ public enum UEFIRebuild {
     /// - Parameter protected: the file's protected ranges, when they have been
     ///   read. A change to a byte inside the IBB is refused and one inside a
     ///   vendor hash range is warned about; nil says they were not checked.
+    ///   - progress: called on the planning thread with what is being done and
+    ///     how far the whole plan has got — for a status bar, since compressing
+    ///     a DXE volume again takes seconds.
     public static func plan(
         _ replacement: [UInt8],
         at target: Target,
         in file: [UInt8],
         limits: UEFIParser.Limits = .init(),
-        protected: [ProtectedRange]? = nil
+        protected: [ProtectedRange]? = nil,
+        progress: (@Sendable (Progress) -> Void)? = nil
     ) -> Result<Plan, Refusal> {
-        let image = UEFIParser.parse(file, limits: limits)
-        let context = Context(file: file, image: image, limits: limits)
+        let report = Reporter(progress)
+        report.phase("Reading the structure of the image")
+        let image = UEFIParser.parse(file, limits: limits) { report.fraction(Reporter.reading * $0) }
+        var compressions = 0
+        if case .decompressed(let chain) = target.space { compressions = chain.count }
+        let context = Context(file: file, image: image, limits: limits,
+                              report: report, compressions: compressions)
         do {
             let rebuilt = try context.put(replacement, at: target)
             guard rebuilt.count == file.count else {
                 throw Refusal("The rebuilt image is not the size of the file. Nothing was changed.")
             }
-            try verify(rebuilt, against: image, target: target, expected: context.targetBytes, limits: limits)
+            report.phase("Checking the rebuilt image")
+            report.fraction(Reporter.checking)
+            try verify(rebuilt, against: image, target: target, expected: context.targetBytes, limits: limits,
+                       progress: { report.fraction(Reporter.checking + (1 - Reporter.checking) * $0) })
+            defer { report.fraction(1) }
             let changes = changedRuns(rebuilt, file)
             var warnings = context.warnings
             if let protected {
@@ -167,6 +180,49 @@ public enum UEFIRebuild {
         return warnings
     }
 
+    // MARK: - Progress
+
+    /// What a rebuild is doing, and how far the whole of it has got, from 0
+    /// to 1.
+    public struct Progress: Equatable, Sendable {
+        public var phase: String
+        public var fraction: Double
+    }
+
+    /// Hands progress on from whichever thread the work is on: the phase as it
+    /// changes, the fraction only ever forward.
+    final class Reporter: @unchecked Sendable {
+        /// Where the phases end on the bar: reading the image, compressing
+        /// again up to `checking`, then checking the result.
+        static let reading = 0.2
+        static let checking = 0.8
+
+        private let sink: (@Sendable (Progress) -> Void)?
+        private let lock = NSLock()
+        private var current = Progress(phase: "", fraction: 0)
+
+        init(_ sink: (@Sendable (Progress) -> Void)?) {
+            self.sink = sink
+        }
+
+        func phase(_ phase: String) {
+            update { $0.phase = phase }
+        }
+
+        func fraction(_ fraction: Double) {
+            update { $0.fraction = max($0.fraction, min(fraction, 1)) }
+        }
+
+        private func update(_ change: (inout Progress) -> Void) {
+            guard let sink else { return }
+            lock.lock()
+            change(&current)
+            let snapshot = current
+            lock.unlock()
+            sink(snapshot)
+        }
+    }
+
     // MARK: - Verifying (§8)
 
     /// The kinds of complaint that mean a structure is broken, rather than
@@ -192,10 +248,11 @@ public enum UEFIRebuild {
         against original: UEFIImage,
         target: Target,
         expected: [UInt8],
-        limits: UEFIParser.Limits
+        limits: UEFIParser.Limits,
+        progress: @escaping @Sendable (Double) -> Void
     ) throws {
         let before = damageCounts(original)
-        let after = damageCounts(UEFIParser.parse(rebuilt, limits: limits))
+        let after = damageCounts(UEFIParser.parse(rebuilt, limits: limits, progress: progress))
         for (kind, count) in after where count > before[kind, default: 0] {
             throw Refusal(
                 "Putting it back would leave the image with a new \(kind) — a fault in the rebuild, not in the edit. Nothing was changed."
@@ -228,10 +285,18 @@ public enum UEFIRebuild {
         var fileSource: Range<UInt64>?
         private var isTarget = true
 
-        init(file: [UInt8], image: UEFIImage, limits: UEFIParser.Limits) {
+        /// Progress, and how many compressed sections the rebuild will compress
+        /// again: the bar between reading and checking is theirs to share.
+        let report: Reporter
+        let compressions: Int
+        private var compressed = 0
+
+        init(file: [UInt8], image: UEFIImage, limits: UEFIParser.Limits, report: Reporter, compressions: Int) {
             self.file = file
             self.image = image
             self.limits = limits
+            self.report = report
+            self.compressions = compressions
             readers = SpaceReaders(file: ImageReader(file), limits: limits)
         }
 
@@ -632,11 +697,20 @@ public enum UEFIRebuild {
             else {
                 throw Refusal("“\(section.name)” no longer decompresses, so it cannot be compressed again the same way.")
             }
+            // The stretch of the bar between reading and checking that this
+            // section's encode, one of `compressions`, has to itself.
+            let share = (Reporter.checking - Reporter.reading) / Double(max(compressions, 1))
+            let low = Reporter.reading + share * Double(compressed)
+            compressed += 1
+            let size = ByteCountFormatter.string(fromByteCount: Int64(buffer.count), countStyle: .file)
+            report.phase("Compressing “\(section.name)” again (\(size))")
+            let report = self.report
             let stream: [UInt8]
             do {
                 stream = try FirmwareCompression.compress(
                     buffer, like: decoded,
-                    from: Array(parentBytes[Int(located.body.lowerBound)..<Int(located.body.upperBound)])
+                    from: Array(parentBytes[Int(located.body.lowerBound)..<Int(located.body.upperBound)]),
+                    progress: { report.fraction(low + share * $0) }
                 )
             } catch {
                 throw Refusal("“\(section.name)” could not be compressed again: \(error).")

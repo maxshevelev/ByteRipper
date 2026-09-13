@@ -333,6 +333,32 @@ final class UEFIRebuildTests: XCTestCase {
         XCTAssertTrue(message.contains("free"), message)
     }
 
+    // MARK: - Progress
+
+    /// A long rebuild says what it is doing and how far it has got: reading the
+    /// image, compressing the section again, checking the result — forward
+    /// only, and all the way at the end.
+    func testARebuildSaysWhatItIsDoing() throws {
+        let (image, section) = compressedImage(lzma(driver()))
+        let seen = NSLock()
+        var reports: [UEFIRebuild.Progress] = []
+
+        let result = UEFIRebuild.plan(driver("InnerDriveX"), at: .init(space: .inside(section)), in: image) {
+            seen.lock()
+            reports.append($0)
+            seen.unlock()
+        }
+
+        guard case .success = result else { return XCTFail("refused") }
+        let phases = reports.map(\.phase).reduce(into: [String]()) { if $0.last != $1 { $0.append($1) } }
+        XCTAssertEqual(phases.count, 3, "\(phases)")
+        XCTAssertTrue(phases[0].hasPrefix("Reading"), phases[0])
+        XCTAssertTrue(phases[1].contains("LZMA compressed section"), phases[1])
+        XCTAssertTrue(phases[2].hasPrefix("Checking"), phases[2])
+        XCTAssertEqual(reports.map(\.fraction), reports.map(\.fraction).sorted(), "never backwards")
+        XCTAssertEqual(reports.last?.fraction, 1)
+    }
+
     // MARK: - Protected ranges (§6.4)
 
     /// A file with the last byte of its body flipped: a change at the body's
