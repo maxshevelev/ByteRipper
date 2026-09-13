@@ -583,6 +583,15 @@ public actor MEFirmwareAnalyzer {
             }
         }
 
+        if let cp = codePartition {
+            // Phase 8 integrity, LZMA half: every module whose `.met` advertises
+            // LZMA and no encryption must decompress and match its stored hash.
+            // No dictionary and no database — so, unlike the Huffman half, it
+            // runs for a firmware that was not identified too.
+            issues.append(contentsOf: Self.lzmaValidationIssues(
+                for: cp, in: region, baseOffset: baseOffset))
+        }
+
         // Phase 10: CSME 12+ SKU ("Consumer H") from the operational partition's
         // CSE_Ext_0C/0x0F_R2 facts + the matched MEA.dat row's platform cell.
         // The top-level `platform` (chipset support, e.g. "CNP"/"TGP") is gated on
@@ -1071,6 +1080,49 @@ public actor MEFirmwareAnalyzer {
                 issues.append(Issue(id: 7, severity: .warning,
                     message: "Huffman module \"\(module.name)\" decompressed to the right "
                         + "size but hit unknown codewords / an early stream end."))
+            }
+        }
+        return issues
+    }
+
+    /// Phase 8 cross-check, LZMA half (`cse_unpack`'s `mod_comp == 2` branch,
+    /// MEA.py ~7245). A code module whose paired `.met` decodes a `CSE_Ext_0A`
+    /// advertising LZMA and no encryption is sliced by that `.met`'s compressed
+    /// size — the `$CPD` row's size is the uncompressed one — decompressed, and
+    /// checked against the stored hash (`LZMAModule`). Never throws.
+    private static func lzmaValidationIssues(
+        for codePartition: CodePartition, in region: Data, baseOffset: Int) -> [Issue] {
+        let headerBase = codePartition.offset - baseOffset
+        var issues: [Issue] = []
+
+        for module in codePartition.modules
+        where !module.name.hasSuffix(".met") && !module.name.hasSuffix(".man") {
+            guard let attrs = codePartition.modules
+                .first(where: { $0.name == module.name + ".met" })?
+                .extensions?
+                .compactMap({ $0.moduleAttributes })
+                .first,
+                attrs.compression == 2, attrs.encryption == 0,
+                attrs.compressedSize > 0 else { continue }
+            let moduleBase = headerBase + module.offset
+            guard moduleBase >= 0, moduleBase + attrs.compressedSize <= region.count else {
+                issues.append(Issue(id: 19, severity: .warning,
+                    message: "LZMA module \"\(module.name)\" extends past the end of the "
+                        + "region; cannot verify it."))
+                continue
+            }
+            let stored = region.subdata(in: moduleBase..<(moduleBase + attrs.compressedSize))
+            guard let decompressed = LZMAModule.decompress(
+                module: stored, uncompressedSize: attrs.uncompressedSize) else {
+                issues.append(Issue(id: 19, severity: .warning,
+                    message: "LZMA module \"\(module.name)\" does not decompress."))
+                continue
+            }
+            if !attrs.moduleHash.isEmpty,
+               !LZMAModule.hashMatches(storedHash: attrs.moduleHash,
+                                       stored: stored, decompressed: decompressed) {
+                issues.append(Issue(id: 19, severity: .warning,
+                    message: "Hash of LZMA module \"\(module.name)\" is invalid."))
             }
         }
         return issues

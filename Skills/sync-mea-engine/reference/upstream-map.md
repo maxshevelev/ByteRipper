@@ -113,6 +113,7 @@ port (module-name heuristics) or the display/DB-label layer.
 | Upstream symbol(s) | Models | Swift home | Status |
 |---|---|---|---|
 | `cse_huffman_decompress` | Huffman module decompression | `Decompress/Huffman.swift` (`HuffmanDecoder`) | ported |
+| `cse_unpack` `mod_comp == 2` branch | LZMA module decompression + hash — stray header zeros removed (`36 00 40 00 00` start, zeros at `0x0E..<0x11`), decoded by `FirmwareCompression` (LZMA SDK), short output filled with its last byte to the `.met` size, hash tried over the stored bytes then the decompressed ones (stored `moduleHash` read backwards = upstream's LE-int print); Phase 8 LZMA half, Issue id 19 (not decompressing / hash invalid / past the region), needs no database | `Decompress/LZMAModule.swift` (`LZMAModule`) + analyzer wiring | ported |
 
 The port exposes a `Data`-returning API (`decompress(module:compressedSize:decompressedSize:dictionary:) -> (output, clean)`),
 never early-returns — a chunk that runs out of stream / overflows / hits an unknown
@@ -121,9 +122,10 @@ codeword is 0x7F-filled to its 0x1000 boundary and later chunks still decode (up
 (`MEAGitHubDataRepository`, single-flight fetch of `Huffman.dat`); the analyzer runs a
 best-effort Phase 8 integrity check (Issue id 7) on declared-Huffman modules that have a
 `.met` 0x0A advertising Huffman + no encryption — oracle: CSME 12.0.3 22/22 modules
-decompress to their exact `.met` sizes, clean. (LZMA — upstream `mod_comp == 2` — is not
-ported here; it decompresses whole-module with Foundation `Compression`/`lzma` when a later
-phase needs it.)
+decompress to their exact `.met` sizes, clean. LZMA — upstream `mod_comp == 2` — is the row
+above: Foundation's `Compression` reads only the xz container, so the decoder is the LZMA
+SDK's, shared with `UEFIImage` through `Packages/FirmwareCompression`. No real CSME 15+ dump
+has been run through it yet; the module fixtures are encoded by the SDK's own encoder.
 
 ## Analysis pipeline (entry flow)
 

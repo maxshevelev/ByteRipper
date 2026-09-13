@@ -10,9 +10,11 @@
 //  (`Skills/sync-mea-engine/SKILL.md`). Its symbol-to-Swift ledger is
 //  `Skills/sync-mea-engine/reference/upstream-map.md`.
 //
-//  It depends on nothing — not on `ToolModuleKit`, not on the app — because a
-//  parser that can be run by `swift test` over a hand-built region is a parser
-//  whose diagnostics can be pinned down without a window.
+//  It depends on no part of the app — not on `ToolModuleKit`, not on the app
+//  itself — because a parser that can be run by `swift test` over a hand-built
+//  region is a parser whose diagnostics can be pinned down without a window.
+//  The packages it links are data and decoders: `FreshData` for the databases,
+//  `FirmwareCompression` for the LZMA-compressed CSME modules.
 //
 //  The module fronting this package exposes an async API to the UI and fetches
 //  its firmware databases (MEA.dat / Huffman.dat / FileTable.dat) live from the
@@ -38,13 +40,22 @@ let package = Package(
     dependencies: [
         // Holding MEA.dat for the life of the process, and checking it once a
         // day — see FreshData's own manifest for why that is a package.
-        .package(path: "../FreshData")
+        .package(path: "../FreshData"),
+        // The LZMA decoder a CSME module is stored with (`mod_comp == 2`).
+        .package(path: "../FirmwareCompression")
     ],
     targets: [
-        .target(name: "MEFirmware", dependencies: ["FreshData"]),
+        .target(name: "MEFirmware", dependencies: [
+            "FreshData",
+            .product(name: "FirmwareCompression", package: "FirmwareCompression")
+        ]),
         .testTarget(
             name: "MEFirmwareTests",
-            dependencies: ["MEFirmware"]
+            dependencies: [
+                "MEFirmware",
+                // The encoder, to build an LZMA module byte by byte.
+                .product(name: "FirmwareCompressionTestSupport", package: "FirmwareCompression")
+            ]
         ),
         .executableTarget(
             name: "MEFirmwareCLI",
