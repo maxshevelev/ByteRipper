@@ -426,9 +426,10 @@ public enum FITEditor {
         return runs
     }
 
-    /// The shared half of a replacement: lay the run down again with the row's
-    /// component swapped for the new bytes, and repoint the row only when the
-    /// move demands it.
+    /// The shared half of a replacement. A component no bigger than the old one
+    /// goes where the old one was and nothing else moves; a bigger one lays the
+    /// run down again with the row's component swapped for the new bytes, and
+    /// repoints the rows the move demands.
     private static func replacing(
         _ row: FITRow,
         with bytes: [UInt8],
@@ -445,6 +446,37 @@ public enum FITEditor {
             return header.offset == old.offset
         }), case .existing(_, let first) = run[0], case .existing(_, let last) = run[run.count - 1]
         else { return .failure(.noSuchEntry) }
+
+        // No bigger than the old one: it goes where the old one was, and
+        // nothing behind it moves. A vendor lays a run out with gaps of its own
+        // — CSME images align each microcode to 4 KiB — and packing the run
+        // tight would move every component behind this one, and rewrite the
+        // rows naming them, for nothing the user asked for. What the old one
+        // covered past the new one's end is erased with the fill the run
+        // already sits in.
+        if bytes.count <= Int(old.totalSize) {
+            let fill = fillByte(
+                at: last.range.upperBound,
+                upTo: spareArea(around: first.offset, image: image, reader: reader).range.upperBound,
+                in: reader
+            )
+            let payload = bytes + [UInt8](repeating: fill, count: Int(old.totalSize) - bytes.count)
+            let writes = [changedPart(of: payload, at: old.offset, in: reader)].compactMap { $0 }
+            return .success((
+                withContainerRepairs(
+                    ToolTransaction(name: "Replace Microcode", writes: writes),
+                    image: image, reader: reader, grownFile: nil
+                ),
+                FITEditOutcome(
+                    kind: .replaced,
+                    range: old.offset..<(old.offset + UInt64(header.totalSize)),
+                    entryIndex: row.entry.index,
+                    replaced: old,
+                    moved: 0
+                )
+            ))
+        }
+
         var items = run
         items[target] = .fresh(bytes)
 
@@ -1000,26 +1032,9 @@ public enum FITEditor {
                 count: Int(oldEnd - next)
             )
         }
-        // Only the part that differs is written. A run whose first components
-        // do not move must not be rewritten with the bytes it already holds:
-        // the dump would colour every one of them as changed, and the undo step
-        // would take back more than the edit did.
-        var write: ToolTransaction.Write? = ToolTransaction.Write(offset: start, bytes: payload)
-        if let current = reader.bytes(start..<(start + UInt64(payload.count))) {
-            // Both ends: a replacement in the middle of a run leaves the
-            // components in front of it and behind it exactly as they were.
-            var first = 0
-            while first < payload.count, payload[first] == current[first] { first += 1 }
-            if first == payload.count {
-                write = nil
-            } else {
-                var last = payload.count - 1
-                while last > first, payload[last] == current[last] { last -= 1 }
-                write = ToolTransaction.Write(
-                    offset: start + UInt64(first), bytes: Array(payload[first...last])
-                )
-            }
-        }
+        // Only the part that differs is written: a run whose first components
+        // do not move is not rewritten with the bytes it already holds.
+        let write = changedPart(of: payload, at: start, in: reader)
         return .success(Relayout(
             write: write,
             moves: moves,
@@ -1027,6 +1042,25 @@ public enum FITEditor {
             growth: growth,
             freshOffset: freshOffset
         ))
+    }
+
+    /// `payload` at `start`, cut to the stretch that differs from what is there
+    /// — at both ends, so a change in the middle of a run leaves the components
+    /// in front of it and behind it alone. Bytes that do not change are not
+    /// written: the dump would colour them as changed, and the undo step would
+    /// take back more than the edit did. Nil when nothing differs.
+    private static func changedPart(
+        of payload: [UInt8], at start: UInt64, in reader: ImageReader
+    ) -> ToolTransaction.Write? {
+        guard let current = reader.bytes(start..<(start + UInt64(payload.count))) else {
+            return ToolTransaction.Write(offset: start, bytes: payload)
+        }
+        var first = 0
+        while first < payload.count, payload[first] == current[first] { first += 1 }
+        guard first < payload.count else { return nil }
+        var last = payload.count - 1
+        while last > first, payload[last] == current[last] { last -= 1 }
+        return ToolTransaction.Write(offset: start + UInt64(first), bytes: Array(payload[first...last]))
     }
 
     private static func writeAddress(_ address: UInt64, into row: inout [UInt8]) {

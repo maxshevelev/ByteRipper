@@ -322,9 +322,11 @@ final class FITEditorTests: XCTestCase {
         XCTAssertTrue(after.problems.isEmpty, "\(after.problems.map(\.message))")
     }
 
-    /// And a smaller one pulls it up, so the run stays tight and the free space
-    /// stays at the end where the next addition can use it.
-    func testASmallerReplacementPullsTheRunUp() throws {
+    /// And a smaller one goes where the old one was too: nothing behind it
+    /// moves, the table is not written, and what the old one covered past the
+    /// new one's end is erased. A vendor's gaps in a run are its own — packing
+    /// them away would move components and rows nobody asked to change.
+    func testASmallerReplacementStaysWhereTheOldOneWas() throws {
         let bytes = runOfThree()
         let smaller = TestFIT.microcode(signature: 0x0009_06EA, revision: 0xF1, totalSize: 0x80)
 
@@ -332,13 +334,42 @@ final class FITEditorTests: XCTestCase {
         let edited = try applying(transaction, to: bytes)
         let after = FITReader.read(ImageReader(edited), image: nil)
 
-        XCTAssertEqual(outcome.moved, 1)
+        XCTAssertEqual(outcome.moved, 0)
+        XCTAssertEqual(outcome.range, 0x2100..<0x2180)
+        let writes = try transaction.validated().writes
+        XCTAssertEqual(writes.count, 1, "the component only, not the table")
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(writes.first).offset, 0x2100)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(writes.first).range.upperBound, 0x2200)
         XCTAssertEqual(after.table?.entries.map(\.entry.address),
-                       [0xFFFF_2000, 0xFFFF_2100, 0xFFFF_2180])
+                       [0xFFFF_2000, 0xFFFF_2100, 0xFFFF_2200])
         XCTAssertEqual(
-            Array(edited[0x2280..<0x2300]), [UInt8](repeating: 0xFF, count: 0x80),
-            "the bytes the run gave up are erased"
+            Array(edited[0x2180..<0x2200]), [UInt8](repeating: 0xFF, count: 0x80),
+            "what the old one covered past the new one's end is erased"
         )
+        XCTAssertEqual(Array(edited[0x2200..<0x2300]), Array(bytes[0x2200..<0x2300]),
+                       "the microcode behind it has not moved")
+        XCTAssertTrue(after.problems.isEmpty, "\(after.problems.map(\.message))")
+    }
+
+    /// A run laid out with gaps keeps them: replacing the first component with
+    /// one of the same size moves nothing behind it, however far away it is.
+    func testAReplacementKeepsTheGapsInARun() throws {
+        let first = TestFIT.microcode(signature: 0x0008_06EA, totalSize: 0x100)
+        let second = TestFIT.microcode(signature: 0x0009_06EA, totalSize: 0x100)
+        let bytes = TestFIT.image(
+            rows: [
+                TestFIT.Row(FIT.microcodeType, target: 0x2000),
+                TestFIT.Row(FIT.microcodeType, target: 0x3000)
+            ],
+            contents: [0x2000: first, 0x3000: second]
+        )
+        let newer = TestFIT.microcode(signature: 0x0008_06EA, revision: 0xF1, totalSize: 0x100)
+
+        let (transaction, outcome) = try addOrReplace(newer, in: bytes).get()
+        let after = FITReader.read(ImageReader(try applying(transaction, to: bytes)), image: nil)
+
+        XCTAssertEqual(outcome.moved, 0)
+        XCTAssertEqual(after.table?.entries.map(\.entry.address), [0xFFFF_2000, 0xFFFF_3000])
         XCTAssertTrue(after.problems.isEmpty, "\(after.problems.map(\.message))")
     }
 
