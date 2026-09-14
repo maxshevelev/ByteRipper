@@ -45,6 +45,11 @@ import ToolModuleKit
     let problems = NSTableView()
     private let entriesScroll = NSScrollView()
     private let problemsScroll = NSScrollView()
+    /// The entries and their legend, as one pane of the splitter: the legend
+    /// explains the rows, and opens into the table's room rather than the
+    /// detail's (`Design/ROW_MARKS.md` §6).
+    private let entriesPane = NSView()
+    let legend = ToolRowMarksLegend(panel: "FIT", marks: FITRowMarks.legendMarks)
     private let detail = ToolDetailScroll()
     private let splitter = ALSplitView()
     private let summaryLabel = NSTextField(labelWithString: "")
@@ -158,7 +163,19 @@ import ToolModuleKit
         splitter.isVertical = false
         splitter.dividerThickness = 1
         splitter.translatesAutoresizingMaskIntoConstraints = false
-        splitter.addPane(entriesScroll)
+        entriesPane.translatesAutoresizingMaskIntoConstraints = false
+        entriesPane.addSubview(entriesScroll)
+        entriesPane.addSubview(legend)
+        NSLayoutConstraint.activate([
+            entriesScroll.topAnchor.constraint(equalTo: entriesPane.topAnchor),
+            entriesScroll.leadingAnchor.constraint(equalTo: entriesPane.leadingAnchor),
+            entriesScroll.trailingAnchor.constraint(equalTo: entriesPane.trailingAnchor),
+            legend.topAnchor.constraint(equalTo: entriesScroll.bottomAnchor, constant: 4),
+            legend.leadingAnchor.constraint(equalTo: entriesPane.leadingAnchor),
+            legend.trailingAnchor.constraint(equalTo: entriesPane.trailingAnchor),
+            legend.bottomAnchor.constraint(equalTo: entriesPane.bottomAnchor)
+        ])
+        splitter.addPane(entriesPane)
         splitter.addPane(detail)
         splitter.setPaneLayout(.fill, at: 0)
         splitter.setPaneLayout(.proportional(1.0 / 3), at: 1)
@@ -585,15 +602,16 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
         guard row < display.rows.count else { return nil }
         let entry = display.rows[row]
         let monospaced = ToolPanelFont.monospacedDigits()
-        // The Type column wears the warning for a row the validator complained
-        // about — one red triangle where the row says what it is, rather than
-        // the whole row in red — and, ahead of it, the microcode row's verdict
-        // against the catalogue. Both are row-wide states worn on the column
-        // the row is named by.
+        // The Type column wears the row's problem — the red octagon for an
+        // error, the orange circle for a caution, as in the UEFI tree, rather
+        // than the whole row in red — and, ahead of it, the microcode row's
+        // verdict against the catalogue. Both are row-wide states worn on the
+        // column the row is named by, in the icons of the shared catalogue.
         if column.identifier == Column.type {
-            ToolPanelTable.setWarning(entry.hasProblem, on: cell,
-                                      explanation: problemText(ofRow: entry.index))
-            markLatest(entry.latestState, on: cell)
+            let marks = FITRowMarks.marks(for: entry, problems: display.problems)
+            ToolPanelTable.setProblem(marks.problem, on: cell)
+            let verdict = FITRowMarks.verdict(of: entry.latestState)
+            ToolPanelTable.setVerdict(verdict?.mark, toolTip: verdict?.toolTip, on: cell)
         }
         switch column.identifier {
         case Column.index:
@@ -622,56 +640,6 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
             ? "Version \(entry.versionText)"
             : (entry.targetText.isEmpty ? nil : entry.targetText)
         return cell
-    }
-
-    /// What the pointer reads on a flagged row's warning: what the list below
-    /// says about that row, so a triangle can be read where it sits.
-    private func problemText(ofRow index: Int) -> String? {
-        let messages = display.problems
-            .filter { $0.entryIndex == index }
-            .map(\.message)
-        return messages.isEmpty ? nil : messages.joined(separator: "\n")
-    }
-
-    /// Dresses the Type column's "latest" marker for one row: the green seal
-    /// where the catalogue confirms the installed revision is its newest for
-    /// this board, the orange triangle where it lists a newer one that serves
-    /// this board (which it names), the orange question mark where the newer
-    /// one it lists might or might not serve it, and nothing where there is no
-    /// basis for a verdict — a row with no verdict is dressed by leaving the
-    /// slot empty, the same way a clean row leaves the warning slot empty.
-    ///
-    /// The two orange states share one colour on purpose: both say the
-    /// installed revision is not confirmed newest, and they differ in how sure
-    /// of it we are, not in what kind of thing it is.
-    private func markLatest(_ state: MicrocodeLatest, on cell: NSTableCellView) {
-        switch state {
-        case .latest:
-            ToolPanelTable.setMarker(
-                symbol: "checkmark.seal.fill", tint: SemanticColors.good,
-                toolTip: "Newest revision the catalogue lists for this processor and platform",
-                on: cell
-            )
-        case .outdated(let newestRevision):
-            ToolPanelTable.setMarker(
-                symbol: "exclamationmark.triangle", tint: SemanticColors.caution,
-                toolTip: "Catalogue lists a newer revision "
-                    + "(r.\(String(newestRevision, radix: 16, uppercase: true)))",
-                on: cell
-            )
-        case .undecided(let newestRevision):
-            ToolPanelTable.setMarker(
-                symbol: "questionmark.circle", tint: SemanticColors.caution,
-                toolTip: "Catalogue lists a newer revision "
-                    + "(r.\(String(newestRevision, radix: 16, uppercase: true))) "
-                    + "whose platforms only partly overlap this one's — whether it "
-                    + "serves this board depends on the board's own platform ID, "
-                    + "which the image does not carry",
-                on: cell
-            )
-        case .notRated:
-            ToolPanelTable.setMarker(symbol: nil, on: cell)
-        }
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {

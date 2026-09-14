@@ -1124,7 +1124,7 @@ final class FITToolFlowTests: XCTestCase {
     }
 
     /// A row the validator complained about wears a red warning where the row
-    /// says what it is — one triangle in the Type column, with what is wrong
+    /// says what it is — one octagon in the Type column, with what is wrong
     /// under the pointer — and its text stays the colour every other row's is.
     ///
     /// Not the whole row in red: a red row reads as red *values*, and the
@@ -1152,6 +1152,40 @@ final class FITToolFlowTests: XCTestCase {
         let clean = try typeCell(row: 0)
         XCTAssertEqual(clean.imageView?.isHidden, true, "a row with nothing wrong wears none")
         XCTAssertEqual(clean.textField?.textColor, .labelColor)
+    }
+
+    /// A microcode whose own image checksum does not add up wears the red
+    /// octagon the UEFI tree gives a wrong checksum — and a microcode that is
+    /// also behind the catalogue wears the verdict's up arrow beside it.
+    func testABrokenMicrocodeWearsTheErrorBesideItsVerdict() throws {
+        _ = try open(FITTestImage.make(microcodeRevision: 0xE0, microcodePlatform: 0x02,
+                                       brokenMicrocodeChecksum: true))
+        try waitForTheCatalogue()
+
+        let cell = try typeCell(row: 1)
+        let problem = try XCTUnwrap(cell.imageView, "the Type cell carries the problem slot")
+        XCTAssertFalse(problem.isHidden, "the broken microcode wears the error")
+        XCTAssertEqual(problem.image?.accessibilityDescription, "Invalid")
+        XCTAssertEqual(problem.contentTintColor, SemanticColors.bad)
+        XCTAssertTrue(problem.toolTip?.hasPrefix("Invalid microcode image checksum") == true,
+                      problem.toolTip ?? "no tooltip")
+
+        let verdict = try marker(in: cell)
+        XCTAssertFalse(verdict.isHidden, "and still wears its verdict")
+        XCTAssertEqual(verdict.contentTintColor, SemanticColors.caution)
+        XCTAssertEqual(verdict.toolTip, "Catalogue lists a newer revision (r.F0)")
+    }
+
+    /// The panel explains its icons: a legend under the table, listing the
+    /// verdicts and the problems in the catalogue's words, and no Show Markings
+    /// switch — the table paints nothing it could hide.
+    func testThePanelCarriesALegendOfItsMarks() throws {
+        _ = try open(FITTestImage.make())
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let legend = try XCTUnwrap(descendants(of: panel, ToolRowMarksLegend.self).first,
+                                   "a legend in the FIT panel")
+        XCTAssertEqual(legend.listedMeanings, FITRowMarks.legendMarks.map(\.meaning))
+        XCTAssertFalse(legend.offersShowMarkings)
     }
 
     // MARK: - The "latest" marker in the Type column
@@ -1183,10 +1217,10 @@ final class FITToolFlowTests: XCTestCase {
     }
 
     /// A microcode behind the catalogue's newest for its CPUID and platform
-    /// wears the orange triangle, and the pointer names the revision it is
+    /// wears the orange up arrow, and the pointer names the revision it is
     /// behind. The catalogue lists 806EA plat02 at r.F0; a board carrying
     /// r.E0 is a board behind.
-    func testAMicrocodeBehindTheCatalogueWearsTheOrangeTriangle() throws {
+    func testAMicrocodeBehindTheCatalogueWearsTheOrangeUpArrow() throws {
         _ = try open(FITTestImage.make(microcodeRevision: 0xE0,
                                        microcodePlatform: 0x02))
         try waitForTheCatalogue()
@@ -1200,7 +1234,7 @@ final class FITToolFlowTests: XCTestCase {
     /// A newer revision whose platforms only partly overlap the row's is a
     /// doubt, not a verdict: the catalogue lists 806EA `plat02` at r.F0, and a
     /// board on `plat22` (bits 1 and 5) is served by it only if it is platform
-    /// 1. The row wears the question mark, in the same colour as the triangle
+    /// 1. The row wears the question mark, in the same colour as the up arrow
     /// — both say "not confirmed newest", and differ in how sure of it we are.
     func testAMicrocodeBehindAPartlyOverlappingPlatformWearsTheQuestionMark() throws {
         _ = try open(FITTestImage.make(microcodeRevision: 0x7C,
@@ -1295,7 +1329,8 @@ enum FITTestImage {
         microcodeSignature: UInt32 = 0x0008_06EA,
         microcodeRevision: UInt32 = 0xF0,
         microcodePlatform: UInt32 = 1,
-        acmInsideAVolume: Bool = false
+        acmInsideAVolume: Bool = false,
+        brokenMicrocodeChecksum: Bool = false
     ) -> [UInt8] {
         var image = [UInt8](repeating: 0xFF, count: 0x1_0000)
         let diff: UInt64 = 0x1_0000_0000 - 0x1_0000
@@ -1304,6 +1339,9 @@ enum FITTestImage {
             with: microcode(signature: microcodeSignature, revision: microcodeRevision,
                             platformIDs: microcodePlatform)
         )
+        // One byte of the update's data changed, and its dword checksum left as
+        // it was.
+        if brokenMicrocodeChecksum { image[0x2080] ^= 0x01 }
         if acmInsideAVolume {
             // A real FFSv2 volume, so what the ACM row points at is a *file*
             // inside it — a name the tree only has once the volume's own walk

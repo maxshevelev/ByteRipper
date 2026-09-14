@@ -111,11 +111,17 @@ which is drawn in the dump and not in a panel.
 | `lock.shield` | badge | holds what others are checked against — protected ranges, or the hashes of other structures | `secondaryLabelColor` |
 | `shield.lefthalf.filled` | badge | partly covered by protected ranges | `secondaryLabelColor` |
 
-The verdict slot's symbols are the panel's own. The FIT table's, already in use:
-`checkmark.seal.fill` (good — newest revision), `exclamationmark.triangle`
-(caution — a newer one serves this board), `questionmark.circle` (caution — a
-newer one might). The outline triangle stays the verdict's; a problem is never a
-triangle, so the two never meet in one shape.
+| `checkmark.seal.fill` | verdict | the newest revision the catalogue lists for this board | `SemanticColors.good` |
+| `arrow.up.circle` | verdict | a newer revision serves this board | `SemanticColors.caution` |
+| `questionmark.circle` | verdict | a newer revision may or may not serve this board | `SemanticColors.caution` |
+
+The verdicts are the FIT table's, but they are marks of the same catalogue
+(`ToolRowMark.newest`, `.newerListed`, `.newerMaybe`), so the cells and the
+legend draw them from one place. No verdict carries an exclamation mark — that is
+the problems' — so the two never meet in one shape: "a newer revision is out
+there" is an up arrow, not a warning. A row can wear both slots: a microcode
+behind the catalogue whose image checksum is also wrong wears the up arrow and,
+after it, the red octagon.
 
 ---
 
@@ -138,7 +144,7 @@ triangle, so the two never meet in one shape.
 | Background | the component the row points at (`targetRange`); the header row by the table's own bytes. A FIT component written inside a protected range is the case this exists for. |
 | Rail | never: a FIT address is physical, and nothing it points at is inside a compressed section |
 | Verdict | the microcode row's "latest" state, as today |
-| Problem | the validator's problems for the row — the red octagon, as today; a caution-level one takes the orange circle |
+| Problem | the validator's problems for the row — an error the red octagon, a caution-level one (a reserved byte that is not zero) the orange circle — and a microcode image whose own dword checksum does not add up (error), or that cannot be read whole to check (caution) |
 | Badges | `lock.shield` on the Boot Guard Key Manifest (`0x0B`) and Boot Policy (`0x0C`) rows — they define the IBB; `shield.lefthalf.filled` when the component is partly covered |
 
 ### 5.3. ME Analyzer — the Full Tree
@@ -224,8 +230,13 @@ change (§6).
 **Status, 2026-09-13.** Steps 1 and 2 are in, and step 5 for the UEFI tree
 alone: its background, `shield.lefthalf.filled`, `lock.shield` on the AMI and
 Phoenix hash files and the Insyde flash device map, the hash problems, and the
-four marks in its legend. The FIT table and the ME tree take theirs with steps 3
-and 4, which draw no marks yet. Where the code differs from the
+four marks in its legend. The ME tree takes its marks with step 3, which draws none
+yet. Step 4 is in for the FIT table's problems and legend (2026-09-14):
+`FITRowMarks` decides a row's problem and verdict, the verdicts are marks of the
+shared catalogue, and the legend lists the verdicts and the two problems with no
+Show Markings switch, since the table paints nothing. `lock.shield` on the Key
+Manifest and Boot Policy rows, and the Boot Guard background of step 5, are not
+drawn in the FIT table yet. Where the code differs from the
 text: a compressed section carries `UEFINode.compression` (algorithm, and
 whether it decodes), set by the parser, which is what the badge is read from;
 the legend's lines are plain views with every edge constrained rather than
