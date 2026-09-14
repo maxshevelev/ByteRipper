@@ -105,6 +105,13 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
     case protectedIBB
     case protectedFirmware
     case decompressed
+    /// Verdict: the newest revision known for this board.
+    case newest
+    /// Verdict: a newer revision is known, and it serves this board.
+    case newerListed
+    /// Verdict: a newer revision is known, and it may or may not serve this
+    /// board.
+    case newerMaybe
     case error
     case caution
     case compressed
@@ -123,6 +130,7 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
         switch self {
         case .protectedIBB, .protectedFirmware: return .background
         case .decompressed: return .rail
+        case .newest, .newerListed, .newerMaybe: return .verdict
         case .error, .caution: return .problem
         case .compressed, .compressedUndecoded, .holdsChecks, .partlyProtected: return .role
         }
@@ -137,6 +145,12 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
             return "Inside a range the firmware checks at boot"
         case .decompressed:
             return "A compressed section that opens here, and what came out of it"
+        case .newest:
+            return "The newest revision the catalogue lists for this processor and platform"
+        case .newerListed:
+            return "The catalogue lists a newer revision for this board"
+        case .newerMaybe:
+            return "The catalogue lists a newer revision that may not serve this board"
         case .error:
             return "Something is wrong: the pointer says what"
         case .caution:

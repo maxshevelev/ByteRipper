@@ -146,6 +146,44 @@ final class ToolRowMarksTests: XCTestCase {
         ])
     }
 
+    /// A panel's verdicts are marks of the catalogue too: listed in their
+    /// channel's place, drawn in the symbol and tint the cells use.
+    func testVerdictsAreMarksOfTheCatalogue() {
+        let legend = ToolRowMarksLegend(panel: "test", marks: [.error, .newerListed, .newest])
+        XCTAssertEqual(legend.listedMeanings, [
+            ToolRowMark.newerListed.meaning, ToolRowMark.newest.meaning, ToolRowMark.error.meaning
+        ])
+        XCTAssertEqual(ToolRowMark.newerListed.symbol, "arrow.up.circle")
+        let problemSymbols = [ToolRowMark.error, .caution].compactMap(\.symbol)
+        for verdict in ToolRowMark.allCases where verdict.channel == .verdict {
+            XCTAssertFalse(problemSymbols.contains(verdict.symbol ?? ""),
+                           "a verdict never takes a problem's shape")
+        }
+    }
+
+    /// The Show Markings switch is offered only where there is paint to hide.
+    func testTheSwitchIsOfferedOnlyToAPanelThatPaints() {
+        XCTAssertFalse(ToolRowMarksLegend(panel: "test", marks: [.newest, .error]).offersShowMarkings)
+        let legend = ToolRowMarksLegend(panel: "test", marks: [.error, .decompressed])
+        XCTAssertTrue(legend.offersShowMarkings)
+        legend.setMarks([.error])
+        XCTAssertFalse(legend.offersShowMarkings)
+    }
+
+    /// The verdict call draws the catalogue's mark, and hides the slot for a
+    /// mark that is not a verdict.
+    func testTheVerdictCallDrawsTheCataloguesMark() throws {
+        let cell = ToolPanelTable.makeCell(identifier: .init("type"), warning: true, marker: true)
+        ToolPanelTable.setVerdict(.newest, toolTip: "newest", on: cell)
+        let marker = try XCTUnwrap(cell.viewWithTag(ToolPanelTable.markerTag) as? NSImageView)
+        XCTAssertFalse(marker.isHidden)
+        XCTAssertEqual(marker.contentTintColor, ToolRowMark.newest.tint)
+        XCTAssertEqual(marker.toolTip, "newest")
+
+        ToolPanelTable.setVerdict(.error, on: cell)
+        XCTAssertTrue(marker.isHidden)
+    }
+
     func testTheLegendStartsShutAndRemembersBeingOpened() {
         let first = ToolRowMarksLegend(panel: "test", marks: [.error])
         XCTAssertFalse(first.isExpanded)

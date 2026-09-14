@@ -61,7 +61,7 @@ import AppPalette
 
     /// A cell for a view-based table drawn at the panel's size: one line of
     /// text, cut short at the end, optionally with icons at the leading edge —
-    /// a red warning triangle for the column that marks a bad row, and a
+    /// a problem slot for the column that marks a bad row, and a
     /// marker slot ahead of it for a row's second verdict.
     ///
     /// One factory for both firmware panels — the cell is the same shape in
@@ -224,7 +224,7 @@ import AppPalette
         return badge
     }
 
-    /// The warning a flagged row wears: a red triangle in an image view of its
+    /// The warning a flagged row wears: a red octagon in an image view of its
     /// own.
     ///
     /// A view, not an `NSTextAttachment` inside the text — an attachment is
@@ -234,18 +234,18 @@ import AppPalette
     ///
     /// The filled octagon: this marks a value that is *wrong* — a checksum that
     /// does not check out — rather than something to look at twice, and the
-    /// octagon is the shape the app gives an error. A triangle is left to the
-    /// states that are not errors, like a microcode the catalogue has a newer
-    /// revision for.
+    /// octagon is the shape the app gives an error. A verdict — a
+    /// microcode the catalogue has a newer revision for — has shapes of its
+    /// own (`ToolRowMark`), none of them with an exclamation mark.
     private static func makeWarning() -> NSImageView {
         let warning = NSImageView()
         let symbol = NSImage(
-            systemSymbolName: "exclamationmark.octagon.fill",
+            systemSymbolName: ToolRowMark.error.symbol ?? "",
             accessibilityDescription: "Invalid"
         )
         symbol?.isTemplate = true
         warning.image = symbol
-        warning.contentTintColor = SemanticColors.bad
+        warning.contentTintColor = ToolRowMark.error.tint
         warning.imageScaling = .scaleProportionallyUpOrDown
         warning.setContentCompressionResistancePriority(.required, for: .horizontal)
         warning.translatesAutoresizingMaskIntoConstraints = false
@@ -290,6 +290,17 @@ import AppPalette
             pointSize: ToolPanelFont.size, weight: .regular
         )
         marker.toolTip = toolTip
+    }
+
+    /// Draws `cell`'s marker as a verdict of the shared catalogue — its symbol
+    /// and tint, the ones the legend shows — or hides it for nil.
+    public static func setVerdict(_ verdict: ToolRowMark?, toolTip: String? = nil,
+                                  on cell: NSTableCellView) {
+        guard let verdict, verdict.channel == .verdict else {
+            setMarker(symbol: nil, on: cell)
+            return
+        }
+        setMarker(symbol: verdict.symbol, tint: verdict.tint, toolTip: toolTip, on: cell)
     }
 
     /// The blank slot the marker is drawn into, hidden until a row earns it.

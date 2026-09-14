@@ -75,8 +75,13 @@ import AppKit
     /// Changes what the legend lists — when a panel starts drawing a mark.
     public func setMarks(_ marks: [ToolRowMark]) {
         self.marks = marks
+        applyState()
         rebuildEntries()
     }
+
+    /// Whether the header offers Show Markings: only to a panel that paints
+    /// something it could hide — the icons stay whatever the switch says.
+    public var offersShowMarkings: Bool { !showSwitch.isHidden }
 
     public func setExpanded(_ expanded: Bool) {
         isExpanded = expanded
@@ -93,8 +98,9 @@ import AppKit
         onShowMarkingsChanged?(shows)
     }
 
-    /// The meanings listed, in order — what a test reads.
-    var listedMeanings: [String] {
+    /// The meanings listed, in order — what a test reads, from the package or
+    /// from the panel that hosts the legend.
+    public var listedMeanings: [String] {
         entries.arrangedSubviews.compactMap { line in
             line.subviews.compactMap { $0 as? NSTextField }.first?.stringValue
         }
@@ -173,6 +179,7 @@ import AppKit
     private func applyState() {
         disclosure.state = isExpanded ? .on : .off
         showSwitch.state = showsMarkings ? .on : .off
+        showSwitch.isHidden = !marks.contains { $0.channel == .background || $0.channel == .rail }
         entries.isHidden = !isExpanded
     }
 

@@ -10,6 +10,11 @@ public extension ToolRowMark {
     var symbol: String? {
         switch self {
         case .protectedIBB, .protectedFirmware, .decompressed: return nil
+        // The verdicts: outline shapes, so none of them is ever a problem's —
+        // no exclamation mark, which is the problems' (ROW_MARKS.md §4).
+        case .newest: return "checkmark.seal.fill"
+        case .newerListed: return "arrow.up.circle"
+        case .newerMaybe: return "questionmark.circle"
         case .error: return "exclamationmark.octagon.fill"
         case .caution: return "exclamationmark.circle.fill"
         case .compressed, .compressedUndecoded: return "zipper.page"
@@ -23,6 +28,10 @@ public extension ToolRowMark {
         case .protectedIBB: return RowMarks.protectedIBB
         case .protectedFirmware: return RowMarks.protectedFirmware
         case .decompressed, .compressed: return RowMarks.decompressed
+        case .newest: return SemanticColors.good
+        // Both say "not confirmed newest", and differ in how sure of it we
+        // are, not in what kind of thing it is: one colour.
+        case .newerListed, .newerMaybe: return SemanticColors.caution
         case .error: return SemanticColors.bad
         case .caution: return SemanticColors.caution
         case .compressedUndecoded, .holdsChecks, .partlyProtected: return .secondaryLabelColor
