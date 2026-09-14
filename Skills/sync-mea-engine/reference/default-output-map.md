@@ -181,6 +181,16 @@ original script on the CSME-12 oracle (PMC 300.2.11.1012, SKU H, stepping B,
 TCB 1, ARB 1, VCN 0, not production ready, 0x14000, CNP) and on the CSME-15 /
 CSME-16 ones (PMC + PCHC + PHY each).
 
+**A deliberate difference: redundant copies.** With CSE Redundancy set, Boot 2
+holds a byte-for-byte backup of Boot 1, and upstream walks both BPDTs and never
+deduplicates — so the console prints every Boot 1 independent firmware twice
+(`CSME 15.bin`: PMC, PCHC and PHY at 0x11E000… in Boot 1, again at 0x4CE000… in
+Boot 2). The engine folds a copy with the same partition name and the same
+bytes into the first table's `redundantCopies` (`EngineModelRevision` 32), and
+the panel shows it as a last row, `Redundant Copy: Boot 2`. Copies that differ
+stay two tables, with a warning naming the partition and both places
+(issue 20).
+
 ### PMC — title "Power Management Controller" (13770; rows 13778–13792)
 
 Tuple unpack at 13772–13774. Console rows, in order:

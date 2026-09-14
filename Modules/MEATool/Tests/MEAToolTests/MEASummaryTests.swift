@@ -680,6 +680,38 @@ final class MEASummaryTests: XCTestCase {
                      "and no MEU stamp on this one")
     }
 
+    /// A firmware stored twice is one table that says where the copy is; a
+    /// firmware stored once has no such row.
+    func testARedundantCopyIsARowNotASecondTable() throws {
+        func pmc(copies: [String]?) -> [String: Any] {
+            var firmware: [String: Any] = [
+                "family": "pmc", "variant": "PMCTGP",
+                "version": ["major": 150, "minor": 1, "hotfix": 10, "build": 1048],
+                "release": "production", "type": "region",
+                "sku": "LP", "platform": "TGP", "chipsetStepping": "B",
+                "manifest": manifestJSON(),
+                "sizeBytes": 0x40000, "regions": [], "issues": [],
+            ]
+            if let copies { firmware["redundantCopies"] = copies }
+            return firmware
+        }
+        let twice = MEASummary.build(try analysis([
+            "manifest": manifestJSON(),
+            "version": ["major": 15, "minor": 0, "hotfix": 30, "build": 1659],
+            "independentFirmware": [pmc(copies: ["Boot 2"])],
+        ]))
+        XCTAssertEqual(twice.count, 2)
+        XCTAssertEqual(twice[1].rows.last?.label, "Redundant Copy")
+        XCTAssertEqual(value("Redundant Copy", in: twice[1].rows), .value("Boot 2"))
+
+        let once = MEASummary.build(try analysis([
+            "manifest": manifestJSON(),
+            "version": ["major": 15, "minor": 0, "hotfix": 30, "build": 1659],
+            "independentFirmware": [pmc(copies: nil)],
+        ]))
+        XCTAssertNil(value("Redundant Copy", in: once[1].rows))
+    }
+
     /// A discrete-graphics PMC has neither of the chipset rows, and a PMC
     /// whose stepping letter the engine could not read says so rather than
     /// leaving the row out.

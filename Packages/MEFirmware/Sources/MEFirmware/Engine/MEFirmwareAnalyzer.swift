@@ -796,20 +796,30 @@ public actor MEFirmwareAnalyzer {
         // the security numbers, the date and its own size).
         var independent: [FirmwareAnalysis] = []
         if findsIndependentFirmware {
-            for slot in Self.independentSlots(fpt: fpt, bootPartitions: bootPartitions,
+            let slots = Self.independentSlots(fpt: fpt, bootPartitions: bootPartitions,
                                               baseOffset: baseOffset,
-                                              regionCount: region.count) {
+                                              regionCount: region.count)
+            let merged = Self.mergingRedundantCopies(slots, in: region)
+            for entry in merged.unique {
+                let slot = entry.slot.range
                 let start = region.startIndex + slot.lowerBound
                 let slice = region.subdata(in: start..<(region.startIndex + slot.upperBound))
                 // A partition that does not decode is left out rather than
                 // reported as an empty table: upstream collects a block only
                 // for what its own analysis could read.
-                guard let analysis = try? await analyze(
+                guard var analysis = try? await analyze(
                     region: slice, baseOffset: baseOffset + slot.lowerBound,
                     findsIndependentFirmware: false),
                     analysis.manifest != nil
                 else { continue }
+                if !entry.copies.isEmpty { analysis.redundantCopies = entry.copies }
                 independent.append(analysis)
+            }
+            for differing in merged.differing {
+                issues.append(Issue(id: 20, severity: .warning,
+                    message: "Partition \(differing.name) differs between "
+                        + differing.places.joined(separator: " and ")
+                        + ": the copies are not the same firmware."))
             }
         }
 
@@ -901,10 +911,58 @@ public actor MEFirmwareAnalyzer {
     /// partition's `BPDT` (11930–11960) — a stitched PMC lives in one or the
     /// other depending on how the image was built. Region-relative ranges,
     /// clamped to what was actually handed over.
+    /// One partition of an independent firmware: its name, its region-relative
+    /// bytes, and the inventory that lists it — "$FPT", or the boot partition
+    /// whose BPDT does ("Boot 1").
+    struct IndependentSlot: Equatable {
+        var name: String
+        var range: Range<Int>
+        var place: String
+    }
+
+    /// The slots with every byte-identical copy folded into the first one that
+    /// holds those bytes, and the partitions listed in more than one place
+    /// whose copies are not the same bytes.
+    ///
+    /// CSE Redundancy keeps a backup of Boot 1 in Boot 2, so every independent
+    /// firmware of Boot 1 is there twice. Upstream prints a table for each
+    /// (MEA.py 11850–12070 walks every boot BPDT and never deduplicates); the
+    /// two tables say nothing the one does not, so the copy goes into the
+    /// first's `copies`. Copies that differ are two firmwares and stay two.
+    nonisolated static func mergingRedundantCopies(
+        _ slots: [IndependentSlot], in region: Data
+    ) -> (unique: [(slot: IndependentSlot, copies: [String])],
+          differing: [(name: String, places: [String])]) {
+        func bytes(_ range: Range<Int>) -> Data {
+            region.subdata(in: (region.startIndex + range.lowerBound)..<(region.startIndex + range.upperBound))
+        }
+        var unique: [(slot: IndependentSlot, copies: [String])] = []
+        var differing: [(name: String, places: [String])] = []
+        for slot in slots {
+            let content = bytes(slot.range)
+            if let index = unique.firstIndex(where: {
+                $0.slot.name == slot.name && $0.slot.range.count == slot.range.count
+                    && bytes($0.slot.range) == content
+            }) {
+                unique[index].copies.append(slot.place)
+                continue
+            }
+            if let other = unique.first(where: { $0.slot.name == slot.name }) {
+                if let index = differing.firstIndex(where: { $0.name == slot.name }) {
+                    differing[index].places.append(slot.place)
+                } else {
+                    differing.append((slot.name, [other.slot.place, slot.place]))
+                }
+            }
+            unique.append((slot, []))
+        }
+        return (unique, differing)
+    }
+
     private nonisolated static func independentSlots(
         fpt: FPTParser.Result?, bootPartitions: [BPDT]?,
         baseOffset: Int, regionCount: Int
-    ) -> [Range<Int>] {
+    ) -> [IndependentSlot] {
         /// The partition names of each family, upstream's own sets.
         let families: [[String]] = [
             ["PMCP", "PCOD"],                    // Power Management Controller
@@ -913,18 +971,18 @@ public actor MEFirmwareAnalyzer {
         ]
         // (name, region-relative offset, size) of every non-empty partition of
         // both inventories.
-        var candidates: [(name: String, offset: Int, size: Int)] = []
+        var candidates: [(name: String, offset: Int, size: Int, place: String)] = []
         for part in fpt?.partitions ?? [] where !part.empty {
-            candidates.append((part.name, part.offset, part.size))
+            candidates.append((part.name, part.offset, part.size, "$FPT"))
         }
         for boot in bootPartitions ?? [] {
             for entry in boot.entries where !entry.empty {
                 // BPDT entry offsets are absolute in the analysed image.
-                candidates.append((entry.name, entry.offset - baseOffset, entry.size))
+                candidates.append((entry.name, entry.offset - baseOffset, entry.size, boot.partitionName))
             }
         }
 
-        var slots: [Range<Int>] = []
+        var slots: [IndependentSlot] = []
         for names in families {
             for candidate in candidates where names.contains(candidate.name) {
                 let start = candidate.offset
@@ -933,8 +991,8 @@ public actor MEFirmwareAnalyzer {
                 let range = start..<min(end, regionCount)
                 // The same partition can be listed twice (a $FPT entry that
                 // also appears in a boot BPDT); one table per firmware.
-                guard !slots.contains(range) else { continue }
-                slots.append(range)
+                guard !slots.contains(where: { $0.range == range }) else { continue }
+                slots.append(IndependentSlot(name: candidate.name, range: range, place: candidate.place))
             }
         }
         return slots

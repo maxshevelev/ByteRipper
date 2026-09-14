@@ -390,6 +390,11 @@ public enum MEASummary {
         if !firmware.platform.isEmpty {
             add("Chipset Support", .value(firmware.platform))
         }
+        // Not a console row: upstream prints the copy as a second, identical
+        // table (`default-output-map.md` §4), and this one says where it is.
+        if let copies = firmware.redundantCopies, !copies.isEmpty {
+            add("Redundant Copy", .value(copies.joined(separator: ", ")))
+        }
         return MEASummaryBlock(title: title, rows: rows)
     }
 

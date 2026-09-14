@@ -147,6 +147,11 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// nil when nothing of the sort is stitched in. Never recursive in
     /// practice: only the image handed to the analyzer looks for these.
     public var independentFirmware: [FirmwareAnalysis]? = nil
+    /// On an independent firmware: the other places its very bytes are stored
+    /// — the boot partition that holds CSE Redundancy's backup of Boot 1
+    /// ("Boot 2") — which upstream lists as tables of their own and this engine
+    /// folds into the one table. nil when it is stored once.
+    public var redundantCopies: [String]? = nil
     public var issues: [Issue]
 }
 
@@ -1931,5 +1936,8 @@ public enum EngineModelRevision {
     /// and becomes the caller's to ask for with
     /// `MEFirmwareAnalyzer.checksums(of:)`. A field that used to arrive and now
     /// arrives nil is exactly the change this number exists to announce.
-    public static let current = 31
+    ///
+    /// 32 adds `redundantCopies`: an independent firmware stored byte for byte
+    /// in two boot partitions arrives once, saying where else it is.
+    public static let current = 32
 }
