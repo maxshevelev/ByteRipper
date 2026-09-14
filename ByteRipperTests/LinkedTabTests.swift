@@ -151,6 +151,81 @@ final class LinkedTabTests: XCTestCase {
         XCTAssertEqual(MainViewController.partName(ofTab: "Body.bin", parent: "bios.rom"), "Body")
     }
 
+    // MARK: - Against the bytes it was opened with
+
+    private func modified(_ range: Range<UInt64>, in tab: MainViewController) -> [Bool] {
+        tab.windowModel.pane1.hexByteStates(in: range).map(\.isModified)
+    }
+
+    /// An edit in a part's tab reads as modified against the bytes the part
+    /// was opened with — in the hex view and on the minimap's source — and
+    /// still does after the edit has been put back into the parent.
+    func testAnEditInAPartsTabReadsAsModified() throws {
+        let (_, tab) = try openZoneTab()
+        let pane = tab.windowModel.pane1
+        XCTAssertTrue(pane.marksModifiedBytes)
+        XCTAssertEqual(modified(0x0F..<0x12, in: tab), [false, false, false], "nothing edited yet")
+
+        try patch(tab, at: 0x10, with: 0x55)
+        XCTAssertEqual(modified(0x0F..<0x12, in: tab), [false, true, false])
+
+        try patch(tab, at: 0x10, with: 0xAA)
+        XCTAssertEqual(modified(0x0F..<0x12, in: tab), [false, false, false],
+                       "the original byte back is not a modification")
+
+        try patch(tab, at: 0x10, with: 0x55)
+        tab.performUpdateInParent(of: pane)
+        XCTAssertEqual(modified(0x10..<0x11, in: tab), [true], "still not what the tab was opened with")
+    }
+
+    /// An untitled document with no parent has nothing to be modified against.
+    func testAPlainUntitledDocumentMarksNothing() throws {
+        let controller = try makeController()
+        let pane = controller.windowModel.pane1
+        pane.openBytes([1, 2, 3], named: "bytes.bin")
+        try pane.applyToolWrites([(offset: 1, bytes: [9])], named: "Patch")
+
+        XCTAssertFalse(pane.marksModifiedBytes)
+        XCTAssertEqual(pane.hexByteStates(in: 0..<3).map(\.isModified), [false, false, false])
+    }
+
+    /// In a part's tab, Revert to Saved is Revert to Original: asked first,
+    /// it drops every edit and leaves the tab linked, holding what it opened with.
+    func testRevertToOriginalGoesBackToTheBytesTheTabOpenedWith() throws {
+        let (parent, tab) = try openZoneTab()
+        let pane = tab.windowModel.pane1
+        let menu = tab.makePaneMenu(for: pane)
+        let item = try XCTUnwrap(menu.items.first {
+            $0.action == #selector(MainViewController.revertPaneDocument(_:))
+        })
+        XCTAssertTrue(tab.validateMenuItem(item))
+        XCTAssertEqual(item.title, "Revert to Original")
+        XCTAssertEqual(parent.makePaneMenu(for: parent.windowModel.pane1).items.first {
+            $0.action == #selector(MainViewController.revertPaneDocument(_:))
+        }.map { parent.validateMenuItem($0) ? $0.title : "disabled" }, "Revert to Saved")
+
+        try patch(tab, at: 0x10, with: 0x55)
+        var asked: String?
+        MainViewController.modalResponder = { alert in
+            asked = alert.messageText
+            return .alertSecondButtonReturn
+        }
+        defer { MainViewController.modalResponder = nil }
+        _ = item.target?.perform(item.action, with: item)
+        XCTAssertEqual(asked, "Revert to the original bytes?")
+        XCTAssertEqual(try byte(at: 0x10, of: tab), 0x55, "cancelled")
+
+        MainViewController.modalResponder = { _ in .alertFirstButtonReturn }
+        _ = item.target?.perform(item.action, with: item)
+
+        XCTAssertEqual(try byte(at: 0x10, of: tab), 0xAA)
+        XCTAssertFalse(pane.status.isDirty)
+        XCTAssertFalse(pane.status.canUndo, "the edits are gone, not undoable")
+        XCTAssertEqual(modified(0x10..<0x11, in: tab), [false])
+        XCTAssertNotNil(pane.origin, "still linked")
+        XCTAssertFalse(try XCTUnwrap(pane.origin).hasChanges(in: pane))
+    }
+
     // MARK: - What the bytes are
 
     /// The report: a Tiano section's body opened in a tab showed only padding

@@ -58,6 +58,11 @@ import UEFIImage
     /// something the image's structure can be laid out again around.
     let rebuildTarget: UEFIRebuild.Target?
 
+    /// The tab's bytes as they were taken out: what its bytes read as modified
+    /// against, and what Revert to Original goes back to. It does not move on
+    /// an update — putting the bytes into the parent does not make them the
+    /// ones the tab was opened with.
+    let original: any ByteStorage
     /// The source's bytes as last taken out or put back.
     private var fingerprint: SHA256.Digest?
     /// The tab's content as last taken out or put back — what "has changes to
@@ -88,6 +93,9 @@ import UEFIImage
         self.kind = kind
         self.rebuildTarget = rebuildTarget
         fingerprint = Self.digest(of: source, in: document)
+        // Shares the array the tab's own storage was built from: nothing is
+        // copied until one of them is written, and neither ever is.
+        original = MemoryBackedStorage(bytes: content)
         baseline = SHA256.hash(data: content)
         lastParentName = parent.status.fileName
         checked = (parent.contentGeneration, fingerprint == nil ? .sourceChanged : .intact)

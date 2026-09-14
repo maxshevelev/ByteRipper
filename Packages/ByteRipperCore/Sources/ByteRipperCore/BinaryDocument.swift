@@ -425,9 +425,17 @@ public final class BinaryDocument: @unchecked Sendable {
     /// Discards all in-memory edits and reloads the document from `url`.
     public func revert() throws {
         let base = try FileBackedStorage(url: url)
-        storage = EditOverlayStorage(base: base)
         identity = FileIdentity(url: url)
         readOnly = !FileManager.default.isWritableFile(atPath: url.path)
+        revert(toBase: base)
+    }
+
+    /// What `revert()` does with the file on disk, for a document whose
+    /// original bytes are not a file — a part of another document, as it was
+    /// taken out: every edit and every history step dropped, `base` read from
+    /// then on.
+    public func revert(toBase base: any ByteStorage) {
+        storage = EditOverlayStorage(base: base)
         undoHistory.reset()
         currentSeriesID = nil
         transactionAwaitingSelection = false

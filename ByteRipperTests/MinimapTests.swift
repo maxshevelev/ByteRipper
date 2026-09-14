@@ -1647,7 +1647,7 @@ final class MinimapTests: XCTestCase {
         )
         let source = MainViewController.OverviewSource(
             storage: MemoryBackedStorage(bytes: bytes), saved: nil,
-            size: UInt64(bytes.count), edited: [], isUntitled: true,
+            size: UInt64(bytes.count), edited: [], marksModified: false,
             differences: index
         )
         return MainViewController.overviewRows(source: source, extent: UInt64(bytes.count),

@@ -92,7 +92,10 @@ final class PaneViewModel: HexViewDataSource {
     /// to have changed (save, save as, revert) so a stale chunk cache can't
     /// misreport. Readable because the minimap's overview compares against the
     /// same reference the panes do when it marks modified cells (§19.4).
-    private(set) var savedStorage: FileBackedStorage?
+    /// What a byte reads as modified against: the file on disk, or — for an
+    /// untitled tab opened from a part of another document — the bytes it was
+    /// opened with (`DocumentOrigin.original`). Nil when there is neither.
+    private(set) var savedStorage: (any ByteStorage)?
     /// True while the pane holds an untitled in-memory document (File > New
     /// File) that has never been saved to disk. Such a document has no URL to
     /// watch and no on-disk reference for modified-byte detection; the header
@@ -683,9 +686,10 @@ final class PaneViewModel: HexViewDataSource {
         document = doc
         // After the document: replacing it is what clears a link.
         self.origin = origin
-        // Nothing on disk to compare against, so no byte reads as modified (§6)
-        // until it is saved and edited.
-        savedStorage = nil
+        // Nothing on disk to compare against. Bytes taken out of another
+        // document read as modified (§6) against what they were when taken
+        // out; bytes from nowhere read as modified against nothing.
+        savedStorage = origin?.original
         isUntitled = true
         untitledName = name
         hasWarnedInsertShift = false
@@ -847,8 +851,29 @@ final class PaneViewModel: HexViewDataSource {
         let caret = doc.selection.start
         try doc.revert()
         refreshSavedStorage()
-        resetEditingState()
         rearmWatcher()
+        finishRevert(of: doc, caret: caret)
+    }
+
+    /// Whether Revert to Saved is Revert to Original here: an untitled tab
+    /// opened from a part of another document has no file to go back to, but
+    /// it has the bytes it was opened with (`DocumentOrigin.original`).
+    var canRevertToOriginal: Bool { isOpen && isUntitled && origin != nil }
+
+    /// Drops every edit and goes back to the bytes the tab was opened with —
+    /// Revert to Saved, for a part of another document. The link stays: the
+    /// bytes are still the part's.
+    func revertToOriginal() {
+        guard canRevertToOriginal, let doc = document, let original = origin?.original else { return }
+        let caret = doc.selection.start
+        doc.revert(toBase: original)
+        refreshSavedStorage()
+        finishRevert(of: doc, caret: caret)
+    }
+
+    /// What both reverts do once the document holds its reverted bytes.
+    private func finishRevert(of doc: BinaryDocument, caret: UInt64) {
+        resetEditingState()
         // The partition survives the revert, re-based onto the saved size (§21.2)
         // — the cuts and names the user set up are kept, not reset to one piece.
         preserveSegments(for: doc)
@@ -893,8 +918,16 @@ final class PaneViewModel: HexViewDataSource {
     private func refreshSavedStorage() {
         defer { onSavedStateChanged?() }
         guard let doc = document else { savedStorage = nil; return }
+        // An untitled document's placeholder URL has no file behind it.
+        guard !isUntitled else { savedStorage = origin?.original; return }
         savedStorage = try? FileBackedStorage(url: doc.url)
     }
+
+    /// Whether bytes are painted modified at all: a file's against the file,
+    /// a part's against the bytes it was taken out as. A plain untitled
+    /// document has no reference — every byte would read as modified, and the
+    /// dirty marker already says it is unsaved.
+    var marksModifiedBytes: Bool { !isUntitled || savedStorage != nil }
 
     private func startWatching(_ url: URL) {
         changeWatcher?.stop()
@@ -1087,15 +1120,13 @@ final class PaneViewModel: HexViewDataSource {
         // background block index (which only drives navigation).
         let other = companionBytes(in: start..<start + UInt64(n))
         let otherSize = companion?.fileSize ?? 0
+        let marksModified = marksModifiedBytes
 
         for i in 0..<n {
             let offset = start + UInt64(i)
             let byte = current.indices.contains(i) ? current[i] : 0
             var isModified = false
-            if !isUntitled {
-                // Untitled documents have no on-disk reference — every byte
-                // would compare "modified". The dirty marker in the header and
-                // status bar already conveys "unsaved", so no red foreground.
+            if marksModified {
                 if offset >= savedSize {
                     isModified = true
                 } else if saved.indices.contains(i) {

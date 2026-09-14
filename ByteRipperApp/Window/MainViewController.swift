@@ -2141,7 +2141,9 @@ final class MainViewController: NSViewController {
         /// Where the edit overlay has written — the only offsets a modified byte
         /// can sit at.
         let edited: [Range<UInt64>]
-        let isUntitled: Bool
+        /// Whether `saved` is something to paint modified bytes against
+        /// (`PaneViewModel.marksModifiedBytes`).
+        let marksModified: Bool
         /// The comparison index, kept whole rather than flattened into a list of
         /// differing ranges: the rows being computed ask it for the blocks in
         /// their own window (§8). Flattening it here walked every block in the
@@ -2434,7 +2436,7 @@ final class MainViewController: NSViewController {
 
     private func overviewSource(_ pane: PaneViewModel) -> OverviewSource {
         OverviewSource(storage: pane.byteStorage, saved: pane.savedStorage, size: pane.fileSize,
-                       edited: pane.editedRanges, isUntitled: pane.isUntitled,
+                       edited: pane.editedRanges, marksModified: pane.marksModifiedBytes,
                        differences: comparisonCoordinator.index)
     }
 
@@ -2623,7 +2625,7 @@ final class MainViewController: NSViewController {
         // Bytes outside the edited ranges cannot differ from the saved copy, so
         // comparing a cell whole is safe: the untouched part of it compares
         // equal and contributes nothing.
-        if !source.isUntitled, !source.edited.isEmpty {
+        if source.marksModified, !source.edited.isEmpty {
             let savedSize = source.saved?.size ?? 0
             for row in rows {
                 if shouldCancel() { return nil }
@@ -4240,6 +4242,10 @@ final class MainViewController: NSViewController {
     }
 
     private func revertDocumentOfPane(_ pane: PaneViewModel) {
+        if pane.canRevertToOriginal {
+            revertToOriginal(pane)
+            return
+        }
         guard pane.isOpen, !pane.isUntitled else { return }  // nothing on disk to revert to
         if pane.status.isDirty {
             let response = confirmAlert(
@@ -4255,6 +4261,36 @@ final class MainViewController: NSViewController {
         } catch {
             presentFileError("Revert failed.", error, url: pane.document?.url)
         }
+    }
+
+    /// Revert to Original: what Revert to Saved is in a tab opened from a part
+    /// of another document, which has no file but has the bytes it was opened
+    /// with.
+    private func revertToOriginal(_ pane: PaneViewModel) {
+        guard let origin = pane.origin else { return }
+        if pane.status.isDirty {
+            let response = confirmAlert(
+                title: "Revert to the original bytes?",
+                message: "Every change made since “\(origin.partName)” was opened from \(origin.parentName) will be discarded.",
+                confirmTitle: "Revert",
+                destructive: true
+            )
+            guard response == .alertFirstButtonReturn else { return }
+        }
+        pane.revertToOriginal()
+    }
+
+    /// Revert to Saved for a file, Revert to Original for a part of another
+    /// document — one item, titled for the pane it acts on.
+    private func validateRevert(_ item: NSMenuItem, for pane: PaneViewModel?) -> Bool {
+        guard let pane else { return false }
+        if pane.canRevertToOriginal {
+            item.title = "Revert to Original"
+            return true
+        }
+        item.title = "Revert to Saved"
+        // Nothing on disk to revert an untitled document to.
+        return pane.isOpen && !pane.isUntitled
     }
 
     /// Reveals the right-clicked pane's file in the Finder (header context
@@ -7022,8 +7058,7 @@ extension MainViewController: NSMenuItemValidation {
         case #selector(updatePaneInParent(_:)):
             return validateUpdateInParent(menuItem, for: pane(from: menuItem))
         case #selector(revertDocument):
-            // Nothing on disk to revert an untitled document to.
-            return activePane.isOpen && !activePane.isUntitled
+            return validateRevert(menuItem, for: activePane)
         case #selector(appendFile),
              #selector(insertFileAtStart):
             // A join needs content to join into: an empty pane has nothing
@@ -7056,8 +7091,7 @@ extension MainViewController: NSMenuItemValidation {
             // Context-menu items act on the pane they were built for.
             return pane(from: menuItem)?.isOpen ?? false
         case #selector(revertPaneDocument(_:)):
-            guard let pane = pane(from: menuItem) else { return false }
-            return pane.isOpen && !pane.isUntitled
+            return validateRevert(menuItem, for: pane(from: menuItem))
         case #selector(showPaneInFinder(_:)):
             // A file must be on disk to reveal it in the Finder — an empty pane
             // has nothing, and an untitled document has no URL.
