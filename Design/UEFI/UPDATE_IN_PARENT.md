@@ -439,11 +439,16 @@ against the ones it opened with, and Revert to Saved is Revert to Original there
 
 **Progress.** Compressing a DXE volume again takes seconds, so an update that
 goes through the planner is shown where it lands: the parent's tab comes to the
-front, and its status bar carries the operation (§14.4 of the requirements) —
-a label naming the phase, a determinate bar and a (×) that abandons the update
-before anything is written. `UEFIRebuild.plan(…, progress:)` reports
+front, and a sheet on its window carries the operation (`BlockingOperationSheet`,
+2026-09-14) — the update's name, a line naming the phase, a determinate bar and a
+Cancel that abandons the update before anything is written. A sheet rather than
+the status bar's strip: it cannot be missed, and it is modal to the window, so
+the parent cannot be edited while the plan is worked out over its bytes as they
+were. The result is said by a sheet on the same window, which lets the panels
+rebuild while it is up. `UEFIRebuild.plan(…, progress:)` reports
 `Progress(phase:fraction:)`: "Reading the structure of the image" up to 0.2, one
-"Compressing “<section>” again (<size>)" per compressed section on the way out
+"Compressing “<section>” (<size>)" per compressed section on the way out — "again at
+the maximum level" when the normal level did not fit —
 sharing the bar up to 0.8 — fed by the LZMA encoder's own progress callback,
 which `clzma_encode` now takes — and "Checking the rebuilt image" to 1.
 `BackgroundOperation.rename(_:)` relabels the strip as the phases change.

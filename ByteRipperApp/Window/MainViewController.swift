@@ -1747,18 +1747,25 @@ final class MainViewController: NSViewController {
                     }
                 }.value
                 operation.finish()
-                // Abandoned from the status bar: nothing was written, and
-                // nothing will be.
+                // Abandoned from the sheet: nothing was written, and nothing
+                // will be.
                 guard let self, !Task.isCancelled else { return }
+                // Said on the parent's window — the tab the update landed in,
+                // brought to the front for it — and as a sheet, so its panels
+                // rebuild while the message is up.
+                let sheetWindow = (Self.controller(holding: parent, among: self.openDocuments?.controllers ?? [])
+                    ?? self).view.window
                 switch result {
                 case .failure(let refusal):
-                    self.presentAlert(title: "“\(origin.partName)” cannot be put back", message: refusal.message)
+                    self.presentSheetAlert(title: "“\(origin.partName)” cannot be put back",
+                                           message: refusal.message, on: sheetWindow)
                 case .success(let plan):
                     // Worked out over the bytes as they were when asked.
                     guard parent.contentGeneration == generation, parent.document === document else {
-                        self.presentAlert(
+                        self.presentSheetAlert(
                             title: "“\(origin.parentName)” changed",
-                            message: "It changed while the update was being worked out. Nothing was written."
+                            message: "It changed while the update was being worked out. Nothing was written.",
+                            on: sheetWindow
                         )
                         return
                     }
@@ -1770,11 +1777,12 @@ final class MainViewController: NSViewController {
                                            tabBytes: bytes, sourceBytes: source,
                                            sourceRange: plan.source, named: stepName)
                     else { return }
-                    self.presentAlert(
+                    self.presentSheetAlert(
                         title: "Updated “\(origin.parentName)”",
                         message: plan.warnings.isEmpty
                             ? "Nothing was written inside a Boot Guard or vendor protected range."
-                            : plan.warnings.joined(separator: "\n\n")
+                            : plan.warnings.joined(separator: "\n\n"),
+                        on: sheetWindow
                     )
                 }
             }
@@ -1806,24 +1814,28 @@ final class MainViewController: NSViewController {
     }
 
     /// Where an update is seen while it is worked out: the parent's tab comes
-    /// to the front — the change lands there — and its status bar says what is
-    /// being done, with a (×) that abandons it. Nothing is written until the
-    /// plan is done, so abandoning costs nothing.
+    /// to the front — the change lands there — and a sheet on its window says
+    /// what is being done, how far it has got, with a Cancel that abandons it
+    /// (`BlockingOperationSheet`). The sheet is modal to that window: the plan
+    /// is worked out over the parent's bytes as they were when asked, and an
+    /// edit made meanwhile would only be thrown away with it. Nothing is written
+    /// until the plan is done, so abandoning costs nothing.
     private func beginUpdateOperation(
         in parent: PaneViewModel, for origin: DocumentOrigin, handle: UpdateHandle
     ) -> BackgroundOperation {
         let owner = Self.controller(holding: parent, among: openDocuments?.controllers ?? []) ?? self
         owner.view.window?.makeKeyAndOrderFront(nil)
         let operation = BackgroundOperation(
-            name: "Updating “\(origin.parentName)” from “\(origin.partName)”…"
+            name: "Getting ready"
         ) { [handle] in
             handle.task?.cancel()
             // The plan cannot be stopped halfway, but its result is thrown
-            // away, so the bar goes now rather than when it finishes.
+            // away, so the sheet goes now rather than when it finishes.
             handle.operation?.finish()
         }
         handle.operation = operation
-        owner.filePaneView(for: parent)?.beginOperation(operation, revealImmediately: true)
+        BlockingOperationSheet.present(
+            operation, title: "Updating “\(origin.parentName)” from “\(origin.partName)”", from: owner)
         return operation
     }
 
@@ -6686,6 +6698,24 @@ final class MainViewController: NSViewController {
         alert.informativeText = message
         alert.alertStyle = .informational
         Self.presentModal(alert, defaultInTest: .alertFirstButtonReturn)  // OK in tests, result ignored
+    }
+
+    /// The same, as a sheet on `window` — for what is said after work that
+    /// changed the file. A modal alert runs its own loop, and everything the
+    /// change set in motion on the main actor waits behind it: the UEFI tree,
+    /// invalidated by the write, sat half rebuilt — rows with no names — until
+    /// the alert was dismissed. A sheet lets the panels finish while it is up.
+    private func presentSheetAlert(title: String, message: String, on window: NSWindow?) {
+        guard !Self.isRunningTests, let window else {
+            presentAlert(title: title, message: message)
+            return
+        }
+        lastAlertTitle = title
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = message
+        alert.alertStyle = .informational
+        alert.beginSheetModal(for: window)
     }
 
     private func presentError(_ title: String, _ error: Error) {

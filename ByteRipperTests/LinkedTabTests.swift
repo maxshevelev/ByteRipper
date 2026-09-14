@@ -371,6 +371,49 @@ final class LinkedTabTests: XCTestCase {
         XCTAssertEqual(try byte(at: 0x20, of: parent), 0xFF)
     }
 
+    /// Waits, a little at a time and for two seconds at most, until `done` —
+    /// for what lands on the main actor after an animation, like a sheet going.
+    private func until(_ done: () -> Bool) async throws {
+        for _ in 0..<200 where !done() {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+    }
+
+    /// Cancel on the update's sheet abandons it: the sheet goes, and nothing is
+    /// written into the parent.
+    func testCancellingTheUpdateSheetWritesNothing() async throws {
+        let parent = try makeController(opening: UEFITestImage.make())
+        let parentHost = try host(parent)
+        let tree = try XCTUnwrap(parentHost.uefiTree())
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            tree.whenReady { done.resume() }
+        }
+        await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+            tree.expand(NodeID.root.child(0)) { _ in done.resume() }
+        }
+        parentHost.publish(ZoneMap(zones: [Zone(id: "0.0", name: "MyDriver", range: 0x48..<0x8C)]))
+        let menu = parent.makeOffsetMenu(for: parent.windowModel.pane1, offset: 0x50)
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Open Zone “MyDriver” in a New Tab" })
+        let tab = try makeController()
+        parent.makeSiblingTab = { tab }
+        _ = item.target?.perform(item.action, with: item)
+        let pane = tab.windowModel.pane1
+        try patch(tab, at: 0x34, with: 0x00)
+        let before = try XCTUnwrap(parent.windowModel.pane1.document?.read(at: 0, length: 0x1000))
+
+        let update = tab.performUpdateInParent(of: pane)
+        let sheet = try XCTUnwrap(parent.presentedViewControllers?.first as? BlockingOperationSheet)
+        sheet.cancelButton.performClick(nil)
+        await update?.value
+        try await until { (parent.presentedViewControllers ?? []).isEmpty }
+
+        XCTAssertTrue((parent.presentedViewControllers ?? []).isEmpty, "the sheet goes")
+        XCTAssertFalse(sheet.operation.isActive)
+        XCTAssertEqual(parent.windowModel.pane1.document.flatMap { try? $0.read(at: 0, length: 0x1000) }, before,
+                       "nothing was written")
+        XCTAssertNotEqual(tab.lastAlertTitle, "Updated “\(parent.windowModel.pane1.status.fileName)”")
+    }
+
     /// A zone that is a file of the image goes back through the planner, which
     /// puts the file's checksums right around the edit.
     func testAZoneThatIsAFileGoesBackWithItsChecksumsRight() async throws {
@@ -395,18 +438,19 @@ final class LinkedTabTests: XCTestCase {
         // The raw section's first payload byte.
         try patch(tab, at: 0x34, with: 0x00)
         let update = tab.performUpdateInParent(of: pane)
-        // The work lands in the parent, and its status bar shows it while it
-        // runs — not the tab's.
-        let parentView = try XCTUnwrap(parent.filePaneView(for: parent.windowModel.pane1))
-        let operation = try XCTUnwrap(parentView.shownOperation, "the parent's status bar shows the update")
-        XCTAssertFalse(parentView.operationView.isHidden)
-        XCTAssertTrue(parentView.operationView.nameLabel.stringValue.contains("MyDriver"),
-                      parentView.operationView.nameLabel.stringValue)
-        XCTAssertNil(tab.filePaneView(for: pane)?.shownOperation)
+        // The work lands in the parent: a sheet on the parent's window says so
+        // while it runs — not the tab's — and keeps the parent from being
+        // edited under it.
+        let sheet = try XCTUnwrap(parent.presentedViewControllers?.first as? BlockingOperationSheet,
+                                  "a sheet on the parent's window")
+        XCTAssertTrue(sheet.titleLabel.stringValue.contains("MyDriver"), sheet.titleLabel.stringValue)
+        XCTAssertNil(tab.presentedViewControllers?.first, "and none on the tab's")
+        XCTAssertEqual(sheet.cancelButton.title, "Cancel")
+        let operation = sheet.operation
         await update?.value
-        for _ in 0..<200 where operation.isActive { await Task.yield() }
-        XCTAssertFalse(operation.isActive, "gone when the update is done")
-        XCTAssertTrue(parentView.operationView.isHidden)
+        try await until { !operation.isActive && (parent.presentedViewControllers ?? []).isEmpty }
+        XCTAssertFalse(operation.isActive, "done")
+        XCTAssertTrue((parent.presentedViewControllers ?? []).isEmpty, "the sheet goes when the update is done")
 
         XCTAssertEqual(try byte(at: 0x48 + 0x34, of: parent), 0x00)
         let bytes = try XCTUnwrap(parent.windowModel.pane1.document?.read(at: 0, length: 0x1000))
