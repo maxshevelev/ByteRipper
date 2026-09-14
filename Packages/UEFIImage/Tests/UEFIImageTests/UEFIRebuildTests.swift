@@ -386,6 +386,68 @@ final class UEFIRebuildTests: XCTestCase {
         }
     }
 
+    /// Runs copied from anywhere earlier in the data, with a few stray bytes
+    /// between them: what the maximum level, searching deeper for matches,
+    /// makes hundreds of bytes shorter than the normal one does (measured:
+    /// 0x8000 bytes to 2652 against 2140). Word-like text barely differs.
+    private func text(_ length: Int, seed: UInt32) -> [UInt8] {
+        var state = seed
+        func next() -> Int {
+            state = state &* 1_103_515_245 &+ 12345
+            return Int(state >> 8)
+        }
+        var out: [UInt8] = (0..<512).map { _ in UInt8(truncatingIfNeeded: next()) }
+        while out.count < length {
+            let from = next() % max(1, out.count - 64)
+            let end = min(out.count, from + 16 + next() % 200)
+            out += out[from..<end]
+            out += (0..<(next() % 6)).map { _ in UInt8(truncatingIfNeeded: next()) }
+        }
+        return Array(out.prefix(length))
+    }
+
+    /// A body too big for its volume's room at the normal level is compressed
+    /// at the maximum level before the rebuild gives up, and the plan says so;
+    /// with room enough for the normal level, the normal level is all it takes.
+    func testTheMaximumLevelIsTriedOnlyWhenTheNormalOneDoesNotFit() throws {
+        let edited = sections([TestImage.nameSection("Drv"),
+                               TestImage.section(type: Section.raw, body: text(0x8000, seed: 4))])
+        func image(_ length: UInt64) -> (file: [UInt8], section: UEFINode)? {
+            let file = TestImage.volume(length: length,
+                                        files: [TestImage.sectionedFile(sections: [lzma(driver())]), fileB()])
+            guard file.count == Int(length),
+                  let node = UEFIParser.parse(file).roots.first?.children.first?.children.first,
+                  node.compression != nil else { return nil }
+            return (file, node)
+        }
+        func fits(_ length: UInt64, fallback: Bool) -> Result<UEFIRebuild.Plan, UEFIRebuild.Refusal>? {
+            guard let (file, section) = image(length) else { return nil }
+            return UEFIRebuild.plan(edited, at: .init(space: .inside(section)), in: file,
+                                    maximumCompressionFallback: fallback)
+        }
+        func smallest(fallback: Bool) -> UInt64? {
+            var low: UInt64 = 0x40, high: UInt64 = 0x8000
+            guard case .success? = fits(high, fallback: fallback) else { return nil }
+            while high - low > 8 {
+                let middle = (low + high) / 2 / 8 * 8
+                if case .success? = fits(middle, fallback: fallback) { high = middle } else { low = middle }
+            }
+            return high
+        }
+        let normalOnly = try XCTUnwrap(smallest(fallback: false))
+        let withFallback = try XCTUnwrap(smallest(fallback: true))
+        XCTAssertLessThan(withFallback, normalOnly, "the maximum level fits where the normal one does not")
+
+        guard case .success(let squeezed)? = fits(withFallback, fallback: true) else {
+            return XCTFail("the maximum level fits")
+        }
+        XCTAssertTrue(squeezed.warnings.contains { $0.contains("maximum level") }, "\(squeezed.warnings)")
+        guard case .success(let roomy)? = fits(normalOnly, fallback: true) else {
+            return XCTFail("the normal level fits")
+        }
+        XCTAssertFalse(roomy.warnings.contains { $0.contains("maximum level") }, "\(roomy.warnings)")
+    }
+
     // MARK: - What a link follows
 
     /// A zone is something to rebuild around only when it is exactly a volume,

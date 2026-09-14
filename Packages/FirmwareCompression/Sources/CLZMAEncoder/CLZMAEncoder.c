@@ -36,7 +36,7 @@ static SRes adapter_progress(ICompressProgressPtr pointer, UInt64 inSize, UInt64
 
 int clzma_encode(const uint8_t *source, size_t sourceLength,
                  uint8_t *destination, size_t *destinationLength,
-                 uint32_t dictionarySize,
+                 uint32_t dictionarySize, int maximum,
                  void *context, clzma_progress progress) {
     progress_adapter adapter = { { adapter_progress }, context, progress };
     const size_t header = LZMA_PROPS_SIZE + 8;
@@ -47,10 +47,15 @@ int clzma_encode(const uint8_t *source, size_t sourceLength,
     CLzmaEncProps properties;
     LzmaEncProps_Init(&properties);
     properties.dictSize = dictionarySize;
-    // What the old UEFITool compressed sections with: a stream put back into a
-    // volume has to fit the room the old one left, so the smallest it can be.
-    properties.level = 9;
-    properties.fb = 273;
+    if (maximum) {
+        // What the old UEFITool compressed sections with: the smallest stream
+        // the encoder makes, for when a normal one does not fit its room.
+        properties.level = 9;
+        properties.fb = 273;
+    } else {
+        // The SDK's normal level, and its own choices for it.
+        properties.level = 5;
+    }
 
     SizeT propertiesSize = LZMA_PROPS_SIZE;
     SizeT streamLength = *destinationLength - header;

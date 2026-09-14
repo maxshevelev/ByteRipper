@@ -372,9 +372,14 @@ Step 3 is in. `CLZMAEncoder` and `CTianoEncoder` moved from `Tests/` to
 `Sources/` behind the `FirmwareCompression` product, and
 `FirmwareCompression.compress(_:as:dictionarySize:legacyPrefix:)` and
 `compress(_:like:from:)` write every variant the decoders read, decoding each
-stream back before returning it (`roundTripFailed` otherwise). LZMA is encoded
-with the old UEFITool's settings (level 9, `fb` 273); the Tiano compressor runs
-under a lock, since it keeps state in statics. UEFITool's legacy Tiano
+stream back before returning it (`roundTripFailed` otherwise). LZMA keeps the
+original's dictionary size and is encoded at the SDK's normal level (5) — the
+level a stream was made at is not in its header, so there is no original one to
+keep. Only when the rebuild then does not fit (`UEFIRebuild.plan` refuses while
+laying the part out) is the whole plan done again at the maximum level, the old
+UEFITool's settings (level 9, `fb` 273), and the plan warns that it was
+(`FirmwareCompression.Effort`, 2026-09-14). The Tiano compressor runs under a
+lock, since it keeps state in statics. UEFITool's legacy Tiano
 compressor is not vendored — the round trip stands in for the fallback it was
 for. `FirmwareCompressionTestSupport` is now a thin wrapper over the product,
 and `CLAUDE.md`'s exception names encoders too.

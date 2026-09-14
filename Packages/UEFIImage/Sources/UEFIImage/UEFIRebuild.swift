@@ -93,6 +93,11 @@ public enum UEFIRebuild {
     /// - Parameter protected: the file's protected ranges, when they have been
     ///   read. A change to a byte inside the IBB is refused and one inside a
     ///   vendor hash range is warned about; nil says they were not checked.
+    ///   - maximumCompressionFallback: a part inside compressed sections is
+    ///     compressed again at the normal level; when the rebuild then does not
+    ///     fit, it is done again at the maximum level before it is refused.
+    ///     Off, the normal level is all there is — for a test that has to see
+    ///     where the normal level stops.
     ///   - progress: called on the planning thread with what is being done and
     ///     how far the whole plan has got — for a status bar, since compressing
     ///     a DXE volume again takes seconds.
@@ -102,6 +107,7 @@ public enum UEFIRebuild {
         in file: [UInt8],
         limits: UEFIParser.Limits = .init(),
         protected: [ProtectedRange]? = nil,
+        maximumCompressionFallback: Bool = true,
         progress: (@Sendable (Progress) -> Void)? = nil
     ) -> Result<Plan, Refusal> {
         let report = Reporter(progress)
@@ -112,10 +118,29 @@ public enum UEFIRebuild {
         }
         var compressions = 0
         if case .decompressed(let chain) = target.space { compressions = chain.count }
-        let context = Context(file: file, image: image, limits: limits,
-                              report: report, compressions: compressions)
+        var context = Context(file: file, image: image, limits: limits,
+                              report: report, compressions: compressions, effort: .normal)
         do {
-            let rebuilt = try context.put(replacement, at: target)
+            let rebuilt: [UInt8]
+            do {
+                rebuilt = try context.put(replacement, at: target)
+            } catch let refusal as Refusal where compressions > 0 && maximumCompressionFallback {
+                // Compressed at the normal level, the part did not go back —
+                // most often because the stream is longer than the room it had.
+                // Only then is it worth the time the maximum level takes: the
+                // whole layout again, every section on the way compressed as
+                // small as the encoder can make it.
+                context = Context(file: file, image: image, limits: limits,
+                                  report: report, compressions: compressions, effort: .maximum)
+                do {
+                    rebuilt = try context.put(replacement, at: target)
+                } catch {
+                    throw refusal
+                }
+                context.warnings.append(
+                    "The compressed data did not fit at the normal compression level, so it was compressed again at the maximum level."
+                )
+            }
             guard rebuilt.count == file.count else {
                 throw Refusal("The rebuilt image is not the size of the file. Nothing was changed.")
             }
@@ -295,13 +320,17 @@ public enum UEFIRebuild {
         let report: Reporter
         let compressions: Int
         private var compressed = 0
+        /// How hard every section on the way is compressed.
+        let effort: FirmwareCompression.Effort
 
-        init(file: [UInt8], image: UEFIImage, limits: UEFIParser.Limits, report: Reporter, compressions: Int) {
+        init(file: [UInt8], image: UEFIImage, limits: UEFIParser.Limits, report: Reporter, compressions: Int,
+             effort: FirmwareCompression.Effort) {
             self.file = file
             self.image = image
             self.limits = limits
             self.report = report
             self.compressions = compressions
+            self.effort = effort
             readers = SpaceReaders(file: ImageReader(file), limits: limits)
         }
 
@@ -815,13 +844,16 @@ public enum UEFIRebuild {
             let low = Reporter.reading + share * Double(compressed)
             compressed += 1
             let size = ByteCountFormatter.string(fromByteCount: Int64(buffer.count), countStyle: .file)
-            report.phase("Compressing “\(section.name)” again (\(size))")
+            report.phase(effort == .maximum
+                ? "Compressing “\(section.name)” again at the maximum level (\(size))"
+                : "Compressing “\(section.name)” again (\(size))")
             let report = self.report
             let stream: [UInt8]
             do {
                 stream = try FirmwareCompression.compress(
                     buffer, like: decoded,
                     from: Array(parentBytes[Int(located.body.lowerBound)..<Int(located.body.upperBound)]),
+                    effort: effort,
                     progress: { report.fraction(low + share * $0) }
                 )
             } catch {

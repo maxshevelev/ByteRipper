@@ -37,6 +37,33 @@ final class CompressionTests: XCTestCase {
         XCTAssertEqual(try FirmwareDecompression.tiano(efi11, limit: limit).efi11, original)
     }
 
+    /// Both levels write a stream that comes back byte for byte, and on data
+    /// full of matches far back — runs copied from anywhere earlier — the
+    /// maximum level's is the shorter one. (Not on all data: on a short block
+    /// repeated with a byte changed every few hundred, it came out longer.)
+    func testBothLevelsRoundTripAndTheMaximumFindsMore() throws {
+        var state: UInt32 = 4
+        func next() -> Int {
+            state = state &* 1_103_515_245 &+ 12345
+            return Int(state >> 8)
+        }
+        var data: [UInt8] = (0..<512).map { _ in UInt8(truncatingIfNeeded: next()) }
+        while data.count < 0x8000 {
+            let from = next() % max(1, data.count - 64)
+            let end = min(data.count, from + 16 + next() % 200)
+            data += data[from..<end]
+            data += (0..<(next() % 6)).map { _ in UInt8(truncatingIfNeeded: next()) }
+        }
+        data = Array(data.prefix(0x8000))
+
+        let normal = try FirmwareCompression.compress(data, as: .lzma, effort: .normal)
+        let maximum = try FirmwareCompression.compress(data, as: .lzma, effort: .maximum)
+
+        XCTAssertEqual(try FirmwareDecompression.lzma(normal, limit: 1 << 24).bytes, data)
+        XCTAssertEqual(try FirmwareDecompression.lzma(maximum, limit: 1 << 24).bytes, data)
+        XCTAssertLessThan(maximum.count + 256, normal.count, "normal \(normal.count), maximum \(maximum.count)")
+    }
+
     func testTheDictionarySizeAskedForIsTheOneWritten() throws {
         let stream = try FirmwareCompression.compress(sample(), as: .lzma, dictionarySize: 1 << 20)
         XCTAssertEqual(try FirmwareDecompression.lzma(stream, limit: limit).dictionarySize, 1 << 20)

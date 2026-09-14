@@ -36,6 +36,20 @@ public enum FirmwareCompression {
     /// than the distance between any two matches in a section of a flash image.
     public static let defaultDictionarySize: UInt32 = 1 << 23
 
+    /// How hard LZMA works at a stream. Tiano and EFI 1.1 have one way only.
+    ///
+    /// The level a stream was made at is not written into it — its header
+    /// keeps the dictionary size, which is kept, and nothing else of the
+    /// settings — so a section is compressed again at the normal level, and at
+    /// the maximum level only when a normal stream does not fit.
+    public enum Effort: Sendable, Equatable {
+        /// The SDK's normal level (5): quick, and nearly as small.
+        case normal
+        /// Level 9 with 273 fast bytes, what the old UEFITool used: the
+        /// smallest stream, and several times the time.
+        case maximum
+    }
+
     /// `bytes` as a stream of `variant`, decoded back and checked.
     ///
     /// - Parameters:
@@ -43,6 +57,7 @@ public enum FirmwareCompression {
     ///     by Tiano and EFI 1.1.
     ///   - legacyPrefix: the four bytes an Intel legacy stream starts with —
     ///     required for that variant, ignored by the others.
+    ///   - effort: the LZMA level; ignored by Tiano and EFI 1.1.
     ///   - progress: called on the encoding thread as the work goes. The LZMA
     ///     encoder reports as it reads; Tiano reports only when it is done.
     public static func compress(
@@ -50,6 +65,7 @@ public enum FirmwareCompression {
         as variant: FirmwareDecompression.Variant,
         dictionarySize: UInt32 = defaultDictionarySize,
         legacyPrefix: [UInt8]? = nil,
+        effort: Effort = .normal,
         progress: Progress? = nil
     ) throws -> [UInt8] {
         guard UInt64(bytes.count) <= UInt64(UInt32.max / 2) else {
@@ -59,14 +75,15 @@ public enum FirmwareCompression {
         let stream: [UInt8]
         switch variant {
         case .lzma:
-            stream = try lzma(bytes, dictionarySize: dictionarySize, progress: progress)
+            stream = try lzma(bytes, dictionarySize: dictionarySize, effort: effort, progress: progress)
         case .lzmaIntelLegacy:
             guard let legacyPrefix, legacyPrefix.count == FirmwareDecompression.lzmaIntelLegacyPrefix else {
                 throw Failure.missingLegacyPrefix
             }
-            stream = legacyPrefix + (try lzma(bytes, dictionarySize: dictionarySize, progress: progress))
+            stream = legacyPrefix + (try lzma(bytes, dictionarySize: dictionarySize, effort: effort,
+                                              progress: progress))
         case .lzmaX86:
-            stream = try lzma(x86Filter(bytes), dictionarySize: dictionarySize, progress: progress)
+            stream = try lzma(x86Filter(bytes), dictionarySize: dictionarySize, effort: effort, progress: progress)
         case .tiano:
             stream = try tiano(bytes, tiano: true)
         case .efi11:
@@ -85,6 +102,7 @@ public enum FirmwareCompression {
         _ bytes: [UInt8],
         like original: FirmwareDecompression.Decoded,
         from stream: [UInt8],
+        effort: Effort = .normal,
         progress: Progress? = nil
     ) throws -> [UInt8] {
         let prefix = original.variant == .lzmaIntelLegacy
@@ -95,6 +113,7 @@ public enum FirmwareCompression {
             as: original.variant,
             dictionarySize: original.dictionarySize ?? defaultDictionarySize,
             legacyPrefix: prefix,
+            effort: effort,
             progress: progress
         )
     }
@@ -124,7 +143,8 @@ public enum FirmwareCompression {
 
     /// The LZMA SDK's encoder in EDK2's layout: five property bytes, the size
     /// in eight, the stream with no end mark.
-    private static func lzma(_ bytes: [UInt8], dictionarySize: UInt32, progress: Progress?) throws -> [UInt8] {
+    private static func lzma(_ bytes: [UInt8], dictionarySize: UInt32, effort: Effort,
+                             progress: Progress?) throws -> [UInt8] {
         // An empty array has no base address to hand the encoder.
         let input = bytes.isEmpty ? [UInt8(0)] : bytes
         var output = [UInt8](repeating: 0, count: bytes.count + bytes.count / 3 + 256)
@@ -139,6 +159,7 @@ public enum FirmwareCompression {
                 output.withUnsafeMutableBufferPointer { destination in
                     clzma_encode(
                         source.baseAddress, bytes.count, destination.baseAddress, &length, dictionarySize,
+                        effort == .maximum ? 1 : 0,
                         context,
                         context == nil ? nil : { context, processed in
                             guard let context else { return }
