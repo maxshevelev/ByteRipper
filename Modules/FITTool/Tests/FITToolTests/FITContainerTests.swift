@@ -52,6 +52,13 @@ final class FITContainerTests: XCTestCase {
         }
     }
 
+    /// The FFS file holding `offset` — the element that bounds a run. The
+    /// microcode images inside it are nodes of their own, so the innermost
+    /// node there is the image, not the file.
+    private func file(containing offset: UInt64, in tree: UEFIImage) -> UEFINode? {
+        tree.allNodes.first { $0.kind == .file && $0.range.contains(offset) }
+    }
+
     /// The fixture is a valid image to begin with, or the test below proves
     /// nothing.
     func testTheFixtureStartsOutRight() throws {
@@ -60,9 +67,10 @@ final class FITContainerTests: XCTestCase {
 
         XCTAssertTrue(checksumProblems(in: bytes).isEmpty,
                       "\(parse(bytes).diagnostics.map(\.message))")
-        // The file bounds the run — its body is opaque to the tree, being a raw
-        // file, and that is exactly the element a component must not grow past.
-        XCTAssertEqual(parsed.innermostNode(containing: firstMicrocode)?.kind, .file)
+        // The raw file reads as its microcode images, and the file around them
+        // is the element a component must not grow past.
+        XCTAssertEqual(parsed.innermostNode(containing: firstMicrocode)?.kind, .microcode)
+        XCTAssertNotNil(file(containing: firstMicrocode, in: parsed))
         let report = FITReader.read(ImageReader(bytes), image: parsed)
         XCTAssertTrue(report.problems.isEmpty, "\(report.problems.map(\.message))")
         XCTAssertEqual(report.table?.entries.compactMap { row -> UInt64? in
@@ -155,7 +163,7 @@ final class FITContainerTests: XCTestCase {
         let table = try XCTUnwrap(FITReader.read(ImageReader(bytes), image: parsed).table)
         // The file ends right behind the second microcode, so there is nothing
         // free inside it at all.
-        XCTAssertEqual(parsed.innermostNode(containing: secondMicrocode)?.range.upperBound,
+        XCTAssertEqual(file(containing: secondMicrocode, in: parsed)?.range.upperBound,
                        secondMicrocode + 0x100)
 
         let (transaction, outcome) = try FITEditor.addOrReplaceMicrocode(
@@ -178,9 +186,10 @@ final class FITContainerTests: XCTestCase {
         // rather than loose in the volume's free space — and the free space
         // shrank by exactly as much, without anything having to record it.
         let tree = parse(edited)
-        let file = try XCTUnwrap(tree.innermostNode(containing: outcome.range.lowerBound))
-        XCTAssertEqual(file.kind, .file)
-        XCTAssertEqual(file.range.upperBound, outcome.range.upperBound)
+        let grown = try XCTUnwrap(file(containing: outcome.range.lowerBound, in: tree))
+        XCTAssertEqual(grown.range.upperBound, outcome.range.upperBound)
+        XCTAssertEqual(tree.innermostNode(containing: outcome.range.lowerBound)?.kind, .microcode,
+                       "and the new component reads as microcode inside it")
         let free = try XCTUnwrap(tree.allNodes.first { $0.kind == .freeSpace })
         XCTAssertEqual(free.range.lowerBound, outcome.range.upperBound)
         XCTAssertFalse(tree.allNodes.contains { $0.kind == .nonUEFIData },
@@ -205,7 +214,7 @@ final class FITContainerTests: XCTestCase {
         let parsed = parse(bytes)
         let table = try XCTUnwrap(FITReader.read(ImageReader(bytes), image: parsed).table)
         let fileEnd = try XCTUnwrap(
-            parsed.innermostNode(containing: secondMicrocode)?.range.upperBound
+            file(containing: secondMicrocode, in: parsed)?.range.upperBound
         )
 
         let outcome = FITEditor.addOrReplaceMicrocode(
@@ -229,7 +238,7 @@ final class FITContainerTests: XCTestCase {
         let bytes = image()
         let parsed = parse(bytes)
         let table = try XCTUnwrap(FITReader.read(ImageReader(bytes), image: parsed).table)
-        let fileEnd = try XCTUnwrap(parsed.innermostNode(containing: firstMicrocode)?.range.upperBound)
+        let fileEnd = try XCTUnwrap(file(containing: firstMicrocode, in: parsed)?.range.upperBound)
         let bigger = TestFIT.microcode(signature: 0x0008_06EA, totalSize: 0x400)
 
         let (transaction, outcome) = try FITEditor.addOrReplaceMicrocode(
@@ -239,8 +248,7 @@ final class FITContainerTests: XCTestCase {
         let tree = parse(edited)
 
         XCTAssertEqual(outcome.moved, 1)
-        let grown = try XCTUnwrap(tree.innermostNode(containing: firstMicrocode))
-        XCTAssertEqual(grown.kind, .file)
+        let grown = try XCTUnwrap(file(containing: firstMicrocode, in: tree))
         XCTAssertGreaterThan(grown.range.upperBound, fileEnd)
         XCTAssertTrue(checksumProblems(in: edited).isEmpty, "\(tree.diagnostics.map(\.message))")
         XCTAssertFalse(tree.allNodes.contains { $0.kind == .nonUEFIData })

@@ -116,6 +116,26 @@ public enum UEFIDetail {
             tables += descriptorTables(descriptor)
         }
 
+        // An update for more than one processor lists the others in a table
+        // of its own, which reads as the grid it is.
+        if node.kind == .microcode,
+           let extended = MicrocodeHeader.read(at: node.header.lowerBound, in: reader)?.extendedTable,
+           !extended.signatures.isEmpty {
+            tables.append(UEFIDetailTable(
+                title: "Extended signatures",
+                symbol: "cpu",
+                columns: ["CPUID", "Processor", "Platforms", "Checksum"],
+                rows: extended.signatures.map { signature in
+                    [
+                        .init(MicrocodeHeader.cpuid(signature.processorSignature)),
+                        .init(MicrocodeHeader.processorText(signature.processorSignature)),
+                        .init(MicrocodeHeader.platformsText(signature.platformIDs)),
+                        .init(hex(signature.checksum))
+                    ]
+                }
+            ))
+        }
+
         if let ranges = image.protectedRanges {
             let touching = ranges.ranges(touching: node, in: image)
             if !touching.isEmpty {
@@ -276,24 +296,21 @@ public enum UEFIDetail {
             }
 
         case .microcode:
-            // The header type is a constant of a valid Intel microcode, so it
-            // is read straight from the bytes; the rest comes back as the
-            // validated header, whose date is BCD the reader would otherwise
-            // have to unpack.
+            // The header type and the loader revision are constants of a valid
+            // Intel microcode, read straight off the bytes. The rest is the
+            // reading the FIT panel gives the microcode an entry points at
+            // (`MicrocodeHeader.fields`), so the two say it in the same words —
+            // with the checksum's verdict this panel's own: the repairs.
             if let headerType = reader.uint32(at: h) { fields.append(.init("Header type", hex(headerType))) }
             if let header = MicrocodeHeader.read(at: h, in: reader) {
-                fields.append(.init("Update revision", hex(header.updateRevision)))
-                fields.append(.init("Date", header.date))
-                fields.append(.init("Processor signature", hex(header.processorSignature)))
-                fields.append(checksumRow("Checksum", header.checksum, digits: 8, repairs: repairs, checksumOffset: h + 0x10))
-                // The loader revision is checked by the reader but not kept on
-                // the validated header, so it comes straight off the bytes.
                 if let loaderRevision = reader.uint32(at: h + 0x14) {
                     fields.append(.init("Loader revision", hex(loaderRevision)))
                 }
-                fields.append(.init("Platform IDs", hex(header.platformIDs)))
-                fields.append(.init("Data size", sizeText(header.dataSize)))
-                fields.append(.init("Total size", sizeText(header.totalSize)))
+                let repair = repairs.first { $0.offset == h + 0x10 }
+                fields += header.fields(
+                    checksumIsCorrect: repair == nil,
+                    expectedChecksum: repair.map { UInt32(truncatingIfNeeded: littleEndian($0.bytes)) }
+                ).map { UEFIDetailField($0.label, $0.value, isProblem: $0.isProblem) }
             }
 
         case .capsule:

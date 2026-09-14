@@ -59,7 +59,7 @@ final class FileParseTests: XCTestCase {
     func testAPadFileIsNamedByItsType() {
         let file = volume([TestImage.file(type: 0xF0, body: [1, 2])]).children[0]
 
-        XCTAssertEqual(file.name, "Pad file")
+        XCTAssertEqual(file.name, "Padding file")
         XCTAssertTrue(UEFIParser.parse(TestImage.volume(files: [
             TestImage.file(type: 0xF0, body: [1, 2])
         ])).diagnostics.isEmpty)

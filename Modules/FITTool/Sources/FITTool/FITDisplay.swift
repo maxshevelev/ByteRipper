@@ -380,7 +380,7 @@ public enum FITPresenter {
     /// The CPUID as a bench writes it: five hex digits, no leading zero, no
     /// `0x` — `806EA`, not `0x000806EA`.
     public static func cpuid(_ signature: UInt32) -> String {
-        String(signature, radix: 16, uppercase: true)
+        MicrocodeHeader.cpuid(signature)
     }
 
     private static func cpuidText(of row: FITRow) -> String? {

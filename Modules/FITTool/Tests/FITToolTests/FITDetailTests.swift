@@ -136,7 +136,7 @@ final class FITDetailTests: XCTestCase {
         XCTAssertEqual(
             field(read!, "Image checksum")?.value,
             Checksums.text(UInt64(stored ?? 0), valid: false,
-                           expected: shouldBe.map(UInt64.init), digits: 4)
+                           expected: shouldBe.map(UInt64.init), digits: 8)
         )
     }
 

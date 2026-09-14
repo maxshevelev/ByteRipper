@@ -129,27 +129,9 @@ public enum FITDetail {
         case .outsideTheImage:
             return [.init("Points at", "outside this image")]
         case .microcode(let header):
-            return [
-                .init("CPUID", FITPresenter.cpuid(header.processorSignature)),
-                // The microcode's own update revision — "Update revision" so it
-                // does not read as the same thing as the entry's Revision above.
-                .init("Update revision", hex(header.updateRevision)),
-                .init("Date", header.date),
-                .init("Data size", size(header.dataSize)),
-                .init("Total size", size(header.totalSize)),
-                .init("Platform IDs", hex(header.platformIDs)),
-                // The image's own dword checksum, distinct from the header's
-                // checksum byte. Shown with whether the image sums to zero, the
-                // shared spelling, so it reads the same wherever a checksum
-                // carries a validity — and a wrong one says what it should be
-                // (§7.1). A header whose image cannot be read whole has no sum,
-                // so there is no answer to give, only that it does not count.
-                .init("Image checksum",
-                      Checksums.text(header.checksum, valid: header.checksumIsCorrect,
-                                     expected: header.computedChecksum.map(UInt64.init),
-                                     digits: 4),
-                      isProblem: !header.checksumIsCorrect)
-            ]
+            // The same reading the UEFI panel gives a microcode node
+            // (`MicrocodeHeader.fields`), so the two say it in the same words.
+            return header.fields.map { .init($0.label, $0.value, isProblem: $0.isProblem) }
         case .emptyMicrocodeSlot(let offset):
             return [
                 .init("Points at", "empty slot (FF FF FF FF)"),

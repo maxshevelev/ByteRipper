@@ -117,13 +117,22 @@ extension Parser {
             children = walkSections(
                 body, ffsVersion: ffsVersion, emptyByte: emptyByte, depth: depth + 1
             )
+        } else if type == FFS.rawType, !body.isEmpty,
+                  MicrocodeHeader.read(at: body.lowerBound, in: reader) != nil {
+            // A raw file that opens on a microcode image is the store the FIT
+            // points into: a run of images, each checked by the header reader
+            // the FIT panel uses, and the empty slots after them. It reads as
+            // those, the way UEFITool shows it, rather than as one blob.
+            children = scanRawArea(body, emptyByte: emptyByte, depth: depth + 1)
         }
 
         let node = UEFINode(
             kind: .file,
             subtype: type,
-            name: KnownGUIDs.name(of: name) ?? userInterfaceName(in: children)
-                ?? FFS.typeName(type),
+            // A pad file's GUID is filler — all ones, as a rule — and names
+            // nothing, so the file is called what it is.
+            name: type == FFS.padType ? "Padding file"
+                : KnownGUIDs.name(of: name) ?? userInterfaceName(in: children) ?? FFS.typeName(type),
             guid: name,
             header: offset..<(offset + headerSize),
             body: body,

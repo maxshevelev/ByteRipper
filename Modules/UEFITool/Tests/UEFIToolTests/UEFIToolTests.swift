@@ -250,11 +250,15 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Header type"), "0x1")
         XCTAssertEqual(field(detail, "Update revision"), "0xF0")
         XCTAssertEqual(field(detail, "Date"), "2019-07-15")
-        XCTAssertEqual(field(detail, "Processor signature"), "0x806EA")
+        XCTAssertEqual(field(detail, "CPUID"), "806EA")
         XCTAssertEqual(field(detail, "Loader revision"), "0x1")
         XCTAssertEqual(field(detail, "Platform IDs"), "0x1")
         XCTAssertEqual(field(detail, "Data size"), "0x40 (64)")
         XCTAssertEqual(field(detail, "Total size"), "0x100 (256)")
+        XCTAssertEqual(field(detail, "Processor"), "Family 0x6, model 0x8E, stepping 0xA")
+        XCTAssertEqual(field(detail, "Platforms"), "0")
+        XCTAssertNil(field(detail, "Extended signatures"), "an update for one processor has no table")
+        XCTAssertTrue(detail.tables.isEmpty)
     }
 
     /// Bytes that are not microcode do not pretend to be: the reader refuses
@@ -596,15 +600,15 @@ final class UEFIDetailTests: XCTestCase {
         let clean = UEFIDetail.build(
             for: built.node, image: built.image, reader: built.reader, repairs: []
         )
-        XCTAssertEqual(field(clean, "Checksum"), "0x00000000 (Valid)")
-        XCTAssertEqual(problem(clean, "Checksum"), false)
+        XCTAssertEqual(field(clean, "Image checksum"), "0x00000000 (Valid)")
+        XCTAssertEqual(problem(clean, "Image checksum"), false)
 
         let corrupt = UEFIDetail.build(
             for: built.node, image: built.image, reader: built.reader,
             repairs: [ChecksumRepair(offset: 0x10, bytes: [0xCA, 0xD6, 0xE2, 0xF8])]
         )
-        XCTAssertEqual(field(corrupt, "Checksum"), "0x00000000 (Invalid), should be 0xF8E2D6CA")
-        XCTAssertEqual(problem(corrupt, "Checksum"), true)
+        XCTAssertEqual(field(corrupt, "Image checksum"), "0x00000000 (Invalid), should be 0xF8E2D6CA")
+        XCTAssertEqual(problem(corrupt, "Image checksum"), true)
     }
 
     /// A byte-length field reads `0x800 (2048)`, while codes and masks on the
@@ -616,7 +620,7 @@ final class UEFIDetailTests: XCTestCase {
 
         XCTAssertEqual(field(detail, "Data size"), "0x800 (2048)")
         XCTAssertEqual(field(detail, "Total size"), "0x1000 (4096)")
-        XCTAssertEqual(field(detail, "Processor signature"), "0x806EA")
+        XCTAssertEqual(field(detail, "CPUID"), "806EA")
         XCTAssertEqual(field(detail, "Update revision"), "0xF0")
     }
 }

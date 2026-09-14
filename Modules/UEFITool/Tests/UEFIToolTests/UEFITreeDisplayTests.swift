@@ -98,6 +98,12 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertEqual(UEFITreeDisplay.name(for: file, catalogue: .empty), guid.description)
         let named = GuidsCatalogue(names: [guid: "Volume Top File"])
         XCTAssertEqual(UEFITreeDisplay.name(for: file, catalogue: named), "Volume Top File")
+
+        let pad = UEFINode(kind: .file, subtype: 0xF0, name: "Padding file",
+                           guid: EFIGUID(bytes: [UInt8](repeating: 0xFF, count: 16)),
+                           header: 0..<0x18, body: 0x18..<0x40)
+        XCTAssertEqual(UEFITreeDisplay.name(for: pad, catalogue: named), "Padding file",
+                       "a pad file's GUID is filler, and names nothing")
     }
 
     /// A VSS variable keeps its decoded name even though it now carries a GUID:

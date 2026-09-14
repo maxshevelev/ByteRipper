@@ -201,7 +201,7 @@ final class TopLevelParseTests: XCTestCase {
         let microcode = parsed.roots[0].children[1]
 
         XCTAssertEqual(microcode.kind, .microcode)
-        XCTAssertEqual(microcode.name, "Microcode 000306A9, revision 0000001F")
+        XCTAssertEqual(microcode.name, "Microcode 306A9, revision 1F")
         XCTAssertEqual(microcode.header, 0x100..<0x130)
         XCTAssertEqual(microcode.body, 0x130..<0x170)
         XCTAssertTrue(microcode.isFixed)

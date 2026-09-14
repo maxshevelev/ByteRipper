@@ -162,6 +162,11 @@ public enum UEFITreeDisplay {
     /// many variables share the single vendor GUID that owns them. So its row
     /// keeps the parser's name; the GUID still shows in the details panel.
     public static func name(for node: UEFINode, catalogue: GuidsCatalogue) -> String {
+        // A pad file (`EFI_FV_FILETYPE_FFS_PAD`) has a GUID only because every
+        // file header does — all ones, as a rule — and it names nothing.
+        if node.kind == .file, node.subtype == 0xF0 {
+            return "Padding file"
+        }
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind) : node.name
         }
