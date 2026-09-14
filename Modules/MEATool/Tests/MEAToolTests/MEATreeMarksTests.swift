@@ -139,6 +139,8 @@ final class MEATreeMarksTests: XCTestCase {
         ]))
         let group = try root("RBE/PM Metadata", in: left)
         XCTAssertEqual(group.fields.first { $0.label == "Unmatched Hashes" }?.value, "1")
+        XCTAssertEqual(group.fields.first { $0.label == "Unmatched Hashes" }?.tone, .standard,
+                       "a hash left over is no done mark")
         let list = try XCTUnwrap(group.children.first { $0.title == "Unmatched Hashes" })
         XCTAssertEqual(list.children.map(\.title), ["Hash 1"])
         XCTAssertEqual(list.children.first?.fields, [MEAField("Hash", "ABCDEF0123456789ABCDEF")])
@@ -148,6 +150,8 @@ final class MEATreeMarksTests: XCTestCase {
         ]))
         let accounted = try root("RBE/PM Metadata", in: none)
         XCTAssertEqual(accounted.fields.first { $0.label == "Unmatched Hashes" }?.value, "None")
+        XCTAssertEqual(accounted.fields.first { $0.label == "Unmatched Hashes" }?.tone, .good,
+                       "every hash accounted for wears the done mark")
         XCTAssertNil(accounted.children.first { $0.title == "Unmatched Hashes" })
     }
 

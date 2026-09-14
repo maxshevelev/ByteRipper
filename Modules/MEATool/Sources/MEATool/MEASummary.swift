@@ -17,7 +17,7 @@ public enum MEASummaryValue: Sendable, Equatable {
 /// because only it knows the fact behind a value (e.g. a File System State's
 /// status). The view resolves each tone into a theme-adapted `NSColor`; a row
 /// carries `.standard` unless it says otherwise.
-public enum MEASummaryTone: Sendable, Equatable {
+public enum MEASummaryTone: Sendable, Equatable, Hashable {
     /// The ordinary label-colour value most rows carry.
     case standard
     /// A settled state — drawn green.

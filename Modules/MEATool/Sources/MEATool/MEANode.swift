@@ -6,10 +6,14 @@ import ToolModuleKit
 public struct MEAField: Sendable, Equatable, Hashable {
     public var label: String
     public var value: String
+    /// What the value says, when it is a verdict: `.good` draws it with the
+    /// green done mark — a check that found nothing wrong.
+    public var tone: MEASummaryTone
 
-    public init(_ label: String, _ value: String) {
+    public init(_ label: String, _ value: String, tone: MEASummaryTone = .standard) {
         self.label = label
         self.value = value
+        self.tone = tone
     }
 }
 

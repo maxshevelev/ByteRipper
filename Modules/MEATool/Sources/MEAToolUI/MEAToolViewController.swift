@@ -741,6 +741,30 @@ import ToolModuleKit
     }
 
     /// Rebuilds the detail list from the focused row's own fields.
+    /// A value that is a check that passed — "None" unmatched hashes — led by
+    /// the green done mark, in the text so it wraps and selects with it.
+    static func doneValue(_ text: String) -> NSAttributedString {
+        let font = ToolPanelFont.body()
+        let result = NSMutableAttributedString()
+        if let symbol = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: "Done")?
+            .withSymbolConfiguration(
+                NSImage.SymbolConfiguration(pointSize: font.pointSize, weight: .regular)
+                    .applying(NSImage.SymbolConfiguration(paletteColors: [MEASummaryToneColor.color(for: .good)]))
+            ) {
+            let attachment = NSTextAttachment()
+            attachment.image = symbol
+            // Sat on the text's baseline, not above it.
+            attachment.bounds = NSRect(x: 0, y: font.descender, width: symbol.size.width,
+                                       height: symbol.size.height)
+            result.append(NSAttributedString(attachment: attachment))
+            result.append(NSAttributedString(string: " "))
+        }
+        result.append(NSAttributedString(string: text))
+        result.addAttributes([.font: font, .foregroundColor: NSColor.labelColor],
+                             range: NSRange(location: 0, length: result.length))
+        return result
+    }
+
     private func renderDetail(_ focus: MEANode?) {
         guard let focus, !focus.fields.isEmpty else {
             detail.showPlaceholder(focus == nil
@@ -779,6 +803,9 @@ import ToolModuleKit
                 ? ToolPanelFont.monospacedDigits()
                 : ToolPanelFont.body()
             value.isSelectable = true
+            if field.tone == .good {
+                value.attributedStringValue = Self.doneValue(field.value)
+            }
 
             let row = NSStackView(views: [label, value])
             row.orientation = .horizontal

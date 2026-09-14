@@ -521,7 +521,10 @@ public enum MEACurator {
         var fields: [MEAField] = []
         var nodes = children
         if let unmatched = a.unmatchedMetadataHashes {
-            fields.append(MEAField("Unmatched Hashes", unmatched.isEmpty ? "None" : String(unmatched.count)))
+            // Every hash accounted for is a check that passed: the done mark.
+            fields.append(unmatched.isEmpty
+                ? MEAField("Unmatched Hashes", "None", tone: .good)
+                : MEAField("Unmatched Hashes", String(unmatched.count)))
             if !unmatched.isEmpty {
                 let rows = unmatched.enumerated().map { i, hash in
                     MEANode(path: [], title: "Hash \(i + 1)", subtitle: String(hash.prefix(16)) + "…",
