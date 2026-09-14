@@ -1925,6 +1925,10 @@ public struct Issue: Codable, Sendable, Equatable, Identifiable {
     public var id: Int
     public var severity: Severity
     public var message: String
+    /// The `$CPD` module the issue is about, by its directory name — set by the
+    /// module checks (Huffman id 7, LZMA id 19), so a panel can say it on the
+    /// module's own row. Nil for an issue about the image as a whole.
+    public var module: String? = nil
 }
 
 /// Bumped whenever the model gains a field, so the UI can decide deliberately
@@ -1939,5 +1943,8 @@ public enum EngineModelRevision {
     ///
     /// 32 adds `redundantCopies`: an independent firmware stored byte for byte
     /// in two boot partitions arrives once, saying where else it is.
-    public static let current = 32
+    ///
+    /// 33 adds `Issue.module`: the Huffman and LZMA module checks name the
+    /// module they are about.
+    public static let current = 33
 }

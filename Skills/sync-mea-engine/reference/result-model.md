@@ -79,6 +79,7 @@ public struct Issue: Codable, Identifiable {
     public var id: Int
     public var severity: Severity        // .note / .warning / .error   (maps to MEA colours)
     public var message: String
+    public var module: String?           // the $CPD module a module check is about (ids 7, 19)
 }
 ```
 

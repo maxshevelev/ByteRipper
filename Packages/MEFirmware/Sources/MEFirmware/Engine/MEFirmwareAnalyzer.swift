@@ -1122,7 +1122,7 @@ public actor MEFirmwareAnalyzer {
             guard moduleBase + attrs.compressedSize <= region.count else {
                 issues.append(Issue(id: 7, severity: .warning,
                     message: "Huffman module \"\(module.name)\" extends past the end of "
-                        + "the region; cannot verify its decompression."))
+                        + "the region; cannot verify its decompression.", module: module.name))
                 continue
             }
             let blob = region.subdata(in: moduleBase..<(moduleBase + attrs.compressedSize))
@@ -1133,11 +1133,13 @@ public actor MEFirmwareAnalyzer {
                 issues.append(Issue(id: 7, severity: .warning,
                     message: "Huffman module \"\(module.name)\" did not decompress to its "
                         + ".met-declared size (got 0x\(String(result.output.count, radix: 16)) "
-                        + "bytes, expected 0x\(String(attrs.uncompressedSize, radix: 16)))."))
+                        + "bytes, expected 0x\(String(attrs.uncompressedSize, radix: 16))).",
+                    module: module.name))
             } else if !result.clean {
                 issues.append(Issue(id: 7, severity: .warning,
                     message: "Huffman module \"\(module.name)\" decompressed to the right "
-                        + "size but hit unknown codewords / an early stream end."))
+                        + "size but hit unknown codewords / an early stream end.",
+                    module: module.name))
             }
         }
         return issues
@@ -1148,7 +1150,7 @@ public actor MEFirmwareAnalyzer {
     /// advertising LZMA and no encryption is sliced by that `.met`'s compressed
     /// size — the `$CPD` row's size is the uncompressed one — decompressed, and
     /// checked against the stored hash (`LZMAModule`). Never throws.
-    private static func lzmaValidationIssues(
+    static func lzmaValidationIssues(
         for codePartition: CodePartition, in region: Data, baseOffset: Int) -> [Issue] {
         let headerBase = codePartition.offset - baseOffset
         var issues: [Issue] = []
@@ -1166,21 +1168,23 @@ public actor MEFirmwareAnalyzer {
             guard moduleBase >= 0, moduleBase + attrs.compressedSize <= region.count else {
                 issues.append(Issue(id: 19, severity: .warning,
                     message: "LZMA module \"\(module.name)\" extends past the end of the "
-                        + "region; cannot verify it."))
+                        + "region; cannot verify it.", module: module.name))
                 continue
             }
             let stored = region.subdata(in: moduleBase..<(moduleBase + attrs.compressedSize))
             guard let decompressed = LZMAModule.decompress(
                 module: stored, uncompressedSize: attrs.uncompressedSize) else {
                 issues.append(Issue(id: 19, severity: .warning,
-                    message: "LZMA module \"\(module.name)\" does not decompress."))
+                    message: "LZMA module \"\(module.name)\" does not decompress.",
+                    module: module.name))
                 continue
             }
             if !attrs.moduleHash.isEmpty,
                !LZMAModule.hashMatches(storedHash: attrs.moduleHash,
                                        stored: stored, decompressed: decompressed) {
                 issues.append(Issue(id: 19, severity: .warning,
-                    message: "Hash of LZMA module \"\(module.name)\" is invalid."))
+                    message: "Hash of LZMA module \"\(module.name)\" is invalid.",
+                    module: module.name))
             }
         }
         return issues
