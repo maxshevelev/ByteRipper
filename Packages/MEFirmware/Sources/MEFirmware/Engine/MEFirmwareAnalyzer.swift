@@ -567,20 +567,6 @@ public actor MEFirmwareAnalyzer {
                 issues.append(Issue(id: 3, severity: .note,
                                     message: "This firmware is not in the database."))
             }
-            if let cp = codePartition, Self.hasHuffmanModuleToValidate(cp) {
-                // Phase 8 integrity: every declared-Huffman module backed by a `.met`
-                // that advertises Huffman compression (and no encryption) must
-                // decompress — against the live Huffman.dat dictionary for this
-                // (variant, major, minor) — to exactly its `.met`-declared uncompressed
-                // size. Best-effort: a missing/unfetchable dictionary just skips the
-                // check rather than failing the analysis; families whose modules are
-                // LZMA/uncompressed (CSME 15+, IUP) never trigger the fetch.
-                let dictionaries = try? await data.huffmanDictionaries()
-                issues.append(contentsOf: Self.huffmanValidationIssues(
-                    for: cp, in: region, baseOffset: baseOffset,
-                    variant: identity.variant, major: identity.major, minor: identity.minor,
-                    dictionaries: dictionaries))
-            }
         }
 
         if let cp = codePartition {
@@ -676,6 +662,35 @@ public actor MEFirmwareAnalyzer {
                                        minor: identity.minor, dictionaries: dictionaries)
         } else {
             rbePm = nil
+        }
+
+        // Phase 8 integrity, Huffman half — after the metadata table, whose
+        // hashes are what a module without a `.met` is checked against. Every
+        // Huffman module the directory can place is decompressed against the
+        // live Huffman.dat dictionary for this (variant, major, minor): one with
+        // a `.met` must come out at its declared size, one without must hash to
+        // a row of the table. Best-effort: a missing/unfetchable dictionary
+        // skips the check rather than failing the analysis, and an image the
+        // engine could not name has no dictionary to pick.
+        if identity.identified, let cp = codePartition,
+           Self.hasHuffmanModuleToValidate(cp, in: region, baseOffset: baseOffset) {
+            let dictionaries = try? await data.huffmanDictionaries()
+            // The FTPR `pm` table's hashes, and those of every RBEP `rbe` table.
+            let rbeHashes = Self.rbeMetadataHashes(
+                atCPDs: Self.rbepOffsets(fpt: fpt, bootPartitions: bootPartitions,
+                                         baseOffset: baseOffset)
+                    .filter { $0 != cp.offset - baseOffset },
+                in: region, baseOffset: baseOffset,
+                family: CPDExtensionParser.family(
+                    major: manifest.major, minor: manifest.minor, hotfix: manifest.hotfix,
+                    build: manifest.build, year: manifest.year, month: manifest.month,
+                    keyLength: manifest.rsaPublicKey?.count),
+                variant: identity.variant, major: identity.major, minor: identity.minor,
+                dictionaries: dictionaries)
+            issues.append(contentsOf: Self.huffmanValidationIssues(
+                for: cp, in: region, baseOffset: baseOffset,
+                variant: identity.variant, major: identity.major, minor: identity.minor,
+                dictionaries: dictionaries, rbePmHashes: (rbePm ?? []).map(\.hash) + rbeHashes))
         }
 
         // Phase 9 (identity-gated): the legacy file-8 Home Directory and the
@@ -1078,71 +1093,247 @@ public actor MEFirmwareAnalyzer {
                             signature: signature, protectedData: protected)?.valid
     }
 
-    /// True when any module is a declared-Huffman row backed by a `.met` whose
-    /// `CSE_Ext_0A` advertises Huffman compression and no encryption — the only
-    /// case the Phase 8 check can validate (it needs a declared target size and a
-    /// decryptable blob). Gates the (relatively costly) Huffman.dat fetch.
-    private static func hasHuffmanModuleToValidate(_ cp: CodePartition) -> Bool {
-        cp.modules.contains { module in
-            module.isHuffman && module.size > 0 && cp.modules.contains { candidate in
-                candidate.name == module.name + ".met"
-                    && (candidate.extensions?.compactMap { $0.moduleAttributes }
-                        .contains { $0.compression == 1 && $0.encryption == 0 } ?? false)
-            }
-        }
+    /// Where a Huffman module's compressed stream is and how long it is on both
+    /// sides — what decompressing it needs.
+    struct HuffmanSlice: Equatable {
+        var module: CPDModule
+        /// Region-relative start of the stream.
+        var offset: Int
+        /// The stream's length, chunk directory included.
+        var compressedSize: Int
+        var uncompressedSize: Int
+        /// The `.met`'s stored hash; nil for a module with no metadata.
+        var hash: String?
+        /// The sizes come from a `.met`, rather than from the `$CPD` directory.
+        var fromMetadata: Bool
     }
 
-    /// Phase 8 cross-check (`mod_anl`'s Huffman branch). A code module whose
-    /// paired `.met` (name suffix `.met`) decodes a `CSE_Ext_0A` advertising
-    /// Huffman compression and no encryption is decompressed and its length
-    /// compared to the declared uncompressed size. The `.met`'s 0x0A *compressed*
-    /// size (chunk directory included) bounds the slice — that is exactly the
-    /// `compressed_size` upstream passes (MEA.py 6906/7186). Never throws; a nil
-    /// dictionary set skips everything.
+    /// Every Huffman module that can be decompressed, with its sizes.
+    ///
+    /// A module with a `.met` takes both sizes from its Module Attributes block
+    /// (only when it advertises Huffman and no encryption). A module with none —
+    /// every Huffman module of a CSME 15 FTPR — has only its uncompressed size in
+    /// the directory, and its compressed size is worked out the way upstream
+    /// does (MEA.py `ext_anl` Stage 3, 6655–6680): up to where the next entry
+    /// starts, the last one up to the partition's end (Partition Info 0x03/0x16)
+    /// or else up to the first `FF FF` (no Huffman codeword is 0xFFFF); an answer
+    /// past the uncompressed size, or below zero, is not believed; and a FIT- or
+    /// OEM-customized partition, whose directory sizes are accurate, is not
+    /// adjusted. An empty module (erased, or past the region) is left out.
+    static func huffmanSlices(for cp: CodePartition, in region: Data, baseOffset: Int) -> [HuffmanSlice] {
+        let headerBase = cp.offset - baseOffset
+        func bytes(at start: Int, count: Int) -> Data {
+            guard start >= 0, start < region.count, count > 0 else { return Data() }
+            let end = min(region.count, start + count)
+            return region.subdata(in: (region.startIndex + start)..<(region.startIndex + end))
+        }
+        // Upstream's entry_empty: nothing there, or exactly `size` bytes of 0xFF.
+        func isEmpty(_ module: CPDModule) -> Bool {
+            let data = bytes(at: headerBase + module.offset, count: module.size)
+            return data.isEmpty || (data.count == module.size && data.allSatisfy { $0 == 0xFF })
+        }
+        // A real OEM key, as opposed to Intel's 0xBCCB placeholder.
+        // Upstream's bccb_pat: CB BC, nine bytes, 00, "$MN2".
+        func isPlaceholderKey(_ data: Data) -> Bool {
+            let head = [UInt8](data.prefix(0x50))
+            let tag = [UInt8]("$MN2".utf8)
+            guard head.count >= 16 else { return false }
+            for i in 0...(head.count - 16) {
+                guard head[i] == 0xCB, head[i + 1] == 0xBC, head[i + 11] == 0 else { continue }
+                if Array(head[(i + 12)..<(i + 16)]) == tag { return true }
+            }
+            return false
+        }
+        let customized = cp.modules.contains { module in
+            if module.name == "fitc.cfg" { return !isEmpty(module) }
+            if module.name == "oem.key", !isEmpty(module) {
+                return !isPlaceholderKey(bytes(at: headerBase + module.offset, count: module.size))
+            }
+            return false
+        }
+        let partitionSize = cp.extensions?.compactMap(\.partitionInfo).first?.partitionSize
+
+        // Stage 3, over every entry in offset order.
+        let ordered = cp.modules.enumerated().sorted {
+            ($0.element.offset, $0.offset) < ($1.element.offset, $1.offset)
+        }.map(\.element)
+        var calculated: [Int: Int] = [:]   // module id → compressed size
+        for (index, module) in ordered.enumerated() where !isEmpty(module) && !customized {
+            var size: Int?
+            if index < ordered.count - 1 {
+                size = ordered[index + 1].offset - module.offset
+            } else if let partitionSize {
+                size = partitionSize - module.offset
+            } else {
+                let rest = [UInt8](bytes(at: headerBase + module.offset, count: region.count))
+                size = rest.indices.dropLast().first { rest[$0] == 0xFF && rest[$0 + 1] == 0xFF }
+            }
+            if let size, size >= 0, size <= module.size { calculated[module.id] = size }
+        }
+
+        var slices: [HuffmanSlice] = []
+        for module in cp.modules where module.isHuffman && module.size > 0 && !isEmpty(module) {
+            let met = cp.modules.first { $0.name == module.name + ".met" }
+            if let met {
+                guard let attrs = met.extensions?.compactMap(\.moduleAttributes).first,
+                      attrs.compression == 1, attrs.encryption == 0,
+                      attrs.compressedSize > 0, attrs.uncompressedSize > 0 else { continue }
+                slices.append(HuffmanSlice(
+                    module: module, offset: headerBase + module.offset,
+                    compressedSize: attrs.compressedSize, uncompressedSize: attrs.uncompressedSize,
+                    hash: attrs.moduleHash, fromMetadata: true))
+            } else {
+                slices.append(HuffmanSlice(
+                    module: module, offset: headerBase + module.offset,
+                    compressedSize: calculated[module.id] ?? module.size,
+                    uncompressedSize: module.size, hash: nil, fromMetadata: false))
+            }
+        }
+        return slices
+    }
+
+    /// True when a module can be decompressed and checked — the gate on the
+    /// (relatively costly) Huffman.dat fetch.
+    private static func hasHuffmanModuleToValidate(_ cp: CodePartition, in region: Data,
+                                                   baseOffset: Int) -> Bool {
+        !huffmanSlices(for: cp, in: region, baseOffset: baseOffset).isEmpty
+    }
+
+    /// Phase 8 cross-check (`mod_anl`'s Huffman branch, MEA.py 7178–7230): every
+    /// Huffman module `huffmanSlices` can place is decompressed against the
+    /// live dictionary for this identity.
+    ///
+    /// - A module with a `.met` must come out at the `.met`'s uncompressed size
+    ///   and without unknown codewords.
+    /// - A module without one is checked the way upstream checks it: its
+    ///   decompressed bytes must hash to one of the hashes the `pm` / `rbe`
+    ///   metadata table lists (`rbePmHashes`). With no such table there is only
+    ///   the size and the codewords to go on.
+    ///
+    /// Never throws; a nil dictionary set skips everything.
     static func huffmanValidationIssues(
         for codePartition: CodePartition, in region: Data, baseOffset: Int,
         variant: String, major: Int, minor: Int,
-        dictionaries: HuffmanDictionaries?) -> [Issue] {
+        dictionaries: HuffmanDictionaries?, rbePmHashes: [String] = []) -> [Issue] {
         guard let dictionaries,
               let dictionary = dictionaries.dictionary(variant: variant,
                                                        major: major, minor: minor),
               major != 0, variant != "" else { return [] }
-        let headerBase = codePartition.offset - baseOffset
         var issues: [Issue] = []
 
-        for module in codePartition.modules where module.isHuffman && module.size > 0 {
-            guard let attrs = codePartition.modules
-                .first(where: { $0.name == module.name + ".met" })?
-                .extensions?
-                .compactMap({ $0.moduleAttributes })
-                .first,
-                attrs.compression == 1, attrs.encryption == 0,
-                attrs.compressedSize > 0, attrs.uncompressedSize > 0 else { continue }
-            let moduleBase = headerBase + module.offset
-            guard moduleBase + attrs.compressedSize <= region.count else {
+        for slice in huffmanSlices(for: codePartition, in: region, baseOffset: baseOffset) {
+            let name = slice.module.name
+            guard slice.offset >= 0, slice.offset + slice.compressedSize <= region.count else {
                 issues.append(Issue(id: 7, severity: .warning,
-                    message: "Huffman module \"\(module.name)\" extends past the end of "
-                        + "the region; cannot verify its decompression.", module: module.name))
+                    message: "Huffman module \"\(name)\" extends past the end of "
+                        + "the region; cannot verify its decompression.", module: name))
                 continue
             }
-            let blob = region.subdata(in: moduleBase..<(moduleBase + attrs.compressedSize))
+            let blob = region.subdata(in: (region.startIndex + slice.offset)
+                                        ..< (region.startIndex + slice.offset + slice.compressedSize))
             let result = HuffmanDecoder.decompress(
-                module: blob, compressedSize: attrs.compressedSize,
-                decompressedSize: attrs.uncompressedSize, dictionary: dictionary)
-            if result.output.count != attrs.uncompressedSize {
+                module: blob, compressedSize: slice.compressedSize,
+                decompressedSize: slice.uncompressedSize, dictionary: dictionary)
+            if result.output.count != slice.uncompressedSize {
+                let source = slice.fromMetadata ? ".met-declared" : "$CPD"
                 issues.append(Issue(id: 7, severity: .warning,
-                    message: "Huffman module \"\(module.name)\" did not decompress to its "
-                        + ".met-declared size (got 0x\(String(result.output.count, radix: 16)) "
-                        + "bytes, expected 0x\(String(attrs.uncompressedSize, radix: 16))).",
-                    module: module.name))
+                    message: "Huffman module \"\(name)\" did not decompress to its "
+                        + "\(source) size (got 0x\(String(result.output.count, radix: 16)) "
+                        + "bytes, expected 0x\(String(slice.uncompressedSize, radix: 16))).",
+                    module: name))
+            } else if !slice.fromMetadata, let first = rbePmHashes.first {
+                let digest = first.count == 96 ? Digest.sha384Hex(result.output)
+                                               : Digest.sha256Hex(result.output)
+                if !rbePmHashes.contains(digest) {
+                    issues.append(Issue(id: 7, severity: .warning,
+                        message: "Hash of Huffman module \"\(name)\" is invalid.", module: name))
+                }
             } else if !result.clean {
                 issues.append(Issue(id: 7, severity: .warning,
-                    message: "Huffman module \"\(module.name)\" decompressed to the right "
+                    message: "Huffman module \"\(name)\" decompressed to the right "
                         + "size but hit unknown codewords / an early stream end.",
-                    module: module.name))
+                    module: name))
             }
         }
         return issues
+    }
+
+    /// Region-relative `$CPD` offsets of the image's RBEP partitions, from the
+    /// `$FPT` and from every boot BPDT — each listed once.
+    private static func rbepOffsets(fpt: FPTParser.Result?, bootPartitions: [BPDT]?,
+                                    baseOffset: Int) -> [Int] {
+        var offsets: [Int] = []
+        for part in fpt?.partitions ?? [] where part.name == "RBEP" && !part.empty {
+            offsets.append(part.offset)
+        }
+        for boot in bootPartitions ?? [] {
+            for entry in boot.entries where entry.name == "RBEP" && !entry.empty {
+                offsets.append(entry.offset - baseOffset)
+            }
+        }
+        var seen = Set<Int>()
+        return offsets.filter { seen.insert($0).inserted }
+    }
+
+    /// The hashes the `rbe` module's metadata table lists, in every RBEP
+    /// partition at `offsets` (region-relative `$CPD` bases). The operational
+    /// partition is FTPR, whose `pm` table lists only the modules `pm` loads;
+    /// the ones the ROM boot extensions load — kernel, syslib, bup and the rest
+    /// — are listed by `rbe`, and upstream checks a module without metadata
+    /// against both (MEA.py 5623–5633). A Huffman `rbe` is sliced and
+    /// decompressed like any other module; one that does not come out whole
+    /// lists nothing.
+    static func rbeMetadataHashes(
+        atCPDs offsets: [Int], in region: Data, baseOffset: Int,
+        family: CPDExtensionParser.Family,
+        variant: String, major: Int, minor: Int, dictionaries: HuffmanDictionaries?
+    ) -> [String] {
+        var hashes: [String] = []
+        for offset in offsets {
+            guard let header = CPDParser.decodeHeader(in: region, at: offset) else { continue }
+            let entries = CPDParser.entries(of: header, in: region, cpdBase: header.base)
+            // `rbe` has a `rbe.met` of its own, whose Module Attributes give
+            // its sizes: every `.met` body is read, as the operational
+            // partition's are.
+            let partition = CodePartition(
+                name: header.partitionName, offset: baseOffset + header.base,
+                headerVersion: header.headerVersion, headerLength: header.headerLength,
+                entryCount: header.numModules, checksumValid: nil,
+                modules: entries.enumerated().map { index, entry in
+                    let metadata = entry.name.hasSuffix(".met") && !entry.isHuffman && entry.size > 0
+                        ? CPDExtensionParser.decodeMetBody(
+                            in: region, contentBase: header.base + entry.offset,
+                            bodySize: Int(entry.size), family: family, baseOffset: baseOffset)
+                        : nil
+                    return CPDModule(id: index, name: entry.name, offset: entry.offset,
+                                     isHuffman: entry.isHuffman, size: Int(entry.size),
+                                     extensions: metadata)
+                })
+            guard let module = partition.modules.first(where: { $0.name == "rbe" }),
+                  module.size > 0 else { continue }
+            let body: Data
+            if module.isHuffman {
+                guard let dictionary = dictionaries?.dictionary(variant: variant, major: major,
+                                                                minor: minor),
+                      let slice = huffmanSlices(for: partition, in: region, baseOffset: baseOffset)
+                        .first(where: { $0.module.id == module.id }),
+                      slice.offset >= 0, slice.offset + slice.compressedSize <= region.count
+                else { continue }
+                let blob = region.subdata(in: (region.startIndex + slice.offset)
+                                            ..< (region.startIndex + slice.offset + slice.compressedSize))
+                let result = HuffmanDecoder.decompress(
+                    module: blob, compressedSize: slice.compressedSize,
+                    decompressedSize: slice.uncompressedSize, dictionary: dictionary)
+                guard result.output.count == slice.uncompressedSize, result.clean else { continue }
+                body = result.output
+            } else {
+                let start = header.base + module.offset
+                guard start >= 0, start + module.size <= region.count else { continue }
+                body = region.subdata(in: (region.startIndex + start)..<(region.startIndex + start + module.size))
+            }
+            hashes += (RBEPMMetadataParser.decode(in: body) ?? []).map(\.hash)
+        }
+        return hashes
     }
 
     /// Phase 8 cross-check, LZMA half (`cse_unpack`'s `mod_comp == 2` branch,
@@ -1208,25 +1399,22 @@ public actor MEFirmwareAnalyzer {
         let moduleBase = codePartition.offset - baseOffset + module.offset
         guard moduleBase >= 0 else { return nil }
         guard !module.isHuffman else {
-            // Huffman body: `.met` gives the blob bounds; the dictionary picks the
-            // variant/major/minor's codebook (major/variant must be usable).
+            // Huffman body: its slice — from the `.met`, or worked out from the
+            // directory when there is none (upstream passes the same `mod[4]`,
+            // `mod[5]`, MEA.py 5629) — and the variant/major/minor's codebook.
             guard let dictionaries,
                   let dictionary = dictionaries.dictionary(variant: variant,
                                                            major: major, minor: minor),
                   major != 0, variant != "" else { return nil }
-            guard let attrs = codePartition.modules
-                .first(where: { $0.name == module.name + ".met" })?
-                .extensions?
-                .compactMap({ $0.moduleAttributes })
-                .first,
-                attrs.compression == 1, attrs.encryption == 0,
-                attrs.compressedSize > 0, attrs.uncompressedSize > 0,
-                moduleBase + attrs.compressedSize <= region.count else { return nil }
-            let blob = region.subdata(in: moduleBase..<(moduleBase + attrs.compressedSize))
+            guard let slice = huffmanSlices(for: codePartition, in: region, baseOffset: baseOffset)
+                    .first(where: { $0.module.id == module.id }),
+                  slice.offset + slice.compressedSize <= region.count else { return nil }
+            let blob = region.subdata(in: (region.startIndex + slice.offset)
+                                        ..< (region.startIndex + slice.offset + slice.compressedSize))
             let result = HuffmanDecoder.decompress(
-                module: blob, compressedSize: attrs.compressedSize,
-                decompressedSize: attrs.uncompressedSize, dictionary: dictionary)
-            guard result.output.count == attrs.uncompressedSize, result.clean else { return nil }
+                module: blob, compressedSize: slice.compressedSize,
+                decompressedSize: slice.uncompressedSize, dictionary: dictionary)
+            guard result.output.count == slice.uncompressedSize, result.clean else { return nil }
             return RBEPMMetadataParser.decode(in: result.output)
         }
         guard moduleBase + module.size <= region.count else { return nil }

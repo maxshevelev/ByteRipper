@@ -275,6 +275,140 @@ final class HuffmanTests: XCTestCase {
         XCTAssertEqual(Self.huffmanIssues(partition, region, dictionary: nil), [])
     }
 
+    // MARK: A module with no metadata (MEA.py ext_anl Stage 3, mod_anl)
+
+    /// A dictionary with a 4-bit codeword per byte value 0x0–0xF — one that
+    /// really compresses, two bytes of such values to one of stream, as a
+    /// module without metadata needs (a stream longer than the module it
+    /// decompresses to is a size upstream does not believe).
+    private static func nibbleDictionary() -> HuffmanDictionary {
+        let shape = [HuffmanShape(length: 4, threshold: 0, maxCodeword: 15)]
+        let symbols: [[UInt8]] = stride(from: 15, through: 0, by: -1).map { [UInt8($0)] }
+        let table = HuffmanSymbolTable(
+            symbolsByLength: Array(repeating: [], count: 4) + [symbols],
+            unknownByLength: Array(repeating: [], count: 4) + [[Bool](repeating: false, count: 16)])
+        return HuffmanDictionary(shape: shape, code: table, data: table)
+    }
+
+    /// `length` bytes of values 0x0–0xF, and the stream the nibble dictionary
+    /// reads them from: codewords most significant bit first.
+    private static func nibbleBody(_ length: Int) -> (body: Data, stream: Data) {
+        let body = Data((0..<length).map { UInt8(($0 * 7) & 0x0F) })
+        var packed = Data()
+        for index in stride(from: 0, to: length, by: 2) {
+            packed.append(body[index] << 4 | body[index + 1])
+        }
+        return (body, packed)
+    }
+
+    /// A `$CPD` whose Huffman module "kernel" at 0x100 has no `.met`: only its
+    /// uncompressed size is in the directory. `next` is another module's row
+    /// and bytes right after the stream, `trailing` bytes after that.
+    private static func partitionWithoutMetadata(
+        body: Data, packed: Data? = nil, next: (name: String, bytes: Data)? = nil,
+        partitionSize: Int? = nil, trailing: Data = Data(), extra: [CPDModule] = []
+    ) -> (partition: CodePartition, region: Data, stream: Data) {
+        let stream = module(chunks: [(flag: 0x20, offset: 0)], bodies: [packed ?? body])
+        var modules = [CPDModule(id: 0, name: "kernel", offset: 0x100, isHuffman: true, size: body.count)]
+        var region = Data(count: 0x100)
+        region.append(stream)
+        if let next {
+            modules.append(CPDModule(id: 1, name: next.name, offset: region.count,
+                                     isHuffman: false, size: next.bytes.count))
+            region.append(next.bytes)
+        }
+        region.append(trailing)
+        modules += extra
+        let extensions = partitionSize.map { size in
+            [CPDExtension(id: 0, tag: 0x03, size: 0x48, offset: 0, partitionInfo: PartitionInfoExtension(
+                partitionName: "FTPR", partitionSize: size, vcn: nil, versionMajor: 0, versionMinor: 0,
+                dataFormatMajor: 0, dataFormatMinor: 0, instanceID: 0, flags: 0, hash: ""))]
+        }
+        let partition = CodePartition(
+            name: "FTPR", offset: 0, headerVersion: 2, headerLength: 0x14, entryCount: modules.count,
+            checksumValid: true, modules: modules, extensions: extensions)
+        return (partition, region, stream)
+    }
+
+    private static func slice(_ partition: CodePartition, _ region: Data) -> MEFirmwareAnalyzer.HuffmanSlice? {
+        MEFirmwareAnalyzer.huffmanSlices(for: partition, in: region, baseOffset: 0)
+            .first { $0.module.name == "kernel" }
+    }
+
+    /// The compressed size is where the next module starts.
+    func testAModuleWithoutMetadataEndsWhereTheNextBegins() throws {
+        let (body, packed) = Self.nibbleBody(0x1000)
+        let (partition, region, stream) = Self.partitionWithoutMetadata(
+            body: body, packed: packed, next: ("intl.cfg", Data(repeating: 0x11, count: 0x10)))
+
+        let slice = try XCTUnwrap(Self.slice(partition, region))
+        XCTAssertEqual(slice.offset, 0x100)
+        XCTAssertEqual(slice.compressedSize, stream.count)
+        XCTAssertEqual(slice.compressedSize, 0x804)
+        XCTAssertEqual(slice.uncompressedSize, 0x1000)
+        XCTAssertNil(slice.hash, "no metadata, so no hash of its own")
+    }
+
+    /// The last module ends where the partition does, when the manifest says
+    /// how long the partition is — and at the erased padding when it does not.
+    func testTheLastModuleEndsAtThePartitionOrThePadding() throws {
+        let (body, packed) = Self.nibbleBody(0x1000)
+        let sized = Self.partitionWithoutMetadata(body: body, packed: packed,
+                                                  partitionSize: 0x100 + 0x804)
+        XCTAssertEqual(try XCTUnwrap(Self.slice(sized.partition, sized.region)).compressedSize, 0x804)
+
+        let padded = Self.partitionWithoutMetadata(body: body, packed: packed,
+                                                   trailing: Data(repeating: 0xFF, count: 0x40))
+        XCTAssertEqual(try XCTUnwrap(Self.slice(padded.partition, padded.region)).compressedSize, 0x804)
+    }
+
+    /// An adjustment past the uncompressed size is not believed, and a FIT
+    /// configured partition is not adjusted at all: the directory size stands.
+    func testAnAdjustmentThatCannotBeRightKeepsTheDirectorySize() throws {
+        let (body, packed) = Self.nibbleBody(0x1000)
+        let far = Self.partitionWithoutMetadata(
+            body: body, packed: packed, next: ("intl.cfg", Data(repeating: 0x11, count: 0x10)),
+            extra: [CPDModule(id: 2, name: "far", offset: 0x8000, isHuffman: false, size: 0x10)])
+        // "far" lies past the region, so it is empty; intl.cfg is next either way.
+        XCTAssertEqual(try XCTUnwrap(Self.slice(far.partition, far.region)).compressedSize, 0x804)
+
+        let tooFar = Self.partitionWithoutMetadata(
+            body: Data(repeating: 0xAA, count: 0x10),
+            next: ("intl.cfg", Data(repeating: 0x11, count: 0x10)))
+        // Four bytes of directory and sixteen of body is more than the sixteen
+        // the module says it holds: not believed.
+        XCTAssertEqual(try XCTUnwrap(Self.slice(tooFar.partition, tooFar.region)).compressedSize, 0x10)
+
+        let configured = Self.partitionWithoutMetadata(
+            body: body, packed: packed, next: ("fitc.cfg", Data(repeating: 0x22, count: 0x10)))
+        XCTAssertEqual(try XCTUnwrap(Self.slice(configured.partition, configured.region)).compressedSize,
+                       0x1000, "a FIT-configured partition's sizes are taken as they are")
+    }
+
+    /// With no metadata the decompressed module is checked against the hashes
+    /// the metadata tables list: one they list passes, one they do not is an
+    /// issue 7 that names the module, and no table checks nothing.
+    func testAModuleWithoutMetadataIsCheckedAgainstTheMetadataTable() throws {
+        let (body, packed) = Self.nibbleBody(0x1000)
+        let (partition, region, _) = Self.partitionWithoutMetadata(
+            body: body, packed: packed, next: ("intl.cfg", Data(repeating: 0x11, count: 0x10)))
+        var dictionaries = HuffmanDictionaries()
+        dictionaries.version12 = Self.nibbleDictionary()
+        func issues(_ hashes: [String]) -> [Issue] {
+            MEFirmwareAnalyzer.huffmanValidationIssues(
+                for: partition, in: region, baseOffset: 0, variant: "CSME", major: 15, minor: 0,
+                dictionaries: dictionaries, rbePmHashes: hashes)
+        }
+
+        XCTAssertEqual(issues([Digest.sha256Hex(body)]), [])
+        XCTAssertEqual(issues([]), [], "nothing to check a module without metadata against")
+
+        let wrong = try XCTUnwrap(issues([String(repeating: "0", count: 64)]).first)
+        XCTAssertEqual(wrong.id, 7)
+        XCTAssertEqual(wrong.module, "kernel")
+        XCTAssertTrue(wrong.message.contains("Hash"), wrong.message)
+    }
+
     func testDecodeEmptyDecompressedSizeYieldsEmpty() {
         let dict = Self.identityDictionary()
         let result = HuffmanDecoder.decompress(
