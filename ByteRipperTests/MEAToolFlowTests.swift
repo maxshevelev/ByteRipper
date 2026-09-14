@@ -229,6 +229,21 @@ final class MEAToolFlowTests: XCTestCase {
                       "a tree row can wear the rail")
     }
 
+    /// The Summary's rows keep the same margins inside their list as the
+    /// detail's rows do — clear of the list's edges, not pressed against them.
+    func testTheSummaryRowsKeepTheDetailListsMargins() throws {
+        _ = try open(METestImage.fptFile())
+        let panel = try panel()
+        let scroll = try XCTUnwrap(descendants(of: panel, ToolDetailScroll.self).first { !$0.isHidden },
+                                   "the Summary tab's list")
+        let first = try XCTUnwrap(scroll.content.arrangedSubviews.first, "a summary row")
+        let row = first.convert(first.bounds, to: scroll)
+        let clip = scroll.contentView.convert(scroll.contentView.bounds, to: scroll)
+        XCTAssertGreaterThanOrEqual(row.minX - clip.minX, 10, "leading margin: row \(row), clip \(clip)")
+        XCTAssertGreaterThanOrEqual(clip.maxX - row.maxX, 10, "trailing margin: row \(row), clip \(clip)")
+        XCTAssertGreaterThanOrEqual(row.minY - clip.minY, 8, "top margin: row \(row), clip \(clip)")
+    }
+
     /// The Summary tab's two ways out, in its own row against the trailing
     /// edge: the rows as rich text to paste, and the whole page as a picture.
     /// They belong to that tab — the tree has no one page to hand over — so

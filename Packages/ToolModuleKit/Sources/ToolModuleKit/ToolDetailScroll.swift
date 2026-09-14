@@ -92,7 +92,12 @@ import AppKit
             content.leadingAnchor.constraint(equalTo: document.leadingAnchor, constant: 10),
             content.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -10),
         ]
-        sideInsets.forEach { $0.priority = .defaultHigh }
+        // One above `.defaultHigh`, not at it: a plain label's compression
+        // resistance, and a list's label-column width, are `.defaultHigh`
+        // too, and a tie between them and the margins is one the engine was
+        // free to settle against the margins — which is how the ME Summary's
+        // rows came to run edge to edge (measured: 0 points either side).
+        sideInsets.forEach { $0.priority = .defaultHigh + 1 }
 
         // The placeholder's own margins, breakable for the same reason: it
         // cannot be kept 10 points clear of both edges of a list that is not
