@@ -58,6 +58,12 @@ import ToolModuleKit
     private var placeholderState = Placeholder.waiting
     private let outline = MEOutlineView()
     private let outlineScroll = NSScrollView()
+    /// The tree and its legend, as one pane of the splitter: the legend
+    /// explains the rows, and opens into the tree's room rather than the
+    /// detail's (`Design/ROW_MARKS.md` §6).
+    private let treePane = NSView()
+    let legend = ToolRowMarksLegend(panel: "MEAnalyzer", marks: MEATreeMarks.legendMarks)
+    private static let rowViewIdentifier = NSUserInterfaceItemIdentifier("meaRow")
     private let detail = ToolDetailScroll()
     private let summaryScroll = ToolDetailScroll()
     private let splitter = ALSplitView()
@@ -149,7 +155,20 @@ import ToolModuleKit
         splitter.isVertical = false
         splitter.dividerThickness = 1
         splitter.translatesAutoresizingMaskIntoConstraints = false
-        splitter.addPane(outlineScroll)
+        treePane.translatesAutoresizingMaskIntoConstraints = false
+        treePane.addSubview(outlineScroll)
+        treePane.addSubview(legend)
+        NSLayoutConstraint.activate([
+            outlineScroll.topAnchor.constraint(equalTo: treePane.topAnchor),
+            outlineScroll.leadingAnchor.constraint(equalTo: treePane.leadingAnchor),
+            outlineScroll.trailingAnchor.constraint(equalTo: treePane.trailingAnchor),
+            legend.topAnchor.constraint(equalTo: outlineScroll.bottomAnchor, constant: 4),
+            legend.leadingAnchor.constraint(equalTo: treePane.leadingAnchor),
+            legend.trailingAnchor.constraint(equalTo: treePane.trailingAnchor),
+            legend.bottomAnchor.constraint(equalTo: treePane.bottomAnchor)
+        ])
+        legend.onShowMarkingsChanged = { [weak self] _ in self?.updateRowMarks() }
+        splitter.addPane(treePane)
         splitter.addPane(detail)
         splitter.setPaneLayout(.fill, at: 0)
         splitter.setPaneLayout(.proportional(1.0 / 3), at: 1)
@@ -590,6 +609,7 @@ import ToolModuleKit
 
         selectTab(tab)
         outline.reloadData()
+        updateRowMarks()
         let focus = focusPath.flatMap { MEATree.node(at: $0, in: roots) }
         renderDetail(focus)
 
@@ -811,8 +831,14 @@ extension MEAToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         else { return nil }
         let cell = outlineView.makeView(withIdentifier: identifier, owner: self)
             as? NSTableCellView
-            ?? ToolPanelTable.makeCell(identifier: identifier)
+            ?? ToolPanelTable.makeCell(identifier: identifier,
+                                       warning: identifier == Column.name,
+                                       badges: identifier == Column.name)
         cell.textField?.stringValue = text(for: node, in: identifier)
+        // The row's problem and badges sit in the column the row is named by.
+        if identifier == Column.name {
+            ToolPanelTable.dress(cell, with: node.marks)
+        }
         cell.textField?.font = identifier == Column.summary && node.subtitle.hasPrefix("0x")
             ? ToolPanelFont.monospacedDigits()
             : ToolPanelFont.body()
@@ -823,6 +849,28 @@ extension MEAToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
             ? .secondaryLabelColor
             : .labelColor
         return cell
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        let rowView = outlineView.makeView(withIdentifier: Self.rowViewIdentifier, owner: self)
+            as? ToolPanelRowView ?? {
+                let created = ToolPanelRowView()
+                created.identifier = Self.rowViewIdentifier
+                return created
+            }()
+        rowView.showsMarkings = legend.showsMarkings
+        rowView.marks = (item as? MEANode)?.marks ?? .none
+        return rowView
+    }
+
+    /// The row views on screen, given their rail again: reloading the cells
+    /// does not reach a row view, and the switch changes every row at once.
+    private func updateRowMarks() {
+        outline.enumerateAvailableRowViews { rowView, row in
+            guard let rowView = rowView as? ToolPanelRowView else { return }
+            rowView.showsMarkings = legend.showsMarkings
+            rowView.marks = (outline.item(atRow: row) as? MEANode)?.marks ?? .none
+        }
     }
 
     private func text(

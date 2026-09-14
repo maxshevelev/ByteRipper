@@ -208,6 +208,27 @@ final class MEAToolFlowTests: XCTestCase {
         XCTAssertTrue(text.contains("0x4000 (16384 bytes)"), "\(text)")
     }
 
+    /// The Full Tree explains its marks: a legend under the tree, listing the
+    /// rail, the problem and the badges in the shared catalogue's words — and
+    /// no Boot Guard background, which an ME row never wears — with the Show
+    /// Markings switch for the rail; and the tree's rows are the rows that
+    /// paint it.
+    func testTheFullTreeCarriesALegendOfItsMarks() throws {
+        _ = try open(METestImage.fptFile())
+        let legend = try XCTUnwrap(descendants(of: try panel(), ToolRowMarksLegend.self).first,
+                                   "a legend in the ME panel")
+        XCTAssertTrue(legend.listedMeanings.contains(ToolRowMark.decompressed.meaning))
+        XCTAssertTrue(legend.listedMeanings.contains(ToolRowMark.holdsChecks.meaning))
+        XCTAssertTrue(legend.listedMeanings.contains(ToolRowMark.error.meaning))
+        XCTAssertFalse(legend.listedMeanings.contains(ToolRowMark.protectedIBB.meaning))
+        XCTAssertTrue(legend.offersShowMarkings)
+
+        let tree = try outline()
+        XCTAssertGreaterThan(tree.numberOfRows, 0, "the identity row at least")
+        XCTAssertTrue(tree.rowView(atRow: 0, makeIfNecessary: true) is ToolPanelRowView,
+                      "a tree row can wear the rail")
+    }
+
     /// The Summary tab's two ways out, in its own row against the trailing
     /// edge: the rows as rich text to paste, and the whole page as a picture.
     /// They belong to that tab — the tree has no one page to hand over — so

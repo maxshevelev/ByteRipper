@@ -46,7 +46,8 @@ let package = Package(
         ]),
         .testTarget(name: "MEAToolTests", dependencies: [
             "MEATool",
-            .product(name: "MEFirmware", package: "MEFirmware")
+            .product(name: "MEFirmware", package: "MEFirmware"),
+            .product(name: "ToolModuleKit", package: "ToolModuleKit")
         ])
     ]
 )

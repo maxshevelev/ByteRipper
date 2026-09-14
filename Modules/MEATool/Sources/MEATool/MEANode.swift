@@ -1,4 +1,5 @@
 import Foundation
+import ToolModuleKit
 
 /// One label/value row of a node's detail list — the panel's lower pane, the
 /// same shape as `UEFIDetailField` in the UEFI tool-module.
@@ -51,6 +52,11 @@ public struct MEANode: Sendable, Equatable, Hashable, Identifiable {
     /// or one the layout marks erased. The panel draws such a row's value
     /// grey: it is a place in the layout rather than something to read.
     public var isEmptySection: Bool
+    /// What the row wears besides its text (`Design/ROW_MARKS.md` §5.3): the
+    /// rail, a compressed or holds-checks badge, a problem — decided when the
+    /// node is built (`MEATreeMarks`), since everything it is decided from is in
+    /// the analysis the node comes out of.
+    public var marks: ToolRowMarks
 
     public var id: [Int] { path }
 
@@ -66,7 +72,8 @@ public struct MEANode: Sendable, Equatable, Hashable, Identifiable {
         range: Range<UInt64>? = nil,
         fields: [MEAField] = [],
         children: [MEANode] = [],
-        isEmptySection: Bool = false
+        isEmptySection: Bool = false,
+        marks: ToolRowMarks = .none
     ) {
         self.path = path
         self.title = title
@@ -75,6 +82,7 @@ public struct MEANode: Sendable, Equatable, Hashable, Identifiable {
         self.fields = fields
         self.children = children
         self.isEmptySection = isEmptySection
+        self.marks = marks
     }
 }
 

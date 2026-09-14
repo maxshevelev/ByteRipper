@@ -133,7 +133,9 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "CSE Layout Table",
                        subtitle: MEAText.count(table.partitions.count, "partition"),
-                       fields: header, children: rows)
+                       fields: header, children: rows,
+                       marks: MEATreeMarks.table(named: "CSE Layout Table",
+                                                 checksumValid: table.checksumValid))
     }
 
     // MARK: - Boot Partitions (BPDT)
@@ -174,7 +176,9 @@ public enum MEACurator {
             }
             return MEANode(path: [], title: bpdt.partitionName,
                            subtitle: MEAText.count(bpdt.entries.count, "entry"),
-                           fields: header, children: entries)
+                           fields: header, children: entries,
+                           marks: MEATreeMarks.table(named: "BPDT",
+                                                     checksumValid: bpdt.checksumValid))
         }
         return MEANode(path: [], title: "Boot Partitions (BPDT)",
                        subtitle: MEAText.count(tables.count, "table"),
@@ -214,7 +218,8 @@ public enum MEACurator {
                                    : MEAText.range(absolute, m.size),
                                range: m.isHuffman ? nil : MEAText.rangeValue(absolute, m.size),
                                fields: fields,
-                               isEmptySection: m.size == 0)
+                               isEmptySection: m.size == 0,
+                               marks: MEATreeMarks.module(m, in: cp, analysis: a))
             }
             children.append(MEANode(path: [], title: "Modules",
                                     subtitle: MEAText.count(moduleRows.count, "module"),
@@ -228,7 +233,8 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "Code Partition ($CPD)",
                        subtitle: "\(cp.name) · \(cp.headerVersion == 1 ? "R1" : "R2")",
-                       fields: header, children: children)
+                       fields: header, children: children,
+                       marks: MEATreeMarks.codePartition(cp))
     }
 
     private static func extensionRow(_ ext: CPDExtension) -> MEANode {
@@ -298,7 +304,8 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "Manifest",
                        subtitle: "\(m.tag) · \(MEAText.manifestFormat(m.format))",
-                       fields: fields)
+                       fields: fields,
+                       marks: MEATreeMarks.manifest(a))
     }
 
     // MARK: - File System (MFS)
@@ -500,15 +507,18 @@ public enum MEACurator {
 
     private static func rbeGroup(_ a: FirmwareAnalysis) -> MEANode? {
         guard let rows = a.rbePmMetadata, !rows.isEmpty else { return nil }
+        // Read out of the pm / rbe module's decompressed body: the rail, when
+        // that module is stored compressed, on the group and on every row.
+        let marks = MEATreeMarks.metadata(a)
         let children = rows.enumerated().map { i, r -> MEANode in
             var fields = MEAValueText.fields(of: r)
             fields.removeAll { $0.label == "Unknown0" }   // raw open word, low signal
             return MEANode(path: [], title: "R\(r.variant.rawValue.uppercased()) #\(r.id)",
-                           fields: fields)
+                           fields: fields, marks: marks)
         }
         return MEANode(path: [], title: "RBE/PM Metadata",
                        subtitle: MEAText.count(children.count, "row"),
-                       children: children)
+                       children: children, marks: marks)
     }
 
     /// What the checksums group is called, and what its rows read before they

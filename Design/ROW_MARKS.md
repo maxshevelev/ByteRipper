@@ -230,8 +230,7 @@ change (§6).
 **Status, 2026-09-13.** Steps 1 and 2 are in, and step 5 for the UEFI tree
 alone: its background, `shield.lefthalf.filled`, `lock.shield` on the AMI and
 Phoenix hash files and the Insyde flash device map, the hash problems, and the
-four marks in its legend. The ME tree takes its marks with step 3, which draws none
-yet. Step 4 is in for the FIT table's problems and legend (2026-09-14):
+four marks in its legend. Step 4 is in for the FIT table's problems and legend (2026-09-14):
 `FITRowMarks` decides a row's problem and verdict, the verdicts are marks of the
 shared catalogue, and the legend lists them. `lock.shield` is on the Key Manifest
 and Boot Policy rows. Step 5 is in for the FIT table too: once the table is up the
@@ -243,6 +242,15 @@ the Show Markings switch in the legend. The ranges are kept across re-reads unti
 the next ones land, so a background does not blink off on every edit. Where the code differs from the
 text: a compressed section carries `UEFINode.compression` (algorithm, and
 whether it decodes), set by the parser, which is what the badge is read from;
+step 3 is in too (2026-09-14): `MEATreeMarks` decides the ME tree's marks as the
+curator builds each `MEANode` (which now carries them) — `zipper.page` on a
+`$CPD` module stored compressed (from `isHuffman` and its `.met` companion's
+Module Attributes), indigo only for the `pm` / `rbe` module the metadata table is
+read out of and never for an encrypted one; the rail on the RBE/PM Metadata rows
+when that module is compressed; `lock.shield` on the manifest; an error for a
+`$CPD`, CSE Layout Table or BPDT checksum that does not add up and for a manifest
+RSA signature that does not check out; the legend with Show Markings. A Huffman
+or LZMA check that failed (Issue ids 7 and 19) still stays in the Issues group;
 the legend's lines are plain views with every edge constrained rather than
 stacks, because a stack line inside the list was ambiguous in a window; and the
 legend and switch states live in `ToolPanelFont.defaults`, the store the app
