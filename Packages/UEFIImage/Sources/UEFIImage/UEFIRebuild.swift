@@ -396,7 +396,8 @@ public enum UEFIRebuild {
                 return result
             }
             guard space != .file else {
-                throw Refusal("“\(child.name)” is at the top of the file and keeps its size (§7 of UPDATE_IN_PARENT.md).")
+                return try settled(child, with: current, among: image.roots, end: UInt64(bytes.count),
+                                   endName: "the end of the file", bytes: bytes)
             }
             // A buffer is a run of sections from its first byte.
             return run(try topNodes(in: space), replacing: child, with: current, bytes: bytes)
@@ -413,10 +414,7 @@ public enum UEFIRebuild {
             case .section:
                 return try Bytes.sized(replacement, name: node.name)
             case .volume:
-                guard UInt64(replacement.count) == node.range.count else {
-                    throw Refusal("“\(node.name)” keeps its size: a volume put back whole cannot grow or shrink.")
-                }
-                return Bytes.volumeHeaderChecksummed(replacement)
+                return Bytes.volumeHeaderChecksummed(try volumeSized(replacement, name: node.name))
             default:
                 return replacement
             }
@@ -448,23 +446,121 @@ public enum UEFIRebuild {
                                       volumeRevision: volumeRevision(upper),
                                       ffsVersion: ffsVersion(upper, space: space))
             case .volume:
-                // Only a volume a section holds can grow: one in a region, or at
-                // the top of a space, is where the flash map is (§6.5, §7).
+                // A volume a section holds grows by blocks and the section takes
+                // the new size (§6.5); one in the file grows into the empty space
+                // after it, unless it holds the Volume Top File, whose end is
+                // pinned (§7). One at the top of a buffer does not grow.
                 let at = path.firstIndex { $0.id == parent.id } ?? 0
+                let growth: VolumeGrowth
+                if at > 0 && path[at - 1].kind == .section {
+                    growth = .inSection
+                } else if space == .file, !parent.flattened.contains(where: isVolumeTop) {
+                    growth = .intoEmptySpace
+                } else {
+                    growth = .none
+                }
                 return try rebuildVolume(parent, replacing: child, with: new, bytes: bytes, space: space,
-                                         isNested: at > 0 && path[at - 1].kind == .section)
+                                         growth: growth)
             default:
                 guard UInt64(new.count) == child.range.count else {
-                    let verb = UInt64(new.count) > child.range.count ? "grow" : "shrink"
-                    throw Refusal(
-                        "“\(child.name)” would have to \(verb) by 0x\(hex(UInt64(abs(new.count - Int(child.range.count))))) bytes inside “\(parent.name)”, which keeps its layout: a volume in a region keeps its size, because the flash map the firmware carries does not move with it (§7 of UPDATE_IN_PARENT.md)."
-                    )
+                    let result = try settled(child, with: new, among: parent.children, end: parent.range.upperBound,
+                                             endName: "the end of “\(parent.name)”", bytes: bytes)
+                    return Array(result[Int(parent.range.lowerBound)..<Int(parent.range.upperBound)])
                 }
                 var result = Array(bytes[Int(parent.range.lowerBound)..<Int(parent.range.upperBound)])
                 let at = Int(child.range.lowerBound - parent.range.lowerBound)
                 result.replaceSubrange(at..<(at + new.count), with: new)
                 return result
             }
+        }
+
+        // MARK: A structure at its own length (§7)
+
+        /// `bytes` with `new` in place of `child`, at exactly its own length: the
+        /// difference is taken from, or given back to, the empty bytes right
+        /// after it, so whatever follows them — the next volume, the next
+        /// region's contents — stays at its offset.
+        func settled(
+            _ child: UEFINode, with new: [UInt8], among siblings: [UEFINode],
+            end: UInt64, endName: String, bytes: [UInt8]
+        ) throws -> [UInt8] {
+            let old = child.range
+            let oldLength = old.upperBound - old.lowerBound
+            let newLength = UInt64(new.count)
+            if child.flattened.contains(where: isVolumeTop) {
+                throw Refusal(
+                    "“\(child.name)” holds the Volume Top File, which has to end at the top of the address space, so it keeps its size of 0x\(hex(oldLength)) bytes and this one is 0x\(hex(newLength)) (§7 of UPDATE_IN_PARENT.md)."
+                )
+            }
+            let next = siblings.first {
+                $0.space == child.space && $0.kind != .padding && !$0.range.isEmpty
+                    && $0.range.lowerBound >= old.upperBound
+            }
+            let limit = min(next?.range.lowerBound ?? end, end)
+            let empty = emptyByte(after: child, limit: limit, bytes: bytes)
+            var result = bytes
+            if newLength > oldLength {
+                let needed = newLength - oldLength
+                var room: UInt64 = 0
+                while old.upperBound + room < limit, bytes[Int(old.upperBound + room)] == empty { room += 1 }
+                guard room >= needed else {
+                    let before = next.map { "“\($0.name)”" } ?? endName
+                    throw Refusal(
+                        "“\(child.name)” is 0x\(hex(needed)) bytes longer than before, and only 0x\(hex(room)) empty bytes follow it before \(before), which stays where it is (§7 of UPDATE_IN_PARENT.md)."
+                    )
+                }
+                result.replaceSubrange(Int(old.lowerBound)..<Int(old.upperBound + needed), with: new)
+            } else {
+                let freed = [UInt8](repeating: empty, count: Int(oldLength - newLength))
+                result.replaceSubrange(Int(old.lowerBound)..<Int(old.upperBound), with: new + freed)
+            }
+            let change = newLength > oldLength
+                ? "0x\(hex(newLength - oldLength)) bytes longer, taken from the empty space after it"
+                : "0x\(hex(oldLength - newLength)) bytes shorter, given back to the empty space after it"
+            var warning = "“\(child.name)” is now 0x\(hex(newLength)) bytes, \(change); what follows stays where it was."
+            if child.kind == .volume {
+                warning += " The flash map the firmware carries (PCDs, vendor tables, an Insyde FDM) still gives its old size."
+            }
+            warnings.append(warning)
+            return result
+        }
+
+        /// What fills the bytes after `child`: the byte already there when it
+        /// is an erased one, otherwise the volume's own erase polarity.
+        func emptyByte(after child: UEFINode, limit: UInt64, bytes: [UInt8]) -> UInt8 {
+            if child.range.upperBound < limit {
+                let there = bytes[Int(child.range.upperBound)]
+                if there == 0xFF || there == 0x00 { return there }
+            }
+            if child.kind == .volume {
+                return (Bytes.u32(bytes, Int(child.range.lowerBound) + 0x2C) & FV.erasePolarity) != 0 ? 0xFF : 0x00
+            }
+            return 0xFF
+        }
+
+        /// A volume put back whole with a length its header does not give:
+        /// `FvLength` and the block map's one entry rewritten to it, when it is
+        /// a whole number of that entry's blocks.
+        func volumeSized(_ volume: [UInt8], name: String) throws -> [UInt8] {
+            guard volume.count >= Int(FV.headerSize) else {
+                throw Refusal("“\(name)” is shorter than a volume header.")
+            }
+            let length = UInt64(volume.count)
+            var declared: UInt64 = 0
+            for index in 0..<8 { declared |= UInt64(volume[0x20 + index]) << (8 * UInt64(index)) }
+            guard declared != length else { return volume }
+            guard let blockLength = Bytes.oneBlockLength(volume, at: 0, end: volume.count),
+                  length % blockLength == 0, length / blockLength <= UInt64(UInt32.max)
+            else {
+                throw Refusal(
+                    "“\(name)” is 0x\(hex(length)) bytes, and its header says 0x\(hex(declared)): a volume is whole blocks of its block map, and this one cannot be made to say the new length."
+                )
+            }
+            var bytes = volume
+            Bytes.put(length, count: 8, at: 0x20, in: &bytes)
+            Bytes.put32(UInt32(length / blockLength), at: Int(FV.headerSize), in: &bytes)
+            warnings.append("“\(name)” said it was 0x\(hex(declared)) bytes: its header now gives 0x\(hex(length)).")
+            return bytes
         }
 
         /// A run of sections laid out again from its first byte, four-byte
@@ -484,9 +580,18 @@ public enum UEFIRebuild {
 
         // MARK: Volumes (§6.3)
 
+        /// Whether a volume that runs out of free space may grow, and into what.
+        enum VolumeGrowth {
+            case none
+            /// Held by a section, which takes the new size (§6.5).
+            case inSection
+            /// In the file: into the empty bytes after it, which `settled` checks (§7).
+            case intoEmptySpace
+        }
+
         func rebuildVolume(
             _ volume: UEFINode, replacing child: UEFINode, with new: [UInt8],
-            bytes: [UInt8], space: ByteSpace, isNested: Bool
+            bytes: [UInt8], space: ByteSpace, growth: VolumeGrowth
         ) throws -> [UInt8] {
             let start = volume.range.lowerBound
             let body = volume.body
@@ -573,9 +678,15 @@ public enum UEFIRebuild {
             let newAbsorbStart = Int64(absorbStart) + shift
 
             if newAbsorbStart > Int64(absorbEnd) {
-                if isNested, padBeforeTop == nil, absorbEnd == body.upperBound {
+                // Growing into the empty space needs some to be there at all;
+                // with none the refusal below says what the volume has.
+                let canGrow = growth == .inSection
+                    || (growth == .intoEmptySpace && Int(volume.range.upperBound) < bytes.count
+                        && [0x00, 0xFF].contains(bytes[Int(volume.range.upperBound)]))
+                if canGrow, padBeforeTop == nil, absorbEnd == body.upperBound {
                     return try grownVolume(volume, replacing: child, with: new, bytes: bytes, space: space,
-                                           needed: UInt64(newAbsorbStart - Int64(absorbEnd)))
+                                           needed: UInt64(newAbsorbStart - Int64(absorbEnd)),
+                                           saysSo: growth == .inSection)
                 }
                 throw Refusal(
                     "“\(volume.name)” has 0x\(hex(absorbEnd - absorbStart)) bytes free where it can take room, and the change needs 0x\(hex(UInt64(newAbsorbStart - Int64(absorbStart)))) (§6.3 of UPDATE_IN_PARENT.md)."
@@ -621,23 +732,17 @@ public enum UEFIRebuild {
         /// longer volume — whose free space now runs to its new end.
         func grownVolume(
             _ volume: UEFINode, replacing child: UEFINode, with new: [UInt8],
-            bytes: [UInt8], space: ByteSpace, needed: UInt64
+            bytes: [UInt8], space: ByteSpace, needed: UInt64, saysSo: Bool
         ) throws -> [UInt8] {
             let start = Int(volume.range.lowerBound)
             let end = Int(volume.range.upperBound)
-            let headerLength = Int(bytes[start + 0x30]) | Int(bytes[start + 0x31]) << 8
-            let map = start + Int(FV.headerSize)
-            guard headerLength == Int(FV.headerSize + 2 * FV.blockMapEntrySize),
-                  end - start >= headerLength,
-                  Bytes.u32(bytes, map + 8) == 0, Bytes.u32(bytes, map + 12) == 0
-            else {
+            guard let blockLength = Bytes.oneBlockLength(bytes, at: start, end: end) else {
                 throw Refusal(
                     "“\(volume.name)” has no room for 0x\(hex(needed)) more bytes, and its block map is not one a new size can be written into (§6.5 of UPDATE_IN_PARENT.md)."
                 )
             }
-            let blockLength = UInt64(Bytes.u32(bytes, map + 4))
             let length = UInt64(volume.range.count)
-            guard blockLength > 0, length % blockLength == 0 else {
+            guard length % blockLength == 0 else {
                 throw Refusal(
                     "“\(volume.name)” has no room for 0x\(hex(needed)) more bytes, and its size is not a whole number of its blocks (§6.5 of UPDATE_IN_PARENT.md)."
                 )
@@ -668,9 +773,11 @@ public enum UEFIRebuild {
                 tail.id = NodeID([-1])
                 bigger.children.append(tail)
             }
-            warnings.append("“\(volume.name)” grew by 0x\(hex(extra)) bytes to make room.")
+            // A volume growing into the empty space after it is said by
+            // `settled`, with what that means for the flash map.
+            if saysSo { warnings.append("“\(volume.name)” grew by 0x\(hex(extra)) bytes to make room.") }
             return try rebuildVolume(bigger, replacing: child, with: new, bytes: grownBytes, space: space,
-                                     isNested: false)
+                                     growth: .none)
         }
 
         func isVolumeTop(_ node: UEFINode) -> Bool {
@@ -847,6 +954,20 @@ public enum UEFIRebuild {
             var bytes = guid + [0, 0, FFS.padType, 0, 0, 0, 0, empty == 0xFF ? 0xF8 : 0x07]
             bytes += [UInt8](repeating: empty, count: size - Int(FFS.headerSize))
             return (try? file(bytes, name: "Pad", volumeRevision: revision, ffsVersion: 2)) ?? bytes
+        }
+
+        /// The block length of a volume at `start` whose block map is one
+        /// entry and its terminator — the only kind a new length can be written
+        /// into (§6.5). Nil for any other.
+        static func oneBlockLength(_ bytes: [UInt8], at start: Int, end: Int) -> UInt64? {
+            guard end - start >= Int(FV.headerSize + 2 * FV.blockMapEntrySize) else { return nil }
+            let headerLength = Int(bytes[start + 0x30]) | Int(bytes[start + 0x31]) << 8
+            let map = start + Int(FV.headerSize)
+            guard headerLength == Int(FV.headerSize + 2 * FV.blockMapEntrySize),
+                  u32(bytes, map + 8) == 0, u32(bytes, map + 12) == 0
+            else { return nil }
+            let blockLength = UInt64(u32(bytes, map + 4))
+            return blockLength > 0 ? blockLength : nil
         }
 
         static func volumeHeaderChecksummed(_ volume: [UInt8]) -> [UInt8] {

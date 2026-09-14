@@ -43,12 +43,18 @@ final class UEFIRebuildTests: XCTestCase {
 
     private func plan(_ replacement: [UInt8], at target: UEFIRebuild.Target, in file: [UInt8],
                       file line: UInt = #line) throws -> [UInt8] {
+        try planned(replacement, at: target, in: file, file: line).file
+    }
+
+    /// The file with the plan written, and what the plan said.
+    private func planned(_ replacement: [UInt8], at target: UEFIRebuild.Target, in file: [UInt8],
+                         file line: UInt = #line) throws -> (file: [UInt8], warnings: [String]) {
         switch UEFIRebuild.plan(replacement, at: target, in: file) {
         case .success(let plan):
             XCTAssertTrue(plan.warnings.contains(UEFIRebuild.rangesNotChecked), line: line)
             var result = file
             result.replaceSubrange(Int(plan.offset)..<(Int(plan.offset) + plan.bytes.count), with: plan.bytes)
-            return result
+            return (result, plan.warnings)
         case .failure(let refusal):
             XCTFail("refused: \(refusal.message)", line: line)
             throw refusal
@@ -163,13 +169,124 @@ final class UEFIRebuildTests: XCTestCase {
         XCTAssertTrue(message.contains("runs in place"), message)
     }
 
-    func testAVolumeAtTheTopOfTheFileKeepsItsSize() throws {
+    /// A volume that fills the file has no empty space after it to grow into.
+    func testAVolumeWithNothingAfterItCannotGrow() throws {
         let image = TestImage.volume(length: 0x400, files: [fileA])
         let volume = UEFIParser.parse(image).roots[0]
+        let longer = TestImage.volume(length: 0x800, files: [fileA])
 
-        let message = try XCTUnwrap(refusal(image + [0, 0, 0, 0, 0, 0, 0, 0],
-                                            at: .init(space: .file, range: volume.range), in: image))
-        XCTAssertTrue(message.contains("keeps its size"), message)
+        let message = try XCTUnwrap(refusal(longer, at: .init(space: .file, range: volume.range), in: image))
+        XCTAssertTrue(message.contains("only 0x0 empty bytes follow it before the end of the file"), message)
+    }
+
+    // MARK: - A volume at its own length (§7)
+
+    private let secondVolume = TestImage.volume(length: 0x400, files: [
+        TestImage.file(guid: KnownGUIDs.guid("33333333-4444-5555-6666-777777777777"),
+                       body: [UInt8](repeating: 0x5A, count: 24))
+    ])
+
+    /// `first`, `gap` erased bytes, and a second volume that has to stay put.
+    private func volumes(_ first: [UInt8], gap: Int) -> [UInt8] {
+        first + [UInt8](repeating: 0xFF, count: gap) + secondVolume
+    }
+
+    /// The structures at the top of a file: volumes with padding around them
+    /// are held by one image node.
+    private func top(_ image: [UInt8]) -> [UEFINode] {
+        let roots = UEFIParser.parse(image).roots
+        return roots.count == 1 && roots[0].kind == .uefiImage ? roots[0].children : roots
+    }
+
+    /// A volume put back longer is written at its new length; the empty space
+    /// after it gives up the difference, and the volume after that stays where
+    /// it was, byte for byte.
+    func testAVolumePutBackLongerTakesTheEmptySpaceAfterIt() throws {
+        let image = volumes(TestImage.volume(length: 0x400, files: [fileA]), gap: 0x800)
+        let volume = top(image)[0]
+        let longer = TestImage.volume(length: 0x800, files: [fileA, fileB()])
+
+        let (rebuilt, warnings) = try planned(longer, at: .init(space: .file, range: volume.range), in: image)
+
+        XCTAssertEqual(damage(UEFIParser.parse(rebuilt)), [])
+        let after = top(rebuilt)
+        XCTAssertEqual(after.map(\.kind), [.volume, .padding, .volume])
+        guard after.count == 3 else { return }
+        XCTAssertEqual(after[0].range, 0..<0x800)
+        XCTAssertEqual(after[1].range, 0x800..<0xC00)
+        XCTAssertEqual(bytes(rebuilt, 0xC00..<0x1000), secondVolume, "the next volume did not move")
+        XCTAssertEqual(rebuilt.count, image.count)
+        XCTAssertTrue(warnings.contains { $0.contains("flash map") }, "\(warnings)")
+    }
+
+    /// A volume put back shorter leaves its old tail erased, as padding.
+    func testAVolumePutBackShorterGivesTheRestToTheEmptySpace() throws {
+        let image = volumes(TestImage.volume(length: 0x400, files: [fileA]), gap: 0x400)
+        let volume = top(image)[0]
+        let shorter = TestImage.volume(length: 0x200, files: [fileA])
+
+        let rebuilt = try plan(shorter, at: .init(space: .file, range: volume.range), in: image)
+
+        XCTAssertEqual(damage(UEFIParser.parse(rebuilt)), [])
+        let after = top(rebuilt)
+        XCTAssertEqual(after.map(\.kind), [.volume, .padding, .volume])
+        guard after.count == 3 else { return }
+        XCTAssertEqual(after[0].range, 0..<0x200)
+        XCTAssertEqual(after[1].range, 0x200..<0x800)
+        XCTAssertTrue(after[1].isErased)
+        XCTAssertEqual(bytes(rebuilt, 0x800..<0xC00), secondVolume)
+    }
+
+    /// Bytes added to a volume in its tab without touching its header: the
+    /// header is made to say the new length, in whole blocks.
+    func testAVolumeWhoseHeaderDoesNotSayItsLengthIsGivenIt() throws {
+        let image = volumes(TestImage.volume(length: 0x400, files: [fileA], blockMapLength: 0x100), gap: 0x400)
+        let volume = top(image)[0]
+        let longer = bytes(image, volume.range) + [UInt8](repeating: 0xFF, count: 0x200)
+
+        let (rebuilt, warnings) = try planned(longer, at: .init(space: .file, range: volume.range), in: image)
+
+        XCTAssertEqual(damage(UEFIParser.parse(rebuilt)), [])
+        XCTAssertEqual(top(rebuilt).first?.range, 0..<0x600)
+        XCTAssertTrue(warnings.contains { $0.contains("header now gives 0x600") }, "\(warnings)")
+
+        let odd = bytes(image, volume.range) + [UInt8](repeating: 0xFF, count: 8)
+        let message = try XCTUnwrap(refusal(odd, at: .init(space: .file, range: volume.range), in: image))
+        XCTAssertTrue(message.contains("whole blocks"), message)
+    }
+
+    func testAVolumeLongerThanTheEmptySpaceAfterItIsRefused() throws {
+        let image = volumes(TestImage.volume(length: 0x400, files: [fileA]), gap: 0x100)
+        let volume = top(image)[0]
+        let longer = TestImage.volume(length: 0x800, files: [fileA])
+
+        let message = try XCTUnwrap(refusal(longer, at: .init(space: .file, range: volume.range), in: image))
+        XCTAssertTrue(message.contains("only 0x100 empty bytes follow it"), message)
+    }
+
+    func testAVolumeHoldingTheVolumeTopFileKeepsItsSize() throws {
+        let vtf = TestImage.volumeTopFile(size: 0x100)
+        let image = volumes(TestImage.volume(length: 0x800, files: [fileA], lastFile: vtf), gap: 0x800)
+        let volume = self.top(image)[0]
+        let longer = TestImage.volume(length: 0x1000, files: [fileA], lastFile: vtf)
+
+        let message = try XCTUnwrap(refusal(longer, at: .init(space: .file, range: volume.range), in: image))
+        XCTAssertTrue(message.contains("Volume Top File"), message)
+    }
+
+    /// A file that outgrows a volume in the file grows the volume by whole
+    /// blocks into the empty space after it.
+    func testAVolumeInTheFileGrowsIntoTheEmptySpaceAfterIt() throws {
+        let image = volumes(TestImage.volume(length: 0x100, files: [fileA]), gap: 0x400)
+        let node = try XCTUnwrap(top(image).first?.children.first { $0.kind == .file })
+        let big = TestImage.file(body: [UInt8](repeating: 0x22, count: 0x180))
+
+        let (rebuilt, warnings) = try planned(big, at: .init(space: .file, range: node.range), in: image)
+
+        XCTAssertEqual(damage(UEFIParser.parse(rebuilt)), [])
+        XCTAssertEqual(top(rebuilt).first?.range, 0..<0x200, "0x48 + 0x198 = 0x1E0 takes two blocks of 0x100")
+        XCTAssertEqual(bytes(rebuilt, 0x500..<0x900), secondVolume)
+        XCTAssertTrue(warnings.contains { $0.contains("taken from the empty space") }, "\(warnings)")
     }
 
     /// The Volume Top File stays flush with the end; the pad file in front of it
