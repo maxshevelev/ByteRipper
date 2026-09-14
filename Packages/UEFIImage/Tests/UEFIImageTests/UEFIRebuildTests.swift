@@ -571,6 +571,24 @@ final class UEFIRebuildTests: XCTestCase {
         XCTAssertFalse(plan.warnings.contains(UEFIRebuild.rangesNotChecked), "they were checked")
     }
 
+    /// Two ranges of one list with one name — two entries of a flash device
+    /// map — written through by one change are one warning, not two.
+    func testOneNameWrittenThroughTwiceIsOneWarning() {
+        let (image, edited, target, body) = editedFile()
+        let half = body.lowerBound + UInt64(body.count / 2)
+        let ranges = [
+            UEFIRebuild.ProtectedRange(kind: .vendorHash, range: body.lowerBound..<half, name: "Insyde flash device map range"),
+            UEFIRebuild.ProtectedRange(kind: .vendorHash, range: half..<body.upperBound, name: "Insyde flash device map range")
+        ]
+        let header = UEFIRebuild.ProtectedRange(kind: .vendorHash, range: (body.lowerBound - 0x18)..<body.lowerBound,
+                                                name: "Insyde flash device map range")
+
+        guard case .success(let plan) = UEFIRebuild.plan(edited, at: target, in: image, protected: ranges + [header])
+        else { return XCTFail("refused") }
+        XCTAssertEqual(plan.warnings.filter { $0.contains("Insyde flash device map range") }.count, 1,
+                       "\(plan.warnings)")
+    }
+
     /// Ranges the change does not write into say nothing — nor does a range
     /// that only sits between two changed bytes it does not contain.
     func testRangesTheChangeDoesNotTouchSayNothing() {

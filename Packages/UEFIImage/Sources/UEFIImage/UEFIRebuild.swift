@@ -200,9 +200,11 @@ public enum UEFIRebuild {
                     "The change writes at 0x\(hex(max(hit.lowerBound, range.range.lowerBound))) inside “\(range.name)”, part of the Boot Guard IBB: the processor checks it before the firmware runs, and an edit there stops the platform starting (§6.4 of UPDATE_IN_PARENT.md). Nothing was changed."
                 )
             case .vendorHash:
-                warnings.append(
-                    "The change writes inside “\(range.name)”: the hash the firmware checks it against no longer matches."
-                )
+                // A list names several ranges one way — every entry of an
+                // Insyde flash device map is its "range" — and a change
+                // through two of them is still one thing to say.
+                let warning = "The change writes inside “\(range.name)”: the hash the firmware checks it against no longer matches."
+                if !warnings.contains(warning) { warnings.append(warning) }
             }
         }
         return warnings
@@ -846,7 +848,7 @@ public enum UEFIRebuild {
             let size = ByteCountFormatter.string(fromByteCount: Int64(buffer.count), countStyle: .file)
             report.phase(effort == .maximum
                 ? "Compressing “\(section.name)” again at the maximum level (\(size))"
-                : "Compressing “\(section.name)” again (\(size))")
+                : "Compressing “\(section.name)” (\(size))")
             let report = self.report
             let stream: [UInt8]
             do {
