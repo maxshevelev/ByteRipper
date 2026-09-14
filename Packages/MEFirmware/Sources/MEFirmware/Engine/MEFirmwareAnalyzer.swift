@@ -1099,7 +1099,7 @@ public actor MEFirmwareAnalyzer {
     /// size (chunk directory included) bounds the slice — that is exactly the
     /// `compressed_size` upstream passes (MEA.py 6906/7186). Never throws; a nil
     /// dictionary set skips everything.
-    private static func huffmanValidationIssues(
+    static func huffmanValidationIssues(
         for codePartition: CodePartition, in region: Data, baseOffset: Int,
         variant: String, major: Int, minor: Int,
         dictionaries: HuffmanDictionaries?) -> [Issue] {

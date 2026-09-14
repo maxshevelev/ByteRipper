@@ -193,6 +193,88 @@ final class HuffmanTests: XCTestCase {
         XCTAssertFalse(result.clean)
     }
 
+    // MARK: The module check, with a dictionary at hand
+
+    /// A `$CPD` with one Huffman module "kernel" at 0x100 — `body` behind a
+    /// one-chunk directory — and its `.met`, whose Module Attributes declare
+    /// the compressed and uncompressed sizes; and a region holding it, cut to
+    /// `regionSize` when given.
+    private static func huffmanPartition(body: Data, regionSize: Int? = nil)
+        -> (partition: CodePartition, region: Data) {
+        let stream = module(chunks: [(flag: 0x20, offset: 0)], bodies: [body])
+        let attributes = ModuleAttributesExtension(
+            compression: 1, encryption: 0, uncompressedSize: body.count,
+            compressedSize: stream.count, deviceID: 0, vendorID: 0x8086, moduleHash: "")
+        let partition = CodePartition(
+            name: "FTPR", offset: 0, headerVersion: 2, headerLength: 0x14, entryCount: 2,
+            checksumValid: true,
+            modules: [
+                CPDModule(id: 0, name: "kernel", offset: 0x100, isHuffman: true, size: body.count),
+                CPDModule(id: 1, name: "kernel.met", offset: 0x80, isHuffman: false, size: 0x60,
+                          extensions: [CPDExtension(id: 0, tag: 0x0A, size: 0x60, offset: 0x80,
+                                                    moduleAttributes: attributes)])
+            ])
+        var region = Data(count: 0x100)
+        region.append(stream)
+        if let regionSize { region = region.prefix(regionSize) }
+        return (partition, region)
+    }
+
+    private static func huffmanIssues(_ partition: CodePartition, _ region: Data,
+                                      dictionary: HuffmanDictionary?) -> [Issue] {
+        var dictionaries = HuffmanDictionaries()
+        dictionaries.version12 = dictionary
+        return MEFirmwareAnalyzer.huffmanValidationIssues(
+            for: partition, in: region, baseOffset: 0,
+            variant: "CSME", major: 15, minor: 0,
+            dictionaries: dictionary == nil ? nil : dictionaries)
+    }
+
+    /// A module the dictionary decodes cleanly to its declared size says
+    /// nothing.
+    func testTheModuleCheckPassesACleanModule() {
+        let (partition, region) = Self.huffmanPartition(body: Self.content(0x1000))
+        XCTAssertEqual(Self.huffmanIssues(partition, region, dictionary: Self.identityDictionary()), [])
+    }
+
+    /// A codeword the dictionary does not know is an issue 7 that names the
+    /// module it is in.
+    func testTheModuleCheckNamesAModuleWithUnknownCodewords() throws {
+        var body = Data(repeating: 0xAA, count: 0x1000)
+        body[10] = 0x41
+        let (partition, region) = Self.huffmanPartition(body: body)
+
+        let issues = Self.huffmanIssues(partition, region,
+                                        dictionary: Self.identityDictionary(unknown: [0x41]))
+
+        let issue = try XCTUnwrap(issues.first)
+        XCTAssertEqual(issues.count, 1)
+        XCTAssertEqual(issue.id, 7)
+        XCTAssertEqual(issue.module, "kernel")
+        XCTAssertTrue(issue.message.contains("unknown codewords"), issue.message)
+    }
+
+    /// A module whose compressed bytes run past the region cannot be checked,
+    /// and says which module that is.
+    func testTheModuleCheckNamesAModuleCutShortByTheRegion() throws {
+        let (partition, region) = Self.huffmanPartition(body: Self.content(0x1000), regionSize: 0x800)
+
+        let issue = try XCTUnwrap(
+            Self.huffmanIssues(partition, region, dictionary: Self.identityDictionary()).first)
+        XCTAssertEqual(issue.id, 7)
+        XCTAssertEqual(issue.module, "kernel")
+        XCTAssertTrue(issue.message.contains("extends past the end"), issue.message)
+    }
+
+    /// With no dictionary at hand there is nothing to check a module against,
+    /// so there is no issue either.
+    func testTheModuleCheckNeedsADictionary() {
+        var body = Data(repeating: 0xAA, count: 0x1000)
+        body[10] = 0x41
+        let (partition, region) = Self.huffmanPartition(body: body)
+        XCTAssertEqual(Self.huffmanIssues(partition, region, dictionary: nil), [])
+    }
+
     func testDecodeEmptyDecompressedSizeYieldsEmpty() {
         let dict = Self.identityDictionary()
         let result = HuffmanDecoder.decompress(
