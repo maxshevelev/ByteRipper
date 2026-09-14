@@ -95,14 +95,18 @@ public enum UEFIPresenter {
         }
     }
 
-    /// A compressed section that opened exports everything it decompressed
-    /// to; a node inside one exports its own bytes from that buffer. Nothing
-    /// else has anything decompressed to save — its bytes are the file's, and
-    /// the dump already exports those.
+    /// A compressed section exports everything it decompresses to — one that
+    /// opened, and one still closed that would: the row already says it is
+    /// compressed, and the buffer is decoded when the export reads it. A node
+    /// inside one exports its own bytes from that buffer. Nothing else has
+    /// anything decompressed to save — its bytes are the file's, and the dump
+    /// already exports those.
     public static func decompressedExport(for node: UEFINode) -> DecompressedExport? {
         let base = (node.name.isEmpty ? "decompressed" : node.name)
             .map { "/:".contains($0) ? "_" : $0 }
-        if node.kind == .section, node.children.contains(where: { $0.space != node.space }) {
+        let opened = node.children.contains { $0.space != node.space }
+        let closed = node.compression?.decodes == true && node.isExpandable && node.children.isEmpty
+        if node.kind == .section, opened || closed {
             return DecompressedExport(
                 space: node.space.inside(sectionAt: node.header.lowerBound),
                 range: nil,

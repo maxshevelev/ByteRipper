@@ -459,7 +459,9 @@ SKU) can then read LZMA modules too.
 `ToolHost.exportFile(_:suggestedName:)` already exists. A compressed section,
 or a node inside one, gets "Export Decompressed Body…" in the tree's context
 menu, and beside it "Open Decompressed Body in New Tab" ("… Bytes …" for a node
-inside). That one goes through `ToolHost.openInNewTab(_:named:)`: the app opens
+inside). A compressed section still closed in the tree offers both too — the
+row already says it is compressed — and choosing one decodes the body then,
+without opening the row. That one goes through `ToolHost.openInNewTab(_:named:)`: the app opens
 the bytes as an untitled copy in a sibling tab, the way Open Zone in a New Tab
 does, named `<dump stem>_<node>.bin`, and without the window's bookmarks, whose
 offsets are the dump's.

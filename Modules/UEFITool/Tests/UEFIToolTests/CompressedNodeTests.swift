@@ -126,4 +126,32 @@ final class CompressedNodeTests: XCTestCase {
         XCTAssertNil(UEFIPresenter.decompressedExport(for: TestUEFI.file().node),
                      "a node of the file has nothing decompressed to save")
     }
+
+    /// The row says it is compressed before it is opened, so the export is
+    /// offered then — and reading it decodes the body.
+    func testAClosedCompressedSectionExportsItsBodyDecodedOnDemand() throws {
+        let built = built()
+        var closed = built.section
+        closed.children = []
+        closed.isExpandable = true
+        closed.compression = SectionCompression(algorithm: "LZMA", decodes: true)
+
+        let body = try XCTUnwrap(UEFIPresenter.decompressedExport(for: closed))
+        XCTAssertEqual(body.space, .decompressed(chain: [0]))
+        XCTAssertNil(body.range)
+        XCTAssertEqual(body.openTitle, "Open Decompressed Body in New Tab")
+        let buffer = try XCTUnwrap(built.readers.reader(for: body.space))
+        XCTAssertEqual(buffer.bytes(buffer.all), TestUEFI.file().bytes)
+
+        var undecodable = closed
+        undecodable.compression = SectionCompression(algorithm: "Unknown", decodes: false)
+        undecodable.isExpandable = false
+        XCTAssertNil(UEFIPresenter.decompressedExport(for: undecodable),
+                     "a section the decoder cannot read has nothing to save")
+
+        var failed = closed
+        failed.isExpandable = false
+        XCTAssertNil(UEFIPresenter.decompressedExport(for: failed),
+                     "one that was opened and did not decompress offers nothing either")
+    }
 }

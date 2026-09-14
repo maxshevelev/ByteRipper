@@ -716,7 +716,7 @@ private struct ChecksumPass: Sendable {
             guard let self else { return }
             self.controller.endBusy()
             guard let bytes else {
-                self.fail("The section no longer decompresses.")
+                self.fail("The section does not decompress.")
                 return
             }
             await use(export, bytes)
