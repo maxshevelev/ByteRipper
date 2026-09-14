@@ -587,7 +587,8 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
             as? NSTableCellView
             ?? ToolPanelTable.makeCell(identifier: column.identifier,
                                        warning: column.identifier == Column.type,
-                                       marker: column.identifier == Column.type)
+                                       marker: column.identifier == Column.type,
+                                       badges: column.identifier == Column.type)
 
         if tableView === problems {
             guard row < display.problems.count else { return nil }
@@ -610,6 +611,7 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
         if column.identifier == Column.type {
             let marks = FITRowMarks.marks(for: entry, problems: display.problems)
             ToolPanelTable.setProblem(marks.problem, on: cell)
+            ToolPanelTable.setBadges(marks.roles, on: cell)
             let verdict = FITRowMarks.verdict(of: entry.latestState)
             ToolPanelTable.setVerdict(verdict?.mark, toolTip: verdict?.toolTip, on: cell)
         }

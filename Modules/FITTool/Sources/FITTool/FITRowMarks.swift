@@ -14,8 +14,22 @@ import UEFIImage
 public enum FITRowMarks {
     /// Every mark this table draws — what its legend lists.
     public static let legendMarks: [ToolRowMark] = [
-        .newest, .newerListed, .newerMaybe, .error, .caution
+        .newest, .newerListed, .newerMaybe, .error, .caution, .holdsChecks
     ]
+
+    /// The words on the badge of a row whose component holds what the IBB is
+    /// checked against — the Boot Guard Key Manifest and Boot Policy — nil for
+    /// every other row.
+    public static func holdsChecks(type: UInt8) -> String? {
+        switch type {
+        case FIT.keyManifestType:
+            return "Holds the Boot Guard Key Manifest: the key the Boot Policy is signed with"
+        case FIT.bootPolicyType:
+            return "Holds the Boot Guard Boot Policy: the IBB segments and the hash they are checked against"
+        default:
+            return nil
+        }
+    }
 
     /// The row's marks, from its own problems in `problems` and what it points
     /// at.
@@ -36,7 +50,8 @@ public enum FITRowMarks {
                 cautions.append("The microcode image cannot be read whole, so its checksum is not checked")
             }
         }
-        return ToolRowMarks(problem: .worst(errors: errors, cautions: cautions))
+        let roles = holdsChecks(type: row.model.entry.type).map { [ToolRowMarks.Role.holdsChecks($0)] } ?? []
+        return ToolRowMarks(problem: .worst(errors: errors, cautions: cautions), roles: roles)
     }
 
     /// The verdict a row's "latest" state is drawn as, and what the pointer

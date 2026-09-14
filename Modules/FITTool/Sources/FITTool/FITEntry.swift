@@ -113,6 +113,8 @@ public enum FIT {
     public static let startupACMType: UInt8 = 0x02
     public static let tpmPolicyType: UInt8 = 0x08
     public static let txtPolicyType: UInt8 = 0x0A
+    public static let keyManifestType: UInt8 = 0x0B
+    public static let bootPolicyType: UInt8 = 0x0C
     public static let cseSecureBootType: UInt8 = 0x10
     public static let emptyType: UInt8 = 0x7F
 

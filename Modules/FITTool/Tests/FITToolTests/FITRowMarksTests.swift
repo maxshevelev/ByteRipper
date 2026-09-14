@@ -55,6 +55,25 @@ final class FITRowMarksTests: XCTestCase {
         XCTAssertEqual(caution.lines, ["The reserved byte is 0x1, and should be zero"])
     }
 
+    /// The Key Manifest and Boot Policy rows hold what the IBB is checked
+    /// against, and wear the badge that says so; no other row does.
+    func testTheBootGuardManifestRowsHoldChecks() {
+        let shown = display([
+            TestFIT.Row(FIT.microcodeType, target: microcode),
+            TestFIT.Row(FIT.keyManifestType, target: 0x3000),
+            TestFIT.Row(FIT.bootPolicyType, target: 0x4000)
+        ])
+
+        XCTAssertEqual(marks(shown, row: 0).roles, [])
+        XCTAssertEqual(marks(shown, row: 1).roles, [])
+        guard case .holdsChecks(let key)? = marks(shown, row: 2).roles.first,
+              case .holdsChecks(let policy)? = marks(shown, row: 3).roles.first
+        else { return XCTFail("the manifest rows wear the badge") }
+        XCTAssertTrue(key.contains("Key Manifest"), key)
+        XCTAssertTrue(policy.contains("Boot Policy"), policy)
+        XCTAssertTrue(FITRowMarks.legendMarks.contains(.holdsChecks))
+    }
+
     /// Each "latest" state is a verdict of the shared catalogue; no state, no
     /// verdict.
     func testTheLatestStatesAreTheCataloguesVerdicts() {
@@ -64,6 +83,7 @@ final class FITRowMarksTests: XCTestCase {
                        "Catalogue lists a newer revision (r.F0)")
         XCTAssertEqual(FITRowMarks.verdict(of: .undecided(newestRevision: 0xF0))?.mark, .newerMaybe)
         XCTAssertNil(FITRowMarks.verdict(of: .notRated))
-        XCTAssertTrue(FITRowMarks.legendMarks.allSatisfy { [.verdict, .problem].contains($0.channel) })
+        XCTAssertTrue(FITRowMarks.legendMarks.allSatisfy { [.verdict, .problem, .role].contains($0.channel) },
+                      "no paint: the table has nothing for Show Markings to hide")
     }
 }

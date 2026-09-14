@@ -234,9 +234,9 @@ four marks in its legend. The ME tree takes its marks with step 3, which draws n
 yet. Step 4 is in for the FIT table's problems and legend (2026-09-14):
 `FITRowMarks` decides a row's problem and verdict, the verdicts are marks of the
 shared catalogue, and the legend lists the verdicts and the two problems with no
-Show Markings switch, since the table paints nothing. `lock.shield` on the Key
-Manifest and Boot Policy rows, and the Boot Guard background of step 5, are not
-drawn in the FIT table yet. Where the code differs from the
+Show Markings switch, since the table paints nothing. `lock.shield` is on the
+Key Manifest and Boot Policy rows and in the legend. The Boot Guard background
+and `shield.lefthalf.filled` of step 5 are not drawn in the FIT table yet. Where the code differs from the
 text: a compressed section carries `UEFINode.compression` (algorithm, and
 whether it decodes), set by the parser, which is what the badge is read from;
 the legend's lines are plain views with every edge constrained rather than
