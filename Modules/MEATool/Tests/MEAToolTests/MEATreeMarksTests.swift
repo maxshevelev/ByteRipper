@@ -129,6 +129,28 @@ final class MEATreeMarksTests: XCTestCase {
         XCTAssertFalse(try root("RBE/PM Metadata", in: plain).marks.hasRail)
     }
 
+    /// The hashes no module accounts for are listed under the metadata table,
+    /// with its count in the table's detail; with every hash accounted for the
+    /// detail says so and there is nothing to list.
+    func testTheUnmatchedHashesAreListedUnderTheMetadataTable() throws {
+        let left = MEACurator.present(try analysis([
+            "rbePmMetadata": [metadataRow],
+            "unmatchedMetadataHashes": ["ABCDEF0123456789ABCDEF"],
+        ]))
+        let group = try root("RBE/PM Metadata", in: left)
+        XCTAssertEqual(group.fields.first { $0.label == "Unmatched Hashes" }?.value, "1")
+        let list = try XCTUnwrap(group.children.first { $0.title == "Unmatched Hashes" })
+        XCTAssertEqual(list.children.map(\.title), ["Hash 1"])
+        XCTAssertEqual(list.children.first?.fields, [MEAField("Hash", "ABCDEF0123456789ABCDEF")])
+
+        let none = MEACurator.present(try analysis([
+            "rbePmMetadata": [metadataRow], "unmatchedMetadataHashes": [],
+        ]))
+        let accounted = try root("RBE/PM Metadata", in: none)
+        XCTAssertEqual(accounted.fields.first { $0.label == "Unmatched Hashes" }?.value, "None")
+        XCTAssertNil(accounted.children.first { $0.title == "Unmatched Hashes" })
+    }
+
     /// The manifest holds the hashes the modules are checked against, and says
     /// so when its own signature does not check out.
     func testTheManifestHoldsChecksAndSaysWhenItsSignatureFails() throws {

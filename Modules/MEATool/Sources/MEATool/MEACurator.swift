@@ -516,9 +516,28 @@ public enum MEACurator {
             return MEANode(path: [], title: "R\(r.variant.rawValue.uppercased()) #\(r.id)",
                            fields: fields, marks: marks)
         }
+        // Upstream's leftover report: what the rbe / pm tables list that no
+        // module of the image hashes to.
+        var fields: [MEAField] = []
+        var nodes = children
+        if let unmatched = a.unmatchedMetadataHashes {
+            fields.append(MEAField("Unmatched Hashes", unmatched.isEmpty ? "None" : String(unmatched.count)))
+            if !unmatched.isEmpty {
+                let rows = unmatched.enumerated().map { i, hash in
+                    MEANode(path: [], title: "Hash \(i + 1)", subtitle: String(hash.prefix(16)) + "…",
+                            fields: [MEAField("Hash", hash)], marks: marks)
+                }
+                nodes.append(MEANode(
+                    path: [], title: "Unmatched Hashes", subtitle: String(unmatched.count),
+                    fields: [MEAField("Meaning",
+                        "Listed by the rbe or pm metadata table, and hashed to by no module of the image — "
+                            + "most often an encrypted module (NFTP pavp, PCOD), which cannot be hashed as it is loaded")],
+                    children: rows, marks: marks))
+            }
+        }
         return MEANode(path: [], title: "RBE/PM Metadata",
                        subtitle: MEAText.count(children.count, "row"),
-                       children: children, marks: marks)
+                       fields: fields, children: nodes, marks: marks)
     }
 
     /// What the checksums group is called, and what its rows read before they
