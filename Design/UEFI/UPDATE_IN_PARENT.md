@@ -117,6 +117,19 @@ Save and Save As work as on any untitled document and do not touch the link: a
 reader may keep a copy of the module on disk and still put it back. Saving does
 not count as updating — the baseline moves only on an update.
 
+### 2.5. Modified bytes and Revert to Original
+
+The tab keeps the bytes it was opened with (`DocumentOrigin.original`). Until
+it is saved to a file, its bytes are painted modified — red, in the hex view and
+on the minimap — against those, as a file's are against the file on disk. An
+update does not move them: what was put into the parent is still not what the
+tab was opened with.
+
+File ▸ Revert to Saved, and its twin in the header's menu, is **Revert to
+Original** in such a tab: asked first when there are edits, it drops every edit
+and the undo history and leaves the tab holding the bytes it opened with, still
+linked. Once the tab is saved to a file, it is Revert to Saved again.
+
 ---
 
 ## 3. Update in Parent
@@ -278,11 +291,27 @@ instead.
 
 ## 7. A volume in a region: growing into the padding after it
 
-A root volume's size change is refused. Shrinking is never needed — its free
-space grows. Growing into empty padding after the volume in the region is easy
-to *check* (a `.padding` node with `isErased` right after it) and would be easy
-to *write* (the header, the block map, the checksum). It is still refused,
-because the image says where the volume ends in places the parser does not see:
+**As built.** A structure of the file whose length changed goes in at exactly
+that length, and the difference is taken from, or given back to, the empty bytes
+right after it — so the next volume, or whatever ends the region, stays at its
+offset:
+
+- A volume put back whole at another length is written at that length. When its
+  header still gives the old one, `FvLength` and the block map's one entry are
+  rewritten, provided the new length is whole blocks; otherwise refused.
+- A change inside a volume of the file that its free space cannot take grows the
+  volume by whole blocks, as §6.5 does for a volume a section holds, and the
+  grown volume is then placed the same way.
+- Shorter: the freed bytes are the empty byte already after it (0xFF or 0x00), or
+  the volume's erase polarity.
+- Longer: refused with the numbers when fewer empty bytes follow than needed,
+  and for a volume holding the Volume Top File, whose end is pinned.
+- The update warns that the firmware's own flash map still gives the old size;
+  a change inside a Boot Guard or vendor protected range is checked as any other
+  (§6.4).
+
+What follows is why this was refused before, and still what the warning is
+about — the image says where the volume ends in places the parser does not see:
 
 - the flash map — each volume's base and size — is compiled into the PEI code
   through PCDs, and AMI keeps it in tables of its own; the firmware keeps
@@ -293,12 +322,8 @@ because the image says where the volume ends in places the parser does not see:
 - a volume with the VTF is pinned to the top of the address space: it could only
   grow downward, which moves its start.
 
-The refusal says how much empty space follows the volume, so the reader knows
-where they stand. A later, separate mode may allow it under confirmation when
-the padding after the volume is erased, no FDM entry, hash range, FIT pointer or
-IBB segment touches that padding, the volume has no VTF, and the block map is
-simple — and it would still warn that the firmware's own flash map is not
-updated.
+Not checked yet: a FIT pointer into the padding that moves, and an FDM entry
+that names the volume's size rather than hashing its bytes.
 
 ---
 
@@ -399,6 +424,13 @@ checked" caveat goes when the ranges were given. The ranges are read now
 parent's through the parent's tree (`LazyUEFITree.resolveProtectedRanges`) and
 hands the planner `ProtectedRanges.rebuildRanges`, so an update says what it
 wrote into, or that it wrote into no protected range at all.
+
+**2026-09-14.** §7 is in as described there: a structure of the file that
+comes back at another length is placed at exactly that length against the empty
+bytes after it (`settled` in `UEFIRebuild`), and a volume of the file grows by
+whole blocks into them. §2.5 is in: a linked tab paints its bytes modified
+against the ones it opened with, and Revert to Saved is Revert to Original there
+(`BinaryDocument.revert(toBase:)`).
 
 **Progress.** Compressing a DXE volume again takes seconds, so an update that
 goes through the planner is shown where it lands: the parent's tab comes to the
