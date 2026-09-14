@@ -417,6 +417,44 @@ entries. In practice that means a shift: insert the new entry in the right
 place, moving everything after it 16 bytes down, and "eat" one `0x7F` slot at
 the tail.
 
+### 9.5. Top Swap: the table kept twice
+
+A chipset with Top Swap set maps the block directly below the top block of the
+BIOS region at the top of memory in its place, so a board can start from a
+second copy of its boot block while the first is being rewritten. An image
+built for it keeps the top block twice, byte for byte: the same volumes,
+microcode and ACM, and a FIT of its own at the same place in the block, naming
+the same addresses — which, once swapped, lead into the copy.
+
+So a change to the table is a change to both copies, or to neither. Made in the
+top block only, it leaves the machine starting, after a swap, from a table and
+microcode that no longer agree with the other copy.
+
+- **Finding the copy.** The block size is a PCH strap whose place in the
+  descriptor moves between generations, so the copy is recognised by what it
+  must hold: for a power-of-two size from 64 KiB to 16 MiB, the dword at
+  `pointer offset − size` holds the same FIT pointer, and `_FIT_` sits at
+  `table offset − size`. `FITTopSwapBackup.find` takes the smallest size that
+  satisfies both.
+- **Changing both.** An edit is worked out for the top block, and every write
+  inside the top block is made again `size` bytes lower. A write outside both
+  blocks is made once — both tables name it by the same address. A write that
+  reaches into either block without lying wholly inside the top one is refused.
+- **Showing the copy.** The backup's table is read through a view of the
+  image with the two blocks traded — the way the chipset maps it — and moved
+  back to its own offsets. The panel lists its rows after the table's, under a
+  heading that says where the copy is, that it is read-only, and whether it
+  agrees; nothing on those rows changes the image. The comparison is the
+  table's bytes, each row's sixteen, and what each row points at inside the
+  block; a difference is a warning on the backup's rows, and a copy whose
+  table agrees while other bytes of the block do not is a warning too, since
+  it is what refuses the next change.
+- **Copies that differ.** When the two blocks are not the same bytes, one change
+  cannot be right for both, and the edit is refused with the copy's range. The
+  checksum repair of §5 is the exception: it is copied into the backup when the
+  backup's table is byte for byte the top one, and made in the top block alone
+  otherwise.
+
 ---
 
 ## 10. Removing an entry

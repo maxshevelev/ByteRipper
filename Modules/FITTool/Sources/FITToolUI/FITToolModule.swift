@@ -424,7 +424,7 @@ struct FITParkedState: ToolSessionState {
     /// simulated — `clickedRow` is -1 unless a real mouse put it there — so
     /// this is the level the app's tests drive.
     public func goToOffset(of index: Int) {
-        guard let row = display.rows.first(where: { $0.index == index }) else { return }
+        guard let row = display.rows.first(where: { $0.key == index }) else { return }
         focus = index
         show(display.focusingTarget(of: index))
         host.reveal(row.offsetToGoTo..<(row.offsetToGoTo + 1), select: false)
@@ -465,7 +465,7 @@ struct FITParkedState: ToolSessionState {
 
     /// The number a bench writes down and looks up.
     public func copyCPUID(of index: Int) {
-        guard let cpuid = display.rows.first(where: { $0.index == index })?.cpuidText else {
+        guard let cpuid = display.rows.first(where: { $0.key == index })?.cpuidText else {
             return
         }
         FITToolSession.pasteboard.clearContents()
@@ -802,10 +802,18 @@ struct FITParkedState: ToolSessionState {
         return " " + warnings.joined(separator: " ")
     }
 
+    /// That the Top Swap backup of the boot block got the same change — said,
+    /// because it is a second place in the file the edit wrote to.
+    private static func topSwapNote(_ backup: Range<UInt64>?) -> String {
+        guard let backup else { return "" }
+        return " The Top Swap backup at 0x" + String(backup.lowerBound, radix: 16, uppercase: true)
+            + " got the same change."
+    }
+
     /// What the panel says afterwards, with what the protected ranges said.
     private static func note(for outcome: FITEditOutcome, describedAs description: String) -> String {
         let at = "0x" + String(outcome.range.lowerBound, radix: 16, uppercase: true)
-        let caveat = protectionNote(outcome.protectionWarnings)
+        let caveat = topSwapNote(outcome.topSwapBackup) + protectionNote(outcome.protectionWarnings)
         guard let replaced = outcome.replaced else {
             return "Added \(description) at \(at)." + caveat
         }
@@ -867,7 +875,8 @@ struct FITParkedState: ToolSessionState {
             parts.append("0x" + String(erased.count, radix: 16, uppercase: true)
                 + " bytes erased at the end of the run")
         }
-        return parts.joined(separator: "; ") + "." + protectionNote(outcome.protectionWarnings)
+        return parts.joined(separator: "; ") + "."
+            + topSwapNote(outcome.topSwapBackup) + protectionNote(outcome.protectionWarnings)
     }
 
     /// The second defect of §11, and the one a tool can put right on its own:
@@ -882,7 +891,9 @@ struct FITParkedState: ToolSessionState {
         do {
             try host.apply(transaction)
             noticeAnswersTheUser = true
-            controller.say("Checksum written. ⌘Z takes it back.")
+            controller.say((transaction.writes.count > 1
+                ? "Checksum written, in the Top Swap backup's table too."
+                : "Checksum written.") + " ⌘Z takes it back.")
         } catch {
             fail("Could not write: \(error)")
         }

@@ -48,7 +48,7 @@ public enum FITDetail {
     /// row, and the value the header's Checksum field is coloured by and quotes
     /// when it reads wrong. Nil when the checksum checks out (or is not
     /// checked): the byte is valid then, not a problem.
-    public static func build(for row: FITRow, checksumShouldBe: UInt8? = nil) -> FITRowDetail {
+    public static func build(for row: FITRow, checksumShouldBe: UInt8? = nil, inBackup: Bool = false) -> FITRowDetail {
         let entry = row.entry
         var fields = entryFields(of: entry, checksumShouldBe: checksumShouldBe)
         fields += targetFields(of: row)
@@ -56,7 +56,7 @@ public enum FITDetail {
             // The number the panel shows for the row, counting from one the way
             // the table and the zones do — not the header's zero, which is its
             // place, not its number.
-            title: "#\(entry.index + 1) \(FIT.typeName(entry.type))",
+            title: (inBackup ? "Backup " : "") + "#\(entry.index + 1) \(FIT.typeName(entry.type))",
             fields: fields
         )
     }

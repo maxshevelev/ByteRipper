@@ -62,6 +62,13 @@ public struct FITDisplayRow: Equatable, Sendable {
     /// The row as the table read it — entry and what it points at — kept so
     /// the detail can be rebuilt for whatever row comes into focus.
     public var model: FITRow
+    /// A row of the Top Swap backup's copy of the table: shown, and never
+    /// changed on its own — a change to the table is made in both copies.
+    public var isBackup: Bool = false
+
+    /// The row's identity in the panel: its index in the table, or — for a row
+    /// of the backup's copy — past `FITPresenter.backupKeyBase`.
+    public var key: Int { isBackup ? FITPresenter.backupKey(index) : index }
 
     /// Where "go to the offset" leads: what the row points at, or — for the
     /// header and for an empty slot, which point nowhere — the row itself.
@@ -70,7 +77,7 @@ public struct FITDisplayRow: Equatable, Sendable {
 
     /// The zone that "go to the offset" brings to the front.
     public var zoneToFocus: String {
-        targetRange == nil ? zoneID : FITPresenter.targetZoneID(index)
+        targetRange == nil ? zoneID : FITPresenter.targetZoneID(key)
     }
 
     /// What the right-button menu offers here. Every row leads with its offset
@@ -137,6 +144,10 @@ public struct FITDisplay: Equatable, Sendable {
     /// What the row in focus is, field by field — the entry's own sixteen
     /// bytes and what its address leads to. Empty when no row is in focus.
     public var detail: FITRowDetail
+    /// Where in `rows` the Top Swap backup's copy of the table starts, and the
+    /// heading the panel puts above it; nil for an image that keeps none.
+    public var backupStart: Int? = nil
+    public var backupHeading: String? = nil
 
     /// Nothing read yet, or nothing to show.
     public static let empty = FITDisplay(
@@ -147,14 +158,14 @@ public struct FITDisplay: Equatable, Sendable {
     /// The same display with another row selected. Selecting a row changes
     /// what is drawn strongly in the dump and what the detail says, so it is a
     /// change to the focus rather than a reason to read the file again.
-    public func focusing(_ index: Int?) -> FITDisplay {
-        focusing(zoneID: index.map(FITPresenter.rowZoneID))
+    public func focusing(_ key: Int?) -> FITDisplay {
+        focusing(zoneID: key.map(FITPresenter.rowZoneID))
     }
 
     /// The same display with what "go to the offset" leads to in focus: the
     /// component a row points at, or the row itself where it points nowhere.
-    public func focusingTarget(of index: Int) -> FITDisplay {
-        guard let row = rows.first(where: { $0.index == index }) else { return self }
+    public func focusingTarget(of key: Int) -> FITDisplay {
+        guard let row = rows.first(where: { $0.key == key }) else { return self }
         return focusing(zoneID: row.zoneToFocus)
     }
 
@@ -166,11 +177,8 @@ public struct FITDisplay: Equatable, Sendable {
         // and the pointer stand for no row, so they leave the detail empty.
         copy.detail = zoneID
             .flatMap(FITPresenter.rowIndex(ofZone:))
-            .flatMap { index in rows.first { $0.index == index } }
-            .map {
-                FITDetail.build(for: $0.model,
-                                checksumShouldBe: FITPresenter.checksumShouldBe(in: problems))
-            }
+            .flatMap { key in rows.first { $0.key == key } }
+            .map { FITPresenter.detail(for: $0, problems: problems) }
             ?? .empty
         return copy
     }
@@ -204,18 +212,21 @@ extension FITDisplay {
     public func protecting(by ranges: ProtectedRanges?) -> FITDisplay {
         guard let ranges else { return self }
         var copy = self
-        let table = tableRange
+        let table = tableRange(backup: false)
+        let backupTable = tableRange(backup: true)
         for index in copy.rows.indices {
             let row = copy.rows[index]
-            let bytes = row.index == 0 ? table : row.targetRange
+            let bytes = row.index == 0 ? (row.isBackup ? backupTable : table) : row.targetRange
             copy.rows[index].protection = bytes.flatMap { ranges.protection(of: $0) }
         }
         return copy
     }
 
-    /// The table's own bytes: from the header's sixteen to the last row's.
-    var tableRange: Range<UInt64>? {
-        guard let first = rows.first, let last = rows.last else { return nil }
+    /// A table's own bytes: from the header's sixteen to the last row's — the
+    /// table's, or the Top Swap backup's copy of it.
+    func tableRange(backup: Bool) -> Range<UInt64>? {
+        let own = rows.filter { $0.isBackup == backup }
+        guard let first = own.first, let last = own.last else { return nil }
         return first.rowRange.lowerBound..<last.rowRange.upperBound
     }
 }
@@ -224,17 +235,41 @@ public enum FITPresenter {
     public static let tableZoneID = "fit.table"
     public static let pointerZoneID = "fit.pointer"
 
-    public static func rowZoneID(_ index: Int) -> String { "fit.row.\(index)" }
-    public static func targetZoneID(_ index: Int) -> String { "fit.target.\(index)" }
+    public static let backupTableZoneID = "fit.backup.table"
+    public static let backupPointerZoneID = "fit.backup.pointer"
 
-    /// Which row a zone id belongs to, for the trip back: the user picks a zone
-    /// in the dump and the panel has to select the row it came from. Nil for
-    /// the table and the pointer, which stand for no row in particular.
+    /// Where the keys of the Top Swap backup's rows start (`FITDisplayRow.key`):
+    /// past any index a table can have.
+    public static let backupKeyBase = 0x1_0000
+    public static func backupKey(_ index: Int) -> Int { backupKeyBase + index }
+
+    public static func rowZoneID(_ key: Int) -> String {
+        key >= backupKeyBase ? "fit.backup.row.\(key - backupKeyBase)" : "fit.row.\(key)"
+    }
+    public static func targetZoneID(_ key: Int) -> String {
+        key >= backupKeyBase ? "fit.backup.target.\(key - backupKeyBase)" : "fit.target.\(key)"
+    }
+
+    /// Which row a zone id belongs to, by key, for the trip back: the user
+    /// picks a zone in the dump and the panel has to select the row it came
+    /// from. Nil for the tables and the pointers, which stand for no row in
+    /// particular.
     public static func rowIndex(ofZone id: String) -> Int? {
+        for prefix in ["fit.backup.row.", "fit.backup.target."] where id.hasPrefix(prefix) {
+            return Int(id.dropFirst(prefix.count)).map(backupKey)
+        }
         for prefix in ["fit.row.", "fit.target."] where id.hasPrefix(prefix) {
             return Int(id.dropFirst(prefix.count))
         }
         return nil
+    }
+
+    /// What the detail says for a row: the checksum it quotes is the one its
+    /// own copy of the table was checked against.
+    static func detail(for row: FITDisplayRow, problems: [FITProblem]) -> FITRowDetail {
+        FITDetail.build(for: row.model,
+                        checksumShouldBe: checksumShouldBe(in: problems.filter { $0.inBackup == row.isBackup }),
+                        inBackup: row.isBackup)
     }
 
     /// The byte the table's checksum should hold, as the validator computed it
@@ -249,7 +284,8 @@ public enum FITPresenter {
         return nil
     }
 
-    /// What to show for a report. `focus` is the row the user has selected.
+    /// What to show for a report. `focus` is the key of the row the user has
+    /// selected.
     public static func display(_ report: FITReport, focus: Int? = nil) -> FITDisplay {
         guard let table = report.table else {
             return FITDisplay(
@@ -261,17 +297,51 @@ public enum FITPresenter {
                 detail: .empty
             )
         }
-        let problemRows = Set(report.problems.compactMap(\.entryIndex))
-        // No catalogue yet: the "latest" verdict for the microcode rows starts
-        // `.notRated`, and the session's `ratingLatest(against:)` fills the
-        // verdicts in once the catalogue is in hand.
-        let latestState: MicrocodeLatest = .notRated
+        // The checksum byte is the header's (§5), so the fix is offered on the
+        // header row — the one the mismatch turns red — and on no other. It is
+        // made in the backup's copy too, when that copy is the same table.
+        let checksumFix = checksumFix(
+            for: table, backup: report.backup.flatMap { $0.tableBytesMatch ? $0.block : nil }
+        )
+        var rows = displayRows(of: table, problems: report.problems.filter { !$0.inBackup },
+                               isBackup: false, checksumFix: checksumFix)
+        var backupStart: Int?
+        var backupHeading: String?
+        if let backup = report.backup, let backupTable = backup.table {
+            // The backup's copy follows the table, under a heading of its own,
+            // and offers nothing that changes it.
+            backupStart = rows.count
+            backupHeading = heading(of: backup)
+            rows += displayRows(of: backupTable, problems: report.problems.filter(\.inBackup),
+                                isBackup: true, checksumFix: nil)
+        }
+        // The detail is the row the user has selected, or nothing before a
+        // selection — built here so a fresh parse shows the same detail the
+        // selection would.
+        let detail = focus
+            .flatMap { key in rows.first { $0.key == key } }
+            .map { self.detail(for: $0, problems: report.problems) }
+            ?? .empty
+        return FITDisplay(
+            summary: summary(of: report),
+            rows: rows,
+            problems: report.problems,
+            checksumFix: checksumFix,
+            zones: zones(of: table, backup: report.backup?.table, rows: rows, focus: focus),
+            detail: detail,
+            backupStart: backupStart,
+            backupHeading: backupHeading
+        )
+    }
+
+    /// One copy of the table's rows. `problems` are that copy's own.
+    private static func displayRows(
+        of table: FITTable, problems: [FITProblem], isBackup: Bool, checksumFix: ToolTransaction?
+    ) -> [FITDisplayRow] {
+        let problemRows = Set(problems.compactMap(\.entryIndex))
         // A table needs one microcode entry (§8.7), so the last one cannot go.
         let microcodeCount = table.rows.filter { $0.entry.type == FIT.microcodeType }.count
-        // The checksum byte is the header's (§5), so the fix is offered on the
-        // header row — the one the mismatch turns red — and on no other.
-        let checksumFix = checksumFix(for: table)
-        let rows = table.rows.map { row in
+        return table.rows.map { row in
             FITDisplayRow(
                 index: row.entry.index,
                 typeText: typeText(of: row.entry),
@@ -281,48 +351,46 @@ public enum FITPresenter {
                 targetText: targetText(of: row),
                 cpuidText: cpuidText(of: row),
                 hasProblem: problemRows.contains(row.entry.index),
-                latestState: latestState,
-                zoneID: rowZoneID(row.entry.index),
+                // No catalogue yet: the "latest" verdict for the microcode rows
+                // starts `.notRated`, and the session's `ratingLatest(against:)`
+                // fills the verdicts in once the catalogue is in hand.
+                latestState: .notRated,
+                zoneID: rowZoneID(isBackup ? backupKey(row.entry.index) : row.entry.index),
                 rowRange: row.entry.offset..<(row.entry.offset + FITEntry.size),
                 targetRange: targetRange(of: row),
-                canRemove: row.entry.type == FIT.microcodeType && microcodeCount > 1,
-                canReplace: row.entry.type == FIT.microcodeType,
-                checksumFixAvailable: checksumFix != nil && row.entry.index == 0,
-                model: row
+                canRemove: !isBackup && row.entry.type == FIT.microcodeType && microcodeCount > 1,
+                canReplace: !isBackup && row.entry.type == FIT.microcodeType,
+                checksumFixAvailable: !isBackup && checksumFix != nil && row.entry.index == 0,
+                model: row,
+                isBackup: isBackup
             )
         }
-        // The detail is the row the user has selected, or nothing before a
-        // selection — built here so a fresh parse shows the same detail the
-        // selection would.
-        let detail = focus
-            .flatMap { index in rows.first { $0.index == index } }
-            .map {
-                FITDetail.build(for: $0.model,
-                                checksumShouldBe: checksumShouldBe(in: report.problems))
-            }
-            ?? .empty
-        return FITDisplay(
-            summary: summary(of: report),
-            rows: rows,
-            problems: report.problems,
-            checksumFix: checksumFix,
-            zones: zones(of: table, rows: rows, focus: focus),
-            detail: detail
-        )
+    }
+
+    /// The line above the backup's rows: where the copy is, that it is not
+    /// changed on its own, and whether it agrees with the table.
+    private static func heading(of backup: FITBackupReading) -> String {
+        let place = "Top Swap backup at \(hex(backup.block.backup.lowerBound)) · read-only"
+        switch backup.status {
+        case .identical: return place + " · same as above"
+        case .otherBytesDiffer: return place + " · same table, other bytes differ"
+        case .tableDiffers: return place + " · differs from the table above"
+        case .noTable: return place + " · no table"
+        }
     }
 
     /// The one edit this tool-module makes: the header's checksum byte, which
     /// an editor that changed the table and did not recompute leaves behind
-    /// (§11's second defect). One byte, one named undo step.
-    public static func checksumFix(for table: FITTable) -> ToolTransaction? {
+    /// (§11's second defect). One byte, one named undo step — written into the
+    /// Top Swap backup's copy of the table as well, when it holds the same one.
+    public static func checksumFix(for table: FITTable, backup: FITTopSwapBackup? = nil) -> ToolTransaction? {
         guard table.checksumIsChecked, !table.checksumIsCorrect else { return nil }
-        return ToolTransaction(
-            name: "Fix FIT Checksum",
-            writes: [ToolTransaction.Write(
-                offset: table.range.lowerBound + 0x0F,
-                bytes: [table.computedChecksum]
-            )]
-        )
+        let offset = table.range.lowerBound + 0x0F
+        var writes = [ToolTransaction.Write(offset: offset, bytes: [table.computedChecksum])]
+        if let backup {
+            writes.append(ToolTransaction.Write(offset: offset - backup.size, bytes: [table.computedChecksum]))
+        }
+        return ToolTransaction(name: "Fix FIT Checksum", writes: writes)
     }
 
     // MARK: - Text
@@ -347,6 +415,12 @@ public enum FITPresenter {
             // out of a dump — and there every address in the table is wrong by
             // whatever was cut off in front of it.
             parts.append("addresses assumed")
+        }
+        if let backup = report.backup {
+            switch backup.status {
+            case .identical: parts.append("Top Swap backup matches")
+            case .otherBytesDiffer, .tableDiffers, .noTable: parts.append("Top Swap backup differs")
+            }
         }
         if !table.checksumIsChecked {
             parts.append("checksum unused")
@@ -452,9 +526,11 @@ public enum FITPresenter {
 
     /// What the dump draws: the table, the pointer that leads to it, each row,
     /// and what each row points at — the last being the useful one, since the
-    /// components are scattered across the image and the table is not.
+    /// components are scattered across the image and the table is not. The
+    /// Top Swap backup's copy is drawn the same way, under names that say so.
     private static func zones(
         of table: FITTable,
+        backup: FITTable?,
         rows: [FITDisplayRow],
         focus: Int?
     ) -> ZoneMap {
@@ -466,20 +542,25 @@ public enum FITPresenter {
                 range: table.pointerOffset..<(table.pointerOffset + 4)
             )
         ]
+        if let backup {
+            zones.append(Zone(id: backupTableZoneID, name: "Backup FIT table", range: backup.range))
+            zones.append(Zone(id: backupPointerZoneID, name: "Backup FIT pointer",
+                              range: backup.pointerOffset..<(backup.pointerOffset + 4)))
+        }
         for row in rows {
-            let start = table.range.lowerBound + UInt64(row.index) * FITEntry.size
+            let prefix = row.isBackup ? "Backup " : ""
             zones.append(Zone(
                 id: row.zoneID,
-                name: "#\(row.displayNumber) \(row.typeText)",
-                range: start..<(start + FITEntry.size)
+                name: "\(prefix)#\(row.displayNumber) \(row.typeText)",
+                range: row.rowRange
             ))
             if let target = row.targetRange {
                 // Named by CPUID where there is one: that is what a bench is
                 // looking for when it goes hunting for a microcode in a dump.
                 zones.append(Zone(
-                    id: targetZoneID(row.index),
-                    name: row.cpuidText.map { "CPUID \($0)" }
-                        ?? (row.targetText.isEmpty ? "#\(row.displayNumber)" : row.targetText),
+                    id: targetZoneID(row.key),
+                    name: prefix + (row.cpuidText.map { "CPUID \($0)" }
+                        ?? (row.targetText.isEmpty ? "#\(row.displayNumber)" : row.targetText)),
                     range: target
                 ))
             }

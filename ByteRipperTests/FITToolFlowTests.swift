@@ -1172,6 +1172,32 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(address.minWidth, 76, "eight hex digits are never cut short")
     }
 
+    /// An image that keeps its top block twice for Top Swap lists the backup's
+    /// copy of the table after the table, under a heading that cannot be
+    /// selected, with nothing on the copy's rows that changes the image.
+    func testATopSwapBackupIsListedUnderItsHeading() throws {
+        _ = try open(FITTestImage.make() + FITTestImage.make())
+        let table = try entriesTable()
+        let display = try session().display
+        let start = try XCTUnwrap(display.backupStart, "the backup is read")
+        XCTAssertEqual(table.numberOfRows, display.rows.count + 1, "the rows and the heading")
+
+        let delegate = try XCTUnwrap(table.delegate)
+        XCTAssertEqual(delegate.tableView?(table, isGroupRow: start), true)
+        XCTAssertEqual(delegate.tableView?(table, shouldSelectRow: start), false)
+        let heading = try XCTUnwrap(delegate.tableView?(table, viewFor: nil, row: start) as? NSTextField)
+        XCTAssertTrue(heading.stringValue.hasPrefix("Top Swap backup at 0x0 · read-only"), heading.stringValue)
+
+        let copy = try XCTUnwrap(display.rows.last)
+        XCTAssertTrue(copy.isBackup)
+        XCTAssertFalse(copy.commands.contains {
+            switch $0 {
+            case .replaceMicrocode, .removeMicrocode, .fixChecksum: return true
+            default: return false
+            }
+        }, "the copy is read-only")
+    }
+
     /// A wider or narrower panel moves "Points at", and leaves the row number
     /// and the address the width they were. Only below "Points at"'s floor do
     /// Size and Type give way — and they come back when the panel does.

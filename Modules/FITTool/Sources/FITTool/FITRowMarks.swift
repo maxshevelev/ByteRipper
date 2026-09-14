@@ -37,7 +37,7 @@ public enum FITRowMarks {
     public static func marks(for row: FITDisplayRow, problems: [FITProblem]) -> ToolRowMarks {
         var errors: [String] = []
         var cautions: [String] = []
-        for problem in problems where problem.entryIndex == row.index {
+        for problem in problems where problem.entryIndex == row.index && problem.inBackup == row.isBackup {
             switch problem.severity {
             case .error: errors.append(problem.message)
             case .warning: cautions.append(problem.message)

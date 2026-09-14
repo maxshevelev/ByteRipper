@@ -359,6 +359,188 @@ final class FITContainerTests: XCTestCase {
     }
 }
 
+/// An image that keeps its top block twice, for Top Swap: every change to the
+/// table lands in both copies, or in neither.
+final class FITTopSwapTests: XCTestCase {
+    private let firstMicrocode: UInt64 = 0x4060
+    private let secondMicrocode: UInt64 = 0x4160
+
+    /// A 64 KiB block with a FIT at 0x1000 naming two microcodes in a file of a
+    /// volume at 0x4000 — the block an image keeps twice.
+    private func block(checksum: UInt8? = nil) -> [UInt8] {
+        let run = TestFIT.microcode(signature: 0x0008_06EA, totalSize: 0x100)
+            + TestFIT.microcode(signature: 0x0009_06EA, totalSize: 0x100)
+        return TestFIT.image(
+            rows: [
+                TestFIT.Row(FIT.microcodeType, target: firstMicrocode),
+                TestFIT.Row(FIT.microcodeType, target: secondMicrocode)
+            ],
+            checksum: checksum,
+            contents: [0x4000: FFS.volume(holding: FFS.file(body: run))]
+        )
+    }
+
+    private func applying(_ transaction: ToolTransaction, to bytes: [UInt8]) throws -> [UInt8] {
+        var edited = bytes
+        for write in try transaction.validated().writes {
+            edited.replaceSubrange(
+                Int(write.offset)..<(Int(write.offset) + write.bytes.count), with: write.bytes
+            )
+        }
+        return edited
+    }
+
+    private func table(_ bytes: [UInt8]) throws -> (FITTable, UEFIImage) {
+        let parsed = UEFIParser.parse(bytes)
+        return (try XCTUnwrap(FITReader.read(ImageReader(bytes), image: parsed).table), parsed)
+    }
+
+    func testTheBackupIsFoundByItsOwnFIT() throws {
+        let bytes = block() + block()
+        let found = try XCTUnwrap(FITTopSwapBackup.find(for: try table(bytes).0, in: ImageReader(bytes)))
+        XCTAssertEqual(found.top, 0x1_0000..<0x2_0000)
+        XCTAssertEqual(found.backup, 0..<0x1_0000)
+        XCTAssertTrue(found.copiesMatch(in: ImageReader(bytes)))
+
+        let single = block()
+        XCTAssertNil(FITTopSwapBackup.find(for: try table(single).0, in: ImageReader(single)),
+                     "one block, and no copy of it")
+        var unrelated = [UInt8](repeating: 0xFF, count: 0x1_0000) + block()
+        unrelated[0xFFC0] = 0x00
+        XCTAssertNil(FITTopSwapBackup.find(for: try table(unrelated).0, in: ImageReader(unrelated)),
+                     "bytes below that hold no FIT of their own are not a backup")
+    }
+
+    func testAnAdditionLandsInTheBackupToo() throws {
+        let bytes = block() + block()
+        let (fit, parsed) = try table(bytes)
+        let (transaction, outcome) = try FITEditor.addOrReplaceMicrocode(
+            TestFIT.microcode(signature: 0x000A_0671, totalSize: 0x300),
+            in: fit, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFE_0000
+        ).get()
+        let edited = try applying(transaction, to: bytes)
+
+        XCTAssertEqual(outcome.topSwapBackup, 0..<0x1_0000)
+        XCTAssertNotEqual(edited, bytes)
+        XCTAssertEqual(Array(edited[0..<0x1_0000]), Array(edited[0x1_0000...]), "both copies carry the change")
+        // The backup, read as the top block it becomes when the swap is set.
+        let swapped = Array(edited[0..<0x1_0000])
+        let report = FITReader.read(ImageReader(swapped), image: UEFIParser.parse(swapped))
+        XCTAssertEqual(report.table?.entries.count, 3)
+        XCTAssertTrue(report.problems.isEmpty, "\(report.problems.map(\.message))")
+    }
+
+    func testARemovalLandsInTheBackupToo() throws {
+        let bytes = block() + block()
+        let (fit, parsed) = try table(bytes)
+        let (transaction, outcome) = try FITEditor.removeMicrocode(
+            1, from: fit, image: parsed, in: ImageReader(bytes), addressDiff: 0xFFFE_0000
+        ).get()
+        let edited = try applying(transaction, to: bytes)
+
+        XCTAssertEqual(outcome.topSwapBackup, 0..<0x1_0000)
+        XCTAssertEqual(Array(edited[0..<0x1_0000]), Array(edited[0x1_0000...]))
+        XCTAssertEqual(FITReader.read(ImageReader(Array(edited[0..<0x1_0000])), image: nil).table?.entries.count, 1)
+    }
+
+    /// Copies that already differ are not changed as if they did not: the
+    /// change is refused, and says where the other copy is.
+    func testCopiesThatDifferAreNotChanged() throws {
+        var backup = block()
+        backup[0x8000] = 0x00
+        let bytes = backup + block()
+        let (fit, parsed) = try table(bytes)
+        let result = FITEditor.addOrReplaceMicrocode(
+            TestFIT.microcode(signature: 0x000A_0671, totalSize: 0x300),
+            in: fit, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFE_0000
+        )
+        guard case .failure(.topSwapCopiesDiffer(let range)) = result else {
+            return XCTFail("expected a refusal, got \(result)")
+        }
+        XCTAssertEqual(range, 0..<0x1_0000)
+    }
+
+    func testAChecksumFixLandsInTheBackupToo() throws {
+        let bytes = block(checksum: 0x00) + block(checksum: 0x00)
+        let report = FITReader.read(ImageReader(bytes), image: UEFIParser.parse(bytes))
+        XCTAssertEqual(report.backup?.block.backup, 0..<0x1_0000)
+        let fix = try XCTUnwrap(FITPresenter.display(report).checksumFix)
+        XCTAssertEqual(fix.writes.map(\.offset), [0x1_100F, 0x100F])
+
+        let one = block() + block(checksum: 0x00)
+        let lone = FITReader.read(ImageReader(one), image: UEFIParser.parse(one))
+        XCTAssertEqual(lone.backup?.tableBytesMatch, false, "a backup whose table differs is not written into")
+        XCTAssertEqual(FITPresenter.display(lone).checksumFix?.writes.count, 1)
+    }
+
+    /// The backup's copy of the table follows it, read-only, at its own offsets.
+    func testTheBackupsRowsFollowTheTableReadOnly() throws {
+        let bytes = block() + block()
+        let report = FITReader.read(ImageReader(bytes), image: UEFIParser.parse(bytes))
+        let backup = try XCTUnwrap(report.backup)
+        XCTAssertEqual(backup.status, .identical)
+        XCTAssertEqual(backup.table?.range.lowerBound, 0x1000, "at its own place in the file")
+        XCTAssertTrue(report.problems.isEmpty, "\(report.problems.map(\.message))")
+
+        let display = FITPresenter.display(report)
+        XCTAssertEqual(display.rows.count, 6)
+        XCTAssertEqual(display.backupStart, 3)
+        XCTAssertEqual(display.backupHeading, "Top Swap backup at 0x0 · read-only · same as above")
+        XCTAssertTrue(display.summary.contains("Top Swap backup matches"), display.summary)
+
+        let copy = display.rows[4]
+        XCTAssertTrue(copy.isBackup)
+        XCTAssertEqual(copy.key, FITPresenter.backupKey(1))
+        XCTAssertEqual(copy.zoneID, "fit.backup.row.1")
+        XCTAssertEqual(copy.targetRange?.lowerBound, 0x4060)
+        XCTAssertEqual(copy.commands, [.goToOffset(0x4060), .copyCPUID("806EA")],
+                       "nothing that changes the table")
+        XCTAssertFalse(display.rows[1].commands.filter { if case .replaceMicrocode = $0 { return true }; return false }.isEmpty)
+        XCTAssertEqual(FITPresenter.rowIndex(ofZone: "fit.backup.target.1"), FITPresenter.backupKey(1))
+        XCTAssertEqual(display.zones.zones.first { $0.id == "fit.backup.target.1" }?.range.lowerBound, 0x4060)
+        XCTAssertEqual(display.focusing(copy.key).detail.title, "Backup #2 Microcode")
+    }
+
+    func testABackupWhoseMicrocodeDiffersIsWarnedAbout() throws {
+        var lower = block()
+        lower[0x4164] ^= 0xFF          // the second microcode's revision, in the backup
+        let bytes = lower + block()
+        let report = FITReader.read(ImageReader(bytes), image: UEFIParser.parse(bytes))
+
+        XCTAssertEqual(report.backup?.status, .tableDiffers(rows: [2]))
+        XCTAssertTrue(report.problems.contains { $0.kind == .topSwapTableDiffers(at: 0x1000) })
+        let entry = try XCTUnwrap(report.problems.first { $0.kind == .topSwapEntryDiffers })
+        XCTAssertEqual(entry.entryIndex, 2)
+        XCTAssertTrue(entry.inBackup)
+        XCTAssertEqual(entry.severity, .warning)
+        XCTAssertTrue(entry.message.hasPrefix("Top Swap backup: "), entry.message)
+
+        let display = FITPresenter.display(report)
+        XCTAssertEqual(display.backupHeading, "Top Swap backup at 0x0 · read-only · differs from the table above")
+        let marked = display.rows.filter(\.hasProblem)
+        XCTAssertEqual(marked.map(\.key), [FITPresenter.backupKey(2)], "the backup's row wears it, not the table's")
+    }
+
+    func testABackupWithOtherBytesDifferentSaysEditsWaitForIt() throws {
+        var lower = block()
+        lower[0x8000] = 0x00
+        let bytes = lower + block()
+        let report = FITReader.read(ImageReader(bytes), image: UEFIParser.parse(bytes))
+        XCTAssertEqual(report.backup?.status, .otherBytesDiffer)
+        XCTAssertEqual(report.problems.map(\.kind), [.topSwapBlockDiffers(backup: 0..<0x1_0000)])
+    }
+
+    func testAWriteAcrossTheBlocksHasNoPlaceInTheCopy() {
+        let copy = FITTopSwapBackup(top: 0x1_0000..<0x2_0000, backup: 0..<0x1_0000)
+        let across = ToolTransaction(name: "Edit", offset: 0xFFF8, bytes: [UInt8](repeating: 0, count: 0x10))
+        guard case .failure(.topSwapWriteCrossesTheBlocks(0xFFF8)) = copy.mirroring(across) else {
+            return XCTFail("a write across the boundary is refused")
+        }
+        let inside = ToolTransaction(name: "Edit", offset: 0x1_2000, bytes: [1, 2])
+        XCTAssertEqual(try copy.mirroring(inside).get().writes.map(\.offset), [0x1_2000, 0x2000])
+    }
+}
+
 /// The smallest volume and file that hold a microcode run.
 private enum FFS {
     static let volumeGUID = "8C8CE578-8A3D-4F1C-9935-896185C32DD3"

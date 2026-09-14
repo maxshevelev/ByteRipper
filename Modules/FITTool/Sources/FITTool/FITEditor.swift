@@ -38,6 +38,12 @@ public enum FITEditProblem: Equatable, Sendable, Error {
     /// The change writes inside the Boot Guard IBB, which the processor checks
     /// before the firmware runs (`BOOT_GUARD_PROTECTED_RANGES.md` §9.4).
     case insideProtectedRange(name: String, at: UInt64)
+    /// The image keeps a Top Swap backup of the block the FIT is in, and the two
+    /// copies are not the same bytes, so one change cannot be right for both.
+    case topSwapCopiesDiffer(backup: Range<UInt64>)
+    /// A write reaches into a Top Swap block without lying wholly inside the top
+    /// one, so it has no place in the other copy.
+    case topSwapWriteCrossesTheBlocks(at: UInt64)
 
     public var message: String {
         switch self {
@@ -69,6 +75,16 @@ public enum FITEditProblem: Equatable, Sendable, Error {
             return "The change writes at 0x" + String(at, radix: 16, uppercase: true)
                 + " inside a " + name + ": the processor checks it before the firmware runs,"
                 + " and with Boot Guard enforced the platform would not start. Nothing was changed."
+        case .topSwapCopiesDiffer(let backup):
+            return "This image keeps a Top Swap backup of the boot block at 0x"
+                + String(backup.lowerBound, radix: 16, uppercase: true) + "–0x"
+                + String(backup.upperBound, radix: 16, uppercase: true)
+                + ", and it is not the same as the block the FIT is in, so the change cannot be"
+                + " made in both. Nothing was changed."
+        case .topSwapWriteCrossesTheBlocks(let at):
+            return "The change writes at 0x" + String(at, radix: 16, uppercase: true)
+                + " across a Top Swap block boundary, where it cannot be made in both copies."
+                + " Nothing was changed."
         }
     }
 }
@@ -98,6 +114,9 @@ public struct FITEditOutcome: Equatable, Sendable {
     /// Nil when no ranges were given to check against; empty when it writes
     /// into none.
     public var protectionWarnings: [String]?
+    /// The Top Swap backup block the change was made in as well, when the
+    /// image keeps one (`FITTopSwapBackup`).
+    public var topSwapBackup: Range<UInt64>? = nil
 }
 
 /// What a removal came to.
@@ -109,6 +128,8 @@ public struct FITRemovalOutcome: Equatable, Sendable {
     public var erased: Range<UInt64>?
     /// As on `FITEditOutcome`.
     public var protectionWarnings: [String]?
+    /// As on `FITEditOutcome`.
+    public var topSwapBackup: Range<UInt64>? = nil
 }
 
 /// Where a new component would go.
@@ -280,7 +301,7 @@ public enum FITEditor {
     /// `protected` is the image's Boot Guard and vendor protected ranges: a
     /// change that writes inside the IBB is refused, one inside another range
     /// is carried out and said (§9.4 of `BOOT_GUARD_PROTECTED_RANGES.md`).
-    public static func addOrReplaceMicrocode(
+    static func addOrReplaceMicrocodeInTheTopBlock(
         _ component: [UInt8],
         in table: FITTable,
         image: UEFIImage?,
@@ -324,7 +345,7 @@ public enum FITEditor {
     /// bigger the run re-lays and the row is repointed. The old bytes are left
     /// where they are either way: erasing them is the risk §10 step 5 warns
     /// about.
-    public static func replaceMicrocode(
+    static func replaceMicrocodeInTheTopBlock(
         at index: Int,
         _ component: [UInt8],
         in table: FITTable,
@@ -643,7 +664,7 @@ public enum FITEditor {
     /// does: a run inside an FFS file leaves that file's checksums describing
     /// what used to be there, and those are recomputed into the same
     /// transaction.
-    public static func removeMicrocode(
+    static func removeMicrocodeFromTheTopBlock(
         _ index: Int,
         from table: FITTable,
         image: UEFIImage?,

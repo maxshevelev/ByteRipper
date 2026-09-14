@@ -102,6 +102,9 @@ public struct FITReport: Equatable, Sendable {
     /// the top of the address space. True for a full flash dump and false for
     /// a region cut out of one — which is why it is said out loud.
     public var addressDiffIsAssumed: Bool
+    /// The Top Swap backup of the block the table is in, read and set against
+    /// this table, when the image keeps one (`FITTopSwapBackup`).
+    public var backup: FITBackupReading? = nil
 }
 
 public enum FITReader {
@@ -113,6 +116,13 @@ public enum FITReader {
     /// allowed — the table can still be read, on the assumption every full
     /// flash dump satisfies.
     public static func read(_ reader: ImageReader, image: UEFIImage?) -> FITReport {
+        read(reader, image: image, readsBackup: true)
+    }
+
+    /// `readsBackup` false is the backup's own reading: a swapped view of the
+    /// image finds the top block's table as *its* backup, and must not go
+    /// looking for it.
+    static func read(_ reader: ImageReader, image: UEFIImage?, readsBackup: Bool) -> FITReport {
         let assumed = image?.addressDiff == nil
         let addressDiff = image?.addressDiff ?? (0x1_0000_0000 &- reader.count)
         // That the mapping was assumed is not a problem with the table: it is a
@@ -186,7 +196,13 @@ public enum FITReader {
             checksumIsChecked: header.checksumValid
         )
         problems += FITValidator.problems(in: table, reader: reader, addressDiff: addressDiff)
-        return report(table)
+        // A Top Swap image keeps the block twice, with a FIT in each: the
+        // backup's is read too, and what differs from this one is said.
+        let backup = readsBackup ? FITBackupReading.read(beside: table, reader: reader, image: image) : nil
+        problems += backup?.findings ?? []
+        var result = report(table)
+        result.backup = backup?.reading
+        return result
     }
 
     /// The checksum the table should carry: every byte of it, with the

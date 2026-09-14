@@ -34,6 +34,17 @@ public struct FITProblem: Equatable, Sendable {
         /// the reason a tool must read what it wrote an address to.
         case notMicrocodeAtTheAddress(address: UInt64)
         case reservedIsNotZero(value: UInt8)
+        /// The image keeps a Top Swap backup of the block the FIT is in, and
+        /// there is no table where the backup's pointer leads.
+        case topSwapBackupHasNoTable(backupAt: UInt64)
+        /// The backup's FIT is not byte for byte this one.
+        case topSwapTableDiffers(at: UInt64)
+        /// A backup row, or what it points at inside the block, is not the same
+        /// as the top block's.
+        case topSwapEntryDiffers
+        /// The backup holds the same FIT, but other bytes of the block differ —
+        /// which is what refuses a microcode change until the copies agree.
+        case topSwapBlockDiffers(backup: Range<UInt64>)
     }
 
     public var kind: Kind
@@ -41,16 +52,21 @@ public struct FITProblem: Equatable, Sendable {
     public var entryIndex: Int?
     /// Where to send the dump.
     public var offset: UInt64?
+    /// Found in the Top Swap backup's copy of the table rather than in the
+    /// table itself: `entryIndex` is a row of that copy.
+    public var inBackup: Bool
 
-    public init(_ kind: Kind, entry: Int? = nil, at offset: UInt64? = nil) {
+    public init(_ kind: Kind, entry: Int? = nil, at offset: UInt64? = nil, inBackup: Bool = false) {
         self.kind = kind
         self.entryIndex = entry
         self.offset = offset
+        self.inBackup = inBackup
     }
 
     public var severity: Severity {
         switch kind {
-        case .reservedIsNotZero:
+        case .reservedIsNotZero, .topSwapBackupHasNoTable, .topSwapTableDiffers,
+             .topSwapEntryDiffers, .topSwapBlockDiffers:
             return .warning
         default:
             return .error
@@ -58,6 +74,10 @@ public struct FITProblem: Equatable, Sendable {
     }
 
     public var message: String {
+        inBackup ? "Top Swap backup: " + ownMessage : ownMessage
+    }
+
+    private var ownMessage: String {
         switch kind {
         case .imageHasNoPointer:
             return "The image is too small to hold a FIT pointer"
@@ -89,6 +109,15 @@ public struct FITProblem: Equatable, Sendable {
             return "No microcode header at \(hex(address)), and it is not an empty slot"
         case .reservedIsNotZero(let value):
             return "The reserved byte is \(hex(UInt64(value))), and should be zero"
+        case .topSwapBackupHasNoTable(let backupAt):
+            return "The Top Swap backup at \(hex(backupAt)) has no FIT where its pointer leads"
+        case .topSwapTableDiffers(let at):
+            return "The Top Swap backup's FIT at \(hex(at)) is not the same as this one"
+        case .topSwapEntryDiffers:
+            return "this entry, or what it points at, is not the same as in the top block"
+        case .topSwapBlockDiffers(let backup):
+            return "The Top Swap backup at \(hex(backup.lowerBound)) holds the same FIT, but other bytes"
+                + " of the block differ, so microcode changes are refused until the copies agree"
         }
     }
 

@@ -494,7 +494,7 @@ import ToolModuleKit
         updateRowMarks()
         problems.reloadData()
         renderDetail(display.detail, subject: focus.map(String.init) ?? "")
-        if let focus, let row = display.rows.firstIndex(where: { $0.index == focus }) {
+        if let focus, let row = tableRow(ofKey: focus) {
             entries.selectRowIndexes([row], byExtendingSelection: false)
         } else {
             entries.deselectAll(nil)
@@ -601,8 +601,8 @@ import ToolModuleKit
     }
 
     @objc private func entryDoubleClicked() {
-        guard entries.clickedRow >= 0, entries.clickedRow < display.rows.count else { return }
-        onGoToTarget?(display.rows[entries.clickedRow].index)
+        guard let row = displayRow(atTableRow: entries.clickedRow) else { return }
+        onGoToTarget?(row.key)
     }
 
     /// Built fresh every time it opens, for the row under the pointer:
@@ -616,18 +616,16 @@ import ToolModuleKit
 
     @objc private func copyCPUIDClicked() {
         guard let row = clickedEntry() else { return }
-        onCopyCPUID?(row.index)
+        onCopyCPUID?(row.key)
     }
 
     @objc private func goToOffsetClicked() {
         guard let row = clickedEntry() else { return }
-        onGoToTarget?(row.index)
+        onGoToTarget?(row.key)
     }
 
     private func clickedEntry() -> FITDisplayRow? {
-        let row = entries.clickedRow
-        guard row >= 0, row < display.rows.count else { return nil }
-        return display.rows[row]
+        displayRow(atTableRow: entries.clickedRow)
     }
 
     @objc private func problemDoubleClicked() {
@@ -671,11 +669,14 @@ extension FITToolViewController: NSMenuDelegate {
 
 extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
     func numberOfRows(in tableView: NSTableView) -> Int {
-        tableView === problems ? display.problems.count : display.rows.count
+        tableView === problems ? display.problems.count : tableRowCount
     }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int)
     -> NSView? {
+        if tableView === entries, isHeading(row) {
+            return headingView(in: tableView)
+        }
         guard let column = tableColumn else { return nil }
         let cell = tableView.makeView(withIdentifier: column.identifier, owner: self)
             as? NSTableCellView
@@ -694,8 +695,7 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
             return cell
         }
 
-        guard row < display.rows.count else { return nil }
-        let entry = display.rows[row]
+        guard let entry = displayRow(atTableRow: row) else { return nil }
         let monospaced = ToolPanelFont.monospacedDigits()
         // The Type column wears the row's problem — the red octagon for an
         // error, the orange circle for a caution, as in the UEFI tree, rather
@@ -726,7 +726,9 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
             cell.textField?.stringValue = entry.targetText
             cell.textField?.font = ToolPanelFont.body()
         }
-        cell.textField?.textColor = .labelColor
+        // The backup's rows read quieter: they are there to be compared, and
+        // nothing on them is changed on its own.
+        cell.textField?.textColor = entry.isBackup ? .secondaryLabelColor : .labelColor
         // The version is a real field and it decides how a policy row's address
         // is read (§7.3), but it is the same 1.00 on almost every row — so it
         // lives where a curious pointer finds it rather than in a column.
@@ -740,7 +742,7 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
     /// under them is a strip of lines, not rows of the image, and keeps the
     /// plain row.
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        guard tableView === entries else { return nil }
+        guard tableView === entries, !isHeading(row) else { return nil }
         let rowView = tableView.makeView(withIdentifier: Self.rowViewIdentifier, owner: self)
             as? ToolPanelRowView ?? {
                 let created = ToolPanelRowView()
@@ -754,8 +756,8 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
 
     /// What an entry row wears besides its text, decided in the pure target.
     private func marks(ofRow row: Int) -> ToolRowMarks {
-        guard row >= 0, row < display.rows.count else { return .none }
-        return FITRowMarks.marks(for: display.rows[row], problems: display.problems)
+        guard let entry = displayRow(atTableRow: row) else { return .none }
+        return FITRowMarks.marks(for: entry, problems: display.problems)
     }
 
     /// The row views on screen, given their background again: reloading the
@@ -771,7 +773,48 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard !isShowingState, notification.object as AnyObject? === entries else { return }
         let row = entries.selectedRow
-        onSelect?(row >= 0 && row < display.rows.count ? display.rows[row].index : nil)
+        onSelect?(displayRow(atTableRow: row)?.key)
+    }
+
+    // MARK: - The Top Swap backup's heading
+
+    /// The table's rows: the entries, and — for an image that keeps a Top Swap
+    /// backup — a heading in front of the backup's copy.
+    private var tableRowCount: Int { display.rows.count + (display.backupStart == nil ? 0 : 1) }
+
+    private func isHeading(_ row: Int) -> Bool { display.backupStart == row }
+
+    private func displayRow(atTableRow row: Int) -> FITDisplayRow? {
+        guard row >= 0, !isHeading(row) else { return nil }
+        let index = display.backupStart.map { row > $0 ? row - 1 : row } ?? row
+        return index < display.rows.count ? display.rows[index] : nil
+    }
+
+    private func tableRow(ofKey key: Int) -> Int? {
+        guard let index = display.rows.firstIndex(where: { $0.key == key }) else { return nil }
+        return display.backupStart.map { index >= $0 ? index + 1 : index } ?? index
+    }
+
+    private func headingView(in tableView: NSTableView) -> NSView {
+        let identifier = NSUserInterfaceItemIdentifier("backupHeading")
+        let label = tableView.makeView(withIdentifier: identifier, owner: self) as? NSTextField ?? {
+            let made = NSTextField(labelWithString: "")
+            made.identifier = identifier
+            made.lineBreakMode = .byTruncatingTail
+            return made
+        }()
+        label.stringValue = display.backupHeading ?? ""
+        label.font = ToolPanelFont.body(weight: .semibold)
+        label.textColor = .secondaryLabelColor
+        return label
+    }
+
+    func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
+        tableView === entries && isHeading(row)
+    }
+
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        !(tableView === entries && isHeading(row))
     }
 
 }
