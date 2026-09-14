@@ -82,14 +82,28 @@ import ToolModuleKit
     /// `ToolPanelFont.designSize`, so the panel scales it to whatever size the
     /// zoom is at rather than leaving "Points at" saying "Microco…" the moment
     /// the type grows.
+    ///
+    /// `minWidth` is how far a column gives way when the panel is narrow: the
+    /// row number and the eight hex digits of an address not at all, the rest
+    /// to where their text starts to be cut short.
     private static let entryColumns:
-    [(id: NSUserInterfaceItemIdentifier, title: String, width: CGFloat)] = [
-        (Column.index, "#", 20),
-        (Column.type, "Type", 96),
-        (Column.address, "Address", 76),
-        (Column.size, "Size", 84),
-        (Column.target, "Points at", 300)
+    [(id: NSUserInterfaceItemIdentifier, title: String, width: CGFloat, minWidth: CGFloat)] = [
+        (Column.index, "#", 20, 20),
+        (Column.type, "Type", 96, 56),
+        (Column.address, "Address", 76, 76),
+        (Column.size, "Size", 84, 40),
+        (Column.target, "Points at", 300, 80)
     ]
+    /// The columns that give way, in order, once "Points at" is down to its
+    /// floor and the table is still wider than the panel — and get their
+    /// width back, the other way round, when the panel grows again.
+    private static let yieldingColumns = [Column.size, Column.type]
+    /// The width each yielding column was given — by the design, a zoom or a
+    /// drag — before a narrow panel squeezed it.
+    private var wantedWidths: [NSUserInterfaceItemIdentifier: CGFloat] = [:]
+    /// Set while the panel moves the columns itself, so what it does is not
+    /// taken for a drag.
+    private var isFittingColumns = false
     private static let problemColumnWidth: CGFloat = 420
     /// How many findings the list shows before it scrolls. Past this it is a
     /// list to scroll through, and the table above is what the panel is for.
@@ -115,13 +129,31 @@ import ToolModuleKit
         )
 
         configure(entries, doubleAction: #selector(entryDoubleClicked))
-        // Fixed widths, and the table scrolls sideways when they do not fit.
-        // Squeezing "Points at" to whatever is left is how the one column with
-        // something to say ends up saying "Microco…".
-        entries.columnAutoresizingStyle = .noColumnAutoresizing
+        // The table keeps inside its scroll view, as the UEFI and ME trees do:
+        // wider than it, the inset style's margins and rounded selection
+        // scroll off the edges and the rows run edge to edge. "Points at", the
+        // column with something to say, takes whatever width the panel gives;
+        // narrowed, it gives way first, then Size and Type, each down to a
+        // floor — and only below all of those does the table scroll sideways.
+        // A cut-short cell still says the whole of it under the pointer.
+        //
+        // Only "Points at" is resized with the table. AppKit's sequential
+        // styles give way from the last column but grow from the first, which
+        // puts a wider panel's width into the row number; Size and Type are
+        // squeezed by hand instead (`fitColumnsToThePanel`).
+        entries.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         for spec in Self.entryColumns {
-            column(entries, spec.id, spec.title, spec.width)
+            column(entries, spec.id, spec.title, spec.width, minWidth: spec.minWidth,
+                   resizesWithTable: spec.id == Column.target)
         }
+        for id in Self.yieldingColumns {
+            wantedWidths[id] = entries.tableColumn(withIdentifier: id)?.width
+        }
+        entriesScroll.contentView.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(entriesClipResized),
+            name: NSView.frameDidChangeNotification, object: entriesScroll.contentView
+        )
         entries.menu = contextMenu()
 
         configure(problems, doubleAction: #selector(problemDoubleClicked))
@@ -371,12 +403,67 @@ import ToolModuleKit
         _ table: NSTableView,
         _ identifier: NSUserInterfaceItemIdentifier,
         _ title: String,
-        _ width: CGFloat
+        _ width: CGFloat,
+        minWidth: CGFloat? = nil,
+        resizesWithTable: Bool = false
     ) {
         let column = NSTableColumn(identifier: identifier)
         column.title = title
         column.width = width
+        if let minWidth {
+            column.resizingMask = resizesWithTable ? [.autoresizingMask, .userResizingMask] : .userResizingMask
+            column.minWidth = minWidth
+        }
         table.addTableColumn(column)
+    }
+
+    @objc private func entriesClipResized(_ notification: Notification) {
+        fitColumnsToThePanel()
+    }
+
+    /// "Points at" takes the width the other columns leave. Below its floor,
+    /// Size and then Type give way down to theirs; with room again, Type and
+    /// then Size get back what they gave, and "Points at" the rest.
+    private func fitColumnsToThePanel() {
+        guard !isFittingColumns, let target = entries.tableColumn(withIdentifier: Column.target),
+              entriesScroll.contentView.bounds.width > 0
+        else { return }
+        isFittingColumns = true
+        defer { isFittingColumns = false }
+
+        entries.sizeLastColumnToFit()
+        // The frame is the columns' only once the table has tiled again: until
+        // then it is the width it had before the panel moved.
+        entries.tile()
+        let clip = entriesScroll.contentView.bounds.width
+        var overflow = entries.frame.width - clip
+        for id in Self.yieldingColumns where overflow > 0.5 {
+            guard let column = entries.tableColumn(withIdentifier: id) else { continue }
+            let give = min(overflow, column.width - column.minWidth)
+            guard give > 0 else { continue }
+            column.width -= give
+            overflow -= give
+        }
+        if overflow <= 0.5 {
+            var slack = target.width - target.minWidth
+            for id in Self.yieldingColumns.reversed() where slack > 0.5 {
+                guard let column = entries.tableColumn(withIdentifier: id) else { continue }
+                let take = min(slack, (wantedWidths[id] ?? column.width) - column.width)
+                guard take > 0 else { continue }
+                column.width += take
+                slack -= take
+            }
+        }
+        entries.sizeLastColumnToFit()
+    }
+
+    func tableViewColumnDidResize(_ notification: Notification) {
+        guard !isFittingColumns, notification.object as AnyObject? === entries,
+              let column = notification.userInfo?["NSTableColumn"] as? NSTableColumn,
+              Self.yieldingColumns.contains(column.identifier)
+        else { return }
+        // A drag: the width the reader chose is the one to come back to.
+        wantedWidths[column.identifier] = column.width
     }
 
     /// Moves the columns to the size on screen — the widths grow and shrink
@@ -386,9 +473,13 @@ import ToolModuleKit
         let size = ToolPanelFont.size
         guard size != columnWidthSize else { return }
         let ratio = size / columnWidthSize
+        isFittingColumns = true
         ToolPanelTable.scaleColumnWidths(of: entries, by: ratio)
         ToolPanelTable.scaleColumnWidths(of: problems, by: ratio)
+        for (id, width) in wantedWidths { wantedWidths[id] = (width * ratio).rounded() }
+        isFittingColumns = false
         columnWidthSize = size
+        fitColumnsToThePanel()
     }
 
     /// Everything the panel shows, in one call.

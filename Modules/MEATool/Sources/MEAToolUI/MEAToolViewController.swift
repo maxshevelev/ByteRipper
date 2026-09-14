@@ -411,6 +411,10 @@ import ToolModuleKit
 
     private func configureOutline() {
         outline.style = .inset
+        // An opened row's indentation comes out of the Name column rather than
+        // widening it, so the tree keeps inside its scroll view and the inset
+        // style's margins stay on screen — as in the UEFI tree.
+        outline.autoresizesOutlineColumn = false
         outline.usesAlternatingRowBackgroundColors = true
         outline.allowsMultipleSelection = false
         outline.allowsColumnReordering = false

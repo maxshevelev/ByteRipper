@@ -126,6 +126,17 @@ final class UEFIToolFlowTests: XCTestCase {
         })
     }
 
+    /// Opening a row does not widen the tree past its scroll view: the
+    /// indentation comes out of the Name column, so the inset style's margins
+    /// and rounded selection stay on screen.
+    func testOpeningARowKeepsTheTreeInsideItsScrollView() throws {
+        _ = try open(UEFITestImage.make())
+        let tree = try expandRow(0)
+        XCTAssertGreaterThan(tree.numberOfRows, 1, "the premise: a row is open")
+        let clip = try XCTUnwrap(tree.enclosingScrollView?.contentView.bounds.width)
+        XCTAssertLessThanOrEqual(tree.frame.width, clip + 0.5, "tree \(tree.frame.width), clip \(clip)")
+    }
+
     /// Empty padding is left out of the tree until the reader asks for it,
     /// with the checkbox in the panel's title row — left of the reveal button
     /// — and the choice is remembered.

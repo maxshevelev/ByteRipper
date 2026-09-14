@@ -347,6 +347,11 @@ import UEFITool
 
     private func configureOutline() {
         outline.style = .inset
+        // An opened row's indentation comes out of the Name column rather than
+        // widening it: widened, the outline outgrows its scroll view, and the
+        // inset style's margins — and the rounded selection — scroll off the
+        // edges (the system's own behaviour, Finder's list view does the same).
+        outline.autoresizesOutlineColumn = false
         outline.usesAlternatingRowBackgroundColors = true
         outline.allowsMultipleSelection = false
         // The column order is the design's, not a drag target.

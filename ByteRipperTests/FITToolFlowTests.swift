@@ -1154,6 +1154,67 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(clean.textField?.textColor, .labelColor)
     }
 
+    /// The table keeps inside its scroll view, as the UEFI and ME trees do, with
+    /// "Points at" — the last column, the one that gives way first — taking
+    /// the width the other columns leave, and the address never cut short.
+    func testTheTableKeepsInsideItsScrollView() throws {
+        _ = try open(FITTestImage.make())
+        let table = try entriesTable()
+        let clip = try XCTUnwrap(table.enclosingScrollView?.contentView.bounds.width)
+        XCTAssertLessThanOrEqual(table.frame.width, clip + 0.5, "table \(table.frame.width), clip \(clip)")
+        let target = try XCTUnwrap(table.tableColumns.last)
+        XCTAssertEqual(target.title, "Points at")
+        XCTAssertTrue(target.resizingMask.contains(.autoresizingMask), "the column that takes the slack")
+        let address = try XCTUnwrap(table.tableColumns.first { $0.title == "Address" })
+        XCTAssertGreaterThanOrEqual(address.width, address.minWidth)
+        // The floor moves with the zoom (`ToolPanelTable.scaleColumnWidths`),
+        // so it is at least the design's, never under it.
+        XCTAssertGreaterThanOrEqual(address.minWidth, 76, "eight hex digits are never cut short")
+    }
+
+    /// A wider or narrower panel moves "Points at", and leaves the row number
+    /// and the address the width they were. Only below "Points at"'s floor do
+    /// Size and Type give way — and they come back when the panel does.
+    func testResizingThePanelMovesOnlyPointsAt() throws {
+        let controller = try open(FITTestImage.make())
+        let table = try entriesTable()
+        func widths() -> [String: CGFloat] {
+            Dictionary(uniqueKeysWithValues: table.tableColumns.map { ($0.title, $0.width) })
+        }
+        func setPanel(_ width: CGFloat) {
+            controller.setToolPanelWidth(width, animated: false)
+            window?.layoutIfNeeded()
+        }
+        let target = try XCTUnwrap(table.tableColumns.last)
+
+        setPanel(700)
+        let wide = widths()
+        XCTAssertGreaterThan(target.width, target.minWidth + 20, "room to spare: \(wide)")
+
+        setPanel(600)
+        let narrower = widths()
+        XCTAssertLessThan(narrower["Points at"] ?? 0, wide["Points at"] ?? 0, "\(wide) → \(narrower)")
+        for title in ["#", "Type", "Address", "Size"] {
+            XCTAssertEqual(narrower[title], wide[title], "\(title): \(wide) → \(narrower)")
+        }
+
+        setPanel(700)
+        XCTAssertEqual(widths(), wide, "growing goes to Points at, not to the row number")
+
+        // Narrower than the columns' floors: "Points at" stops at its own,
+        // Size gives way, and the row number and the address still do not.
+        setPanel(230)
+        let narrow = widths()
+        XCTAssertEqual(target.width, target.minWidth, accuracy: 0.5, "\(narrow)")
+        XCTAssertLessThan(narrow["Size"] ?? 0, wide["Size"] ?? 0, "\(narrow)")
+        XCTAssertEqual(narrow["Address"], wide["Address"])
+        XCTAssertEqual(narrow["#"], wide["#"])
+
+        // Wide again, what gave way comes back.
+        setPanel(700)
+        XCTAssertEqual(widths(), wide, "\(narrow) → \(widths())")
+    }
+
     /// A microcode whose own image checksum does not add up wears the red
     /// octagon the UEFI tree gives a wrong checksum — and a microcode that is
     /// also behind the catalogue wears the verdict's up arrow beside it.

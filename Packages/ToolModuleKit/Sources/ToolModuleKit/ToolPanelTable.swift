@@ -45,10 +45,24 @@ import AppPalette
     /// the panel was laid out with: a column the user dragged wider keeps
     /// being the wider one, and one nobody has touched lands where the design
     /// put it.
+    ///
+    /// The floor a column gives way to moves with it: a column resized with
+    /// its table would otherwise be squeezed straight back to a floor set for
+    /// text at the old size — eight hex digits at 20 points do not fit where
+    /// they fit at 13. Raised after the width and lowered before it, so neither
+    /// step clamps the other.
     public static func scaleColumnWidths(of table: NSTableView, by ratio: CGFloat) {
         guard ratio > 0, ratio != 1 else { return }
         for column in table.tableColumns {
-            column.width = (column.width * ratio).rounded()
+            let width = (column.width * ratio).rounded()
+            let minWidth = (column.minWidth * ratio).rounded()
+            if ratio > 1 {
+                column.width = width
+                column.minWidth = minWidth
+            } else {
+                column.minWidth = minWidth
+                column.width = width
+            }
         }
     }
 
