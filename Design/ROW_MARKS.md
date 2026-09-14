@@ -154,7 +154,7 @@ after it, the red octagon.
 | Background | the node's `range` against the protected ranges, by the same rule. The ranges lie in the BIOS region, so an ME dump shows none — which is the truth, and the rule stays one rule. |
 | Rail | a row whose values were decoded out of a decompressed module body: the RBE/PM Metadata rows when `pm`/`rbe` is stored compressed today; a module's internals when those are shown |
 | Verdict | none |
-| Problem | facts local to the row: a `$CPD` checksum that does not add up, a manifest whose RSA signature is invalid, a module whose Huffman or LZMA check failed (Issue ids 7 and 19). The last needs the engine's `Issue` to name its module — a result-model change, through the `sync-mea-engine` skill — before it can attach to a row; until then it stays in the Issues group only. |
+| Problem | facts local to the row: a `$CPD` checksum that does not add up, a manifest whose RSA signature is invalid, a module whose Huffman or LZMA check failed (Issue ids 7 and 19), which name their module (`Issue.module`) — a caution on that module's row, and still listed in the Issues group. |
 | Badges | `zipper.page` on a module row stored compressed: indigo for LZMA, and for Huffman when the dictionary is at hand; grey for an encrypted module or a Huffman one with no dictionary. `lock.shield` on the manifest row — the hashes the modules are checked against. |
 
 The Summary tab's status tones and the Issues group are not rows of this kind
@@ -250,7 +250,9 @@ read out of and never for an encrypted one; the rail on the RBE/PM Metadata rows
 when that module is compressed; `lock.shield` on the manifest; an error for a
 `$CPD`, CSE Layout Table or BPDT checksum that does not add up and for a manifest
 RSA signature that does not check out; the legend with Show Markings. A Huffman
-or LZMA check that failed (Issue ids 7 and 19) still stays in the Issues group;
+or LZMA check that failed (Issue ids 7 and 19) names its module since
+`EngineModelRevision` 33 (`Issue.module`), and is a caution on that module's row
+as well as in the Issues group;
 the legend's lines are plain views with every edge constrained rather than
 stacks, because a stack line inside the list was ambiguous in a window; and the
 legend and switch states live in `ToolPanelFont.defaults`, the store the app

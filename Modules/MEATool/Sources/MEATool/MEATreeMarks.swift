@@ -20,7 +20,7 @@ import ToolModuleKit
 public enum MEATreeMarks {
     /// Every mark this tree draws — what its legend lists.
     public static let legendMarks: [ToolRowMark] = [
-        .decompressed, .error, .compressed, .compressedUndecoded, .holdsChecks
+        .decompressed, .error, .caution, .compressed, .compressedUndecoded, .holdsChecks
     ]
 
     /// How a module is stored, from its directory row and its `.met`
@@ -48,18 +48,32 @@ public enum MEATreeMarks {
     static let metadataModules: Set<String> = ["pm", "rbe"]
 
     /// A `$CPD` module's row: the compressed badge when it is stored
-    /// compressed. It opens here only when it is the module the panel's
-    /// metadata table was read out of, and it is not encrypted.
+    /// compressed — it opens here only when it is the module the panel's
+    /// metadata table was read out of, and it is not encrypted — and what the
+    /// engine's module checks said about it (`Issue.module`): an error for an
+    /// error, a caution for the rest. They stay in the Issues group too.
     public static func module(_ module: CPDModule, in partition: CodePartition,
                               analysis: FirmwareAnalysis) -> ToolRowMarks {
+        var errors: [String] = []
+        var cautions: [String] = []
+        for issue in analysis.issues where issue.module == module.name {
+            if issue.severity == .error {
+                errors.append(issue.message)
+            } else {
+                cautions.append(issue.message)
+            }
+        }
+        var roles: [ToolRowMarks.Role] = []
         let stored = storage(of: module, in: partition)
-        guard let compression = stored.compression else { return .none }
-        let opens = !stored.isEncrypted && metadataModules.contains(module.name)
-            && !(analysis.rbePmMetadata ?? []).isEmpty
-        return ToolRowMarks(roles: [.compressed(
-            algorithm: stored.isEncrypted ? "Encrypted \(compression)" : compression,
-            decoded: opens
-        )])
+        if let compression = stored.compression {
+            let opens = !stored.isEncrypted && metadataModules.contains(module.name)
+                && !(analysis.rbePmMetadata ?? []).isEmpty
+            roles.append(.compressed(
+                algorithm: stored.isEncrypted ? "Encrypted \(compression)" : compression,
+                decoded: opens
+            ))
+        }
+        return ToolRowMarks(problem: .worst(errors: errors, cautions: cautions), roles: roles)
     }
 
     /// The code partition's row: its directory checksum.

@@ -85,6 +85,31 @@ final class MEATreeMarksTests: XCTestCase {
         XCTAssertEqual(roles("plain"), [])
     }
 
+    /// A module check that failed is a caution on that module's row — beside
+    /// its badge — and on no other row; an issue about the image stays off the
+    /// module rows.
+    func testAFailedModuleCheckIsACautionOnItsRow() throws {
+        let roots = MEACurator.present(try analysis([
+            "codePartition": cpd([
+                module(0, "kernel"), module(1, "kernel.met", attributes: (2, 0)),
+                module(2, "plain"),
+            ]),
+            "issues": [
+                ["id": 19, "severity": "warning", "message": "LZMA module \"kernel\" does not decompress.",
+                 "module": "kernel"],
+                ["id": 3, "severity": "note", "message": "This firmware is not in the database."],
+            ],
+        ]))
+        let rows = try modules(in: roots)
+        let kernel = try XCTUnwrap(rows.first { $0.title == "kernel" })
+
+        XCTAssertEqual(kernel.marks.problem, .caution(["LZMA module \"kernel\" does not decompress."]))
+        XCTAssertEqual(kernel.marks.roles, [.compressed(algorithm: "LZMA", decoded: false)])
+        XCTAssertNil(rows.first { $0.title == "plain" }?.marks.problem)
+        XCTAssertNotNil(roots.first { $0.title == "Issues" }, "still listed with the rest")
+        XCTAssertTrue(MEATreeMarks.legendMarks.contains(.caution))
+    }
+
     /// The metadata rows wear the rail when their module is stored compressed,
     /// and not otherwise.
     func testTheMetadataRowsWearTheRailWhenTheirModuleIsCompressed() throws {
