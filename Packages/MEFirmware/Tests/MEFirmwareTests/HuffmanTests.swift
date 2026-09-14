@@ -409,6 +409,25 @@ final class HuffmanTests: XCTestCase {
         XCTAssertTrue(wrong.message.contains("Hash"), wrong.message)
     }
 
+    /// What the tables list that no module hashes to: a Huffman module is
+    /// hashed decompressed, an uncompressed one as it is stored, and a hash no
+    /// module has is what is left — in table order, each once.
+    func testTheHashesNoModuleAccountsForAreLeftOver() {
+        let (body, packed) = Self.nibbleBody(0x1000)
+        let data = Data(repeating: 0x11, count: 0x10)
+        let (partition, region, _) = Self.partitionWithoutMetadata(
+            body: body, packed: packed, next: ("data", data))
+        let gone = Digest.sha256Hex(Data("encrypted".utf8))
+        let tables = [Digest.sha256Hex(data), gone, Digest.sha256Hex(body), gone]
+
+        let left = MEFirmwareAnalyzer.unmatchedMetadataHashes(
+            tables, among: [partition], in: region, baseOffset: 0, dictionary: Self.nibbleDictionary())
+
+        XCTAssertEqual(left, [gone])
+        XCTAssertEqual(MEFirmwareAnalyzer.unmatchedMetadataHashes(
+            [], among: [partition], in: region, baseOffset: 0, dictionary: nil), [])
+    }
+
     func testDecodeEmptyDecompressedSizeYieldsEmpty() {
         let dict = Self.identityDictionary()
         let result = HuffmanDecoder.decompress(

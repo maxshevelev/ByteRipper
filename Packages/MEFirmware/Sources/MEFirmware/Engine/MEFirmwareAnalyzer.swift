@@ -672,6 +672,7 @@ public actor MEFirmwareAnalyzer {
         // a row of the table. Best-effort: a missing/unfetchable dictionary
         // skips the check rather than failing the analysis, and an image the
         // engine could not name has no dictionary to pick.
+        var unmatchedHashes: [String]? = nil
         if identity.identified, let cp = codePartition,
            Self.hasHuffmanModuleToValidate(cp, in: region, baseOffset: baseOffset) {
             let dictionaries = try? await data.huffmanDictionaries()
@@ -691,6 +692,30 @@ public actor MEFirmwareAnalyzer {
                 for: cp, in: region, baseOffset: baseOffset,
                 variant: identity.variant, major: identity.major, minor: identity.minor,
                 dictionaries: dictionaries, rbePmHashes: (rbePm ?? []).map(\.hash) + rbeHashes))
+
+            // What the tables list that no module accounts for, over every
+            // `$CPD` partition the image lists — the operational one first, each
+            // partition name once (Boot 2's backup of Boot 1 adds nothing).
+            let tables = (rbePm ?? []).map(\.hash) + rbeHashes
+            if !tables.isEmpty {
+                let family = CPDExtensionParser.family(
+                    major: manifest.major, minor: manifest.minor, hotfix: manifest.hotfix,
+                    build: manifest.build, year: manifest.year, month: manifest.month,
+                    keyLength: manifest.rsaPublicKey?.count)
+                var partitions = [cp]
+                var names: Set<String> = [cp.name]
+                for offset in Self.partitionOffsets(fpt: fpt, bootPartitions: bootPartitions,
+                                                    baseOffset: baseOffset) {
+                    guard let partition = Self.codePartition(atCPD: offset, in: region,
+                                                             baseOffset: baseOffset, family: family),
+                          names.insert(partition.name).inserted else { continue }
+                    partitions.append(partition)
+                }
+                unmatchedHashes = Self.unmatchedMetadataHashes(
+                    tables, among: partitions, in: region, baseOffset: baseOffset,
+                    dictionary: dictionaries?.dictionary(variant: identity.variant,
+                                                         major: identity.major, minor: identity.minor))
+            }
         }
 
         // Phase 9 (identity-gated): the legacy file-8 Home Directory and the
@@ -913,6 +938,7 @@ public actor MEFirmwareAnalyzer {
             oemCustomized: oemCustomized,
             fwUpdateSupport: fwUpdateSupport,
             independentFirmware: independent.isEmpty ? nil : independent,
+            unmatchedMetadataHashes: unmatchedHashes,
             issues: issues)
     }
 
@@ -1258,6 +1284,113 @@ public actor MEFirmwareAnalyzer {
         return issues
     }
 
+    /// The `$CPD` at `offset` (region-relative) as a code partition: its
+    /// directory, with every `.met` body read as the operational partition's
+    /// are. Nil where no `$CPD` header is.
+    static func codePartition(atCPD offset: Int, in region: Data, baseOffset: Int,
+                              family: CPDExtensionParser.Family) -> CodePartition? {
+        guard let header = CPDParser.decodeHeader(in: region, at: offset) else { return nil }
+        let entries = CPDParser.entries(of: header, in: region, cpdBase: header.base)
+        return CodePartition(
+            name: header.partitionName, offset: baseOffset + header.base,
+            headerVersion: header.headerVersion, headerLength: header.headerLength,
+            entryCount: header.numModules, checksumValid: nil,
+            modules: entries.enumerated().map { index, entry in
+                let metadata = entry.name.hasSuffix(".met") && !entry.isHuffman && entry.size > 0
+                    ? CPDExtensionParser.decodeMetBody(
+                        in: region, contentBase: header.base + entry.offset,
+                        bodySize: Int(entry.size), family: family, baseOffset: baseOffset)
+                    : nil
+                return CPDModule(id: index, name: entry.name, offset: entry.offset,
+                                 isHuffman: entry.isHuffman, size: Int(entry.size),
+                                 extensions: metadata)
+            })
+    }
+
+    /// Region-relative offsets of every non-empty partition the `$FPT` and the
+    /// boot BPDTs list, in that order, each once — the places a `$CPD` can be.
+    private static func partitionOffsets(fpt: FPTParser.Result?, bootPartitions: [BPDT]?,
+                                         baseOffset: Int) -> [Int] {
+        var offsets: [Int] = []
+        for part in fpt?.partitions ?? [] where !part.empty { offsets.append(part.offset) }
+        for boot in bootPartitions ?? [] {
+            for entry in boot.entries where !entry.empty { offsets.append(entry.offset - baseOffset) }
+        }
+        var seen = Set<Int>()
+        return offsets.filter { seen.insert($0).inserted }
+    }
+
+    /// The hashes the `pm` / `rbe` metadata tables list that no module of the
+    /// image hashes to — upstream's leftover report (MEA.py 5814–5817, printed
+    /// under `-bypass`), which says what those tables name that the image does
+    /// not account for: most often a module that is encrypted (NFTP `pavp`,
+    /// PCOD), which cannot be hashed as it is loaded.
+    ///
+    /// Every module without metadata in `partitions` is hashed the way
+    /// `mod_anl` hashes it against the tables: a Huffman one decompressed; an
+    /// uncompressed one as stored; an LZMA one (its stream header says so) as
+    /// stored, and else decompressed (MEA.py 7120–7140, 7300–7330). `pavp` is
+    /// skipped, as upstream skips it. A module with a `.met` is checked against
+    /// its own hash instead and matches no table row. In table order, each once.
+    static func unmatchedMetadataHashes(
+        _ tables: [String], among partitions: [CodePartition], in region: Data, baseOffset: Int,
+        dictionary: HuffmanDictionary?
+    ) -> [String] {
+        guard let length = tables.first?.count else { return [] }
+        let listed = Set(tables)
+        func digest(_ data: Data) -> String {
+            length == 96 ? Digest.sha384Hex(data) : Digest.sha256Hex(data)
+        }
+        var matched = Set<String>()
+        for partition in partitions {
+            if let dictionary {
+                for slice in huffmanSlices(for: partition, in: region, baseOffset: baseOffset)
+                where !slice.fromMetadata {
+                    guard slice.offset >= 0, slice.offset + slice.compressedSize <= region.count else { continue }
+                    let blob = region.subdata(in: (region.startIndex + slice.offset)
+                                                ..< (region.startIndex + slice.offset + slice.compressedSize))
+                    let result = HuffmanDecoder.decompress(
+                        module: blob, compressedSize: slice.compressedSize,
+                        decompressedSize: slice.uncompressedSize, dictionary: dictionary)
+                    let hash = digest(result.output)
+                    if listed.contains(hash) { matched.insert(hash) }
+                }
+            }
+            let headerBase = partition.offset - baseOffset
+            for module in partition.modules where !module.isHuffman && module.size > 0 {
+                let name = module.name
+                guard !name.hasSuffix(".met"), !name.hasSuffix(".man"), name != "pavp",
+                      !partition.modules.contains(where: { $0.name == name + ".met" }) else { continue }
+                let start = headerBase + module.offset
+                guard start >= 0, start + module.size <= region.count else { continue }
+                let stored = region.subdata(in: (region.startIndex + start)
+                                              ..< (region.startIndex + start + module.size))
+                let hash = digest(stored)
+                if listed.contains(hash) {
+                    matched.insert(hash)
+                } else if let size = lzmaUncompressedSize(of: stored),
+                          let decompressed = LZMAModule.decompress(module: stored, uncompressedSize: size) {
+                    let unpacked = digest(decompressed)
+                    if listed.contains(unpacked) { matched.insert(unpacked) }
+                }
+            }
+        }
+        var seen = Set<String>()
+        return tables.filter { !matched.contains($0) && seen.insert($0).inserted }
+    }
+
+    /// The uncompressed size an LZMA module's stream header gives, when the
+    /// bytes open with the header upstream recognises one by (`36 00 40 00 00`,
+    /// and zeros at 0xE–0x10); nil for anything else.
+    private static func lzmaUncompressedSize(of data: Data) -> Int? {
+        let bytes = [UInt8](data.prefix(0x11))
+        guard bytes.count == 0x11, bytes[0..<5] == [0x36, 0x00, 0x40, 0x00, 0x00][...],
+              bytes[0xE..<0x11] == [0, 0, 0][...] else { return nil }
+        var size: UInt64 = 0
+        for index in 0..<8 { size |= UInt64(bytes[5 + index]) << (8 * UInt64(index)) }
+        return size > 0 && size < UInt64(Int32.max) ? Int(size) : nil
+    }
+
     /// Region-relative `$CPD` offsets of the image's RBEP partitions, from the
     /// `$FPT` and from every boot BPDT — each listed once.
     private static func rbepOffsets(fpt: FPTParser.Result?, bootPartitions: [BPDT]?,
@@ -1290,27 +1423,13 @@ public actor MEFirmwareAnalyzer {
     ) -> [String] {
         var hashes: [String] = []
         for offset in offsets {
-            guard let header = CPDParser.decodeHeader(in: region, at: offset) else { continue }
-            let entries = CPDParser.entries(of: header, in: region, cpdBase: header.base)
             // `rbe` has a `rbe.met` of its own, whose Module Attributes give
-            // its sizes: every `.met` body is read, as the operational
-            // partition's are.
-            let partition = CodePartition(
-                name: header.partitionName, offset: baseOffset + header.base,
-                headerVersion: header.headerVersion, headerLength: header.headerLength,
-                entryCount: header.numModules, checksumValid: nil,
-                modules: entries.enumerated().map { index, entry in
-                    let metadata = entry.name.hasSuffix(".met") && !entry.isHuffman && entry.size > 0
-                        ? CPDExtensionParser.decodeMetBody(
-                            in: region, contentBase: header.base + entry.offset,
-                            bodySize: Int(entry.size), family: family, baseOffset: baseOffset)
-                        : nil
-                    return CPDModule(id: index, name: entry.name, offset: entry.offset,
-                                     isHuffman: entry.isHuffman, size: Int(entry.size),
-                                     extensions: metadata)
-                })
-            guard let module = partition.modules.first(where: { $0.name == "rbe" }),
+            // its sizes.
+            guard let partition = codePartition(atCPD: offset, in: region, baseOffset: baseOffset,
+                                                family: family),
+                  let module = partition.modules.first(where: { $0.name == "rbe" }),
                   module.size > 0 else { continue }
+            let header = (base: partition.offset - baseOffset, ())
             let body: Data
             if module.isHuffman {
                 guard let dictionary = dictionaries?.dictionary(variant: variant, major: major,

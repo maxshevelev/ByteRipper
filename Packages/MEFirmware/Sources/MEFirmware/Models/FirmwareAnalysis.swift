@@ -152,6 +152,12 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// ("Boot 2") — which upstream lists as tables of their own and this engine
     /// folds into the one table. nil when it is stored once.
     public var redundantCopies: [String]? = nil
+    /// The hashes the `pm` / `rbe` module metadata tables list that no module
+    /// of the image hashes to (upstream's leftover report, MEA.py 5814) — most
+    /// often an encrypted module, which cannot be hashed as it is loaded, such
+    /// as NFTP `pavp`. Uppercase hex, in table order. Empty when every hash is
+    /// accounted for; nil when no table was read.
+    public var unmatchedMetadataHashes: [String]? = nil
     public var issues: [Issue]
 }
 
@@ -1946,5 +1952,8 @@ public enum EngineModelRevision {
     ///
     /// 33 adds `Issue.module`: the Huffman and LZMA module checks name the
     /// module they are about.
-    public static let current = 33
+    ///
+    /// 34 adds `unmatchedMetadataHashes`: what the rbe / pm metadata tables
+    /// list that no module of the image accounts for.
+    public static let current = 34
 }
