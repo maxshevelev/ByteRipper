@@ -1,4 +1,5 @@
 import XCTest
+import FirmwareCompressionTestSupport
 @testable import UEFIImage
 
 /// `LazyUEFITree`: the shared, incrementally-materialized parse that a
@@ -337,16 +338,19 @@ final class LazyUEFITreeTests: XCTestCase {
         XCTAssertFalse(tree.children(of: refreshedVolumes[1].id).isEmpty)
     }
 
-    func testInvalidateWithOverlapCollapsesOnlyTheAffectedVolume() async {
+    func testInvalidateWithOverlapCollapsesOnlyTheAffectedVolume() async throws {
         let source = MutableByteSource(twoVolumeImage())
         let tree = await built(source)
         let bios = tree.rootNodes[0].children.first { $0.name == "BIOS region" }!
         let volumes = await expandAsync(tree, bios.id).filter { $0.kind == .volume }
-        _ = await expandAsync(tree, volumes[0].id)
+        let files = await expandAsync(tree, volumes[0].id).filter { $0.kind == .file }
         _ = await expandAsync(tree, volumes[1].id)
 
-        // Flip a byte inside the first volume's file body (well inside its range).
-        let editOffset = volumes[0].range.lowerBound + 0x30
+        // Flip a byte inside the first volume's file body — not its header:
+        // volume + 0x30 is the volume header's own length and checksum, and a
+        // header edit is the region's to answer (its length may have moved the
+        // volumes after it).
+        let editOffset = try XCTUnwrap(files.first).body.lowerBound + 1
         source.overwrite(at: editOffset, with: [0xAA])
         tree.invalidate(editedRange: editOffset..<(editOffset + 1), sizeDelta: 0)
 
@@ -383,6 +387,61 @@ final class LazyUEFITreeTests: XCTestCase {
         let filesAfter = await expandAsync(tree, firstVolumeID)
         let fileAfter = filesAfter.first { $0.kind == .file }!
         XCTAssertEqual(source.bytes(in: fileAfter.body), [UInt8](repeating: 0x42, count: Int(fileAfter.body.count)))
+    }
+
+    /// The report: a compressed section put back shorter moves the file after
+    /// it up, and the rewrite runs from the section to the end of where that
+    /// file used to be. Narrowed into the section, the volume kept the moved
+    /// file at its old offset — erased bytes now, read as a file of size
+    /// 0xFFFFFF with every checksum wrong. An edit like that is the volume's,
+    /// and collapses it; one inside the section's stream alone still is the
+    /// section's, and leaves the files beside it where they are.
+    func testAnEditThatMovesTheFilesAfterASectionCollapsesTheirVolume() async throws {
+        let inner = TestImage.nameSection("Inner")
+        let compressed = TestImage.compressionSection(
+            algorithm: 0x02, body: LZMATestEncoder.lzma(inner), uncompressedLength: UInt32(inner.count))
+        let image = TestImage.volume(length: 0x1000, files: [
+            TestImage.sectionedFile(sections: [compressed]),
+            TestImage.file(guid: KnownGUIDs.guid("22222222-3333-4444-5555-666666666666"),
+                           body: [UInt8](repeating: 0x42, count: 40))
+        ])
+        let tree = await built(MutableByteSource(image))
+        let volume = try XCTUnwrap(tree.rootNodes.first { $0.kind == .volume })
+        let files = await expandAsync(tree, volume.id).filter { $0.kind == .file }
+        XCTAssertEqual(files.count, 2)
+        let section = try XCTUnwrap(files[0].children.first { $0.compression != nil })
+        _ = await expandAsync(tree, section.id)
+
+        // Inside the stream: the section is read again, the files stay.
+        let insideStream = (section.body.lowerBound + 2)..<(section.body.lowerBound + 3)
+        tree.invalidate(editedRange: insideStream, sizeDelta: 0)
+        let afterStream = try XCTUnwrap(tree.rootNodes.first { $0.kind == .volume })
+        XCTAssertEqual(tree.children(of: afterStream.id).filter { $0.kind == .file }.count, 2,
+                       "an edit in the stream alone keeps the volume's files")
+
+        // From the section's header to the end of the next file: the layout.
+        tree.invalidate(editedRange: section.range.lowerBound..<files[1].range.upperBound, sizeDelta: 0)
+        let afterMove = try XCTUnwrap(tree.rootNodes.first { $0.kind == .volume })
+        XCTAssertTrue(afterMove.isExpandable, "the volume is read again")
+        XCTAssertEqual(afterMove.children, [])
+    }
+
+    /// Bytes typed into a file's size field, inside one file: that file's
+    /// neighbours may have moved, so its volume is read again.
+    func testAnEditToAFilesHeaderCollapsesItsVolume() async throws {
+        let tree = await built(twoVolumeImage())
+        let bios = tree.rootNodes[0].children.first { $0.name == "BIOS region" }!
+        let volumes = await expandAsync(tree, bios.id).filter { $0.kind == .volume }
+        let files = await expandAsync(tree, volumes[0].id).filter { $0.kind == .file }
+        _ = await expandAsync(tree, volumes[1].id)
+        let file = try XCTUnwrap(files.first)
+
+        tree.invalidate(editedRange: (file.header.lowerBound + 0x14)..<(file.header.lowerBound + 0x17), sizeDelta: 0)
+
+        let refreshed = tree.children(of: tree.rootNodes[0].children.first { $0.name == "BIOS region" }!.id)
+            .filter { $0.kind == .volume }
+        XCTAssertTrue(refreshed[0].isExpandable)
+        XCTAssertFalse(refreshed[1].children.isEmpty, "the other volume is untouched")
     }
 
     // MARK: - invalidate — sizeDelta != 0

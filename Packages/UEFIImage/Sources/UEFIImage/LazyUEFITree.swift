@@ -748,7 +748,22 @@ public final class LazyUEFITree {
         // is not, and goes with the section that holds it.
         guard node.fileRange?.overlaps(range) ?? false, !node.children.isEmpty
         else { return (node, false) }
-        let results = node.children.map { collapseOneOverlapping($0, range: range) }
+        // Narrowing into a child is sound only while the edit is that child's
+        // alone: wholly inside it, and clear of its header, where its size is.
+        // An edit that runs from one child into the next, or rewrites a size,
+        // may have moved every child after it — a compressed section put back
+        // shorter moves the files behind it up — and then this node's own
+        // layout is what went stale. Narrowed anyway, the section was read
+        // again while the moved file stayed at its old offset, over the erased
+        // bytes it left behind.
+        let inFile = node.children.filter { $0.fileRange?.overlaps(range) ?? false }
+        let ownedByOneChild = inFile.count <= 1 && inFile.allSatisfy { child in
+            child.range.lowerBound <= range.lowerBound && range.upperBound <= child.range.upperBound
+                && !child.header.overlaps(range)
+        }
+        let results = ownedByOneChild
+            ? node.children.map { collapseOneOverlapping($0, range: range) }
+            : node.children.map { (node: $0, changed: false) }
         if results.contains(where: \.changed) {
             node.children = results.map(\.node)
             return (node, true)
