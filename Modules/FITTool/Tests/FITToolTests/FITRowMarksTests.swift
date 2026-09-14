@@ -74,6 +74,54 @@ final class FITRowMarksTests: XCTestCase {
         XCTAssertTrue(FITRowMarks.legendMarks.contains(.holdsChecks))
     }
 
+    // MARK: - The Boot Guard background
+
+    private func ranges(_ list: [(ProtectedRange.Kind, Range<UInt64>)]) -> ProtectedRanges {
+        ProtectedRanges(ranges: list.map {
+            ProtectedRange(kind: $0.0, range: $0.1, source: 0xF000..<0xF010)
+        })
+    }
+
+    /// A row wholly inside the IBB wears the IBB background; the header, whose
+    /// table lies outside it, wears none.
+    func testARowPointingIntoTheIBBWearsItsBackground() {
+        let shown = display([TestFIT.Row(FIT.microcodeType, target: microcode)])
+            .protecting(by: ranges([(.ibb, 0x2000..<0x3000)]))
+
+        XCTAssertEqual(marks(shown, row: 1).protection, .ibb)
+        XCTAssertNil(marks(shown, row: 0).protection)
+    }
+
+    /// The header is placed by the table's own bytes.
+    func testTheHeaderIsPlacedByTheTablesBytes() {
+        let shown = display([TestFIT.Row(FIT.microcodeType, target: microcode)])
+            .protecting(by: ranges([(.phoenix, 0x1000..<0x1100)]))
+
+        XCTAssertEqual(marks(shown, row: 0).protection, .firmware)
+        XCTAssertNil(marks(shown, row: 1).protection)
+    }
+
+    /// A component only partly covered gets no tint and the partly-protected
+    /// badge, after the badge it may already wear.
+    func testAPartlyCoveredComponentWearsTheBadgeNotTheTint() {
+        let shown = display([
+            TestFIT.Row(FIT.microcodeType, target: microcode),
+            TestFIT.Row(FIT.bootPolicyType, target: 0x4000)
+        ]).protecting(by: ranges([(.ibb, 0x2100..<0x2200), (.ibb, 0x4000..<0x4004)]))
+
+        XCTAssertNil(marks(shown, row: 1).protection)
+        XCTAssertEqual(marks(shown, row: 1).roles, [.partlyProtected])
+        XCTAssertEqual(marks(shown, row: 2).roles.last, .partlyProtected)
+        XCTAssertEqual(marks(shown, row: 2).roles.count, 2, "the holds-checks badge first")
+    }
+
+    /// Before the ranges are read nothing is placed, and nothing is tinted.
+    func testNoRangesPlaceNothing() {
+        let plain = display([TestFIT.Row(FIT.microcodeType, target: microcode)])
+        XCTAssertEqual(plain.protecting(by: nil), plain)
+        XCTAssertEqual(plain.protecting(by: ProtectedRanges()).rows.map(\.protection), [nil, nil])
+    }
+
     /// Each "latest" state is a verdict of the shared catalogue; no state, no
     /// verdict.
     func testTheLatestStatesAreTheCataloguesVerdicts() {
@@ -83,7 +131,7 @@ final class FITRowMarksTests: XCTestCase {
                        "Catalogue lists a newer revision (r.F0)")
         XCTAssertEqual(FITRowMarks.verdict(of: .undecided(newestRevision: 0xF0))?.mark, .newerMaybe)
         XCTAssertNil(FITRowMarks.verdict(of: .notRated))
-        XCTAssertTrue(FITRowMarks.legendMarks.allSatisfy { [.verdict, .problem, .role].contains($0.channel) },
-                      "no paint: the table has nothing for Show Markings to hide")
+        XCTAssertFalse(FITRowMarks.legendMarks.contains(.decompressed),
+                       "no rail: nothing a FIT address points at is inside a compressed section")
     }
 }

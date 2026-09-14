@@ -14,7 +14,8 @@ import UEFIImage
 public enum FITRowMarks {
     /// Every mark this table draws — what its legend lists.
     public static let legendMarks: [ToolRowMark] = [
-        .newest, .newerListed, .newerMaybe, .error, .caution, .holdsChecks
+        .protectedIBB, .protectedFirmware,
+        .newest, .newerListed, .newerMaybe, .error, .caution, .holdsChecks, .partlyProtected
     ]
 
     /// The words on the badge of a row whose component holds what the IBB is
@@ -50,8 +51,19 @@ public enum FITRowMarks {
                 cautions.append("The microcode image cannot be read whole, so its checksum is not checked")
             }
         }
-        let roles = holdsChecks(type: row.model.entry.type).map { [ToolRowMarks.Role.holdsChecks($0)] } ?? []
-        return ToolRowMarks(problem: .worst(errors: errors, cautions: cautions), roles: roles)
+        var roles = holdsChecks(type: row.model.entry.type).map { [ToolRowMarks.Role.holdsChecks($0)] } ?? []
+        // The background by the same rule as the UEFI tree's: wholly inside the
+        // IBB, wholly inside what the firmware checks, or — for bytes only
+        // partly covered — no tint and the badge (ROW_MARKS.md §2).
+        var protection: ToolRowMarks.Protection?
+        switch row.protection {
+        case .ibb: protection = .ibb
+        case .protected: protection = .firmware
+        case .partial: roles.append(.partlyProtected)
+        case nil: break
+        }
+        return ToolRowMarks(protection: protection,
+                            problem: .worst(errors: errors, cautions: cautions), roles: roles)
     }
 
     /// The verdict a row's "latest" state is drawn as, and what the pointer

@@ -34,6 +34,11 @@ public struct FITDisplayRow: Equatable, Sendable {
     /// wherever nothing the collection holds matches. The Type column wears it
     /// as an icon ahead of the warning.
     public var latestState: MicrocodeLatest
+    /// How the bytes the row stands for — the component it points at, or the
+    /// table itself for the header — lie against the image's Boot Guard and
+    /// vendor protected ranges (`ROW_MARKS.md` §5.2). Nil until the ranges are
+    /// read, and where none of them touches those bytes.
+    public var protection: ProtectedRanges.Protection? = nil
     /// The zone for the row itself — sixteen bytes of the table.
     public var zoneID: String
     /// Those sixteen bytes.
@@ -188,6 +193,30 @@ extension FITDisplay {
             copy.rows[index].latestState = MicrocodeCatalogue.latest(of: header, in: catalogue)
         }
         return copy
+    }
+
+    /// The same display with every row placed against the image's protected
+    /// ranges: a row by the component it points at, the header by the table's
+    /// own bytes, and a row that points nowhere not at all. Nil ranges — not
+    /// read yet — leave the display as it is.
+    ///
+    /// Like the verdicts, it changes the marks and never the map.
+    public func protecting(by ranges: ProtectedRanges?) -> FITDisplay {
+        guard let ranges else { return self }
+        var copy = self
+        let table = tableRange
+        for index in copy.rows.indices {
+            let row = copy.rows[index]
+            let bytes = row.index == 0 ? table : row.targetRange
+            copy.rows[index].protection = bytes.flatMap { ranges.protection(of: $0) }
+        }
+        return copy
+    }
+
+    /// The table's own bytes: from the header's sixteen to the last row's.
+    var tableRange: Range<UInt64>? {
+        guard let first = rows.first, let last = rows.last else { return nil }
+        return first.rowRange.lowerBound..<last.rowRange.upperBound
     }
 }
 

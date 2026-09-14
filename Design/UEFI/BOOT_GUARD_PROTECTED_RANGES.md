@@ -615,8 +615,10 @@ differs from the text below:
   `ProtectedRanges.rebuildRanges`, and the app hands it the parent's.
 - The UEFI tree draws the background, the partly-protected and holds-checks
   badges, and a hash that does not match — an error, or a caution for the IBB
-  (§6.1). The FIT table and the ME tree do not yet: they have no row marks at
-  all until steps 3 and 4 of `ROW_MARKS.md`.
+  (§6.1). The FIT table draws the background and the partly-protected badge
+  too (2026-09-14): each row by the component it points at, the header by the
+  table's own bytes, once the session has read the ranges behind the table. The
+  ME tree does not yet: it has no row marks until step 3 of `ROW_MARKS.md`.
 - §9.5: `ZoneKind` still has one case. A zone of its own kind needs the dump to
   draw it, which is a change of its own.
 

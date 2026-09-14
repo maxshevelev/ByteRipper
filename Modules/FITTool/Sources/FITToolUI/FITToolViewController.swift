@@ -50,6 +50,7 @@ import ToolModuleKit
     /// detail's (`Design/ROW_MARKS.md` §6).
     private let entriesPane = NSView()
     let legend = ToolRowMarksLegend(panel: "FIT", marks: FITRowMarks.legendMarks)
+    private static let rowViewIdentifier = NSUserInterfaceItemIdentifier("fitRow")
     private let detail = ToolDetailScroll()
     private let splitter = ALSplitView()
     private let summaryLabel = NSTextField(labelWithString: "")
@@ -175,6 +176,7 @@ import ToolModuleKit
             legend.trailingAnchor.constraint(equalTo: entriesPane.trailingAnchor),
             legend.bottomAnchor.constraint(equalTo: entriesPane.bottomAnchor)
         ])
+        legend.onShowMarkingsChanged = { [weak self] _ in self?.updateRowMarks() }
         splitter.addPane(entriesPane)
         splitter.addPane(detail)
         splitter.setPaneLayout(.fill, at: 0)
@@ -398,6 +400,7 @@ import ToolModuleKit
 
         summaryLabel.stringValue = display.summary
         entries.reloadData()
+        updateRowMarks()
         problems.reloadData()
         renderDetail(display.detail, subject: focus.map(String.init) ?? "")
         if let focus, let row = display.rows.firstIndex(where: { $0.index == focus }) {
@@ -609,9 +612,7 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
         // verdict against the catalogue. Both are row-wide states worn on the
         // column the row is named by, in the icons of the shared catalogue.
         if column.identifier == Column.type {
-            let marks = FITRowMarks.marks(for: entry, problems: display.problems)
-            ToolPanelTable.setProblem(marks.problem, on: cell)
-            ToolPanelTable.setBadges(marks.roles, on: cell)
+            ToolPanelTable.dress(cell, with: marks(ofRow: row))
             let verdict = FITRowMarks.verdict(of: entry.latestState)
             ToolPanelTable.setVerdict(verdict?.mark, toolTip: verdict?.toolTip, on: cell)
         }
@@ -642,6 +643,38 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
             ? "Version \(entry.versionText)"
             : (entry.targetText.isEmpty ? nil : entry.targetText)
         return cell
+    }
+
+    /// The entries' rows carry the Boot Guard background; the findings list
+    /// under them is a strip of lines, not rows of the image, and keeps the
+    /// plain row.
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        guard tableView === entries else { return nil }
+        let rowView = tableView.makeView(withIdentifier: Self.rowViewIdentifier, owner: self)
+            as? ToolPanelRowView ?? {
+                let created = ToolPanelRowView()
+                created.identifier = Self.rowViewIdentifier
+                return created
+            }()
+        rowView.showsMarkings = legend.showsMarkings
+        rowView.marks = marks(ofRow: row)
+        return rowView
+    }
+
+    /// What an entry row wears besides its text, decided in the pure target.
+    private func marks(ofRow row: Int) -> ToolRowMarks {
+        guard row >= 0, row < display.rows.count else { return .none }
+        return FITRowMarks.marks(for: display.rows[row], problems: display.problems)
+    }
+
+    /// The row views on screen, given their background again: reloading the
+    /// cells does not reach a row view, and the ranges land after the rows.
+    private func updateRowMarks() {
+        entries.enumerateAvailableRowViews { rowView, row in
+            guard let rowView = rowView as? ToolPanelRowView else { return }
+            rowView.showsMarkings = legend.showsMarkings
+            rowView.marks = marks(ofRow: row)
+        }
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {

@@ -233,10 +233,14 @@ Phoenix hash files and the Insyde flash device map, the hash problems, and the
 four marks in its legend. The ME tree takes its marks with step 3, which draws none
 yet. Step 4 is in for the FIT table's problems and legend (2026-09-14):
 `FITRowMarks` decides a row's problem and verdict, the verdicts are marks of the
-shared catalogue, and the legend lists the verdicts and the two problems with no
-Show Markings switch, since the table paints nothing. `lock.shield` is on the
-Key Manifest and Boot Policy rows and in the legend. The Boot Guard background
-and `shield.lefthalf.filled` of step 5 are not drawn in the FIT table yet. Where the code differs from the
+shared catalogue, and the legend lists them. `lock.shield` is on the Key Manifest
+and Boot Policy rows. Step 5 is in for the FIT table too: once the table is up the
+session reads the image's protected ranges through the pane's tree
+(`LazyUEFITree.resolveProtectedRanges`), and `FITDisplay.protecting(by:)` places
+every row — by `targetRange`, the header by the table's own bytes — so the rows
+wear the IBB and firmware-checked backgrounds and `shield.lefthalf.filled`, with
+the Show Markings switch in the legend. The ranges are kept across re-reads until
+the next ones land, so a background does not blink off on every edit. Where the code differs from the
 text: a compressed section carries `UEFINode.compression` (algorithm, and
 whether it decodes), set by the parser, which is what the badge is read from;
 the legend's lines are plain views with every edge constrained rather than

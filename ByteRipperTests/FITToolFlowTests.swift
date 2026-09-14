@@ -1176,16 +1176,21 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(verdict.toolTip, "Catalogue lists a newer revision (r.F0)")
     }
 
-    /// The panel explains its icons: a legend under the table, listing the
-    /// verdicts and the problems in the catalogue's words, and no Show Markings
-    /// switch — the table paints nothing it could hide.
+    /// The panel explains its marks: a legend under the table, listing the
+    /// Boot Guard backgrounds, the verdicts, the problems and the badges in the
+    /// catalogue's words, with the Show Markings switch for the backgrounds —
+    /// and the entries' rows are the rows that paint them.
     func testThePanelCarriesALegendOfItsMarks() throws {
         _ = try open(FITTestImage.make())
         let panel = try XCTUnwrap(controller?.tools.panel)
         let legend = try XCTUnwrap(descendants(of: panel, ToolRowMarksLegend.self).first,
                                    "a legend in the FIT panel")
         XCTAssertEqual(legend.listedMeanings, FITRowMarks.legendMarks.map(\.meaning))
-        XCTAssertFalse(legend.offersShowMarkings)
+        XCTAssertTrue(legend.offersShowMarkings)
+
+        let table = try entriesTable()
+        XCTAssertTrue(table.rowView(atRow: 0, makeIfNecessary: true) is ToolPanelRowView,
+                      "an entry row can wear a background")
     }
 
     // MARK: - The "latest" marker in the Type column

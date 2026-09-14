@@ -229,6 +229,7 @@ struct FITParkedState: ToolSessionState {
             self.onDisplay?(self.display)
 
             self.nameTargets(of: report, in: tree, generation: generation)
+            self.readProtection(in: tree, generation: generation)
         }
     }
 
@@ -255,6 +256,31 @@ struct FITParkedState: ToolSessionState {
             self.onTargetsNamed?()
         }
     }
+
+    /// The image's protected ranges, as last read — what every display this
+    /// session shows is placed against, so a re-show for the names or the
+    /// catalogue keeps its backgrounds. Kept across a re-read until the next
+    /// ranges land: they change far less often than the table is read, and a
+    /// background that went and came back on every edit would say nothing.
+    private var readRanges: ProtectedRanges?
+
+    /// Reads the protected ranges behind the table and shows its rows against
+    /// them (`ROW_MARKS.md` §5.2) — like the names, never in front of the
+    /// table: the ranges can mean opening compressed sections.
+    private func readProtection(in tree: LazyUEFITree, generation: Int) {
+        Task { [weak self] in
+            guard let self else { return }
+            let ranges = await self.protectedRanges(of: tree)
+            guard self.generation == generation else { return }
+            self.readRanges = ranges
+            self.show(self.display)
+            self.onProtectionRead?()
+        }
+    }
+
+    /// Called when a read's protected ranges have been applied — the seam a
+    /// test waits on.
+    var onProtectionRead: (() -> Void)?
 
     /// The pane's shared tree with its top level built and its address mapping
     /// worked out — the two things a FIT read cannot start without. Nil when
@@ -368,6 +394,7 @@ struct FITParkedState: ToolSessionState {
     }
 
     private func show(_ display: FITDisplay) {
+        let display = display.protecting(by: readRanges)
         self.display = display
         cpuidsInTheImage = Set(display.rows.compactMap {
             $0.cpuidText.flatMap { UInt32($0, radix: 16) }
