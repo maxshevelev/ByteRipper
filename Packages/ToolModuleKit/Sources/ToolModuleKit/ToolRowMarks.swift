@@ -7,9 +7,9 @@ import Foundation
 /// One vocabulary for every panel, because a reader moves between the UEFI
 /// tree, the FIT table and the ME tree on the same image, and a rose row has to
 /// mean the same thing in each.
-public struct ToolRowMarks: Equatable, Sendable {
+public struct ToolRowMarks: Hashable, Sendable {
     /// Background: what an edit to the row's bytes breaks.
-    public enum Protection: Equatable, Sendable {
+    public enum Protection: Hashable, Sendable {
         /// Wholly inside the Boot Guard IBB.
         case ibb
         /// Wholly inside ranges the firmware checks at boot.
@@ -18,7 +18,7 @@ public struct ToolRowMarks: Equatable, Sendable {
 
     /// The row's problems, as one icon: an error when any of them is one, a
     /// caution otherwise. Every line is in the icon's tooltip.
-    public enum Problem: Equatable, Sendable {
+    public enum Problem: Hashable, Sendable {
         case error([String])
         case caution([String])
 
@@ -43,7 +43,7 @@ public struct ToolRowMarks: Equatable, Sendable {
     }
 
     /// A badge: what the row is to the others.
-    public enum Role: Equatable, Sendable {
+    public enum Role: Hashable, Sendable {
         /// Holds compressed data — `decoded` when this project opens it.
         case compressed(algorithm: String, decoded: Bool)
         /// Holds what other structures are checked against: protected ranges,
@@ -144,7 +144,7 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
         case .protectedFirmware:
             return "Inside a range the firmware checks at boot"
         case .decompressed:
-            return "A compressed section that opens here, and what came out of it"
+            return "Read out of compressed data, and the compressed data open on it"
         case .newest:
             return "The newest revision the catalogue lists for this processor and platform"
         case .newerListed:
