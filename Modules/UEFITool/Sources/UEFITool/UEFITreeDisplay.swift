@@ -72,6 +72,20 @@ public enum UEFITreeDisplay {
         }
     }
 
+    /// Padding nobody wrote to: erased bytes between structures. The tree
+    /// leaves these out unless the reader asks for them — a dump is full of
+    /// them, and a row that stands for nothing is a row to scroll past.
+    /// Padding that holds data stays, and so does free space inside a volume,
+    /// which says how much room the volume has.
+    public static func isEmptyPadding(_ node: UEFINode) -> Bool {
+        node.kind == .padding && node.isErased
+    }
+
+    /// `nodes` as the tree lists them: every one, or all but the empty padding.
+    public static func listed(_ nodes: [UEFINode], showsEmptyPadding: Bool) -> [UEFINode] {
+        showsEmptyPadding ? nodes : nodes.filter { !isEmptyPadding($0) }
+    }
+
     public static func present(_ image: UEFIImage) -> PresentedImage {
         guard image.roots.count == 1, let root = image.roots.first,
               isWrapper(root), !root.children.isEmpty

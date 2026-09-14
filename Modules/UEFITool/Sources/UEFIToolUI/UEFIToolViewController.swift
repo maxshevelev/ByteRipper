@@ -52,6 +52,10 @@ import UEFITool
     /// the next so the data source reads the same top level the last show laid
     /// out.
     private var presented = UEFITreeDisplay.PresentedImage(title: nil, rows: [])
+    /// Whether the tree lists empty padding — off until the reader turns it on
+    /// from the tree's menu, and remembered like the panel's other settings.
+    private(set) var showsEmptyPadding = ToolPanelFont.defaults.bool(forKey: showsEmptyPaddingKey)
+    static let showsEmptyPaddingKey = "UEFIStructure.ShowsEmptyPadding"
     private var focus: NodeID?
     /// The detail on screen, kept so the rows can be rebuilt at a new type
     /// size without waiting for the next parse — a zoom is not a re-read.
@@ -121,6 +125,9 @@ import UEFITool
     /// the same act — go where the caret points — pointed at the tree instead
     /// of the dump.
     private let revealButton = NSButton()
+    /// Whether the tree lists empty padding, in the title row beside the
+    /// panel's other control.
+    private let paddingToggle = NSButton(checkboxWithTitle: "Show Empty Padding", target: nil, action: nil)
     private let outline = UEFIOutlineView()
     private let outlineScroll = NSScrollView()
     /// The tree and its legend, as one pane of the splitter: the legend
@@ -175,6 +182,7 @@ import UEFITool
         view.translatesAutoresizingMaskIntoConstraints = false
 
         summaryLabel.font = ToolPanelFont.body(weight: .medium)
+        paddingToggle.font = ToolPanelFont.body()
         summaryLabel.lineBreakMode = .byTruncatingTail
         summaryLabel.translatesAutoresizingMaskIntoConstraints = false
         // The title names the image, not a row: the one root the tree folded
@@ -200,6 +208,18 @@ import UEFITool
         revealButton.target = self
         revealButton.action = #selector(revealClicked)
         revealButton.translatesAutoresizingMaskIntoConstraints = false
+
+        paddingToggle.controlSize = .small
+        paddingToggle.font = ToolPanelFont.body()
+        paddingToggle.state = showsEmptyPadding ? .on : .off
+        paddingToggle.target = self
+        paddingToggle.action = #selector(paddingToggleClicked)
+        paddingToggle.toolTip = "List the padding nobody wrote to — erased bytes between structures"
+        paddingToggle.setContentCompressionResistancePriority(.defaultHigh + 1, for: .horizontal)
+        paddingToggle.translatesAutoresizingMaskIntoConstraints = false
+        // The title gives way first: a long image name truncates before the
+        // checkbox does.
+        summaryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         configureOutline()
 
@@ -254,6 +274,7 @@ import UEFITool
         bottomRow.addArrangedSubview(noticeLabel)
 
         view.addSubview(summaryLabel)
+        view.addSubview(paddingToggle)
         view.addSubview(revealButton)
         view.addSubview(splitter)
         view.addSubview(bottomRow)
@@ -266,8 +287,10 @@ import UEFITool
             // The button owns the title row's right end; a long image name
             // truncates before it rather than running under it.
             summaryLabel.trailingAnchor.constraint(
-                equalTo: revealButton.leadingAnchor, constant: -6
+                lessThanOrEqualTo: paddingToggle.leadingAnchor, constant: -8
             ),
+            paddingToggle.trailingAnchor.constraint(equalTo: revealButton.leadingAnchor, constant: -6),
+            paddingToggle.centerYAnchor.constraint(equalTo: summaryLabel.centerYAnchor),
 
             // A small square: the glyph is 12 point, and a button the size of
             // its image alone would be a needlessly thin thing to hit.
@@ -304,6 +327,7 @@ import UEFITool
     /// rebuilt rather than restyled.
     private func applyPanelFont() {
         summaryLabel.font = ToolPanelFont.body(weight: .medium)
+        paddingToggle.font = ToolPanelFont.body()
         noticeLabel.font = ToolPanelFont.body()
         ToolPanelTable.apply(to: outline)
         applyColumnWidths()
@@ -825,7 +849,8 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     private func childrenList(for id: NodeID) -> [Any] {
         guard let tree, let node = tree.node(id) else { return [] }
         if !node.children.isEmpty {
-            return node.children.map { row($0.id) }
+            return UEFITreeDisplay.listed(node.children, showsEmptyPadding: showsEmptyPadding)
+                .map { row($0.id) }
         }
         guard node.isExpandable else { return [] }
         if showingPlaceholder.contains(id) { return [placeholder(under: id)] }
@@ -918,7 +943,9 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// The outline's own top level: one "Loading…" row while the tree is still
     /// working out what the top level is, and the presented rows once it has.
     private var topLevelRows: [Any] {
-        isBuilding ? [placeholder(under: .root)] : presented.rows.map { row($0.id) }
+        isBuilding
+            ? [placeholder(under: .root)]
+            : UEFITreeDisplay.listed(presented.rows, showsEmptyPadding: showsEmptyPadding).map { row($0.id) }
     }
 
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
@@ -935,7 +962,10 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
 
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
         guard let node = node(of: item) else { return false }
-        return node.isExpandable || !node.children.isEmpty
+        // A branch read to nothing but empty padding has nothing to open on
+        // while that padding is hidden.
+        return node.isExpandable
+            || !UEFITreeDisplay.listed(node.children, showsEmptyPadding: showsEmptyPadding).isEmpty
     }
 
     /// The loading row is a placeholder, not a node — nothing to select, no
@@ -1062,11 +1092,33 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     private func contextMenu(for event: NSEvent) -> NSMenu? {
         let point = outline.convert(event.locationInWindow, from: nil)
         let row = outline.row(at: point)
-        guard row >= 0,
-              let clicked = outline.item(atRow: row),
-              let node = node(of: clicked)
-        else { return nil }
+        guard row >= 0, let clicked = outline.item(atRow: row), let node = node(of: clicked) else {
+            return nil
+        }
+        let items = nodeMenuItems(for: node)
+        guard !items.isEmpty else { return nil }
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        items.forEach(menu.addItem)
+        return menu
+    }
 
+    /// Turns the empty padding rows on or off, and remembers the choice.
+    func setShowsEmptyPadding(_ shows: Bool) {
+        paddingToggle.state = shows ? .on : .off
+        guard shows != showsEmptyPadding else { return }
+        showsEmptyPadding = shows
+        ToolPanelFont.defaults.set(shows, forKey: Self.showsEmptyPaddingKey)
+        outline.reloadData()
+        updateRowMarks()
+    }
+
+    @objc private func paddingToggleClicked() {
+        setShowsEmptyPadding(paddingToggle.state == .on)
+    }
+
+    /// What the tree's menu offers for one node.
+    private func nodeMenuItems(for node: UEFINode) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
         if !(badChecksums[node.id]?.isEmpty ?? true), node.space == .file {
             let item = NSMenuItem(
@@ -1100,11 +1152,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = node.id
             items.append(item)
         }
-        guard !items.isEmpty else { return nil }
-        let menu = NSMenu()
-        menu.autoenablesItems = false
-        items.forEach(menu.addItem)
-        return menu
+        return items
     }
 
     @objc private func fixChecksumClicked(_ sender: NSMenuItem) {

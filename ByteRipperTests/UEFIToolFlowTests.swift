@@ -26,9 +26,17 @@ final class UEFIToolFlowTests: XCTestCase {
         defaultsName = isolated.name
         ToolController.defaults = isolated.store
         ToolController.changeDelay = 0
+        // The test volume's rows include the erased padding that aligns its
+        // free space, and these tests count and index rows with it there: the
+        // tree lists it here, as a reader who turned it on would see it. The
+        // default is tested on its own.
+        ToolPanelFont.defaults.set(true, forKey: Self.showsEmptyPaddingKey)
     }
 
+    private static let showsEmptyPaddingKey = "UEFIStructure.ShowsEmptyPadding"
+
     override func tearDown() {
+        ToolPanelFont.defaults.removeObject(forKey: Self.showsEmptyPaddingKey)
         controller?.windowModel.pane1.close()
         for file in files { try? FileManager.default.removeItem(at: file) }
         if let defaultsName { discardIsolatedDefaults(defaultsName, ToolController.defaults) }
@@ -116,6 +124,33 @@ final class UEFIToolFlowTests: XCTestCase {
         try XCTUnwrap(descendants(of: panel, NSTextField.self).first {
             $0.stringValue.hasPrefix(prefix)
         })
+    }
+
+    /// Empty padding is left out of the tree until the reader asks for it,
+    /// with the checkbox in the panel's title row — left of the reveal button
+    /// — and the choice is remembered.
+    func testEmptyPaddingIsListedOnlyWhenAskedFor() throws {
+        ToolPanelFont.defaults.removeObject(forKey: Self.showsEmptyPaddingKey)
+        _ = try open(UEFITestImage.withTrailingPadding())
+        let tree = try outline()
+        XCTAssertEqual(kinds(of: tree), [.volume], "the trailing erased padding is not listed")
+
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let toggle = try XCTUnwrap(descendants(of: panel, NSButton.self).first { $0.title == "Show Empty Padding" },
+                                   "the checkbox in the title row")
+        let reveal = try XCTUnwrap(descendants(of: panel, NSButton.self).first {
+            $0.toolTip == "Show the node under the caret in the tree"
+        })
+        let inPanel = { (view: NSView) in view.convert(view.bounds, to: panel) }
+        XCTAssertLessThan(inPanel(toggle).maxX, inPanel(reveal).minX, "left of the reveal button")
+        XCTAssertEqual(inPanel(toggle).midY, inPanel(reveal).midY, accuracy: 3, "on the title row")
+        XCTAssertEqual(toggle.state, .off)
+
+        toggle.performClick(nil)
+        window?.layoutIfNeeded()
+
+        XCTAssertEqual(kinds(of: tree), [.volume, .padding])
+        XCTAssertEqual(ToolPanelFont.defaults.bool(forKey: Self.showsEmptyPaddingKey), true, "remembered")
     }
 
     /// It is in the shipping app, not only in the tests.
