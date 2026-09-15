@@ -96,6 +96,38 @@ import ToolModuleKit
         startSession(module, on: pane)
     }
 
+    /// Moves the running tool-module onto the pane at `index` — what choosing
+    /// it in the header's selector means. The same thing a pane dropped on the
+    /// panel does, and the same door: `rebind`, so a choice and a drop cannot
+    /// come to mean two different things.
+    func selectPane(at index: Int) {
+        guard let owner, let pane = owner.pane(at: index) else { return }
+        rebind(to: pane)
+    }
+
+    /// Re-reads what the header should say: the name the selector shows, and
+    /// which pane its tick is on.
+    ///
+    /// Called whenever either half can have moved — the active pane changed, a
+    /// file was opened or closed, the session was re-bound. A header that only
+    /// updated on re-bind would keep naming the pane the user was in when the
+    /// tool opened, which is the one thing the header must not do.
+    func refreshPanelHeader() {
+        guard let owner else { return }
+        let panes: [PaneViewModel] = [owner.windowModel.pane1, owner.windowModel.pane2]
+        let choices: [ToolPanelView.PaneChoice] = panes.map { pane in
+            ToolPanelView.PaneChoice(
+                fileName: pane.isOpen ? pane.status.fileName : "No file",
+                isBound: pane === boundPane,
+                isEnabled: pane.isOpen)
+        }
+        // Nothing to switch between with one file open, and a dropdown that
+        // offers a closed pane would be offering somewhere the tool cannot go.
+        let switchable = choices.filter { $0.isEnabled }.count > 1
+        panel.setPanes(choices, activeFileName: owner.windowModel.activePane.status.fileName)
+        panel.setSelectorEnabled(switchable)
+    }
+
     /// What dropping the pane with `dragID` on the panel would say, or nil for
     /// one the panel will not take. Its own pane is the one it will not: the
     /// tool is already reading that file, and a drop that changes nothing is a
@@ -124,7 +156,11 @@ import ToolModuleKit
         boundPane = pane
         runningIdentifier = module.identifier
         zones = .empty
-        panel.setTitle(module.title, fileName: pane.status.fileName)
+        panel.setTitle(module.title)
+        // The tick and the visible name are the header's state as much as the
+        // session's, so they are read here rather than left to whoever started
+        // the session to remember to say them.
+        refreshPanelHeader()
         panel.setContent(session.viewController.view)
         owner.addChild(session.viewController)
         session.start()
@@ -160,6 +196,9 @@ import ToolModuleKit
         host = nil
         boundPane = nil
         zones = .empty
+        // The tick goes with the session: with nothing open, no pane is the one
+        // being read, and the header must not keep saying that one is.
+        refreshPanelHeader()
     }
 
     /// What the dump should draw, from the session that is running now. A
@@ -285,8 +324,11 @@ import ToolModuleKit
         guard let change = pendingChange, let session else { return }
         pendingChange = nil
         deliveryTask = nil
-        if let module = activeModule, let pane = boundPane {
-            panel.setTitle(module.title, fileName: pane.status.fileName)
+        // A rename changes what the selector says without changing which pane
+        // the session is bound to, and the file may have been replaced
+        // outright, so both halves are re-read together.
+        if activeModule != nil, boundPane != nil {
+            refreshPanelHeader()
         }
         session.contentChanged(change)
     }

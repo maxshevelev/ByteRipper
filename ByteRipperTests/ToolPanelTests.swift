@@ -96,6 +96,153 @@ final class ToolPanelTests: XCTestCase {
         XCTAssertEqual(controller.tools.panel.fileName, controller.windowModel.pane1.status.fileName)
     }
 
+    // MARK: - The header's file selector
+
+    /// Opens a second file into the other pane, so there is something to switch
+    /// between. Returns the second file's URL.
+    @discardableResult
+    private func openSecondFile(_ controller: MainViewController) throws -> URL {
+        let file = try tempFile([UInt8](repeating: 0x01, count: 0x80))
+        controller.openFiles(into: 1, urls: [file])
+        controller.windowModel.setActivePane(0)
+        controller.refreshToolPanelHeader()
+        return file
+    }
+
+    /// With both panes open the selector offers both names, in pane order, and
+    /// ticks the pane the session is reading.
+    func testTheSelectorOffersBothPanesAndTicksTheBoundOne() throws {
+        let (controller, _) = try makeController()
+        try openSecondFile(controller)
+
+        controller.tools.activate(StubToolA.identifier, animated: false)
+
+        XCTAssertEqual(controller.tools.panel.paneTitles,
+                       [controller.windowModel.pane1.status.fileName,
+                        controller.windowModel.pane2.status.fileName])
+        XCTAssertEqual(controller.tools.panel.tickedPaneIndex, 0,
+                       "the session started against pane 1")
+    }
+
+    /// Open the menu and each entry names its *own* pane, whatever the closed
+    /// popup is drawing: the entry under the pointer is somewhere to send the
+    /// tool, so it has to say where that is.
+    func testAnEntryNamesItsOwnPaneWhenTheMenuIsOpen() throws {
+        let (controller, _) = try makeController()
+        try openSecondFile(controller)
+        controller.tools.activate(StubToolA.identifier, animated: false)
+        controller.activatePaneForTesting(1)
+        let selector = controller.tools.panel.paneSelector
+        let menu = try XCTUnwrap(selector.menu)
+
+        // Closed first: the selected entry is the bound one — pane 1 — and it
+        // carries the header's answer, which is the *active* pane's name.
+        XCTAssertEqual(selector.itemArray[0].title,
+                       controller.windowModel.pane2.status.fileName,
+                       "closed, the ticked entry draws the header")
+        XCTAssertEqual(controller.tools.panel.tickedPaneIndex, 0)
+
+        // Open, and every entry names its own pane again.
+        menu.delegate?.menuWillOpen?(menu)
+        XCTAssertEqual(selector.itemArray[0].title,
+                       controller.windowModel.pane1.status.fileName,
+                       "open, the entry for pane 1 names pane 1")
+        XCTAssertEqual(selector.itemArray[1].title,
+                       controller.windowModel.pane2.status.fileName)
+
+        // And back again when it closes.
+        menu.delegate?.menuDidClose?(menu)
+        XCTAssertEqual(selector.itemArray[0].title,
+                       controller.windowModel.pane2.status.fileName,
+                       "closed again, the header's answer is back")
+    }
+
+    /// The header *shows* the active pane's file, which is not the ticked one
+    /// once the user clicks the other pane: the tick says where the tool's
+    /// writes go, the visible name says where the user is.
+    func testTheHeaderShowsTheActivePanesFileNotTheBoundOne() throws {
+        let (controller, window) = try makeController()
+        try openSecondFile(controller)
+        controller.tools.activate(StubToolA.identifier, animated: false)
+
+        controller.activatePaneForTesting(1)
+        window.layoutIfNeeded()
+
+        XCTAssertEqual(controller.tools.panel.fileName,
+                       controller.windowModel.pane2.status.fileName,
+                       "the header follows the active pane")
+        XCTAssertEqual(controller.tools.panel.tickedPaneIndex, 0,
+                       "but the tick stays where the tool is bound")
+    }
+
+    /// Picking the other pane moves the tool onto it through the same door a
+    /// drop uses — a new session, bound to the new pane.
+    ///
+    /// And, like a drop, it moves the *tool* and not the user: the active pane
+    /// is where the user is working and is not changed by sending a tool
+    /// somewhere, so the header goes on naming pane 1 while the tick moves to
+    /// pane 2.
+    func testChoosingTheOtherPaneMovesTheSessionToIt() throws {
+        let (controller, _) = try makeController()
+        try openSecondFile(controller)
+        controller.tools.activate(StubToolA.identifier, animated: false)
+        let fileOfPane1 = controller.windowModel.pane1.status.fileName
+
+        controller.tools.selectPane(at: 1)
+
+        XCTAssertTrue(controller.tools.boundPane === controller.windowModel.pane2,
+                      "the session is bound to the pane that was chosen")
+        XCTAssertEqual(controller.tools.panel.tickedPaneIndex, 1,
+                       "the tick follows the tool")
+        XCTAssertEqual(controller.tools.panel.fileName, fileOfPane1,
+                       "while the header goes on naming the pane the user is in")
+    }
+
+    /// With one file open there is nowhere to move the tool, so the selector is
+    /// disabled rather than being a control that does nothing.
+    func testTheSelectorIsDisabledWithOneFileOpen() throws {
+        let (controller, _) = try makeController()
+        controller.tools.activate(StubToolA.identifier, animated: false)
+
+        XCTAssertFalse(controller.tools.panel.paneSelector.isEnabled)
+    }
+
+    /// And live once there is a second file to move to.
+    func testTheSelectorIsEnabledWithTwoFilesOpen() throws {
+        let (controller, _) = try makeController()
+        try openSecondFile(controller)
+        controller.tools.activate(StubToolA.identifier, animated: false)
+
+        XCTAssertTrue(controller.tools.panel.paneSelector.isEnabled)
+    }
+
+    /// A closed pane keeps its entry, disabled, so the list is the same length
+    /// in the same order whatever is open.
+    func testAClosedPaneKeepsADisabledEntry() throws {
+        let (controller, _) = try makeController()
+        try openSecondFile(controller)
+        controller.tools.activate(StubToolA.identifier, animated: false)
+
+        controller.closePane(at: 1)
+
+        XCTAssertEqual(controller.tools.panel.paneTitles.count, 2,
+                       "the entry stays, so position always means the same pane")
+        XCTAssertFalse(controller.tools.panel.paneSelector.itemArray[1].isEnabled,
+                       "and it is not somewhere the tool can be sent")
+    }
+
+    /// Ending the session takes the tick with it: nothing open means no pane is
+    /// the one being read, and the header must not go on saying one is.
+    func testNoneLeavesNoPaneTicked() throws {
+        let (controller, _) = try makeController()
+        try openSecondFile(controller)
+        controller.tools.activate(StubToolA.identifier, animated: false)
+
+        controller.tools.activate(nil, animated: false)
+
+        XCTAssertNil(controller.tools.panel.tickedPaneIndex)
+    }
+
     /// The header is chrome beside the dump, not a dark bar in front of it: the
     /// same translucent fill the panes' own headers use. It was
     /// `underPageBackgroundColor` — a page's *surround*, which reads as a slab

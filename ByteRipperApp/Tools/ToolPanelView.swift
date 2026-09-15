@@ -12,7 +12,7 @@ import Cocoa
 ///
 /// The panel hosts a view controller it does not own: the tool-module builds
 /// it, this holds it, and swapping tool-modules swaps the view.
-final class ToolPanelView: NSView {
+final class ToolPanelView: NSView, NSMenuDelegate {
     /// Fired by the header's ✕. The same thing as Tools ▸ None.
     var onClose: (() -> Void)?
 
@@ -25,12 +25,28 @@ final class ToolPanelView: NSView {
     /// a pane the panel will not take, which is its own.
     var paneDropTitle: ((UUID) -> String?)?
 
+    /// A pane was chosen in the header's selector: the tool moves to it. Index
+    /// 0 or 1, the same numbering `MainViewController` uses for panes.
+    ///
+    /// The same thing a pane dropped on the panel does, through the same door,
+    /// so the two ways of moving a tool-module onto another file cannot grow
+    /// apart. `boundIndex` is what the panel is reading *now*, so the callback
+    /// can ignore a selection of the pane already chosen.
+    var onSelectPane: ((Int) -> Void)?
+
     private let header = NSView()
     /// The same wrench the toolbar's Tools button carries, so the panel and the
     /// button that opened it read as one thing.
     private let iconView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
-    private let fileLabel = NSTextField(labelWithString: "")
+    /// The file selector: a dropdown naming the active pane's file, which opens
+    /// the panes this tool-module may be moved onto.
+    ///
+    /// A popup rather than a label because the header's question — *which* file
+    /// is this tool reading — has an answer that can be changed from here, and a
+    /// name the user can see is the natural place to offer that. It is the pane
+    /// the tool is *bound to*, not the active pane, that a choice moves it to.
+    private let fileSelector = NSPopUpButton()
     private let closeButton = NSButton()
     private let bottomSeparator = NSView()
     private let trailingSeparator = NSView()
@@ -41,6 +57,28 @@ final class ToolPanelView: NSView {
     private let dropZone = DropTargetView(title: SingleFileDropTarget.replace.title)
     /// The pane in flight, while one is.
     private var draggedPaneID: UUID?
+    /// What the selector's menu currently offers, in pane order — kept so a
+    /// choice can be read back to the index it stands for.
+    private var paneChoices: [PaneChoice] = []
+    /// Each entry's own pane's file name, in pane order, as the menu shows it
+    /// while it is open. The closed popup draws the *active* pane's name
+    /// instead — see `setPanes` — and the two are swapped around the menu
+    /// opening, because a popup offers no other moment to tell the difference.
+    private var paneEntryTitles: [String] = []
+    /// What the header says in the popup's closed state: the active pane's file
+    /// name. Kept so the titles can be swapped around the menu and swapped back.
+    private var headerTitle: String?
+
+    /// What the selector's menu is built from: one entry per pane, in pane
+    /// order. `isBound` puts the tick on the pane the tool is reading;
+    /// `isEnabled` is false for a pane that is not open — a closed pane is not
+    /// somewhere a tool can be moved to, and the entry says so rather than
+    /// disappearing, so the list is always the same length in the same order.
+    struct PaneChoice: Equatable {
+        var fileName: String
+        var isBound: Bool
+        var isEnabled: Bool
+    }
 
     /// The chrome's height, matching the pane's title bar so the panel's body
     /// starts level with the dump beside it.
@@ -89,14 +127,20 @@ final class ToolPanelView: NSView {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        fileLabel.font = .systemFont(ofSize: 11)
-        fileLabel.textColor = .secondaryLabelColor
-        fileLabel.lineBreakMode = .byTruncatingMiddle
-        fileLabel.translatesAutoresizingMaskIntoConstraints = false
+        fileSelector.bezelStyle = .inline
+        // Borderless-ish, like the ✕ beside it: the header is 28 points tall
+        // and a full-size popup would set the height of the bar rather than sit
+        // in it.
+        fileSelector.isBordered = false
+        fileSelector.font = .systemFont(ofSize: 11)
+        fileSelector.lineBreakMode = .byTruncatingMiddle
+        fileSelector.target = self
+        fileSelector.action = #selector(paneSelected)
         // The file name is what gives way first when the panel is narrow: the
         // tool-module's name is the shorter of the two and the one that says
         // what the panel is.
-        fileLabel.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
+        fileSelector.translatesAutoresizingMaskIntoConstraints = false
+        fileSelector.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
 
         closeButton.bezelStyle = .inline
         closeButton.isBordered = false
@@ -132,7 +176,7 @@ final class ToolPanelView: NSView {
         registerForDraggedTypes([.fileURL, .fileNames, .pane])
         header.addSubview(iconView)
         header.addSubview(titleLabel)
-        header.addSubview(fileLabel)
+        header.addSubview(fileSelector)
         header.addSubview(closeButton)
         header.addSubview(bottomSeparator)
 
@@ -146,12 +190,12 @@ final class ToolPanelView: NSView {
             equalTo: iconView.trailingAnchor, constant: 5
         )
         afterIcon.priority = .defaultHigh
-        let gap = fileLabel.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 6)
+        let gap = fileSelector.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 6)
         gap.priority = .defaultHigh
         let trailing = closeButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -6)
         trailing.priority = .defaultHigh
-        let toClose = fileLabel.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor,
-                                                          constant: -6)
+        let toClose = fileSelector.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor,
+                                                             constant: -6)
         toClose.priority = .defaultHigh
 
         // The drop zone's insets break for the same reason, and it is not a
@@ -206,7 +250,7 @@ final class ToolPanelView: NSView {
             leading, afterIcon, gap, trailing, toClose,
             iconView.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            fileLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            fileSelector.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             closeButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             closeButton.widthAnchor.constraint(equalToConstant: 16),
             closeButton.heightAnchor.constraint(equalToConstant: 16),
@@ -342,11 +386,118 @@ final class ToolPanelView: NSView {
         onClose?()
     }
 
-    /// What the header says: the tool-module, and the file its session is bound
-    /// to.
-    func setTitle(_ title: String, fileName: String) {
+    /// The tool-module's half of the header. The file half is the selector, and
+    /// it is filled by `setPanes`, which is told about the panes — nothing here
+    /// is, so nothing here can name a file.
+    func setTitle(_ title: String) {
         titleLabel.stringValue = title
-        fileLabel.stringValue = fileName
+    }
+
+    /// Fills the selector: one entry per pane, in pane order, with a tick on
+    /// the one the tool-module is reading.
+    ///
+    /// `activeFileName` is what the closed selector *shows* — the active pane's
+    /// file, which is the pane the user is working in and the one the header is
+    /// answering for. It is deliberately not the ticked entry: the tick says
+    /// where the tool's writes go, the visible name says where the user is, and
+    /// those two differ exactly while the user has clicked the other pane while
+    /// the tool is parked on this one. A selector that showed its own ticked
+    /// entry would answer a question nobody asked — which file the tool reads —
+    /// while the user is looking at the other one.
+    ///
+    /// Both facts have to come out of one popup, and `NSPopUpButton` will not
+    /// let them: it writes the tick itself, from whichever item is selected, and
+    /// would undo a `state` set here. So the *selection* is what carries the
+    /// tick — the bound pane is the selected item — and the active pane's name
+    /// is written into that item's title. A tick on the bound pane and a name
+    /// for the active one, from one mechanism instead of two fighting.
+    ///
+    /// The entry for a pane is the one at its own position either way, so the
+    /// name a title carries is what the menu *shows*, not what choosing that
+    /// entry would mean: the entry under the pointer is still its pane.
+    ///
+    /// A pane that is closed keeps its entry and is disabled rather than
+    /// vanishing, so the list is the same length in the same order whatever is
+    /// open, and the entry at a given position is always the same pane.
+    func setPanes(_ choices: [PaneChoice], activeFileName: String) {
+        paneChoices = choices
+        // Which entry the tick and the visible name both land on. With nothing
+        // bound there is no tick — the first entry is simply where the name
+        // goes, since the popup insists on drawing some selected title.
+        let bound = choices.firstIndex(where: { $0.isBound }) ?? 0
+        // The menu is rebuilt wholesale: `NSMenu` has no cheap "change the
+        // ticks" and the list is two entries long.
+        paneEntryTitles = choices.map(\.fileName)
+        headerTitle = activeFileName
+        let menu = NSMenu()
+        menu.delegate = self
+        for (index, choice) in choices.enumerated() {
+            let item = NSMenuItem(title: choice.fileName, action: #selector(paneSelected),
+                                  keyEquivalent: "")
+            item.target = self
+            item.tag = index
+            item.isEnabled = choice.isEnabled
+            menu.addItem(item)
+        }
+        fileSelector.menu = menu
+        // The selected item's title is what the closed popup draws — the header
+        // — so it carries the active pane's name rather than its own pane's.
+        // `menuWillOpen` puts the entries' own names back for as long as the
+        // menu is up, and `menuDidClose` returns it.
+        menu.item(at: bound)?.title = activeFileName
+        // The popup writes the tick itself, from the selection, and would undo
+        // a `state` set on any item — so the tick is the selection.
+        fileSelector.selectItem(at: bound)
+        fileSelector.isEnabled = !choices.isEmpty
+    }
+
+    @objc private func paneSelected(_ sender: NSMenuItem) {
+        // The tag is the pane's own index: every entry in the menu is a pane,
+        // in pane order.
+        let index = sender.tag
+        guard paneChoices.indices.contains(index) else { return }
+        // The pane the tool already reads is not somewhere to move it to, and
+        // choosing it would restart a parse for a file that has not changed.
+        guard !paneChoices[index].isBound else { return }
+        onSelectPane?(index)
+    }
+
+    // MARK: - The open menu
+
+    /// While the selector is open every entry names the pane it stands for, so
+    /// the entry under the pointer says where choosing it sends the tool. The
+    /// closed popup draws one of these titles as the header instead, which is
+    /// the active pane's name.
+    func menuWillOpen(_ menu: NSMenu) {
+        for (index, title) in paneEntryTitles.enumerated() {
+            menu.item(at: index)?.title = title
+        }
+    }
+
+    /// Back to the header's own answer once the menu is away: the selected
+    /// entry carries the active pane's name again, and every other entry its
+    /// own.
+    func menuDidClose(_ menu: NSMenu) {
+        restoreClosedTitles()
+    }
+
+    /// Puts the closed popup's titles back — the selected entry showing the
+    /// header's answer, the rest showing their own pane. Also the way a
+    /// selection gets drawn, since choosing one has just moved the tick.
+    private func restoreClosedTitles() {
+        for (index, title) in paneEntryTitles.enumerated() {
+            fileSelector.item(at: index)?.title = title
+        }
+        guard !paneChoices.isEmpty, let headerTitle = headerTitle else { return }
+        let bound = paneChoices.firstIndex(where: { $0.isBound }) ?? 0
+        fileSelector.item(at: bound)?.title = headerTitle
+    }
+
+    /// Whether the selector offers a choice at all. False with one file open,
+    /// where there is nowhere to move the tool and an enabled dropdown would be
+    /// a control that does nothing — the ✕ beside it stays live either way.
+    func setSelectorEnabled(_ isEnabled: Bool) {
+        fileSelector.isEnabled = isEnabled
     }
 
     /// The tool-module's view, or nil to empty the panel. The panel constrains
@@ -393,5 +544,22 @@ final class ToolPanelView: NSView {
     var headerFill: CGColor? { header.layer?.backgroundColor }
     var headerIcon: NSImage? { iconView.image }
     var title: String { titleLabel.stringValue }
-    var fileName: String { fileLabel.stringValue }
+    /// What the header is *showing* about the file: the name in the selector's
+    /// closed state, which is the active pane's file.
+    var fileName: String { fileSelector.titleOfSelectedItem ?? "" }
+    /// The selector's pane entries, for the tests that check what it offers.
+    ///
+    /// A title is what the menu *draws*, which for the selected entry is the
+    /// active pane's name; the pane an entry stands for is its position.
+    var paneTitles: [String] { fileSelector.itemArray.map(\.title) }
+    /// The index of the pane the tool-module is bound to, read the way the popup
+    /// itself keeps it — the selection. nil when there is no session.
+    var tickedPaneIndex: Int? {
+        guard paneChoices.contains(where: { $0.isBound }) else { return nil }
+        return fileSelector.indexOfSelectedItem
+    }
+    /// The selector itself, for the tests that drive a choice the way a user
+    /// does — by picking an item.
+    var paneSelector: NSPopUpButton { fileSelector }
+
 }

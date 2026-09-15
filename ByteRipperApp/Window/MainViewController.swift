@@ -374,6 +374,18 @@ final class MainViewController: NSViewController {
         pane === windowModel.pane2 ? 1 : 0
     }
 
+    /// This window's pane at `index`. The other half of `paneIndex(of:)`, and
+    /// the one place that knows pane 2 is the high index — so a caller that has
+    /// an index (the tool panel's selector) does not spell the same pair out
+    /// again.
+    func pane(at index: Int) -> PaneViewModel? {
+        switch index {
+        case 0: return windowModel.pane1
+        case 1: return windowModel.pane2
+        default: return nil
+        }
+    }
+
     /// The index of this window's pane with `dragID`, if either has it — the
     /// pane half of the registry's question, beside the file half below.
     /// Internal so the registry can ask it of every window.
@@ -494,6 +506,10 @@ final class MainViewController: NSViewController {
         controller.panel.onDropPane = { [weak self] dragID in
             guard let self, let index = self.paneIndex(withDragID: dragID) else { return }
             self.tools.rebind(to: index == 0 ? self.windowModel.pane1 : self.windowModel.pane2)
+        }
+        // A pane chosen in the header's selector moves it, by the same door.
+        controller.panel.onSelectPane = { [weak self] index in
+            self?.tools.selectPane(at: index)
         }
         controller.panel.paneDropTitle = { [weak self] dragID in
             self?.tools.paneDropTitle(forPaneWith: dragID)
@@ -1996,6 +2012,17 @@ final class MainViewController: NSViewController {
         syncMinimapZones()
     }
 
+    /// The panel's header re-reads what it says about the file — called for
+    /// anything that can change either half of it: the active pane moving, a
+    /// file opening or closing, a session starting or ending.
+    ///
+    /// Free with no tool open (the header is a bare strip then), which is what
+    /// lets the pane-activation path call it unconditionally rather than
+    /// checking whether a panel happens to be up.
+    func refreshToolPanelHeader() {
+        tools.refreshPanelHeader()
+    }
+
     // MARK: - Minimap (§19)
 
     /// Toggles the right-hand minimap panel (the toolbar button). The panel is
@@ -2146,8 +2173,14 @@ final class MainViewController: NSViewController {
     /// pointer, the comparison view's chrome, and the focus all follow (§3.3).
     /// Driven by a header click and by a click on that pane's minimap.
     private func activatePane(at index: Int) {
-        guard let comparisonView else { return }
+        // The window model's pointer moves first, and the header follows it at
+        // a point where the comparison view is not needed: it names the active
+        // pane's file, and a pane can be activated while that view is down — a
+        // file opening into the panes, say. Everything below needs the view;
+        // this does not.
         windowModel.setActivePane(index)
+        refreshToolPanelHeader()
+        guard let comparisonView else { return }
         activeFilePane = index == 0 ? comparisonView.paneView1 : comparisonView.paneView2
         comparisonView.setActive(index)
         // Focus follows activation (e.g. a header click), so typing and the
@@ -2162,6 +2195,13 @@ final class MainViewController: NSViewController {
         // The typing mode is per pane (§7.6), so the toolbar's toggle follows
         // the pane the keys now go to (§24.2).
         revalidateToolbar()
+    }
+
+    /// Makes pane `index` the active one, from the tests that need to drive a
+    /// pane switch without a mouse — which is the only thing a click does that
+    /// this does not.
+    func activatePaneForTesting(_ index: Int) {
+        activatePane(at: index)
     }
 
     // MARK: - Minimap overview (§19.4)
@@ -4505,6 +4545,11 @@ final class MainViewController: NSViewController {
             }
         }
         performClosePane(at: index)
+        // A closed pane keeps its entry in the selector but is disabled, and
+        // with one file left there is nowhere to move the tool, so the whole
+        // header is re-read — including the case where it is now the *other*
+        // pane's file that the header has to name.
+        refreshToolPanelHeader()
     }
 
     /// Performs the pane close after the dirty prompt succeeded.
@@ -4863,6 +4908,11 @@ final class MainViewController: NSViewController {
         }
         windowModel.setActivePane(index)
         if ignored > 0 { notifyIgnored(count: ignored) }
+        // A file arriving in a pane changes the pane's name, so the selector
+        // has to re-read it. `refreshMode` cannot be the hook for this: it
+        // returns early when the mode has not changed, which is the common case
+        // here — a second file opening into a window that already has one.
+        refreshToolPanelHeader()
         refreshMode()
     }
 
