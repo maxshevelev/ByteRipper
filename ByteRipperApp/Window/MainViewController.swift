@@ -459,6 +459,12 @@ final class MainViewController: NSViewController {
     /// kept current. Nil in the other modes.
     private weak var emptyStateView: EmptyStateView?
 
+    /// The newer-release check started for the landing screen that is up, if one
+    /// is still running. Held only so that a test can wait for the answer rather
+    /// than race it: nothing in the app waits on it, which is the point of it
+    /// being a task at all.
+    private(set) var releaseCheckTask: Task<Void, Never>?
+
     /// Re-reads the marks into the empty window's list and its title.
     private func refreshEmptyStateBookmarks() {
         guard mode == .empty else { return }
@@ -1009,6 +1015,7 @@ final class MainViewController: NSViewController {
                 self?.setPaneDragCopyingEverywhere(copying)
             }
             setContentView(emptyView)
+            announceNewerRelease(on: emptyView)
 
         case .singleFile:
             let paneModel = windowModel.pane1
@@ -1220,6 +1227,42 @@ final class MainViewController: NSViewController {
         // left describing the panes that went away (§11).
         syncFindBarToActivePane()
     }
+
+    /// Asks whether a newer release has been published, and — if one has — says
+    /// so on the landing screen that is on it now.
+    ///
+    /// In the background, and it never holds the window up: the screen is set
+    /// up and drawn first, and the line arrives after it, when it arrives at
+    /// all. Nothing waits for it, and no failure of it is the window's problem
+    /// — offline is the normal state of a bench, and a landing screen that
+    /// reported its own errand would be a landing screen that has stopped being
+    /// about the user's file (`ReleaseSource.newerRelease(than:)`).
+    ///
+    /// The answer is held for the run (`GitHubReleases`), so a window that goes
+    /// back to empty — which is what closing the last file does — asks again of
+    /// a value in memory rather than of github.com.
+    @discardableResult
+    private func announceNewerRelease(on emptyView: EmptyStateView) -> Task<Void, Never>? {
+        releaseCheckTask = Task { [weak self, weak emptyView] in
+            guard let release = await Self.releases
+                .newerRelease(than: .current) else { return }
+            // The answer is older than the question: a file may have been
+            // opened, or another window drawn, since it was asked.
+            guard let self, self.emptyStateView === emptyView else { return }
+            emptyView?.showAvailableRelease(release)
+        }
+        return releaseCheckTask
+    }
+
+    /// Where the landing screen's check is asked: the app's own source, and a
+    /// stub in a test that is about the check.
+    ///
+    /// Under test the default is a source with nothing to announce, so that the
+    /// tests which are *not* about this — and every one of them that opens an
+    /// empty window is not — neither reach github.com nor wait on it. A suite
+    /// that needs the network fails on a train, for reasons that have nothing to
+    /// do with what it was testing.
+    static var releases: ReleaseSource = isRunningTests ? NoReleases() : GitHubReleases.shared
 
     /// Wires companion panes and coordinator callbacks for comparison mode.
     /// Runs on every comparison apply — pane objects are swapped by Swap Panels

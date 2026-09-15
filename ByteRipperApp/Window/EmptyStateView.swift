@@ -2,7 +2,12 @@ import Cocoa
 
 /// Placeholder shown in empty mode (§3.1): a large system icon that opens the
 /// file picker on click, a "Drop files here" headline, the up-to-two-files
-/// hint, and drag-and-drop support (§4.3 empty mode).
+/// hint, the app's own name and version, and drag-and-drop support (§4.3 empty
+/// mode).
+///
+/// A newer release, when there is one, is announced under the version it is
+/// newer than. The view is told about it rather than looking for it: asking
+/// github.com is the app's business, not a view's (`GitHubReleases`).
 final class EmptyStateView: NSView {
     /// Fired with the dropped file URLs; the view controller applies §4.3 rules.
     var onOpenFiles: (([URL]) -> Void)?
@@ -41,6 +46,15 @@ final class EmptyStateView: NSView {
 
     private let openButton = NSButton()
 
+    /// The line announcing a newer release, under the version line. Hidden
+    /// until there is a release to announce.
+    private let releaseButton = LinkButton()
+
+    /// Where that line goes when it is clicked, and what it says — held because
+    /// the button's title is an attributed string and its page is not in it.
+    private var releasePage: URL?
+    private var releaseText = ""
+
     /// The bookmark list shown under the hint, and the scroll view that bounds
     /// it. Hidden while the window has no marks.
     private let bookmarkGrid = NSGridView(views: [])
@@ -64,6 +78,11 @@ final class EmptyStateView: NSView {
     /// stack's own spacing: the version belongs to the hint, it is not another
     /// thing the landing screen is saying.
     private static let versionGap: CGFloat = 6
+
+    /// The gap between the version and the newer-release line under it. Tighter
+    /// than `versionGap` because these two are one subject — both are about
+    /// which build this window is.
+    private static let releaseGap: CGFloat = 4
 
     /// The gap between the hint and the bookmarks section, wider than the
     /// stack's own spacing.
@@ -130,7 +149,26 @@ final class EmptyStateView: NSView {
         let versionLabel = NSTextField(labelWithString: Self.appNameAndVersion)
         versionLabel.textColor = .tertiaryLabelColor
         versionLabel.alignment = .center
-        versionLabel.font = .systemFont(ofSize: 11)
+        versionLabel.font = .systemFont(ofSize: 14, weight: .semibold)
+
+        // The newer-release line is a button rather than a link inside a text
+        // field: a label's link is all but invisible — it is found by hovering,
+        // and only after the pointer is already where the link was — while this
+        // line exists to be noticed and clicked. What it opens is set by
+        // `showAvailableRelease`, which no caller has called yet.
+        releaseButton.bezelStyle = .inline
+        releaseButton.isBordered = false
+        releaseButton.target = self
+        releaseButton.action = #selector(openReleasePage)
+        releaseButton.isHidden = true
+
+        // The version and the line under it, held together as one subject: the
+        // gap between them is not the stack's, and the bookmark section's gap
+        // below them must not move when one of the two is hidden.
+        let versionBlock = NSStackView(views: [versionLabel, releaseButton])
+        versionBlock.orientation = .vertical
+        versionBlock.alignment = .centerX
+        versionBlock.spacing = Self.releaseGap
 
         let stackView = NSStackView()
         stackView.orientation = .vertical
@@ -140,12 +178,12 @@ final class EmptyStateView: NSView {
         stackView.addArrangedSubview(openButton)
         stackView.addArrangedSubview(titleLabel)
         stackView.addArrangedSubview(hintLabel)
-        stackView.addArrangedSubview(versionLabel)
+        stackView.addArrangedSubview(versionBlock)
         stackView.addArrangedSubview(makeBookmarkSection())
         stackView.setCustomSpacing(Self.versionGap, after: hintLabel)
         // More air than the stack's usual rhythm: the list is a different
         // subject from the landing screen above it, not the next line of it.
-        stackView.setCustomSpacing(Self.bookmarkSectionGap, after: versionLabel)
+        stackView.setCustomSpacing(Self.bookmarkSectionGap, after: versionBlock)
         addSubview(stackView)
         contentStack = stackView
 
@@ -304,6 +342,53 @@ final class EmptyStateView: NSView {
         return address.textColor
     }
 
+    /// Announces a newer release under the version line: one line, and one click
+    /// on it opens that release's page on github.com.
+    ///
+    /// Nothing here asks whether there *is* one. The app asks
+    /// (`ReleaseSource.newerRelease(than:)`) and calls this only when the answer
+    /// is a release this build is older than — a view that went looking for
+    /// releases would be a view that does IO, and the landing screen is drawn
+    /// again every time the last file is closed.
+    func showAvailableRelease(_ release: Release) {
+        releasePage = release.page
+        releaseText = "Version \(release.version.text) is available on GitHub"
+        releaseButton.attributedTitle = Self.releaseLineText(releaseText)
+        releaseButton.toolTip = release.page.absoluteString
+        releaseButton.setAccessibilityLabel(
+            "Version \(release.version.text) is available — open its page on GitHub"
+        )
+        releaseButton.isHidden = false
+    }
+
+    /// The line, drawn as a link: underlined, in the hint's own size, and in the
+    /// system's link colour.
+    ///
+    /// That colour is the one thing the app draws text with that `AppPalette`
+    /// does not name, and deliberately: the About panel's credits use it too,
+    /// because what it means — "this opens somewhere else" — is the system's
+    /// meaning rather than one of ours.
+    private static func releaseLineText(_ text: String) -> NSAttributedString {
+        NSAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 13),
+            .foregroundColor: NSColor.linkColor,
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+        ])
+    }
+
+    /// Opens the announced release's page, in the browser, the way the About
+    /// panel's links do.
+    @objc private func openReleasePage() {
+        guard let releasePage else { return }
+        NSWorkspace.shared.open(releasePage)
+    }
+
+    /// What the newer-release line says and where it points, or `nil` while
+    /// there is no release to announce (for tests).
+    var releaseLineForTesting: (text: String, page: URL?)? {
+        releaseButton.isHidden ? nil : (releaseText, releasePage)
+    }
+
     private func updateIconSize() {
         let windowSize = window?.frame.size
         let shortSide = windowSize.map { min($0.width, $0.height) } ?? 0
@@ -425,5 +510,18 @@ extension EmptyStateView {
             onOpenFiles?(urls)
         }
         return true
+    }
+}
+
+/// A button that reads as a link, with the one thing a link has that text does
+/// not: the pointing hand over it.
+///
+/// The cursor is the button's own business — a rect added by its owner would
+/// have to be invalidated by its owner every time the stack above it re-laid
+/// out, and a stale one shows the hand over the wrong line.
+private final class LinkButton: NSButton {
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        addCursorRect(bounds, cursor: .pointingHand)
     }
 }

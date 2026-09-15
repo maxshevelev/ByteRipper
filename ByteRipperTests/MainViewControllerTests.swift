@@ -54,4 +54,54 @@ final class MainViewControllerTests: XCTestCase {
         let bytes = try XCTUnwrap(controller.windowModel.pane1.byteStorage?.read(at: 0, length: 3))
         XCTAssertEqual(bytes, [0x41, 0x22, 0x33])
     }
+
+    // MARK: - The landing screen's release check
+
+    /// A source that answers without a network — github.com is not something the
+    /// suite may reach (`ReleaseSource`).
+    private struct StubReleases: ReleaseSource {
+        var release: Release?
+
+        func latestRelease() async throws -> Release? { release }
+    }
+
+    /// The landing screen of the window that asked is the one the answer is
+    /// applied to — the wiring the check exists for. The view is built and shown
+    /// first, and the line is added to it afterwards, when the answer arrives.
+    func testANewerReleaseIsAnnouncedOnTheLandingScreen() async throws {
+        let page = try XCTUnwrap(
+            URL(string: "https://github.com/maxshevelev/ByteRipper/releases/tag/v9.9.9")
+        )
+        let installed = MainViewController.releases
+        MainViewController.releases = StubReleases(
+            release: Release(version: try XCTUnwrap(AppVersion("9.9.9")), page: page)
+        )
+        defer { MainViewController.releases = installed }
+
+        let controller = MainViewController()
+        controller.apply(mode: .empty)
+        await controller.releaseCheckTask?.value
+
+        let landing = try XCTUnwrap(
+            descendants(of: controller.view, EmptyStateView.self).first,
+            "the landing screen"
+        )
+        XCTAssertEqual(landing.releaseLineForTesting?.page, page,
+                       "and the line on it opens that release")
+    }
+
+    /// A release that is not newer — the ordinary case, on the day of a release
+    /// — leaves the landing screen as it was: version line, and nothing under it.
+    func testTheVersionRunningIsNotAnnounced() async throws {
+        let installed = MainViewController.releases
+        MainViewController.releases = StubReleases(release: nil)
+        defer { MainViewController.releases = installed }
+
+        let controller = MainViewController()
+        controller.apply(mode: .empty)
+        await controller.releaseCheckTask?.value
+
+        let landing = try XCTUnwrap(descendants(of: controller.view, EmptyStateView.self).first)
+        XCTAssertNil(landing.releaseLineForTesting)
+    }
 }

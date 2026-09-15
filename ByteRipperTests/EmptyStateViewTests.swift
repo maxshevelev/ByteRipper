@@ -50,4 +50,44 @@ final class EmptyStateViewTests: XCTestCase {
                       "the line must name the app")
     }
 
+    /// The version is the landing screen's anchor under the hint, not another
+    /// quiet caption: larger than the hint above it, and the semibold face.
+    func testTheVersionLineIsBiggerAndBolderThanTheHint() throws {
+        let view = makeEmptyView()
+        let labels = descendants(of: view, NSTextField.self)
+        let version = try XCTUnwrap(
+            labels.first { $0.stringValue == EmptyStateView.appNameAndVersion },
+            "the version line"
+        )
+        let hint = try XCTUnwrap(
+            labels.first { $0.stringValue.hasPrefix("Up to two files") },
+            "the hint above it"
+        )
+
+        let size = try XCTUnwrap(version.font?.pointSize)
+        XCTAssertGreaterThan(size, try XCTUnwrap(hint.font?.pointSize),
+                             "the version is larger than the hint")
+        XCTAssertEqual(version.font, .systemFont(ofSize: size, weight: .semibold),
+                       "and it is the semibold one")
+    }
+
+    /// A newer release is announced under the version line, and the line knows
+    /// where to go — nothing is announced until there is one, because an empty
+    /// window is not the place for a line about nothing.
+    func testANewerReleaseIsAnnouncedUnderTheVersionLine() throws {
+        let view = makeEmptyView()
+        XCTAssertNil(view.releaseLineForTesting, "nothing announced to begin with")
+
+        let page = try XCTUnwrap(
+            URL(string: "https://github.com/maxshevelev/ByteRipper/releases/tag/v0.9.0")
+        )
+        view.showAvailableRelease(
+            Release(version: try XCTUnwrap(AppVersion("0.9.0")), page: page)
+        )
+
+        let line = try XCTUnwrap(view.releaseLineForTesting)
+        XCTAssertEqual(line.text, "Version 0.9.0 is available on GitHub")
+        XCTAssertEqual(line.page, page, "and clicking it opens that release")
+    }
+
 }
