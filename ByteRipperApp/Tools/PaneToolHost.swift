@@ -100,6 +100,19 @@ import MEFirmware
         owner.revealForTool(range, in: pane, select: select)
     }
 
+    /// The window's own plate, the one a search result is reported in: a
+    /// tool-module's confirmation is the same kind of report and is shown
+    /// through the same presenter, so the two cannot come to look like
+    /// different apps.
+    ///
+    /// It goes over the whole window rather than over the panel the button was
+    /// in, which is the app's one convention for this — and the right one here,
+    /// since what a copy put on the clipboard is about to be pasted somewhere
+    /// else entirely.
+    func showNotice(symbol: String, lines: [String]) {
+        owner?.showNotice(symbol: symbol, lines: lines)
+    }
+
     /// Asks the user for a file and hands back its bytes. The panel is the
     /// app's, so the sandbox's grant on what the user picked stays on this side
     /// of the line: a tool-module is never given a URL or a scope to hold.

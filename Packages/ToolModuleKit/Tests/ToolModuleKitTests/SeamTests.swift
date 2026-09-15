@@ -45,6 +45,11 @@ final class SeamTests: XCTestCase {
 
         func publish(_ zones: ZoneMap) { published = zones.normalized(contentSize: contentSize) }
         func reveal(_ range: Range<UInt64>, select: Bool) { revealed = (range, select) }
+        /// What the app drew over the window, in the order it was asked for.
+        var notices: [(symbol: String, lines: [String])] = []
+        func showNotice(symbol: String, lines: [String]) {
+            notices.append((symbol, lines))
+        }
         func requestFile(kinds: [String]) async -> ToolFile? { nil }
         func exportFile(_ bytes: [UInt8], suggestedName: String) async -> Bool { false }
         func openInNewTab(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>) {}
@@ -77,6 +82,10 @@ final class SeamTests: XCTestCase {
 
         func contentChanged(_ change: ToolContentChange) { changes.append(change) }
         func stop() { stopped = true }
+
+        /// Something the panel did, which the user is told about over the
+        /// window: the one direction a confirmation can travel.
+        func confirm() { host.showNotice(symbol: "doc.on.doc", lines: ["Copied"]) }
     }
 
     private struct StubModule: ToolModule {
@@ -107,6 +116,21 @@ final class SeamTests: XCTestCase {
         XCTAssertEqual(host.published.zones.map(\.name), ["Header"])
         XCTAssertEqual(host.published.focus, "head")
         XCTAssertNotNil(session.viewController)
+    }
+
+    /// The other thing a panel needs to do that is not about the bytes: say
+    /// that something happened. The plate is the app's — it is drawn over the
+    /// window, where every such confirmation in this app is drawn — so a
+    /// tool-module's only way to it is through the host, and this is that way.
+    @MainActor func testASessionReportsAConfirmationThroughTheHost() throws {
+        let host = StubHost(bytes: [UInt8](repeating: 0xFF, count: 0x100))
+        let session = try XCTUnwrap(StubModule.makeSession(host: host) as? StubSession)
+
+        session.confirm()
+
+        XCTAssertEqual(host.notices.count, 1)
+        XCTAssertEqual(host.notices.first?.symbol, "doc.on.doc")
+        XCTAssertEqual(host.notices.first?.lines, ["Copied"])
     }
 
     @MainActor func testATransactionFromASessionReachesTheBytes() throws {

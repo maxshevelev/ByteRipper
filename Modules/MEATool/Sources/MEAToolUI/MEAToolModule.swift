@@ -84,6 +84,20 @@ struct MEAParkedState: ToolSessionState {
         controller.onSelect = { [weak self] path in self?.select(path) }
         controller.onTabChanged = { [weak self] tab in self?.selectTab(tab) }
         controller.onRetry = { [weak self] in self?.reparse() }
+        // A copy is confirmed over the window rather than in the status row: it
+        // is an answer about the whole panel, and the user is looking away from
+        // the panel by then — at the place they are about to paste into. The
+        // line is the panel's own button's words turned around, and the glyph is
+        // that button's, so the plate is recognisably about the control that was
+        // clicked (`ToolHost.showNotice`).
+        controller.onSummaryCopied = { [weak self] in
+            self?.host.showNotice(symbol: MEAToolViewController.copySummaryGlyph,
+                                  lines: ["Summary Copied"])
+        }
+        controller.onScreenshotCopied = { [weak self] in
+            self?.host.showNotice(symbol: MEAToolViewController.copyScreenshotGlyph,
+                                  lines: ["Screenshot Copied"])
+        }
     }
 
     public var viewController: NSViewController { controller }

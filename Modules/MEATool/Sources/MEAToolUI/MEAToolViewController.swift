@@ -20,6 +20,12 @@ import ToolModuleKit
     var onTabChanged: ((Int) -> Void)?
     /// The status row's Try Again was pressed, after a failed analysis.
     var onRetry: (() -> Void)?
+    /// The summary went to the clipboard as text, and the screenshot as a
+    /// picture. Told rather than announced here: the plate that says a copy
+    /// happened is the window's, and a panel that drew its own would be a
+    /// second convention for the same confirmation (`ToolHost.showNotice`).
+    var onSummaryCopied: (() -> Void)?
+    var onScreenshotCopied: (() -> Void)?
 
     /// The tree as it is shown, kept from one show to the next so the data
     /// source reads the same roots the last show laid out.
@@ -358,12 +364,20 @@ import ToolModuleKit
         tabs.setContentCompressionResistancePriority(.required, for: .horizontal)
     }
 
+    /// The glyph each of the summary's two ways out wears — on its own button
+    /// and on the notice that confirms the copy. One sign for one action, so
+    /// the plate that appears after a click is recognisably about the control
+    /// that was clicked; named here rather than written twice so the button and
+    /// the plate cannot come to wear different ones.
+    static let copySummaryGlyph = "doc.on.doc"
+    static let copyScreenshotGlyph = "camera"
+
     /// The two ways out of the Summary tab, as icons in its own row: the rows
     /// as text to paste, and the whole page as a picture.
     private func configureSummaryActions() {
         for (button, symbol, name, action) in [
-            (copyButton, "doc.on.doc", "Copy Summary", #selector(copySummary)),
-            (screenshotButton, "camera", "Copy Screenshot", #selector(copyScreenshot)),
+            (copyButton, Self.copySummaryGlyph, "Copy Summary", #selector(copySummary)),
+            (screenshotButton, Self.copyScreenshotGlyph, "Copy Screenshot", #selector(copyScreenshot)),
         ] {
             button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: name)?
                 .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))
@@ -472,11 +486,16 @@ import ToolModuleKit
     /// report as the table it is on screen rather than as a run-on paragraph.
     /// An `NSAttributedString` carries both spellings — the RTF and the plain
     /// text under it — so a plain-text field gets a readable version for free.
+    ///
+    /// The session is told afterwards, and only if the pasteboard took it: the
+    /// plate says the summary is on the clipboard, and a copy that failed is
+    /// not something to say happened.
     @objc func copySummary() {
         guard !summaryBlocks.isEmpty else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([Self.richText(of: summaryBlocks)])
+        guard pasteboard.writeObjects([Self.richText(of: summaryBlocks)]) else { return }
+        onSummaryCopied?()
     }
 
     /// A picture of the whole summary on the clipboard — all of it, not the
@@ -486,7 +505,8 @@ import ToolModuleKit
         guard !summaryBlocks.isEmpty, let image = summaryPicture() else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.writeObjects([image])
+        guard pasteboard.writeObjects([image]) else { return }
+        onScreenshotCopied?()
     }
 
     /// A picture of the summary's rows, drawn whole and cropped to them.

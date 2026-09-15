@@ -1,7 +1,8 @@
 import Foundation
 
 /// The open file, as the tool-module bound to it is allowed to see it: read it,
-/// write it, say what the dump should draw, and send the view somewhere.
+/// write it, say what the dump should draw and what just happened, and send the
+/// view somewhere.
 ///
 /// One host stands for one pane. A session gets it at birth and holds it until
 /// `stop()`; everything it can ask for is here, which is also the list of what
@@ -57,6 +58,22 @@ import Foundation
     /// Scrolls the dump to `range` — and selects it, when the point is what the
     /// bytes are rather than where they are.
     func reveal(_ range: Range<UInt64>, select: Bool)
+
+    /// Shows a short-lived notice over the window — the plate a search result
+    /// is reported in — about something the panel *did* rather than something
+    /// it found in the bytes: a copy that went to the clipboard, a write that
+    /// landed.
+    ///
+    /// The panel names the glyph and writes the lines, because the panel is
+    /// what knows what happened; where the plate appears, how long it holds,
+    /// and that a new one replaces the one before are the window's
+    /// conventions, so they are asked for here rather than re-decided by every
+    /// tool-module that has something to confirm. Which is the whole reason
+    /// this is on the seam: a panel drawing its own plate would be a second
+    /// convention, and the user would see two.
+    ///
+    /// For a report that is nothing but a sign, `lines` is empty.
+    func showNotice(symbol: String, lines: [String])
 
     /// Asks the user for a file and hands back its bytes. The panel is the
     /// app's, so the sandbox's access to what the user picked stays on the

@@ -38,6 +38,11 @@ final class TransientNoticeView: NSVisualEffectView {
     /// What the plate says, for tests.
     private(set) var lines: [String] = []
 
+    /// The glyph it was told to wear, for tests — what a plate about a control
+    /// can be checked against: the sign on the plate and the sign on the button
+    /// are the same one.
+    private(set) var symbolName = ""
+
     /// The glyph the plate actually drew, for the test that a symbol named in
     /// code is one this system has.
     var symbolImageForTests: NSImage? { symbolView.image }
@@ -63,6 +68,7 @@ final class TransientNoticeView: NSVisualEffectView {
         translatesAutoresizingMaskIntoConstraints = false
         alphaValue = 0
 
+        symbolName = symbol
         symbolView.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         symbolView.symbolConfiguration = NSImage.SymbolConfiguration(
             pointSize: lines.isEmpty ? Self.glyphPointSize : Self.symbolPointSize,

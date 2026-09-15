@@ -341,6 +341,71 @@ final class MEAToolFlowTests: XCTestCase {
             "no button called \"\(name)\" in the panel")
     }
 
+    /// Neither way out of the Summary tab is silent. Each is confirmed over the
+    /// window — in the same plate a search result is reported in, which is what
+    /// makes it recognisable as this app's answer rather than the panel's — and
+    /// each plate wears the glyph of the button that was clicked, so the two
+    /// halves of the action are one sign.
+    func testASummaryCopyIsConfirmedOverTheWindowWithItsButtonsGlyph() throws {
+        _ = try open(METestImage.fptFile())
+        let controller = try XCTUnwrap(self.controller)
+        let panel = try panel()
+        let pasteboard = NSPasteboard.general
+        let restored = pasteboard.string(forType: .string)
+        addTeardownBlock {
+            pasteboard.clearContents()
+            if let restored { pasteboard.setString(restored, forType: .string) }
+        }
+
+        XCTAssertNil(controller.transientNotice, "nothing is said before anything is done")
+
+        try button(named: "Copy Summary", in: panel).performClick(nil)
+        XCTAssertEqual(controller.transientNotice?.lines, ["Summary Copied"])
+        XCTAssertEqual(controller.transientNotice?.symbolName, "doc.on.doc",
+                       "the glyph on the plate is the one on the button")
+
+        try button(named: "Copy Screenshot", in: panel).performClick(nil)
+        XCTAssertEqual(controller.transientNotice?.lines, ["Screenshot Copied"])
+        XCTAssertEqual(controller.transientNotice?.symbolName, "camera",
+                       "and the picture's plate wears the camera, not the document")
+    }
+
+    /// And the plate is a confirmation, not a decoration. While the ME region
+    /// is still being read there is no summary to take away — the firmware
+    /// table is always non-empty once one lands, so "nothing to copy" is
+    /// exactly this state — and the actions behind the two (off-tab) buttons
+    /// decline quietly rather than announce a copy that did not happen. The
+    /// same action confirms once the summary is up: the plate follows the
+    /// summary, not the click.
+    func testNothingIsConfirmedWhileThereIsNoSummaryToCopy() throws {
+        _ = try openWithoutWaiting(METestImage.fptFile())
+        let controller = try XCTUnwrap(self.controller)
+        let panel = try panel()
+        let pasteboard = NSPasteboard.general
+        let restored = pasteboard.string(forType: .string)
+        addTeardownBlock {
+            pasteboard.clearContents()
+            if let restored { pasteboard.setString(restored, forType: .string) }
+        }
+
+        let copy = try button(named: "Copy Summary", in: panel)
+        let picture = try button(named: "Copy Screenshot", in: panel)
+        XCTAssertFalse(isOnScreen(copy, under: panel), "the premise: nothing to hand over yet")
+
+        // Sent rather than clicked: the buttons are off the tab while the panel
+        // waits, and what is being checked is the action's own answer — it has
+        // to decline quietly rather than confirm a copy it did not make.
+        copy.sendAction(copy.action, to: copy.target)
+        picture.sendAction(picture.action, to: picture.target)
+        XCTAssertNil(controller.transientNotice, "and so nothing says a copy happened")
+
+        _ = try waitForDisplay(of: try session())
+        XCTAssertTrue(isOnScreen(copy, under: panel), "the summary takes the tab")
+        copy.sendAction(copy.action, to: copy.target)
+        XCTAssertEqual(controller.transientNotice?.lines, ["Summary Copied"],
+                       "and now there is something to confirm")
+    }
+
     /// "Reading ME…" is the line under the panel while a parse runs — and only
     /// while it runs. Once the analysis lands the line returns to empty, as the
     /// other panels' do, so the busy reading is not mistaken for a result that
