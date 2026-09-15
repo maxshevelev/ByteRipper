@@ -60,9 +60,27 @@ final class EmptyStateView: NSView {
     /// stapled to the top of it.
     private static let maxBookmarkListHeight: CGFloat = 220
 
+    /// The gap between the version line and the hint above it, tighter than the
+    /// stack's own spacing: the version belongs to the hint, it is not another
+    /// thing the landing screen is saying.
+    private static let versionGap: CGFloat = 6
+
     /// The gap between the hint and the bookmarks section, wider than the
     /// stack's own spacing.
     private static let bookmarkSectionGap: CGFloat = 30
+
+    /// The app's name and version, as the landing screen signs off with them:
+    /// "ByteRipper 0.8.2". Read from the bundle rather than written here, so the
+    /// number has one home — `MARKETING_VERSION` in `project.yml`.
+    static var appNameAndVersion: String {
+        let info = Bundle.main.infoDictionary
+        let name = info?["CFBundleDisplayName"] as? String
+            ?? info?["CFBundleName"] as? String
+            ?? "ByteRipper"
+        guard let version = info?["CFBundleShortVersionString"] as? String,
+              !version.isEmpty else { return name }
+        return "\(name) \(version)"
+    }
 
     /// The vertical stack holding the icon, headline and hint — kept so
     /// `updateIconSize()` can adjust the icon–headline gap per size.
@@ -106,6 +124,14 @@ final class EmptyStateView: NSView {
         hintLabel.alignment = .center
         hintLabel.font = .systemFont(ofSize: 13)
 
+        // Which app this is and which build of it, under the hint: the one line
+        // that answers "what am I looking at" on a window with no file open, and
+        // what a bug report gets quoted from.
+        let versionLabel = NSTextField(labelWithString: Self.appNameAndVersion)
+        versionLabel.textColor = .tertiaryLabelColor
+        versionLabel.alignment = .center
+        versionLabel.font = .systemFont(ofSize: 11)
+
         let stackView = NSStackView()
         stackView.orientation = .vertical
         stackView.alignment = .centerX
@@ -114,10 +140,12 @@ final class EmptyStateView: NSView {
         stackView.addArrangedSubview(openButton)
         stackView.addArrangedSubview(titleLabel)
         stackView.addArrangedSubview(hintLabel)
+        stackView.addArrangedSubview(versionLabel)
         stackView.addArrangedSubview(makeBookmarkSection())
+        stackView.setCustomSpacing(Self.versionGap, after: hintLabel)
         // More air than the stack's usual rhythm: the list is a different
         // subject from the landing screen above it, not the next line of it.
-        stackView.setCustomSpacing(Self.bookmarkSectionGap, after: hintLabel)
+        stackView.setCustomSpacing(Self.bookmarkSectionGap, after: versionLabel)
         addSubview(stackView)
         contentStack = stackView
 

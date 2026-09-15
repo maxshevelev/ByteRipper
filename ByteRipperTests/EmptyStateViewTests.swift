@@ -36,4 +36,18 @@ final class EmptyStateViewTests: XCTestCase {
                       "the up-to-two-files hint must be shown")
     }
 
+    /// The landing screen signs off with the app's name and its number, taken
+    /// from the bundle the test runs hosted in — so this asserts the label is
+    /// the bundle's own name and version, not a copy of today's number that
+    /// every release would have to remember to bump.
+    func testLandingScreenShowsAppNameAndVersionUnderTheHint() {
+        let view = makeEmptyView()
+        let labels = descendants(of: view, NSTextField.self).map { $0.stringValue }
+
+        XCTAssertTrue(labels.contains(EmptyStateView.appNameAndVersion),
+                      "the app name and version must be shown under the hint")
+        XCTAssertTrue(EmptyStateView.appNameAndVersion.hasPrefix("ByteRipper"),
+                      "the line must name the app")
+    }
+
 }
