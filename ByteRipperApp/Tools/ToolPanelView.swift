@@ -140,7 +140,17 @@ final class ToolPanelView: NSView, NSMenuDelegate {
         // tool-module's name is the shorter of the two and the one that says
         // what the panel is.
         fileSelector.translatesAutoresizingMaskIntoConstraints = false
+        // Both halves of the sizing contract, and the second is the one that
+        // matters. A popup measures itself by the title of the *selected* item,
+        // and `setPanes` writes the active pane's file name into that item —
+        // so a long name there made the control ask for 188 points, where its
+        // own two-line menu needs 63. Resistance alone only says "do not squeeze
+        // me below this"; it is hugging that says "do not *grow* me to this",
+        // and without it the popup insists on the width of the longest name the
+        // header can ever show, against a chain of five equally breakable links
+        // — which is what AppKit logged as a pile of conflicts on every open.
         fileSelector.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
+        fileSelector.setContentHuggingPriority(.defaultLow - 1, for: .horizontal)
 
         closeButton.bezelStyle = .inline
         closeButton.isBordered = false
@@ -184,19 +194,28 @@ final class ToolPanelView: NSView, NSMenuDelegate {
         // width, for the reason the minimap panel's do (§19.2): a collapsed
         // panel is a legal state and must not log a constraint conflict every
         // time it is reached.
+        //
+        // They are breakable *by different amounts*, and that is the point of
+        // the four priorities below. Five links at one priority are five links
+        // AppKit has no reason to prefer when a narrow panel cannot hold them
+        // all: it logs the conflict and then breaks whichever it reached last,
+        // so the header gave up its pieces in an order nobody chose. Ranked, the
+        // squeeze has an answer written down — the rule the panel follows is
+        // "the ✕ stays put, the name shortens first, then the module's title,
+        // and the icon's own inset goes last".
         let leading = iconView.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 8)
-        leading.priority = .defaultHigh
+        leading.priority = .defaultHigh - 3
         let afterIcon = titleLabel.leadingAnchor.constraint(
             equalTo: iconView.trailingAnchor, constant: 5
         )
-        afterIcon.priority = .defaultHigh
+        afterIcon.priority = .defaultHigh - 2
         let gap = fileSelector.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 6)
-        gap.priority = .defaultHigh
+        gap.priority = .defaultHigh - 1
         let trailing = closeButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -6)
         trailing.priority = .defaultHigh
         let toClose = fileSelector.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor,
                                                              constant: -6)
-        toClose.priority = .defaultHigh
+        toClose.priority = .defaultHigh - 1
 
         // The drop zone's insets break for the same reason, and it is not a
         // nicety: a collapsed panel is 8 + 8 + the trailing rule narrower than
