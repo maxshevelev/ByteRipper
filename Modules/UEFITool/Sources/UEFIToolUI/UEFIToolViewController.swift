@@ -238,17 +238,9 @@ import UEFITool
         splitter.dividerThickness = 1
         splitter.translatesAutoresizingMaskIntoConstraints = false
         treePane.translatesAutoresizingMaskIntoConstraints = false
-        treePane.addSubview(outlineScroll)
-        treePane.addSubview(legend)
-        NSLayoutConstraint.activate([
-            outlineScroll.topAnchor.constraint(equalTo: treePane.topAnchor),
-            outlineScroll.leadingAnchor.constraint(equalTo: treePane.leadingAnchor),
-            outlineScroll.trailingAnchor.constraint(equalTo: treePane.trailingAnchor),
-            legend.topAnchor.constraint(equalTo: outlineScroll.bottomAnchor, constant: 4),
-            legend.leadingAnchor.constraint(equalTo: treePane.leadingAnchor),
-            legend.trailingAnchor.constraint(equalTo: treePane.trailingAnchor),
-            legend.bottomAnchor.constraint(equalTo: treePane.bottomAnchor)
-        ])
+        // The list over its legend, with the legend's edges breakable against
+        // a pane that is still zero-sized while the panel opens.
+        legend.install(below: outlineScroll, in: treePane)
         legend.onShowMarkingsChanged = { [weak self] _ in self?.updateRowMarks() }
         splitter.addPane(treePane)
         splitter.addPane(detail)

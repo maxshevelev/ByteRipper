@@ -197,17 +197,9 @@ import ToolModuleKit
         splitter.dividerThickness = 1
         splitter.translatesAutoresizingMaskIntoConstraints = false
         entriesPane.translatesAutoresizingMaskIntoConstraints = false
-        entriesPane.addSubview(entriesScroll)
-        entriesPane.addSubview(legend)
-        NSLayoutConstraint.activate([
-            entriesScroll.topAnchor.constraint(equalTo: entriesPane.topAnchor),
-            entriesScroll.leadingAnchor.constraint(equalTo: entriesPane.leadingAnchor),
-            entriesScroll.trailingAnchor.constraint(equalTo: entriesPane.trailingAnchor),
-            legend.topAnchor.constraint(equalTo: entriesScroll.bottomAnchor, constant: 4),
-            legend.leadingAnchor.constraint(equalTo: entriesPane.leadingAnchor),
-            legend.trailingAnchor.constraint(equalTo: entriesPane.trailingAnchor),
-            legend.bottomAnchor.constraint(equalTo: entriesPane.bottomAnchor)
-        ])
+        // The list over its legend, with the legend's edges breakable against
+        // a pane that is still zero-sized while the panel opens.
+        legend.install(below: entriesScroll, in: entriesPane)
         legend.onShowMarkingsChanged = { [weak self] _ in self?.updateRowMarks() }
         splitter.addPane(entriesPane)
         splitter.addPane(detail)

@@ -150,9 +150,18 @@ import AppPalette
         }
         content.translatesAutoresizingMaskIntoConstraints = false
         cell.addSubview(content)
+        // The trailing edge gives way, below the icons' compression resistance.
+        // The text is cut short to any width (it resists at `.defaultLow`), but
+        // the icons ahead of it and the spacing between them are not, and a
+        // column dragged narrower than they are — down to a few points — would
+        // otherwise be a required pair AppKit breaks the stack's own spacing to
+        // meet, or an edge strong enough to crush the icons. Below that width
+        // the row runs past the cell's edge, where the column clips it.
+        let trailing = content.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2)
+        trailing.priority = .defaultHigh - 1
         NSLayoutConstraint.activate([
             content.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
-            content.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
+            trailing,
             content.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
         ])
         return cell

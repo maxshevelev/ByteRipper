@@ -126,6 +126,15 @@ import AppKit
         showSwitch.target = self
         showSwitch.action = #selector(switchClicked)
 
+        // One line each, cut short rather than wrapped: a button's title wraps
+        // by default, and a header squeezed for a moment — a pane that is still
+        // zero-wide while the panel opens — would otherwise be left one letter
+        // a line after the pane has grown back.
+        for button in [titleButton, showSwitch] {
+            (button.cell as? NSButtonCell)?.wraps = false
+            button.cell?.lineBreakMode = .byTruncatingTail
+        }
+
         let spacer = NSView()
         spacer.setContentHuggingPriority(.init(1), for: .horizontal)
         let header = NSStackView(views: [disclosure, titleButton, spacer, showSwitch])
