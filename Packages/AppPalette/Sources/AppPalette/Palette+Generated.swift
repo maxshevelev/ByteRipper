@@ -107,3 +107,23 @@ public extension RowMarks.Sets {
     /// Every row colour set in the catalogue, in its own order.
     static let all = [decompressed, protectedFirmware, protectedIBB]
 }
+
+public extension NoticeColors.Sets {
+    static let icon = PaletteColor(
+        name: "NoticeIcon",
+        light: (0.000, 0.000, 0.000, 0.530),
+        dark: (1.000, 1.000, 1.000, 0.550))
+
+    /// Every notice colour set in the catalogue, in its own order.
+    static let all = [icon]
+}
+
+public extension EmptyStateColors.Sets {
+    static let icon = PaletteColor(
+        name: "EmptyStateIcon",
+        light: (0.000, 0.000, 0.000, 0.259),
+        dark: (1.000, 1.000, 1.000, 0.247))
+
+    /// Every emptystate colour set in the catalogue, in its own order.
+    static let all = [icon]
+}

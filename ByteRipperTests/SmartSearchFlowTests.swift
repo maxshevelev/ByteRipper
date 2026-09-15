@@ -557,6 +557,8 @@ final class SmartSearchFlowTests: XCTestCase {
         XCTAssertEqual(notice.frame.midX, content.bounds.midX, accuracy: 0.5,
                        "centred across the window")
         XCTAssertGreaterThan(notice.frame.width, 100, "and sized to its lines")
+        XCTAssertEqual(notice.frame.width, notice.frame.height, accuracy: 0.5,
+                       "square: the side is what the content asked for")
         // The view is not flipped, so a third of the way *up* is a small y.
         XCTAssertEqual(notice.frame.midY,
                        content.bounds.height * TransientNoticePresenter.verticalFraction,
@@ -564,6 +566,11 @@ final class SmartSearchFlowTests: XCTestCase {
                        "a third of the height up from the bottom")
         XCTAssertGreaterThan(notice.frame.minY, content.bounds.minY, "inside the window")
         XCTAssertLessThan(notice.frame.midY, content.bounds.midY, "and below its middle")
+        // The tall case, and the one that shows what "square" costs: a report
+        // of five lines sets the side, so the plate comes out wide as well as
+        // tall rather than squeezing the lines into a narrow column.
+        XCTAssertGreaterThan(notice.frame.width, 200,
+                             "as wide as the widest line it had to set")
     }
 
     /// A plate reports a search, so it goes the moment that search stops being

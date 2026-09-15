@@ -52,7 +52,7 @@ public enum SemanticColors {
     /// app suite checks the catalogue against.
     public static var everySet: [PaletteColor] {
         Sets.all + ZoneColors.Sets.all + SegmentTints.Sets.all + DifferenceColors.Sets.all
-            + RowMarks.Sets.all
+            + RowMarks.Sets.all + NoticeColors.Sets.all + EmptyStateColors.Sets.all
     }
 }
 
@@ -126,4 +126,36 @@ public enum RowMarks {
 
     /// The rail: the row's bytes came out of a decompressed buffer.
     public static let decompressed = Sets.decompressed.color
+}
+
+/// What a transient notice draws with — the plate over the window that reports
+/// something the window has already done (§11).
+///
+/// A family of its own rather than a `Semantic` meaning: a notice is not a
+/// state a value can be in, and it is the one thing in the app drawn *over*
+/// whatever the user is reading, so its colour answers to a different question —
+/// how loud a report should be, and how far it may sit from the chrome behind
+/// it. A mid grey in both themes, the weight of the platform's own build-result
+/// plate: read at a glance, and quieter than the document it sits over.
+public enum NoticeColors {
+    public enum Sets {}
+
+    /// The glyph on a notice, and the words under it. The two are the same
+    /// colour on purpose — a plate is one object, and a sign louder than its
+    /// own text would read as two.
+    public static let icon = Sets.icon.color
+}
+
+/// What the empty window's landing screen draws with — the large "drop files
+/// here" picture and its headline.
+///
+/// A family of its own, not a notice's: the landing screen is the window's
+/// whole content while there is nothing to show, not a report over a document,
+/// and it is fainter than a notice so an empty window reads as waiting rather
+/// than as saying something.
+public enum EmptyStateColors {
+    public enum Sets {}
+
+    /// The landing screen's picture, and the headline beside it.
+    public static let icon = Sets.icon.color
 }

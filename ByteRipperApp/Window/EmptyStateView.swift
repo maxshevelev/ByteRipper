@@ -1,3 +1,4 @@
+import AppPalette
 import Cocoa
 
 /// Placeholder shown in empty mode (§3.1): a large system icon that opens the
@@ -33,8 +34,10 @@ final class EmptyStateView: NSView {
 
     /// The muted grey shared by the icon and the headline — softer than the
     /// regular secondary text, so the landing screen reads as a hint, not a
-    /// primary control.
-    private static let iconColor = NSColor.tertiaryLabelColor
+    /// primary control. The palette's own colour for the landing screen, a
+    /// family apart from a transient notice's: the empty window is waiting, not
+    /// reporting, so it is the fainter of the two.
+    private static let iconColor = EmptyStateColors.icon
 
     /// The icon is a third of the window's shorter side, capped so a huge
     /// window doesn't blow it up past this point.

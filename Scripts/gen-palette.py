@@ -25,6 +25,8 @@ colour is *for*:
   Segment<N>          the tint of the Nth piece of a partition
   Difference<What>    the comparison's own fills — a byte that differs
   Row<Mark>           a mark a firmware panel draws on a row (Design/ROW_MARKS.md)
+  Notice<What>        something a transient notice draws with (§11)
+  EmptyState<What>    something the empty window's landing screen draws with
 
 Each family's colours land in that family's `Sets` namespace, and the family
 itself gives them the names callers use — `SemanticColors.Sets.good` is the
@@ -40,7 +42,8 @@ editing — the package's tests pin each family's rules rather than any
 particular shade.
 
 To add one: a colour set named for its family, a run of this, and one line in
-the family's facade (`SemanticColors`, `ZoneColors`, `SegmentTints`) giving it a
+the family's facade (`SemanticColors`, `ZoneColors`, `SegmentTints`,
+`NoticeColors`, `EmptyStateColors`) giving it a
 name. The value is the catalogue's; the meaning is Swift's.
 
 Run it from anywhere; the repository root is resolved relative to this file
@@ -66,6 +69,8 @@ FAMILIES = [
     ("Segment", "SegmentTints"),
     ("Difference", "DifferenceColors"),
     ("Row", "RowMarks"),
+    ("Notice", "NoticeColors"),
+    ("EmptyState", "EmptyStateColors"),
 ]
 
 
