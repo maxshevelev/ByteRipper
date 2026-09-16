@@ -108,10 +108,11 @@ import ToolModuleKit
     /// Re-reads what the header should say: the name the selector shows, and
     /// which pane its tick is on.
     ///
-    /// Called whenever either half can have moved — the active pane changed, a
-    /// file was opened or closed, the session was re-bound. A header that only
-    /// updated on re-bind would keep naming the pane the user was in when the
-    /// tool opened, which is the one thing the header must not do.
+    /// Called whenever either half can have moved — a file was opened, closed
+    /// or renamed, a pane was adopted, the session started, ended or was
+    /// re-bound. Which pane is *active* is not one of those: the header names
+    /// the file the session reads and writes, and clicking the other pane does
+    /// not take the session there.
     func refreshPanelHeader() {
         guard let owner else { return }
         let panes: [PaneViewModel] = [owner.windowModel.pane1, owner.windowModel.pane2]
@@ -124,7 +125,7 @@ import ToolModuleKit
         // Nothing to switch between with one file open, and a dropdown that
         // offers a closed pane would be offering somewhere the tool cannot go.
         let switchable = choices.filter { $0.isEnabled }.count > 1
-        panel.setPanes(choices, activeFileName: owner.windowModel.activePane.status.fileName)
+        panel.setPanes(choices)
         panel.setSelectorEnabled(switchable)
     }
 

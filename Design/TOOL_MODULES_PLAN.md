@@ -212,7 +212,12 @@ edge:
 - **Width per tool-module**, from `preferredPanelWidth`, user-resizable and
   persisted under the module's identifier. A FIT table wants ~450 pt where the
   minimap is happy at 120–240; one shared width would be wrong for both.
-- **The header names the file** the session is bound to.
+- **The header names the file** the session is bound to, and offers the pane
+  beside it: a dropdown listing the panes in pane order, ticking the one being
+  read. Dropping a pane on the panel and choosing one in that dropdown are the
+  only two gestures that move a session — activating a pane is not one of them,
+  and the header goes on naming the bound file while the user works in the
+  other one.
 - **Zoom-to-fit makes room for it**, as it does for the minimap (§19.2): a
   double-click on the title bar fits the whole content area, and a panel left
   out of that sum zooms the window to a width the dump does not actually get.

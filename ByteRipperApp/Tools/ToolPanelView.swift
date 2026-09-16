@@ -12,7 +12,7 @@ import Cocoa
 ///
 /// The panel hosts a view controller it does not own: the tool-module builds
 /// it, this holds it, and swapping tool-modules swaps the view.
-final class ToolPanelView: NSView, NSMenuDelegate {
+final class ToolPanelView: NSView {
     /// Fired by the header's ✕. The same thing as Tools ▸ None.
     var onClose: (() -> Void)?
 
@@ -39,13 +39,19 @@ final class ToolPanelView: NSView, NSMenuDelegate {
     /// button that opened it read as one thing.
     private let iconView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
-    /// The file selector: a dropdown naming the active pane's file, which opens
-    /// the panes this tool-module may be moved onto.
+    /// The file selector: a dropdown naming the file the tool-module is
+    /// reading, which opens the panes it may be moved onto.
     ///
     /// A popup rather than a label because the header's question — *which* file
     /// is this tool reading — has an answer that can be changed from here, and a
     /// name the user can see is the natural place to offer that. It is the pane
-    /// the tool is *bound to*, not the active pane, that a choice moves it to.
+    /// the tool is *bound to*, not the active pane, that a choice moves it to,
+    /// and the name it shows is that same pane's — the two are one answer.
+    ///
+    /// Changing the active pane is not a way of changing this one: the tool
+    /// goes on reading the file it was opened for, so the header goes on naming
+    /// it. Dropping a pane on the panel and choosing one here are the only two
+    /// gestures that move it.
     private let fileSelector = NSPopUpButton()
     private let closeButton = NSButton()
     private let bottomSeparator = NSView()
@@ -60,14 +66,6 @@ final class ToolPanelView: NSView, NSMenuDelegate {
     /// What the selector's menu currently offers, in pane order — kept so a
     /// choice can be read back to the index it stands for.
     private var paneChoices: [PaneChoice] = []
-    /// Each entry's own pane's file name, in pane order, as the menu shows it
-    /// while it is open. The closed popup draws the *active* pane's name
-    /// instead — see `setPanes` — and the two are swapped around the menu
-    /// opening, because a popup offers no other moment to tell the difference.
-    private var paneEntryTitles: [String] = []
-    /// What the header says in the popup's closed state: the active pane's file
-    /// name. Kept so the titles can be swapped around the menu and swapped back.
-    private var headerTitle: String?
 
     /// What the selector's menu is built from: one entry per pane, in pane
     /// order. `isBound` puts the tick on the pane the tool is reading;
@@ -142,8 +140,8 @@ final class ToolPanelView: NSView, NSMenuDelegate {
         fileSelector.translatesAutoresizingMaskIntoConstraints = false
         // Both halves of the sizing contract, and the second is the one that
         // matters. A popup measures itself by the title of the *selected* item,
-        // and `setPanes` writes the active pane's file name into that item —
-        // so a long name there made the control ask for 188 points, where its
+        // which `setPanes` fills with the bound pane's file name — a long name
+        // there made the control ask for 188 points, where its
         // own two-line menu needs 63. Resistance alone only says "do not squeeze
         // me below this"; it is hugging that says "do not *grow* me to this",
         // and without it the popup insists on the width of the longest name the
@@ -412,44 +410,33 @@ final class ToolPanelView: NSView, NSMenuDelegate {
         titleLabel.stringValue = title
     }
 
-    /// Fills the selector: one entry per pane, in pane order, with a tick on
-    /// the one the tool-module is reading.
+    /// Fills the selector: one entry per pane, in pane order, naming its own
+    /// file, with a tick — and so the header — on the one the tool-module is
+    /// reading.
     ///
-    /// `activeFileName` is what the closed selector *shows* — the active pane's
-    /// file, which is the pane the user is working in and the one the header is
-    /// answering for. It is deliberately not the ticked entry: the tick says
-    /// where the tool's writes go, the visible name says where the user is, and
-    /// those two differ exactly while the user has clicked the other pane while
-    /// the tool is parked on this one. A selector that showed its own ticked
-    /// entry would answer a question nobody asked — which file the tool reads —
-    /// while the user is looking at the other one.
+    /// There is one answer to show, not two. The header's question is *which
+    /// file this panel is working on*, and that is the file the session is
+    /// bound to: the pane the user has clicked into since is somewhere else
+    /// entirely, and naming it would say the tool had gone there — which it has
+    /// not, and which nothing but a drop or a choice here can make it do.
     ///
-    /// Both facts have to come out of one popup, and `NSPopUpButton` will not
-    /// let them: it writes the tick itself, from whichever item is selected, and
-    /// would undo a `state` set here. So the *selection* is what carries the
-    /// tick — the bound pane is the selected item — and the active pane's name
-    /// is written into that item's title. A tick on the bound pane and a name
-    /// for the active one, from one mechanism instead of two fighting.
-    ///
-    /// The entry for a pane is the one at its own position either way, so the
-    /// name a title carries is what the menu *shows*, not what choosing that
-    /// entry would mean: the entry under the pointer is still its pane.
+    /// `NSPopUpButton` writes the tick itself, from whichever item is selected,
+    /// and undoes a `state` set on any item — so the tick is the selection, and
+    /// the entry it lands on carries both the tick and the name the header
+    /// draws while the menu is shut.
     ///
     /// A pane that is closed keeps its entry and is disabled rather than
     /// vanishing, so the list is the same length in the same order whatever is
     /// open, and the entry at a given position is always the same pane.
-    func setPanes(_ choices: [PaneChoice], activeFileName: String) {
+    func setPanes(_ choices: [PaneChoice]) {
         paneChoices = choices
         // Which entry the tick and the visible name both land on. With nothing
-        // bound there is no tick — the first entry is simply where the name
-        // goes, since the popup insists on drawing some selected title.
+        // bound there is no tick — the first entry is simply where the popup's
+        // selection has to sit, since it insists on drawing some title.
         let bound = choices.firstIndex(where: { $0.isBound }) ?? 0
         // The menu is rebuilt wholesale: `NSMenu` has no cheap "change the
         // ticks" and the list is two entries long.
-        paneEntryTitles = choices.map(\.fileName)
-        headerTitle = activeFileName
         let menu = NSMenu()
-        menu.delegate = self
         for (index, choice) in choices.enumerated() {
             let item = NSMenuItem(title: choice.fileName, action: #selector(paneSelected),
                                   keyEquivalent: "")
@@ -459,13 +446,9 @@ final class ToolPanelView: NSView, NSMenuDelegate {
             menu.addItem(item)
         }
         fileSelector.menu = menu
-        // The selected item's title is what the closed popup draws — the header
-        // — so it carries the active pane's name rather than its own pane's.
-        // `menuWillOpen` puts the entries' own names back for as long as the
-        // menu is up, and `menuDidClose` returns it.
-        menu.item(at: bound)?.title = activeFileName
-        // The popup writes the tick itself, from the selection, and would undo
-        // a `state` set on any item — so the tick is the selection.
+        // The selected item's title is what the closed popup draws, and it is
+        // its own pane's name either way — the header and the menu offer the
+        // same list, with the tick saying which of them the tool is on.
         fileSelector.selectItem(at: bound)
         fileSelector.isEnabled = !choices.isEmpty
     }
@@ -479,37 +462,6 @@ final class ToolPanelView: NSView, NSMenuDelegate {
         // choosing it would restart a parse for a file that has not changed.
         guard !paneChoices[index].isBound else { return }
         onSelectPane?(index)
-    }
-
-    // MARK: - The open menu
-
-    /// While the selector is open every entry names the pane it stands for, so
-    /// the entry under the pointer says where choosing it sends the tool. The
-    /// closed popup draws one of these titles as the header instead, which is
-    /// the active pane's name.
-    func menuWillOpen(_ menu: NSMenu) {
-        for (index, title) in paneEntryTitles.enumerated() {
-            menu.item(at: index)?.title = title
-        }
-    }
-
-    /// Back to the header's own answer once the menu is away: the selected
-    /// entry carries the active pane's name again, and every other entry its
-    /// own.
-    func menuDidClose(_ menu: NSMenu) {
-        restoreClosedTitles()
-    }
-
-    /// Puts the closed popup's titles back — the selected entry showing the
-    /// header's answer, the rest showing their own pane. Also the way a
-    /// selection gets drawn, since choosing one has just moved the tick.
-    private func restoreClosedTitles() {
-        for (index, title) in paneEntryTitles.enumerated() {
-            fileSelector.item(at: index)?.title = title
-        }
-        guard !paneChoices.isEmpty, let headerTitle = headerTitle else { return }
-        let bound = paneChoices.firstIndex(where: { $0.isBound }) ?? 0
-        fileSelector.item(at: bound)?.title = headerTitle
     }
 
     /// Whether the selector offers a choice at all. False with one file open,
@@ -564,12 +516,11 @@ final class ToolPanelView: NSView, NSMenuDelegate {
     var headerIcon: NSImage? { iconView.image }
     var title: String { titleLabel.stringValue }
     /// What the header is *showing* about the file: the name in the selector's
-    /// closed state, which is the active pane's file.
+    /// closed state, which is the file the tool-module is reading.
     var fileName: String { fileSelector.titleOfSelectedItem ?? "" }
     /// The selector's pane entries, for the tests that check what it offers.
-    ///
-    /// A title is what the menu *draws*, which for the selected entry is the
-    /// active pane's name; the pane an entry stands for is its position.
+    /// Each names its own pane, so the pane an entry stands for is both its
+    /// position and its title.
     var paneTitles: [String] { fileSelector.itemArray.map(\.title) }
     /// The index of the pane the tool-module is bound to, read the way the popup
     /// itself keeps it — the selection. nil when there is no session.

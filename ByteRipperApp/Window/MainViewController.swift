@@ -2013,12 +2013,17 @@ final class MainViewController: NSViewController {
     }
 
     /// The panel's header re-reads what it says about the file — called for
-    /// anything that can change either half of it: the active pane moving, a
-    /// file opening or closing, a session starting or ending.
+    /// anything that can change either half of it: a file opening, closing or
+    /// being renamed, the two panes swapping places, a session starting,
+    /// ending or being re-bound to another pane.
+    ///
+    /// Which pane is *active* is deliberately not on that list: the header
+    /// names the file the session is bound to, and clicking the other pane does
+    /// not take the session there.
     ///
     /// Free with no tool open (the header is a bare strip then), which is what
-    /// lets the pane-activation path call it unconditionally rather than
-    /// checking whether a panel happens to be up.
+    /// lets the paths that cannot tell whether a panel happens to be up call it
+    /// unconditionally.
     func refreshToolPanelHeader() {
         tools.refreshPanelHeader()
     }
@@ -2173,11 +2178,17 @@ final class MainViewController: NSViewController {
     /// pointer, the comparison view's chrome, and the focus all follow (§3.3).
     /// Driven by a header click and by a click on that pane's minimap.
     private func activatePane(at index: Int) {
-        // The window model's pointer moves first, and the header follows it at
-        // a point where the comparison view is not needed: it names the active
-        // pane's file, and a pane can be activated while that view is down — a
-        // file opening into the panes, say. Everything below needs the view;
-        // this does not.
+        // The window model's pointer moves first, and the panel's header is
+        // re-read beside it, at a point where the comparison view is not needed
+        // — a pane can be activated while that view is down, a file opening
+        // into the panes, say. Everything below needs the view; this does not.
+        //
+        // The header does not *follow* the activation — it names the file the
+        // tool is bound to, which a click between panes does not change. It is
+        // re-read here because a pane's file can have arrived by a route with
+        // no hook of its own, and this is the moment the user has just turned
+        // to the panes: the alternative is a menu that names the wrong file the
+        // next time it is opened.
         windowModel.setActivePane(index)
         refreshToolPanelHeader()
         guard let comparisonView else { return }
@@ -4547,8 +4558,8 @@ final class MainViewController: NSViewController {
         performClosePane(at: index)
         // A closed pane keeps its entry in the selector but is disabled, and
         // with one file left there is nowhere to move the tool, so the whole
-        // header is re-read — including the case where it is now the *other*
-        // pane's file that the header has to name.
+        // header is re-read — whether the session ended with the file that
+        // closed or is still reading the one beside it.
         refreshToolPanelHeader()
     }
 
@@ -5380,6 +5391,11 @@ final class MainViewController: NSViewController {
     @objc func swapPanes() {
         guard mode == .comparison else { return }
         windowModel.swapPanes()
+        // The panel's header lists the panes in pane order, and the session
+        // stays bound to its own pane — which has just moved to the other
+        // position. Without this the tick would sit on the file the tool is
+        // *not* reading, which is the one thing the header exists to say.
+        refreshToolPanelHeader()
         // Swap exchanges the models in position but leaves the mode unchanged,
         // so `refreshMode()`'s skip-when-unchanged guard would not re-apply —
         // and the panes would stay put while the model→position mapping
