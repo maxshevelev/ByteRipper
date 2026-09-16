@@ -69,7 +69,9 @@ final class DiffNavigationTests: XCTestCase {
     /// the build's cancel/reset teardown on the shared builder actor and can
     /// transiently fail; navigating on the built index is the normal (§10.3)
     /// path the tests exercise. The status-bar summary only appears once the
-    /// index is ready (§14.4), so it is the "index ready" signal.
+    /// index is ready (§14.4), so it is the "index ready" signal — and every
+    /// fixture here differs, since a pair that did not would show no summary
+    /// at all and this wait would never return.
     @discardableResult
     private func waitForIndex(_ window: NSWindow, timeout: TimeInterval = 5) -> Bool {
         let panes = descendants(of: window.contentView!, FilePaneView.self)

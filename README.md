@@ -80,7 +80,7 @@ These projects are why a repair shop can work on modern firmware at all. Between
 ### Comparison
 
 - Two panes: open one or two files via **File > Open…** (⌘O) or drag-and-drop. One file — single-pane mode; two — comparison.
-- Differing bytes get an orange fill, tuned for light and dark mode; the shorter file's EOF tail counts as a difference too. The status bar shows a live summary — `12 differing · 2048 same` — updating as you edit.
+- Differing bytes get an orange fill, tuned for light and dark mode; the shorter file's EOF tail counts as a difference too. The status bar shows how much of the two files differs, as a percentage of the longer one — `differing 0.4%`, rounded up to a tenth, so a single differing byte in 16 MB still says 0.1% — updating as you edit, and saying nothing at all while the files are identical.
 - **Next/Previous Difference** (⌘⌥→ / ⌘⌥←) and **Next/Previous Same Block** (⌘⌥⇧→ / ⌘⌥⇧←) centre each result. Navigation steps between *changes*, not bytes: differing bytes closer together than the grouping distance (64 bytes by default) are one target, so a rewritten NVRAM area is one press instead of hundreds while highlighting stays per byte.
 - A selection in one pane is outlined in the other, so the two halves of the same offset read as one. **View > Toggle Pane Layout** (⌘⌥L) switches side-by-side and stacked; **Swap Panels** exchanges the two files without reopening them.
 

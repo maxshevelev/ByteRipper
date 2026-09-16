@@ -6,8 +6,8 @@ import ALSplitView
 /// draggable `ALSplitView`, with:
 /// - a left/right ⇄ top/bottom toggle (View menu) persisted in `UserDefaults`;
 /// - synchronized scrolling by absolute offset (same row layout ⇒ same y);
-/// - the comparison coordinator's diff counts mirrored into the panes' status
-///   bars, and its build operation shown in the ACTIVE pane's status bar.
+/// - the comparison coordinator's differing share mirrored into the panes'
+///   status bars, and its build operation shown in the ACTIVE pane's status bar.
 final class ComparisonView: NSView {
     let coordinator: ComparisonCoordinator
     let paneView1: FilePaneView
@@ -317,19 +317,10 @@ final class ComparisonView: NSView {
     }
 
     func refreshComparisonInfo() {
-        let text: String
-        if let index = coordinator.index {
-            var diffBytes: UInt64 = 0
-            var sameBytes: UInt64 = 0
-            for block in index.blocks {
-                if block.kind == .different { diffBytes += block.count } else { sameBytes += block.count }
-            }
-            text = "\(diffBytes) differing · \(sameBytes) same"
-        } else {
-            // While building, the progress bar (not text) shows the status; the
-            // summary only appears once the index is ready (§14.4).
-            text = ""
-        }
+        // While building, the progress bar (not text) shows the status; the
+        // summary only appears once the index is ready (§14.4) — and is empty,
+        // leaving the bar silent, when the two files do not differ.
+        let text = coordinator.index.map { ComparisonSummary(index: $0).text } ?? ""
         paneView1.comparisonInfo = text
         paneView2.comparisonInfo = text
     }

@@ -908,7 +908,7 @@ difference block.
   are not rescanned.
 - Grouping affects navigation only:
   - byte highlighting stays per byte (§8.2);
-  - the difference/same byte counts in the status bar stay per byte;
+  - the status bar's differing share stays per byte;
   - the block index keeps its byte-exact semantics (§8.1); the hunks are
     derived from it.
 - Enabling/disabling the navigation commands must use the same grouped unit as
