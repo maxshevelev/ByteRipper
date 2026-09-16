@@ -466,7 +466,14 @@ final class FilePaneView: NSView {
         // split — which sets a pane's frame outright — can still squeeze a
         // pane dragged to zero down to zero. The indicator is simply the last
         // thing to compress.
-        typingModeLabel.font = .monospacedSystemFont(ofSize: 11, weight: .semibold)
+        // Bold: the mode is a word the eye has to catch at the end of a line of
+        // quiet grey, and it is the one part of the bar that changes what the
+        // next keystroke does (§7.6).
+        typingModeLabel.font = .monospacedSystemFont(ofSize: 11, weight: .bold)
+        // No alignment is set: the label draws its own line, centred in the box
+        // it draws around itself, so the cell's alignment — which
+        // `NSTextField(labelWithString:)` overwrites with `.natural` anyway — is
+        // never consulted.
         typingModeLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         typingModeLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
         // The indicator is a control as well as a readout (§7.6) — a click

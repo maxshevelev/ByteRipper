@@ -615,7 +615,13 @@ typing into insertion. It is a mode, not a command: it changes what the keys of
   drawn in. INS is drawn in the same red the insert caret and modified bytes use
   — in this app red means "not the file you opened", which is what the mode
   leads to. The indicator keeps its width across both states so the bar does not
-  shift when the mode flips.
+  shift when the mode flips. It is drawn in a box of its own, and the box is
+  drawn in whatever colour the word inside it is drawn in: the two are one
+  object, and a grey box around a red word would be two things disagreeing about
+  what the next keystroke does. The word is centred in that box, across and
+  down: a borderless field draws its line from the top of its bounds, and a line
+  box is taller than a cap-height word, so a cell that draws it would leave the
+  word against the top.
 - Backspace on a half-typed byte rolls that byte back — the inserted byte
   disappears and nothing is recorded, as if the nibble had never been entered.
 - Delete and Backspace otherwise remove bytes and shift the tail (Backspace the
@@ -3653,14 +3659,8 @@ button as well (§20.5).
 
 24.2 The two stateful items
 
-Two items are in the toolbar because of what they SHOW, not what they do:
+One item is in the toolbar because of what it SHOWS, not what it does:
 
-- **Insert mode** (§7.6) is the one mode where a wrong state quietly damages a
-  dump: typing inserts and shifts the tail instead of overwriting. It is a
-  push-on/push-off button, lit while the mode is on. The mode is per pane, so the
-  button reads the ACTIVE pane and follows a pane switch. It is never disabled —
-  a typing mode is meaningful with no file open, exactly as the menu item is, and
-  the pane's status bar says OVR/INS either way.
 - **Word size** (§6) is a menu button, the only item carrying text: it names the
   size in force — "2 Bytes", not a bare digit, since an icon-only toolbar draws
   no labels and a number alone would not read as a word size. The size has to be
@@ -3670,13 +3670,23 @@ Two items are in the toolbar because of what they SHOW, not what they do:
   then left alone. The menu's wording is the View menu's, from one place. Always
   enabled — a view setting, not something done to a file.
 
-Both are view-backed items, and the framework's own validation does nothing for
+The item is view-backed, and the framework's own validation does nothing for
 those: the item has to ask the target itself. It asks for the enabled state the
 way a plain item would, and the state the control DISPLAYS is pushed from the
 same answer — the place the menu items' checkmarks are set (§10.3). Nothing can
 then drift: one pass sets both. A change made from the keyboard, the menu or the
 Settings window asks for that pass at once, instead of waiting for the
 framework's idle schedule.
+
+Insert mode (§7.6) is deliberately NOT in the toolbar, though it is the one mode
+where a wrong state quietly damages a dump. The state is already on screen in the
+pane it belongs to — OVR/INS, bold, in a box of its own at the end of that pane's
+status bar, the box in the same colour as the word in it, where the mode is read
+anyway before typing — and that readout is what
+flips it: a click on it switches the mode of the pane it is drawn in. A toolbar
+button would be a second place showing the same state, and a worse one: it can
+only ever speak for the active pane, so with two panes open it would sit lit while
+the pane the user is looking at is in overwrite mode.
 
 24.3 The pane-layout toggle
 

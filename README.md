@@ -120,7 +120,7 @@ These projects are why a repair shop can work on modern firmware at all. Between
 ### Editing
 
 - Type hex digits or text — bytes overwrite in place, with per-pane Undo/Redo (⌘Z / ⇧⌘Z). Modified bytes are drawn red until saved.
-- **Insert Mode** (⌥⌘I) switches typing from overwrite to insertion: the byte lands at the caret, the tail shifts right, and Delete/Backspace remove bytes instead of zeroing them. The mode is per pane — one file can be typed into while the other is read — shown as `OVR`/`INS` in the status bar and by the caret's own shape, and switched by clicking that indicator in the pane the mode belongs to. It shifts every offset from the caret on, so the first keystroke in each file asks once.
+- **Insert Mode** (⌥⌘I) switches typing from overwrite to insertion: the byte lands at the caret, the tail shifts right, and Delete/Backspace remove bytes instead of zeroing them. The mode is per pane — one file can be typed into while the other is read — shown as bold `OVR`/`INS` in a box at the end of that pane's status bar — the box in the same grey or red as the word inside it — and by the caret's own shape, and switched by clicking that indicator — it is the only place the mode is shown, and the only control that changes it. It shifts every offset from the caret on, so the first keystroke in each file asks once.
 - Undo is segmented for typed input: the first ⌘Z takes back the last byte, a quick second takes back the rest of the run, and after a pause it is one byte per press again.
 - **Paste Insert…**, **Delete Bytes…** and **Fill Selection with…** — the fast way to blank a region to `0xFF`. The confirmations for edits that shift the file can be turned off in **Settings ▸ Editing**.
 - **File > New File** (⌘N) opens an empty in-memory document — somewhere to paste a block out of a dump; **Revert to Saved** throws away the session's edits.
@@ -155,7 +155,7 @@ These projects are why a repair shop can work on modern firmware at all. Between
 
 ### Toolbar
 
-- Icon-only and fixed: **Go To**, **Find** and **Segments** on the left, then the two controls worth seeing rather than clicking — the **insert-mode** toggle, lit while typing shifts the file, and the **word size**, a menu button that says "2 Bytes". On the right: the difference arrows (or the *Files are identical* badge), the **pane layout** toggle, whose icon shows the arrangement the click will produce, and the **minimap** toggle. File operations are not there on purpose — dumps arrive by drop, and ⌘S saves them.
+- Icon-only and fixed: **Go To**, **Find** and **Segments** on the left, then the one control worth seeing rather than clicking — the **word size**, a menu button that says "2 Bytes". On the right: the difference arrows (or the *Files are identical* badge), the **pane layout** toggle, whose icon shows the arrangement the click will produce, and the **minimap** toggle. File operations are not there on purpose — dumps arrive by drop, and ⌘S saves them.
 
 ### Selection, clipboard, menus
 

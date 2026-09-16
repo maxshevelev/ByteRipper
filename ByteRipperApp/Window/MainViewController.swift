@@ -5280,15 +5280,12 @@ final class MainViewController: NSViewController {
         flipInsertMode(of: activePane)
     }
 
-    /// Flips the typing mode of `pane` — the Edit menu and the toolbar's toggle
-    /// act on the active one, a click on a pane's status-bar indicator on the
-    /// pane that was clicked (§7.6). The mode is per pane either way, and the
-    /// toolbar's toggle is re-read against the pane the keys go to.
+    /// Flips the typing mode of `pane` — the Edit menu acts on the active one, a
+    /// click on a pane's status-bar indicator on the pane that was clicked
+    /// (§7.6). The mode is per pane either way, and the pane whose mode changed
+    /// is the one that redraws its OVR/INS indicator.
     func flipInsertMode(of pane: PaneViewModel) {
         pane.isInsertMode.toggle()
-        // The toolbar's toggle carries the mode, and the keyboard path (⌥⌘I) has
-        // to light it without waiting for AppKit's idle pass (§24.2).
-        revalidateToolbar()
         pane.confirmInsertModeWarning = { [weak self, weak pane] in
             guard let self, let pane else { return true }
             let offset = pane.caretOffset
@@ -7138,8 +7135,7 @@ extension MainViewController: NSToolbarItemValidation {
     }
 
     /// The toolbar's items follow the menu items they mirror (§10.3, §24), and
-    /// the two that carry a state — the insert-mode toggle and the word-size
-    /// radio — are pushed to it here.
+    /// the word-size control, which carries a state, is pushed to here.
     ///
     /// Pushing `isEnabled` onto the items from our own state does not work:
     /// AppKit revalidates every visible item on each run-loop pass, and the
@@ -7160,13 +7156,6 @@ extension MainViewController: NSToolbarItemValidation {
             // The document commands need a dump to act on, exactly like the menu
             // items they mirror (§24.1).
             return activePane.isOpen
-        case #selector(toggleInsertMode(_:)):
-            // The button holds the ACTIVE pane's mode: it is per pane (§7.6), so
-            // the toggle follows the pane the keys go to. Always enabled — a
-            // typing mode is meaningful with no file open, and the pane's status
-            // bar says OVR/INS either way (§24.2).
-            (item.view as? NSButton)?.state = activePane.isInsertMode ? .on : .off
-            return true
         case #selector(activateTool(_:)):
             // The pull-down's first row is what it displays, so the name of the
             // tool-module in force is written there rather than selected

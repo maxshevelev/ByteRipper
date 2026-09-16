@@ -60,8 +60,8 @@ final class ToolbarItemsTests: XCTestCase {
     // MARK: - Composition
 
     /// The order is the layout: the Tools pull-down on the edge its panel opens
-    /// from, a space, the document commands, a space, the two
-    /// stateful controls, the flexible space that pins the right-hand group to
+    /// from, a space, the document commands, a space, the one stateful control
+    /// — the word size — the flexible space that pins the right-hand group to
     /// the window's edge, then the difference plaque, the pane arrangement and
     /// the minimap — each set apart by a system space (§24).
     func testTheToolbarIsTwoGroupsSplitByTheFlexibleSpace() throws {
@@ -71,14 +71,30 @@ final class ToolbarItemsTests: XCTestCase {
 
         XCTAssertEqual(wc.toolbarDefaultItemIdentifiers(toolbar),
                        [.tools, .space,
-                        .goTo, .find, .segments, .space, .insertMode, .wordSize,
+                        .goTo, .find, .segments, .space, .wordSize,
                         .flexibleSpace, .diffNavigation, .space, .paneLayout, .space, .toggleMinimap])
         // The live items, with no file open: the difference block is carried
         // only in comparison mode (§10.3), everything else is always there.
         XCTAssertEqual(toolbar.items.map(\.itemIdentifier),
                        [.tools, .space,
-                        .goTo, .find, .segments, .space, .insertMode, .wordSize,
+                        .goTo, .find, .segments, .space, .wordSize,
                         .flexibleSpace, .space, .paneLayout, .space, .toggleMinimap])
+    }
+
+    /// The insert-mode button is gone from the toolbar (§24.2): the mode is the
+    /// one readout a pane's status bar carries in a box of its own, and a click
+    /// on it flips the mode of the pane it is drawn in — a second control in the
+    /// window chrome showing the same state, and changing it for the active pane
+    /// rather than the clicked one, is one place too many to look.
+    func testTheToolbarCarriesNoInsertModeButton() throws {
+        let (wc, window) = makeWindow()
+        defer { wc.close() }
+        let toolbar = try XCTUnwrap(window.toolbar)
+        let ids = (toolbar.items.map(\.itemIdentifier)
+                   + wc.toolbarAllowedItemIdentifiers(toolbar))
+            .map(\.rawValue)
+        XCTAssertFalse(ids.contains("InsertMode"),
+                       "the toolbar neither shows the toggle nor offers it in customization")
     }
 
     /// Every command routes straight at the controller, which resolves the
@@ -90,7 +106,6 @@ final class ToolbarItemsTests: XCTestCase {
             (.goTo, #selector(MainViewController.goToPosition)),
             (.find, #selector(MainViewController.toggleFindBar)),
             (.segments, #selector(MainViewController.showSegments)),
-            (.insertMode, #selector(MainViewController.toggleInsertMode(_:))),
             (.wordSize, #selector(MainViewController.setWordSize(_:))),
             (.paneLayout, #selector(MainViewController.togglePaneLayout)),
         ]
@@ -159,65 +174,6 @@ final class ToolbarItemsTests: XCTestCase {
         for id in ids {
             XCTAssertFalse(try item(window, id).isEnabled, "\(id.rawValue): closed again")
         }
-    }
-
-    // MARK: - The insert-mode toggle (§24.2)
-
-    private func insertButton(_ window: NSWindow) throws -> NSButton {
-        try XCTUnwrap(item(window, .insertMode).view as? NSButton,
-                      "the insert-mode item is a push-on/push-off button")
-    }
-
-    /// The toggle carries the ACTIVE pane's typing mode — the mode is per pane
-    /// (§7.6), so the button reads the pane the keys go to, and switching panes
-    /// switches what it shows. It is never disabled: a typing mode is
-    /// meaningful with no file open, exactly as the menu item is.
-    func testTheInsertModeToggleCarriesTheActivePanesMode() throws {
-        let (wc, window) = makeWindow()
-        let controller = wc.mainViewController
-        defer {
-            controller.windowModel.pane1.close()
-            controller.windowModel.pane2.close()
-            wc.close()
-        }
-        let button = try insertButton(window)
-        XCTAssertEqual(button.state, .off, "a fresh window types in overwrite mode")
-        XCTAssertTrue(try item(window, .insertMode).isEnabled,
-                      "a mode switch is meaningful with no file open")
-
-        try controller.windowModel.pane1.open(url: try file(0x11))
-        try controller.windowModel.pane2.open(url: try file(0x22))
-        controller.apply(mode: .comparison)
-        controller.windowModel.setActivePane(0)
-        controller.toggleInsertMode(nil)
-        XCTAssertTrue(controller.windowModel.pane1.isInsertMode)
-        XCTAssertEqual(button.state, .on,
-                       "the keyboard path lights the button without waiting for an idle pass")
-
-        // The other pane is still in overwrite mode, and the button follows the
-        // active one rather than the window.
-        controller.windowModel.setActivePane(1)
-        window.toolbar?.validateVisibleItems()
-        XCTAssertEqual(button.state, .off, "pane 2 types in overwrite mode")
-        controller.windowModel.setActivePane(0)
-        window.toolbar?.validateVisibleItems()
-        XCTAssertEqual(button.state, .on, "and back")
-    }
-
-    /// Clicking the button toggles the mode: the item's own action is only
-    /// there for validation, so the click has to be the button's.
-    func testClickingTheInsertModeButtonTogglesTheMode() throws {
-        let (wc, window) = makeWindow()
-        let controller = wc.mainViewController
-        defer { controller.windowModel.pane1.close(); wc.close() }
-        try controller.windowModel.pane1.open(url: try file(0x11))
-        controller.apply(mode: .singleFile)
-
-        let button = try insertButton(window)
-        button.performClick(nil)
-        XCTAssertTrue(controller.windowModel.activePane.isInsertMode, "the click switched the mode on")
-        button.performClick(nil)
-        XCTAssertFalse(controller.windowModel.activePane.isInsertMode, "and off again")
     }
 
     // MARK: - The word-size button (§24.2)

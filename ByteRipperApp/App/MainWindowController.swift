@@ -24,7 +24,7 @@ final class MainWindowController: NSWindowController {
     /// delegate can hand it out.
     private(set) var filesIdenticalItem: NSToolbarItem?
 
-    /// The toolbar's document commands (§24.1) and its two stateful controls
+    /// The toolbar's document commands (§24.1) and its one stateful control
     /// (§24.2), plus the pane-layout toggle. Built on first request and cached
     /// the way the difference block is: the delegate must hand out one fixed
     /// instance per identifier, and a test reads the live control back through
@@ -32,7 +32,6 @@ final class MainWindowController: NSWindowController {
     private(set) var goToItem: NSToolbarItem?
     private(set) var findItem: NSToolbarItem?
     private(set) var segmentsItem: NSToolbarItem?
-    private(set) var insertModeItem: NSToolbarItem?
     private(set) var wordSizeItem: NSToolbarItem?
     private(set) var paneLayoutItem: NSToolbarItem?
     /// The Tools pull-down (Design/TOOL_MODULES_PLAN.md): the wrench, and the
@@ -277,40 +276,6 @@ final class MainWindowController: NSWindowController {
         return item
     }
 
-    /// The insert-mode toggle: a push-on/push-off button, so the mode the keys
-    /// are in is readable from the window chrome and not only as OVR/INS in the
-    /// pane's status bar (§24.2). The state is pushed in `validateToolbarItem` —
-    /// the mode is per pane, and validation is where the menu item's checkmark
-    /// is set too.
-    private func makeInsertModeItem() -> NSToolbarItem {
-        let item = ControlToolbarItem(itemIdentifier: .insertMode)
-        let button = NSButton(
-            image: NSImage(systemSymbolName: "character.cursor.ibeam",
-                           accessibilityDescription: "Insert Mode") ?? NSImage(),
-            target: mainViewController,
-            action: #selector(MainViewController.toggleInsertMode(_:))
-        )
-        // The bezel first, then the type: a button's type is its cell's
-        // highlight/state masks, and assigning `bezelStyle` re-derives them for
-        // the new bezel — set the type first and a display pass can turn the
-        // toggle back into a momentary button (the Find bar's case toggle had
-        // exactly that, §11).
-        button.bezelStyle = .toolbar
-        button.setButtonType(.pushOnPushOff)
-        button.imagePosition = .imageOnly
-        button.sizeToFit()
-        button.setAccessibilityLabel("Insert Mode")
-        item.view = button
-        item.label = "Insert Mode"
-        item.paletteLabel = "Insert Mode"
-        item.toolTip = "Insert mode: typing shifts the rest of the file"
-        // The click is the button's own; the item's target and action are what
-        // validation is routed through (see `ControlToolbarItem`).
-        item.target = mainViewController
-        item.action = #selector(MainViewController.toggleInsertMode(_:))
-        return item
-    }
-
     /// The word-size control: a menu button naming the size in force — "2
     /// Bytes", not a bare digit, so the number is readable as a word size
     /// without a label the icon-only toolbar would not draw (§24.2). A menu
@@ -422,8 +387,6 @@ extension NSToolbarItem.Identifier {
     static let find = NSToolbarItem.Identifier("Find")
     /// Segments: the partition's form (§21.4).
     static let segments = NSToolbarItem.Identifier("Segments")
-    /// The insert/overwrite typing-mode toggle (§7.6).
-    static let insertMode = NSToolbarItem.Identifier("InsertMode")
     /// The 1 / 2 / 4 / 8 word-size radio (§6).
     static let wordSize = NSToolbarItem.Identifier("WordSize")
     /// The side-by-side ⇄ stacked pane-arrangement toggle (§3.3).
@@ -450,16 +413,16 @@ extension MainWindowController: NSToolbarDelegate {
         // The flexible space must be listed as allowed too, or AppKit drops it
         // from the default items and the diff block ends up on the LEFT edge.
         [.flexibleSpace, .space,
-         .tools, .goTo, .find, .segments, .insertMode, .wordSize,
+         .tools, .goTo, .find, .segments, .wordSize,
          .diffNavigation, .filesIdentical, .paneLayout, .toggleMinimap]
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         // Two groups, and the flexible space between them pins the right-hand
         // one to the toolbar's edge (§24). Left: what acts on the dump in the
-        // active pane, then — past a space — the two controls that carry a
-        // state. Right: the difference plaque, the pane arrangement, the
-        // minimap. Every gap is a system space item, not a custom empty view:
+        // active pane, then — past a space — the one control that carries a
+        // state, the word size. Right: the difference plaque, the pane
+        // arrangement, the minimap. Every gap is a system space item, not a custom empty view:
         // AppKit draws a single background platter around adjacent items, and a
         // view-backed spacer joins its neighbour's platter — a wide capsule
         // with the icon shoved against its edge.
@@ -468,7 +431,7 @@ extension MainWindowController: NSToolbarDelegate {
         // that changes what the window CONTAINS rather than what it does to
         // the dump.
         [.tools, .space,
-         .goTo, .find, .segments, .space, .insertMode, .wordSize,
+         .goTo, .find, .segments, .space, .wordSize,
          .flexibleSpace, .diffNavigation, .space, .paneLayout, .space, .toggleMinimap]
     }
 
@@ -520,11 +483,6 @@ extension MainWindowController: NSToolbarDelegate {
                 toolsItem = makeToolsItem()
             }
             return toolsItem
-        case .insertMode:
-            if insertModeItem == nil {
-                insertModeItem = makeInsertModeItem()
-            }
-            return insertModeItem
         case .wordSize:
             if wordSizeItem == nil {
                 wordSizeItem = makeWordSizeItem()

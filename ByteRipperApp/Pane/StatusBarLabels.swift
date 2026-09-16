@@ -396,10 +396,92 @@ final class StatusLabel: NSTextField {
 /// mode it names: the mode is read from this corner many times a session, and
 /// sending the user to the menu bar to change the thing the readout is already
 /// pointing at is the wrong shape for it.
+///
+/// It is drawn in a box of its own, which is the whole of what this class adds
+/// to a label: the mode is the one readout in the bar that a click acts on, and
+/// the box says so where the pointer is rather than in a tooltip. The toolbar's
+/// own insert-mode button is gone for the same reason — the readout that has to
+/// be read anyway is the right place to change it (§24.2).
 final class TypingModeLabel: NSTextField {
     /// Flips this pane's typing mode. Set by the pane, which is what knows
     /// which pane the label belongs to.
     var onToggle: (() -> Void)?
+
+    /// The room the box leaves around its text, on each side, and how far inside
+    /// the label's own frame the box is drawn.
+    ///
+    /// Wide horizontally on purpose: the box has to enclose the text with a gap,
+    /// and the padding is where that gap comes from — a label draws its text
+    /// against its own edges.
+    private static let framePadding = NSSize(width: 7, height: 3)
+    private static let frameInset: CGFloat = 2
+    /// A hairline, like the rest of the pane's chrome — but NOT in
+    /// `separatorColor`, which is what made the first frame invisible: it
+    /// resolves to 0.098 alpha, and a 10 % grey line over the status bar is a
+    /// frame nobody can see however thick it is drawn (§3.4).
+    private static let frameLineWidth: CGFloat = 1
+    /// The box's corners: rounded, but not a pill — three characters in a
+    /// stadium read as a button from a toolbar rather than as a readout that
+    /// happens to be clickable.
+    private static let frameCornerRadius: CGFloat = 3
+
+    /// The box wears the mode's own colour, the one the text inside it is
+    /// written in: `OVR` grey, `INS` the caret's red. The indicator is one
+    /// object, and a grey box around a red word would be two things disagreeing
+    /// about what the next keystroke does (§3.4).
+    private var frameColor: NSColor { textColor ?? .secondaryLabelColor }
+
+    /// Three characters and the room the box needs around them. INS and OVR
+    /// measure the same in the bar's monospaced font, so the label keeps one
+    /// width in both states and the line beside it never shifts when the mode
+    /// flips (§3.4).
+    override var intrinsicContentSize: NSSize {
+        let text = super.intrinsicContentSize
+        return NSSize(width: text.width + 2 * Self.framePadding.width,
+                      height: text.height + 2 * Self.framePadding.height)
+    }
+
+    /// The box, and the word inside it — the word drawn here rather than by the
+    /// cell.
+    ///
+    /// A borderless field draws its one line from the TOP of its bounds, and a
+    /// label's line box is taller than a cap-height word: `OVR` in this box
+    /// measured its ink from 3.0 to 11.0 of 20 points, three points above the
+    /// middle of the box drawn around it (§24.2). The cell centres a line
+    /// horizontally and nothing vertically, so the vertical centring is this
+    /// view's own job either way.
+    override func draw(_ dirtyRect: NSRect) {
+        let box = bounds.insetBy(dx: Self.frameInset, dy: Self.frameInset)
+        if box.width > 0, box.height > 0 {
+            let path = NSBezierPath(roundedRect: box,
+                                    xRadius: Self.frameCornerRadius,
+                                    yRadius: Self.frameCornerRadius)
+            path.lineWidth = Self.frameLineWidth
+            frameColor.setStroke()
+            path.stroke()
+        }
+        drawCentredText()
+    }
+
+    /// The word, on a baseline that puts the middle of its ink — which is not
+    /// the middle of its ascent box — on the middle of the box, drawn by AppKit
+    /// rather than with CoreText directly.
+    ///
+    /// This view is flipped, as a label's is, and CoreText draws its glyphs with
+    /// y up: a line drawn into this context with `CTLineDraw` comes out mirrored,
+    /// upside down in a box that otherwise looks right. `draw(at:)` goes through
+    /// the text system, which knows about the flip. The ink centring is the same
+    /// one the hex view's rows use (§3.2).
+    private func drawCentredText() {
+        guard let font, !stringValue.isEmpty else { return }
+        let text = NSAttributedString(string: stringValue, attributes: [
+            .font: font,
+            .foregroundColor: textColor ?? .secondaryLabelColor,
+        ])
+        text.draw(at: NSPoint(
+            x: bounds.midX - text.size().width / 2,
+            y: AppearanceSettings.centeredBaseline(font: font, rowHeight: bounds.height)))
+    }
 
     /// The click is consumed here rather than passed on: the pane's own handler
     /// focuses the dump, which is what makes the clicked pane active (§3.3).
