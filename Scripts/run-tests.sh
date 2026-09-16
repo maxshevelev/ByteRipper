@@ -46,8 +46,16 @@ done
 derived="${BYTERIPPER_DD:-${DUMPCOMPARE_DD:-$PWD/.build/xcode}}"
 failed=0
 
-report() {   # keeps the counts and the failures, drops the rest
-    grep -E "^/Users.*error:|Executed [0-9]+ tests" | tail -20
+report() {   # keeps the counts, the failures, and any death of the test host
+    # A test host that dies mid-run is not a line in this output: XCTest prints
+    # "Restarting after unexpected exit", launches a second host, and reports
+    # totals that add the two together — so a class whose host crashed can
+    # still print "Executed 15 tests, with 0 failures". That is worth a line of
+    # its own, at the end, next to the counts it silently qualified.
+    awk '
+        /^\/Users.*error:|Executed [0-9]+ tests|Restarting after unexpected exit|Program crashed|TEST (FAILED|SUCCEEDED)/ { print; if ($0 ~ /Restarting after unexpected exit|Program crashed/) died = 1 }
+        END { if (died) print "  ⚠️  the test host died and XCTest restarted it — these counts span more than one launch" }
+    ' | tail -21
 }
 
 if [ "$packages" = yes ] && [ -z "$only" ]; then
