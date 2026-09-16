@@ -101,15 +101,25 @@ final class FilePaneView: NSView {
     private var parentChangeObserver: NSObjectProtocol?
     /// A click on the link: show the source in the parent.
     var onRevealOrigin: (() -> Void)?
-    /// The status bar's main readout. Internal (not private) so a test can read
-    /// the rendered string, the way `typingModeLabel` is.
-    let statusLabel = NSTextField(labelWithString: "")
+    /// The status bar's main readout, and the size in it as the part the
+    /// pointer can act on — the pointer turns the size into the exact count,
+    /// and a right-click copies the half of it that was clicked, in that half's
+    /// format (§3.4). Internal (not private) so a test can read the rendered
+    /// string and the size's region, the way `typingModeLabel` is.
+    let statusLabel = StatusLabel(labelWithString: "")
+    /// The dot between the readout and the mode indicator. The indicator is the
+    /// one part of the bar that is not about the file but about the next
+    /// keystroke, and without a separator the bar's own "  ·  " rhythm is
+    /// broken at exactly the point where the meaning changes: "4 MB" and "OVR"
+    /// ten points apart read as one phrase. Internal so a test can read it.
+    let statusSeparatorLabel = NSTextField(labelWithString: "·")
     /// The typing-mode indicator at the right end of the status bar: `OVR` in
     /// the status bar's own quiet grey, `INS` in the insert caret's red (§7.6).
     /// Insert mode grows the file on every keystroke, so it is the state that
     /// gets the colour — the mode is readable at a glance, without hunting for
-    /// the caret or opening the Edit menu. Internal so tests can read it.
-    let typingModeLabel = NSTextField(labelWithString: "OVR")
+    /// the caret or opening the Edit menu. Clicking it flips the mode, because
+    /// the readout is already pointing at it. Internal so tests can read it.
+    let typingModeLabel = TypingModeLabel(labelWithString: "OVR")
     /// The pinned column header above the dump ("Offset" / "Hex" / "Decoded
     /// text"). It sits outside the scroll view, so it never scrolls vertically,
     /// and mirrors the horizontal scroll to stay aligned with the columns (§6).
@@ -211,6 +221,32 @@ final class FilePaneView: NSView {
     /// THIS pane even when it is not the active one (§10.2).
     var offsetMenuProvider: ((UInt64) -> NSMenu)? {
         didSet { hexView.offsetMenuProvider = offsetMenuProvider }
+    }
+
+    /// Builds the status bar's right-click menu for the file size — the "Copy"
+    /// item for the half of the exact size that was clicked on, in that half's
+    /// format — given the size that was clicked on, resolving THIS pane even
+    /// when it is not the active one (§3.4). Set by MainViewController, which
+    /// owns the clipboard path; `statusLabel` pops it.
+    var sizeMenuProvider: ((UInt64, StatusLabel.SizeForm) -> NSMenu)? {
+        didSet { statusLabel.sizeMenuProvider = sizeMenuProvider }
+    }
+
+    /// Fired when the user clicks the status bar's OVR/INS indicator: the mode
+    /// of THIS pane flips (§7.6). The flip itself belongs to the controller,
+    /// which owns the one-time "inserting shifts the file" warning.
+    var onTypingModeToggle: (() -> Void)?
+
+    /// A click on the status bar's OVR/INS indicator: this pane becomes the
+    /// typing target and its mode flips (§7.6).
+    ///
+    /// The focus comes first: it is what makes a pane active (§3.3), so the
+    /// mode that flips is the one the keys are about to go to, and clicking the
+    /// inactive pane's indicator switches to that pane as well as switching its
+    /// mode — which is what the click plainly means.
+    func toggleTypingModeFromStatusBar() {
+        focusHexView()
+        onTypingModeToggle?()
     }
 
     /// Fired when the user double-clicks an address in the Offset column, with
@@ -402,7 +438,16 @@ final class FilePaneView: NSView {
         statusLabel.lineBreakMode = .byTruncatingTail
         statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        // The mode indicator keeps its width: three monospaced characters, the
+        // The dot between the readout and the indicator: the same quiet grey as
+        // the text, narrow and uncompressible, so it is the readout that gives
+        // way in a narrowing pane and the separator that goes with the last of
+        // it (§3.4).
+        statusSeparatorLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        statusSeparatorLabel.textColor = .secondaryLabelColor
+        statusSeparatorLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        statusSeparatorLabel.setContentCompressionResistancePriority(.defaultHigh,
+                                                                     for: .horizontal)
+        // The indicator keeps its width: three monospaced characters, the
         // same in both states, so the bar's layout never shifts when the mode
         // flips. Its resistance beats the status text's, so a narrowing pane
         // truncates the status text first; both stay below required, so the
@@ -412,6 +457,13 @@ final class FilePaneView: NSView {
         typingModeLabel.font = .monospacedSystemFont(ofSize: 11, weight: .semibold)
         typingModeLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         typingModeLabel.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+        // The indicator is a control as well as a readout (§7.6) — a click
+        // flips this pane's mode — so VoiceOver is told it is a button rather
+        // than a label, and the click focuses the dump on its way through.
+        typingModeLabel.setAccessibilityRole(.button)
+        typingModeLabel.onToggle = { [weak self] in
+            self?.toggleTypingModeFromStatusBar()
+        }
         // A pane built while the mode is already on shows INS from the start.
         updateTypingModeIndicator(viewModel.isInsertMode)
         // The strip keeps its size; a narrow pane shrinks the status text.
@@ -424,8 +476,12 @@ final class FilePaneView: NSView {
         statusStack.spacing = 10
         statusStack.translatesAutoresizingMaskIntoConstraints = false
         statusStack.addArrangedSubview(statusLabel)
+        statusStack.addArrangedSubview(statusSeparatorLabel)
         statusStack.addArrangedSubview(typingModeLabel)
         statusStack.addArrangedSubview(operationView)
+        // The readout is the one arranged view that is sized to its content, so
+        // how much of the bar is left for it is not its to see: it asks.
+        statusLabel.roomProvider = { [weak self] in self?.statusRoom ?? 0 }
 
         statusBar.translatesAutoresizingMaskIntoConstraints = false
         // Same as the header: stay flexible so a narrow pane can shrink it.
@@ -840,7 +896,7 @@ final class FilePaneView: NSView {
     /// replacing the regular status for a couple of seconds, then restoring it.
     /// Used by the Find bar for errors and empty results (§11).
     func showTransientMessage(_ message: String) {
-        statusLabel.stringValue = message
+        statusLabel.showTransient(message)
         NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(restoreStatus), object: nil)
         perform(#selector(restoreStatus), with: nil, afterDelay: 2.0)
     }
@@ -967,6 +1023,29 @@ final class FilePaneView: NSView {
         lockLabel.isHidden = !fits
         linkButton.isHidden = !fits || viewModel.origin == nil
         statusStack.isHidden = !fits
+    }
+
+    /// The width the readout may grow into: the bar's own width, less its two
+    /// insets, less whatever of the stack is not the readout.
+    ///
+    /// The readout is laid out to its content — it never stretches to fill the
+    /// bar — so its own frame says nothing about whether a longer form would be
+    /// drawn whole or cut off at the tail. That room is the bar's to know, since
+    /// the bar holds the constraints, and the readout needs it before it offers
+    /// the exact form of a size on hover (§3.4). The readout asks for it as it
+    /// draws rather than being handed it here, because these are frames: inside
+    /// this method the bar's subviews have not been laid out for the current
+    /// pass yet, and a value read now would be a pass out of date.
+    ///
+    /// The stack's width is its arranged subviews' widths and the gaps between
+    /// them, in both of the regimes the bar can be in: content-sized, and
+    /// squeezed to the bar with the readout taking the squeeze. So what is left
+    /// when the readout's own frame is taken out of it is the dot, the
+    /// indicator, the operation strip when it is up (§14.4) and those gaps.
+    /// The insets are the 10 points per side the bar pins its stack with.
+    private var statusRoom: CGFloat {
+        let chrome = max(0, statusStack.frame.width - statusLabel.frame.width)
+        return statusBar.bounds.width - 20 - chrome
     }
 
     private func refresh(reveal: PaneViewModel.SelectionReveal = .follow) {
@@ -1399,6 +1478,9 @@ final class FilePaneView: NSView {
         if let seg = status.segment {
             parts.append("\(seg.label): \(address(seg.range.lowerBound))-\(address(seg.range.lastByte)) (\(Self.friendlySize(UInt64(seg.range.count))))")
         }
+        // The size is one part of the line among the others, but it is the one
+        // the pointer can act on (§3.4), so where it landed is remembered.
+        let sizeIndex = parts.count
         parts.append(Self.friendlySize(status.fileSize))
         if status.isDirty {
             parts.append("Modified")
@@ -1409,7 +1491,7 @@ final class FilePaneView: NSView {
         if !comparisonInfo.isEmpty {
             parts.append(comparisonInfo)
         }
-        statusLabel.stringValue = parts.joined(separator: "  ·  ")
+        statusLabel.show(parts: parts, sizeIndex: sizeIndex, fileSize: status.fileSize)
         updateTypingModeIndicator(status.isInsertMode)
     }
 

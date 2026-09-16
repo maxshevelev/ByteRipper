@@ -595,9 +595,11 @@ typing into insertion. It is a mode, not a command: it changes what the keys of
 §7 do until it is switched off.
 
 - Scope: one mode per pane, toggled for the active pane from Edit > Insert Mode
-  (a checked item) or its key equivalent. The checkmark follows the active pane's
-  mode, and each pane's status bar reports its own — one file can be typed into
-  while the other is being read.
+  (a checked item) or its key equivalent, or for a particular pane by clicking
+  that pane's own INS/OVR indicator — that pane becomes the active one, since
+  the mode that flips is the one the keys then go to. The checkmark follows the
+  active pane's mode, and each pane's status bar reports its own — one file can
+  be typed into while the other is being read.
 - Typing inserts: a completed byte is inserted at the caret and every byte from
   there on shifts right; the file grows by one. Hex entry inserts on the first
   digit with the low nibble still empty, and the second digit fills that nibble
@@ -608,10 +610,12 @@ typing into insertion. It is a mode, not a command: it changes what the keys of
 - The caret marks the byte boundary the next byte will land on, and is visually
   distinct from the overwrite caret. Switching modes redraws it where it is,
   without scrolling: the caret has not moved.
-- Every pane's status bar shows the mode as INS/OVR (§15). INS is drawn in the
-  same red the insert caret and modified bytes use — in this app red means "not
-  the file you opened", which is what the mode leads to. The indicator keeps its
-  width across both states so the bar does not shift when the mode flips.
+- Every pane's status bar shows the mode as INS/OVR (§15), and that indicator
+  is the control for it: a click flips the mode of the pane the indicator is
+  drawn in. INS is drawn in the same red the insert caret and modified bytes use
+  — in this app red means "not the file you opened", which is what the mode
+  leads to. The indicator keeps its width across both states so the bar does not
+  shift when the mode flips.
 - Backspace on a half-typed byte rolls that byte back — the inserted byte
   disappears and nothing is recorded, as if the nibble had never been entered.
 - Delete and Backspace otherwise remove bytes and shift the tail (Backspace the
@@ -1951,7 +1955,22 @@ Status bar or equivalent info area should show:
 - comparison status;
 - background task progress for diff/search when applicable;
 - the typing mode as INS/OVR (§7.6), with INS coloured — the mode changes what
-  every keystroke does, so it must be readable without opening a menu.
+  every keystroke does, so it must be readable without opening a menu — and
+  separated from the size by a point, so that the two readouts at the end of the
+  line do not run together.
+
+The size in that line is a readout the pointer can act on, in place: while the
+pointer is on it, the size itself is drawn in the Details view's exact form —
+`0x200000 (2097152 bytes)` — because the bar's own `2 MB` is rounded, and the
+line goes back to the abbreviation when the pointer leaves. The exact form is
+not offered where the bar is too narrow to draw it whole: an expanded size that
+was cut off would say less than the abbreviation it replaced. A right-click on
+the exact form copies the half it landed on, in that half's own format — the hex
+address with its prefix, or the decimal count without the word beside it — since
+which of the two is wanted depends on what it is being pasted into. Nothing else
+in the line takes the pointer: a click beside the size reaches the pane and
+focuses the dump, as it did before. The OVR/INS indicator, by contrast, is a
+control: a click flips the mode of the pane it is drawn in (§7.6).
 
 Accessibility:
 

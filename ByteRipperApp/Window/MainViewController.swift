@@ -1046,6 +1046,9 @@ final class MainViewController: NSViewController {
                 self?.makeOffsetMenu(for: paneModel, offset: offset) ?? NSMenu()
             }
             wireBookmarkDoubleClick(pane, for: paneModel)
+            // Status bar: the size's tooltip and copy menu, and the OVR/INS
+            // click, all resolving THIS pane (§3.4, §7.6).
+            wireStatusBar(pane, for: paneModel)
             // Close button: closing the last file returns to empty mode (§3.5).
             pane.onClose = { [weak self] in self?.closePane(at: 0) }
             // The link to a parent document, in a tab opened from a part of one.
@@ -1147,6 +1150,10 @@ final class MainViewController: NSViewController {
             // was clicked (§20.3).
             wireBookmarkDoubleClick(pane1View, for: pane1)
             wireBookmarkDoubleClick(pane2View, for: pane2)
+            // Each status bar's size menu and OVR/INS click act on their own
+            // pane (§3.4, §7.6).
+            wireStatusBar(pane1View, for: pane1)
+            wireStatusBar(pane2View, for: pane2)
             // Each map's viewport rectangle mirrors its pane's visible slice (§19).
             trackMinimapViewport(for: pane1View)
             trackMinimapViewport(for: pane2View)
@@ -4687,6 +4694,38 @@ final class MainViewController: NSViewController {
         return menu
     }
 
+    /// The status bar's right-click menu on a pane's file size: copying the
+    /// half of the size that was clicked on, in that half's own format.
+    ///
+    /// The bar abbreviates ("2 MB"), which is what a glance wants and not what
+    /// a clipboard wants — an offset, a tool panel's address, or a size typed
+    /// into another tool has to be exact. So putting the pointer on the size
+    /// turns the bar into the Details view's exact form — `0x200000 (2097152
+    /// bytes)` — and the two halves of that form are separately copyable: the
+    /// hex address as hex, the decimal count as decimal. Each item is titled
+    /// with the value it will copy, so what lands on the pasteboard is readable
+    /// in the menu that offered it, the way "Copy offset" is (§3.4).
+    func makeSizeMenu(size: UInt64, form: StatusLabel.SizeForm) -> NSMenu {
+        let menu = NSMenu(title: "File Size")
+        let copy = menu.addItem(withTitle: "Copy \(StatusLabel.copyText(size, as: form))",
+                                action: #selector(copyFileSize(_:)),
+                                keyEquivalent: "")
+        copy.target = self
+        copy.representedObject = StatusLabel.copyText(size, as: form)
+        return menu
+    }
+
+    /// Status bar menu > Copy <size>: puts the size on the clipboard in the
+    /// form the menu was opened on — the value the item was titled with,
+    /// rather than the pane's size read again at click time, which the bar may
+    /// have changed under the open menu (§3.4).
+    @objc func copyFileSize(_ sender: Any?) {
+        guard let text = (sender as? NSMenuItem)?.representedObject as? String else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+    }
+
     /// The zone block: a right-click inside a zone a tool-module published
     /// offers that zone by name (`Design/TOOL_MODULES_PLAN.md`). Nothing at all
     /// where there are no zones — which is most files, most of the time.
@@ -5212,7 +5251,14 @@ final class MainViewController: NSViewController {
     /// keystroke; it is mode-independent, so re-enabling after a toggle-off never
     /// re-arms it within the same file.
     @objc func toggleInsertMode(_ sender: Any?) {
-        let pane = activePane
+        flipInsertMode(of: activePane)
+    }
+
+    /// Flips the typing mode of `pane` — the Edit menu and the toolbar's toggle
+    /// act on the active one, a click on a pane's status-bar indicator on the
+    /// pane that was clicked (§7.6). The mode is per pane either way, and the
+    /// toolbar's toggle is re-read against the pane the keys go to.
+    func flipInsertMode(of pane: PaneViewModel) {
         pane.isInsertMode.toggle()
         // The toolbar's toggle carries the mode, and the keyboard path (⌥⌘I) has
         // to light it without waiting for AppKit's idle pass (§24.2).
@@ -5492,6 +5538,19 @@ final class MainViewController: NSViewController {
     func wireBookmarkDoubleClick(_ paneView: FilePaneView, for pane: PaneViewModel) {
         paneView.onOffsetDoubleClick = { [weak self] offset in
             self?.handleOffsetDoubleClick(in: pane, rowContaining: offset)
+        }
+    }
+
+    /// Wires a pane view's status-bar controls, each of which acts on THIS pane
+    /// rather than on the active one: the file size's copy menu (§3.4) and the
+    /// OVR/INS indicator's click, which flips the mode of the pane it is drawn
+    /// in (§7.6).
+    func wireStatusBar(_ paneView: FilePaneView, for pane: PaneViewModel) {
+        paneView.sizeMenuProvider = { [weak self] size, form in
+            self?.makeSizeMenu(size: size, form: form) ?? NSMenu()
+        }
+        paneView.onTypingModeToggle = { [weak self] in
+            self?.flipInsertMode(of: pane)
         }
     }
 

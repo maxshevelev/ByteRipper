@@ -120,7 +120,7 @@ These projects are why a repair shop can work on modern firmware at all. Between
 ### Editing
 
 - Type hex digits or text — bytes overwrite in place, with per-pane Undo/Redo (⌘Z / ⇧⌘Z). Modified bytes are drawn red until saved.
-- **Insert Mode** (⌥⌘I) switches typing from overwrite to insertion: the byte lands at the caret, the tail shifts right, and Delete/Backspace remove bytes instead of zeroing them. The mode is per pane — one file can be typed into while the other is read — shown as `OVR`/`INS` in the status bar and by the caret's own shape. It shifts every offset from the caret on, so the first keystroke in each file asks once.
+- **Insert Mode** (⌥⌘I) switches typing from overwrite to insertion: the byte lands at the caret, the tail shifts right, and Delete/Backspace remove bytes instead of zeroing them. The mode is per pane — one file can be typed into while the other is read — shown as `OVR`/`INS` in the status bar and by the caret's own shape, and switched by clicking that indicator in the pane the mode belongs to. It shifts every offset from the caret on, so the first keystroke in each file asks once.
 - Undo is segmented for typed input: the first ⌘Z takes back the last byte, a quick second takes back the rest of the run, and after a pause it is one byte per press again.
 - **Paste Insert…**, **Delete Bytes…** and **Fill Selection with…** — the fast way to blank a region to `0xFF`. The confirmations for edits that shift the file can be turned off in **Settings ▸ Editing**.
 - **File > New File** (⌘N) opens an empty in-memory document — somewhere to paste a block out of a dump; **Revert to Saved** throws away the session's edits.
@@ -161,6 +161,7 @@ These projects are why a repair shop can work on modern firmware at all. Between
 
 - Mouse selection, ⌘A, **Select Block…** (start + end, or start + length, with **To Beginning** and **To End** for the two bounds you would otherwise look up). **Copy** puts both raw bytes and hex text on the clipboard; ⌘V overwrites bytes from it.
 - Right-click an address for **Copy offset** (no `0x`, so a prefixed field doesn't double it), **Select block from here** (prefilled), and the bookmark commands for *that* row. Right-click inside a selection for **Copy**, **Fill Selection with…**, **Delete Bytes** — applied to the clicked pane's selection, not the active pane's.
+- The file size in the status bar answers the pointer: putting the pointer on it turns it into the exact count in the Details view's form — `0x200000 (2097152 bytes)` — in place, and a right-click then copies the half the pointer was on, in that half's own format, because `2 MB` is what a glance wants and not what a clipboard wants. A point of its own separates the size from the `OVR`/`INS` indicator beside it.
 - Every offset field accepts `0x`-hex or decimal, puts the caret behind the prefix instead of selecting the whole text, and validates on each keystroke, with the message under the field it belongs to.
 
 ### File types
