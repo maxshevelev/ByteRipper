@@ -42,14 +42,15 @@ final class StatusBarSizeTests: XCTestCase {
         XCTAssertEqual(StatusLabel.exactSizeText(0x1_0000_0001), "0x100000001 (4294967297 bytes)")
     }
 
-    /// What each half of the exact form puts on the clipboard: that half, as
-    /// the bar draws it — the hex address with its prefix, the decimal count
-    /// without the word that follows it in the bar.
+    /// What each half of the exact form puts on the clipboard: that half on its
+    /// own — the hex address without the `0x` prefix the readout beside it
+    /// wears, the decimal count without the word that follows it in the bar.
+    /// The prefix belongs to the field the value is pasted into, which adds it.
     func testEachHalfOfTheExactFormIsCopiedInItsOwnFormat() {
         let size: UInt64 = 2 * 1024 * 1024
-        XCTAssertEqual(StatusLabel.copyText(size, as: .hex), "0x200000")
+        XCTAssertEqual(StatusLabel.copyText(size, as: .hex), "200000")
         XCTAssertEqual(StatusLabel.copyText(size, as: .decimal), "2097152")
-        XCTAssertEqual(StatusLabel.copyText(0x1_0000_0001, as: .hex), "0x100000001")
+        XCTAssertEqual(StatusLabel.copyText(0x1_0000_0001, as: .hex), "100000001")
         XCTAssertEqual(StatusLabel.copyText(0x1_0000_0001, as: .decimal), "4294967297")
     }
 
@@ -342,9 +343,9 @@ final class StatusBarSizeTests: XCTestCase {
         let expanded = try XCTUnwrap(label.sizeRegion)
         let text = expanded.minX + StatusLabel.hitSlack
         XCTAssertEqual(label.sizeMenu(at: NSPoint(x: text + 2 * advance, y: 9))?
-            .items.first?.title, "Copy 0x12C")
+            .items.first?.title, "Copy hex size 12C")
         XCTAssertEqual(label.sizeMenu(at: NSPoint(x: text + 12 * advance, y: 9))?
-            .items.first?.title, "Copy 300")
+            .items.first?.title, "Copy size 300")
 
         // The dot sits between the readout and the mode indicator — the two
         // things the bar says that are about different subjects.
@@ -395,21 +396,22 @@ final class StatusBarSizeTests: XCTestCase {
                       "and the pointer turns it into the exact count here too")
     }
 
-    /// The controller's menu: one item, titled with the value it will copy, and
-    /// the pasteboard ends up holding that half of the size and nothing else.
+    /// The controller's menu: one item, naming the form it copies and then the
+    /// value, and the pasteboard ends up holding that half of the size and
+    /// nothing else — the hex one bare, with no `0x` for a field to double.
     func testTheMenuCopiesTheSizeInTheFormItWasOpenedOn() {
         let controller = MainViewController()
         let size: UInt64 = 2 * 1024 * 1024
 
         let hexItem = try? XCTUnwrap(controller.makeSizeMenu(size: size, form: .hex).items.first)
-        XCTAssertEqual(hexItem?.title, "Copy 0x200000")
-        controller.copyFileSize(hexItem)
-        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "0x200000")
+        XCTAssertEqual(hexItem?.title, "Copy hex size 200000")
+        controller.copyStatusValue(hexItem)
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "200000")
 
         let decimalItem = try? XCTUnwrap(
             controller.makeSizeMenu(size: size, form: .decimal).items.first)
-        XCTAssertEqual(decimalItem?.title, "Copy 2097152")
-        controller.copyFileSize(decimalItem)
+        XCTAssertEqual(decimalItem?.title, "Copy size 2097152")
+        controller.copyStatusValue(decimalItem)
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "2097152")
     }
 

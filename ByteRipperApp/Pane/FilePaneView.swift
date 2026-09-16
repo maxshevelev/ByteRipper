@@ -228,8 +228,20 @@ final class FilePaneView: NSView {
     /// format — given the size that was clicked on, resolving THIS pane even
     /// when it is not the active one (§3.4). Set by MainViewController, which
     /// owns the clipboard path; `statusLabel` pops it.
-    var sizeMenuProvider: ((UInt64, StatusLabel.SizeForm) -> NSMenu)? {
-        didSet { statusLabel.sizeMenuProvider = sizeMenuProvider }
+    ///
+    /// Prefixed "status" to keep it apart from `offsetMenuProvider`, which is
+    /// the hex dump's own Offset column (§10.2): both menus copy an address, and
+    /// only one of them is in the bar.
+    var statusSizeMenuProvider: ((UInt64, StatusLabel.SizeForm) -> NSMenu)? {
+        didSet { statusLabel.sizeMenuProvider = statusSizeMenuProvider }
+    }
+
+    /// Builds the status bar's right-click menu for the caret's offset — the
+    /// "Copy" item that puts the address, as the bar draws it, on the clipboard
+    /// — resolving THIS pane even when it is not the active one (§3.4). Set by
+    /// MainViewController, for the same reason as `statusSizeMenuProvider`.
+    var statusOffsetMenuProvider: ((String) -> NSMenu)? {
+        didSet { statusLabel.offsetMenuProvider = statusOffsetMenuProvider }
     }
 
     /// Fired when the user clicks the status bar's OVR/INS indicator: the mode
@@ -1464,6 +1476,9 @@ final class FilePaneView: NSView {
             String(value, radix: 16, uppercase: true).leftPadded(to: width, with: "0")
         }
         var parts: [String] = []
+        // The offset is the line's first part, and the bar always leads with it:
+        // the digits it draws here are the ones a right-click on them copies
+        // (§3.4), so they are handed to the readout as the address's own text.
         parts.append("Offset \(address(status.cursorOffset))")
         if status.selectionLength > 0 {
             // The selection's length, abbreviated and rounded to a whole value
@@ -1491,7 +1506,8 @@ final class FilePaneView: NSView {
         if !comparisonInfo.isEmpty {
             parts.append(comparisonInfo)
         }
-        statusLabel.show(parts: parts, sizeIndex: sizeIndex, fileSize: status.fileSize)
+        statusLabel.show(parts: parts, sizeIndex: sizeIndex, fileSize: status.fileSize,
+                         offset: .init(index: 0, digits: address(status.cursorOffset)))
         updateTypingModeIndicator(status.isInsertMode)
     }
 

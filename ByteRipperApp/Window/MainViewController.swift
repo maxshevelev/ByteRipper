@@ -4702,24 +4702,50 @@ final class MainViewController: NSViewController {
     /// into another tool has to be exact. So putting the pointer on the size
     /// turns the bar into the Details view's exact form — `0x200000 (2097152
     /// bytes)` — and the two halves of that form are separately copyable: the
-    /// hex address as hex, the decimal count as decimal. Each item is titled
-    /// with the value it will copy, so what lands on the pasteboard is readable
-    /// in the menu that offered it, the way "Copy offset" is (§3.4).
+    /// hex address as hex, the decimal count as decimal.
+    ///
+    /// Each item names the form it copies and then the value, "Copy hex size
+    /// 200000" and "Copy size 2097152", so what lands on the pasteboard is
+    /// readable in the menu that offered it, the way "Copy offset" is (§3.4) —
+    /// and the names are there because the two values are the same file size:
+    /// one number, two readings of it, and the menu has to say which is which.
+    /// The hex one is bare, without the prefix the readout above it wears.
     func makeSizeMenu(size: UInt64, form: StatusLabel.SizeForm) -> NSMenu {
         let menu = NSMenu(title: "File Size")
-        let copy = menu.addItem(withTitle: "Copy \(StatusLabel.copyText(size, as: form))",
-                                action: #selector(copyFileSize(_:)),
+        let named = form == .hex ? "Copy hex size" : "Copy size"
+        let copy = menu.addItem(withTitle: "\(named) \(StatusLabel.copyText(size, as: form))",
+                                action: #selector(copyStatusValue(_:)),
                                 keyEquivalent: "")
         copy.target = self
         copy.representedObject = StatusLabel.copyText(size, as: form)
         return menu
     }
 
-    /// Status bar menu > Copy <size>: puts the size on the clipboard in the
-    /// form the menu was opened on — the value the item was titled with,
-    /// rather than the pane's size read again at click time, which the bar may
-    /// have changed under the open menu (§3.4).
-    @objc func copyFileSize(_ sender: Any?) {
+    /// The status bar's right-click menu on the caret's offset: copying the
+    /// address as the bar draws it (§3.4).
+    ///
+    /// The bar pads the address to the width of the file's largest address so
+    /// that the offsets in the line read as aligned columns (§21.3), and what
+    /// it copies is those digits — the ones the user read — rather than a second
+    /// formatting of the same number. The padding is harmless where the value
+    /// goes next: an offset field takes `0x` followed by hex, and leading zeros
+    /// are hex.
+    func makeStatusOffsetMenu(digits: String) -> NSMenu {
+        let menu = NSMenu(title: "Offset")
+        let copy = menu.addItem(withTitle: "Copy offset \(digits)",
+                                action: #selector(copyStatusValue(_:)),
+                                keyEquivalent: "")
+        copy.target = self
+        copy.representedObject = digits
+        return menu
+    }
+
+    /// Status bar menu > Copy …: puts the value the item was titled with on the
+    /// clipboard — the value read when the menu was opened, rather than the
+    /// pane's read again at click time, which the bar may have changed under the
+    /// open menu (§3.4). One action for both of the bar's copyable parts: what
+    /// reaches the pasteboard is the item's own payload either way.
+    @objc func copyStatusValue(_ sender: Any?) {
         guard let text = (sender as? NSMenuItem)?.representedObject as? String else { return }
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -5542,12 +5568,15 @@ final class MainViewController: NSViewController {
     }
 
     /// Wires a pane view's status-bar controls, each of which acts on THIS pane
-    /// rather than on the active one: the file size's copy menu (§3.4) and the
-    /// OVR/INS indicator's click, which flips the mode of the pane it is drawn
-    /// in (§7.6).
+    /// rather than on the active one: the file size's and the offset's copy
+    /// menus (§3.4), and the OVR/INS indicator's click, which flips the mode of
+    /// the pane it is drawn in (§7.6).
     func wireStatusBar(_ paneView: FilePaneView, for pane: PaneViewModel) {
-        paneView.sizeMenuProvider = { [weak self] size, form in
+        paneView.statusSizeMenuProvider = { [weak self] size, form in
             self?.makeSizeMenu(size: size, form: form) ?? NSMenu()
+        }
+        paneView.statusOffsetMenuProvider = { [weak self] digits in
+            self?.makeStatusOffsetMenu(digits: digits) ?? NSMenu()
         }
         paneView.onTypingModeToggle = { [weak self] in
             self?.flipInsertMode(of: pane)

@@ -1965,12 +1965,27 @@ pointer is on it, the size itself is drawn in the Details view's exact form —
 line goes back to the abbreviation when the pointer leaves. The exact form is
 not offered where the bar is too narrow to draw it whole: an expanded size that
 was cut off would say less than the abbreviation it replaced. A right-click on
-the exact form copies the half it landed on, in that half's own format — the hex
-address with its prefix, or the decimal count without the word beside it — since
-which of the two is wanted depends on what it is being pasted into. Nothing else
+the exact form copies the half it landed on, in that half's own format — the
+hex address, or the decimal count without the word beside it — since which of
+the two is wanted depends on what it is being pasted into. The item says which
+it is and what it holds: **Copy hex size 200000**, **Copy size 2097152**. The
+copied hex is bare, without the `0x` the readout above it wears: the prefix
+belongs to the field the value is pasted into, which supplies it, exactly as the
+offset's own menu and the dump's "Copy offset" leave it off (§10.2). Nothing else
 in the line takes the pointer: a click beside the size reaches the pane and
 focuses the dump, as it did before. The OVR/INS indicator, by contrast, is a
 control: a click flips the mode of the pane it is drawn in (§7.6).
+
+The caret's offset in that line is a readout the pointer can act on too, and
+copying is all it offers: a right-click on the address digits puts exactly those
+digits on the clipboard — the address as the bar draws it, zero-padded to the
+file's address width and without a `0x` prefix, so a prefixed offset field takes
+it as it stands, and the same string whether it is read here or off the row it
+came from. The word "Offset" in front of the digits is not part of it: the
+right-click lands on the digits, and anywhere else in the line is a click on the
+bar like any other. The bar's one hover readout is the size's; the offset does
+not grow under the pointer, since a second expansion in the same line would
+fight the first for the room it needs.
 
 Accessibility:
 
