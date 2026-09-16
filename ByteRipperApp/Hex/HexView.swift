@@ -203,6 +203,16 @@ final class HexView: NSView, NSViewToolTipOwner {
     /// Whether the current click has become a drag. Once the pointer leaves the
     /// dead zone the flag sticks, so later `mouseDragged` events keep extending.
     private var dragEngaged = false
+    /// Whether the press currently down is one this view received. A drag is the
+    /// continuation of a press, and AppKit sends drags that continue nothing of
+    /// ours: closing a context menu pops the dismissing click's queued drag at
+    /// whichever view took the last mouse-down — this one, still, from the
+    /// gesture before — carrying the status bar's own point converted into this
+    /// view's coordinates, a row below the viewport. Without a press to continue
+    /// there is no gesture here (`mouseDragged`), and no `mouseUp` is coming
+    /// either, so a stray drag taken for one starts a selection and an
+    /// autoscroll that nothing stops (§6).
+    private var pressInFlight = false
     /// The last drag pointer's window location. The drag-autoscroll timer
     /// converts it back to view coordinates on every tick: the pointer sits at a
     /// fixed spot on screen while the document scrolls under it, so re-deriving
@@ -2747,6 +2757,10 @@ final class HexView: NSView, NSViewToolTipOwner {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        // Recorded before anything can return: the press is this view's whether
+        // or not this view does something with it (a double click on an address
+        // only marks the row), and the drag that continues it belongs here too.
+        pressInFlight = true
         // A double click on an address marks that row (§20.3). The click that
         // came before it has already placed the caret there, which is where the
         // gesture would leave it anyway; the second click adds the mark instead
@@ -2786,6 +2800,15 @@ final class HexView: NSView, NSViewToolTipOwner {
             return
         }
         if !dragEngaged {
+            // A drag continues a press, so a drag with no press of ours behind
+            // it is not a gesture of ours — and AppKit does send those. Closing
+            // a context menu re-dispatches the dismissing click's queued drag to
+            // this view (the one that took the last mouse-down), with the status
+            // bar's point converted into these coordinates, i.e. a row below the
+            // viewport; taken for a drag it extends the selection and arms the
+            // autoscroll, and the click's mouse-up is the menu's, so it never
+            // arrives to stop it (§6).
+            guard pressInFlight else { return }
             let point = convert(event.locationInWindow, from: nil)
             if let origin = mouseDownLocation, !dragHasLeftDeadZone(from: origin, to: point) {
                 return  // still a click — the pointer has not left the dead zone
@@ -2809,6 +2832,7 @@ final class HexView: NSView, NSViewToolTipOwner {
         mouseDownLocation = nil
         lastDragPoint = nil
         dragEngaged = false
+        pressInFlight = false
         if draggingBookmarkRow != nil {
             draggingBookmarkRow = nil
             draggingBookmarkPointerRow = nil

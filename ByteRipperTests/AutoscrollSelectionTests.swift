@@ -59,6 +59,16 @@ final class AutoscrollSelectionTests: XCTestCase {
         hexView.enclosingScrollView!
     }
 
+    /// Half a second of event-tracking run loop — where the autoscroll timer is
+    /// registered — with no further drag events, so a timer that is armed is
+    /// free to keep scrolling and one that is not cannot move anything.
+    private func holdStill() {
+        let tracking = RunLoop.Mode(rawValue: "kCFRunLoopEventTrackingMode")
+        for _ in 0..<10 {
+            RunLoop.main.run(mode: tracking, before: Date().addingTimeInterval(0.05))
+        }
+    }
+
     // MARK: - Scrolling down past the bottom edge
 
     /// Dragging below the visible bottom edge scrolls the pane down so the
@@ -116,14 +126,6 @@ final class AutoscrollSelectionTests: XCTestCase {
 
         let scroll = scroll(hexView)
         let clip = scroll.contentView
-        let tracking = RunLoop.Mode(rawValue: "kCFRunLoopEventTrackingMode")
-        /// Half a second of event-tracking run loop — where the autoscroll timer
-        /// is registered — with no further drag events.
-        func holdStill() {
-            for _ in 0..<10 {
-                RunLoop.main.run(mode: tracking, before: Date().addingTimeInterval(0.05))
-            }
-        }
 
         hexView.mouseDown(with: mouse(.leftMouseDown, at: byteCentre(hexView, row: 0, column: 0), window: window))
 
@@ -151,6 +153,59 @@ final class AutoscrollSelectionTests: XCTestCase {
         XCTAssertGreaterThan(pane.hexSelection().end, 0,
                              "the selection extends all the while, without any mouse movement")
         hexView.mouseUp(with: mouse(.leftMouseUp, at: statusPoint, window: window))
+    }
+
+    /// A drag with no press of this view's own behind it is not a gesture of
+    /// this view's, and must not become one.
+    ///
+    /// The reported runaway (§6, §24.2): with a selection left ending below the
+    /// viewport, a right-click opens the size menu in the status bar, and the
+    /// click that closes it never reaches the status bar at all. AppKit pops the
+    /// dismissing click's queued drag at whichever view took the last
+    /// mouse-down — this one, still, from the gesture before — carrying the
+    /// status bar's point converted into these coordinates, which is a row below
+    /// the viewport. Taken for a drag, that event extended the selection and
+    /// armed the autoscroll, and the click's own mouse-up was the menu's, so
+    /// nothing came to stop it: a real log has the stray drag at 21:41:54, the
+    /// timer armed in the same second, and five seconds of scrolling with the
+    /// pointer elsewhere — the selection growing 1465 → 2905 with no mouse
+    /// movement and no mouse-up — until a click on the hex panel broke it.
+    func testADragWithNoPressBehindItIsIgnored() throws {
+        let (_, pane, hexView, window, url) = try makePane([UInt8](repeating: 0x11, count: 4096))
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let scroll = scroll(hexView)
+        let clip = scroll.contentView
+
+        // The precondition the report names: a selection whose end is below the
+        // viewport, made the way the app makes one — dragged past the bottom
+        // edge — and finished, so the press is released and the gesture is over.
+        hexView.mouseDown(with: mouse(.leftMouseDown, at: byteCentre(hexView, row: 0, column: 0), window: window))
+        let below = bytePoint(hexView, atY: clip.bounds.height + 100)
+        hexView.mouseDragged(with: mouse(.leftMouseDragged, at: below, window: window))
+        hexView.mouseUp(with: mouse(.leftMouseUp, at: below, window: window))
+        let settled = pane.hexSelection()
+        let settledScroll = clip.bounds.origin.y
+        XCTAssertGreaterThan(settled.count, 0, "premise: there is a selection to spoil")
+
+        // Then the stray event, delivered the way AppKit delivers it: the status
+        // bar's own point, with no press of this view's and no button held.
+        let scrollWindowFrame = scroll.convert(scroll.bounds, to: nil)
+        let statusPoint = NSPoint(x: scrollWindowFrame.midX, y: scrollWindowFrame.minY - 12)
+        XCTAssertGreaterThan(statusPoint.y, 0, "premise: the point is the status bar, inside the window")
+        hexView.mouseDragged(with: mouse(.leftMouseDragged, at: statusPoint, window: window))
+
+        XCTAssertEqual(clip.bounds.origin.y, settledScroll,
+                       "no press, no gesture: the stray drag scrolls nothing")
+        XCTAssertEqual(pane.hexSelection().start, settled.start, "and extends nothing")
+        XCTAssertEqual(pane.hexSelection().end, settled.end, "not even to the row at the edge")
+
+        // And it leaves nothing running behind it — the half of the bug that
+        // made it a runaway rather than one wrong selection: the timer it armed
+        // went on scrolling while the pointer sat somewhere else entirely.
+        holdStill()
+        XCTAssertEqual(clip.bounds.origin.y, settledScroll, "and nothing keeps scrolling after it")
+        XCTAssertEqual(pane.hexSelection().end, settled.end, "nor extends the selection")
     }
 
     // MARK: - Scrolling up past the top edge
