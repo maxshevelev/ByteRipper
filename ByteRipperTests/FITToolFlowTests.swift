@@ -380,6 +380,40 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(try session().display.rows.first { $0.index == 1 }?.index, 1)
     }
 
+    /// An edit in the dump reads the table again — and no more than that. The
+    /// outline the user put on a component stays on it, and the dump, which the
+    /// host takes to whatever is in focus, stays where they were typing: an
+    /// edit is not a reason to be shown something else.
+    ///
+    /// The row key alone does not say which zone was in front, so a re-read read
+    /// from it slides the outline back to the row and the dump follows it into
+    /// the table, two pages up the file.
+    func testAnEditLeavesTheOutlineOnTheComponentTheUserWasIn() throws {
+        let controller = try open(FITTestImage.make())
+        let pane = controller.windowModel.pane1
+        let content = try XCTUnwrap(window?.contentView)
+        let hexView = try XCTUnwrap(descendants(of: content, HexView.self).first)
+
+        try session().goToOffset(of: 1)
+        XCTAssertEqual(pane.zones.focus, "fit.target.1")
+        XCTAssertTrue(hexView.visibleByteRange().contains(0x2000),
+                      "precondition: the dump is at the component")
+
+        // A byte of the microcode itself, typed where a user would type it.
+        pane.moveCaret(to: 0x2080)
+        pane.typeHexNibble(0x0)
+        pane.typeHexNibble(0x0)
+        try waitForParse()
+        window?.layoutIfNeeded()
+
+        XCTAssertEqual(pane.zones.focus, "fit.target.1",
+                       "the outline stays on what the user was looking at")
+        XCTAssertTrue(hexView.visibleByteRange().contains(0x2080),
+                      "and the dump does not follow the table back to the row")
+        XCTAssertEqual(pane.caretOffset, 0x2081, "the caret is where the typing left it")
+        XCTAssertEqual(try session().display.rows.count, 2, "the table itself was read again")
+    }
+
     /// The "FIT at …" title is clickable, and clicking it puts the whole table
     /// in focus and takes the dump there — not a row, since the title stands
     /// for the table.

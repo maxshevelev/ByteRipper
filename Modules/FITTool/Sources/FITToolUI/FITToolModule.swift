@@ -25,12 +25,14 @@ public enum FITToolModule: ToolModule {
 }
 
 /// What a parked session hands back: the row the user was looking at, and
-/// nothing else. The reading is worth doing again — it is a handful of lookups
+/// which zone of it was in front — the row itself, what it points at, or the
+/// table. The reading is worth doing again — it is a handful of lookups
 /// over the pane's own tree — and a tree of thousands of nodes per parked
 /// tool-module is how an app comes to hold four copies of an image it is not
 /// showing (`ToolSession.parkedState`).
 struct FITParkedState: ToolSessionState {
     var focus: Int?
+    var focusZone: String?
 }
 
 /// The running instrument: read the table through the pane's shared tree, show
@@ -68,6 +70,17 @@ struct FITParkedState: ToolSessionState {
         onCatalogueLoaded = { _ in body() }
     }
     private var focus: Int?
+    /// The zone the outline is on — the row the user picked, what that row
+    /// points at, or the table itself.
+    ///
+    /// Kept beside `focus` because the row alone does not say which of them it
+    /// is: "go to the offset" moves the outline from a row to the component it
+    /// points at, and both are the same row's. Every display but the ones the
+    /// four setters below build carries the *row* in focus, so a re-read read
+    /// from the row key alone would slide the outline back — and the dump,
+    /// which the host keeps bringing to whatever is in focus, would follow it
+    /// out of what the user was looking at.
+    private var focusZone: String?
     /// The CPUIDs this image already names, which is the narrowing the add
     /// form offers: a dump is for one board.
     private var cpuidsInTheImage: Set<UInt32> = []
@@ -164,11 +177,14 @@ struct FITParkedState: ToolSessionState {
         catalogueWatch = nil
     }
 
-    public var parkedState: (any ToolSessionState)? { FITParkedState(focus: focus) }
+    public var parkedState: (any ToolSessionState)? {
+        FITParkedState(focus: focus, focusZone: focusZone)
+    }
 
     public func restore(_ state: any ToolSessionState) {
         guard let state = state as? FITParkedState else { return }
         focus = state.focus
+        focusZone = state.focusZone
     }
 
     // MARK: - Reading
@@ -394,7 +410,7 @@ struct FITParkedState: ToolSessionState {
     }
 
     private func show(_ display: FITDisplay) {
-        let display = display.protecting(by: readRanges)
+        let display = outline(of: display).protecting(by: readRanges)
         self.display = display
         cpuidsInTheImage = Set(display.rows.compactMap {
             $0.cpuidText.flatMap { UInt32($0, radix: 16) }
@@ -403,10 +419,31 @@ struct FITParkedState: ToolSessionState {
         host.publish(display.zones)
     }
 
+    /// The same display with the outline still where the user left it.
+    ///
+    /// Every re-read — an edit in the dump, the names landing, a catalogue
+    /// arriving — builds its display from the row key, which is where the
+    /// outline would go back to if this were not applied. Where the user was
+    /// looking is not something a re-read gets to decide.
+    ///
+    /// A zone the reading no longer has is not one to hold: the table does not
+    /// say what became of what it was pointing at, and pointing at the row
+    /// that took its place would be picking a row the user never picked. The
+    /// remembered zone stays, so an undo that brings the row back brings the
+    /// outline back with it.
+    private func outline(of display: FITDisplay) -> FITDisplay {
+        guard let zone = focusZone else { return display }
+        guard display.zones.zones.contains(where: { $0.id == zone }) else {
+            return display.focusing(zoneID: nil)
+        }
+        return display.focusing(zoneID: zone)
+    }
+
     // MARK: - What the panel asks for
 
     private func select(_ index: Int?) {
         focus = index
+        focusZone = index.map(FITPresenter.rowZoneID)
         // Publishing again is what moves the outline in the dump, and the host
         // brings a newly focused zone on screen by itself.
         show(display.focusing(index))
@@ -426,6 +463,7 @@ struct FITParkedState: ToolSessionState {
     public func goToOffset(of index: Int) {
         guard let row = display.rows.first(where: { $0.key == index }) else { return }
         focus = index
+        focusZone = row.zoneToFocus
         show(display.focusingTarget(of: index))
         host.reveal(row.offsetToGoTo..<(row.offsetToGoTo + 1), select: false)
     }
@@ -439,6 +477,7 @@ struct FITParkedState: ToolSessionState {
     public func showTable() {
         guard let range = display.zones.zones.first(where: { $0.id == FITPresenter.tableZoneID })?.range
         else { return }
+        focusZone = FITPresenter.tableZoneID
         show(display.focusing(zoneID: FITPresenter.tableZoneID))
         host.reveal(range, select: false)
     }
@@ -448,6 +487,7 @@ struct FITParkedState: ToolSessionState {
     /// which is the half only this side knows how to do.
     public func zoneSelected(_ id: Zone.ID) {
         focus = FITPresenter.rowIndex(ofZone: id)
+        focusZone = id
         show(display.focusing(zoneID: id))
     }
 
