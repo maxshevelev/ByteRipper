@@ -287,6 +287,83 @@ about background operations.
 **Cost.** 4–6 hours, most of it in routing events from a package that must not
 learn about AppKit.
 
+### Help for the ME panel: what the terms mean, and where the knowledge comes from
+
+**What.** Two pieces of writing the app does not have, both about the ME tool.
+
+First, a **glossary**: what the words in the panel actually mean, in a sentence
+each. A reader looking at a CSME dump meets `$FPT`, `$CPD`, `$MN2`, MFS/AFS,
+FTBL/EFST, EFS, FITC, ARB SVN, VCN, UTOK/STKN and `UTFL`, Anti-Replay, SVN,
+Integrity table, Huffman module, IUP, RBE/BUP/`pm`, OEM-configurable — and the
+panel names all of them without saying what any of them is. The engine's own
+doc comments carry most of this already, one structure at a time; the glossary
+is that knowledge turned around to face the reader instead of the porter.
+
+Second, a **provenance note**: where the decode comes from and how far it can be
+trusted. Intel publishes no specification for any of these containers — not
+`$FPT`, not the manifests, not MFS/EFS/FITC, not `UTFL`. The port is from
+platomav/MEAnalyzer, which is itself reverse-engineering. What corroborates it
+from outside, and is worth naming so a reader can judge for themselves:
+
+- **Intel's own tools and their vocabulary.** FIT (Flash Image Tool, from the
+  CSME System Tools kit) *writes* these structures, and its configuration files
+  name the settings and the config paths — which is where "OEM configurable",
+  the FIT flag and paths like `/home/bup/si_features` come from. The semantics
+  are often Intel's words; the byte layout is not published anywhere.
+- **Intel's high-level papers** (the public CSME Security White Paper and the
+  DCI/DFX unlock-token collateral) name the components and the concepts —
+  boot flow, anti-rollback SVN/VCN, Delayed Authentication Mode — without a
+  single offset. The one adjacent structure with real vendor documentation is
+  the SPI Flash Descriptor, described in the PCH programming guides.
+- **Independent reverse engineering** as a cross-check: the Positive
+  Technologies work on ME 11 internals (including the flash file system talk)
+  describes the same volumes, FAT chains, chunks and integrity tables that MEA
+  decodes, arrived at separately; `me_cleaner` and coreboot read `$FPT` well
+  enough to blank partitions. Agreement between independent efforts is the
+  strongest external evidence there is here.
+- **Our own byte evidence**, which is what the panel can honestly claim: CRC-32s
+  that check out, HMACs and nonces sitting exactly where a table's flag says
+  they are, declared lengths that match, and offsets landing on files whose
+  bytes equal what upstream extracts. That is verification of the
+  *interpretation* without a spec, and it is recorded per row in
+  `Skills/sync-mea-engine/reference/oracle-verification.md`.
+
+**Why.** The panel is read by people who did not port it. Without the glossary
+it is a wall of vendor acronyms; without the provenance note it invites a
+trust it has not earned — or, worse, gets read as a specification. The honest
+framing is the one the engine already follows internally: a field whose meaning
+nobody knows keeps its raw value and is called unknown (`accessUnknown`,
+`unknownFlags`, `reservedHex`, `Unknown0`), and the help should say why those
+names are what they are rather than hiding them.
+
+**How.** The app has a Help menu (`MainMenu.swift`) and nothing behind it, so
+the first decision is the vehicle: an Apple Help book is a build step and a
+bundle nobody wants to maintain by hand; a Markdown document rendered in a
+sheet, or simply shipped in the repository and linked from Help, costs almost
+nothing and is diffable. Prefer the cheap one, and write the glossary so that a
+term can also be reached from the panel itself later — a row's detail pane is
+the natural place for "what is an Integrity table", which argues for one entry
+per term keyed by a stable id rather than one long page.
+
+Sources to write it from, all in the repository: the doc comments in
+`Packages/MEFirmware/Sources/MEFirmware` (each structure says what it is and
+what upstream calls it), `Skills/sync-mea-engine/reference/upstream-map.md`
+(what is ported, what it was verified against) and `.../result-model.md` (why
+DB text never enters the model — which the glossary should explain, because it
+is visible in the panel as "the name came from a database, the size came from
+the flash").
+
+Keep it out of the README: that page is for someone deciding whether to
+download the app, and this is for someone already reading a dump with it.
+
+**Touches.** A new `Design/` or `Help/` document, the Help menu, possibly a
+sheet to render Markdown, and later the ME panel's detail pane if terms become
+reachable from the rows.
+
+**Cost.** The vehicle is 2–4 hours. The writing is the real cost: half a day
+for the provenance note, a day or two for a glossary that covers what the panel
+actually shows, and it wants doing once properly rather than in fragments.
+
 ## Someday
 
 ### View, interactor, coordinator — reasoning, not an entry
