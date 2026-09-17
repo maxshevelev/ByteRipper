@@ -35,7 +35,7 @@ The workflows the app is shaped around:
 
 Half of what a bench needs to know about a dump is not in the bytes but in the *structure* over them. Which region is this offset in. Whether this volume's checksum still holds after a patch. What microcode the board carries, and whether it is the one the CPU on it wants. Whether the ME region is the firmware that shipped with the board, an update, or something a bad flash left behind. Answered by hand, each of those is counting offsets against a specification with a dump open in one window and a document in another.
 
-The **tool panel** answers them next to the dump. It opens on the left from the **Tools** menu or the toolbar's wrench, one tool at a time, bound to the pane it was opened for — so in a comparison the panel reads *one* of the two files and says which in its header. A row picked in a tool takes the dump to the bytes behind it and draws that node's extent in the minimap's margin, so the region under investigation stays visible while you work in it. Everything a tool writes goes through the editor's own undo stack: a fix is an edit like any other, and ⌘Z takes it back.
+The **tool panel** answers them next to the dump. It opens on the left from the **Tools** menu or the toolbar's wrench, one tool at a time, bound to the pane it was opened for — so in a comparison the panel reads *one* of the two files. Its header says which, as a dropdown that also **takes the tool to the other pane**; dragging a pane's header onto the panel does the same thing. The name it shows is the file the panel works on and nothing else, so clicking into the other pane to read it does not make the panel claim the tool has moved. A row picked in a tool takes the dump to the bytes behind it and draws that node's extent in the minimap's margin, so the region under investigation stays visible while you work in it. Everything a tool writes goes through the editor's own undo stack: a fix is an edit like any other, and ⌘Z takes it back.
 
 Three tools ship.
 
@@ -57,13 +57,15 @@ The Firmware Interface Table the CPU reads before any code runs: every entry wit
 
 Microcode is the part a bench changes. **Add**, **Replace** and **Remove** work on the table's microcode entries, with the replacement picked from a catalogue of Intel's published microcodes by CPUID, revision and date; the table's own bookkeeping — the entry count, the header checksum — is rewritten with it, and the whole operation is a single undo.
 
+Editing the dump makes the table read again, and it comes back **where you left it**: an outline put on the component a row points at stays on that component rather than sliding back to the row and taking the dump with it, two pages up the file from the microcode you were typing into.
+
 ### ME Analyzer
 
 What the Intel ME/CSME region in this dump actually is, in the words the field uses: family and version, SKU, chipset and stepping, release and revision, the date it was built, and whether it is a stock image, an update, or one extracted from a board. Firmware stitched inside an image is analysed in its own right and gets its own table.
 
 <img width="1238" height="957" alt="Screenshot 2026-09-11 at 06 59 48" src="https://github.com/user-attachments/assets/ab877f72-5520-4392-81b0-138793893835" />
 
-The health rows are the ones that say whether a region survived what happened to it — RSA signature, partition tables, the EFS volume and its page bookkeeping, the MFS dictionary, the file-system state — each shown as a plain Yes/No or a coloured word rather than as a hex field to interpret. **Full Tree** opens the same analysis as the structure behind those answers. **Copy** puts the summary on the clipboard as rich text and **Screenshot** as a picture, which is what a ticket, a forum post or a message to another bench actually needs.
+The health rows are the ones that say whether a region survived what happened to it — RSA signature, partition tables, the EFS volume and its page bookkeeping, the MFS dictionary, the file-system state — each shown as a plain Yes/No or a coloured word rather than as a hex field to interpret. **Full Tree** opens the same analysis as the structure behind those answers. **Copy** puts the summary on the clipboard as rich text and **Screenshot** as a picture, which is what a ticket, a forum post or a message to another bench actually needs. Each says so over the window, in the same plate a search reports in and wearing the glyph of the button you pressed, so the evidence that the click did anything is not the paste.
 
 ## Standing on other people's work
 
@@ -143,6 +145,7 @@ These projects are why a repair shop can work on modern firmware at all. Between
 - **The match comes before the count.** The first occurrence is found by a scan from the caret in about a millisecond on a 16 MB dump; the index of every *other* occurrence fills in behind it, so a pattern as common as `FF` never makes you wait for it. Navigation wraps, and a search that came round the end of the file says so.
 - **Smart Search** (on by default): you know the string, not how the firmware stored it. A pattern that reads as hex bytes is looked for as bytes first and as text after; anything else is tried as ASCII, UTF-8 and UTF-16 LE/BE in turn until something is found — and the encoding that found it is what the popup then shows. Name an encoding yourself, by choosing it or by picking an earlier search out of the history, and that is where the hunt starts. A pass that finds nothing says which encodings it tried.
 - **Patterns you keep.** The pattern field's menu holds two lists: **Recent Queries**, what you searched for lately, and **Favorites**, the ones you named — a favourite *is* a recent with a name, so keeping one asks for the name and nothing else. Choosing one searches with the encoding it was kept under, so `windows` kept as UTF-16 LE comes back as UTF-16 LE. Only searches that found something enter the history, and a hex pattern is shown back the way a dump prints it: `DE AD BE EF`.
+- **Use Selection for Find** (⌘E) takes the pattern out of the dump: the selection becomes what the next Find will look for, and nothing else happens — no bar, no search, the caret and the focus left where they are. The column the selection was made in decides what the pattern says: bytes from the hex column, written the way a dump prints them, and the text they read as from the decoded-text column. Bytes that are no text at all — a selection starting mid-character, a run of `FF` fill, a stretch of code — come back as bytes, since a pattern of replacement characters would find nothing that is in the file.
 - **Search Results** lists every occurrence in a panel beside the dump — the same set the dump highlights, not a second search — with each offset, a hex excerpt and the decoded text, read from the pane's live bytes so they follow later edits. Past a thousand matches it states the count and refuses to list: a list that long is a sign the pattern needs refining, not a tool.
 
 ### The pattern library
@@ -174,6 +177,7 @@ These projects are why a repair shop can work on modern firmware at all. Between
 - **⌘,** opens a standard settings window: the monospaced font, its size and the row density, the theme (follow the system, or force light or dark), the grouping distance for diff navigation, the text decoding table (Windows-1252 by default) with a live grid of all 256 byte values, the file types the app opens, and the pattern library.
 - External changes on disk are detected and offer a reload, keeping local edits; closing a dirty file prompts the standard Save / Don't Save / Cancel. Security-scoped bookmarks keep file access across launches.
 - Light and dark themes, all colours dynamic; state is carried by colour *and* form (EOF hatching, outline contours), so it survives a theme switch and colour blindness. Accessibility labels on the grid and document state, frame autosave, **Window > Zoom** to fit the content exactly.
+- **An empty window signs itself** with the app's name and the build it is, and says when a newer one has been published — one question to this repository's latest release, offered as a link under the line. Asked in the background and silent on every failure: a window waiting for a file has no business reporting on an errand of its own.
 
 ## Requirements
 
