@@ -182,81 +182,10 @@ These projects are why a repair shop can work on modern firmware at all. Between
 ## Requirements
 
 - macOS 14.0 or later
-- Apple silicon or Intel — the release build is universal
+- Apple silicon or Intel — the `.dmg` is universal
 
-## Build
+## Contributing
 
-The Xcode project is **generated**, not committed: the repository keeps
-`project.yml` and [XcodeGen](https://github.com/yonaskolb/XcodeGen) makes
-`ByteRipper.xcodeproj` from it. Run it after cloning, and again after adding a
-source file:
-
-```sh
-xcodegen generate
-xcodebuild build -project ByteRipper.xcodeproj -scheme ByteRipper -destination 'platform=macOS'
-```
-
-### Signing
-
-The app builds and runs ad-hoc signed, and that is enough for everything except
-one thing: a folder the app is given access to — where the pattern library is
-kept, if it is kept in a synced one — stops being accessible after the next
-build. macOS binds that permission to the app's code identity, and an ad-hoc
-identity is the binary's own hash, so every build is a different app as far as
-the permission is concerned.
-
-Signing with your own Apple Development identity fixes it. Put your team in
-`Signing.local.xcconfig`, which git ignores:
-
-```sh
-# the certificate's OU field is your team
-security find-certificate -a -c "Apple Development" -p | openssl x509 -noout -subject
-```
-
-```
-DEVELOPMENT_TEAM = <your team>
-CODE_SIGN_STYLE = Automatic
-CODE_SIGN_IDENTITY = Apple Development
-```
-
-A team belongs to a person, so it never enters the repository. To keep it that
-way by construction rather than by care, install the hook that refuses to commit
-one:
-
-```sh
-git config core.hooksPath Scripts/git-hooks
-```
-
-A universal release build, the way the `.dmg` is made. The signing is forced
-back to ad-hoc for it: a build signed with a personal Apple Development identity
-carries that person's name and team inside the binary, which is not what to hand
-to strangers.
-
-```sh
-xcodebuild build -project ByteRipper.xcodeproj -scheme ByteRipper \
-  -configuration Release ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
-  CODE_SIGN_IDENTITY="-" CODE_SIGN_STYLE=Manual DEVELOPMENT_TEAM=""
-```
-
-The app icon — a black flash package on a transparent ground, five leads above and below, `A5` beside a `FF` marked as a difference — is generated rather than drawn by hand: `Design/AppIcon.swift` renders the 1024 pt master and `Design/render-appicon.sh` slices it into the asset catalog.
-
-## Tests
-
-```sh
-# the Core package, then the app suite in groups, one group at a time
-Scripts/run-tests.sh
-
-# only the classes a change touches
-Scripts/run-tests.sh -o "Library|Search"
-```
-
-Ninety-five test classes in one `xcodebuild test` is a single process holding a
-real window-server session for twenty minutes, and the tests that wait on a
-window, an animation or a panel are the ones that give up when the Mac is busy.
-The script cuts them into groups and runs one group at a time, tearing the test
-host down in between. Never run two of them at once: they share one UI session,
-and what that produces reads exactly like a real bug.
-
-## Architecture
-
-Storage layer (`ByteRipperCore`) → model (`BinaryDocument`, diff, search, undo) → view-models (`PaneViewModel`, `WindowModel`) → AppKit views (`HexView`, `FilePaneView`, `ComparisonView`, `MinimapView`). Domain code is pure Swift and unit-tested; all UI runs on the main actor, and long-running work (diff, search, the overview map) runs in background tasks. The behaviour is specified in `Design/REQUIREMENTS.md`, and the design documents beside it record why each feature came out the way it did.
+The app is built with XcodeGen, tested with `Scripts/run-tests.sh`, and put
+together as described in [CONTRIBUTING.md](CONTRIBUTING.md) — the build, the
+tests, the layers and where the behaviour is written down.

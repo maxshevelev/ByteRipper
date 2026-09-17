@@ -20,6 +20,12 @@
 // — it is the `OU` field. Without the file the app falls back to ad-hoc
 // signing, which builds and runs; only the folder permission stops surviving
 // rebuilds.
+//
+// A team belongs to a person, so it never enters the repository. To keep it
+// that way by construction rather than by care, install the hook that refuses
+// to commit one:
+//
+//     git config core.hooksPath Scripts/git-hooks
 
 // The fallback, stated plainly rather than as an interpolation keyed on the
 // team. `$(CODE_SIGN_IDENTITY_$(DEVELOPMENT_TEAM:default=none))` was the clever
