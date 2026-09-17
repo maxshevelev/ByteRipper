@@ -14,11 +14,17 @@ import MEFirmware
 /// the second argument and reported offsets are shifted by it.
 ///
 /// Usage:
-///   swift run MEFirmwareCLI <image> [baseOffset]
+///   swift run MEFirmwareCLI <image> [baseOffset] [--dat <dir>]
+///
+/// `--dat` points at a MEAnalyzer clone and reads its databases off disk
+/// instead of over the network — which is also the only way to get the decodes
+/// that wait for `FileTable.dat` (the MFS Integrity split, the EFS file
+/// inventory) out of a one-shot run.
 ///
 /// Examples:
 ///   swift run MEFirmwareCLI ~/dumps/me_region.bin
 ///   swift run MEFirmwareCLI ~/dumps/full.bin 0x1000     # region sits at 0x1000
+///   swift run MEFirmwareCLI ~/dumps/full.bin --dat ~/Projects/MEAnalyzer
 @main
 struct MEFirmwareCLI {
     static func main() async {
@@ -33,10 +39,19 @@ struct MEFirmwareCLI {
 
         let path = args[1]
         var baseOffset = 0
-        if args.count >= 3 {
-            switch parseOffset(args[2]) {
+        var datDirectory: String? = nil
+        var rest = args.dropFirst(2)
+        while let argument = rest.first {
+            rest = rest.dropFirst()
+            if argument == "--dat" {
+                guard let directory = rest.first else { fail("--dat needs a directory") }
+                rest = rest.dropFirst()
+                datDirectory = directory
+                continue
+            }
+            switch parseOffset(argument) {
             case .success(let value): baseOffset = value
-            case .failure(let reason): fail("bad baseOffset '\(args[2])': \(reason)")
+            case .failure(let reason): fail("bad baseOffset '\(argument)': \(reason)")
             }
         }
 
@@ -47,7 +62,10 @@ struct MEFirmwareCLI {
 
         let result: FirmwareAnalysis
         do {
-            result = try await MEFirmwareAnalyzer().analyze(region: data, baseOffset: baseOffset)
+            let source: any MEADataSource = datDirectory.map { local(dat: $0) }
+                ?? MEAGitHubDataRepository()
+            result = try await MEFirmwareAnalyzer(data: source)
+                .analyze(region: data, baseOffset: baseOffset)
         } catch {
             fail("analysis failed: \(error.localizedDescription)")
         }
@@ -71,6 +89,7 @@ struct MEFirmwareCLI {
     private struct LocalData: MEADataSource {
         var db = MEADatabase()
         var huffman: HuffmanDictionaries?
+        var table: FileTable?
 
         func database() async throws -> MEADatabase { db }
         func huffmanDictionaries() async throws -> HuffmanDictionaries {
@@ -79,22 +98,37 @@ struct MEFirmwareCLI {
             }
             return huffman
         }
+        func fileTable() async throws -> FileTable {
+            guard let table else {
+                throw MEADataError.malformed(file: "FileTable.dat (not supplied)")
+            }
+            return table
+        }
+    }
+
+    /// The databases of a MEAnalyzer clone, as a source. Anything missing is
+    /// reported and left throwing, which is what the protocol default does —
+    /// the decodes needing it are then the ones a network run would get.
+    private static func local(dat: String) -> LocalData {
+        var source = LocalData()
+        if let text = try? String(contentsOfFile: dat + "/MEA.dat", encoding: .utf8) {
+            source.db = MEADatabase.parse(text)
+        } else {
+            print("warning: no MEA.dat under \(dat) — identification will be empty")
+        }
+        if let text = try? String(contentsOfFile: dat + "/Huffman.dat", encoding: .utf8) {
+            source.huffman = try? HuffmanDictionaries.parse(text)
+        }
+        if let text = try? String(contentsOfFile: dat + "/FileTable.dat", encoding: .utf8) {
+            source.table = try? FileTable.parse(text)
+        }
+        return source
     }
 
     /// Time `analyze` over every file in `dumps`, five runs each after a warm-up.
     /// Reports the best run, which is the one least polluted by other load.
     static func bench(dumps: String, dat: String?) async {
-        var source = LocalData()
-        if let dat {
-            if let text = try? String(contentsOfFile: dat + "/MEA.dat", encoding: .utf8) {
-                source.db = MEADatabase.parse(text)
-            } else {
-                print("warning: no MEA.dat under \(dat) — identification will be empty")
-            }
-            if let text = try? String(contentsOfFile: dat + "/Huffman.dat", encoding: .utf8) {
-                source.huffman = try? HuffmanDictionaries.parse(text)
-            }
-        }
+        let source = dat.map { local(dat: $0) } ?? LocalData()
         let files = ((try? FileManager.default.contentsOfDirectory(atPath: dumps)) ?? [])
             .sorted()
             .filter { !$0.hasPrefix(".") }
@@ -170,16 +204,19 @@ struct MEFirmwareCLI {
 
     static func usage() -> Never {
         FileHandle.standardError.write(Data("""
-        Usage: MEFirmwareCLI <image> [baseOffset]
+        Usage: MEFirmwareCLI <image> [baseOffset] [--dat <dir>]
                MEFirmwareCLI --bench <dumps-dir> [dat-dir]
           <image>      engine region whose bytes start at $FPT (e.g. ME partition)
           [baseOffset] offset of <image> inside a larger dump, decimal or 0x-hex (default 0)
+          --dat <dir>  read the databases off a MEAnalyzer clone instead of the
+                       network (the only way to get the FileTable.dat decodes)
           --bench      time analyze() over every file in <dumps-dir>, no network;
-                       [dat-dir] holds MEA.dat/Huffman.dat (a MEAnalyzer clone)
+                       [dat-dir] holds the same databases (a MEAnalyzer clone)
 
         Examples:
           swift run MEFirmwareCLI ~/dumps/me_region.bin
           swift run MEFirmwareCLI ~/dumps/full.bin 0x1000
+          swift run MEFirmwareCLI ~/dumps/full.bin --dat ~/Projects/MEAnalyzer
           swift run -c release MEFirmwareCLI --bench ~/Desktop/ME ~/Projects/MEAnalyzer
         """.utf8))
         exit(2)

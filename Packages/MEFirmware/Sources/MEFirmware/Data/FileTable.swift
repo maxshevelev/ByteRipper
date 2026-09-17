@@ -15,13 +15,22 @@ import Foundation
 ///
 /// ```json
 /// { "04": { "0A": { "FTBL": { "10003500": "/home/mca/manuf_ver,1,0,0,40,0,70,63,448" },
-///                   "EFST": { "00003004": "3,76,548,5,0,BUP_MBP" } } } }
+///                   "EFST": { "01": { "00003004": "3,76,548,5,0,BUP_MBP" } } } } }
 /// ```
 ///
-/// — platform → dictionary → table → file ID → one comma-joined record. The
+/// — platform → dictionary → table → … → key → one comma-joined record. The
 /// `FTBL` record is `path,integrity,encryption,antiReplay,accessUnknown,
-/// groupID,userID,vfsID,unknown`, and **`vfsID` is the low-level file index**
-/// the MFS walk assembles (`MFSLowLevelFile.index`), which is the whole join.
+/// groupID,userID,vfsID,unknown`, keyed by file ID, and **`vfsID` is the
+/// low-level file index** the MFS walk assembles (`MFSLowLevelFile.index`),
+/// which is the whole join.
+///
+/// `EFST` — the EFS volume's own table — nests one level deeper: a **table
+/// revision** (the EFS System page's own `DictRevision`, `01` on everything
+/// shipped so far) before the entries, which are keyed by the file's offset
+/// into the volume's assembled data area and read
+/// `page,pageOffset,size,fileID,reserved,name`. Its `fileID` is the same
+/// `vfsID` the FTBL rows use, which is how an EFS file gets its path and — the
+/// reason the FTBL read is not optional — its Integrity flag.
 ///
 /// The records are kept as written and parsed on demand for the one platform
 /// and dictionary a volume asks about. The file holds ~67 000 records across
@@ -67,6 +76,44 @@ public struct FileTable: Sendable, Equatable {
         }
     }
 
+    /// One `EFST` record: where an EFS file sits in the volume's assembled
+    /// data area, how long the table says it is, and what it is called.
+    ///
+    /// The name is the only thing the EFS volume itself never says — the pages
+    /// carry a 4-byte metadata header and the bytes, and nothing else. The
+    /// record's `fileID` is the `vfsID` of the FTBL row that holds the file's
+    /// path and its Integrity flag, which is why an EFS walk reads both tables.
+    public struct EFSEntry: Sendable, Equatable {
+        /// The record's key: the file's offset into the data area assembled
+        /// from the volume's Data pages in System-index order.
+        public let dataOffset: Int
+        /// The logical Data page the file starts on, and the offset inside that
+        /// page's data area — `dataOffset` split the way the record writes it.
+        public let page: Int
+        public let pageOffset: Int
+        /// The length the table claims. The file's own metadata is preferred
+        /// over it (upstream: "always prefer over EFST Size"); the two
+        /// disagreeing means this is the wrong table for the volume.
+        public let size: Int
+        /// The file's ID — the FTBL `vfsID`.
+        public let fileID: Int
+        /// Upstream's trailing reserved value (0 on everything shipped).
+        public let reserved: Int
+        /// The file's name, e.g. `BUP_MBP`.
+        public let name: String
+
+        public init(dataOffset: Int, page: Int, pageOffset: Int, size: Int,
+                    fileID: Int, reserved: Int, name: String) {
+            self.dataOffset = dataOffset
+            self.page = page
+            self.pageOffset = pageOffset
+            self.size = size
+            self.fileID = fileID
+            self.reserved = reserved
+            self.name = name
+        }
+    }
+
     /// Which table a volume's header actually landed on, and how (§
     /// `check_ftbl_pl` / `check_ftbl_id`, MEA.py 7405–7445).
     ///
@@ -81,7 +128,10 @@ public struct FileTable: Sendable, Equatable {
         public var assumedPlatform: Bool
         public var assumedDictionary: Bool
         /// True when even the fallback has no `FTBL` table — nothing here can
-        /// name this volume's files.
+        /// name an MFS volume's files, or say which of an EFS volume's carry an
+        /// Integrity table. The `EFST` half is asked about separately
+        /// (`hasEFST`), because a platform can carry one table without the
+        /// other.
         public var missing: Bool
     }
 
@@ -90,19 +140,30 @@ public struct FileTable: Sendable, Equatable {
     public static let defaultDictionary = 0x0A // CON
 
     /// platform → dictionary → table name → file ID → record, exactly as the
-    /// file is written.
+    /// file is written. `EFST` is not in here: it is keyed one level deeper and
+    /// lives in `efst`.
     private let tables: [String: [String: [String: [String: String]]]]
 
-    public init() { self.tables = [:] }
+    /// platform → dictionary → table revision → data-area offset → record —
+    /// the `EFST` tables, whose extra level is the revision an EFS volume's
+    /// System page names.
+    private let efst: [String: [String: [String: [String: String]]]]
 
-    init(tables: [String: [String: [String: [String: String]]]]) {
+    public init() {
+        self.tables = [:]
+        self.efst = [:]
+    }
+
+    init(tables: [String: [String: [String: [String: String]]]],
+         efst: [String: [String: [String: [String: String]]]] = [:]) {
         self.tables = tables
+        self.efst = efst
     }
 
     /// True when nothing was loaded — a source that has no table to give.
     /// Upstream only warns about a missing entry when it *has* a file to look
     /// in; an empty table says nothing at all.
-    public var isEmpty: Bool { tables.isEmpty }
+    public var isEmpty: Bool { tables.isEmpty && efst.isEmpty }
 
     /// The platform and dictionary a volume's header values resolve to, with
     /// upstream's fallbacks applied (MEA.py 7405–7445). `platform` or
@@ -111,17 +172,30 @@ public struct FileTable: Sendable, Equatable {
         var result = Resolution(platform: platform, dictionary: dictionary,
                                 assumedPlatform: false, assumedDictionary: false,
                                 missing: false)
-        if platform < 0 || tables[Self.key(platform)] == nil {
+        // Present means present in the file, not in one of its two halves: a
+        // platform that carries only `EFST` is a platform upstream finds
+        // (`if '%0.2X' % vol_ftbl_pl not in ftbl_dict`), and falling back off
+        // it would read another platform's table.
+        if platform < 0 || !hasPlatform(platform) {
             result.platform = Self.defaultPlatform
             result.assumedPlatform = platform != Self.defaultPlatform
         }
-        let platformTables = tables[Self.key(result.platform)]
-        if dictionary < 0 || platformTables?[Self.key(dictionary)] == nil {
+        if dictionary < 0 || !hasDictionary(dictionary, platform: result.platform) {
             result.dictionary = Self.defaultDictionary
             result.assumedDictionary = dictionary != Self.defaultDictionary
         }
-        result.missing = platformTables?[Self.key(result.dictionary)]?["FTBL"] == nil
+        result.missing = tables[Self.key(result.platform)]?[
+            Self.key(result.dictionary)]?["FTBL"] == nil
         return result
+    }
+
+    private func hasPlatform(_ platform: Int) -> Bool {
+        tables[Self.key(platform)] != nil || efst[Self.key(platform)] != nil
+    }
+
+    private func hasDictionary(_ dictionary: Int, platform: Int) -> Bool {
+        tables[Self.key(platform)]?[Self.key(dictionary)] != nil
+            || efst[Self.key(platform)]?[Self.key(dictionary)] != nil
     }
 
     /// The `FTBL` record that names low-level file `index` in the table
@@ -156,6 +230,32 @@ public struct FileTable: Sendable, Equatable {
         return best
     }
 
+    /// The `EFST` entries describing an EFS volume of table `revision`, in the
+    /// order they sit in the data area, or nil when this platform/dictionary
+    /// carries no `EFST` or none at that revision (upstream errors out on both,
+    /// MEA.py 8946–8950).
+    ///
+    /// `platform` and `dictionary` are the **MFS** volume header's, not the EFS
+    /// System page's — upstream hands `efs_anl` the values `mfs_anl` read
+    /// (MEA.py 5618), and the EFS page's own Dictionary is only checked against
+    /// them. `revision` is the EFS System page's `DictRevision`.
+    public func efsEntries(platform: Int, dictionary: Int,
+                           revision: Int) -> [EFSEntry]? {
+        let resolution = resolve(platform: platform, dictionary: dictionary)
+        guard let records = efst[Self.key(resolution.platform)]?[
+                  Self.key(resolution.dictionary)]?[Self.key(revision)] else { return nil }
+        return records.compactMap { Self.efsEntry(offsetKey: $0.key, record: $0.value) }
+            .sorted { $0.dataOffset < $1.dataOffset }
+    }
+
+    /// Whether this platform/dictionary has an `EFST` at all, so a panel can
+    /// tell "no table for this volume" from "a table that named nothing".
+    public func hasEFST(platform: Int, dictionary: Int) -> Bool {
+        let resolution = resolve(platform: platform, dictionary: dictionary)
+        return efst[Self.key(resolution.platform)]?[
+            Self.key(resolution.dictionary)] != nil
+    }
+
     /// `FileTable.dat` as it is downloaded. Malformed JSON is an error; a
     /// platform, dictionary or table of an unexpected shape is skipped, which
     /// is how the file grows a new one without breaking this parser.
@@ -165,22 +265,42 @@ public struct FileTable: Sendable, Equatable {
             throw MEADataError.malformed(file: "FileTable.dat")
         }
         var tables: [String: [String: [String: [String: String]]]] = [:]
+        var efst: [String: [String: [String: [String: String]]]] = [:]
         for (platform, dictionaries) in root {
             guard let dictionaries = dictionaries as? [String: Any] else { continue }
             var byDictionary: [String: [String: [String: String]]] = [:]
+            var efstByDictionary: [String: [String: [String: String]]] = [:]
             for (dictionary, named) in dictionaries {
                 guard let named = named as? [String: Any] else { continue }
                 var byTable: [String: [String: String]] = [:]
                 for (table, records) in named {
+                    // `EFST` keys its records by revision first; every other
+                    // table is flat. A table of neither shape is skipped, which
+                    // is how the file grows a new one without breaking this.
+                    if table.uppercased() == "EFST" {
+                        guard let revisions = records as? [String: Any] else { continue }
+                        var byRevision: [String: [String: String]] = [:]
+                        for (revision, entries) in revisions {
+                            guard let entries = entries as? [String: String] else { continue }
+                            byRevision[revision.uppercased()] = entries
+                        }
+                        if !byRevision.isEmpty {
+                            efstByDictionary[dictionary.uppercased()] = byRevision
+                        }
+                        continue
+                    }
                     guard let records = records as? [String: String] else { continue }
                     byTable[table.uppercased()] = records
                 }
                 if !byTable.isEmpty { byDictionary[dictionary.uppercased()] = byTable }
             }
             if !byDictionary.isEmpty { tables[platform.uppercased()] = byDictionary }
+            if !efstByDictionary.isEmpty { efst[platform.uppercased()] = efstByDictionary }
         }
-        guard !tables.isEmpty else { throw MEADataError.malformed(file: "FileTable.dat") }
-        return FileTable(tables: tables)
+        guard !tables.isEmpty || !efst.isEmpty else {
+            throw MEADataError.malformed(file: "FileTable.dat")
+        }
+        return FileTable(tables: tables, efst: efst)
     }
 
     /// One record string, typed. Nil for a record that does not carry the nine
@@ -202,6 +322,26 @@ public struct FileTable: Sendable, Equatable {
                      userID: value[5],
                      vfsID: value[6],
                      unknown: value[7])
+    }
+
+    /// One `EFST` record, typed: `page,pageOffset,size,fileID,reserved,name`,
+    /// keyed by the file's hex offset into the data area. Nil for anything that
+    /// does not carry those six fields — a record read wrong would put a name
+    /// on the wrong bytes.
+    static func efsEntry(offsetKey: String, record: String) -> EFSEntry? {
+        let parts = record.split(separator: ",", omittingEmptySubsequences: false)
+        guard parts.count >= 6,
+              let dataOffset = Int(offsetKey.trimmingCharacters(in: .whitespaces), radix: 16),
+              dataOffset >= 0 else { return nil }
+        let numbers = parts.prefix(5).map { Int($0.trimmingCharacters(in: .whitespaces)) }
+        guard numbers.allSatisfy({ $0 != nil }) else { return nil }
+        let value = numbers.map { $0! }
+        let name = parts.dropFirst(5).joined(separator: ",")
+            .trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return nil }
+        return EFSEntry(dataOffset: dataOffset, page: value[0], pageOffset: value[1],
+                        size: value[2], fileID: value[3], reserved: value[4],
+                        name: name)
     }
 
     /// The key form the file uses: two upper-case hex digits.

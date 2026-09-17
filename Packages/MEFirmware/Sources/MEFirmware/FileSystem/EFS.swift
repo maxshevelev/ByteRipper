@@ -5,11 +5,14 @@ import Foundation
 /// (MEA.py 8572). These are *raw* FPT partitions ("EFS" / "FITC") on the newer
 /// (CSME 15) whole-flash layout, not contents of a Huffman module body.
 ///
-/// Only the byte-derived structural decode is ported. EFS *file* naming and
-/// per-file integrity, and FITC *config records*, are assembled from the
-/// external `FileTable.dat` EFST/FTBL rows — a parked DB-naming increment — so
-/// both parsers stop at the on-flash facts. Verified byte-for-byte on the CSME
-/// 15.0.30 dump's EFS @0x267000 and FITC @0x1F2000.
+/// `parse` is the byte-derived structural decode. The file walk that follows it
+/// (`dataArea` + `files`) needs the external `FileTable.dat`: an EFS volume's
+/// pages are one flat byte area, and the offsets that cut it into files are the
+/// EFST records, with the Integrity flag that decides each file's end coming
+/// from the FTBL rows beside them — which is why upstream calls that read
+/// necessary and not optional (MEA.py 8846). FITC *config records* stay a
+/// parked DB increment. Verified byte-for-byte on the CSME 15.0.30 dump's EFS
+/// @0x267000 and FITC @0x1F2000.
 enum EFSParser {
 
     static let pageSize = 0x1000          // EFS page size (upstream page_size)
@@ -17,6 +20,7 @@ enum EFSParser {
     static let pageFooterSize = 0x08      // EFS_Page_Footer
     static let crcLength = 0x04
     static let indexPaddingLength = 0x08
+    static let metadataSize = 0x04        // EFS_File_Metadata
 
     /// Decode the EFS volume occupying `region[offset ..< offset+size]`.
     /// `absoluteOffset` is the volume's position in the analyzed image (reported
@@ -191,6 +195,110 @@ enum EFSParser {
             dataPageHeaderCRCsValid: dataPageHeaderCRCsValid,
             dataPageFooterCRCsValid: dataPageFooterCRCsValid,
             matchesMFSDictionary: mfsDictionary.map { Int(dictionary) == $0 })
+    }
+
+    // MARK: - The file walk (upstream 8745–8850, `-unp86` only)
+
+    /// The volume's data area: its Data pages in System-index order, each
+    /// contributing the bytes between its 0x10 header and its 0x8 footer
+    /// (upstream `efs_data_all`). This is the buffer the EFS table's offsets
+    /// are offsets into — the volume has no other notion of a file position.
+    ///
+    /// Empty when `order` is not a permutation of the volume's Data pages: the
+    /// index area is what says which physical page is the logical first, and
+    /// without a usable one there is no data area to speak of.
+    static func dataArea(in region: Data, offset: Int, size: Int,
+                         order: [UInt8]) -> Data {
+        guard offset >= 0, size >= pageSize, offset + size <= region.count else { return Data() }
+        let buffer = region.subdata(in: offset..<(offset + size))
+        let bases = dataPageBases(in: buffer)
+        guard order.count == bases.count,
+              order.allSatisfy({ Int($0) < bases.count }),
+              Set(order).count == order.count else { return Data() }
+        var area = Data()
+        area.reserveCapacity(bases.count * (pageSize - pageHeaderSize - pageFooterSize))
+        for value in order {
+            let base = bases[Int(value)]
+            area.append(buffer[(base + pageHeaderSize)..<(base + pageSize - pageFooterSize)])
+        }
+        return area
+    }
+
+    /// The physical bases of the volume's Data pages, in page order — the same
+    /// classification `parse` makes: a Data page carries a Dictionary of
+    /// 0x0000/0xFFFF and a written Unknown0.
+    private static func dataPageBases(in buffer: Data) -> [Int] {
+        var bases: [Int] = []
+        for page in 0..<(buffer.count / pageSize) {
+            let base = page * pageSize
+            let dictionary = EFSParser.u16(buffer, at: base + 0x02) ?? 0
+            let unknown0 = EFSParser.u16(buffer, at: base + 0x00) ?? 0xFFFF
+            if dictionary == 0x0000 || dictionary == 0xFFFF, unknown0 != 0xFFFF {
+                bases.append(base)
+            }
+        }
+        return bases
+    }
+
+    /// The volume's files: one per EFS table entry that the data area actually
+    /// carries, in the order they sit there.
+    ///
+    /// Each entry gives an offset; the four bytes there are the file's own
+    /// metadata, and its `Size` — preferred over the table's length, as
+    /// upstream prefers it — is how much follows. `integrityFileIDs` are the
+    /// files the FTBL rows flag as Integrity-protected: their content ends with
+    /// an `MFS_Integrity_Table`, and nothing in the EFS bytes says so, which is
+    /// why the flags are an argument.
+    ///
+    /// Skipped, exactly as upstream skips them: an entry the data area is too
+    /// small to hold, a metadata `Size` of 0xFFFF (a file never written), and a
+    /// file whose metadata claims more bytes than the table allotted it — the
+    /// table is then the wrong one for this volume, and cutting the area at its
+    /// offsets would name bytes that belong to something else.
+    static func files(dataArea: Data, entries: [FileTable.EFSEntry],
+                      integrityFileIDs: Set<Int>,
+                      variant: String, major: Int, minor: Int,
+                      platform: Int) -> [EFSFile] {
+        let sec = MFSHomeDecoder.secHeaderSize(variant: variant, major: major,
+                                               minor: minor, platform: platform)
+        var result: [EFSFile] = []
+        for entry in entries.sorted(by: { $0.dataOffset < $1.dataOffset }) {
+            let start = entry.dataOffset
+            guard start >= 0, start + metadataSize <= dataArea.count,
+                  let storedSize = EFSParser.u16(dataArea, at: start),
+                  let unknown = EFSParser.u16(dataArea, at: start + 0x02) else { continue }
+            guard storedSize != 0xFFFF else { continue }
+            let stored = Int(storedSize)
+            guard stored <= entry.size,
+                  start + metadataSize + stored <= dataArea.count else { continue }
+            let content = dataArea.subdata(
+                in: (start + metadataSize)..<(start + metadataSize + stored))
+
+            var contentSize = stored
+            var integrity: MFSIntegrityTable? = nil
+            if integrityFileIDs.contains(entry.fileID) {
+                var tableSize = sec
+                if content.count >= sec {
+                    var table = MFSHomeDecoder.integrityTable(Data(content.suffix(sec)))
+                    if sec == 0x28, let read = table, read.arCounter > 0xFFFF,
+                       content.count >= 0x38,
+                       let wider = MFSHomeDecoder.integrityTable(
+                           Data(content.suffix(0x38).prefix(0x28))) {
+                        // The same workaround the MFS split needs: the table
+                        // sits 0x10 earlier than it looked, and the extra bytes
+                        // are part of what the file ends with.
+                        tableSize = 0x38
+                        table = wider
+                    }
+                    integrity = table
+                }
+                contentSize = max(0, stored - tableSize)
+            }
+            result.append(EFSFile(fileID: entry.fileID, dataOffset: start,
+                                  storedSize: stored, metadataUnknown: Int(unknown),
+                                  contentSize: contentSize, integrity: integrity))
+        }
+        return result
     }
 
     // MARK: - little-endian reads (bounds-checked, nil when out of range)

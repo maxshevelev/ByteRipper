@@ -2,8 +2,8 @@ import XCTest
 @testable import MEFirmware
 
 /// `FileTable.dat` — the table that names an FTBL-mode MFS volume's low-level
-/// files (upstream `mfs_home13_anl` + `check_ftbl_pl` / `check_ftbl_id`,
-/// MEA.py 7405–7445, 8303).
+/// files and an EFS volume's (upstream `mfs_home13_anl` + `efs_anl` +
+/// `check_ftbl_pl` / `check_ftbl_id`, MEA.py 7405–7445, 8303, 8801).
 ///
 /// The records here are copied from the real file (platform `04`, dictionary
 /// `0A` — the table the CSME 15 oracle dump's volume header points at), so the
@@ -21,7 +21,10 @@ final class FileTableTests: XCTestCase {
             "10040000": "/home/upid/features_state,1,1,1,0,0,7,256,0"
           },
           "EFST": {
-            "00003004": "3,76,548,5,0,BUP_MBP"
+            "01": {
+              "00003004": "3,76,548,5,0,BUP_MBP",
+              "00000000": "0,0,12288,6,0,ICC_MPHYTBL"
+            }
           }
         },
         "0B": {
@@ -139,7 +142,7 @@ final class FileTableTests: XCTestCase {
     /// dictionary has no `FTBL` table reports `missing`, and names nothing.
     func testAPlatformWithNoFTBLTableReportsMissing() throws {
         let table = try FileTable.parse("""
-        { "02": { "0B": { "EFST": { "00000000": "0,0,1,0,0,X" } } } }
+        { "02": { "0B": { "EFST": { "01": { "00000000": "0,0,1,0,0,X" } } } } }
         """)
         let resolution = table.resolve(platform: 2, dictionary: 0x0B)
         XCTAssertTrue(resolution.missing, "no FTBL table to name anything from")
@@ -151,6 +154,72 @@ final class FileTableTests: XCTestCase {
     func testTheDefaultDictionaryIsNotReportedAsAssumedWhenItWasAskedFor() throws {
         let resolution = try table().resolve(platform: 4, dictionary: 0x0A)
         XCTAssertFalse(resolution.assumedDictionary)
+    }
+
+    // MARK: - The EFS table
+
+    /// An `EFST` record is `page,pageOffset,size,fileID,reserved,name`, keyed
+    /// by the file's offset into the volume's data area — and that key is the
+    /// page and the page offset the record itself states
+    /// (3 × 0xFE8 + 76 = 0x3004).
+    func testAnEFSRecordIsReadInUpstreamsFieldOrder() throws {
+        let entries = try XCTUnwrap(
+            try table().efsEntries(platform: 4, dictionary: 0x0A, revision: 1))
+        let entry = try XCTUnwrap(entries.first { $0.name == "BUP_MBP" })
+        XCTAssertEqual(entry.dataOffset, 0x3004)
+        XCTAssertEqual(entry.page, 3)
+        XCTAssertEqual(entry.pageOffset, 76)
+        XCTAssertEqual(entry.size, 548)
+        XCTAssertEqual(entry.fileID, 5)
+        XCTAssertEqual(entry.reserved, 0)
+    }
+
+    /// The entries come back in data-area order, which is the order the files
+    /// sit in — not the order a dictionary happened to hash them into.
+    func testTheEFSEntriesComeBackInDataAreaOrder() throws {
+        let entries = try XCTUnwrap(
+            try table().efsEntries(platform: 4, dictionary: 0x0A, revision: 1))
+        XCTAssertEqual(entries.map(\.name), ["ICC_MPHYTBL", "BUP_MBP"])
+        XCTAssertEqual(entries.map(\.dataOffset), [0, 0x3004])
+    }
+
+    /// The `EFST` half is keyed one level deeper than `FTBL`: a revision the
+    /// volume's System page does not name is nothing, and asking for one is not
+    /// the same as asking for a table that is not there.
+    func testAnEFSRevisionTheTableDoesNotCarryIsNil() throws {
+        XCTAssertNil(try table().efsEntries(platform: 4, dictionary: 0x0A,
+                                            revision: 2))
+        XCTAssertTrue(try table().hasEFST(platform: 4, dictionary: 0x0A))
+    }
+
+    /// A dictionary with no `EFST` at all reports so — the 0x0B table of this
+    /// file's platform 04 carries only `FTBL`.
+    func testADictionaryWithNoEFSTSaysSo() throws {
+        XCTAssertFalse(try table().hasEFST(platform: 4, dictionary: 0x0B))
+        XCTAssertNil(try table().efsEntries(platform: 4, dictionary: 0x0B,
+                                            revision: 1))
+    }
+
+    /// A file whose only table is `EFST` still parses: `FTBL` is what names an
+    /// MFS volume, and a platform that has one without the other is not a
+    /// malformed file.
+    func testAnEFSTOnlyFileParses() throws {
+        let table = try FileTable.parse("""
+        { "02": { "0B": { "EFST": { "01": { "00000000": "0,0,4,1,0,ONLY" } } } } }
+        """)
+        XCTAssertFalse(table.isEmpty)
+        XCTAssertEqual(table.efsEntries(platform: 2, dictionary: 0x0B,
+                                        revision: 1)?.map(\.name), ["ONLY"])
+    }
+
+    /// A record short of its six fields, an unreadable key or a nameless row
+    /// names nothing: a name put on the wrong offset is worse than no name.
+    func testAMalformedEFSRecordIsNoEntry() {
+        XCTAssertNil(FileTable.efsEntry(offsetKey: "0", record: "0,0,4,1,0"))
+        XCTAssertNil(FileTable.efsEntry(offsetKey: "zz", record: "0,0,4,1,0,X"))
+        XCTAssertNil(FileTable.efsEntry(offsetKey: "0", record: "0,0,x,1,0,X"))
+        XCTAssertNil(FileTable.efsEntry(offsetKey: "0", record: "0,0,4,1,0,"))
+        XCTAssertNotNil(FileTable.efsEntry(offsetKey: "3004", record: "3,76,548,5,0,X"))
     }
 
     // MARK: - The file itself
@@ -188,5 +257,7 @@ final class FileTableTests: XCTestCase {
     func testAnEmptyTableIsEmpty() {
         XCTAssertTrue(FileTable().isEmpty)
         XCTAssertNil(FileTable().record(namingFileIndex: 0, platform: 4, dictionary: 0x0A))
+        XCTAssertNil(FileTable().efsEntries(platform: 4, dictionary: 0x0A, revision: 1))
+        XCTAssertFalse(FileTable().hasEFST(platform: 4, dictionary: 0x0A))
     }
 }

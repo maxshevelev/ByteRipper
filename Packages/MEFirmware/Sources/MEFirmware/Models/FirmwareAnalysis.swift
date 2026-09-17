@@ -1167,9 +1167,10 @@ public struct MFSBackupEntry: Codable, Sendable, Equatable {
 /// (CSME 15) layouts, decoded from an FPT region named "EFS". Surfaced here is
 /// the *structural* decode only (upstream `efs_anl`, MEA.py 8621): the page
 /// inventory, the System Page header fields and the CRC-32 validations of the
-/// page header / index area / Data Page headers and footers. The EFS file
-/// *contents* (names, per-file integrity split) are assembled from the external
-/// FileTable.dat EFST rows — a parked DB-naming increment, never carried here.
+/// page header / index area / Data Page headers and footers — plus `files`,
+/// the inventory the external `FileTable.dat` EFST table locates (see
+/// `EFSFile`): a volume's pages say nothing about where one file ends and the
+/// next begins, so that list waits for the table.
 ///
 /// The System Page header is self-describing: `dictionary` is its File Table id
 /// and must equal the owning MFS volume's (0x0A on the CSME 15.0.30 dump), and
@@ -1197,6 +1198,9 @@ public struct EFSVolume: Codable, Sendable, Equatable {
     public var dataPageHeaderCRCsValid: Bool
     public var dataPageFooterCRCsValid: Bool
     public var matchesMFSDictionary: Bool?  // nil when no MFS volume decoded alongside
+    /// The volume's files, in data-area order — empty until the EFS table that
+    /// locates them has been read, and on a volume no table describes.
+    public var files: [EFSFile] = []
 
     public init(offset: Int, pageSize: Int, systemPageCount: Int,
                 dataPageCount: Int, scratchPageCount: Int,
@@ -1227,6 +1231,58 @@ public struct EFSVolume: Codable, Sendable, Equatable {
         self.dataPageHeaderCRCsValid = dataPageHeaderCRCsValid
         self.dataPageFooterCRCsValid = dataPageFooterCRCsValid
         self.matchesMFSDictionary = matchesMFSDictionary
+    }
+}
+
+/// One file of an EFS volume (upstream's `efs_anl` file walk, MEA.py 8817).
+///
+/// Where the file *is* comes from outside the flash: an EFS volume's Data pages
+/// are a flat byte area with no directory in them, and the offsets that cut it
+/// into files are the `EFST` records of `FileTable.dat`. What is here is what
+/// those bytes then say — the file's own 4-byte metadata header, and, for a
+/// file the FTBL row flags as Integrity-protected, the table it ends with and
+/// the content length without it. The file's *name* and *path* are the table's
+/// own text and stay out of the model (reference/result-model.md); `fileID` is
+/// the number both tables key it by, which is what the panel joins on.
+///
+/// `dataOffset` is an offset into the volume's assembled data area — its Data
+/// pages concatenated in System-index order, each contributing the bytes
+/// between its 0x10 header and 0x8 footer — and not a position in the image: a
+/// file long enough to span pages (the CSME 15 dump's 0x3000-byte `ICC_MPHYTBL`
+/// spans three) occupies no one range of the dump.
+///
+/// Files the volume has not written are not listed: upstream skips a metadata
+/// size of 0xFFFF (never used) and a file whose metadata is longer than the
+/// table claims (the table is the wrong one for this volume, and a name put on
+/// those bytes would be a guess).
+public struct EFSFile: Codable, Sendable, Equatable {
+    /// The EFST/FTBL file ID — the FTBL `vfsID` the panel's name comes from.
+    public var fileID: Int
+    /// The file's offset into the volume's assembled data area.
+    public var dataOffset: Int
+    /// `EFS_File_Metadata.Size`: the length the file's own header states,
+    /// Integrity table included. Preferred over the table's length, as upstream
+    /// prefers it.
+    public var storedSize: Int
+    /// `EFS_File_Metadata.Unknown`, kept as the open field it is.
+    public var metadataUnknown: Int
+    /// The file's own bytes with the Integrity table taken off the end. Equal
+    /// to `storedSize` where the FTBL row flags no Integrity.
+    public var contentSize: Int
+    /// The table the file ends with, where it has one and it decoded. Nil on an
+    /// unprotected file — and on a protected one whose tail is too short to
+    /// read, which still splits (`storedSize - contentSize` is the tail).
+    public var integrity: MFSIntegrityTable?
+
+    public init(fileID: Int, dataOffset: Int, storedSize: Int,
+                metadataUnknown: Int, contentSize: Int,
+                integrity: MFSIntegrityTable? = nil) {
+        self.fileID = fileID
+        self.dataOffset = dataOffset
+        self.storedSize = storedSize
+        self.metadataUnknown = metadataUnknown
+        self.contentSize = contentSize
+        self.integrity = integrity
     }
 }
 
@@ -1974,5 +2030,9 @@ public enum EngineModelRevision {
     /// files carry one is the file table's answer, so the split waits for it;
     /// what the fields hold is bytes — the tail's HMAC, nonce, counters and
     /// flags, and the content length without it.
-    public static let current = 35
+    ///
+    /// 36 adds `EFSVolume.files`: an EFS volume's file inventory, cut out of its
+    /// data area at the offsets the EFS table gives and split from the Integrity
+    /// tables the FTBL flags say are there.
+    public static let current = 36
 }

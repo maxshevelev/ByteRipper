@@ -754,8 +754,17 @@ public actor MEFirmwareAnalyzer {
         // volume the table does not describe) leaves every `contentSize` nil
         // and `size` the whole chain, which is what the flash says. No Issue is
         // raised — a missing database is not a finding about the firmware.
+        //
+        // One read serves both file systems: the EFS walk below needs the same
+        // table (its own `EFST` half, and the `FTBL` flags beside it), and the
+        // source answers the second ask out of what the first fetched.
+        var fileTable: FileTable? = nil
+        if mfsVolume?.usesFTBL == true || efsVolume != nil {
+            fileTable = try? await data.fileTable()
+            if fileTable?.isEmpty == true { fileTable = nil }
+        }
         if mfsVolume?.usesFTBL == true, let info = mfsInfo, !info.files.isEmpty,
-           let table = try? await data.fileTable(), !table.isEmpty {
+           let table = fileTable {
             let resolution = table.resolve(platform: info.ftblPlatform,
                                            dictionary: info.ftblDictionary)
             let protected = Set(info.files.map(\.index).filter { index in
@@ -777,6 +786,46 @@ public actor MEFirmwareAnalyzer {
                     return file
                 }
                 mfsVolume = volume
+            }
+        }
+
+        // Phase 9 (identity-gated, database): the EFS volume's files. Its Data
+        // pages are one flat byte area with no directory in them — the offsets
+        // that cut it into files are the file table's `EFST` records, and which
+        // of those files end with an Integrity table is the `FTBL` flag beside
+        // them (upstream calls that read necessary, not optional: without the
+        // flag a file's content length cannot be worked out, MEA.py 8846). The
+        // platform and dictionary are the *MFS* volume's, as upstream hands
+        // them to `efs_anl`; the revision is the EFS System page's own.
+        //
+        // Best-effort like the MFS split: no table, no `EFST` for this volume,
+        // or a table whose offsets the data area does not carry leaves `files`
+        // empty, which is the honest answer about a volume that names nothing
+        // itself. No Issue — a missing database is not a finding about the
+        // firmware.
+        if var efs = efsVolume, let table = fileTable,
+           let efsRegion = regions.first(where: { $0.name == "EFS" }) {
+            let resolution = table.resolve(platform: mfsInfo?.ftblPlatform ?? -1,
+                                           dictionary: mfsInfo?.ftblDictionary ?? -1)
+            if !resolution.missing,
+               let entries = table.efsEntries(platform: resolution.platform,
+                                              dictionary: resolution.dictionary,
+                                              revision: Int(efs.dictionaryRevision)),
+               !entries.isEmpty {
+                let protected = Set(entries.map(\.fileID).filter { id in
+                    table.record(namingFileIndex: id,
+                                 platform: resolution.platform,
+                                 dictionary: resolution.dictionary)?.integrity == true
+                })
+                let area = EFSParser.dataArea(in: region,
+                                              offset: efsRegion.offset - baseOffset,
+                                              size: efsRegion.size,
+                                              order: efs.dataPageOrder)
+                efs.files = EFSParser.files(
+                    dataArea: area, entries: entries, integrityFileIDs: protected,
+                    variant: identity.variant, major: identity.major,
+                    minor: identity.minor, platform: resolution.platform)
+                efsVolume = efs
             }
         }
 

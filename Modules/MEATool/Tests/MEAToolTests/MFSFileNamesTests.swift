@@ -145,7 +145,7 @@ final class MFSFileNamesTests: XCTestCase {
     /// the volume says where the panel looked.
     func testAMissingTableIsReported() throws {
         let table = try FileTable.parse("""
-        { "02": { "0B": { "EFST": { "0": "0,0,1,0,0,X" } } } }
+        { "02": { "0B": { "EFST": { "01": { "00000000": "0,0,1,0,0,X" } } } } }
         """)
         let names = MFSFileNames(table: table, volume: try volume(platform: 2, dictionary: 0x0B))
         XCTAssertTrue(names.isEmpty)

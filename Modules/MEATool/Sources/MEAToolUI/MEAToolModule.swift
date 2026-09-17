@@ -61,6 +61,10 @@ struct MEAParkedState: ToolSessionState {
     /// they come from has arrived. `.none` until then, and on every volume that
     /// names its own files (`MFSFileNames`).
     private var mfsNames: MFSFileNames = .none
+    /// The names an EFS volume's files carry, from the same table. `.none`
+    /// until it has arrived, and on a dump with no EFS partition
+    /// (`EFSFileNames`).
+    private var efsNames: EFSFileNames = .none
     /// The in-flight `FileTable.dat` request, so a re-present does not start a
     /// second one.
     private var fileTableTask: Task<Void, Never>?
@@ -219,6 +223,7 @@ struct MEAParkedState: ToolSessionState {
         // The names belong to the volume they were looked up for; a re-parse
         // may be of another file, or of one whose volume has just been edited.
         mfsNames = .none
+        efsNames = .none
         analysis = nil
         // Named, not just "Reading…": three panels can be the one on screen and
         // each reads something different, so the line says which this is.
@@ -337,7 +342,7 @@ struct MEAParkedState: ToolSessionState {
     /// re-parse.
     private func present(_ analysis: FirmwareAnalysis) {
         self.analysis = analysis
-        roots = MEACurator.present(analysis, mfsNames: mfsNames)
+        roots = MEACurator.present(analysis, mfsNames: mfsNames, efsNames: efsNames)
         if let path = focusPath, MEATree.node(at: path, in: roots) == nil {
             focusPath = nil
         }
@@ -351,14 +356,17 @@ struct MEAParkedState: ToolSessionState {
         loadFileNames()
     }
 
-    /// Names the low-level files of an FTBL-mode MFS volume (§ CSME 15/16).
+    /// Names the files of an FTBL-mode MFS volume (§ CSME 15/16) and of the EFS
+    /// volume beside it.
     ///
-    /// Such a volume carries no names at all: its FAT chains are numbered, and
-    /// the paths live in upstream's `FileTable.dat`, keyed by the platform and
-    /// dictionary the volume header itself names. So this is the one reading
-    /// the panel does *after* the analysis — like the checksums group, and for
-    /// the same reason: it costs a fetch, and most dumps never need it (a
-    /// legacy volume names its own files through the home directory).
+    /// Neither carries names at all: an MFS volume's FAT chains are numbered,
+    /// an EFS volume's pages are one flat byte area, and both get their paths
+    /// out of upstream's `FileTable.dat` — keyed by the platform and dictionary
+    /// the *MFS* volume header names, which is why one fetch serves both. So
+    /// this is the one reading the panel does *after* the analysis — like the
+    /// checksums group, and for the same reason: it costs a fetch, and most
+    /// dumps never need it (a legacy volume names its own files through the
+    /// home directory).
     ///
     /// Silent on failure. Offline, rate-limited, or a table that does not
     /// describe this volume all leave the rows reading `File 63`, which is what
@@ -366,17 +374,26 @@ struct MEAParkedState: ToolSessionState {
     /// reporting on an errand of its own, and the file inventory is complete
     /// without it.
     private func loadFileNames() {
-        guard let volume = analysis?.mfsVolume, volume.usesFTBL,
-              !volume.files.isEmpty, mfsNames.resolution == nil,
-              fileTableTask == nil else { return }
+        guard let analysis, fileTableTask == nil else { return }
+        let volume = analysis.mfsVolume
+        let wantsMFS = volume?.usesFTBL == true && volume?.files.isEmpty == false
+            && mfsNames.resolution == nil
+        let wantsEFS = analysis.efsVolume != nil && efsNames.resolution == nil
+        guard wantsMFS || wantsEFS else { return }
         let source = Self.dataSource
         let generation = self.generation
         fileTableTask = Task { [weak self] in
-            let names = await MEAToolSession.fileNames(for: volume, from: source)
+            let names = await MEAToolSession.fileNames(
+                mfs: wantsMFS ? volume : nil,
+                efs: wantsEFS ? analysis.efsVolume : nil,
+                platform: volume?.ftblPlatform ?? -1,
+                dictionary: volume?.ftblDictionary ?? -1,
+                from: source)
             guard let self, self.generation == generation else { return }
             self.fileTableTask = nil
             guard let names, let analysis = self.analysis else { return }
-            self.mfsNames = names
+            self.mfsNames = names.mfs ?? self.mfsNames
+            self.efsNames = names.efs ?? self.efsNames
             // Re-presenting rebuilds the rows with the names in them; the
             // selection is kept by path, so the row the reader is looking at
             // stays where it is and simply gains its name.
@@ -447,12 +464,19 @@ struct MEAParkedState: ToolSessionState {
     /// cannot be parsed — which the caller treats as "the rows keep their
     /// numbers".
     private nonisolated static func fileNames(
-        for volume: MFSVolume,
+        mfs: MFSVolume?,
+        efs: EFSVolume?,
+        platform: Int,
+        dictionary: Int,
         from source: any MEADataSource
-    ) async -> MFSFileNames? {
+    ) async -> (mfs: MFSFileNames?, efs: EFSFileNames?)? {
         guard let table = try? await source.fileTable() else { return nil }
         return await Task.detached(priority: .utility) {
-            MFSFileNames(table: table, volume: volume)
+            (mfs.map { MFSFileNames(table: table, volume: $0) },
+             efs.map {
+                 EFSFileNames(table: table, volume: $0,
+                              platform: platform, dictionary: dictionary)
+             })
         }.value
     }
 

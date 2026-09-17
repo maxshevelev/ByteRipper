@@ -11,6 +11,13 @@ import Foundation
 /// vectors live in ChecksumTests. Facts asserted here mirror the CSME 15.0.30
 /// dump (1.bin: EFS @0x267000 1 System + 14 Data + 1 Scratch page, dict 0x0A;
 /// FITC @0x1F2000 revision 1) plus negative cases. Tests never touch the network.
+///
+/// The file walk (`dataArea` + `files`, upstream 8745–8850) is covered from the
+/// same fixtures: what the data area is assembled out of, and how a table entry
+/// plus the FTBL Integrity flag cut a file out of it. The whole walk is checked
+/// against upstream's own `-unp86` output on `CSME 15.bin` — 12 files, every
+/// content size, metadata word, HMAC, nonce and 0x28/0x38 tail identical —
+/// which is a run, not a test: no dump is committed.
 final class EFSTests: XCTestCase {
 
     // MARK: Fixtures
@@ -222,6 +229,207 @@ final class EFSTests: XCTestCase {
         let region = Data(repeating: 0xFF, count: Self.pageSize)
         XCTAssertNil(EFSParser.parse(in: region, offset: 0, size: region.count,
                                      absoluteOffset: 0, mfsDictionary: nil))
+    }
+
+    // MARK: The file walk (efs_anl 8745–8850)
+
+    /// The data area is the Data pages in *index* order — not physical order —
+    /// each stripped of its 0x10 header and 0x8 footer, which is the buffer the
+    /// table's offsets are offsets into.
+    func testTheDataAreaIsTheDataPagesInIndexOrder() {
+        let region = Self.makeVolume()
+        let area = EFSParser.dataArea(in: region, offset: 0, size: region.count,
+                                      order: [1, 0])
+        let pageData = Self.pageSize - Self.pageHeaderSize - 0x08
+        XCTAssertEqual(area.count, 2 * pageData)
+        // Index [1, 0]: the second physical Data page comes first, and its body
+        // starts at its own seed.
+        XCTAssertEqual(area[0], 0x40)
+        XCTAssertEqual(area[pageData], 0x00)
+    }
+
+    /// An index area that is not a permutation of the volume's Data pages
+    /// leaves no data area: without it there is no saying which page is first,
+    /// and a wrong order would name every file's bytes wrong.
+    func testTheDataAreaIsEmptyWhenTheIndexOrderIsNotAPermutation() {
+        let region = Self.makeVolume()
+        XCTAssertTrue(EFSParser.dataArea(in: region, offset: 0, size: region.count,
+                                         order: [0, 0]).isEmpty)
+        XCTAssertTrue(EFSParser.dataArea(in: region, offset: 0, size: region.count,
+                                         order: [1]).isEmpty)
+        XCTAssertTrue(EFSParser.dataArea(in: region, offset: 0, size: region.count,
+                                         order: [0, 5]).isEmpty)
+    }
+
+    /// A file is its metadata header plus what that header says follows. The
+    /// table's own length is not it — upstream prefers the metadata, and the
+    /// CSME 15 dump's `ICC_MPHYTBL` is allotted 0x3000 and stores 0x15FC.
+    func testAFileIsAsLongAsItsOwnMetadataSays() throws {
+        var area = Data(repeating: 0xFF, count: 0x200)
+        area.replaceSubrange(0x10..<0x12, with: Self.le16(0x20))     // Size
+        area.replaceSubrange(0x12..<0x14, with: Self.le16(0xAB12))   // Unknown
+        let entry = FileTable.EFSEntry(dataOffset: 0x10, page: 0, pageOffset: 0x10,
+                                       size: 0x100, fileID: 7, reserved: 0,
+                                       name: "SOME_FILE")
+        let files = EFSParser.files(dataArea: area, entries: [entry],
+                                    integrityFileIDs: [], variant: "CSME",
+                                    major: 15, minor: 0, platform: 4)
+        let file = try XCTUnwrap(files.first)
+        XCTAssertEqual(file.fileID, 7)
+        XCTAssertEqual(file.dataOffset, 0x10)
+        XCTAssertEqual(file.storedSize, 0x20)
+        XCTAssertEqual(file.contentSize, 0x20, "nothing flagged, nothing split off")
+        XCTAssertEqual(file.metadataUnknown, 0xAB12)
+        XCTAssertNil(file.integrity)
+    }
+
+    /// The Integrity flag comes from the FTBL row, and nothing in the EFS bytes
+    /// says so — a file that is flagged ends with the table, one that is not
+    /// keeps every byte.
+    func testAFlaggedFileIsSplitFromTheTableItEndsWith() throws {
+        let table = Self.integrityTable(size: 0x28, flags: 0x2,
+                                        hmac: Data(repeating: 0xA1, count: 16),
+                                        nonce: Data(repeating: 0xB2, count: 12),
+                                        arRandom: 0x55, arCounter: 9)
+        var area = Data()
+        area.append(Self.le16(UInt16(0x40 + 0x28)))      // file 1: content + table
+        area.append(Self.le16(0x1111))
+        area.append(Data(repeating: 0x33, count: 0x40))
+        area.append(table)
+        let flaggedEnd = area.count
+        area.append(Self.le16(0x10))                      // file 2: unflagged
+        area.append(Self.le16(0x2222))
+        area.append(Data(repeating: 0x44, count: 0x10))
+
+        let entries = [
+            FileTable.EFSEntry(dataOffset: 0, page: 0, pageOffset: 0, size: 0x100,
+                               fileID: 5, reserved: 0, name: "FLAGGED"),
+            FileTable.EFSEntry(dataOffset: flaggedEnd, page: 0, pageOffset: 0,
+                               size: 0x100, fileID: 6, reserved: 0, name: "PLAIN"),
+        ]
+        let files = EFSParser.files(dataArea: area, entries: entries,
+                                    integrityFileIDs: [5], variant: "CSME",
+                                    major: 15, minor: 0, platform: 4)
+        XCTAssertEqual(files.map(\.fileID), [5, 6], "in data-area order")
+        let flagged = try XCTUnwrap(files.first)
+        XCTAssertEqual(flagged.storedSize, 0x40 + 0x28)
+        XCTAssertEqual(flagged.contentSize, 0x40, "the content, without the table")
+        XCTAssertEqual(flagged.integrity?.size, 0x28)
+        XCTAssertEqual(flagged.integrity?.arCounter, 9)
+        XCTAssertEqual(flagged.integrity?.hmacHex.prefix(4), "A1A1")
+        XCTAssertEqual(files[1].contentSize, 0x10, "unflagged: whole")
+        XCTAssertNil(files[1].integrity)
+    }
+
+    /// Upstream's 0x28 workaround applies to an EFS file exactly as it does to
+    /// an MFS one: a counter no Anti-Replay index would hold means the table
+    /// sits 0x10 further back, and the file ends 0x38 from its content.
+    func testAnAbsurdCounterMeansTheEFSTableSitsTenBytesEarlier() throws {
+        let table = Self.integrityTable(size: 0x28, flags: 0x2,
+                                        hmac: Data(repeating: 0xC3, count: 16),
+                                        nonce: Data(repeating: 0xD4, count: 12),
+                                        arRandom: 0x7, arCounter: 4)
+        var area = Data()
+        area.append(Self.le16(UInt16(0x20 + 0x38)))
+        area.append(Self.le16(0))
+        area.append(Data(repeating: 0x66, count: 0x20))
+        area.append(table)
+        area.append(Data(repeating: 0xEE, count: 0x10))
+
+        let entry = FileTable.EFSEntry(dataOffset: 0, page: 0, pageOffset: 0,
+                                       size: 0x100, fileID: 4, reserved: 0,
+                                       name: "EXTRA")
+        let file = try XCTUnwrap(EFSParser.files(
+            dataArea: area, entries: [entry], integrityFileIDs: [4],
+            variant: "CSME", major: 15, minor: 0, platform: 4).first)
+        XCTAssertEqual(file.storedSize - file.contentSize, 0x38,
+                       "0x28 of table plus the 0x10 behind it")
+        XCTAssertEqual(file.contentSize, 0x20, "and the content is whole")
+        XCTAssertEqual(file.integrity?.arCounter, 4, "read where the table really is")
+    }
+
+    /// A metadata size of 0xFFFF is a slot the volume never wrote. Upstream
+    /// skips it, and so does the inventory — listing it would be a file that
+    /// does not exist.
+    func testAnUnwrittenFileIsNotListed() {
+        var area = Data(repeating: 0xFF, count: 0x100)
+        area.replaceSubrange(0..<2, with: Self.le16(0xFFFF))
+        let entry = FileTable.EFSEntry(dataOffset: 0, page: 0, pageOffset: 0,
+                                       size: 0x80, fileID: 3, reserved: 0,
+                                       name: "NEVER_WRITTEN")
+        XCTAssertTrue(EFSParser.files(dataArea: area, entries: [entry],
+                                      integrityFileIDs: [], variant: "CSME",
+                                      major: 15, minor: 0, platform: 4).isEmpty)
+    }
+
+    /// A file whose metadata claims more than the table allotted it means the
+    /// table is the wrong one for this volume (upstream warns and skips). The
+    /// bytes past the allotment belong to whatever the table put next — naming
+    /// them would be a guess.
+    func testAFileLongerThanTheTableAllowsIsSkipped() {
+        var area = Data(repeating: 0x00, count: 0x200)
+        area.replaceSubrange(0..<2, with: Self.le16(0x81))
+        let entry = FileTable.EFSEntry(dataOffset: 0, page: 0, pageOffset: 0,
+                                       size: 0x80, fileID: 2, reserved: 0,
+                                       name: "TOO_LONG")
+        XCTAssertTrue(EFSParser.files(dataArea: area, entries: [entry],
+                                      integrityFileIDs: [], variant: "CSME",
+                                      major: 15, minor: 0, platform: 4).isEmpty)
+    }
+
+    /// An entry the data area does not reach — a table written for a volume
+    /// with more pages than this one has — is skipped rather than read off the
+    /// end.
+    func testAnEntryPastTheDataAreaIsSkipped() {
+        var area = Data(repeating: 0x00, count: 0x40)
+        area.replaceSubrange(0x30..<0x32, with: Self.le16(0x20))  // runs off the end
+        let entries = [
+            FileTable.EFSEntry(dataOffset: 0x100, page: 1, pageOffset: 0,
+                               size: 0x80, fileID: 1, reserved: 0, name: "BEYOND"),
+            FileTable.EFSEntry(dataOffset: 0x30, page: 0, pageOffset: 0x30,
+                               size: 0x80, fileID: 2, reserved: 0, name: "CUT_OFF"),
+        ]
+        XCTAssertTrue(EFSParser.files(dataArea: area, entries: entries,
+                                      integrityFileIDs: [], variant: "CSME",
+                                      major: 15, minor: 0, platform: 4).isEmpty)
+    }
+
+    /// A flagged file too short to hold the table it is flagged for still ends
+    /// where the flag says — upstream's slice of a too-short buffer is empty,
+    /// not negative, and no table is reported for it.
+    func testAFlaggedFileTooShortForItsTableHasNoContent() throws {
+        var area = Data(repeating: 0x00, count: 0x40)
+        area.replaceSubrange(0..<2, with: Self.le16(0x10))
+        let entry = FileTable.EFSEntry(dataOffset: 0, page: 0, pageOffset: 0,
+                                       size: 0x80, fileID: 8, reserved: 0,
+                                       name: "SHORT")
+        let file = try XCTUnwrap(EFSParser.files(
+            dataArea: area, entries: [entry], integrityFileIDs: [8],
+            variant: "CSME", major: 15, minor: 0, platform: 4).first)
+        XCTAssertEqual(file.storedSize, 0x10)
+        XCTAssertEqual(file.contentSize, 0)
+        XCTAssertNil(file.integrity)
+    }
+
+    /// The same `MFS_Integrity_Table` builder the MFS split tests use — the
+    /// tail an EFS file ends with is that structure, not one of its own.
+    private static func integrityTable(size: Int, flags: UInt32, hmac: Data,
+                                       nonce: Data, arRandom: UInt32 = 0,
+                                       arCounter: UInt32 = 0) -> Data {
+        var out = Data(repeating: 0, count: size)
+        out.replaceSubrange(0..<min(hmac.count, size), with: hmac)
+        if size == 0x28 {
+            out.replaceSubrange(0x10..<0x14, with: le32(flags))
+            out.replaceSubrange(0x14..<0x18, with: le32(arRandom))
+            out.replaceSubrange(0x18..<0x1C, with: le32(arCounter))
+            out.replaceSubrange(0x1C..<0x28, with: nonce)
+        } else {
+            out.replaceSubrange(0x20..<0x24, with: le32(flags))
+            out.replaceSubrange(0x24..<0x34, with: nonce)
+            out.replaceSubrange(0x24..<0x28, with: le32(arRandom))
+            out.replaceSubrange(0x28..<0x2C, with: le32(arCounter))
+        }
+        return out
     }
 
     // MARK: FITC decode

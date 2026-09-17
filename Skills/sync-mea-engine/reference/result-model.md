@@ -23,6 +23,13 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   (version numbers, dates, sizes, booleans). Display labels such as
   "Management Engine", "Production", or the human firmware name belong to the
   DB layer and to the UI, not here.
+- **A database *flag* may still drive a byte fact.** The rule is about text.
+  Where a database says something about the bytes — `FileTable.dat`'s Integrity
+  flag says an MFS/EFS file ends with an `MFS_Integrity_Table`, and its EFST
+  offsets say where an EFS file starts — what the engine then reads out of the
+  flash is a parsed fact and belongs here (`MFSFile.contentSize`/`.integrity`,
+  `EFSVolume.files`). The file's *name* and *path*, read from the same table,
+  do not: those are the panel's lookup (`MFSFileNames`, `EFSFileNames`).
 
 ## Shape (starting point; bootstrap materializes it)
 

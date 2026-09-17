@@ -20,13 +20,15 @@ public enum MEACurator {
     /// The presented tree roots, in reading order: identity first, then the
     /// structural groups, then the fact groups of whatever else decoded.
     ///
-    /// `mfsNames` is the one thing here that does not come out of the analysis:
-    /// an FTBL-mode MFS volume's low-level files have no name in their bytes,
-    /// so the panel looks theirs up in `FileTable.dat` and hands the answer in
-    /// (`MFSFileNames`). `.none` — the default — is the tree as it reads before
+    /// `mfsNames` and `efsNames` are the one thing here that does not come out
+    /// of the analysis: an FTBL-mode MFS volume's low-level files and an EFS
+    /// volume's files have no name in their bytes, so the panel looks theirs up
+    /// in `FileTable.dat` and hands the answer in (`MFSFileNames`,
+    /// `EFSFileNames`). `.none` — the default — is the tree as it reads before
     /// the table arrives, and on every volume that names its own files.
     public static func present(_ analysis: FirmwareAnalysis,
-                               mfsNames: MFSFileNames = .none) -> [MEANode] {
+                               mfsNames: MFSFileNames = .none,
+                               efsNames: EFSFileNames = .none) -> [MEANode] {
         var roots: [MEANode] = []
         let add: (MEANode?) -> Void = { if let n = $0 { roots.append(n) } }
 
@@ -40,7 +42,7 @@ public enum MEACurator {
 
         // Fact groups — everything else a dump carried, each only when present.
         add(backupGroup(analysis))
-        add(efsGroup(analysis))
+        add(efsGroup(analysis, efsNames))
         add(oemGroup(analysis))
         add(mmeGroup(analysis))
         add(gscGroup(analysis))
@@ -517,11 +519,72 @@ public enum MEACurator {
         6: "Intel Configuration", 7: "OEM Configuration", 9: "Manifest Backup",
     ]
 
-    private static func efsGroup(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func efsGroup(_ a: FirmwareAnalysis,
+                                 _ names: EFSFileNames) -> MEANode? {
         guard let efs = a.efsVolume else { return nil }
+        // The volume's own facts are dumped field by field, minus the file list
+        // — that is rows, not a field, and it is the one part of the volume the
+        // table had to be read for.
+        var fields = MEAValueText.fields(of: efs)
+        fields.removeAll { $0.label == "files" }
+        // Where the names on the file rows came from, on the same terms as the
+        // MFS volume's row: the tables read, the revision asked for, and
+        // whether either half was assumed.
+        if let table = names.tableLabel {
+            append(&fields, "File Table", table)
+        }
+        var children: [MEANode] = []
+        if !efs.files.isEmpty {
+            let rows = efs.files.map { efsFileRow($0, names) }
+            children.append(MEANode(path: [], title: "Files",
+                                    subtitle: MEAText.count(rows.count, "file"),
+                                    children: rows))
+        }
         return MEANode(path: [], title: "EFS Volume",
                        subtitle: MEAText.offset(efs.offset),
-                       fields: MEAValueText.fields(of: efs))
+                       fields: fields, children: children)
+    }
+
+    /// One EFS file. Its name and path are the two tables' text; the sizes and
+    /// the Integrity tail are the volume's own bytes.
+    ///
+    /// The data-area offset is among the fields and not a range on the node:
+    /// it is an offset into the volume's Data pages concatenated in index
+    /// order, so a long file occupies no one stretch of the dump (`EFSFile`).
+    private static func efsFileRow(_ file: EFSFile, _ names: EFSFileNames) -> MEANode {
+        var fields: [MEAField] = []
+        append(&fields, "VFS ID", String(file.fileID))
+        append(&fields, "Size", MEAText.size(file.contentSize))
+        if file.contentSize != file.storedSize {
+            // What the file's own metadata says it stores, Integrity included
+            // — the difference is the table taken off the end.
+            append(&fields, "Stored Size", MEAText.size(file.storedSize))
+        }
+        append(&fields, "Data Offset", MEAText.hex(file.dataOffset))
+        append(&fields, "Metadata Unknown", MEAText.hex(file.metadataUnknown))
+        let record = names.record(for: file.fileID)
+        if let record {
+            append(&fields, "Path", record.path)
+            append(&fields, "File ID", "0x\(record.fileID)")
+            append(&fields, "Integrity", MEAText.yesNo(record.integrity))
+            append(&fields, "Encryption", MEAText.yesNo(record.encryption))
+            append(&fields, "Anti-Replay", MEAText.yesNo(record.antiReplay))
+            append(&fields, "Group ID", MEAText.hex(record.groupID))
+            append(&fields, "User ID", MEAText.hex(record.userID))
+        }
+        var children: [MEANode] = []
+        if let integrity = file.integrity {
+            children.append(MEANode(path: [], title: "Integrity",
+                                    subtitle: MEAText.size(integrity.size),
+                                    fields: MEAValueText.fields(of: integrity)))
+        }
+        let name = names.name(for: file.fileID)
+        return MEANode(path: [], title: name ?? "File \(file.fileID)",
+                       subtitle: name == nil
+                           ? MEAText.size(file.contentSize)
+                           : "#\(file.fileID) · \(MEAText.size(file.contentSize))",
+                       fields: fields, children: children,
+                       isEmptySection: file.contentSize == 0)
     }
 
     private static func oemGroup(_ a: FirmwareAnalysis) -> MEANode? {
@@ -569,7 +632,7 @@ public enum MEACurator {
         let marks = MEATreeMarks.metadata(a)
         let children = rows.enumerated().map { i, r -> MEANode in
             var fields = MEAValueText.fields(of: r)
-            fields.removeAll { $0.label == "Unknown0" }   // raw open word, low signal
+            fields.removeAll { $0.label == "unknown0" }   // raw open word, low signal
             return MEANode(path: [], title: "R\(r.variant.rawValue.uppercased()) #\(r.id)",
                            fields: fields, marks: marks)
         }
