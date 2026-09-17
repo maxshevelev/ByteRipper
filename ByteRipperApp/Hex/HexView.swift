@@ -1396,22 +1396,24 @@ final class HexView: NSView, NSViewToolTipOwner {
         let lift = Self.indicatorLift(atPhase: indicatorBouncePhase())
         let elevation = Self.indicatorElevation(atLift: lift)
         for loop in loops where loop.count >= 3 {
-            let path = roundedContourPath(loops: [loop], radius: Self.mirrorContourRadius)
-            if lift > 0 {
-                // The plate grows about its own centre and does not move: it
-                // must stay lined up with the bytes it is highlighting, so the
-                // hop expands it evenly in every direction rather than lifting
-                // it off its row. What says "higher" is the shadow.
-                //
-                // Each column's loop scales about its own centre — scaling the
-                // two together would drag the hex and text plates towards each
-                // other instead of growing them in place.
-                let box = path.bounds
-                var transform = AffineTransform(translationByX: box.midX, byY: box.midY)
-                transform.scale(elevation.scale)
-                transform.translate(x: -box.midX, y: -box.midY)
-                path.transform(using: transform)
-            }
+            // The plate grows by pushing its own outline **outward** — every
+            // edge by the same couple of points — and does not move: it must
+            // stay lined up with the bytes it is highlighting, so the hop
+            // expands it evenly in every direction rather than lifting it off
+            // its row. What says "higher" is the shadow.
+            //
+            // Outward by a fixed distance rather than scaled about the centre.
+            // A scale is proportional to what it scales, so on a long match —
+            // one crossing a row, or twenty bytes of a string — the ends
+            // travelled points away from the bytes they mark while the top and
+            // bottom barely moved: the plate came unstuck from its own
+            // highlight. An outset keeps the border the same distance off the
+            // glyphs everywhere, on a two-byte match and on a two-row one
+            // alike, and the corner radius grows with it so the outline stays
+            // concentric with the one at rest.
+            let outline = Self.outsetContour(loop, by: elevation.outset)
+            let path = roundedContourPath(
+                loops: [outline], radius: Self.mirrorContourRadius + elevation.outset)
             // The shadow is drawn from the plate's own geometry rather than by
             // `NSShadow`, and that is a correctness decision, not a stylistic
             // one: an `NSShadow` offset is interpreted in whatever coordinate
@@ -1461,9 +1463,12 @@ final class HexView: NSView, NSViewToolTipOwner {
     /// second the jump registered as a flicker, which is worse than nothing —
     /// the eye reads it as a redraw glitch.
     static let indicatorBounceDuration: TimeInterval = 0.55
-    /// How much bigger the plate gets, and how much deeper its shadow, at the
-    /// top of the hop. The plate does not move — see `drawFindIndicator`.
-    static let indicatorLiftScale: CGFloat = 0.14
+    /// How far the plate's outline stands out past its resting one, and how
+    /// much deeper its shadow, at the top of the hop. In **points**, not as a
+    /// fraction of the plate: the border keeps the same distance off the bytes
+    /// on a match of any length (see `drawFindIndicator`). The plate does not
+    /// move.
+    static let indicatorLiftOutset: CGFloat = 2.5
     /// The key shadow drops and spreads as the bubble climbs; the ambient halo
     /// widens with it, so the plate keeps its edge on the light side too.
     static let indicatorLiftShadowDrop: CGFloat = 2
@@ -1539,9 +1544,9 @@ final class HexView: NSView, NSViewToolTipOwner {
     /// bigger shadow" is a fact about the code rather than about three call
     /// sites.
     static func indicatorElevation(atLift lift: CGFloat)
-        -> (scale: CGFloat, ambient: IndicatorShadow, key: IndicatorShadow) {
+        -> (outset: CGFloat, ambient: IndicatorShadow, key: IndicatorShadow) {
         let clamped = min(max(lift, 0), 1)
-        return (scale: 1 + indicatorLiftScale * clamped,
+        return (outset: indicatorLiftOutset * clamped,
                 ambient: IndicatorShadow(
                     offset: .zero,
                     blur: indicatorAmbientBlur + indicatorLiftAmbientBlur * clamped,
@@ -1638,15 +1643,15 @@ final class HexView: NSView, NSViewToolTipOwner {
         let firstRow = Int(match.lowerBound / UInt64(HexLayout.bytesPerRow))
         let lastRow = Int((match.upperBound - 1) / UInt64(HexLayout.bytesPerRow))
         let rows = layout.rowFrame(row: firstRow).union(layout.rowFrame(row: lastRow))
-        // At the top of the hop the plate is `indicatorLiftScale` bigger about
-        // its own centre, so each edge moves out by half of that.
-        let growth = Self.indicatorLiftScale / 2
+        // At the top of the hop every edge of the plate stands
+        // `indicatorLiftOutset` further out than at rest, whatever the match's
+        // size — so the margin is a constant too.
         let peak = Self.indicatorElevation(atLift: 1)
         let reach = max(peak.ambient.blur + abs(peak.ambient.offset.width),
                         peak.key.blur + max(abs(peak.key.offset.width),
                                             abs(peak.key.offset.height)))
-        return rows.insetBy(dx: -(rows.width * growth + reach + Self.mirrorContourPadding),
-                            dy: -(rows.height * growth + reach + Self.mirrorContourPadding))
+        let margin = peak.outset + reach + Self.mirrorContourPadding
+        return rows.insetBy(dx: -margin, dy: -margin)
     }
 
     /// Fills the selection for one row, leaving out the columns the find
@@ -2211,6 +2216,39 @@ final class HexView: NSView, NSViewToolTipOwner {
             path.close()
         }
         return path
+    }
+
+    /// `loop` pushed `distance` outward: the same closed outline, standing that
+    /// far off the cells on every side.
+    ///
+    /// The contours here are rectilinear — axis-aligned edges, clockwise, with
+    /// no vertex that is not a corner (`deduplicated` removes those) — and for
+    /// such a polygon the offset is exact and local: each edge moves along its
+    /// own outward normal, and a corner lands where its two moved edges meet,
+    /// which is the corner plus `distance` on each axis. That holds for the
+    /// staircase's inward corners too, where the two normals point along
+    /// different axes and the notch closes up by `distance` rather than opening.
+    ///
+    /// Pure and static, so the geometry is asserted without a view.
+    static func outsetContour(_ loop: [CGPoint], by distance: CGFloat) -> [CGPoint] {
+        guard distance != 0, loop.count >= 3 else { return loop }
+        let n = loop.count
+        return (0..<n).map { i in
+            let point = loop[i]
+            let incoming = outwardNormal(from: loop[(i - 1 + n) % n], to: point)
+            let outgoing = outwardNormal(from: point, to: loop[(i + 1) % n])
+            return CGPoint(x: point.x + (incoming.x + outgoing.x) * distance,
+                           y: point.y + (incoming.y + outgoing.y) * distance)
+        }
+    }
+
+    /// The outward normal of one edge of a contour, which these are always
+    /// wound clockwise in: the edge direction turned a quarter turn, in a
+    /// flipped space where +y is down. A rectangle's top edge runs left to
+    /// right, and its outward normal is up.
+    private static func outwardNormal(from: CGPoint, to: CGPoint) -> CGPoint {
+        let direction = edgeDirection(from: from, to: to)
+        return CGPoint(x: direction.y, y: -direction.x)
     }
 
     /// Unit vector along the edge `from → to`. Consecutive contour vertices are

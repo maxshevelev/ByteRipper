@@ -412,12 +412,20 @@ Visual states:
      rose.
    - each step of Find Next / Find Previous makes it **hop**: it comes off the
      page and settles back, once clearly and once smaller, over about half a
-     second. The plate grows about its **own centre** and does not move — it
-     must stay lined up with the bytes it is highlighting, so it expands evenly
-     in every direction; what says "higher" is the shadow growing wider, softer
-     and deeper, not a jump upwards. The animation must be slow enough to see;
-     a quarter of a second reads as a redraw glitch. A wrap onto a lone match
-     hops too, or the press would look swallowed.
+     second. The plate does not move — it must stay lined up with the bytes it
+     is highlighting — and it grows by pushing its **outline outward**, every
+     edge by the same couple of points; what says "higher" is the shadow
+     growing wider, softer and deeper, not a jump upwards. Outward by a fixed
+     distance rather than **scaled** about its centre: a scale is proportional
+     to what it scales, so on a long match — a string, or a span crossing a row
+     — the ends travelled points away from the bytes they mark while the top
+     and bottom hardly moved, and the plate came unstuck from its own
+     highlight. An outset keeps the border the same distance off the glyphs
+     everywhere, on a two-byte match and on a two-row one alike, and the corner
+     radius grows with it so the outline stays concentric with the resting one.
+     The animation must be slow enough to see; a quarter of a second reads as a
+     redraw glitch. A wrap onto a lone match hops too, or the press would look
+     swallowed.
    - the ink over it is forced **black**, because that colour is the same in
      both appearances (the platform's own instruction). A modified byte keeps
      its red — an unsaved edit outranks the convention — and the muted

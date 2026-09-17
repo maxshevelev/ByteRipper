@@ -360,8 +360,15 @@ final class FindHighlightTests: XCTestCase {
                               row: Int, columns: ClosedRange<Int>, phase: CGFloat) throws
         -> (below: CGFloat, above: CGFloat, right: CGFloat, left: CGFloat) {
         let layout = view.hexLayout
+        // The plate as this phase draws it: the hop pushes its outline outward,
+        // so the patches follow it out. Sampling where the resting plate's edge
+        // was would put the peak's own yellow inside the patch, and yellow is
+        // not a shadow — the reading would fall as the plate climbed.
+        let outset = HexView.indicatorElevation(atLift: HexView.indicatorLift(atPhase: phase))
+            .outset
         let plate = layout.hexByteFrame(row: row, column: columns.lowerBound)
             .union(layout.hexByteFrame(row: row, column: columns.upperBound))
+            .insetBy(dx: -outset, dy: -outset)
         // Close in, where a halo meant to edge the plate has to show — the
         // reach is a couple of points, so this samples right against it.
         let gap: CGFloat = 1.5
@@ -428,12 +435,14 @@ final class FindHighlightTests: XCTestCase {
     func testHeightGrowsTheShadow() {
         let rest = HexView.indicatorElevation(atLift: 0)
         let top = HexView.indicatorElevation(atLift: 1)
-        XCTAssertEqual(rest.scale, 1, accuracy: 0.0001)
+        XCTAssertEqual(rest.outset, 0, accuracy: 0.0001,
+                       "at rest the outline is the resting one")
         XCTAssertEqual(rest.key.offset.width, HexView.indicatorShadowOffset.width,
                        accuracy: 0.0001, "at rest the shadow is the resting one")
         XCTAssertEqual(rest.key.offset.height, HexView.indicatorShadowOffset.height,
                        accuracy: 0.0001)
-        XCTAssertGreaterThan(top.scale, rest.scale)
+        XCTAssertGreaterThan(top.outset, rest.outset,
+                             "the outline stands further out at the top of the hop")
         XCTAssertEqual(rest.ambient.offset, .zero,
                        "the halo has no offset: it is the plate's edge on every side")
         XCTAssertGreaterThan(top.ambient.blur, rest.ambient.blur,
@@ -497,6 +506,114 @@ final class FindHighlightTests: XCTestCase {
         XCTAssertGreaterThan(top.bottom, rest.bottom, "and downward by as much")
     }
 
+    /// The outset itself, on the shape the dump actually draws: a rectangle,
+    /// clockwise in the flipped space the rows are laid out in. Every edge
+    /// moves out by the distance asked for, and the rectangle stays a
+    /// rectangle.
+    func testTheOutsetPushesEveryEdgeOutByTheSameDistance() {
+        let rect = [CGPoint(x: 10, y: 20), CGPoint(x: 50, y: 20),
+                    CGPoint(x: 50, y: 36), CGPoint(x: 10, y: 36)]
+        XCTAssertEqual(HexView.outsetContour(rect, by: 2),
+                       [CGPoint(x: 8, y: 18), CGPoint(x: 52, y: 18),
+                        CGPoint(x: 52, y: 38), CGPoint(x: 8, y: 38)])
+        XCTAssertEqual(HexView.outsetContour(rect, by: 0), rect,
+                       "at rest the outline is untouched")
+    }
+
+    /// A match that starts mid-row and ends mid-row below is traced as a
+    /// staircase, and its inward corners must open outward with the rest: the
+    /// notch closes up by the distance rather than gaping.
+    func testTheOutsetOpensAStaircasesInwardCornersToo() {
+        // Three rows, 16 pt each: the span starts at x = 30 on the first row
+        // and ends at x = 60 on the last — the eight-corner outline
+        // `contour(of:…)` builds, wound clockwise.
+        let staircase = [CGPoint(x: 30, y: 0), CGPoint(x: 100, y: 0),
+                         CGPoint(x: 100, y: 32), CGPoint(x: 60, y: 32),
+                         CGPoint(x: 60, y: 48), CGPoint(x: 0, y: 48),
+                         CGPoint(x: 0, y: 16), CGPoint(x: 30, y: 16)]
+        let grown = HexView.outsetContour(staircase, by: 2)
+        XCTAssertEqual(grown.count, staircase.count, "the same outline, further out")
+        XCTAssertEqual(grown, [CGPoint(x: 28, y: -2), CGPoint(x: 102, y: -2),
+                               CGPoint(x: 102, y: 34), CGPoint(x: 62, y: 34),
+                               CGPoint(x: 62, y: 50), CGPoint(x: -2, y: 50),
+                               CGPoint(x: -2, y: 14), CGPoint(x: 28, y: 14)])
+    }
+
+    /// The complaint the outset answers: a hop that **scaled** the plate grew
+    /// it in proportion to its own size, so on a long match the ends travelled
+    /// points away from the bytes they mark while the top and bottom hardly
+    /// moved — the plate came unstuck from its own highlight. The growth has to
+    /// be the same distance on every side, and the same on a two-byte match as
+    /// on a twelve-byte one.
+    func testTheHopGrowsALongMatchByTheSameDistanceAsAShortOne() throws {
+        /// How much wider and taller the yellow gets at the top of the hop, for
+        /// a match of `pattern` sitting at the start of row 1.
+        func growth(of pattern: [UInt8]) throws -> (across: CGFloat, down: CGFloat) {
+            var bytes = [UInt8](repeating: 0x11, count: 48)
+            bytes.replaceSubrange(16..<(16 + pattern.count), with: pattern)
+            let (controller, window) = try makeController(bytes)
+            let view = try hexView(window)
+            try search(pattern.map { String(format: "%02X", $0) }.joined(separator: " "),
+                       in: controller, window)
+
+            let layout = view.hexLayout
+            let row = layout.rowFrame(row: 1)
+            let plate = layout.hexByteFrame(row: 1, column: 0)
+                .union(layout.hexByteFrame(row: 1, column: pattern.count - 1))
+            // The hex column's plate only, with room around it for the growth:
+            // the text column's plate is yellow too, and a band reaching as far
+            // as that one reports the gap between them the moment the hop
+            // brings its edge inside.
+            let band = CGRect(x: 0, y: row.minY - 12,
+                              width: plate.maxX + 12, height: row.height + 24)
+
+            /// The bounding box of the yellow inside `band`.
+            func yellowBox(atPhase phase: CGFloat) throws -> CGRect {
+                view.indicatorBouncePhaseForTests = phase
+                view.needsDisplay = true
+                let rep = try render(view)
+                view.indicatorBouncePhaseForTests = nil
+                let scale = CGFloat(rep.pixelsWide) / view.bounds.width
+                var minX = CGFloat.greatestFiniteMagnitude
+                var maxX = -CGFloat.greatestFiniteMagnitude
+                var minY = CGFloat.greatestFiniteMagnitude
+                var maxY = -CGFloat.greatestFiniteMagnitude
+                for y in Int(band.minY * scale)...Int(band.maxY * scale) {
+                    for x in Int(band.minX * scale)...Int(band.maxX * scale) {
+                        guard let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB)
+                        else { continue }
+                        guard c.redComponent > 0.8, c.greenComponent > 0.8,
+                              c.blueComponent < 0.4 else { continue }
+                        minX = min(minX, CGFloat(x) / scale)
+                        maxX = max(maxX, CGFloat(x) / scale)
+                        minY = min(minY, CGFloat(y) / scale)
+                        maxY = max(maxY, CGFloat(y) / scale)
+                    }
+                }
+                XCTAssertLessThan(minX, maxX, "the plate must be on screen to be measured")
+                return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+            }
+
+            let rest = try yellowBox(atPhase: 1)
+            let peak = try yellowBox(atPhase: 0.31)
+            return (across: peak.width - rest.width, down: peak.height - rest.height)
+        }
+
+        // Both sides of each axis, so twice the outset.
+        let expected = 2 * HexView.indicatorLiftOutset
+        let short = try growth(of: [0xAA, 0xBB])
+        let long = try growth(of: Array(0xA0...0xAB))  // twelve bytes
+
+        XCTAssertEqual(short.across, expected, accuracy: 1.2,
+                       "a short match grows by the outset on each side")
+        XCTAssertEqual(short.down, expected, accuracy: 1.2)
+        XCTAssertEqual(long.across, expected, accuracy: 1.2,
+                       "and a long one by exactly as much — not in proportion to its length")
+        XCTAssertEqual(long.down, expected, accuracy: 1.2)
+        XCTAssertEqual(long.across, short.across, accuracy: 1.2,
+                       "the two grow alike, which is the whole point")
+    }
+
     /// The hop is slow enough to be seen: a quarter of a second read as a
     /// redraw glitch rather than as movement.
     func testTheHopIsSlowEnoughToRead() {
@@ -523,11 +640,10 @@ final class FindHighlightTests: XCTestCase {
             .union(layout.hexByteFrame(row: 1, column: 3))
         let damage = try XCTUnwrap(view.indicatorDamageRect())
 
-        // The peak plate: grown about its centre, then its shadow's furthest
-        // reach around that.
+        // The peak plate: its outline pushed outward, then its shadow's
+        // furthest reach around that.
         let peak = HexView.indicatorElevation(atLift: 1)
-        let grown = plate.insetBy(dx: -plate.width * HexView.indicatorLiftScale / 2,
-                                  dy: -plate.height * HexView.indicatorLiftScale / 2)
+        let grown = plate.insetBy(dx: -peak.outset, dy: -peak.outset)
         let reach = max(peak.ambient.blur,
                         peak.key.blur + max(peak.key.offset.width, peak.key.offset.height))
         let painted = grown.insetBy(dx: -(reach + HexView.mirrorContourPadding),

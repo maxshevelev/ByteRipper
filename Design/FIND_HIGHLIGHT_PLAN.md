@@ -49,11 +49,19 @@ in `draw(_:)`, and a layer would cover them. What is taken from the platform is
 its frame clock: `NSView.displayLink(target:selector:)` (macOS 14) drives the
 hop, not a `Timer`.
 
-The hop itself is one idea — height — with three consequences: the plate grows
-about its own centre (never moving off the bytes it marks), and its shadow grows
-wider, softer and deeper. Half a second, one clear jump and a small second one.
-A quarter of a second was tried and reads as a redraw glitch rather than as
+The hop itself is one idea — height — with three consequences: the plate's
+outline is pushed outward (never moving off the bytes it marks), and its shadow
+grows wider, softer and deeper. Half a second, one clear jump and a small second
+one. A quarter of a second was tried and reads as a redraw glitch rather than as
 movement.
+
+Outward by a fixed number of points, not by a scale about the centre: scaling
+grows a plate in proportion to its own size, so a long match's ends swung points
+clear of the bytes they mark while its top and bottom barely moved. The outset is
+exact on these outlines — they are rectilinear and clockwise, so each edge moves
+along its own normal and each corner lands where its two moved edges meet
+(`outsetContour`) — and the corner radius grows with it, which keeps the moving
+outline concentric with the resting one.
 
 The shadow is drawn from the plate's own geometry — concentric strokes of the
 same outline — rather than with `NSShadow`, and that is a correctness decision:
