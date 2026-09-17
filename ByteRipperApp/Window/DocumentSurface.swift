@@ -226,6 +226,22 @@ import ALSplitView
         }
     }
 
+    // MARK: - What the surface shows
+
+    /// Puts `newView` in the middle pane, replacing whatever was there — the
+    /// empty state, one file pane, or a comparison.
+    func setContent(_ newView: NSView) {
+        contentHost.subviews.forEach { $0.removeFromSuperview() }
+        newView.translatesAutoresizingMaskIntoConstraints = false
+        contentHost.addSubview(newView)
+        NSLayoutConstraint.activate([
+            newView.topAnchor.constraint(equalTo: contentHost.topAnchor),
+            newView.bottomAnchor.constraint(equalTo: contentHost.bottomAnchor),
+            newView.leadingAnchor.constraint(equalTo: contentHost.leadingAnchor),
+            newView.trailingAnchor.constraint(equalTo: contentHost.trailingAnchor),
+        ])
+    }
+
     // MARK: - Panel widths
 
     /// The minimap panel's width as the split currently has it — what the tool

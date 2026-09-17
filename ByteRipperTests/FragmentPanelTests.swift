@@ -1,0 +1,228 @@
+import XCTest
+@testable import ByteRipper
+
+/// `Design/FRAGMENT_PANELS_PLAN.md`: a part of a file opened as a panel over
+/// the window that holds it — the geometry that leaves the parent showing, the
+/// slide, the dock of pills, and the marks a panel keeps to itself.
+@MainActor
+final class FragmentPanelTests: XCTestCase {
+    /// A real controller in a real window, laid out, so the panel host has a
+    /// size to place panels in.
+    private func makeController() -> (MainViewController, NSWindow) {
+        let controller = MainViewController()
+        let window = makeTestWindow()
+        window.contentViewController = controller
+        window.makeKeyAndOrderFront(nil)
+        window.contentView?.layoutSubtreeIfNeeded()
+        return (controller, window)
+    }
+
+    private func cleanup(_ controller: MainViewController) {
+        for id in controller.fragments.dock.panels {
+            controller.fragments.close(id, animated: false)
+        }
+        controller.windowModel.pane1.close()
+        controller.windowModel.pane2.close()
+    }
+
+    private func host(of controller: MainViewController) throws -> FragmentPanelHost {
+        try XCTUnwrap(descendants(of: controller.view, FragmentPanelHost.self).first)
+    }
+
+    private func strip(of controller: MainViewController) throws -> FragmentDockStrip {
+        try XCTUnwrap(descendants(of: controller.view, FragmentDockStrip.self).first)
+    }
+
+    // MARK: - The geometry
+
+    /// The panel stops short of the top so the parent's header — the name of
+    /// the file the part came out of — stays readable.
+    func testThePanelLeavesTheParentsHeaderShowing() {
+        let height = FragmentPanelLayout.panelHeight(hostHeight: 600)
+        XCTAssertEqual(height, 600 - FragmentPanelLayout.parentPeek)
+        XCTAssertGreaterThan(FragmentPanelLayout.parentPeek, FilePaneView.headerHeight,
+                             "the peek must show a whole header, not most of one")
+    }
+
+    /// In a short window the peek gives way before the panel does: the part is
+    /// what was asked for.
+    func testAShortAreaGivesUpThePeekBeforeTheMinimum() {
+        let short = FragmentPanelLayout.minimumPanelHeight + FragmentPanelLayout.parentPeek - 10
+        XCTAssertEqual(FragmentPanelLayout.panelHeight(hostHeight: short),
+                       FragmentPanelLayout.minimumPanelHeight,
+                       "the panel keeps its minimum and the peek takes the loss")
+    }
+
+    /// And in an area smaller than the minimum the panel takes what there is
+    /// rather than hanging off the bottom.
+    func testThePanelNeverOutgrowsItsArea() {
+        for height in [0.0, 40.0, 100.0, 159.0, 200.0, 600.0, 2000.0] {
+            let panel = FragmentPanelLayout.panelHeight(hostHeight: height)
+            XCTAssertGreaterThanOrEqual(panel, 0, "at host height \(height)")
+            XCTAssertLessThanOrEqual(panel, height, "at host height \(height)")
+        }
+    }
+
+    // MARK: - Opening
+
+    /// Opening a part raises a panel and puts a pill in the dock, named after
+    /// the part.
+    func testOpeningAFragmentRaisesAPanelAndPutsAPillInTheDock() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+
+        let id = try XCTUnwrap(controller.openFragment([0xAA, 0xBB], named: "NVRAM",
+                                                       animated: false))
+
+        XCTAssertEqual(controller.fragments.count, 1)
+        XCTAssertEqual(controller.fragments.expanded, id, "what you asked for is on screen")
+        let pills = try strip(of: controller).pillsForTesting
+        XCTAssertEqual(pills.map(\.title), ["NVRAM"])
+        XCTAssertTrue(pills[0].isUp, "the pill of the panel in front is the filled one")
+    }
+
+    /// The panel is an ordinary hex panel: the header with the name is the
+    /// pane's own, not chrome invented for the panel.
+    func testThePanelShowsTheFragmentInAPaneOfItsOwn() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+
+        let id = try XCTUnwrap(controller.openFragment([UInt8](0..<32), named: "ME body",
+                                                       animated: false))
+
+        let panel = try XCTUnwrap(controller.fragments.panelView(id))
+        let panes = descendants(of: panel, FilePaneView.self)
+        XCTAssertEqual(panes.count, 1, "one pane, in the panel's own surface")
+        XCTAssertEqual(controller.fragments.pane(id)?.status.fileName, "ME body")
+        XCTAssertEqual(controller.fragments.pane(id)?.fileSize, 32)
+        XCTAssertNotNil(controller.fragments.surface(id)?.minimapView,
+                        "and its own minimap, which is what makes it a surface")
+    }
+
+    /// Only one panel is ever up: opening a second folds the first, and its
+    /// view goes below the area it slides in.
+    func testASecondPanelFoldsTheFirst() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+
+        let first = try XCTUnwrap(controller.openFragment([0x01], named: "one", animated: false))
+        let second = try XCTUnwrap(controller.openFragment([0x02], named: "two", animated: false))
+
+        XCTAssertEqual(controller.fragments.expanded, second)
+        let folded = try XCTUnwrap(controller.fragments.panelView(first))
+        XCTAssertLessThan(folded.frame.maxY, 1, "the folded panel is out of the clipped area")
+        let up = try XCTUnwrap(controller.fragments.panelView(second))
+        XCTAssertEqual(up.frame.minY, 0, "and the one that is up sits on the dock's edge")
+        XCTAssertEqual(try strip(of: controller).pillsForTesting.filter(\.isUp).count, 1)
+    }
+
+    // MARK: - Folding and raising
+
+    /// Clicking the pill of the panel on screen folds it; clicking a folded
+    /// one raises it.
+    func testThePillRaisesAndFoldsItsPanel() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01], named: "one", animated: false))
+
+        controller.fragments.toggle(id, animated: false)
+        XCTAssertNil(controller.fragments.expanded, "the dump behind comes back")
+        XCTAssertEqual(controller.fragments.count, 1, "folding is not closing")
+
+        controller.fragments.toggle(id, animated: false)
+        XCTAssertEqual(controller.fragments.expanded, id)
+    }
+
+    /// With nothing up, the area the panels live in is transparent to the
+    /// pointer — otherwise a tab that had once opened a panel would have an
+    /// unreachable dump.
+    func testTheAreaIsTransparentWhileNothingIsUp() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let panelHost = try host(of: controller)
+
+        XCTAssertNil(panelHost.hitTest(NSPoint(x: 10, y: 10)), "nothing has ever been opened")
+
+        let id = try XCTUnwrap(controller.openFragment([0x01], named: "one", animated: false))
+        controller.fragments.collapse(animated: false)
+        XCTAssertTrue(panelHost.isHidden, "a folded panel leaves the panes to the pointer")
+        XCTAssertNil(panelHost.hitTest(NSPoint(x: 10, y: 10)))
+        _ = id
+    }
+
+    // MARK: - Closing
+
+    /// Closing takes the pill, lets go of the pane, and — for the last one —
+    /// takes the dock away.
+    func testClosingAPanelTakesItsPillAndTheLastOneTakesTheDock() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let first = try XCTUnwrap(controller.openFragment([0x01], named: "one", animated: false))
+        let second = try XCTUnwrap(controller.openFragment([0x02], named: "two", animated: false))
+
+        controller.fragments.close(second, animated: false)
+        XCTAssertEqual(try strip(of: controller).pillsForTesting.map(\.title), ["one"])
+        XCTAssertNil(controller.fragments.expanded,
+                     "closing the panel that was up leaves the dump showing, not the next pill")
+        XCTAssertNil(controller.fragments.pane(second))
+
+        controller.fragments.close(first, animated: false)
+        XCTAssertTrue(controller.fragments.isEmpty)
+        XCTAssertTrue(pumpUntil(1) { (try? self.strip(of: controller).frame.height) == 0 },
+                      "the dock gives its height back when the last panel goes")
+    }
+
+    /// A panel let go of rather than closed keeps its document: the pane is
+    /// handed over whole, which is what tearing one off into a tab needs.
+    func testReleasingAPanelHandsBackItsPaneStillOpen() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part", animated: false))
+
+        let pane = try XCTUnwrap(controller.fragments.release(id, animated: false))
+
+        XCTAssertTrue(controller.fragments.isEmpty, "the dock has let it go")
+        XCTAssertTrue(pane.isOpen, "but the document is still open, to be put somewhere")
+        XCTAssertEqual(pane.fileSize, 2)
+        XCTAssertNil(pane.bookmarkStore, "it travels with no marks, to take its new home's")
+        pane.close()
+    }
+
+    // MARK: - What a panel keeps to itself
+
+    /// A part's offsets are its own, so its marks are its own: a bookmark made
+    /// in a panel is not a bookmark in the window's list.
+    func testAPanelsMarksAreItsOwn() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](0..<64), named: "part",
+                                                       animated: false))
+        let pane = try XCTUnwrap(controller.fragments.pane(id))
+
+        pane.bookmarkStore?.toggle(rowContaining: 0)
+
+        XCTAssertEqual(pane.bookmarkStore?.bookmarks.count, 1)
+        XCTAssertTrue(controller.windowModel.bookmarkStore.bookmarks.isEmpty,
+                      "the window's list is about the dump's offsets, not the part's")
+    }
+
+    /// The pill is marked once the part holds an edit — a dot, since the pill
+    /// has room for a name and no more. Not from birth: a part just taken out
+    /// is the parent's own bytes, and there is nothing to put back yet.
+    func testThePillIsMarkedOnceThePartIsEdited() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part",
+                                                       animated: false))
+        let pill = try XCTUnwrap(strip(of: controller).pillsForTesting.first)
+        XCTAssertFalse(pill.hasChanges, "nothing has been changed in it yet")
+
+        let pane = try XCTUnwrap(controller.fragments.pane(id))
+        try pane.applyToolWrites([(offset: 0, bytes: [0xFF])], named: "Patch")
+        controller.fragments.refreshDock()
+        XCTAssertTrue(pill.hasChanges, "an edit the parent has not got back is worth a dot")
+
+        controller.fragments.close(id, animated: false)
+        XCTAssertTrue(try strip(of: controller).pillsForTesting.isEmpty)
+    }
+}

@@ -482,6 +482,19 @@ final class MainViewController: NSViewController {
         surface.setMinimapPanelWidth(width, animated: animated, windowResize: windowResize)
     }
 
+    /// Where fragment panels slide in: exactly the area the panes occupy, so a
+    /// panel never covers the New Tab strip above it nor the dock below
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
+    private let fragmentHost = FragmentPanelHost()
+    /// The dock along the bottom: one pill per fragment panel this tab holds.
+    private let fragmentDockStrip = FragmentDockStrip()
+    private var fragmentDockHeight: NSLayoutConstraint?
+
+    /// The fragment panels this tab has open, and the dock they fold into.
+    private(set) lazy var fragments = FragmentPanels(host: self,
+                                                     container: fragmentHost,
+                                                     strip: fragmentDockStrip)
+
     /// The window-level drop target under the tab bar: a file let go there opens
     /// in a tab of its own (`Design/PANE_DRAG_PLAN.md`).
     ///
@@ -783,6 +796,18 @@ final class MainViewController: NSViewController {
         let stripHeight = newTabDropStrip.heightAnchor.constraint(equalToConstant: 0)
         newTabDropStripHeight = stripHeight
         contentContainer.addSubview(panelSplit)
+        // The dock takes its own height along the bottom rather than lying over
+        // the panes, the way the New Tab strip at the other end does: a dock
+        // drawn over a pane's status bar would hide the one line that says
+        // where the caret is. Zero-height until the tab has a panel.
+        fragmentDockStrip.translatesAutoresizingMaskIntoConstraints = false
+        contentContainer.addSubview(fragmentDockStrip)
+        let dockHeight = fragmentDockStrip.heightAnchor.constraint(equalToConstant: 0)
+        fragmentDockHeight = dockHeight
+        // Over the panes, under nothing: added after the split, so a panel is
+        // drawn on top of what it covers.
+        fragmentHost.translatesAutoresizingMaskIntoConstraints = false
+        contentContainer.addSubview(fragmentHost)
         NSLayoutConstraint.activate([
             // Above everything, across the whole window: the strip is about the
             // window's tabs, so it spans the minimap as well as the panes.
@@ -791,9 +816,17 @@ final class MainViewController: NSViewController {
             newTabDropStrip.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
             stripHeight,
             panelSplit.topAnchor.constraint(equalTo: newTabDropStrip.bottomAnchor),
-            panelSplit.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor),
+            panelSplit.bottomAnchor.constraint(equalTo: fragmentDockStrip.topAnchor),
             panelSplit.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
             panelSplit.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            fragmentDockStrip.leadingAnchor.constraint(equalTo: contentContainer.leadingAnchor),
+            fragmentDockStrip.trailingAnchor.constraint(equalTo: contentContainer.trailingAnchor),
+            fragmentDockStrip.bottomAnchor.constraint(equalTo: contentContainer.bottomAnchor),
+            dockHeight,
+            fragmentHost.topAnchor.constraint(equalTo: panelSplit.topAnchor),
+            fragmentHost.bottomAnchor.constraint(equalTo: panelSplit.bottomAnchor),
+            fragmentHost.leadingAnchor.constraint(equalTo: panelSplit.leadingAnchor),
+            fragmentHost.trailingAnchor.constraint(equalTo: panelSplit.trailingAnchor),
         ])
         // The map is virtualized: it pulls the bytes of its visible window as it
         // draws, and a drag or a wheel over it scrolls the panes (§19).
@@ -1263,7 +1296,7 @@ final class MainViewController: NSViewController {
     /// The `FilePaneView` for `model`, created on first use and reused
     /// thereafter — the view follows its model, so a mode change or pane
     /// re-ordering re-parents the same view instead of rebuilding it (§3.3).
-    private func paneView(for model: PaneViewModel) -> FilePaneView {
+    func paneView(for model: PaneViewModel) -> FilePaneView {
         let key = ObjectIdentifier(model)
         if let existing = paneViews[key] { return existing }
         let view = FilePaneView(viewModel: model)
@@ -1276,7 +1309,13 @@ final class MainViewController: NSViewController {
         // follows the very signal the pane headers follow — a file opened,
         // saved under a new name, reverted or detached by a join moves both at
         // once, and there is no second list of places to remember.
-        view.onHeaderChanged = { [weak self] in self?.updateWindowTitle() }
+        view.onHeaderChanged = { [weak self] in
+            self?.updateWindowTitle()
+            // A fragment panel's pill is named after its pane and marked when
+            // the parent has not got its bytes back, so both follow the very
+            // signal the header follows.
+            self?.fragments.refreshDock()
+        }
         // The results panel is a child controller of this one: containment is
         // what makes its appear/disappear callbacks fire, and it is what will
         // let the same panel be presented some other way later. Its *view*
@@ -1285,6 +1324,13 @@ final class MainViewController: NSViewController {
         addChild(view.searchResults)
         paneViews[key] = view
         return view
+    }
+
+    /// Drops the view built for `model` — what a closed fragment panel leaves
+    /// behind. The window's own panes are persistent objects and never reach
+    /// this; a panel's pane goes when the panel does.
+    func forgetPaneView(of model: PaneViewModel) {
+        paneViews.removeValue(forKey: ObjectIdentifier(model))
     }
 
     /// What the window (and so its tab) is called: the files it holds.
@@ -1316,15 +1362,7 @@ final class MainViewController: NSViewController {
     }
 
     private func setContentView(_ newView: NSView) {
-        contentHost.subviews.forEach { $0.removeFromSuperview() }
-        newView.translatesAutoresizingMaskIntoConstraints = false
-        contentHost.addSubview(newView)
-        NSLayoutConstraint.activate([
-            newView.topAnchor.constraint(equalTo: contentHost.topAnchor),
-            newView.bottomAnchor.constraint(equalTo: contentHost.bottomAnchor),
-            newView.leadingAnchor.constraint(equalTo: contentHost.leadingAnchor),
-            newView.trailingAnchor.constraint(equalTo: contentHost.trailingAnchor),
-        ])
+        surface.setContent(newView)
     }
 
     /// Opens the strip for a drag's lifetime, or closes it when the drag is over.
@@ -1607,6 +1645,34 @@ final class MainViewController: NSViewController {
             )
         )
         tab.apply(mode: .singleFile)
+    }
+
+    // MARK: - Fragment panels (Design/FRAGMENT_PANELS_PLAN.md)
+
+    /// Opens a part of one of this tab's files as a panel over it: a zone, a
+    /// decompressed body, bytes a tool-module handed over.
+    ///
+    /// The panel is where a part opens — there is no second route, and the tab
+    /// stays what a tab is, a comparison.
+    @discardableResult
+    func openFragment(_ bytes: [UInt8], named name: String,
+                      origin: DocumentOrigin? = nil,
+                      animated: Bool = true) -> FragmentDock.PanelID? {
+        fragments.open(bytes, named: name, origin: origin, animated: animated)
+    }
+
+    /// Gives the dock its height, or takes it away when the last panel closes.
+    /// Called by the panels themselves, which know when that happens.
+    func setFragmentDockVisible(_ visible: Bool) {
+        guard let dockHeight = fragmentDockHeight else { return }
+        let target: CGFloat = visible ? FragmentDockStrip.height : 0
+        guard dockHeight.constant != target else { return }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = visible ? 0.12 : 0.10
+            context.allowsImplicitAnimation = true
+            dockHeight.animator().constant = target
+            contentContainer.layoutSubtreeIfNeeded()
+        }
     }
 
     // MARK: - Update in Parent

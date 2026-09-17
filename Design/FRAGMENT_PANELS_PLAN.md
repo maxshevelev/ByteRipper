@@ -70,8 +70,16 @@ right for them.
 ```
 
 The panel is anchored to the dock strip and inset from the top of the content
-area. The inset is **at least the New Tab strip's height**, so a panel can be
-dragged out to a tab while it is up — the strip has to be reachable above it.
+area by a pane header's height and a little over. That inset is the whole point
+of the shape: what stays showing is the **header of the file the part came out
+of**, so its name is readable while you work on the part. A panel you cannot see
+the parent behind is a tab with a shadow.
+
+The area a panel slides in is exactly the area the panes occupy — below the New
+Tab strip and above the dock — so a panel never covers either, and the strip
+stays reachable for dragging a panel out to a tab while one is up. In a window
+too short for the panel to be useful the peek gives way before the panel does,
+and in one shorter still the panel takes what there is.
 
 At most one panel is expanded. Clicking another pill folds the open one down and
 raises that one, in one animation.
