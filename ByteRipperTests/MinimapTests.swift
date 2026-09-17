@@ -1943,7 +1943,7 @@ final class MinimapTests: XCTestCase {
         // Two occurrences, at an eighth and at five eighths of the file.
         bytes.replaceSubrange((size / 8)..<(size / 8 + 2), with: [0xDE, 0xAD])
         bytes.replaceSubrange((size * 5 / 8)..<(size * 5 / 8 + 2), with: [0xDE, 0xAD])
-        let (controller, window, panel) = try makeOverviewWindow(bytes)
+        let (controller, _, panel) = try makeOverviewWindow(bytes)
         let pane = controller.windowModel.pane1
         XCTAssertTrue(panel.matchOverlays.allSatisfy { $0.matched.allSatisfy { $0 == 0 } },
                       "no search, no strokes")

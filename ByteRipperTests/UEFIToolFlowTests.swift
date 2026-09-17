@@ -413,7 +413,7 @@ final class UEFIToolFlowTests: XCTestCase {
         // that is clickable.
         let title = try summary(panel, prefix: "UEFI image")
         XCTAssertTrue(
-            (title.gestureRecognizers ?? []).contains(where: { $0 is NSClickGestureRecognizer }),
+            title.gestureRecognizers.contains(where: { $0 is NSClickGestureRecognizer }),
             "the title must be clickable"
         )
 
@@ -447,7 +447,7 @@ final class UEFIToolFlowTests: XCTestCase {
     /// reading and leaves the row shut; the row opens when there is something
     /// in it, and stays open.
     func testARowOpensOnceWhenItsBranchIsThere() throws {
-        let controller = try open(UEFITestImage.make())
+        _ = try open(UEFITestImage.make())
         let outline = try outline()
 
         // A click on the disclosure triangle. The branch has not been read, so

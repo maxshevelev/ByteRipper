@@ -10,17 +10,30 @@
 // in `Signing.local.xcconfig`, which git ignores:
 //
 //     DEVELOPMENT_TEAM = <your team>
+//     CODE_SIGN_STYLE = Automatic
+//     CODE_SIGN_IDENTITY = Apple Development
 //
-// Find it with:
+// Find the team with:
 //
 //     security find-certificate -a -c "Apple Development" -p | openssl x509 -noout -subject
 //
-// — the team is the `OU` field. Without the file the app falls back to ad-hoc
+// — it is the `OU` field. Without the file the app falls back to ad-hoc
 // signing, which builds and runs; only the folder permission stops surviving
 // rebuilds.
-#include? "Signing.local.xcconfig"
 
-CODE_SIGN_STYLE = $(CODE_SIGN_STYLE_$(DEVELOPMENT_TEAM:default=none))
-CODE_SIGN_STYLE_none = Manual
-CODE_SIGN_IDENTITY = $(CODE_SIGN_IDENTITY_$(DEVELOPMENT_TEAM:default=none))
-CODE_SIGN_IDENTITY_none = -
+// The fallback, stated plainly rather than as an interpolation keyed on the
+// team. `$(CODE_SIGN_IDENTITY_$(DEVELOPMENT_TEAM:default=none))` was the clever
+// version and it was wrong twice over: with a team configured it expanded to
+// `CODE_SIGN_IDENTITY_<team>`, which nothing defines, so the identity came out
+// **empty** — that is the "isn't code signed but requires entitlements" warning
+// — and because the include sat above it, the line overrode the very local
+// file it was meant to defer to, so the machine with a real certificate was
+// building unsigned and the bookmarks were losing their identity on every
+// rebuild anyway.
+//
+// The include goes last instead: in an xcconfig the later assignment wins, so a
+// machine with a local file overrides these two and one without keeps them.
+CODE_SIGN_STYLE = Manual
+CODE_SIGN_IDENTITY = -
+
+#include? "Signing.local.xcconfig"

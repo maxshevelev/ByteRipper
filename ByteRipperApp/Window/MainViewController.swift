@@ -3016,9 +3016,10 @@ final class MainViewController: NSViewController {
     /// thousand rows, so per-match work would be the wrong way round. Each row
     /// stops early once every column is marked or after `perRowMarkLimit`
     /// matches — by then the row says all it can say at this scale.
-    private static func matchOverlay(for set: MatchSet?, current: Range<UInt64>?,
-                                     binning: OverviewBinning,
-                                     rowCount: Int, extent: UInt64) -> MinimapView.MatchOverlay {
+    nonisolated private static func matchOverlay(for set: MatchSet?, current: Range<UInt64>?,
+                                                 binning: OverviewBinning,
+                                                 rowCount: Int,
+                                                 extent: UInt64) -> MinimapView.MatchOverlay {
         guard let set, set.isHighlightable else { return .empty }
         let perRowMarkLimit = 32
         let rows = 0...(rowCount - 1)
@@ -3050,8 +3051,9 @@ final class MainViewController: NSViewController {
 
     /// The row bits for the find indicator alone — one range, so this is what a
     /// step of ‹ › costs on the map.
-    private static func currentMatchMarks(_ range: Range<UInt64>?, binning: OverviewBinning,
-                                          rowCount: Int) -> [UInt16] {
+    nonisolated private static func currentMatchMarks(_ range: Range<UInt64>?,
+                                                      binning: OverviewBinning,
+                                                      rowCount: Int) -> [UInt16] {
         var marks = [UInt16](repeating: 0, count: rowCount)
         guard rowCount > 0, let range else { return marks }
         binning.markHexColumns(range, rows: 0...(rowCount - 1), into: &marks)

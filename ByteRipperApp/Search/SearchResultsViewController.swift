@@ -253,7 +253,11 @@ final class SearchResultsViewController: NSViewController {
         appearanceObserver = NotificationCenter.default.addObserver(
             forName: AppearanceSettings.didChangeNotification, object: nil, queue: nil
         ) { [weak self] _ in
-            self?.applyAppearance()
+            // The setting is changed from the Settings window and from the zoom
+            // commands, so the post arrives on the main thread; the observer
+            // block itself is not isolated, and this is where that is stated
+            // (the same reading the other observers here take).
+            MainActor.assumeIsolated { self?.applyAppearance() }
         }
 
         scrollView.translatesAutoresizingMaskIntoConstraints = false

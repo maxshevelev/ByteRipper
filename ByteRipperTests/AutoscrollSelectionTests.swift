@@ -357,6 +357,9 @@ final class AutoscrollSelectionTests: XCTestCase {
     /// has nothing to reveal.
     func testRevertKeepsTheViewportScrolledWhereItWas() throws {
         let (_, pane, hexView, window, url) = try makePane([UInt8](repeating: 0xAB, count: 0x4000))
+        // The window is held rather than read: it is the only strong reference
+        // to the pane's view tree, and this test walks that tree.
+        defer { withExtendedLifetime(window) {} }
         defer { try? FileManager.default.removeItem(at: url) }
 
         let clip = scroll(hexView).contentView

@@ -249,7 +249,7 @@ final class UEFIChecksumFlowTests: XCTestCase {
         // The file is the volume's first child, so the volume is opened first:
         // its files — and their checksums — are not read until it is.
         try openTheVolume()
-        try nodeFlagged(with: .fileBody)
+        _ = try nodeFlagged(with: .fileBody)  // called for its own assertion
         let flagged = try nameCell(of: 1)
         let warning = try XCTUnwrap(flagged.imageView, "the name cell carries the warning")
         XCTAssertFalse(warning.isHidden, "the flagged row wears its warning")

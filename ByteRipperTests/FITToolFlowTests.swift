@@ -428,7 +428,7 @@ final class FITToolFlowTests: XCTestCase {
             $0.stringValue.hasPrefix("FIT at")
         })
         XCTAssertTrue(
-            (title.gestureRecognizers ?? []).contains(where: { $0 is NSClickGestureRecognizer }),
+            title.gestureRecognizers.contains(where: { $0 is NSClickGestureRecognizer }),
             "the title must be clickable"
         )
 
