@@ -433,9 +433,54 @@ final class MainViewController: NSViewController {
     private let findBar = FindBarView()
     /// Host for the mode content (`setContentView` swaps what's inside).
     private let contentContainer = NSView()
+    /// The tab's own content surface: the split that shares the content area
+    /// between the tool panel, the dump and the minimap, and the three of them
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`). One today; a fragment panel is
+    /// another one of these.
+    ///
+    /// Lazy so it can be handed its tab at birth rather than in `viewDidLoad`:
+    /// a tab made for a pane torn off into it is asked to open a tool-module
+    /// before anything has made it load its view.
+    private(set) lazy var surface = DocumentSurface(host: self)
+
+    // The surface's pieces under the names this file has always called them.
+    // Forwarding rather than renaming three hundred call sites — here and
+    // across the suite — in a change whose whole point is that nothing moves
+    // on screen.
+    var panelSplit: ALSplitView { surface.panelSplit }
     /// The left pane of the minimap split — the mode's content lives here, so
     /// the minimap panel can share the content area to its right (§19).
-    let contentHost = NSView()
+    var contentHost: NSView { surface.contentHost }
+    var minimapView: MinimapView { surface.minimapView }
+    var minimapPanel: MinimapPanelView { surface.minimapPanel }
+    var tools: ToolController { surface.tools }
+    var minimapPanelVisible: Bool { surface.minimapPanelVisible }
+    var minimapPreferredPanelWidth: CGFloat { surface.minimapPreferredPanelWidth }
+
+    static var minimapDefaults: UserDefaults {
+        get { DocumentSurface.minimapDefaults }
+        set { DocumentSurface.minimapDefaults = newValue }
+    }
+    static var minimapWidthDefaultsKey: String { DocumentSurface.minimapWidthDefaultsKey }
+    static var minimapMinPanelWidth: CGFloat { DocumentSurface.minimapMinPanelWidth }
+    static var minimapMaxPanelWidth: CGFloat { DocumentSurface.minimapMaxPanelWidth }
+    static var toolPaneIndex: Int { DocumentSurface.toolPaneIndex }
+    static var contentPaneIndex: Int { DocumentSurface.contentPaneIndex }
+    static var minimapPaneIndex: Int { DocumentSurface.minimapPaneIndex }
+    static var toolDividerIndex: Int { DocumentSurface.toolDividerIndex }
+    static var minimapDividerIndex: Int { DocumentSurface.minimapDividerIndex }
+
+    func toolPanelWidth() -> CGFloat { surface.toolPanelWidth() }
+
+    func setToolPanelWidth(_ width: CGFloat, animated: Bool,
+                           windowResize: ((CGFloat) -> Void)? = nil) {
+        surface.setToolPanelWidth(width, animated: animated, windowResize: windowResize)
+    }
+
+    func setMinimapPanelWidth(_ width: CGFloat, animated: Bool = false,
+                              windowResize: ((CGFloat) -> Void)? = nil) {
+        surface.setMinimapPanelWidth(width, animated: animated, windowResize: windowResize)
+    }
 
     /// The window-level drop target under the tab bar: a file let go there opens
     /// in a tab of its own (`Design/PANE_DRAG_PLAN.md`).
@@ -483,80 +528,7 @@ final class MainViewController: NSViewController {
         emptyStateView?.setBookmarks(windowModel.bookmarkStore.bookmarks)
         updateWindowTitle()
     }
-    /// The tab's tool-module: which one is active, and the panel and session
-    /// that follow from it (`Design/TOOL_MODULES_PLAN.md`). One per tab.
-    ///
-    /// Lazy so it can be handed its tab at birth rather than in `viewDidLoad`:
-    /// a tab made for a pane torn off into it is asked to open a tool-module
-    /// before anything has made it load its view, and a controller that does
-    /// not know its own window cannot open a panel in it.
-    private(set) lazy var tools: ToolController = {
-        let controller = ToolController()
-        controller.owner = self
-        // The panel's ✕ is Tools ▸ None by another route.
-        controller.panel.onClose = { [weak self] in self?.tools.activate(nil) }
-        // A file dropped on the panel replaces the file the panel is reading —
-        // the same thing, through the same door, as dropping it on that pane's
-        // Replace Current File band.
-        controller.panel.onDropFiles = { [weak self] urls in
-            guard let self, let pane = self.tools.boundPane else { return }
-            self.openFiles(into: self.paneIndex(of: pane), urls: urls)
-        }
-        // A pane dropped on the panel moves the tool onto it.
-        controller.panel.onDropPane = { [weak self] dragID in
-            guard let self, let index = self.paneIndex(withDragID: dragID) else { return }
-            self.tools.rebind(to: index == 0 ? self.windowModel.pane1 : self.windowModel.pane2)
-        }
-        // A pane chosen in the header's selector moves it, by the same door.
-        controller.panel.onSelectPane = { [weak self] index in
-            self?.tools.selectPane(at: index)
-        }
-        controller.panel.paneDropTitle = { [weak self] dragID in
-            self?.tools.paneDropTitle(forPaneWith: dragID)
-        }
-        return controller
-    }()
 
-    /// The right-hand minimap panel (hidden by default, toggled by the toolbar
-    /// button). Internal so tests can assert its visibility (§19).
-    let minimapView = MinimapView()
-
-    /// The map plus its chrome — the header's mode switch and the status bar's
-    /// rebuild progress (§19.2).
-    private(set) lazy var minimapPanel = MinimapPanelView(mapView: minimapView)
-    /// The vertical split sharing the content area between the panes and the
-    /// minimap. The panes are the `.fill` pane and the minimap a `.fixed` one,
-    /// so the minimap keeps the width the user chose while the panes absorb
-    /// window resizes; hidden just means the minimap is fixed at zero width.
-    /// Internal so tests can toggle it and drive the divider (§19).
-    let panelSplit = ALSplitView()
-
-    /// Whether the minimap panel is shown. Drives the split's divider clamp:
-    /// while hidden, the clamp pins the divider to the right edge so the panel
-    /// sits at zero width and the hex panes reclaim the content area (§19).
-    private(set) var minimapPanelVisible = false
-
-    /// Where the minimap panel width is persisted. Swappable so the suite does
-    /// not write the user's real preference.
-    static var minimapDefaults: UserDefaults = .standard
-    /// `UserDefaults` key for the user's chosen minimap width (§19).
-    static let minimapWidthDefaultsKey = "MinimapPanelWidth"
-    /// The minimap keeps at least this width when shown (§19).
-    static let minimapMinPanelWidth: CGFloat = 120
-    /// The minimap never grows beyond this width (§19), so it stays a compact
-    /// overview column beside the hex panes no matter how wide the window gets.
-    static let minimapMaxPanelWidth: CGFloat = 240
-
-    /// The panel width the user last chose (or the built-in minimum), clamped
-    /// to the legal [min, max] band. The caller is responsible for clamping to
-    /// what the split can actually hold (`setMinimapPanelWidth` already does),
-    /// so this also serves zoom-to-fit, which wants the preferred width
-    /// regardless of how small the window is right now.
-    var minimapPreferredPanelWidth: CGFloat {
-        let stored = Self.minimapDefaults.object(forKey: Self.minimapWidthDefaultsKey) as? NSNumber
-        let preferred = stored.map { CGFloat($0.doubleValue) } ?? Self.minimapMinPanelWidth
-        return min(max(preferred, Self.minimapMinPanelWidth), Self.minimapMaxPanelWidth)
-    }
     private var contentTopToView: NSLayoutConstraint!
     private var contentTopToFindBar: NSLayoutConstraint!
     private var findTask: Task<Void, Never>?
@@ -789,83 +761,14 @@ final class MainViewController: NSViewController {
             contentTopToView,
         ])
 
-        // The panel split fills the content container: the tool-module's panel
-        // on the left (Design/TOOL_MODULES_PLAN.md), the mode content in the
-        // middle, the minimap panel on the right. Both side panels start
-        // collapsed — neither is shown on launch — and each is opened by its
-        // own command. The clamp owns each divider's legal range, and a divider
-        // move persists that panel's width.
-        //
-        // Both panels are in the split from the start rather than added when
-        // shown: a pane added mid-life moves every divider index under
-        // everything that holds one.
-        panelSplit.translatesAutoresizingMaskIntoConstraints = false
-        panelSplit.isVertical = true
-        panelSplit.dividerThickness = 1
-        contentHost.translatesAutoresizingMaskIntoConstraints = false
-        minimapPanel.translatesAutoresizingMaskIntoConstraints = false
-        panelSplit.addPane(tools.panel)
-        panelSplit.addPane(contentHost)
-        // The panel, not the bare map: its header carries the mode switch and
-        // its status bar the rebuild's progress, and together they align the map
-        // with the dump beside it (§19.2).
-        panelSplit.addPane(minimapPanel)
-        // The panes fill whatever the panel doesn't take; the panel starts
-        // collapsed at zero width, so the hex panes get the whole content area
-        // until the minimap is shown (§19). A show that landed before the view
-        // loaded found no panes to park a policy in (`setPaneLayout` is a
-        // no-op on an empty split), so the initial policy reads the visibility
-        // flag and opens the panel at its width on the first layout.
-        panelSplit.setPaneLayout(.fixed(0), at: Self.toolPaneIndex)
-        panelSplit.setPaneLayout(.fill, at: Self.contentPaneIndex)
-        panelSplit.setPaneLayout(.fixed(minimapPanelVisible ? minimapPreferredPanelWidth : 0),
-                                 at: Self.minimapPaneIndex)
-        // The clamp owns the divider's legal range (§19). While the panel is
-        // shown, a drag never shrinks the minimap below its minimum nor grows
-        // it past its maximum. While it is hidden and no show/hide animation is
-        // gliding, the clamp pins the divider to the trailing edge: the panel
-        // stays collapsed at zero width, and a drag on the divider cannot open
-        // it (only the toolbar/menu toggle can). The animation is exempt — it
-        // needs the full range to glide the divider to the edge on a hide.
-        panelSplit.clampDividerPosition = { [weak self] index, position in
-            guard let self else { return position }
-            guard !self.panelSplit.isAnimatingDivider else { return position }
-            let total = self.panelSplit.bounds.width
-            let thickness = self.panelSplit.dividerThickness
-            if index == Self.toolDividerIndex {
-                // The tool panel's own rule, and it needs to know what the
-                // minimap is taking: the dump's minimum is what the panel may
-                // not eat into, and the minimap has already taken its share.
-                return self.tools.clampPanelDivider(position, total: total,
-                                                    dividers: thickness * 2,
-                                                    minimapWidth: self.currentMinimapWidth())
-            }
-            guard self.minimapPanelVisible else {
-                // Pinned flat against the trailing edge: a hidden panel is a
-                // pane of zero width, and the position that leaves nothing
-                // below this divider is not the free axis once the tool
-                // panel's divider sits above it.
-                return self.panelSplit.maximumDividerPosition(at: index)
-            }
-            // The minimap is the last pane, so its width is what is left after
-            // this divider whatever precedes it — the same arithmetic as when
-            // it was the only panel.
-            let maxPanel = min(MainViewController.minimapMaxPanelWidth, max(0, total - thickness))
-            let minPosition = max(0, total - maxPanel - thickness)
-            let maxPosition = max(0, total - MainViewController.minimapMinPanelWidth - thickness)
-            return min(max(position, minPosition), maxPosition)
-        }
-        // A divider move — a drag or a programmatic sizing — makes that panel's
-        // new width the user's preferred width for its next show (§19,
-        // Design/TOOL_MODULES_PLAN.md).
-        panelSplit.onDividerMoved = { [weak self] index, position in
-            guard let self else { return }
-            if index == Self.toolDividerIndex {
-                self.tools.persistPanelWidth(position)
-            } else {
-                self.persistMinimapPanelWidth(position: position)
-            }
-        }
+        // The tab's own surface: the tool panel, the dump and the minimap in
+        // one split, which is the surface's view. A child view controller, so a
+        // tool-module's own controller has a parent to be added to and the
+        // surface gets the appearance and lifecycle callbacks a view of this
+        // size should have.
+        addChild(surface)
+        _ = surface.view
+
         newTabDropStrip.translatesAutoresizingMaskIntoConstraints = false
         newTabDropStrip.onDropFiles = { [weak self] urls in
             self?.openFilesInNewTab(urls)
@@ -1535,16 +1438,6 @@ final class MainViewController: NSViewController {
 
     // MARK: - Tools (Design/TOOL_MODULES_PLAN.md)
 
-    /// Where each panel sits in `panelSplit`, and which divider borders it.
-    /// Named rather than written as 0/1/2 at a dozen call sites: the split gained
-    /// a third pane once already, and every index in this file moved with it.
-    static let toolPaneIndex = 0
-    static let contentPaneIndex = 1
-    static let minimapPaneIndex = 2
-    /// The divider at `i` is between panes `i` and `i + 1`.
-    static let toolDividerIndex = 0
-    static let minimapDividerIndex = 1
-
     /// How much of the dump's spare width each side panel is borrowing right
     /// now: the room it opened into instead of pushing the window's edge out.
     /// Kept so the way out mirrors the way in — a panel gives back what it
@@ -1587,44 +1480,6 @@ final class MainViewController: NSViewController {
         let given = min(-delta, borrowed)
         borrowed -= given
         return delta + given
-    }
-
-    /// The minimap panel's width as the split currently has it — what the tool
-    /// panel's clamp has to leave alone.
-    private func currentMinimapWidth() -> CGFloat {
-        let total = panelSplit.bounds.width
-        guard total > 0 else { return 0 }
-        return max(0, total - panelSplit.dividerPosition(at: Self.minimapDividerIndex)
-                   - panelSplit.dividerThickness)
-    }
-
-    /// The tool panel's width as the split currently has it.
-    func toolPanelWidth() -> CGFloat {
-        guard panelSplit.bounds.width > 0 else { return 0 }
-        return panelSplit.dividerPosition(at: Self.toolDividerIndex)
-    }
-
-    /// Moves the first divider so the tool panel gets `width` points, animating
-    /// unless reduced motion or a snap. `windowResize` is the window move that
-    /// belongs to this change, driven by the panel animation's own tick so the
-    /// window edge and the panel edge move as one thing (§19).
-    func setToolPanelWidth(_ width: CGFloat, animated: Bool,
-                           windowResize: ((CGFloat) -> Void)? = nil) {
-        let total = panelSplit.bounds.width
-        guard total > 0 else {
-            // No bounds yet: park the width in the pane's policy and let the
-            // first layout place the divider from it.
-            panelSplit.setPaneLayout(.fixed(max(0, width)), at: Self.toolPaneIndex)
-            windowResize?(1)
-            return
-        }
-        let target = max(0, min(width, panelSplit.axisAvailable()))
-        if animated {
-            panelSplit.animateLeadingPaneSize(to: target, onTick: windowResize)
-        } else {
-            panelSplit.setDividerPosition(target, at: Self.toolDividerIndex)
-            windowResize?(1)
-        }
     }
 
     /// The window move that goes with opening or closing the tool panel: the
@@ -2048,7 +1903,7 @@ final class MainViewController: NSViewController {
     /// reduced motion (then it snaps).
     func setMinimapPanelVisible(_ visible: Bool, animated: Bool = true) {
         let changed = minimapPanelVisible != visible
-        minimapPanelVisible = visible
+        surface.minimapPanelVisible = visible
         // The window grows or shrinks by the panel's width so the hex content
         // area keeps its width (§19). It is handed to the panel's animation
         // rather than run beside it: one clock and one curve, so the window
@@ -2064,36 +1919,6 @@ final class MainViewController: NSViewController {
         setMinimapPanelVisible(!minimapPanelVisible, animated: animated)
     }
 
-    /// Moves the divider so the panel gets `width` points (clamped to the
-    /// split's room and the legal band by the split's divider clamp),
-    /// animating unless reduced motion or the distance is a snap.
-    /// `windowResize`, when given, is the window move that belongs to this width
-    /// change — the growth or shrink that keeps the hex content area's width
-    /// (§19). It takes a progress in 0…1 and is driven by the panel animation's
-    /// own tick, so the two never drift apart; unanimated, it is called with 1.
-    func setMinimapPanelWidth(_ width: CGFloat, animated: Bool = false,
-                              windowResize: ((CGFloat) -> Void)? = nil) {
-        let total = panelSplit.bounds.width
-        guard total > 0 else {
-            // No bounds yet: park the width in the panel's policy; the first
-            // layout places the divider from it.
-            panelSplit.setPaneLayout(.fixed(max(0, width)), at: 1)
-            windowResize?(1)
-            return
-        }
-        let thickness = panelSplit.dividerThickness
-        let target = max(0, min(width, total - thickness))
-        if animated {
-            // The divider is eased by the panel's WIDTH — the position is
-            // re-derived from the live bounds on every step, the way the
-            // divider drag does it — which is what lets the window grow
-            // underneath the animation without the panel losing its place.
-            panelSplit.animateTrailingPaneSize(to: target, onTick: windowResize)
-        } else {
-            panelSplit.setDividerPosition(total - target - thickness, at: Self.minimapDividerIndex)
-            windowResize?(1)
-        }
-    }
 
     /// A panel-visibility change: while hidden the maps and viewport are stale
     /// (nothing was drawn), so a show refreshes them (§19).
@@ -2113,18 +1938,6 @@ final class MainViewController: NSViewController {
         }
     }
 
-    /// Persists the panel's current width as the user's preferred width for the
-    /// next show. Only while the panel is shown and within the legal range: a
-    /// transient layout (e.g. mid-animation) whose panel width is absurd would
-    /// poison the next reveal if persisted.
-    private func persistMinimapPanelWidth(position: CGFloat) {
-        guard minimapPanelVisible else { return }
-        let split = panelSplit
-        let panelWidth = split.bounds.width - position - split.dividerThickness
-        guard panelWidth >= Self.minimapMinPanelWidth,
-              panelWidth <= Self.minimapMaxPanelWidth else { return }
-        Self.minimapDefaults.set(panelWidth, forKey: Self.minimapWidthDefaultsKey)
-    }
 
     /// The window move that goes with showing or hiding the minimap: growing or
     /// shrinking by whatever the dump's own spare width cannot absorb, so the
