@@ -885,10 +885,12 @@ extension MEAToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         cell.textField?.font = identifier == Column.summary && node.subtitle.hasPrefix("0x")
             ? ToolPanelFont.monospacedDigits()
             : ToolPanelFont.body()
-        // A section that holds nothing reads grey in the value column: it is a
-        // place in the layout rather than something to go and look at. Its
-        // name stays black — the row is still worth finding.
-        cell.textField?.textColor = identifier == Column.summary && node.isEmptySection
+        // A section that holds nothing reads grey — the whole row, name
+        // included: it is a place in the layout rather than something to go and
+        // look at. Greying the value alone left the row reading as loud as a
+        // real one, with the quiet half looking like a rendering slip rather
+        // than a statement about the section.
+        cell.textField?.textColor = node.isEmptySection
             ? .secondaryLabelColor
             : .labelColor
         return cell

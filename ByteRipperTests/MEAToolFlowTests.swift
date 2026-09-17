@@ -715,10 +715,10 @@ final class MEAToolFlowTests: XCTestCase {
         label.attributedStringValue.size().width
     }
 
-    /// A section that holds nothing reads grey in the tree's value column —
-    /// it is a place in the layout, not something to go and look at — while
-    /// its name stays as readable as any other row's.
-    func testAnEmptySectionsValueIsGreyInTheTree() throws {
+    /// A section that holds nothing reads grey across the whole row — name and
+    /// value both: it is a place in the layout, not something to go and look
+    /// at. A row with bytes in it is drawn at full strength in both columns.
+    func testAnEmptySectionIsGreyThroughoutInTheTree() throws {
         _ = try open(METestImage.fptFileWithEmptyRegion())
 
         try showFullTree()
@@ -740,7 +740,8 @@ final class MEAToolFlowTests: XCTestCase {
                        "the value says the section holds nothing")
         let empty = try colours(row: emptyRow)
         XCTAssertEqual(empty.value, .secondaryLabelColor)
-        XCTAssertEqual(empty.name, .labelColor, "the row is still worth finding")
+        XCTAssertEqual(empty.name, .secondaryLabelColor,
+                       "and the name with it — the row is quiet, not half-quiet")
 
         // A region with bytes in it is drawn as before.
         let real = try colours(row: try XCTUnwrap(row(ofTitle: "FTUE", in: tree)))
