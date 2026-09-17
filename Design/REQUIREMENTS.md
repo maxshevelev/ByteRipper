@@ -1962,8 +1962,9 @@ Status bar or equivalent info area should show:
 - background task progress for diff/search when applicable;
 - the typing mode as INS/OVR (§7.6), with INS coloured — the mode changes what
   every keystroke does, so it must be readable without opening a menu — and
-  separated from the size by a point, so that the two readouts at the end of the
-  line do not run together.
+  pinned to the bar's own right end, with the left-hand run of readouts
+  stopping short of it, so that the mode is found in the same corner of every
+  pane whatever the line beside it is saying.
 
 The size in that line is a readout the pointer can act on, in place: while the
 pointer is on it, the size itself is drawn in the Details view's exact form —

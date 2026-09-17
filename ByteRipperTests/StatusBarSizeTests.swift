@@ -278,8 +278,8 @@ final class StatusBarSizeTests: XCTestCase {
     /// its line, publishes the size's region against the label's real width,
     /// gives the readout room to grow into, and hands the right-click to the
     /// controller's menu — which offers the half that was clicked, in that
-    /// half's format. And the dot that separates the readout from the mode
-    /// indicator sits between the two.
+    /// half's format. And the mode indicator is pinned to the bar's other end,
+    /// with the readout's growth stopping short of it.
     func testThePanePublishesTheSizesRegionRoomAndMenu() throws {
         let urlA = try tempFile([UInt8](repeating: 0x41, count: 300))
         let urlB = try tempFile([UInt8](repeating: 0x42, count: 300))
@@ -347,13 +347,18 @@ final class StatusBarSizeTests: XCTestCase {
         XCTAssertEqual(label.sizeMenu(at: NSPoint(x: text + 12 * advance, y: 9))?
             .items.first?.title, "Copy size 300")
 
-        // The dot sits between the readout and the mode indicator — the two
-        // things the bar says that are about different subjects.
-        let separator = pane.statusSeparatorLabel
-        XCTAssertEqual(separator.stringValue, "·")
-        XCTAssertFalse(separator.isHidden)
-        XCTAssertGreaterThan(separator.frame.minX, label.frame.maxX)
-        XCTAssertLessThan(separator.frame.maxX, pane.typingModeLabel.frame.minX)
+        // The indicator is the bar's own right corner, not a third thing in the
+        // readout's row: it ends at the trailing inset, and the readout — which
+        // grows towards it as the pointer asks for the exact form — stops short
+        // of it rather than running under it (§3.4).
+        let indicator = pane.typingModeLabel
+        let bar = try XCTUnwrap(indicator.superview, "the indicator is pinned to the bar")
+        XCTAssertEqual(bar.bounds.maxX - indicator.frame.maxX, 10, accuracy: 0.5,
+                       "the indicator sits at the bar's trailing inset")
+        XCTAssertEqual(indicator.frame.midY, bar.bounds.midY, accuracy: 0.5)
+        let readout = label.convert(label.bounds, to: bar)
+        XCTAssertLessThan(readout.maxX, indicator.frame.minX,
+                          "and nothing is drawn between the readout and the indicator")
     }
 
     /// With one file open the app is in single-file mode (§3.2): the bar still

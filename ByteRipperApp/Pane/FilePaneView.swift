@@ -107,13 +107,7 @@ final class FilePaneView: NSView {
     /// format (§3.4). Internal (not private) so a test can read the rendered
     /// string and the size's region, the way `typingModeLabel` is.
     let statusLabel = StatusLabel(labelWithString: "")
-    /// The dot between the readout and the mode indicator. The indicator is the
-    /// one part of the bar that is not about the file but about the next
-    /// keystroke, and without a separator the bar's own "  ·  " rhythm is
-    /// broken at exactly the point where the meaning changes: "4 MB" and "OVR"
-    /// ten points apart read as one phrase. Internal so a test can read it.
-    let statusSeparatorLabel = NSTextField(labelWithString: "·")
-    /// The typing-mode indicator at the right end of the status bar: `OVR` in
+    /// The typing-mode indicator pinned to the right end of the status bar: `OVR` in
     /// the status bar's own quiet grey, `INS` in the insert caret's red (§7.6).
     /// Insert mode grows the file on every keystroke, so it is the state that
     /// gets the colour — the mode is readable at a glance, without hunting for
@@ -442,23 +436,16 @@ final class FilePaneView: NSView {
         NSLayoutConstraint.activate(headerChain)
 
         // Status bar: the regular status text on the left, the background
-        // operation strip (name + progress + ×) to its right. An NSStackView
-        // collapses a hidden arranged subview, so hiding the strip frees its
-        // width and the label can stretch across the whole bar (§14.4).
+        // operation strip (name + progress + ×) to its right, and the mode
+        // indicator alone in the far corner. An NSStackView collapses a hidden
+        // arranged subview, so hiding the strip frees its width and the label
+        // can stretch across the whole bar (§14.4) — but the indicator is not
+        // one of its arranged views (below), so it stays where it is put.
         statusLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.lineBreakMode = .byTruncatingTail
         statusLabel.setContentHuggingPriority(.defaultLow, for: .horizontal)
         statusLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        // The dot between the readout and the indicator: the same quiet grey as
-        // the text, narrow and uncompressible, so it is the readout that gives
-        // way in a narrowing pane and the separator that goes with the last of
-        // it (§3.4).
-        statusSeparatorLabel.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
-        statusSeparatorLabel.textColor = .secondaryLabelColor
-        statusSeparatorLabel.setContentHuggingPriority(.defaultHigh, for: .horizontal)
-        statusSeparatorLabel.setContentCompressionResistancePriority(.defaultHigh,
-                                                                     for: .horizontal)
         // The indicator keeps its width: three monospaced characters, the
         // same in both states, so the bar's layout never shifts when the mode
         // flips. Its resistance beats the status text's, so a narrowing pane
@@ -495,8 +482,6 @@ final class FilePaneView: NSView {
         statusStack.spacing = 10
         statusStack.translatesAutoresizingMaskIntoConstraints = false
         statusStack.addArrangedSubview(statusLabel)
-        statusStack.addArrangedSubview(statusSeparatorLabel)
-        statusStack.addArrangedSubview(typingModeLabel)
         statusStack.addArrangedSubview(operationView)
         // The readout is the one arranged view that is sized to its content, so
         // how much of the bar is left for it is not its to see: it asks.
@@ -507,19 +492,40 @@ final class FilePaneView: NSView {
         statusBar.setContentHuggingPriority(.defaultLow, for: .horizontal)
         statusBar.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         statusBar.addSubview(statusStack)
+        // The indicator is not in the stack: it belongs in the bar's own right
+        // corner, at the far end from the readout, and a stack places its
+        // arranged views in a row rather than at two ends of one (§3.4).
+        statusBar.addSubview(typingModeLabel)
+        typingModeLabel.translatesAutoresizingMaskIntoConstraints = false
         // The side insets are breakable, like the header's: a pane dragged to
         // zero is squeezed below the 20pt the insets need, and a required inset
         // would then floor the pane (the least-squares solver compromises at the
         // insets' minimum instead of letting the pane reach zero). At any real
-        // width the insets hold exactly (§3.4).
+        // width the insets hold exactly (§3.4). The gap between the two groups
+        // is breakable for the same reason.
+        //
+        // The trailing inset is measured in the frames the eye sees, not in the
+        // rectangles the solver pins: a borderless text field's alignment rect
+        // is inset two points at each side — the cell's own text-area inset —
+        // and Auto Layout works in alignment rects, so a bare -10 leaves the
+        // box eight points from the edge instead of ten. The label's own inset
+        // is added back, and the gap before it is measured from the same place
+        // for the same reason.
+        let indicatorTrailingInset = 10 + typingModeLabel.alignmentRectInsets.right
         let statusLeadingInset = statusStack.leadingAnchor.constraint(equalTo: statusBar.leadingAnchor, constant: 10)
-        let statusTrailingInset = statusStack.trailingAnchor.constraint(lessThanOrEqualTo: statusBar.trailingAnchor, constant: -10)
+        let statusTrailingInset = typingModeLabel.trailingAnchor.constraint(equalTo: statusBar.trailingAnchor,
+                                                                           constant: -indicatorTrailingInset)
+        let statusGroupsGap = statusStack.trailingAnchor.constraint(lessThanOrEqualTo: typingModeLabel.leadingAnchor,
+                                                                    constant: -indicatorTrailingInset)
         statusLeadingInset.priority = .defaultHigh
         statusTrailingInset.priority = .defaultHigh
+        statusGroupsGap.priority = .defaultHigh
         NSLayoutConstraint.activate([
             statusLeadingInset,
             statusTrailingInset,
+            statusGroupsGap,
             statusStack.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor),
+            typingModeLabel.centerYAnchor.constraint(equalTo: statusBar.centerYAnchor),
             statusBar.heightAnchor.constraint(equalToConstant: Self.statusBarHeight),
         ])
 
@@ -1041,7 +1047,11 @@ final class FilePaneView: NSView {
         closeButton.isHidden = !fits
         lockLabel.isHidden = !fits
         linkButton.isHidden = !fits || viewModel.origin == nil
+        // Both halves of the bar's own chrome go together: the indicator is
+        // pinned to the bar rather than arranged in the stack, so hiding the
+        // stack no longer takes it with it.
         statusStack.isHidden = !fits
+        typingModeLabel.isHidden = !fits
     }
 
     /// The width the readout may grow into: the bar's own width, less its two
@@ -1059,12 +1069,14 @@ final class FilePaneView: NSView {
     /// The stack's width is its arranged subviews' widths and the gaps between
     /// them, in both of the regimes the bar can be in: content-sized, and
     /// squeezed to the bar with the readout taking the squeeze. So what is left
-    /// when the readout's own frame is taken out of it is the dot, the
-    /// indicator, the operation strip when it is up (§14.4) and those gaps.
-    /// The insets are the 10 points per side the bar pins its stack with.
+    /// when the readout's own frame is taken out of it is the operation strip
+    /// when it is up (§14.4) and the gap before it. The indicator is not in the
+    /// stack — it is pinned to the bar's trailing edge — so its own width is
+    /// taken out separately, and the 30 points are the insets the bar pins its
+    /// two ends with plus the gap the readout keeps before the indicator.
     private var statusRoom: CGFloat {
         let chrome = max(0, statusStack.frame.width - statusLabel.frame.width)
-        return statusBar.bounds.width - 20 - chrome
+        return statusBar.bounds.width - 30 - chrome - typingModeLabel.frame.width
     }
 
     private func refresh(reveal: PaneViewModel.SelectionReveal = .follow) {
