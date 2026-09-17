@@ -114,6 +114,62 @@ clears the forward stack.
 
 ---
 
+### Compare the OEM configuration of two dumps, record by record
+
+**What.** With an ME image in both slots, say which *configuration records*
+differ: present only in A, only in B, or the same setting with different bytes.
+A record is named by its path — `/home/amt/rtfd/PrivacyLvl`, `/home/icc/default`
+— so the answer reads as settings rather than as offsets.
+
+**Why.** This is the question a bench actually asks of two dumps from the same
+board: *what did the OEM change?* It is also the question the hex view cannot
+answer, because the same setting need not sit at the same offset in the two
+images — the records are keyed by File ID inside a stream whose layout is the
+image's own, so a byte-for-byte diff of the two areas shows a wall of red where
+the honest answer is "one flag differs". Intel's Flash Image Tool answers this
+by knowing every setting's name and type; we cannot (its schema ships with the
+NDA tool kit, and MEA does not carry it either — see the Help entry below).
+What we *can* do is name the file each setting lives in and say which files
+differ, which is most of the practical value and needs no new decode.
+
+**How.** The records are already in the model after the 2026-09-17 increments:
+`OEMConfiguration.recordsByID` for a FITC partition, `MFSVolume
+.configurationsByID` for a newer volume's own 6/7 streams, and
+`MFSVolume.configurations` for the legacy named ones. The paths come from the
+panel's `ConfigRecordPaths` / `FileTable.dat` lookup. The diff itself is a pure
+function over two analyses keyed by path (File ID where the table names
+nothing), which is where the tests go.
+
+The one real gap is the bytes. A FITC record is reachable — `payloadOffset +
+record.offset`, an absolute position, which the panel already reveals — but a
+record inside a low-level MFS file lives in a FAT chain the engine does not
+expose, so there is nothing to compare. Two shapes:
+
+1. **A digest per record**, computed by the engine where it already holds the
+   bytes (a CRC-32 or a short SHA-256 prefix on `MFSConfigIDRecord` /
+   `MFSConfigRecord`). Cheap, additive, keeps megabytes out of the model, and
+   makes "these two differ" answerable for every stream. Prefer this.
+2. **The record's bytes on the model**, which answers "how do they differ" too
+   but puts the whole configuration in the analysis — the thing the result
+   model has stayed clear of so far.
+
+Take 1, and let a reader who wants the bytes reveal the FITC ones.
+
+The other open question is the vehicle: a tool-module sees one pane, and this
+needs both. `MEAAnalysisProviding` already reaches the host for a pane's cached
+analysis, so the shape is probably "the ME panel asks the host for the other
+pane's analysis and marks the rows that differ", with the comparison view's own
+summary as a possible second home. Decide that before writing any of it.
+
+**Touches.** `MEACurator` (marks on the record rows, a "Differences" group),
+`MEAToolModule` + the host seam for the second pane's analysis, one small
+digest field per record kind in `FirmwareAnalysis` (with the revision bump),
+and the ME tool's REQUIREMENTS lines.
+
+**Cost.** 4–6 hours for the diff and the rows if the digest shape is taken;
+add 2–3 for the host seam if reaching the other pane's analysis turns out not
+to be there yet.
+
 ## Later
 
 ### An editable zone — a region a tool-module opens for editing
@@ -164,9 +220,11 @@ the day a tool-module needs it.
   inside in a space of their own (`UEFI/COMPRESSED_SECTIONS.md`). The other
   three still name their algorithm and keep their body whole — to be added the
   day a dump needs one (§10 there).
-- **The flash descriptor's innards** — the masters section, the straps, the VSCC
-  table, the OEM section. The region map is parsed because it is the map of the
-  whole image; the rest is descriptor configuration nobody has asked to see.
+- **The flash descriptor's innards** — partly read since this was written: the
+  masters section, the per-region BIOS access and the VSCC chip table are
+  decoded (`DescriptorInfo`, §2). What is left is the component and strap
+  sections, which have an entry of their own below, and the OEM section, which
+  nobody has asked to see.
 - **NVRAM stores, BPDT/CPD and AMD microcode** (§8, §9). Recognised as volumes
   with an unknown file system, or as padding, which keeps their bytes and loses
   their structure.
@@ -363,6 +421,41 @@ reachable from the rows.
 **Cost.** The vehicle is 2–4 hours. The writing is the real cost: half a day
 for the provenance note, a day or two for a glossary that covers what the panel
 actually shows, and it wants doing once properly rather than in fragments.
+
+### Finish the flash descriptor: the component and strap sections
+
+**What.** The descriptor decode in the UEFI tool covers the reserved vector,
+where each region begins, the master read/write masks, what the BIOS master may
+do to each region, and the VSCC chip table (`DescriptorInfo`, §2). Two sections
+of the same 0x1000 bytes are not read: the **component** section (`FCBA` — the
+flash chip sizes the image was built for, the read / fast-read / write
+frequencies, single or dual output) and the **PCH strap** section (`FPSBA`).
+Region *limits* would come with them, as numbers beside the offsets.
+
+**Why.** These are the fields Intel's Flash Image Tool shows under Flash
+Settings, and they answer a bench question the app cannot answer today: *what
+chip and what SPI speed was this image built for, and will it come up on the
+part I am about to solder on?* They are also the best-grounded decode in the
+project — the descriptor is the one structure in a full SPI dump that Intel
+actually documents (the PCH SPI programming guide), and `ifdtool` in coreboot
+is an independent implementation to check against on the same dumps. Nothing
+else in the ME or UEFI decode has that.
+
+**How.** One more base out of the map words the parser already reads
+(`FLMAP0`/`FLMAP1` carry `FCBA` and `FPSBA` the same `base << 4` way as the
+region and master bases), then the fields. Straps are
+PCH-generation-specific: decode the ones with public documentation, and keep
+the rest as raw words named unknown — the same policy the ME model follows for
+a field whose meaning nobody can justify, and for the same reason. `ifdtool
+-d` on the oracle dumps is the check.
+
+**Touches.** `DescriptorParser` / `DescriptorInfo` in `UEFIImage`, the UEFI
+panel's detail rows for a descriptor node, and §2 of
+`Design/UEFI_STRUCTURE_TOOL.md`.
+
+**Cost.** 3–5 hours for the component section and the region limits; the
+straps are open-ended and worth doing generation by generation rather than in
+one go.
 
 ## Someday
 
