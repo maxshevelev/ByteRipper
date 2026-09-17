@@ -23,6 +23,11 @@ final class FragmentPillView: NSView {
 
     var onSelect: (() -> Void)?
     var onClose: (() -> Void)?
+    /// Right-click ▸ Open in New Tab. The only way a *folded* panel leaves for
+    /// a tab: a pill has no header to drag onto the New Tab strip.
+    var onTearOff: (() -> Void)?
+    /// Whether there is a window to put a tab beside.
+    var canTearOff = true
 
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
@@ -96,9 +101,27 @@ final class FragmentPillView: NSView {
     }
 
     @objc private func closeTapped() { onClose?() }
+    @objc private func tearOffTapped() { onTearOff?() }
 
     override func mouseDown(with event: NSEvent) {
         onSelect?()
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = NSMenu()
+        // Built here rather than validated through the responder chain: the
+        // pill is not a control the menu bar knows about, and both items act on
+        // this panel alone.
+        menu.autoenablesItems = false
+        let tearOff = menu.addItem(withTitle: "Open in New Tab",
+                                   action: #selector(tearOffTapped), keyEquivalent: "")
+        tearOff.target = self
+        tearOff.isEnabled = canTearOff
+        menu.addItem(.separator())
+        let close = menu.addItem(withTitle: "Close “\(title)”",
+                                 action: #selector(closeTapped), keyEquivalent: "")
+        close.target = self
+        return menu
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -138,10 +161,12 @@ final class FragmentDockStrip: NSView {
         var title: String
         var isUp: Bool
         var hasChanges: Bool
+        var canTearOff: Bool
     }
 
     var onSelect: ((FragmentDock.PanelID) -> Void)?
     var onClose: ((FragmentDock.PanelID) -> Void)?
+    var onTearOff: ((FragmentDock.PanelID) -> Void)?
 
     private let row = NSStackView()
     private var pills: [FragmentDock.PanelID: FragmentPillView] = [:]
@@ -195,6 +220,7 @@ final class FragmentDockStrip: NSView {
             pill.title = item.title
             pill.isUp = item.isUp
             pill.hasChanges = item.hasChanges
+            pill.canTearOff = item.canTearOff
             if row.arrangedSubviews.firstIndex(of: pill) != index {
                 row.insertArrangedSubview(pill, at: index)
             }
@@ -205,6 +231,7 @@ final class FragmentDockStrip: NSView {
         let pill = FragmentPillView(id: item.id, title: item.title)
         pill.onSelect = { [weak self] in self?.onSelect?(item.id) }
         pill.onClose = { [weak self] in self?.onClose?(item.id) }
+        pill.onTearOff = { [weak self] in self?.onTearOff?(item.id) }
         pills[item.id] = pill
         return pill
     }

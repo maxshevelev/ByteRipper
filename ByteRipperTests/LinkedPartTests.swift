@@ -177,6 +177,28 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertEqual(MainViewController.partName(ofTab: "Body.bin", parent: "bios.rom"), "Body")
     }
 
+    /// A part torn off into a tab of its own keeps the link: the origin is the
+    /// pane's own property, so Update in Parent still knows where the bytes go
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
+    func testAPartTornOffIntoATabKeepsItsLink() throws {
+        let (controller, part) = try openZonePanel()
+        let tab = try makeController()
+        controller.makeSiblingTab = { tab }
+
+        controller.tearOffPaneToNewTab(draggedPaneID: part.dragID)
+
+        XCTAssertTrue(controller.fragments.isEmpty)
+        XCTAssertTrue(tab.windowModel.pane1 === part)
+        let origin = try XCTUnwrap(part.origin, "still linked to the zone it came out of")
+        XCTAssertTrue(origin.parent === controller.windowModel.pane1)
+        XCTAssertEqual(origin.state, .intact)
+
+        try patch(part, at: 0x10, with: 0x55)
+        tab.performUpdateInParent(of: part)
+        XCTAssertEqual(try byte(at: 0x110, of: controller.windowModel.pane1), 0x55,
+                       "and the bytes still go back where they came from")
+    }
+
     // MARK: - Against the bytes it was opened with
 
     private func modified(_ range: Range<UInt64>, in part: PaneViewModel) -> [Bool] {

@@ -139,7 +139,27 @@ final class MainViewController: NSViewController {
     /// takes every one of them along by construction.
     @objc func openPaneInNewTab(_ sender: Any?) {
         guard let pane = (sender as? NSMenuItem)?.representedObject as? PaneViewModel else { return }
+        // A fragment panel's own header offers the same item, and means the
+        // same thing by it — but the panel is not one of the window's two
+        // panes, so asking which index it is would name the wrong one
+        // (`Design/FRAGMENT_PANELS_PLAN.md`).
+        if let panel = fragments.panel(withDragID: pane.dragID) {
+            tearOffFragment(panel)
+            return
+        }
         movePaneToNewTab(at: paneIndex(pane))
+    }
+
+    /// Whether a fragment panel has a window to be put in a tab beside.
+    var canTearOffFragment: Bool { makeSiblingTab != nil }
+
+    /// Moves a fragment panel out into a tab beside this window: the menu's
+    /// form of dragging it onto the New Tab strip, and the only form a folded
+    /// panel has, since a pill has no header to drag.
+    func tearOffFragment(_ panel: FragmentDock.PanelID) {
+        guard let tab = makeSiblingTab?(),
+              let released = fragments.release(panel) else { return }
+        tab.adoptPane(released.pane, bookmarks: released.bookmarks)
     }
 
     private func movePaneToNewTab(at index: Int) {
@@ -171,6 +191,11 @@ final class MainViewController: NSViewController {
     /// A pane let go on this window's New Tab strip: it leaves for a tab of its
     /// own beside this window, wherever it came from.
     func tearOffPaneToNewTab(draggedPaneID: UUID, copying: Bool = false) {
+        // A fragment panel dragged out by its header is the other thing this
+        // strip can be handed (`Design/FRAGMENT_PANELS_PLAN.md`). It is the
+        // same move — the pane object goes, with its edits, its undo and the
+        // link to the parent, which is the pane's own and so travels with it.
+        if tearOffFragmentToNewTab(draggedPaneID: draggedPaneID, copying: copying) { return }
         guard let origin = paneLocation(ofPaneWith: draggedPaneID) else { return }
         guard copying else {
             origin.controller.tearOff(paneAt: origin.paneIndex, into: self)
@@ -191,6 +216,47 @@ final class MainViewController: NSViewController {
         }
         tab.windowModel.bookmarkStore.seed(origin.controller.windowModel.bookmarkStore.bookmarks)
         tab.apply(mode: .singleFile)
+    }
+
+    /// A fragment panel let go on this window's New Tab strip, moved or copied
+    /// into a tab of its own. False when the drag was not a fragment panel's,
+    /// which is how the caller knows to look among the window panes instead.
+    ///
+    /// The panel leaves the dock it was in, which need not be this window's:
+    /// the strip that was aimed at decides where the tab goes, not where the
+    /// panel came from — the same rule a torn-off pane follows.
+    private func tearOffFragmentToNewTab(draggedPaneID: UUID, copying: Bool) -> Bool {
+        guard let found = fragmentLocation(ofPaneWith: draggedPaneID) else { return false }
+        guard let tab = makeSiblingTab?() else { return true }
+        if copying {
+            // A copy of a part has no claim to put bytes back: it is a new
+            // document that happens to hold the same bytes, exactly as
+            // Duplicate leaves one anywhere else.
+            guard let source = found.controller.fragments.pane(found.panel), source.isOpen else {
+                return true
+            }
+            do {
+                try tab.windowModel.pane1.openDuplicate(of: source, named: unsavedName(for: source))
+            } catch {
+                presentFileError("Could not duplicate the panel.", error, url: nil)
+                return true
+            }
+            tab.apply(mode: .singleFile)
+            return true
+        }
+        guard let released = found.controller.fragments.release(found.panel) else { return true }
+        tab.adoptPane(released.pane, bookmarks: released.bookmarks)
+        return true
+    }
+
+    /// The window and fragment panel carrying `dragID` — this window's own when
+    /// there is no registry, the way the pane lookup falls back.
+    private func fragmentLocation(ofPaneWith dragID: UUID)
+    -> (controller: MainViewController, panel: FragmentDock.PanelID)? {
+        if let openDocuments {
+            return openDocuments.location(ofFragmentWith: dragID)
+        }
+        return fragments.panel(withDragID: dragID).map { (self, $0) }
     }
 
     /// Copies `source` into this window's pane `index`, replacing whatever is
@@ -7333,6 +7399,9 @@ extension MainViewController: NSMenuItemValidation {
             // `makeSiblingTab` is nil in a controller with no window to put a
             // tab beside.
             guard let pane = pane(from: menuItem), makeSiblingTab != nil else { return false }
+            // A fragment panel is always spare: moving it out leaves the tab
+            // exactly as it was, with one pill fewer.
+            if fragments.panel(withDragID: pane.dragID) != nil { return pane.isOpen }
             return mode == .comparison && pane.isOpen
         case #selector(savePaneDocument(_:)),
              #selector(savePaneDocumentAs(_:)):

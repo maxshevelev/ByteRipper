@@ -72,6 +72,22 @@ final class OpenDocumentRegistry {
         return nil
     }
 
+    /// The window and fragment panel carrying `dragID`, or nil when no window
+    /// has it — a panel closed, or its window shut, while a drag of it was in
+    /// flight. Asked the same way and for the same reason as the pane lookup
+    /// above: the panels answer at the moment of the question.
+    func location(ofFragmentWith dragID: UUID)
+    -> (controller: MainViewController, panel: FragmentDock.PanelID)? {
+        compact()
+        for entry in entries {
+            guard let controller = entry.controller else { continue }
+            if let panel = controller.fragments.panel(withDragID: dragID) {
+                return (controller, panel)
+            }
+        }
+        return nil
+    }
+
     /// Every window still open. Used where something is the whole app's
     /// business rather than one window's — a pane drag, which any window can
     /// receive.

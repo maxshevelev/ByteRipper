@@ -182,13 +182,109 @@ final class FragmentPanelTests: XCTestCase {
         defer { cleanup(controller) }
         let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part", animated: false))
 
-        let pane = try XCTUnwrap(controller.fragments.release(id, animated: false))
+        let released = try XCTUnwrap(controller.fragments.release(id, animated: false))
 
         XCTAssertTrue(controller.fragments.isEmpty, "the dock has let it go")
-        XCTAssertTrue(pane.isOpen, "but the document is still open, to be put somewhere")
-        XCTAssertEqual(pane.fileSize, 2)
-        XCTAssertNil(pane.bookmarkStore, "it travels with no marks, to take its new home's")
-        pane.close()
+        XCTAssertTrue(released.pane.isOpen, "but the document is still open, to be put somewhere")
+        XCTAssertEqual(released.pane.fileSize, 2)
+        XCTAssertNil(released.pane.bookmarkStore,
+                     "it travels with no list, to take its new home's")
+        released.pane.close()
+    }
+
+    // MARK: - Out into a tab
+
+    /// A panel dragged onto the New Tab strip leaves for a tab of its own, and
+    /// what leaves is the pane object — the document, its edits and its undo
+    /// travel with it rather than being opened again.
+    func testDraggingAPanelToTheNewTabStripMovesItIntoATab() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02, 0x03], named: "part",
+                                                       animated: false))
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        let tab = MainViewController()
+        defer { tab.windowModel.pane1.close() }
+        controller.makeSiblingTab = { tab }
+
+        controller.tearOffPaneToNewTab(draggedPaneID: part.dragID)
+
+        XCTAssertTrue(controller.fragments.isEmpty, "the dock has let it go")
+        XCTAssertTrue(tab.windowModel.pane1 === part, "the pane itself moved, bytes and all")
+        XCTAssertEqual(tab.windowModel.pane1.fileSize, 3)
+    }
+
+    /// Its marks go with it: they were made against the part's own offsets and
+    /// mean the same rows wherever it lands.
+    func testThePanelsMarksTravelWithIt() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](0..<64), named: "part",
+                                                       animated: false))
+        try XCTUnwrap(controller.fragments.pane(id)).bookmarkStore?.toggle(rowContaining: 0x20)
+        let tab = MainViewController()
+        defer { tab.windowModel.pane1.close() }
+        controller.makeSiblingTab = { tab }
+
+        controller.tearOffPaneToNewTab(draggedPaneID: try XCTUnwrap(controller.fragments.pane(id)).dragID)
+
+        XCTAssertEqual(tab.windowModel.bookmarkStore.bookmarks.count, 1)
+    }
+
+    /// With Option held it is a copy: the tab gets a document holding the same
+    /// bytes and the panel stays where it was.
+    func testOptionDraggingAPanelCopiesItAndLeavesThePanel() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02, 0x03], named: "part",
+                                                       animated: false))
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        let tab = MainViewController()
+        defer { tab.windowModel.pane1.close() }
+        controller.makeSiblingTab = { tab }
+
+        controller.tearOffPaneToNewTab(draggedPaneID: part.dragID, copying: true)
+
+        XCTAssertEqual(controller.fragments.count, 1, "the panel stays")
+        XCTAssertFalse(tab.windowModel.pane1 === part, "and the tab holds a copy, not the part")
+        XCTAssertEqual(tab.windowModel.pane1.fileSize, 3)
+    }
+
+    /// A folded panel has no header to drag, so its pill carries the same
+    /// command in its own menu.
+    func testAPillsMenuOffersOpeningThePanelInATab() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part",
+                                                       animated: false))
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        controller.fragments.collapse(animated: false)
+        let tab = MainViewController()
+        defer { tab.windowModel.pane1.close() }
+        controller.makeSiblingTab = { tab }
+        controller.fragments.refreshDock()
+
+        let pill = try XCTUnwrap(strip(of: controller).pillsForTesting.first)
+        let menu = try XCTUnwrap(pill.menu(for: NSEvent()))
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Open in New Tab" })
+        XCTAssertTrue(item.isEnabled, "there is a window to put a tab beside")
+        _ = item.target?.perform(item.action, with: item)
+
+        XCTAssertTrue(controller.fragments.isEmpty)
+        XCTAssertTrue(tab.windowModel.pane1 === part)
+    }
+
+    /// With no window to put a tab beside, the item is there and dimmed rather
+    /// than missing — the same rule the pane header's twin follows.
+    func testThePillsTabItemIsDimmedWithNoWindowToPutATabBeside() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        _ = controller.openFragment([0x01], named: "part", animated: false)
+
+        let pill = try XCTUnwrap(strip(of: controller).pillsForTesting.first)
+        let menu = try XCTUnwrap(pill.menu(for: NSEvent()))
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Open in New Tab" })
+        XCTAssertFalse(item.isEnabled)
     }
 
     // MARK: - What a panel keeps to itself

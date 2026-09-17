@@ -162,9 +162,13 @@ and means the same row in both (§20). A part's offsets are its own.
 
 ## Tearing a panel off into a tab
 
-A fragment panel is dragged — by its header, or by its pill in the dock — onto
-the New Tab strip, and leaves for a tab of its own. The mechanism already exists
-and is the right one: `releasePane(at:)` / `adoptPane(_:bookmarks:)` **move** the
+A fragment panel that is up is dragged by its header onto the New Tab strip and
+leaves for a tab of its own — the same gesture, the same strip and the same
+handle a pane is torn off by, because a panel's header *is* a pane's. A folded
+one has no header on screen, so its pill carries **Open in New Tab** in its own
+menu, and the header's menu carries the same item for the panel that is up. The
+mechanism underneath all three is the one that already exists, and is the right
+one: `releasePane(at:)` / `adoptPane(_:bookmarks:)` **move** the
 `PaneViewModel` object, so the document, the unsaved edits, the undo history, the
 segments and the change watcher travel with it, and the file stays open exactly
 once (§4.1 rule 6 is never in question).

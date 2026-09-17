@@ -53,6 +53,7 @@ import Cocoa
         // Through the tab, not straight to `close`: a pill's ✕ has to ask the
         // same question ⌘W does about bytes the parent has not got back.
         strip.onClose = { [weak self] id in self?.host?.closeFragment(id) }
+        strip.onTearOff = { [weak self] id in self?.host?.tearOffFragment(id) }
         refreshDock()
     }
 
@@ -143,18 +144,28 @@ import Cocoa
         apply(dock.remove(id), animated: animated)
     }
 
+    /// The panel whose pane is being dragged, or nil when the drag is not one
+    /// of this dock's.
+    func panel(withDragID dragID: UUID) -> FragmentDock.PanelID? {
+        dock.panels.first { entries[$0]?.pane.dragID == dragID }
+    }
+
     /// Lets go of a panel without closing its document: what tearing one off
     /// into a tab of its own leaves behind. The pane is handed back so the
     /// caller can put it somewhere, with everything it carries — its edits, its
     /// undo, and the link to the parent, which is the pane's own property and
     /// so travels with it.
-    func release(_ id: FragmentDock.PanelID, animated: Bool = true) -> PaneViewModel? {
+    ///
+    /// Its marks come too, as a copy: they were made against the part's own
+    /// offsets and mean the same rows wherever it lands. The pane itself leaves
+    /// with no list, because it is about to be given its new home's.
+    func release(_ id: FragmentDock.PanelID,
+                 animated: Bool = true) -> (pane: PaneViewModel, bookmarks: [Bookmark])? {
         guard let entry = entries[id] else { return nil }
-        // The pane leaves with no marks: it is about to be given the list of
-        // wherever it lands.
+        let marks = entry.bookmarks.bookmarks
         entry.pane.bookmarkStore = nil
         apply(dock.remove(id), animated: animated)
-        return entry.pane
+        return (entry.pane, marks)
     }
 
     // MARK: - Running a transition
@@ -256,7 +267,8 @@ import Cocoa
                 title: entry.pane.status.fileName,
                 isUp: dock.expanded == id,
                 hasChanges: entry.pane.origin?.hasChanges(in: entry.pane)
-                    ?? entry.pane.status.isDirty
+                    ?? entry.pane.status.isDirty,
+                canTearOff: host?.canTearOffFragment ?? false
             )
         })
         host?.setFragmentDockVisible(!dock.isEmpty)
