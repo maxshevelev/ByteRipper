@@ -11,7 +11,7 @@ Beside the dump there is a **tool panel**: the same image read as the structure 
 
 ## Download
 
-[**ByteRipper 0.8.2**](https://github.com/maxshevelev/ByteRipper/releases/latest) — a universal `.dmg` (Apple silicon and Intel), macOS 14 or later.
+[**ByteRipper 0.8.3**](https://github.com/maxshevelev/ByteRipper/releases/latest) — a universal `.dmg` (Apple silicon and Intel), macOS 14 or later.
 
 The build is ad-hoc signed and not notarized, so Gatekeeper stops the first launch: right-click the app and choose **Open**, or clear the quarantine flag once.
 
