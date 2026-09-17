@@ -687,7 +687,12 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
     /// toggle, and focuses the pattern field ready for typing.
     func prepareForShow() {
         show(patternError: nil)
-        if let mostRecent = FindHistoryStore.mostRecent {
+        if let staged = stagedPattern {
+            // A selection was put into the pattern while the bar was closed
+            // (⌘E, §11). It is the newer statement of what to look for, so the
+            // open offers it rather than the last search.
+            applyStaged(staged)
+        } else if let mostRecent = FindHistoryStore.mostRecent {
             patternField.stringValue = mostRecent.pattern
             if let encodingIndex = SearchEncoding.allCases.firstIndex(of: mostRecent.encoding) {
                 encodingPopup.selectItem(at: encodingIndex)
@@ -711,6 +716,53 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
             patternField.selectText(nil)
         }
     }
+
+    // MARK: - Use Selection for Find (§11)
+
+    /// The pattern a selection was put into, kept so the *next* open offers it
+    /// (§11). Dropped by the next keystroke in the field, by a row picked out
+    /// of the lists, and by a search — from then on the field's own text, or
+    /// the history, is the newer statement of what to look for.
+    private var stagedPattern: SelectionFindPattern?
+
+    /// ⌘E: the selection becomes the pattern to search for, and nothing else
+    /// happens — the bar is not opened, no search is run, and the focus stays
+    /// where the user is (§11).
+    ///
+    /// The write lands in the field whether the bar is showing or not: a bar on
+    /// screen must say what it will search for, and a closed one is restored
+    /// from `stagedPattern` when it opens.
+    ///
+    /// The case toggle is left alone. It is the user's own preference, persisted
+    /// across searches, and taking a pattern out of the dump says nothing about
+    /// how they want it matched.
+    func stage(_ pattern: SelectionFindPattern) {
+        stagedPattern = pattern
+        applyStaged(pattern)
+        // Whatever the bar said a moment ago — a count, or a complaint — was
+        // about the text that was there, and the search that count described is
+        // no longer the one the field names (§11). The same reading a keystroke
+        // in the field gets, because this is the same kind of event: the pattern
+        // changed without being searched for.
+        show(patternError: nil)
+        show(count: nil)
+        onPatternEdited?()
+    }
+
+    /// Writes a staged pattern into the form: the text, and the encoding it is
+    /// to be read under — including as the encoding a Smart Search starts from,
+    /// which is what picking the popup by hand states too (§11).
+    private func applyStaged(_ pattern: SelectionFindPattern) {
+        setPatternText(pattern.text)
+        if let index = SearchEncoding.allCases.firstIndex(of: pattern.encoding) {
+            encodingPopup.selectItem(at: index)
+        }
+        pickedEncoding = pattern.encoding
+        updateCaseButtonVisibility()
+    }
+
+    /// The staged pattern, for tests.
+    var stagedPatternForTests: SelectionFindPattern? { stagedPattern }
 
     /// Rebuilds the field's menu: the two lists and the commands that belong to
     /// each (§11, `Design/PATTERN_LIBRARY_IDEA.md`).
@@ -947,6 +999,9 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         // Typed over: whatever encoding a picked entry brought with it is not
         // about this text (§11).
         pickedEncoding = nil
+        // …nor is a pattern a selection staged: the text in front of the user
+        // is theirs now, and the next open offers what they left in the field.
+        stagedPattern = nil
         // Whatever the field said a moment ago — a count or a complaint about
         // it — was about the text that was there (§11).
         show(patternError: nil)
@@ -1067,6 +1122,9 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
     private var searchToRecord: (text: String, caseSensitive: Bool)?
 
     private func noteSearchStarted(recording: Bool) {
+        // A search supersedes a staged pattern: what it finds goes into the
+        // history, which is what the next open offers (§11).
+        stagedPattern = nil
         // A row picked out of the menu records nothing: the history is what was
         // *typed*, and spending its ten slots on things already kept elsewhere
         // is the problem the favourites exist to solve (§11).
@@ -1162,6 +1220,9 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
     /// active editor ignores `stringValue` until it commits.
     private func apply(_ entry: SearchPatternEntry) {
         setPatternText(entry.pattern)
+        // A row chosen by hand replaces a staged pattern: both say "search for
+        // this", and the later one is the one that stands (§11).
+        stagedPattern = nil
 
         if let index = SearchEncoding.allCases.firstIndex(of: entry.encoding) {
             encodingPopup.selectItem(at: index)

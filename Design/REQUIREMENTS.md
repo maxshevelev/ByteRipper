@@ -1213,6 +1213,62 @@ Smart Search:
   a window. The bar hands over the text and the case flag and shows what came
   back; the window's controller puts the answer on screen.
 
+Use Selection for Find (⌘E):
+
+- The platform's standard command, in the platform's standard place: Edit >
+  **Use Selection for Find**, bound to ⌘E, beside Find.
+- It loads the selection into the pattern the next Find will look for — and
+  does **nothing else**. The Find bar is not opened, no search is run, the
+  caret and the selection stay where they are, and the focus stays in the dump.
+  A command that opened the bar would be ⌘F with extra steps; the point of ⌘E
+  is to say *what* to look for while going on reading.
+- **The column the selection was made in is the question being answered.** In
+  the hex column the pattern is the **bytes**, written the way a dump writes
+  them (`DE AD BE EF`) — the same form a search writes back into the field, so
+  a pattern taken out of the dump and one typed into it are the same text. In
+  the decoded-text column it is the **text** those bytes read as, as UTF-8,
+  searched as UTF-8.
+- Where the text column's bytes are **not** text, the pattern is the bytes
+  again. A pattern is a thing to search *with*: bytes that do not decode — a
+  selection starting mid-character, a run of `FF` fill, a stretch of code —
+  would become replacement characters, and a search for those finds nothing
+  that is in the file. Bytes always find themselves. "Not text" means either
+  the selection does not decode as UTF-8 at all, or it decodes to something
+  that cannot be read back off a single-line field and corrected there: a NUL,
+  a newline, any other control character.
+- The decoded-text column is drawn through a **single-byte decoder**, which is
+  not UTF-8: over ASCII the two agree, and a high byte a code page draws as a
+  letter is not UTF-8 by itself, so it comes back as its byte. Guessing which
+  encoding the file's strings are in is Smart Search's job, on the bar, where
+  the user can see the guess and correct it.
+- The pattern **and the encoding it is read under** travel together, because
+  either half alone is a lie: `41 42` under UTF-8 searches for four characters,
+  and `AB` under hex does not parse. The encoding is also the one a Smart
+  Search starts from, exactly as picking the popup by hand states it.
+- The **case toggle is left alone.** It is the user's own preference, persisted
+  across searches, and taking a pattern out of the dump says nothing about how
+  they want it matched.
+- The loaded pattern is what the **next open** of the bar offers, in place of
+  the last search — it is the newer statement of what to look for. It is
+  superseded by anything newer: a keystroke in the field, a row picked out of
+  the lists, or a search (which records what it finds, and the history is what
+  the open after that offers).
+- Loaded into a bar that is **already open**, it replaces what the field says
+  and ends the search that field described — the count and the greys go, the
+  way they go when the pattern is typed over. A count left standing would be
+  about a pattern that is no longer there.
+- The command has no visible effect of its own, so it **says what it did**: a
+  plate of the usual kind (`TransientNoticePresenter`) carrying the pattern and
+  the encoding it will be searched under. That is also where a text selection
+  finds out it came back as bytes.
+- A selection **too long** to be a pattern — over 1024 bytes — is refused in
+  words rather than truncated: a shortened pattern would find places the user
+  never asked about. (Select All followed by ⌘E is the case this catches.)
+- Dimmed without a selection, the same rule Copy follows: there is nothing to
+  take.
+- Both readings of a selection are the **model's** (`SelectionFindPattern` in
+  the Core package) and tested without a window.
+
 Search navigation:
 
 - Activating a search does two things, in this order: it **shows the match**,

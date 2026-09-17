@@ -267,6 +267,11 @@ enum MainMenu {
         editMenu.addItem(withTitle: "Select All", action: #selector(MainViewController.selectAllBytes), keyEquivalent: "a")
         editMenu.addItem(.separator())
         editMenu.addItem(withTitle: "Find", action: #selector(MainViewController.findPattern), keyEquivalent: "f")
+        // ⌘E beside Find, where every Mac app puts it: it loads the pattern the
+        // next Find will use and does nothing else — no bar, no search (§11).
+        editMenu.addItem(withTitle: "Use Selection for Find",
+                         action: #selector(MainViewController.useSelectionForFind),
+                         keyEquivalent: "e")
         // ⌘D marks (or unmarks) the caret's row — the gesture that has to cost
         // nothing on a bench (§20). It sits beside Go To: mark where you are,
         // then go to a position. The title says Toggle rather than Add because

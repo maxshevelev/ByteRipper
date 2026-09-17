@@ -6121,6 +6121,71 @@ final class MainViewController: NSViewController {
         showFindBar()
     }
 
+    /// The longest selection that can become a find pattern (§11).
+    ///
+    /// A pattern is a thing to compare a file against, not a piece of the file:
+    /// past a kilobyte the field holds three thousand characters of hex that
+    /// nobody can read, correct or keep, and the command has stopped being
+    /// "search for this". A Select All followed by ⌘E is the case this catches,
+    /// and it is answered in words rather than by quietly searching for the
+    /// first kilobyte of it — a truncated pattern would find places the user
+    /// never asked about.
+    static let maxSelectionFindBytes: UInt64 = 1024
+
+    /// Edit > Use Selection for Find (⌘E): the selection becomes the pattern to
+    /// search for, and that is all it does — the bar is deliberately **not**
+    /// opened, no search is run, and the focus stays in the dump (§11).
+    ///
+    /// The column the selection was made in is the whole question. In the hex
+    /// column the pattern is the bytes, written as a dump writes them; in the
+    /// decoded-text column it is the text they read as — and where they read as
+    /// no text at all, the bytes again, because a pattern of replacement
+    /// characters finds nothing that is in the file. Both readings belong to
+    /// `SelectionFindPattern`, which is pure and tested on its own.
+    ///
+    /// The command has no visible effect of its own — that is what "does not
+    /// open the bar" means — so it reports in a plate: the pattern and the
+    /// encoding it will be searched under. That is also where a text selection
+    /// finds out it came back as bytes.
+    @objc func useSelectionForFind() {
+        let pane = activePane
+        guard pane.isOpen, let doc = pane.document else { return }
+        let selection = doc.selection
+        guard !selection.isEmpty else { return }
+        guard selection.count <= Self.maxSelectionFindBytes else {
+            showNotice(symbol: "exclamationmark.triangle", lines: [
+                "Selection too long to search for",
+                "Up to \(Self.maxSelectionFindBytes) bytes can be used as a find pattern.",
+            ])
+            return
+        }
+        guard let bytes = try? doc.read(at: selection.start, length: Int(selection.count)) else {
+            return
+        }
+        // Where the caret was typing is where the selection was made (§7): the
+        // hex column asks about bytes, the decoded-text column about text.
+        let pattern = pane.inputRegion == .ascii
+            ? SelectionFindPattern.forText(bytes)
+            : SelectionFindPattern.forBytes(bytes)
+        findBar.stage(pattern)
+        showNotice(symbol: "magnifyingglass", lines: [
+            "Find pattern set",
+            Self.patternExcerpt(pattern.text),
+            pattern.encoding.displayName,
+        ])
+    }
+
+    /// The pattern ⌘E loaded, for tests.
+    var stagedFindPatternForTests: SelectionFindPattern? { findBar.stagedPatternForTests }
+
+    /// The pattern as the plate says it: quoted, and cut short where it is
+    /// longer than a line the eye takes in at once. The plate is a receipt —
+    /// "this is what ⌘E took" — and the field holds the whole of it.
+    static func patternExcerpt(_ text: String, limit: Int = 40) -> String {
+        guard text.count > limit else { return "\u{201C}\(text)\u{201D}" }
+        return "\u{201C}\(text.prefix(limit))\u{2026}\u{201D}"
+    }
+
     /// The toolbar's Find button, which is a switch rather than a command: it
     /// is a thing on screen that is either pressed or not, and pressing it
     /// again is Done.
@@ -7336,7 +7401,10 @@ extension MainViewController: NSMenuItemValidation {
         case #selector(fillSelectionWithBytes):
             let pane = activePane
             return pane.isOpen && !pane.hexSelection().isEmpty
-        case #selector(copySelection):
+        case #selector(copySelection),
+             #selector(useSelectionForFind):
+            // Both act on the selection, so both are dimmed without one: ⌘E
+            // with nothing selected would have nothing to take (§11).
             let pane = activePane
             return pane.isOpen && !pane.hexSelection().isEmpty
         case #selector(NSText.paste(_:)):
