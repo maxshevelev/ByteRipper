@@ -336,6 +336,65 @@ final class MEACuratorTests: XCTestCase {
         XCTAssertEqual(field("File", in: entry), "Intel Configuration")
     }
 
+    // MARK: - Unlock Token
+
+    /// The flags an unlock token ends with are four facts on one node — no
+    /// folder to open — and the node stands for the 0x20 bytes it describes.
+    func testTheUnlockTokenNodeCarriesItsFactsAndItsBytes() throws {
+        let a = try analysis(["unlockTokenFlags": [[
+            "partition": "UTOK", "offset": 0x461FE0, "delayedAuthMode": 0,
+            "reservedHex": String(repeating: "FF", count: 0x1B),
+        ]]])
+        let node = try XCTUnwrap(find("Unlock Token", in: MEACurator.present(a)))
+        XCTAssertEqual(node.subtitle, "0x461FE0")
+        XCTAssertEqual(node.range, 0x461FE0..<0x462000)
+        XCTAssertEqual(field("Partition", in: node), "UTOK")
+        XCTAssertEqual(field("Offset", in: node), "0x461FE0")
+        XCTAssertEqual(field("Delayed Authentication Mode", in: node), "No")
+        XCTAssertEqual(field("Reserved", in: node),
+                       "0x" + String(repeating: "FF", count: 0x1B))
+        XCTAssertTrue(node.children.isEmpty)
+    }
+
+    /// The mode byte is worded as upstream words it, and a value nobody has
+    /// seen says so rather than reading as Yes.
+    func testTheDelayedAuthenticationModeIsWordedNotRounded() throws {
+        func mode(_ raw: Int) throws -> String? {
+            let a = try analysis(["unlockTokenFlags": [[
+                "partition": "UTOK", "offset": 0x1000, "delayedAuthMode": raw,
+                "reservedHex": "00",
+            ]]])
+            return field("Delayed Authentication Mode",
+                         in: try XCTUnwrap(find("Unlock Token", in: MEACurator.present(a))))
+        }
+        XCTAssertEqual(try mode(0), "No")
+        XCTAssertEqual(try mode(1), "Yes")
+        XCTAssertEqual(try mode(3), "Unknown (3)")
+    }
+
+    /// Two tokens in one image are two nodes, each named by its partition — a
+    /// bare "Unlock Token" twice would say nothing about which is which.
+    func testTwoTokensAreNamedByTheirPartitions() throws {
+        let a = try analysis(["unlockTokenFlags": [
+            ["partition": "UTOK", "offset": 0x1000, "delayedAuthMode": 0,
+             "reservedHex": "00"],
+            ["partition": "STKN", "offset": 0x9000, "delayedAuthMode": 1,
+             "reservedHex": "00"],
+        ]])
+        let roots = MEACurator.present(a)
+        XCTAssertNil(find("Unlock Token", in: roots))
+        XCTAssertNotNil(find("Unlock Token (UTOK)", in: roots))
+        XCTAssertEqual(field("Delayed Authentication Mode",
+                             in: try XCTUnwrap(find("Unlock Token (STKN)", in: roots))),
+                       "Yes")
+    }
+
+    /// The structure is optional in the format, so an image without one has no
+    /// node saying so — the tree lists what a dump carries.
+    func testAnImageWithoutTheFlagsHasNoNode() throws {
+        XCTAssertNil(find("Unlock Token", in: MEACurator.present(try analysis([:]))))
+    }
+
     // MARK: - Zones
 
     func testZoneForByteRangeAndEmptyOtherwise() throws {

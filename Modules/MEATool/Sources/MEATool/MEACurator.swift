@@ -46,6 +46,7 @@ public enum MEACurator {
         add(backupGroup(analysis))
         add(efsGroup(analysis, efsNames))
         add(oemGroup(analysis, configPaths))
+        unlockTokenGroups(analysis).forEach(add)
         add(mmeGroup(analysis))
         add(gscGroup(analysis))
         add(oromGroup(analysis))
@@ -635,6 +636,43 @@ public enum MEACurator {
         return MEANode(path: [], title: "OEM Configuration",
                        subtitle: MEAText.offset(oem.offset),
                        fields: fields, children: children)
+    }
+
+    /// The Unlock Token Flags an unlock-token partition ends with, one node per
+    /// partition that has them (`UTOK`, `STKN`). Nothing at all when no such
+    /// partition carries the structure — it is optional in the format, so its
+    /// absence is not a row saying so.
+    ///
+    /// A flat node rather than a group with one child: it is four facts, and a
+    /// reader should not have to open a folder to see three of them.
+    private static func unlockTokenGroups(_ a: FirmwareAnalysis) -> [MEANode] {
+        let tokens = a.unlockTokenFlags ?? []
+        return tokens.map { token in
+            var fields: [MEAField] = []
+            append(&fields, "Partition", token.partition)
+            append(&fields, "Offset", MEAText.offset(token.offset))
+            append(&fields, "Delayed Authentication Mode",
+                   delayedAuthenticationMode(token.delayedAuthMode))
+            append(&fields, "Reserved", "0x\(token.reservedHex)")
+            return MEANode(
+                path: [],
+                title: tokens.count == 1
+                    ? "Unlock Token" : "Unlock Token (\(token.partition))",
+                subtitle: MEAText.offset(token.offset),
+                range: MEAText.rangeValue(token.offset, UnlockTokenFlags.size),
+                fields: fields)
+        }
+    }
+
+    /// Upstream's own wording for the one byte that means something: 0 and 1 are
+    /// No and Yes, and anything else is a value nobody has seen — said as such
+    /// rather than rounded to Yes.
+    private static func delayedAuthenticationMode(_ raw: Int) -> String {
+        switch raw {
+        case 0: return "No"
+        case 1: return "Yes"
+        default: return "Unknown (\(raw))"
+        }
     }
 
     /// One ID-keyed Configuration stream as a group of record rows.

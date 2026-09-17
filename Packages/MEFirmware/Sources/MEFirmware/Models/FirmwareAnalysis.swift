@@ -73,6 +73,7 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     public var rbePmMetadata: [RBE_PMMetadata]? = nil  // FTPR `pm` / RBEP `rbe` module "Metadata" table (rows 54/55)
     public var efsVolume: EFSVolume? = nil            // EFS paged-volume structural facts (FPT "EFS" region)
     public var oemConfiguration: OEMConfiguration? = nil  // FITC "OEM Configuration" facts (FPT "FITC" region)
+    public var unlockTokenFlags: [UnlockTokenFlags]? = nil  // UTFL at the end of a UTOK/STKN partition (row 68)
     /// ARB Security Version Number (row 9): hoisted from the operational chain's
     /// CSE_Ext_0F `SignedPackageExtension.arbSvn` (last such tag seen), nil when
     /// the chain carries none.
@@ -1638,6 +1639,43 @@ public struct MFSReservedFileIntegrity: Codable, Sendable, Equatable {
     }
 }
 
+/// The flags a debug unlock token ends with — upstream `UTFL_Header`
+/// (MEA.py 2038).
+///
+/// An FPT partition named `UTOK` or `STKN` carries a signed unlock token, and
+/// may end with a 0x20-byte structure tagged `UTFL`. One per such partition
+/// that has one; a token without the structure is listed nowhere, which is
+/// upstream's reading too — it calls the structure optional and says nothing
+/// when the tag is absent.
+///
+/// `delayedAuthMode` is kept as the raw byte it is. Upstream words 0 and 1 as
+/// No and Yes and anything else as "Unknown (n)", which is the panel's job:
+/// the model says what the byte held. `reservedHex` is the 27 trailing bytes in
+/// storage order (upstream prints the same bytes as one little-endian value).
+public struct UnlockTokenFlags: Codable, Sendable, Equatable {
+    /// `UTFL_Header`'s fixed length — what `offset` points at is this many
+    /// bytes, and a reader showing the structure needs to say so.
+    public static let size = 0x20
+
+    /// The partition the flags sit at the end of — `UTOK` or `STKN`.
+    public var partition: String
+    /// Where the 0x20-byte structure starts in the image.
+    public var offset: Int
+    /// `DelayedAuthMode`, raw.
+    public var delayedAuthMode: Int
+    /// The 27 reserved bytes, uppercase hex in storage order. Erased (all 0xFF)
+    /// on both dumps that carry a token.
+    public var reservedHex: String
+
+    public init(partition: String, offset: Int, delayedAuthMode: Int,
+                reservedHex: String) {
+        self.partition = partition
+        self.offset = offset
+        self.delayedAuthMode = delayedAuthMode
+        self.reservedHex = reservedHex
+    }
+}
+
 /// One slot of an IFWI 1.6/1.7 CSE Layout Table's partition inventory (upstream
 /// `cse_lt_hdr_info`, MEA.py 11549). `name` is upstream's label — "Data",
 /// "Boot 1"…"Boot 5", plus "Temp"/"ELog" on IFWI 1.7. `offset` is the slot's SPI
@@ -2105,10 +2143,14 @@ public enum EngineModelRevision {
     /// data area at the offsets the EFS table gives and split from the Integrity
     /// tables the FTBL flags say are there.
     ///
+    /// 38 adds `unlockTokenFlags`: the `UTFL` structure a `UTOK`/`STKN`
+    /// partition may end with — its Delayed Authentication Mode byte and the
+    /// reserved bytes behind it.
+    ///
     /// 37 adds the ID-keyed Configuration records of the newer layouts —
     /// `MFSVolume.configurationsByID` and the FITC payload's own
     /// `OEMConfiguration.records` / `.recordsByID`. Which record struct a stream
     /// carries is an identity answer (`get_cfg_rec_size`), so the decode moved
     /// to the identity-gated phase for both sizes.
-    public static let current = 37
+    public static let current = 38
 }

@@ -706,6 +706,20 @@ public actor MEFirmwareAnalyzer {
             }
         }
 
+        // Phase 9 (structural): the Unlock Token Flags. An image may carry a
+        // debug unlock token as an FPT partition named "UTOK" or "STKN", and
+        // such a partition may *end* with a 0x20-byte `UTFL` structure
+        // (upstream reads it at the partition's tail, MEA.py 6637/6650). It is
+        // optional there and optional here: a token without the tag is not a
+        // finding, and the list simply has no row for it.
+        let unlockTokenFlags = regions
+            .filter { UnlockTokenParser.partitionNames.contains($0.name) }
+            .compactMap {
+                UnlockTokenParser.flags(in: region, offset: $0.offset - baseOffset,
+                                        size: $0.size, absoluteOffset: $0.offset,
+                                        partition: $0.name)
+            }
+
         // Phase 9 (identity-gated): the legacy file-8 Home Directory and the
         // per-reserved-file Integrity tables of a `vfs_starts_at_0`-false volume
         // (CSME 11–14 + SPS/TXE analogues), mirroring upstream `mfs_home_anl` and
@@ -1034,6 +1048,7 @@ public actor MEFirmwareAnalyzer {
             rbePmMetadata: rbePm,
             efsVolume: efsVolume,
             oemConfiguration: oemConfiguration,
+            unlockTokenFlags: unlockTokenFlags.isEmpty ? nil : unlockTokenFlags,
             arbSvn: chainHoist.arbSvn,
             vcn: chainHoist.vcn03 ?? chainHoist.vcn0F ?? manifestSummary?.vcn,
             nvmCompatibility: chainHoist.nvm,
