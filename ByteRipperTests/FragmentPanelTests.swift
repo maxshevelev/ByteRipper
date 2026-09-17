@@ -192,6 +192,37 @@ final class FragmentPanelTests: XCTestCase {
         released.pane.close()
     }
 
+    /// The header's ✕ closes the panel. It is the pane's own button, and it did
+    /// nothing at all until the panel's pane view was given the wiring the
+    /// tab's panes get.
+    func testTheHeadersCloseButtonClosesThePanel() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part",
+                                                       animated: false))
+        let panel = try XCTUnwrap(controller.fragments.panelView(id))
+        let close = try XCTUnwrap(descendants(of: panel, NSButton.self).first {
+            $0.accessibilityLabel() == "Close pane"
+        })
+
+        close.performClick(nil)
+
+        XCTAssertTrue(controller.fragments.isEmpty, "the panel goes, and its pill with it")
+        XCTAssertTrue(try strip(of: controller).pillsForTesting.isEmpty)
+    }
+
+    /// And the header's right-click menu is this part's, not the dump's.
+    func testTheHeaderCarriesThePartsOwnMenu() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part",
+                                                       animated: false))
+        let paneView = controller.paneView(for: try XCTUnwrap(controller.fragments.pane(id)))
+
+        let menu = try XCTUnwrap(paneView.paneMenu, "the header has a menu at all")
+        XCTAssertTrue(menu.items.contains { $0.title == "Open in New Tab" })
+    }
+
     // MARK: - Out into a tab
 
     /// A panel dragged onto the New Tab strip leaves for a tab of its own, and
@@ -318,8 +349,8 @@ final class FragmentPanelTests: XCTestCase {
 
         let pane = try XCTUnwrap(controller.fragments.pane(id))
         try pane.applyToolWrites([(offset: 0, bytes: [0xFF])], named: "Patch")
-        controller.fragments.refreshDock()
-        XCTAssertTrue(pill.hasChanges, "an edit the parent has not got back is worth a dot")
+        XCTAssertTrue(pill.hasChanges,
+                      "an edit the parent has not got back is worth a dot, without being asked")
 
         controller.fragments.close(id, animated: false)
         XCTAssertTrue(try strip(of: controller).pillsForTesting.isEmpty)

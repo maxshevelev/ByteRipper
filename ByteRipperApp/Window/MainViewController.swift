@@ -150,6 +150,46 @@ final class MainViewController: NSViewController {
         movePaneToNewTab(at: paneIndex(pane))
     }
 
+    /// Gives a fragment panel's pane view the wiring `apply(mode:)` gives the
+    /// tab's own panes: the header's ✕ and its link to the parent, the two
+    /// context menus, the status bar, and what a tool-module and the search
+    /// have to hear about an edit.
+    ///
+    /// Written out here rather than shared with `apply(mode:)` because every
+    /// target differs: the ✕ closes a panel rather than a pane, the tool that
+    /// hears about an edit is the panel's own, and the pill in the dock has to
+    /// be re-read for the dot that says the parent has not got these bytes.
+    ///
+    /// What is deliberately **not** here is the minimap's: its feed is still
+    /// the tab's one map pair, so a minimap opened on a panel would draw
+    /// nothing. That is the next piece of work, not an omission.
+    func wireFragmentPaneView(_ view: FilePaneView, for pane: PaneViewModel,
+                              panel: FragmentDock.PanelID, surface: DocumentSurface) {
+        view.paneMenu = makePaneMenu(for: pane)
+        view.offsetMenuProvider = { [weak self] offset in
+            self?.makeOffsetMenu(for: pane, offset: offset) ?? NSMenu()
+        }
+        wireBookmarkDoubleClick(view, for: pane)
+        wireStatusBar(view, for: pane)
+        view.onClose = { [weak self] in self?.closeFragment(panel) }
+        view.onRevealOrigin = { [weak self] in self?.revealOrigin(of: pane) }
+        view.onSearchResultsClose = { [weak self] _ in self?.syncFindBarToActivePane() }
+        view.onMatchesChanged = { [weak self] in self?.searchAppearanceChanged() }
+        pane.onEdit = { [weak self, weak surface] edit in
+            self?.invalidateMatches(in: pane)
+            surface?.tools.paneEdited(pane, edit)
+            // The pill's dot is "the parent has not got this", which an edit is
+            // exactly what changes.
+            self?.fragments.refreshDock()
+        }
+        pane.onFullInvalidation = { [weak self, weak surface] in
+            surface?.tools.paneReloaded(pane)
+            self?.invalidateMatches(in: pane)
+            self?.fragments.refreshDock()
+        }
+        pane.onSavedStateChanged = { [weak self] in self?.fragments.refreshDock() }
+    }
+
     /// Whether a fragment panel has a window to be put in a tab beside.
     var canTearOffFragment: Bool { makeSiblingTab != nil }
 

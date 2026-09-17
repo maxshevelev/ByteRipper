@@ -112,6 +112,9 @@ import Cocoa
         let opened = dock.open()
         entries[opened.id] = Entry(pane: pane, surface: surface, paneView: paneView,
                                    view: view, bookmarks: bookmarks)
+        // After the id exists: the ✕ closes *this* panel, and the tool that
+        // hears about an edit is this surface's.
+        host.wireFragmentPaneView(paneView, for: pane, panel: opened.id, surface: surface)
         apply(opened.transition, animated: animated)
         return opened.id
     }
