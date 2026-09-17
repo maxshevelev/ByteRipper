@@ -15,7 +15,8 @@ public protocol MEADataSource: Sendable {
     /// when a run actually needs to decompress an older CSE module.
     func huffmanDictionaries() async throws -> HuffmanDictionaries
 
-    /// FileTable.dat module-name/version map for the VFS walk.
+    /// Parsed `FileTable.dat`: what names an FTBL-mode MFS volume's low-level
+    /// files, which carry no name in their own bytes (`FileTable`).
     func fileTable() async throws -> FileTable
 
     /// Emits when a background check has replaced `MEA.dat` with a newer one.
@@ -52,14 +53,6 @@ public enum MEADataError: LocalizedError, Sendable, Equatable {
     }
 }
 
-// Parser placeholder: the DB layer that turns FileTable.dat into this is a
-// later incremental step (upstream-map "CSE file systems"); nothing consumes
-// it yet. It exists so the protocol seam above is concrete and injectable from
-// day one. `HuffmanDictionaries` (the real type) lives in Decompress/Huffman.swift.
-public struct FileTable: Sendable, Equatable {
-    public init() {}
-}
-
 extension MEADataSource {
     /// A source with nothing to announce — a stub in a test, a local file.
     public func databaseChanges() async -> AsyncStream<Void> {
@@ -73,9 +66,11 @@ extension MEADataSource {
         throw MEADataError.malformed(file: "Huffman.dat (no data source configured)")
     }
 
-    /// Not ported yet: upstream FileTable.dat loaders / `check_ftbl_id`. Throws
-    /// until then.
+    /// Default: no table available — the caller decides whether that is fatal
+    /// (for the MFS names it is not: a file keeps its index).
+    /// `MEAGitHubDataRepository` overrides this with a live single-flight fetch
+    /// of `FileTable.dat`.
     public func fileTable() async throws -> FileTable {
-        throw MEADataError.malformed(file: "FileTable.dat (parser not ported yet)")
+        throw MEADataError.malformed(file: "FileTable.dat (no data source configured)")
     }
 }

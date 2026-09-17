@@ -25,6 +25,7 @@ public actor MEAGitHubDataRepository: MEADataSource {
     private let session: URLSession
     private let databaseData: Freshened<MEADatabase>
     private let huffmanData: Freshened<HuffmanDictionaries>
+    private let fileTableData: Freshened<FileTable>
 
     public init() {
         self.init(session: MEAGitHubDataRepository.makeSession())
@@ -41,6 +42,7 @@ public actor MEAGitHubDataRepository: MEADataSource {
         self.session = session
         self.databaseData = Freshened(ttl: ttl, now: now)
         self.huffmanData = Freshened(ttl: ttl, now: now)
+        self.fileTableData = Freshened(ttl: ttl, now: now)
     }
 
     public func database() async throws -> MEADatabase {
@@ -65,6 +67,18 @@ public actor MEAGitHubDataRepository: MEADataSource {
         }
     }
 
+    /// `FileTable.dat` — fetched only when a volume actually asks for a name,
+    /// which is an FTBL-mode MFS and nothing else. The file is the largest of
+    /// the three (~5 MB), so a dump that has no such volume never pays for it.
+    public func fileTable() async throws -> FileTable {
+        let session = session
+        return try await fileTableData.value { validator in
+            try await Self.check(path: "FileTable.dat", validator: validator, session: session) { text in
+                try FileTable.parse(text)
+            }
+        }
+    }
+
     /// Emits when a check behind someone's back found a newer `MEA.dat`.
     public func databaseChanges() async -> AsyncStream<Void> {
         let replacements = await databaseData.changes()
@@ -79,10 +93,11 @@ public actor MEAGitHubDataRepository: MEADataSource {
         return stream
     }
 
-    /// Make the next call re-check both files, whatever the clock says.
+    /// Make the next call re-check every file, whatever the clock says.
     public func markStale() async {
         await databaseData.markStale()
         await huffmanData.markStale()
+        await fileTableData.markStale()
     }
 
     /// Wait for a check running behind an answer — for tests, which must not
@@ -90,6 +105,7 @@ public actor MEAGitHubDataRepository: MEADataSource {
     func settle() async {
         await databaseData.settle()
         await huffmanData.settle()
+        await fileTableData.settle()
     }
 
     /// When each file last changed and when it was last confirmed current, for
@@ -98,9 +114,6 @@ public actor MEAGitHubDataRepository: MEADataSource {
                            huffman: Freshened<HuffmanDictionaries>.Status?) {
         get async { (await databaseData.status, await huffmanData.status) }
     }
-
-    // FileTable.dat parser is not ported yet; the protocol default throws
-    // `.malformed` until the DB layer lands (see MEADataSource.swift).
 
     /// One conditional request, turned into the answer `Freshened` expects.
     private static func check<T: Sendable>(

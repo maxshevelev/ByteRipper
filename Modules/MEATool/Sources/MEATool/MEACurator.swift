@@ -19,7 +19,14 @@ import MEFirmware
 public enum MEACurator {
     /// The presented tree roots, in reading order: identity first, then the
     /// structural groups, then the fact groups of whatever else decoded.
-    public static func present(_ analysis: FirmwareAnalysis) -> [MEANode] {
+    ///
+    /// `mfsNames` is the one thing here that does not come out of the analysis:
+    /// an FTBL-mode MFS volume's low-level files have no name in their bytes,
+    /// so the panel looks theirs up in `FileTable.dat` and hands the answer in
+    /// (`MFSFileNames`). `.none` — the default — is the tree as it reads before
+    /// the table arrives, and on every volume that names its own files.
+    public static func present(_ analysis: FirmwareAnalysis,
+                               mfsNames: MFSFileNames = .none) -> [MEANode] {
         var roots: [MEANode] = []
         let add: (MEANode?) -> Void = { if let n = $0 { roots.append(n) } }
 
@@ -29,7 +36,7 @@ public enum MEACurator {
         add(bootPartitions(analysis))
         add(codePartition(analysis))
         add(manifest(analysis))
-        add(mfsVolume(analysis))
+        add(mfsVolume(analysis, mfsNames))
 
         // Fact groups — everything else a dump carried, each only when present.
         add(backupGroup(analysis))
@@ -310,7 +317,7 @@ public enum MEACurator {
 
     // MARK: - File System (MFS)
 
-    private static func mfsVolume(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func mfsVolume(_ a: FirmwareAnalysis, _ names: MFSFileNames) -> MEANode? {
         guard let vol = a.mfsVolume else { return nil }
         var header: [MEAField] = []
         append(&header, "Offset", MEAText.offset(vol.offset))
@@ -327,19 +334,16 @@ public enum MEACurator {
         append(&header, "FTBL Dictionary", MEAText.hex(vol.ftblDictionary))
         append(&header, "FTBL Platform", MEAText.hex(vol.ftblPlatform))
         append(&header, "Uses FileTable.dat", MEAText.yesNo(vol.usesFTBL))
+        // Where the names on the file rows came from — and whether either half
+        // of the table was assumed rather than named by the volume. Only when a
+        // lookup was actually made: a legacy volume names its own files.
+        if let table = names.tableLabel {
+            append(&header, "File Table", table)
+        }
 
         var children: [MEANode] = []
         if !vol.files.isEmpty {
-            let rows = vol.files.map { f -> MEANode in
-                var fields: [MEAField] = []
-                append(&fields, "Index", String(f.index))
-                append(&fields, "Size", MEAText.size(f.size))
-                // A present file has content, but its byte position is the FAT
-                // chain walk the engine does not expose — no reliable range.
-                return MEANode(path: [], title: "File \(f.index)",
-                               subtitle: MEAText.size(f.size), fields: fields,
-                               isEmptySection: f.size == 0)
-            }
+            let rows = vol.files.map { mfsFileRow($0, names) }
             children.append(MEANode(path: [], title: "Files",
                                     subtitle: MEAText.count(rows.count, "file"),
                                     children: rows))
@@ -371,6 +375,43 @@ public enum MEACurator {
         return MEANode(path: [], title: "File System (MFS)",
                        subtitle: MEAText.count(vol.presentFileCount, "file"),
                        fields: header, children: children)
+    }
+
+    /// One present low-level file. Numbered where nothing names it — which is
+    /// every legacy volume's rows, and an FTBL volume's before its table
+    /// arrives — and named where `FileTable.dat` does.
+    ///
+    /// The fields describe the record the title came from, which is why the
+    /// File ID is among them: a reader checking the panel against upstream's
+    /// console is looking at that number.
+    private static func mfsFileRow(_ file: MFSFile, _ names: MFSFileNames) -> MEANode {
+        var fields: [MEAField] = []
+        append(&fields, "Index", String(file.index))
+        append(&fields, "Size", MEAText.size(file.size))
+        let record = names.record(for: file.index)
+        if let record {
+            append(&fields, "Path", record.path)
+            append(&fields, "File ID", "0x\(record.fileID)")
+            append(&fields, "Integrity", MEAText.yesNo(record.integrity))
+            append(&fields, "Encryption", MEAText.yesNo(record.encryption))
+            append(&fields, "Anti-Replay", MEAText.yesNo(record.antiReplay))
+            append(&fields, "Group ID", MEAText.hex(record.groupID))
+            append(&fields, "User ID", MEAText.hex(record.userID))
+        }
+        // A present file has content, but its byte position is the FAT
+        // chain walk the engine does not expose — no reliable range.
+        return MEANode(path: [], title: record?.path ?? "File \(file.index)",
+                       subtitle: mfsFileSubtitle(file, named: record != nil),
+                       fields: fields,
+                       isEmptySection: file.size == 0)
+    }
+
+    /// A named row's subtitle keeps the number the flash actually carries: the
+    /// index is what the volume says about the file, and a reader comparing the
+    /// panel with a dump — or with upstream's own `path (0063)` — needs it.
+    private static func mfsFileSubtitle(_ file: MFSFile, named: Bool) -> String {
+        guard named else { return MEAText.size(file.size) }
+        return "#\(file.index) · \(MEAText.size(file.size))"
     }
 
     private static func homeGroup(_ home: MFSHomeDirectory) -> MEANode {

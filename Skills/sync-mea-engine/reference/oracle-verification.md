@@ -206,7 +206,7 @@ design, each with its reason recorded in the map.
 | 82 | `chk_iup_size` | display Warning/Note + optional padding-strip writer |
 | 83 | `fovd_clean` | clean/dirty *display* flag |
 | 94 | `get_fw_ver` | version display string; needs the DB/UI label layer |
-| 96 | FileTable.dat loaders | **parked (user decision)** — DB-derived text/flags only, excluded by the result-model rule |
+| 96 | FileTable.dat loaders | **done 2026-09-17** — in the panel, not the model: the rule holds and the names are a lookup the ME tool makes (verified 366/366 against upstream's `-unp86` log on `CSME 15.bin`). The integrity-tail split it unlocks is open |
 | 134 | `cse_unpack` | file-extraction/repair writer — an output feature, not analysis facts |
 | 135 | per-family pipeline chain | thin print/orchestration driver over the ported descriptor rows |
 
@@ -224,8 +224,11 @@ The rows not ported are deferred on one of four grounds, none of which is
 "not yet ported byte core":
 
 1. **DB-text naming / display** — excluded by the standing result-model rule
-   (the UI model never carries DB-derived display text): EFS/FTBL file names,
-   FITC config records, `get_fw_ver`, `chk_iup_size`, `fovd_clean`, row 96.
+   (the UI model never carries DB-derived display text): EFS file names, FITC
+   config records, `get_fw_ver`, `chk_iup_size`, `fovd_clean`. The **MFS/FTBL
+   file names** (row 96) left this list on 2026-09-17: the rule is about the
+   *model*, and the names now live where display text belongs — the ME tool's
+   own rows, looked up in `FileTable.dat`.
 2. **Extraction/repair writers** — ByteRipper output features, not analysis:
    `cse_unpack`, `MFS_Backup` restore writer.
 3. **Thin orchestration loops** whose facts already live in ported rows:

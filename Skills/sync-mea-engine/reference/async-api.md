@@ -49,7 +49,7 @@ public protocol MEADataSource: Sendable {
     /// Huffman dictionaries keyed by (variant, major, minor) — fetched only
     /// when a run actually needs to decompress an older CSE module.
     func huffmanDictionaries() async throws -> HuffmanDictionaries
-    /// FileTable.dat module-name/version map for the VFS walk.
+    /// FileTable.dat: what names an FTBL-mode MFS volume's low-level files.
     func fileTable() async throws -> FileTable
     /// Emits when a background check replaced MEA.dat with a newer one.
     /// Default implementation: a stream that finishes at once.

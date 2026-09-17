@@ -57,6 +57,13 @@ struct MEAParkedState: ToolSessionState {
     private var analysis: FirmwareAnalysis?
     /// The in-flight checksum request, so selecting the row twice asks once.
     private var checksumsTask: Task<Void, Never>?
+    /// The names an FTBL-mode volume's low-level files carry, once the table
+    /// they come from has arrived. `.none` until then, and on every volume that
+    /// names its own files (`MFSFileNames`).
+    private var mfsNames: MFSFileNames = .none
+    /// The in-flight `FileTable.dat` request, so a re-present does not start a
+    /// second one.
+    private var fileTableTask: Task<Void, Never>?
     /// The user's selection as a tree path. Nil before a choice, and after a
     /// re-parse that lost the row.
     private var focusPath: [Int]?
@@ -139,6 +146,8 @@ struct MEAParkedState: ToolSessionState {
     public func stop() {
         databaseWatch?.cancel()
         databaseWatch = nil
+        fileTableTask?.cancel()
+        fileTableTask = nil
     }
 
     public var parkedState: (any ToolSessionState)? {
@@ -205,6 +214,11 @@ struct MEAParkedState: ToolSessionState {
         // it, belongs to bytes that are no longer the ones on screen.
         checksumsTask?.cancel()
         checksumsTask = nil
+        fileTableTask?.cancel()
+        fileTableTask = nil
+        // The names belong to the volume they were looked up for; a re-parse
+        // may be of another file, or of one whose volume has just been edited.
+        mfsNames = .none
         analysis = nil
         // Named, not just "Reading…": three panels can be the one on screen and
         // each reads something different, so the line says which this is.
@@ -323,7 +337,7 @@ struct MEAParkedState: ToolSessionState {
     /// re-parse.
     private func present(_ analysis: FirmwareAnalysis) {
         self.analysis = analysis
-        roots = MEACurator.present(analysis)
+        roots = MEACurator.present(analysis, mfsNames: mfsNames)
         if let path = focusPath, MEATree.node(at: path, in: roots) == nil {
             focusPath = nil
         }
@@ -334,6 +348,43 @@ struct MEAParkedState: ToolSessionState {
         controller.setPlaceholder(.empty)
         controller.showSummary(MEASummary.build(analysis))
         show()
+        loadFileNames()
+    }
+
+    /// Names the low-level files of an FTBL-mode MFS volume (§ CSME 15/16).
+    ///
+    /// Such a volume carries no names at all: its FAT chains are numbered, and
+    /// the paths live in upstream's `FileTable.dat`, keyed by the platform and
+    /// dictionary the volume header itself names. So this is the one reading
+    /// the panel does *after* the analysis — like the checksums group, and for
+    /// the same reason: it costs a fetch, and most dumps never need it (a
+    /// legacy volume names its own files through the home directory).
+    ///
+    /// Silent on failure. Offline, rate-limited, or a table that does not
+    /// describe this volume all leave the rows reading `File 63`, which is what
+    /// the flash says about them — a panel that complained here would be
+    /// reporting on an errand of its own, and the file inventory is complete
+    /// without it.
+    private func loadFileNames() {
+        guard let volume = analysis?.mfsVolume, volume.usesFTBL,
+              !volume.files.isEmpty, mfsNames.resolution == nil,
+              fileTableTask == nil else { return }
+        let source = Self.dataSource
+        let generation = self.generation
+        fileTableTask = Task { [weak self] in
+            let names = await MEAToolSession.fileNames(for: volume, from: source)
+            guard let self, self.generation == generation else { return }
+            self.fileTableTask = nil
+            guard let names, let analysis = self.analysis else { return }
+            self.mfsNames = names
+            // Re-presenting rebuilds the rows with the names in them; the
+            // selection is kept by path, so the row the reader is looking at
+            // stays where it is and simply gains its name.
+            self.present(analysis)
+            // The panel is showing this analysis — named now — which is what
+            // `onDisplay` means, and the seam a test waits on.
+            self.onDisplay?(analysis)
+        }
     }
 
     /// Everything the panel shows, in one call.
@@ -388,6 +439,21 @@ struct MEAParkedState: ToolSessionState {
             // means — and it is the seam a test waits on instead of the clock.
             self.onDisplay?(updated)
         }
+    }
+
+    /// Off the main actor: the table fetched (or taken from the source's own
+    /// in-memory cache) and turned into this volume's names. Nil when there is
+    /// nothing to name with — no source configured, no network, a table that
+    /// cannot be parsed — which the caller treats as "the rows keep their
+    /// numbers".
+    private nonisolated static func fileNames(
+        for volume: MFSVolume,
+        from source: any MEADataSource
+    ) async -> MFSFileNames? {
+        guard let table = try? await source.fileTable() else { return nil }
+        return await Task.detached(priority: .utility) {
+            MFSFileNames(table: table, volume: volume)
+        }.value
     }
 
     /// Off the main actor: the same region `analyze` was given, digested.
