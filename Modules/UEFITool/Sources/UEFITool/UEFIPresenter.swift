@@ -76,7 +76,7 @@ public enum UEFIPresenter {
         return ZoneMap(zones: [whole, body], focus: body.id)
     }
 
-    /// What "Export Decompressed…" saves, and "Open Decompressed… in New Tab"
+    /// What "Export Decompressed…" saves, and "Open Decompressed…"
     /// opens, for a node (`COMPRESSED_SECTIONS.md` §8.2).
     public struct DecompressedExport: Equatable, Sendable {
         /// The buffer to read.
@@ -112,7 +112,7 @@ public enum UEFIPresenter {
                 range: nil,
                 suggestedName: String(base) + ".bin",
                 menuTitle: "Export Decompressed Body…",
-                openTitle: "Open Decompressed Body in New Tab"
+                openTitle: "Open Decompressed Body"
             )
         }
         if node.space != .file {
@@ -121,7 +121,7 @@ public enum UEFIPresenter {
                 range: node.range,
                 suggestedName: String(base) + ".bin",
                 menuTitle: "Export Decompressed Bytes…",
-                openTitle: "Open Decompressed Bytes in New Tab"
+                openTitle: "Open Decompressed Bytes"
             )
         }
         return nil

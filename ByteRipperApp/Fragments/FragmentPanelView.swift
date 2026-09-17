@@ -8,11 +8,13 @@ import Cocoa
 enum FragmentPanelLayout {
     /// How much of the panes behind is left showing above the panel.
     ///
-    /// A pane header's height and a little over: enough for the name of the
-    /// file the part came out of to stay readable while you work on the part.
-    /// That is the whole reason the panel does not simply cover everything —
-    /// a panel you cannot see the parent behind is a tab with a shadow.
-    static let parentPeek: CGFloat = FilePaneView.headerHeight + 16
+    /// Half a pane header: the panel's top edge cuts the header of the file the
+    /// part came out of in half. Enough of it shows to say what is behind and
+    /// which file it is, and the overlap is what says the panel is laid *over*
+    /// that file rather than docked beside it. A panel you cannot see the
+    /// parent behind is a tab with a shadow; one that clears the header
+    /// entirely reads as a second pane.
+    static let parentPeek: CGFloat = FilePaneView.headerHeight / 2
 
     /// The panel never folds itself smaller than this by being in a short
     /// window: below it there is no room for a header, a row of bytes and a
@@ -106,21 +108,22 @@ final class FragmentPanelView: NSView {
         // corner there would show the panes through a notch that means nothing.
         body.layer?.maskedCorners = [.layerMinXMaxYCorner, .layerMaxXMaxYCorner]
         body.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        body.translatesAutoresizingMaskIntoConstraints = false
         addSubview(body)
-
-        content.translatesAutoresizingMaskIntoConstraints = false
+        // The panel is placed by frame arithmetic — it is what the slide
+        // animates — and so is everything in it, down to the surface's split.
+        // Constraints from a frame-positioned panel into a view controller's
+        // own view do not resolve: the surface's split stayed at zero while the
+        // body around it took the panel's size, which is a whole panel of
+        // nothing.
+        content.translatesAutoresizingMaskIntoConstraints = true
         body.addSubview(content)
-        NSLayoutConstraint.activate([
-            body.topAnchor.constraint(equalTo: topAnchor),
-            body.bottomAnchor.constraint(equalTo: bottomAnchor),
-            body.leadingAnchor.constraint(equalTo: leadingAnchor),
-            body.trailingAnchor.constraint(equalTo: trailingAnchor),
-            content.topAnchor.constraint(equalTo: body.topAnchor),
-            content.bottomAnchor.constraint(equalTo: body.bottomAnchor),
-            content.leadingAnchor.constraint(equalTo: body.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: body.trailingAnchor),
-        ])
+    }
+
+    override func layout() {
+        super.layout()
+        body.frame = bounds
+        // The surface's split is the body's one subview, and it fills it.
+        for held in body.subviews { held.frame = body.bounds }
     }
 
     @available(*, unavailable)

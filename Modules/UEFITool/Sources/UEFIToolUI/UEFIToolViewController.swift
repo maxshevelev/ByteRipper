@@ -26,7 +26,7 @@ import UEFITool
     /// An opened compressed section's — or a node inside one's — export item
     /// was chosen.
     var onExportDecompressed: ((NodeID) -> Void)?
-    /// The same node's Open Decompressed … in New Tab item was chosen.
+    /// The same node's Open Decompressed … item was chosen.
     var onOpenDecompressed: ((NodeID) -> Void)?
     /// A row was opened or shut. What is open belongs to the file rather than
     /// to this panel, so the session writes it through to where the tree

@@ -69,11 +69,12 @@ right for them.
 └──────────────────────────────┘
 ```
 
-The panel is anchored to the dock strip and inset from the top of the content
-area by a pane header's height and a little over. That inset is the whole point
-of the shape: what stays showing is the **header of the file the part came out
-of**, so its name is readable while you work on the part. A panel you cannot see
-the parent behind is a tab with a shadow.
+The panel is anchored to the dock strip, and its top edge **cuts the panes'
+header in half**. That overlap is the shape's whole point: enough of the parent
+shows to say which file the part came out of, and cutting into its header is
+what says the panel is laid *over* that file rather than docked beside it. A
+panel you cannot see the parent behind is a tab with a shadow; one that clears
+the header entirely reads as a second pane.
 
 The area a panel slides in is exactly the area the panes occupy — below the New
 Tab strip and above the dock — so a panel never covers either, and the strip

@@ -688,10 +688,10 @@ private struct ChecksumPass: Sendable {
             if let provider = self.treeProvider {
                 // Where the bytes go back to: the whole buffer, or this node's
                 // bytes in it (`UPDATE_IN_PARENT.md` §6).
-                provider.openInNewTab(bytes, named: name, linkedTo: source, layout: chosenLayout,
+                provider.openPart(bytes, named: name, linkedTo: source, layout: chosenLayout,
                                       part: UEFIRebuild.Target(space: export.space, range: export.range))
             } else {
-                self.host.openInNewTab(bytes, named: name, linkedTo: source)
+                self.host.openPart(bytes, named: name, linkedTo: source)
             }
         }
     }

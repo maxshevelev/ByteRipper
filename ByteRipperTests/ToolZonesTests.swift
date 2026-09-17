@@ -267,38 +267,36 @@ final class ToolZonesTests: XCTestCase {
         XCTAssertEqual(parent.submenu?.items.map(\.title), ["#1 Microcode", "FIT table"])
     }
 
-    /// The same zone block offers Open Zone in a New Tab, and it takes the
-    /// zone's bytes there.
+    /// The same zone block offers Open Zone, and it takes the zone's bytes
+    /// into a panel over the file they came out of.
     ///
     /// A zone is a structure somebody found in the file — a volume, a table, a
     /// microcode — and the way to study one is often to read it as a file
     /// rather than as offsets inside a bigger one.
-    func testARightClickInsideAZoneOffersOpeningItInATab() throws {
+    func testARightClickInsideAZoneOffersOpeningItInAPanel() throws {
         let (controller, _) = try makeController()
         let host = try host(controller)
         host.publish(ZoneMap(zones: [Zone(id: "fv", name: "FFSv2", range: 0x100..<0x180)]))
 
         let menu = controller.makeOffsetMenu(for: controller.windowModel.pane1, offset: 0x120)
-        let item = try XCTUnwrap(
-            menu.items.first { $0.title == "Open Zone “FFSv2” in a New Tab" }
-        )
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Open Zone “FFSv2”" })
 
-        let tab = MainViewController()
-        defer { tab.windowModel.pane1.close() }
-        controller.makeSiblingTab = { tab }
         _ = item.target?.perform(item.action, with: item)
 
-        XCTAssertEqual(tab.windowModel.pane1.fileSize, 0x80, "the zone's bytes, and only those")
-        XCTAssertTrue(tab.windowModel.pane1.isUntitled,
+        let id = try XCTUnwrap(controller.fragments.expanded, "the panel is up")
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        XCTAssertEqual(part.fileSize, 0x80, "the zone's bytes, and only those")
+        XCTAssertTrue(part.isUntitled,
                       "a copy, so editing it cannot reach back into the dump")
-        XCTAssertTrue(tab.windowModel.pane1.status.fileName.hasSuffix("_FFSv2.bin"),
+        XCTAssertTrue(part.status.fileName.hasSuffix("_FFSv2.bin"),
                       "named after the file it came out of and the zone it is: "
-                      + tab.windowModel.pane1.status.fileName)
+                      + part.status.fileName)
+        controller.fragments.close(id, animated: false)
     }
 
     /// Nested zones give it the same submenu Select Zone gets: the choice is
     /// the same choice.
-    func testOpeningInATabOffersEveryZoneUnderThePointer() throws {
+    func testOpeningAZoneOffersEveryZoneUnderThePointer() throws {
         let (controller, _) = try makeController()
         let host = try host(controller)
         host.publish(ZoneMap(zones: [
@@ -307,7 +305,7 @@ final class ToolZonesTests: XCTestCase {
         ]))
 
         let menu = controller.makeOffsetMenu(for: controller.windowModel.pane1, offset: 0x118)
-        let parent = try XCTUnwrap(menu.items.first { $0.title == "Open Zone in a New Tab" })
+        let parent = try XCTUnwrap(menu.items.first { $0.title == "Open Zone" })
 
         XCTAssertEqual(parent.submenu?.items.map(\.title), ["#1 Microcode", "FIT table"])
     }
@@ -327,16 +325,15 @@ final class ToolZonesTests: XCTestCase {
                                  "the bracket has a menu")
 
         XCTAssertEqual(menu.items.map(\.title),
-                       ["Select Zone “FFSv2”", "Open Zone “FFSv2” in a New Tab"])
+                       ["Select Zone “FFSv2”", "Open Zone “FFSv2”"])
 
         let item = try XCTUnwrap(menu.items.last)
-        let tab = MainViewController()
-        defer { tab.windowModel.pane1.close() }
-        controller.makeSiblingTab = { tab }
         _ = item.target?.perform(item.action, with: item)
 
-        XCTAssertEqual(tab.windowModel.pane1.fileSize, 0x80,
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        XCTAssertEqual(controller.fragments.pane(id)?.fileSize, 0x80,
                        "and it takes the same bytes there")
+        controller.fragments.close(id, animated: false)
     }
 
     /// The same zone block offers Save Zone as… for the zone under the pointer —

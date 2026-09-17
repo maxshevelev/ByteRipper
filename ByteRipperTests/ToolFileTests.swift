@@ -129,24 +129,27 @@ final class ToolFileTests: XCTestCase {
     }
 
     /// Bytes that are not a range of the file — a decompressed body — open as
-    /// an untitled copy in a tab beside the window, under the name given.
-    func testBytesOpenInATabOfTheirOwn() throws {
+    /// an untitled copy in a panel over the dump, under the name given
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
+    func testBytesOpenInAPanelOfTheirOwn() throws {
         let (host, controller) = try makeHost()
-        let tab = MainViewController()
-        defer { tab.windowModel.pane1.close() }
-        controller.makeSiblingTab = { tab }
+        defer {
+            for id in controller.fragments.dock.panels { controller.fragments.close(id, animated: false) }
+        }
 
-        host.openInNewTab([0x01, 0x02, 0x03], named: "bios_Body.bin", linkedTo: 0x10..<0x20)
+        host.openPart([0x01, 0x02, 0x03], named: "bios_Body.bin", linkedTo: 0x10..<0x20)
 
-        XCTAssertEqual(tab.windowModel.pane1.fileSize, 3)
-        let origin = try XCTUnwrap(tab.windowModel.pane1.origin, "linked back to the dump")
+        let id = try XCTUnwrap(controller.fragments.expanded, "the panel is up")
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        XCTAssertEqual(part.fileSize, 3)
+        let origin = try XCTUnwrap(part.origin, "linked back to the dump")
         XCTAssertTrue(origin.parent === controller.windowModel.pane1)
         XCTAssertEqual(origin.sourceRange, 0x10..<0x20)
         XCTAssertEqual(origin.state, .intact)
-        XCTAssertTrue(tab.windowModel.pane1.isUntitled,
+        XCTAssertTrue(part.isUntitled,
                       "a copy, so editing it cannot reach back into the dump")
-        XCTAssertTrue(tab.windowModel.pane1.status.fileName.hasSuffix("bios_Body.bin"),
-                      tab.windowModel.pane1.status.fileName)
+        XCTAssertTrue(part.status.fileName.hasSuffix("bios_Body.bin"),
+                      part.status.fileName)
         XCTAssertEqual(controller.windowModel.pane1.fileSize, 0x40, "the dump is left as it was")
     }
 }

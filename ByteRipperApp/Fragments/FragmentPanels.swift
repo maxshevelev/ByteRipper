@@ -50,7 +50,9 @@ import Cocoa
         container.isHidden = true
         container.onLayout = { [weak self] in self?.layoutPanels() }
         strip.onSelect = { [weak self] id in self?.toggle(id) }
-        strip.onClose = { [weak self] id in self?.close(id) }
+        // Through the tab, not straight to `close`: a pill's ✕ has to ask the
+        // same question ⌘W does about bytes the parent has not got back.
+        strip.onClose = { [weak self] id in self?.host?.closeFragment(id) }
         refreshDock()
     }
 
@@ -99,6 +101,9 @@ import Cocoa
         let bookmarks = bookmarks ?? BookmarkStore()
         pane.bookmarkStore = bookmarks
         let surface = DocumentSurface(host: host)
+        // The panel's tool-module reads the part, not whatever the tab's active
+        // pane is — the panel is a surface with exactly one pane.
+        surface.pinnedPane = pane
         host.addChild(surface)
         let paneView = host.paneView(for: pane)
         surface.setContent(paneView)
@@ -199,18 +204,28 @@ import Cocoa
         container.isHidden = true
     }
 
+    /// Slides `view` to `frame`.
+    ///
+    /// The **size** is set at once and only the origin is animated. A panel
+    /// does not change shape on its way up — it is the same panel, lower down —
+    /// and animating the frame whole made the size animate too: everything
+    /// inside it, the surface's split included, spent the slide growing from
+    /// nothing, and anything that asked how wide the pane was mid-slide was
+    /// told almost zero. Laying the subtree out before the slide starts means
+    /// the first frame drawn is already the panel as it will be.
     private func move(_ view: NSView, to frame: NSRect, animated: Bool,
                       completion: (() -> Void)? = nil) {
+        view.setFrameSize(frame.size)
+        view.layoutSubtreeIfNeeded()
         guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
-            view.frame = frame
+            view.setFrameOrigin(frame.origin)
             completion?()
             return
         }
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Self.slideDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            context.allowsImplicitAnimation = true
-            view.animator().frame = frame
+            view.animator().setFrameOrigin(frame.origin)
         } completionHandler: {
             completion?()
         }

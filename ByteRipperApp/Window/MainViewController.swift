@@ -1625,17 +1625,16 @@ final class MainViewController: NSViewController {
         }
     }
 
-    /// Opens bytes a tool-module hands over in a tab of their own, for
-    /// `ToolHost.openInNewTab` — the untitled copy Open Zone in a New Tab
-    /// makes, of bytes that are not a range of this file. The window's
-    /// bookmarks stay behind: their offsets are the dump's, not these bytes'.
-    func openBytesInNewTabForTool(
+    /// Opens bytes a tool-module hands over as a panel over the file they came
+    /// out of, for `ToolHost.openPart` — the untitled copy Open Zone makes, of
+    /// bytes that are not a range of this file. The window's bookmarks stay
+    /// behind: their offsets are the dump's, not these bytes'.
+    func openPartForTool(
         _ bytes: [UInt8], named name: String, from pane: PaneViewModel,
         source: Range<UInt64>, layout: UEFIRootLayout, kind: DocumentOrigin.Kind,
         part: UEFIRebuild.Target?
     ) {
-        guard let tab = makeSiblingTab?() else { return }
-        tab.windowModel.pane1.openBytes(
+        openFragment(
             bytes,
             named: name,
             origin: DocumentOrigin(
@@ -1644,7 +1643,6 @@ final class MainViewController: NSViewController {
                 layout: layout, kind: kind, rebuildTarget: part, content: bytes
             )
         )
-        tab.apply(mode: .singleFile)
     }
 
     // MARK: - Fragment panels (Design/FRAGMENT_PANELS_PLAN.md)
@@ -1659,6 +1657,78 @@ final class MainViewController: NSViewController {
                       origin: DocumentOrigin? = nil,
                       animated: Bool = true) -> FragmentDock.PanelID? {
         fragments.open(bytes, named: name, origin: origin, animated: animated)
+    }
+
+    /// What the question a panel with something to put back asks answers with.
+    /// Swappable so the suite does not have to drive a modal.
+    var fragmentCloseConfirm: ((NSAlert) -> NSApplication.ModalResponse)?
+
+    /// Closes a fragment panel, asking first if there is anything to lose.
+    ///
+    /// Two different questions, because there are two different losses. A part
+    /// that holds an edit its parent has not got back is offered the thing it
+    /// was opened for — Update in Parent — rather than a save panel for a file
+    /// nobody wants on disk. A part with nowhere to put its bytes back gets the
+    /// ordinary save/discard question.
+    func closeFragment(_ id: FragmentDock.PanelID) {
+        guard let pane = fragments.pane(id) else { return }
+        if let origin = pane.origin, origin.hasChanges(in: pane) {
+            switch confirmClosingUnreturnedPart(origin) {
+            case .alertFirstButtonReturn:  // Update in Parent
+                if let task = performUpdateInParent(of: pane) {
+                    Task { [weak self] in
+                        await task.value
+                        self?.closeFragmentIfPutBack(id, pane: pane, origin: origin)
+                    }
+                    return
+                }
+                closeFragmentIfPutBack(id, pane: pane, origin: origin)
+                return
+            case .alertSecondButtonReturn:  // Close Anyway
+                break
+            default:  // Cancel
+                return
+            }
+        } else if pane.status.isDirty {
+            switch confirmSaveDiscardCancel() {
+            case .alertFirstButtonReturn:  // Save
+                savePane(pane, onSaved: { [weak self] in self?.fragments.close(id) })
+                return
+            case .alertSecondButtonReturn:  // Don't Save
+                break
+            default:  // Cancel
+                return
+            }
+        }
+        fragments.close(id)
+    }
+
+    /// Closes the panel only if the bytes really did go back. An update can be
+    /// refused — a parent that is read-only, a part whose length changed — and
+    /// it says so in an alert of its own; closing anyway would throw away the
+    /// bytes the reader has just been told could not be put back.
+    private func closeFragmentIfPutBack(_ id: FragmentDock.PanelID,
+                                        pane: PaneViewModel, origin: DocumentOrigin) {
+        guard !origin.hasChanges(in: pane) else {
+            fragments.refreshDock()
+            return
+        }
+        fragments.close(id)
+    }
+
+    private func confirmClosingUnreturnedPart(_ origin: DocumentOrigin) -> NSApplication.ModalResponse {
+        let alert = NSAlert()
+        alert.messageText = "Put “\(origin.partName)” back into \(origin.parentName)?"
+        alert.informativeText = "It has changes \(origin.parentName) has not got. "
+            + "Closing this panel without putting them back loses them."
+        alert.addButton(withTitle: "Update in Parent")
+        alert.addButton(withTitle: "Close Anyway")
+        alert.addButton(withTitle: "Cancel")
+        if let fragmentCloseConfirm {
+            return fragmentCloseConfirm(alert)
+        }
+        // Cancel in tests.
+        return Self.presentModal(alert, defaultInTest: .alertThirdButtonReturn)
     }
 
     /// Gives the dock its height, or takes it away when the last panel closes.
@@ -1850,8 +1920,8 @@ final class MainViewController: NSViewController {
     private func confirmOverwritingChangedSource(of origin: DocumentOrigin) -> Bool {
         let alert = NSAlert()
         alert.messageText = "“\(origin.partName)” has changed in \(origin.parentName)"
-        alert.informativeText = "Its bytes there are no longer the ones this tab was opened from. "
-            + "Updating overwrites those changes with this tab's bytes."
+        alert.informativeText = "Its bytes there are no longer the ones this part was opened from. "
+            + "Updating overwrites those changes with this part's bytes."
         alert.addButton(withTitle: "Overwrite")
         alert.addButton(withTitle: "Cancel")
         if let updateConfirm {
@@ -3298,15 +3368,14 @@ final class MainViewController: NSViewController {
             return item
         }
         _ = item("Select Zone \(named)", #selector(minimapMenuSelectZone(_:)))
-        _ = item("Open Zone \(named) in a New Tab",
-                 #selector(minimapMenuOpenZoneInNewTab(_:)))
+        _ = item("Open Zone \(named)", #selector(minimapMenuOpenZone(_:)))
         return menu
     }
 
-    /// Open in a New Tab from the gutter's menu: the same act the dump's own
-    /// menu performs, on the zone looked up again — a tool-module may have
+    /// Open Zone from the gutter's menu: the same act the dump's own menu
+    /// performs, on the zone looked up again — a tool-module may have
     /// republished between the menu opening and the item being picked.
-    @objc private func minimapMenuOpenZoneInNewTab(_ sender: NSMenuItem) {
+    @objc private func minimapMenuOpenZone(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? ZoneMenuTarget,
               let pane = minimapPane(at: target.mapIndex),
               let zone = pane.zones.zones.first(where: { $0.id == target.zoneID })
@@ -3508,7 +3577,23 @@ final class MainViewController: NSViewController {
 
     // MARK: - Helpers
 
-    private var activePane: PaneViewModel { windowModel.activePane }
+    /// The pane the commands that act on *what you are looking at* mean: the
+    /// fragment panel in front when one is up, and the tab's own active pane
+    /// otherwise (`Design/FRAGMENT_PANELS_PLAN.md`).
+    ///
+    /// Editing, the caret and the selection, Find and Go To, the bookmarks, the
+    /// segments, Save and Revert, Update in Parent: every one of them is about
+    /// the document on screen, and with a panel up that is the panel's. ⌘Z into
+    /// the dump behind a panel would undo an edit the reader cannot see.
+    var activePane: PaneViewModel { fragments.frontPane ?? windowModel.activePane }
+
+    /// The tab's own active pane, whatever is in front of it.
+    ///
+    /// The few commands that are about the tab's *panes* rather than about a
+    /// document — joining a donor file into one, duplicating one into the pane
+    /// beside it — mean this. A fragment panel has one pane and no pane beside
+    /// it, so it is not what they are addressed to.
+    private var windowActivePane: PaneViewModel { windowModel.activePane }
 
     private func focusActiveHexView() {
         activeFilePane?.focusHexView()
@@ -3811,13 +3896,13 @@ final class MainViewController: NSViewController {
     /// File > Append File…: joins the chosen file's bytes after the active
     /// pane's content (§22.1).
     @objc func appendFile() {
-        joinFile(at: .end, in: activePane)
+        joinFile(at: .end, in: windowActivePane)
     }
 
     /// File > Insert File at Start…: joins the chosen file's bytes before the
     /// active pane's content (§22.1).
     @objc func insertFileAtStart() {
-        joinFile(at: .start, in: activePane)
+        joinFile(at: .start, in: windowActivePane)
     }
 
     /// The pane-menu twins: the same join, acting on the pane the menu was built
@@ -4022,7 +4107,7 @@ final class MainViewController: NSViewController {
     /// as an untitled, never-saved document (§23). Single-file mode only — the
     /// copy needs a pane to land in.
     @objc func duplicateDocument() {
-        duplicate(from: activePane)
+        duplicate(from: windowActivePane)
     }
 
     /// Rename from the pane's header menu (§23): the title turns into a field in
@@ -4400,6 +4485,13 @@ final class MainViewController: NSViewController {
     /// returns to empty mode. With no panes open there is nothing to close, so
     /// the window closes instead.
     @objc func closeDocument() {
+        // A panel in front is the document in front, so ⌘W closes that first —
+        // the same step-at-a-time rule the panes and the tab already follow
+        // (`Design/FRAGMENT_PANELS_PLAN.md`).
+        if let up = fragments.expanded {
+            closeFragment(up)
+            return
+        }
         guard windowModel.hasOpenFile else {
             view.window?.performClose(nil)
             return
@@ -4662,19 +4754,19 @@ final class MainViewController: NSViewController {
         } else {
             menu.addItem(item("Select Zone “\(zones[0].name)”", #selector(selectZone(_:)), zones[0]))
         }
-        // Open in a New Tab mirrors the choice, taking the picked zone's bytes
+        // Open Zone mirrors the choice, taking the picked zone's bytes
         // out into a document of their own.
         if zones.count > 1 {
-            let parent = menu.addItem(withTitle: "Open Zone in a New Tab",
+            let parent = menu.addItem(withTitle: "Open Zone",
                                       action: nil, keyEquivalent: "")
-            let submenu = NSMenu(title: "Open Zone in a New Tab")
+            let submenu = NSMenu(title: "Open Zone")
             for zone in zones {
-                submenu.addItem(item(zone.name, #selector(openZoneInNewTab(_:)), zone))
+                submenu.addItem(item(zone.name, #selector(openZoneInPanel(_:)), zone))
             }
             parent.submenu = submenu
         } else {
-            menu.addItem(item("Open Zone “\(zones[0].name)” in a New Tab",
-                              #selector(openZoneInNewTab(_:)), zones[0]))
+            menu.addItem(item("Open Zone “\(zones[0].name)”",
+                              #selector(openZoneInPanel(_:)), zones[0]))
         }
         // Save Zone as… mirrors the choice, writing the picked zone's bytes out.
         if zones.count > 1 {
@@ -4946,21 +5038,23 @@ final class MainViewController: NSViewController {
                   purpose: "the zone")
     }
 
-    /// Takes a zone's bytes out into a tab of their own.
+    /// Takes a zone's bytes out into a panel of their own.
     ///
     /// A zone is a structure somebody found in the file — a volume, a FIT table,
     /// a microcode — and the way to study one is often to look at it as a file
-    /// rather than at its offsets inside a bigger one. The tab holds a copy: it
-    /// is untitled and unsaved, so editing it cannot reach back into the dump it
-    /// was taken from, and Save routes through Save As.
-    @objc func openZoneInNewTab(_ sender: NSMenuItem) {
+    /// rather than at its offsets inside a bigger one. The panel holds a copy:
+    /// it is untitled and unsaved, so editing it cannot reach back into the
+    /// dump it was taken from, and Save routes through Save As. What does reach
+    /// back is Update in Parent, which is why the panel opens over the parent
+    /// rather than beside it (`Design/FRAGMENT_PANELS_PLAN.md`).
+    @objc func openZoneInPanel(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? ZoneContextTarget else { return }
         openZone(target.zone, of: target.pane)
     }
 
     /// The act both zone menus perform — the dump's and the minimap gutter's.
-    /// One reading of the bytes, one tab, one set of rules about what the copy
-    /// is, wherever the reader asked from.
+    /// One reading of the bytes, one panel, one set of rules about what the
+    /// copy is, wherever the reader asked from.
     private func openZone(_ zone: Zone, of pane: PaneViewModel) {
         guard pane.isOpen, let doc = pane.document else { return }
         let bytes: [UInt8]
@@ -4970,13 +5064,12 @@ final class MainViewController: NSViewController {
             presentFileError("Could not read the zone.", error, url: doc.url)
             return
         }
-        guard let tab = makeSiblingTab?() else { return }
         // Linked back to the zone, and told what the bytes are when the file's
         // UEFI tree knows (`Design/UEFI/UPDATE_IN_PARENT.md` §2.1).
         let layout = pane.uefiState.tree.map {
             UEFIRootLayout.forFileRange(zone.range, in: $0.image())
         } ?? .image
-        tab.windowModel.pane1.openBytes(
+        openFragment(
             bytes,
             named: zoneExportName(fileName: pane.status.fileName,
                                   zoneName: zone.name, range: zone.range),
@@ -4989,8 +5082,6 @@ final class MainViewController: NSViewController {
                                    },
                                    content: bytes)
         )
-        tab.windowModel.bookmarkStore.seed(windowModel.bookmarkStore.bookmarks)
-        tab.apply(mode: .singleFile)
     }
 
     /// The tail shared by Save Selection as… and Save Zone as…: reads `range`
@@ -6135,6 +6226,12 @@ final class MainViewController: NSViewController {
     override func cancelOperation(_ sender: Any?) {
         if !findBar.isHidden {
             hideFindBar()
+        } else if fragments.expanded != nil {
+            // Escape means "let me see what is behind this", so it folds the
+            // panel into its pill rather than closing it: nothing is lost, and
+            // the pill is right there to bring it back
+            // (`Design/FRAGMENT_PANELS_PLAN.md`).
+            fragments.collapse()
         } else {
             super.cancelOperation(sender)
         }
@@ -7211,15 +7308,17 @@ extension MainViewController: NSMenuItemValidation {
         case #selector(appendFile),
              #selector(insertFileAtStart):
             // A join needs content to join into: an empty pane has nothing
-            // (§22.1). The File-menu items act on the active pane.
-            return activePane.isOpen
+            // (§22.1). The File-menu items act on the tab's active pane — a
+            // join is about the panes, not about whatever is in front of them.
+            return windowActivePane.isOpen
         case #selector(appendFileInPane(_:)),
              #selector(insertFileAtStartInPane(_:)):
             // Context-menu items act on the pane they were built for.
             return pane(from: menuItem)?.isOpen ?? false
         case #selector(duplicateDocument):
-            // The copy needs a free pane and bytes to copy (§23).
-            return canDuplicate(activePane)
+            // The copy needs a free pane and bytes to copy (§23), which is
+            // the pane beside the tab's own — a panel has none.
+            return canDuplicate(windowActivePane)
         case #selector(duplicatePaneDocument(_:)):
             guard let pane = pane(from: menuItem) else { return false }
             return canDuplicate(pane)

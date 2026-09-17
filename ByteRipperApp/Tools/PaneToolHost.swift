@@ -127,20 +127,20 @@ import MEFirmware
     }
 
     /// The source's own bytes, copied out: they go back as they are.
-    func openInNewTab(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>) {
+    func openPart(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>) {
         guard let pane, let owner else { return }
-        owner.openBytesInNewTabForTool(bytes, named: name, from: pane, source: source,
+        owner.openPartForTool(bytes, named: name, from: pane, source: source,
                                        layout: .image, kind: .copy, part: nil)
     }
 
     /// `UEFITreeProviding`'s form: what the source decompresses to, told what
     /// its bytes are and where they go back to.
-    func openInNewTab(
+    func openPart(
         _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>,
         layout: UEFIRootLayout, part: UEFIRebuild.Target
     ) {
         guard let pane, let owner else { return }
-        owner.openBytesInNewTabForTool(bytes, named: name, from: pane, source: source,
+        owner.openPartForTool(bytes, named: name, from: pane, source: source,
                                        layout: layout, kind: .decompressed, part: part)
     }
 }

@@ -47,11 +47,18 @@ import ALSplitView
     /// The tool-module panel and the session behind it
     /// (`Design/TOOL_MODULES_PLAN.md`).
     ///
-    /// Its `owner` is the tab rather than this surface, which is right for the
-    /// window's own surface and is what a fragment panel will have to change:
-    /// the controller asks its owner for "pane 1" and "pane 2", and a fragment
-    /// surface has one pane that is neither.
+    /// Its `owner` is the tab — the alerts, the panels and the panes are the
+    /// tab's — while its widths and, for a fragment panel, the pane it reads
+    /// are this surface's.
     private(set) var tools = ToolController()
+
+    /// The one pane this surface holds, for a surface that holds exactly one: a
+    /// fragment panel. Nil for the tab's own surface, which has two and an
+    /// active-pane pointer between them.
+    ///
+    /// It is what makes a tool-module opened on a panel read the part rather
+    /// than whatever the tab's active pane happens to be.
+    var pinnedPane: PaneViewModel?
 
     /// Whether the minimap panel is shown. Drives the split's divider clamp:
     /// while hidden, the clamp pins the divider to the trailing edge so the
@@ -108,6 +115,7 @@ import ALSplitView
         self.host = host
         super.init(nibName: nil, bundle: nil)
         tools.owner = host
+        tools.surface = self
         wireToolPanel()
         assemble()
     }

@@ -112,8 +112,8 @@ final class CompressedNodeTests: XCTestCase {
         XCTAssertEqual(bytes.range, 0..<0x100)
         XCTAssertEqual(bytes.menuTitle, "Export Decompressed Bytes…")
         XCTAssertEqual(bytes.suggestedName, "Inner.bin")
-        XCTAssertEqual(body.openTitle, "Open Decompressed Body in New Tab")
-        XCTAssertEqual(bytes.openTitle, "Open Decompressed Bytes in New Tab")
+        XCTAssertEqual(body.openTitle, "Open Decompressed Body")
+        XCTAssertEqual(bytes.openTitle, "Open Decompressed Bytes")
         XCTAssertEqual(bytes.tabName(fileName: "bios.rom"), "bios_Inner.bin",
                        "named after the dump it came out of, then what it is")
         XCTAssertEqual(bytes.tabName(fileName: ""), "Inner.bin")
@@ -139,7 +139,7 @@ final class CompressedNodeTests: XCTestCase {
         let body = try XCTUnwrap(UEFIPresenter.decompressedExport(for: closed))
         XCTAssertEqual(body.space, .decompressed(chain: [0]))
         XCTAssertNil(body.range)
-        XCTAssertEqual(body.openTitle, "Open Decompressed Body in New Tab")
+        XCTAssertEqual(body.openTitle, "Open Decompressed Body")
         let buffer = try XCTUnwrap(built.readers.reader(for: body.space))
         XCTAssertEqual(buffer.bytes(buffer.all), TestUEFI.file().bytes)
 

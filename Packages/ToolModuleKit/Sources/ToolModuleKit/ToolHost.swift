@@ -86,11 +86,15 @@ import Foundation
     func exportFile(_ bytes: [UInt8], suggestedName: String) async -> Bool
 
     /// Opens bytes taken out of this file — a part of it, or what a compressed
-    /// section decompressed to — in a tab of their own: an untitled copy the
-    /// user can study as a file, which editing cannot reach back into the dump,
-    /// linked to `source`, the bytes of this file they came out of
-    /// (`Design/UEFI/UPDATE_IN_PARENT.md` §2).
-    func openInNewTab(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>)
+    /// section decompressed to — as a panel over the file they came out of: an
+    /// untitled copy the user can study as a file, which editing cannot reach
+    /// back into the dump, linked to `source`, the bytes of this file they came
+    /// out of (`Design/UEFI/UPDATE_IN_PARENT.md` §2,
+    /// `Design/FRAGMENT_PANELS_PLAN.md`).
+    ///
+    /// Where it opens is the app's business, not the tool-module's — which is
+    /// why this is named after what it opens rather than after where.
+    func openPart(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>)
 }
 
 /// Bytes that do not change under the reader, from any thread.

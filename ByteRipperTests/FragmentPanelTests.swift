@@ -12,6 +12,10 @@ final class FragmentPanelTests: XCTestCase {
         let controller = MainViewController()
         let window = makeTestWindow()
         window.contentViewController = controller
+        // Taking a controller shrinks the window to what its view asks for, and
+        // an empty window asks for nothing: without this the panel host has no
+        // height to place a panel in.
+        window.setContentSize(NSSize(width: 800, height: 600))
         window.makeKeyAndOrderFront(nil)
         window.contentView?.layoutSubtreeIfNeeded()
         return (controller, window)
@@ -35,13 +39,12 @@ final class FragmentPanelTests: XCTestCase {
 
     // MARK: - The geometry
 
-    /// The panel stops short of the top so the parent's header — the name of
-    /// the file the part came out of — stays readable.
-    func testThePanelLeavesTheParentsHeaderShowing() {
+    /// The panel's top edge cuts the parent's header in half: enough shows to
+    /// say which file is behind, and the overlap says the panel is over it.
+    func testThePanelCutsTheParentsHeaderInHalf() {
         let height = FragmentPanelLayout.panelHeight(hostHeight: 600)
         XCTAssertEqual(height, 600 - FragmentPanelLayout.parentPeek)
-        XCTAssertGreaterThan(FragmentPanelLayout.parentPeek, FilePaneView.headerHeight,
-                             "the peek must show a whole header, not most of one")
+        XCTAssertEqual(FragmentPanelLayout.parentPeek, FilePaneView.headerHeight / 2)
     }
 
     /// In a short window the peek gives way before the panel does: the part is

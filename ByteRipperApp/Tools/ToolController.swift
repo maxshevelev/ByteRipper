@@ -20,6 +20,16 @@ import ToolModuleKit
     /// way round.
     weak var owner: MainViewController?
 
+    /// The surface this panel belongs to. Its widths are that surface's split's
+    /// business, and — for a fragment panel — so is which pane the session
+    /// reads (`Design/FRAGMENT_PANELS_PLAN.md`).
+    weak var surface: DocumentSurface?
+
+    /// The one pane this controller may bind to, for a surface that holds
+    /// exactly one: a fragment panel. Nil for the tab's own surface, where the
+    /// session binds to the active pane and can be moved to the other one.
+    private var pinnedPane: PaneViewModel? { surface?.pinnedPane }
+
     /// The active tool-module's identifier, or nil for None. Kept as an
     /// identifier rather than a type so a choice can outlive a build in which
     /// that tool-module was removed — it resolves through the registry, and an
@@ -101,7 +111,7 @@ import ToolModuleKit
     /// panel does, and the same door: `rebind`, so a choice and a drop cannot
     /// come to mean two different things.
     func selectPane(at index: Int) {
-        guard let owner, let pane = owner.pane(at: index) else { return }
+        guard pinnedPane == nil, let owner, let pane = owner.pane(at: index) else { return }
         rebind(to: pane)
     }
 
@@ -115,7 +125,10 @@ import ToolModuleKit
     /// not take the session there.
     func refreshPanelHeader() {
         guard let owner else { return }
-        let panes: [PaneViewModel] = [owner.windowModel.pane1, owner.windowModel.pane2]
+        // A fragment panel holds one pane and the tool cannot leave it: the
+        // header names that part and offers nothing to switch to.
+        let panes: [PaneViewModel] = pinnedPane.map { [$0] }
+            ?? [owner.windowModel.pane1, owner.windowModel.pane2]
         let choices: [ToolPanelView.PaneChoice] = panes.map { pane in
             ToolPanelView.PaneChoice(
                 fileName: pane.isOpen ? pane.status.fileName : "No file",
@@ -134,7 +147,8 @@ import ToolModuleKit
     /// tool is already reading that file, and a drop that changes nothing is a
     /// gesture that looks broken.
     func paneDropTitle(forPaneWith dragID: UUID) -> String? {
-        guard let module = activeModule,
+        guard pinnedPane == nil,
+              let module = activeModule,
               let owner,
               let index = owner.paneIndex(withDragID: dragID)
         else { return nil }
@@ -420,7 +434,8 @@ import ToolModuleKit
         guard resolved != activeIdentifier else { return }
         activeIdentifier = resolved
         endSession()
-        guard let module = activeModule, let pane = owner?.windowModel.activePane, pane.isOpen else {
+        guard let module = activeModule, let pane = pinnedPane ?? owner?.windowModel.activePane,
+              pane.isOpen else {
             activeIdentifier = nil
             setPanelVisible(false, animated: animated)
             return
@@ -447,10 +462,16 @@ import ToolModuleKit
     /// keeps the width it had in every one of them rather than in the case
     /// somebody remembered to write.
     private func setPanelWidth(_ width: CGFloat, animated: Bool) {
-        guard let owner else { return }
-        let current = owner.toolPanelWidth()
-        owner.setToolPanelWidth(width, animated: animated,
-                                windowResize: owner.toolPanelWindowResize(delta: width - current))
+        guard let surface else { return }
+        let current = surface.toolPanelWidth()
+        // Only the tab's own surface takes the window's width with it: a
+        // fragment panel opens inside the area it was given, and a window that
+        // grew because a panel over it opened a tool would be the window moving
+        // for something that is not the window's.
+        let resize = surface.pinnedPane == nil
+            ? owner?.toolPanelWindowResize(delta: width - current)
+            : nil
+        surface.setToolPanelWidth(width, animated: animated, windowResize: resize)
     }
 
     /// Whether the menu item for `identifier` should be available, and with

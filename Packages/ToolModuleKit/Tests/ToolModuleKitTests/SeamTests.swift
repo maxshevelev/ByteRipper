@@ -52,7 +52,7 @@ final class SeamTests: XCTestCase {
         }
         func requestFile(kinds: [String]) async -> ToolFile? { nil }
         func exportFile(_ bytes: [UInt8], suggestedName: String) async -> Bool { false }
-        func openInNewTab(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>) {}
+        func openPart(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>) {}
     }
 
     private struct FrozenBytes: ToolContentReader {
