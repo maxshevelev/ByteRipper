@@ -387,7 +387,13 @@ public enum MEACurator {
     private static func mfsFileRow(_ file: MFSFile, _ names: MFSFileNames) -> MEANode {
         var fields: [MEAField] = []
         append(&fields, "Index", String(file.index))
-        append(&fields, "Size", MEAText.size(file.size))
+        // The file's own bytes where the Integrity table has been taken off the
+        // end, which is the size upstream prints — with the whole chain beside
+        // it, because that is what the volume spent on the file.
+        append(&fields, "Size", MEAText.size(file.contentSize ?? file.size))
+        if file.contentSize != nil {
+            append(&fields, "Chain Size", MEAText.size(file.size))
+        }
         let record = names.record(for: file.index)
         if let record {
             append(&fields, "Path", record.path)
@@ -398,11 +404,20 @@ public enum MEACurator {
             append(&fields, "Group ID", MEAText.hex(record.groupID))
             append(&fields, "User ID", MEAText.hex(record.userID))
         }
+        // The table that came off the end, as its own row under the file: it is
+        // a structure with a dozen fields of its own, and the file's own facts
+        // would be lost among them.
+        var children: [MEANode] = []
+        if let integrity = file.integrity {
+            children.append(MEANode(path: [], title: "Integrity",
+                                    subtitle: MEAText.size(integrity.size),
+                                    fields: MEAValueText.fields(of: integrity)))
+        }
         // A present file has content, but its byte position is the FAT
         // chain walk the engine does not expose — no reliable range.
         return MEANode(path: [], title: record?.path ?? "File \(file.index)",
                        subtitle: mfsFileSubtitle(file, named: record != nil),
-                       fields: fields,
+                       fields: fields, children: children,
                        isEmptySection: file.size == 0)
     }
 
@@ -410,8 +425,9 @@ public enum MEACurator {
     /// index is what the volume says about the file, and a reader comparing the
     /// panel with a dump — or with upstream's own `path (0063)` — needs it.
     private static func mfsFileSubtitle(_ file: MFSFile, named: Bool) -> String {
-        guard named else { return MEAText.size(file.size) }
-        return "#\(file.index) · \(MEAText.size(file.size))"
+        let size = MEAText.size(file.contentSize ?? file.size)
+        guard named else { return size }
+        return "#\(file.index) · \(size)"
     }
 
     private static func homeGroup(_ home: MFSHomeDirectory) -> MEANode {

@@ -429,6 +429,85 @@ final class MFSTests: XCTestCase {
         return out
     }
 
+    // MARK: FTBL-volume file Integrity (mfs_home13_anl 8367–8404)
+
+    /// An FTBL volume's files are split only where the file table says they
+    /// carry a table — there is nothing in the bytes to tell, and splitting a
+    /// file that carries none would take 40 bytes of its content away.
+    func testTheFTBLSplitFollowsTheTablesFlag() throws {
+        let table = Self.integrityTable(size: 0x28, flags: 0x2,
+                                        hmac: Data(repeating: 0xAA, count: 16),
+                                        nonce: Data(repeating: 0xBB, count: 12),
+                                        arRandom: 0x1234, arCounter: 7)
+        let files = [
+            MFSLowLevelFile(index: 5, content: Data(repeating: 0x55, count: 0x100) + table),
+            MFSLowLevelFile(index: 6, content: Data(repeating: 0x66, count: 0x100)),
+        ]
+        let splits = MFSHomeDecoder.ftblFileIntegrity(
+            files: files, protectedIndices: [5],
+            variant: "CSME", major: 15, minor: 0, platform: 4)
+
+        XCTAssertEqual(splits.map(\.fileIndex), [5], "file 6 is not flagged, so it is not split")
+        let split = try XCTUnwrap(splits.first)
+        XCTAssertEqual(split.contentSize, 0x100, "the content, without the table")
+        XCTAssertEqual(split.tableSize, 0x28)
+        XCTAssertEqual(split.integrity.size, 0x28)
+        XCTAssertEqual(split.integrity.arCounter, 7)
+        XCTAssertTrue(split.integrity.antiReplayProtection)
+    }
+
+    /// Upstream's own workaround, ported as written: some files carry an extra
+    /// 0x10 after the 0x28 table, with nothing anywhere saying which — so a
+    /// table whose Anti-Replay counter reads absurdly large (> 0xFFFF) is
+    /// re-read 0x10 further back, and the file ends 0x38 from its content.
+    /// On `CSME 15.bin` this is the difference between 233 files and 132.
+    func testAnAbsurdCounterMeansTheTableSitsTenBytesEarlier() throws {
+        let real = Self.integrityTable(size: 0x28, flags: 0x2,
+                                       hmac: Data(repeating: 0xCC, count: 16),
+                                       nonce: Data(repeating: 0xDD, count: 12),
+                                       arRandom: 0x99, arCounter: 3)
+        // The file ends with the table *and* 0x10 of unknown bytes, so a plain
+        // 0x28 read off the end lands in the middle of both and comes out with
+        // a counter no Anti-Replay index would ever hold.
+        let content = Data(repeating: 0x77, count: 0x80)
+        let files = [MFSLowLevelFile(index: 9,
+                                     content: content + real + Data(repeating: 0xEE, count: 0x10))]
+        let splits = MFSHomeDecoder.ftblFileIntegrity(
+            files: files, protectedIndices: [9],
+            variant: "CSME", major: 15, minor: 0, platform: 4)
+
+        let split = try XCTUnwrap(splits.first)
+        XCTAssertEqual(split.tableSize, 0x38, "0x28 of table plus the 0x10 behind it")
+        XCTAssertEqual(split.contentSize, 0x80, "and the content is whole")
+        XCTAssertEqual(split.integrity.arCounter, 3, "read where the table really is")
+        XCTAssertEqual(split.integrity.hmacHex.prefix(4), "CCCC")
+    }
+
+    /// A 0x34-table volume has no such wrinkle — the workaround is upstream's
+    /// 0x28 branch alone.
+    func testThe0x34LayoutIsSplitAtItsOwnSize() throws {
+        let table = Self.integrityTable(size: 0x34, flags: 0x2,
+                                        hmac: Data(repeating: 0x11, count: 32),
+                                        nonce: Data(repeating: 0x22, count: 16),
+                                        arRandom: 0xFFFFFF, arCounter: 0xFFFFFF)
+        let files = [MFSLowLevelFile(index: 3, content: Data(repeating: 0x33, count: 0x40) + table)]
+        let splits = MFSHomeDecoder.ftblFileIntegrity(
+            files: files, protectedIndices: [3],
+            variant: "CSME", major: 14, minor: 5, platform: 4)
+        let split = try XCTUnwrap(splits.first)
+        XCTAssertEqual(split.tableSize, 0x34)
+        XCTAssertEqual(split.contentSize, 0x40)
+    }
+
+    /// A file too short to hold the table it is flagged for is left alone: a
+    /// negative content length is not a fact about a file.
+    func testAFileTooShortForItsTableIsNotSplit() {
+        let files = [MFSLowLevelFile(index: 2, content: Data(repeating: 0x22, count: 0x10))]
+        XCTAssertTrue(MFSHomeDecoder.ftblFileIntegrity(
+            files: files, protectedIndices: [2],
+            variant: "CSME", major: 15, minor: 0, platform: 4).isEmpty)
+    }
+
     // MARK: Layout selectors (get_sec_hdr_size / get_vfs_start_0)
 
     func testSecHeaderSizeLayoutSelectors() {

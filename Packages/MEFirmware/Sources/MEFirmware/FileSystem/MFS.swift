@@ -524,6 +524,67 @@ enum MFSHomeDecoder {
         return result
     }
 
+    // MARK: FTBL-volume file Integrity (upstream `mfs_home13_anl` 8367–8404)
+
+    /// One FTBL-mode low-level file split into its content and its trailing
+    /// `MFS_Integrity_Table`.
+    struct MFSFileIntegritySplit {
+        var fileIndex: Int
+        /// The file's own bytes, with the Integrity table taken off the end.
+        var contentSize: Int
+        /// How long that table turned out to be — 0x28, 0x34, or the 0x38 the
+        /// `arCounter` workaround below finds.
+        var tableSize: Int
+        var integrity: MFSIntegrityTable
+    }
+
+    /// Splits the Integrity table off the end of every file an FTBL-mode
+    /// volume's file table flags as Integrity-protected.
+    ///
+    /// **Which files carry one cannot be seen in the bytes.** A legacy volume's
+    /// reserved files are known by index (`reservedIntegrity` above), and its
+    /// home directory carries an Integrity bit per row; an FTBL volume has
+    /// neither — its files are a numbered inventory whose flags live in
+    /// `FileTable.dat`. So `protectedIndices` is handed in by the caller, which
+    /// is the one place that has the table, and this stays a byte decode: what
+    /// comes out is the tail's own HMAC, nonce, counters and flags.
+    ///
+    /// `secHeaderSize` picks 0x28 or 0x34 as it does for a legacy volume. The
+    /// 0x28 case has one wrinkle, and it is upstream's, comment and all: some
+    /// files carry an extra 0x10 of unknown data after the table (0x38 in all),
+    /// with nothing in FTBL or the volume to say which. Upstream's workaround —
+    /// "stupid AF but should work until the proper indicator can be found" — is
+    /// to read the table, and if its Anti-Replay counter comes out absurdly
+    /// large (> 0xFFFF), re-split 0x10 further back. It is ported as written,
+    /// because a wrong split is a wrong file: on `CSME 15.bin` it is the
+    /// difference between 233 files that end at 0x28 and 132 that end at 0x38.
+    static func ftblFileIntegrity(files: [MFSLowLevelFile],
+                                  protectedIndices: Set<Int>,
+                                  variant: String, major: Int, minor: Int,
+                                  platform: Int) -> [MFSFileIntegritySplit] {
+        let sec = secHeaderSize(variant: variant, major: major, minor: minor,
+                                platform: platform)
+        var result: [MFSFileIntegritySplit] = []
+        for file in files where protectedIndices.contains(file.index) {
+            guard file.content.count >= sec else { continue }
+            guard var table = integrityTable(Data(file.content.suffix(sec))) else { continue }
+            var size = sec
+            if sec == 0x28, table.arCounter > 0xFFFF, file.content.count >= 0x38,
+               let wider = integrityTable(Data(file.content.suffix(0x38).prefix(0x28))) {
+                // The table sits 0x10 earlier than it looked: re-read it there
+                // and count the extra bytes as part of what the file ends with.
+                size = 0x38
+                table = wider
+            }
+            result.append(MFSFileIntegritySplit(
+                fileIndex: file.index,
+                contentSize: file.content.count - size,
+                tableSize: size,
+                integrity: table))
+        }
+        return result.sorted { $0.fileIndex < $1.fileIndex }
+    }
+
     // MARK: File-8 Home Directory (upstream 8021–8301)
 
     /// Detect the Home Directory record size by scanning the root buffer for its

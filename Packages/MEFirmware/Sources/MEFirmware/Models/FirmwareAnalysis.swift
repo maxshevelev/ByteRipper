@@ -1341,11 +1341,24 @@ public struct MFSConfigRecord: Codable, Sendable, Equatable {
 public struct MFSFile: Codable, Sendable, Equatable, Identifiable {
     public var id: Int { index }
     public var index: Int
+    /// The whole assembled FAT chain, Integrity table and all.
     public var size: Int
+    /// The file's own bytes, where a trailing `MFS_Integrity_Table` was taken
+    /// off the end — what upstream prints as the file's Size. Nil where nothing
+    /// was split: a file that carries no such table, and every file of a legacy
+    /// volume, whose Integrity tables are reported per reserved file and per
+    /// home-directory row instead (`reservedIntegrity`, `homeDirectory`).
+    public var contentSize: Int?
+    /// The table that came off the end, when one did (`MFSIntegrityTable.size`
+    /// says which of 0x28 / 0x34 / 0x38 it turned out to be).
+    public var integrity: MFSIntegrityTable?
 
-    public init(index: Int, size: Int) {
+    public init(index: Int, size: Int, contentSize: Int? = nil,
+                integrity: MFSIntegrityTable? = nil) {
         self.index = index
         self.size = size
+        self.contentSize = contentSize
+        self.integrity = integrity
     }
 }
 
@@ -1955,5 +1968,11 @@ public enum EngineModelRevision {
     ///
     /// 34 adds `unmatchedMetadataHashes`: what the rbe / pm metadata tables
     /// list that no module of the image accounts for.
-    public static let current = 34
+    ///
+    /// 35 adds `MFSFile.contentSize` / `MFSFile.integrity`: an FTBL-mode
+    /// volume's files split from the `MFS_Integrity_Table` they end with. Which
+    /// files carry one is the file table's answer, so the split waits for it;
+    /// what the fields hold is bytes — the tail's HMAC, nonce, counters and
+    /// flags, and the content length without it.
+    public static let current = 35
 }

@@ -32,8 +32,17 @@ final class MFSFileNamesTests: XCTestCase {
     private func table() throws -> FileTable { try FileTable.parse(json) }
 
     /// An FTBL-mode volume with the three files the table can speak about.
+    /// `split` indices carry an Integrity table the engine took off the end,
+    /// the way an FTBL volume's flagged files arrive.
     private func volume(platform: Int = 4, dictionary: Int = 0x0A,
-                        indices: [Int] = [6, 7, 63, 99]) throws -> MFSVolume {
+                        indices: [Int] = [6, 7, 63, 99],
+                        split: Set<Int> = []) throws -> MFSVolume {
+        let integrity: [String: Any] = [
+            "size": 0x28, "hmacHex": "AABB", "flagsRaw": 2,
+            "antiReplayProtection": true, "encryptionProtection": false,
+            "antiReplayIndex": 3, "securityVersion": 0,
+            "arRandom": 0x99, "arCounter": 7, "nonceHex": "CCDD",
+        ]
         let json: [String: Any] = [
             "offset": 0x1FF000, "pageSize": 0x2000, "pageCount": 49,
             "systemPageCount": 1, "dataPageCount": 48,
@@ -43,7 +52,11 @@ final class MFSFileNamesTests: XCTestCase {
             "ftblDictionary": dictionary, "ftblPlatform": platform,
             "ftblReserved": 0, "usesFTBL": true,
             "presentFileCount": indices.count, "fileBytes": 0x100 * indices.count,
-            "files": indices.map { ["index": $0, "size": 0x100] },
+            "files": indices.map { index -> [String: Any] in
+                guard split.contains(index) else { return ["index": index, "size": 0x100] }
+                return ["index": index, "size": 0x100,
+                        "contentSize": 0x100 - 0x28, "integrity": integrity]
+            },
             "configurations": [], "reservedIntegrity": [],
         ]
         let data = try JSONSerialization.data(withJSONObject: json)
@@ -201,6 +214,35 @@ final class MFSFileNamesTests: XCTestCase {
         XCTAssertEqual(row.subtitle, "0x100 (256 bytes)",
                        "no index in the subtitle: the title is the index")
         XCTAssertNil(field("Path", in: row))
+    }
+
+    /// A file whose Integrity table the engine took off the end reads as
+    /// upstream prints it: `Size` is the content, the whole chain is beside it,
+    /// and the table is a row of its own under the file.
+    func testASplitFileShowsItsContentSizeAndItsTable() throws {
+        let volume = try volume(split: [63])
+        let names = MFSFileNames(table: try table(), volume: volume)
+        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names))
+        let row = try XCTUnwrap(files.children.first { $0.title == "/home/mca/manuf_ver" })
+
+        XCTAssertEqual(field("Size", in: row), "0xD8 (216 bytes)", "0x100 less the 0x28 tail")
+        XCTAssertEqual(field("Chain Size", in: row), "0x100 (256 bytes)")
+        XCTAssertEqual(row.subtitle, "#63 · 0xD8 (216 bytes)")
+        let table = try XCTUnwrap(row.children.first { $0.title == "Integrity" })
+        XCTAssertEqual(table.subtitle, "0x28 (40 bytes)")
+        XCTAssertFalse(table.fields.isEmpty, "the table's own fields are on its row")
+    }
+
+    /// A file with no table is not given a chain-size row it does not need: the
+    /// two numbers are the same one.
+    func testAFileWithNoTableShowsOneSize() throws {
+        let volume = try volume()
+        let names = MFSFileNames(table: try table(), volume: volume)
+        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names))
+        let row = try XCTUnwrap(files.children.first { $0.title == "/home/mca/manuf_ver" })
+        XCTAssertEqual(field("Size", in: row), "0x100 (256 bytes)")
+        XCTAssertNil(field("Chain Size", in: row))
+        XCTAssertTrue(row.children.isEmpty)
     }
 
     /// The volume's own row says which table the names came from, so a reader

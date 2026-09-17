@@ -206,7 +206,7 @@ design, each with its reason recorded in the map.
 | 82 | `chk_iup_size` | display Warning/Note + optional padding-strip writer |
 | 83 | `fovd_clean` | clean/dirty *display* flag |
 | 94 | `get_fw_ver` | version display string; needs the DB/UI label layer |
-| 96 | FileTable.dat loaders | **done 2026-09-17** — in the panel, not the model: the rule holds and the names are a lookup the ME tool makes (verified 366/366 against upstream's `-unp86` log on `CSME 15.bin`). The integrity-tail split it unlocks is open |
+| 96 | FileTable.dat loaders | **done 2026-09-17** — names in the panel (the result-model rule holds: they are a lookup the ME tool makes), and the integrity-tail split they unlock in the engine (`MFSFile.contentSize`/`.integrity`, revision 35). Verified 366/366 against upstream's `-unp86` log on `CSME 15.bin`: path, File ID, Size, and all 365 tables' HMAC + nonce |
 | 134 | `cse_unpack` | file-extraction/repair writer — an output feature, not analysis facts |
 | 135 | per-family pipeline chain | thin print/orchestration driver over the ported descriptor rows |
 

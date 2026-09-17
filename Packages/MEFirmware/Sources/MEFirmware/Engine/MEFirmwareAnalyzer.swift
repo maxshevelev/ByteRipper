@@ -742,6 +742,44 @@ public actor MEFirmwareAnalyzer {
                 isAFS: false)
         }
 
+        // Phase 9 (identity-gated, and the one decode that waits for a
+        // database): an FTBL-mode volume's files end with an
+        // `MFS_Integrity_Table`, and *which* of them do is not in the bytes —
+        // the file table says so (upstream `mfs_home13_anl` reads the flag out
+        // of FTBL before it splits the file). So the flags are fetched, the
+        // split is byte work, and what lands in the model is the tail's own
+        // numbers plus the content length without it.
+        //
+        // Best-effort in every direction: no table (offline, rate-limited, a
+        // volume the table does not describe) leaves every `contentSize` nil
+        // and `size` the whole chain, which is what the flash says. No Issue is
+        // raised — a missing database is not a finding about the firmware.
+        if mfsVolume?.usesFTBL == true, let info = mfsInfo, !info.files.isEmpty,
+           let table = try? await data.fileTable(), !table.isEmpty {
+            let resolution = table.resolve(platform: info.ftblPlatform,
+                                           dictionary: info.ftblDictionary)
+            let protected = Set(info.files.map(\.index).filter { index in
+                table.record(namingFileIndex: index,
+                             platform: resolution.platform,
+                             dictionary: resolution.dictionary)?.integrity == true
+            })
+            let splits = MFSHomeDecoder.ftblFileIntegrity(
+                files: info.files, protectedIndices: protected,
+                variant: identity.variant, major: identity.major,
+                minor: identity.minor, platform: info.ftblPlatform)
+            let byIndex = Dictionary(uniqueKeysWithValues: splits.map { ($0.fileIndex, $0) })
+            if var volume = mfsVolume {
+                volume.files = volume.files.map { file in
+                    guard let split = byIndex[file.index] else { return file }
+                    var file = file
+                    file.contentSize = split.contentSize
+                    file.integrity = split.integrity
+                    return file
+                }
+                mfsVolume = volume
+            }
+        }
+
         // Phase 9 (identity-gated): the file-6 Intel Configuration's Chipset
         // Initialization Tables (upstream mphytbl/pch_init_anl). mphytbl* file
         // records are already sliced out of file 6 by the config decode retained
