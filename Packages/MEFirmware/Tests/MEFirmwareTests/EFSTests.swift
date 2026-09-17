@@ -512,6 +512,48 @@ final class EFSTests: XCTestCase {
         XCTAssertEqual(oem.paddingAllFF, false)
     }
 
+    /// The payload is where the records are read from, and where it starts is
+    /// the revision's answer: 0x10 past a revision-1 header, 0x04 past the
+    /// alpha layout's own length word. `payloadOffset` says so absolutely, so a
+    /// record's own offset becomes a position in the image.
+    func testThePayloadIsHandedOutFromBehindTheHeader() throws {
+        let region = Self.makeFITC()
+        let payload = try XCTUnwrap(FITCParser.configPayload(
+            in: region, offset: 0, size: region.count))
+        XCTAssertEqual(payload.count, 0x80)
+        XCTAssertEqual(Array(payload.prefix(2)), [3, 10], "the payload's own bytes")
+        let oem = try XCTUnwrap(FITCParser.parse(in: region, offset: 0,
+                                                 size: region.count,
+                                                 absoluteOffset: 0x315000))
+        XCTAssertEqual(oem.payloadOffset, 0x315010)
+
+        let alpha = Data(Self.le32(0x20)) + Data((0..<0x20).map { UInt8($0) })
+            + Data(repeating: 0xFF, count: 0x100)
+        let alphaPayload = try XCTUnwrap(FITCParser.configPayload(
+            in: alpha, offset: 0, size: alpha.count))
+        XCTAssertEqual(alphaPayload.count, 0x20)
+        XCTAssertEqual(alphaPayload.first, 0)
+        let alphaOEM = try XCTUnwrap(FITCParser.parse(in: alpha, offset: 0,
+                                                      size: alpha.count,
+                                                      absoluteOffset: 0x1000))
+        XCTAssertEqual(alphaOEM.payloadOffset, 0x1004)
+    }
+
+    /// A length running past the partition is no payload: there is no saying
+    /// how much of it was meant, and cutting records out of the remainder would
+    /// invent them.
+    func testAPayloadLongerThanThePartitionIsNil() {
+        var region = Data(repeating: 0x00, count: 0x40)
+        region.replaceSubrange(0..<4, with: Self.le32(1))          // revision 1
+        region.replaceSubrange(8..<12, with: Self.le32(0x1000))    // DataLength
+        XCTAssertNil(FITCParser.configPayload(in: region, offset: 0,
+                                              size: region.count))
+        // And a header that declares nothing has nothing to hand out.
+        var empty = Data(repeating: 0x00, count: 0x40)
+        empty.replaceSubrange(0..<4, with: Self.le32(1))
+        XCTAssertNil(FITCParser.configPayload(in: empty, offset: 0, size: empty.count))
+    }
+
     func testRegionTooSmallForFITCReturnsNil() {
         XCTAssertNil(FITCParser.parse(in: Data(repeating: 0, count: 0x0F),
                                       offset: 0, size: 0x0F, absoluteOffset: 0))

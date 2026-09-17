@@ -58,8 +58,10 @@ swift run -c release MEFirmwareCLI <dump> --dat ~/Projects/MEAnalyzer
 
 Upstream writes its record logs and every unpacked file under
 `Unpacked_<dump>/` — `EFS 0000 [0x…].txt` ends with the EFS File Records table,
-and the files beside it are the contents, so their lengths on disk are a second
-check on every `contentSize`. `--dat` reads the three databases off the clone
+`FITC 0000 [0x…]/OEM Configuration/home_records.txt` is the Configuration
+record log, and the files beside each are the contents, so their bytes on disk
+are a second check: on every EFS `contentSize`, and on the FITC records'
+`payloadOffset + offset` pair, which upstream never prints. `--dat` reads the three databases off the clone
 instead of the network, which is the only way a one-shot CLI run reaches the
 table. Delete the `Unpacked_*` tree afterwards: the clone is a pinned baseline
 and its working tree stays clean.
@@ -206,10 +208,10 @@ design, each with its reason recorded in the map.
 | 43 `CSE_Layout_*` flags | redundancy (1.7 Flags bit0) + CRC-32 validity | per-field flag-table *display* of each header — DB/UI label layer |
 | ~~65 EFS pages~~ | **done 2026-09-17** — pages, System header, index permutation and CRCs byte-verified on 1.bin; the file walk (data area cut at the `EFST` offsets, split by the `FTBL` Integrity flags) oracle-verified 12/12 on `CSME 15.bin` | — |
 | 66 MFS volume/pages | page sort, `Crc16_14` de-obfuscation, header + FAT facts — byte-verified on both legacy dumps | — (structural complete; feeds rows below) |
-| 67 MFS files + legacy records/home | FAT-chain file walk, legacy 0x1C config, home directory + Integrity, backup decode | FTBL 0xC config branch + `mfs_home13_anl` naming (`FileTable.dat`) |
-| 68 FITC/UTFL | FITC rev-1 structural header/data CRC — byte-verified on 1.bin | FITC config-*record* walk (DB-text); `UTFL_Header` open |
-| 69 (FS deferral note) | structural EFS/FITC decode of the on-flash regions, plus the EFS file contents (row 65) | the FITC config *records*; UTFL + FTBL/EFST binary tables |
-| 71 FS drivers | `ext_anl`/`mod_anl`, legacy `mfs_cfg_anl`/`mfs_home_anl`, backup, `fitc_anl`'s structural half — and `efs_anl` whole, file walk included | the FITC config *records* + the FTBL 0xC config branch (rows 67–69/93) |
+| 67 MFS files + records/home | FAT-chain file walk, **both** config record layouts (identity-selected), home directory + Integrity, backup decode, `mfs_home13_anl` naming + split | `mphytbl` inside a 0xC stream — upstream finds it by each record's FTBL *name* |
+| 68 FITC/UTFL | rev-1 structural header/data CRC byte-verified on 1.bin; the config-*record* walk oracle-verified 94/94 on `CSME 15.bin` and 56/56 on `CSME 16.bin`, contents included | `UTFL_Header` open |
+| 69 (FS deferral note) | the on-flash EFS/FITC regions, structure *and* content (rows 65/67/68) | UTFL + the binary FTBL/EFST tables |
+| 71 FS drivers | `ext_anl`/`mod_anl`, `mfs_cfg_anl` (both record layouts), `mfs_home_anl`, backup, and `efs_anl`/`fitc_anl` whole — file walk and config records included | `mphytbl` over a 0xC stream; the text sinks of row 73 |
 | 72 `mfs_anl` structural | MFS scan surfaced as `mfsVolume` + Issues | — (the `partial` tag predates the file-walk/record increments; see 66/67) |
 | 81 PMC/PCHC/PHY/PCH-init | family descriptor (platform/SKU/stepping) oracle-verified on 1.bin; PCH-init real-dump-verified (above) | the `_parse` loops — thin row-aggregation wrappers adding only DB-name text |
 
@@ -225,6 +227,7 @@ design, each with its reason recorded in the map.
 | 83 | `fovd_clean` | clean/dirty *display* flag |
 | 94 | `get_fw_ver` | version display string; needs the DB/UI label layer |
 | 96 | FileTable.dat loaders | **done 2026-09-17** — names in the panel (the result-model rule holds: they are a lookup the ME tool makes), and the integrity-tail split they unlock in the engine (`MFSFile.contentSize`/`.integrity`, revision 35). Verified 366/366 against upstream's `-unp86` log on `CSME 15.bin`: path, File ID, Size, and all 365 tables' HMAC + nonce |
+| ~~68~~ | FITC config records | **done 2026-09-17** — `OEMConfiguration.records`/`.recordsByID` + `payloadOffset` (revision 37), paths in the panel through the table's *other* lookup (`record(withFileID:)`); 94/94 on `CSME 15.bin` and 56/56 on `CSME 16.bin`, every record's content bytes included |
 | ~~65~~ | EFS file contents | **done 2026-09-17** — `EFSVolume.files` (revision 36), names in the panel; 12/12 against upstream's `-unp86` EFS File Records on `CSME 15.bin`, content sizes cross-checked against the unpacked files' own lengths |
 | 134 | `cse_unpack` | file-extraction/repair writer — an output feature, not analysis facts |
 | 135 | per-family pipeline chain | thin print/orchestration driver over the ported descriptor rows |
@@ -232,8 +235,8 @@ design, each with its reason recorded in the map.
 ## What *done* means
 
 The incremental port of **byte-core engine facts** — every fact the engine can
-decode from firmware bytes with no database — is **complete**: 37 of 57 ledger
-rows fully ported and the remaining 20 either already split into their ported
+decode from firmware bytes with no database — is **complete**: 38 of 57 ledger
+rows fully ported and the remaining 19 either already split into their ported
 structural half or deferred/parked with recorded, non-byte-core reasons. All
 five oracle dumps decode with their known values reproduced exactly and no
 spurious Issues; the two non-empty issue lists (2.rom EFS, new.bin not-in-DB)
@@ -243,13 +246,15 @@ The rows not ported are deferred on one of four grounds, none of which is
 "not yet ported byte core":
 
 1. **DB-text naming / display** — excluded by the standing result-model rule
-   (the UI model never carries DB-derived display text): FITC config records,
-   `get_fw_ver`, `chk_iup_size`, `fovd_clean`. The **MFS/FTBL file names**
-   (row 96) and the **EFS file names** (row 65) left this list on 2026-09-17:
+   (the UI model never carries DB-derived display text): `get_fw_ver`,
+   `chk_iup_size`, `fovd_clean`. Everything `FileTable.dat` was holding up left
+   this list on 2026-09-17 — the **MFS/FTBL file names** (row 96), the **EFS
+   file names** (row 65) and the **Configuration records' paths** (rows 67/68):
    the rule is about the *model*, and the names now live where display text
-   belongs — the ME tool's own rows, looked up in `FileTable.dat`. What the
-   lookup unlocked in the engine went the other way: the table's *flags* drive
-   a byte split, so the sizes and Integrity tables are model facts.
+   belongs — the ME tool's own rows, looked up in `FileTable.dat`. What those
+   lookups unlocked in the engine went the other way: the table's *flags* and
+   *offsets* drive byte work, so the sizes, Integrity tables, file inventories
+   and record streams are model facts.
 2. **Extraction/repair writers** — ByteRipper output features, not analysis:
    `cse_unpack`, `MFS_Backup` restore writer.
 3. **Thin orchestration loops** whose facts already live in ported rows:

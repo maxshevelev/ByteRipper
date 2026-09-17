@@ -48,8 +48,6 @@ struct MFSVolumeInfo {
     var usesFTBL: Bool                  // not (dict,plat,reserved) == (1,0,0)
     var files: [MFSLowLevelFile]        // present (non-empty) records, by index
     var fileChainsIntact: Bool          // every used chain hit a clean EOF marker
-    var configurations: [MFSConfigDecode]  // legacy MFS only: decoded low-level
-                                           // files 6/7 (Intel/OEM Configuration)
 }
 
 /// One present low-level MFS file (upstream 7849–7877): the raw bytes of its
@@ -87,6 +85,32 @@ struct MFSRawConfigRecord {
     var reserved: Int            // Reserved
     var ownerUserID: Int
     var ownerGroupID: Int
+}
+
+/// One decoded `MFS_Config_Record_0xC` — the record the newer layouts use
+/// (CSME 13–16, CSSPS 6, and the CSSPS 4.4 / 5-on-platform-10 pair), selected
+/// by `MFSHomeDecoder.configRecordSize` exactly as upstream's
+/// `get_cfg_rec_size` selects the struct.
+///
+/// It carries no name: the file is identified by a **File ID**, and the path
+/// that ID stands for lives in `FileTable.dat`'s `FTBL` table under that ID as
+/// its key (upstream `mfs_cfg_anl`'s 0xC branch, MEA.py 8526). So the name is a
+/// panel lookup, the way an FTBL volume's file names are, and what the record
+/// itself says is where the bytes are and how the configuration may be
+/// overridden.
+struct MFSRawConfigIDRecord {
+    var fileID: Int              // FTBL table key (0x10002000, 0x12090300, …)
+    var offset: Int              // FileOffset into the owning stream
+    var size: Int                // FileSize
+    var oemConfigurable: Bool    // Flags bit0 — fitc.cfg may override intl.cfg
+    var unknownFlags: Int        // Flags bits 1–15
+}
+
+/// An ID-keyed Configuration record stream, with the low-level file it came
+/// from (6 = Intel, 7 = OEM) — the 0xC counterpart of `MFSConfigDecode`.
+struct MFSConfigIDDecode {
+    var owningFile: Int
+    var records: [MFSRawConfigIDRecord]
 }
 
 enum MFSParser {
@@ -199,8 +223,7 @@ enum MFSParser {
                                  ftblReserved: 0,
                                  usesFTBL: false,
                                  files: [],
-                                 fileChainsIntact: true,
-                                 configurations: [])
+                                 fileChainsIntact: true)
 
         guard let volume = chunks[0], volume.count >= volumeHeaderSize else {
             return info                       // no System chunk 0 ⇒ signature invalid
@@ -294,22 +317,13 @@ enum MFSParser {
             info.fileChainsIntact = intact
         }
 
-        // ——— Legacy Configuration record decode. Only the old-style MFS
-        // (usesFTBL == false, CSME ≤ 12) lays out Intel/OEM Configuration
-        // (low-level files 6/7) as `MFS_Config_Record_0x1C` streams; the FTBL
-        // layout's 0xC records name their files through FileTable.dat (the
-        // DB/FileTable increment). Decode whichever of 6/7 the volume carries.
-        if !info.usesFTBL {
-            var configs: [MFSConfigDecode] = []
-            for owner in [6, 7] {
-                guard let file = info.files.first(where: { $0.index == owner }),
-                      !file.content.isEmpty else { continue }
-                if let records = Self.decodeConfigRecords(file.content) {
-                    configs.append(MFSConfigDecode(owningFile: owner, records: records))
-                }
-            }
-            info.configurations = configs
-        }
+        // The Intel/OEM Configuration streams (low-level files 6/7) are *not*
+        // decoded here: which record struct they carry is an identity question
+        // (`get_cfg_rec_size` — 0x1C on CSME 11/12 and their analogues, 0xC on
+        // CSME 13–16), and this parser knows only bytes. The decode is
+        // `MFSHomeDecoder.configurations`, run from the analyzer's
+        // identity-gated phase over the files retained here — the same place
+        // the Home Directory and the Integrity split are decoded.
         return info
     }
 
@@ -342,6 +356,28 @@ enum MFSParser {
                 reserved: Int(readUInt16(content, at: base + 0x0C)),
                 ownerUserID: Int(readUInt16(content, at: base + 0x14)),
                 ownerGroupID: Int(readUInt16(content, at: base + 0x16))))
+        }
+        return records
+    }
+
+    /// Decode an ID-keyed Configuration record stream: a u32 record count then
+    /// that many 0xC `MFS_Config_Record_0xC` entries. Bounded the same way as
+    /// the 0x1C walk — the declared count leads, and a stream shorter than the
+    /// table it declares yields the complete records that fit.
+    static func decodeConfigIDRecords(_ content: Data) -> [MFSRawConfigIDRecord]? {
+        guard content.count >= 4 else { return nil }
+        let count = Int(readUInt32(content, at: 0))
+        var records: [MFSRawConfigIDRecord] = []
+        for i in 0..<count {
+            let base = 4 + i * 0xC
+            guard base + 0xC <= content.count else { break }
+            let flags = readUInt16(content, at: base + 0x0A)
+            records.append(MFSRawConfigIDRecord(
+                fileID: Int(readUInt32(content, at: base)),
+                offset: Int(readUInt32(content, at: base + 0x04)),
+                size: Int(readUInt16(content, at: base + 0x08)),
+                oemConfigurable: flags & 1 != 0,
+                unknownFlags: Int(flags >> 1)))
         }
         return records
     }
@@ -466,6 +502,54 @@ enum MFSHomeDecoder {
             || (variant, major) == ("CSME", 14) || (variant, major) == ("CSME", 15) {
             return 0x28 }
         return 0x28
+    }
+
+    /// `get_cfg_rec_size`: the length of one Intel/OEM Configuration record —
+    /// 0x1C (named files, `MFS_Config_Record_0x1C`) or 0xC (files identified by
+    /// File ID through `FTBL`, `MFS_Config_Record_0xC`). Like `secHeaderSize`
+    /// it reads variant/major/minor and `platform` (`vol_ftbl_pl`); `hotfix` is
+    /// unused upstream. Upstream's own default for anything unlisted is 0xC.
+    static func configRecordSize(variant: String, major: Int, minor: Int,
+                                 platform: Int) -> Int {
+        if (variant, major, minor) == ("CSSPS", 4, 4)
+            || (variant, major, platform) == ("CSSPS", 5, 10) { return 0xC }
+        if (variant, major) == ("CSME", 11) || (variant, major) == ("CSME", 12)
+            || (variant, major) == ("CSTXE", 3) || (variant, major) == ("CSTXE", 4)
+            || (variant, major) == ("CSSPS", 4) || (variant, major) == ("CSSPS", 5) {
+            return 0x1C }
+        if (variant, major) == ("CSME", 13) || (variant, major) == ("CSME", 14)
+            || (variant, major) == ("CSME", 15) || (variant, major) == ("CSME", 16)
+            || (variant, major) == ("CSSPS", 6) { return 0xC }
+        return 0xC
+    }
+
+    /// The volume's Intel (6) and OEM (7) Configuration record streams, read
+    /// with the record struct this identity uses (upstream `mfs_cfg_anl` over
+    /// `get_cfg_rec_size`). One of the two lists comes back empty: a volume's
+    /// streams are all one struct or all the other.
+    ///
+    /// A stream whose low-level file the volume does not carry is not a finding
+    /// — a CSME 15 FTBL volume has no files 6/7 at all, and an uninitialized
+    /// volume has no configuration yet.
+    static func configurations(files: [MFSLowLevelFile], variant: String,
+                               major: Int, minor: Int, platform: Int)
+        -> (byName: [MFSConfigDecode], byID: [MFSConfigIDDecode]) {
+        let size = configRecordSize(variant: variant, major: major,
+                                    minor: minor, platform: platform)
+        var byName: [MFSConfigDecode] = []
+        var byID: [MFSConfigIDDecode] = []
+        for owner in [6, 7] {
+            guard let file = files.first(where: { $0.index == owner }),
+                  !file.content.isEmpty else { continue }
+            if size == 0x1C {
+                if let records = MFSParser.decodeConfigRecords(file.content) {
+                    byName.append(MFSConfigDecode(owningFile: owner, records: records))
+                }
+            } else if let records = MFSParser.decodeConfigIDRecords(file.content) {
+                byID.append(MFSConfigIDDecode(owningFile: owner, records: records))
+            }
+        }
+        return (byName, byID)
     }
 
     /// `get_vfs_start_0`: whether the volume's files start at System offset 0.

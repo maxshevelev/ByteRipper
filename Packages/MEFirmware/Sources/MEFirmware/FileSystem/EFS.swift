@@ -317,16 +317,17 @@ enum EFSParser {
     }
 }
 
-/// FITC header + content integrity decode (upstream `fitc_anl`, MEA.py 8572 —
-/// the structural half; the MFS config-record walk it then runs is a parked
-/// FileTable.dat increment). A revision-1 volume carries, in its 0x10-byte
-/// `FITC_Header`, two plain CRC-32s: the header's own (over bytes [0x00:0x04]
-/// + zeroed [0x04:0x08] + [0x08:0x0C]) and the config data's (over bytes
-/// [0x10 : 0x10+DataLength]). Any other revision (CSME 15 TGP alpha layout)
-/// carries no checksums: config length comes from the first u32 at +0x04 and
+/// FITC header + content integrity decode (upstream `fitc_anl`, MEA.py 8572),
+/// plus the payload its config-record walk reads. A revision-1 volume carries,
+/// in its 0x10-byte `FITC_Header`, two plain CRC-32s: the header's own (over
+/// bytes [0x00:0x04] + zeroed [0x04:0x08] + [0x08:0x0C]) and the config data's
+/// (over bytes [0x10 : 0x10+DataLength]). Any other revision (the CSME 15 TGP
+/// alpha layout) carries no checksums: config length comes from the first u32 at +0x04 and
 /// the tail past it must be 0xFF padding. Both branches are byte-derived; the
-/// config data itself is only named/parsed with FileTable.dat, so it is not
-/// decoded here.
+/// config data itself is a Configuration record stream, and which record struct
+/// it carries is an identity answer — so `configPayload` hands those bytes out
+/// and the decode runs from the analyzer's identity-gated phase
+/// (`MFSParser.decodeConfigIDRecords`), the same way the EFS file walk does.
 enum FITCParser {
     static let headerSize = 0x10         // FITC_Header
 
@@ -343,6 +344,11 @@ enum FITCParser {
             dataLength: nil, headerCRCStored: nil, headerCRCValid: nil,
             dataCRCStored: nil, dataCRCValid: nil,
             configLength: nil, paddingAllFF: nil)
+        // Where the payload begins, made absolute: the record offsets inside it
+        // are offsets from there, so this is what turns one into a position in
+        // the image.
+        result.payloadOffset = absoluteOffset
+            + ((result.headerRevision == 1) ? headerSize : 0x04)
 
         if result.headerRevision == 1 {
             // Header CRC-32 span is the first 0x0C bytes with HeaderChecksum
@@ -379,6 +385,26 @@ enum FITCParser {
             }
         }
         return result
+    }
+
+    /// The partition's configuration payload — the bytes the record stream is
+    /// read out of: `[0x10 : 0x10+DataLength]` on a revision-1 header, and
+    /// `[0x04 : 0x04+length]` on the alpha layout whose first u32 *is* the
+    /// length. Both branches are the ones `parse` already checks, read again
+    /// here rather than kept alive: the payload is wanted once, after identity.
+    ///
+    /// Nil where the header's own length runs past the partition — there is no
+    /// saying how much of it was meant.
+    static func configPayload(in region: Data, offset: Int, size: Int) -> Data? {
+        guard offset >= 0, size >= headerSize, offset + size <= region.count else { return nil }
+        let buffer = region.subdata(in: offset..<(offset + size))
+        let revision = FITCParser.u32(buffer, at: 0x00) ?? 0
+        let start = revision == 1 ? headerSize : 0x04
+        let length = revision == 1
+            ? Int(FITCParser.u32(buffer, at: 0x08) ?? 0)
+            : Int(revision)
+        guard length > 0, start + length <= buffer.count else { return nil }
+        return buffer.subdata(in: start..<(start + length))
     }
 
     private static func u32(_ data: Data, at index: Int) -> UInt32? {

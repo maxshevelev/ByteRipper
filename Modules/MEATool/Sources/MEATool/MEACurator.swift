@@ -20,15 +20,17 @@ public enum MEACurator {
     /// The presented tree roots, in reading order: identity first, then the
     /// structural groups, then the fact groups of whatever else decoded.
     ///
-    /// `mfsNames` and `efsNames` are the one thing here that does not come out
-    /// of the analysis: an FTBL-mode MFS volume's low-level files and an EFS
-    /// volume's files have no name in their bytes, so the panel looks theirs up
-    /// in `FileTable.dat` and hands the answer in (`MFSFileNames`,
-    /// `EFSFileNames`). `.none` — the default — is the tree as it reads before
-    /// the table arrives, and on every volume that names its own files.
+    /// `mfsNames`, `efsNames` and `configPaths` are the one thing here that does
+    /// not come out of the analysis: an FTBL-mode MFS volume's low-level files,
+    /// an EFS volume's files and an ID-keyed Configuration record's file have no
+    /// name in their bytes, so the panel looks theirs up in `FileTable.dat` and
+    /// hands the answer in (`MFSFileNames`, `EFSFileNames`,
+    /// `ConfigRecordPaths`). `.none` — the default — is the tree as it reads
+    /// before the table arrives, and on every volume that names its own files.
     public static func present(_ analysis: FirmwareAnalysis,
                                mfsNames: MFSFileNames = .none,
-                               efsNames: EFSFileNames = .none) -> [MEANode] {
+                               efsNames: EFSFileNames = .none,
+                               configPaths: ConfigRecordPaths = .none) -> [MEANode] {
         var roots: [MEANode] = []
         let add: (MEANode?) -> Void = { if let n = $0 { roots.append(n) } }
 
@@ -38,12 +40,12 @@ public enum MEACurator {
         add(bootPartitions(analysis))
         add(codePartition(analysis))
         add(manifest(analysis))
-        add(mfsVolume(analysis, mfsNames))
+        add(mfsVolume(analysis, mfsNames, configPaths))
 
         // Fact groups — everything else a dump carried, each only when present.
         add(backupGroup(analysis))
         add(efsGroup(analysis, efsNames))
-        add(oemGroup(analysis))
+        add(oemGroup(analysis, configPaths))
         add(mmeGroup(analysis))
         add(gscGroup(analysis))
         add(oromGroup(analysis))
@@ -319,7 +321,8 @@ public enum MEACurator {
 
     // MARK: - File System (MFS)
 
-    private static func mfsVolume(_ a: FirmwareAnalysis, _ names: MFSFileNames) -> MEANode? {
+    private static func mfsVolume(_ a: FirmwareAnalysis, _ names: MFSFileNames,
+                                  _ configPaths: ConfigRecordPaths = .none) -> MEANode? {
         guard let vol = a.mfsVolume else { return nil }
         var header: [MEAField] = []
         append(&header, "Offset", MEAText.offset(vol.offset))
@@ -358,6 +361,15 @@ public enum MEACurator {
             children.append(MEANode(path: [], title: "Configurations",
                                     subtitle: MEAText.count(rows.count, "record"),
                                     children: rows))
+        }
+        // The newer layouts' Configuration streams: records that identify their
+        // file by ID instead of naming it, so the rows are named through the
+        // table (`ConfigRecordPaths`) the way the file rows above are.
+        for stream in vol.configurationsByID ?? [] {
+            children.append(configByIDGroup(stream.records,
+                                            title: configStreamTitle(stream.owningFile),
+                                            paths: configPaths,
+                                            payloadOffset: nil))
         }
         if let home = vol.homeDirectory {
             children.append(homeGroup(home))
@@ -534,8 +546,9 @@ public enum MEACurator {
             append(&fields, "File Table", table)
         }
         var children: [MEANode] = []
-        if !efs.files.isEmpty {
-            let rows = efs.files.map { efsFileRow($0, names) }
+        let files = efs.files ?? []
+        if !files.isEmpty {
+            let rows = files.map { efsFileRow($0, names) }
             children.append(MEANode(path: [], title: "Files",
                                     subtitle: MEAText.count(rows.count, "file"),
                                     children: rows))
@@ -587,10 +600,95 @@ public enum MEACurator {
                        isEmptySection: file.contentSize == 0)
     }
 
-    private static func oemGroup(_ a: FirmwareAnalysis) -> MEANode? {
+    /// The FITC partition: its header facts, and the configuration records its
+    /// payload carries — the OEM `fitc.cfg`, which on the newer layouts is a
+    /// partition of its own rather than a low-level file of the volume.
+    private static func oemGroup(_ a: FirmwareAnalysis,
+                                 _ paths: ConfigRecordPaths = .none) -> MEANode? {
         guard let oem = a.oemConfiguration else { return nil }
+        var fields = MEAValueText.fields(of: oem)
+        // The record lists are rows, not fields; the reflected dump would say
+        // "94 entries" and leave the reader no way in.
+        fields.removeAll { $0.label == "records" || $0.label == "recordsByID" }
+        let byID = oem.recordsByID ?? []
+        let byName = oem.records ?? []
+        if !byID.isEmpty, let table = paths.tableLabel {
+            append(&fields, "File Table", table)
+        }
+        var children: [MEANode] = []
+        if !byID.isEmpty {
+            children.append(configByIDGroup(byID,
+                                            title: "Configuration Records",
+                                            paths: paths,
+                                            payloadOffset: oem.payloadOffset))
+        }
+        if !byName.isEmpty {
+            let rows = byName.map { record in
+                MEANode(path: [], title: record.name.isEmpty ? "Record" : record.name,
+                        subtitle: MEAText.size(record.size),
+                        fields: MEAValueText.fields(of: record))
+            }
+            children.append(MEANode(path: [], title: "Configuration Records",
+                                    subtitle: MEAText.count(rows.count, "record"),
+                                    children: rows))
+        }
         return MEANode(path: [], title: "OEM Configuration",
-                       fields: MEAValueText.fields(of: oem))
+                       subtitle: MEAText.offset(oem.offset),
+                       fields: fields, children: children)
+    }
+
+    /// One ID-keyed Configuration stream as a group of record rows.
+    ///
+    /// `payloadOffset` is where the stream's bytes start in the image, when
+    /// that is knowable: a FITC partition's payload has one position, so its
+    /// rows stand for real bytes and reveal them. A stream living in a
+    /// low-level MFS file has none — the file is a FAT chain, and the engine
+    /// does not expose where its chunks landed.
+    private static func configByIDGroup(_ records: [MFSConfigIDRecord],
+                                        title: String,
+                                        paths: ConfigRecordPaths,
+                                        payloadOffset: Int?) -> MEANode {
+        let rows = records.map { configIDRow($0, paths, payloadOffset) }
+        return MEANode(path: [], title: title,
+                       subtitle: MEAText.count(rows.count, "record"),
+                       children: rows)
+    }
+
+    /// One record of an ID-keyed stream. Named through the table where it names
+    /// it, and otherwise by the fallback upstream writes the file out under —
+    /// `/Unknown/<ID>.bin`, which says the record is real and its name is not
+    /// known, rather than passing the ID off as a name.
+    private static func configIDRow(_ record: MFSConfigIDRecord,
+                                    _ paths: ConfigRecordPaths,
+                                    _ payloadOffset: Int?) -> MEANode {
+        let path = paths.path(for: record.fileID)
+        var fields: [MEAField] = []
+        append(&fields, "File ID", String(format: "0x%08X", record.fileID))
+        append(&fields, "Path", path)
+        append(&fields, "Size", MEAText.size(record.size))
+        append(&fields, "Offset", MEAText.hex(record.offset))
+        // Upstream's "FIT" column: an OEM `fitc.cfg` setting may override the
+        // Intel `intl.cfg` one through the Flash Image Tool.
+        append(&fields, "OEM Configurable", MEAText.yesNo(record.oemConfigurable))
+        append(&fields, "Reserved Flags", MEAText.hex(record.unknownFlags))
+        return MEANode(path: [],
+                       title: path ?? String(format: "Record 0x%08X", record.fileID),
+                       subtitle: MEAText.size(record.size),
+                       range: payloadOffset.flatMap {
+                           MEAText.rangeValue($0 + record.offset, record.size)
+                       },
+                       fields: fields,
+                       isEmptySection: record.size == 0)
+    }
+
+    /// What the low-level file a Configuration stream came from is called
+    /// (upstream's own "006 Intel" / "007 OEM").
+    private static func configStreamTitle(_ owningFile: Int) -> String {
+        switch owningFile {
+        case 6: return "Intel Configuration"
+        case 7: return "OEM Configuration"
+        default: return "Configuration \(owningFile)"
+        }
     }
 
     private static func mmeGroup(_ a: FirmwareAnalysis) -> MEANode? {

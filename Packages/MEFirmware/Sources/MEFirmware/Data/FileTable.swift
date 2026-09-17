@@ -230,6 +230,26 @@ public struct FileTable: Sendable, Equatable {
         return best
     }
 
+    /// The `FTBL` record stored **under `fileID` as its key** — the lookup a
+    /// Configuration record needs, which is not the same lookup a file index
+    /// needs: an MFS/EFS file is found by the `vfsID` *inside* a record
+    /// (`record(namingFileIndex:)`), while a 0xC Configuration record carries
+    /// the record's own key and reads the row at it directly (upstream
+    /// `ftbl_dict[pl][id]['FTBL'][ftbl_rec_id]`, MEA.py 8546).
+    ///
+    /// Nil where no row is keyed by that ID — upstream warns and falls back to
+    /// `/Unknown/<ID>.bin`, which is the panel's job to say.
+    public func record(withFileID fileID: Int,
+                       platform: Int, dictionary: Int) -> Entry? {
+        let resolution = resolve(platform: platform, dictionary: dictionary)
+        guard !resolution.missing,
+              let records = tables[Self.key(resolution.platform)]?[
+                  Self.key(resolution.dictionary)]?["FTBL"] else { return nil }
+        let key = String(format: "%08X", fileID)
+        guard let record = records[key] else { return nil }
+        return Self.entry(fileID: key, record: record)
+    }
+
     /// The `EFST` entries describing an EFS volume of table `revision`, in the
     /// order they sit in the data area, or nil when this platform/dictionary
     /// carries no `EFST` or none at that revision (upstream errors out on both,

@@ -286,10 +286,16 @@ final class MFSTests: XCTestCase {
         let info = try XCTUnwrap(MFSParser.parse(in: region, offset: 0, size: region.count))
 
         XCTAssertFalse(info.usesFTBL)
-        XCTAssertEqual(info.configurations.count, 1)
-        XCTAssertEqual(info.configurations[0].owningFile, 6)
+        // The stride is an identity answer, so the decode is asked for it:
+        // CSME 12 is a 0x1C-record layout (`get_cfg_rec_size`).
+        let configs = MFSHomeDecoder.configurations(
+            files: info.files, variant: "CSME", major: 12, minor: 0,
+            platform: info.ftblPlatform)
+        XCTAssertTrue(configs.byID.isEmpty, "a 0x1C layout fills one list, not both")
+        XCTAssertEqual(configs.byName.count, 1)
+        XCTAssertEqual(configs.byName[0].owningFile, 6)
 
-        let recs = info.configurations[0].records
+        let recs = configs.byName[0].records
         XCTAssertEqual(recs.count, 2)
 
         let home = recs[0]
@@ -333,7 +339,14 @@ final class MFSTests: XCTestCase {
 
         XCTAssertTrue(info.usesFTBL)
         XCTAssertEqual(info.files.map(\.index), [6])     // the file walked fine…
-        XCTAssertTrue(info.configurations.isEmpty)       // …but is not decoded as config
+        // …and a CSME 15 identity reads its records as 0xC, not as the 0x1C
+        // stream the bytes were written as: the layout is upstream's answer,
+        // not a guess from the volume header.
+        let configs = MFSHomeDecoder.configurations(
+            files: info.files, variant: "CSME", major: 15, minor: 0,
+            platform: info.ftblPlatform)
+        XCTAssertTrue(configs.byName.isEmpty)
+        XCTAssertEqual(configs.byID.count, 1)
     }
 
     func testLegacyVolumeWithoutConfigFilesHasEmptyConfigurations() throws {
@@ -345,7 +358,11 @@ final class MFSTests: XCTestCase {
             dictionary: 1, platform: 0, reserved: 0)
         let info = try XCTUnwrap(MFSParser.parse(in: region, offset: 0, size: region.count))
         XCTAssertFalse(info.usesFTBL)
-        XCTAssertTrue(info.configurations.isEmpty)
+        let configs = MFSHomeDecoder.configurations(
+            files: info.files, variant: "CSME", major: 12, minor: 0,
+            platform: info.ftblPlatform)
+        XCTAssertTrue(configs.byName.isEmpty)
+        XCTAssertTrue(configs.byID.isEmpty)
     }
 
     func testConfigStreamTruncatedBeforeItsDeclaredCountDecodesWhatFits() throws {
@@ -364,6 +381,120 @@ final class MFSTests: XCTestCase {
 
         XCTAssertNil(MFSParser.decodeConfigRecords(Data([1, 2, 3])))
         XCTAssertNil(MFSParser.decodeConfigRecords(Data()))
+    }
+
+    // MARK: ID-keyed Configuration record decode (mfs_cfg_anl 0xC branch)
+
+    /// One `MFS_Config_Record_0xC` stream: a u32 count then that many records
+    /// of File ID, offset, size and flags.
+    private static func configIDStream(
+        _ records: [(fileID: UInt32, offset: UInt32, size: UInt16, flags: UInt16)]
+    ) -> Data {
+        var out = le32(UInt32(records.count))
+        for r in records {
+            out.append(le32(r.fileID))       // +0x00 FileID
+            out.append(le32(r.offset))       // +0x04 FileOffset
+            out.append(le16(r.size))         // +0x08 FileSize
+            out.append(le16(r.flags))        // +0x0A Flags
+        }
+        return out
+    }
+
+    /// The record's own fields, with real values from the CSME 15 dump's FITC
+    /// payload: `/home/amt/rtfd/PrivacyLvl` is File ID 0x10080A00, one byte
+    /// long, and OEM-configurable (upstream's "FIT" column).
+    func testAnIDKeyedRecordIsReadInUpstreamsFieldOrder() throws {
+        let stream = Self.configIDStream([
+            (fileID: 0x1008_0A00, offset: 0x0000, size: 1, flags: 0x0001),
+            (fileID: 0x1008_0700, offset: 0x0001, size: 0x10, flags: 0x0000),
+        ])
+        let records = try XCTUnwrap(MFSParser.decodeConfigIDRecords(stream))
+        XCTAssertEqual(records.count, 2)
+        XCTAssertEqual(records[0].fileID, 0x1008_0A00)
+        XCTAssertEqual(records[0].offset, 0)
+        XCTAssertEqual(records[0].size, 1)
+        XCTAssertTrue(records[0].oemConfigurable, "Flags bit 0")
+        XCTAssertEqual(records[0].unknownFlags, 0, "and nothing else set")
+        XCTAssertEqual(records[1].fileID, 0x1008_0700)
+        XCTAssertEqual(records[1].offset, 1)
+        XCTAssertEqual(records[1].size, 0x10)
+        XCTAssertFalse(records[1].oemConfigurable)
+    }
+
+    /// The flag byte is split the way upstream splits it: bit 0 is the OEM
+    /// override and the 15 above it are the unnamed remainder, not a second
+    /// reading of the same bit.
+    func testTheRemainingFlagBitsAreReportedApartFromTheOEMBit() throws {
+        let stream = Self.configIDStream([
+            (fileID: 0x1234_5678, offset: 0, size: 0, flags: 0xFFFF),
+        ])
+        let record = try XCTUnwrap(MFSParser.decodeConfigIDRecords(stream)?.first)
+        XCTAssertTrue(record.oemConfigurable)
+        XCTAssertEqual(record.unknownFlags, 0x7FFF)
+    }
+
+    /// Bounded like the 0x1C walk: a declared count the bytes cannot cover
+    /// decodes the records that fit, and a stream shorter than the count field
+    /// is no stream at all.
+    func testATruncatedIDKeyedStreamDecodesWhatFits() {
+        let two = Self.configIDStream([
+            (fileID: 1, offset: 0, size: 1, flags: 0),
+            (fileID: 2, offset: 1, size: 1, flags: 0),
+        ])
+        let records = MFSParser.decodeConfigIDRecords(Data(two.prefix(4 + 0xC)))
+        XCTAssertEqual(records?.map(\.fileID), [1])
+        XCTAssertNil(MFSParser.decodeConfigIDRecords(Data([1, 2, 3])))
+    }
+
+    /// `get_cfg_rec_size`, upstream's own table: the older families name their
+    /// records, the newer ones key them by ID, and the two CSSPS exceptions
+    /// come first — CSSPS 4.4, and CSSPS 5 on FTBL platform 10, are 0xC even
+    /// though plain CSSPS 4/5 are 0x1C.
+    func testTheConfigRecordSizeFollowsUpstreamsTable() {
+        let size = { (v: String, major: Int, minor: Int, platform: Int) in
+            MFSHomeDecoder.configRecordSize(variant: v, major: major,
+                                            minor: minor, platform: platform)
+        }
+        XCTAssertEqual(size("CSME", 11, 8, 0), 0x1C)
+        XCTAssertEqual(size("CSME", 12, 0, 0), 0x1C)
+        XCTAssertEqual(size("CSTXE", 4, 0, 0), 0x1C)
+        XCTAssertEqual(size("CSSPS", 4, 0, 0), 0x1C)
+        XCTAssertEqual(size("CSSPS", 5, 0, 0), 0x1C)
+        XCTAssertEqual(size("CSSPS", 4, 4, 0), 0xC, "the 4.4 exception")
+        XCTAssertEqual(size("CSSPS", 5, 0, 10), 0xC, "and the platform-10 one")
+        XCTAssertEqual(size("CSME", 13, 0, 0), 0xC)
+        XCTAssertEqual(size("CSME", 14, 5, 0), 0xC)
+        XCTAssertEqual(size("CSME", 15, 0, 4), 0xC)
+        XCTAssertEqual(size("CSME", 16, 1, 16), 0xC)
+        XCTAssertEqual(size("CSSPS", 6, 0, 0), 0xC)
+        XCTAssertEqual(size("GSC", 104, 0, 0), 0xC, "upstream's own default")
+    }
+
+    /// A volume's streams are all one struct or all the other, and which is
+    /// the identity's answer — the same bytes read as a 0x1C stream on CSME 12
+    /// and as a 0xC one on CSME 15.
+    func testTheVolumesStreamsAreReadWithTheIdentitysRecordStruct() throws {
+        let stream = Self.configIDStream([
+            (fileID: 0x1000_2000, offset: 0x20, size: 4, flags: 1),
+        ])
+        let region = Self.makeFileVolume(
+            fileRecords: 20,
+            fat: [7: 20, 20: UInt16(stream.count)],
+            dataSlotContents: [stream],
+            dictionary: 1, platform: 0, reserved: 0)
+        let info = try XCTUnwrap(MFSParser.parse(in: region, offset: 0, size: region.count))
+
+        let newer = MFSHomeDecoder.configurations(
+            files: info.files, variant: "CSME", major: 15, minor: 0, platform: 4)
+        XCTAssertTrue(newer.byName.isEmpty)
+        XCTAssertEqual(newer.byID.count, 1)
+        XCTAssertEqual(newer.byID[0].owningFile, 7, "file 7 is the OEM stream")
+        XCTAssertEqual(newer.byID[0].records.first?.fileID, 0x1000_2000)
+
+        let older = MFSHomeDecoder.configurations(
+            files: info.files, variant: "CSME", major: 12, minor: 0, platform: 4)
+        XCTAssertTrue(older.byID.isEmpty)
+        XCTAssertEqual(older.byName.count, 1, "the same bytes, read as 0x1C records")
     }
 
     // MARK: Home Directory / Integrity decode fixtures

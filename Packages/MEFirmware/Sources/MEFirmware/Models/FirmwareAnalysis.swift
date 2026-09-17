@@ -963,6 +963,11 @@ public struct MFSVolume: Codable, Sendable, Equatable {
     public var presentFileCount: Int    // used records that walked to real content
     public var fileBytes: Int           // total bytes across present files
     public var files: [MFSFile]         // present low-level files, by index
+    /// The volume's ID-keyed (0xC) Configuration streams, where its identity
+    /// says its records are those. Nil when they are 0x1C (`configurations`
+    /// then holds them), when the volume carries no file 6/7 at all, and on a
+    /// payload written before the field existed.
+    public var configurationsByID: [MFSConfigurationByID]?
     public var configurations: [MFSConfiguration]  // decoded legacy (non-FTBL)
                                           // Intel/OEM Configuration record streams
     public var homeDirectory: MFSHomeDirectory?   // file-8 Home Directory decode
@@ -1198,9 +1203,11 @@ public struct EFSVolume: Codable, Sendable, Equatable {
     public var dataPageHeaderCRCsValid: Bool
     public var dataPageFooterCRCsValid: Bool
     public var matchesMFSDictionary: Bool?  // nil when no MFS volume decoded alongside
-    /// The volume's files, in data-area order — empty until the EFS table that
-    /// locates them has been read, and on a volume no table describes.
-    public var files: [EFSFile] = []
+    /// The volume's files, in data-area order. Nil until the EFS table that
+    /// locates them has been read, on a volume no table describes, and on a
+    /// payload written before the field existed — the additive-only contract:
+    /// a field added later decodes as nil, never as a failure.
+    public var files: [EFSFile]?
 
     public init(offset: Int, pageSize: Int, systemPageCount: Int,
                 dataPageCount: Int, scratchPageCount: Int,
@@ -1290,9 +1297,10 @@ public struct EFSFile: Codable, Sendable, Equatable {
 /// Configuration store of the newer layouts, decoded from an FPT region named
 /// "FITC". Upstream `fitc_anl` (MEA.py 8572) reads a `FITC_Header` (revision 1)
 /// whose header and data are each protected by a plain CRC-32, then parses the
-/// data as MFS config *records* — a FileTable.dat-named step that is parked,
-/// never carried here. Only the header/length/integrity facts are on-flash
-/// bytes. A revision ≠ 1 layout (CSME 15 TGP alpha) carries no checksums: the
+/// data as MFS config *records*, which is ported too: `records`/`recordsByID`
+/// are that payload decoded with the record struct the identity selects
+/// (`MFSConfigIDRecord` — the path each record's File ID stands for is the
+/// panel's `FileTable.dat` lookup, not a model field). A revision ≠ 1 layout (CSME 15 TGP alpha) carries no checksums: the
 /// config length comes from the first u32 and the tail must be 0xFF padding.
 /// Byte-verified on 1.bin's FITC (revision 1, header and data CRC-32 valid).
 public struct OEMConfiguration: Codable, Sendable, Equatable {
@@ -1307,6 +1315,18 @@ public struct OEMConfiguration: Codable, Sendable, Equatable {
     /// rev != 1: config length from the first u32 and whether the tail is 0xFF.
     public var configLength: Int?
     public var paddingAllFF: Bool?
+    /// Where the configuration payload starts in the image — the partition's
+    /// own offset plus its header (0x10 on revision 1, 0x04 on the alpha
+    /// layout whose first u32 is the length). A record's `offset` is relative
+    /// to this, so the two together are the record's bytes in the dump.
+    public var payloadOffset: Int?
+    /// The configuration records the payload carries, read with the record
+    /// struct this identity uses — ID-keyed (0xC) on every layout that ships a
+    /// FITC partition, and named (0x1C) only if an older identity ever did. Nil
+    /// for the struct this partition does not use, before the identity-gated
+    /// decode has run, and on a payload written before the fields existed.
+    public var recordsByID: [MFSConfigIDRecord]?
+    public var records: [MFSConfigRecord]?
 
     public init(offset: Int, headerRevision: UInt32, dataLength: Int?,
                 headerCRCStored: UInt32?, headerCRCValid: Bool?,
@@ -1330,9 +1350,10 @@ public struct OEMConfiguration: Codable, Sendable, Equatable {
 /// `owningFile` is the low-level file index the records came from. Records are
 /// a flat ordered list — folder entries nest by name and pop back out on ".." —
 /// with file content living at `record.offset..<offset+size` inside that
-/// owning file. Only decoded for `usesFTBL == false` volumes (CSME ≤ 12): the
-/// FTBL layout's 0xC records name files through FileTable.dat, a later
-/// increment. CSME 12.0.3 carries an Intel Configuration (file 6) of 152
+/// owning file. Only decoded where the identity says the volume's records are
+/// 0x1C (`get_cfg_rec_size` — CSME 11/12, CSTXE 3/4, CSSPS 4/5); a newer
+/// layout's 0xC records arrive as `MFSConfigurationByID` instead.
+/// CSME 12.0.3 carries an Intel Configuration (file 6) of 152
 /// records whose folders include bup/chipsetinit/cls/dal_ivm/…; no OEM
 /// Configuration (file 7) is present on that dump.
 public struct MFSConfiguration: Codable, Sendable, Equatable {
@@ -1383,6 +1404,55 @@ public struct MFSConfigRecord: Codable, Sendable, Equatable {
         self.reserved = reserved
         self.ownerUserID = ownerUserID
         self.ownerGroupID = ownerGroupID
+    }
+}
+
+/// A decoded ID-keyed MFS Configuration stream — the 0xC branch of upstream's
+/// `mfs_cfg_anl` (MEA.py 8526), which is what the newer layouts carry (CSME
+/// 13–16, CSSPS 6, and the CSSPS 4.4 / 5-on-platform-10 pair) and what the
+/// FITC partition's own payload is made of.
+///
+/// `owningFile` is the low-level file the records came from (6 = Intel, 7 =
+/// OEM). A volume's streams are all one record struct or all the other, so a
+/// volume that fills this one leaves `MFSVolume.configurations` empty.
+public struct MFSConfigurationByID: Codable, Sendable, Equatable {
+    public var owningFile: Int
+    public var records: [MFSConfigIDRecord]
+
+    public init(owningFile: Int, records: [MFSConfigIDRecord]) {
+        self.owningFile = owningFile
+        self.records = records
+    }
+}
+
+/// One decoded `MFS_Config_Record_0xC` (MEA.py 1402): a configuration file
+/// located by **File ID** rather than by name.
+///
+/// There is no name in the record and none in the stream — the path the ID
+/// stands for is a row of `FileTable.dat`'s `FTBL` table keyed by that ID
+/// (`0x10002000` → `/home/ish_srv/bios2ish`), which upstream looks up before
+/// writing the file out and falls back to `/Unknown/<ID>.bin` for. So the path
+/// is a panel lookup (reference/result-model.md) and what is here is the
+/// record's own bytes: where the content sits in the owning stream, how long it
+/// is, and whether an OEM `fitc.cfg` setting may override the Intel `intl.cfg`
+/// one (`oemConfigurable`, upstream's "OEM Configurable").
+public struct MFSConfigIDRecord: Codable, Sendable, Equatable {
+    /// The `FTBL` table key, as a number — upstream prints it `0x%0.8X`.
+    public var fileID: Int
+    /// Offset of the content inside the owning stream.
+    public var offset: Int
+    public var size: Int
+    public var oemConfigurable: Bool
+    /// Flags bits 1–15, which upstream prints as 15 bits and does not name.
+    public var unknownFlags: Int
+
+    public init(fileID: Int, offset: Int, size: Int,
+                oemConfigurable: Bool, unknownFlags: Int) {
+        self.fileID = fileID
+        self.offset = offset
+        self.size = size
+        self.oemConfigurable = oemConfigurable
+        self.unknownFlags = unknownFlags
     }
 }
 
@@ -2034,5 +2104,11 @@ public enum EngineModelRevision {
     /// 36 adds `EFSVolume.files`: an EFS volume's file inventory, cut out of its
     /// data area at the offsets the EFS table gives and split from the Integrity
     /// tables the FTBL flags say are there.
-    public static let current = 36
+    ///
+    /// 37 adds the ID-keyed Configuration records of the newer layouts —
+    /// `MFSVolume.configurationsByID` and the FITC payload's own
+    /// `OEMConfiguration.records` / `.recordsByID`. Which record struct a stream
+    /// carries is an identity answer (`get_cfg_rec_size`), so the decode moved
+    /// to the identity-gated phase for both sizes.
+    public static let current = 37
 }

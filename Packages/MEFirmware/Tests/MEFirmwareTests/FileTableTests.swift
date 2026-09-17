@@ -95,6 +95,37 @@ final class FileTableTests: XCTestCase {
                                         platform: 4, dictionary: 0x0A))
     }
 
+    // MARK: - The other lookup: by the record's own key
+
+    /// A Configuration record carries the table key itself, so the row at that
+    /// key is the answer — a different question from "which row claims file
+    /// 63", and the two can land on different rows.
+    func testARecordIsAlsoFoundByItsOwnKey() throws {
+        let entry = try XCTUnwrap(
+            try table().record(withFileID: 0x1000_3500, platform: 4, dictionary: 0x0A))
+        XCTAssertEqual(entry.path, "/home/mca/manuf_ver")
+        XCTAssertEqual(entry.fileID, "10003500")
+        XCTAssertEqual(entry.vfsID, 63, "the row's own vfsID, whatever was asked")
+    }
+
+    /// The key is eight upper-case hex digits, as the file writes it — upstream
+    /// formats the record's File ID `%0.8X` before looking it up.
+    func testTheKeyIsTheEightDigitFormOfTheID() throws {
+        XCTAssertNotNil(try table().record(withFileID: 0x1004_0000,
+                                           platform: 4, dictionary: 0x0A))
+        XCTAssertNil(try table().record(withFileID: 0x40000,
+                                        platform: 4, dictionary: 0x0A),
+                     "a different ID, not the same one short of its leading digits")
+    }
+
+    /// An ID no row is keyed under is nil — upstream warns and writes the file
+    /// out as `/Unknown/<ID>.bin`, which is the panel's wording, not a table
+    /// answer.
+    func testAnIDTheTableDoesNotCarryIsNil() throws {
+        XCTAssertNil(try table().record(withFileID: 0xDEAD_BEEF,
+                                        platform: 4, dictionary: 0x0A))
+    }
+
     // MARK: - The two fallbacks
 
     /// A volume that names a platform and a dictionary this file has is read
@@ -258,6 +289,8 @@ final class FileTableTests: XCTestCase {
         XCTAssertTrue(FileTable().isEmpty)
         XCTAssertNil(FileTable().record(namingFileIndex: 0, platform: 4, dictionary: 0x0A))
         XCTAssertNil(FileTable().efsEntries(platform: 4, dictionary: 0x0A, revision: 1))
+        XCTAssertNil(FileTable().record(withFileID: 0x1000_3500,
+                                        platform: 4, dictionary: 0x0A))
         XCTAssertFalse(FileTable().hasEFST(platform: 4, dictionary: 0x0A))
     }
 }

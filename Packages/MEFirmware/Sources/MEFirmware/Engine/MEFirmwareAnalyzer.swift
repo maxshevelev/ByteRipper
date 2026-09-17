@@ -138,22 +138,10 @@ public actor MEFirmwareAnalyzer {
                     presentFileCount: present.count,
                     fileBytes: present.reduce(0) { $0 + $1.content.count },
                     files: present.map { MFSFile(index: $0.index, size: $0.content.count) },
-                    configurations: info.configurations.map {
-                        MFSConfiguration(owningFile: $0.owningFile,
-                                         records: $0.records.map {
-                            MFSConfigRecord(name: $0.name, isFolder: $0.isFolder,
-                                            size: $0.size, offset: $0.offset,
-                                            unixRights: $0.unixRights,
-                                            integrityProtection: $0.integrity,
-                                            encryptionProtection: $0.encryption,
-                                            antiReplayProtection: $0.antiReplay,
-                                            oemConfigurable: $0.oemConfigurable,
-                                            mcaConfigurable: $0.mcaConfigurable,
-                                            reserved: $0.reserved,
-                                            ownerUserID: $0.ownerUserID,
-                                            ownerGroupID: $0.ownerGroupID)
-                        })
-                    })
+                    // The Configuration streams are filled in phase 9: which
+                    // record struct they carry is `get_cfg_rec_size`, and that
+                    // needs the identity this phase does not have yet.
+                    configurations: [])
                 if !info.volumeSignatureValid {
                     mfsIssues.append(Issue(id: 8, severity: .warning,
                         message: "MFS volume at 0x\(String(mfsRegion.offset, radix: 16)) "
@@ -829,6 +817,56 @@ public actor MEFirmwareAnalyzer {
             }
         }
 
+        // Phase 9 (identity-gated): the Intel (6) and OEM (7) Configuration
+        // record streams. Which record struct they carry is not in the bytes —
+        // `get_cfg_rec_size` answers it from variant/major/minor and the FTBL
+        // platform (0x1C named records on CSME 11/12 and their analogues, 0xC
+        // ID-keyed ones on CSME 13–16) — so the decode waits for the identity
+        // rather than guessing the stride from the layout, which would read one
+        // struct as the other and print a table of nonsense.
+        var mfsConfigurations: [MFSConfigDecode] = []
+        if let info = mfsInfo {
+            let decoded = MFSHomeDecoder.configurations(
+                files: info.files, variant: identity.variant,
+                major: identity.major, minor: identity.minor,
+                platform: info.ftblPlatform)
+            mfsConfigurations = decoded.byName
+            mfsVolume?.configurations = decoded.byName.map {
+                MFSConfiguration(owningFile: $0.owningFile,
+                                 records: $0.records.map(Self.configRecord))
+            }
+            if !decoded.byID.isEmpty {
+                mfsVolume?.configurationsByID = decoded.byID.map {
+                    MFSConfigurationByID(owningFile: $0.owningFile,
+                                         records: $0.records.map(Self.configRecord))
+                }
+            }
+        }
+
+        // Phase 9 (identity-gated): the FITC partition's own payload, which is
+        // one more Configuration record stream — low-level file 7, the OEM
+        // `fitc.cfg`, kept as a partition of its own on the newer whole-flash
+        // layouts (upstream `fitc_anl` hands it straight to `mfs_cfg_anl`,
+        // MEA.py 8611). The header facts were read in the structural phase; the
+        // records need the same identity-selected struct as a volume's, so they
+        // are read here, off the partition's bytes again.
+        if var oem = oemConfiguration,
+           let fitcRegion = regions.first(where: { $0.name == "FITC" }),
+           let payload = FITCParser.configPayload(in: region,
+                                                  offset: fitcRegion.offset - baseOffset,
+                                                  size: fitcRegion.size) {
+            let size = MFSHomeDecoder.configRecordSize(
+                variant: identity.variant, major: identity.major,
+                minor: identity.minor, platform: mfsInfo?.ftblPlatform ?? -1)
+            if size == 0xC {
+                oem.recordsByID = (MFSParser.decodeConfigIDRecords(payload) ?? [])
+                    .map(Self.configRecord)
+            } else if let records = MFSParser.decodeConfigRecords(payload) {
+                oem.records = records.map(Self.configRecord)
+            }
+            oemConfiguration = oem
+        }
+
         // Phase 9 (identity-gated): the file-6 Intel Configuration's Chipset
         // Initialization Tables (upstream mphytbl/pch_init_anl). mphytbl* file
         // records are already sliced out of file 6 by the config decode retained
@@ -840,7 +878,7 @@ public actor MEFirmwareAnalyzer {
         // effort: no mphytbl records → nil, no Issues.
         if mfsVolume?.usesFTBL == false, let info = mfsInfo {
             mfsVolume?.pchInit = PCHInitDecoder.decode(
-                files: info.files, configurations: info.configurations,
+                files: info.files, configurations: mfsConfigurations,
                 variant: identity.variant, major: identity.major,
                 minor: identity.minor, build: identity.build,
                 year: manifest.year, month: manifest.month, day: manifest.day)
@@ -1128,6 +1166,26 @@ public actor MEFirmwareAnalyzer {
 
     /// The two Downgrade Blacklist entries of an ME 7 manifest, as the model
     /// carries them — nil when neither line blacklists anything.
+    /// A decoded Configuration record as the model carries it. Two streams and
+    /// two record structs share these, so the mapping is written once.
+    private static func configRecord(_ r: MFSRawConfigRecord) -> MFSConfigRecord {
+        MFSConfigRecord(name: r.name, isFolder: r.isFolder, size: r.size,
+                        offset: r.offset, unixRights: r.unixRights,
+                        integrityProtection: r.integrity,
+                        encryptionProtection: r.encryption,
+                        antiReplayProtection: r.antiReplay,
+                        oemConfigurable: r.oemConfigurable,
+                        mcaConfigurable: r.mcaConfigurable,
+                        reserved: r.reserved, ownerUserID: r.ownerUserID,
+                        ownerGroupID: r.ownerGroupID)
+    }
+
+    private static func configRecord(_ r: MFSRawConfigIDRecord) -> MFSConfigIDRecord {
+        MFSConfigIDRecord(fileID: r.fileID, offset: r.offset, size: r.size,
+                          oemConfigurable: r.oemConfigurable,
+                          unknownFlags: r.unknownFlags)
+    }
+
     private static func downgradeBlacklist(
         in region: Data, manifest: ManifestParser.Manifest
     ) -> DowngradeBlacklist? {

@@ -110,7 +110,46 @@ final class FirmwareAnalysisModelTests: XCTestCase {
     }
 
     func testEngineModelRevisionBumpsWithAdditiveChanges() {
-        XCTAssertEqual(EngineModelRevision.current, 36)
+        XCTAssertEqual(EngineModelRevision.current, 37)
+    }
+
+    /// The additive contract reaches *inside* the model too, and a Swift
+    /// property default does not give it: a synthesized decoder asks for every
+    /// non-optional key, default or no default, so a nested struct's new field
+    /// has to be optional or an older payload stops decoding altogether. These
+    /// three grew one each (revisions 36–37) — an EFS volume's file list and
+    /// the two Configuration record lists.
+    func testNestedStructsDecodeWithoutTheirNewestFields() throws {
+        let payload = """
+        {"family":"csme","variant":"CSME","version":{"major":15,"minor":0,
+         "hotfix":30,"build":1716},
+         "release":"production","type":"region","sku":"","platform":"",
+         "sizeBytes":2048,"regions":[],"issues":[],
+         "mfsVolume":{"offset":0,"pageSize":8192,"pageCount":1,
+           "systemPageCount":1,"dataPageCount":0,"signatureValid":true,
+           "volumeSize":0,"computedVolumeSize":0,"fileRecordCount":0,
+           "usedFileCount":0,"ftblDictionary":11,"ftblPlatform":4,
+           "ftblReserved":0,"usesFTBL":true,"presentFileCount":0,"fileBytes":0,
+           "files":[],"configurations":[],"reservedIntegrity":[]},
+         "efsVolume":{"offset":0,"pageSize":4096,"systemPageCount":1,
+           "dataPageCount":0,"scratchPageCount":0,"scratchPagesEmpty":true,
+           "dataPageCountMatchesSystem":true,"dictionary":11,"revision":1,
+           "unknown1":2,"dictionaryRevision":1,"dataPagesCommitted":0,
+           "dataPagesReserved":0,"systemHeaderCRCValid":true,
+           "indexesCRCValid":true,"firstIndexPaddingEmpty":true,
+           "dataPageOrder":[],"dataPageHeaderCRCsValid":true,
+           "dataPageFooterCRCsValid":true},
+         "oemConfiguration":{"offset":0,"headerRevision":1}}
+        """
+        let decoded = try JSONDecoder().decode(
+            FirmwareAnalysis.self, from: Data(payload.utf8))
+        XCTAssertNil(decoded.efsVolume?.files)
+        XCTAssertNil(decoded.mfsVolume?.configurationsByID)
+        XCTAssertNil(decoded.oemConfiguration?.records)
+        XCTAssertNil(decoded.oemConfiguration?.recordsByID)
+        XCTAssertNil(decoded.oemConfiguration?.payloadOffset)
+        XCTAssertEqual(decoded.mfsVolume?.configurations, [],
+                       "and what was always there still reads as it did")
     }
 
     /// Row 18's firmware size is additive too, and it is *not* `sizeBytes`: a

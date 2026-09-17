@@ -29,7 +29,15 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   offsets say where an EFS file starts — what the engine then reads out of the
   flash is a parsed fact and belongs here (`MFSFile.contentSize`/`.integrity`,
   `EFSVolume.files`). The file's *name* and *path*, read from the same table,
-  do not: those are the panel's lookup (`MFSFileNames`, `EFSFileNames`).
+  do not: those are the panel's lookup (`MFSFileNames`, `EFSFileNames`,
+  `ConfigRecordPaths`).
+- **An added field has to be optional, not defaulted.** A Swift property
+  default does *not* satisfy the additive contract: the synthesized decoder
+  asks for every non-optional key regardless of a default, so a nested struct
+  that grows `var files: [EFSFile] = []` stops decoding every payload written
+  before the field. Declare it `[EFSFile]?` and read it as `?? []`
+  (`FirmwareAnalysisTests.testNestedStructsDecodeWithoutTheirNewestFields`
+  covers the ones added so far).
 
 ## Shape (starting point; bootstrap materializes it)
 

@@ -65,6 +65,10 @@ struct MEAParkedState: ToolSessionState {
     /// until it has arrived, and on a dump with no EFS partition
     /// (`EFSFileNames`).
     private var efsNames: EFSFileNames = .none
+    /// What the files of an ID-keyed Configuration stream are called — the
+    /// FITC partition's records, and a newer volume's own 6/7 streams. `.none`
+    /// until the table has arrived (`ConfigRecordPaths`).
+    private var configPaths: ConfigRecordPaths = .none
     /// The in-flight `FileTable.dat` request, so a re-present does not start a
     /// second one.
     private var fileTableTask: Task<Void, Never>?
@@ -224,6 +228,7 @@ struct MEAParkedState: ToolSessionState {
         // may be of another file, or of one whose volume has just been edited.
         mfsNames = .none
         efsNames = .none
+        configPaths = .none
         analysis = nil
         // Named, not just "Reading…": three panels can be the one on screen and
         // each reads something different, so the line says which this is.
@@ -342,7 +347,8 @@ struct MEAParkedState: ToolSessionState {
     /// re-parse.
     private func present(_ analysis: FirmwareAnalysis) {
         self.analysis = analysis
-        roots = MEACurator.present(analysis, mfsNames: mfsNames, efsNames: efsNames)
+        roots = MEACurator.present(analysis, mfsNames: mfsNames, efsNames: efsNames,
+                                   configPaths: configPaths)
         if let path = focusPath, MEATree.node(at: path, in: roots) == nil {
             focusPath = nil
         }
@@ -356,8 +362,9 @@ struct MEAParkedState: ToolSessionState {
         loadFileNames()
     }
 
-    /// Names the files of an FTBL-mode MFS volume (§ CSME 15/16) and of the EFS
-    /// volume beside it.
+    /// Names the files of an FTBL-mode MFS volume (§ CSME 15/16), of the EFS
+    /// volume beside it, and of the ID-keyed Configuration records either
+    /// carries.
     ///
     /// Neither carries names at all: an MFS volume's FAT chains are numbered,
     /// an EFS volume's pages are one flat byte area, and both get their paths
@@ -379,13 +386,20 @@ struct MEAParkedState: ToolSessionState {
         let wantsMFS = volume?.usesFTBL == true && volume?.files.isEmpty == false
             && mfsNames.resolution == nil
         let wantsEFS = analysis.efsVolume != nil && efsNames.resolution == nil
-        guard wantsMFS || wantsEFS else { return }
+        // Every ID-keyed Configuration record in the analysis, wherever it came
+        // from: the FITC partition's payload and a newer volume's own 6/7
+        // streams are keyed into the same table.
+        let configIDs = (analysis.oemConfiguration?.recordsByID ?? []).map(\.fileID)
+            + (volume?.configurationsByID ?? []).flatMap { $0.records.map(\.fileID) }
+        let wantsConfig = !configIDs.isEmpty && configPaths.resolution == nil
+        guard wantsMFS || wantsEFS || wantsConfig else { return }
         let source = Self.dataSource
         let generation = self.generation
         fileTableTask = Task { [weak self] in
             let names = await MEAToolSession.fileNames(
                 mfs: wantsMFS ? volume : nil,
                 efs: wantsEFS ? analysis.efsVolume : nil,
+                configIDs: wantsConfig ? configIDs : [],
                 platform: volume?.ftblPlatform ?? -1,
                 dictionary: volume?.ftblDictionary ?? -1,
                 from: source)
@@ -394,6 +408,7 @@ struct MEAParkedState: ToolSessionState {
             guard let names, let analysis = self.analysis else { return }
             self.mfsNames = names.mfs ?? self.mfsNames
             self.efsNames = names.efs ?? self.efsNames
+            self.configPaths = names.config ?? self.configPaths
             // Re-presenting rebuilds the rows with the names in them; the
             // selection is kept by path, so the row the reader is looking at
             // stays where it is and simply gains its name.
@@ -466,17 +481,21 @@ struct MEAParkedState: ToolSessionState {
     private nonisolated static func fileNames(
         mfs: MFSVolume?,
         efs: EFSVolume?,
+        configIDs: [Int],
         platform: Int,
         dictionary: Int,
         from source: any MEADataSource
-    ) async -> (mfs: MFSFileNames?, efs: EFSFileNames?)? {
+    ) async -> (mfs: MFSFileNames?, efs: EFSFileNames?, config: ConfigRecordPaths?)? {
         guard let table = try? await source.fileTable() else { return nil }
         return await Task.detached(priority: .utility) {
             (mfs.map { MFSFileNames(table: table, volume: $0) },
              efs.map {
                  EFSFileNames(table: table, volume: $0,
                               platform: platform, dictionary: dictionary)
-             })
+             },
+             configIDs.isEmpty ? nil
+                 : ConfigRecordPaths(table: table, fileIDs: configIDs,
+                                     platform: platform, dictionary: dictionary))
         }.value
     }
 
