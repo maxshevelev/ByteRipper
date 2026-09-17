@@ -105,6 +105,8 @@ final class UseSelectionForFindTests: XCTestCase {
         XCTAssertTrue(try bar(window).isHidden, "⌘E must not open the Find bar")
         XCTAssertEqual(try bar(window).stagedPatternForTests,
                        SelectionFindPattern(text: "DE AD BE", encoding: .hex))
+        XCTAssertNil(controller.transientNotice,
+                     "and it passes silently: no plate over the dump")
 
         controller.findPattern()
         XCTAssertFalse(try bar(window).isHidden)
@@ -254,31 +256,6 @@ final class UseSelectionForFindTests: XCTestCase {
         XCTAssertFalse(controller.validateMenuItem(item), "no selection, nothing to take")
         select(0..<2, region: .hex, in: controller)
         XCTAssertTrue(controller.validateMenuItem(item))
-    }
-
-    // MARK: - The report
-
-    /// The command has no visible effect of its own, so it says what it did:
-    /// the pattern and the encoding it will be searched under (§11).
-    func testItReportsWhatItTook() throws {
-        let (controller, _, url) = try makeController(Array("AMI BIOS".utf8))
-        defer { cleanup(controller, url) }
-
-        select(4..<8, region: .ascii, in: controller)
-        controller.useSelectionForFind()
-
-        let notice = try XCTUnwrap(controller.transientNotice, "a plate reports the pattern")
-        XCTAssertEqual(notice.lines, ["Find pattern set", "\u{201C}BIOS\u{201D}", "UTF-8"])
-        XCTAssertNotNil(notice.symbolImageForTests, "with a glyph this system has")
-    }
-
-    /// A pattern longer than a line is cut short on the plate — the field holds
-    /// the whole of it.
-    func testTheReportCutsALongPatternShort() {
-        let long = String(repeating: "A", count: 60)
-        XCTAssertEqual(MainViewController.patternExcerpt(long, limit: 8),
-                       "\u{201C}AAAAAAAA\u{2026}\u{201D}")
-        XCTAssertEqual(MainViewController.patternExcerpt("AB", limit: 8), "\u{201C}AB\u{201D}")
     }
 
     // MARK: - The menu item

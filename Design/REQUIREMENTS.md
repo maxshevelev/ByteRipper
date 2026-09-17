@@ -1257,13 +1257,16 @@ Use Selection for Find (⌘E):
   and ends the search that field described — the count and the greys go, the
   way they go when the pattern is typed over. A count left standing would be
   about a pattern that is no longer there.
-- The command has no visible effect of its own, so it **says what it did**: a
-  plate of the usual kind (`TransientNoticePresenter`) carrying the pattern and
-  the encoding it will be searched under. That is also where a text selection
-  finds out it came back as bytes.
+- It **says nothing**. ⌘E is a preparation, run by a reader who is going on
+  reading, and a plate over the dump would be exactly the effect the command
+  exists not to have. The field is where the answer is, for anyone who opens
+  the bar to look — including a text selection that came back as bytes, which
+  the encoding popup then names.
 - A selection **too long** to be a pattern — over 1024 bytes — is refused in
   words rather than truncated: a shortened pattern would find places the user
-  never asked about. (Select All followed by ⌘E is the case this catches.)
+  never asked about. (Select All followed by ⌘E is the case this catches.) The
+  one thing the command ever says, and it says it because nothing happened: a
+  silent refusal would read as a dead key.
 - Dimmed without a selection, the same rule Copy follows: there is nothing to
   take.
 - Both readings of a selection are the **model's** (`SelectionFindPattern` in

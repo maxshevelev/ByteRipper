@@ -6143,10 +6143,10 @@ final class MainViewController: NSViewController {
     /// characters finds nothing that is in the file. Both readings belong to
     /// `SelectionFindPattern`, which is pure and tested on its own.
     ///
-    /// The command has no visible effect of its own — that is what "does not
-    /// open the bar" means — so it reports in a plate: the pattern and the
-    /// encoding it will be searched under. That is also where a text selection
-    /// finds out it came back as bytes.
+    /// It says nothing while it works. The command is a preparation, run by a
+    /// reader who is going on reading, and a plate over the dump for it would
+    /// be the effect that ⌘E exists not to have — the field is where the answer
+    /// is, for anyone who opens the bar to look.
     @objc func useSelectionForFind() {
         let pane = activePane
         guard pane.isOpen, let doc = pane.document else { return }
@@ -6168,23 +6168,10 @@ final class MainViewController: NSViewController {
             ? SelectionFindPattern.forText(bytes)
             : SelectionFindPattern.forBytes(bytes)
         findBar.stage(pattern)
-        showNotice(symbol: "magnifyingglass", lines: [
-            "Find pattern set",
-            Self.patternExcerpt(pattern.text),
-            pattern.encoding.displayName,
-        ])
     }
 
     /// The pattern ⌘E loaded, for tests.
     var stagedFindPatternForTests: SelectionFindPattern? { findBar.stagedPatternForTests }
-
-    /// The pattern as the plate says it: quoted, and cut short where it is
-    /// longer than a line the eye takes in at once. The plate is a receipt —
-    /// "this is what ⌘E took" — and the field holds the whole of it.
-    static func patternExcerpt(_ text: String, limit: Int = 40) -> String {
-        guard text.count > limit else { return "\u{201C}\(text)\u{201D}" }
-        return "\u{201C}\(text.prefix(limit))\u{2026}\u{201D}"
-    }
 
     /// The toolbar's Find button, which is a switch rather than a command: it
     /// is a thing on screen that is either pressed or not, and pressing it
