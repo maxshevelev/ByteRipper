@@ -42,19 +42,19 @@ enum FragmentPanelLayout {
 /// the one every sheet uses: a deliberate flick puts it away whatever distance
 /// it covered, and a slow drag has to have gone far enough to count.
 enum PullDown {
-    /// Downward speed, in points a second, that reads as "away with it" however
-    /// short the drag was.
+    /// The speed, in points a second, below which a pull counts as **stopped**.
     ///
-    /// A flick on a trackpad clears a couple of thousand; a hand moving the
-    /// panel to look behind it stays in the low hundreds. The line sits between
-    /// them, nearer the slow end, because a pull that ends while still moving
-    /// downward was on its way down.
-    static var dismissVelocity: CGFloat = 650
+    /// What decides is the direction the hand was going when it let go — the
+    /// panel finishes the movement rather than arguing with it — and that needs
+    /// a line under which there is no direction to speak of. A hand holding
+    /// something still drifts by a few points a second; a hand that is moving
+    /// clears this within one frame.
+    static var stillness: CGFloat = 40
 
-    /// How much of the panel's own height a *slow* pull has to cover to count
-    /// as putting it away. A third and a bit: far enough that a look behind
-    /// springs back, close enough that a deliberate shove need not reach the
-    /// dock.
+    /// How much of the panel's own height a pull that ended **stopped** has to
+    /// have covered to count as putting it away. A third and a bit: far enough
+    /// that a look behind springs back, close enough that a deliberate shove
+    /// need not reach the dock.
     static var dismissFraction: CGFloat = 0.35
 
     /// How much of an upward pull the panel actually takes. It is already at
@@ -72,13 +72,20 @@ enum PullDown {
     }
 
     /// `travelled` is how far down the panel has been pulled from its resting
-    /// place, `velocity` how fast it was still going down when let go (upward
-    /// is negative), `height` the panel's own height.
+    /// place, `velocity` how fast it was going when let go — positive down,
+    /// negative up — and `height` the panel's own height.
+    ///
+    /// **The direction decides.** Let go while still going down and the panel
+    /// carries on down; let go on the way back up and it goes back up. Whatever
+    /// distance was covered before that, the last thing the hand did is what it
+    /// meant, and the panel finishing that movement is what makes the gesture
+    /// feel like one movement rather than a vote.
+    ///
+    /// Distance only answers when the pull ended standing still, which is the
+    /// one case with no direction to continue.
     static func outcome(travelled: CGFloat, height: CGFloat, velocity: CGFloat) -> Outcome {
-        if velocity >= dismissVelocity { return .collapse }
-        // A flick *upward* is the opposite instruction, and beats the distance:
-        // a long pull that ends on its way back up is a pull being taken back.
-        if velocity <= -dismissVelocity { return .springBack }
+        if velocity > stillness { return .collapse }
+        if velocity < -stillness { return .springBack }
         return travelled >= height * dismissFraction ? .collapse : .springBack
     }
 
@@ -128,6 +135,19 @@ final class FragmentPanelHost: NSView {
     override func layout() {
         super.layout()
         onLayout?()
+    }
+
+    /// An arrow over everything it covers.
+    ///
+    /// Cursor rectangles are geometry, not hit testing: the split behind a
+    /// panel goes on offering its resize cursor over a divider nobody can
+    /// reach, which is the panes saying they are live when they are not. The
+    /// panel's own views are subviews of this one, so their cursors still win
+    /// over this one where they overlap.
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        guard !subviews.isEmpty else { return }
+        addCursorRect(bounds, cursor: .arrow)
     }
 }
 

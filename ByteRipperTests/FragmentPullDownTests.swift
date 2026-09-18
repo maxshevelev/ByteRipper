@@ -10,39 +10,39 @@ final class FragmentPullDownTests: XCTestCase {
 
     // MARK: - Letting go
 
-    /// A flick downward puts the panel away however short the drag was: what
-    /// decides is how it was let go.
-    func testAFlickDownCollapsesWhateverTheDistance() {
-        XCTAssertEqual(PullDown.outcome(travelled: 12, height: height,
-                                        velocity: PullDown.dismissVelocity),
-                       .collapse)
+    /// Let go while still going down, and the panel carries on down — whatever
+    /// distance the pull had covered. The action continues the movement.
+    func testStillGoingDownCollapsesWhateverTheDistance() {
         XCTAssertEqual(PullDown.outcome(travelled: 0, height: height,
-                                        velocity: PullDown.dismissVelocity * 3),
+                                        velocity: PullDown.stillness + 1),
                        .collapse)
+        XCTAssertEqual(PullDown.outcome(travelled: 12, height: height, velocity: 200), .collapse)
+        XCTAssertEqual(PullDown.outcome(travelled: 0, height: height, velocity: 2_000), .collapse)
     }
 
-    /// A look behind — pulled down and let go while barely moving — springs
-    /// back.
-    func testASlowLookBehindSpringsBack() {
-        XCTAssertEqual(PullDown.outcome(travelled: height * 0.2, height: height, velocity: 40),
+    /// Let go on the way back up, and it goes back up — even from the bottom.
+    /// A pull taken back is a pull taken back.
+    func testGoingBackUpSpringsBackFromAnywhere() {
+        XCTAssertEqual(PullDown.outcome(travelled: height * 0.9, height: height,
+                                        velocity: -PullDown.stillness - 1),
                        .springBack)
-        XCTAssertEqual(PullDown.outcome(travelled: 0, height: height, velocity: 0), .springBack)
+        XCTAssertEqual(PullDown.outcome(travelled: height * 0.5, height: height, velocity: -120),
+                       .springBack)
     }
 
-    /// A slow pull that went far enough counts as putting it away, and the line
-    /// is the fraction the rule names.
-    func testASlowPullPastTheFractionCollapses() {
+    /// Only a pull that ended standing still is decided by how far it went:
+    /// there is no direction left to continue.
+    func testAPullThatEndedStillIsDecidedByDistance() {
         let line = height * PullDown.dismissFraction
         XCTAssertEqual(PullDown.outcome(travelled: line, height: height, velocity: 0), .collapse)
         XCTAssertEqual(PullDown.outcome(travelled: line - 1, height: height, velocity: 0),
                        .springBack)
-    }
-
-    /// A pull taken back — let go while already travelling up — springs back
-    /// even from far down. The last direction is the instruction.
-    func testAPullTakenBackSpringsBackFromAnywhere() {
-        XCTAssertEqual(PullDown.outcome(travelled: height * 0.9, height: height,
-                                        velocity: -PullDown.dismissVelocity),
+        // A hand holding something still drifts; that is not a direction.
+        XCTAssertEqual(PullDown.outcome(travelled: line, height: height,
+                                        velocity: PullDown.stillness - 1),
+                       .collapse)
+        XCTAssertEqual(PullDown.outcome(travelled: line - 1, height: height,
+                                        velocity: -PullDown.stillness + 1),
                        .springBack)
     }
 
@@ -62,6 +62,66 @@ final class FragmentPullDownTests: XCTestCase {
         XCTAssertLessThan(small, 40, "a pull up is answered, not obeyed")
         XCTAssertEqual(PullDown.position(restingY: 0, offset: 10_000), PullDown.upwardLimit,
                        "and it never rises past its limit")
+    }
+
+    // MARK: - The panel under the hand
+
+    private func makePanel() throws -> (MainViewController, NSWindow, FragmentDock.PanelID) {
+        let controller = MainViewController()
+        let window = makeTestWindow(width: 900, height: 600)
+        window.contentViewController = controller
+        window.setContentSize(NSSize(width: 900, height: 600))
+        window.layoutIfNeeded()
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x100),
+                                                       named: "part", animated: false))
+        window.layoutIfNeeded()
+        return (controller, window, id)
+    }
+
+    /// The panel follows the pull — and a layout pass in the middle of it does
+    /// not take it back. It did: every mouse move set the frame and the layout
+    /// that followed put it at rest again, so the panel shook instead of
+    /// moving, and only a flick — which is decided by speed, not distance —
+    /// ever worked.
+    func testALayoutPassDoesNotTakeThePulledPanelBack() throws {
+        let (controller, window, id) = try makePanel()
+        defer { controller.fragments.close(id, animated: false) }
+        let panel = try XCTUnwrap(controller.fragments.panelView(id))
+        let resting = panel.frame.origin.y
+
+        controller.fragments.pullPanel(id, by: -120)
+        XCTAssertEqual(panel.frame.origin.y, resting - 120, "it follows the hand")
+
+        window.layoutIfNeeded()
+        try XCTUnwrap(panel.superview).layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(panel.frame.origin.y, resting - 120,
+                       "and stays where the hand has it")
+        controller.fragments.endPull(id, velocity: 0)
+    }
+
+    /// Let go slowly after a look behind, the panel is still up.
+    func testALookBehindLeavesThePanelUp() throws {
+        let (controller, _, id) = try makePanel()
+        defer { controller.fragments.close(id, animated: false) }
+
+        controller.fragments.pullPanel(id, by: -40)
+        controller.fragments.endPull(id, velocity: -60)
+
+        XCTAssertEqual(controller.fragments.expanded, id,
+                       "let go on the way back up, it comes back up")
+    }
+
+    /// Flicked, it goes into its pill — and the pill is still there.
+    func testAFlickPutsThePanelInItsPill() throws {
+        let (controller, _, id) = try makePanel()
+        defer { controller.fragments.close(id, animated: false) }
+
+        controller.fragments.pullPanel(id, by: -30)
+        controller.fragments.endPull(id, velocity: PullDown.stillness + 100)
+
+        XCTAssertNil(controller.fragments.expanded, "it went down")
+        XCTAssertEqual(controller.fragments.count, 1, "folded, not closed")
     }
 
     // MARK: - The handle

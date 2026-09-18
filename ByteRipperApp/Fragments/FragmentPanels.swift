@@ -37,6 +37,10 @@ import Cocoa
     }
 
     private(set) var dock = FragmentDock()
+
+    /// The panel being pulled down by hand, whose frame is the gesture's to set
+    /// until it is let go.
+    private var pulling: FragmentDock.PanelID?
     private var entries: [FragmentDock.PanelID: Entry] = [:]
 
     private weak var host: MainViewController?
@@ -203,7 +207,6 @@ import Cocoa
     func beginPullDown(_ id: FragmentDock.PanelID, from event: NSEvent) {
         guard dock.expanded == id, let entry = entries[id],
               let window = entry.view.window else { return }
-        let resting = FragmentPanelView.restingFrame(in: container)
         let start = event.locationInWindow.y
         // The last moments of the pull, for the speed it ended at. A short tail
         // rather than the whole gesture: what decides is how it was let go, not
@@ -220,24 +223,49 @@ import Cocoa
 
             switch tracked.type {
             case .leftMouseDragged:
-                var frame = resting
-                frame.origin.y = PullDown.position(restingY: resting.origin.y, offset: y - start)
-                entry.view.frame = frame
+                self.pullPanel(id, by: y - start)
             default:
                 stop.pointee = true
-                let travelled = resting.origin.y - entry.view.frame.origin.y
-                self.finishPullDown(id, entry: entry, resting: resting, travelled: travelled,
-                                    velocity: Self.downwardVelocity(samples))
+                self.endPull(id, velocity: Self.downwardVelocity(samples))
             }
         }
     }
 
-    /// The tail of the gesture the speed is read from.
-    private static let velocityWindow: TimeInterval = 0.08
+    /// Puts the panel where the hand has it, `offset` from where it was
+    /// grabbed (negative is down).
+    ///
+    /// Internal because the gesture runs a nested tracking loop, which a test
+    /// cannot enter: driving the pull through these two is how the suite gets
+    /// at it.
+    func pullPanel(_ id: FragmentDock.PanelID, by offset: CGFloat) {
+        guard dock.expanded == id, let entry = entries[id] else { return }
+        pulling = id
+        var frame = FragmentPanelView.restingFrame(in: container)
+        frame.origin.y = PullDown.position(restingY: frame.origin.y, offset: offset)
+        entry.view.frame = frame
+    }
 
-    /// How fast the pointer was going down when it was let go, in points a
-    /// second. Positive is downward, which is the direction that puts a panel
-    /// away.
+    /// Lets the pull go at `velocity` points a second downward.
+    func endPull(_ id: FragmentDock.PanelID, velocity: CGFloat) {
+        guard pulling == id, let entry = entries[id] else { return }
+        pulling = nil
+        let resting = FragmentPanelView.restingFrame(in: container)
+        finishPullDown(id, entry: entry, resting: resting,
+                       travelled: resting.origin.y - entry.view.frame.origin.y,
+                       velocity: velocity)
+    }
+
+    /// The tail of the gesture the direction is read from.
+    ///
+    /// Short, because what is being asked is which way the hand was going *as
+    /// it let go* — a longer window would answer with the average of the whole
+    /// pull, and a pull taken back at the end would still read as going down.
+    /// Fifty milliseconds is three to six moves, enough not to be one noisy
+    /// sample and short enough to be the end of the gesture.
+    private static let velocityWindow: TimeInterval = 0.05
+
+    /// How fast the pointer was going when it was let go, in points a second.
+    /// Positive is downward, which is the direction that puts a panel away.
     private static func downwardVelocity(_ samples: [(time: TimeInterval, y: CGFloat)]) -> CGFloat {
         guard let first = samples.first, let last = samples.last else { return 0 }
         let seconds = last.time - first.time
@@ -304,9 +332,16 @@ import Cocoa
             }
         }
         refreshDock()
+        invalidateCursors()
         // The panel in front takes the keyboard; folding the last one gives it
         // back to the dump. Without it the file behind kept the caret.
         host?.fragmentFocusChanged()
+    }
+
+    /// The cursors over the covered panes change with the panel arriving or
+    /// leaving, and AppKit only re-asks when told.
+    private func invalidateCursors() {
+        container.window?.invalidateCursorRects(for: container)
     }
 
     private func hideContainerIfClear() {
@@ -348,6 +383,15 @@ import Cocoa
     /// resize must not leave them showing.
     private func layoutPanels() {
         for (id, entry) in entries where entry.view.superview === container {
+            // Not the one in the hand: a pull sets the panel's frame on every
+            // mouse move, and a layout pass that put it back to rest was the
+            // panel shaking instead of following.
+            guard id != pulling else {
+                var frame = FragmentPanelView.restingFrame(in: container)
+                frame.origin.y = entry.view.frame.origin.y
+                entry.view.frame = frame
+                continue
+            }
             entry.view.frame = dock.expanded == id
                 ? FragmentPanelView.restingFrame(in: container)
                 : FragmentPanelView.foldedFrame(in: container)
