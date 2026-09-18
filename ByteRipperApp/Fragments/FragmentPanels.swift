@@ -208,25 +208,28 @@ import Cocoa
         guard dock.expanded == id, let entry = entries[id],
               let window = entry.view.window else { return }
         let start = event.locationInWindow.y
-        // The last moments of the pull, for the speed it ended at. A short tail
-        // rather than the whole gesture: what decides is how it was let go, not
-        // how it began.
-        var samples: [(time: TimeInterval, y: CGFloat)] = [(event.timestamp, start)]
+        // Where the hand last was, for the next movement to be measured from,
+        // and the last movement worth calling one. A distance rather than a
+        // speed: a nudge up followed by a pause before letting go is still a
+        // nudge up, and asking how fast the pointer was going at the moment of
+        // release would answer "not at all".
+        var anchor = start
+        var direction = PullDown.Direction.none
 
         window.trackEvents(matching: [.leftMouseDragged, .leftMouseUp],
                            timeout: .greatestFiniteMagnitude, mode: .eventTracking) { tracked, stop in
             guard let tracked else { stop.pointee = true; return }
             let y = tracked.locationInWindow.y
-            samples.append((tracked.timestamp, y))
-            samples.removeAll { tracked.timestamp - $0.time > Self.velocityWindow }
-            if samples.count < 2 { samples.insert((tracked.timestamp - 0.008, start), at: 0) }
-
+            if let moved = PullDown.Direction.of(offset: y - anchor) {
+                direction = moved
+                anchor = y
+            }
             switch tracked.type {
             case .leftMouseDragged:
                 self.pullPanel(id, by: y - start)
             default:
                 stop.pointee = true
-                self.endPull(id, velocity: Self.downwardVelocity(samples))
+                self.endPull(id, direction: direction)
             }
         }
     }
@@ -245,37 +248,20 @@ import Cocoa
         entry.view.frame = frame
     }
 
-    /// Lets the pull go at `velocity` points a second downward.
-    func endPull(_ id: FragmentDock.PanelID, velocity: CGFloat) {
+    /// Lets the pull go, `direction` being the way the hand last went.
+    func endPull(_ id: FragmentDock.PanelID, direction: PullDown.Direction) {
         guard pulling == id, let entry = entries[id] else { return }
         pulling = nil
         let resting = FragmentPanelView.restingFrame(in: container)
         finishPullDown(id, entry: entry, resting: resting,
                        travelled: resting.origin.y - entry.view.frame.origin.y,
-                       velocity: velocity)
-    }
-
-    /// The tail of the gesture the direction is read from.
-    ///
-    /// Short, because what is being asked is which way the hand was going *as
-    /// it let go* — a longer window would answer with the average of the whole
-    /// pull, and a pull taken back at the end would still read as going down.
-    /// Fifty milliseconds is three to six moves, enough not to be one noisy
-    /// sample and short enough to be the end of the gesture.
-    private static let velocityWindow: TimeInterval = 0.05
-
-    /// How fast the pointer was going when it was let go, in points a second.
-    /// Positive is downward, which is the direction that puts a panel away.
-    private static func downwardVelocity(_ samples: [(time: TimeInterval, y: CGFloat)]) -> CGFloat {
-        guard let first = samples.first, let last = samples.last else { return 0 }
-        let seconds = last.time - first.time
-        guard seconds > 0 else { return 0 }
-        return CGFloat(Double(first.y - last.y) / seconds)
+                       direction: direction)
     }
 
     private func finishPullDown(_ id: FragmentDock.PanelID, entry: Entry, resting: NSRect,
-                                travelled: CGFloat, velocity: CGFloat) {
-        switch PullDown.outcome(travelled: travelled, height: resting.height, velocity: velocity) {
+                                travelled: CGFloat, direction: PullDown.Direction) {
+        switch PullDown.outcome(travelled: travelled, height: resting.height,
+                                direction: direction) {
         case .springBack:
             move(entry.view, to: resting, animated: true, duration: Self.springBackDuration)
         case .collapse:

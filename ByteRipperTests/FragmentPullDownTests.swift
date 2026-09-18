@@ -10,39 +10,38 @@ final class FragmentPullDownTests: XCTestCase {
 
     // MARK: - Letting go
 
-    /// Let go while still going down, and the panel carries on down — whatever
-    /// distance the pull had covered. The action continues the movement.
-    func testStillGoingDownCollapsesWhateverTheDistance() {
-        XCTAssertEqual(PullDown.outcome(travelled: 0, height: height,
-                                        velocity: PullDown.stillness + 1),
-                       .collapse)
-        XCTAssertEqual(PullDown.outcome(travelled: 12, height: height, velocity: 200), .collapse)
-        XCTAssertEqual(PullDown.outcome(travelled: 0, height: height, velocity: 2_000), .collapse)
+    /// Nudged down and let go, the panel carries on down — whatever distance
+    /// the pull had covered. The action continues the movement.
+    func testANudgeDownCollapsesWhateverTheDistance() {
+        XCTAssertEqual(PullDown.outcome(travelled: 0, height: height, direction: .down), .collapse)
+        XCTAssertEqual(PullDown.outcome(travelled: 12, height: height, direction: .down), .collapse)
     }
 
-    /// Let go on the way back up, and it goes back up — even from the bottom.
-    /// A pull taken back is a pull taken back.
-    func testGoingBackUpSpringsBackFromAnywhere() {
-        XCTAssertEqual(PullDown.outcome(travelled: height * 0.9, height: height,
-                                        velocity: -PullDown.stillness - 1),
+    /// Nudged up, it goes back up — from the very bottom, and after any pause.
+    /// This is the one the hand found: a panel dragged to the floor and pushed
+    /// gently back used to freeze and then collapse.
+    func testANudgeUpSpringsBackFromAnywhere() {
+        XCTAssertEqual(PullDown.outcome(travelled: height * 0.95, height: height, direction: .up),
                        .springBack)
-        XCTAssertEqual(PullDown.outcome(travelled: height * 0.5, height: height, velocity: -120),
+        XCTAssertEqual(PullDown.outcome(travelled: height * 0.5, height: height, direction: .up),
                        .springBack)
     }
 
-    /// Only a pull that ended standing still is decided by how far it went:
-    /// there is no direction left to continue.
-    func testAPullThatEndedStillIsDecidedByDistance() {
+    /// A movement is a movement of at least the threshold; a tremble is not one
+    /// and leaves the direction where it was.
+    func testATrembleIsNotAMovement() {
+        XCTAssertNil(PullDown.Direction.of(offset: PullDown.movementThreshold - 0.5))
+        XCTAssertNil(PullDown.Direction.of(offset: -PullDown.movementThreshold + 0.5))
+        XCTAssertEqual(PullDown.Direction.of(offset: -PullDown.movementThreshold), .down)
+        XCTAssertEqual(PullDown.Direction.of(offset: PullDown.movementThreshold), .up)
+    }
+
+    /// Only a pull that never went anywhere is decided by how far it went.
+    func testAPullWithNoDirectionIsDecidedByDistance() {
         let line = height * PullDown.dismissFraction
-        XCTAssertEqual(PullDown.outcome(travelled: line, height: height, velocity: 0), .collapse)
-        XCTAssertEqual(PullDown.outcome(travelled: line - 1, height: height, velocity: 0),
-                       .springBack)
-        // A hand holding something still drifts; that is not a direction.
-        XCTAssertEqual(PullDown.outcome(travelled: line, height: height,
-                                        velocity: PullDown.stillness - 1),
+        XCTAssertEqual(PullDown.outcome(travelled: line, height: height, direction: .none),
                        .collapse)
-        XCTAssertEqual(PullDown.outcome(travelled: line - 1, height: height,
-                                        velocity: -PullDown.stillness + 1),
+        XCTAssertEqual(PullDown.outcome(travelled: line - 1, height: height, direction: .none),
                        .springBack)
     }
 
@@ -97,19 +96,20 @@ final class FragmentPullDownTests: XCTestCase {
 
         XCTAssertEqual(panel.frame.origin.y, resting - 120,
                        "and stays where the hand has it")
-        controller.fragments.endPull(id, velocity: 0)
+        controller.fragments.endPull(id, direction: .none)
     }
 
-    /// Let go slowly after a look behind, the panel is still up.
-    func testALookBehindLeavesThePanelUp() throws {
+    /// Pulled down to the floor and nudged back up, the panel is still up —
+    /// however far it had been dragged first.
+    func testANudgeBackUpLeavesThePanelUp() throws {
         let (controller, _, id) = try makePanel()
         defer { controller.fragments.close(id, animated: false) }
 
-        controller.fragments.pullPanel(id, by: -40)
-        controller.fragments.endPull(id, velocity: -60)
+        controller.fragments.pullPanel(id, by: -400)
+        controller.fragments.endPull(id, direction: .up)
 
         XCTAssertEqual(controller.fragments.expanded, id,
-                       "let go on the way back up, it comes back up")
+                       "nudged back up, it comes back up")
     }
 
     /// Flicked, it goes into its pill — and the pill is still there.
@@ -118,7 +118,7 @@ final class FragmentPullDownTests: XCTestCase {
         defer { controller.fragments.close(id, animated: false) }
 
         controller.fragments.pullPanel(id, by: -30)
-        controller.fragments.endPull(id, velocity: PullDown.stillness + 100)
+        controller.fragments.endPull(id, direction: .down)
 
         XCTAssertNil(controller.fragments.expanded, "it went down")
         XCTAssertEqual(controller.fragments.count, 1, "folded, not closed")

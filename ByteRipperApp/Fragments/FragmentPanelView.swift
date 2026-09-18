@@ -42,20 +42,36 @@ enum FragmentPanelLayout {
 /// the one every sheet uses: a deliberate flick puts it away whatever distance
 /// it covered, and a slow drag has to have gone far enough to count.
 enum PullDown {
-    /// The speed, in points a second, below which a pull counts as **stopped**.
+    /// How far the hand has to move for it to count as a movement with a
+    /// direction, in points.
     ///
-    /// What decides is the direction the hand was going when it let go — the
-    /// panel finishes the movement rather than arguing with it — and that needs
-    /// a line under which there is no direction to speak of. A hand holding
-    /// something still drifts by a few points a second; a hand that is moving
-    /// clears this within one frame.
-    static var stillness: CGFloat = 40
+    /// Two: a hand holding something still trembles by a point, and every
+    /// deliberate nudge clears this at once. It is a distance rather than a
+    /// speed on purpose — a nudge up and then a pause before letting go is
+    /// still a nudge up, and reading a speed at the moment of release would
+    /// answer "stopped" and forget which way the hand had gone.
+    static var movementThreshold: CGFloat = 2
 
-    /// How much of the panel's own height a pull that ended **stopped** has to
-    /// have covered to count as putting it away. A third and a bit: far enough
-    /// that a look behind springs back, close enough that a deliberate shove
-    /// need not reach the dock.
+    /// How much of the panel's own height a pull that never moved anywhere has
+    /// to have covered to count as putting it away. The fallback for a gesture
+    /// with no direction at all, which the drag threshold makes nearly
+    /// impossible — it is here so the rule is total.
     static var dismissFraction: CGFloat = 0.35
+
+    /// Which way the hand last went.
+    enum Direction: Equatable {
+        case down
+        case up
+        /// It never moved far enough to say.
+        case none
+
+        /// The direction of a movement of `offset` points, negative being down,
+        /// or `nil` when it is too small to be one.
+        static func of(offset: CGFloat) -> Direction? {
+            guard abs(offset) >= movementThreshold else { return nil }
+            return offset < 0 ? .down : .up
+        }
+    }
 
     /// How much of an upward pull the panel actually takes. It is already at
     /// the top, so this is resistance, not travel — enough to answer the hand
@@ -71,22 +87,23 @@ enum PullDown {
         case collapse
     }
 
-    /// `travelled` is how far down the panel has been pulled from its resting
-    /// place, `velocity` how fast it was going when let go — positive down,
-    /// negative up — and `height` the panel's own height.
+    /// What letting go means: `direction` is the way the hand last went,
+    /// `travelled` how far down the panel was pulled from its resting place,
+    /// `height` the panel's own height.
     ///
-    /// **The direction decides.** Let go while still going down and the panel
-    /// carries on down; let go on the way back up and it goes back up. Whatever
-    /// distance was covered before that, the last thing the hand did is what it
-    /// meant, and the panel finishing that movement is what makes the gesture
-    /// feel like one movement rather than a vote.
+    /// **The last movement decides, and nothing else does.** Nudged down, the
+    /// panel carries on down; nudged up, it goes back up — from anywhere,
+    /// whatever distance the pull had covered, and however long the hand rested
+    /// before letting go. The panel finishing the movement the hand made is
+    /// what makes the gesture feel like one movement rather than a vote.
     ///
-    /// Distance only answers when the pull ended standing still, which is the
-    /// one case with no direction to continue.
-    static func outcome(travelled: CGFloat, height: CGFloat, velocity: CGFloat) -> Outcome {
-        if velocity > stillness { return .collapse }
-        if velocity < -stillness { return .springBack }
-        return travelled >= height * dismissFraction ? .collapse : .springBack
+    /// Distance answers only for a pull with no direction at all.
+    static func outcome(travelled: CGFloat, height: CGFloat, direction: Direction) -> Outcome {
+        switch direction {
+        case .down: return .collapse
+        case .up: return .springBack
+        case .none: return travelled >= height * dismissFraction ? .collapse : .springBack
+        }
     }
 
     /// Where the panel sits while the pointer has moved `offset` from where it
