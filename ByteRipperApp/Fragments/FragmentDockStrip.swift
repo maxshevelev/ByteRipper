@@ -207,8 +207,15 @@ final class FragmentDockStrip: NSView {
 
     /// Where a panel's pill sits, in this strip's own coordinates, or nil when
     /// the dock has no pill for it. What a folding panel flies into.
+    ///
+    /// Laid out before it answers: a pill added a moment ago has no frame yet,
+    /// and until the row arranges them every pill sits at its leading edge —
+    /// which is why every new panel flew out of the leftmost position instead
+    /// of out of its own.
     func pillFrame(for id: FragmentDock.PanelID) -> NSRect? {
-        pills[id].map { $0.convert($0.bounds, to: self) }
+        guard let pill = pills[id] else { return nil }
+        window?.layoutIfNeeded()
+        return pill.convert(pill.bounds, to: self)
     }
 
     /// Brings the pills in line with `items`, reusing the ones already there:

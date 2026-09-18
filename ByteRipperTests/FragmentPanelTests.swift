@@ -299,6 +299,27 @@ final class FragmentPanelTests: XCTestCase {
                        "with the dock at its full height under both")
     }
 
+    /// A new panel flies out of *its own* pill. Every one of them flew out of
+    /// the leftmost position: the pill had just been made and the dock's row
+    /// had not arranged it yet, so the answer was the row's own origin.
+    func testANewPillKnowsWhereItIsAsSoonAsItIsAsked() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let first = try XCTUnwrap(controller.openFragment([0x01], named: "one", animated: false))
+        window.layoutIfNeeded()
+        let strip = try self.strip(of: controller)
+        let firstPill = try XCTUnwrap(strip.pillFrame(for: first))
+
+        // Asked the way a flight asks it — straight after opening, with no
+        // layout pass of the test's own in between.
+        let second = try XCTUnwrap(controller.openFragment([0x02], named: "two", animated: false))
+        let secondPill = try XCTUnwrap(strip.pillFrame(for: second))
+
+        XCTAssertGreaterThan(secondPill.width, 0, "it has a size by then")
+        XCTAssertGreaterThan(secondPill.minX, firstPill.maxX - 1,
+                             "and sits after the first rather than on top of it")
+    }
+
     // MARK: - The landing's arithmetic
 
     /// A panel folded into its pill comes down on the pill — whatever the
