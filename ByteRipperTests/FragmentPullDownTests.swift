@@ -189,6 +189,43 @@ final class FragmentPullDownTests: XCTestCase {
         XCTAssertEqual(carried, 2, "and so is upward: there is no pull up")
     }
 
+    /// The tool panel's header is a handle too, so a panel opened with a tool
+    /// can be pulled down by either strip.
+    func testTheToolPanelsHeaderIsAlsoAHandle() throws {
+        let handle = PullDownHandleView(frame: NSRect(x: 0, y: 0, width: 300, height: 28))
+        let window = makeTestWindow(width: 400, height: 200)
+        window.contentView?.addSubview(handle)
+        var pulled = 0
+        handle.onPulledDown = { _ in pulled += 1 }
+
+        handle.mouseDown(with: try press(at: NSPoint(x: 100, y: 100), in: window))
+        handle.mouseDragged(with: try press(at: NSPoint(x: 101, y: 60), in: window,
+                                            type: .leftMouseDragged))
+        XCTAssertEqual(pulled, 1, "down is a pull")
+
+        handle.mouseDown(with: try press(at: NSPoint(x: 100, y: 100), in: window))
+        handle.mouseDragged(with: try press(at: NSPoint(x: 160, y: 98), in: window,
+                                            type: .leftMouseDragged))
+        XCTAssertEqual(pulled, 1, "sideways over this header means nothing")
+
+        handle.mouseDown(with: try press(at: NSPoint(x: 100, y: 100), in: window))
+        handle.mouseDragged(with: try press(at: NSPoint(x: 100, y: 140), in: window,
+                                            type: .leftMouseDragged))
+        XCTAssertEqual(pulled, 1, "and neither does up")
+    }
+
+    /// A panel with a tool open wires that header to the same gesture; the
+    /// tab's own tool panel has nothing to pull and is left alone.
+    func testOnlyAPanelsToolHeaderPulls() throws {
+        let (controller, _, id) = try makePanel()
+        defer { controller.fragments.close(id, animated: false) }
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+
+        XCTAssertNotNil(surface.tools.panel.onHeaderPulledDown)
+        XCTAssertNil(controller.tools.panel.onHeaderPulledDown,
+                     "the tab's own tool panel is not a handle")
+    }
+
     private func press(at point: NSPoint, in window: NSWindow,
                        type: NSEvent.EventType = .leftMouseDown) throws -> NSEvent {
         try XCTUnwrap(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],

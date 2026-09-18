@@ -13,6 +13,13 @@ import Cocoa
 /// The panel hosts a view controller it does not own: the tool-module builds
 /// it, this holds it, and swapping tool-modules swaps the view.
 final class ToolPanelView: NSView {
+    /// The header has been pulled down — a fragment panel's gesture, set only
+    /// there. Nil in the tab's own panel, where there is nothing to pull.
+    var onHeaderPulledDown: ((NSEvent) -> Void)? {
+        get { header.onPulledDown }
+        set { header.onPulledDown = newValue }
+    }
+
     /// Fired by the header's ✕. The same thing as Tools ▸ None.
     var onClose: (() -> Void)?
 
@@ -34,7 +41,10 @@ final class ToolPanelView: NSView {
     /// can ignore a selection of the pane already chosen.
     var onSelectPane: ((Int) -> Void)?
 
-    private let header = NSView()
+    /// The header, which is also a handle: on a fragment panel it can be pulled
+    /// down the way the pane's own header can
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
+    private let header = PullDownHandleView()
     /// The same wrench the toolbar's Tools button carries, so the panel and the
     /// button that opened it read as one thing.
     private let iconView = NSImageView()

@@ -128,6 +128,10 @@ import Cocoa
         // After the id exists: the ✕ closes *this* panel, and the tool that
         // hears about an edit is this surface's.
         host.wireFragmentPaneView(paneView, for: pane, panel: opened.id, surface: surface)
+        // The tool panel's header is a handle too, when the panel has one open.
+        surface.tools.panel.onHeaderPulledDown = { [weak self] event in
+            self?.beginPullDown(opened.id, from: event)
+        }
         host.prepareFragmentMinimap(of: surface, pane: pane, paneView: paneView)
         // The panel's own list, and the only thing reading it: the pane it
         // marks and the map beside it.
