@@ -206,12 +206,16 @@ final class FragmentToolTests: XCTestCase {
         XCTAssertEqual(controller.fragments.count, 2)
 
         var asked: [String] = []
+        var buttons: [String] = []
         controller.fragmentCloseConfirm = { alert in
             asked.append(alert.messageText + " " + alert.informativeText)
+            buttons = alert.buttons.map(\.title)
             return .alertSecondButtonReturn  // Cancel
         }
         controller.closeFragment(outer)
 
+        XCTAssertEqual(buttons, ["Close and Break Link", "Cancel"],
+                       "the button says what closing does, not just that it closes")
         XCTAssertEqual(asked.count, 1, "asked once, and cancelled there")
         XCTAssertEqual(asked.first?.contains("One panel was opened out of it"), true,
                        asked.first ?? "not asked")
@@ -324,6 +328,99 @@ final class FragmentToolTests: XCTestCase {
 
         XCTAssertFalse(asked, "nothing leads here, so there is nothing to warn about")
         XCTAssertTrue(controller.fragments.isEmpty)
+    }
+
+    // MARK: - Closing the window
+
+    /// Closing the window asks about a part holding an edit nobody has back.
+    /// The panels are documents too; they were taken without a word.
+    func testClosingTheWindowAsksAboutAPartHoldingAnEdit() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                       named: "part", animated: false))
+        try XCTUnwrap(controller.fragments.pane(id))
+            .applyToolWrites([(offset: 0, bytes: [0xFF])], named: "Patch")
+
+        var titles: [String] = []
+        MainViewController.modalResponder = { alert in
+            titles.append(alert.messageText)
+            return .alertThirdButtonReturn  // Cancel
+        }
+        defer { MainViewController.modalResponder = nil }
+
+        XCTAssertFalse(controller.windowShouldClose(window), "cancelled, so the window stays")
+        XCTAssertEqual(titles, ["Save changes before closing?"])
+        XCTAssertEqual(controller.fragments.count, 1, "and the part stays with it")
+    }
+
+    /// Answered, the panel goes and the window closes — and the question about
+    /// the files behind it is still asked, after.
+    func testTheWindowClosesOncePartsAreAnsweredFor() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                       named: "part", animated: false))
+        try XCTUnwrap(controller.fragments.pane(id))
+            .applyToolWrites([(offset: 0, bytes: [0xFF])], named: "Patch")
+        try controller.windowModel.pane1.applyToolWrites([(offset: 0, bytes: [0x01])],
+                                                         named: "Patch")
+
+        var titles: [String] = []
+        MainViewController.modalResponder = { alert in
+            titles.append(alert.messageText)
+            return .alertSecondButtonReturn  // Don't Save
+        }
+        defer { MainViewController.modalResponder = nil }
+
+        XCTAssertTrue(controller.windowShouldClose(window))
+        XCTAssertEqual(titles.count, 2, "the part, then the files: \(titles)")
+        XCTAssertTrue(controller.fragments.isEmpty, "the part was answered for and went")
+    }
+
+    /// A panel with nothing to lose is not asked about — and not closed
+    /// either, in case the question about the files is the one cancelled.
+    func testAPartWithNothingToLoseIsLeftAlone() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        _ = controller.openFragment([UInt8](repeating: 0, count: 0x80), named: "part",
+                                    animated: false)
+        try controller.windowModel.pane1.applyToolWrites([(offset: 0, bytes: [0x01])],
+                                                         named: "Patch")
+
+        var titles: [String] = []
+        MainViewController.modalResponder = { alert in
+            titles.append(alert.messageText)
+            return .alertThirdButtonReturn  // Cancel the files question
+        }
+        defer { MainViewController.modalResponder = nil }
+
+        XCTAssertFalse(controller.windowShouldClose(window))
+        XCTAssertEqual(titles, ["Save changes before closing?"], "asked only about the file")
+        XCTAssertEqual(controller.fragments.count, 1, "the panel is still there")
+    }
+
+    /// Closing the window does not ask what closing one panel asks: nothing is
+    /// stranded when the whole window goes at once.
+    func testClosingTheWindowDoesNotAskAboutLinks() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let outer = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                          named: "part", animated: false))
+        activateToolFromTheMenu(controller)
+        let host = try XCTUnwrap(StubToolA.log.session?.host as? PaneToolHost)
+        host.openPart([0x01, 0x02, 0x03], named: "inner.bin", linkedTo: 0x10..<0x13)
+        window.layoutIfNeeded()
+        try XCTUnwrap(controller.fragments.pane(outer))
+            .applyToolWrites([(offset: 0, bytes: [0xFF])], named: "Patch")
+
+        var asked = false
+        controller.fragmentCloseConfirm = { _ in asked = true; return .alertSecondButtonReturn }
+        MainViewController.modalResponder = { _ in .alertSecondButtonReturn }  // Don't Save
+        defer { MainViewController.modalResponder = nil }
+
+        XCTAssertTrue(controller.windowShouldClose(window))
+        XCTAssertFalse(asked, "the panel the link led to is going the same way")
     }
 
     // MARK: - The wall

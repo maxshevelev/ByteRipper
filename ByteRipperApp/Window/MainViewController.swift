@@ -1840,36 +1840,58 @@ final class MainViewController: NSViewController {
         // half goes unread — which is the same as not asking.
         let stranded = fragments.panelsLinked(to: pane).count
         if stranded > 0, !confirmStranding(stranded, closing: pane.status.fileName) { return }
+        closeFragment(id, pane: pane)
+    }
+
+    /// Everything after the question about links: what closing does to this
+    /// panel's own bytes, and then the closing.
+    ///
+    /// `done` says whether the panel really went — false where the reader
+    /// cancelled. It does not run at all where the answer went to a sheet that
+    /// was then abandoned (a Save As backed out of), which leaves whatever was
+    /// waiting on it waiting, exactly as it does for a pane.
+    ///
+    /// Asked separately from the links question because closing the whole
+    /// window asks this of every panel and asks the other of none: nothing is
+    /// stranded when everything goes at once.
+    private func closeFragment(_ id: FragmentDock.PanelID, pane: PaneViewModel,
+                               then done: ((Bool) -> Void)? = nil) {
         if let origin = pane.origin, origin.hasChanges(in: pane) {
             switch confirmClosingUnreturnedPart(origin) {
             case .alertFirstButtonReturn:  // Update in Parent
                 if let task = performUpdateInParent(of: pane) {
                     Task { [weak self] in
                         await task.value
-                        self?.closeFragmentIfPutBack(id, pane: pane, origin: origin)
+                        self?.closeFragmentIfPutBack(id, pane: pane, origin: origin, then: done)
                     }
                     return
                 }
-                closeFragmentIfPutBack(id, pane: pane, origin: origin)
+                closeFragmentIfPutBack(id, pane: pane, origin: origin, then: done)
                 return
             case .alertSecondButtonReturn:  // Close Anyway
                 break
             default:  // Cancel
+                done?(false)
                 return
             }
         }
         if pane.status.isDirty, pane.origin == nil {
             switch confirmSaveDiscardCancel() {
             case .alertFirstButtonReturn:  // Save
-                savePane(pane, onSaved: { [weak self] in self?.fragments.close(id) })
+                savePane(pane, onSaved: { [weak self] in
+                    self?.fragments.close(id)
+                    done?(true)
+                })
                 return
             case .alertSecondButtonReturn:  // Don't Save
                 break
             default:  // Cancel
+                done?(false)
                 return
             }
         }
         fragments.close(id)
+        done?(true)
     }
 
     /// Closes the panel only if the bytes really did go back. An update can be
@@ -1877,12 +1899,66 @@ final class MainViewController: NSViewController {
     /// it says so in an alert of its own; closing anyway would throw away the
     /// bytes the reader has just been told could not be put back.
     private func closeFragmentIfPutBack(_ id: FragmentDock.PanelID,
-                                        pane: PaneViewModel, origin: DocumentOrigin) {
+                                        pane: PaneViewModel, origin: DocumentOrigin,
+                                        then done: ((Bool) -> Void)? = nil) {
         guard !origin.hasChanges(in: pane) else {
             fragments.refreshDock()
+            done?(false)
             return
         }
         fragments.close(id)
+        done?(true)
+    }
+
+    /// Every panel of the tab, parts before the panels they came out of.
+    ///
+    /// The order is what makes Update in Parent mean anything while the window
+    /// is closing: a part put back into another panel has to find that panel
+    /// still open, and the panel it lands in is then asked about the bytes it
+    /// has just been handed.
+    private var fragmentsInnermostFirst: [FragmentDock.PanelID] {
+        let panels = fragments.dock.panels
+        func depth(_ id: FragmentDock.PanelID, seen: Int = 0) -> Int {
+            guard seen < panels.count, let parent = fragments.pane(id)?.origin?.parent,
+                  let above = fragments.panel(holding: parent)
+            else { return seen }
+            return depth(above, seen: seen + 1)
+        }
+        return panels.sorted { depth($0) > depth($1) }
+    }
+
+    /// Whether closing `id` without a word would lose something: bytes its
+    /// parent has not got back, or an edit to a part with nowhere to put it.
+    /// Exactly the two cases closing a panel asks about.
+    private func fragmentHasSomethingToLose(_ id: FragmentDock.PanelID) -> Bool {
+        guard let pane = fragments.pane(id) else { return false }
+        if let origin = pane.origin { return origin.hasChanges(in: pane) }
+        return pane.status.isDirty
+    }
+
+    /// Asks about every panel holding something a close would lose, innermost
+    /// first, and runs `done` once none is left. A cancelled question stops the
+    /// run: `done` never fires, and everything still open stays open.
+    ///
+    /// The next panel is picked after each one goes rather than listed up
+    /// front, because a panel put back into another hands that one bytes it did
+    /// not have — and the panel that has just been handed them is then asked
+    /// about them in its turn.
+    ///
+    /// Panels with nothing to lose are left where they are. They go with the
+    /// window, and closing them here would throw them away for nothing if the
+    /// question about the files is then cancelled.
+    private func closeFragmentsHoldingSomething(then done: @escaping () -> Void) {
+        guard let id = fragmentsInnermostFirst.first(where: fragmentHasSomethingToLose),
+              let pane = fragments.pane(id)
+        else {
+            done()
+            return
+        }
+        closeFragment(id, pane: pane) { [weak self] closed in
+            guard closed else { return }
+            self?.closeFragmentsHoldingSomething(then: done)
+        }
     }
 
     private func confirmClosingUnreturnedPart(_ origin: DocumentOrigin) -> NSApplication.ModalResponse {
@@ -1924,8 +2000,17 @@ final class MainViewController: NSViewController {
     /// being closed.
     static func strandingSentence(_ count: Int) -> String {
         count == 1
-            ? "One panel was opened out of it and will lose its way back."
-            : "\(count) panels were opened out of it and will lose their way back."
+            ? "One panel was opened out of it and will lose its way back. "
+                + "Its bytes stay as they are; only the way back goes."
+            : "\(count) panels were opened out of it and will lose their way back. "
+                + "Their bytes stay as they are; only the way back goes."
+    }
+
+    /// What the button that goes ahead with it says. Not "Close": the button
+    /// has to say what closing does that the reader would not have expected,
+    /// and what it does is break the way back for something else.
+    static func strandingCloseButton(_ count: Int) -> String {
+        count == 1 ? "Close and Break Link" : "Close and Break Links"
     }
 
     /// Asked before a panel that other panels came out of is closed. Their link
@@ -1935,8 +2020,7 @@ final class MainViewController: NSViewController {
         let alert = NSAlert()
         alert.messageText = "Close “\(name)”?"
         alert.informativeText = Self.strandingSentence(count)
-            + " Their bytes stay as they are; only the way back goes."
-        alert.addButton(withTitle: "Close")
+        alert.addButton(withTitle: Self.strandingCloseButton(count))
         alert.addButton(withTitle: "Cancel")
         if let fragmentCloseConfirm {
             return fragmentCloseConfirm(alert) == .alertFirstButtonReturn
@@ -6280,7 +6364,24 @@ extension MainViewController: NSWindowDelegate {
     /// Combined dirty prompt on window close: list every modified file, offer
     /// Save / Don't Save / Cancel. Aborts the close when a save fails so no
     /// change is ever lost silently.
+    ///
+    /// The panels come first, and each is asked about on its own. They are
+    /// documents too — a part holds bytes that exist nowhere else until they
+    /// are put back — but they are not files, so they cannot be listed among
+    /// the files here and they are not answered by one Save. Closing the
+    /// window used to take them without a word.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        // True while this call is still on the stack: a tab with nothing held
+        // in a panel is answered here and now, rather than by closing the
+        // window from inside its own delegate callback.
+        var inThisCall = true
+        var partsSettled = false
+        closeFragmentsHoldingSomething { [weak sender] in
+            partsSettled = true
+            if !inThisCall { sender?.performClose(nil) }
+        }
+        inThisCall = false
+        guard partsSettled else { return false }
         let panes = [windowModel.pane1, windowModel.pane2]
         let dirty = panes.filter { $0.isOpen && $0.status.isDirty }
         guard !dirty.isEmpty else { return true }
