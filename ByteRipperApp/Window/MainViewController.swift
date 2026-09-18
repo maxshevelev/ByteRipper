@@ -6403,6 +6403,19 @@ extension MainViewController: NSWindowDelegate {
         return answer ?? false
     }
 
+    /// How many documents of this tab closing it would ask about: its modified
+    /// files, and the parts holding something a close would lose.
+    ///
+    /// Counted so that quitting can say how much is at stake before it starts
+    /// asking — the reader deciding whether to go through four questions wants
+    /// to know there are four.
+    var unsavedDocumentCount: Int {
+        let files = [windowModel.pane1, windowModel.pane2]
+            .filter { $0.isOpen && $0.status.isDirty }
+            .count
+        return files + fragments.dock.panels.filter(fragmentHasSomethingToLose).count
+    }
+
     /// Everything the tab has to ask before it can go: the parts it holds,
     /// then its files. `done(true)` when there is nothing left in the way,
     /// `done(false)` when the reader said no.

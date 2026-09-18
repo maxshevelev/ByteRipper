@@ -423,6 +423,29 @@ final class FragmentToolTests: XCTestCase {
         XCTAssertFalse(asked, "the panel the link led to is going the same way")
     }
 
+    /// What quitting counts before it starts asking: the modified files and
+    /// the parts holding something, and nothing else. A panel with nothing to
+    /// lose is not a document anybody has to answer for.
+    func testTheTabCountsWhatItWouldAskAbout() throws {
+        let (controller, _, url) = try makeController()
+        defer { cleanup(controller, url) }
+        XCTAssertEqual(controller.unsavedDocumentCount, 0, "a clean tab asks nothing")
+
+        try controller.windowModel.pane1.applyToolWrites([(offset: 0, bytes: [0x01])],
+                                                         named: "Patch")
+        XCTAssertEqual(controller.unsavedDocumentCount, 1, "the file")
+
+        _ = controller.openFragment([UInt8](repeating: 0, count: 0x80), named: "clean",
+                                    animated: false)
+        XCTAssertEqual(controller.unsavedDocumentCount, 1, "a part nobody edited is not one")
+
+        let edited = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                           named: "edited", animated: false))
+        try XCTUnwrap(controller.fragments.pane(edited))
+            .applyToolWrites([(offset: 0, bytes: [0xFF])], named: "Patch")
+        XCTAssertEqual(controller.unsavedDocumentCount, 2, "the file and the edited part")
+    }
+
     // MARK: - The wall
 
     /// Nothing the mouse does over a raised panel may reach the tab behind it —

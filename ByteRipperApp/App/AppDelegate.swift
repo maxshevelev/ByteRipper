@@ -277,6 +277,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// is why the flows it goes through report a backed-out sheet as an answer
     /// rather than saying nothing.
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // More than one thing to answer for, and the answers are a queue of
+        // dialogs the reader is about to be walked through. Say so first, and
+        // say how many — the way every document-based app on the system does.
+        // One is not a queue: it is asked directly, with no preamble.
+        let unsaved = windowControllers.reduce(0) { $0 + $1.mainViewController.unsavedDocumentCount }
+        if unsaved > 1 {
+            switch confirmReviewingChanges(unsaved) {
+            case .alertSecondButtonReturn:  // Discard Changes
+                return .terminateNow
+            case .alertThirdButtonReturn:  // Cancel
+                return .terminateCancel
+            default:  // Review Changes…
+                break
+            }
+        }
         var inThisCall = true
         var answer: NSApplication.TerminateReply?
         askToClose(windowControllers) { [weak sender] agreed in
@@ -285,6 +300,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
         inThisCall = false
         return answer ?? .terminateLater
+    }
+
+    /// The one question asked before the queue of them: review, throw it all
+    /// away, or stay.
+    private func confirmReviewingChanges(_ count: Int) -> NSApplication.ModalResponse {
+        let alert = NSAlert()
+        alert.messageText = "You have \(count) documents with unsaved changes. "
+            + "Do you want to review these changes before quitting?"
+        alert.informativeText = "If you don’t review your documents, all your changes will be lost."
+        alert.addButton(withTitle: "Review Changes…")
+        alert.addButton(withTitle: "Discard Changes")
+        alert.addButton(withTitle: "Cancel")
+        // Cancel in tests: quitting must never be the thing that throws work
+        // away while a suite is running.
+        return MainViewController.presentModal(alert, defaultInTest: .alertThirdButtonReturn)
     }
 
     /// Asks the windows in `queue` one at a time, stopping at the first that
