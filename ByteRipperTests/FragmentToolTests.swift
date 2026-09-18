@@ -126,6 +126,80 @@ final class FragmentToolTests: XCTestCase {
                       "and the dump's gutter is not where a part's zones go")
     }
 
+    /// Closing a panel that another panel came out of kills the link rather
+    /// than leaving it looking alive. It looked alive: the header went on
+    /// naming the closed panel and Update in Parent stayed available, and what
+    /// it would have written to is a document nobody could see.
+    func testClosingAParentPanelKillsTheChildsLink() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let outer = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                          named: "part", animated: false))
+        activateToolFromTheMenu(controller)
+        let host = try XCTUnwrap(StubToolA.log.session?.host as? PaneToolHost)
+        host.openPart([0x01, 0x02, 0x03], named: "inner.bin", linkedTo: 0x10..<0x20)
+        let inner = try XCTUnwrap(controller.fragments.expanded)
+        let deeper = try XCTUnwrap(controller.fragments.pane(inner))
+        window.layoutIfNeeded()
+        XCTAssertEqual(deeper.origin?.state, .intact, "the premise: the link is good")
+
+        controller.fragments.close(outer, animated: false)
+
+        XCTAssertEqual(deeper.origin?.state, .parentClosed,
+                       "the panel it came out of is gone, and the link knows")
+        let item = NSMenuItem(title: "", action: #selector(MainViewController.updateInParent),
+                              keyEquivalent: "")
+        XCTAssertFalse(controller.validateMenuItem(item),
+                       "so Update in Parent is not on offer")
+        XCTAssertEqual(try XCTUnwrap(deeper.origin).explanation.contains("no longer open"), true,
+                       "and the header says why")
+    }
+
+    /// Closing a panel that others came out of asks first — a link that dies
+    /// without a word is one the reader meets later, when Update in Parent
+    /// refuses.
+    func testClosingAPanelOthersCameOutOfAsksFirst() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let outer = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                          named: "part", animated: false))
+        activateToolFromTheMenu(controller)
+        let host = try XCTUnwrap(StubToolA.log.session?.host as? PaneToolHost)
+        host.openPart([0x01, 0x02, 0x03], named: "inner.bin", linkedTo: 0x10..<0x20)
+        window.layoutIfNeeded()
+        XCTAssertEqual(controller.fragments.count, 2)
+
+        var asked: String?
+        controller.fragmentCloseConfirm = { alert in
+            asked = alert.messageText + " " + alert.informativeText
+            return .alertSecondButtonReturn  // Cancel
+        }
+        controller.closeFragment(outer)
+
+        XCTAssertEqual(asked?.contains("One panel was opened out of it"), true, asked ?? "not asked")
+        XCTAssertEqual(controller.fragments.count, 2, "cancelled, so nothing closed")
+
+        controller.fragmentCloseConfirm = { _ in .alertFirstButtonReturn }  // Close
+        controller.closeFragment(outer)
+        XCTAssertEqual(controller.fragments.count, 1, "and closing goes through when told to")
+    }
+
+    /// A panel nothing came out of closes without a question.
+    func testClosingAPanelNothingCameOutOfAsksNothing() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                       named: "part", animated: false))
+        window.layoutIfNeeded()
+        var asked = false
+        controller.fragmentCloseConfirm = { _ in asked = true; return .alertSecondButtonReturn }
+
+        controller.closeFragment(id)
+
+        XCTAssertFalse(asked, "nothing leads here, so there is nothing to warn about")
+        XCTAssertTrue(controller.fragments.isEmpty)
+    }
+
     // MARK: - The wall
 
     /// Nothing the mouse does over a raised panel may reach the tab behind it —

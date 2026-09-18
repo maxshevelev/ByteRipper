@@ -180,8 +180,11 @@ final class MainViewController: NSViewController {
         view.onRevealOrigin = { [weak self] in self?.revealOrigin(of: pane) }
         view.onSearchResultsClose = { [weak self] _ in self?.syncFindBarToActivePane() }
         view.onMatchesChanged = { [weak self] in self?.searchAppearanceChanged() }
-        pane.onEdit = { [weak self, weak surface] edit in
-            guard let surface else { return }
+        // The pane is captured weakly by the closures it holds itself: a
+        // strong one is a ring the pane can never get out of, and a panel
+        // closed but never freed goes on being somebody's parent.
+        pane.onEdit = { [weak self, weak surface, weak pane] edit in
+            guard let surface, let pane else { return }
             self?.invalidateMatches(in: pane)
             surface.tools.paneEdited(pane, edit)
             surface.minimap.repaint(after: edit, mapIndex: 0)
@@ -189,8 +192,8 @@ final class MainViewController: NSViewController {
             // exactly what changes.
             self?.fragments.refreshDock()
         }
-        pane.onFullInvalidation = { [weak self, weak surface] in
-            guard let surface else { return }
+        pane.onFullInvalidation = { [weak self, weak surface, weak pane] in
+            guard let surface, let pane else { return }
             surface.tools.paneReloaded(pane)
             self?.invalidateMatches(in: pane)
             surface.minimapView.invalidateCells()
@@ -1798,8 +1801,12 @@ final class MainViewController: NSViewController {
     /// ordinary save/discard question.
     func closeFragment(_ id: FragmentDock.PanelID) {
         guard let pane = fragments.pane(id) else { return }
+        // Parts taken out of this one lose their way back when it goes, and a
+        // link that dies without a word is a link the reader finds out about
+        // when Update in Parent refuses.
+        let stranded = fragments.panelsLinked(to: pane).count
         if let origin = pane.origin, origin.hasChanges(in: pane) {
-            switch confirmClosingUnreturnedPart(origin) {
+            switch confirmClosingUnreturnedPart(origin, stranding: stranded) {
             case .alertFirstButtonReturn:  // Update in Parent
                 if let task = performUpdateInParent(of: pane) {
                     Task { [weak self] in
@@ -1815,7 +1822,10 @@ final class MainViewController: NSViewController {
             default:  // Cancel
                 return
             }
-        } else if pane.status.isDirty {
+        } else if stranded > 0, !confirmStranding(stranded, closing: pane.status.fileName) {
+            return
+        }
+        if pane.status.isDirty, pane.origin == nil {
             switch confirmSaveDiscardCancel() {
             case .alertFirstButtonReturn:  // Save
                 savePane(pane, onSaved: { [weak self] in self?.fragments.close(id) })
@@ -1842,11 +1852,13 @@ final class MainViewController: NSViewController {
         fragments.close(id)
     }
 
-    private func confirmClosingUnreturnedPart(_ origin: DocumentOrigin) -> NSApplication.ModalResponse {
+    private func confirmClosingUnreturnedPart(_ origin: DocumentOrigin,
+                                              stranding: Int) -> NSApplication.ModalResponse {
         let alert = NSAlert()
         alert.messageText = "Put “\(origin.partName)” back into \(origin.parentName)?"
         alert.informativeText = "It has changes \(origin.parentName) has not got. "
             + "Closing this panel without putting them back loses them."
+            + (stranding > 0 ? " " + Self.strandingSentence(stranding) : "")
         alert.addButton(withTitle: "Update in Parent")
         alert.addButton(withTitle: "Close Anyway")
         alert.addButton(withTitle: "Cancel")
@@ -1876,6 +1888,32 @@ final class MainViewController: NSViewController {
     /// that rearranged or replaced something nobody can see is a command that
     /// looks like it did nothing.
     var windowPanesAreReachable: Bool { fragments.expanded == nil }
+
+    /// What the reader is told about the parts that were taken out of a panel
+    /// being closed.
+    static func strandingSentence(_ count: Int) -> String {
+        count == 1
+            ? "One panel was opened out of it and will lose its way back."
+            : "\(count) panels were opened out of it and will lose their way back."
+    }
+
+    /// Asked before a panel that other panels came out of is closed. Their link
+    /// does not follow it anywhere: it simply stops leading somewhere, and
+    /// Update in Parent stops being on offer for them.
+    private func confirmStranding(_ count: Int, closing name: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Close “\(name)”?"
+        alert.informativeText = Self.strandingSentence(count)
+            + " Their bytes stay as they are; only the way back goes."
+        alert.addButton(withTitle: "Close")
+        alert.addButton(withTitle: "Cancel")
+        if let fragmentCloseConfirm {
+            return fragmentCloseConfirm(alert) == .alertFirstButtonReturn
+        }
+        // Cancel in tests.
+        return Self.presentModal(alert, defaultInTest: .alertSecondButtonReturn)
+            == .alertFirstButtonReturn
+    }
 
     /// Gives the dock its height, or takes it away when the last panel closes.
     /// Called by the panels themselves, which know when that happens.

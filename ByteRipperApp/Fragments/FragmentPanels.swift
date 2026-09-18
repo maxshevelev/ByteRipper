@@ -73,6 +73,12 @@ import Cocoa
     func surface(_ id: FragmentDock.PanelID) -> DocumentSurface? { entries[id]?.surface }
     func panelView(_ id: FragmentDock.PanelID) -> FragmentPanelView? { entries[id]?.view }
 
+    /// The panels whose way back leads to `pane` — the parts taken out of it.
+    /// What closing it would strand.
+    func panelsLinked(to pane: PaneViewModel) -> [FragmentDock.PanelID] {
+        dock.panels.filter { entries[$0]?.pane.origin?.parent === pane }
+    }
+
     /// The surface of the panel holding `pane`, or nil when `pane` is not a
     /// part this dock has open — which is the answer for the tab's own panes.
     func surface(holding pane: PaneViewModel) -> DocumentSurface? {
@@ -168,7 +174,7 @@ import Cocoa
     /// The caller has already asked whatever had to be asked — unsaved edits,
     /// bytes not yet put back. This is the act, not the question.
     func close(_ id: FragmentDock.PanelID, animated: Bool = true) {
-        apply(dock.remove(id), animated: animated)
+        apply(dock.remove(id), animated: animated, closesDocument: true)
     }
 
     /// The panel whose pane is being dragged, or nil when the drag is not one
@@ -287,7 +293,7 @@ import Cocoa
     // MARK: - Running a transition
 
     private func apply(_ transition: FragmentDock.Transition, animated: Bool,
-                       duration: TimeInterval? = nil) {
+                       duration: TimeInterval? = nil, closesDocument: Bool = false) {
         if let raising = transition.raising, let entry = entries[raising] {
             container.isHidden = false
             if entry.view.superview !== container {
@@ -315,6 +321,20 @@ import Cocoa
                 entry.surface.removeFromParent()
                 entry.paneView.searchResults.removeFromParent()
                 self?.host?.forgetPaneView(of: entry.pane)
+                // The panel's own tool-module has nothing left to read: end it
+                // the way a pane closing or leaving a tab ends the tab's.
+                if closesDocument {
+                    entry.surface.tools.paneClosed(entry.pane)
+                } else {
+                    entry.surface.tools.paneLeft(entry.pane)
+                }
+                // A closed panel's document closes with it, and that is what a
+                // part opened *out of* this one has to be told: its link goes
+                // dead, its header says so, and Update in Parent refuses rather
+                // than writing into a document nobody can see. A panel let go
+                // of rather than closed keeps its document — it is on its way
+                // to a tab of its own.
+                if closesDocument { entry.pane.close() }
                 self?.hideContainerIfClear()
             }
             // A panel that was up folds out of sight before it is taken apart;
