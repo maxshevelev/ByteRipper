@@ -452,22 +452,46 @@ import Cocoa
         }
         let shrunk = CATransform3DMakeAffineTransform(
             PanelLanding.transform(from: frame, on: pill, anchor: layer.anchorPoint))
+        let full = CATransform3DIdentity
 
         container.layer?.masksToBounds = false
-        let restoreClip = { [weak self] in self?.container.layer?.masksToBounds = true }
-        layer.transform = out ? CATransform3DIdentity : shrunk
-        layer.opacity = out ? 1 : 0
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = duration
-            context.timingFunction = CAMediaTimingFunction(name: out ? .easeIn : .easeOut)
-            context.allowsImplicitAnimation = true
-            layer.transform = out ? shrunk : CATransform3DIdentity
-            layer.opacity = 1
-        } completionHandler: {
-            if out { layer.transform = CATransform3DIdentity }
-            restoreClip()
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak self] in
+            if out {
+                layer.transform = full
+                layer.opacity = 1
+            }
+            self?.container.layer?.masksToBounds = true
             completion()
         }
+        // Both ends written out rather than left to the implicit animation.
+        // Setting the starting value and the finishing one in the same turn of
+        // the run loop leaves Core Animation interpolating from what is on
+        // screen — which is the finishing value, so the panel did not fly at
+        // all and the opacity was the only thing moving.
+        let flight = CABasicAnimation(keyPath: "transform")
+        flight.fromValue = NSValue(caTransform3D: out ? full : shrunk)
+        flight.toValue = NSValue(caTransform3D: out ? shrunk : full)
+        flight.duration = duration
+        flight.timingFunction = CAMediaTimingFunction(name: out ? .easeIn : .easeOut)
+        layer.transform = out ? shrunk : full
+        layer.add(flight, forKey: "flight")
+
+        // A fade on the way down only, and a shallow one: the panel is landing
+        // on a pill, not evaporating, and on the way up a fade would blur the
+        // one thing the flight is there to say.
+        if out {
+            let fade = CABasicAnimation(keyPath: "opacity")
+            fade.fromValue = 1
+            fade.toValue = 0.35
+            fade.duration = duration
+            fade.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            layer.opacity = 0.35
+            layer.add(fade, forKey: "fade")
+        } else {
+            layer.opacity = 1
+        }
+        CATransaction.commit()
     }
 
     private func move(_ view: NSView, to frame: NSRect, animated: Bool,
