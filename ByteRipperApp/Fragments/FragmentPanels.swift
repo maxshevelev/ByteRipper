@@ -187,20 +187,96 @@ import Cocoa
         return (entry.pane, marks)
     }
 
+    // MARK: - Pulling the panel down
+
+    /// How long a spring back takes. Shorter than the slide: nothing changed,
+    /// so the panel should look like it never left.
+    static var springBackDuration: TimeInterval = 0.2
+
+    /// The panel's header has been pulled down: it follows the pointer until
+    /// the button comes up, and then either springs back or carries on into its
+    /// pill (`Design/FRAGMENT_PANELS_PLAN.md`).
+    ///
+    /// The pointer is tracked here rather than through the responder chain
+    /// because the gesture belongs to the panel while it lasts: the header it
+    /// started on is scrolling away under the hand.
+    func beginPullDown(_ id: FragmentDock.PanelID, from event: NSEvent) {
+        guard dock.expanded == id, let entry = entries[id],
+              let window = entry.view.window else { return }
+        let resting = FragmentPanelView.restingFrame(in: container)
+        let start = event.locationInWindow.y
+        // The last moments of the pull, for the speed it ended at. A short tail
+        // rather than the whole gesture: what decides is how it was let go, not
+        // how it began.
+        var samples: [(time: TimeInterval, y: CGFloat)] = [(event.timestamp, start)]
+
+        window.trackEvents(matching: [.leftMouseDragged, .leftMouseUp],
+                           timeout: .greatestFiniteMagnitude, mode: .eventTracking) { tracked, stop in
+            guard let tracked else { stop.pointee = true; return }
+            let y = tracked.locationInWindow.y
+            samples.append((tracked.timestamp, y))
+            samples.removeAll { tracked.timestamp - $0.time > Self.velocityWindow }
+            if samples.count < 2 { samples.insert((tracked.timestamp - 0.008, start), at: 0) }
+
+            switch tracked.type {
+            case .leftMouseDragged:
+                var frame = resting
+                frame.origin.y = PullDown.position(restingY: resting.origin.y, offset: y - start)
+                entry.view.frame = frame
+            default:
+                stop.pointee = true
+                let travelled = resting.origin.y - entry.view.frame.origin.y
+                self.finishPullDown(id, entry: entry, resting: resting, travelled: travelled,
+                                    velocity: Self.downwardVelocity(samples))
+            }
+        }
+    }
+
+    /// The tail of the gesture the speed is read from.
+    private static let velocityWindow: TimeInterval = 0.08
+
+    /// How fast the pointer was going down when it was let go, in points a
+    /// second. Positive is downward, which is the direction that puts a panel
+    /// away.
+    private static func downwardVelocity(_ samples: [(time: TimeInterval, y: CGFloat)]) -> CGFloat {
+        guard let first = samples.first, let last = samples.last else { return 0 }
+        let seconds = last.time - first.time
+        guard seconds > 0 else { return 0 }
+        return CGFloat(Double(first.y - last.y) / seconds)
+    }
+
+    private func finishPullDown(_ id: FragmentDock.PanelID, entry: Entry, resting: NSRect,
+                                travelled: CGFloat, velocity: CGFloat) {
+        switch PullDown.outcome(travelled: travelled, height: resting.height, velocity: velocity) {
+        case .springBack:
+            move(entry.view, to: resting, animated: true, duration: Self.springBackDuration)
+        case .collapse:
+            // From wherever the hand left it, so the rest of the way takes the
+            // rest of the time: a panel already most of the way down must not
+            // dawdle through a full slide.
+            let remaining = max(0, resting.height - travelled)
+            let share = resting.height > 0 ? remaining / resting.height : 1
+            let duration = max(0.1, Self.slideDuration * Double(share))
+            apply(dock.collapse(), animated: true, duration: duration)
+        }
+    }
+
     // MARK: - Running a transition
 
-    private func apply(_ transition: FragmentDock.Transition, animated: Bool) {
+    private func apply(_ transition: FragmentDock.Transition, animated: Bool,
+                       duration: TimeInterval? = nil) {
         if let raising = transition.raising, let entry = entries[raising] {
             container.isHidden = false
             if entry.view.superview !== container {
                 entry.view.frame = FragmentPanelView.foldedFrame(in: container)
                 container.addSubview(entry.view)
             }
-            move(entry.view, to: FragmentPanelView.restingFrame(in: container), animated: animated)
+            move(entry.view, to: FragmentPanelView.restingFrame(in: container),
+                 animated: animated, duration: duration)
         }
         if let folding = transition.folding, let entry = entries[folding] {
             move(entry.view, to: FragmentPanelView.foldedFrame(in: container),
-                 animated: animated) { [weak self] in
+                 animated: animated, duration: duration) { [weak self] in
                 guard let self else { return }
                 // Unless it has been raised again in the meantime: a pill
                 // clicked twice while the slide was still running must not take
@@ -221,12 +297,16 @@ import Cocoa
             // A panel that was up folds out of sight before it is taken apart;
             // one that was already a pill has nothing to animate.
             if transition.folding == removed, animated {
-                DispatchQueue.main.asyncAfter(deadline: .now() + Self.slideDuration, execute: tearDown)
+                DispatchQueue.main.asyncAfter(deadline: .now() + (duration ?? Self.slideDuration),
+                                              execute: tearDown)
             } else {
                 tearDown()
             }
         }
         refreshDock()
+        // The panel in front takes the keyboard; folding the last one gives it
+        // back to the dump. Without it the file behind kept the caret.
+        host?.fragmentFocusChanged()
     }
 
     private func hideContainerIfClear() {
@@ -244,7 +324,7 @@ import Cocoa
     /// told almost zero. Laying the subtree out before the slide starts means
     /// the first frame drawn is already the panel as it will be.
     private func move(_ view: NSView, to frame: NSRect, animated: Bool,
-                      completion: (() -> Void)? = nil) {
+                      duration: TimeInterval? = nil, completion: (() -> Void)? = nil) {
         view.setFrameSize(frame.size)
         view.layoutSubtreeIfNeeded()
         guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
@@ -253,7 +333,7 @@ import Cocoa
             return
         }
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = Self.slideDuration
+            context.duration = duration ?? Self.slideDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             view.animator().setFrameOrigin(frame.origin)
         } completionHandler: {

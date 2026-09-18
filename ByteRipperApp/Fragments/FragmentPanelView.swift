@@ -35,6 +35,64 @@ enum FragmentPanelLayout {
     }
 }
 
+/// What letting go of a pulled-down panel means
+/// (`Design/FRAGMENT_PANELS_PLAN.md`).
+///
+/// Pure, so the feel of it can be tuned and pinned without a mouse. The rule is
+/// the one every sheet uses: a deliberate flick puts it away whatever distance
+/// it covered, and a slow drag has to have gone far enough to count.
+enum PullDown {
+    /// Downward speed, in points a second, that reads as "away with it" however
+    /// short the drag was.
+    ///
+    /// A flick on a trackpad clears a couple of thousand; a hand moving the
+    /// panel to look behind it stays in the low hundreds. The line sits between
+    /// them, nearer the slow end, because a pull that ends while still moving
+    /// downward was on its way down.
+    static var dismissVelocity: CGFloat = 650
+
+    /// How much of the panel's own height a *slow* pull has to cover to count
+    /// as putting it away. A third and a bit: far enough that a look behind
+    /// springs back, close enough that a deliberate shove need not reach the
+    /// dock.
+    static var dismissFraction: CGFloat = 0.35
+
+    /// How much of an upward pull the panel actually takes. It is already at
+    /// the top, so this is resistance, not travel — enough to answer the hand
+    /// without pretending there is somewhere to go.
+    static var upwardResistance: CGFloat = 0.25
+    /// And it never rises more than this, however hard it is pulled.
+    static var upwardLimit: CGFloat = 40
+
+    enum Outcome: Equatable {
+        /// Back where it was, as if nothing had happened.
+        case springBack
+        /// Down into its pill.
+        case collapse
+    }
+
+    /// `travelled` is how far down the panel has been pulled from its resting
+    /// place, `velocity` how fast it was still going down when let go (upward
+    /// is negative), `height` the panel's own height.
+    static func outcome(travelled: CGFloat, height: CGFloat, velocity: CGFloat) -> Outcome {
+        if velocity >= dismissVelocity { return .collapse }
+        // A flick *upward* is the opposite instruction, and beats the distance:
+        // a long pull that ends on its way back up is a pull being taken back.
+        if velocity <= -dismissVelocity { return .springBack }
+        return travelled >= height * dismissFraction ? .collapse : .springBack
+    }
+
+    /// Where the panel sits while the pointer has moved `offset` from where it
+    /// was grabbed (negative is down), given its resting top.
+    ///
+    /// Downward it follows the hand exactly. Upward it gives a quarter and
+    /// stops, because there is nothing above to reveal.
+    static func position(restingY: CGFloat, offset: CGFloat) -> CGFloat {
+        guard offset > 0 else { return restingY + offset }
+        return restingY + min(offset * upwardResistance, upwardLimit)
+    }
+}
+
 /// The area a fragment panel slides in over: exactly the part of the window the
 /// panes occupy, so the panel never covers the New Tab strip above it nor the
 /// dock below it.

@@ -223,6 +223,53 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertTrue(menu.items.contains { $0.title == "Open in New Tab" })
     }
 
+    // MARK: - While a panel is in front
+
+    /// The panel takes the keyboard. Without this the dump behind kept the
+    /// first responder, so every key went into the file the reader could not
+    /// see — and folding gives it back.
+    func testThePanelInFrontTakesTheKeyboard() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let url = try tempFile([UInt8](repeating: 0xAA, count: 0x200))
+        defer { try? FileManager.default.removeItem(at: url) }
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        window.layoutIfNeeded()
+        let dumpHex = try XCTUnwrap(descendants(of: controller.view, HexView.self).first)
+
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part", animated: false))
+        window.layoutIfNeeded()
+        let panel = try XCTUnwrap(controller.fragments.panelView(id))
+        let partHex = try XCTUnwrap(descendants(of: panel, HexView.self).first)
+        XCTAssertTrue(window.firstResponder === partHex, "the part has the keyboard")
+
+        controller.fragments.collapse(animated: false)
+        XCTAssertTrue(window.firstResponder === dumpHex, "and folding gives it back to the dump")
+    }
+
+    /// The tab's panes take no orders while a panel is over them: a command
+    /// that rearranged or joined something nobody can see would look like it
+    /// did nothing.
+    func testTheTabsPaneCommandsAreRefusedWhileAPanelIsUp() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let url = try tempFile([UInt8](repeating: 0xAA, count: 0x200))
+        defer { try? FileManager.default.removeItem(at: url) }
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        window.layoutIfNeeded()
+        let join = NSMenuItem(title: "Append File…",
+                              action: #selector(MainViewController.appendFile), keyEquivalent: "")
+        XCTAssertTrue(controller.validateMenuItem(join), "with nothing in front, the panes answer")
+
+        _ = controller.openFragment([0x01], named: "part", animated: false)
+        XCTAssertFalse(controller.validateMenuItem(join), "and refuse while a panel covers them")
+
+        controller.fragments.collapse(animated: false)
+        XCTAssertTrue(controller.validateMenuItem(join), "folded, they answer again")
+    }
+
     // MARK: - Out into a tab
 
     /// A panel dragged onto the New Tab strip leaves for a tab of its own, and

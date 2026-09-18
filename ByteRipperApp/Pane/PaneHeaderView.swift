@@ -15,6 +15,15 @@ final class PaneHeaderView: NSView {
     /// should begin from.
     var onDragThresholdPassed: ((NSEvent) -> Void)?
 
+    /// The same moment, for a drag that is going **down** rather than sideways:
+    /// on a fragment panel that means pulling the panel down to see what is
+    /// behind it, not carrying the pane away (`Design/FRAGMENT_PANELS_PLAN.md`).
+    ///
+    /// Which of the two a press becomes is decided once, at the threshold, from
+    /// the direction it has taken by then — the way a sheet and a scroll are
+    /// told apart everywhere else.
+    var onDownwardDragThresholdPassed: ((NSEvent) -> Void)?
+
     /// The hairline along the header's bottom edge, which together with the
     /// header's own fill draws the line between the window's chrome and the
     /// dump.
@@ -137,15 +146,22 @@ final class PaneHeaderView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let origin = pressOrigin, onDragThresholdPassed != nil else {
+        guard let origin = pressOrigin,
+              onDragThresholdPassed != nil || onDownwardDragThresholdPassed != nil else {
             super.mouseDragged(with: event)
             return
         }
-        let moved = hypot(event.locationInWindow.x - origin.x,
-                          event.locationInWindow.y - origin.y)
-        guard moved >= Self.dragThreshold else { return }
+        let dx = event.locationInWindow.x - origin.x
+        let dy = event.locationInWindow.y - origin.y
+        guard hypot(dx, dy) >= Self.dragThreshold else { return }
         // One drag per press: the session takes the mouse from here.
         pressOrigin = nil
+        // Down, and more down than sideways: the panel is being pulled, not the
+        // pane carried off. A window's y grows upward, so down is negative.
+        if let pulled = onDownwardDragThresholdPassed, dy < 0, -dy > abs(dx) {
+            pulled(event)
+            return
+        }
         onDragThresholdPassed?(event)
     }
 

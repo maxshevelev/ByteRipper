@@ -172,6 +172,11 @@ final class MainViewController: NSViewController {
         wireBookmarkDoubleClick(view, for: pane)
         wireStatusBar(view, for: pane)
         view.onClose = { [weak self] in self?.closeFragment(panel) }
+        // The header is also the panel's handle: pulled down it moves the panel
+        // rather than carrying the pane off to a tab.
+        view.onHeaderPulledDown = { [weak self] event in
+            self?.fragments.beginPullDown(panel, from: event)
+        }
         view.onRevealOrigin = { [weak self] in self?.revealOrigin(of: pane) }
         view.onSearchResultsClose = { [weak self] _ in self?.syncFindBarToActivePane() }
         view.onMatchesChanged = { [weak self] in self?.searchAppearanceChanged() }
@@ -1851,6 +1856,26 @@ final class MainViewController: NSViewController {
         // Cancel in tests.
         return Self.presentModal(alert, defaultInTest: .alertThirdButtonReturn)
     }
+
+    /// Moves the keyboard to the panel that has just been raised, or back to
+    /// the tab's own dump when the last one folds.
+    ///
+    /// Without this the dump behind a panel kept the first responder: every
+    /// keystroke, every arrow, everything ⌘Z means went into the file the
+    /// reader could not see (`Design/FRAGMENT_PANELS_PLAN.md`).
+    func fragmentFocusChanged() {
+        if let up = fragments.expanded, let pane = fragments.pane(up) {
+            paneView(for: pane).focusHexView()
+        } else {
+            activeFilePane?.focusHexView()
+        }
+    }
+
+    /// Whether the tab's own panes are taking orders. They are not while a
+    /// fragment panel is in front of them: the panel covers them, and a command
+    /// that rearranged or replaced something nobody can see is a command that
+    /// looks like it did nothing.
+    var windowPanesAreReachable: Bool { fragments.expanded == nil }
 
     /// Gives the dock its height, or takes it away when the last panel closes.
     /// Called by the panels themselves, which know when that happens.
@@ -6210,9 +6235,9 @@ extension MainViewController: NSToolbarItemValidation {
     func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
         switch item.action {
         case #selector(nextDifference):
-            return diffNavigationState.nextDifference
+            return windowPanesAreReachable && diffNavigationState.nextDifference
         case #selector(previousDifference):
-            return diffNavigationState.previousDifference
+            return windowPanesAreReachable && diffNavigationState.previousDifference
         case #selector(goToPosition),
              #selector(findPattern),
              #selector(toggleFindBar),
@@ -6249,7 +6274,7 @@ extension MainViewController: NSToolbarItemValidation {
             item.image = NSImage(systemSymbolName: offersStacked ? "square.split.1x2" : "square.split.2x1",
                                  accessibilityDescription: offersStacked ? "Stack Panes" : "Side-by-Side Panes")
             item.toolTip = offersStacked ? "Stack the panes" : "Place the panes side by side"
-            return mode == .comparison
+            return windowPanesAreReachable && mode == .comparison
         default:
             return true
         }
@@ -6379,16 +6404,18 @@ extension MainViewController: NSMenuItemValidation {
              #selector(insertFileAtStart):
             // A join needs content to join into: an empty pane has nothing
             // (§22.1). The File-menu items act on the tab's active pane — a
-            // join is about the panes, not about whatever is in front of them.
-            return windowActivePane.isOpen
+            // join is about the panes, not about whatever is in front of them,
+            // and while something is in front of them they take no orders.
+            return windowPanesAreReachable && windowActivePane.isOpen
         case #selector(appendFileInPane(_:)),
              #selector(insertFileAtStartInPane(_:)):
             // Context-menu items act on the pane they were built for.
             return pane(from: menuItem)?.isOpen ?? false
         case #selector(duplicateDocument):
             // The copy needs a free pane and bytes to copy (§23), which is
-            // the pane beside the tab's own — a panel has none.
-            return canDuplicate(windowActivePane)
+            // the pane beside the tab's own — a panel has none, and while one
+            // is in front the panes take no orders.
+            return windowPanesAreReachable && canDuplicate(windowActivePane)
         case #selector(duplicatePaneDocument(_:)):
             guard let pane = pane(from: menuItem) else { return false }
             return canDuplicate(pane)
@@ -6456,17 +6483,19 @@ extension MainViewController: NSMenuItemValidation {
             if viewIfLoaded?.window?.firstResponder is HexView { return activePane.isOpen }
             return false
         case #selector(nextDifference):
-            return diffNavigationState.nextDifference
+            return windowPanesAreReachable && diffNavigationState.nextDifference
         case #selector(previousDifference):
-            return diffNavigationState.previousDifference
+            return windowPanesAreReachable && diffNavigationState.previousDifference
         case #selector(nextSameBlock):
-            return diffNavigationState.nextSameBlock
+            return windowPanesAreReachable && diffNavigationState.nextSameBlock
         case #selector(previousSameBlock):
-            return diffNavigationState.previousSameBlock
+            return windowPanesAreReachable && diffNavigationState.previousSameBlock
         case #selector(togglePaneLayout),
              #selector(swapPanes):
-            // Layout and swap depend only on comparison mode, not the index.
-            return mode == .comparison
+            // Layout and swap depend only on comparison mode, not the index —
+            // and on the panes being reachable, which they are not while a
+            // fragment panel is in front of them.
+            return windowPanesAreReachable && mode == .comparison
         case #selector(setWordSize(_:)):
             // Radio state: check the item matching the current word size (§6).
             menuItem.state = menuItem.tag == WordSize.current.rawValue ? .on : .off

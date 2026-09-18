@@ -265,6 +265,12 @@ final class FilePaneView: NSView {
 
     /// Fired when the user clicks anywhere in the pane (activates it).
     var onActivate: (() -> Void)?
+    /// Set only on a fragment panel's pane: the header has been pulled down,
+    /// which is the panel's gesture rather than the pane's
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`). Nil everywhere else, and a nil hook
+    /// leaves the drag meaning what it has always meant.
+    var onHeaderPulledDown: ((NSEvent) -> Void)?
+
     /// Fired when the user double-clicks the header: expand this pane so its
     /// hex content fits by width (§3.3).
     /// Fired when this pane's own drag session begins and ends.
@@ -375,6 +381,11 @@ final class FilePaneView: NSView {
         statusBar.layer?.masksToBounds = true
         header.onDoubleClick = { [weak self] in
             self?.onHeaderDoubleClick?()
+        }
+        // A fragment panel's header is also its handle: pulled down, it moves
+        // the panel rather than carrying the pane away.
+        header.onDownwardDragThresholdPassed = { [weak self] event in
+            self?.onHeaderPulledDown?(event)
         }
         header.onDragThresholdPassed = { [weak self] event in
             self?.beginPaneDrag(with: event)
