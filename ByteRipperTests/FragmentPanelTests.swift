@@ -375,6 +375,49 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertEqual(controller.fragments.count, 1, "folded, not closed")
     }
 
+    /// Switching from one panel to another does not fly: the reader asked to
+    /// look at the other panel, not to watch this one leave. It is done by the
+    /// time the click returns.
+    func testSwitchingBetweenPanelsDoesNotFly() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let first = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "one",
+                                                          animated: false))
+        let second = try XCTUnwrap(controller.openFragment([0x03, 0x04], named: "two",
+                                                           animated: false))
+        window.layoutIfNeeded()
+        XCTAssertEqual(controller.fragments.expanded, second)
+
+        controller.fragments.expand(first, animated: true)
+
+        XCTAssertNil(controller.fragments.panelView(second)?.superview,
+                     "the one that was up is already off the stage")
+        let up = try XCTUnwrap(controller.fragments.panelView(first))
+        XCTAssertNotNil(up.superview, "and the other is already on it")
+        XCTAssertTrue(CATransform3DIsIdentity(up.layer?.transform ?? CATransform3DIdentity),
+                      "with no flight under way")
+    }
+
+    /// A panel *arriving* still flies, even over one that has to fold for it:
+    /// that flight says where the new panel came from, which is a thing worth
+    /// saying.
+    func testANewPanelStillFliesOverTheOneItReplaces() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let first = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "one",
+                                                          animated: false))
+        window.layoutIfNeeded()
+
+        let second = try XCTUnwrap(controller.openFragment([0x03, 0x04], named: "two",
+                                                           animated: true))
+
+        XCTAssertNotNil(controller.fragments.panelView(first)?.superview,
+                        "the first is still on its way out")
+        XCTAssertTrue(pumpUntil(2) { controller.fragments.panelView(first)?.superview == nil },
+                      "and the flights finish")
+        XCTAssertEqual(controller.fragments.expanded, second)
+    }
+
     // MARK: - The link when there is nowhere left to go
 
     /// A panel whose parent has closed stops showing a chain: the way back is

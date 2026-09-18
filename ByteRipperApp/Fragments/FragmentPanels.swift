@@ -184,8 +184,18 @@ import Cocoa
         }
     }
 
+    /// Raises `id`, folding whatever was up.
+    ///
+    /// Switching from one panel to another is not animated, however it is
+    /// asked for — a pill clicked, or an update sending the reader to the panel
+    /// it landed in. The flight of a panel says where it went; between two
+    /// panels there is nowhere to go, and watching one fall into its pill so
+    /// the next can climb out of its own is a wait in the middle of a glance.
+    /// The flights that say something stay: a panel arriving, a panel folding
+    /// to show the dump, a pull let go of.
     func expand(_ id: FragmentDock.PanelID, animated: Bool = true) {
-        apply(dock.expand(id), animated: animated)
+        let switching = dock.expanded != nil && dock.expanded != id
+        apply(dock.expand(id), animated: animated && !switching)
     }
 
     /// Folds whatever is up. What Esc does, and what the dump behind is for.
