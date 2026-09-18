@@ -52,6 +52,31 @@ import ALSplitView
     /// are this surface's.
     private(set) var tools = ToolController()
 
+    /// Which panes this surface's minimap maps, in map order: none in the empty
+    /// state, one in single-file mode and on a fragment panel, two in a
+    /// comparison.
+    ///
+    /// The one question every one of the map's feeds starts from — which pane
+    /// is map 0, which is map 1 — and being able to ask it of the surface is
+    /// what lets a second surface have a map at all.
+    ///
+    /// Asked rather than stored: the tab's two panes are swapped by Swap Panels
+    /// and promoted when pane 1 closes, so a list kept here would have to be
+    /// put right at every one of those, and the one that was forgotten would be
+    /// a map drawing the wrong file.
+    var panesInMapOrder: () -> [PaneViewModel] = { [] }
+
+    /// The pane views this surface shows, in map order — what a drag over the
+    /// map scrolls, and what the panel's chrome lines itself up with. Asked for
+    /// the same reason the panes are: a comparison replaces both of them.
+    var paneViewsInMapOrder: () -> [FilePaneView] = { [] }
+
+    /// The pane behind map `index`, or nil when the map has no pane there.
+    func mappedPane(at index: Int) -> PaneViewModel? {
+        let panes = panesInMapOrder()
+        return index >= 0 && index < panes.count ? panes[index] : nil
+    }
+
     /// The one pane this surface holds, for a surface that holds exactly one: a
     /// fragment panel. Nil for the tab's own surface, which has two and an
     /// active-pane pointer between them.
@@ -68,6 +93,73 @@ import ALSplitView
     /// a change means — the maps and the viewport are stale while the panel is
     /// closed, and a show has to refresh them.
     var minimapPanelVisible = false
+
+    // MARK: - The minimap's own state
+
+    // What the map on this surface is in the middle of: the overview's passes,
+    // the search overlay it has synced, and where each pane was scrolled to.
+    //
+    // It lives here rather than on the tab because every surface has a map of
+    // its own, and a second surface reading the first one's pass counters would
+    // be two maps sharing one state machine. The tab still drives it — the
+    // methods are `MainViewController`'s, and each takes the surface it acts on.
+
+    /// The debounce waiting to start a pass, and the pass itself. Separate
+    /// handles because they are cancelled for different reasons: a request that
+    /// arrives while a pass runs must not kill it (see `scheduleOverviewRebuild`).
+    var overviewDebounceTask: Task<Void, Never>?
+
+    var overviewPassTask: Task<Void, Never>?
+
+    /// The row count the running pass is binning for — a diagnostic seam for the
+    /// tests, and what a future decision about a pass's usefulness would read.
+    var overviewPassRowCount = 0
+
+    /// Edited ranges whose difference marks are still waiting for the comparison
+    /// index to absorb them (§19.9).
+    var overviewRowsAwaitingIndex: [Range<UInt64>] = []
+
+    /// The index build this controller's overview was derived from.
+    var overviewIndexBuildCount = 0
+
+    /// How many full overview passes and how many row patches have run — the
+    /// seam for "an edit does not walk the file" (§19.9).
+    var overviewRebuilds = 0
+
+    var overviewPatches = 0
+
+    /// Full passes that finished and published their picture.
+    var overviewRebuildsCompleted = 0
+
+    /// The rebuild's latest progress, or nil when nothing is running.
+    var overviewProgress: Double?
+
+    var overviewProgressReveal: Task<Void, Never>?
+
+    var overviewProgressHide: Task<Void, Never>?
+
+    var overviewProgressShown: ContinuousClock.Instant?
+
+    var syncedMatchPicture: MainViewController.MatchPicture?
+
+    /// Whether a match sync is already queued for the next turn, so a run of
+    /// presses costs one walk rather than one per press.
+    var minimapMatchSyncScheduled = false
+
+    /// Which sync is current: a walk that finished after a newer one started
+    /// has nothing to install.
+    var minimapMatchSyncGeneration = 0
+
+    /// How many times the strokes have actually been walked. The point of the
+    /// picture check above is that this does not climb while the set stands
+    /// still, which is only observable as a count (§11).
+    var matchOverlayWalksForTesting = 0
+
+    /// The panes' latest visible byte ranges, keyed by pane identity, so a
+    /// scroll in either pane rebuilds the minimap's viewport array without
+    /// waiting for the other pane to re-report. Cleared on every apply(mode:) —
+    /// panes are rebuilt and re-keyed.
+    var minimapViewports: [ObjectIdentifier: Range<UInt64>] = [:]
 
     // MARK: - Where each panel sits
 

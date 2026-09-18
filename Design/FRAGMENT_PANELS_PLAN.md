@@ -236,9 +236,33 @@ is not a tab. G4 unblocks.
 5. **Tear-off to a tab** through the New Tab strip.
 6. **Port**, closing G4.
 
+## The panel's own minimap and tool panel
+
+A panel covers the whole content area, the tab's own side panels included, so
+there is never a minimap or a tool panel on screen but the panel's. That settles
+the interface without inventing any: **the commands follow what is in front**,
+which is the rule everything else already follows. The toolbar's minimap button
+and the Tools menu sit directly above the panel and act on the map and the tool
+you can see; fold the panel and they mean the tab's again, each side keeping its
+own.
+
+What a panel opens with: **the minimap the tab has** — someone who works with
+the map on wants it on the part too, and a part is exactly where a map earns its
+place — and **no tool panel**, because running a parser over every part that is
+opened is work nobody asked for and *which* tool is a choice.
+
+Side-panel widths are the tab's, shared. A map that changed width as a panel was
+folded and raised would be a jump for no reason.
+
+Neither takes the window's width with it: a panel opens its map and its tool
+inside the area it was given. A window that grew because something inside a
+panel over it opened would be the window moving for something that is not the
+window's.
+
 ## Open questions
 
-- Does a fragment panel remember its split widths per panel, or share the
-  window's? (Leaning: share — they are the user's habit, not the document's.)
 - Is there a keyboard route to the dock — ⌃1…⌃9 by position, say — or is it
   pointer-only in the first cut?
+- The gutter's own menus on a panel's map — Select Zone, the segment commands —
+  are off for now: they are menu actions addressed to the tab, and pointing them
+  at a surface is its own change.

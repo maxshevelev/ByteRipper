@@ -124,6 +124,13 @@ import Cocoa
         // After the id exists: the ✕ closes *this* panel, and the tool that
         // hears about an edit is this surface's.
         host.wireFragmentPaneView(paneView, for: pane, panel: opened.id, surface: surface)
+        host.prepareFragmentMinimap(of: surface, pane: pane, paneView: paneView)
+        // The panel's own list, and the only thing reading it: the pane it
+        // marks and the map beside it.
+        bookmarks.onChange = { [weak self, weak pane, weak surface] row in
+            pane?.onBookmarksChanged?(row)
+            if let surface { self?.host?.syncFragmentMinimapBookmarks(of: surface) }
+        }
         apply(opened.transition, animated: animated)
         return opened.id
     }
