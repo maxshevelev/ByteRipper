@@ -3060,15 +3060,7 @@ final class MainViewController: NSViewController {
         }
         let rowCount = surface.minimapView.overviewRowCount()
         let extent = currentFileSizes(of: surface).max() ?? 0
-        let panes: [PaneViewModel?]
-        switch mode {
-        case .empty:
-            panes = []
-        case .singleFile:
-            panes = [windowModel.pane1]
-        case .comparison:
-            panes = [windowModel.pane1, windowModel.pane2]
-        }
+        let panes: [PaneViewModel?] = surface.panesInMapOrder()
         guard rowCount > 0, extent > 0, !panes.isEmpty else {
             surface.minimapView.setMatchOverlays([])
             surface.syncedMatchPicture = nil
@@ -3199,15 +3191,7 @@ final class MainViewController: NSViewController {
     /// hands its lone block; the minimap draws no strip for it, and the strip
     /// appears the moment a cut makes a second piece.
     private func syncMinimapSegments(of surface: DocumentSurface) {
-        let panes: [PaneViewModel?]
-        switch mode {
-        case .empty:
-            panes = []
-        case .singleFile:
-            panes = [windowModel.pane1]
-        case .comparison:
-            panes = [windowModel.pane1, windowModel.pane2]
-        }
+        let panes: [PaneViewModel?] = surface.panesInMapOrder()
         let blocks: [[MinimapView.SegmentBlock]] = panes.map { pane in
             guard let pane, pane.isOpen else { return [] }
             return pane.segmentStore.segments.map {
@@ -3227,12 +3211,7 @@ final class MainViewController: NSViewController {
     /// same bytes. It also means this needs no idea of which pane a session is
     /// bound to — the other pane's map is simply empty.
     private func syncMinimapZones(of surface: DocumentSurface) {
-        let count: Int
-        switch mode {
-        case .empty: count = 0
-        case .singleFile: count = 1
-        case .comparison: count = 2
-        }
+        let count = surface.panesInMapOrder().count
         surface.minimapView.setZoneMaps((0..<count).map { index in
             guard let pane = surface.mappedPane(at: index), pane.isOpen else { return ZoneMap.empty }
             return pane.zones
@@ -3295,7 +3274,11 @@ final class MainViewController: NSViewController {
             // The difference marks come from the comparison index, which absorbs
             // the edit in the background: these rows are patched again when it
             // does, instead of the whole picture being rebuilt (§19.9).
-            if mode == .comparison { surface.overviewRowsAwaitingIndex.append(range) }
+            // Only a comparison has an index for the difference marks to wait on,
+        // and only a surface with two maps is one.
+        if surface.panesInMapOrder().count > 1 {
+            surface.overviewRowsAwaitingIndex.append(range)
+        }
         case .insert, .delete:
             // Every byte after the change moved, so no range describes it: the
             // exact picture is a full pass, and that pass waits for the typing to
@@ -3681,16 +3664,7 @@ final class MainViewController: NSViewController {
     /// Moves each map's selection overlay to its pane's current selection.
     /// Cheap (an overlay repaint), so it rides the caret-changed callbacks.
     private func updateMinimapSelections(of surface: DocumentSurface) {
-        let selections: [Range<UInt64>?]
-        switch mode {
-        case .singleFile:
-            selections = [minimapSelectionRange(windowModel.pane1)]
-        case .comparison:
-            selections = [minimapSelectionRange(windowModel.pane1),
-                          minimapSelectionRange(windowModel.pane2)]
-        case .empty:
-            selections = []
-        }
+        let selections = surface.panesInMapOrder().map { minimapSelectionRange($0) }
         for (index, selection) in selections.enumerated() {
             surface.minimapView.updateSelection(selection, forMapAt: index)
         }
@@ -3718,21 +3692,8 @@ final class MainViewController: NSViewController {
     /// also re-derives the shared window. Cheap — no file pass — so it rides the
     /// scroll and resize notifications.
     private func updateMinimapViewports(of surface: DocumentSurface) {
-        let viewports: [Range<UInt64>?]
-        switch mode {
-        case .singleFile:
-            if let pane = activeFilePane {
-                viewports = [surface.minimapViewports[ObjectIdentifier(pane)]]
-            } else {
-                viewports = []
-            }
-        case .comparison:
-            let pane1 = comparisonView?.paneView1
-            let pane2 = comparisonView?.paneView2
-            viewports = [pane1.flatMap { surface.minimapViewports[ObjectIdentifier($0)] },
-                         pane2.flatMap { surface.minimapViewports[ObjectIdentifier($0)] }]
-        case .empty:
-            viewports = []
+        let viewports = surface.paneViewsInMapOrder().map {
+            surface.minimapViewports[ObjectIdentifier($0)]
         }
         surface.minimapView.setViewports(viewports)
     }

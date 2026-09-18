@@ -113,6 +113,46 @@ final class FragmentMinimapTests: XCTestCase {
         XCTAssertEqual(controller.minimapView.bookmarks.count, 1, "and the tab's map is untouched")
     }
 
+    /// The band that says where in the part you are follows the part's own
+    /// scroll. It was drawn from the tab's panes before, so a panel's map had
+    /// no band at all.
+    func testTheViewportBandFollowsThePartsOwnScroll() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x400),
+                                                       named: "part", animated: false))
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        controller.setMinimapPanelVisible(of: surface, true, animated: false)
+        window.layoutIfNeeded()
+        let paneView = controller.paneView(for: try XCTUnwrap(controller.fragments.pane(id)))
+
+        paneView.onHexViewportChanged?(0x80..<0x100)
+
+        XCTAssertEqual(surface.minimapView.viewports, [0x80..<0x100],
+                       "the part's own map got the band")
+        XCTAssertFalse(controller.minimapView.viewports.contains(0x80..<0x100),
+                       "and the dump's map kept its own band, not the part's")
+    }
+
+    /// A drag over the panel's map scrolls the part, not the dump behind it.
+    func testADragOverThePanelsMapScrollsThePart() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x4000),
+                                                       named: "part", animated: false))
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        controller.setMinimapPanelVisible(of: surface, true, animated: false)
+        window.layoutIfNeeded()
+        let paneView = controller.paneView(for: try XCTUnwrap(controller.fragments.pane(id)))
+        var scrolledTo: Range<UInt64>?
+        paneView.onHexViewportChanged = { scrolledTo = $0 }
+
+        surface.minimapView.onScrollToOffset?(0x2000)
+
+        XCTAssertEqual(scrolledTo?.lowerBound, 0x2000,
+                       "the map scrolled the pane it maps")
+    }
+
     /// The panel's map pulls its bytes from the part: the feed is wired to that
     /// surface's pane, so an edit in the part reads as modified on its own map
     /// and nowhere else.
