@@ -208,28 +208,33 @@ import Cocoa
         guard dock.expanded == id, let entry = entries[id],
               let window = entry.view.window else { return }
         let start = event.locationInWindow.y
-        // Where the hand last was, for the next movement to be measured from,
-        // and the last movement worth calling one. A distance rather than a
-        // speed: a nudge up followed by a pause before letting go is still a
-        // nudge up, and asking how fast the pointer was going at the moment of
-        // release would answer "not at all".
+        // Where the hand last was, when it was there, and what it did on the
+        // way — measured over the movement itself rather than over a window of
+        // time, so a nudge followed by a pause is still a nudge.
         var anchor = start
-        var direction = PullDown.Direction.none
+        var anchorTime = event.timestamp
+        var movement = PullDown.Movement()
 
         window.trackEvents(matching: [.leftMouseDragged, .leftMouseUp],
                            timeout: .greatestFiniteMagnitude, mode: .eventTracking) { tracked, stop in
             guard let tracked else { stop.pointee = true; return }
             let y = tracked.locationInWindow.y
-            if let moved = PullDown.Direction.of(offset: y - anchor) {
-                direction = moved
+            if let direction = PullDown.Direction.of(offset: y - anchor) {
+                let distance = abs(y - anchor)
+                // A floor under the interval: two events can share a timestamp,
+                // and a division by nothing is not a speed.
+                let seconds = max(tracked.timestamp - anchorTime, 1.0 / 240)
+                movement = PullDown.Movement(direction: direction, distance: distance,
+                                             speed: distance / CGFloat(seconds))
                 anchor = y
+                anchorTime = tracked.timestamp
             }
             switch tracked.type {
             case .leftMouseDragged:
                 self.pullPanel(id, by: y - start)
             default:
                 stop.pointee = true
-                self.endPull(id, direction: direction)
+                self.endPull(id, movement: movement)
             }
         }
     }
@@ -248,20 +253,20 @@ import Cocoa
         entry.view.frame = frame
     }
 
-    /// Lets the pull go, `direction` being the way the hand last went.
-    func endPull(_ id: FragmentDock.PanelID, direction: PullDown.Direction) {
+    /// Lets the pull go, `movement` being what the hand last did.
+    func endPull(_ id: FragmentDock.PanelID, movement: PullDown.Movement) {
         guard pulling == id, let entry = entries[id] else { return }
         pulling = nil
         let resting = FragmentPanelView.restingFrame(in: container)
         finishPullDown(id, entry: entry, resting: resting,
                        travelled: resting.origin.y - entry.view.frame.origin.y,
-                       direction: direction)
+                       movement: movement)
     }
 
     private func finishPullDown(_ id: FragmentDock.PanelID, entry: Entry, resting: NSRect,
-                                travelled: CGFloat, direction: PullDown.Direction) {
+                                travelled: CGFloat, movement: PullDown.Movement) {
         switch PullDown.outcome(travelled: travelled, height: resting.height,
-                                direction: direction) {
+                                movement: movement) {
         case .springBack:
             move(entry.view, to: resting, animated: true, duration: Self.springBackDuration)
         case .collapse:

@@ -52,11 +52,28 @@ enum PullDown {
     /// answer "stopped" and forget which way the hand had gone.
     static var movementThreshold: CGFloat = 2
 
-    /// How much of the panel's own height a pull that never moved anywhere has
-    /// to have covered to count as putting it away. The fallback for a gesture
-    /// with no direction at all, which the drag threshold makes nearly
-    /// impossible — it is here so the rule is total.
-    static var dismissFraction: CGFloat = 0.35
+    /// How far down the pull has to have gone before the panel is treated as
+    /// being on its way out rather than merely lifted for a look.
+    ///
+    /// Above this line a release puts the panel back whatever the hand was
+    /// doing — a tug to see what is underneath is a tug to see what is
+    /// underneath, and it should cost nothing. Below it the panel is somewhere
+    /// nobody drags it to by accident, and the last movement is taken as an
+    /// instruction.
+    static var commitFraction: CGFloat = 0.35
+
+    /// The speed, in points a second, at which a movement reads as a flick
+    /// rather than a drag — what lets a decisive swipe from the top put the
+    /// panel away without dragging it all the way down.
+    ///
+    /// Nine hundred is about seven points a frame: not something a hand
+    /// positioning a panel produces, and not something a shove fails to.
+    static var flickSpeed: CGFloat = 900
+
+    /// And a flick has to be a real shove, not a fast tremble: the movement
+    /// that carries the speed must itself be this long, in points. Two points
+    /// crossed in two milliseconds is arithmetic, not a gesture.
+    static var flickDistance: CGFloat = 8
 
     /// Which way the hand last went.
     enum Direction: Equatable {
@@ -87,23 +104,34 @@ enum PullDown {
         case collapse
     }
 
-    /// What letting go means: `direction` is the way the hand last went,
-    /// `travelled` how far down the panel was pulled from its resting place,
-    /// `height` the panel's own height.
+    /// What the last movement of a pull was: which way it went, how far, and
+    /// how fast — measured over that movement itself rather than over a window
+    /// of time, so a nudge followed by a pause is still a nudge.
+    struct Movement: Equatable {
+        var direction: Direction = .none
+        var distance: CGFloat = 0
+        var speed: CGFloat = 0
+
+        /// Whether it was a flick rather than a hand placing the panel.
+        var isFlick: Bool { distance >= flickDistance && speed >= flickSpeed }
+    }
+
+    /// What letting go means, given how far down the panel was pulled and what
+    /// the hand last did.
     ///
-    /// **The last movement decides, and nothing else does.** Nudged down, the
-    /// panel carries on down; nudged up, it goes back up — from anywhere,
-    /// whatever distance the pull had covered, and however long the hand rested
-    /// before letting go. The panel finishing the movement the hand made is
-    /// what makes the gesture feel like one movement rather than a vote.
-    ///
-    /// Distance answers only for a pull with no direction at all.
-    static func outcome(travelled: CGFloat, height: CGFloat, direction: Direction) -> Outcome {
-        switch direction {
-        case .down: return .collapse
-        case .up: return .springBack
-        case .none: return travelled >= height * dismissFraction ? .collapse : .springBack
+    /// Two halves, because a pull means two different things depending where it
+    /// ends up. **Near the top it is a look**: the panel goes back, whatever the
+    /// hand was doing, unless the hand flicked it away — a decisive swipe is
+    /// still a way to put the panel down without carrying it there. **Past the
+    /// commit line the last movement is an instruction**: nudged up it springs
+    /// back from anywhere, nudged down it carries on down, however long the
+    /// hand rested before letting go.
+    static func outcome(travelled: CGFloat, height: CGFloat, movement: Movement) -> Outcome {
+        guard travelled >= height * commitFraction else {
+            // A look behind costs nothing; only a flick down ends it.
+            return movement.direction == .down && movement.isFlick ? .collapse : .springBack
         }
+        return movement.direction == .up ? .springBack : .collapse
     }
 
     /// Where the panel sits while the pointer has moved `offset` from where it

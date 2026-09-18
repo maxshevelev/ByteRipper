@@ -8,23 +8,68 @@ import XCTest
 final class FragmentPullDownTests: XCTestCase {
     private let height: CGFloat = 500
 
-    // MARK: - Letting go
+    // MARK: - Letting go near the top: a look
 
-    /// Nudged down and let go, the panel carries on down — whatever distance
-    /// the pull had covered. The action continues the movement.
-    func testANudgeDownCollapsesWhateverTheDistance() {
-        XCTAssertEqual(PullDown.outcome(travelled: 0, height: height, direction: .down), .collapse)
-        XCTAssertEqual(PullDown.outcome(travelled: 12, height: height, direction: .down), .collapse)
+    private func look(_ direction: PullDown.Direction, flick: Bool = false) -> PullDown.Movement {
+        PullDown.Movement(direction: direction,
+                          distance: flick ? PullDown.flickDistance : 3,
+                          speed: flick ? PullDown.flickSpeed : 120)
     }
 
-    /// Nudged up, it goes back up — from the very bottom, and after any pause.
-    /// This is the one the hand found: a panel dragged to the floor and pushed
-    /// gently back used to freeze and then collapse.
-    func testANudgeUpSpringsBackFromAnywhere() {
-        XCTAssertEqual(PullDown.outcome(travelled: height * 0.95, height: height, direction: .up),
+    /// Pulled a little and let go, the panel goes back — whatever the hand was
+    /// doing. A tug to see what is underneath should cost nothing.
+    func testALookNearTheTopAlwaysSpringsBack() {
+        let short = height * PullDown.commitFraction - 1
+        for direction in [PullDown.Direction.down, .up, .none] {
+            XCTAssertEqual(PullDown.outcome(travelled: short, height: height,
+                                            movement: look(direction)),
+                           .springBack, "\(direction) near the top")
+        }
+    }
+
+    /// Except a flick: a decisive swipe still puts the panel away without
+    /// having to carry it all the way down.
+    func testAFlickDownFromTheTopStillCollapses() {
+        let short = height * PullDown.commitFraction - 1
+        XCTAssertEqual(PullDown.outcome(travelled: short, height: height,
+                                        movement: look(.down, flick: true)),
+                       .collapse)
+        XCTAssertEqual(PullDown.outcome(travelled: short, height: height,
+                                        movement: look(.up, flick: true)),
+                       .springBack, "a flick the other way is not a dismissal")
+    }
+
+    /// A fast tremble is not a flick: the movement carrying the speed has to be
+    /// a real shove.
+    func testAFastTrembleIsNotAFlick() {
+        let jitter = PullDown.Movement(direction: .down,
+                                       distance: PullDown.flickDistance - 1,
+                                       speed: PullDown.flickSpeed * 4)
+        XCTAssertFalse(jitter.isFlick)
+        XCTAssertEqual(PullDown.outcome(travelled: 10, height: height, movement: jitter),
                        .springBack)
-        XCTAssertEqual(PullDown.outcome(travelled: height * 0.5, height: height, direction: .up),
-                       .springBack)
+    }
+
+    // MARK: - Letting go past the commit line: an instruction
+
+    /// Nudged up from down there, the panel comes back — from anywhere, at any
+    /// speed, after any pause. This is the one the hand found.
+    func testANudgeUpPastTheLineSpringsBack() {
+        for travelled in [height * PullDown.commitFraction, height * 0.7, height * 0.98] {
+            XCTAssertEqual(PullDown.outcome(travelled: travelled, height: height,
+                                            movement: look(.up)),
+                           .springBack, "at \(travelled)")
+        }
+    }
+
+    /// Nudged down from down there, it carries on down.
+    func testANudgeDownPastTheLineCollapses() {
+        XCTAssertEqual(PullDown.outcome(travelled: height * 0.6, height: height,
+                                        movement: look(.down)),
+                       .collapse)
+        XCTAssertEqual(PullDown.outcome(travelled: height * 0.6, height: height,
+                                        movement: look(.none)),
+                       .collapse, "carried there and simply let go, it stays down")
     }
 
     /// A movement is a movement of at least the threshold; a tremble is not one
@@ -34,15 +79,6 @@ final class FragmentPullDownTests: XCTestCase {
         XCTAssertNil(PullDown.Direction.of(offset: -PullDown.movementThreshold + 0.5))
         XCTAssertEqual(PullDown.Direction.of(offset: -PullDown.movementThreshold), .down)
         XCTAssertEqual(PullDown.Direction.of(offset: PullDown.movementThreshold), .up)
-    }
-
-    /// Only a pull that never went anywhere is decided by how far it went.
-    func testAPullWithNoDirectionIsDecidedByDistance() {
-        let line = height * PullDown.dismissFraction
-        XCTAssertEqual(PullDown.outcome(travelled: line, height: height, direction: .none),
-                       .collapse)
-        XCTAssertEqual(PullDown.outcome(travelled: line - 1, height: height, direction: .none),
-                       .springBack)
     }
 
     // MARK: - Where it sits while pulled
@@ -96,7 +132,7 @@ final class FragmentPullDownTests: XCTestCase {
 
         XCTAssertEqual(panel.frame.origin.y, resting - 120,
                        "and stays where the hand has it")
-        controller.fragments.endPull(id, direction: .none)
+        controller.fragments.endPull(id, movement: look(.none))
     }
 
     /// Pulled down to the floor and nudged back up, the panel is still up —
@@ -106,7 +142,7 @@ final class FragmentPullDownTests: XCTestCase {
         defer { controller.fragments.close(id, animated: false) }
 
         controller.fragments.pullPanel(id, by: -400)
-        controller.fragments.endPull(id, direction: .up)
+        controller.fragments.endPull(id, movement: look(.up))
 
         XCTAssertEqual(controller.fragments.expanded, id,
                        "nudged back up, it comes back up")
@@ -118,7 +154,7 @@ final class FragmentPullDownTests: XCTestCase {
         defer { controller.fragments.close(id, animated: false) }
 
         controller.fragments.pullPanel(id, by: -30)
-        controller.fragments.endPull(id, direction: .down)
+        controller.fragments.endPull(id, movement: look(.down, flick: true))
 
         XCTAssertNil(controller.fragments.expanded, "it went down")
         XCTAssertEqual(controller.fragments.count, 1, "folded, not closed")
