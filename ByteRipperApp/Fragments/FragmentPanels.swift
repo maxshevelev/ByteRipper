@@ -69,6 +69,15 @@ import Cocoa
     func surface(_ id: FragmentDock.PanelID) -> DocumentSurface? { entries[id]?.surface }
     func panelView(_ id: FragmentDock.PanelID) -> FragmentPanelView? { entries[id]?.view }
 
+    /// The surface of the panel holding `pane`, or nil when `pane` is not a
+    /// part this dock has open — which is the answer for the tab's own panes.
+    func surface(holding pane: PaneViewModel) -> DocumentSurface? {
+        for id in dock.panels where entries[id]?.pane === pane {
+            return entries[id]?.surface
+        }
+        return nil
+    }
+
     /// The surface of the panel that is up, if one is — the surface the front
     /// of the window belongs to.
     var frontSurface: DocumentSurface? { dock.expanded.flatMap { entries[$0]?.surface } }
@@ -275,5 +284,8 @@ import Cocoa
             )
         })
         host?.setFragmentDockVisible(!dock.isEmpty)
+        // The Tools popup names the tool-module of whatever is in front, so
+        // raising or folding a panel changes what it should read.
+        host?.revalidateToolbar()
     }
 }

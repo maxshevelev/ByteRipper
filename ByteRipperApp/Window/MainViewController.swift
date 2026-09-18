@@ -559,7 +559,22 @@ final class MainViewController: NSViewController {
     var contentHost: NSView { surface.contentHost }
     var minimapView: MinimapView { surface.minimapView }
     var minimapPanel: MinimapPanelView { surface.minimapPanel }
+    /// The tab's own tool-module: the panel down the left of the window.
     var tools: ToolController { surface.tools }
+
+    /// The tool-module the Tools menu and its toolbar popup mean: the fragment
+    /// panel's when one is up, the tab's otherwise
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
+    ///
+    /// A panel covers the tab's own tool panel, so the one the commands act on
+    /// is always the one on screen — there is never a choice of two.
+    var frontTools: ToolController { fragments.frontSurface?.tools ?? surface.tools }
+
+    /// The tool-module reading `pane`: a part's panel has its own, and a zone
+    /// picked in a part belongs to the tool that drew it there.
+    func tools(reading pane: PaneViewModel) -> ToolController {
+        fragments.surface(holding: pane)?.tools ?? surface.tools
+    }
     var minimapPanelVisible: Bool { surface.minimapPanelVisible }
     var minimapPreferredPanelWidth: CGFloat { surface.minimapPreferredPanelWidth }
 
@@ -1660,7 +1675,7 @@ final class MainViewController: NSViewController {
     /// identifier in `representedObject`, and None carries nothing, so one
     /// action serves every row.
     @objc func activateTool(_ sender: NSMenuItem) {
-        tools.activate(sender.representedObject as? String)
+        frontTools.activate(sender.representedObject as? String)
     }
 
     // MARK: - Files, for a tool-module (Design/TOOL_MODULES_PLAN.md)
@@ -3499,7 +3514,7 @@ final class MainViewController: NSViewController {
               let zone = pane.zones.zones.first(where: { $0.id == target.zoneID }) else { return }
         pane.select(range: zone.range)
         filePaneView(for: pane)?.revealOffsetCentered(zone.range.lowerBound)
-        tools.zoneSelected(zone.id, in: pane)
+        tools(reading: pane).zoneSelected(zone.id, in: pane)
     }
 
     /// Save Segment… from the strip's menu: the piece under the click, written to
@@ -4891,7 +4906,7 @@ final class MainViewController: NSViewController {
     @objc func selectZone(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? ZoneContextTarget else { return }
         target.pane.select(range: target.zone.range)
-        tools.zoneSelected(target.zone.id, in: target.pane)
+        tools(reading: target.pane).zoneSelected(target.zone.id, in: target.pane)
     }
 
     /// The segment block of the offset context menu (§21.3): *Split Here at «address»* opens
@@ -7298,7 +7313,7 @@ extension MainViewController: NSToolbarItemValidation {
             // (Design/TOOL_MODULES_PLAN.md). Re-sized when it changes: the
             // toolbar lays a view-backed item out at the view's own width.
             if let button = item.view as? NSPopUpButton, let title = button.menu?.items.first {
-                let name = tools.activeModule?.title ?? MainWindowController.noToolTitle
+                let name = frontTools.activeModule?.title ?? MainWindowController.noToolTitle
                 if title.title != name {
                     title.title = name
                     button.sizeToFit()
@@ -7337,8 +7352,8 @@ extension MainViewController: NSMenuItemValidation {
             // A radio group: the active tool-module is checked, and a
             // tool-module needs a file to work on. None is always available —
             // it is how the panel is closed.
-            let (enabled, state) = tools.menuState(for: menuItem.representedObject as? String,
-                                                   fileIsOpen: activePane.isOpen)
+            let (enabled, state) = frontTools.menuState(for: menuItem.representedObject as? String,
+                                                        fileIsOpen: activePane.isOpen)
             menuItem.state = state
             return enabled
         case #selector(toggleMinimapOverview):
