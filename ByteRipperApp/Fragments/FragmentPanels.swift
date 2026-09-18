@@ -10,13 +10,25 @@ import Cocoa
 /// opened with to the pill it folds into, and the tab's part in it is one
 /// stored property.
 @MainActor final class FragmentPanels {
-    /// How long the slide takes. Long enough to read as one thing rising while
-    /// another goes down, short enough that folding a panel to glance at the
+    /// A multiplier on every panel animation, for watching one in detail:
+    ///
+    ///     defaults write dev.maxik.DumpCompare FragmentPanelSlowMotion 8
+    ///
+    /// Absent or one is the real speed. It exists because these animations say
+    /// *where* a panel went, and whether they say it truthfully cannot be read
+    /// at a fifth of a second.
+    static var slowMotion: Double {
+        max(1, UserDefaults.standard.double(forKey: "FragmentPanelSlowMotion"))
+    }
+
+    /// How long the flight takes. Long enough to read as one thing arriving
+    /// while another leaves, short enough that folding a panel to glance at the
     /// dump behind it is not a wait.
-    static var slideDuration: TimeInterval = 0.22
+    static var slideDuration: TimeInterval { 0.22 * slowMotion }
 
     /// What a panel is made of, beyond its id.
     private final class Entry {
+        let id: FragmentDock.PanelID
         let pane: PaneViewModel
         let surface: DocumentSurface
         let paneView: FilePaneView
@@ -26,8 +38,9 @@ import Cocoa
         /// followed).
         let bookmarks: BookmarkStore
 
-        init(pane: PaneViewModel, surface: DocumentSurface, paneView: FilePaneView,
-             view: FragmentPanelView, bookmarks: BookmarkStore) {
+        init(id: FragmentDock.PanelID, pane: PaneViewModel, surface: DocumentSurface,
+             paneView: FilePaneView, view: FragmentPanelView, bookmarks: BookmarkStore) {
+            self.id = id
             self.pane = pane
             self.surface = surface
             self.paneView = paneView
@@ -140,8 +153,8 @@ import Cocoa
         surface.setContent(paneView)
         let view = FragmentPanelView(content: surface.view)
         let opened = dock.open()
-        entries[opened.id] = Entry(pane: pane, surface: surface, paneView: paneView,
-                                   view: view, bookmarks: bookmarks)
+        entries[opened.id] = Entry(id: opened.id, pane: pane, surface: surface,
+                                   paneView: paneView, view: view, bookmarks: bookmarks)
         // After the id exists: the ✕ closes *this* panel, and the tool that
         // hears about an edit is this surface's.
         host.wireFragmentPaneView(paneView, for: pane, panel: opened.id, surface: surface)
@@ -214,9 +227,9 @@ import Cocoa
 
     // MARK: - Pulling the panel down
 
-    /// How long a spring back takes. Shorter than the slide: nothing changed,
+    /// How long a spring back takes. Shorter than the flight: nothing changed,
     /// so the panel should look like it never left.
-    static var springBackDuration: TimeInterval = 0.2
+    static var springBackDuration: TimeInterval { 0.2 * slowMotion }
 
     /// The panel's header has been pulled down: it follows the pointer until
     /// the button comes up, and then either springs back or carries on into its
@@ -305,37 +318,47 @@ import Cocoa
 
     private func apply(_ transition: FragmentDock.Transition, animated: Bool,
                        duration: TimeInterval? = nil, closesDocument: Bool = false) {
-        if let raising = transition.raising, let entry = entries[raising] {
-            container.isHidden = false
-            let resting = FragmentPanelView.restingFrame(in: container)
-            if entry.view.superview !== container {
-                entry.view.frame = resting
-                container.addSubview(entry.view)
-            }
-            // The pill it grows out of, so the eye follows it from where it was
-            // parked; a panel with no pill yet simply slides up.
-            if animated, let pill = pillRect(for: raising) {
-                entry.view.frame = resting
-                flying.insert(raising)
-                fly(entry.view, to: pill, duration: duration ?? Self.slideDuration,
-                    out: false) { [weak self] in self?.flying.remove(raising) }
-            } else {
-                move(entry.view, to: resting, animated: animated, duration: duration)
+        // Where a folding panel is flying to, read before the dock is brought
+        // in line: a panel that is closing takes its pill with it.
+        let foldTarget = transition.folding.flatMap { pillRect(for: $0) }
+        // And the dock first, so a panel that has just been opened has a pill
+        // to grow out of.
+        refreshDock()
+        let span = duration ?? Self.slideDuration
+
+        let raise: () -> Void = { [weak self] in
+            guard let self, let raising = transition.raising,
+                  let entry = self.entries[raising], self.dock.expanded == raising else { return }
+            self.container.isHidden = false
+            let resting = FragmentPanelView.restingFrame(in: self.container)
+            if entry.view.superview !== self.container { self.container.addSubview(entry.view) }
+            entry.view.frame = resting
+            guard animated, let pill = self.pillRect(for: raising) else { return }
+            self.flying.insert(raising)
+            self.fly(entry.view, to: pill, duration: span, out: false) { [weak self] in
+                self?.flying.remove(raising)
             }
         }
+
         if let folding = transition.folding, let entry = entries[folding] {
-            // Unless it has been raised again in the meantime: a pill clicked
-            // twice while the flight was still running must not take the panel
-            // it just brought back off the screen.
-            let land = { [weak self] in
-                guard let self, self.dock.expanded != folding else { return }
-                entry.view.removeFromSuperview()
-                self.hideContainerIfClear()
+            let land: () -> Void = { [weak self] in
+                guard let self else { return }
+                // Unless it has been raised again in the meantime: a pill
+                // clicked twice while the flight was still running must not
+                // take the panel it just brought back off the stage.
+                if self.dock.expanded != folding {
+                    entry.view.removeFromSuperview()
+                    self.hideContainerIfClear()
+                }
+                if transition.removed == folding { self.tearDown(entry, closesDocument: closesDocument) }
+                // One at a time: the panel that is leaving finishes leaving
+                // before the next one starts arriving, or the two flights read
+                // as one muddle.
+                raise()
             }
-            if animated, let pill = pillRect(for: folding) {
+            if animated, let pill = foldTarget {
                 flying.insert(folding)
-                fly(entry.view, to: pill, duration: duration ?? Self.slideDuration,
-                    out: true) { [weak self] in
+                fly(entry.view, to: pill, duration: span, out: true) { [weak self] in
                     self?.flying.remove(folding)
                     land()
                 }
@@ -343,43 +366,41 @@ import Cocoa
                 move(entry.view, to: FragmentPanelView.foldedFrame(in: container),
                      animated: animated, duration: duration, completion: land)
             }
-        }
-        if let removed = transition.removed, let entry = entries.removeValue(forKey: removed) {
-            let tearDown = { [weak self] in
-                entry.view.removeFromSuperview()
-                entry.surface.removeFromParent()
-                entry.paneView.searchResults.removeFromParent()
-                self?.host?.forgetPaneView(of: entry.pane)
-                // The panel's own tool-module has nothing left to read: end it
-                // the way a pane closing or leaving a tab ends the tab's.
-                if closesDocument {
-                    entry.surface.tools.paneClosed(entry.pane)
-                } else {
-                    entry.surface.tools.paneLeft(entry.pane)
-                }
-                // A closed panel's document closes with it, and that is what a
-                // part opened *out of* this one has to be told: its link goes
-                // dead, its header says so, and Update in Parent refuses rather
-                // than writing into a document nobody can see. A panel let go
-                // of rather than closed keeps its document — it is on its way
-                // to a tab of its own.
-                if closesDocument { entry.pane.close() }
-                self?.hideContainerIfClear()
-            }
-            // A panel that was up folds out of sight before it is taken apart;
-            // one that was already a pill has nothing to animate.
-            if transition.folding == removed, animated {
-                DispatchQueue.main.asyncAfter(deadline: .now() + (duration ?? Self.slideDuration),
-                                              execute: tearDown)
-            } else {
-                tearDown()
+        } else {
+            raise()
+            if let removed = transition.removed, let entry = entries.removeValue(forKey: removed) {
+                tearDown(entry, closesDocument: closesDocument)
             }
         }
-        refreshDock()
+
         invalidateCursors()
         // The panel in front takes the keyboard; folding the last one gives it
         // back to the dump. Without it the file behind kept the caret.
         host?.fragmentFocusChanged()
+    }
+
+    /// Lets go of everything behind a panel that has left the dock.
+    private func tearDown(_ entry: Entry, closesDocument: Bool) {
+        entries.removeValue(forKey: entry.id)
+        entry.view.removeFromSuperview()
+        entry.surface.removeFromParent()
+        entry.paneView.searchResults.removeFromParent()
+        host?.forgetPaneView(of: entry.pane)
+        // The panel's own tool-module has nothing left to read: end it the way
+        // a pane closing or leaving a tab ends the tab's.
+        if closesDocument {
+            entry.surface.tools.paneClosed(entry.pane)
+        } else {
+            entry.surface.tools.paneLeft(entry.pane)
+        }
+        // A closed panel's document closes with it, and that is what a part
+        // opened *out of* this one has to be told: its link goes dead, its
+        // header says so, and Update in Parent refuses rather than writing into
+        // a document nobody can see. A panel let go of rather than closed keeps
+        // its document — it is on its way to a tab of its own.
+        if closesDocument { entry.pane.close() }
+        refreshDock()
+        hideContainerIfClear()
     }
 
     /// The cursors over the covered panes change with the panel arriving or
@@ -429,8 +450,8 @@ import Cocoa
             completion()
             return
         }
-        var shrunk = CATransform3DMakeTranslation(pill.midX - frame.midX, pill.midY - frame.midY, 0)
-        shrunk = CATransform3DScale(shrunk, pill.width / frame.width, pill.height / frame.height, 1)
+        let shrunk = CATransform3DMakeAffineTransform(
+            PanelLanding.transform(from: frame, on: pill, anchor: layer.anchorPoint))
 
         container.layer?.masksToBounds = false
         let restoreClip = { [weak self] in self?.container.layer?.masksToBounds = true }

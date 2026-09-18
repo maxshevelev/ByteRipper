@@ -147,6 +147,45 @@ enum PullDown {
     }
 }
 
+/// Where a panel lands when it folds into its pill, and where it grows from
+/// when it comes back (`Design/FRAGMENT_PANELS_PLAN.md`).
+///
+/// Pure, because this is arithmetic that looks right and is not: a layer-backed
+/// `NSView` anchors its layer at **(0, 0)**, not at the centre the way UIKit
+/// does, so a translation worked out between centres sends the panel a long way
+/// past the dock — left of the window and below it — while looking perfectly
+/// reasonable in the source.
+enum PanelLanding {
+    /// What the layer's `transform` must be for a panel of `frame` to come down
+    /// exactly on `target`. The scale is about the anchor point, which Core
+    /// Animation applies for us; what is left to work out is where that anchor
+    /// has to end up.
+    static func transform(from frame: NSRect, on target: NSRect,
+                          anchor: CGPoint) -> CGAffineTransform {
+        let sx = frame.width > 0 ? target.width / frame.width : 1
+        let sy = frame.height > 0 ? target.height / frame.height : 1
+        let from = NSPoint(x: frame.minX + frame.width * anchor.x,
+                           y: frame.minY + frame.height * anchor.y)
+        let to = NSPoint(x: target.minX + target.width * anchor.x,
+                         y: target.minY + target.height * anchor.y)
+        return CGAffineTransform(translationX: to.x - from.x, y: to.y - from.y)
+            .scaledBy(x: sx, y: sy)
+    }
+
+    /// Where a panel of `frame` actually ends up with `transform` on its layer
+    /// — the arithmetic Core Animation does, written out so the landing can be
+    /// checked without watching it.
+    static func landed(_ frame: NSRect, with transform: CGAffineTransform,
+                       anchor: CGPoint) -> NSRect {
+        let ax = frame.minX + frame.width * anchor.x
+        let ay = frame.minY + frame.height * anchor.y
+        return NSRect(x: ax + (frame.minX - ax) * transform.a + transform.tx,
+                      y: ay + (frame.minY - ay) * transform.d + transform.ty,
+                      width: frame.width * transform.a,
+                      height: frame.height * transform.d)
+    }
+}
+
 /// The area a fragment panel slides in over: exactly the part of the window the
 /// panes occupy, so the panel never covers the New Tab strip above it nor the
 /// dock below it.

@@ -1831,11 +1831,17 @@ final class MainViewController: NSViewController {
     func closeFragment(_ id: FragmentDock.PanelID) {
         guard let pane = fragments.pane(id) else { return }
         // Parts taken out of this one lose their way back when it goes, and a
-        // link that dies without a word is a link the reader finds out about
-        // when Update in Parent refuses.
+        // link that dies without a word is a link the reader meets later, when
+        // Update in Parent refuses.
+        //
+        // One question at a time, in the order the consequences arrive: what
+        // closing does to other panels, then what it does to this one's bytes.
+        // Folded into one dialog they read as a single warning and the second
+        // half goes unread — which is the same as not asking.
         let stranded = fragments.panelsLinked(to: pane).count
+        if stranded > 0, !confirmStranding(stranded, closing: pane.status.fileName) { return }
         if let origin = pane.origin, origin.hasChanges(in: pane) {
-            switch confirmClosingUnreturnedPart(origin, stranding: stranded) {
+            switch confirmClosingUnreturnedPart(origin) {
             case .alertFirstButtonReturn:  // Update in Parent
                 if let task = performUpdateInParent(of: pane) {
                     Task { [weak self] in
@@ -1851,8 +1857,6 @@ final class MainViewController: NSViewController {
             default:  // Cancel
                 return
             }
-        } else if stranded > 0, !confirmStranding(stranded, closing: pane.status.fileName) {
-            return
         }
         if pane.status.isDirty, pane.origin == nil {
             switch confirmSaveDiscardCancel() {
@@ -1881,13 +1885,11 @@ final class MainViewController: NSViewController {
         fragments.close(id)
     }
 
-    private func confirmClosingUnreturnedPart(_ origin: DocumentOrigin,
-                                              stranding: Int) -> NSApplication.ModalResponse {
+    private func confirmClosingUnreturnedPart(_ origin: DocumentOrigin) -> NSApplication.ModalResponse {
         let alert = NSAlert()
         alert.messageText = "Put “\(origin.partName)” back into \(origin.parentName)?"
         alert.informativeText = "It has changes \(origin.parentName) has not got. "
             + "Closing this panel without putting them back loses them."
-            + (stranding > 0 ? " " + Self.strandingSentence(stranding) : "")
         alert.addButton(withTitle: "Update in Parent")
         alert.addButton(withTitle: "Close Anyway")
         alert.addButton(withTitle: "Cancel")

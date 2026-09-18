@@ -205,19 +205,59 @@ final class FragmentToolTests: XCTestCase {
         window.layoutIfNeeded()
         XCTAssertEqual(controller.fragments.count, 2)
 
-        var asked: String?
+        var asked: [String] = []
         controller.fragmentCloseConfirm = { alert in
-            asked = alert.messageText + " " + alert.informativeText
+            asked.append(alert.messageText + " " + alert.informativeText)
             return .alertSecondButtonReturn  // Cancel
         }
         controller.closeFragment(outer)
 
-        XCTAssertEqual(asked?.contains("One panel was opened out of it"), true, asked ?? "not asked")
+        XCTAssertEqual(asked.count, 1, "asked once, and cancelled there")
+        XCTAssertEqual(asked.first?.contains("One panel was opened out of it"), true,
+                       asked.first ?? "not asked")
         XCTAssertEqual(controller.fragments.count, 2, "cancelled, so nothing closed")
 
         controller.fragmentCloseConfirm = { _ in .alertFirstButtonReturn }  // Close
         controller.closeFragment(outer)
         XCTAssertEqual(controller.fragments.count, 1, "and closing goes through when told to")
+    }
+
+    /// An unsaved panel that others came out of asks both questions, one after
+    /// the other — the links first, then its own bytes. Folded into one dialog
+    /// the second half went unread, which is the same as not asking.
+    func testBothQuestionsAreAskedInTurn() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let outer = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                          named: "part", animated: false))
+        let part = try XCTUnwrap(controller.fragments.pane(outer))
+        activateToolFromTheMenu(controller)
+        let host = try XCTUnwrap(StubToolA.log.session?.host as? PaneToolHost)
+        host.openPart([0x01, 0x02, 0x03], named: "inner.bin", linkedTo: 0x10..<0x13)
+        window.layoutIfNeeded()
+        // The panel now has a part hanging off it and bytes of its own that
+        // have never been anywhere. It has no parent itself, so what it is
+        // asked about its own bytes is the ordinary save question.
+        try part.applyToolWrites([(offset: 0, bytes: [0xFF])], named: "Patch")
+
+        var titles: [String] = []
+        controller.fragmentCloseConfirm = { alert in
+            titles.append(alert.messageText)
+            return .alertFirstButtonReturn
+        }
+        MainViewController.modalResponder = { alert in
+            titles.append(alert.messageText)
+            return .alertSecondButtonReturn  // Don't Save, where that is asked
+        }
+        defer { MainViewController.modalResponder = nil }
+
+        controller.closeFragment(outer)
+
+        XCTAssertEqual(titles.count, 2, "two questions, not one: \(titles)")
+        XCTAssertEqual(titles.first?.hasPrefix("Close "), true,
+                       "the links first — what closing does to other panels")
+        XCTAssertEqual(titles.last?.hasPrefix("Save changes"), true,
+                       "then this panel's own bytes: \(titles)")
     }
 
     /// A panel nothing came out of closes without a question.

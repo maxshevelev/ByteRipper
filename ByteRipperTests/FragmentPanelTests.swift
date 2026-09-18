@@ -274,6 +274,35 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertTrue(controller.validateMenuItem(join), "folded, they answer again")
     }
 
+    // MARK: - The landing's arithmetic
+
+    /// A panel folded into its pill comes down on the pill — whatever the
+    /// layer's anchor point is. It did not: a layer-backed NSView anchors at
+    /// (0, 0) rather than at the centre, and a translation worked out between
+    /// centres put the panel left of the window and below it.
+    func testAPanelLandsExactlyOnItsPill() {
+        let panel = NSRect(x: 0, y: 36, width: 900, height: 520)
+        let pill = NSRect(x: 12, y: 8, width: 160, height: 24)
+        for anchor in [CGPoint(x: 0, y: 0), CGPoint(x: 0.5, y: 0.5), CGPoint(x: 1, y: 1)] {
+            let t = PanelLanding.transform(from: panel, on: pill, anchor: anchor)
+            let landed = PanelLanding.landed(panel, with: t, anchor: anchor)
+            XCTAssertEqual(landed.minX, pill.minX, accuracy: 0.001, "x at anchor \(anchor)")
+            XCTAssertEqual(landed.minY, pill.minY, accuracy: 0.001, "y at anchor \(anchor)")
+            XCTAssertEqual(landed.width, pill.width, accuracy: 0.001, "width at anchor \(anchor)")
+            XCTAssertEqual(landed.height, pill.height, accuracy: 0.001, "height at anchor \(anchor)")
+        }
+    }
+
+    /// A panel that lands on a pill to its right goes right, not left — the
+    /// direction is the whole message of the flight.
+    func testTheFlightGoesTowardsThePill() {
+        let panel = NSRect(x: 0, y: 36, width: 900, height: 520)
+        let far = NSRect(x: 700, y: 8, width: 160, height: 24)
+        let t = PanelLanding.transform(from: panel, on: far, anchor: .zero)
+        XCTAssertGreaterThan(t.tx, 0, "towards a pill on the right")
+        XCTAssertLessThan(t.ty, 0, "and downwards, into the dock")
+    }
+
     // MARK: - Where a fold lands
 
     /// Folding flies the panel into its own pill rather than dropping it off
