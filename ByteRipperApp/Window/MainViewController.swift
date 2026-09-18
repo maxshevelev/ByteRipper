@@ -3669,6 +3669,12 @@ final class MainViewController: NSViewController {
     func closePane(at index: Int) {
         let pane = index == 0 ? windowModel.pane1 : windowModel.pane2
         guard pane.isOpen else { return }
+        // Parts opened out of this pane lose their way back when its document
+        // goes, exactly as they do when a panel they came out of closes — so
+        // the same question is asked here, and asked first, before the one
+        // about this pane's own bytes.
+        let stranded = fragments.panelsLinked(to: pane).count
+        if stranded > 0, !confirmStranding(stranded, closing: pane.status.fileName) { return }
         if pane.status.isDirty {
             switch confirmSaveDiscardCancel() {
             case .alertFirstButtonReturn:  // Save

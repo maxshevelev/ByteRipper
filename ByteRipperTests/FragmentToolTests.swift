@@ -260,6 +260,56 @@ final class FragmentToolTests: XCTestCase {
                        "then this panel's own bytes: \(titles)")
     }
 
+    /// Closing the *dump* parts were taken out of asks the same question. The
+    /// link dies exactly as it does when a panel closes — it just dies from
+    /// the other end, and that end used to close in silence.
+    func testClosingTheDumpPartsCameOutOfAsksFirst() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        activateToolFromTheMenu(controller)
+        let host = try XCTUnwrap(StubToolA.log.session?.host as? PaneToolHost)
+        host.openPart([0x01, 0x02, 0x03], named: "part.bin", linkedTo: 0x10..<0x13)
+        window.layoutIfNeeded()
+        XCTAssertEqual(controller.fragments.count, 1)
+        XCTAssertTrue(controller.fragments.pane(controller.fragments.dock.panels[0])?
+            .origin?.parent === controller.windowModel.pane1, "opened out of the dump")
+
+        var asked: [String] = []
+        controller.fragmentCloseConfirm = { alert in
+            asked.append(alert.messageText + " " + alert.informativeText)
+            return .alertSecondButtonReturn  // Cancel
+        }
+        controller.closePane(at: 0)
+
+        XCTAssertEqual(asked.count, 1, "asked once, and cancelled there")
+        XCTAssertEqual(asked.first?.contains("One panel was opened out of it"), true,
+                       asked.first ?? "not asked")
+        XCTAssertTrue(controller.windowModel.pane1.isOpen, "cancelled, so the dump stays")
+
+        controller.fragmentCloseConfirm = { _ in .alertFirstButtonReturn }  // Close
+        controller.closePane(at: 0)
+        XCTAssertFalse(controller.windowModel.pane1.isOpen,
+                       "and closing goes through when told to")
+        XCTAssertEqual(controller.fragments.pane(controller.fragments.dock.panels[0])?
+            .origin?.state, .parentClosed, "the part stays, with its way back gone")
+    }
+
+    /// A dump nothing came out of closes without a question.
+    func testClosingADumpNothingCameOutOfAsksNothing() throws {
+        let (controller, _, url) = try makeController()
+        defer { cleanup(controller, url) }
+        _ = controller.openFragment([UInt8](repeating: 0, count: 0x80), named: "part",
+                                    animated: false)
+        controller.fragments.collapse(animated: false)
+        var asked = false
+        controller.fragmentCloseConfirm = { _ in asked = true; return .alertSecondButtonReturn }
+
+        controller.closePane(at: 0)
+
+        XCTAssertFalse(asked, "a panel opened out of nothing leads nowhere")
+        XCTAssertFalse(controller.windowModel.pane1.isOpen)
+    }
+
     /// A panel nothing came out of closes without a question.
     func testClosingAPanelNothingCameOutOfAsksNothing() throws {
         let (controller, window, url) = try makeController()
