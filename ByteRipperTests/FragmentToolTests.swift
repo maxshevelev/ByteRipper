@@ -126,6 +126,30 @@ final class FragmentToolTests: XCTestCase {
                       "and the dump's gutter is not where a part's zones go")
     }
 
+    /// A part taken out of a panel belongs to **that panel**, not to the dump
+    /// behind it: the dock stays flat, and the links form the chain
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
+    func testAPartOpenedFromAPanelHasThatPanelAsItsParent() throws {
+        let (controller, _, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let outer = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                          named: "part", animated: false))
+        let part = try XCTUnwrap(controller.fragments.pane(outer))
+        activateToolFromTheMenu(controller)
+        let host = try XCTUnwrap(StubToolA.log.session?.host as? PaneToolHost)
+
+        host.openPart([0x01, 0x02, 0x03], named: "inner.bin", linkedTo: 0x10..<0x20)
+
+        XCTAssertEqual(controller.fragments.count, 2, "two panels, side by side in the dock")
+        let inner = try XCTUnwrap(controller.fragments.expanded)
+        let deeper = try XCTUnwrap(controller.fragments.pane(inner))
+        let origin = try XCTUnwrap(deeper.origin)
+        XCTAssertTrue(origin.parent === part, "its parent is the panel it came out of")
+        XCTAssertFalse(origin.parent === controller.windowModel.pane1)
+        XCTAssertEqual(origin.sourceRange, 0x10..<0x20,
+                       "and the range is in that panel's own offsets, not the dump's")
+    }
+
     /// The panel's tool panel opens inside the panel: it takes width from that
     /// surface's split and leaves the window's own alone.
     func testThePanelsToolPanelDoesNotMoveTheWindow() throws {
