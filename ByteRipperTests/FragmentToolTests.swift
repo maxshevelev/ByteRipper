@@ -155,6 +155,42 @@ final class FragmentToolTests: XCTestCase {
                        "and the header says why")
     }
 
+    /// A closed panel is let go of — its pane, its surface and its view.
+    ///
+    /// Under an autorelease pool, and that is the point of the test as much as
+    /// the release is: AppKit hands objects back through one, so a weak
+    /// reference read before the pool drains says "still here" about something
+    /// already on its way out. Read without the pool, this looked like a leak
+    /// and was not one.
+    func testAClosedPanelIsReleased() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        weak var pane: PaneViewModel?
+        weak var surface: DocumentSurface?
+        weak var panel: FragmentPanelView?
+
+        try autoreleasepool {
+            let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                           named: "part", animated: false))
+            let held = try XCTUnwrap(controller.fragments.surface(id))
+            held.minimap.setPanelVisible(true, animated: false)
+            held.tools.activate(StubToolA.identifier, animated: false)
+            window.layoutIfNeeded()
+            pane = controller.fragments.pane(id)
+            surface = held
+            panel = controller.fragments.panelView(id)
+            XCTAssertNotNil(pane)
+            controller.fragments.close(id, animated: false)
+        }
+
+        // And after a turn of the run loop: some of the letting go is posted
+        // rather than done on the spot.
+        _ = pumpUntil(1) { pane == nil }
+        XCTAssertNil(pane, "the pane of a closed panel")
+        XCTAssertNil(surface, "and its surface")
+        XCTAssertNil(panel, "and the panel itself")
+    }
+
     /// Closing a panel that others came out of asks first — a link that dies
     /// without a word is one the reader meets later, when Update in Parent
     /// refuses.
