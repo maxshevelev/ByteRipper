@@ -273,6 +273,78 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertTrue(controller.validateMenuItem(join), "folded, they answer again")
     }
 
+    // MARK: - What a panel's header menu may and may not do
+
+    /// The commands that put a document *into a pane* are not offered in a
+    /// panel: a part has no pane beside it, and what they reached for was one
+    /// of the tab's — Duplicate replaced the file behind the panel with a copy
+    /// of the part.
+    func testTheCommandsThatActOnTheTabsPanesAreNotOfferedInAPanel() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let url = try tempFile([UInt8](repeating: 0xAA, count: 0x200))
+        defer { try? FileManager.default.removeItem(at: url) }
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        window.layoutIfNeeded()
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                       named: "part", animated: false))
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        let menu = controller.makePaneMenu(for: part)
+
+        for title in ["Duplicate", "New File", "Open…"] {
+            let item = try XCTUnwrap(menu.items.first { $0.title == title }, title)
+            XCTAssertFalse(controller.validateMenuItem(item), "\(title) must be refused")
+        }
+        // And the tab's own pane still offers them.
+        let dumpMenu = controller.makePaneMenu(for: controller.windowModel.pane1)
+        let dup = try XCTUnwrap(dumpMenu.items.first { $0.title == "Duplicate" })
+        XCTAssertTrue(controller.validateMenuItem(dup))
+    }
+
+    /// Rename in a panel renames the part. It did nothing: the view it asked
+    /// for was looked up among the tab's two panes, and a panel's is neither.
+    func testRenameInAPanelReachesThePart() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                       named: "part", animated: false))
+        window.layoutIfNeeded()
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        XCTAssertNotNil(controller.filePaneView(for: part),
+                        "the panel's pane has a view, and this is how it is found")
+
+        let menu = controller.makePaneMenu(for: part)
+        let rename = try XCTUnwrap(menu.items.first { $0.title == "Rename" })
+        XCTAssertTrue(controller.validateMenuItem(rename), "an untitled part can be renamed")
+        _ = rename.target?.perform(rename.action, with: rename)
+
+        XCTAssertTrue(try XCTUnwrap(controller.filePaneView(for: part)).isRenaming,
+                      "the header's name field is open on the part")
+    }
+
+    /// Close in a panel's header menu closes the panel, not one of the tab's
+    /// panes — it asked for pane 1 or 2 by index, and a panel's pane is neither.
+    func testCloseInAPanelsMenuClosesThePanel() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let url = try tempFile([UInt8](repeating: 0xAA, count: 0x200))
+        defer { try? FileManager.default.removeItem(at: url) }
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        window.layoutIfNeeded()
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                       named: "part", animated: false))
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        let menu = controller.makePaneMenu(for: part)
+        let close = try XCTUnwrap(menu.items.first { $0.title == "Close" })
+
+        _ = close.target?.perform(close.action, with: close)
+
+        XCTAssertTrue(controller.fragments.isEmpty, "the panel went")
+        XCTAssertTrue(controller.windowModel.pane1.isOpen, "and the dump stayed")
+    }
+
     // MARK: - Out into a tab
 
     /// A panel dragged onto the New Tab strip leaves for a tab of its own, and

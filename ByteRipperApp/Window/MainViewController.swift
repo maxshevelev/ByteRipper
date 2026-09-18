@@ -242,6 +242,16 @@ final class MainViewController: NSViewController {
         surface.minimap.syncBookmarks()
     }
 
+    /// The fragment panel `pane` belongs to, for the commands that mean one
+    /// thing in a panel and another — or nothing — among the tab's panes.
+    ///
+    /// The trouble they share is `paneIndex(_:)`: it answers 0 or 1 for a pane
+    /// that is neither, so a command addressed to a panel's pane quietly lands
+    /// on one of the tab's.
+    func fragmentPanel(of pane: PaneViewModel) -> FragmentDock.PanelID? {
+        fragments.panel(holding: pane)
+    }
+
     /// Whether a fragment panel has a window to be put in a tab beside.
     var canTearOffFragment: Bool { makeSiblingTab != nil }
 
@@ -3970,6 +3980,11 @@ final class MainViewController: NSViewController {
     /// now. Used to scroll the right-clicked pane's dump, which may not be the
     /// active one (§10.2).
     func filePaneView(for pane: PaneViewModel) -> FilePaneView? {
+        // A fragment panel's pane is neither of the tab's two, and answering
+        // with pane 2's view — which in single-file mode is nothing at all — is
+        // how Rename in a panel came to do nothing. Its view is the one built
+        // for it, which is what `paneView(for:)` has been holding all along.
+        if fragmentPanel(of: pane) != nil { return paneViews[ObjectIdentifier(pane)] }
         if pane === windowModel.pane1 { return comparisonView?.paneView1 ?? activeFilePane }
         return comparisonView?.paneView2
     }
@@ -4066,6 +4081,12 @@ final class MainViewController: NSViewController {
     /// the menu bar keeps its own behavior).
     @objc func closePaneDocument(_ sender: Any?) {
         guard let pane = pane(from: sender), pane.isOpen else { return }
+        // A panel's pane is not one of the tab's two, so closing it means
+        // closing the panel — with the questions that closing a panel asks.
+        if let panel = fragmentPanel(of: pane) {
+            closeFragment(panel)
+            return
+        }
         closePane(at: paneIndex(pane))
     }
 
@@ -6455,8 +6476,19 @@ extension MainViewController: NSMenuItemValidation {
             // is in front the panes take no orders.
             return windowPanesAreReachable && canDuplicate(windowActivePane)
         case #selector(duplicatePaneDocument(_:)):
-            guard let pane = pane(from: menuItem) else { return false }
+            // Not in a panel: a part has no pane beside it to be copied into,
+            // and what the command reached for was one of the tab's, which is
+            // the file behind the panel being replaced by a copy of the part.
+            guard let pane = pane(from: menuItem), fragmentPanel(of: pane) == nil else {
+                return false
+            }
             return canDuplicate(pane)
+        case #selector(newDocumentInPane(_:)),
+             #selector(openInPane(_:)):
+            // Same reason: both put a document *into a pane*, and a panel's
+            // pane is not one of the tab's two to put anything into.
+            guard let pane = pane(from: menuItem) else { return false }
+            return fragmentPanel(of: pane) == nil
         case #selector(renamePaneDocument(_:)):
             // A saved document's name belongs to its file; only the label of an
             // unsaved one is the app's to change (§23).

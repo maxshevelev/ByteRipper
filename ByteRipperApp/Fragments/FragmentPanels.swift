@@ -73,6 +73,11 @@ import Cocoa
     func surface(_ id: FragmentDock.PanelID) -> DocumentSurface? { entries[id]?.surface }
     func panelView(_ id: FragmentDock.PanelID) -> FragmentPanelView? { entries[id]?.view }
 
+    /// The panel `pane` belongs to, or nil for one of the tab's own panes.
+    func panel(holding pane: PaneViewModel) -> FragmentDock.PanelID? {
+        dock.panels.first { entries[$0]?.pane === pane }
+    }
+
     /// The panels whose way back leads to `pane` — the parts taken out of it.
     /// What closing it would strand.
     func panelsLinked(to pane: PaneViewModel) -> [FragmentDock.PanelID] {
