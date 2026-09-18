@@ -1,5 +1,6 @@
 import Cocoa
 import ALSplitView
+import AppPalette
 
 /// One file pane (§3.4, §15): a header (file name, `*` dirty, read-only lock,
 /// comparison-mode close button), the virtualized hex dump, and a status bar.
@@ -1462,10 +1463,12 @@ final class FilePaneView: NSView {
     /// because a link that cannot be followed should not invite the click that
     /// proves it.
     ///
-    /// Grey rather than red on purpose. Red means one thing everywhere else in
-    /// this app — bytes modified and not saved — and a red mark in a pane
-    /// header would be read as that before it was read as this. The octagon
-    /// carries the meaning on its own.
+    /// The broken one is drawn in the app's own colour for a state that is
+    /// wrong — the one a failed checksum and a refused permission wear — and
+    /// the name goes red with the symbol rather than the symbol alone: grey on
+    /// grey in a strip of chrome is an indication nobody sees, and half a row
+    /// in colour reads as a stray glyph. It is deliberately not the red of
+    /// modified bytes: that one means "not saved yet", which this is not.
     private func updateLink() {
         guard let origin = viewModel.origin else {
             linkButton.isHidden = true
@@ -1478,7 +1481,9 @@ final class FilePaneView: NSView {
             return
         }
         let broken = origin.state == .parentClosed
-        let tint: NSColor = origin.state == .intact ? .secondaryLabelColor : .tertiaryLabelColor
+        let tint: NSColor = broken
+            ? SemanticColors.bad
+            : (origin.state == .intact ? .secondaryLabelColor : .tertiaryLabelColor)
         // Kept beside the image because a symbol image does not remember the
         // name it was made from, and which symbol is showing is the whole of
         // what this says.
@@ -1486,7 +1491,6 @@ final class FilePaneView: NSView {
         linkButton.image = NSImage(systemSymbolName: linkSymbolName ?? "link",
                                    accessibilityDescription: nil)
         linkButton.contentTintColor = tint
-        linkButton.isEnabled = !broken
         linkButton.attributedTitle = NSAttributedString(string: origin.parentName, attributes: [
             .font: NSFont.systemFont(ofSize: 11),
             .foregroundColor: tint
@@ -1517,6 +1521,11 @@ final class FilePaneView: NSView {
     }
 
     @objc private func linkTapped() {
+        // A link that leads nowhere is still drawn — at full strength, because
+        // it is saying something — but following it does nothing. Refused here
+        // rather than by disabling the button, which would dim the very mark
+        // that is there to be seen.
+        guard viewModel.origin?.state != .parentClosed else { return }
         onRevealOrigin?()
     }
 

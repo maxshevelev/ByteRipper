@@ -1,3 +1,4 @@
+import AppPalette
 import XCTest
 @testable import ByteRipper
 
@@ -294,7 +295,7 @@ final class FragmentPanelTests: XCTestCase {
         let link = controller.paneView(for: deeper).linkButton
         XCTAssertEqual(controller.paneView(for: deeper).linkSymbolName, "link",
                        "while the way back is good")
-        XCTAssertTrue(link.isEnabled, "and it can be followed")
+        XCTAssertEqual(link.contentTintColor, NSColor.secondaryLabelColor, "drawn quietly")
 
         controller.fragmentCloseConfirm = { _ in .alertFirstButtonReturn }
         controller.closeFragment(outer)
@@ -303,8 +304,8 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertEqual(deeper.origin?.state, .parentClosed)
         XCTAssertEqual(controller.paneView(for: deeper).linkSymbolName, "xmark.octagon",
                        "the chain goes")
-        XCTAssertFalse(link.isEnabled,
-                       "and it stops inviting the click that would prove it dead")
+        XCTAssertEqual(link.contentTintColor, SemanticColors.bad,
+                       "and the whole row goes red — grey on grey is not an indication")
         XCTAssertEqual(link.toolTip?.contains("no longer open"), true, "with the reason under it")
     }
 
