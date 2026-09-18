@@ -114,6 +114,37 @@ final class CloseFileTests: XCTestCase {
         XCTAssertTrue(spy.windowShouldCloseCalled,
                       "with no panes open, Cmd+W must route to closing the window")
     }
+
+    // MARK: - Answering for the whole tab (what Quit asks)
+
+    /// Quitting asks each window what closing it would ask, and waits for the
+    /// answer — so a window must always give one. A clean tab agrees on the
+    /// spot.
+    func testACleanTabAgreesToClose() throws {
+        let (controller, _, url) = try makeController([0x41, 0x42, 0x43])
+        defer { cleanup(controller, url) }
+
+        var answers: [Bool] = []
+        controller.confirmClose { answers.append($0) }
+
+        XCTAssertEqual(answers, [true])
+    }
+
+    /// And a tab whose question is cancelled says no — rather than saying
+    /// nothing, which is what would leave a quit waiting for ever.
+    func testACancelledQuestionIsAnAnswer() throws {
+        let (controller, _, url) = try makeController([0x41, 0x42, 0x43])
+        defer { cleanup(controller, url) }
+        try controller.windowModel.pane1.applyToolWrites([(offset: 0, bytes: [0xFF])],
+                                                         named: "Patch")
+        MainViewController.modalResponder = { _ in .alertThirdButtonReturn }  // Cancel
+        defer { MainViewController.modalResponder = nil }
+
+        var answers: [Bool] = []
+        controller.confirmClose { answers.append($0) }
+
+        XCTAssertEqual(answers, [false])
+    }
 }
 
 /// A window delegate that records being asked to close but declines (returns

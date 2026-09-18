@@ -261,4 +261,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         true
     }
+
+    /// ⌘Q. Every window is asked what closing it would ask — the parts it
+    /// holds, then its files — one at a time, and the app goes only when all of
+    /// them agree.
+    ///
+    /// Quit used to take everything unsaved in the app with it. The prompt each
+    /// window puts up is a *close* prompt, and terminating closes nothing: no
+    /// window was ever asked.
+    ///
+    /// Answered here where every window can answer on the spot; a window whose
+    /// answer needs a sheet — an untitled file has to be given a location, a
+    /// part is being put back — makes the quit wait for it instead. That wait
+    /// runs its own run loop, so a window must always answer, either way: it
+    /// is why the flows it goes through report a backed-out sheet as an answer
+    /// rather than saying nothing.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        var inThisCall = true
+        var answer: NSApplication.TerminateReply?
+        askToClose(windowControllers) { [weak sender] agreed in
+            answer = agreed ? .terminateNow : .terminateCancel
+            if !inThisCall { sender?.reply(toApplicationShouldTerminate: agreed) }
+        }
+        inThisCall = false
+        return answer ?? .terminateLater
+    }
+
+    /// Asks the windows in `queue` one at a time, stopping at the first that
+    /// says no.
+    private func askToClose(_ queue: [MainWindowController],
+                            then done: @escaping (Bool) -> Void) {
+        var rest = queue
+        guard let controller = rest.first else {
+            done(true)
+            return
+        }
+        rest.removeFirst()
+        // The questions are alerts that name a file, not a window, and a tab
+        // that is not in front is a question about something nobody can see —
+        // so the window being asked about comes to the front to ask it.
+        controller.window?.makeKeyAndOrderFront(nil)
+        controller.mainViewController.confirmClose { [weak self] agreed in
+            guard agreed, let self else {
+                done(agreed)
+                return
+            }
+            self.askToClose(rest, then: done)
+        }
+    }
 }

@@ -1881,7 +1881,7 @@ final class MainViewController: NSViewController {
                 savePane(pane, onSaved: { [weak self] in
                     self?.fragments.close(id)
                     done?(true)
-                })
+                }, onCancelled: { done?(false) })
                 return
             case .alertSecondButtonReturn:  // Don't Save
                 break
@@ -3491,20 +3491,33 @@ final class MainViewController: NSViewController {
     /// from an external-change conflict or a deferred untitled save, §5.5).
     /// `onSaved` fires after a successful save — it continues a flow that had
     /// to wait for the untitled document to get a location.
-    private func presentSaveAs(for pane: PaneViewModel, onSaved: (() -> Void)? = nil) {
-        guard pane.isOpen else { return }
+    ///
+    /// `onCancelled` fires where nothing was written: the sheet was backed out
+    /// of, or the write failed and has been reported. A flow that only wants to
+    /// carry on after a save leaves it out; one that has to *answer* either way
+    /// — closing, quitting — passes it, and must, or it waits for ever.
+    private func presentSaveAs(for pane: PaneViewModel, onSaved: (() -> Void)? = nil,
+                               onCancelled: (() -> Void)? = nil) {
+        guard pane.isOpen else {
+            onCancelled?()
+            return
+        }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = pane.status.fileName
         panel.allowedContentTypes = []
         panel.canCreateDirectories = true
         panel.beginSheetModal(for: view.window ?? NSWindow()) { [weak self] response in
-            guard response == .OK, let url = panel.url, let self else { return }
+            guard response == .OK, let url = panel.url, let self else {
+                onCancelled?()
+                return
+            }
             do {
                 try pane.saveAs(to: url)
                 SandboxBookmarkStore.shared.record(url)
                 onSaved?()
             } catch {
                 self.presentFileError("Save As failed.", error, url: url)
+                onCancelled?()
             }
         }
     }
@@ -3514,9 +3527,10 @@ final class MainViewController: NSViewController {
     /// (and `onSaved` has run); false when it is deferred to a sheet (the
     /// completion will call `onSaved`) or failed (error already shown).
     @discardableResult
-    private func savePane(_ pane: PaneViewModel, onSaved: @escaping () -> Void) -> Bool {
+    private func savePane(_ pane: PaneViewModel, onSaved: @escaping () -> Void,
+                          onCancelled: (() -> Void)? = nil) -> Bool {
         if pane.isUntitled {
-            presentSaveAs(for: pane, onSaved: onSaved)
+            presentSaveAs(for: pane, onSaved: onSaved, onCancelled: onCancelled)
             return false
         }
         do {
@@ -3525,18 +3539,21 @@ final class MainViewController: NSViewController {
             return true
         } catch {
             presentFileError("Save failed.", error, url: pane.document?.url)
+            onCancelled?()
             return false
         }
     }
 
     /// Saves `panes` one at a time; each untitled pane goes through its own Save
     /// As sheet, then the next saves, then `then` runs. Stops on the first
-    /// failure (the error has already been shown).
-    private func saveAllThen(_ panes: [PaneViewModel], then: @escaping () -> Void) {
+    /// failure or backed-out sheet (the error has already been shown), which is
+    /// what `onCancelled` is told about.
+    private func saveAllThen(_ panes: [PaneViewModel], then: @escaping () -> Void,
+                             onCancelled: (() -> Void)? = nil) {
         guard let first = panes.first else { then(); return }
         savePane(first, onSaved: { [weak self] in
-            self?.saveAllThen(Array(panes.dropFirst()), then: then)
-        })
+            self?.saveAllThen(Array(panes.dropFirst()), then: then, onCancelled: onCancelled)
+        }, onCancelled: onCancelled)
     }
 
     @objc func revertDocument() {
@@ -6371,20 +6388,48 @@ extension MainViewController: NSWindowDelegate {
     /// the files here and they are not answered by one Save. Closing the
     /// window used to take them without a word.
     func windowShouldClose(_ sender: NSWindow) -> Bool {
-        // True while this call is still on the stack: a tab with nothing held
-        // in a panel is answered here and now, rather than by closing the
+        // True while this call is still on the stack: a tab that can answer
+        // everything on the spot is answered here, rather than by closing the
         // window from inside its own delegate callback.
         var inThisCall = true
-        var partsSettled = false
-        closeFragmentsHoldingSomething { [weak sender] in
-            partsSettled = true
-            if !inThisCall { sender?.performClose(nil) }
+        var answer: Bool?
+        confirmClose { [weak sender] agreed in
+            answer = agreed
+            if !inThisCall, agreed { sender?.close() }
         }
         inThisCall = false
-        guard partsSettled else { return false }
+        // Nothing yet means an answer went to a sheet: the window stays until
+        // that sheet comes back.
+        return answer ?? false
+    }
+
+    /// Everything the tab has to ask before it can go: the parts it holds,
+    /// then its files. `done(true)` when there is nothing left in the way,
+    /// `done(false)` when the reader said no.
+    ///
+    /// `done` does not run at all where an answer went to a sheet that was then
+    /// abandoned — a Save As backed out of — which leaves whatever was waiting
+    /// on it waiting, and the tab where it is.
+    ///
+    /// Asked in this shape, rather than as a Bool, because quitting asks it of
+    /// every window in turn and a window may take a sheet to answer.
+    func confirmClose(then done: @escaping (Bool) -> Void) {
+        closeFragmentsHoldingSomething { [weak self] in
+            guard let self else {
+                done(false)
+                return
+            }
+            self.confirmClosingFiles(then: done)
+        }
+    }
+
+    private func confirmClosingFiles(then done: @escaping (Bool) -> Void) {
         let panes = [windowModel.pane1, windowModel.pane2]
         let dirty = panes.filter { $0.isOpen && $0.status.isDirty }
-        guard !dirty.isEmpty else { return true }
+        guard !dirty.isEmpty else {
+            done(true)
+            return
+        }
 
         let names = dirty.map { "“\($0.status.fileName)”" }.joined(separator: ", ")
         let alert = NSAlert()
@@ -6396,25 +6441,26 @@ extension MainViewController: NSWindowDelegate {
         switch Self.presentModal(alert, defaultInTest: .alertThirdButtonReturn) {  // Cancel in tests (abort close)
         case .alertFirstButtonReturn:
             // Untitled panes have no file yet, so their "Save" runs a Save As
-            // sheet; the window closes once every pane is on disk. When every
-            // save can happen inline, close right away.
+            // sheet; the answer comes once every pane is on disk. When every
+            // save can happen inline, it comes right away.
             if dirty.contains(where: { $0.isUntitled }) {
-                saveAllThen(dirty, then: { [weak sender] in sender?.close() })
-                return false
+                saveAllThen(dirty, then: { done(true) }, onCancelled: { done(false) })
+                return
             }
             for pane in dirty {
                 do {
                     try pane.save()
                 } catch {
                     presentFileError("Could not save “\(pane.status.fileName)”.", error, url: pane.document?.url)
-                    return false
+                    done(false)
+                    return
                 }
             }
-            return true
+            done(true)
         case .alertSecondButtonReturn:
-            return true
+            done(true)
         default:
-            return false
+            done(false)
         }
     }
 }
