@@ -1946,6 +1946,22 @@ final class MainViewController: NSViewController {
             == .alertFirstButtonReturn
     }
 
+    /// Puts the dock at the height it is about to have and lays the window out
+    /// now, before a panel is placed or flown.
+    ///
+    /// The first panel of a tab is raised while the dock is still growing from
+    /// nothing, so the stage it was measured against was a dock taller than the
+    /// one it ended up on and the panel sat a dock's height too high. The dock
+    /// arrives first, with its pill, and only then does the panel fly out of
+    /// it — which is also the order the flight tells a story in.
+    func settleFragmentDock() {
+        guard let dockHeight = fragmentDockHeight else { return }
+        let target: CGFloat = fragments.isEmpty ? 0 : FragmentDockStrip.height
+        guard dockHeight.constant != target else { return }
+        dockHeight.constant = target
+        contentContainer.layoutSubtreeIfNeeded()
+    }
+
     /// Gives the dock its height, or takes it away when the last panel closes.
     /// Called by the panels themselves, which know when that happens.
     func setFragmentDockVisible(_ visible: Bool) {

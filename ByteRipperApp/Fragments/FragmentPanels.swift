@@ -322,8 +322,10 @@ import Cocoa
         // in line: a panel that is closing takes its pill with it.
         let foldTarget = transition.folding.flatMap { pillRect(for: $0) }
         // And the dock first, so a panel that has just been opened has a pill
-        // to grow out of.
+        // to grow out of — at its full height and laid out, so the stage the
+        // panel is measured against is the one it will stand on.
         refreshDock()
+        if transition.raising != nil { host?.settleFragmentDock() }
         let span = duration ?? Self.slideDuration
 
         let raise: () -> Void = { [weak self] in

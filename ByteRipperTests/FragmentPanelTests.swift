@@ -274,6 +274,31 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertTrue(controller.validateMenuItem(join), "folded, they answer again")
     }
 
+    /// The first panel of a tab stands where every later one does. It did not:
+    /// it was raised while the dock was still growing from nothing, so it was
+    /// measured against a stage a dock's height too tall and sat that much too
+    /// high.
+    func testTheFirstPanelStandsWhereTheNextOneWould() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+
+        let first = try XCTUnwrap(controller.openFragment([0x01], named: "one", animated: false))
+        window.layoutIfNeeded()
+        let host = try XCTUnwrap(descendants(of: controller.view, FragmentPanelHost.self).first)
+        let firstFrame = try XCTUnwrap(controller.fragments.panelView(first)).frame
+        XCTAssertEqual(firstFrame, FragmentPanelView.restingFrame(in: host),
+                       "the first panel is placed on the stage the dock leaves it")
+
+        // And the second, opened with the dock already there, lands in the same
+        // place — which is the whole of what "as if it were not the first"
+        // means.
+        let second = try XCTUnwrap(controller.openFragment([0x02], named: "two", animated: false))
+        window.layoutIfNeeded()
+        XCTAssertEqual(try XCTUnwrap(controller.fragments.panelView(second)).frame, firstFrame)
+        XCTAssertEqual(try strip(of: controller).frame.height, FragmentDockStrip.height,
+                       "with the dock at its full height under both")
+    }
+
     // MARK: - The landing's arithmetic
 
     /// A panel folded into its pill comes down on the pill — whatever the
