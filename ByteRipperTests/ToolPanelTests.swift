@@ -420,7 +420,7 @@ final class ToolPanelTests: XCTestCase {
         XCTAssertLessThan(width, controller.dumpAreaSlack(),
                           "the premise: the panel fits in the room the window already has")
 
-        controller.setMinimapPanelVisible(true, animated: false)
+        controller.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
 
         XCTAssertEqual(window.frame.width, before, accuracy: 1,
@@ -428,7 +428,7 @@ final class ToolPanelTests: XCTestCase {
         XCTAssertEqual(controller.contentHost.frame.width, contentBefore - width, accuracy: 2,
                        "the dump gave the panel its spare width")
 
-        controller.setMinimapPanelVisible(false, animated: false)
+        controller.surface.minimap.setPanelVisible(false, animated: false)
         window.layoutIfNeeded()
 
         XCTAssertEqual(window.frame.width, before, accuracy: 1,
@@ -444,7 +444,7 @@ final class ToolPanelTests: XCTestCase {
         let (controller, window) = try makeController(width: 1400)
 
         controller.tools.activate(StubToolA.identifier, animated: false)
-        controller.setMinimapPanelVisible(true, animated: false)
+        controller.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
 
         let panel = controller.tools.panel.frame

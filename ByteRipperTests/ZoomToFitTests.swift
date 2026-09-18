@@ -213,7 +213,7 @@ final class ZoomToFitTests: XCTestCase {
                        accuracy: 1, "a hidden panel adds nothing")
 
         // Shown at its preferred width, the fit grows by panel + divider.
-        mainVC.setMinimapPanelVisible(true, animated: false)
+        mainVC.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         let shown = mainVC.windowWillUseStandardFrame(
             window, defaultFrame: NSRect(x: 0, y: 0, width: 3000, height: 2000))

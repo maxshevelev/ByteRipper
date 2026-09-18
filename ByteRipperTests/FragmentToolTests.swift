@@ -104,6 +104,28 @@ final class FragmentToolTests: XCTestCase {
                       "the tool hears that the part changed under it")
     }
 
+    /// A zone-map a tool-module publishes for the part reaches the part's own
+    /// map at once. It used to reach the tab's instead, so the panel's gutter
+    /// stayed as it was until the map was hidden and shown again.
+    func testZonesPublishedForThePartReachThePartsOwnMap() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x200),
+                                                       named: "part", animated: false))
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        surface.minimap.setPanelVisible(true, animated: false)
+        window.layoutIfNeeded()
+        activateToolFromTheMenu(controller)
+        let host = try XCTUnwrap(StubToolA.log.session?.host as? PaneToolHost)
+
+        host.publish(ZoneMap(zones: [Zone(id: "fv", name: "FFSv2", range: 0x40..<0x80)]))
+
+        XCTAssertEqual(surface.minimapView.zoneBrackets.first?.count, 1,
+                       "the part's gutter drew the zone without being hidden and shown")
+        XCTAssertTrue(controller.minimapView.zoneBrackets.allSatisfy(\.isEmpty),
+                      "and the dump's gutter is not where a part's zones go")
+    }
+
     /// The panel's tool panel opens inside the panel: it takes width from that
     /// surface's split and leaves the window's own alone.
     func testThePanelsToolPanelDoesNotMoveTheWindow() throws {

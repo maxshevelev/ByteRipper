@@ -65,7 +65,7 @@ final class FragmentMinimapTests: XCTestCase {
         let closed = try XCTUnwrap(controller.openFragment([0x01], named: "shut", animated: false))
         XCTAssertFalse(try XCTUnwrap(controller.fragments.surface(closed)).minimapPanelVisible)
 
-        controller.setMinimapPanelVisible(true, animated: false)
+        controller.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         let open = try XCTUnwrap(controller.openFragment([0x01], named: "open", animated: false))
 
@@ -122,7 +122,7 @@ final class FragmentMinimapTests: XCTestCase {
         let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x400),
                                                        named: "part", animated: false))
         let surface = try XCTUnwrap(controller.fragments.surface(id))
-        controller.setMinimapPanelVisible(of: surface, true, animated: false)
+        surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         let paneView = controller.paneView(for: try XCTUnwrap(controller.fragments.pane(id)))
 
@@ -141,7 +141,7 @@ final class FragmentMinimapTests: XCTestCase {
         let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x4000),
                                                        named: "part", animated: false))
         let surface = try XCTUnwrap(controller.fragments.surface(id))
-        controller.setMinimapPanelVisible(of: surface, true, animated: false)
+        surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         let paneView = controller.paneView(for: try XCTUnwrap(controller.fragments.pane(id)))
         var scrolledTo: Range<UInt64>?

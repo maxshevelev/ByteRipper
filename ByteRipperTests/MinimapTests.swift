@@ -35,8 +35,8 @@ final class MinimapTests: XCTestCase {
 
     override func tearDown() {
         removeTempFiles()
-        MainViewController.overviewProgressDelay = .milliseconds(80)
-        MainViewController.overviewProgressMinimumVisible = .milliseconds(300)
+        SurfaceMinimapController.overviewProgressDelay = .milliseconds(80)
+        SurfaceMinimapController.overviewProgressMinimumVisible = .milliseconds(300)
         if let savedLayoutIsVertical {
             LayoutSettings.set(isVertical: savedLayoutIsVertical)
         }
@@ -193,14 +193,14 @@ final class MinimapTests: XCTestCase {
         let (_, window) = try makeController()
         let (split, panel) = try minimapViews(window)
 
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         XCTAssertTrue(split.minimapPanelVisible, "showing flips the panel-visible flag")
         window.layoutIfNeeded()
         XCTAssertGreaterThanOrEqual(panel.frame.width, MainViewController.minimapMinPanelWidth,
                                     "a shown panel keeps at least its minimum width")
 
         // A second toggle hides it again.
-        split.toggleMinimapPanel(animated: false)
+        split.surface.minimap.togglePanel(animated: false)
         XCTAssertFalse(split.minimapPanelVisible, "toggling again hides the panel")
         window.layoutIfNeeded()
         XCTAssertLessThan(panel.frame.width, 2, "the panel collapses back to the divider")
@@ -245,13 +245,13 @@ final class MinimapTests: XCTestCase {
         let delta = MainViewController.minimapMinPanelWidth + split.panelSplit.dividerThickness
 
         // Showing the panel grows the window by the panel's width.
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         XCTAssertEqual(window.frame.width, initialWidth + delta, accuracy: 1,
                        "showing the minimap grows the window by the panel's width")
 
         // Hiding it shrinks the window back.
-        split.setMinimapPanelVisible(false, animated: false)
+        split.surface.minimap.setPanelVisible(false, animated: false)
         window.layoutIfNeeded()
         XCTAssertEqual(window.frame.width, initialWidth, accuracy: 1,
                        "hiding the minimap shrinks the window back")
@@ -278,7 +278,7 @@ final class MinimapTests: XCTestCase {
         let split = controller.panelSplit
         let startWidth = window.frame.width
 
-        controller.setMinimapPanelVisible(true, animated: true)
+        controller.surface.minimap.setPanelVisible(true, animated: true)
 
         // The first sample is taken before the run loop turns again, so it
         // cannot be missed: the animation's opening frame has run, and nothing
@@ -326,29 +326,29 @@ final class MinimapTests: XCTestCase {
     func testPanelWidthIsClampedAndPersisted() throws {
         let (_, window) = try makeController()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
 
         // A width the user dragged lands verbatim (it is within the clamp).
-        split.setMinimapPanelWidth(150, animated: false)
+        split.surface.setMinimapPanelWidth(150, animated: false)
         window.layoutIfNeeded()
         XCTAssertEqual(panel.frame.width, 150, accuracy: 1,
                        "an in-range width is applied as dragged")
 
         // Below the minimum the delegate clamps the divider back up to 120 pt.
-        split.setMinimapPanelWidth(10, animated: false)
+        split.surface.setMinimapPanelWidth(10, animated: false)
         window.layoutIfNeeded()
         XCTAssertGreaterThanOrEqual(panel.frame.width, MainViewController.minimapMinPanelWidth,
                                     "the panel never shrinks below its minimum")
 
         // Above the maximum the panel stops at 240 pt.
-        split.setMinimapPanelWidth(10_000, animated: false)
+        split.surface.setMinimapPanelWidth(10_000, animated: false)
         window.layoutIfNeeded()
         XCTAssertLessThanOrEqual(panel.frame.width, MainViewController.minimapMaxPanelWidth,
                                  "the panel never grows past its maximum width")
 
         // The in-range drag is persisted for the next show.
-        split.setMinimapPanelWidth(150, animated: false)
+        split.surface.setMinimapPanelWidth(150, animated: false)
         _ = pumpUntil(1.0) {
             MainViewController.minimapDefaults.object(forKey: MainViewController.minimapWidthDefaultsKey) != nil
         }
@@ -364,17 +364,17 @@ final class MinimapTests: XCTestCase {
         let (split, panel) = try minimapViews(window)
 
         // First show: drag to 150 (persisted).
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
-        split.setMinimapPanelWidth(150, animated: false)
+        split.surface.setMinimapPanelWidth(150, animated: false)
         window.layoutIfNeeded()
 
         // Hide, then show again — the persisted width wins over the default.
-        split.setMinimapPanelVisible(false, animated: false)
+        split.surface.minimap.setPanelVisible(false, animated: false)
         window.layoutIfNeeded()
         XCTAssertLessThan(panel.frame.width, 1)
 
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         XCTAssertEqual(panel.frame.width, 150, accuracy: 1,
                        "the second show restores the dragged width")
@@ -509,7 +509,7 @@ final class MinimapTests: XCTestCase {
         controller.apply(mode: .singleFile)
         window.layoutIfNeeded()
         let (_, map) = try minimapViews(window)
-        controller.setMinimapPanelVisible(true, animated: false)
+        controller.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         let mapHeight = map.frame.height
         XCTAssertGreaterThan(mapHeight, 100, "premise: the window is tall enough to matter")
@@ -546,7 +546,7 @@ final class MinimapTests: XCTestCase {
         // Panel first, minimap second.
         paneView.showSearchResults()
         window.layoutIfNeeded()
-        controller.setMinimapPanelVisible(true, animated: false)
+        controller.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         let minimapPanel = try XCTUnwrap(descendants(of: window.contentView!,
                                                      MinimapPanelView.self).first)
@@ -570,7 +570,7 @@ final class MinimapTests: XCTestCase {
         window.layoutIfNeeded()
 
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         guard case .single = panel.mapLayout else {
             return XCTFail("single-file mode shows a single map, got \(panel.mapLayout)")
@@ -582,7 +582,7 @@ final class MinimapTests: XCTestCase {
     func testTheMapLayoutMirrorsThePaneArrangementBothWays() throws {
         let (_, sideBySideWindow) = try makeComparisonWindow(vertical: true)
         let (sideBySideSplit, sideBySidePanel) = try minimapViews(sideBySideWindow)
-        sideBySideSplit.setMinimapPanelVisible(true, animated: false)
+        sideBySideSplit.surface.minimap.setPanelVisible(true, animated: false)
         sideBySideWindow.layoutIfNeeded()
         guard case .sideBySide = sideBySidePanel.mapLayout else {
             return XCTFail("side-by-side comparison splits the minimap vertically, got \(sideBySidePanel.mapLayout)")
@@ -590,7 +590,7 @@ final class MinimapTests: XCTestCase {
 
         let (_, stackedWindow) = try makeComparisonWindow(vertical: false)
         let (stackedSplit, stackedPanel) = try minimapViews(stackedWindow)
-        stackedSplit.setMinimapPanelVisible(true, animated: false)
+        stackedSplit.surface.minimap.setPanelVisible(true, animated: false)
         stackedWindow.layoutIfNeeded()
         guard case .stacked(let fraction) = stackedPanel.mapLayout else {
             return XCTFail("stacked comparison splits the minimap horizontally, got \(stackedPanel.mapLayout)")
@@ -602,7 +602,7 @@ final class MinimapTests: XCTestCase {
     func testStackedDividerFollowsPaneDivider() throws {
         let (_, window) = try makeComparisonWindow(vertical: false)
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
 
         let comparison = try XCTUnwrap(descendants(of: window.contentView!, ComparisonView.self).first,
@@ -623,7 +623,7 @@ final class MinimapTests: XCTestCase {
     func testTogglingPaneLayoutFlipsMinimapSplit() throws {
         let (controller, window) = try makeComparisonWindow(vertical: true)
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         guard case .sideBySide = panel.mapLayout else {
             return XCTFail("comparison starts side-by-side, got \(panel.mapLayout)")
@@ -650,7 +650,7 @@ final class MinimapTests: XCTestCase {
         controller.apply(mode: .singleFile)
         window.layoutIfNeeded()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         // Most tests here exercise the detail window, and a file large enough to
         // need one opens in overview (§19.4) — so pin detail, the way a user's
@@ -797,7 +797,7 @@ final class MinimapTests: XCTestCase {
         // background index to wait for.
         let (_, window) = try makeComparisonWindow(vertical: true, sizes: (64, 64))
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
 
         XCTAssertEqual(panel.maps.count, 2, "one map per pane")
@@ -875,7 +875,7 @@ final class MinimapTests: XCTestCase {
         controller.apply(mode: .comparison)
         window.layoutIfNeeded()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         // A 100 KB pair opens in overview (§19.4); this test is about the detail
         // window's per-pane maps.
         controller.setMinimapRenderModeForTesting(.detail)
@@ -924,7 +924,7 @@ final class MinimapTests: XCTestCase {
     func testSideBySideDrawsOneViewportBandAcrossBothMaps() throws {
         let (_, window) = try makeComparisonWindow(vertical: true)
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         _ = pumpUntil(2.0) { panel.viewportRects().count == 1 }
 
@@ -945,7 +945,7 @@ final class MinimapTests: XCTestCase {
     func testTheSharedBandHasNoDividerSeamThroughIt() throws {
         let (_, window) = try makeComparisonWindow(vertical: true, sizes: (8_000, 4_000))
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         _ = pumpUntil(2.0) { panel.viewportRects().count == 1 }
         let band = try XCTUnwrap(panel.viewportRects().first)
@@ -991,7 +991,7 @@ final class MinimapTests: XCTestCase {
     func testStackedKeepsABandPerMap() throws {
         let (_, window) = try makeComparisonWindow(vertical: false)
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         _ = pumpUntil(2.0) { panel.viewportRects().count == 2 }
 
@@ -1009,7 +1009,7 @@ final class MinimapTests: XCTestCase {
     func testSharedBandMatchesTheVisibleRowsAtTheFixedScale() throws {
         let (_, window) = try makeComparisonWindow(vertical: true, sizes: (8_000, 4_000))
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         _ = pumpUntil(2.0) { panel.viewportRects().count == 1 }
 
@@ -1240,8 +1240,8 @@ final class MinimapTests: XCTestCase {
     func testPanelHoldsItsWidthWhenTheWindowGrows() throws {
         let (_, window) = try makeController()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
-        split.setMinimapPanelWidth(150, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
+        split.surface.setMinimapPanelWidth(150, animated: false)
         window.layoutIfNeeded()
         XCTAssertEqual(panel.frame.width, 150, accuracy: 1)
 
@@ -1263,7 +1263,7 @@ final class MinimapTests: XCTestCase {
         let controller = MainViewController()
         let split = controller.panelSplit
         XCTAssertEqual(split.bounds.width, 0, "no layout has run yet")
-        controller.setMinimapPanelVisible(true, animated: false)
+        controller.surface.minimap.setPanelVisible(true, animated: false)
 
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
@@ -1349,7 +1349,7 @@ final class MinimapTests: XCTestCase {
     func testClickingTheSecondMapActivatesThatPane() throws {
         let (controller, window) = try makeComparisonWindow(vertical: true, sizes: (8_000, 8_000))
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         _ = pumpUntil(2.0) { panel.viewportRects().count == 1 }
         XCTAssertEqual(controller.windowModel.activePaneIndex, 0, "pane 1 starts active")
@@ -1449,7 +1449,7 @@ final class MinimapTests: XCTestCase {
         let long = 100_000, short = 10_000
         let (controller, window) = try makeComparisonWindow(vertical: true, sizes: (long, short))
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         controller.setMinimapRenderModeForTesting(.overview)
         window.layoutIfNeeded()
         _ = pumpUntil(3.0) { (panel.overviewSummaries.first?.rowCount ?? 0) > 0 }
@@ -1535,7 +1535,7 @@ final class MinimapTests: XCTestCase {
     func testMinimapValueCoversBothPanes() throws {
         let (_, window) = try makeComparisonWindow(vertical: true, sizes: (8_000, 4_000))
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         _ = pumpUntil(2.0) { panel.viewport(forMapAt: 0) != nil }
 
@@ -1552,7 +1552,7 @@ final class MinimapTests: XCTestCase {
         XCTAssertTrue(panel.isAccessibilityElement(), "shown: announced")
 
         let (split, _) = try minimapViews(window)
-        split.setMinimapPanelVisible(false, animated: false)
+        split.surface.minimap.setPanelVisible(false, animated: false)
         window.layoutIfNeeded()
         XCTAssertFalse(panel.isAccessibilityElement(), "hidden: not announced")
     }
@@ -1561,7 +1561,7 @@ final class MinimapTests: XCTestCase {
     func testMinimapValueWithNoFileOpen() throws {
         let (_, window) = try makeController()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         XCTAssertEqual(panel.accessibilityValue() as? String, "No file open.")
     }
@@ -1645,12 +1645,12 @@ final class MinimapTests: XCTestCase {
             leftSize: UInt64(bytes.count), rightSize: UInt64(bytes.count),
             blocks: differences.map { DiffBlock(kind: .different, range: $0) }
         )
-        let source = MainViewController.OverviewSource(
+        let source = SurfaceMinimapController.OverviewSource(
             storage: MemoryBackedStorage(bytes: bytes), saved: nil,
             size: UInt64(bytes.count), edited: [], marksModified: false,
             differences: index
         )
-        return MainViewController.overviewRows(source: source, extent: UInt64(bytes.count),
+        return SurfaceMinimapController.overviewRows(source: source, extent: UInt64(bytes.count),
                                                rowCount: rowCount, rows: 0...(rowCount - 1))
     }
 
@@ -1758,7 +1758,7 @@ final class MinimapTests: XCTestCase {
         let bigURL = try tempFile([UInt8](repeating: 0x41, count: 256 * 1024))
         let (controller, window) = try makeController()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
 
         try controller.windowModel.pane1.open(url: bigURL)
@@ -1782,7 +1782,7 @@ final class MinimapTests: XCTestCase {
         let url = try tempFile(bytes)
         let (controller, window) = try makeController()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
 
         try controller.windowModel.pane1.open(url: url)
@@ -1913,7 +1913,7 @@ final class MinimapTests: XCTestCase {
         controller.apply(mode: .comparison)
         window.layoutIfNeeded()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
 
         _ = pumpUntil(5.0) {
@@ -2229,7 +2229,7 @@ final class MinimapTests: XCTestCase {
         controller.apply(mode: .comparison)
         window.layoutIfNeeded()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         XCTAssertTrue(pumpUntil(10.0) {
             panel.overviewSummaries.first?.rowCount == panel.overviewRowCount()
@@ -2285,7 +2285,7 @@ final class MinimapTests: XCTestCase {
         controller.apply(mode: .comparison)
         window.layoutIfNeeded()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         XCTAssertTrue(pumpUntil(10.0) {
             (panel.overviewSummaries.last?.rowCount ?? 0) == panel.overviewRowCount()
@@ -2298,7 +2298,7 @@ final class MinimapTests: XCTestCase {
             controller.diffNavigationState.nextDifference
         }, "the comparison index is built")
         let rebuildsBefore = controller.overviewRebuildsCompleted
-        controller.rebuildOverviewForTesting()
+        controller.surface.minimap.rebuildForTesting()
         XCTAssertTrue(pumpUntil(10.0) {
             controller.overviewRebuildsCompleted > rebuildsBefore
         }, "the pass over the built index lands")
@@ -2417,10 +2417,10 @@ final class MinimapTests: XCTestCase {
         controller.apply(mode: .comparison)
         window.layoutIfNeeded()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         // A width whose sixteenth is not a whole number of pixels — the case that
         // produced the stripes.
-        split.setMinimapPanelWidth(203, animated: false)
+        split.surface.setMinimapPanelWidth(203, animated: false)
         window.layoutIfNeeded()
         _ = pumpUntil(10.0) { (panel.overviewSummaries.last?.rowCount ?? 0) > 0 }
 
@@ -2732,7 +2732,7 @@ final class MinimapTests: XCTestCase {
     func testAnEditRepaintsBothMapsRows() throws {
         let (controller, window) = try makeComparisonWindow(vertical: true, sizes: (2048, 2048))
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         controller.setMinimapRenderModeForTesting(.detail)
         panel.displayIfNeeded()
@@ -2787,7 +2787,7 @@ final class MinimapTests: XCTestCase {
         let patched = try XCTUnwrap(panel.overviewSummaries.first)
 
         let published = controller.overviewRebuildsCompleted
-        controller.rebuildOverviewForTesting()
+        controller.surface.minimap.rebuildForTesting()
         XCTAssertTrue(pumpUntil(5.0) { controller.overviewRebuildsCompleted > published },
                       "the full pass published its picture")
         let rebuilt = try XCTUnwrap(panel.overviewSummaries.first)
@@ -2809,7 +2809,7 @@ final class MinimapTests: XCTestCase {
         controller.apply(mode: .comparison)
         window.layoutIfNeeded()
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         controller.setMinimapRenderModeForTesting(.overview)
 
@@ -2891,7 +2891,7 @@ final class MinimapTests: XCTestCase {
     func testTheMapsSpanBothDumpsWhenThePanesAreStacked() throws {
         let (_, window) = try makeComparisonWindow(vertical: false, sizes: (8_000, 8_000))
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         let panes = descendants(of: window.contentView!, FilePaneView.self)
         XCTAssertEqual(panes.count, 2, "two panes, one above the other")
@@ -2915,7 +2915,7 @@ final class MinimapTests: XCTestCase {
         let rows = panel.overviewRowCount()
         let drawnBefore = panel.standInDraws
 
-        split.setMinimapPanelWidth(180, animated: false)
+        split.surface.setMinimapPanelWidth(180, animated: false)
         window.layoutIfNeeded()
         XCTAssertEqual(panel.overviewRowCount(), rows, "a width change does not re-bin the file")
         panel.displayIfNeeded()
@@ -2993,8 +2993,8 @@ final class MinimapTests: XCTestCase {
     /// deliberately never shown (§19.9), and a fixture big enough to outlive the
     /// delay would make this test depend on how fast the machine is.
     func testARebuildReportsItsProgressInTheStatusBar() throws {
-        MainViewController.overviewProgressDelay = .zero
-        MainViewController.overviewProgressMinimumVisible = .milliseconds(1500)
+        SurfaceMinimapController.overviewProgressDelay = .zero
+        SurfaceMinimapController.overviewProgressMinimumVisible = .milliseconds(1500)
         let (_, window, panel) = try makeOverviewWindow(
             [UInt8](repeating: 0x41, count: 256 * 1024))
         let chrome = try panelChrome(window)
@@ -3349,7 +3349,7 @@ final class MinimapTests: XCTestCase {
             pane.segmentStore.addCut(at: cut)
         }
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         // The store fires its change synchronously, but the strip's repaint lands
         // on the next run-loop pass — pump so a render test sees the new blocks.
@@ -3416,7 +3416,7 @@ final class MinimapTests: XCTestCase {
     func testSideBySideStripsSitOnTheOuterSideOfEachMap() throws {
         let (controller, window) = try makeComparisonWindow(vertical: true)
         let (split, panel) = try minimapViews(window)
-        split.setMinimapPanelVisible(true, animated: false)
+        split.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         guard case .sideBySide = panel.mapLayout else {
             return XCTFail("expected a side-by-side minimap, got \(panel.mapLayout)")

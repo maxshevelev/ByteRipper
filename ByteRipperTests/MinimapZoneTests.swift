@@ -62,7 +62,7 @@ final class MinimapZoneTests: XCTestCase {
         window.layoutIfNeeded()
         let panel = try XCTUnwrap(descendants(of: window.contentView!, MinimapView.self).first,
                                   "the minimap panel")
-        controller.setMinimapPanelVisible(true, animated: false)
+        controller.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         // These tests aim at exact rows, so the detail window's mapping is the
         // one they want — the same pin the rest of the minimap's tests use.

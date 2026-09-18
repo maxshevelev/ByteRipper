@@ -43,7 +43,7 @@ final class BookmarkMinimapTests: XCTestCase {
             controller.apply(mode: .singleFile)
         }
         let panel = try XCTUnwrap(descendants(of: window.contentView!, MinimapView.self).first)
-        controller.setMinimapPanelVisible(true, animated: false)
+        controller.surface.minimap.setPanelVisible(true, animated: false)
         window.layoutIfNeeded()
         controller.setMinimapRenderModeForTesting(.detail)
         window.layoutIfNeeded()

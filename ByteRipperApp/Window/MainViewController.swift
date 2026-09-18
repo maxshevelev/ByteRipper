@@ -179,7 +179,7 @@ final class MainViewController: NSViewController {
             guard let surface else { return }
             self?.invalidateMatches(in: pane)
             surface.tools.paneEdited(pane, edit)
-            self?.repaintMinimap(of: surface, after: edit, mapIndex: 0)
+            surface.minimap.repaint(after: edit, mapIndex: 0)
             // The pill's dot is "the parent has not got this", which an edit is
             // exactly what changes.
             self?.fragments.refreshDock()
@@ -189,19 +189,22 @@ final class MainViewController: NSViewController {
             surface.tools.paneReloaded(pane)
             self?.invalidateMatches(in: pane)
             surface.minimapView.invalidateCells()
-            self?.refreshMinimapMaps(of: surface)
+            surface.minimap.refreshMaps()
             self?.fragments.refreshDock()
         }
         pane.onSavedStateChanged = { [weak self, weak surface] in
             if let surface {
                 surface.minimapView.invalidateCells()
-                self?.refreshMinimapMaps(of: surface)
+                surface.minimap.refreshMaps()
             }
             self?.fragments.refreshDock()
         }
-        pane.onCaretChanged = { [weak self, weak surface] in
+        pane.onCaretChanged = { [weak surface] in
             guard let surface else { return }
-            self?.updateMinimapSelections(of: surface)
+            surface.minimap.updateSelections()
+        }
+        pane.onSegmentsChanged = { [weak surface] in
+            surface?.minimap.syncSegments()
         }
     }
 
@@ -215,18 +218,20 @@ final class MainViewController: NSViewController {
                                 paneView: FilePaneView) {
         surface.panesInMapOrder = { [pane] }
         surface.paneViewsInMapOrder = { [paneView] }
-        wireMinimap(of: surface, menus: false)
-        trackMinimapViewport(of: surface, for: paneView)
-        setMinimapPanelVisible(of: surface, minimapPanelVisible, animated: false)
-        refreshMinimapMaps(of: surface)
-        updateMinimapLayout(of: surface)
-        updateMinimapViewports(of: surface)
-        syncMinimapBookmarks(of: surface)
+        surface.minimap.wire(menus: false)
+        surface.minimap.track(paneView)
+        surface.minimap.setPanelVisible(minimapPanelVisible, animated: false)
+        surface.minimap.refreshMaps()
+        surface.minimap.updateLayout()
+        surface.minimap.updateViewports()
+        surface.minimap.syncBookmarks()
+        surface.minimap.syncSegments()
+        surface.minimap.syncZones()
     }
 
     /// A mark added or removed in a panel: its map's margin follows.
     func syncFragmentMinimapBookmarks(of surface: DocumentSurface) {
-        syncMinimapBookmarks(of: surface)
+        surface.minimap.syncBookmarks()
     }
 
     /// Whether a fragment panel has a window to be put in a tab beside.
@@ -630,28 +635,13 @@ final class MainViewController: NSViewController {
     static var toolDividerIndex: Int { DocumentSurface.toolDividerIndex }
     static var minimapDividerIndex: Int { DocumentSurface.minimapDividerIndex }
 
-    // The tab's own map, in the spelling that means it. Every minimap method
-    // names the surface it acts on; these three are the ones reached from
-    // outside this file, where "the minimap" means the window's.
-    func setMinimapPanelVisible(_ visible: Bool, animated: Bool = true) {
-        setMinimapPanelVisible(of: surface, visible, animated: animated)
-    }
-
-    func toggleMinimapPanel(animated: Bool = true) {
-        toggleMinimapPanel(of: surface, animated: animated)
-    }
-
-    func rebuildOverviewForTesting() {
-        rebuildOverviewForTesting(of: surface)
-    }
-
     // The tab's own map keeps its counters where the suite has always read
     // them. They live on the surface now, one set per map.
-    var overviewRebuilds: Int { surface.overviewRebuilds }
-    var overviewPatches: Int { surface.overviewPatches }
-    var overviewRebuildsCompleted: Int { surface.overviewRebuildsCompleted }
-    var overviewPassRowCount: Int { surface.overviewPassRowCount }
-    var matchOverlayWalksForTesting: Int { surface.matchOverlayWalksForTesting }
+    var overviewRebuilds: Int { surface.minimap.overviewRebuilds }
+    var overviewPatches: Int { surface.minimap.overviewPatches }
+    var overviewRebuildsCompleted: Int { surface.minimap.overviewRebuildsCompleted }
+    var overviewPassRowCount: Int { surface.minimap.overviewPassRowCount }
+    var matchOverlayWalksForTesting: Int { surface.minimap.matchOverlayWalksForTesting }
 
     func toolPanelWidth() -> CGFloat { surface.toolPanelWidth() }
 
@@ -845,7 +835,7 @@ final class MainViewController: NSViewController {
         windowModel.onBookmarksChanged = { [weak self] row in
             self?.dismissEditPopoverIfItsMarkIsGone(row: row)
             self?.openGoToForm?.reloadBookmarks()
-            self?.syncMinimapBookmarks(of: surface)
+            surface.minimap.syncBookmarks()
             // The empty window shows the list too, and it is the only thing it
             // shows — so a mark added or removed while no file is open has to
             // reach it, and the title that counts them (§3.1, §20).
@@ -869,7 +859,7 @@ final class MainViewController: NSViewController {
             self.comparisonView?.setLayout(vertical: LayoutSettings.isVertical)
             // The pane arrangement changed (View menu or the Settings tab), so
             // the minimap's internal split flips with it (§19).
-            self.updateMinimapLayout(of: surface)
+            surface.minimap.updateLayout()
         }
         wordSizeObserver = NotificationCenter.default.addObserver(
             forName: WordSize.didChangeNotification,
@@ -911,7 +901,7 @@ final class MainViewController: NSViewController {
             // Detail reads difference state per byte from the panes, but the
             // overview takes it from this index — one query per block beats
             // re-reading both files (§19.4).
-            self?.overviewFollowIndexChange(of: surface)
+            surface.minimap.followIndexChange()
         }
 
         findBar.translatesAutoresizingMaskIntoConstraints = false
@@ -968,6 +958,7 @@ final class MainViewController: NSViewController {
         // size should have.
         addChild(surface)
         surface.panesInMapOrder = { [weak self] in self?.windowPanesInMapOrder() ?? [] }
+        surface.activeMapIndex = { [weak self] in self?.windowModel.activePaneIndex ?? 0 }
         _ = surface.view
 
         newTabDropStrip.translatesAutoresizingMaskIntoConstraints = false
@@ -1016,7 +1007,7 @@ final class MainViewController: NSViewController {
             fragmentHost.leadingAnchor.constraint(equalTo: panelSplit.leadingAnchor),
             fragmentHost.trailingAnchor.constraint(equalTo: panelSplit.trailingAnchor),
         ])
-        wireMinimap(of: surface)
+        surface.minimap.wire()
         surface.paneViewsInMapOrder = { [weak self] in
             guard let self else { return [] }
             if let comparison = self.comparisonView {
@@ -1051,11 +1042,11 @@ final class MainViewController: NSViewController {
         // the strip whether or not it is.
         windowModel.pane1.onSegmentsChanged = { [weak self] in
             self?.openSegmentsForm?.reloadSegments()
-            self?.syncMinimapSegments(of: surface)
+            surface.minimap.syncSegments()
         }
         windowModel.pane2.onSegmentsChanged = { [weak self] in
             self?.openSegmentsForm?.reloadSegments()
-            self?.syncMinimapSegments(of: surface)
+            surface.minimap.syncSegments()
         }
         // The panes are about to be rebuilt, so a scan in flight would land its
         // set in a pane that is going away.
@@ -1063,7 +1054,7 @@ final class MainViewController: NSViewController {
         endIndexing()
         // Panes are rebuilt on every apply, so the viewport mirrors must start
         // empty and fill in as the new panes report their visible ranges (§19).
-        surface.minimapViewports.removeAll()
+        surface.minimap.clearViewports()
         surface.minimapView.setViewports([])
 
         switch mode {
@@ -1131,26 +1122,26 @@ final class MainViewController: NSViewController {
             // The minimap's single map mirrors this pane: edits rebuild its
             // cells, a moved caret moves the selection overlay, and scrolling
             // moves the viewport rectangle (§19).
-            trackMinimapViewport(of: surface, for: pane)
+            surface.minimap.track(pane)
             paneModel.onEdit = { [weak self] edit in
-                self?.repaintMinimap(of: surface, after: edit, mapIndex: 0)
+                surface.minimap.repaint(after: edit, mapIndex: 0)
                 self?.invalidateMatches(in: paneModel)
                 self?.tools.paneEdited(paneModel, edit)
             }
             paneModel.onFullInvalidation = { [weak self] in
                 self?.tools.paneReloaded(paneModel)
                 self?.surface.minimapView.invalidateCells()
-                self?.refreshMinimapMaps(of: surface)
+                surface.minimap.refreshMaps()
                 self?.invalidateMatches(in: paneModel)
             }
             // A save moves the on-disk reference, so the map's red cells have to
             // clear even though no byte changed (§19).
             paneModel.onSavedStateChanged = { [weak self] in
                 self?.surface.minimapView.invalidateCells()
-                self?.refreshMinimapMaps(of: surface)
+                surface.minimap.refreshMaps()
             }
-            paneModel.onCaretChanged = { [weak self] in
-                self?.updateMinimapSelections(of: surface)
+            paneModel.onCaretChanged = { [weak surface] in
+                surface?.minimap.updateSelections()
             }
             // Wrap in the drop-target split view (§4.3 single-file mode). The
             // pane itself is NOT drop-registered here so the outer view wins.
@@ -1220,8 +1211,8 @@ final class MainViewController: NSViewController {
             wireStatusBar(pane1View, for: pane1)
             wireStatusBar(pane2View, for: pane2)
             // Each map's viewport rectangle mirrors its pane's visible slice (§19).
-            trackMinimapViewport(of: surface, for: pane1View)
-            trackMinimapViewport(of: surface, for: pane2View)
+            surface.minimap.track(pane1View)
+            surface.minimap.track(pane2View)
             let view = ComparisonView(
                 coordinator: comparisonCoordinator,
                 paneView1: pane1View,
@@ -1294,14 +1285,14 @@ final class MainViewController: NSViewController {
             view.setActive(windowModel.activePaneIndex)
             // The minimap's stacked divider mirrors the panes' divider position,
             // so keep it glued whenever the panes' divider moves (§19).
-            view.onFractionChanged = { [weak self] in
-                self?.updateMinimapLayout(of: surface)
+            view.onFractionChanged = { [weak surface] in
+                surface?.minimap.updateLayout()
             }
             comparisonCoordinator.start()
             activeFilePane?.focusHexView()
         }
-        updateMinimapLayout(of: surface)
-        refreshMinimapMaps(of: surface)
+        surface.minimap.updateLayout()
+        surface.minimap.refreshMaps()
         // A different file can call for a different mode — a dump too large for
         // the detail window opens in overview (§19.4).
         applyPreferredMinimapMode()
@@ -1361,13 +1352,13 @@ final class MainViewController: NSViewController {
         windowModel.pane2.companion = windowModel.pane1
         windowModel.pane1.onEdit = { [weak self] edit in
             self?.comparisonCoordinator.record(edit: edit)
-            self?.repaintMinimap(of: surface, after: edit, mapIndex: 0)
+            surface.minimap.repaint(after: edit, mapIndex: 0)
             self?.invalidateMatches(in: self?.windowModel.pane1)
             self.map { $0.tools.paneEdited($0.windowModel.pane1, edit) }
         }
         windowModel.pane2.onEdit = { [weak self] edit in
             self?.comparisonCoordinator.record(edit: edit)
-            self?.repaintMinimap(of: surface, after: edit, mapIndex: 1)
+            surface.minimap.repaint(after: edit, mapIndex: 1)
             self?.invalidateMatches(in: self?.windowModel.pane2)
             self.map { $0.tools.paneEdited($0.windowModel.pane2, edit) }
         }
@@ -1379,36 +1370,36 @@ final class MainViewController: NSViewController {
             self.map { $0.tools.paneReloaded($0.windowModel.pane1) }
             self?.comparisonCoordinator.rebuild()
             self?.surface.minimapView.invalidateCells()
-            self?.refreshMinimapMaps(of: surface)
+            surface.minimap.refreshMaps()
             self?.invalidateMatches(in: self?.windowModel.pane1)
         }
         windowModel.pane2.onFullInvalidation = { [weak self] in
             self.map { $0.tools.paneReloaded($0.windowModel.pane2) }
             self?.comparisonCoordinator.rebuild()
             self?.surface.minimapView.invalidateCells()
-            self?.refreshMinimapMaps(of: surface)
+            surface.minimap.refreshMaps()
             self?.invalidateMatches(in: self?.windowModel.pane2)
         }
         // A save clears modified state without changing a byte, so the minimap's
         // red cells have to go even though the bytes stayed put (§19).
         windowModel.pane1.onSavedStateChanged = { [weak self] in
             self?.surface.minimapView.invalidateCells()
-            self?.refreshMinimapMaps(of: surface)
+            surface.minimap.refreshMaps()
         }
         windowModel.pane2.onSavedStateChanged = { [weak self] in
             self?.surface.minimapView.invalidateCells()
-            self?.refreshMinimapMaps(of: surface)
+            surface.minimap.refreshMaps()
         }
         // A moved caret changes whether a next/previous block still exists from
         // the new position, so navigation enablement follows it (§10.3); the
         // selection overlay on the minimap follows the caret too (§19).
         windowModel.pane1.onCaretChanged = { [weak self] in
             self?.refreshDiffNavigation()
-            self?.updateMinimapSelections(of: surface)
+            surface.minimap.updateSelections()
         }
         windowModel.pane2.onCaretChanged = { [weak self] in
             self?.refreshDiffNavigation()
-            self?.updateMinimapSelections(of: surface)
+            surface.minimap.updateSelections()
         }
     }
 
@@ -1775,82 +1766,6 @@ final class MainViewController: NSViewController {
         )
     }
 
-    /// Wires a surface's map to the panes it maps: what it pulls as it draws,
-    /// and what a drag, a click or a mode switch over it does
-    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
-    ///
-    /// Every closure names the surface it was wired for, so a second map — a
-    /// fragment panel's — feeds from that panel's pane rather than from the
-    /// tab's. `menus` is off for a panel's map for now: the gutter's commands
-    /// are menu actions addressed to the tab, and pointing them at a surface is
-    /// its own change.
-    func wireMinimap(of surface: DocumentSurface, menus: Bool = true) {
-        // The map is virtualized: it pulls the bytes of its visible window as it
-        // draws, and a drag or a wheel over it scrolls the panes (§19).
-        surface.minimapView.byteStates = { [weak self] mapIndex, range in
-            self?.minimapByteStates(of: surface, mapIndex: mapIndex, range: range) ?? []
-        }
-        surface.minimapView.matchRanges = { [weak self] mapIndex, range in
-            self?.minimapMatchRanges(of: surface, mapIndex: mapIndex, range: range) ?? []
-        }
-        surface.minimapView.currentMatchRange = { [weak self] mapIndex in
-            self?.minimapCurrentMatch(of: surface, mapIndex: mapIndex)
-        }
-        surface.minimapView.onScrollToOffset = { [weak self] offset in
-            self?.scrollPanesToOffset(of: surface, offset)
-        }
-        surface.minimapView.onSelectOffset = { [weak self] mapIndex, offset in
-            self?.selectMinimapOffset(of: surface, mapIndex: mapIndex, offset: offset)
-        }
-        // The segment strip's legend answers (§19.4.4, §21.3): the piece's
-        // current name (asked for at hover time, since the store fires no
-        // invalidation for a rename), and the right-click menu that acts on the
-        // piece under the pointer — the same menu the form's row offers.
-        surface.minimapView.segmentPieceName = { [weak self] mapIndex, pieceIndex in
-            self?.minimapSegmentName(of: surface, mapIndex: mapIndex, pieceIndex: pieceIndex) ?? ""
-        }
-        if menus {
-            surface.minimapView.segmentStripMenu = { [weak self] mapIndex, pieceIndex, point in
-                self?.makeMinimapSegmentMenu(mapIndex: mapIndex, pieceIndex: pieceIndex, point: point)
-            }
-        }
-        // And the zone gutter's, on the other side of each map (§19.4.5): the
-        // commands that act on the zone under the pointer. Its name and range
-        // are the bracket's own — a tool-module republishes its whole map
-        // whenever anything about it changes, so there is nothing to ask for
-        // live the way a segment's name has to be.
-        if menus {
-            surface.minimapView.zoneBracketMenu = { [weak self] mapIndex, zoneID in
-                self?.makeMinimapZoneMenu(mapIndex: mapIndex, zoneID: zoneID)
-            }
-        }
-        // The overview bins the file into one row per pixel, so a resize changes
-        // the bins and the summary has to be recomputed (§19.4).
-        surface.minimapView.onOverviewRowCountChanged = { [weak self] in
-            self?.scheduleOverviewRebuild(of: surface)
-        }
-        // A panel tall enough to magnify the open file takes the Overview choice
-        // away, and gives it back when it shrinks again (§19.4).
-        surface.minimapView.onOverviewUsefulnessChanged = { [weak self] in
-            self?.updateOverviewAvailability(of: surface)
-        }
-        surface.minimapPanel.onModeChange = { [weak self] mode in
-            self?.setMinimapRenderMode(of: surface, mode)
-        }
-        // The panel aligns its own chrome with the dump, and asks where the dump
-        // is on every layout pass (§19.2).
-        surface.minimapPanel.dumpAreaInWindow = { [weak surface] in
-            guard let surface else { return nil }
-            let areas = surface.paneViewsInMapOrder().compactMap(\.dumpAreaInWindow)
-            guard let first = areas.first else { return nil }
-            // The maps span every dump: stacked panes (§3.3) put one above the
-            // other, and the panel's two maps cover both, so the span the chrome
-            // has to match is their union — not the first pane's dump, which
-            // ends halfway down the window.
-            return areas.dropFirst().reduce(first) { $0.union($1) }
-        }
-    }
-
     // MARK: - Fragment panels (Design/FRAGMENT_PANELS_PLAN.md)
 
     /// Opens a part of one of this tab's files as a panel over it: a zone, a
@@ -2212,8 +2127,10 @@ final class MainViewController: NSViewController {
     /// ending and taking the map with it. The dump repaints from the pane's own
     /// hook (`PaneViewModel.onFullInvalidationOfZones`); the minimap's gutters
     /// are handed the map from here (§19.4.5).
-    func toolZonesChanged() {
-        syncMinimapZones(of: surface)
+    func toolZonesChanged(of surface: DocumentSurface?) {
+        // The map that redraws is the one belonging to the surface whose
+        // tool-module republished — a panel's zones are not the tab's.
+        (surface ?? self.surface).minimap.syncZones()
     }
 
     /// The panel's header re-reads what it says about the file — called for
@@ -2238,59 +2155,13 @@ final class MainViewController: NSViewController {
     /// hidden by default and animated in/out; the split's divider keeps the
     /// user's chosen width between shows.
     @objc func toggleMinimap() {
-        toggleMinimapPanel(of: frontSurface, animated: true)
+        frontSurface.minimap.togglePanel(animated: true)
     }
 
     /// The surface the commands about "the minimap" mean: the fragment panel in
     /// front when one is up, the tab's otherwise. A panel covers the tab's own
     /// map, so the one the button toggles is always the one on screen.
     var frontSurface: DocumentSurface { fragments.frontSurface ?? surface }
-
-    /// Shows or hides the panel, animating the divider unless the user prefers
-    /// reduced motion (then it snaps).
-    func setMinimapPanelVisible(of surface: DocumentSurface, _ visible: Bool, animated: Bool = true) {
-        let changed = surface.minimapPanelVisible != visible
-        surface.minimapPanelVisible = visible
-        // The window grows or shrinks by the panel's width so the hex content
-        // area keeps its width (§19). It is handed to the panel's animation
-        // rather than run beside it: one clock and one curve, so the window
-        // edge and the panel edge move as a single thing. Evaluated here,
-        // before the width changes, because it captures the window's start.
-        // Only the tab's own panel moves the window's edge: a fragment panel
-        // opens its map inside the area it was given, and a window that grew
-        // because a panel over it showed a map would be the window moving for
-        // something that is not the window's.
-        let resize = changed && surface === self.surface
-            ? minimapWindowResize(visible: visible) : nil
-        surface.setMinimapPanelWidth(visible ? surface.minimapPreferredPanelWidth : 0,
-                                     animated: animated, windowResize: resize)
-        if changed { minimapPanelVisibilityChanged(of: surface, visible) }
-    }
-
-    /// Toggles the panel's visibility (§19).
-    func toggleMinimapPanel(of surface: DocumentSurface, animated: Bool = true) {
-        setMinimapPanelVisible(of: surface, !surface.minimapPanelVisible, animated: animated)
-    }
-
-
-    /// A panel-visibility change: while hidden the maps and viewport are stale
-    /// (nothing was drawn), so a show refreshes them (§19).
-    private func minimapPanelVisibilityChanged(of surface: DocumentSurface, _ visible: Bool) {
-        if visible {
-            updateMinimapLayout(of: surface)
-            refreshMinimapMaps(of: surface)
-            // The mode was decided when the file opened, panel or no panel
-            // (§19.4) — showing the panel must not undo a choice made in it,
-            // only settle whether overview is on offer now that it has a height.
-            updateOverviewAvailability(of: surface)
-            updateMinimapViewports(of: surface)
-            rebuildOverview(of: surface)
-            // The search's marks were not computed while the panel was closed
-            // (§11).
-            scheduleMinimapMatchSync(of: surface)
-        }
-    }
-
 
     /// The window move that goes with showing or hiding the minimap: growing or
     /// shrinking by whatever the dump's own spare width cannot absorb, so the
@@ -2306,7 +2177,7 @@ final class MainViewController: NSViewController {
     /// Every step is computed from the frame captured here rather than from the
     /// window's current one, so the on-screen clamp cannot accumulate across
     /// the steps.
-    private func minimapWindowResize(visible: Bool) -> ((CGFloat) -> Void)? {
+    func minimapWindowResize(visible: Bool) -> ((CGFloat) -> Void)? {
         guard let window = view.window else { return nil }
         let width = minimapPreferredPanelWidth + panelSplit.dividerThickness
         let move = windowDelta(forPanel: visible ? width : -width,
@@ -2326,30 +2197,6 @@ final class MainViewController: NSViewController {
                                      visibleFrame.maxX - frame.size.width)
             }
             window.setFrame(frame, display: true, animate: false)
-        }
-    }
-
-    /// Recomputes the minimap's internal map split from the current window mode
-    /// and pane arrangement (§19): one map in single-file mode, two maps with a
-    /// centered vertical line for side-by-side panes, two maps with a
-    /// horizontal line mirroring the panes' divider for stacked panes.
-    private func updateMinimapLayout(of surface: DocumentSurface) {
-        guard surface === self.surface else {
-            // A fragment panel has one pane, so its map is one map, whatever
-            // the tab behind it is showing.
-            surface.minimapView.setMapLayout(.single)
-            return
-        }
-        switch mode {
-        case .empty, .singleFile:
-            surface.minimapView.setMapLayout(.single)
-        case .comparison:
-            guard let comparisonView else { return }
-            if comparisonView.splitView.isVertical {
-                surface.minimapView.setMapLayout(.sideBySide)
-            } else {
-                surface.minimapView.setMapLayout(.stacked(fraction: comparisonView.currentFraction))
-            }
         }
     }
 
@@ -2397,27 +2244,6 @@ final class MainViewController: NSViewController {
     // MARK: - Minimap overview (§19.4)
 
 
-    /// One pane's inputs for an overview summary, snapshotted on the main thread
-    /// before the background pass reads anything. Internal so a test can drive
-    /// the row engine directly.
-    struct OverviewSource: Sendable {
-        let storage: (any ByteStorage)?
-        let saved: (any ByteStorage)?
-        let size: UInt64
-        /// Where the edit overlay has written — the only offsets a modified byte
-        /// can sit at.
-        let edited: [Range<UInt64>]
-        /// Whether `saved` is something to paint modified bytes against
-        /// (`PaneViewModel.marksModifiedBytes`).
-        let marksModified: Bool
-        /// The comparison index, kept whole rather than flattened into a list of
-        /// differing ranges: the rows being computed ask it for the blocks in
-        /// their own window (§8). Flattening it here walked every block in the
-        /// index on every keystroke — a third of the main thread on a 16 MB
-        /// comparison, and the sticking that came with it. Nil in single-file
-        /// mode and before the first index lands.
-        let differences: DiffBlockIndex?
-    }
 
     /// The mode the file(s) now open call for: detail for a file small enough
     /// that it is the more informative view, overview for a dump detail could
@@ -2434,257 +2260,30 @@ final class MainViewController: NSViewController {
     /// Puts the minimap in the mode the current file calls for. Called whenever
     /// the open files change.
     private func applyPreferredMinimapMode() {
-        setMinimapRenderMode(of: surface, preferredMinimapMode())
-        updateOverviewAvailability(of: surface)
-    }
-
-    /// Keeps the Overview control in step with what the overview could say about
-    /// the open file, and leaves the mode if it has nothing left to say — the
-    /// panel is never parked in a view its own switch refuses to offer (§19.4).
-    private func updateOverviewAvailability(of surface: DocumentSurface) {
-        let available = surface.minimapView.overviewIsInformative()
-        surface.minimapPanel.setOverviewAvailable(available)
-        if !available, surface.minimapView.renderMode == .overview {
-            setMinimapRenderMode(of: surface, .detail)
-        }
-    }
-
-    /// Switches the minimap's mode and reflects it in the header switch.
-    private func setMinimapRenderMode(of surface: DocumentSurface, _ mode: MinimapView.RenderMode) {
-        // The switch reflects the map's state whatever changed it — the menu
-        // item (§15), a file that calls for overview, or the switch itself.
-        surface.minimapPanel.showMode(mode)
-        guard surface.minimapView.renderMode != mode else { return }
-        surface.minimapView.setRenderMode(mode)
-        if mode == .overview {
-            scheduleOverviewRebuild(of: surface)
-        } else {
-            cancelOverviewWork(of: surface)
-            reportOverviewProgress(of: surface, nil)
-        }
-    }
-
-    /// Runs a full overview pass now, so a test can compare a patched picture
-    /// against the one a full pass builds.
-    func rebuildOverviewForTesting(of surface: DocumentSurface) {
-        rebuildOverview(of: surface)
+        surface.minimap.setRenderMode(preferredMinimapMode())
+        surface.minimap.updateOverviewAvailability()
     }
 
     /// Puts the minimap in `mode`, the way the header switch does. Exposed
     /// (internal) so tests can exercise a mode directly.
     func setMinimapRenderModeForTesting(_ mode: MinimapView.RenderMode) {
-        setMinimapRenderMode(of: surface, mode)
+        surface.minimap.setRenderMode(mode)
     }
 
     /// Toggles between the whole-file overview and the detail window. The choice
     /// holds until the open files change, which decides afresh (§19.4).
     @objc func toggleMinimapOverview() {
         guard surface.minimapView.renderMode == .overview || surface.minimapView.overviewIsInformative() else { return }
-        setMinimapRenderMode(of: surface, surface.minimapView.renderMode == .overview ? .detail : .overview)
+        surface.minimap.setRenderMode(surface.minimapView.renderMode == .overview ? .detail : .overview)
     }
 
-    /// Recomputes the overview after a change that alters what it shows. Every
-    /// row of an overview is on screen at once, so unlike the detail window it
-    /// cannot be pulled per repaint — it is computed in the background and
-    /// debounced, so a burst of edits costs one pass (§19.4).
-    /// The pass waits for the edits to stop: each request restarts the delay, so
-    /// a burst of keystrokes — auto-repeat is thirty a second — costs one pass
-    /// after it, not one per keystroke. A pass over two 16 MB dumps reads both
-    /// files whole; doing that thirty times a second starves the main thread of
-    /// the very cache it draws from, which is felt as the typing sticking.
-    ///
-    /// Waiting is only acceptable because the map does not go silent while it
-    /// waits: a shifting edit marks its tail immediately and for free
-    /// (`markShiftedTailModified`), and the picture in hand is stretched rather
-    /// than dropped. What the pass adds is exactness.
-    ///
-    /// A pass in flight is cancelled: something changed under it, so whatever it
-    /// is halfway through computing is already the wrong picture, and finishing
-    /// it costs the reads that make the typing stick. The request that cancelled
-    /// it starts the wait again.
-    private func scheduleOverviewRebuild(of surface: DocumentSurface) {
-        guard surface.minimapPanelVisible, surface.minimapView.renderMode == .overview else { return }
-        surface.overviewPassTask?.cancel()
-        surface.overviewPassTask = nil
-        reportOverviewProgress(of: surface, nil)
-        surface.overviewDebounceTask?.cancel()
-        surface.overviewDebounceTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 250_000_000)
-            guard !Task.isCancelled else { return }
-            self?.surface.overviewDebounceTask = nil
-            self?.rebuildOverview(of: surface)
-        }
-    }
-
-    /// Cancels whatever the overview has in flight — a waiting debounce and a
-    /// running pass — and forgets any queued request.
-    private func cancelOverviewWork(of surface: DocumentSurface) {
-        surface.overviewDebounceTask?.cancel()
-        surface.overviewDebounceTask = nil
-        surface.overviewPassTask?.cancel()
-        surface.overviewPassTask = nil
-    }
-
-    private func rebuildOverview(of surface: DocumentSurface) {
-        guard surface.minimapPanelVisible, surface.minimapView.renderMode == .overview else { return }
-        let rowCount = surface.minimapView.overviewRowCount()
-        let sources = overviewSources(of: surface)
-        let extent = sources.map(\.size).max() ?? 0
-        guard rowCount > 0, extent > 0, !sources.isEmpty else {
-            surface.minimapView.setOverviewSummaries([])
-            return
-        }
-        surface.overviewPassTask?.cancel()
-        surface.overviewPassRowCount = rowCount
-        surface.overviewRebuilds += 1
-        beginOverviewProgress(of: surface)
-        let progress = OverviewProgressSink(total: rowCount * sources.count) { [weak self] fraction in
-            self?.reportOverviewProgress(of: surface, fraction)
-        }
-        // Deliberately below the interface's priority: the picture is worth
-        // waiting a little longer for, and nothing about it is worth competing
-        // with the keystroke being typed. The two files are independent passes
-        // and run together, which halves the wait on a comparison.
-        surface.overviewPassTask = Task.detached(priority: .utility) { [weak self] in
-            let summaries = await withTaskGroup(
-                of: (Int, MinimapView.OverviewSummary).self
-            ) { group -> [MinimapView.OverviewSummary] in
-                for (index, source) in sources.enumerated() {
-                    group.addTask {
-                        (index, Self.overviewSummary(source: source, extent: extent,
-                                                     rowCount: rowCount,
-                                                     shouldCancel: { Task.isCancelled },
-                                                     rowsDone: { progress.advance($0) }))
-                    }
-                }
-                var built: [(Int, MinimapView.OverviewSummary)] = []
-                for await pair in group { built.append(pair) }
-                return built.sorted { $0.0 < $1.0 }.map(\.1)
-            }
-            guard !Task.isCancelled else { return }
-            await MainActor.run { [weak self] in
-                guard let self else { return }
-                self.reportOverviewProgress(of: surface, nil)
-                surface.overviewPassTask = nil
-                guard !Task.isCancelled, surface.minimapView.renderMode == .overview else { return }
-                surface.minimapView.setOverviewSummaries(summaries)
-                // The row count the picture was built for is now the panel's,
-                // so the match bits are re-binned to match it (§11).
-                self.scheduleMinimapMatchSync(of: surface)
-                surface.overviewRebuildsCompleted += 1
-            }
-        }
-    }
-
-    /// Adds up what the concurrent passes have finished and reports it to the
-    /// panel's status bar, in twentieths: a progress bar told about every one of
-    /// a thousand rows would cost more than the pass it measures.
-    private final class OverviewProgressSink: @unchecked Sendable {
-        private let lock = NSLock()
-        private let total: Int
-        private var done = 0
-        private var reportedStep = -1
-        // The callback is always invoked on the main actor — `advance` hops there
-        // before firing it — so it is declared main-actor isolated; otherwise a
-        // caller updating the panel from it would warn.
-        private let onChange: @Sendable @MainActor (Double) -> Void
-
-        init(total: Int, onChange: @escaping @Sendable @MainActor (Double) -> Void) {
-            self.total = max(1, total)
-            self.onChange = onChange
-        }
-
-        func advance(_ rows: Int) {
-            lock.lock()
-            done += rows
-            let fraction = min(1, Double(done) / Double(total))
-            let step = Int(fraction * 20)
-            let changed = step != reportedStep
-            if changed { reportedStep = step }
-            lock.unlock()
-            guard changed else { return }
-            Task { @MainActor in onChange(fraction) }
-        }
-    }
-
-    /// How long a rebuild has to run before its progress is worth showing. A
-    /// small dump is binned in a few milliseconds, and a bar that appeared for
-    /// one frame would read as a glitch rather than as progress.
-    /// Injectable so a test can pin the policy instead of racing a real pass.
-    static var overviewProgressDelay: Duration = .milliseconds(80)
-
-    /// Once the bar is up it stays up this long, even if the pass finishes
-    /// first. Binning two 16 MB dumps takes ~150 ms, so hiding the bar the
-    /// instant the pass ended made it flash for a few frames — visible as a
-    /// flicker, unreadable as progress.
-    static var overviewProgressMinimumVisible: Duration = .milliseconds(300)
 
 
-    /// Starts watching a rebuild: the bar appears only if the pass is still
-    /// going when the delay is up.
-    private func beginOverviewProgress(of surface: DocumentSurface) {
-        surface.overviewProgress = 0
-        surface.overviewProgressHide?.cancel()
-        surface.overviewProgressHide = nil
-        surface.overviewProgressReveal?.cancel()
-        surface.overviewProgressReveal = Task { [weak self] in
-            try? await Task.sleep(for: Self.overviewProgressDelay)
-            guard !Task.isCancelled, let self, let fraction = surface.overviewProgress else { return }
-            surface.overviewProgressShown = .now
-            surface.minimapPanel.setRebuildProgress(fraction)
-        }
-    }
 
-    /// Moves the bar, or clears the status bar when the rebuild is over (nil).
-    private func reportOverviewProgress(of surface: DocumentSurface, _ fraction: Double?) {
-        surface.overviewProgress = fraction
-        guard let fraction else {
-            surface.overviewProgressReveal?.cancel()
-            surface.overviewProgressReveal = nil
-            hideOverviewProgress(of: surface)
-            return
-        }
-        // Only move a bar that is already up; whether it appears at all is the
-        // reveal task's decision.
-        guard !surface.minimapPanel.progressBar.isHidden else { return }
-        surface.minimapPanel.setRebuildProgress(fraction)
-    }
-
-    /// Takes the bar down, holding it for the rest of its minimum showing.
-    private func hideOverviewProgress(of surface: DocumentSurface) {
-        guard let shown = surface.overviewProgressShown else {
-            surface.minimapPanel.setRebuildProgress(nil)
-            return
-        }
-        let remaining = Self.overviewProgressMinimumVisible - shown.duration(to: .now)
-        guard remaining > .zero else {
-            surface.overviewProgressShown = nil
-            surface.minimapPanel.setRebuildProgress(nil)
-            return
-        }
-        // Finish the bar off at 100 % while it waits out its minimum.
-        surface.minimapPanel.setRebuildProgress(1)
-        surface.overviewProgressHide?.cancel()
-        surface.overviewProgressHide = Task { [weak self] in
-            try? await Task.sleep(for: remaining)
-            guard !Task.isCancelled, let self else { return }
-            surface.overviewProgressShown = nil
-            surface.overviewProgressHide = nil
-            surface.minimapPanel.setRebuildProgress(nil)
-        }
-    }
-
-    /// Re-aligns the panel's chrome with the dump (§19.2). The panel measures the
-    /// dump itself on every layout pass; this is for the changes that move the
-    /// bytes without touching the panel's own frame — a new pane layout, an
-    /// opened Find bar (§11), a taller row (§6).
-    private func updateMinimapChrome(of surface: DocumentSurface) {
-        surface.minimapPanel.needsLayout = true
-    }
 
     override func viewDidLayout() {
         super.viewDidLayout()
-        updateMinimapChrome(of: surface)
+        surface.minimap.updateChrome()
         updateDropStripInsets()
     }
 
@@ -2693,12 +2292,6 @@ final class MainViewController: NSViewController {
         // The toolbar can only be reconfigured once it is up, which is not the
         // case while the window controller is still building (§10.3).
         syncDiffNavigationToolbarItem()
-    }
-
-    private func overviewSource(_ pane: PaneViewModel) -> OverviewSource {
-        OverviewSource(storage: pane.byteStorage, saved: pane.savedStorage, size: pane.fileSize,
-                       edited: pane.editedRanges, marksModified: pane.marksModifiedBytes,
-                       differences: comparisonCoordinator.index)
     }
 
     /// How many of `buffer[from..<to]` are neither 0x00 nor 0xFF — how "full"
@@ -2745,639 +2338,15 @@ final class MainViewController: NSViewController {
         return zeros | ones
     }
 
-    /// Bins one file into `rowCount` rows of 16 cells: how full each cell's slice
-    /// of bytes is, and which cells hold a modified or differing byte.
-    ///
-    /// Rows are binned over `extent` — the longest open file — so the same row
-    /// means the same absolute offset on both maps (§9); rows past this file's
-    /// own end stay empty. One read per row keeps the pass sequential and bounded
-    /// by the file's size.
-    nonisolated private static func overviewSummary(
-        source: OverviewSource, extent: UInt64, rowCount: Int,
-        shouldCancel: () -> Bool,
-        rowsDone: (Int) -> Void = { _ in }
-    ) -> MinimapView.OverviewSummary {
-        let columns = Int(MinimapView.bytesPerRow)
-        let rows = max(0, rowCount)
-        let empty = MinimapView.OverviewSummary(
-            extent: extent, rowCount: rowCount,
-            density: [UInt8](repeating: 0, count: rows * columns),
-            modified: [UInt16](repeating: 0, count: rows),
-            different: [UInt16](repeating: 0, count: rows)
-        )
-        guard rowCount > 0, extent > 0,
-              let all = overviewRows(source: source, extent: extent, rowCount: rowCount,
-                                     rows: 0...(rowCount - 1),
-                                     shouldCancel: shouldCancel, rowsDone: rowsDone)
-        else { return empty }
-        return MinimapView.OverviewSummary(extent: extent, rowCount: rowCount,
-                                          density: all.density, modified: all.modified,
-                                          different: all.different)
-    }
 
-    /// The overview's values for `rows` alone: the density of their cells and
-    /// their modified/difference bits. A whole picture is this over every row; a
-    /// byte edit is this over the one or two rows it lands in, which is why the
-    /// engine takes a row range rather than always walking the file (§19.9).
-    ///
-    /// Returns nil when cancelled or when `rows` is not inside the picture.
-    nonisolated static func overviewRows(
-        source: OverviewSource, extent: UInt64, rowCount: Int, rows: ClosedRange<Int>,
-        shouldCancel: () -> Bool = { false },
-        rowsDone: (Int) -> Void = { _ in }
-    ) -> (density: [UInt8], modified: [UInt16], different: [UInt16])? {
-        let columns = Int(MinimapView.bytesPerRow)
-        guard rowCount > 0, extent > 0, rows.lowerBound >= 0, rows.upperBound < rowCount else {
-            return nil
-        }
-        var density = [UInt8](repeating: 0, count: rows.count * columns)
-        var modified = [UInt16](repeating: 0, count: rows.count)
-        var different = [UInt16](repeating: 0, count: rows.count)
-        guard let storage = source.storage else { return (density, modified, different) }
-
-        // One mapping, shared with the search's match overlay: the two must
-        // land on the same cells or the map contradicts itself (§19.4.2).
-        let binning = OverviewBinning(extent: extent, rowCount: rowCount)
-
-        /// The first byte of a row's slice of the file.
-        func start(ofRow row: Int) -> UInt64 { binning.start(ofRow: row) }
-
-        /// The cells one byte of a row's slice occupies, when the slice is
-        /// thinner than the row's 16 cells: the byte is stretched over the cells
-        /// it covers, so `index` 0 of a one-byte slice fills the row.
-        ///
-        /// A row covers fewer bytes than it has cells whenever the file is
-        /// smaller than 16 bytes per pixel row — under ~25 KB on a full-height
-        /// panel — and covers a *fraction* of a byte once the file is smaller
-        /// than the panel has rows. Slicing per cell there gave every cell but
-        /// the last an empty byte range: the picture came out a pale field with
-        /// the whole file collapsed into a stripe down its right edge (§19.4.2).
-        func stretchedColumns(forByteAt index: UInt64, ofSpan span: UInt64) -> ClosedRange<Int> {
-            binning.stretchedColumns(forByteAt: index, ofSpan: span)
-        }
-
-        /// The row a byte offset falls in, and the cells it occupies there.
-        func cells(of offset: UInt64) -> (row: Int, columns: ClosedRange<Int>)? {
-            binning.cells(of: offset, within: rows)
-        }
-
-        // The byte range these rows cover, so the passes below read and scan
-        // only what belongs to them.
-        let windowStart = start(ofRow: rows.lowerBound)
-        let windowEnd = start(ofRow: rows.upperBound + 1)
-
-        // Density: one read per row, counting the bytes that are not a fill.
-        // Progress is reported in blocks of rows, which is granular enough for a
-        // bar and rare enough not to matter to the pass.
-        var reportedRow = rows.lowerBound
-        for row in rows {
-            if shouldCancel() { return nil }
-            if row - reportedRow >= 64 {
-                rowsDone(row - reportedRow)
-                reportedRow = row
-            }
-            let rowStart = start(ofRow: row)
-            let rowEnd = start(ofRow: row + 1)
-            let span = rowEnd - rowStart
-            // A row whose slice is thinner than a byte still stands for the byte
-            // its position falls in — read that one, rather than leaving the row
-            // blank as it used to be.
-            let readEnd = min(max(rowEnd, rowStart + 1), source.size)
-            guard rowStart < readEnd else { continue }
-            guard let bytes = try? storage.read(at: rowStart, length: Int(readEnd - rowStart)),
-                  !bytes.isEmpty else { continue }
-            let base = (row - rows.lowerBound) * columns
-            bytes.withUnsafeBufferPointer { buffer in
-                guard span >= UInt64(columns) else {
-                    // Fewer bytes than cells: each byte fills the cells it
-                    // covers, so the row reads as a coarse picture of those
-                    // bytes instead of one inked cell at its right edge.
-                    let count = min(buffer.count, Int(max(span, 1)))
-                    for index in 0..<count {
-                        guard significantByteCount(buffer, from: index, to: index + 1) > 0 else { continue }
-                        for column in stretchedColumns(forByteAt: UInt64(index), ofSpan: span) {
-                            density[base + column] = 255
-                        }
-                    }
-                    return
-                }
-                for column in 0..<columns {
-                    let sliceStart = rowStart + span * UInt64(column) / UInt64(columns)
-                    let sliceEnd = rowStart + span * UInt64(column + 1) / UInt64(columns)
-                    let from = Int(sliceStart - rowStart)
-                    let to = Int(min(sliceEnd, readEnd) - rowStart)
-                    guard from < to, to <= buffer.count else { continue }
-                    let significant = significantByteCount(buffer, from: from, to: to)
-                    guard significant > 0 else { continue }
-                    density[base + column] =
-                        UInt8(min(255, max(1, significant * 255 / (to - from))))
-                }
-            }
-        }
-
-        rowsDone(rows.upperBound + 1 - reportedRow)
-
-        // Modified: where the byte differs from the saved copy — the same rule
-        // the panes paint by — inside the rows an edit can have reached.
-        //
-        // Row by row, cell by cell, comparing whole slices rather than bytes: an
-        // insert or a delete shifts every byte after it, so `source.edited`
-        // covers the file's whole tail and a per-byte loop over it took seconds.
-        // Bytes outside the edited ranges cannot differ from the saved copy, so
-        // comparing a cell whole is safe: the untouched part of it compares
-        // equal and contributes nothing.
-        if source.marksModified, !source.edited.isEmpty {
-            let savedSize = source.saved?.size ?? 0
-            for row in rows {
-                if shouldCancel() { return nil }
-                let rowStart = start(ofRow: row)
-                let rowEnd = start(ofRow: row + 1)
-                let span = rowEnd - rowStart
-                let readEnd = min(max(rowEnd, rowStart + 1), source.size)
-                guard rowStart < readEnd else { continue }
-                // Rows no edit can have reached are skipped, so a clean file
-                // costs nothing here and a small edit costs one row.
-                guard source.edited.contains(where: {
-                    $0.lowerBound < readEnd && $0.upperBound > rowStart
-                }) else { continue }
-                guard let bytes = try? storage.read(at: rowStart, length: Int(readEnd - rowStart)),
-                      !bytes.isEmpty else { continue }
-                let savedBytes = source.saved
-                    .flatMap { try? $0.read(at: rowStart, length: Int(readEnd - rowStart)) } ?? []
-                let index = row - rows.lowerBound
-
-                guard span >= UInt64(columns) else {
-                    // Fewer bytes than cells: compare the handful of bytes and
-                    // stretch each one over the cells it covers.
-                    for offsetInRow in 0..<bytes.count {
-                        let absolute = rowStart + UInt64(offsetInRow)
-                        let changed = absolute >= savedSize
-                            || (savedBytes.indices.contains(offsetInRow)
-                                ? savedBytes[offsetInRow] != bytes[offsetInRow] : true)
-                        guard changed else { continue }
-                        for column in stretchedColumns(forByteAt: UInt64(offsetInRow), ofSpan: span) {
-                            modified[index] |= UInt16(1) << UInt16(column)
-                        }
-                    }
-                    continue
-                }
-
-                for column in 0..<columns {
-                    let sliceStart = rowStart + span * UInt64(column) / UInt64(columns)
-                    let sliceEnd = rowStart + span * UInt64(column + 1) / UInt64(columns)
-                    let from = Int(sliceStart - rowStart)
-                    let to = Int(min(sliceEnd, readEnd) - rowStart)
-                    guard from < to, to <= bytes.count else { continue }
-                    // Bytes past the saved file's end are new by definition.
-                    if sliceStart + UInt64(to - from) > savedSize {
-                        modified[index] |= UInt16(1) << UInt16(column)
-                        continue
-                    }
-                    guard savedBytes.count >= to else {
-                        modified[index] |= UInt16(1) << UInt16(column)
-                        continue
-                    }
-                    let differs = bytes.withUnsafeBufferPointer { current in
-                        savedBytes.withUnsafeBufferPointer { saved in
-                            memcmp(current.baseAddress! + from, saved.baseAddress! + from, to - from) != 0
-                        }
-                    }
-                    if differs { modified[index] |= UInt16(1) << UInt16(column) }
-                }
-            }
-        }
-
-        // Differences: the index's differing blocks that touch these rows, found
-        // by binary search rather than by flattening the index. A block spanning
-        // whole rows marks every column of them.
-        for block in source.differences?.blocks(in: windowStart..<windowEnd) ?? []
-        where block.kind == .different {
-            if shouldCancel() { return nil }
-            binning.mark(block.range, rows: rows, into: &different)
-        }
-
-        // A cell past this file's own end holds none of its bytes, so it can
-        // neither differ nor be modified — whatever the comparison index says.
-        // The index is built over the *union* of the two files (§9), so every
-        // byte past the shorter file's end counts as a difference there; drawn
-        // as such it painted the shorter map's empty tail solid. The tail is
-        // empty, exactly as it is in detail mode.
-        for row in rows {
-            let slot = row - rows.lowerBound
-            guard modified[slot] != 0 || different[slot] != 0 else { continue }
-            var covered: UInt16 = 0
-            let rowStart = start(ofRow: row)
-            let span = start(ofRow: row + 1) - rowStart
-            for column in 0..<columns
-            where rowStart + span * UInt64(column) / UInt64(columns) < source.size {
-                covered |= UInt16(1) << UInt16(column)
-            }
-            modified[slot] &= covered
-            different[slot] &= covered
-        }
-
-        return (density, modified, different)
-    }
 
     // MARK: - Minimap data (§19)
 
-    /// Feeds the minimap the per-byte state of the rows it is showing.
-    ///
-    /// The map is virtualized: it asks for the byte range of its visible window
-    /// on each repaint and stores nothing, so this reads a couple of thousand
-    /// bytes however large the file is. It is also the very call the panes make
-    /// to paint their own rows, which is what keeps the map's colours — modified,
-    /// difference — identical to theirs instead of a background approximation
-    /// that lags behind them.
-    private func minimapByteStates(of surface: DocumentSurface, mapIndex: Int, range: Range<UInt64>) -> [HexByteState] {
-        surface.mappedPane(at: mapIndex)?.hexByteStates(in: range) ?? []
-    }
-
-    /// Feeds the minimap the active search's matches for the rows it is
-    /// showing (§11), from the same set the dump paints from — the map cannot
-    /// disagree with the dump for the same reason its byte states cannot.
-    private func minimapMatchRanges(of surface: DocumentSurface, mapIndex: Int, range: Range<UInt64>) -> [Range<UInt64>] {
-        surface.mappedPane(at: mapIndex)?.matchRanges(intersecting: range) ?? []
-    }
-
-    private func minimapCurrentMatch(of surface: DocumentSurface, mapIndex: Int) -> Range<UInt64>? {
-        surface.mappedPane(at: mapIndex)?.currentMatchRange
-    }
-
-    /// Hands the minimap the window's bookmarks (§19.4.3). The store is the one
-    /// list both maps mark, so this is a straight copy — which rows a given map
-    /// actually shows is the minimap's own geometry to decide, and the names come
-    /// along because hovering a mark names it.
-    private func syncMinimapBookmarks(of surface: DocumentSurface) {
-        // The list the panes this surface maps are reading: the tab's for its
-        // own two, and a fragment panel's own, whose offsets are the part's.
-        let marks = surface.panesInMapOrder().first?.bookmarkStore?.bookmarks
-            ?? windowModel.bookmarkStore.bookmarks
-        surface.minimapView.setBookmarks(marks)
-    }
-
-    /// Hands the minimap the search's matches for the overview (§11).
-    ///
-    /// Derived from the pane's match set with the overview's own binning — the
-    /// same arithmetic the density picture uses, so a match lands on the cell
-    /// its bytes land in — and cheap enough to do on the main actor: a couple of
-    /// hundred bytes per map, no file read.
-    /// Asks for the map's match marks, later.
-    ///
-    /// The map is never on the critical path of a search: showing the match the
-    /// user asked for is the dump's job and the reveal's, and the marks beside
-    /// it are a summary that may as well arrive a frame afterwards. So this
-    /// only schedules — coalescing a burst of presses into one sync — and the
-    /// walk itself runs off the main thread (§11, §19).
-    private func scheduleMinimapMatchSync(of surface: DocumentSurface) {
-        // Nothing on the map is drawn while the panel is closed, so nothing is
-        // computed for it. Showing the panel is what asks
-        // (`minimapPanelVisibilityChanged`), and the forgotten picture makes
-        // that ask rebuild rather than trust what it last saw (§19).
-        guard surface.minimapPanelVisible else {
-            surface.syncedMatchPicture = nil
-            return
-        }
-        guard !surface.minimapMatchSyncScheduled else { return }
-        surface.minimapMatchSyncScheduled = true
-        Task { @MainActor [weak self] in
-            self?.surface.minimapMatchSyncScheduled = false
-            await self?.syncMinimapMatchOverlays(of: surface)
-        }
-    }
-
-    /// Hands the minimap the search's matches for the overview (§11).
-    ///
-    /// The state is read here, on the actor that owns it; the row walk that
-    /// turns a set into marks is pure arithmetic over `Sendable` values, so it
-    /// runs on a detached task and the result is installed on return. A picture
-    /// that has been overtaken while that ran is dropped: a newer sync is
-    /// already on its way.
-    private func syncMinimapMatchOverlays(of surface: DocumentSurface) async {
-        guard surface.minimapPanelVisible else {
-            surface.syncedMatchPicture = nil
-            return
-        }
-        let rowCount = surface.minimapView.overviewRowCount()
-        let extent = currentFileSizes(of: surface).max() ?? 0
-        let panes: [PaneViewModel?] = surface.panesInMapOrder()
-        guard rowCount > 0, extent > 0, !panes.isEmpty else {
-            surface.minimapView.setMatchOverlays([])
-            surface.syncedMatchPicture = nil
-            return
-        }
-        let binning = OverviewBinning(extent: extent, rowCount: rowCount)
-        let picture = MatchPicture(rowCount: rowCount, extent: extent,
-                                   sets: panes.map { MatchPicture.Marks($0?.highlightedMatchSet) })
-        if picture == surface.syncedMatchPicture, surface.minimapView.matchOverlays.count == panes.count {
-            // The same occurrences over the same geometry are the same strokes.
-            // Only the plate can have moved, and re-marking one range is the
-            // whole of that — this is the path a press of ‹ › takes, and it
-            // used to walk every row of the map instead (§11).
-            surface.minimapView.setMatchOverlays(zip(surface.minimapView.matchOverlays, panes).map { overlay, pane in
-                var moved = overlay
-                moved.current = Self.currentMatchMarks(pane?.currentMatchRange, binning: binning,
-                                                       rowCount: rowCount)
-                return moved
-            })
-            return
-        }
-        // The sets and the plates as values, so the walk needs nothing from the
-        // main actor.
-        let sets = panes.map { pane -> MatchSet? in
-            guard let pane, pane.isOpen else { return nil }
-            return pane.highlightedMatchSet
-        }
-        let currents = panes.map { $0?.currentMatchRange }
-        let generation = surface.minimapMatchSyncGeneration + 1
-        surface.minimapMatchSyncGeneration = generation
-        surface.matchOverlayWalksForTesting += 1
-        let overlays = await Task.detached(priority: .utility) {
-            zip(sets, currents).map {
-                Self.matchOverlay(for: $0, current: $1, binning: binning,
-                                  rowCount: rowCount, extent: extent)
-            }
-        }.value
-        guard generation == surface.minimapMatchSyncGeneration else { return }
-        surface.syncedMatchPicture = picture
-        surface.minimapView.setMatchOverlays(overlays)
-    }
-
-    /// What the overview's match strokes were last computed from: the geometry,
-    /// and each pane's set as far as the strokes can tell two sets apart.
-    ///
-    /// The set is not compared byte for byte — it is compared by the things the
-    /// picture is made of. Two sets with the same pattern, the same folding and
-    /// the same count over the same extent mark the same rows, so there is
-    /// nothing to redo; and while a search is being indexed the count is what
-    /// grows, so a batch still reads as a new picture.
-    struct MatchPicture: Equatable {
-        struct Marks: Equatable {
-            let pattern: SearchPattern
-            let folding: CaseFolding
-            let total: Int
-
-            init?(_ set: MatchSet?) {
-                guard let set else { return nil }
-                pattern = set.pattern
-                folding = set.folding
-                total = set.total
-            }
-        }
-
-        let rowCount: Int
-        let extent: UInt64
-        let sets: [Marks?]
-    }
 
 
 
 
-    /// One map's worth of match bits.
-    ///
-    /// Walks the **rows**, not the matches: a two-byte pattern in a dump has
-    /// hundreds of thousands of occurrences and the overview has a couple of
-    /// thousand rows, so per-match work would be the wrong way round. Each row
-    /// stops early once every column is marked or after `perRowMarkLimit`
-    /// matches — by then the row says all it can say at this scale.
-    nonisolated private static func matchOverlay(for set: MatchSet?, current: Range<UInt64>?,
-                                                 binning: OverviewBinning,
-                                                 rowCount: Int,
-                                                 extent: UInt64) -> MinimapView.MatchOverlay {
-        guard let set, set.isHighlightable else { return .empty }
-        let perRowMarkLimit = 32
-        let rows = 0...(rowCount - 1)
-        let reach = UInt64(max(set.patternLength - 1, 0))
-        var matched = [UInt16](repeating: 0, count: rowCount)
 
-        for row in rows {
-            let rowStart = binning.start(ofRow: row)
-            let rowEnd = binning.start(ofRow: row + 1)
-            guard rowEnd > rowStart else { continue }
-            // A match starting just above the row can still reach into it.
-            let from = rowStart > reach ? rowStart - reach : 0
-            var index = set.index(atOrAfter: from)
-            var marks = 0
-            while let i = index, marks < perRowMarkLimit, matched[row] != .max {
-                guard let start = set.start(at: i), start < rowEnd else { break }
-                // The whole row range, not this one row: the marking indexes
-                // the bits from the range's start, and the masks are absolute.
-                binning.markHexColumns(start..<start + UInt64(set.patternLength),
-                                       rows: rows, into: &matched)
-                marks += 1
-                index = i + 1 < set.total ? i + 1 : nil
-            }
-        }
-        return MinimapView.MatchOverlay(
-            extent: extent, rowCount: rowCount, matched: matched,
-            current: currentMatchMarks(current, binning: binning, rowCount: rowCount))
-    }
-
-    /// The row bits for the find indicator alone — one range, so this is what a
-    /// step of ‹ › costs on the map.
-    nonisolated private static func currentMatchMarks(_ range: Range<UInt64>?,
-                                                      binning: OverviewBinning,
-                                                      rowCount: Int) -> [UInt16] {
-        var marks = [UInt16](repeating: 0, count: rowCount)
-        guard rowCount > 0, let range else { return marks }
-        binning.markHexColumns(range, rows: 0...(rowCount - 1), into: &marks)
-        return marks
-    }
-
-    /// Hands the minimap the open panes' segment partitions, so the strip beside
-    /// each map paints the dump's pieces (§19.4.4). The tint is by *position* —
-    /// the piece's index into the partition — the same rule the dump's row tint
-    /// uses, so the strip and the dump are one legend. A pane with a single piece
-    /// hands its lone block; the minimap draws no strip for it, and the strip
-    /// appears the moment a cut makes a second piece.
-    private func syncMinimapSegments(of surface: DocumentSurface) {
-        let panes: [PaneViewModel?] = surface.panesInMapOrder()
-        let blocks: [[MinimapView.SegmentBlock]] = panes.map { pane in
-            guard let pane, pane.isOpen else { return [] }
-            return pane.segmentStore.segments.map {
-                MinimapView.SegmentBlock(range: $0.range,
-                                         colorIndex: $0.index % HexTheme.segmentTints.count)
-            }
-        }
-        surface.minimapView.setSegmentBlocks(blocks)
-    }
-
-    /// Hands the minimap the panes' published zone maps, so the gutter left of
-    /// each map brackets what a tool-module found in that file (§19.4.5).
-    ///
-    /// Read from the panes rather than from the `ToolController`: the pane is
-    /// where the map lands once it has been clamped to the file's own size
-    /// (`ZoneMap.normalized`), so the gutter and the dump bracket exactly the
-    /// same bytes. It also means this needs no idea of which pane a session is
-    /// bound to — the other pane's map is simply empty.
-    private func syncMinimapZones(of surface: DocumentSurface) {
-        let count = surface.panesInMapOrder().count
-        surface.minimapView.setZoneMaps((0..<count).map { index in
-            guard let pane = surface.mappedPane(at: index), pane.isOpen else { return ZoneMap.empty }
-            return pane.zones
-        })
-    }
-
-    /// Hands the minimap the open files' sizes. That is all it needs to lay its
-    /// maps out — everything it draws it pulls per repaint.
-    private func refreshMinimapMaps(of surface: DocumentSurface) {
-        surface.minimapView.setMaps(currentFileSizes(of: surface).map { MinimapView.Map(fileSize: $0) })
-        updateMinimapSelections(of: surface)
-        // The maps were just rebuilt, so the marks have to be handed over again
-        // — and a file that grew or shrank changes which of them are drawn (§9).
-        syncMinimapBookmarks(of: surface)
-        // A content edit moves the cuts with the bytes (§21.2), so the strip's
-        // partition follows — and a file that opened or closed changes which
-        // panes have a partition at all.
-        syncMinimapSegments(of: surface)
-        // The same goes for the zones a tool-module published: a file that
-        // opened, closed or changed length changes which of them there are to
-        // bracket (§19.4.5).
-        syncMinimapZones(of: surface)
-        // The overview's match bits are binned over the extent, so a file that
-        // grew or shrank re-bins them too (§11).
-        scheduleMinimapMatchSync(of: surface)
-        // An insert or a delete can carry the file across the line where the
-        // overview stops magnifying it, so the offer follows the size as well as
-        // the panel's height (§19.4). The *mode* is deliberately not re-decided
-        // here: this runs on every edit, and the choice belongs where the open
-        // files change.
-        updateOverviewAvailability(of: surface)
-        // The bytes moved, so an overview summary of them is stale.
-        scheduleOverviewRebuild(of: surface)
-    }
-
-    /// The bytes under the maps changed. An overwrite names a bounded range, so
-    /// both modes update in place and at once: detail repaints the rows that draw
-    /// it (its cells are pulled from the panes as it draws), and overview
-    /// recomputes those rows of its picture instead of walking the file again —
-    /// a typed byte moves one row of a thousand (§19.9).
-    ///
-    /// Both maps, because a byte edited in one file changes the difference state
-    /// the other one paints at that same offset (§9).
-    /// `mapIndex` is the map of the pane the edit happened in — the maps mirror
-    /// the panes (§19). Only that map's rows can have moved: a shift in one file
-    /// says nothing about the other, which is what painting both of them red
-    /// wrongly claimed.
-    private func repaintMinimap(of surface: DocumentSurface, after edit: DiffEdit, mapIndex: Int) {
-        switch edit {
-        case .overwrite(let range):
-            // Typing past EOF grows the file, which re-bins the overview: that is
-            // a new picture, not a patch.
-            guard surface.minimapView.maps.map(\.fileSize) == currentFileSizes(of: surface) else {
-                surface.minimapView.invalidateCells()
-                refreshMinimapMaps(of: surface)
-                return
-            }
-            surface.minimapView.invalidateBytes(in: range)
-            patchOverviewRows(of: surface, covering: range)
-            // The difference marks come from the comparison index, which absorbs
-            // the edit in the background: these rows are patched again when it
-            // does, instead of the whole picture being rebuilt (§19.9).
-            // Only a comparison has an index for the difference marks to wait on,
-        // and only a surface with two maps is one.
-        if surface.panesInMapOrder().count > 1 {
-            surface.overviewRowsAwaitingIndex.append(range)
-        }
-        case .insert, .delete:
-            // Every byte after the change moved, so no range describes it: the
-            // exact picture is a full pass, and that pass waits for the typing to
-            // settle. Until it lands the map keeps the picture it has — a byte
-            // or two out of date, which at a row per 13 KB is invisible.
-            //
-            // Marking the shifted tail red in the meantime was tried and is
-            // wrong: from an edit near the start of a file that paints the whole
-            // map red, which is not "the old picture, slightly stale" but a new
-            // and much worse one.
-            surface.minimapView.invalidateCells()
-            refreshMinimapMaps(of: surface)
-        }
-    }
-
-    /// Recomputes the overview rows that `range` falls in, on every map, and
-    /// leaves the rest of the picture untouched. Falls back to a full rebuild
-    /// when the picture on screen was binned differently from what these rows
-    /// would be (a resize or a new file landed in between).
-    private func patchOverviewRows(of surface: DocumentSurface, covering range: Range<UInt64>) {
-        guard surface.minimapPanelVisible, surface.minimapView.renderMode == .overview else { return }
-        let summaries = surface.minimapView.overviewSummaries
-        let sources = overviewSources(of: surface)
-        guard !summaries.isEmpty, summaries.count == sources.count,
-              let extent = summaries.first?.extent, extent > 0,
-              let rowCount = summaries.first?.rowCount, rowCount > 0,
-              summaries.allSatisfy({ $0.extent == extent && $0.rowCount == rowCount }),
-              rowCount == surface.minimapView.overviewRowCount(),
-              extent == sources.map(\.size).max() ?? 0 else {
-            scheduleOverviewRebuild(of: surface)
-            return
-        }
-        let last = min(range.upperBound &- 1, extent - 1)
-        guard range.lowerBound <= last else { return }
-        let firstRow = Int(range.lowerBound * UInt64(rowCount) / extent)
-        let lastRow = min(rowCount - 1, Int(last * UInt64(rowCount) / extent))
-        guard firstRow <= lastRow else { return }
-        let rows = firstRow...lastRow
-        for (index, source) in sources.enumerated() {
-            guard let patch = Self.overviewRows(source: source, extent: extent,
-                                                rowCount: rowCount, rows: rows) else { continue }
-            surface.minimapView.updateOverviewRows(rows, density: patch.density, modified: patch.modified,
-                                           different: patch.different, forMapAt: index)
-        }
-        surface.overviewPatches += 1
-    }
-
-    /// The open files' sizes, in map order.
-    private func currentFileSizes(of surface: DocumentSurface) -> [UInt64] {
-        surface.panesInMapOrder().map(\.fileSize)
-    }
-
-    /// One snapshot per map, in map order.
-    private func overviewSources(of surface: DocumentSurface) -> [OverviewSource] {
-        surface.panesInMapOrder().map { overviewSource($0) }
-    }
-
-    /// The comparison index changed. When what changed is the edits this
-    /// controller recorded, the overview patches their rows; anything else — a
-    /// fresh index, a build starting, a cancel — means the derived picture is
-    /// stale as a whole and is rebuilt (§19.9).
-    private func overviewFollowIndexChange(of surface: DocumentSurface) {
-        guard surface.minimapPanelVisible, surface.minimapView.renderMode == .overview else {
-            surface.overviewRowsAwaitingIndex.removeAll()
-            return
-        }
-        let build = comparisonCoordinator.indexBuildCount
-        guard build == surface.overviewIndexBuildCount else {
-            surface.overviewIndexBuildCount = build
-            surface.overviewRowsAwaitingIndex.removeAll()
-            scheduleOverviewRebuild(of: surface)
-            return
-        }
-        guard !surface.overviewRowsAwaitingIndex.isEmpty else {
-            scheduleOverviewRebuild(of: surface)
-            return
-        }
-        let ranges = surface.overviewRowsAwaitingIndex
-        surface.overviewRowsAwaitingIndex.removeAll()
-        for range in ranges { patchOverviewRows(of: surface, covering: range) }
-    }
-
-    /// Centres the pane on the byte clicked on a map, moving the viewport
-    /// without touching the caret or the selection — a minimap click navigates
-    /// the view, it does not edit the caret's position. In comparison mode the
-    /// click also makes that pane active, so the keyboard and the navigation
-    /// commands act on the pane the user just pointed at.
-    private func selectMinimapOffset(of surface: DocumentSurface, mapIndex: Int, offset: UInt64) {
-        guard let pane = surface.mappedPane(at: mapIndex), pane.isOpen else { return }
-        // Clicking the second map of a comparison also makes that pane active,
-        // the way clicking its dump does. A surface with one pane has nothing
-        // to point at.
-        if surface === self.surface, mode == .comparison, mapIndex != windowModel.activePaneIndex {
-            activatePane(at: mapIndex)
-        }
-        let views = surface.paneViewsInMapOrder()
-        let view = mapIndex < views.count ? views[mapIndex] : filePaneView(for: pane)
-        view?.revealOffsetCentered(offset)
-    }
 
     // MARK: - The segment strip's legend (§19.4.4, §21.3)
 
@@ -3391,15 +2360,6 @@ final class MainViewController: NSViewController {
         case .singleFile: return [windowModel.pane1]
         case .comparison: return [windowModel.pane1, windowModel.pane2]
         }
-    }
-
-    /// The current name of the piece the strip's hover text names — asked for at
-    /// hover time, not stored, because the store fires no invalidation for a
-    /// rename (§21.3).
-    private func minimapSegmentName(of surface: DocumentSurface, mapIndex: Int, pieceIndex: Int) -> String {
-        guard let pane = surface.mappedPane(at: mapIndex), pane.isOpen,
-              pieceIndex < pane.segmentStore.segments.count else { return "" }
-        return pane.segmentStore.segments[pieceIndex].name
     }
 
     /// The piece a strip-menu item acts on, carried in the item's
@@ -3647,55 +2607,6 @@ final class MainViewController: NSViewController {
               let pane = surface.mappedPane(at: target.mapIndex), pane.isOpen,
               target.pieceIndex < pane.segmentStore.segments.count else { return }
         pane.segmentStore.removePiece(at: target.pieceIndex)
-    }
-
-    /// Scrolls the panes so `offset`'s hex row sits at the top of the pane —
-    /// what the minimap's drag and wheel ask for. In comparison mode scrolling
-    /// one pane syncs the other (§9), so driving the active pane is enough.
-    private func scrollPanesToOffset(of surface: DocumentSurface, _ offset: UInt64) {
-        let views = surface.paneViewsInMapOrder()
-        // The active pane when it is one this surface shows — a comparison's
-        // map scrolls the pane the reader is in — and otherwise the first,
-        // which for a surface with one pane is that pane.
-        let target = activeFilePane.flatMap { views.contains($0) ? $0 : nil } ?? views.first
-        target?.scrollRowToTop(containing: offset)
-    }
-
-    /// Moves each map's selection overlay to its pane's current selection.
-    /// Cheap (an overlay repaint), so it rides the caret-changed callbacks.
-    private func updateMinimapSelections(of surface: DocumentSurface) {
-        let selections = surface.panesInMapOrder().map { minimapSelectionRange($0) }
-        for (index, selection) in selections.enumerated() {
-            surface.minimapView.updateSelection(selection, forMapAt: index)
-        }
-    }
-
-    private func minimapSelectionRange(_ pane: PaneViewModel) -> Range<UInt64>? {
-        let selection = pane.hexSelection()
-        guard !selection.isEmpty else { return nil }
-        return selection.start..<selection.end
-    }
-
-
-    /// Wires a pane's viewport scrolls into the minimap: every visible-range
-    /// change moves the grey viewport band and slides the map's own window,
-    /// since the window is derived from the panes (§19).
-    private func trackMinimapViewport(of surface: DocumentSurface, for pane: FilePaneView) {
-        pane.onHexViewportChanged = { [weak self, weak pane] range in
-            guard let self, let pane else { return }
-            surface.minimapViewports[ObjectIdentifier(pane)] = range
-            self.updateMinimapViewports(of: surface)
-        }
-    }
-
-    /// Moves each map's viewport band to its pane's visible byte range, which
-    /// also re-derives the shared window. Cheap — no file pass — so it rides the
-    /// scroll and resize notifications.
-    private func updateMinimapViewports(of surface: DocumentSurface) {
-        let viewports = surface.paneViewsInMapOrder().map {
-            surface.minimapViewports[ObjectIdentifier($0)]
-        }
-        surface.minimapView.setViewports(viewports)
     }
 
     // MARK: - Helpers
@@ -6787,7 +5698,7 @@ final class MainViewController: NSViewController {
         // No byte range describes a set arriving or a plate moving to another
         // part of the file, so in detail mode every cell it draws is suspect.
         surface.minimapView.invalidateCells()
-        scheduleMinimapMatchSync(of: surface)
+        surface.minimap.scheduleMatchSync()
     }
 
     /// Points the Find bar at the active pane (§11).
@@ -7346,6 +6257,42 @@ extension MainViewController: NSToolbarItemValidation {
 }
 
 // MARK: - Menu validation
+
+/// What a surface's map asks of the tab it lives in
+/// (`Design/FRAGMENT_PANELS_PLAN.md`). Everything else it needs it asks of its
+/// own surface, which is the point: nothing here offers it the window's mode.
+extension MainViewController: MinimapHost {
+    /// Two maps follow the panes they map: side by side, or stacked at the
+    /// panes' own divider so the two lines meet (§19).
+    func minimapPairLayout() -> MinimapView.MapLayout {
+        guard let comparisonView else { return .single }
+        return comparisonView.splitView.isVertical
+            ? .sideBySide
+            : .stacked(fraction: comparisonView.currentFraction)
+    }
+
+    func overviewSource(for pane: PaneViewModel) -> SurfaceMinimapController.OverviewSource {
+        SurfaceMinimapController.OverviewSource(
+            storage: pane.byteStorage, saved: pane.savedStorage, size: pane.fileSize,
+            edited: pane.editedRanges, marksModified: pane.marksModifiedBytes,
+            differences: comparisonCoordinator.index)
+    }
+
+    var comparisonIndexBuild: Int { comparisonCoordinator.indexBuildCount }
+
+    func activatePane(showingMapAt index: Int) {
+        guard mode == .comparison, index != windowModel.activePaneIndex else { return }
+        activatePane(at: index)
+    }
+
+    func minimapSegmentMenu(mapIndex: Int, pieceIndex: Int, point: NSPoint) -> NSMenu? {
+        makeMinimapSegmentMenu(mapIndex: mapIndex, pieceIndex: pieceIndex, point: point)
+    }
+
+    func minimapZoneMenu(mapIndex: Int, zoneID: Zone.ID) -> NSMenu? {
+        makeMinimapZoneMenu(mapIndex: mapIndex, zoneID: zoneID)
+    }
+}
 
 extension MainViewController: NSMenuItemValidation {
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
