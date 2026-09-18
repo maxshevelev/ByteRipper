@@ -11,8 +11,9 @@ final class ParseProgressTests: XCTestCase {
     /// progress. 2 MiB spans several of the scan's 1 MiB windows.
     func testScanReportsMonotonicProgressAcrossTheImage() {
         let image = [UInt8](repeating: 0xFF, count: 2 << 20)
-        var seen: [Double] = []
-        let parsed = UEFIParser.parse(image, progress: { seen.append($0) })
+        let reported = Reported<Double>()
+        let parsed = UEFIParser.parse(image, progress: { reported.append($0) })
+        let seen = reported.all
 
         XCTAssertGreaterThanOrEqual(seen.count, 3,
                                     "the scan should report more than once across several windows")

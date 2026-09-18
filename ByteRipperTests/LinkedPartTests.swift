@@ -153,7 +153,7 @@ final class LinkedPartTests: XCTestCase {
 
     /// Another file dropped into the tab replaces the part: no link any more.
     func testReplacingTheTabsContentDropsTheLink() throws {
-        let (controller, part) = try openZonePanel()
+        let (_, part) = try openZonePanel()
         let url = try tempFile([0x01, 0x02])
         files.append(url)
 

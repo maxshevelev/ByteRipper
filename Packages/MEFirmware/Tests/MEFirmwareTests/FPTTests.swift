@@ -73,7 +73,7 @@ final class FPTParserTests: XCTestCase {
 
     func testResolvedFptStartKeyedOnCseLayoutTablePresence() {
         // No FD/LT and an old-style version → base is marker − 0x10.
-        var data = FPTFixture.fptRegion(anchor: 0x10, entries: [("FTPR", 0x1000, 0x1000, 0)])
+        let data = FPTFixture.fptRegion(anchor: 0x10, entries: [("FTPR", 0x1000, 0x1000, 0)])
         let marker = 0x10
         XCTAssertEqual(FPTParser.fptStart(anchor: marker, version: 0x20, length: 0x20,
                                           cseLayoutTablePresent: false, in: data), 0x0)

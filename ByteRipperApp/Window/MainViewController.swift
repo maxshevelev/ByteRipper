@@ -885,18 +885,22 @@ final class MainViewController: NSViewController {
             forName: LayoutSettings.layoutDirectionDidChangeNotification,
             object: nil,
             queue: .main
+        // Posted on the main queue and handled there — said so out loud, because
+        // the closure is `@Sendable` and everything it touches is the window.
         ) { [weak self] _ in
-            guard let self else { return }
-            // The toolbar's layout icon names the arrangement the click will
-            // produce, so it follows the direction wherever it was changed
-            // (§24.3) — including outside comparison mode, where the value is
-            // only stored.
-            self.revalidateToolbar()
-            guard self.mode == .comparison else { return }
-            self.comparisonView?.setLayout(vertical: LayoutSettings.isVertical)
-            // The pane arrangement changed (View menu or the Settings tab), so
-            // the minimap's internal split flips with it (§19).
-            surface.minimap.updateLayout()
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                // The toolbar's layout icon names the arrangement the click will
+                // produce, so it follows the direction wherever it was changed
+                // (§24.3) — including outside comparison mode, where the value is
+                // only stored.
+                self.revalidateToolbar()
+                guard self.mode == .comparison else { return }
+                self.comparisonView?.setLayout(vertical: LayoutSettings.isVertical)
+                // The pane arrangement changed (View menu or the Settings tab), so
+                // the minimap's internal split flips with it (§19).
+                surface.minimap.updateLayout()
+            }
         }
         wordSizeObserver = NotificationCenter.default.addObserver(
             forName: WordSize.didChangeNotification,

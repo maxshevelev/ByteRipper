@@ -178,7 +178,9 @@ final class MEAGitHubDataRepositoryTests: XCTestCase {
         _ = try await repository.database()
         await repository.settle()
 
-        let announced = await changes.next()
+        // The stream carries nothing but the fact that it fired, so its
+        // element is Void and the type has to be said out loud.
+        let announced: Void? = await changes.next()
         XCTAssertNotNil(announced, "the analysis was made against the database before this one")
     }
 

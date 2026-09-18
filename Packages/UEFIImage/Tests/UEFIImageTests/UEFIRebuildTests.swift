@@ -519,14 +519,12 @@ final class UEFIRebuildTests: XCTestCase {
     /// only, and all the way at the end.
     func testARebuildSaysWhatItIsDoing() throws {
         let (image, section) = compressedImage(lzma(driver()))
-        let seen = NSLock()
-        var reports: [UEFIRebuild.Progress] = []
+        let reported = Reported<UEFIRebuild.Progress>()
 
         let result = UEFIRebuild.plan(driver("InnerDriveX"), at: .init(space: .inside(section)), in: image) {
-            seen.lock()
-            reports.append($0)
-            seen.unlock()
+            reported.append($0)
         }
+        let reports = reported.all
 
         guard case .success = result else { return XCTFail("refused") }
         let phases = reports.map(\.phase).reduce(into: [String]()) { if $0.last != $1 { $0.append($1) } }

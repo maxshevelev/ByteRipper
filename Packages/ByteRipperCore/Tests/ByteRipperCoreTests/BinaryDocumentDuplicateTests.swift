@@ -91,7 +91,7 @@ final class BinaryDocumentDuplicateTests: XCTestCase {
     /// A copy of a read-only file is not itself read-only: it is a new document,
     /// and the file's permissions were never its own.
     func testTheCopyOfAReadOnlyFileIsWritable() throws {
-        let (doc, url) = try makeFileDocument([0x01, 0x02])
+        let (_, url) = try makeFileDocument([0x01, 0x02])
         try FileManager.default.setAttributes([.posixPermissions: 0o444], ofItemAtPath: url.path)
         let reopened = try BinaryDocument(url: url)
         XCTAssertTrue(reopened.readOnly)

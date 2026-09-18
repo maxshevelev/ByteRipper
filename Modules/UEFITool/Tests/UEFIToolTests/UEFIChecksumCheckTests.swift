@@ -157,7 +157,7 @@ final class UEFIChecksumCheckTests: XCTestCase {
     /// A file held by a volume whose checksums `repairs` writes back — a valid
     /// file, the start of every corrupt-one-field-at-a-time test.
     private func fixingFile(_ file: TestUEFI.Built, revision: UInt8) -> Holding {
-        var holding = volumeHolding(file, revision: revision)
+        let holding = volumeHolding(file, revision: revision)
         let repairs = UEFIChecksumCheck.repairs(
             for: holding.file, volumeRevision: revision, in: holding.reader
         )

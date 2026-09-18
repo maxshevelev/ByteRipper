@@ -123,13 +123,11 @@ final class CompressionTests: XCTestCase {
     /// An encode says how far it has got: forward only, the encoder's share
     /// first, and all the way when the check is done.
     func testAnEncodeReportsItsProgress() throws {
-        let seen = NSLock()
-        var fractions: [Double] = []
-        _ = try FirmwareCompression.compress(sample(count: 400_000), as: .lzma) { fraction in
-            seen.lock()
-            fractions.append(fraction)
-            seen.unlock()
+        let reported = Reported<Double>()
+        _ = try FirmwareCompression.compress(sample(count: 400_000), as: .lzma) {
+            reported.append($0)
         }
+        let fractions = reported.all
 
         XCTAssertEqual(fractions.first, 0)
         XCTAssertEqual(fractions.last, 1)
@@ -154,5 +152,25 @@ final class CompressionTests: XCTestCase {
             }
         }
         XCTAssertEqual(failed, 0)
+    }
+}
+
+/// Where a progress closure puts what it is told. The closure is `@Sendable`
+/// and may be called from wherever the encoder is running, so what it writes
+/// into cannot be a captured `var`.
+private final class Reported<Element>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var items: [Element] = []
+
+    func append(_ item: Element) {
+        lock.lock()
+        items.append(item)
+        lock.unlock()
+    }
+
+    var all: [Element] {
+        lock.lock()
+        defer { lock.unlock() }
+        return items
     }
 }
