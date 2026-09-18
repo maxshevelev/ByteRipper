@@ -126,6 +126,68 @@ final class FragmentToolTests: XCTestCase {
                       "and the dump's gutter is not where a part's zones go")
     }
 
+    // MARK: - The wall
+
+    /// Nothing the mouse does over a raised panel may reach the tab behind it —
+    /// not its panes, not its minimap, not its tool panel — at any point of the
+    /// area the panel covers. Swept rather than sampled, because the whole
+    /// trouble with this is that a strip of the tab shows above the panel on
+    /// purpose and the panes look reachable.
+    func testNoPointBehindARaisedPanelReachesTheTab() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        controller.surface.minimap.setPanelVisible(true, animated: false)
+        controller.tools.activate(StubToolA.identifier, animated: false)
+        window.layoutIfNeeded()
+        _ = controller.openFragment([UInt8](repeating: 0, count: 0x200), named: "part",
+                                    animated: false)
+        window.layoutIfNeeded()
+
+        let host = try XCTUnwrap(descendants(of: controller.view, FragmentPanelHost.self).first)
+        let content = try XCTUnwrap(window.contentView)
+        let tab = controller.surface.view
+        let area = host.convert(host.bounds, to: nil)
+        var leaks: [String] = []
+        for x in stride(from: area.minX + 1, to: area.maxX - 1, by: 20) {
+            for y in stride(from: area.minY + 1, to: area.maxY - 1, by: 10) {
+                guard let hit = content.hitTest(NSPoint(x: x, y: y)) else { continue }
+                if hit.isDescendant(of: tab) {
+                    leaks.append("(\(Int(x)),\(Int(y))) \(type(of: hit))")
+                }
+            }
+        }
+        XCTAssertEqual(leaks, [], "these points reach the tab through the panel")
+    }
+
+    /// And an event the panel's own views do not want stops at the wall rather
+    /// than climbing the responder chain to something behind that still wants
+    /// it. A right-click is the one that showed: the tool panel in front had no
+    /// menu of its own, so the click went looking for one.
+    func testTheWallAnswersNothingAndOffersNoMenu() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let host = try XCTUnwrap(descendants(of: controller.view, FragmentPanelHost.self).first)
+        XCTAssertFalse(host.acceptsFirstMouse(for: nil), "with no panel it is not in the way")
+
+        _ = controller.openFragment([UInt8](repeating: 0, count: 0x200), named: "part",
+                                    animated: false)
+        window.layoutIfNeeded()
+
+        XCTAssertTrue(host.acceptsFirstMouse(for: nil),
+                      "a click that merely brings the window forward is not a click on a pane")
+        let click = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .rightMouseDown, location: NSPoint(x: 10, y: 10), modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber, context: nil,
+            eventNumber: 0, clickCount: 1, pressure: 1))
+        XCTAssertNil(host.menu(for: click), "no menu of its own, and none from what it covers")
+        // The overrides are what stop the climb; calling them must simply do
+        // nothing rather than pass anything on.
+        host.rightMouseDown(with: click)
+        host.mouseDown(with: click)
+        host.scrollWheel(with: click)
+    }
+
     /// A part taken out of a panel belongs to **that panel**, not to the dump
     /// behind it: the dock stays flat, and the links form the chain
     /// (`Design/FRAGMENT_PANELS_PLAN.md`).

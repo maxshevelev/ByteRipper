@@ -153,6 +153,15 @@ enum PullDown {
 ///
 /// It clips, which an `NSView` does not do by itself — without it the panel
 /// would be drawn across the dock on its way up and down.
+///
+/// **And while it holds a panel it is a wall.** Nothing the mouse does over the
+/// area a panel covers may reach the panes behind it, and nothing is allowed to
+/// reach them by travelling *past* it either: a click, a right-click, a scroll
+/// or a gesture that the panel's own views do not want stops here rather than
+/// climbing the responder chain to something that is still listening. The panes
+/// look reachable — a strip of the file behind shows above the panel on purpose
+/// — and looking reachable is exactly why the wall has to be explicit rather
+/// than a consequence of who happens to be in front.
 final class FragmentPanelHost: NSView {
     /// Called after every layout pass, so whoever owns the panels can re-place
     /// them: the panels are positioned by frame arithmetic rather than by
@@ -175,7 +184,7 @@ final class FragmentPanelHost: NSView {
     /// swallowed clicks would make the dump unreachable the moment a panel had
     /// been opened and folded again.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        guard !subviews.isEmpty else { return nil }
+        guard isHoldingAPanel else { return nil }
         return super.hitTest(point)
     }
 
@@ -183,6 +192,39 @@ final class FragmentPanelHost: NSView {
         super.layout()
         onLayout?()
     }
+
+    // MARK: - The wall
+
+    /// Whether a panel is over the panes. With none there the host is not in
+    /// the way of anything, and every rule below stands down.
+    private var isHoldingAPanel: Bool { !subviews.isEmpty }
+
+    /// Takes the first click in an inactive window rather than letting it fall
+    /// through: a window brought forward by clicking where a pane used to be
+    /// must not act on that pane.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { isHoldingAPanel }
+
+    /// No menu of its own, and none from anything it covers.
+    override func menu(for event: NSEvent) -> NSMenu? { nil }
+
+    // Every way a mouse can speak, answered with silence. A view that does not
+    // implement these passes them to the next responder, which is how an event
+    // over a covered pane finds something behind that still wants it.
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseDragged(with event: NSEvent) {}
+    override func mouseUp(with event: NSEvent) {}
+    override func rightMouseDown(with event: NSEvent) {}
+    override func rightMouseDragged(with event: NSEvent) {}
+    override func rightMouseUp(with event: NSEvent) {}
+    override func otherMouseDown(with event: NSEvent) {}
+    override func otherMouseDragged(with event: NSEvent) {}
+    override func otherMouseUp(with event: NSEvent) {}
+    override func mouseMoved(with event: NSEvent) {}
+    override func scrollWheel(with event: NSEvent) {}
+    override func magnify(with event: NSEvent) {}
+    override func rotate(with event: NSEvent) {}
+    override func swipe(with event: NSEvent) {}
+    override func pressureChange(with event: NSEvent) {}
 
     /// An arrow over everything it covers.
     ///
@@ -193,7 +235,7 @@ final class FragmentPanelHost: NSView {
     /// over this one where they overlap.
     override func resetCursorRects() {
         super.resetCursorRects()
-        guard !subviews.isEmpty else { return }
+        guard isHoldingAPanel else { return }
         addCursorRect(bounds, cursor: .arrow)
     }
 }
