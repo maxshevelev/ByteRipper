@@ -69,10 +69,10 @@ right for them.
 └──────────────────────────────┘
 ```
 
-The panel is anchored to the dock strip, and its top edge **cuts the panes'
-header in half**. That overlap is the shape's whole point: enough of the parent
-shows to say which file the part came out of, and cutting into its header is
-what says the panel is laid *over* that file rather than docked beside it. A
+The panel is anchored to the dock strip, and its top edge **covers a fifth of
+the panes' header**. That overlap is the shape's whole point: enough of the
+parent shows to say which file the part came out of, and cutting into its header
+is what says the panel is laid *over* that file rather than docked beside it. A
 panel you cannot see the parent behind is a tab with a shadow; one that clears
 the header entirely reads as a second pane.
 

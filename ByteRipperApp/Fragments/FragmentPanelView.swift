@@ -6,15 +6,17 @@ import Cocoa
 /// Pure, so the one rule the geometry has — how much of the file underneath
 /// stays showing — is pinned without a window.
 enum FragmentPanelLayout {
-    /// How much of the panes behind is left showing above the panel.
+    /// How much of the pane header behind the panel the panel covers.
     ///
-    /// Half a pane header: the panel's top edge cuts the header of the file the
-    /// part came out of in half. Enough of it shows to say what is behind and
-    /// which file it is, and the overlap is what says the panel is laid *over*
-    /// that file rather than docked beside it. A panel you cannot see the
-    /// parent behind is a tab with a shadow; one that clears the header
-    /// entirely reads as a second pane.
-    static let parentPeek: CGFloat = FilePaneView.headerHeight / 2
+    /// A fifth. The overlap is what says the panel is laid *over* the file
+    /// rather than docked beside it — a panel that cleared the header entirely
+    /// would read as a second pane — and a fifth is enough to say so while
+    /// leaving the header itself readable.
+    static let headerCoveredShare: CGFloat = 0.2
+
+    /// How much of the panes behind is left showing above the panel: the rest
+    /// of that header.
+    static var parentPeek: CGFloat { FilePaneView.headerHeight * (1 - headerCoveredShare) }
 
     /// The panel never folds itself smaller than this by being in a short
     /// window: below it there is no room for a header, a row of bytes and a
@@ -55,12 +57,12 @@ enum PullDown {
     /// How far down the pull has to have gone before the panel is treated as
     /// being on its way out rather than merely lifted for a look.
     ///
-    /// Above this line a release puts the panel back whatever the hand was
+    /// Half. Down to there a release puts the panel back whatever the hand was
     /// doing — a tug to see what is underneath is a tug to see what is
-    /// underneath, and it should cost nothing. Below it the panel is somewhere
+    /// underneath, and it should cost nothing. Past it the panel is somewhere
     /// nobody drags it to by accident, and the last movement is taken as an
     /// instruction.
-    static var commitFraction: CGFloat = 0.35
+    static var commitFraction: CGFloat = 0.5
 
     /// The speed, in points a second, at which a movement reads as a flick
     /// rather than a drag — what lets a decisive swipe from the top put the

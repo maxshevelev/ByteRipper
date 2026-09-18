@@ -39,12 +39,15 @@ final class FragmentPanelTests: XCTestCase {
 
     // MARK: - The geometry
 
-    /// The panel's top edge cuts the parent's header in half: enough shows to
-    /// say which file is behind, and the overlap says the panel is over it.
-    func testThePanelCutsTheParentsHeaderInHalf() {
+    /// The panel's top edge covers a fifth of the parent's header: enough of an
+    /// overlap to say the panel is over it, little enough that the header is
+    /// still readable.
+    func testThePanelCoversAFifthOfTheParentsHeader() {
         let height = FragmentPanelLayout.panelHeight(hostHeight: 600)
         XCTAssertEqual(height, 600 - FragmentPanelLayout.parentPeek)
-        XCTAssertEqual(FragmentPanelLayout.parentPeek, FilePaneView.headerHeight / 2)
+        XCTAssertEqual(FragmentPanelLayout.parentPeek,
+                       FilePaneView.headerHeight * 0.8, accuracy: 0.001)
+        XCTAssertEqual(FragmentPanelLayout.headerCoveredShare, 0.2)
     }
 
     /// In a short window the peek gives way before the panel does: the part is
