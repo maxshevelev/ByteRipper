@@ -188,15 +188,21 @@ public enum UEFIPresenter {
     /// anything decompressed to save — its bytes are the file's, and the dump
     /// already exports those.
     public static func decompressedExport(for node: UEFINode) -> DecompressedExport? {
-        let base = (node.name.isEmpty ? "decompressed" : node.name)
-            .map { "/:".contains($0) ? "_" : $0 }
+        // What came *out* of a section says so in its name. Without it the
+        // section opened as a node and the same section's decompressed body
+        // arrive under one name — `bios_LZMA Section.bin` twice — and the two
+        // hold entirely different bytes. A node with no name is already called
+        // `decompressed`, so it says it once.
+        let base = String((node.name.isEmpty ? "decompressed" : node.name)
+            .map { "/:".contains($0) ? "_" : $0 })
+        let marked = node.name.isEmpty ? base : base + " decompressed"
         let opened = node.children.contains { $0.space != node.space }
         let closed = node.compression?.decodes == true && node.isExpandable && node.children.isEmpty
         if node.kind == .section, opened || closed {
             return DecompressedExport(
                 space: node.space.inside(sectionAt: node.header.lowerBound),
                 range: nil,
-                suggestedName: String(base) + ".bin",
+                suggestedName: marked + ".bin",
                 menuTitle: "Export Decompressed Body…",
                 openTitle: "Open Decompressed Body"
             )
@@ -205,7 +211,7 @@ public enum UEFIPresenter {
             return DecompressedExport(
                 space: node.space,
                 range: node.range,
-                suggestedName: String(base) + ".bin",
+                suggestedName: marked + ".bin",
                 menuTitle: "Export Decompressed Bytes…",
                 openTitle: "Open Decompressed Bytes"
             )

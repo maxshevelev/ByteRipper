@@ -104,6 +104,10 @@ final class CompressedNodeTests: XCTestCase {
         XCTAssertEqual(body.space, .decompressed(chain: [0]))
         XCTAssertNil(body.range)
         XCTAssertEqual(body.menuTitle, "Export Decompressed Body…")
+        XCTAssertEqual(body.suggestedName, "LZMA compressed section decompressed.bin")
+        let sectionAsNode = try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.section, in: built.image, body: false))
+        XCTAssertEqual(sectionAsNode.suggestedName, "LZMA compressed section.bin",
+                       "the section itself keeps its plain name; only what it opens to is marked")
         let buffer = try XCTUnwrap(built.readers.reader(for: body.space))
         XCTAssertEqual(buffer.bytes(buffer.all), TestUEFI.file().bytes)
 
@@ -111,12 +115,15 @@ final class CompressedNodeTests: XCTestCase {
         XCTAssertEqual(bytes.space, built.inner.space)
         XCTAssertEqual(bytes.range, 0..<0x100)
         XCTAssertEqual(bytes.menuTitle, "Export Decompressed Bytes…")
-        XCTAssertEqual(bytes.suggestedName, "Inner.bin")
+        XCTAssertEqual(bytes.suggestedName, "Inner decompressed.bin")
         XCTAssertEqual(body.openTitle, "Open Decompressed Body")
         XCTAssertEqual(bytes.openTitle, "Open Decompressed Bytes")
-        XCTAssertEqual(bytes.tabName(fileName: "bios.rom"), "bios_Inner.bin",
+        XCTAssertEqual(bytes.tabName(fileName: "bios.rom"), "bios_Inner decompressed.bin",
                        "named after the dump it came out of, then what it is")
-        XCTAssertEqual(bytes.tabName(fileName: ""), "Inner.bin")
+        XCTAssertEqual(bytes.tabName(fileName: ""), "Inner decompressed.bin")
+        let asNode = try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.inner, in: built.image, body: false))
+        XCTAssertNotEqual(bytes.suggestedName, asNode.suggestedName,
+                          "the node and what it decompresses to must not arrive under one name")
         XCTAssertEqual(UEFIPresenter.fileSource(of: built.inner, in: built.image),
                        built.section.fileRange,
                        "a tab from inside is linked to the compressed section holding it")
