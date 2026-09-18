@@ -95,6 +95,10 @@ final class FilePaneView: NSView {
     /// broken (`Design/UEFI/UPDATE_IN_PARENT.md` §2.2). Internal so a test can
     /// read what it says.
     let linkButton = NSButton()
+
+    /// Which symbol the link is showing: `link` while there is a way back,
+    /// `xmark.octagon` once there is not, nil with no link at all.
+    private(set) var linkSymbolName: String?
     /// Collapses the link to nothing on a pane that has none.
     private var linkCollapsed: NSLayoutConstraint?
     /// Refreshes the link when the parent's bytes change or it closes.
@@ -1447,21 +1451,42 @@ final class FilePaneView: NSView {
     private weak var observedParent: PaneViewModel?
 
     /// The link to a parent document (`Design/UEFI/UPDATE_IN_PARENT.md` §2.2):
-    /// the `link` symbol and the parent's name while the pane has one, grey
-    /// with the reason under the pointer once it is broken, nothing otherwise.
+    /// the `link` symbol and the parent's name while the pane has one, nothing
+    /// otherwise — and, once the way back is gone, a symbol that says so.
+    ///
+    /// Three states and two of them are not "intact", but they are not the same
+    /// kind of not-intact. A source that **changed** still leads somewhere: the
+    /// chain stays, dimmed, and clicking it still shows where the bytes came
+    /// from. A parent that has **closed** leads nowhere at all, so the chain
+    /// goes — `xmark.octagon` in its place, and the button stops being a button,
+    /// because a link that cannot be followed should not invite the click that
+    /// proves it.
+    ///
+    /// Grey rather than red on purpose. Red means one thing everywhere else in
+    /// this app — bytes modified and not saved — and a red mark in a pane
+    /// header would be read as that before it was read as this. The octagon
+    /// carries the meaning on its own.
     private func updateLink() {
         guard let origin = viewModel.origin else {
             linkButton.isHidden = true
             linkCollapsed?.isActive = true
             linkButton.image = nil
+            linkSymbolName = nil
             linkButton.title = ""
             linkButton.toolTip = nil
             observeParent(nil)
             return
         }
+        let broken = origin.state == .parentClosed
         let tint: NSColor = origin.state == .intact ? .secondaryLabelColor : .tertiaryLabelColor
-        linkButton.image = NSImage(systemSymbolName: "link", accessibilityDescription: nil)
+        // Kept beside the image because a symbol image does not remember the
+        // name it was made from, and which symbol is showing is the whole of
+        // what this says.
+        linkSymbolName = broken ? "xmark.octagon" : "link"
+        linkButton.image = NSImage(systemSymbolName: linkSymbolName ?? "link",
+                                   accessibilityDescription: nil)
         linkButton.contentTintColor = tint
+        linkButton.isEnabled = !broken
         linkButton.attributedTitle = NSAttributedString(string: origin.parentName, attributes: [
             .font: NSFont.systemFont(ofSize: 11),
             .foregroundColor: tint

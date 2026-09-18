@@ -273,6 +273,41 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertTrue(controller.validateMenuItem(join), "folded, they answer again")
     }
 
+    // MARK: - The link when there is nowhere left to go
+
+    /// A panel whose parent has closed stops showing a chain: the way back is
+    /// gone, so the symbol says so and the button stops being one.
+    func testALinkThatLeadsNowhereStopsLookingLikeALink() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let outer = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                          named: "part", animated: false))
+        let part = try XCTUnwrap(controller.fragments.pane(outer))
+        let bytes: [UInt8] = [0x01, 0x02, 0x03]
+        let origin = try XCTUnwrap(DocumentOrigin(parent: part, source: 0x10..<0x13,
+                                                  partName: "inner", layout: .image,
+                                                  content: bytes))
+        let inner = try XCTUnwrap(controller.openFragment(bytes, named: "inner.bin",
+                                                          origin: origin, animated: false))
+        window.layoutIfNeeded()
+        let deeper = try XCTUnwrap(controller.fragments.pane(inner))
+        let link = controller.paneView(for: deeper).linkButton
+        XCTAssertEqual(controller.paneView(for: deeper).linkSymbolName, "link",
+                       "while the way back is good")
+        XCTAssertTrue(link.isEnabled, "and it can be followed")
+
+        controller.fragmentCloseConfirm = { _ in .alertFirstButtonReturn }
+        controller.closeFragment(outer)
+        window.layoutIfNeeded()
+
+        XCTAssertEqual(deeper.origin?.state, .parentClosed)
+        XCTAssertEqual(controller.paneView(for: deeper).linkSymbolName, "xmark.octagon",
+                       "the chain goes")
+        XCTAssertFalse(link.isEnabled,
+                       "and it stops inviting the click that would prove it dead")
+        XCTAssertEqual(link.toolTip?.contains("no longer open"), true, "with the reason under it")
+    }
+
     // MARK: - What a panel's header menu may and may not do
 
     /// The commands that put a document *into a pane* are not offered in a
