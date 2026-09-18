@@ -34,4 +34,18 @@ public protocol UEFITreeProviding: AnyObject {
         _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>,
         layout: UEFIRootLayout, part: UEFIRebuild.Target
     )
+
+    /// Opens `bytes` that **are** a range of this file — a node of the tree, or
+    /// a node's body — as a panel of their own, linked to that range and read
+    /// there as `layout`. `part` is where they go back to through the rebuild
+    /// planner, or nil for bytes that go back as they are.
+    ///
+    /// The difference from the method above is what the bytes are, and it
+    /// decides what putting them back means: these are the file's own, so they
+    /// go back as they are, while what a compressed section decompressed to
+    /// goes back compressed again.
+    func openFilePart(
+        _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>,
+        layout: UEFIRootLayout, part: UEFIRebuild.Target?
+    )
 }

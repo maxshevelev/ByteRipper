@@ -133,6 +133,17 @@ import MEFirmware
                                        layout: .image, kind: .copy, part: nil)
     }
 
+    /// `UEFITreeProviding`'s other form: a part of the file itself — a node of
+    /// the tree, or its body — which goes back as it is.
+    func openFilePart(
+        _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>,
+        layout: UEFIRootLayout, part: UEFIRebuild.Target?
+    ) {
+        guard let pane, let owner else { return }
+        owner.openPartForTool(bytes, named: name, from: pane, source: source,
+                              layout: layout, kind: .copy, part: part)
+    }
+
     /// `UEFITreeProviding`'s form: what the source decompresses to, told what
     /// its bytes are and where they go back to.
     func openPart(

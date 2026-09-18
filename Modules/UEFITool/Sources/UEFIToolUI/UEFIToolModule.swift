@@ -160,6 +160,9 @@ private struct ChecksumPass: Sendable {
         controller.onOpenDecompressed = { [weak self] nodeID in
             self?.openDecompressedInNewTab(for: nodeID)
         }
+        controller.onOpenNode = { [weak self] nodeID, body in
+            self?.openNodeInPanel(for: nodeID, body: body)
+        }
         controller.onOpenRowsChanged = { [weak self] in self?.rememberOpenRows() }
     }
 
@@ -694,6 +697,59 @@ private struct ChecksumPass: Sendable {
                 self.host.openPart(bytes, named: name, linkedTo: source)
             }
         }
+    }
+
+    /// Opens a node of the tree — or its body alone — as a panel of its own, so
+    /// the reader studies a part of the image as a file: its own offsets from
+    /// zero, its own search, its own tree (`Design/FRAGMENT_PANELS_PLAN.md`).
+    ///
+    /// Works wherever the node lives. Bytes of the file go across as they are
+    /// and go back as they are; bytes of a buffer a compressed section opened
+    /// to are linked to that section and go back through it.
+    ///
+    /// Public because a right-click cannot be simulated — the level the app's
+    /// tests drive, like `fixChecksum(for:)`.
+    public func openNodeInPanel(for nodeID: NodeID, body: Bool) {
+        guard let tree, tree.isReady, let node = tree.image().node(nodeID),
+              let open = UEFIPresenter.nodeOpen(for: node, in: tree.image(), body: body)
+        else {
+            fail("There is nothing to open here.")
+            return
+        }
+        let readers = tree.spaceReaders
+        let name = open.partName(fileName: host.fileName)
+        controller.showBusy()
+        Task { [weak self] in
+            let bytes = await UEFIToolSession.bytes(of: open, readers: readers)
+            guard let self else { return }
+            self.controller.endBusy()
+            guard let bytes, !bytes.isEmpty else {
+                self.fail("Those bytes could not be read.")
+                return
+            }
+            guard let provider = self.treeProvider else {
+                self.host.openPart(bytes, named: name, linkedTo: open.source)
+                return
+            }
+            if open.space == .file {
+                provider.openFilePart(bytes, named: name, linkedTo: open.source,
+                                      layout: open.layout, part: open.rebuild)
+            } else {
+                provider.openPart(bytes, named: name, linkedTo: open.source,
+                                  layout: open.layout,
+                                  part: open.rebuild ?? UEFIRebuild.Target(space: open.space,
+                                                                           range: open.range))
+            }
+        }
+    }
+
+    private nonisolated static func bytes(
+        of open: UEFIPresenter.NodeOpen,
+        readers: SpaceReaders
+    ) async -> [UInt8]? {
+        await Task.detached(priority: .userInitiated) {
+            readers.reader(for: open.space)?.bytes(open.range)
+        }.value
     }
 
     /// Reads what a node has decompressed off the main actor, then hands it to

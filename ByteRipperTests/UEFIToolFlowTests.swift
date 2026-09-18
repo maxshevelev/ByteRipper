@@ -4,6 +4,7 @@ import AppPalette
 import FITToolUI
 import ToolModuleKit
 import UEFIImage
+import UEFITool
 import UEFIToolUI
 @testable import ByteRipper
 
@@ -833,6 +834,57 @@ final class UEFIToolFlowTests: XCTestCase {
         text = descendants(of: panel, NSTextField.self).map(\.stringValue)
         XCTAssertTrue(text.contains("MyDriver"), "\(text)")
         XCTAssertTrue(text.contains("Driver"), "\(text)")
+    }
+
+    // MARK: - A node opened as a panel (Design/FRAGMENT_PANELS_PLAN.md)
+
+    /// Any node of the tree can be taken out into a panel over the dump: its
+    /// own bytes, linked back to where they are in the file, so Update in
+    /// Parent knows the way home.
+    func testANodeOpensAsAPanelLinkedToItsOwnBytes() throws {
+        let controller = try open(UEFITestImage.make())
+        let node = try node(atRow: 0)
+
+        try session().openNodeInPanel(for: node.id, body: false)
+        XCTAssertTrue(pumpUntil(2) { controller.fragments.expanded != nil },
+                      "the panel is raised")
+
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        XCTAssertEqual(part.fileSize, UInt64(node.range.count), "the node's bytes, and only those")
+        let origin = try XCTUnwrap(part.origin, "linked back to where it came from")
+        XCTAssertEqual(origin.sourceRange, node.range)
+        XCTAssertTrue(origin.parent === controller.windowModel.pane1)
+        XCTAssertEqual(origin.state, .intact)
+        controller.fragments.close(id, animated: false)
+    }
+
+    /// And its body alone, without the header, linked to the body's own bytes.
+    func testANodesBodyOpensAsAPanelOfItsOwn() throws {
+        let controller = try open(UEFITestImage.make())
+        let node = try node(atRow: 0)
+        try XCTSkipIf(node.header.isEmpty, "this node has no header to leave behind")
+
+        try session().openNodeInPanel(for: node.id, body: true)
+        XCTAssertTrue(pumpUntil(2) { controller.fragments.expanded != nil })
+
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        XCTAssertEqual(part.fileSize, UInt64(node.body.count))
+        XCTAssertEqual(try XCTUnwrap(part.origin).sourceRange, node.body,
+                       "the body's own bytes, not the node's")
+        XCTAssertTrue(part.status.fileName.hasSuffix(" body.bin"), part.status.fileName)
+        controller.fragments.close(id, animated: false)
+    }
+
+    /// The tree's own menu is where a reader reaches them.
+    func testTheTreeMenuOffersBothOnANodeWithAHeader() throws {
+        _ = try open(UEFITestImage.make())
+        let node = try node(atRow: 0)
+        XCTAssertNotNil(UEFIPresenter.nodeOpenTitle(for: node, body: false))
+        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: node, body: true) != nil,
+                       !node.header.isEmpty,
+                       "a body is offered exactly where there is a header to leave behind")
     }
 }
 

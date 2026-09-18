@@ -21,6 +21,10 @@ import UEFITool
     /// The title-row reveal button was clicked: show the node under the caret
     /// in the dump.
     var onRevealAtCaret: (() -> Void)?
+    /// A node's Open item was chosen: the node itself, or its body alone
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
+    var onOpenNode: ((NodeID, Bool) -> Void)?
+
     /// A flagged node's Fix Checksum menu item was chosen.
     var onFixChecksum: ((NodeID) -> Void)?
     /// An opened compressed section's — or a node inside one's — export item
@@ -1131,6 +1135,18 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = node.id
             items.append(item)
         }
+        // Every node can be taken out and read as a file of its own, and a
+        // node with a header can have its body taken out without it.
+        for body in [false, true] {
+            guard let title = UEFIPresenter.nodeOpenTitle(for: node, body: body),
+                  !body || !node.header.isEmpty
+            else { continue }
+            let item = NSMenuItem(title: title, action: #selector(openNodeClicked(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = NodeOpenTarget(id: node.id, body: body)
+            items.append(item)
+        }
         if let export = UEFIPresenter.decompressedExport(for: node) {
             let open = NSMenuItem(
                 title: export.openTitle,
@@ -1150,6 +1166,19 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             items.append(item)
         }
         return items
+    }
+
+    /// Which node an Open item means, and whether it means its body. Carried by
+    /// id rather than by node: a parse between the click and the action re-reads
+    /// the tree, and the id is what still points at the node.
+    private struct NodeOpenTarget {
+        let id: NodeID
+        let body: Bool
+    }
+
+    @objc private func openNodeClicked(_ sender: NSMenuItem) {
+        guard let target = sender.representedObject as? NodeOpenTarget else { return }
+        onOpenNode?(target.id, target.body)
     }
 
     @objc private func fixChecksumClicked(_ sender: NSMenuItem) {

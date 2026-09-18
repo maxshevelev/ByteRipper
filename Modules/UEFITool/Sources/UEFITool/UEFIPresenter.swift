@@ -95,6 +95,92 @@ public enum UEFIPresenter {
         }
     }
 
+    /// What opening a node — or its body alone — as a panel of its own means
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
+    ///
+    /// Every node can be opened: a volume, a file, a section, and a node inside
+    /// a compressed section as much as one in the file. The way to study a part
+    /// of an image is often to read it as a file — its own offsets from zero,
+    /// its own search, its own tree — and the tree is where the reader is
+    /// already pointing at the part they mean.
+    public struct NodeOpen: Equatable, Sendable {
+        /// The buffer the bytes are read from: the file, or what a compressed
+        /// section opened to.
+        public var space: ByteSpace
+        /// The bytes, in that space.
+        public var range: Range<UInt64>
+        /// The file bytes the panel links back to — the node's own where they
+        /// are the file's, and the compressed section they came out of where
+        /// they are not.
+        public var source: Range<UInt64>
+        /// What a UEFI panel opened on the part should read the bytes as.
+        public var layout: UEFIRootLayout
+        /// Where the bytes go back to through the rebuild planner, when the
+        /// part is something the image's structure can be laid out around
+        /// again (`Design/UEFI/UPDATE_IN_PARENT.md` §6).
+        public var rebuild: UEFIRebuild.Target?
+        public var suggestedName: String
+        public var menuTitle: String
+
+        /// The panel's name: the dump it came out of, then what it is — the way
+        /// a zone's and a decompressed body's are named.
+        public func partName(fileName: String) -> String {
+            let stem = (fileName as NSString).deletingPathExtension
+            return stem.isEmpty ? suggestedName : "\(stem)_\(suggestedName)"
+        }
+    }
+
+    /// What opening `node` would do, or nil when there is nothing there to
+    /// open: an empty range, or a part of a buffer whose compressed section
+    /// cannot be traced back to the file.
+    ///
+    /// `body` asks for the body alone, which is worth offering only where the
+    /// node has a header to tell the two apart — the caller decides whether to
+    /// offer it, and this refuses a body that is the whole node anyway.
+    /// What the tree's menu calls opening `node`, or nil when there is nothing
+    /// there to open. The title alone, for a menu built where the image is not
+    /// at hand; `nodeOpen` answers the rest.
+    public static func nodeOpenTitle(for node: UEFINode, body: Bool) -> String? {
+        let range = body ? node.body : node.range
+        guard !range.isEmpty, !(body && range == node.range) else { return nil }
+        guard !node.name.isEmpty else { return body ? "Open Node Body" : "Open Node" }
+        return body ? "Open Body of “\(node.name)”" : "Open “\(node.name)”"
+    }
+
+    public static func nodeOpen(for node: UEFINode, in image: UEFIImage, body: Bool) -> NodeOpen? {
+        guard let title = nodeOpenTitle(for: node, body: body) else { return nil }
+        let range = body ? node.body : node.range
+
+        // Where it links back to. A node in the file is its own source; one in
+        // a buffer is linked to the compressed section that buffer came out of,
+        // and goes back through it.
+        let source: Range<UInt64>?
+        if node.space == .file {
+            source = range
+        } else {
+            source = fileSource(of: node, in: image)
+        }
+        guard let source else { return nil }
+
+        let base = String((node.name.isEmpty ? "node" : node.name)
+            .map { "/:".contains($0) ? "_" : $0 })
+        let suffix = body ? " body" : ""
+        return NodeOpen(
+            space: node.space,
+            range: range,
+            source: source,
+            layout: body ? .ofBody(of: node, in: image) : .of(node, in: image),
+            // A whole node of the file is a structure the image can be laid out
+            // around again; a body, or a slice of a buffer, is bytes going back
+            // where they were.
+            rebuild: node.space == .file && !body
+                ? UEFIRebuild.target(forFileRange: range, in: image)
+                : UEFIRebuild.Target(space: node.space, range: range),
+            suggestedName: base + suffix + ".bin",
+            menuTitle: title
+        )
+    }
+
     /// A compressed section exports everything it decompresses to — one that
     /// opened, and one still closed that would: the row already says it is
     /// compressed, and the buffer is decoded when the export reads it. A node
