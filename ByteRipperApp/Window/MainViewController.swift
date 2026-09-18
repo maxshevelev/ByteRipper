@@ -252,6 +252,25 @@ final class MainViewController: NSViewController {
         fragments.panel(holding: pane)
     }
 
+    /// After the bytes have gone back: the panel they came from folds, and what
+    /// they went into comes to the front — the tab's dump, or the panel that is
+    /// the parent — with the bytes that just landed selected there.
+    ///
+    /// Watching the change arrive is the reason a part opens over its parent
+    /// rather than in a tab of its own, and the moment it is worth watching is
+    /// this one. A parent in another tab is not raised here: the panel folds
+    /// all the same, and `revealOrigin` brings that window forward.
+    func revealUpdateDestination(from pane: PaneViewModel, to parent: PaneViewModel) {
+        guard let panel = fragmentPanel(of: pane) else { return }
+        if let parentPanel = fragmentPanel(of: parent) {
+            // Raising one folds the other: there is only ever one up.
+            fragments.expand(parentPanel)
+        } else if fragments.expanded == panel {
+            fragments.collapse()
+        }
+        revealOrigin(of: pane)
+    }
+
     /// Whether a fragment panel has a window to be put in a tab beside.
     var canTearOffFragment: Bool { makeSiblingTab != nil }
 
@@ -1973,8 +1992,10 @@ final class MainViewController: NSViewController {
         case .overwrite(let offset, let bytes, let confirm):
             guard let parent = origin.parent else { return nil }
             if confirm, !confirmOverwritingChangedSource(of: origin) { return nil }
-            _ = writeUpdate(bytes, at: offset, into: parent, for: origin, tabBytes: bytes,
-                            sourceBytes: bytes, sourceRange: origin.sourceRange, named: stepName)
+            if writeUpdate(bytes, at: offset, into: parent, for: origin, tabBytes: bytes,
+                           sourceBytes: bytes, sourceRange: origin.sourceRange, named: stepName) {
+                revealUpdateDestination(from: pane, to: parent)
+            }
             return nil
 
         case .rebuild(let target, let bytes, let confirm):
@@ -2028,6 +2049,7 @@ final class MainViewController: NSViewController {
                                            tabBytes: bytes, sourceBytes: source,
                                            sourceRange: plan.source, named: stepName)
                     else { return }
+                    self.revealUpdateDestination(from: pane, to: parent)
                     self.presentSheetAlert(
                         title: "Updated “\(origin.parentName)”",
                         message: plan.warnings.isEmpty

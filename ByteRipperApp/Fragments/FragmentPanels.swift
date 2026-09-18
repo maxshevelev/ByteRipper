@@ -41,6 +41,12 @@ import Cocoa
     /// The panel being pulled down by hand, whose frame is the gesture's to set
     /// until it is let go.
     private var pulling: FragmentDock.PanelID?
+
+    /// The panels in flight between the dock and the stage. Their frames stand
+    /// still while their layers do the moving, so a layout pass must leave them
+    /// alone — putting a folding panel back at its folded frame mid-flight is a
+    /// jump out of the middle of the animation.
+    private var flying: Set<FragmentDock.PanelID> = []
     private var entries: [FragmentDock.PanelID: Entry] = [:]
 
     private weak var host: MainViewController?
@@ -301,23 +307,41 @@ import Cocoa
                        duration: TimeInterval? = nil, closesDocument: Bool = false) {
         if let raising = transition.raising, let entry = entries[raising] {
             container.isHidden = false
+            let resting = FragmentPanelView.restingFrame(in: container)
             if entry.view.superview !== container {
-                entry.view.frame = FragmentPanelView.foldedFrame(in: container)
+                entry.view.frame = resting
                 container.addSubview(entry.view)
             }
-            move(entry.view, to: FragmentPanelView.restingFrame(in: container),
-                 animated: animated, duration: duration)
+            // The pill it grows out of, so the eye follows it from where it was
+            // parked; a panel with no pill yet simply slides up.
+            if animated, let pill = pillRect(for: raising) {
+                entry.view.frame = resting
+                flying.insert(raising)
+                fly(entry.view, to: pill, duration: duration ?? Self.slideDuration,
+                    out: false) { [weak self] in self?.flying.remove(raising) }
+            } else {
+                move(entry.view, to: resting, animated: animated, duration: duration)
+            }
         }
         if let folding = transition.folding, let entry = entries[folding] {
-            move(entry.view, to: FragmentPanelView.foldedFrame(in: container),
-                 animated: animated, duration: duration) { [weak self] in
-                guard let self else { return }
-                // Unless it has been raised again in the meantime: a pill
-                // clicked twice while the slide was still running must not take
-                // the panel it just brought back off the screen.
-                guard self.dock.expanded != folding else { return }
+            // Unless it has been raised again in the meantime: a pill clicked
+            // twice while the flight was still running must not take the panel
+            // it just brought back off the screen.
+            let land = { [weak self] in
+                guard let self, self.dock.expanded != folding else { return }
                 entry.view.removeFromSuperview()
                 self.hideContainerIfClear()
+            }
+            if animated, let pill = pillRect(for: folding) {
+                flying.insert(folding)
+                fly(entry.view, to: pill, duration: duration ?? Self.slideDuration,
+                    out: true) { [weak self] in
+                    self?.flying.remove(folding)
+                    land()
+                }
+            } else {
+                move(entry.view, to: FragmentPanelView.foldedFrame(in: container),
+                     animated: animated, duration: duration, completion: land)
             }
         }
         if let removed = transition.removed, let entry = entries.removeValue(forKey: removed) {
@@ -378,6 +402,53 @@ import Cocoa
     /// nothing, and anything that asked how wide the pane was mid-slide was
     /// told almost zero. Laying the subtree out before the slide starts means
     /// the first frame drawn is already the panel as it will be.
+    /// The rectangle a panel folds into: its pill, in the coordinates the panel
+    /// itself is placed in. Nil when the dock has no pill for it yet, which is
+    /// the moment a panel is being opened.
+    private func pillRect(for id: FragmentDock.PanelID) -> NSRect? {
+        guard let inStrip = strip.pillFrame(for: id) else { return nil }
+        return container.convert(inStrip, from: strip)
+    }
+
+    /// Folds a panel into its pill, or grows it out of one.
+    ///
+    /// A shrink onto the pill rather than a slide off the bottom, because every
+    /// pill in the dock looks like every other and the panel going into one is
+    /// the only thing that says which. Done with the layer's transform rather
+    /// than the frame: a frame animation re-lays the panel out at every size on
+    /// the way, which is a hex grid reflowing sixty times a second to arrive
+    /// somewhere nobody will read.
+    ///
+    /// The host clips, so it stops clipping for the length of the flight —
+    /// otherwise the last part of it, the part over the dock, is cut off at the
+    /// very moment it is saying where the panel went.
+    private func fly(_ view: FragmentPanelView, to pill: NSRect, duration: TimeInterval,
+                     out: Bool, completion: @escaping () -> Void) {
+        let frame = view.frame
+        guard frame.width > 0, frame.height > 0, let layer = view.layer else {
+            completion()
+            return
+        }
+        var shrunk = CATransform3DMakeTranslation(pill.midX - frame.midX, pill.midY - frame.midY, 0)
+        shrunk = CATransform3DScale(shrunk, pill.width / frame.width, pill.height / frame.height, 1)
+
+        container.layer?.masksToBounds = false
+        let restoreClip = { [weak self] in self?.container.layer?.masksToBounds = true }
+        layer.transform = out ? CATransform3DIdentity : shrunk
+        layer.opacity = out ? 1 : 0
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = duration
+            context.timingFunction = CAMediaTimingFunction(name: out ? .easeIn : .easeOut)
+            context.allowsImplicitAnimation = true
+            layer.transform = out ? shrunk : CATransform3DIdentity
+            layer.opacity = 1
+        } completionHandler: {
+            if out { layer.transform = CATransform3DIdentity }
+            restoreClip()
+            completion()
+        }
+    }
+
     private func move(_ view: NSView, to frame: NSRect, animated: Bool,
                       duration: TimeInterval? = nil, completion: (() -> Void)? = nil) {
         view.setFrameSize(frame.size)
@@ -406,6 +477,7 @@ import Cocoa
             // Not the one in the hand: a pull sets the panel's frame on every
             // mouse move, and a layout pass that put it back to rest was the
             // panel shaking instead of following.
+            guard !flying.contains(id) else { continue }
             guard id != pulling else {
                 var frame = FragmentPanelView.restingFrame(in: container)
                 frame.origin.y = entry.view.frame.origin.y

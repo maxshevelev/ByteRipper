@@ -274,6 +274,32 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertTrue(controller.validateMenuItem(join), "folded, they answer again")
     }
 
+    // MARK: - Where a fold lands
+
+    /// Folding flies the panel into its own pill rather than dropping it off
+    /// the bottom, because every pill looks like every other and the flight is
+    /// the only thing that says which one it went into. The flight is over the
+    /// dock, so the area stops clipping for its length and clips again after.
+    func testAFoldFliesIntoItsPillAndLeavesNoTraceBehind() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part", animated: false))
+        window.layoutIfNeeded()
+        let panel = try XCTUnwrap(controller.fragments.panelView(id))
+        let strip = try self.strip(of: controller)
+        XCTAssertNotNil(strip.pillFrame(for: id), "there is a pill to fly into")
+
+        controller.fragments.collapse(animated: true)
+        XCTAssertTrue(pumpUntil(2) { panel.superview == nil },
+                      "the flight ends with the panel off the stage")
+
+        let host = try XCTUnwrap(descendants(of: controller.view, FragmentPanelHost.self).first)
+        XCTAssertEqual(host.layer?.masksToBounds, true, "and the area clips again afterwards")
+        XCTAssertTrue(CATransform3DIsIdentity(panel.layer?.transform ?? CATransform3DIdentity),
+                      "with nothing left of the flight on the panel itself")
+        XCTAssertEqual(controller.fragments.count, 1, "folded, not closed")
+    }
+
     // MARK: - The link when there is nowhere left to go
 
     /// A panel whose parent has closed stops showing a chain: the way back is

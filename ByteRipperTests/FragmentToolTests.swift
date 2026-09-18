@@ -310,7 +310,7 @@ final class FragmentToolTests: XCTestCase {
         activateToolFromTheMenu(controller)
         let host = try XCTUnwrap(StubToolA.log.session?.host as? PaneToolHost)
 
-        host.openPart([0x01, 0x02, 0x03], named: "inner.bin", linkedTo: 0x10..<0x20)
+        host.openPart([0x01, 0x02, 0x03], named: "inner.bin", linkedTo: 0x10..<0x13)
 
         XCTAssertEqual(controller.fragments.count, 2, "two panels, side by side in the dock")
         let inner = try XCTUnwrap(controller.fragments.expanded)
@@ -318,8 +318,15 @@ final class FragmentToolTests: XCTestCase {
         let origin = try XCTUnwrap(deeper.origin)
         XCTAssertTrue(origin.parent === part, "its parent is the panel it came out of")
         XCTAssertFalse(origin.parent === controller.windowModel.pane1)
-        XCTAssertEqual(origin.sourceRange, 0x10..<0x20,
+        XCTAssertEqual(origin.sourceRange, 0x10..<0x13,
                        "and the range is in that panel's own offsets, not the dump's")
+
+        // And putting it back raises the panel it goes into rather than the
+        // dump: what the reader wants to see is where the bytes landed.
+        try deeper.applyToolWrites([(offset: 0, bytes: [0xFF])], named: "Patch")
+        controller.performUpdateInParent(of: deeper)
+        XCTAssertEqual(controller.fragments.expanded, outer,
+                       "the parent panel comes to the front")
     }
 
     /// The panel's tool panel opens inside the panel: it takes width from that

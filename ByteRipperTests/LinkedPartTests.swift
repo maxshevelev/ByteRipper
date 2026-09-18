@@ -341,6 +341,24 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertEqual(origin.state, .sourceChanged, "the parent no longer holds what the tab put back")
     }
 
+    /// The bytes go back, and the panel gets out of the way so the change can
+    /// be seen landing: it folds into its pill, and the dump behind it has the
+    /// part selected where it went.
+    func testUpdatingFoldsThePanelAndShowsWhereItLanded() throws {
+        let (controller, part) = try openZonePanel()
+        try patch(part, at: 0x10, with: 0x55)
+        XCTAssertNotNil(controller.fragments.expanded, "the premise: the panel is up")
+
+        controller.performUpdateInParent(of: part)
+
+        XCTAssertNil(controller.fragments.expanded,
+                     "the panel folds — watching it land is why a part opens over its parent")
+        XCTAssertEqual(controller.fragments.count, 1, "folded, not closed")
+        let selection = controller.windowModel.pane1.hexSelection()
+        XCTAssertEqual(selection.start..<selection.end, 0x100..<0x180,
+                       "and the dump shows the bytes that just arrived")
+    }
+
     /// Offered in the header's menu, named after the parent, and enabled only
     /// when there is something to put back.
     func testTheCommandIsOfferedWhenThereIsSomethingToPutBack() throws {

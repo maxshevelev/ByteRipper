@@ -205,6 +205,12 @@ final class FragmentDockStrip: NSView {
         NSRect(x: 0, y: bounds.maxY - 1, width: bounds.width, height: 1).fill()
     }
 
+    /// Where a panel's pill sits, in this strip's own coordinates, or nil when
+    /// the dock has no pill for it. What a folding panel flies into.
+    func pillFrame(for id: FragmentDock.PanelID) -> NSRect? {
+        pills[id].map { $0.convert($0.bounds, to: self) }
+    }
+
     /// Brings the pills in line with `items`, reusing the ones already there:
     /// a pill rebuilt on every change would lose its tracking and flicker on a
     /// name that did not change.
