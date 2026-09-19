@@ -265,6 +265,36 @@ final class FragmentPanelHost: NSView {
     override func swipe(with event: NSEvent) {}
     override func pressureChange(with event: NSEvent) {}
 
+    // MARK: - The wall against a drag
+
+    /// A drag is not a mouse event and does not travel the responder chain: the
+    /// window looks for a view *registered* for what is being dragged, and a
+    /// wall that is not registered is not a view — so a file dragged onto a
+    /// panel went straight through it and landed in the drop zones of the panes
+    /// underneath, which is the one thing about them that still worked while
+    /// they were covered.
+    ///
+    /// Registered only while a panel is up, because refusing is all this can do:
+    /// a destination cannot hand the drag back to whatever is beneath it, so an
+    /// empty wall that stayed registered would be a window that never takes a
+    /// file again.
+    override func didAddSubview(_ subview: NSView) {
+        super.didAddSubview(subview)
+        registerForDraggedTypes([.fileURL, .fileNames, .pane])
+    }
+
+    override func willRemoveSubview(_ subview: NSView) {
+        super.willRemoveSubview(subview)
+        // Sent before the removal, so the last one still counts itself.
+        if subviews == [subview] { unregisterDraggedTypes() }
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { [] }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { [] }
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool { false }
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool { false }
+    override func wantsPeriodicDraggingUpdates() -> Bool { false }
+
     /// An arrow over everything it covers.
     ///
     /// Cursor rectangles are geometry, not hit testing: the split behind a

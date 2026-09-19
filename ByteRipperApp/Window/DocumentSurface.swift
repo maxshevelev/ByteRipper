@@ -81,7 +81,14 @@ import ALSplitView
     ///
     /// It is what makes a tool-module opened on a panel read the part rather
     /// than whatever the tab's active pane happens to be.
-    var pinnedPane: PaneViewModel?
+    ///
+    /// It is also what says this surface is a panel's, which is why the tool
+    /// panel stops taking drops the moment it is set: a part has no file to
+    /// replace, and the pane a drop would reach for is one of the tab's, under
+    /// the panel and out of sight.
+    var pinnedPane: PaneViewModel? {
+        didSet { tools.panel.takesDrops = pinnedPane == nil }
+    }
 
 
     // MARK: - The minimap

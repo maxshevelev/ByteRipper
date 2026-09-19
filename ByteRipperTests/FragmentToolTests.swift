@@ -508,6 +508,57 @@ final class FragmentToolTests: XCTestCase {
         host.scrollWheel(with: click)
     }
 
+    /// A drag does not travel the responder chain: the window looks for a view
+    /// registered for what is being dragged, so a wall that is not registered
+    /// is no wall at all and a file dropped on a panel landed in the drop zones
+    /// of the panes underneath.
+    func testTheWallRefusesADraggedFileWhileAPanelIsUp() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let host = try XCTUnwrap(descendants(of: controller.view, FragmentPanelHost.self).first)
+        XCTAssertEqual(host.registeredDraggedTypes, [],
+                       "with no panel it must not be a destination: refusing is all it can do, "
+                           + "and a window that always refuses never takes a file again")
+
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x200),
+                                                       named: "part", animated: false))
+        window.layoutIfNeeded()
+
+        XCTAssertTrue(host.registeredDraggedTypes.contains(.fileURL), "a file")
+        XCTAssertTrue(host.registeredDraggedTypes.contains(.pane), "and a pane")
+        let drag = FakeDraggingInfo(fileURLs: [url])
+        XCTAssertEqual(host.draggingEntered(drag), [], "nothing is on offer")
+        XCTAssertEqual(host.draggingUpdated(drag), [])
+        XCTAssertFalse(host.prepareForDragOperation(drag))
+        XCTAssertFalse(host.performDragOperation(drag))
+
+        controller.fragments.close(id, animated: false)
+        XCTAssertEqual(host.registeredDraggedTypes, [],
+                       "and the last panel leaving gives the drags back to the tab")
+    }
+
+    /// The panel's own tool panel takes no drops either. It is in front of the
+    /// wall, not behind it, and what it would have done is replace the file in
+    /// a pane of the tab — the pane the panel is covering.
+    func testThePanelsToolPanelTakesNoDrops() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x200),
+                                                       named: "part", animated: false))
+        activateToolFromTheMenu(controller)
+        window.layoutIfNeeded()
+        let panel = try XCTUnwrap(controller.fragments.surface(id)).tools.panel
+
+        let drag = FakeDraggingInfo(fileURLs: [url])
+        XCTAssertEqual(panel.draggingEntered(drag), [], "refused")
+        XCTAssertEqual(panel.draggingUpdated(drag), [])
+        XCTAssertFalse(panel.performDragOperation(drag))
+        XCTAssertEqual(controller.windowModel.pane1.document?.url, url,
+                       "and the tab's own file is untouched")
+        XCTAssertTrue(controller.tools.panel.takesDrops,
+                      "while the tab's own panel goes on taking them")
+    }
+
     /// A part taken out of a panel belongs to **that panel**, not to the dump
     /// behind it: the dock stays flat, and the links form the chain
     /// (`Design/FRAGMENT_PANELS_PLAN.md`).

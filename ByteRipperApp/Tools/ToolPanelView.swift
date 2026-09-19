@@ -32,6 +32,12 @@ final class ToolPanelView: NSView {
     /// a pane the panel will not take, which is its own.
     var paneDropTitle: ((UUID) -> String?)?
 
+    /// Whether anything may be dropped on the panel at all. False on a fragment
+    /// panel: what the panel reads is a *part*, which has no file to replace
+    /// and no other pane to move to, and both drops would otherwise reach past
+    /// it into the tab underneath.
+    var takesDrops = true
+
     /// A pane was chosen in the header's selector: the tool moves to it. Index
     /// 0 or 1, the same numbering `MainViewController` uses for panes.
     ///
@@ -335,6 +341,13 @@ final class ToolPanelView: NSView {
     // MARK: - Dropping on the panel
 
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard takesDrops else {
+            // Wearing the refusal rather than staying blank, for the reason the
+            // pane refusal below gives: an area that does nothing and says
+            // nothing does not say why.
+            show(dropZone: true, refused: true)
+            return []
+        }
         if let paneID = sender.draggingPasteboard.draggedPaneID {
             draggedPaneID = paneID
             guard let title = paneDropTitle?(paneID) else {
@@ -355,6 +368,7 @@ final class ToolPanelView: NSView {
     }
 
     override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard takesDrops else { return [] }
         if let paneID = draggedPaneID {
             return paneDropTitle?(paneID) == nil ? [] : .move
         }
@@ -370,10 +384,14 @@ final class ToolPanelView: NSView {
     }
 
     override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        true
+        takesDrops
     }
 
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard takesDrops else {
+            endDrag()
+            return false
+        }
         if let paneID = sender.draggingPasteboard.draggedPaneID {
             let accepted = paneDropTitle?(paneID) != nil
             endDrag()
