@@ -50,6 +50,40 @@ display link fire mid-test.
    above (guarded by `MainViewController.isRunningTests`) — deterministic, but it
    touches app code, so get sign-off first.
 
+## Investigation (2026-09-19): direction 1 does not work
+
+Tried (1) — `window.makeKeyAndOrderFront(nil)` in `LinkedPartTests.makeController`
+(the window source for both sheet tests). Instrumented the test to print the
+scale state right after the sheet is presented:
+
+- The environment **does** have a screen: `NSScreen.screens.count == 1`.
+- After `makeKeyAndOrderFront`, both the parent and the sheet window report
+  `backingScaleFactor == 2.0` and are on a screen.
+- **Every** layer in the sheet's view tree — `NSViewBackingLayer` and the
+  `NSTextLayer`s — reports `contentsScale == 2.0` at presentation time.
+
+So the window and the text layers all have a valid scale while the sheet is up.
+The scale only becomes 0 **during the animated close**, which is exactly when the
+display link fires (`NS_setFlushesWithDisplayLink` → `CA::Transaction::commit` →
+`-[NSTextLayer display]`). Giving the window a scale at presentation cannot help,
+because the sheet window loses it mid-close. Crash rate is unchanged (~40%, 3 of 7
+full-class runs) with or without the order-front; the change was reverted.
+
+A second test-only route was also ruled out: spinning the wait's run loop in a
+mode that excludes the display link. The crash backtrace shows the "display link"
+is an `NSRunLoopObserver` (`NSRunLoopObserverCreateWithHandler`) that commits the
+`CATransaction`, and it is what *drives* the close animation — blocking the mode
+it fires in would stall the dismissal and hang the test on
+`presentedViewControllers`. The run loop's modes are not enumerable via public
+API, so the excluding mode can't even be confirmed.
+
+Conclusion: the fault is the layer's `contentsScale` being 0 mid-close, not the
+window's scale at presentation. A test-infrastructure change that only affects
+the window's initial state cannot reach it, and the animation cannot be suppressed
+without touching app code. The deterministic fix remains (2), the custom-animator
+path that skips the animated dismissal. Decision (2026-09-19): leave the flaky
+crash as-is and keep this doc as the record; pick up (2) if it starts biting.
+
 Verify with the classes the change touches (`LinkedPartTests`), not the full
 suite. A crashed host still reports "0 failures" (XCTest merges totals across
 launches) — grep the log for the restart.
