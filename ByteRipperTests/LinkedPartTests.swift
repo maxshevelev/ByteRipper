@@ -199,6 +199,60 @@ final class LinkedPartTests: XCTestCase {
                        "and the source is selected in it, in its own offsets")
     }
 
+    /// A part torn off into a tab whose parent stayed behind as a panel: the
+    /// link still leads somewhere, and clicking it raises that panel in the
+    /// window it belongs to. The parent is a document of that window held in a
+    /// panel rather than in a pane, which is what the search for its window
+    /// used to miss.
+    func testALinkFromATabToAPanelOfAnotherWindowLeadsThere() throws {
+        let (controller, part) = try openZonePanel()
+        let host = try partHost(controller)
+        host.openPart([0x01, 0x02, 0x03], named: "inner.bin", linkedTo: 0x10..<0x13)
+        let deeper = try openedPart(in: controller)
+        XCTAssertTrue(deeper.origin?.parent === part, "opened out of the panel, not the dump")
+
+        let tab = try makeController()
+        let registry = OpenDocumentRegistry()
+        registry.register(controller)
+        registry.register(tab)
+        controller.openDocuments = registry
+        tab.openDocuments = registry
+        controller.makeSiblingTab = { tab }
+        controller.tearOffPaneToNewTab(draggedPaneID: deeper.dragID)
+        XCTAssertTrue(tab.windowModel.pane1 === deeper, "the part is a tab of its own now")
+        XCTAssertEqual(controller.fragments.count, 1, "and its parent is still a panel back there")
+        controller.fragments.collapse(animated: false)
+
+        tab.revealOrigin(of: deeper)
+
+        XCTAssertEqual(controller.fragments.expanded,
+                       controller.fragments.panel(holding: part),
+                       "the panel holding the parent is raised in its own window")
+        let selection = part.hexSelection()
+        XCTAssertEqual(selection.start..<selection.end, 0x10..<0x13,
+                       "and the source is selected in it")
+    }
+
+    /// Where the bytes land must not be left under something else. A folded
+    /// panel put back into the dump while *another* panel is up used to leave
+    /// that other panel standing over the very thing this is here to show.
+    func testUpdatingAFoldedPanelClearsWhateverIsCoveringTheDump() throws {
+        let (controller, part) = try openZonePanel()
+        let other = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x40),
+                                                          named: "other", animated: false))
+        XCTAssertEqual(controller.fragments.expanded, other, "the other panel is the one up")
+        try patch(part, at: 0x10, with: 0x55)
+
+        XCTAssertNil(controller.performUpdateInParent(of: part), "written on the spot")
+
+        XCTAssertNil(controller.fragments.expanded,
+                     "the stage is cleared, whichever panel was standing on it")
+        XCTAssertEqual(controller.fragments.count, 2, "both panels are still open, in their pills")
+        let selection = controller.windowModel.pane1.hexSelection()
+        XCTAssertEqual(selection.start..<selection.end, 0x100..<0x180,
+                       "and what landed is selected where it landed")
+    }
+
     func testAToolTabsPartIsNamedWithoutTheDumpAroundIt() {
         XCTAssertEqual(MainViewController.partName(ofTab: "bios_LZMA section.bin", parent: "bios.rom"),
                        "LZMA section")

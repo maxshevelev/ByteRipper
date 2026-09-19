@@ -183,9 +183,10 @@ final class MainViewController: NSViewController {
         }
         view.onRevealOrigin = { [weak self] in self?.revealOrigin(of: pane) }
         view.onSearchResultsClose = { [weak self] _ in self?.syncFindBarToActivePane() }
+        // The surface weakly: a panel whose surface has already gone leaves the
+        // question to the tab's own map, which by then is the only one there is.
         view.onMatchesChanged = { [weak self, weak surface] in
-            guard let self, let surface else { return }
-            self.searchAppearanceChanged(on: surface)
+            self?.searchAppearanceChanged(on: surface)
         }
         // The pane is captured weakly by the closures it holds itself: a
         // strong one is a ring the pane can never get out of, and a panel
@@ -268,11 +269,16 @@ final class MainViewController: NSViewController {
     /// this one. A parent in another tab is not raised here: the panel folds
     /// all the same, and `revealOrigin` brings that window forward.
     func revealUpdateDestination(from pane: PaneViewModel, to parent: PaneViewModel) {
-        guard let panel = fragmentPanel(of: pane) else { return }
+        guard fragmentPanel(of: pane) != nil else { return }
         if let parentPanel = fragmentPanel(of: parent) {
             // Raising one folds the other: there is only ever one up.
             fragments.expand(parentPanel)
-        } else if fragments.expanded == panel {
+        } else {
+            // The bytes went into the dump, so the stage is cleared — whichever
+            // panel is standing on it. Folding only the panel being updated
+            // left another one covering the very thing this is here to show:
+            // update a folded panel while a different one is up, and the
+            // selection landed behind it.
             fragments.collapse()
         }
         revealOrigin(of: pane)
@@ -2286,21 +2292,23 @@ final class MainViewController: NSViewController {
     /// front with the source selected in its dump (`UPDATE_IN_PARENT.md` §2.2).
     /// Nothing happens once the parent is gone.
     ///
-    /// A parent that is itself a fragment lives in this window's own dock — a
-    /// nested panel and the panel it came out of share one — so it is raised
-    /// here rather than hunted for as a window pane, which it is not.
+    /// A parent that is itself a part lives in a panel of its window's dock, and
+    /// a folded panel shows nothing — so the panel is raised before the source
+    /// is selected in it. Its window is not always this one: a nested panel
+    /// torn off into a tab keeps the link, and what it leads to stayed behind.
     func revealOrigin(of pane: PaneViewModel) {
         guard let origin = pane.origin, origin.state != .parentClosed,
-              let parent = origin.parent
-        else { return }
-        if let panel = fragments.panel(holding: parent) {
-            fragments.expand(panel)
-            revealForTool(origin.sourceRange, in: parent, select: true)
-            return
-        }
-        guard let owner = Self.controller(holding: parent, among: openDocuments?.controllers ?? [])
+              let parent = origin.parent,
+              // This window first, so the common case — a panel opened out of
+              // another panel of the same dock — never depends on the app's
+              // bookkeeping of its windows.
+              let owner = Self.controller(holding: parent,
+                                          among: [self] + (openDocuments?.controllers ?? []))
         else { return }
         owner.view.window?.makeKeyAndOrderFront(nil)
+        if let panel = owner.fragments.panel(holding: parent) {
+            owner.fragments.expand(panel)
+        }
         owner.revealForTool(origin.sourceRange, in: parent, select: true)
     }
 
@@ -2313,6 +2321,11 @@ final class MainViewController: NSViewController {
         let windows = NSApp.windows.compactMap { $0.contentViewController as? MainViewController }
         return (known + windows).first {
             $0.windowModel.pane1 === pane || $0.windowModel.pane2 === pane
+                // A part is a document of that window too, held in a panel
+                // rather than in a pane. Asking only about the two panes is how
+                // a link to a part went nowhere, and how the sheet an update
+                // puts up went to the wrong window.
+                || $0.fragments.panel(holding: pane) != nil
         }
     }
 
