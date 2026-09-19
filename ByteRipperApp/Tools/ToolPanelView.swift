@@ -69,7 +69,10 @@ final class ToolPanelView: NSView {
     /// it. Dropping a pane on the panel and choosing one here are the only two
     /// gestures that move it.
     private let fileSelector = NSPopUpButton()
-    private let closeButton = NSButton()
+    private lazy var closeButton = HeaderButton.make(
+        symbol: "xmark", label: "Close the tool panel",
+        tooltip: "Close the tool panel", target: self, action: #selector(closeClicked)
+    )
     private let bottomSeparator = NSView()
     private let trailingSeparator = NSView()
     /// Where the tool-module's view goes.
@@ -166,16 +169,6 @@ final class ToolPanelView: NSView {
         fileSelector.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
         fileSelector.setContentHuggingPriority(.defaultLow - 1, for: .horizontal)
 
-        closeButton.bezelStyle = .inline
-        closeButton.isBordered = false
-        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close")
-        closeButton.imagePosition = .imageOnly
-        closeButton.target = self
-        closeButton.action = #selector(closeClicked)
-        closeButton.toolTip = "Close the tool panel"
-        closeButton.setAccessibilityLabel("Close the tool panel")
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         for separator in [bottomSeparator, trailingSeparator] {
             separator.translatesAutoresizingMaskIntoConstraints = false
@@ -285,8 +278,8 @@ final class ToolPanelView: NSView {
             titleLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             fileSelector.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             closeButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            closeButton.widthAnchor.constraint(equalToConstant: 16),
-            closeButton.heightAnchor.constraint(equalToConstant: 16),
+            closeButton.widthAnchor.constraint(equalToConstant: HeaderButton.side),
+            closeButton.heightAnchor.constraint(equalToConstant: HeaderButton.side),
 
             bottomSeparator.leadingAnchor.constraint(equalTo: header.leadingAnchor),
             bottomSeparator.trailingAnchor.constraint(equalTo: header.trailingAnchor),

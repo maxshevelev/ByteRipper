@@ -72,7 +72,21 @@ final class FilePaneView: NSView {
     /// The comparison-mode close button, and the status strip that holds the
     /// readout. Stored because a very narrow pane has to be able to take them
     /// away — see `layout()`.
-    private let closeButton = NSButton()
+    private lazy var closeButton = HeaderButton.make(
+        symbol: "xmark", label: "Close pane",
+        tooltip: "Close pane", target: self, action: #selector(closeTapped)
+    )
+    /// Folds a fragment panel into its pill. Hidden — and taking no width —
+    /// on the tab's own panes, which have no pill to fold into.
+    ///
+    /// The gesture does the same thing and does it better, but a gesture is not
+    /// discoverable and, in the web edition, not there at all.
+    private lazy var collapseButton = HeaderButton.make(
+        symbol: "chevron.down", label: "Collapse panel",
+        tooltip: "Collapse into the dock", target: self, action: #selector(collapseTapped)
+    )
+    private var collapseWidth: NSLayoutConstraint?
+    private var collapseGap: NSLayoutConstraint?
     private let statusBar = NSView()
     private let statusStack = NSStackView()
     /// The field that stands in the title's place while the name is being
@@ -290,6 +304,16 @@ final class FilePaneView: NSView {
     var onHeaderDoubleClick: (() -> Void)?
     /// Fired when the comparison-mode close button is clicked.
     var onClose: (() -> Void)?
+    /// Fired by the header's ⌄. Set on a fragment panel's pane and nowhere
+    /// else: setting it is what puts the button in the header, because a pane
+    /// of the tab itself has nothing to fold into.
+    var onCollapse: (() -> Void)? {
+        didSet {
+            collapseWidth?.isActive = onCollapse == nil
+            collapseGap?.constant = onCollapse == nil ? 0 : -6
+            needsLayout = true
+        }
+    }
     /// Fired when the user closes the Search All results panel (the ×), with
     /// this pane. The panel is hidden and cleared by `hideSearchResults()`
     /// regardless; the owner uses the hook to stop the in-flight search (§11).
@@ -356,22 +380,6 @@ final class FilePaneView: NSView {
         lockLabel.font = .systemFont(ofSize: 12)
         lockLabel.textColor = .secondaryLabelColor
 
-        // An `xmark` symbol rather than a "✕" character: the glyph is the
-        // system's, so it lines up with the rest of the chrome and scales with
-        // the interface instead of being a 10 pt letter. The default button type
-        // dims it while it is held; `.momentaryChange` swapped in an
-        // `alternateTitle` that was never set, so a press showed nothing.
-        closeButton.image = NSImage(systemSymbolName: "xmark",
-                                    accessibilityDescription: "Close pane")
-        closeButton.target = self
-        closeButton.action = #selector(closeTapped)
-        closeButton.isBordered = false
-        closeButton.imagePosition = .imageOnly
-        closeButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .semibold)
-        closeButton.setAccessibilityLabel("Close pane")
-        closeButton.toolTip = "Close pane"
-        closeButton.contentTintColor = .secondaryLabelColor
-
         header.translatesAutoresizingMaskIntoConstraints = false
         // The chrome's horizontal chain is breakable end to end (below), which
         // is what lets a pane reach its minimum width — but a broken chain puts
@@ -404,12 +412,12 @@ final class FilePaneView: NSView {
         header.addSubview(titleLabel)
         header.addSubview(linkButton)
         header.addSubview(lockLabel)
+        header.addSubview(collapseButton)
         header.addSubview(closeButton)
         documentIcon.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         linkButton.translatesAutoresizingMaskIntoConstraints = false
         lockLabel.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
         // The link to a parent document (§2.2 of UPDATE_IN_PARENT.md): a
         // borderless button, so a click on it is its own — the header routes
         // every other click to itself. It gives way before the pane's own
@@ -432,12 +440,27 @@ final class FilePaneView: NSView {
         // required link in the chain would floor the pane (the least-squares
         // solver compromises at the chain's minimum instead of letting the
         // pane reach zero). At any real width every link holds exactly (§3.4).
+        // The fold button takes no room at all where there is nothing to fold:
+        // its width and the gap after it both go to zero, so the ✕ sits exactly
+        // where it always did on the tab's own panes. Shown, the width goes off
+        // rather than to a number — the glyph's own size is what makes it the
+        // same mark as the ✕ beside it, and a rounded number here would make it
+        // a slightly different one.
+        let collapseTrailing = collapseButton.trailingAnchor.constraint(
+            equalTo: closeButton.leadingAnchor, constant: 0
+        )
+        let collapseWidth = collapseButton.widthAnchor.constraint(equalToConstant: 0)
+        collapseWidth.isActive = true
+        self.collapseWidth = collapseWidth
+        self.collapseGap = collapseTrailing
+        collapseButton.isHidden = true
         let headerChain: [NSLayoutConstraint] = [
             documentIcon.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 10),
             titleLabel.leadingAnchor.constraint(equalTo: documentIcon.trailingAnchor, constant: 6),
             linkButton.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 6),
             linkButton.trailingAnchor.constraint(lessThanOrEqualTo: lockLabel.leadingAnchor, constant: -6),
-            lockLabel.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -6),
+            lockLabel.trailingAnchor.constraint(equalTo: collapseButton.leadingAnchor, constant: -6),
+            collapseTrailing,
             closeButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -6),
         ]
         for constraint in headerChain { constraint.priority = .defaultHigh }
@@ -446,6 +469,7 @@ final class FilePaneView: NSView {
             titleLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             linkButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             lockLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            collapseButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             closeButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             header.heightAnchor.constraint(equalToConstant: Self.headerHeight),
         ])
@@ -1041,6 +1065,10 @@ final class FilePaneView: NSView {
         onClose?()
     }
 
+    @objc private func collapseTapped() {
+        onCollapse?()
+    }
+
     override func mouseDown(with event: NSEvent) {
         // Chrome clicks (e.g. the header, reached here via the responder chain)
         // activate the pane through the same path as dump clicks: focus the hex
@@ -1061,6 +1089,7 @@ final class FilePaneView: NSView {
         super.layout()
         let fits = bounds.width >= Self.trailingChromeMinWidth
         closeButton.isHidden = !fits
+        collapseButton.isHidden = !fits || onCollapse == nil
         lockLabel.isHidden = !fits
         linkButton.isHidden = !fits || viewModel.origin == nil
         // Both halves of the bar's own chrome go together: the indicator is

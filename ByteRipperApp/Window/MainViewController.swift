@@ -172,6 +172,10 @@ final class MainViewController: NSViewController {
         wireBookmarkDoubleClick(view, for: pane)
         wireStatusBar(view, for: pane)
         view.onClose = { [weak self] in self?.closeFragment(panel) }
+        // What the pull-down gesture does, as a button. The gesture is better
+        // and stays; a button beside the ✕ is what says the panel can be put
+        // away at all — and the web edition has no gesture to offer.
+        view.onCollapse = { [weak self] in self?.fragments.collapse() }
         // The header is also the panel's handle: pulled down it moves the panel
         // rather than carrying the pane off to a tab.
         view.onHeaderPulledDown = { [weak self] event in

@@ -349,6 +349,68 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertLessThan(t.ty, 0, "and downwards, into the dock")
     }
 
+    // MARK: - The header's buttons
+
+    private func button(_ label: String, in view: NSView) throws -> NSButton {
+        try XCTUnwrap(descendants(of: view, NSButton.self).first { $0.accessibilityLabel() == label },
+                      "no button labelled “\(label)”")
+    }
+
+    /// Every ✕ in the window's chrome is the same mark: the tool panel's and
+    /// the hex panel's were built apart and drifted — a 10 pt semibold glyph in
+    /// grey beside a plain one in the label colour.
+    func testEveryCloseButtonIsTheSameMark() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let url = try tempFile([0x01, 0x02])
+        defer { try? FileManager.default.removeItem(at: url) }
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        controller.tools.activate(StubToolA.identifier, animated: false)
+        window.layoutIfNeeded()
+
+        let paneView = controller.paneView(for: controller.windowModel.pane1)
+        paneView.layoutSubtreeIfNeeded()
+        controller.tools.panel.layoutSubtreeIfNeeded()
+        let pane = try button("Close pane", in: paneView)
+        let tool = try button("Close the tool panel", in: controller.tools.panel)
+        XCTAssertEqual(pane.image?.name(), tool.image?.name(), "the same symbol")
+        XCTAssertNil(pane.symbolConfiguration, "at the system's own size, both of them")
+        XCTAssertNil(tool.symbolConfiguration)
+        XCTAssertEqual(pane.contentTintColor, tool.contentTintColor, "in the same ink")
+        XCTAssertEqual(pane.image?.size, tool.image?.size, "drawn at the same size")
+        XCTAssertEqual(pane.isBordered, tool.isBordered)
+    }
+
+    /// A panel can be put away with a button as well as with the gesture. The
+    /// gesture is better and stays; a button is what says it can be done at all
+    /// — and the web edition will have no gesture to offer.
+    func testThePanelFoldsFromItsHeaderButton() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let url = try tempFile([0x01, 0x02])
+        defer { try? FileManager.default.removeItem(at: url) }
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        window.layoutIfNeeded()
+        let tabPane = controller.paneView(for: controller.windowModel.pane1)
+        XCTAssertNil(descendants(of: tabPane, NSButton.self)
+            .first { $0.accessibilityLabel() == "Collapse panel" && !$0.isHidden },
+            "a pane of the tab has nothing to fold into")
+
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part",
+                                                       animated: false))
+        window.layoutIfNeeded()
+        let panelPane = try XCTUnwrap(controller.fragments.pane(id))
+        let fold = try button("Collapse panel", in: controller.paneView(for: panelPane))
+        XCTAssertFalse(fold.isHidden, "and a panel does")
+
+        fold.performClick(nil)
+
+        XCTAssertNil(controller.fragments.expanded, "folded")
+        XCTAssertEqual(controller.fragments.count, 1, "and still open, in its pill")
+    }
+
     // MARK: - Where a fold lands
 
     /// Folding flies the panel into its own pill rather than dropping it off
