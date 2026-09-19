@@ -171,6 +171,34 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertEqual(selection.start..<selection.end, 0x100..<0x180)
     }
 
+    /// A link whose parent is itself a panel: the parent panel comes to the
+    /// front with the source selected in it — not a silent no-op, the case
+    /// `controller(holding:)` cannot see because the parent is not a window
+    /// pane (`Design/FRAGMENT_PANELS_PLAN.md`).
+    func testClickingTheLinkInANestedPanelSelectsTheSourceInTheParentPanel() throws {
+        let controller = try makeController()
+        let outer = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                          named: "part", animated: false))
+        let part = try XCTUnwrap(controller.fragments.pane(outer))
+        let host = try partHost(controller)
+
+        host.openPart([0x01, 0x02, 0x03], named: "inner.bin", linkedTo: 0x10..<0x13)
+
+        let inner = try XCTUnwrap(controller.fragments.expanded, "the inner part opens raised")
+        let deeper = try XCTUnwrap(controller.fragments.pane(inner))
+        XCTAssertTrue(deeper.origin?.parent === part, "the inner part's parent is the outer panel")
+
+        controller.view.window?.layoutIfNeeded()
+
+        controller.revealOrigin(of: deeper)
+
+        XCTAssertEqual(controller.fragments.expanded, outer,
+                       "the parent panel comes to the front")
+        let selection = part.hexSelection()
+        XCTAssertEqual(selection.start..<selection.end, 0x10..<0x13,
+                       "and the source is selected in it, in its own offsets")
+    }
+
     func testAToolTabsPartIsNamedWithoutTheDumpAroundIt() {
         XCTAssertEqual(MainViewController.partName(ofTab: "bios_LZMA section.bin", parent: "bios.rom"),
                        "LZMA section")

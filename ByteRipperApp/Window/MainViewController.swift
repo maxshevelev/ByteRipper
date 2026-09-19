@@ -2278,10 +2278,20 @@ final class MainViewController: NSViewController {
     /// The link in a tab's header was clicked: the parent's window comes to the
     /// front with the source selected in its dump (`UPDATE_IN_PARENT.md` §2.2).
     /// Nothing happens once the parent is gone.
+    ///
+    /// A parent that is itself a fragment lives in this window's own dock — a
+    /// nested panel and the panel it came out of share one — so it is raised
+    /// here rather than hunted for as a window pane, which it is not.
     func revealOrigin(of pane: PaneViewModel) {
         guard let origin = pane.origin, origin.state != .parentClosed,
-              let parent = origin.parent,
-              let owner = Self.controller(holding: parent, among: openDocuments?.controllers ?? [])
+              let parent = origin.parent
+        else { return }
+        if let panel = fragments.panel(holding: parent) {
+            fragments.expand(panel)
+            revealForTool(origin.sourceRange, in: parent, select: true)
+            return
+        }
+        guard let owner = Self.controller(holding: parent, among: openDocuments?.controllers ?? [])
         else { return }
         owner.view.window?.makeKeyAndOrderFront(nil)
         owner.revealForTool(origin.sourceRange, in: parent, select: true)
