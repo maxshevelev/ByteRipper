@@ -1,3 +1,4 @@
+import ByteRipperCore
 import XCTest
 import UEFIImage
 @testable import ByteRipper
@@ -111,6 +112,41 @@ final class FragmentMinimapTests: XCTestCase {
 
         XCTAssertEqual(surface.minimapView.bookmarks.count, 1, "its own list reaches its own map")
         XCTAssertEqual(controller.minimapView.bookmarks.count, 1, "and the tab's map is untouched")
+    }
+
+    /// A search in the part re-marks the part's own map, not the dump's behind
+    /// it (`Design/FRAGMENT_PANELS_PLAN.md`). The match overlay was the one feed
+    /// a fragment's map missed: it still asked the tab's map to redraw, so a
+    /// search in a panel left the panel's strokes stale.
+    func testASearchInThePartReMarksThePartsOwnMap() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0x41, count: 0x80),
+                                                       named: "part", animated: false))
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+
+        // Both maps in overview and on screen, so either could be the one a
+        // search re-marks: the part's must be, the dump's must not be.
+        controller.surface.minimap.setRenderMode(.overview)
+        controller.surface.minimap.setPanelVisible(true, animated: false)
+        surface.minimap.setRenderMode(.overview)
+        surface.minimap.setPanelVisible(true, animated: false)
+        window.layoutIfNeeded()
+        _ = pumpUntil(3.0) { (surface.minimapView.overviewSummaries.first?.rowCount ?? 0) > 0 }
+
+        let partWalks = surface.minimap.matchOverlayWalksForTesting
+        let tabWalks = controller.matchOverlayWalksForTesting
+
+        let set = MatchSet(pattern: SearchPattern(bytes: [0xDE, 0xAD], encoding: .hex),
+                           folding: .exact, extent: 0x80, starts: [0x10, 0x40])
+        part.setMatches(set, current: 0)
+
+        XCTAssertTrue(pumpUntil(3.0) { surface.minimap.matchOverlayWalksForTesting > partWalks },
+                      "the part's map re-marks its matches")
+        XCTAssertEqual(controller.matchOverlayWalksForTesting, tabWalks,
+                       "and the dump behind it is left alone")
     }
 
     /// The band that says where in the part you are follows the part's own

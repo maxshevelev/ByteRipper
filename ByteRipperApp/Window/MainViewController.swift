@@ -179,7 +179,10 @@ final class MainViewController: NSViewController {
         }
         view.onRevealOrigin = { [weak self] in self?.revealOrigin(of: pane) }
         view.onSearchResultsClose = { [weak self] _ in self?.syncFindBarToActivePane() }
-        view.onMatchesChanged = { [weak self] in self?.searchAppearanceChanged() }
+        view.onMatchesChanged = { [weak self, weak surface] in
+            guard let self, let surface else { return }
+            self.searchAppearanceChanged(on: surface)
+        }
         // The pane is captured weakly by the closures it holds itself: a
         // strong one is a ring the pane can never get out of, and a panel
         // closed but never freed goes on being somebody's parent.
@@ -5937,13 +5940,18 @@ final class MainViewController: NSViewController {
     /// Everything here is skipped while the minimap panel is closed: it paints
     /// nothing, and a press of ‹ › used to invalidate its cells and rebuild its
     /// overlay regardless.
-    private func searchAppearanceChanged() {
+    ///
+    /// `surface` is the map to re-mark — the tab's by default, or a fragment's
+    /// own when the search lives in a panel, so a panel's matches never re-mark
+    /// the dump behind it.
+    private func searchAppearanceChanged(on surface: DocumentSurface? = nil) {
         syncFindBarToActivePane()
-        guard surface.minimapPanelVisible else { return }
+        let map = surface ?? self.surface
+        guard map.minimapPanelVisible else { return }
         // No byte range describes a set arriving or a plate moving to another
         // part of the file, so in detail mode every cell it draws is suspect.
-        surface.minimapView.invalidateCells()
-        surface.minimap.scheduleMatchSync()
+        map.minimapView.invalidateCells()
+        map.minimap.scheduleMatchSync()
     }
 
     /// Points the Find bar at the active pane (§11).
