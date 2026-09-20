@@ -810,7 +810,19 @@ private struct ChecksumPass: Sendable {
         controller.onMERegionLoading?(id, true)
         meLoadingID = id
         meTask = Task { [weak self] in
-            let result = await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
+            // Two panels on one file ask for this region in the same moment —
+            // this open, and the ME Analyzer re-parsing on a switch to it — so
+            // the ask goes through the pane's cache, which runs it once and
+            // hands the second caller the same answer rather than reading the
+            // region a second time.
+            let result: Result<FirmwareAnalysis, Error>
+            if let provider {
+                result = await provider.meAnalysis(for: meRegion) {
+                    await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
+                }
+            } else {
+                result = await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
+            }
             guard let self else { return }
             // Two ways a landing is not the current one, and neither may touch
             // the panel. A re-read has replaced the file this analysis was made
@@ -938,7 +950,14 @@ private struct ChecksumPass: Sendable {
             let checksums = await MEReads.checksums(snapshot, meRegion: meRegion)
             guard let self, self.generation == generation else { return }
             self.meChecksumsTask = nil
-            guard var updated = self.meAnalysis, updated.checksums == nil else { return }
+            // The cache is read here rather than taken from this session's own
+            // snapshot: the other panel may have put a fuller analysis there
+            // while the digests were being computed, and writing this session's
+            // copy back would undo it. Nothing awaits between this read and the
+            // write below, so on the main actor the two are one step.
+            guard let current = analysisProvider?.cachedMEAnalysis() ?? self.meAnalysis,
+                  current.checksums == nil else { return }
+            var updated = current
             updated.checksums = checksums
             analysisProvider?.setCachedMEAnalysis(updated, meRegion: meRegion)
             self.presentME(updated)

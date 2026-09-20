@@ -32,6 +32,16 @@ import ByteRipperCore
     /// inside it is what drops the cache; one outside it leaves the analysis
     /// exactly as valid as it was.
     private var cachedAnalysisRegion: Range<UInt64>?
+    /// The analysis being computed right now, if any, and the range it is being
+    /// computed for. Two panels on one file ask for the same region in the same
+    /// moment — the UEFI Structure opening it, the ME Analyzer re-parsing on the
+    /// switch — and both would otherwise find the cache empty and read the whole
+    /// region. The second ask awaits this instead.
+    private var analysisInFlight: Task<Result<FirmwareAnalysis, Error>, Never>?
+    private var analysisInFlightRegion: Range<UInt64>?
+    /// Which in-flight analysis is the current one, so the starter of an
+    /// abandoned one does not clear a newer ask's marker on its way out.
+    private var analysisRun = 0
 
     /// The tree, building it against `makeSource()` the first time anything
     /// asks. `makeSource` produces a *live* `ByteSource` — one that reads
@@ -56,6 +66,35 @@ import ByteRipperCore
         cachedAnalysisRegion = meRegion
     }
 
+    /// The analysis for `meRegion`, with `analysing` run once however many
+    /// callers ask at the same moment — the shape `FreshData.Freshened` gives
+    /// the data source's own fetches, for the most expensive read the app makes.
+    ///
+    /// A caller that joins returns what the first computed; neither writes the
+    /// cache, which is the caller's to do after its own guard.
+    func meAnalysis(
+        for meRegion: Range<UInt64>?,
+        analysing: @escaping @MainActor () async -> Result<FirmwareAnalysis, Error>
+    ) async -> Result<FirmwareAnalysis, Error> {
+        if let cachedAnalysis { return .success(cachedAnalysis) }
+        if let analysisInFlight, analysisInFlightRegion == meRegion {
+            return await analysisInFlight.value
+        }
+        analysisRun += 1
+        let run = analysisRun
+        let task = Task { @MainActor in await analysing() }
+        analysisInFlight = task
+        analysisInFlightRegion = meRegion
+        let result = await task.value
+        // Only the ask that started it clears it: an edit inside the region may
+        // have dropped this marker and a later ask put its own in its place.
+        if analysisRun == run {
+            analysisInFlight = nil
+            analysisInFlightRegion = nil
+        }
+        return result
+    }
+
     /// Narrows the tree's own stale subtrees, and drops the cached analysis
     /// when the edit falls inside (or, for a size-changing edit, at or after)
     /// the region it was computed for.
@@ -76,14 +115,26 @@ import ByteRipperCore
 
         tree?.invalidate(editedRange: range, sizeDelta: sizeDelta)
 
-        if let cachedAnalysisRegion {
-            let stillValid = sizeDelta == 0
-                ? !cachedAnalysisRegion.overlaps(range)
-                : cachedAnalysisRegion.upperBound <= range.lowerBound
-            if !stillValid {
-                cachedAnalysis = nil
-                self.cachedAnalysisRegion = nil
-            }
+        // Whether a whole-region read of `subject` is still a read of what the
+        // file holds. A size-changing edit moves everything at or after it, so
+        // only a region that ends before the edit survives; an overwrite is
+        // local to the bytes it touched.
+        func survives(_ subject: Range<UInt64>) -> Bool {
+            sizeDelta == 0
+                ? !subject.overlaps(range)
+                : subject.upperBound <= range.lowerBound
+        }
+
+        if let cachedAnalysisRegion, !survives(cachedAnalysisRegion) {
+            cachedAnalysis = nil
+            self.cachedAnalysisRegion = nil
+        }
+        // The analysis in flight goes with it: what it is reading is no longer
+        // what the file holds, so a panel asking again must not join it. Its own
+        // caller drops the result — this only stops anyone new waiting on it.
+        if let analysisInFlightRegion, !survives(analysisInFlightRegion) {
+            analysisInFlight = nil
+            self.analysisInFlightRegion = nil
         }
     }
 
@@ -95,5 +146,7 @@ import ByteRipperCore
         openUEFIRows = []
         cachedAnalysis = nil
         cachedAnalysisRegion = nil
+        analysisInFlight = nil
+        analysisInFlightRegion = nil
     }
 }

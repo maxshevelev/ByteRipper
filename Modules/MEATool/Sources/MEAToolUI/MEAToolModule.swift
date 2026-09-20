@@ -249,7 +249,17 @@ struct MEAParkedState: ToolSessionState {
         controller.showBusy()
         let analyzer = self.analyzer
         Task { [weak self] in
-            let result = await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
+            // The UEFI Structure opening the same region in the same moment
+            // makes the same ask, so it goes through the pane's cache: one
+            // reading, and whichever panel asked second is handed its answer.
+            let result: Result<FirmwareAnalysis, Error>
+            if let analysisProvider {
+                result = await analysisProvider.meAnalysis(for: meRegion) {
+                    await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
+                }
+            } else {
+                result = await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
+            }
             guard let self, self.generation == generation else { return }
             self.controller.endBusy()
             switch result {
@@ -390,7 +400,14 @@ struct MEAParkedState: ToolSessionState {
             let checksums = await MEReads.checksums(snapshot, meRegion: meRegion)
             guard let self, self.generation == generation else { return }
             self.checksumsTask = nil
-            guard var updated = self.analysis, updated.checksums == nil else { return }
+            // The cache is read here rather than taken from this session's own
+            // snapshot: the other panel may have put a fuller analysis there
+            // while the digests were being computed, and writing this session's
+            // copy back would undo it. Nothing awaits between this read and the
+            // write below, so on the main actor the two are one step.
+            guard let current = analysisProvider?.cachedMEAnalysis() ?? self.analysis,
+                  current.checksums == nil else { return }
+            var updated = current
             updated.checksums = checksums
             analysisProvider?.setCachedMEAnalysis(updated, meRegion: meRegion)
             // Re-presenting rebuilds the rows from the fuller analysis; the

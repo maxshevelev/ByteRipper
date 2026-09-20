@@ -204,6 +204,14 @@ extension PaneToolHost: MEAAnalysisProviding {
     func setCachedMEAnalysis(_ analysis: FirmwareAnalysis?, meRegion: Range<UInt64>?) {
         pane?.uefiState.setCachedMEAnalysis(analysis, meRegion: meRegion)
     }
+
+    func meAnalysis(
+        for meRegion: Range<UInt64>?,
+        analysing: @escaping @MainActor () async -> Result<FirmwareAnalysis, Error>
+    ) async -> Result<FirmwareAnalysis, Error> {
+        guard let state = pane?.uefiState else { return await analysing() }
+        return await state.meAnalysis(for: meRegion, analysing: analysing)
+    }
 }
 
 /// Bytes that cannot change, from any thread: an immutable storage snapshot

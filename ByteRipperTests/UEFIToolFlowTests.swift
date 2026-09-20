@@ -1258,6 +1258,65 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(source.fetches, 1,
                        "and the database was not asked a second time for it")
     }
+
+    /// A count a `@MainActor` closure can add to.
+    private final class Tally { var count = 0 }
+
+    /// Two panels on one file ask for the region in the same moment — the UEFI
+    /// Structure opening it, the ME Analyzer re-parsing on the switch to it —
+    /// and the pane's cache runs that ask once: the second caller waits on the
+    /// first reading instead of starting its own. The read behind it is the
+    /// largest the app makes, a whole region.
+    func testTwoAsksForOneRegionReadItOnce() async throws {
+        let state = PaneUEFIState()
+        let analysis = try meAnalysisFixture()
+        let reads = Tally()
+
+        @MainActor func ask() async -> Result<FirmwareAnalysis, Error> {
+            await state.meAnalysis(for: 0x1000..<0x2000) {
+                reads.count += 1
+                // Long enough that the second ask arrives while this one runs,
+                // which is the whole point: the two are in the same moment.
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                return .success(analysis)
+            }
+        }
+
+        async let first = ask()
+        async let second = ask()
+        let (one, other) = await (first, second)
+
+        XCTAssertEqual(reads.count, 1, "the region was read once, not twice")
+        XCTAssertEqual(try one.get().version.text, analysis.version.text,
+                       "and both callers were answered")
+        XCTAssertEqual(try other.get().version.text, analysis.version.text)
+    }
+
+    /// An edit inside the region drops the reading in flight with the cache:
+    /// what it is reading is no longer what the file holds, so a panel asking
+    /// again must not join it.
+    func testAnEditInsideTheRegionDropsTheReadingInFlight() async throws {
+        let state = PaneUEFIState()
+        let analysis = try meAnalysisFixture()
+        let reads = Tally()
+
+        @MainActor func ask() async -> Result<FirmwareAnalysis, Error> {
+            await state.meAnalysis(for: 0x1000..<0x2000) {
+                reads.count += 1
+                try? await Task.sleep(nanoseconds: 50_000_000)
+                return .success(analysis)
+            }
+        }
+
+        async let before = ask()
+        // The first ask is in flight by now: it set its marker before it waited.
+        await Task.yield()
+        async let after = ask()
+        state.invalidate(.overwrite(range: 0x1400..<0x1401))
+
+        _ = await (before, after)
+        XCTAssertEqual(reads.count, 2, "the ask after the edit read the region again")
+    }
 }
 
 /// A 4 KiB FFSv2 volume with one sectioned file in it, built byte by byte — the
