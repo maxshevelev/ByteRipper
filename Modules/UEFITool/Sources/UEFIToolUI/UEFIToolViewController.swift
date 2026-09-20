@@ -478,6 +478,11 @@ import UEFITool
             rows.removeAll()
             loadingRows.removeAll()
             meRows.removeAll()
+            // The loading latches are keyed by path, and a new file's rows have
+            // the same paths: its ME region would inherit the last file's dead
+            // "Loading…" row. Both go with the rows they stood for.
+            showingPlaceholder.removeAll()
+            meOpening = nil
         }
         self.image = image
         self.tree = tree
@@ -571,7 +576,7 @@ import UEFITool
     /// row exists by the time a selection is asked to land on it.
     private func revealME(_ path: [Int]) {
         guard !path.isEmpty else {
-            outline.deselectAll(nil)
+            deselectForShow()
             return
         }
         // Open every ME ancestor the row sits under. The sub-tree is a value,
@@ -587,11 +592,29 @@ import UEFITool
         }
         let row = outline.row(forItem: meRow(path))
         guard row >= 0 else {
-            outline.deselectAll(nil)
+            deselectForShow()
             return
         }
         outline.scrollRowToVisible(row)
+        // The selection is the panel's own doing, not the reader's, so it must
+        // not read back as a click — the same reason `reveal` sets this around
+        // its own selection. This reaches here from inside a scope that may
+        // already hold it, so it is put back as it was found rather than
+        // cleared.
+        let wasShowingState = isShowingState
+        isShowingState = true
+        defer { isShowingState = wasShowingState }
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+    }
+
+    /// Clears the outline's selection without the panel reading it back as the
+    /// reader having picked nothing, which would drop the focus and publish an
+    /// empty zone map off a path that merely stopped resolving.
+    private func deselectForShow() {
+        let wasShowingState = isShowingState
+        isShowingState = true
+        defer { isShowingState = wasShowingState }
+        outline.deselectAll(nil)
     }
 
     /// The ME analysis has landed for the region node at `id`: open its row onto

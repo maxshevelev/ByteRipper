@@ -150,8 +150,20 @@ private struct ChecksumPass: Sendable {
     /// Kept apart from `focus` (a UEFI `NodeID`): the two resolve against
     /// different trees, and only one is the active focus at a time.
     private var meFocus: [Int]?
-    /// The in-flight ME analysis, so opening the region twice asks once.
+    /// The in-flight ME analysis. Cancelling it stops nothing — the reading runs
+    /// detached — so it is kept for the identity a landing is judged by
+    /// (`meRun`), not as a way to stop the work.
     private var meTask: Task<Void, Never>?
+    /// Which analysis is the current one. `generation` catches a landing whose
+    /// file has since been re-read; this catches one a later open has already
+    /// superseded within the same reading. The newer analysis owns the panel's
+    /// "Loading…" row and the sub-tree it will present, so the older landing
+    /// must end neither.
+    private var meRun = 0
+    /// The region node whose "Loading…" row an in-flight analysis put up, so the
+    /// one place that takes the row down knows which row it is ending. Nil when
+    /// no row is up.
+    private var meLoadingID: NodeID?
     /// The file names the ME sub-tree's rows are named with — the MFS volume's,
     /// the EFS volume's, and the ID-keyed Configuration records' — fetched from
     /// the firmware database the same way the ME Analyzer fetches them. The
@@ -264,6 +276,11 @@ private struct ChecksumPass: Sendable {
         meMfsNames = .none
         meEfsNames = .none
         meConfigPaths = .none
+        // Whatever the analysis was doing, its landing is not the current one
+        // any more — the reading it was made from is gone. The row it put up is
+        // the panel's, so it comes down here rather than waiting on a landing
+        // that the generation guard below will drop.
+        endMERegionLoading()
         meTask?.cancel()
         meTask = nil
         meFileTableTask?.cancel()
@@ -691,6 +708,10 @@ private struct ChecksumPass: Sendable {
     private func runMEAnalysis(_ id: NodeID, then completion: @escaping @MainActor () -> Void) {
         guard let snapshot = try? host.snapshot() else {
             controller.say("Could not read the file.", asProblem: true)
+            // The panel holds the region's row shut on the open that brought us
+            // here, and has its "Loading…" clock on it besides. Nothing is going
+            // to land, so the open is over and the row is released.
+            controller.onMERegionLoading?(id, false)
             return
         }
         let meRegion = treeProvider?.uefiTree()?.region(.me)
@@ -708,6 +729,8 @@ private struct ChecksumPass: Sendable {
             return
         }
         meTask?.cancel()
+        meRun += 1
+        let run = meRun
         let generation = self.generation
         let analyzer = self.analyzer
         controller.say("Reading ME…")
@@ -715,14 +738,19 @@ private struct ChecksumPass: Sendable {
         // The analysis is about to run: the region's row earns a "Loading…" row
         // if it is slow enough, the way a UEFI branch does.
         controller.onMERegionLoading?(id, true)
+        meLoadingID = id
         meTask = Task { [weak self] in
             let result = await UEFIToolSession.analyzeME(snapshot, analyzer: analyzer, meRegion: meRegion)
-            guard let self, self.generation == generation else { return }
+            guard let self else { return }
+            // Two ways a landing is not the current one, and neither may touch
+            // the panel. A re-read has replaced the file this analysis was made
+            // from, and the row went with it (`contentChanged`). A later open
+            // has superseded it, and that analysis owns the row now — ending it
+            // from here would take down a "Loading…" that is still true.
+            guard self.generation == generation, self.meRun == run else { return }
             self.meTask = nil
+            self.endMERegionLoading()
             self.controller.endBusy()
-            // The analysis has landed — or failed — either way the "Loading…"
-            // row gives way to whatever the row holds now.
-            self.controller.onMERegionLoading?(id, false)
             switch result {
             case .success(let analysis):
                 self.controller.say("")
@@ -749,6 +777,17 @@ private struct ChecksumPass: Sendable {
         // behind it, the way the ME Analyzer fetches them, and re-present the
         // rows with their names when they land.
         loadFileNames()
+    }
+
+    /// Takes the region's "Loading…" row down, if one is up. Only a landing that
+    /// still owns the row reaches here (`meRun`), or `contentChanged`, where the
+    /// reading the row stood for is gone. The row is the panel's, so the panel
+    /// is what is told — and telling it twice is what the id being cleared first
+    /// rules out.
+    private func endMERegionLoading() {
+        guard let id = meLoadingID else { return }
+        meLoadingID = nil
+        controller.onMERegionLoading?(id, false)
     }
 
     /// The region's analysis started or finished: forward it to the panel,
@@ -945,6 +984,11 @@ private struct ChecksumPass: Sendable {
               let title = UEFITreeDisplay.present(image).title
         else { return }
         focus = title.id
+        // The two focuses are halves of one selection, so a UEFI focus drops
+        // whatever ME row was in focus — the same thing `select` and
+        // `zoneSelected` do. Kept, it would win in `refreshTheOutline` and this
+        // click would read as broken.
+        meFocus = nil
         show(publish: true)
     }
 
@@ -998,6 +1042,10 @@ private struct ChecksumPass: Sendable {
             self.controller.endBusy()
             guard let node = chain.last else { return }
             self.focus = node.id
+            // The UEFI node is the focus now, so the ME half is dropped with it
+            // — otherwise the tree stays on the ME row it was revealing and the
+            // reveal lands nowhere.
+            self.meFocus = nil
             self.show(publish: false)
         }
     }
