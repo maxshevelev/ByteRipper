@@ -625,11 +625,21 @@ import UEFITool
     func openMERegion(_ id: NodeID) {
         expandRow(id) { [weak self] in
             guard let self else { return }
-            if let focus = self.meFocus, self.meNode(of: self.meRow(focus)) != nil {
-                self.revealME(focus)
-            } else if let first = self.meRoots.first {
-                self.revealME(first.path)
-            }
+            // The row the open settles on: the one already in focus while it
+            // still resolves, else the first root, so an open always lands
+            // somewhere.
+            let settled = self.meFocus.flatMap {
+                self.meNode(of: self.meRow($0)) != nil ? $0 : nil
+            } ?? self.meRoots.first?.path
+            guard let settled else { return }
+            self.revealME(settled)
+            // The panel chose this row, so the session is told outright rather
+            // than the outline being asked. A selection read back off the
+            // delegate is one the panel mistakes for a click; and guarding that
+            // read-back the way the UEFI half's `reveal` does — which is what
+            // `revealME` now does — would leave the row highlighted with no
+            // detail and no zones behind it.
+            self.onSelectME?(settled)
         }
     }
 
