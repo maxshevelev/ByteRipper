@@ -1067,10 +1067,12 @@ private struct ChecksumPass: Sendable {
     /// a region it has not been given yet is opened for the reveal rather than
     /// answered for by the node above it.
     ///
-    /// The dump is where the user is standing, so a reveal that stays inside the
-    /// half already on screen publishes nothing. One that moves off an ME row
-    /// does: the zones on screen belong to the tree just left, and a zone click
-    /// after it would route by a focus that is no longer set.
+    /// The dump is where the user is standing, so nothing a reveal does moves
+    /// it. That is also why a reveal that moves off an ME row clears the zone
+    /// map rather than republishing: the zones on screen belong to the tree just
+    /// left, and a zone click after it would route by a focus that is no longer
+    /// set — while drawing the new node's own zone would scroll the dump to the
+    /// start of it.
     ///
     /// Public because a click on the title-row button is driven the same way
     /// the panel's other clicks are — through the session, not a simulated
@@ -1116,17 +1118,21 @@ private struct ChecksumPass: Sendable {
     /// kept here would win in `refreshTheOutline` and the reveal would land
     /// nowhere.
     ///
-    /// The zone is published only when there was an ME focus to cross from. A
-    /// reveal that crossed no halves leaves the dump where the user is standing,
-    /// which is this half staying quiet; one that did cannot, because the zones
-    /// on screen belong to the tree just left. The node's own zone is safe to
-    /// draw either way — it is the answer the reveal settled on, so it is the
-    /// byte the caret is in.
+    /// When there was an ME focus to cross from, the zones on screen belong to
+    /// the tree just left, so they go — replaced by nothing rather than by the
+    /// new node's own zone. Publishing a zone is what makes the host bring it on
+    /// screen, and what it brings is the *start* of it
+    /// (`FilePaneView.revealOffsetIfOffScreen`): for a node the caret sits deep
+    /// inside, that is a scroll away from the byte the reveal was asked about,
+    /// which is the one thing this gesture may not do. An empty map clears the
+    /// stale zones and moves nothing — the host's scroll follows a focus, and an
+    /// empty map has none.
     private func showUEFIFocus(_ id: NodeID) {
         let crossedHalves = meFocus != nil
         focus = id
         meFocus = nil
-        show(publish: crossedHalves)
+        show()
+        if crossedHalves { host.publish(.empty) }
     }
 
     /// The path of the innermost presented ME row whose range covers `offset`,

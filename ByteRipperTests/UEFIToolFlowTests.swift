@@ -1088,6 +1088,37 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(outline.numberOfRows, 2,
                        "and nothing was opened onto: the reading failed")
     }
+
+    /// A reveal that moves off an ME row takes that row's zone off the dump —
+    /// and puts nothing in its place. Publishing the new node's own zone instead
+    /// would be what makes the host bring it on screen, and what it brings is
+    /// the *start* of it: for a node the caret sits deep inside, that is a jump
+    /// away from the byte the reveal was asked about.
+    func testARevealOffAnMERowClearsTheZoneMap() throws {
+        let outline = try openMERegion()
+        let pane = try XCTUnwrap(controller?.windowModel.pane1)
+
+        // An ME row that stands for bytes, so there is a zone to lose.
+        let regionsRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Regions (FPT)" })
+        outline.expandItem(outline.item(atRow: regionsRow))
+        window?.layoutIfNeeded()
+        let ftpRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "FTPR" })
+        outline.selectRowIndexes(IndexSet(integer: ftpRow), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+        XCTAssertEqual(pane.zones.zones.map(\.id), ["1/0"], "the ME row's zone is up")
+
+        // The caret moves into the descriptor, off the ME region entirely, so
+        // the reveal crosses to a UEFI node.
+        pane.moveCaret(to: 0x50)
+        try session().revealNodeAtCaret()
+
+        XCTAssertTrue(pumpUntil(5) { pane.zones.zones.isEmpty },
+                      "the zone went with the row it stood for: "
+                      + "\(pane.zones.zones.map(\.id))")
+        XCTAssertEqual(pane.zones.focus, nil, "and nothing took its place")
+    }
 }
 
 /// A 4 KiB FFSv2 volume with one sectioned file in it, built byte by byte — the
