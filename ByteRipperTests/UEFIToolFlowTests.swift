@@ -1262,6 +1262,49 @@ final class UEFIToolFlowTests: XCTestCase {
     /// A count a `@MainActor` closure can add to.
     private final class Tally { var count = 0 }
 
+    /// A source that can announce a new firmware database on demand.
+    private final class AnnouncingSource: MEADataSource, @unchecked Sendable {
+        private let stream: AsyncStream<Void>
+        private let announce: AsyncStream<Void>.Continuation
+
+        init() {
+            let (stream, continuation) = AsyncStream<Void>.makeStream()
+            self.stream = stream
+            self.announce = continuation
+        }
+
+        func database() async throws -> MEADatabase {
+            throw MEADataError.offline(underlying: "test offline")
+        }
+        func fileTable() async throws -> FileTable {
+            throw MEADataError.offline(underlying: "test offline")
+        }
+        func databaseChanges() async -> AsyncStream<Void> { stream }
+        func aNewDatabaseHasArrived() { announce.yield() }
+    }
+
+    /// A firmware database that has been replaced makes every analysis made
+    /// against the old one a description of a world that is gone — the
+    /// identification, the names and the known-bad hashes all came out of that
+    /// file. The cache drops it on that event itself, so every panel finds it
+    /// gone rather than only the one that happened to be running.
+    func testANewDatabaseDropsTheCachedAnalysis() async throws {
+        let source = AnnouncingSource()
+        UEFIToolSession.dataSource = source
+        let state = PaneUEFIState()
+        state.setCachedMEAnalysis(try meAnalysisFixture(), meRegion: 0x1000..<0x2000)
+        XCTAssertNotNil(state.cachedMEAnalysis(), "the analysis is cached")
+
+        source.aNewDatabaseHasArrived()
+        // The watch runs on the main actor: give it the turns it needs.
+        var turns = 0
+        while state.cachedMEAnalysis() != nil && turns < 1000 {
+            await Task.yield()
+            turns += 1
+        }
+        XCTAssertNil(state.cachedMEAnalysis(), "and the new database dropped it")
+    }
+
     /// Two panels on one file ask for the region in the same moment — the UEFI
     /// Structure opening it, the ME Analyzer re-parsing on the switch to it —
     /// and the pane's cache runs that ask once: the second caller waits on the

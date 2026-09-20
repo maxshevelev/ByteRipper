@@ -107,6 +107,10 @@ targets:
       # through, so it needs the type directly.
       - package: MEFirmware
         product: MEFirmware
+      # `PaneUEFIState` drops its cached analysis when the firmware database is
+      # replaced, and hears about that from the source the reads share. The app
+      # holds no ME reading of its own; it needs the seam only to listen to.
+      - package: MEReads
       # The landing screen's check for a newer release holds its answer the way
       # the tool-modules' live sources hold theirs: fetched once, re-checked
       # once a day, and silent when it cannot be made.

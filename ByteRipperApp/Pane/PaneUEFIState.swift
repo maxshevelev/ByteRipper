@@ -1,6 +1,7 @@
 import Foundation
 import UEFIImage
 import MEFirmware
+import MEReads
 import ByteRipperCore
 
 /// The one shared, lazily-materialized UEFI parse for this pane's open file,
@@ -42,6 +43,9 @@ import ByteRipperCore
     /// Which in-flight analysis is the current one, so the starter of an
     /// abandoned one does not clear a newer ask's marker on its way out.
     private var analysisRun = 0
+    /// Listening for a newer firmware database. Cancelled by `reset()`, and
+    /// started when there is something for it to invalidate.
+    private var databaseWatch: Task<Void, Never>?
 
     /// The tree, building it against `makeSource()` the first time anything
     /// asks. `makeSource` produces a *live* `ByteSource` — one that reads
@@ -64,6 +68,29 @@ import ByteRipperCore
     func setCachedMEAnalysis(_ analysis: FirmwareAnalysis?, meRegion: Range<UInt64>?) {
         cachedAnalysis = analysis
         cachedAnalysisRegion = meRegion
+        if analysis != nil { watchTheDatabase() }
+    }
+
+    /// The firmware database has been replaced. An analysis made against the old
+    /// one describes a world that is gone — the identification, the names and
+    /// the known-bad hashes all came out of that file — so the cache drops it.
+    ///
+    /// Which is a fact about the analysis, and is kept with it here rather than
+    /// being a panel's errand: it used to be the ME Analyzer clearing this on its
+    /// way past, so the panel that noticed was the one that happened to be
+    /// running. Every panel now finds it gone, and any that has work of its own
+    /// to do about the change still does it — the source fans out to every
+    /// subscriber, so this takes the event from nobody.
+    private func watchTheDatabase() {
+        guard databaseWatch == nil else { return }
+        let source = MEReads.dataSource
+        databaseWatch = Task { [weak self] in
+            for await _ in await source.databaseChanges() {
+                guard let self else { return }
+                self.cachedAnalysis = nil
+                self.cachedAnalysisRegion = nil
+            }
+        }
     }
 
     /// The analysis for `meRegion`, with `analysing` run once however many
@@ -148,5 +175,7 @@ import ByteRipperCore
         cachedAnalysisRegion = nil
         analysisInFlight = nil
         analysisInFlightRegion = nil
+        databaseWatch?.cancel()
+        databaseWatch = nil
     }
 }

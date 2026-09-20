@@ -145,10 +145,13 @@ struct MEAParkedState: ToolSessionState {
             for await _ in await source.databaseChanges() {
                 guard let self else { return }
                 // The pane's cached analysis was read against the database that
-                // has just been replaced, so it is the first thing that is out
-                // of date — and `reparse()` would otherwise present it.
-                self.analysisProvider?.setCachedMEAnalysis(nil, meRegion: nil)
-                self.reparse()
+                // has just been replaced, and the pane's own holder drops it —
+                // that is the cache's rule now rather than this panel's errand,
+                // so that it holds for every panel and not only for the one that
+                // happened to be running. What is left here is this panel's own
+                // work: an answer from the old file is exactly what the check was
+                // for, so the reading is done again, against the new database.
+                self.reparse(ignoringCache: true)
             }
         }
     }
@@ -189,7 +192,16 @@ struct MEAParkedState: ToolSessionState {
     private var treeProvider: (any UEFITreeProviding)? { host as? any UEFITreeProviding }
     private var analysisProvider: (any MEAAnalysisProviding)? { host as? any MEAAnalysisProviding }
 
-    private func reparse() {
+    /// Read the file and the region it names, analyse it, and present the
+    /// result.
+    ///
+    /// `ignoringCache` is for the one caller that knows the cache is wrong: a
+    /// firmware database that has just been replaced makes every analysis made
+    /// against the old one a description of a world that is gone, and this
+    /// panel's answer has to come from the new one. The pane's own holder drops
+    /// that analysis on the same event — this is not a consequence of that, it
+    /// is this panel not depending on which of the two arrives first.
+    private func reparse(ignoringCache: Bool = false) {
         let snapshot: any ToolContentReader
         do {
             snapshot = try host.snapshot()
@@ -216,7 +228,7 @@ struct MEAParkedState: ToolSessionState {
         // region (`PaneUEFIState.invalidate`), so reactivating this
         // tool-module after using another one is instant rather than a
         // second full analysis of data nothing changed.
-        if let cached = analysisProvider?.cachedMEAnalysis() {
+        if !ignoringCache, let cached = analysisProvider?.cachedMEAnalysis() {
             present(cached)
             // Announced on the next turn rather than from inside this call: a
             // caller that has only just asked for this session — `start()` runs
