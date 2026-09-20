@@ -171,7 +171,11 @@ final class MainViewController: NSViewController {
         }
         wireBookmarkDoubleClick(view, for: pane)
         wireStatusBar(view, for: pane)
-        view.onClose = { [weak self] in self?.closeFragment(panel) }
+        // Instant, where the fold beside it is not: a close takes the pill with
+        // it, so there is nothing for the panel to fly into. The fold keeps its
+        // flight — the pill stays, and watching the panel fall into it is what
+        // says where the panel went.
+        view.onClose = { [weak self] in self?.closeFragment(panel, animated: false) }
         // What the pull-down gesture does, as a button. The gesture is better
         // and stays; a button beside the ✕ is what says the panel can be put
         // away at all — and the web edition has no gesture to offer.
@@ -1845,7 +1849,13 @@ final class MainViewController: NSViewController {
     /// was opened for — Update in Parent — rather than a save panel for a file
     /// nobody wants on disk. A part with nowhere to put its bytes back gets the
     /// ordinary save/discard question.
-    func closeFragment(_ id: FragmentDock.PanelID) {
+    ///
+    /// `animated` is false for the header's ✕, and true for everything else. A
+    /// close takes the panel's pill with it, so the flight has nowhere to land
+    /// — the panel would fly at a pill that is leaving with it. The fold the
+    /// collapse button asks for is another thing: there the pill stays, and
+    /// watching the panel fall into it is what says where the panel went.
+    func closeFragment(_ id: FragmentDock.PanelID, animated: Bool = true) {
         guard let pane = fragments.pane(id) else { return }
         // Parts taken out of this one lose their way back when it goes, and a
         // link that dies without a word is a link the reader meets later, when
@@ -1857,7 +1867,7 @@ final class MainViewController: NSViewController {
         // half goes unread — which is the same as not asking.
         let stranded = fragments.panelsLinked(to: pane).count
         if stranded > 0, !confirmStranding(stranded, closing: pane.status.fileName) { return }
-        closeFragment(id, pane: pane)
+        closeFragment(id, pane: pane, animated: animated)
     }
 
     /// Everything after the question about links: what closing does to this
@@ -1872,6 +1882,7 @@ final class MainViewController: NSViewController {
     /// window asks this of every panel and asks the other of none: nothing is
     /// stranded when everything goes at once.
     private func closeFragment(_ id: FragmentDock.PanelID, pane: PaneViewModel,
+                               animated: Bool = true,
                                then done: ((Bool) -> Void)? = nil) {
         if let origin = pane.origin, origin.hasChanges(in: pane) {
             switch confirmClosingUnreturnedPart(origin) {
@@ -1879,11 +1890,13 @@ final class MainViewController: NSViewController {
                 if let task = performUpdateInParent(of: pane) {
                     Task { [weak self] in
                         await task.value
-                        self?.closeFragmentIfPutBack(id, pane: pane, origin: origin, then: done)
+                        self?.closeFragmentIfPutBack(id, pane: pane, origin: origin,
+                                                     animated: animated, then: done)
                     }
                     return
                 }
-                closeFragmentIfPutBack(id, pane: pane, origin: origin, then: done)
+                closeFragmentIfPutBack(id, pane: pane, origin: origin,
+                                       animated: animated, then: done)
                 return
             case .alertSecondButtonReturn:  // Close Anyway
                 break
@@ -1896,7 +1909,7 @@ final class MainViewController: NSViewController {
             switch confirmSaveDiscardCancel() {
             case .alertFirstButtonReturn:  // Save
                 savePane(pane, onSaved: { [weak self] in
-                    self?.fragments.close(id)
+                    self?.fragments.close(id, animated: animated)
                     done?(true)
                 }, onCancelled: { done?(false) })
                 return
@@ -1907,7 +1920,7 @@ final class MainViewController: NSViewController {
                 return
             }
         }
-        fragments.close(id)
+        fragments.close(id, animated: animated)
         done?(true)
     }
 
@@ -1917,13 +1930,14 @@ final class MainViewController: NSViewController {
     /// bytes the reader has just been told could not be put back.
     private func closeFragmentIfPutBack(_ id: FragmentDock.PanelID,
                                         pane: PaneViewModel, origin: DocumentOrigin,
+                                        animated: Bool = true,
                                         then done: ((Bool) -> Void)? = nil) {
         guard !origin.hasChanges(in: pane) else {
             fragments.refreshDock()
             done?(false)
             return
         }
-        fragments.close(id)
+        fragments.close(id, animated: animated)
         done?(true)
     }
 
