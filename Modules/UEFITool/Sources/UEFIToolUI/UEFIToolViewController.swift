@@ -618,19 +618,17 @@ import UEFITool
     }
 
     /// The ME analysis has landed for the region node at `id`: open its row onto
-    /// the sub-tree it presents, then settle the selection on the ME focus — or
-    /// the first root, so an open always lands somewhere. The region row is a
-    /// UEFI row, so it opens through the UEFI path; the sub-tree it opens onto
-    /// is the ME half, and the selection that follows it is a ME reveal.
-    func openMERegion(_ id: NodeID) {
+    /// the sub-tree it presents, then settle the selection on the row `preferred`
+    /// names while it resolves — else on the ME focus, else on the first root, so
+    /// an open always lands somewhere. The region row is a UEFI row, so it opens
+    /// through the UEFI path; the sub-tree it opens onto is the ME half, and the
+    /// selection that follows it is a ME reveal.
+    func openMERegion(_ id: NodeID, settlingOn preferred: [Int]? = nil) {
         expandRow(id) { [weak self] in
             guard let self else { return }
-            // The row the open settles on: the one already in focus while it
-            // still resolves, else the first root, so an open always lands
-            // somewhere.
-            let settled = self.meFocus.flatMap {
-                self.meNode(of: self.meRow($0)) != nil ? $0 : nil
-            } ?? self.meRoots.first?.path
+            let settled = [preferred, self.meFocus].compactMap { $0 }
+                .first { self.meNode(of: self.meRow($0)) != nil }
+                ?? self.meRoots.first?.path
             guard let settled else { return }
             self.revealME(settled)
             // The panel chose this row, so the session is told outright rather

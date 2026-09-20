@@ -696,12 +696,24 @@ private struct ChecksumPass: Sendable {
     private var analysisProvider: (any MEAAnalysisProviding)? { host as? any MEAAnalysisProviding }
 
     /// The ME region node was opened: run the ME analysis (reusing the pane's
-    /// cache) and, once the sub-tree is presented, open the region row onto it.
-    /// The node is not expandable in the UEFI tree, so this is the only thing
-    /// that opens it.
-    private func openMERegion(_ id: NodeID) {
+    /// cache) and, once the sub-tree is presented, open the region row onto it,
+    /// settling on `settlingOn` when it resolves. The node is not expandable in
+    /// the UEFI tree, so this is the only thing that opens it.
+    private func openMERegion(_ id: NodeID, settlingOn path: [Int]? = nil) {
         runMEAnalysis(id) { [weak self] in
-            self?.controller.openMERegion(id)
+            self?.controller.openMERegion(id, settlingOn: path)
+        }
+    }
+
+    /// A reveal that stopped at the ME region: the rows that could place the
+    /// caret are not presented yet, so the region is opened for it — the panel's
+    /// own open, its "Loading…" row and all, because that is what opening a
+    /// region is — and the reveal lands on the row that owns the byte once the
+    /// sub-tree is there.
+    private func openMERegionForReveal(_ id: NodeID, at offset: UInt64) {
+        runMEAnalysis(id) { [weak self] in
+            guard let self else { return }
+            self.controller.openMERegion(id, settlingOn: self.mePath(covering: offset))
         }
     }
 
@@ -1029,9 +1041,14 @@ private struct ChecksumPass: Sendable {
     /// its row selected, its detail up. The offset is where the user is
     /// pointing — the start of a selection when there is one, else the caret —
     /// and the innermost node whose range covers it is the one that owns the
-    /// byte. A byte of the ME region is owned by a row of the presented ME
-    /// sub-tree when one covers it, and by the region node itself when none
-    /// does.
+    /// byte.
+    ///
+    /// A byte of the ME region is owned by a row of the ME sub-tree, which the
+    /// UEFI walk cannot see: its rows are `MEANode`s presented under the region
+    /// rather than parsed into the tree, so the deepest node the walk finds
+    /// inside the region is the region itself. The sub-tree is asked first, and
+    /// a region it has not been given yet is opened for the reveal rather than
+    /// answered for by the node above it.
     ///
     /// The dump is where the user is standing, so a reveal that stays inside the
     /// half already on screen publishes nothing. One that moves off an ME row
@@ -1044,13 +1061,19 @@ private struct ChecksumPass: Sendable {
     public func revealNodeAtCaret() {
         let offset = host.selection?.lowerBound ?? host.caret
         guard let tree, tree.isReady else { return }
-        // The ME half first, because the walk below has never heard of it. Its
-        // rows are `MEANode`s presented under the region, not `UEFINode`s in the
-        // tree, so the deepest node the tree can find inside the region is the
-        // region itself — and a caret the sub-tree can place should not land
-        // there. The two halves route by the same rule `zoneSelected` uses.
+        // The ME half first, because the walk below has never heard of it. The
+        // two halves route by the same rule `zoneSelected` uses.
         if let path = mePath(covering: offset) {
             selectME(path)
+            return
+        }
+        // The presented sub-tree placed the byte in no row of its own — or there
+        // is no sub-tree yet, and the rows that could place it do not exist.
+        // Only the second is worth opening a region for: the first has answered,
+        // and the region node is that answer.
+        if meRoots.isEmpty, let id = meRegionID,
+           currentImage?.node(id)?.fileRange?.contains(offset) == true {
+            openMERegionForReveal(id, at: offset)
             return
         }
         // The one place that asks the tree for an *offset* rather than for a

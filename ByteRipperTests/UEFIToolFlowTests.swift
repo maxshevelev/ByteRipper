@@ -1028,6 +1028,29 @@ final class UEFIToolFlowTests: XCTestCase {
         }, "the reveal settled on the sub-tree's row, not the region: \(outline.selectedRow)")
         XCTAssertEqual(pane.zones.focus, "1/0", "and published the row's own zone")
     }
+
+    /// A caret inside an ME region nobody has opened is still the sub-tree's to
+    /// place. The rows that could own the byte do not exist yet, so the reveal
+    /// opens the region rather than answering with the node above it, and
+    /// settles on the row once the sub-tree is there.
+    func testRevealingIntoAnUnopenedMERegionOpensItAndPicksTheRow() throws {
+        let controller = try open(UEFITestImage.intelImageWithME())
+        controller.windowModel.pane1.uefiState.setCachedMEAnalysis(
+            try meAnalysisFixture(), meRegion: 0x1000..<0x2000)
+        let outline = try outline()
+        let pane = controller.windowModel.pane1
+
+        // The descriptor and the region are the whole tree: the region is shut.
+        XCTAssertEqual(outline.numberOfRows, 2, "the region has not been opened")
+
+        pane.moveCaret(to: 0x1000)
+        try session().revealNodeAtCaret()
+
+        XCTAssertTrue(pumpUntil(5) {
+            outline.selectedRow >= 0 && titleText(outline, row: outline.selectedRow) == "FTPR"
+        }, "the reveal opened the region and settled on its row: \(outline.selectedRow)")
+        XCTAssertEqual(pane.zones.focus, "1/0", "and published the row's own zone")
+    }
 }
 
 /// A 4 KiB FFSv2 volume with one sectioned file in it, built byte by byte — the
