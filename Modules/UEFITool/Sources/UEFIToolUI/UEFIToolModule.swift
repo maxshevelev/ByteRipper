@@ -137,6 +137,11 @@ private struct ChecksumPass: Sendable {
     /// `MEAToolSession.dataSource`, for the app-suite tests that drive this
     /// session end to end.
     static var dataSource: any MEADataSource = MEAGitHubDataRepository()
+    /// The analysis the presented sub-tree was built from, kept so the lazy
+    /// reads — the file names, the Checksums group's digests — can re-present
+    /// the sub-tree from a fuller analysis once they land. Nil until the first
+    /// analysis.
+    private var meAnalysis: FirmwareAnalysis?
     /// The presented ME sub-tree of the last analysis — the rows the ME region
     /// node opens onto. Empty until the analysis has run (or was cached), which
     /// is why the region's row is shut on first paint.
@@ -147,6 +152,19 @@ private struct ChecksumPass: Sendable {
     private var meFocus: [Int]?
     /// The in-flight ME analysis, so opening the region twice asks once.
     private var meTask: Task<Void, Never>?
+    /// The file names the ME sub-tree's rows are named with — the MFS volume's,
+    /// the EFS volume's, and the ID-keyed Configuration records' — fetched from
+    /// the firmware database the same way the ME Analyzer fetches them. The
+    /// sub-tree is presented from these, so a re-present after a fetch fills the
+    /// rows in with their names.
+    private var meMfsNames: MFSFileNames = .none
+    private var meEfsNames: EFSFileNames = .none
+    private var meConfigPaths: ConfigRecordPaths = .none
+    /// The in-flight file-name fetch, so a re-present asks once.
+    private var meFileTableTask: Task<Void, Never>?
+    /// The in-flight digest computation for the Checksums group, so selecting
+    /// the row twice asks once.
+    private var meChecksumsTask: Task<Void, Never>?
 
     /// Listening for a newer `guids.csv`. Cancelled in `stop()`.
     private var guidsWatch: Task<Void, Never>?
@@ -242,8 +260,16 @@ private struct ChecksumPass: Sendable {
         // session presented from it goes with it either way.
         meRoots = []
         meFocus = nil
+        meAnalysis = nil
+        meMfsNames = .none
+        meEfsNames = .none
+        meConfigPaths = .none
         meTask?.cancel()
         meTask = nil
+        meFileTableTask?.cancel()
+        meFileTableTask = nil
+        meChecksumsTask?.cancel()
+        meChecksumsTask = nil
         bind()
     }
 
@@ -299,9 +325,18 @@ private struct ChecksumPass: Sendable {
         nodeRepairs = [:]
         checksumProblems = [:]
         // A new reading is a new sub-tree; the presented roots of the last one
-        // mean nothing here. The ME focus is kept — it may be a parked
-        // selection this bind is restoring.
+        // mean nothing here, and neither do the names and digests the last
+        // one's rows were filled with. The ME focus is kept — it may be a
+        // parked selection this bind is restoring.
         meRoots = []
+        meAnalysis = nil
+        meMfsNames = .none
+        meEfsNames = .none
+        meConfigPaths = .none
+        meFileTableTask?.cancel()
+        meFileTableTask = nil
+        meChecksumsTask?.cancel()
+        meChecksumsTask = nil
 
         guard let tree else {
             controller.endBusy()
@@ -607,6 +642,12 @@ private struct ChecksumPass: Sendable {
         meFocus = path
         focus = nil
         show(publish: true)
+        // Looking at the checksums row is what asks for the checksums: the
+        // engine leaves them out of a parse because they are three passes over
+        // the whole region, and until now nothing was going to read them.
+        if let path, path == MEACurator.checksumsPath(in: meRoots) {
+            loadChecksums()
+        }
     }
 
     // MARK: - The ME sub-tree
@@ -697,11 +738,17 @@ private struct ChecksumPass: Sendable {
     /// A successful analysis lands here: present the curated sub-tree and show
     /// it, keeping whatever ME selection still resolves after the re-parse.
     private func presentME(_ analysis: FirmwareAnalysis) {
-        meRoots = MEACurator.present(analysis)
+        meAnalysis = analysis
+        meRoots = MEACurator.present(analysis, mfsNames: meMfsNames, efsNames: meEfsNames,
+                                     configPaths: meConfigPaths)
         if let path = meFocus, MEATree.node(at: path, in: meRoots) == nil {
             meFocus = nil
         }
         show(publish: meFocus != nil)
+        // The sub-tree is on screen; the file names it still lacks are fetched
+        // behind it, the way the ME Analyzer fetches them, and re-present the
+        // rows with their names when they land.
+        loadFileNames()
     }
 
     /// The region's analysis started or finished: forward it to the panel,
@@ -713,6 +760,112 @@ private struct ChecksumPass: Sendable {
         } else {
             controller.meRegionLoading(id)
         }
+    }
+
+    /// Names the files of an FTBL-mode MFS volume, of the EFS volume beside it,
+    /// and of the ID-keyed Configuration records either carries — the same
+    /// reading the ME Analyzer makes after an analysis, and for the same reason:
+    /// it costs a fetch, and most dumps never need it. The sub-tree is
+    /// re-presented with the names when they land, so a row that read `File 63`
+    /// gains its name in place. Silent on failure: offline, rate-limited, or a
+    /// table that does not describe this volume all leave the rows reading their
+    /// numbers, which is what the flash says about them.
+    private func loadFileNames() {
+        guard let analysis = meAnalysis, meFileTableTask == nil else { return }
+        let volume = analysis.mfsVolume
+        let wantsMFS = volume?.usesFTBL == true && volume?.files.isEmpty == false
+            && meMfsNames.resolution == nil
+        let wantsEFS = analysis.efsVolume != nil && meEfsNames.resolution == nil
+        // Every ID-keyed Configuration record in the analysis, wherever it came
+        // from: the FITC partition's payload and a newer volume's own 6/7
+        // streams are keyed into the same table.
+        let configIDs = (analysis.oemConfiguration?.recordsByID ?? []).map(\.fileID)
+            + (volume?.configurationsByID ?? []).flatMap { $0.records.map(\.fileID) }
+        let wantsConfig = !configIDs.isEmpty && meConfigPaths.resolution == nil
+        guard wantsMFS || wantsEFS || wantsConfig else { return }
+        let source = Self.dataSource
+        let generation = self.generation
+        meFileTableTask = Task { [weak self] in
+            let names = await UEFIToolSession.meFileNames(
+                mfs: wantsMFS ? volume : nil,
+                efs: wantsEFS ? analysis.efsVolume : nil,
+                configIDs: wantsConfig ? configIDs : [],
+                platform: volume?.ftblPlatform ?? -1,
+                dictionary: volume?.ftblDictionary ?? -1,
+                from: source)
+            guard let self, self.generation == generation else { return }
+            self.meFileTableTask = nil
+            guard let names, let analysis = self.meAnalysis else { return }
+            self.meMfsNames = names.mfs ?? self.meMfsNames
+            self.meEfsNames = names.efs ?? self.meEfsNames
+            self.meConfigPaths = names.config ?? self.meConfigPaths
+            self.presentME(analysis)
+        }
+    }
+
+    /// Compute the region's digests off the main actor and put them into the
+    /// analysis the sub-tree was built from. The Checksums group is the one
+    /// whose values `analyze` leaves out — three passes over the whole region
+    /// for three rows — so looking at it is what asks for them, the way the ME
+    /// Analyzer asks. The bytes are read again rather than kept alive between
+    /// parses: this path runs once per file, if at all.
+    private func loadChecksums() {
+        guard let analysis = meAnalysis, analysis.checksums == nil,
+              meChecksumsTask == nil, let snapshot = try? host.snapshot() else { return }
+        let meRegion = treeProvider?.uefiTree()?.region(.me)
+        let analysisProvider = self.analysisProvider
+        let generation = self.generation
+        meChecksumsTask = Task { [weak self] in
+            let checksums = await UEFIToolSession.meChecksums(snapshot, meRegion: meRegion)
+            guard let self, self.generation == generation else { return }
+            self.meChecksumsTask = nil
+            guard var updated = self.meAnalysis, updated.checksums == nil else { return }
+            updated.checksums = checksums
+            analysisProvider?.setCachedMEAnalysis(updated, meRegion: meRegion)
+            self.presentME(updated)
+        }
+    }
+
+    /// Off the main actor: the table fetched (or taken from the source's own
+    /// in-memory cache) and turned into this volume's names. Nil when there is
+    /// nothing to name with — no source configured, no network, a table that
+    /// cannot be parsed — which the caller treats as "the rows keep their
+    /// numbers".
+    private nonisolated static func meFileNames(
+        mfs: MFSVolume?,
+        efs: EFSVolume?,
+        configIDs: [Int],
+        platform: Int,
+        dictionary: Int,
+        from source: any MEADataSource
+    ) async -> (mfs: MFSFileNames?, efs: EFSFileNames?, config: ConfigRecordPaths?)? {
+        guard let table = try? await source.fileTable() else { return nil }
+        return await Task.detached(priority: .utility) {
+            (mfs.map { MFSFileNames(table: table, volume: $0) },
+             efs.map {
+                 EFSFileNames(table: table, volume: $0,
+                              platform: platform, dictionary: dictionary)
+             },
+             configIDs.isEmpty ? nil
+                 : ConfigRecordPaths(table: table, fileIDs: configIDs,
+                                     platform: platform, dictionary: dictionary))
+        }.value
+    }
+
+    /// Off the main actor: the same region `analyze` was given, digested.
+    /// An unreadable file leaves every field nil, and the group then goes.
+    private nonisolated static func meChecksums(
+        _ snapshot: any ToolContentReader,
+        meRegion: Range<UInt64>?
+    ) async -> MEFirmware.Checksums {
+        // `Checksums` is spelled out: UEFIImage has one of its own, and this
+        // file can see both.
+        await Task.detached(priority: .userInitiated) {
+            guard let data = try? UEFIToolSession.regionBytes(snapshot, meRegion) else {
+                return MEFirmware.Checksums()
+            }
+            return await MEFirmwareAnalyzer.checksums(of: data)
+        }.value
     }
 
     /// Off the main actor: materialise just the ME region (when the shared tree
