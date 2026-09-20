@@ -164,6 +164,49 @@ final class UEFIToolFlowTests: XCTestCase {
         })
     }
 
+    /// Opening a row is not a reason to move the table. A show that finds the
+    /// focus where it already was — which is what a branch opening and the
+    /// checksum pass behind it produce — used to scroll the tree back to the
+    /// selected row, taking the reader away from whatever they had scrolled to
+    /// look at.
+    func testOpeningARowDoesNotScrollBackToTheSelection() throws {
+        _ = try open(UEFITestImage.make())
+        let tree = try expandRow(0)
+        guard tree.numberOfRows >= 4 else {
+            return XCTFail("the premise: rows to scroll past — \(tree.numberOfRows) rows")
+        }
+
+        // A short tree pane, so four rows are more than fit. Without that the
+        // scroll below is a no-op and nothing could be observed either way.
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
+        splitter.setDividerPosition(56, at: 0)
+        window?.layoutIfNeeded()
+
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+        let clip = try XCTUnwrap(tree.enclosingScrollView)
+        clip.contentView.scroll(to: NSPoint(x: 0, y: 40))
+        clip.reflectScrolledClipView(clip.contentView)
+        let away = clip.contentView.bounds.origin.y
+        XCTAssertGreaterThan(away, 0, "the premise: the tree is scrolled away from the row")
+
+        // The reader's own gesture: open another row, and let the reading it
+        // starts land — which is the show that used to bring the table back.
+        let session = try session()
+        let checked = expectation(description: "the branch's checksums are read")
+        checked.assertForOverFulfill = false
+        session.onChecksums = { checked.fulfill() }
+        try expandRow(1)
+        wait(for: [checked], timeout: 5)
+        session.onChecksums = nil
+
+        clip.layoutSubtreeIfNeeded()
+        XCTAssertEqual(clip.contentView.bounds.origin.y, away, accuracy: 0.5,
+                       "opening a row leaves the table where the reader put it")
+        XCTAssertEqual(tree.selectedRow, 0, "and the selection is where it was")
+    }
+
     /// Opening a row does not widen the tree past its scroll view: the
     /// indentation comes out of the Name column, so the inset style's margins
     /// and rounded selection stay on screen.

@@ -595,6 +595,9 @@ import UEFITool
             deselectForShow()
             return
         }
+        // The same rule the UEFI half's `selectAndScroll` keeps: a show that
+        // finds the row where it already was does not move the table.
+        guard outline.selectedRow != row else { return }
         outline.scrollRowToVisible(row)
         // The selection is the panel's own doing, not the reader's, so it must
         // not read back as a click — the same reason `reveal` sets this around
@@ -684,6 +687,12 @@ import UEFITool
     private func selectAndScroll(to nodeID: NodeID) {
         let row = outline.row(forItem: row(nodeID))
         guard row >= 0 else { return }
+        // A show that finds the focus where it already was — a branch opening,
+        // the checksum pass that follows it, an edit — is not a reason to move
+        // the table. The reader may have scrolled somewhere else to look at
+        // something, and the row this would scroll to is already the selection,
+        // so there is nothing to move to and nothing to select.
+        guard outline.selectedRow != row else { return }
         outline.scrollRowToVisible(row)
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
     }
