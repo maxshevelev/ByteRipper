@@ -1030,6 +1030,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         if isMERegion(node) {
             guard meRoots.isEmpty else { return true }
             guard !showingPlaceholder.contains(row.id) else { return true }
+            // An open already in flight is not asked for a second time. The
+            // analysis is reading, the panel has its clock on the row but no
+            // placeholder yet, and a second ask would be a second full read of
+            // the region — two passes where the session means to make one.
+            guard meOpening != row.id else { return false }
             meRegionOpening(row.id)
             onOpenMERegion?(row.id)
             return false

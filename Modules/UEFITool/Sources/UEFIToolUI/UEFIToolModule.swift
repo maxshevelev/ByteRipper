@@ -297,6 +297,17 @@ private struct ChecksumPass: Sendable {
         guidsWatch = nil
         rangesRequest?.cancel()
         rangesRequest = nil
+        // The ME reads are this session's own, and a parked panel is not going to
+        // show what they find. The row an analysis put up goes with them: the
+        // pane is not rebuilt on a restore, so a latch left here would still be
+        // holding the region shut the next time the tool is brought back.
+        endMERegionLoading()
+        meTask?.cancel()
+        meTask = nil
+        meFileTableTask?.cancel()
+        meFileTableTask = nil
+        meChecksumsTask?.cancel()
+        meChecksumsTask = nil
     }
 
     public var parkedState: (any ToolSessionState)? {
@@ -1041,12 +1052,20 @@ private struct ChecksumPass: Sendable {
             guard let self else { return }
             self.controller.endBusy()
             guard let node = chain.last else { return }
+            // Whether the dump is wearing another tree's zones: with an ME focus
+            // set, it is.
+            let crossedHalves = self.meFocus != nil
             self.focus = node.id
             // The UEFI node is the focus now, so the ME half is dropped with it
             // — otherwise the tree stays on the ME row it was revealing and the
             // reveal lands nowhere.
             self.meFocus = nil
-            self.show(publish: false)
+            // A reveal that crossed no halves leaves the dump where the user is
+            // standing, which is the point of this half staying quiet. One that
+            // did cannot: the zones on screen belong to the tree just left. The
+            // new node's own zone is safe to draw — it is the innermost one
+            // covering the caret, so it is already the byte under it.
+            self.show(publish: crossedHalves)
         }
     }
 
