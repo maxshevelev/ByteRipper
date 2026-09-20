@@ -2,6 +2,7 @@ import ALSplitView
 import AppPalette
 import AppKit
 import MEATool
+import MEPresentation
 import ToolModuleKit
 
 /// The panel: a Summary / Full Tree switch — the MEA-style summary on the

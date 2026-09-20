@@ -1,6 +1,6 @@
 import XCTest
 import MEFirmware
-@testable import MEATool
+@testable import MEPresentation
 
 /// `MFSFileNames` + the file rows it names — the panel's half of upstream's
 /// `mfs_home13_anl`: an FTBL-mode MFS volume's low-level files have no name in

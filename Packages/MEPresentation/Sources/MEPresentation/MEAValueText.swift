@@ -4,47 +4,50 @@ import MEFirmware
 /// Deterministic value formatting for the curated tree — the one shared voice
 /// behind every label/value pair and hex subtitle. Offsets are bare uppercase
 /// hex; sizes carry their decimal byte count; flags/CRCs are width-padded.
-enum MEAText {
+///
+/// Public because two panels format through it: the Full Tree's curator and the
+/// ME Analyzer's Summary tab (the latter lives in `MEATool`, a different module).
+public enum MEAText {
     // MARK: Hex
 
     /// `0x`-prefixed, no padding — for offsets and small counts.
-    static func hex(_ v: Int) -> String { String(format: "0x%X", v) }
+    public static func hex(_ v: Int) -> String { String(format: "0x%X", v) }
     /// Width-padded to one byte, e.g. an extension tag.
-    static func hexByte(_ v: Int) -> String { String(format: "0x%02X", v) }
+    public static func hexByte(_ v: Int) -> String { String(format: "0x%02X", v) }
     /// Width-padded to two bytes, e.g. a BPDT partition type.
-    static func hex16(_ v: Int) -> String { String(format: "0x%04X", v) }
+    public static func hex16(_ v: Int) -> String { String(format: "0x%04X", v) }
     /// Width-padded to four bytes, e.g. a region's flags word.
-    static func hex32(_ v: UInt32) -> String { String(format: "0x%08X", v) }
+    public static func hex32(_ v: UInt32) -> String { String(format: "0x%08X", v) }
 
     // MARK: Ranges and sizes
 
     /// The detail value for a byte offset.
-    static func offset(_ v: Int) -> String { hex(v) }
+    public static func offset(_ v: Int) -> String { hex(v) }
     /// The detail value for a byte count: hex plus the decimal bytes, so a
     /// reader never has to convert one to check the other. A count of zero is
     /// not a number worth two spellings — the area holds nothing, and the row
     /// says so.
-    static func size(_ v: Int) -> String {
+    public static func size(_ v: Int) -> String {
         v == 0 ? "Empty" : String(format: "0x%X (%d bytes)", v, v)
     }
     /// The compact row subtitle `0x… · 0x…` (offset · size), with the same
     /// word for a section that holds nothing.
-    static func range(_ offset: Int, _ size: Int) -> String {
+    public static func range(_ offset: Int, _ size: Int) -> String {
         "\(hex(offset)) · \(size == 0 ? "Empty" : hex(size))"
     }
     /// The file range a row stands for; nil when the size is empty or negative.
-    static func rangeValue(_ offset: Int, _ size: Int) -> Range<UInt64>? {
+    public static func rangeValue(_ offset: Int, _ size: Int) -> Range<UInt64>? {
         guard offset >= 0, size > 0 else { return nil }
         return UInt64(offset)..<UInt64(offset + size)
     }
-    static func count(_ n: Int, _ noun: String) -> String {
+    public static func count(_ n: Int, _ noun: String) -> String {
         n == 1 ? "1 \(noun)" : "\(n) \(noun)s"
     }
 
     // MARK: Words
 
-    static func yesNo(_ b: Bool) -> String { b ? "Yes" : "No" }
-    static func family(_ f: FirmwareFamily) -> String {
+    public static func yesNo(_ b: Bool) -> String { b ? "Yes" : "No" }
+    public static func family(_ f: FirmwareFamily) -> String {
         switch f {
         case .me: return "ME"
         case .csme: return "CSME"
@@ -60,7 +63,7 @@ enum MEAText {
         case .unknown: return "Unknown"
         }
     }
-    static func manifestFormat(_ f: ManifestFormat) -> String {
+    public static func manifestFormat(_ f: ManifestFormat) -> String {
         switch f {
         case .r0: return "R0"
         case .r1: return "R1"
@@ -70,7 +73,7 @@ enum MEAText {
     }
     /// First-letter capitalization for one-word enum raw values, with the few
     /// camelCase/uppercase raw values mapped by hand.
-    static func title(_ s: String) -> String {
+    public static func title(_ s: String) -> String {
         switch s {
         case "production": return "Production"
         case "preProduction": return "Pre-production"
@@ -82,7 +85,7 @@ enum MEAText {
 
     // MARK: Structured
 
-    static func version(_ major: Int, _ minor: Int, _ hotfix: Int,
+    public static func version(_ major: Int, _ minor: Int, _ hotfix: Int,
                         _ build: Int) -> String {
         "\(major).\(minor).\(hotfix).\(build)"
     }
@@ -95,7 +98,7 @@ enum MEAText {
     ///
     /// Keyed by the *variant* token rather than the family, because that is
     /// what upstream keys on and what tells `PMCADP` from `PMCDG2`.
-    static func firmwareVersion(variant: String, major: Int, minor: Int,
+    public static func firmwareVersion(variant: String, major: Int, minor: Int,
                                 hotfix: Int, build: Int) -> String {
         if variant == "SPS" || variant == "CSSPS" {
             return String(format: "%02d.%02d.%02d.%03d", major, minor, hotfix, build)
@@ -117,7 +120,7 @@ enum MEAText {
     }
     /// The Flash Image Tool (FITC) version a firmware was built with — the
     /// same `get_fw_ver` shaping, over the FIT's own four fields.
-    static func firmwareImageTool(variant: String, major: Int, minor: Int,
+    public static func firmwareImageTool(variant: String, major: Int, minor: Int,
                                   hotfix: Int, build: Int) -> String {
         firmwareVersion(variant: variant, major: major, minor: minor,
                         hotfix: hotfix, build: build)
@@ -126,7 +129,7 @@ enum MEAText {
     /// 20, upstream `mn2_meu_ver`, MEA.py 12229): the build is padded to four
     /// digits, so a `1.4.0.14` MEU reads "1.4.0.0014" exactly as the console
     /// prints it.
-    static func manifestExtensionUtility(major: Int, minor: Int, hotfix: Int,
+    public static func manifestExtensionUtility(major: Int, minor: Int, hotfix: Int,
                                          build: Int) -> String {
         String(format: "%d.%d.%d.%04d", major, minor, hotfix, build)
     }
@@ -134,13 +137,13 @@ enum MEAText {
     /// `', '.join(list(sku_stp))`): each letter of a stepping record read as
     /// its own stepping, so a firmware recorded as "BA" supports steppings B
     /// and A.
-    static func chipsetStepping(_ letters: String) -> String {
+    public static func chipsetStepping(_ letters: String) -> String {
         letters.map(String.init).joined(separator: ", ")
     }
     /// The Power Down Mitigation row (row 12a, upstream `pdm_status`). The
     /// unknown answers are the database's own — it recorded that it does not
     /// know — and upstream prints them as they are.
-    static func powerDownMitigation(_ value: PowerDownMitigation) -> String {
+    public static func powerDownMitigation(_ value: PowerDownMitigation) -> String {
         switch value {
         case .yes: return "Yes"
         case .no: return "No"
@@ -153,13 +156,13 @@ enum MEAText {
     /// newest firmware of that ME 7 line the image refuses to be downgraded
     /// to, written as upstream writes it — `<= 7.1.2.1000`. The label of the
     /// row names the line, so the major is always the 7.
-    static func downgradeBlacklist(_ entry: Version3) -> String {
+    public static func downgradeBlacklist(_ entry: Version3) -> String {
         "<= 7.\(entry.minor).\(entry.hotfix).\(entry.build)"
     }
     /// The FWUpdate Support row (row 15, upstream `fwu_iup_result`).
     /// "Impossible" is upstream's own word for an image no added partition
     /// would make updatable.
-    static func fwUpdateSupport(_ value: FWUpdateSupport) -> String {
+    public static func fwUpdateSupport(_ value: FWUpdateSupport) -> String {
         switch value {
         case .yes: return "Yes"
         case .no: return "No"
@@ -171,7 +174,7 @@ enum MEAText {
     /// reserved value keeps upstream's own wording for a number outside the
     /// map, so a future revision's third medium reads as unknown rather than
     /// as one of these two.
-    static func nvmCompatibility(_ raw: Int) -> String {
+    public static func nvmCompatibility(_ raw: Int) -> String {
         switch raw {
         case 0: return "Undefined"
         case 1: return "UFS"
@@ -179,10 +182,10 @@ enum MEAText {
         default: return "Unknown (\(raw))"
         }
     }
-    static func date(year: Int, month: Int, day: Int) -> String {
+    public static func date(year: Int, month: Int, day: Int) -> String {
         String(format: "%04d-%02d-%02d", year, month, day)
     }
-    static func date(_ d: Date) -> String {
+    public static func date(_ d: Date) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(identifier: "UTC")!
         let c = calendar.dateComponents([.year, .month, .day], from: d)

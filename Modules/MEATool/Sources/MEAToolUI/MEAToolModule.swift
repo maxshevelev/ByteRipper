@@ -1,6 +1,7 @@
 import AppKit
 import MEFirmware
 import MEATool
+import MEPresentation
 import ToolModuleKit
 import UEFIImage
 

@@ -1,6 +1,6 @@
 import XCTest
 import MEFirmware
-@testable import MEATool
+@testable import MEPresentation
 
 /// `EFSFileNames` + the file rows it names — the panel's half of upstream's
 /// `efs_anl` file walk. An EFS volume's files have no name in their bytes at

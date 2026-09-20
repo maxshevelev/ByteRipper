@@ -1,5 +1,6 @@
 import XCTest
 import MEFirmware
+import MEPresentation
 @testable import MEATool
 
 /// `MEASummary` — the pure builder behind the «Summary» tab: the primary

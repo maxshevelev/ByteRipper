@@ -50,6 +50,11 @@ packages:
   # install a stub `MEADataSource` and so import it directly.
   MEFirmware:
     path: Packages/MEFirmware
+  # The presentation over a `FirmwareAnalysis`: the curated ME tree, its zones,
+  # row marks and value text. Both firmware tool-modules build it; no target
+  # here links it directly.
+  MEPresentation:
+    path: Packages/MEPresentation
   # Fetched once, checked once a day. All three live sources hold their parsed
   # database in one of these, and so does the app's own check for a newer
   # release; only the app links it directly.

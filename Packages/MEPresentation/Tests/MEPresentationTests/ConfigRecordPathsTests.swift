@@ -1,6 +1,6 @@
 import XCTest
 import MEFirmware
-@testable import MEATool
+@testable import MEPresentation
 
 /// `ConfigRecordPaths` + the record rows it names — the panel's half of the 0xC
 /// branch of upstream's `mfs_cfg_anl`. An ID-keyed Configuration record carries

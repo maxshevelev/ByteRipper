@@ -1,6 +1,6 @@
 import XCTest
 import MEFirmware
-@testable import MEATool
+@testable import MEPresentation
 
 /// `MEACurator` / `MEAZones` — the pure, hand-curated tree over the engine's
 /// `FirmwareAnalysis`. Fixtures are built by decoding JSON so the tests never

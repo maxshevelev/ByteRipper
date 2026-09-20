@@ -3,14 +3,16 @@
 //  MEATool — the "ME Analyzer" instrument panel: two tabs, Summary and Full
 //  Tree, a view over `MEFirmware`'s `FirmwareAnalysis`.
 //
-//  The engine (`MEFirmwareAnalyzer.analyze`) returns one big typed model; this
-//  module turns it into the curated tree the tool shows — hand-named groups in a
-//  fixed order, rows carrying the byte ranges the panel reveals, details read
-//  from the very model rows stand for. The tree building is a pure target,
-//  tested by `swift test` over in-memory `FirmwareAnalysis` fixtures; the UI
-//  target only lays out what it returns.
+//  The engine (`MEFirmwareAnalyzer.analyze`) returns one big typed model. The
+//  shared presentation over that model — the curated Full Tree, its zones, its
+//  row marks, its value text — lives in `MEPresentation`, because the UEFI
+//  Structure's ME branch builds the same tree and a tool-module may not depend
+//  on another. This module's pure target keeps what only the ME Analyzer shows:
+//  the Summary tab's model, tested by `swift test` over in-memory
+//  `FirmwareAnalysis` fixtures. The UI target lays out both tabs.
 //
-//  Two targets, as every tool-module has: the decisions and the view over them.
+//  Two targets, as every tool-module has: the Summary decisions and the view
+//  over them.
 //
 
 import PackageDescription
@@ -29,17 +31,19 @@ let package = Package(
         .package(path: "../../Packages/ToolModuleKit"),
         .package(path: "../../Packages/AppPalette"),
         .package(path: "../../Packages/MEFirmware"),
+        .package(path: "../../Packages/MEPresentation"),
         .package(path: "../../Packages/UEFIImage")
     ],
     targets: [
         .target(name: "MEATool", dependencies: [
             .product(name: "MEFirmware", package: "MEFirmware"),
-            .product(name: "ToolModuleKit", package: "ToolModuleKit"),
+            .product(name: "MEPresentation", package: "MEPresentation"),
         ]),
         .target(name: "MEAToolUI", dependencies: [
             .product(name: "AppPalette", package: "AppPalette"),
             "MEATool",
             .product(name: "MEFirmware", package: "MEFirmware"),
+            .product(name: "MEPresentation", package: "MEPresentation"),
             .product(name: "ALSplitView", package: "ALSplitView"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage")
@@ -47,7 +51,7 @@ let package = Package(
         .testTarget(name: "MEAToolTests", dependencies: [
             "MEATool",
             .product(name: "MEFirmware", package: "MEFirmware"),
-            .product(name: "ToolModuleKit", package: "ToolModuleKit")
+            .product(name: "MEPresentation", package: "MEPresentation")
         ])
     ]
 )

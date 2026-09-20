@@ -1,5 +1,6 @@
 import Foundation
 import MEFirmware
+import MEPresentation
 
 /// The value a summary row carries: the fact the analysis answered, or the
 /// placeholder that names a row upstream MEA prints but this engine does not
@@ -11,21 +12,6 @@ public enum MEASummaryValue: Sendable, Equatable {
     case value(String)
     /// The engine has nothing for this row yet.
     case comingSoon
-}
-
-/// How a row's value is drawn — the colour intent the pure target decides
-/// because only it knows the fact behind a value (e.g. a File System State's
-/// status). The view resolves each tone into a theme-adapted `NSColor`; a row
-/// carries `.standard` unless it says otherwise.
-public enum MEASummaryTone: Sendable, Equatable, Hashable {
-    /// The ordinary label-colour value most rows carry.
-    case standard
-    /// A settled state — drawn green.
-    case good
-    /// A state in the middle of its lifecycle — drawn brown.
-    case caution
-    /// A failed state — drawn red.
-    case bad
 }
 
 /// One Field/Value row of the summary — the same shape as `MEAField`, with the
