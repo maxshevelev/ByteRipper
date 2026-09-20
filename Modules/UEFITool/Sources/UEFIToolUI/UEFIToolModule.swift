@@ -573,7 +573,11 @@ private struct ChecksumPass: Sendable {
             meRoots: meRoots, meFocus: meFocus
         )
         if publish {
-            host.publish(UEFIPresenter.zones(for: node, in: image))
+            // An ME focus zones the node's own byte range, the way the ME
+            // Analyzer does; a UEFI focus zones the node as before. The two are
+            // kept apart, so at most one is published.
+            host.publish(meNode.map(MEAZones.build)
+                         ?? UEFIPresenter.zones(for: node, in: image))
         }
     }
 
@@ -765,7 +769,18 @@ private struct ChecksumPass: Sendable {
     /// selected; what is left is to bring the node it stands for to the front —
     /// expand the tree to it and select it, which is the half only this side
     /// knows how to do.
+    ///
+    /// The zone on screen belongs to whichever focus is active. An ME focus and
+    /// a UEFI focus are kept apart, so the id is routed by which one is set —
+    /// not by the id's shape, which a one-level ME path ("0") and a UEFI node
+    /// ("0") cannot tell apart.
     public func zoneSelected(_ id: Zone.ID) {
+        if meFocus != nil {
+            let path = id.split(separator: "/").compactMap { Int($0) }
+            guard !path.isEmpty, MEATree.node(at: path, in: meRoots) != nil else { return }
+            selectME(path)
+            return
+        }
         guard let nodeID = UEFIPresenter.nodeID(ofZone: id) else { return }
         focus = nodeID
         meFocus = nil
