@@ -41,6 +41,42 @@ final class MEAToolFlowTests: XCTestCase {
         }
     }
 
+    /// A reachable database that counts how often it was asked for one, and can
+    /// announce a newer one on demand. The count is what says the panel went back
+    /// to the database rather than answering out of what it already had.
+    private final class CountingAnnouncingSource: MEADataSource, @unchecked Sendable {
+        private let stream: AsyncStream<Void>
+        private let announce: AsyncStream<Void>.Continuation
+        private let lock = NSLock()
+        private var count = 0
+
+        var fetches: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return count
+        }
+
+        init() {
+            let (stream, continuation) = AsyncStream<Void>.makeStream()
+            self.stream = stream
+            self.announce = continuation
+        }
+
+        func database() async throws -> MEADatabase {
+            lock.lock()
+            count += 1
+            lock.unlock()
+            return MEADatabase(revision: 378)
+        }
+
+        func fileTable() async throws -> FileTable {
+            throw MEADataError.offline(underlying: "test offline")
+        }
+
+        func databaseChanges() async -> AsyncStream<Void> { stream }
+        func aNewDatabaseHasArrived() { announce.yield() }
+    }
+
     override func setUp() {
         super.setUp()
         let isolated = isolatedDefaults(for: self)
@@ -840,6 +876,23 @@ final class MEAToolFlowTests: XCTestCase {
         XCTAssertNil(retried, "still offline, still no analysis")
         XCTAssertEqual(notice.stringValue.contains("Could not reach the MEAnalyzer repository"),
                        true)
+    }
+
+    /// A firmware database that has been replaced makes every analysis made
+    /// against the old one a description of a world that is gone — the
+    /// identification, the names and the known-bad hashes all came out of that
+    /// file. The panel reads again rather than answering out of what it has: the
+    /// pane's cache drops the analysis on the same event, and this re-reading
+    /// does not go near it either, so the answer comes from the new database
+    /// whichever of the two arrives first.
+    func testANewDatabaseMakesThePanelReadAgain() throws {
+        let source = CountingAnnouncingSource()
+        _ = try open(METestImage.manifestFile(), dataSource: source)
+        XCTAssertEqual(source.fetches, 1, "the first analysis read the database")
+
+        try waitForDisplay(of: session()) { source.aNewDatabaseHasArrived() }
+        XCTAssertEqual(source.fetches, 2,
+                       "and the new one made the panel read the database again")
     }
 }
 
