@@ -613,7 +613,7 @@ private struct ChecksumPass: Sendable {
             // checksum. The full tone rendering (the green done-mark, the brown
             // caution) is the ME Analyzer's — this is the sub-tree's view of it.
             detail = UEFINodeDetail(
-                title: meNode.title,
+                title: meDetailTitle(of: meNode),
                 fields: meNode.fields.map {
                     UEFIDetailField($0.label, $0.value, isProblem: $0.tone == .bad)
                 },
@@ -1133,6 +1133,26 @@ private struct ChecksumPass: Sendable {
         meFocus = nil
         show()
         if crossedHalves { host.publish(.empty) }
+    }
+
+    /// What names an ME row in the detail: its title, and — when the row has
+    /// nothing else to say — the subtitle it carries.
+    ///
+    /// A row that stands for bytes already answers this in the fields under the
+    /// heading (`Offset`, `Size`), and a heading repeating them would say it
+    /// twice. A group carries no fields at all, so its heading is the whole of
+    /// what the detail can say about it: without the subtitle a count like
+    /// "17 regions" would be nowhere in the panel.
+    ///
+    /// This is the one place the subtitle can land. The ME Analyzer keeps it in
+    /// a Summary column of its own, 150 points wide; this panel's tree has no
+    /// column for it — the two beside the name are a UEFI node's kind and
+    /// subtype, which an ME row is neither — and borrowing one would either
+    /// squeeze a hex range past reading in 69 points or take the width off the
+    /// Name column, where a UEFI row's GUID lives.
+    private func meDetailTitle(of node: MEANode) -> String {
+        guard node.fields.isEmpty, !node.subtitle.isEmpty else { return node.title }
+        return "\(node.title) · \(node.subtitle)"
     }
 
     /// The path of the innermost presented ME row whose range covers `offset`,

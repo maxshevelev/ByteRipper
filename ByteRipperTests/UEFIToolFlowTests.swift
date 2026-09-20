@@ -1157,6 +1157,39 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(try nameColor(ofRowTitled: "FTPR"), .labelColor,
                        "and one that holds something reads normally")
     }
+
+    /// An ME row's second fact — how many things it holds — reaches the detail
+    /// when the row has no fields to say it with. A group carries none, so its
+    /// heading is the whole of what the detail can say about it, and without
+    /// this the count would be nowhere in the panel.
+    func testTheDetailCarriesAGroupsCount() throws {
+        let outline = try openMERegion()
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        func detailText() -> [String] {
+            descendants(of: panel, NSTextField.self).map(\.stringValue)
+        }
+
+        // A group row, which has nothing but its count to say.
+        let regionsRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Regions (FPT)" })
+        outline.selectRowIndexes(IndexSet(integer: regionsRow), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+        XCTAssertTrue(detailText().contains("Regions (FPT) · 1 region"),
+                      "a group's count has nowhere else to be: \(detailText())")
+
+        // And a row that stands for bytes does not repeat itself: its heading
+        // is its name, and the fields below it carry the offset and the size.
+        outline.expandItem(outline.item(atRow: regionsRow))
+        window?.layoutIfNeeded()
+        let ftpRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "FTPR" })
+        outline.selectRowIndexes(IndexSet(integer: ftpRow), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+        let text = detailText()
+        XCTAssertTrue(text.contains("FTPR"), "the row is named: \(text)")
+        XCTAssertFalse(text.contains("FTPR · 0x1000 · 0x1000"),
+                       "and its heading is not the fields under it said twice: \(text)")
+    }
 }
 
 /// A 4 KiB FFSv2 volume with one sectioned file in it, built byte by byte — the
