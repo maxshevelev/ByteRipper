@@ -1,4 +1,6 @@
 import AppKit
+import MEFirmware
+import MEPresentation
 import ToolModuleKit
 import UEFIContentSource
 import UEFIImage
@@ -39,6 +41,10 @@ public enum UEFIToolModule: ToolModule {
 /// (`ToolSession.parkedState`).
 struct UEFIParkedState: ToolSessionState {
     var focus: NodeID?
+    /// The ME row the user was looking at, as its path under the ME region
+    /// node. Kept apart from `focus` (a UEFI `NodeID`) because the two resolve
+    /// against different trees, and only one is the active focus at a time.
+    var meFocus: [Int]?
 }
 
 /// What one checksum pass hands back: for every node it read, the fields that
@@ -118,6 +124,30 @@ private struct ChecksumPass: Sendable {
     /// overwrite a fresh one.
     private var guidsGeneration = 0
 
+    // MARK: - The ME sub-tree
+
+    /// The one engine instance this session keeps: `MEFirmwareAnalyzer` holds
+    /// the data source, whose in-memory single-flight cache of MEA.dat is what
+    /// makes re-reading the same dump cheap. The ME branch of the structure
+    /// tree is built from its analysis, presented through the shared
+    /// `MEPresentation` tree (`Design/ME_REGION_IN_UEFI_TREE_PLAN.md`).
+    private let analyzer: MEFirmwareAnalyzer
+    /// Where the fresh firmware database comes from. A test installs its own so
+    /// the suite does not reach GitHub — the same public seam as
+    /// `MEAToolSession.dataSource`, for the app-suite tests that drive this
+    /// session end to end.
+    static var dataSource: any MEADataSource = MEAGitHubDataRepository()
+    /// The presented ME sub-tree of the last analysis — the rows the ME region
+    /// node opens onto. Empty until the analysis has run (or was cached), which
+    /// is why the region's row is shut on first paint.
+    private var meRoots: [MEANode] = []
+    /// The ME row the user is looking at, as its path under the ME region node.
+    /// Kept apart from `focus` (a UEFI `NodeID`): the two resolve against
+    /// different trees, and only one is the active focus at a time.
+    private var meFocus: [Int]?
+    /// The in-flight ME analysis, so opening the region twice asks once.
+    private var meTask: Task<Void, Never>?
+
     /// Listening for a newer `guids.csv`. Cancelled in `stop()`.
     private var guidsWatch: Task<Void, Never>?
     /// The protected ranges asked for, a moment after an edit. Cancelled by the
@@ -148,6 +178,7 @@ private struct ChecksumPass: Sendable {
 
     public init(host: any ToolHost) {
         self.host = host
+        self.analyzer = MEFirmwareAnalyzer(data: Self.dataSource)
         controller.onSelect = { [weak self] nodeID in self?.select(nodeID) }
         controller.onSelectTop = { [weak self] in self?.showTopNode() }
         controller.onRevealAtCaret = { [weak self] in self?.revealNodeAtCaret() }
@@ -164,6 +195,8 @@ private struct ChecksumPass: Sendable {
             self?.openNodeInPanel(for: nodeID, body: body)
         }
         controller.onOpenRowsChanged = { [weak self] in self?.rememberOpenRows() }
+        controller.onSelectME = { [weak self] path in self?.selectME(path) }
+        controller.onOpenMERegion = { [weak self] id in self?.openMERegion(id) }
     }
 
     public var viewController: NSViewController { controller }
@@ -201,6 +234,13 @@ private struct ChecksumPass: Sendable {
         // A tree of our own is over a frozen snapshot and cannot be told about
         // an edit; the shared one can, and was.
         ownTree = nil
+        // An edit invalidates the pane's cached analysis when it lands inside
+        // the ME region (`PaneUEFIState.invalidate`), and the sub-tree this
+        // session presented from it goes with it either way.
+        meRoots = []
+        meFocus = nil
+        meTask?.cancel()
+        meTask = nil
         bind()
     }
 
@@ -213,11 +253,14 @@ private struct ChecksumPass: Sendable {
         rangesRequest = nil
     }
 
-    public var parkedState: (any ToolSessionState)? { UEFIParkedState(focus: focus) }
+    public var parkedState: (any ToolSessionState)? {
+        UEFIParkedState(focus: focus, meFocus: meFocus)
+    }
 
     public func restore(_ state: any ToolSessionState) {
         guard let state = state as? UEFIParkedState else { return }
         focus = state.focus
+        meFocus = state.meFocus
     }
 
     // MARK: - Reading
@@ -252,6 +295,10 @@ private struct ChecksumPass: Sendable {
         checkedIDs = []
         nodeRepairs = [:]
         checksumProblems = [:]
+        // A new reading is a new sub-tree; the presented roots of the last one
+        // mean nothing here. The ME focus is kept — it may be a parked
+        // selection this bind is restoring.
+        meRoots = []
 
         guard let tree else {
             controller.endBusy()
@@ -281,6 +328,12 @@ private struct ChecksumPass: Sendable {
             // is announced — coming back to a panel and finding the tree shut
             // is coming back to a panel that forgot.
             self.controller.restoreOpenRows(self.treeProvider?.openUEFIRows() ?? [])
+            // A parked ME focus is the sub-tree's half of the selection: run
+            // the analysis (reusing the pane's cache) and open the region onto
+            // it, so the row the reader was looking at is back on screen.
+            if self.meFocus != nil, let regionID = self.meRegionID {
+                self.openMERegion(regionID)
+            }
             self.requestProtectedRanges(after: 0)
             // `onDisplay` means "the panel is showing this file": the top
             // level, and its own checksums read. A branch opened later brings
@@ -463,7 +516,8 @@ private struct ChecksumPass: Sendable {
             controller.show(
                 image: nil, tree: tree, focus: nil, detail: .empty, catalogue: guids,
                 badChecksums: checksumProblems, canWrite: !host.isReadOnly,
-                isBuilding: tree != nil, rowsChanged: true
+                isBuilding: tree != nil, rowsChanged: true,
+                meRoots: meRoots, meFocus: meFocus
             )
             if publish { host.publish(.empty) }
             return
@@ -480,10 +534,14 @@ private struct ChecksumPass: Sendable {
         let image = tree.image()
         let readers = tree.spaceReaders
         let node = focus.flatMap { image.node($0) }
+        // The ME focus is the sub-tree's half of the selection, kept apart from
+        // the UEFI focus. The outline shows the sub-tree from `meRoots`; the
+        // detail and the zone it carries come in with their own steps.
         let detail = node.map {
             // From the node's own space. A section on the way in that no
-            // longer decodes leaves nothing to read, and the header fields go
-            // with it rather than being read off the file at buffer offsets.
+            // longer decodes leaves nothing to read, and the header fields
+            // go with it rather than being read off the file at buffer
+            // offsets.
             UEFIDetail.build(
                 for: $0, image: image,
                 reader: readers.reader(for: $0.space) ?? ImageReader([UInt8]()),
@@ -493,9 +551,12 @@ private struct ChecksumPass: Sendable {
         controller.show(
             image: image, tree: tree, focus: focus, detail: detail, catalogue: guids,
             badChecksums: checksumProblems, canWrite: !host.isReadOnly, isBuilding: false,
-            rowsChanged: rowsChanged
+            rowsChanged: rowsChanged,
+            meRoots: meRoots, meFocus: meFocus
         )
-        if publish { host.publish(UEFIPresenter.zones(for: node, in: image)) }
+        if publish {
+            host.publish(UEFIPresenter.zones(for: node, in: image))
+        }
     }
 
     // MARK: - What the panel asks for
@@ -505,7 +566,165 @@ private struct ChecksumPass: Sendable {
     /// by itself.
     private func select(_ nodeID: NodeID?) {
         focus = nodeID
+        // A UEFI node and an ME row are two halves of one selection: picking a
+        // node in the UEFI tree drops whatever ME row was in focus, and
+        // `selectME` does the reverse.
+        meFocus = nil
         show(publish: true)
+    }
+
+    /// The user picked a row of the ME sub-tree, or cleared it. The ME focus
+    /// and the UEFI focus are kept apart, so picking an ME row drops the UEFI
+    /// focus. A row that stands for bytes reveals them the way a UEFI node's
+    /// does; a row that is only a summary of its children has nothing to
+    /// reveal and says nothing in the dump.
+    private func selectME(_ path: [Int]?) {
+        meFocus = path
+        focus = nil
+        show(publish: true)
+    }
+
+    // MARK: - The ME sub-tree
+
+    /// The id of the ME region node in the tree, when there is one — the graft
+    /// point the ME sub-tree opens under. Nil for a file with no ME region.
+    private var meRegionID: NodeID? {
+        guard let image = currentImage else { return nil }
+        return image.allNodes.first {
+            $0.kind == .region && $0.subtype == UInt8(FlashRegionType.me.rawValue)
+        }?.id
+    }
+
+    /// The pane's own whole-region cache of the last `FirmwareAnalysis`, reached
+    /// through the host: the same seam `MEATool` casts for, so the UEFI
+    /// Structure and the ME Analyzer share one analysis rather than each
+    /// re-reading the region. Nil under a host that offers none (a test double).
+    private var analysisProvider: (any MEAAnalysisProviding)? { host as? any MEAAnalysisProviding }
+
+    /// The ME region node was opened: run the ME analysis (reusing the pane's
+    /// cache) and, once the sub-tree is presented, open the region row onto it.
+    /// The node is not expandable in the UEFI tree, so this is the only thing
+    /// that opens it.
+    private func openMERegion(_ id: NodeID) {
+        runMEAnalysis { [weak self] in
+            self?.controller.openMERegion(id)
+        }
+    }
+
+    /// Read the ME region and run the engine's analysis over it, reusing the
+    /// pane's cached analysis when the ME Analyzer has already fetched it, and
+    /// present the sub-tree when it lands. The reading runs off the main actor
+    /// behind an indeterminate bar, because `MEFirmwareAnalyzer.analyze`
+    /// reports no fractions of its own.
+    private func runMEAnalysis(then completion: @escaping @MainActor () -> Void) {
+        guard let snapshot = try? host.snapshot() else {
+            controller.say("Could not read the file.", asProblem: true)
+            return
+        }
+        let meRegion = treeProvider?.uefiTree()?.region(.me)
+        let provider = analysisProvider
+        // A cached analysis is instant: the pane's holder only drops it when an
+        // edit lands inside the region, so a re-open is a re-present, not a
+        // second full analysis of data nothing changed.
+        if let cached = provider?.cachedMEAnalysis() {
+            presentME(cached)
+            completion()
+            return
+        }
+        meTask?.cancel()
+        let generation = self.generation
+        let analyzer = self.analyzer
+        controller.say("Reading ME…")
+        controller.showBusy()
+        meTask = Task { [weak self] in
+            let result = await UEFIToolSession.analyzeME(snapshot, analyzer: analyzer, meRegion: meRegion)
+            guard let self, self.generation == generation else { return }
+            self.meTask = nil
+            self.controller.endBusy()
+            switch result {
+            case .success(let analysis):
+                self.controller.say("")
+                provider?.setCachedMEAnalysis(analysis, meRegion: meRegion)
+                self.presentME(analysis)
+                completion()
+            case .failure(let error):
+                self.controller.say(UEFIToolSession.describeME(error), asProblem: true)
+            }
+        }
+    }
+
+    /// A successful analysis lands here: present the curated sub-tree and show
+    /// it, keeping whatever ME selection still resolves after the re-parse.
+    private func presentME(_ analysis: FirmwareAnalysis) {
+        meRoots = MEACurator.present(analysis)
+        if let path = meFocus, MEATree.node(at: path, in: meRoots) == nil {
+            meFocus = nil
+        }
+        show(publish: meFocus != nil)
+    }
+
+    /// Off the main actor: materialise just the ME region (when the shared tree
+    /// could resolve it) and hand it to the engine at that region's own base
+    /// offset, so every address the engine reports is still absolute in the
+    /// open file. Falls back to the whole file when the region is not known —
+    /// the same shape `MEAToolSession.analyze` uses.
+    private nonisolated static func analyzeME(
+        _ snapshot: any ToolContentReader,
+        analyzer: MEFirmwareAnalyzer,
+        meRegion: Range<UInt64>?
+    ) async -> Result<FirmwareAnalysis, Error> {
+        await Task.detached(priority: .userInitiated) {
+            do {
+                let data = try UEFIToolSession.regionBytes(snapshot, meRegion)
+                let baseOffset = UEFIToolSession.regionBase(meRegion)
+                let analysis = try await analyzer.analyze(region: data, baseOffset: baseOffset)
+                return .success(analysis)
+            } catch {
+                return .failure(error)
+            }
+        }.value
+    }
+
+    /// The bytes handed to the engine: the ME region when the shared tree could
+    /// resolve it, the whole file otherwise.
+    private nonisolated static func regionBytes(
+        _ snapshot: any ToolContentReader,
+        _ meRegion: Range<UInt64>?
+    ) throws -> Data {
+        if let meRegion, meRegion.lowerBound < meRegion.upperBound {
+            return try readRange(snapshot, meRegion)
+        }
+        return try readRange(snapshot, 0..<snapshot.size)
+    }
+
+    /// Where `regionBytes` starts in the open file.
+    private nonisolated static func regionBase(_ meRegion: Range<UInt64>?) -> Int {
+        guard let meRegion, meRegion.lowerBound < meRegion.upperBound else { return 0 }
+        return Int(meRegion.lowerBound)
+    }
+
+    /// `range`, as one `Data` — chunked so a large image is never assembled in
+    /// one giant append.
+    private nonisolated static func readRange(
+        _ snapshot: any ToolContentReader, _ range: Range<UInt64>
+    ) throws -> Data {
+        var data = Data()
+        let chunk = 1 << 20
+        var offset = range.lowerBound
+        while offset < range.upperBound {
+            let length = Int(min(UInt64(chunk), range.upperBound - offset))
+            data.append(contentsOf: try snapshot.read(at: offset, length: length))
+            offset += UInt64(length)
+        }
+        return data
+    }
+
+    /// A data error's line for the status row. The engine's `MEADataError` is a
+    /// `LocalizedError` with its own wording; anything else is an internal
+    /// failure worth saying plainly.
+    private nonisolated static func describeME(_ error: Error) -> String {
+        (error as? MEADataError)?.errorDescription
+            ?? "The analysis failed: \(error.localizedDescription)"
     }
 
     /// The title names the image, not a row: the one root the tree folded into
@@ -531,6 +750,7 @@ private struct ChecksumPass: Sendable {
     public func zoneSelected(_ id: Zone.ID) {
         guard let nodeID = UEFIPresenter.nodeID(ofZone: id) else { return }
         focus = nodeID
+        meFocus = nil
         show(publish: true)
     }
 

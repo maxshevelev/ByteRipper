@@ -1,6 +1,7 @@
 import ALSplitView
 import AppKit
 import AppPalette
+import MEPresentation
 import ToolModuleKit
 import UEFIImage
 import UEFITool
@@ -36,6 +37,15 @@ import UEFITool
     /// to this panel, so the session writes it through to where the tree
     /// lives (`UEFITreeProviding.setOpenUEFIRows`).
     var onOpenRowsChanged: (() -> Void)?
+    /// A row of the ME sub-tree was picked — its path under the ME region node.
+    /// Kept apart from `onSelect` (a `NodeID`) because the two kinds of row
+    /// resolve against different trees and the session keeps the two focuses
+    /// apart too.
+    var onSelectME: (([Int]?) -> Void)?
+    /// The ME region node was opened: run the ME analysis (reusing the pane's
+    /// cache) and open the row on the sub-tree it presents. The node is not
+    /// expandable in the UEFI tree, so this is the only thing that opens it.
+    var onOpenMERegion: ((NodeID) -> Void)?
 
     /// The tree as one value, for everything that reads it rather than walks
     /// it: the summary line, the title fold, the detail panel. It is the
@@ -90,6 +100,17 @@ import UEFITool
     /// The "Loading…" rows, one per branch being read, kept apart from the
     /// rows above so the two never hand out the same object for the same path.
     private var loadingRows: [NodeID: UEFITreeRow] = [:]
+    /// The presented ME sub-tree — the rows the ME region node opens onto.
+    /// Empty until the ME analysis has run (or was cached), which is why the
+    /// region's row is shut on first paint and opens only once this is filled.
+    private var meRoots: [MEANode] = []
+    /// One row object per ME path, so the outline is handed the same item for
+    /// the same ME node every time, the way `rows` does for the UEFI tree.
+    private var meRows: [[Int]: MEOutlineRow] = [:]
+    /// The ME row in focus, as its path under the ME region node — what the
+    /// outline re-selects on a show and the detail and zone read back. Nil when
+    /// the focus is a UEFI node or nothing.
+    private var meFocus: [Int]?
     /// Branches the reader has asked for and the tree has not answered yet,
     /// with the moment we asked. The row stays *shut* while one is in flight:
     /// opening it onto a "Loading…" row that is replaced a few milliseconds
@@ -435,14 +456,18 @@ import UEFITool
         badChecksums: [NodeID: Set<UEFIChecksumField>],
         canWrite: Bool,
         isBuilding: Bool,
-        rowsChanged: Bool
+        rowsChanged: Bool,
+        meRoots: [MEANode] = [],
+        meFocus: [Int]? = nil
     ) {
         // A different tree is a different file: the rows standing for the old
         // one's paths mean nothing now, and the outline's memory of which of
-        // them were open means nothing either.
+        // them were open means nothing either. The ME sub-tree goes with it —
+        // it is built from this file's ME region, and a new file has its own.
         if tree !== self.tree {
             rows.removeAll()
             loadingRows.removeAll()
+            meRows.removeAll()
         }
         self.image = image
         self.tree = tree
@@ -451,6 +476,8 @@ import UEFITool
         self.badChecksums = badChecksums
         self.canWrite = canWrite
         self.isBuilding = isBuilding
+        self.meRoots = meRoots
+        self.meFocus = meFocus
         // Without a tree there is nothing to reveal the caret into.
         revealButton.isEnabled = image != nil
         isShowingState = true
@@ -505,6 +532,14 @@ import UEFITool
             )
         }
 
+        // The ME focus is the sub-tree's half of the selection: it reveals its
+        // own row, not a UEFI node. The two focuses are apart, so only one is
+        // in play at a time.
+        if let meFocus {
+            revealME(meFocus)
+            return
+        }
+
         // The focus is the root the tree folded into the title: it has no row
         // to select, and the title already stands for it in accent colour, so
         // there is nothing to do to the tree.
@@ -518,6 +553,51 @@ import UEFITool
             return
         }
         reveal(focus, in: tree)
+    }
+
+    /// The ME sub-tree's half of `reveal`: selects and scrolls to the row at
+    /// `path`. Its ancestors are the ME region node and the rows above it in
+    /// the sub-tree — opened on the way the UEFI reveal opens its own — so the
+    /// row exists by the time a selection is asked to land on it.
+    private func revealME(_ path: [Int]) {
+        guard !path.isEmpty else {
+            outline.deselectAll(nil)
+            return
+        }
+        // Open every ME ancestor the row sits under. The sub-tree is a value,
+        // so an ancestor's children are always in hand and each opens at once —
+        // unlike a UEFI branch, which may still be reading.
+        for depth in 1..<path.count {
+            let index = outline.row(forItem: meRow(Array(path.prefix(depth))))
+            guard index >= 0 else { return }
+            let item = outline.item(atRow: index)
+            if !outline.isItemExpanded(item) {
+                outline.expandItem(item)
+            }
+        }
+        let row = outline.row(forItem: meRow(path))
+        guard row >= 0 else {
+            outline.deselectAll(nil)
+            return
+        }
+        outline.scrollRowToVisible(row)
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+    }
+
+    /// The ME analysis has landed for the region node at `id`: open its row onto
+    /// the sub-tree it presents, then settle the selection on the ME focus — or
+    /// the first root, so an open always lands somewhere. The region row is a
+    /// UEFI row, so it opens through the UEFI path; the sub-tree it opens onto
+    /// is the ME half, and the selection that follows it is a ME reveal.
+    func openMERegion(_ id: NodeID) {
+        expandRow(id) { [weak self] in
+            guard let self else { return }
+            if let focus = self.meFocus, self.meNode(of: self.meRow(focus)) != nil {
+                self.revealME(focus)
+            } else if let first = self.meRoots.first {
+                self.revealME(first.path)
+            }
+        }
     }
 
     // MARK: - One change to the table at a time
@@ -839,6 +919,25 @@ public final class UEFITreeRow {
     }
 }
 
+/// One row of the ME sub-tree grafted under the ME region node: the place in
+/// the presented ME tree it stands for, and nothing else. The node itself is a
+/// value the panel resolves from the presented roots by `path`
+/// (`MEATree.node`), so a re-parse that moves a row is picked up on the next
+/// read rather than frozen into the row object.
+///
+/// Kept apart from `UEFITreeRow` (which stands for a `NodeID`) because the two
+/// kinds of row resolve against different trees — the UEFI tree and the
+/// presented ME tree — and the outline's data source switches on which it was
+/// handed.
+final class MEOutlineRow {
+    /// The node's position in the presented ME tree, under the ME region node.
+    let path: [Int]
+
+    init(_ path: [Int]) {
+        self.path = path
+    }
+}
+
 extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate {
     /// `item`'s children as the outline should see them right now: the ones
     /// the tree has, or the single "Loading…" row a branch slow enough to have
@@ -849,6 +948,12 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// real children. The rest of it covers a row opened some other way.
     private func childrenList(for id: NodeID) -> [Any] {
         guard let tree, let node = tree.node(id) else { return [] }
+        // The ME region node is not expandable in the UEFI tree, but it opens
+        // the ME sub-tree: its children are the presented ME roots, not a raw
+        // area scan. Empty until the analysis has run (or been cached).
+        if isMERegion(node) {
+            return meRoots.map { meRow($0.path) }
+        }
         if !node.children.isEmpty {
             return UEFITreeDisplay.listed(node.children, showsEmptyPadding: showsEmptyPadding)
                 .map { row($0.id) }
@@ -869,7 +974,17 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// would never open at all.
     func outlineView(_ outlineView: NSOutlineView, shouldExpandItem item: Any) -> Bool {
         guard let row = item as? UEFITreeRow, !row.isLoading, let tree,
-              let node = tree.node(row.id), node.children.isEmpty, node.isExpandable,
+              let node = tree.node(row.id)
+        else { return true }
+        // The ME region node is not expandable in the UEFI tree, but opening it
+        // runs the ME analysis and opens the row on the sub-tree it presents —
+        // so it is answered here rather than left to the tree, which would scan
+        // a raw area and find nothing.
+        if isMERegion(node) {
+            onOpenMERegion?(row.id)
+            return false
+        }
+        guard node.children.isEmpty, node.isExpandable,
               !showingPlaceholder.contains(row.id)
         else { return true }
         beginOpening(row.id)
@@ -941,6 +1056,47 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         return tree?.node(row.id)
     }
 
+    /// Whether a node of the UEFI tree is the ME region — the graft point the
+    /// ME sub-tree opens under. The descriptor names it by its region type
+    /// (0x02), and it is the one region the UEFI tree does not scan as a raw
+    /// area: opening it runs the ME analysis instead (`Design/ME_REGION_IN_UEFI_TREE_PLAN.md`).
+    private func isMERegion(_ node: UEFINode) -> Bool {
+        node.kind == .region && node.subtype == UInt8(FlashRegionType.me.rawValue)
+    }
+
+    /// The one row object standing for this place in the presented ME tree, the
+    /// way `row(_:)` does for the UEFI tree.
+    private func meRow(_ path: [Int]) -> MEOutlineRow {
+        if let row = meRows[path] { return row }
+        let row = MEOutlineRow(path)
+        meRows[path] = row
+        return row
+    }
+
+    /// The presented ME node an outline item stands for, as the last show laid
+    /// it out. Resolved by path from the presented roots, so a re-parse that
+    /// moves a row is picked up on the next read rather than frozen into the
+    /// row object.
+    private func meNode(of row: MEOutlineRow) -> MEANode? {
+        MEATree.node(at: row.path, in: meRoots)
+    }
+
+    /// What an ME row's cell reads in each column: the name for the Name
+    /// column, nothing for Type and Subtype — the ME sub-tree is a semantic
+    /// tree, not a structural one, and has no UEFI type or subtype to show.
+    private func text(for node: MEANode, in column: NSUserInterfaceItemIdentifier) -> String {
+        column == Column.name ? node.title : ""
+    }
+
+    /// The marks an outline item of either kind wears: a UEFI row's, worked out
+    /// from the tree, or an ME row's, carried by the node itself.
+    private func marks(of item: Any) -> ToolRowMarks {
+        if let meRow = item as? MEOutlineRow {
+            return meNode(of: meRow)?.marks ?? .none
+        }
+        return node(of: item).map { marks(for: $0) } ?? .none
+    }
+
     /// The outline's own top level: one "Loading…" row while the tree is still
     /// working out what the top level is, and the presented rows once it has.
     private var topLevelRows: [Any] {
@@ -951,18 +1107,31 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
 
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
         guard let item else { return topLevelRows.count }
+        if let meRow = item as? MEOutlineRow {
+            return meNode(of: meRow)?.children.count ?? 0
+        }
         guard let row = item as? UEFITreeRow, !row.isLoading else { return 0 }
         return childrenList(for: row.id).count
     }
 
     func outlineView(_ outlineView: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
+        if let row = item as? MEOutlineRow {
+            let children = meNode(of: row)?.children ?? []
+            return meRow(children[index].path)
+        }
         guard let item, let row = item as? UEFITreeRow, !row.isLoading
         else { return topLevelRows[index] }
         return childrenList(for: row.id)[index]
     }
 
     func outlineView(_ outlineView: NSOutlineView, isItemExpandable item: Any) -> Bool {
+        if let meRow = item as? MEOutlineRow {
+            return meNode(of: meRow)?.isExpandable ?? false
+        }
         guard let node = node(of: item) else { return false }
+        // The ME region node offers the triangle even though the UEFI tree
+        // marks it non-expandable: it opens the ME sub-tree, not a raw area.
+        if isMERegion(node) { return true }
         // A branch read to nothing but empty padding has nothing to open on
         // while that padding is hidden.
         return node.isExpandable
@@ -970,9 +1139,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     }
 
     /// The loading row is a placeholder, not a node — nothing to select, no
-    /// zone to publish, no menu to offer.
+    /// zone to publish, no menu to offer. An ME row is always selectable: it is
+    /// a real row of the sub-tree, and selecting it is what reads its detail.
     func outlineView(_ outlineView: NSOutlineView, shouldSelectItem item: Any) -> Bool {
-        (item as? UEFITreeRow)?.isLoading == false
+        if item is MEOutlineRow { return true }
+        return (item as? UEFITreeRow)?.isLoading == false
     }
 
     /// A row's cell, view-based and with its text centred.
@@ -1003,6 +1174,22 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             cell.textField?.font = ToolPanelFont.body()
             if identifier == Column.name {
                 ToolPanelTable.dress(cell, with: .none)
+            }
+            return cell
+        }
+        if let meRow = item as? MEOutlineRow {
+            guard let node = meNode(of: meRow) else { return nil }
+            let cell = outlineView.makeView(withIdentifier: identifier, owner: self)
+                as? NSTableCellView
+                ?? ToolPanelTable.makeCell(identifier: identifier,
+                                           warning: identifier == Column.name,
+                                           badges: identifier == Column.name)
+            cell.textField?.stringValue = text(for: node, in: identifier)
+            cell.textField?.font = ToolPanelFont.body()
+            // The Name column wears the row's marks, the way a UEFI row does —
+            // the rail and badges the ME node was built with.
+            if identifier == Column.name {
+                ToolPanelTable.dress(cell, with: node.marks)
             }
             return cell
         }
@@ -1054,8 +1241,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         outline.enumerateAvailableRowViews { rowView, row in
             guard let rowView = rowView as? ToolPanelRowView else { return }
             rowView.showsMarkings = legend.showsMarkings
-            rowView.marks = outline.item(atRow: row).flatMap { node(of: $0) }
-                .map { marks(for: $0) } ?? .none
+            rowView.marks = outline.item(atRow: row).map { marks(of: $0) } ?? .none
         }
     }
 
@@ -1067,7 +1253,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
                 return created
             }()
         rowView.showsMarkings = legend.showsMarkings
-        rowView.marks = node(of: item).map { marks(for: $0) } ?? .none
+        rowView.marks = marks(of: item)
         return rowView
     }
 
@@ -1219,6 +1405,12 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// only reports the second kind itself (see `UEFIOutlineView`).
     private func chooseNode(atRow row: Int) {
         let item = row >= 0 ? outline.item(atRow: row) : nil
+        // An ME row resolves against the presented ME tree, not the UEFI tree,
+        // so it is published on its own callback with its ME path.
+        if let meRow = item as? MEOutlineRow {
+            onSelectME?(meRow.path)
+            return
+        }
         onSelect?((item as? UEFITreeRow)?.id)
     }
 }
