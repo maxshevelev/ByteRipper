@@ -5,7 +5,8 @@ import FITToolUI
 import ToolModuleKit
 import UEFIImage
 import UEFITool
-import UEFIToolUI
+@testable import UEFIToolUI
+import MEFirmware
 @testable import ByteRipper
 
 /// The UEFI Structure tool-module end to end in the app: a real FFSv2 volume in
@@ -886,6 +887,129 @@ final class UEFIToolFlowTests: XCTestCase {
                        !node.header.isEmpty,
                        "a body is offered exactly where there is a header to leave behind")
     }
+
+    // MARK: - The ME region's sub-tree (Design/ME_REGION_IN_UEFI_TREE_PLAN.md)
+
+    /// What a row says in the Name column — the node's title for a UEFI row,
+    /// the curated title for an ME row.
+    private func titleText(_ outline: NSOutlineView, row: Int) -> String? {
+        (outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)?
+            .textField?.stringValue
+    }
+
+    /// The analysis a test parks in the pane's cache: an identity, one FPT
+    /// region with a range, and nothing else — enough for a mappable row and an
+    /// info leaf. Decoded the way the engine hands it, so no internal
+    /// initializers are needed.
+    private func meAnalysisFixture() throws -> FirmwareAnalysis {
+        let base: [String: Any] = [
+            "family": "csme",
+            "variant": "CSME",
+            "version": ["major": 15, "minor": 40, "hotfix": 37, "build": 3121],
+            "release": "production",
+            "type": "region",
+            "sku": "",
+            "platform": "",
+            "sizeBytes": 0x2000,
+            "regions": [["id": 0, "name": "FTPR", "offset": 0x1000, "size": 0x1000,
+                         "flags": 0x8000]],
+            "issues": [],
+        ]
+        return try JSONDecoder().decode(
+            FirmwareAnalysis.self,
+            from: JSONSerialization.data(withJSONObject: base))
+    }
+
+    /// Opens the ME-region image, parks a cached analysis, and opens the region
+    /// onto its sub-tree, returning the outline once the sub-tree is on screen.
+    ///
+    /// The image is an Intel image, so the tree folds the "Intel image" root
+    /// into the title and the outline's top level is the root's children — the
+    /// descriptor and the ME region, two rows. The ME region is already at the
+    /// top level; opening it runs the shared analysis (a cache hit reads
+    /// nothing) and presents the curated sub-tree as its children, so the open
+    /// lands in the same step and the reveal that follows has already selected
+    /// the first root.
+    private func openMERegion() throws -> NSOutlineView {
+        let controller = try open(UEFITestImage.intelImageWithME())
+        controller.windowModel.pane1.uefiState.setCachedMEAnalysis(
+            try meAnalysisFixture(), meRegion: 0x1000..<0x2000)
+        let outline = try outline()
+        let meRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { (try? node(atRow: $0))?.kind == .region },
+            "the descriptor maps an ME region")
+        // A reader opens the region by clicking its disclosure triangle, which
+        // asks the delegate `shouldExpandItem` — the seam that starts the ME
+        // analysis. The test invokes that delegate method directly, the way the
+        // outline would on a click, so the analysis runs and the row opens onto
+        // the sub-tree it presents.
+        let vc = try XCTUnwrap(session().viewController as? UEFIToolViewController)
+        let item = outline.item(atRow: meRow)
+        vc.outlineView(outline, shouldExpandItem: item)
+        let open = pumpUntil(5) { outline.numberOfRows == 5 }
+        XCTAssertTrue(open,
+                      "the ME region opened onto its three roots: \(outline.numberOfRows) rows")
+        return outline
+    }
+
+    /// The ME region node is the graft point: opening it runs the shared ME
+    /// analysis and presents the curated sub-tree as its children, in place of
+    /// a raw-area scan the tree would otherwise find nothing in.
+    func testTheMERegionExpandsToTheMESubTree() throws {
+        let outline = try openMERegion()
+        // The three roots the curator presents, in its order — the identity,
+        // the regions, and the checksums — not a raw-area scan. They sit under
+        // the ME region (row 1), after the descriptor (row 0).
+        XCTAssertEqual((2..<outline.numberOfRows).map { titleText(outline, row: $0) },
+                       ["Firmware", "Regions (FPT)", "Checksums"])
+    }
+
+    /// A row of the sub-tree that stands for bytes publishes a zone for its own
+    /// range, the way the ME Analyzer does — and the host brings it on screen
+    /// the way it already does for a UEFI node.
+    func testSelectingAMappableMENodePublishesItsRange() throws {
+        let outline = try openMERegion()
+        let pane = try XCTUnwrap(controller?.windowModel.pane1)
+
+        // The region is under the "Regions (FPT)" root, which is opened first.
+        let regionsRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Regions (FPT)" })
+        outline.expandItem(outline.item(atRow: regionsRow))
+        window?.layoutIfNeeded()
+        let ftpRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "FTPR" })
+        outline.selectRowIndexes(IndexSet(integer: ftpRow), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+
+        XCTAssertEqual(pane.zones.zones.map(\.id), ["1/0"], "one zone, the node's own")
+        XCTAssertEqual(pane.zones.zones.map(\.range), [0x1000..<0x2000],
+                       "the region's range, as the analysis gave it")
+        XCTAssertEqual(pane.zones.focus, "1/0")
+    }
+
+    /// A row that stands for no bytes — the identity — publishes no zone and
+    /// shows its fields in the detail only.
+    func testSelectingAnInfoLeafMENodePublishesNoZone() throws {
+        let outline = try openMERegion()
+        let pane = try XCTUnwrap(controller?.windowModel.pane1)
+
+        // The open's reveal already settled on the first root, the identity, so
+        // a plain re-select would be a change of nothing the outline does not
+        // report. Deselect first, so settling back on the identity is a real
+        // selection — the one that reads its detail and says what the map holds.
+        let firmwareRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Firmware" })
+        outline.deselectAll(nil)
+        outline.selectRowIndexes(IndexSet(integer: firmwareRow), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+
+        XCTAssertTrue(pane.zones.zones.isEmpty, "an info leaf has no range to publish")
+        // Its fields are in the detail, the way the ME Analyzer shows them.
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let text = descendants(of: panel, NSTextField.self).map(\.stringValue)
+        XCTAssertTrue(text.contains("Family"), "the identity's fields: \(text)")
+        XCTAssertTrue(text.contains("CSME"), "\(text)")
+    }
 }
 
 /// A 4 KiB FFSv2 volume with one sectioned file in it, built byte by byte — the
@@ -995,6 +1119,36 @@ enum UEFITestImage {
         }
 
         image.replaceSubrange(biosAt..<(biosAt + 0x1000), with: make())
+        return image
+    }
+
+    /// A whole SPI dump with an ME region: a flash descriptor that maps an ME
+    /// region after itself, and nothing else. The ME region's bytes are padding
+    /// — the tests that use this park a cached analysis first, so the content
+    /// is never read.
+    static func intelImageWithME() -> [UInt8] {
+        var image = [UInt8](repeating: 0xFF, count: 0x2000)
+        func put(_ value: UInt32, at offset: Int) {
+            for index in 0..<4 { image[offset + index] = UInt8(truncatingIfNeeded: value >> (8 * index)) }
+        }
+        func put16(_ value: UInt16, at offset: Int) {
+            image[offset] = UInt8(truncatingIfNeeded: value)
+            image[offset + 1] = UInt8(truncatingIfNeeded: value >> 8)
+        }
+
+        // The vector, the signature, and a map naming the sections.
+        image.replaceSubrange(0..<16, with: [0x11, 0x00, 0x00, 0x9C, 0x90, 0x02, 0x00, 0xD6,
+                                             0x00, 0x00, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF])
+        put(0x0FF0_A55A, at: 0x10)
+        put(0x0004_0000, at: 0x14)          // RegionBase 0x04
+        put(0xFFFF_FFFF, at: 0x20)          // a version 1 descriptor
+
+        for index in 0..<16 {               // every region absent…
+            put16(0, at: 0x40 + index * 4)
+            put16(0, at: 0x40 + index * 4 + 2)
+        }
+        put16(0x01, at: 0x48)               // …but ME, 0x1000–0x1FFF.
+        put16(0x01, at: 0x4A)
         return image
     }
 

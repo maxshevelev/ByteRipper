@@ -980,7 +980,15 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // runs the ME analysis and opens the row on the sub-tree it presents —
         // so it is answered here rather than left to the tree, which would scan
         // a raw area and find nothing.
+        //
+        // This is asked both when the reader clicks the triangle and when the
+        // panel's own `expandItem` runs the open — AppKit asks on the way in
+        // either way. Until the sub-tree is presented there is nothing to open
+        // onto, so the first ask starts the analysis and holds the row shut;
+        // once the roots are in hand the same ask lets the open through, or the
+        // panel's `expandItem` would re-ask and re-start the analysis forever.
         if isMERegion(node) {
+            guard meRoots.isEmpty else { return true }
             onOpenMERegion?(row.id)
             return false
         }
