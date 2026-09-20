@@ -1010,6 +1010,24 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertTrue(text.contains("Family"), "the identity's fields: \(text)")
         XCTAssertTrue(text.contains("CSME"), "\(text)")
     }
+
+    /// A caret inside the ME region is the sub-tree's to place, not the region
+    /// node's. The sub-tree's rows are presented under the region rather than
+    /// parsed into the UEFI tree, so the deepest node the tree can find inside
+    /// the region is the region itself — and the reveal asks the ME half first.
+    func testRevealingACaretInsideTheMERegionPicksTheSubTreesRow() throws {
+        let outline = try openMERegion()
+        let pane = try XCTUnwrap(controller?.windowModel.pane1)
+
+        // 0x1000 is the FPT region the fixture's analysis gives a range for.
+        pane.moveCaret(to: 0x1000)
+        try session().revealNodeAtCaret()
+
+        XCTAssertTrue(pumpUntil(5) {
+            outline.selectedRow >= 0 && titleText(outline, row: outline.selectedRow) == "FTPR"
+        }, "the reveal settled on the sub-tree's row, not the region: \(outline.selectedRow)")
+        XCTAssertEqual(pane.zones.focus, "1/0", "and published the row's own zone")
+    }
 }
 
 /// A 4 KiB FFSv2 volume with one sectioned file in it, built byte by byte — the

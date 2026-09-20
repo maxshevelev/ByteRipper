@@ -1029,8 +1029,14 @@ private struct ChecksumPass: Sendable {
     /// its row selected, its detail up. The offset is where the user is
     /// pointing — the start of a selection when there is one, else the caret —
     /// and the innermost node whose range covers it is the one that owns the
-    /// byte. Only the tree moves: the dump is where the user is standing, so
-    /// nothing is published that would scroll it away from that caret.
+    /// byte. A byte of the ME region is owned by a row of the presented ME
+    /// sub-tree when one covers it, and by the region node itself when none
+    /// does.
+    ///
+    /// The dump is where the user is standing, so a reveal that stays inside the
+    /// half already on screen publishes nothing. One that moves off an ME row
+    /// does: the zones on screen belong to the tree just left, and a zone click
+    /// after it would route by a focus that is no longer set.
     ///
     /// Public because a click on the title-row button is driven the same way
     /// the panel's other clicks are — through the session, not a simulated
@@ -1038,6 +1044,15 @@ private struct ChecksumPass: Sendable {
     public func revealNodeAtCaret() {
         let offset = host.selection?.lowerBound ?? host.caret
         guard let tree, tree.isReady else { return }
+        // The ME half first, because the walk below has never heard of it. Its
+        // rows are `MEANode`s presented under the region, not `UEFINode`s in the
+        // tree, so the deepest node the tree can find inside the region is the
+        // region itself — and a caret the sub-tree can place should not land
+        // there. The two halves route by the same rule `zoneSelected` uses.
+        if let path = mePath(covering: offset) {
+            selectME(path)
+            return
+        }
         // The one place that asks the tree for an *offset* rather than for a
         // row, so it is also the one that has to open the branches on the way
         // to it: the node under the caret may sit inside a volume nobody has
@@ -1053,7 +1068,8 @@ private struct ChecksumPass: Sendable {
             self.controller.endBusy()
             guard let node = chain.last else { return }
             // Whether the dump is wearing another tree's zones: with an ME focus
-            // set, it is.
+            // set, it is. (The ME half above returns before this, so reaching
+            // here with one set means the sub-tree could not place the offset.)
             let crossedHalves = self.meFocus != nil
             self.focus = node.id
             // The UEFI node is the focus now, so the ME half is dropped with it
@@ -1067,6 +1083,21 @@ private struct ChecksumPass: Sendable {
             // covering the caret, so it is already the byte under it.
             self.show(publish: crossedHalves)
         }
+    }
+
+    /// The path of the innermost presented ME row whose range covers `offset`,
+    /// or nil when the offset falls in none of them. A row that stands for no
+    /// bytes — the identity, a group — is descended through rather than
+    /// answered with, the same way `MEAZones` refuses to zone one.
+    private func mePath(covering offset: UInt64) -> [Int]? {
+        func innermost(_ nodes: [MEANode]) -> [Int]? {
+            for node in nodes {
+                if let deeper = innermost(node.children) { return deeper }
+                if node.range?.contains(offset) == true { return node.path }
+            }
+            return nil
+        }
+        return innermost(meRoots)
     }
 
     // MARK: - Fix Checksum
