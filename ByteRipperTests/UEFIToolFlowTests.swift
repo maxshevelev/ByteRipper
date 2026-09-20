@@ -993,8 +993,10 @@ final class UEFIToolFlowTests: XCTestCase {
     /// nothing) and presents the curated sub-tree as its children, so the open
     /// lands in the same step and the reveal that follows has already selected
     /// the first root.
-    private func openMERegion(analysis: FirmwareAnalysis? = nil) throws -> NSOutlineView {
-        let controller = try open(UEFITestImage.intelImageWithME())
+    private func openMERegion(
+        analysis: FirmwareAnalysis? = nil, image: [UInt8]? = nil
+    ) throws -> NSOutlineView {
+        let controller = try open(image ?? UEFITestImage.intelImageWithME())
         let cached = try analysis ?? meAnalysisFixture()
         controller.windowModel.pane1.uefiState.setCachedMEAnalysis(
             cached, meRegion: 0x1000..<0x2000)
@@ -1262,10 +1264,20 @@ final class UEFIToolFlowTests: XCTestCase {
     /// A count a `@MainActor` closure can add to.
     private final class Tally { var count = 0 }
 
-    /// A source that can announce a new firmware database on demand.
+    /// A source that can announce a new firmware database on demand, and counts
+    /// how often it was asked for one — the count is what says a panel went back
+    /// to the database at all.
     private final class AnnouncingSource: MEADataSource, @unchecked Sendable {
         private let stream: AsyncStream<Void>
         private let announce: AsyncStream<Void>.Continuation
+        private let lock = NSLock()
+        private var count = 0
+
+        var fetches: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return count
+        }
 
         init() {
             let (stream, continuation) = AsyncStream<Void>.makeStream()
@@ -1273,12 +1285,15 @@ final class UEFIToolFlowTests: XCTestCase {
             self.announce = continuation
         }
 
-        func database() async throws -> MEADatabase {
-            throw MEADataError.offline(underlying: "test offline")
+        private func counted() -> MEADataError {
+            lock.lock()
+            count += 1
+            lock.unlock()
+            return .offline(underlying: "test offline")
         }
-        func fileTable() async throws -> FileTable {
-            throw MEADataError.offline(underlying: "test offline")
-        }
+
+        func database() async throws -> MEADatabase { throw counted() }
+        func fileTable() async throws -> FileTable { throw counted() }
         func databaseChanges() async -> AsyncStream<Void> { stream }
         func aNewDatabaseHasArrived() { announce.yield() }
     }
@@ -1296,13 +1311,30 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertNotNil(state.cachedMEAnalysis(), "the analysis is cached")
 
         source.aNewDatabaseHasArrived()
-        // The watch runs on the main actor: give it the turns it needs.
-        var turns = 0
-        while state.cachedMEAnalysis() != nil && turns < 1000 {
-            await Task.yield()
-            turns += 1
-        }
+        await awaitUntil(5) { state.cachedMEAnalysis() == nil }
         XCTAssertNil(state.cachedMEAnalysis(), "and the new database dropped it")
+    }
+
+    /// The UEFI panel refreshes what it is showing when the firmware database is
+    /// replaced, the way the ME Analyzer re-runs its analysis: the names those
+    /// rows wear came out of the file that was just superseded. The pane's cache
+    /// drops the analysis on the same event, so the reading has to be made again
+    /// rather than taken from it.
+    ///
+    /// The image's region holds a real manifest, which is what makes the reading
+    /// reach the database at all — an erased one parses and never asks.
+    func testANewDatabaseMakesTheUEFIPanelReadTheRegionAgain() throws {
+        let source = AnnouncingSource()
+        UEFIToolSession.dataSource = source
+        _ = try openMERegion(analysis: meAnalysisFixture(),
+                             image: UEFITestImage.intelImageWithReadableME())
+        XCTAssertEqual(source.fetches, 0,
+                       "a cached analysis was presented, so nothing was read")
+
+        source.aNewDatabaseHasArrived()
+        XCTAssertTrue(pumpUntil(5) { source.fetches > 0 },
+                      "the new database made the panel read the region again")
+        XCTAssertEqual(source.fetches, 1, "once")
     }
 
     /// Two panels on one file ask for the region in the same moment — the UEFI
@@ -1352,11 +1384,15 @@ final class UEFIToolFlowTests: XCTestCase {
         }
 
         async let before = ask()
-        // The first ask is in flight by now: it set its marker before it waited.
-        await Task.yield()
-        async let after = ask()
+        // The reading has begun, which is what says its marker is up: the marker
+        // is set before the work it stands for is handed to the engine.
+        await awaitUntil(5) { reads.count == 1 }
         state.invalidate(.overwrite(range: 0x1400..<0x1401))
 
+        // Asked after the edit, so it must not join what the edit invalidated.
+        // Started here rather than alongside the first: a second ask that raced
+        // the edit would be testing the wrong thing.
+        async let after = ask()
         _ = await (before, after)
         XCTAssertEqual(reads.count, 2, "the ask after the edit read the region again")
     }

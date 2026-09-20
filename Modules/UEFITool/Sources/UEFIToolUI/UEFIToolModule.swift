@@ -196,6 +196,8 @@ private struct ChecksumPass: Sendable {
 
     /// Listening for a newer `guids.csv`. Cancelled in `stop()`.
     private var guidsWatch: Task<Void, Never>?
+    /// Listening for a newer firmware database. Cancelled in `stop()`.
+    private var databaseWatch: Task<Void, Never>?
     /// The protected ranges asked for, a moment after an edit. Cancelled by the
     /// next edit, and in `stop()`.
     private var rangesRequest: Task<Void, Never>?
@@ -254,6 +256,30 @@ private struct ChecksumPass: Sendable {
         bind()
         refreshGuids()
         watchTheGuids()
+        watchTheDatabase()
+    }
+
+    /// A firmware database that has been replaced makes the names the presented
+    /// sub-tree wears describe a world that is gone. The pane's own cache drops
+    /// the analysis on that event; what is left here is this panel's work —
+    /// reading the region again, against the new database, so that what is on
+    /// screen stops being an answer from the old one.
+    ///
+    /// Only while the sub-tree is on screen. A panel that never opened the region
+    /// has nothing to refresh, and the cache it would fill has already been
+    /// dropped, so a later open reads fresh regardless.
+    private func watchTheDatabase() {
+        guard databaseWatch == nil else { return }
+        let source = Self.dataSource
+        databaseWatch = Task { [weak self] in
+            for await _ in await source.databaseChanges() {
+                guard let self else { return }
+                guard !self.meRoots.isEmpty, let id = self.meRegionID else { continue }
+                self.runMEAnalysis(id, ignoringCache: true) { [weak self] in
+                    self?.controller.openMERegion(id)
+                }
+            }
+        }
     }
 
     /// `guids.csv` is re-checked once a day, behind whatever is being read at
@@ -311,6 +337,8 @@ private struct ChecksumPass: Sendable {
         observation = nil
         guidsWatch?.cancel()
         guidsWatch = nil
+        databaseWatch?.cancel()
+        databaseWatch = nil
         rangesRequest?.cancel()
         rangesRequest = nil
         // The ME reads are this session's own, and a parked panel is not going to
@@ -766,12 +794,20 @@ private struct ChecksumPass: Sendable {
     /// `controller.onMERegionLoading`. A cached analysis is instant, so it is
     /// presented and opened with no placeholder in between.
     ///
+    /// `ignoringCache` is for the one caller that knows the cache is wrong: a
+    /// firmware database that has just been replaced makes every analysis made
+    /// against the old one a description of a world that is gone, and the rows
+    /// have to be named from the new one. The pane's own holder drops that
+    /// analysis on the same event — this is not a consequence of that, it is
+    /// this panel not depending on which of the two arrives first.
+    ///
     /// `onFailure` is for a caller with something to fall back on: the sub-tree
     /// is not coming, and the region node is where it can still land. A landing
     /// that a re-read or a later open superseded does not call it — that is not
     /// a failure, and the newer analysis owns the outcome.
     private func runMEAnalysis(
         _ id: NodeID,
+        ignoringCache: Bool = false,
         then completion: @escaping @MainActor () -> Void,
         onFailure failed: (@MainActor () -> Void)? = nil
     ) {
@@ -792,7 +828,7 @@ private struct ChecksumPass: Sendable {
         // panel started on the open is stopped here, or its placeholder task
         // would fire a moment later and put a row up for an analysis that is
         // already in hand.
-        if let cached = provider?.cachedMEAnalysis() {
+        if !ignoringCache, let cached = provider?.cachedMEAnalysis() {
             presentME(cached)
             controller.onMERegionLoading?(id, false)
             completion()
@@ -816,7 +852,11 @@ private struct ChecksumPass: Sendable {
             // hands the second caller the same answer rather than reading the
             // region a second time.
             let result: Result<FirmwareAnalysis, Error>
-            if let provider {
+            // A caller that knows the cache is wrong asks the engine directly.
+            // The pane's `meAnalysis` is a cache first, and would hand back the
+            // very analysis this re-reading exists to replace — whether or not
+            // the pane's own watch has got round to dropping it yet.
+            if let provider, !ignoringCache {
                 result = await provider.meAnalysis(for: meRegion) {
                     await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
                 }

@@ -265,7 +265,11 @@ struct MEAParkedState: ToolSessionState {
             // makes the same ask, so it goes through the pane's cache: one
             // reading, and whichever panel asked second is handed its answer.
             let result: Result<FirmwareAnalysis, Error>
-            if let analysisProvider {
+            // A caller that knows the cache is wrong asks the engine directly.
+            // The pane's `meAnalysis` is a cache first, and would hand back the
+            // very analysis this re-reading exists to replace — whether or not
+            // the pane's own watch has got round to dropping it yet.
+            if let analysisProvider, !ignoringCache {
                 result = await analysisProvider.meAnalysis(for: meRegion) {
                     await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
                 }
