@@ -32,6 +32,7 @@ let package = Package(
         .package(path: "../../Packages/AppPalette"),
         .package(path: "../../Packages/MEFirmware"),
         .package(path: "../../Packages/MEPresentation"),
+        .package(path: "../../Packages/MEReads"),
         .package(path: "../../Packages/UEFIImage")
     ],
     targets: [
@@ -44,6 +45,7 @@ let package = Package(
             "MEATool",
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "MEPresentation", package: "MEPresentation"),
+            .product(name: "MEReads", package: "MEReads"),
             .product(name: "ALSplitView", package: "ALSplitView"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage")

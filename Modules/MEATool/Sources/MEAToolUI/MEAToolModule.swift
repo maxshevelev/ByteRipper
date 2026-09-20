@@ -2,6 +2,7 @@ import AppKit
 import MEFirmware
 import MEATool
 import MEPresentation
+import MEReads
 import ToolModuleKit
 import UEFIImage
 
@@ -87,7 +88,15 @@ struct MEAParkedState: ToolSessionState {
     /// the suite does not reach GitHub — the same public seam as
     /// `FITToolSession.microcodeSource`, for the app-suite tests that live in
     /// another module and drive the session end to end.
-    public static var dataSource: any MEADataSource = MEAGitHubDataRepository()
+    ///
+    /// The storage is the shared reads' (`MEReads`), so this and the UEFI
+    /// Structure's seam are one source and a test that installs one covers both
+    /// panels. The name is kept because this is the one this module's tests and
+    /// doc comments use.
+    public static var dataSource: any MEADataSource {
+        get { MEReads.dataSource }
+        set { MEReads.dataSource = newValue }
+    }
 
     /// Called on the main actor once a parse has landed and the panel has been
     /// shown. The analysis runs off the main actor, so a test that waited for it
@@ -240,7 +249,7 @@ struct MEAParkedState: ToolSessionState {
         controller.showBusy()
         let analyzer = self.analyzer
         Task { [weak self] in
-            let result = await MEAToolSession.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
+            let result = await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
             guard let self, self.generation == generation else { return }
             self.controller.endBusy()
             switch result {
@@ -257,90 +266,12 @@ struct MEAParkedState: ToolSessionState {
                 self.controller.showSummary([])
                 self.controller.setPlaceholder(.failed)
                 self.controller.say(
-                    MEAToolSession.describe(error), asProblem: true)
+                    MEReads.describe(error), asProblem: true)
                 self.controller.showRetry(true)
                 self.show()
                 self.onDisplay?(nil)
             }
         }
-    }
-
-    /// Off the main actor: materialise just the ME region (when the shared
-    /// tree could resolve it) and hand it to the engine at that region's own
-    /// base offset, so every address the engine reports is still absolute in
-    /// the open file. Falls back to the whole file — exactly today's
-    /// behavior, `baseOffset 0` — when the region is not known (no
-    /// descriptor recognized yet, or a bare ME dump with no descriptor at
-    /// all): MEFirmware's own `$FPT` search over the whole buffer is what
-    /// covers that case, unchanged.
-    private nonisolated static func analyze(
-        _ snapshot: any ToolContentReader,
-        analyzer: MEFirmwareAnalyzer,
-        meRegion: Range<UInt64>?
-    ) async -> Result<FirmwareAnalysis, Error> {
-        await Task.detached(priority: .userInitiated) {
-            do {
-                let data = try MEAToolSession.regionBytes(snapshot, meRegion)
-                let baseOffset = MEAToolSession.regionBase(meRegion)
-                let analysis = try await analyzer.analyze(region: data, baseOffset: baseOffset)
-                return .success(analysis)
-            } catch {
-                return .failure(error)
-            }
-        }.value
-    }
-
-    /// The bytes handed to the engine: the ME region when the shared tree could
-    /// resolve it, the whole file otherwise. Both the parse and the later
-    /// checksum request go through here, so the digests describe the same
-    /// buffer the analysis was made from and not a differently chosen one.
-    private nonisolated static func regionBytes(
-        _ snapshot: any ToolContentReader,
-        _ meRegion: Range<UInt64>?
-    ) throws -> Data {
-        if let meRegion, meRegion.lowerBound < meRegion.upperBound {
-            return try readRange(snapshot, meRegion)
-        }
-        return try readAll(snapshot)
-    }
-
-    /// Where `regionBytes` starts in the open file.
-    private nonisolated static func regionBase(_ meRegion: Range<UInt64>?) -> Int {
-        guard let meRegion, meRegion.lowerBound < meRegion.upperBound else { return 0 }
-        return Int(meRegion.lowerBound)
-    }
-
-    /// The whole content, as one `Data`. The engine takes a region buffer, so
-    /// the reader is materialised; chunked so a large image is never assembled
-    /// in one giant append.
-    private nonisolated static func readAll(
-        _ snapshot: any ToolContentReader
-    ) throws -> Data {
-        try readRange(snapshot, 0..<snapshot.size)
-    }
-
-    /// `range`, as one `Data` — the same chunked-read shape as `readAll`,
-    /// narrowed to just the bytes the engine actually needs.
-    private nonisolated static func readRange(
-        _ snapshot: any ToolContentReader, _ range: Range<UInt64>
-    ) throws -> Data {
-        var data = Data()
-        let chunk = 1 << 20
-        var offset = range.lowerBound
-        while offset < range.upperBound {
-            let length = Int(min(UInt64(chunk), range.upperBound - offset))
-            data.append(contentsOf: try snapshot.read(at: offset, length: length))
-            offset += UInt64(length)
-        }
-        return data
-    }
-
-    /// A data error's line for the status row. The engine's `MEADataError` is a
-    /// `LocalizedError` with its own wording; anything else is an internal
-    /// failure worth saying plainly.
-    private nonisolated static func describe(_ error: Error) -> String {
-        (error as? MEADataError)?.errorDescription
-            ?? "The analysis failed: \(error.localizedDescription)"
     }
 
     /// A successful analysis lands here: present the summary and the curated
@@ -394,16 +325,14 @@ struct MEAParkedState: ToolSessionState {
             + (volume?.configurationsByID ?? []).flatMap { $0.records.map(\.fileID) }
         let wantsConfig = !configIDs.isEmpty && configPaths.resolution == nil
         guard wantsMFS || wantsEFS || wantsConfig else { return }
-        let source = Self.dataSource
         let generation = self.generation
         fileTableTask = Task { [weak self] in
-            let names = await MEAToolSession.fileNames(
+            let names = await MEReads.fileNames(
                 mfs: wantsMFS ? volume : nil,
                 efs: wantsEFS ? analysis.efsVolume : nil,
                 configIDs: wantsConfig ? configIDs : [],
                 platform: volume?.ftblPlatform ?? -1,
-                dictionary: volume?.ftblDictionary ?? -1,
-                from: source)
+                dictionary: volume?.ftblDictionary ?? -1)
             guard let self, self.generation == generation else { return }
             self.fileTableTask = nil
             guard let names, let analysis = self.analysis else { return }
@@ -458,7 +387,7 @@ struct MEAParkedState: ToolSessionState {
         let analysisProvider = self.analysisProvider
         let generation = self.generation
         checksumsTask = Task { [weak self] in
-            let checksums = await MEAToolSession.checksums(snapshot, meRegion: meRegion)
+            let checksums = await MEReads.checksums(snapshot, meRegion: meRegion)
             guard let self, self.generation == generation else { return }
             self.checksumsTask = nil
             guard var updated = self.analysis, updated.checksums == nil else { return }
@@ -472,49 +401,6 @@ struct MEAParkedState: ToolSessionState {
             // means — and it is the seam a test waits on instead of the clock.
             self.onDisplay?(updated)
         }
-    }
-
-    /// Off the main actor: the table fetched (or taken from the source's own
-    /// in-memory cache) and turned into this volume's names. Nil when there is
-    /// nothing to name with — no source configured, no network, a table that
-    /// cannot be parsed — which the caller treats as "the rows keep their
-    /// numbers".
-    private nonisolated static func fileNames(
-        mfs: MFSVolume?,
-        efs: EFSVolume?,
-        configIDs: [Int],
-        platform: Int,
-        dictionary: Int,
-        from source: any MEADataSource
-    ) async -> (mfs: MFSFileNames?, efs: EFSFileNames?, config: ConfigRecordPaths?)? {
-        guard let table = try? await source.fileTable() else { return nil }
-        return await Task.detached(priority: .utility) {
-            (mfs.map { MFSFileNames(table: table, volume: $0) },
-             efs.map {
-                 EFSFileNames(table: table, volume: $0,
-                              platform: platform, dictionary: dictionary)
-             },
-             configIDs.isEmpty ? nil
-                 : ConfigRecordPaths(table: table, fileIDs: configIDs,
-                                     platform: platform, dictionary: dictionary))
-        }.value
-    }
-
-    /// Off the main actor: the same region `analyze` was given, digested.
-    /// An unreadable file leaves every field nil, and the group then goes —
-    /// the panel does not stand there promising numbers it cannot get.
-    private nonisolated static func checksums(
-        _ snapshot: any ToolContentReader,
-        meRegion: Range<UInt64>?
-    ) async -> MEFirmware.Checksums {
-        // `Checksums` is spelled out: UEFIImage has one of its own, and this
-        // file can see both.
-        await Task.detached(priority: .userInitiated) {
-            guard let data = try? MEAToolSession.regionBytes(snapshot, meRegion) else {
-                return MEFirmware.Checksums()
-            }
-            return await MEFirmwareAnalyzer.checksums(of: data)
-        }.value
     }
 
     /// The user changed tab. Purely a choice of what to look at — the analysis

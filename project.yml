@@ -55,6 +55,11 @@ packages:
   # here links it directly.
   MEPresentation:
     path: Packages/MEPresentation
+  # The ME region's bytes and the reads over them. Both firmware tool-modules
+  # build it, so the same reading is not written out twice; no target here
+  # links it directly.
+  MEReads:
+    path: Packages/MEReads
   # Fetched once, checked once a day. All three live sources hold their parsed
   # database in one of these, and so does the app's own check for a newer
   # release; only the app links it directly.

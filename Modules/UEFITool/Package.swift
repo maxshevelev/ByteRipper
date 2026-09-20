@@ -33,6 +33,9 @@ let package = Package(
         // shared presentation over it (Design/ME_REGION_IN_UEFI_TREE_PLAN.md).
         .package(path: "../../Packages/MEFirmware"),
         .package(path: "../../Packages/MEPresentation"),
+        // The region's bytes and the reads over them — the same reading the ME
+        // Analyzer makes, shared rather than written out twice.
+        .package(path: "../../Packages/MEReads"),
         // Only for the tests, to build a compressed section byte by byte.
         .package(path: "../../Packages/FirmwareCompression")
     ],
@@ -50,7 +53,8 @@ let package = Package(
             .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "UEFIContentSource", package: "UEFIContentSource"),
             .product(name: "MEFirmware", package: "MEFirmware"),
-            .product(name: "MEPresentation", package: "MEPresentation")
+            .product(name: "MEPresentation", package: "MEPresentation"),
+            .product(name: "MEReads", package: "MEReads")
         ]),
         .testTarget(name: "UEFIToolTests", dependencies: [
             "UEFITool",
