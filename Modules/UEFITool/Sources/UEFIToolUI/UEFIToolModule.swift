@@ -534,20 +534,38 @@ private struct ChecksumPass: Sendable {
         let image = tree.image()
         let readers = tree.spaceReaders
         let node = focus.flatMap { image.node($0) }
-        // The ME focus is the sub-tree's half of the selection, kept apart from
-        // the UEFI focus. The outline shows the sub-tree from `meRoots`; the
-        // detail and the zone it carries come in with their own steps.
-        let detail = node.map {
-            // From the node's own space. A section on the way in that no
-            // longer decodes leaves nothing to read, and the header fields
-            // go with it rather than being read off the file at buffer
-            // offsets.
-            UEFIDetail.build(
-                for: $0, image: image,
-                reader: readers.reader(for: $0.space) ?? ImageReader([UInt8]()),
-                repairs: nodeRepairs[$0.id] ?? []
+        // The ME focus is the sub-tree's half of the selection, kept apart
+        // from the UEFI focus, so at most one is in play. An ME row's detail
+        // is the node's own curated fields; a UEFI node's is its header read
+        // back through the node's own space.
+        let meNode = meFocus.flatMap { MEATree.node(at: $0, in: meRoots) }
+        let detail: UEFINodeDetail
+        if let meNode {
+            // An ME row's detail is its own curated fields. They render through
+            // the UEFI detail's label/value rows; a field whose tone is a failed
+            // check is the one worth the red the UEFI detail reserves for a bad
+            // checksum. The full tone rendering (the green done-mark, the brown
+            // caution) is the ME Analyzer's — this is the sub-tree's view of it.
+            detail = UEFINodeDetail(
+                title: meNode.title,
+                fields: meNode.fields.map {
+                    UEFIDetailField($0.label, $0.value, isProblem: $0.tone == .bad)
+                },
+                tables: []
             )
-        } ?? .empty
+        } else {
+            detail = node.map {
+                // From the node's own space. A section on the way in that no
+                // longer decodes leaves nothing to read, and the header fields
+                // go with it rather than being read off the file at buffer
+                // offsets.
+                UEFIDetail.build(
+                    for: $0, image: image,
+                    reader: readers.reader(for: $0.space) ?? ImageReader([UInt8]()),
+                    repairs: nodeRepairs[$0.id] ?? []
+                )
+            } ?? .empty
+        }
         controller.show(
             image: image, tree: tree, focus: focus, detail: detail, catalogue: guids,
             badChecksums: checksumProblems, canWrite: !host.isReadOnly, isBuilding: false,
