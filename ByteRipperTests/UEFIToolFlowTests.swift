@@ -21,16 +21,36 @@ final class UEFIToolFlowTests: XCTestCase {
     private var controller: MainViewController?
     private var window: NSWindow?
     private var defaultsName: String?
+    private var offlineSource: CountingOfflineSource?
 
-    /// A data source whose database fetch fails the way an offline one does.
-    /// Installed for the whole class so no test here can reach the network: the
-    /// ME analyses these tests drive are handed a cached analysis instead
-    /// (`setCachedMEAnalysis`), and the one that is not expects the reading to
-    /// fail — the fixture's ME region is erased, so there is nothing to parse.
-    private struct OfflineDatabaseSource: MEADataSource {
-        func database() async throws -> MEADatabase {
-            throw MEADataError.offline(underlying: "test offline")
+    /// A data source whose fetches fail the way an offline one does, and which
+    /// counts them. Installed for the whole class so no test here can reach the
+    /// network: the ME analyses these tests drive are handed a cached analysis
+    /// (`setCachedMEAnalysis`) except where the reading is the thing under test.
+    ///
+    /// The count is what says whether a reading that could not reach the
+    /// database asked once or asked again behind the reader's back. The lock is
+    /// because the fetch runs off the main actor and the count is read on it.
+    private final class CountingOfflineSource: MEADataSource, @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+
+        var fetches: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return count
         }
+
+        private func counted() -> MEADataError {
+            lock.lock()
+            count += 1
+            lock.unlock()
+            return .offline(underlying: "test offline")
+        }
+
+        func database() async throws -> MEADatabase { throw counted() }
+        func fileTable() async throws -> FileTable { throw counted() }
+        func databaseChanges() async -> AsyncStream<Void> { AsyncStream { _ in } }
     }
 
     override func setUp() {
@@ -39,7 +59,9 @@ final class UEFIToolFlowTests: XCTestCase {
         defaultsName = isolated.name
         ToolController.defaults = isolated.store
         ToolController.changeDelay = 0
-        UEFIToolSession.dataSource = OfflineDatabaseSource()
+        let source = CountingOfflineSource()
+        offlineSource = source
+        UEFIToolSession.dataSource = source
         // The test volume's rows include the erased padding that aligns its
         // free space, and these tests count and index rows with it there: the
         // tree lists it here, as a reader who turned it on would see it. The
@@ -52,6 +74,7 @@ final class UEFIToolFlowTests: XCTestCase {
     override func tearDown() {
         ToolPanelFont.defaults.removeObject(forKey: Self.showsEmptyPaddingKey)
         UEFIToolSession.dataSource = MEAGitHubDataRepository()
+        offlineSource = nil
         controller?.windowModel.pane1.close()
         for file in files { try? FileManager.default.removeItem(at: file) }
         if let defaultsName { discardIsolatedDefaults(defaultsName, ToolController.defaults) }
@@ -915,10 +938,12 @@ final class UEFIToolFlowTests: XCTestCase {
     /// info leaf. Decoded the way the engine hands it, so no internal
     /// initializers are needed.
     /// `emptyRegionNamed` adds an erased region beside the real one — a row
-    /// whose section holds nothing, which the panel draws grey. Off by default:
-    /// the other tests count this sub-tree's rows.
+    /// whose section holds nothing, which the panel draws grey. `withEFSVolume`
+    /// adds a volume whose file names come from the table in the database, so
+    /// the reading has a reason to reach for it. Both are off by default: the
+    /// other tests count this sub-tree's rows.
     private func meAnalysisFixture(
-        emptyRegionNamed empty: String? = nil
+        emptyRegionNamed empty: String? = nil, withEFSVolume: Bool = false
     ) throws -> FirmwareAnalysis {
         var regions: [[String: Any]] = [
             ["id": 0, "name": "FTPR", "offset": 0x1000, "size": 0x1000, "flags": 0x8000],
@@ -926,7 +951,7 @@ final class UEFIToolFlowTests: XCTestCase {
         if let empty {
             regions.append(["id": 1, "name": empty, "offset": 0x2000, "size": 0, "flags": 0])
         }
-        let base: [String: Any] = [
+        var base: [String: Any] = [
             "family": "csme",
             "variant": "CSME",
             "version": ["major": 15, "minor": 40, "hotfix": 37, "build": 3121],
@@ -938,6 +963,21 @@ final class UEFIToolFlowTests: XCTestCase {
             "regions": regions,
             "issues": [],
         ]
+        if withEFSVolume {
+            // A volume whose file list is not in its own bytes: naming its rows
+            // costs the `FileTable` this suite's source refuses, which is what
+            // makes the reading reach for the database at all.
+            base["efsVolume"] = [
+                "offset": 0x2000, "pageSize": 0x1000, "systemPageCount": 1,
+                "dataPageCount": 4, "scratchPageCount": 1,
+                "scratchPagesEmpty": true, "dataPageCountMatchesSystem": true,
+                "dictionary": 1, "revision": 1, "unknown1": 0, "dictionaryRevision": 1,
+                "dataPagesCommitted": 4, "dataPagesReserved": 0,
+                "systemHeaderCRCValid": true, "indexesCRCValid": true,
+                "firstIndexPaddingEmpty": true, "dataPageOrder": [0, 1, 2, 3],
+                "dataPageHeaderCRCsValid": true, "dataPageFooterCRCsValid": true,
+            ]
+        }
         return try JSONDecoder().decode(
             FirmwareAnalysis.self,
             from: JSONSerialization.data(withJSONObject: base))
@@ -1189,6 +1229,34 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertTrue(text.contains("FTPR"), "the row is named: \(text)")
         XCTAssertFalse(text.contains("FTPR · 0x1000 · 0x1000"),
                        "and its heading is not the fields under it said twice: \(text)")
+    }
+
+    /// A reading that could not reach the database is not asked again on the
+    /// next re-presentation. The answer would be the same, and every attempt
+    /// costs the repository's own timeout while the reader waits behind it.
+    func testAFailedNameFetchIsNotAskedAgain() throws {
+        let outline = try openMERegion(analysis: meAnalysisFixture(withEFSVolume: true))
+        let source = try XCTUnwrap(offlineSource)
+
+        // A volume whose names come from the table, and a table the source
+        // cannot hand over: the reading asks once, and the ask fails.
+        XCTAssertTrue(pumpUntil(5) { source.fetches == 1 },
+                      "the reading asked the database: \(source.fetches)")
+
+        // Selecting the Checksums row is what asks for the digests, and their
+        // landing re-presents the sub-tree — the re-presentation that used to
+        // ask the database a second time. (This is `MEACurator.pendingValue`,
+        // the placeholder the group carries until they arrive.)
+        let checksumsRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Checksums" })
+        outline.selectRowIndexes(IndexSet(integer: checksumsRow), byExtendingSelection: false)
+
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        XCTAssertTrue(pumpUntil(5) {
+            !descendants(of: panel, NSTextField.self).map(\.stringValue).contains("Loading…")
+        }, "the digests landed, so the sub-tree has been presented again")
+        XCTAssertEqual(source.fetches, 1,
+                       "and the database was not asked a second time for it")
     }
 }
 

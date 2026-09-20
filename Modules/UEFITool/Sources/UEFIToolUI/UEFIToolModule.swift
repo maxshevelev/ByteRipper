@@ -174,6 +174,13 @@ private struct ChecksumPass: Sendable {
     private var meConfigPaths: ConfigRecordPaths = .none
     /// The in-flight file-name fetch, so a re-present asks once.
     private var meFileTableTask: Task<Void, Never>?
+    /// Whether that fetch has been made for this reading, answered or not. A
+    /// reading that could not reach the database — offline, rate-limited, a
+    /// table that does not describe this volume — is not worth asking again:
+    /// the answer would be the same, and each attempt costs the repository's
+    /// own timeout while the reader waits behind it. Reset with the reading
+    /// (`bind`), because a new analysis is a new question.
+    private var askedForFileNames = false
     /// The in-flight digest computation for the Checksums group, so selecting
     /// the row twice asks once.
     private var meChecksumsTask: Task<Void, Never>?
@@ -361,6 +368,7 @@ private struct ChecksumPass: Sendable {
         meMfsNames = .none
         meEfsNames = .none
         meConfigPaths = .none
+        askedForFileNames = false
         meFileTableTask?.cancel()
         meFileTableTask = nil
         meChecksumsTask?.cancel()
@@ -807,12 +815,20 @@ private struct ChecksumPass: Sendable {
     /// it, keeping whatever ME selection still resolves after the re-parse.
     private func presentME(_ analysis: FirmwareAnalysis) {
         meAnalysis = analysis
+        // What the sub-tree held before this presentation, by path. A
+        // re-presentation that follows a fetch changes what the rows *say* —
+        // a file gains its name, a digest appears — and the outline only has to
+        // redraw their cells for that. One that changes which rows there are
+        // needs the outline to ask for the children again, or a row that left
+        // the tree stays on screen: the Checksums group goes when the digests
+        // come back with nothing in them, and it used to keep its row anyway.
+        let rowsBefore = Self.meRowPaths(meRoots)
         meRoots = MEACurator.present(analysis, mfsNames: meMfsNames, efsNames: meEfsNames,
                                      configPaths: meConfigPaths)
         if let path = meFocus, MEATree.node(at: path, in: meRoots) == nil {
             meFocus = nil
         }
-        show(publish: meFocus != nil)
+        show(publish: meFocus != nil, rowsChanged: rowsBefore != Self.meRowPaths(meRoots))
         // The sub-tree is on screen; the file names it still lacks are fetched
         // behind it, the way the ME Analyzer fetches them, and re-present the
         // rows with their names when they land.
@@ -850,7 +866,8 @@ private struct ChecksumPass: Sendable {
     /// table that does not describe this volume all leave the rows reading their
     /// numbers, which is what the flash says about them.
     private func loadFileNames() {
-        guard let analysis = meAnalysis, meFileTableTask == nil else { return }
+        guard let analysis = meAnalysis, meFileTableTask == nil,
+              !askedForFileNames else { return }
         let volume = analysis.mfsVolume
         let wantsMFS = volume?.usesFTBL == true && volume?.files.isEmpty == false
             && meMfsNames.resolution == nil
@@ -862,6 +879,8 @@ private struct ChecksumPass: Sendable {
             + (volume?.configurationsByID ?? []).flatMap { $0.records.map(\.fileID) }
         let wantsConfig = !configIDs.isEmpty && meConfigPaths.resolution == nil
         guard wantsMFS || wantsEFS || wantsConfig else { return }
+        // Asked, whatever comes back: this is the one attempt for this reading.
+        askedForFileNames = true
         let source = Self.dataSource
         let generation = self.generation
         meFileTableTask = Task { [weak self] in
@@ -1153,6 +1172,13 @@ private struct ChecksumPass: Sendable {
     private func meDetailTitle(of node: MEANode) -> String {
         guard node.fields.isEmpty, !node.subtitle.isEmpty else { return node.title }
         return "\(node.title) · \(node.subtitle)"
+    }
+
+    /// Every path a presentation holds, in order — the shape of the sub-tree,
+    /// with what its rows say left out. A path is a node's position, so two
+    /// presentations agree here exactly when they hold the same rows.
+    private static func meRowPaths(_ nodes: [MEANode]) -> [[Int]] {
+        nodes.flatMap { [$0.path] + meRowPaths($0.children) }
     }
 
     /// The path of the innermost presented ME row whose range covers `offset`,
