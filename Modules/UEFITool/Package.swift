@@ -29,6 +29,10 @@ let package = Package(
         .package(path: "../../Packages/UEFIImage"),
         .package(path: "../../Packages/UEFIContentSource"),
         .package(path: "../../Packages/FreshData"),
+        // The ME branch of the structure tree: the engine's model and the
+        // shared presentation over it (Design/ME_REGION_IN_UEFI_TREE_PLAN.md).
+        .package(path: "../../Packages/MEFirmware"),
+        .package(path: "../../Packages/MEPresentation"),
         // Only for the tests, to build a compressed section byte by byte.
         .package(path: "../../Packages/FirmwareCompression")
     ],
@@ -44,7 +48,9 @@ let package = Package(
             .product(name: "ALSplitView", package: "ALSplitView"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
-            .product(name: "UEFIContentSource", package: "UEFIContentSource")
+            .product(name: "UEFIContentSource", package: "UEFIContentSource"),
+            .product(name: "MEFirmware", package: "MEFirmware"),
+            .product(name: "MEPresentation", package: "MEPresentation")
         ]),
         .testTarget(name: "UEFIToolTests", dependencies: [
             "UEFITool",
