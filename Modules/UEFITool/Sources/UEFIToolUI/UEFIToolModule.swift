@@ -660,7 +660,7 @@ private struct ChecksumPass: Sendable {
             detail = UEFINodeDetail(
                 title: meDetailTitle(of: meNode),
                 fields: meNode.fields.map {
-                    UEFIDetailField($0.label, $0.value, isProblem: $0.tone == .bad)
+                    UEFIDetailField($0.label, $0.value, tone: $0.tone)
                 },
                 tables: []
             )

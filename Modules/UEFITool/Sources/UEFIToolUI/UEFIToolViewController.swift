@@ -813,14 +813,10 @@ import UEFITool
             ).isActive = true
 
             let value = ToolWrappingLabel(string: field.value)
-            value.font = field.value.hasPrefix("0x")
-                ? ToolPanelFont.monospacedDigits()
-                : ToolPanelFont.body()
-            // A checksum that does not check out is the one thing in the detail
-            // worth colouring red: it is what the Fix Checksum item would write.
-            if field.isProblem {
-                value.textColor = SemanticColors.bad
-            }
+            // A value that carries a status is drawn the way the ME panel draws
+            // its own — bold, and in the tone's colour — so a checksum that does
+            // not check out reads here the way a "Configured" reads there.
+            field.tone.draw(value, value: field.value)
             // Selectable, not a dead label: a bench copies an offset or a GUID
             // out of here, and a value it cannot select is one it has to retype.
             value.isSelectable = true

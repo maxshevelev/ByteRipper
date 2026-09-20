@@ -116,7 +116,8 @@ final class MEAToolFlowTests: XCTestCase {
     /// runs off the main actor, so this is the panel as a user sees it *while*
     /// the ME region is being read — the state the empty tab speaks for.
     private func openWithoutWaiting(_ bytes: [UInt8],
-                                    dataSource: (any MEADataSource)? = nil)
+                                    dataSource: (any MEADataSource)? = nil,
+                                    cachedAnalysis: FirmwareAnalysis? = nil)
         throws -> MainViewController {
         if let dataSource { MEAToolSession.dataSource = dataSource }
         let url = try tempFile(bytes)
@@ -130,6 +131,12 @@ final class MEAToolFlowTests: XCTestCase {
         try controller.windowModel.pane1.open(url: url)
         controller.apply(mode: .singleFile)
         window.layoutIfNeeded()
+        // Parked before the panel is switched on, because switching it on is
+        // what reads it — the same cache the UEFI Structure's panel shares.
+        if let cachedAnalysis {
+            controller.windowModel.pane1.uefiState.setCachedMEAnalysis(
+                cachedAnalysis, meRegion: nil)
+        }
         controller.tools.activate(MEAToolModule.identifier, animated: false)
         window.layoutIfNeeded()
         return controller
@@ -893,6 +900,64 @@ final class MEAToolFlowTests: XCTestCase {
         try waitForDisplay(of: session()) { source.aNewDatabaseHasArrived() }
         XCTAssertEqual(source.fetches, 2,
                        "and the new one made the panel read the database again")
+    }
+
+    /// An analysis whose identity carries a File System State — the one field in
+    /// its list that is a status rather than just a value, and so the one drawn
+    /// by a tone.
+    private func analysisWithAFileSystemState() throws -> FirmwareAnalysis {
+        let base: [String: Any] = [
+            "family": "csme",
+            "variant": "CSME",
+            "version": ["major": 15, "minor": 40, "hotfix": 37, "build": 3121],
+            "release": "production",
+            "type": "region",
+            "sku": "",
+            "platform": "",
+            "sizeBytes": 0x4000,
+            "regions": [],
+            "issues": [],
+            "mfsState": "configured",
+        ]
+        return try JSONDecoder().decode(
+            FirmwareAnalysis.self,
+            from: JSONSerialization.data(withJSONObject: base))
+    }
+
+    /// The Full Tree's detail draws a status the way the Summary tab draws it:
+    /// bold, in the app's colour for that status, and — this panel's own
+    /// rendering for a check that passed — led by the green done mark. Both
+    /// halves read the tone from the same shared type, which is what keeps them
+    /// saying the same thing about the same field.
+    func testTheDetailDrawsAStatusValueBoldAndColoured() throws {
+        _ = try openWithoutWaiting(METestImage.manifestFile(),
+                                   cachedAnalysis: try analysisWithAFileSystemState())
+        _ = try waitForDisplay(of: session())
+        try showFullTree()
+        let tree = try outline()
+
+        let firmwareRow = try XCTUnwrap(row(ofTitle: "Firmware", in: tree))
+        tree.selectRowIndexes(IndexSet(integer: firmwareRow), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+
+        let panel = try panel()
+        let shown = descendants(of: panel, NSTextField.self).filter {
+            $0.attributedStringValue.string.contains("Configured")
+        }
+        // The done mark is an attachment ahead of the word, and only the tree's
+        // detail draws one — which is what says this is the row being read.
+        let value = try XCTUnwrap(
+            shown.first { $0.attributedStringValue.string.contains("\u{FFFC}") },
+            "the detail leads the state with its done mark: \(shown.map(\.stringValue))")
+
+        let text = value.attributedStringValue
+        let index = (text.string as NSString).range(of: "Configured").location
+        XCTAssertNotEqual(index, NSNotFound, "the word is in the row: \(text.string)")
+        XCTAssertEqual(text.attribute(.foregroundColor, at: index, effectiveRange: nil) as? NSColor,
+                       SemanticColors.good, "a settled state reads in the app's green")
+        let font = text.attribute(.font, at: index, effectiveRange: nil) as? NSFont
+        XCTAssertEqual(font?.fontDescriptor.symbolicTraits.contains(.bold), true,
+                       "and bold, so the state reads at a glance")
     }
 }
 

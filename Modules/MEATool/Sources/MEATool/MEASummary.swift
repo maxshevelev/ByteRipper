@@ -1,6 +1,7 @@
 import Foundation
 import MEFirmware
 import MEPresentation
+import ToolModuleKit
 
 /// The value a summary row carries: the fact the analysis answered, or the
 /// placeholder that names a row upstream MEA prints but this engine does not
@@ -21,10 +22,10 @@ public struct MEASummaryRow: Sendable, Equatable {
     public var value: MEASummaryValue
     /// How the value is drawn; `.standard` for rows with nothing to say in
     /// colour.
-    public var tone: MEASummaryTone
+    public var tone: ToolValueTone
 
     public init(_ label: String, _ value: MEASummaryValue,
-                tone: MEASummaryTone = .standard) {
+                tone: ToolValueTone = .standard) {
         self.label = label
         self.value = value
         self.tone = tone
@@ -222,7 +223,7 @@ public enum MEASummary {
             if let state = analysis.mfsState {
                 rows.append(MEASummaryRow("File System State",
                                           .value(MEAText.title(state.rawValue)),
-                                          tone: Self.tone(for: state)))
+                                          tone: MEATones.fileSystemState(state)))
             } else if identified {
                 add("File System State", .comingSoon)
             }
@@ -466,18 +467,6 @@ public enum MEASummary {
         }
         let letters = last.steppings.map(String.init).joined(separator: ",")
         return letters.isEmpty ? last.chipset : "\(last.chipset) \(letters)"
-    }
-
-    /// The File System State row's colour tone. The two settled states — the
-    /// volume has no files yet (`unconfigured`) and it is fully set up
-    /// (`configured`) — read as green; a volume mid-lifecycle (`initialized`)
-    /// is brown; a failed decode (`error`) is red.
-    private static func tone(for state: MFSState) -> MEASummaryTone {
-        switch state {
-        case .unconfigured, .configured: return .good
-        case .initialized: return .caution
-        case .error: return .bad
-        }
     }
 
     /// The Stock / Update / Extracted axis word for a firmware `type`, nil when

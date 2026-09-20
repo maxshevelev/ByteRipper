@@ -962,6 +962,10 @@ final class UEFIToolFlowTests: XCTestCase {
             "sizeBytes": 0x2000,
             "regions": regions,
             "issues": [],
+            // The one field in the identity's list that carries a status rather
+            // than just a value: it is drawn bold and coloured, and the tone it
+            // is drawn by is shared with the Summary tab.
+            "mfsState": "configured",
         ]
         if withEFSVolume {
             // A volume whose file list is not in its own bytes: naming its rows
@@ -1335,6 +1339,30 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertTrue(pumpUntil(5) { source.fetches > 0 },
                       "the new database made the panel read the region again")
         XCTAssertEqual(source.fetches, 1, "once")
+    }
+
+    /// The detail draws a value that carries a status the way the Summary tab
+    /// draws it — bold, and in the app's colour for that status. File System
+    /// State is the field that carries one, and it reaches this panel through
+    /// the same shared tone the Summary's row carries, which is what keeps the
+    /// two halves of the app saying the same thing about it.
+    func testAStatusValueIsDrawnBoldAndColoured() throws {
+        let outline = try openMERegion()
+        let panel = try XCTUnwrap(controller?.tools.panel)
+
+        // The identity root, whose fields carry the File System State.
+        let firmwareRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Firmware" })
+        outline.selectRowIndexes(IndexSet(integer: firmwareRow), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+
+        let value = try XCTUnwrap(
+            descendants(of: panel, NSTextField.self).first { $0.stringValue == "Configured" },
+            "the detail shows the File System State")
+        XCTAssertEqual(value.textColor, SemanticColors.good,
+                       "a settled state reads in the app's green")
+        XCTAssertEqual(value.font?.fontDescriptor.symbolicTraits.contains(.bold), true,
+                       "and bold, so the state reads at a glance")
     }
 
     /// Two panels on one file ask for the region in the same moment — the UEFI

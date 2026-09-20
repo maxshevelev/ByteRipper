@@ -39,6 +39,10 @@ let package = Package(
         .target(name: "MEATool", dependencies: [
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "MEPresentation", package: "MEPresentation"),
+            // The tone a value is drawn by — the shared vocabulary in
+            // `ToolValueTone`, which the UEFI Structure's pure target links for
+            // the same reason.
+            .product(name: "ToolModuleKit", package: "ToolModuleKit")
         ]),
         .target(name: "MEAToolUI", dependencies: [
             .product(name: "AppPalette", package: "AppPalette"),

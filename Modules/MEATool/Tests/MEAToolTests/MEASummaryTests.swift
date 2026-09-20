@@ -1,6 +1,7 @@
 import XCTest
 import MEFirmware
 import MEPresentation
+import ToolModuleKit
 @testable import MEATool
 
 /// `MEASummary` — the pure builder behind the «Summary» tab: the primary
@@ -38,7 +39,7 @@ final class MEASummaryTests: XCTestCase {
         rows.first { $0.label == label }?.value
     }
 
-    private func tone(_ label: String, in rows: [MEASummaryRow]) -> MEASummaryTone? {
+    private func tone(_ label: String, in rows: [MEASummaryRow]) -> ToolValueTone? {
         rows.first { $0.label == label }?.tone
     }
 

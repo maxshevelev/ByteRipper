@@ -82,7 +82,10 @@ public enum MEACurator {
         append(&fields, "RSA Signature Valid", a.rsaSignatureValid.map(MEAText.yesNo))
         append(&fields, "ARB SVN", a.arbSvn)
         append(&fields, "VCN", a.vcn)
-        if let state = a.mfsState { append(&fields, "File System State", MEAText.title(state.rawValue)) }
+        if let state = a.mfsState {
+            fields.append(MEAField("File System State", MEAText.title(state.rawValue),
+                                   tone: MEATones.fileSystemState(state)))
+        }
         // Row 19 for a non-IFWI image: the $FPT header's FIT (an IFWI image's
         // FIT sits on each boot BPDT, surfaced under "Boot Partitions (BPDT)").
         if let fit = a.fptHeaderFIT {

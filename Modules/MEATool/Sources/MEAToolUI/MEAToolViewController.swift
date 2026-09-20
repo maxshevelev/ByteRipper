@@ -573,7 +573,7 @@ import ToolModuleKit
                 case .value(let shown):
                     value = shown
                     // The same weight the panel gives a status-toned value.
-                    emphasized = row.tone != .standard
+                    emphasized = row.tone.isStatus
                 case .comingSoon:
                     value = "Coming soon"
                     emphasized = false
@@ -582,7 +582,7 @@ import ToolModuleKit
                     .font: value.hasPrefix("0x")
                         ? NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular)
                         : NSFont.systemFont(ofSize: size, weight: emphasized ? .bold : .regular),
-                    .foregroundColor: MEASummaryToneColor.color(for: row.tone),
+                    .foregroundColor: row.tone.color,
                     .paragraphStyle: rowStyle,
                 ]))
             }
@@ -736,13 +736,11 @@ import ToolModuleKit
         case .value(let text):
             value = ToolWrappingLabel(string: text)
             // A status-toned value (File System State) is bold as well as
-            // coloured — the weight makes the state read at a glance.
-            let emphasized = row.tone != .standard
-            value.font = text.hasPrefix("0x")
-                ? ToolPanelFont.monospacedDigits()
-                : ToolPanelFont.body(weight: emphasized ? .bold : .regular)
+            // coloured — the weight makes the state read at a glance. Both come
+            // from the tone, which is also what the tree's detail draws by.
+            value.font = row.tone.font(for: text)
             value.isSelectable = true
-            value.textColor = MEASummaryToneColor.color(for: row.tone)
+            value.textColor = row.tone.color
         case .comingSoon:
             value = ToolWrappingLabel(string: "Coming soon")
             value.font = ToolPanelFont.body()
@@ -759,14 +757,16 @@ import ToolModuleKit
 
     /// Rebuilds the detail list from the focused row's own fields.
     /// A value that is a check that passed — "None" unmatched hashes — led by
-    /// the green done mark, in the text so it wraps and selects with it.
-    static func doneValue(_ text: String) -> NSAttributedString {
-        let font = ToolPanelFont.body()
+    /// the green done mark, in the text so it wraps and selects with it. The
+    /// text itself is drawn the way the Summary draws a status: bold, and in the
+    /// tone's colour, so a reader comparing the two halves finds one rendering.
+    static func doneValue(_ text: String, tone: ToolValueTone) -> NSAttributedString {
+        let font = tone.font(for: text)
         let result = NSMutableAttributedString()
         if let symbol = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: "Done")?
             .withSymbolConfiguration(
                 NSImage.SymbolConfiguration(pointSize: font.pointSize, weight: .regular)
-                    .applying(NSImage.SymbolConfiguration(paletteColors: [MEASummaryToneColor.color(for: .good)]))
+                    .applying(NSImage.SymbolConfiguration(paletteColors: [tone.color]))
             ) {
             let attachment = NSTextAttachment()
             attachment.image = symbol
@@ -777,7 +777,7 @@ import ToolModuleKit
             result.append(NSAttributedString(string: " "))
         }
         result.append(NSAttributedString(string: text))
-        result.addAttributes([.font: font, .foregroundColor: NSColor.labelColor],
+        result.addAttributes([.font: font, .foregroundColor: tone.color],
                              range: NSRange(location: 0, length: result.length))
         return result
     }
@@ -816,13 +816,15 @@ import ToolModuleKit
 
         for (field, label) in zip(focus.fields, labels) {
             let value = ToolWrappingLabel(string: field.value)
-            value.font = field.value.hasPrefix("0x")
-                ? ToolPanelFont.monospacedDigits()
-                : ToolPanelFont.body()
-            value.isSelectable = true
+            // A value that carries a status is drawn the way the Summary draws
+            // it — bold, and in the tone's colour — so the same fact reads the
+            // same in both halves of the panel.
             if field.tone == .good {
-                value.attributedStringValue = Self.doneValue(field.value)
+                value.attributedStringValue = Self.doneValue(field.value, tone: field.tone)
+            } else {
+                field.tone.draw(value, value: field.value)
             }
+            value.isSelectable = true
 
             let row = NSStackView(views: [label, value])
             row.orientation = .horizontal
@@ -936,20 +938,3 @@ extension MEAToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
 /// The tree, with no behaviour past NSOutlineView's — kept as its own subclass
 /// so a future context menu (like the UEFI tool's Fix Checksum) has a home.
 private final class MEOutlineView: NSOutlineView {}
-
-/// The colour a summary row's value is drawn in, by its `MEASummaryTone`.
-///
-/// The tones are the app's meanings, so the colours are the app's palette
-/// (`SemanticColors`) rather than three shades mixed here: "Configured" in this
-/// panel and a granted permission in the UEFI one are the same green because
-/// they are the same statement.
-private enum MEASummaryToneColor {
-    static func color(for tone: MEASummaryTone) -> NSColor {
-        switch tone {
-        case .standard: return SemanticColors.plain
-        case .good: return SemanticColors.good
-        case .caution: return SemanticColors.caution
-        case .bad: return SemanticColors.bad
-        }
-    }
-}

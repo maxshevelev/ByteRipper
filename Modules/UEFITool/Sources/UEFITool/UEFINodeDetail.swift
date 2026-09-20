@@ -1,25 +1,35 @@
 import Foundation
+import ToolModuleKit
 import UEFIImage
 
 /// One label/value row in the detail list.
 public struct UEFIDetailField: Equatable, Sendable {
     public var label: String
     public var value: String
+    /// What the value says, when it is a verdict: the view draws it bold and in
+    /// the colour the tone names (`ToolValueTone`). `.standard` is ordinary
+    /// text, which is what most fields are.
+    public var tone: ToolValueTone
+
     /// A value that reads as a problem — a checksum that does not check out.
-    /// The controller colours just this row's value with it; everything else
-    /// stays as it is.
-    public var isProblem: Bool
+    /// A `.bad` tone is what that is, so this asks the tone rather than keeping
+    /// a second flag that could disagree with it.
+    public var isProblem: Bool { tone == .bad }
 
     public init(_ label: String, _ value: String) {
         self.label = label
         self.value = value
-        self.isProblem = false
+        self.tone = .standard
+    }
+
+    public init(_ label: String, _ value: String, tone: ToolValueTone) {
+        self.label = label
+        self.value = value
+        self.tone = tone
     }
 
     public init(_ label: String, _ value: String, isProblem: Bool) {
-        self.label = label
-        self.value = value
-        self.isProblem = isProblem
+        self.init(label, value, tone: isProblem ? .bad : .standard)
     }
 }
 

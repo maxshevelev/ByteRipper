@@ -6,11 +6,12 @@ import ToolModuleKit
 public struct MEAField: Sendable, Equatable, Hashable {
     public var label: String
     public var value: String
-    /// What the value says, when it is a verdict: `.good` draws it with the
-    /// green done mark — a check that found nothing wrong.
-    public var tone: MEASummaryTone
+    /// What the value says, when it is a verdict: the panel draws it bold and in
+    /// the colour the tone names (`ToolValueTone`). `.standard` is ordinary
+    /// text, which is what most fields are.
+    public var tone: ToolValueTone
 
-    public init(_ label: String, _ value: String, tone: MEASummaryTone = .standard) {
+    public init(_ label: String, _ value: String, tone: ToolValueTone = .standard) {
         self.label = label
         self.value = value
         self.tone = tone
