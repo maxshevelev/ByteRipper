@@ -714,6 +714,12 @@ private struct ChecksumPass: Sendable {
         runMEAnalysis(id) { [weak self] in
             guard let self else { return }
             self.controller.openMERegion(id, settlingOn: self.mePath(covering: offset))
+        } onFailure: { [weak self] in
+            // The sub-tree is not coming, so the region node is the nearest
+            // thing above the caret the panel can still show. It covers the
+            // caret — that is how the reveal got here — so landing on it is the
+            // same answer one level up. Why it failed has already been said.
+            self?.showUEFIFocus(id)
         }
     }
 
@@ -728,13 +734,23 @@ private struct ChecksumPass: Sendable {
     /// does, and the start and finish are signalled through
     /// `controller.onMERegionLoading`. A cached analysis is instant, so it is
     /// presented and opened with no placeholder in between.
-    private func runMEAnalysis(_ id: NodeID, then completion: @escaping @MainActor () -> Void) {
+    ///
+    /// `onFailure` is for a caller with something to fall back on: the sub-tree
+    /// is not coming, and the region node is where it can still land. A landing
+    /// that a re-read or a later open superseded does not call it — that is not
+    /// a failure, and the newer analysis owns the outcome.
+    private func runMEAnalysis(
+        _ id: NodeID,
+        then completion: @escaping @MainActor () -> Void,
+        onFailure failed: (@MainActor () -> Void)? = nil
+    ) {
         guard let snapshot = try? host.snapshot() else {
             controller.say("Could not read the file.", asProblem: true)
             // The panel holds the region's row shut on the open that brought us
             // here, and has its "Loading…" clock on it besides. Nothing is going
             // to land, so the open is over and the row is released.
             controller.onMERegionLoading?(id, false)
+            failed?()
             return
         }
         let meRegion = treeProvider?.uefiTree()?.region(.me)
@@ -782,6 +798,7 @@ private struct ChecksumPass: Sendable {
                 completion()
             case .failure(let error):
                 self.controller.say(UEFIToolSession.describeME(error), asProblem: true)
+                failed?()
             }
         }
     }
@@ -1090,22 +1107,26 @@ private struct ChecksumPass: Sendable {
             guard let self else { return }
             self.controller.endBusy()
             guard let node = chain.last else { return }
-            // Whether the dump is wearing another tree's zones: with an ME focus
-            // set, it is. (The ME half above returns before this, so reaching
-            // here with one set means the sub-tree could not place the offset.)
-            let crossedHalves = self.meFocus != nil
-            self.focus = node.id
-            // The UEFI node is the focus now, so the ME half is dropped with it
-            // — otherwise the tree stays on the ME row it was revealing and the
-            // reveal lands nowhere.
-            self.meFocus = nil
-            // A reveal that crossed no halves leaves the dump where the user is
-            // standing, which is the point of this half staying quiet. One that
-            // did cannot: the zones on screen belong to the tree just left. The
-            // new node's own zone is safe to draw — it is the innermost one
-            // covering the caret, so it is already the byte under it.
-            self.show(publish: crossedHalves)
+            self.showUEFIFocus(node.id)
         }
+    }
+
+    /// Makes `id` the UEFI focus and shows it, dropping the ME half with it: the
+    /// two are halves of one selection, so only one is ever set — an ME focus
+    /// kept here would win in `refreshTheOutline` and the reveal would land
+    /// nowhere.
+    ///
+    /// The zone is published only when there was an ME focus to cross from. A
+    /// reveal that crossed no halves leaves the dump where the user is standing,
+    /// which is this half staying quiet; one that did cannot, because the zones
+    /// on screen belong to the tree just left. The node's own zone is safe to
+    /// draw either way — it is the answer the reveal settled on, so it is the
+    /// byte the caret is in.
+    private func showUEFIFocus(_ id: NodeID) {
+        let crossedHalves = meFocus != nil
+        focus = id
+        meFocus = nil
+        show(publish: crossedHalves)
     }
 
     /// The path of the innermost presented ME row whose range covers `offset`,

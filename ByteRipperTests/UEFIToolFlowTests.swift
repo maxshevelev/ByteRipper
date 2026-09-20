@@ -22,12 +22,24 @@ final class UEFIToolFlowTests: XCTestCase {
     private var window: NSWindow?
     private var defaultsName: String?
 
+    /// A data source whose database fetch fails the way an offline one does.
+    /// Installed for the whole class so no test here can reach the network: the
+    /// ME analyses these tests drive are handed a cached analysis instead
+    /// (`setCachedMEAnalysis`), and the one that is not expects the reading to
+    /// fail — the fixture's ME region is erased, so there is nothing to parse.
+    private struct OfflineDatabaseSource: MEADataSource {
+        func database() async throws -> MEADatabase {
+            throw MEADataError.offline(underlying: "test offline")
+        }
+    }
+
     override func setUp() {
         super.setUp()
         let isolated = isolatedDefaults(for: self)
         defaultsName = isolated.name
         ToolController.defaults = isolated.store
         ToolController.changeDelay = 0
+        UEFIToolSession.dataSource = OfflineDatabaseSource()
         // The test volume's rows include the erased padding that aligns its
         // free space, and these tests count and index rows with it there: the
         // tree lists it here, as a reader who turned it on would see it. The
@@ -39,6 +51,7 @@ final class UEFIToolFlowTests: XCTestCase {
 
     override func tearDown() {
         ToolPanelFont.defaults.removeObject(forKey: Self.showsEmptyPaddingKey)
+        UEFIToolSession.dataSource = MEAGitHubDataRepository()
         controller?.windowModel.pane1.close()
         for file in files { try? FileManager.default.removeItem(at: file) }
         if let defaultsName { discardIsolatedDefaults(defaultsName, ToolController.defaults) }
@@ -1051,6 +1064,30 @@ final class UEFIToolFlowTests: XCTestCase {
         }, "the reveal opened the region and settled on its row: \(outline.selectedRow)")
         XCTAssertEqual(pane.zones.focus, "1/0", "and published the row's own zone")
     }
+
+    /// When the reading fails there is no sub-tree to place the caret in, and
+    /// the nearest node above it is the region — so the reveal lands there
+    /// rather than nowhere. The fixture's ME region is erased, which is what
+    /// makes the reading fail; the failure itself is said under the tree.
+    func testARevealWhoseReadingFailsFallsBackToTheRegionNode() throws {
+        // No cached analysis, so the open has to read the region — and the
+        // region holds a manifest, which the analysis names out of the firmware
+        // database, which this suite's offline source refuses.
+        let controller = try open(UEFITestImage.intelImageWithReadableME())
+        let outline = try outline()
+        let pane = controller.windowModel.pane1
+        XCTAssertEqual(outline.numberOfRows, 2, "the descriptor and the region")
+
+        pane.moveCaret(to: 0x1000)
+        try session().revealNodeAtCaret()
+
+        XCTAssertTrue(pumpUntil(5) { outline.selectedRow == 1 },
+                      "the reveal fell back to the region node: \(outline.selectedRow)")
+        XCTAssertEqual(try node(atRow: outline.selectedRow).kind, .region,
+                       "the region stands for the bytes the caret is in")
+        XCTAssertEqual(outline.numberOfRows, 2,
+                       "and nothing was opened onto: the reading failed")
+    }
 }
 
 /// A 4 KiB FFSv2 volume with one sectioned file in it, built byte by byte — the
@@ -1190,6 +1227,17 @@ enum UEFITestImage {
         }
         put16(0x01, at: 0x48)               // …but ME, 0x1000–0x1FFF.
         put16(0x01, at: 0x4A)
+        return image
+    }
+
+    /// The same image with a real ME manifest in its region instead of the
+    /// erased bytes. Enough for the analysis to get as far as the firmware
+    /// database — which is where a machine that cannot reach it fails, and the
+    /// only failure this session can actually be driven into.
+    static func intelImageWithReadableME() -> [UInt8] {
+        var image = intelImageWithME()
+        let manifest = METestImage.manifestFile()
+        image.replaceSubrange(0x1000..<(0x1000 + manifest.count), with: manifest)
         return image
     }
 
