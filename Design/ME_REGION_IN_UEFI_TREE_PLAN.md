@@ -4,12 +4,18 @@ Graft the ME Region tree — the one the ME Analyzer module already builds —
 inside the UEFI Structure tree, reusing the parsing and presentation code that
 already exists, instead of re-parsing the ME bytes a second way.
 
-This doc is the analysis that led to the design, and the plan to build it. It
-is a plan, not a build: nothing here has been implemented yet.
+This doc is the analysis that led to the design, and the plan that was built
+from it. Sections 1–3 are the analysis and still stand as written; section 4
+is how it was built, and every step of it is in the tree; section 5's
+decisions are closed, with what they closed to.
 
-**Status.** Analysis complete. Design decided (graft `MEANode`s, not
-`UEFINode`s). Implementation not started. Two open decisions are flagged at
-the end.
+**Status.** Built. The graft lives in `Modules/UEFITool`: opening the ME
+region node runs the shared analysis and opens the region's row onto the
+`MEANode` sub-tree, which `Packages/MEPresentation` curates for both this
+panel and the ME Analyzer. The four places that cite this doc —
+`Modules/UEFITool/Package.swift`, `UEFIToolModule.swift`,
+`UEFIToolViewController.swift` and `ByteRipperTests/UEFIToolFlowTests.swift`
+— are pointing at shipped code.
 
 ---
 
@@ -266,6 +272,10 @@ shared package under `Packages/`" prescribes.
 
 ## 4. Implementation plan
 
+Written before the build, and kept as it was written: the steps below are the
+order the work was done in, and all six are in the tree. Read them as the
+record of how it was built rather than as instructions.
+
 ### Step 1 — Extract `Packages/MEPresentation`
 
 - Create `Packages/MEPresentation/Package.swift`
@@ -343,23 +353,25 @@ shared package under `Packages/`" prescribes.
 
 ### Verification artifact (optional, before or alongside Step 3)
 
-A byte-for-byte diff of the CPD / BPDT / FPT / IFWI structs — our Swift
-structs against UEFITool's `common/me.h` / `ffs.h` layouts — to confirm the
-upper levels agree. This is the "our upper levels should match UEFITool"
-claim made concrete. Produce it if we want the comparison to rest on verified
-layouts rather than the research summary.
+Not produced. The claim it was meant to make concrete — that our upper levels
+match UEFITool's layouts — rests on the research summary in section 1, not on
+a byte-for-byte struct diff against `common/me.h` / `ffs.h`. Nothing that
+shipped depends on the artifact, and the appendix below still lists the files
+such a diff would be made against.
 
 ---
 
-## 5. Open decisions
+## 5. Decisions, since closed
 
-1. **New package vs. fold into `MEFirmware`.** The plan assumes a separate
-   `MEPresentation` package (parsing vs. presentation are distinct concerns).
-   The alternative — adding the presentation model to `MEFirmware` — is fewer
-   packages but mixes the engine with its UI-facing tree. Decide before Step 1.
-2. **Detail rendering: shared helper vs. per-tool.** Whether the
-   `fields: [MEAField]` rendering is one shared component in `MEPresentation`
-   or duplicated in each tool. Decide during Step 1's move.
+1. **New package vs. fold into `MEFirmware`.** A separate
+   `Packages/MEPresentation` was extracted, as the plan assumed: the engine
+   stays in `MEFirmware`, and the tree both panels present lives one package
+   along, over the `MEANode` the plan settled on rather than `UEFINode`s.
+2. **Detail rendering: shared helper vs. per-tool.** Per-tool, over a shared
+   model. `MEAField` is `MEPresentation`'s, and each panel renders it its own
+   way — the ME Analyzer into its wrapping label rows, the UEFI Structure into
+   its `UEFIDetailField` rows, which is what lets a grafted node carry its
+   fields into a detail panel that was not built for it.
 
 ---
 
