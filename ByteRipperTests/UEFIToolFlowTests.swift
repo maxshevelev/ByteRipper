@@ -914,7 +914,18 @@ final class UEFIToolFlowTests: XCTestCase {
     /// region with a range, and nothing else — enough for a mappable row and an
     /// info leaf. Decoded the way the engine hands it, so no internal
     /// initializers are needed.
-    private func meAnalysisFixture() throws -> FirmwareAnalysis {
+    /// `emptyRegionNamed` adds an erased region beside the real one — a row
+    /// whose section holds nothing, which the panel draws grey. Off by default:
+    /// the other tests count this sub-tree's rows.
+    private func meAnalysisFixture(
+        emptyRegionNamed empty: String? = nil
+    ) throws -> FirmwareAnalysis {
+        var regions: [[String: Any]] = [
+            ["id": 0, "name": "FTPR", "offset": 0x1000, "size": 0x1000, "flags": 0x8000],
+        ]
+        if let empty {
+            regions.append(["id": 1, "name": empty, "offset": 0x2000, "size": 0, "flags": 0])
+        }
         let base: [String: Any] = [
             "family": "csme",
             "variant": "CSME",
@@ -924,8 +935,7 @@ final class UEFIToolFlowTests: XCTestCase {
             "sku": "",
             "platform": "",
             "sizeBytes": 0x2000,
-            "regions": [["id": 0, "name": "FTPR", "offset": 0x1000, "size": 0x1000,
-                         "flags": 0x8000]],
+            "regions": regions,
             "issues": [],
         ]
         return try JSONDecoder().decode(
@@ -943,10 +953,11 @@ final class UEFIToolFlowTests: XCTestCase {
     /// nothing) and presents the curated sub-tree as its children, so the open
     /// lands in the same step and the reveal that follows has already selected
     /// the first root.
-    private func openMERegion() throws -> NSOutlineView {
+    private func openMERegion(analysis: FirmwareAnalysis? = nil) throws -> NSOutlineView {
         let controller = try open(UEFITestImage.intelImageWithME())
+        let cached = try analysis ?? meAnalysisFixture()
         controller.windowModel.pane1.uefiState.setCachedMEAnalysis(
-            try meAnalysisFixture(), meRegion: 0x1000..<0x2000)
+            cached, meRegion: 0x1000..<0x2000)
         let outline = try outline()
         let meRow = try XCTUnwrap(
             (0..<outline.numberOfRows).first { (try? node(atRow: $0))?.kind == .region },
@@ -959,9 +970,9 @@ final class UEFIToolFlowTests: XCTestCase {
         let vc = try XCTUnwrap(session().viewController as? UEFIToolViewController)
         let item = outline.item(atRow: meRow)
         vc.outlineView(outline, shouldExpandItem: item)
-        let open = pumpUntil(5) { outline.numberOfRows == 5 }
+        let open = pumpUntil(5) { outline.numberOfRows >= 5 }
         XCTAssertTrue(open,
-                      "the ME region opened onto its three roots: \(outline.numberOfRows) rows")
+                      "the ME region opened onto its roots: \(outline.numberOfRows) rows")
         return outline
     }
 
@@ -1118,6 +1129,33 @@ final class UEFIToolFlowTests: XCTestCase {
                       "the zone went with the row it stood for: "
                       + "\(pane.zones.zones.map(\.id))")
         XCTAssertEqual(pane.zones.focus, nil, "and nothing took its place")
+    }
+
+    /// A row whose section holds nothing reads grey — the whole row, every
+    /// column, the way the ME Analyzer draws it. Setting it in the cell is the
+    /// only way the model's `isEmptySection` can reach this panel:
+    /// `ToolRowMarks` carries a problem, badges and a tooltip, and no colour.
+    func testAnEmptyMESectionReadsGrey() throws {
+        let outline = try openMERegion(analysis: meAnalysisFixture(emptyRegionNamed: "MFS"))
+
+        let regionsRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Regions (FPT)" })
+        outline.expandItem(outline.item(atRow: regionsRow))
+        window?.layoutIfNeeded()
+
+        func nameColor(ofRowTitled title: String) throws -> NSColor? {
+            let row = try XCTUnwrap(
+                (0..<outline.numberOfRows).first { titleText(outline, row: $0) == title },
+                "the row titled \(title)")
+            let cell = try XCTUnwrap(
+                outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)
+            return cell.textField?.textColor
+        }
+
+        XCTAssertEqual(try nameColor(ofRowTitled: "MFS"), .secondaryLabelColor,
+                       "a section holding nothing is a place in the layout, not one to read")
+        XCTAssertEqual(try nameColor(ofRowTitled: "FTPR"), .labelColor,
+                       "and one that holds something reads normally")
     }
 }
 

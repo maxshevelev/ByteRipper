@@ -1270,6 +1270,10 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
                                        badges: identifier == Column.name)
             cell.textField?.stringValue = identifier == Column.name ? "Loading…" : ""
             cell.textField?.font = ToolPanelFont.body()
+            // The colour too: cells share one pool per column, so a cell that
+            // was grey for an empty ME section would hand its grey on to a
+            // placeholder that has nothing to do with it.
+            cell.textField?.textColor = .labelColor
             if identifier == Column.name {
                 ToolPanelTable.dress(cell, with: .none)
             }
@@ -1284,6 +1288,14 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
                                            badges: identifier == Column.name)
             cell.textField?.stringValue = text(for: node, in: identifier)
             cell.textField?.font = ToolPanelFont.body()
+            // A section that holds nothing reads grey — the whole row, name
+            // included, every column: it is a place in the layout rather than
+            // something to go and look at. The ME Analyzer draws it this way,
+            // and greying the value alone left the row reading as loud as a
+            // real one, with the quiet half looking like a rendering slip.
+            cell.textField?.textColor = node.isEmptySection
+                ? .secondaryLabelColor
+                : .labelColor
             // The Name column wears the row's marks, the way a UEFI row does —
             // the rail and badges the ME node was built with.
             if identifier == Column.name {
@@ -1301,6 +1313,10 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // Set per row, not once when the cell is made: a reused cell carries
         // the font it was made with, and the zoom moves under it.
         cell.textField?.font = ToolPanelFont.body()
+        // And back to the label colour, for the same reason: a UEFI row is
+        // never the grey an empty ME section wears, and the cell this row was
+        // handed may have been one.
+        cell.textField?.textColor = .labelColor
         // The Name column wears the row's icons: its problem, with what is
         // wrong under the pointer, and its badges (`Design/ROW_MARKS.md`).
         if identifier == Column.name {
