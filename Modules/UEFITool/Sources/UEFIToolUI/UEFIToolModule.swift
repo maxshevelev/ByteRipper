@@ -197,6 +197,9 @@ private struct ChecksumPass: Sendable {
         controller.onOpenRowsChanged = { [weak self] in self?.rememberOpenRows() }
         controller.onSelectME = { [weak self] path in self?.selectME(path) }
         controller.onOpenMERegion = { [weak self] id in self?.openMERegion(id) }
+        controller.onMERegionLoading = { [weak self] id, loading in
+            self?.meRegionLoading(id, loading: loading)
+        }
     }
 
     public var viewController: NSViewController { controller }
@@ -628,7 +631,7 @@ private struct ChecksumPass: Sendable {
     /// The node is not expandable in the UEFI tree, so this is the only thing
     /// that opens it.
     private func openMERegion(_ id: NodeID) {
-        runMEAnalysis { [weak self] in
+        runMEAnalysis(id) { [weak self] in
             self?.controller.openMERegion(id)
         }
     }
@@ -638,7 +641,13 @@ private struct ChecksumPass: Sendable {
     /// present the sub-tree when it lands. The reading runs off the main actor
     /// behind an indeterminate bar, because `MEFirmwareAnalyzer.analyze`
     /// reports no fractions of its own.
-    private func runMEAnalysis(then completion: @escaping @MainActor () -> Void) {
+    ///
+    /// `id` is the region node the panel opened: while a fresh analysis runs,
+    /// the panel shows a "Loading…" row for it, the way a slow UEFI branch
+    /// does, and the start and finish are signalled through
+    /// `controller.onMERegionLoading`. A cached analysis is instant, so it is
+    /// presented and opened with no placeholder in between.
+    private func runMEAnalysis(_ id: NodeID, then completion: @escaping @MainActor () -> Void) {
         guard let snapshot = try? host.snapshot() else {
             controller.say("Could not read the file.", asProblem: true)
             return
@@ -647,9 +656,13 @@ private struct ChecksumPass: Sendable {
         let provider = analysisProvider
         // A cached analysis is instant: the pane's holder only drops it when an
         // edit lands inside the region, so a re-open is a re-present, not a
-        // second full analysis of data nothing changed.
+        // second full analysis of data nothing changed. The "Loading…" clock the
+        // panel started on the open is stopped here, or its placeholder task
+        // would fire a moment later and put a row up for an analysis that is
+        // already in hand.
         if let cached = provider?.cachedMEAnalysis() {
             presentME(cached)
+            controller.onMERegionLoading?(id, false)
             completion()
             return
         }
@@ -658,11 +671,17 @@ private struct ChecksumPass: Sendable {
         let analyzer = self.analyzer
         controller.say("Reading ME…")
         controller.showBusy()
+        // The analysis is about to run: the region's row earns a "Loading…" row
+        // if it is slow enough, the way a UEFI branch does.
+        controller.onMERegionLoading?(id, true)
         meTask = Task { [weak self] in
             let result = await UEFIToolSession.analyzeME(snapshot, analyzer: analyzer, meRegion: meRegion)
             guard let self, self.generation == generation else { return }
             self.meTask = nil
             self.controller.endBusy()
+            // The analysis has landed — or failed — either way the "Loading…"
+            // row gives way to whatever the row holds now.
+            self.controller.onMERegionLoading?(id, false)
             switch result {
             case .success(let analysis):
                 self.controller.say("")
@@ -683,6 +702,17 @@ private struct ChecksumPass: Sendable {
             meFocus = nil
         }
         show(publish: meFocus != nil)
+    }
+
+    /// The region's analysis started or finished: forward it to the panel,
+    /// which shows a "Loading…" row for the region while a fresh analysis runs
+    /// and opens the row onto the sub-tree when it lands.
+    private func meRegionLoading(_ id: NodeID, loading: Bool) {
+        if loading {
+            controller.meRegionOpening(id)
+        } else {
+            controller.meRegionLoading(id)
+        }
     }
 
     /// Off the main actor: materialise just the ME region (when the shared tree

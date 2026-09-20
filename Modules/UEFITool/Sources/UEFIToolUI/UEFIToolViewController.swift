@@ -46,6 +46,10 @@ import UEFITool
     /// cache) and open the row on the sub-tree it presents. The node is not
     /// expandable in the UEFI tree, so this is the only thing that opens it.
     var onOpenMERegion: ((NodeID) -> Void)?
+    /// The ME analysis for the region node at `id` started or finished: the
+    /// row shows a "Loading…" row while it runs, the way a slow UEFI branch
+    /// does. `loading` is true when the analysis starts, false when it lands.
+    var onMERegionLoading: ((NodeID, Bool) -> Void)?
 
     /// The tree as one value, for everything that reads it rather than walks
     /// it: the summary line, the title fold, the detail panel. It is the
@@ -111,6 +115,12 @@ import UEFITool
     /// outline re-selects on a show and the detail and zone read back. Nil when
     /// the focus is a UEFI node or nothing.
     private var meFocus: [Int]?
+    /// The ME region's analysis, in flight the moment the reader opened the
+    /// row until it lands — the ME half of `opening`, kept apart because the
+    /// analysis is run by the session rather than read by the tree. The row
+    /// stays shut while it is in flight, and earns a "Loading…" row if it is
+    /// slow enough, the way a UEFI branch does.
+    private var meOpening: NodeID?
     /// Branches the reader has asked for and the tree has not answered yet,
     /// with the moment we asked. The row stays *shut* while one is in flight:
     /// opening it onto a "Loading…" row that is replaced a few milliseconds
@@ -950,8 +960,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         guard let tree, let node = tree.node(id) else { return [] }
         // The ME region node is not expandable in the UEFI tree, but it opens
         // the ME sub-tree: its children are the presented ME roots, not a raw
-        // area scan. Empty until the analysis has run (or been cached).
+        // area scan. Empty until the analysis has run (or been cached) — and,
+        // while a fresh analysis is slow enough to have earned one, the single
+        // "Loading…" row that stands in for it, the way a UEFI branch shows.
         if isMERegion(node) {
+            if showingPlaceholder.contains(id) { return [placeholder(under: id)] }
             return meRoots.map { meRow($0.path) }
         }
         if !node.children.isEmpty {
@@ -987,8 +1000,14 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // onto, so the first ask starts the analysis and holds the row shut;
         // once the roots are in hand the same ask lets the open through, or the
         // panel's `expandItem` would re-ask and re-start the analysis forever.
+        //
+        // The "Loading…" row is the one exception to holding the row shut: it
+        // is put up by the panel's own `expandItem`, and refusing that ask would
+        // refuse the panel's attempt to show it.
         if isMERegion(node) {
             guard meRoots.isEmpty else { return true }
+            guard !showingPlaceholder.contains(row.id) else { return true }
+            meRegionOpening(row.id)
             onOpenMERegion?(row.id)
             return false
         }
@@ -1030,6 +1049,41 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         enqueue(animated: true) { [weak self] in
             guard let self, let item = self.outlineItem(for: id) else { return }
             self.outline.reloadItem(item, reloadChildren: true)
+        }
+    }
+
+    /// The ME region's analysis is about to run: hold the row shut and — only
+    /// if it turns out to be slow — put a "Loading…" row up, the way
+    /// `beginOpening` does for a UEFI branch. The reading itself is the
+    /// session's (`onOpenMERegion`), so this only keeps the placeholder's clock.
+    func meRegionOpening(_ id: NodeID) {
+        guard meOpening == nil else { return }
+        meOpening = id
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(
+                nanoseconds: UInt64(Self.placeholderDelay * 1_000_000_000)
+            )
+            guard let self, self.meOpening == id else { return }
+            self.showingPlaceholder.insert(id)
+            self.expandRow(id)
+        }
+    }
+
+    /// The ME region's analysis has landed — or failed. The row's placeholder
+    /// gives way: a row that never earned one simply opens now (the open
+    /// `openMERegion(_:)` makes, a moment later); a row that did has its
+    /// "Loading…" row replaced by the sub-tree, or shut again on a failure.
+    func meRegionLoading(_ id: NodeID) {
+        guard meOpening == id else { return }
+        meOpening = nil
+        guard showingPlaceholder.remove(id) != nil else { return }
+        enqueue(animated: true) { [weak self] in
+            guard let self, let item = self.outlineItem(for: id) else { return }
+            if self.meRoots.isEmpty {
+                self.outline.collapseItem(item)
+            } else {
+                self.outline.reloadItem(item, reloadChildren: true)
+            }
         }
     }
 
