@@ -756,32 +756,6 @@ import ToolModuleKit
     }
 
     /// Rebuilds the detail list from the focused row's own fields.
-    /// A value that is a check that passed — "None" unmatched hashes — led by
-    /// the green done mark, in the text so it wraps and selects with it. The
-    /// text itself is drawn the way the Summary draws a status: bold, and in the
-    /// tone's colour, so a reader comparing the two halves finds one rendering.
-    static func doneValue(_ text: String, tone: ToolValueTone) -> NSAttributedString {
-        let font = tone.font(for: text)
-        let result = NSMutableAttributedString()
-        if let symbol = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: "Done")?
-            .withSymbolConfiguration(
-                NSImage.SymbolConfiguration(pointSize: font.pointSize, weight: .regular)
-                    .applying(NSImage.SymbolConfiguration(paletteColors: [tone.color]))
-            ) {
-            let attachment = NSTextAttachment()
-            attachment.image = symbol
-            // Sat on the text's baseline, not above it.
-            attachment.bounds = NSRect(x: 0, y: font.descender, width: symbol.size.width,
-                                       height: symbol.size.height)
-            result.append(NSAttributedString(attachment: attachment))
-            result.append(NSAttributedString(string: " "))
-        }
-        result.append(NSAttributedString(string: text))
-        result.addAttributes([.font: font, .foregroundColor: tone.color],
-                             range: NSRange(location: 0, length: result.length))
-        return result
-    }
-
     private func renderDetail(_ focus: MEANode?) {
         guard let focus, !focus.fields.isEmpty else {
             detail.showPlaceholder(focus == nil
@@ -816,14 +790,14 @@ import ToolModuleKit
 
         for (field, label) in zip(focus.fields, labels) {
             let value = ToolWrappingLabel(string: field.value)
-            // A value that carries a status is drawn the way the Summary draws
-            // it — bold, and in the tone's colour — so the same fact reads the
-            // same in both halves of the panel.
-            if field.tone == .good {
-                value.attributedStringValue = Self.doneValue(field.value, tone: field.tone)
-            } else {
-                field.tone.draw(value, value: field.value)
-            }
+            // One rendering for a value that carries a status, wherever it is
+            // drawn: bold, in the tone's colour, and nothing besides. This is
+            // the same call the UEFI Structure's detail makes for the same
+            // field, and the same font and colour the Summary's row asks for —
+            // so the three cannot come apart. A green done mark added here for
+            // one tone was exactly that: a row that read differently in this
+            // panel than in the other two.
+            field.tone.draw(value, value: field.value)
             value.isSelectable = true
 
             let row = NSStackView(views: [label, value])

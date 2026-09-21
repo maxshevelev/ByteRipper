@@ -924,12 +924,12 @@ final class MEAToolFlowTests: XCTestCase {
             from: JSONSerialization.data(withJSONObject: base))
     }
 
-    /// The Full Tree's detail draws a status the way the Summary tab draws it:
-    /// bold, in the app's colour for that status, and — this panel's own
-    /// rendering for a check that passed — led by the green done mark. Both
-    /// halves read the tone from the same shared type, which is what keeps them
-    /// saying the same thing about the same field.
-    func testTheDetailDrawsAStatusValueBoldAndColoured() throws {
+    /// One status, one rendering. `ME -> Firmware -> File System State` reads
+    /// the same in this panel's detail, in the UEFI Structure's detail and the
+    /// Summary's row: bold, in the app's colour for the status, and nothing
+    /// besides — a green done mark on one of them is a row that reads
+    /// differently from the other two, which is what this says must not happen.
+    func testTheDetailDrawsAStatusValueLikeTheOtherPanels() throws {
         _ = try openWithoutWaiting(METestImage.manifestFile(),
                                    cachedAnalysis: try analysisWithAFileSystemState())
         _ = try waitForDisplay(of: session())
@@ -942,22 +942,17 @@ final class MEAToolFlowTests: XCTestCase {
 
         let panel = try panel()
         let shown = descendants(of: panel, NSTextField.self).filter {
-            $0.attributedStringValue.string.contains("Configured")
+            $0.stringValue.contains("Configured")
         }
-        // The done mark is an attachment ahead of the word, and only the tree's
-        // detail draws one — which is what says this is the row being read.
-        let value = try XCTUnwrap(
-            shown.first { $0.attributedStringValue.string.contains("\u{FFFC}") },
-            "the detail leads the state with its done mark: \(shown.map(\.stringValue))")
-
-        let text = value.attributedStringValue
-        let index = (text.string as NSString).range(of: "Configured").location
-        XCTAssertNotEqual(index, NSNotFound, "the word is in the row: \(text.string)")
-        XCTAssertEqual(text.attribute(.foregroundColor, at: index, effectiveRange: nil) as? NSColor,
-                       SemanticColors.good, "a settled state reads in the app's green")
-        let font = text.attribute(.font, at: index, effectiveRange: nil) as? NSFont
-        XCTAssertEqual(font?.fontDescriptor.symbolicTraits.contains(.bold), true,
-                       "and bold, so the state reads at a glance")
+        XCTAssertFalse(shown.isEmpty, "the File System State is on screen")
+        for value in shown {
+            XCTAssertEqual(value.stringValue, "Configured",
+                           "the row says its value and nothing else")
+            XCTAssertEqual(value.textColor, SemanticColors.good,
+                           "a settled state reads in the app's green")
+            XCTAssertEqual(value.font?.fontDescriptor.symbolicTraits.contains(.bold), true,
+                           "and bold, so the state reads at a glance")
+        }
     }
 }
 
