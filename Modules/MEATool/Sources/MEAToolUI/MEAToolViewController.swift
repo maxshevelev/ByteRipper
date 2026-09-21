@@ -735,12 +735,11 @@ import ToolModuleKit
         switch row.value {
         case .value(let text):
             value = ToolWrappingLabel(string: text)
-            // A status-toned value (File System State) is bold as well as
-            // coloured — the weight makes the state read at a glance. Both come
-            // from the tone, which is also what the tree's detail draws by.
-            value.font = row.tone.font(for: text)
+            // A status-toned value is bold as well as coloured, and a passed
+            // check carries its tick — all of it from the tone, which is the
+            // same rendering the tree's detail and the UEFI Structure's use.
+            value.attributedStringValue = row.tone.attributedValue(text)
             value.isSelectable = true
-            value.textColor = row.tone.color
         case .comingSoon:
             value = ToolWrappingLabel(string: "Coming soon")
             value.font = ToolPanelFont.body()
@@ -791,12 +790,11 @@ import ToolModuleKit
         for (field, label) in zip(focus.fields, labels) {
             let value = ToolWrappingLabel(string: field.value)
             // One rendering for a value that carries a status, wherever it is
-            // drawn: bold, in the tone's colour, and nothing besides. This is
-            // the same call the UEFI Structure's detail makes for the same
-            // field, and the same font and colour the Summary's row asks for —
-            // so the three cannot come apart. A green done mark added here for
-            // one tone was exactly that: a row that read differently in this
-            // panel than in the other two.
+            // drawn — bold, in the tone's colour, and led by the tick when the
+            // status is a passed check. This is the same call the UEFI
+            // Structure's detail makes for the same field, and the Summary's
+            // row asks the tone for the same string, so the three cannot come
+            // apart.
             field.tone.draw(value, value: field.value)
             value.isSelectable = true
 

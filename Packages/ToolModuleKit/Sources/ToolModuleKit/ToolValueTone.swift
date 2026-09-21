@@ -51,10 +51,43 @@ public enum ToolValueTone: Sendable, Equatable, Hashable {
             : ToolPanelFont.body(weight: isStatus ? .bold : .regular)
     }
 
-    /// Draws `field` the way the app draws a labelled value — the font and the
-    /// colour, in the one place both panels ask for.
+    /// The value as it is drawn: the text itself, and — ahead of it, for a tone
+    /// that is a passed check — the tick that says so.
+    ///
+    /// In the attributed string rather than in a view beside the label, so the
+    /// mark wraps and selects with what it marks: a value long enough to wrap
+    /// carries its tick on the first line, and copying the row copies both.
+    ///
+    /// The tick and not a filled disc: at a label's size the disc's own tick is
+    /// a few pixels across and the mark reads as a green dot on the row rather
+    /// than as "this checks out".
+    public func attributedValue(_ value: String) -> NSAttributedString {
+        let font = font(for: value)
+        let result = NSMutableAttributedString()
+        if self == .good, let tick = NSImage(systemSymbolName: "checkmark",
+                                             accessibilityDescription: "Done")?
+            .withSymbolConfiguration(
+                NSImage.SymbolConfiguration(pointSize: font.pointSize, weight: .regular)
+                    .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
+            ) {
+            let attachment = NSTextAttachment()
+            attachment.image = tick
+            // Sat on the text's baseline, not above it.
+            attachment.bounds = NSRect(x: 0, y: font.descender, width: tick.size.width,
+                                       height: tick.size.height)
+            result.append(NSAttributedString(attachment: attachment))
+            result.append(NSAttributedString(string: " "))
+        }
+        result.append(NSAttributedString(string: value))
+        result.addAttributes([.font: font, .foregroundColor: color],
+                             range: NSRange(location: 0, length: result.length))
+        return result
+    }
+
+    /// Draws `field` the way the app draws a labelled value — the font, the
+    /// colour, and the mark a passed check carries. The one call every panel
+    /// makes, so the same fact cannot read two ways in two of them.
     public func draw(_ field: NSTextField, value: String) {
-        field.font = font(for: value)
-        field.textColor = color
+        field.attributedStringValue = attributedValue(value)
     }
 }

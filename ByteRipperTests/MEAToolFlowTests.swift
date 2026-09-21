@@ -902,10 +902,10 @@ final class MEAToolFlowTests: XCTestCase {
                        "and the new one made the panel read the database again")
     }
 
-    /// An analysis whose identity carries a File System State — the one field in
-    /// its list that is a status rather than just a value, and so the one drawn
-    /// by a tone.
-    private func analysisWithAFileSystemState() throws -> FirmwareAnalysis {
+    /// An analysis whose two status-bearing fields are both a passed check: the
+    /// identity's File System State — a volume that is fully set up — and the
+    /// metadata table's Unmatched Hashes, which every module accounted for.
+    private func analysisWithStatuses() throws -> FirmwareAnalysis {
         let base: [String: Any] = [
             "family": "csme",
             "variant": "CSME",
@@ -918,41 +918,60 @@ final class MEAToolFlowTests: XCTestCase {
             "regions": [],
             "issues": [],
             "mfsState": "configured",
+            "rbePmMetadata": [[
+                "id": 0, "variant": "r2", "unknown0": 0, "deviceID": 0, "vendorID": 0x8086,
+                "sizeUncompressed": 0x1000, "sizeCompressed": 0x80, "hash": "CD",
+            ]],
+            "unmatchedMetadataHashes": [],
         ]
         return try JSONDecoder().decode(
             FirmwareAnalysis.self,
             from: JSONSerialization.data(withJSONObject: base))
     }
 
-    /// One status, one rendering. `ME -> Firmware -> File System State` reads
-    /// the same in this panel's detail, in the UEFI Structure's detail and the
-    /// Summary's row: bold, in the app's colour for the status, and nothing
-    /// besides — a green done mark on one of them is a row that reads
-    /// differently from the other two, which is what this says must not happen.
-    func testTheDetailDrawsAStatusValueLikeTheOtherPanels() throws {
+    /// One status, one rendering — and the same one for each field that carries
+    /// a status. `ME -> Firmware -> File System State` reads the same in this
+    /// panel's detail, in the UEFI Structure's detail and in the Summary's row,
+    /// and `Unmatched Hashes` reads the same wherever it appears: bold, in the
+    /// app's colour for the status, and led by the tick a passed check carries.
+    /// That mark is the tone's own, which is what makes the three agree.
+    func testTheDetailDrawsStatusValuesLikeTheOtherPanels() throws {
         _ = try openWithoutWaiting(METestImage.manifestFile(),
-                                   cachedAnalysis: try analysisWithAFileSystemState())
+                                   cachedAnalysis: try analysisWithStatuses())
         _ = try waitForDisplay(of: session())
         try showFullTree()
         let tree = try outline()
-
-        let firmwareRow = try XCTUnwrap(row(ofTitle: "Firmware", in: tree))
-        tree.selectRowIndexes(IndexSet(integer: firmwareRow), byExtendingSelection: false)
-        window?.layoutIfNeeded()
-
         let panel = try panel()
-        let shown = descendants(of: panel, NSTextField.self).filter {
-            $0.stringValue.contains("Configured")
+
+        /// The rows reading exactly `value` behind its tick — the whole string,
+        /// so a row drawn without the mark is a failure to find rather than a
+        /// quietly passing assertion.
+        func assertDrawn(_ value: String, under rowTitle: String) throws {
+            let index = try XCTUnwrap(row(ofTitle: rowTitle, in: tree),
+                                      "the \(rowTitle) row")
+            tree.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+            window?.layoutIfNeeded()
+
+            let shown = descendants(of: panel, NSTextField.self).filter {
+                $0.attributedStringValue.string == "\u{FFFC} " + value
+            }
+            XCTAssertFalse(shown.isEmpty,
+                           "“\(value)” is on screen behind its tick: "
+                           + "\(descendants(of: panel, NSTextField.self).map(\.stringValue))")
+            for field in shown {
+                let text = field.attributedStringValue
+                let at = (text.string as NSString).range(of: value).location
+                XCTAssertEqual(
+                    text.attribute(.foregroundColor, at: at, effectiveRange: nil) as? NSColor,
+                    SemanticColors.good, "a passed check reads in the app's green")
+                let font = text.attribute(.font, at: at, effectiveRange: nil) as? NSFont
+                XCTAssertEqual(font?.fontDescriptor.symbolicTraits.contains(.bold), true,
+                               "and bold, so it reads at a glance")
+            }
         }
-        XCTAssertFalse(shown.isEmpty, "the File System State is on screen")
-        for value in shown {
-            XCTAssertEqual(value.stringValue, "Configured",
-                           "the row says its value and nothing else")
-            XCTAssertEqual(value.textColor, SemanticColors.good,
-                           "a settled state reads in the app's green")
-            XCTAssertEqual(value.font?.fontDescriptor.symbolicTraits.contains(.bold), true,
-                           "and bold, so the state reads at a glance")
-        }
+
+        try assertDrawn("Configured", under: "Firmware")
+        try assertDrawn("None", under: "RBE/PM Metadata")
     }
 }
 

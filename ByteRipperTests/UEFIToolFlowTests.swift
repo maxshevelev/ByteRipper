@@ -1400,11 +1400,18 @@ final class UEFIToolFlowTests: XCTestCase {
         window?.layoutIfNeeded()
 
         let value = try XCTUnwrap(
-            descendants(of: panel, NSTextField.self).first { $0.stringValue == "Configured" },
+            descendants(of: panel, NSTextField.self).first {
+                $0.attributedStringValue.string.contains("Configured")
+            },
             "the detail shows the File System State")
-        XCTAssertEqual(value.textColor, SemanticColors.good,
-                       "a settled state reads in the app's green")
-        XCTAssertEqual(value.font?.fontDescriptor.symbolicTraits.contains(.bold), true,
+        let text = value.attributedStringValue
+        XCTAssertTrue(text.string.contains("\u{FFFC}"),
+                      "led by the tick a passed check carries: \(text.string)")
+        let index = (text.string as NSString).range(of: "Configured").location
+        XCTAssertEqual(text.attribute(.foregroundColor, at: index, effectiveRange: nil) as? NSColor,
+                       SemanticColors.good, "a settled state reads in the app's green")
+        let font = text.attribute(.font, at: index, effectiveRange: nil) as? NSFont
+        XCTAssertEqual(font?.fontDescriptor.symbolicTraits.contains(.bold), true,
                        "and bold, so the state reads at a glance")
     }
 
