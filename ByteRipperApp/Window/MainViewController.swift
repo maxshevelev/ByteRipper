@@ -1462,6 +1462,15 @@ final class MainViewController: NSViewController {
     }
 
     private func unwireComparison() {
+        // "differing 25.0%" is the ending comparison's readout, and a pane's
+        // view outlives the mode it was shown in — it is reused when the panes
+        // are rebuilt (§3.3), so a pane left on its own would keep a share of
+        // differences it no longer has anything to differ from. A comparison
+        // that is only being rebuilt puts its own text straight back
+        // (`ComparisonView.refreshComparisonInfo`, run from the initialiser).
+        for view in paneViews.values {
+            view.comparisonInfo = ""
+        }
         windowModel.pane1.companion = nil
         windowModel.pane2.companion = nil
         windowModel.pane1.onEdit = nil

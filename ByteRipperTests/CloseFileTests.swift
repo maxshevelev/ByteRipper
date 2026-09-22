@@ -115,6 +115,50 @@ final class CloseFileTests: XCTestCase {
                       "with no panes open, Cmd+W must route to closing the window")
     }
 
+    // MARK: - What the closed pane takes with it
+
+    /// The status bar's "differing N%" belongs to the comparison (§14.4), so
+    /// closing one of the two panes has to take it away: the pane left behind
+    /// has nothing to differ from. Its view is the very one the comparison
+    /// wrote the share into and is reused as the mode changes (§3.3), so the
+    /// readout has to be cleared rather than merely left unwritten.
+    func testClosingOnePaneTakesTheDifferingShareWithIt() throws {
+        var other = [UInt8](repeating: 0x11, count: 64)
+        other[8] = 0x22
+        let urlA = try tempFile([UInt8](repeating: 0x11, count: 64))
+        let urlB = try tempFile(other)
+        let controller = MainViewController()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.contentViewController = controller
+        window.setContentSize(NSSize(width: 900, height: 600))
+        window.makeKeyAndOrderFront(nil)
+        try controller.windowModel.pane1.open(url: urlA)
+        try controller.windowModel.pane2.open(url: urlB)
+        controller.apply(mode: .comparison)
+        window.layoutIfNeeded()
+        defer {
+            controller.windowModel.pane1.close()
+            controller.windowModel.pane2.close()
+            try? FileManager.default.removeItem(at: urlA)
+            try? FileManager.default.removeItem(at: urlB)
+        }
+
+        let compared = descendants(of: window.contentView!, FilePaneView.self)
+        XCTAssertTrue(pumpUntil(5) { compared.contains { $0.comparisonInfo.contains("differing") } },
+                      "precondition: the comparison reports a share of differing bytes")
+
+        controller.closePane(at: 1)
+        window.layoutIfNeeded()
+
+        XCTAssertEqual(controller.mode, .singleFile)
+        XCTAssertEqual(descendants(of: window.contentView!, FilePaneView.self).map(\.comparisonInfo), [""],
+                       "the pane left on its own must report no share of differences")
+        XCTAssertFalse(descendants(of: window.contentView!, StatusLabel.self)
+            .contains { $0.stringValue.contains("differing") },
+                       "and its status bar must not still read one")
+    }
+
     // MARK: - Answering for the whole tab (what Quit asks)
 
     /// Quitting asks each window what closing it would ask, and waits for the
