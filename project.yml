@@ -208,8 +208,8 @@ targets:
         # and this one never changes.
         PRODUCT_BUNDLE_IDENTIFIER: dev.maxik.DumpCompare
         PRODUCT_NAME: ByteRipper
-        MARKETING_VERSION: "0.8.3"
-        CURRENT_PROJECT_VERSION: "15"
+        MARKETING_VERSION: "0.8.4"
+        CURRENT_PROJECT_VERSION: "16"
         # The icon lives in Assets.xcassets; Design/render-appicon.sh regenerates
         # its images from Design/AppIcon.swift.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

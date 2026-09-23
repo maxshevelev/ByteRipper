@@ -11,7 +11,7 @@ Beside the dump there is a **tool panel**: the same image read as the structure 
 
 ## Download
 
-[**ByteRipper 0.8.3**](https://github.com/maxshevelev/ByteRipper/releases/latest) — a universal `.dmg` (Apple silicon and Intel), macOS 14 or later.
+[**ByteRipper 0.8.4**](https://github.com/maxshevelev/ByteRipper/releases/latest) — a universal `.dmg` (Apple silicon and Intel), macOS 14 or later.
 
 The build is ad-hoc signed and not notarized, so Gatekeeper stops the first launch: right-click the app and choose **Open**, or clear the quarantine flag once.
 
@@ -28,6 +28,7 @@ The workflows the app is shaped around:
 - **Keeping your place in it.** ⌘D marks the caret's row and offers it a name; the mark is a purple arrow in the Offset column and in the minimap's margin, so the header, the table and the region under investigation stay findable while you work between them.
 - **Patching by hand.** ⌘L to the offset, type the hex digits, the changed bytes turn red until saved. Confirmations guard the operations that shift data.
 - **Two chips, one image.** Plenty of boards split the BIOS region across two SPI flashes. Read both, **File ▸ Append File…** to join them in order, work on the whole image as one dump — compare, search, patch — then **Save All as Separate Files…** to split it back at the same seam and flash each half.
+- **Taking a part out, and putting it back.** A compressed section, a zone, any node of the structure tree opens as a **panel over the dump it came out of** — the parent still showing above it, the panel folded down into a pill along the window's bottom edge when you are done with it. Edit the decompressed body, **Update in Parent**, fold the panel away, and the change is in the dump behind it, as one undo step.
 - **More than one comparison at a time.** A board rarely gives you one question. ⌘T opens another tab — its own two panes, its own bookmarks, its own comparison — so the donor pair stays open while you look at the second chip, and ⌃Tab goes back.
 - **Chip-sized files, not toy files.** Files are read in chunks and never loaded whole, so a 16 MB SPI dump — or a 1 GB image — opens immediately and stays within a low double-digit megabyte working set.
 
@@ -48,6 +49,8 @@ The flash image as the tree it actually is: the Intel descriptor and each region
 - **The tree is read lazily.** Opening the panel on a 32 MB image is instant: the top level is parsed, and a branch is read when it is opened. One tree serves all three tools and survives switching between them, so the FIT table and the ME Analyzer start from what has already been read rather than parsing the image again.
 - **Checksums are checked as the tree is built**, and a wrong one is flagged on the node that carries it — a volume header, an FFS file, an NVRAM record. **Fix Checksum** writes the value the format asks for, as one undoable edit.
 - **Addresses are the ones the CPU sees.** The image's own reset vector anchors the mapping, so a node's `Address` is where that byte is in the processor's address space, not merely its offset in the file.
+- **The ME region is part of the tree.** Opening its node runs the same analysis the ME Analyzer runs and grafts that reading in place — the partitions, their directories, the volumes and the files in them — rather than parsing the region a second way. It is read when the node is opened, with a Loading row while it runs, and a region that cannot be analysed is still the region: the node stays, holding what the descriptor says about it.
+- **Any node opens on its own.** *Open “PEI Core”* takes the whole node, *Open Body of…* its payload, and a compressed section offers **Open Decompressed Body** — decoded when the command is chosen, whether or not the node has been expanded. What opens is a panel over the dump; **Update in Parent** writes it back.
 
 ### FIT Table
 
@@ -64,6 +67,8 @@ Editing the dump makes the table read again, and it comes back **where you left 
 What the Intel ME/CSME region in this dump actually is, in the words the field uses: family and version, SKU, chipset and stepping, release and revision, the date it was built, and whether it is a stock image, an update, or one extracted from a board. Firmware stitched inside an image is analysed in its own right and gets its own table.
 
 <img width="1238" height="957" alt="Screenshot 2026-09-11 at 06 59 48" src="https://github.com/user-attachments/assets/ab877f72-5520-4392-81b0-138793893835" />
+
+**Full Tree** now goes down to the files. The MFS volumes are cut into the records they hold — an EFS volume's files out of its data area, an FTBL volume's out of the integrity table it ends with — and each is named from the firmware's own `FileTable.dat` rather than numbered. The OEM configuration a board's FITC partition carries is decoded record by record, with the file each record points at named beside it, and a UTOK/STKN partition's Unlock Token flags are read out of the block they sit in. Every row reveals its own bytes in the dump, so a field that reads wrong is one click from the bytes behind it.
 
 The health rows are the ones that say whether a region survived what happened to it — RSA signature, partition tables, the EFS volume and its page bookkeeping, the MFS dictionary, the file-system state — each shown as a plain Yes/No or a coloured word rather than as a hex field to interpret. **Full Tree** opens the same analysis as the structure behind those answers. **Copy** puts the summary on the clipboard as rich text and **Screenshot** as a picture, which is what a ticket, a forum post or a message to another bench actually needs. Each says so over the window, in the same plate a search reports in and wearing the glyph of the button you pressed, so the evidence that the click did anything is not the paste.
 
@@ -95,6 +100,15 @@ These projects are why a repair shop can work on modern firmware at all. Between
 - **Drag a pane by its header.** Onto the other pane to swap them, onto its top or bottom edge to join it in, onto another tab to move it there (hover the tab and the bar switches), or onto the strip that appears at the top of the window to give it a tab of its own. In single-file mode the free half offers **Duplicate Here** — the dump beside itself, so a patch you make shows every difference it causes.
 - **Drop a file on that strip** to open it in a new tab without disturbing the window you dropped it on.
 - An empty window is not an empty room: bookmarks belong to the window, so closing the last dump leaves the marks, and the window lists them and counts them in its title — `Empty (3 Bookmarks)`.
+
+### Parts of a dump, opened over it
+
+- **A part of a file is not a comparison, so it does not get a tab.** A zone, a node of the structure tree, a decompressed section — everything that used to open beside the dump now opens *over* it: a panel that rises from the bottom of the window and leaves enough of the parent showing to say which file it came out of. It is a surface of its own, with its own header, its own minimap and its own tool panel, so the part can be searched, patched and analysed exactly like a dump.
+- **The dock along the bottom is what you have taken out of this image.** Each folded panel is a pill named after its part; one panel is up at a time, and clicking another pill folds the open one down and raises that one in a single movement. The panel flies out of its own pill and lands back on it, so which pill a panel belongs to is never in doubt.
+- A **⌄ beside the panel's ✕** does the same thing as a button, for the times a gesture is not what you want. **Pull the panel down by its header** to fold it away. Near the top the pull is a *look* at the dump underneath — let go and the panel goes back where it was, unless you flicked it, which is still a way to put it down without carrying it there. Past the halfway line the last movement of the hand is the instruction: nudged up it springs back, nudged down it carries on down, however long you rested before letting go.
+- **The way back is in the header.** The link names the parent and jumps to it, and **Update in Parent** writes the part's bytes back where they came from as one undo step. A link that no longer leads anywhere is drawn as a dead one — a red row, not a button — rather than failing when pressed.
+- Closing the parent of an open part asks first, and says what the answer costs: *its bytes stay as they are; only the way back goes.* **Quit** asks the same thing for the whole app, and says how much is at stake before it starts working through the windows one by one.
+- **A panel can still become a tab.** Drag it by its header onto the New Tab strip — the same gesture a pane is torn off by — or choose **Open in New Tab** from the pill's menu while it is folded. The document goes with it: unsaved edits, undo history, segments, and the link back, so Update in Parent keeps writing into the file the part came out of.
 
 ### Going somewhere, and coming back
 
@@ -158,7 +172,7 @@ These projects are why a repair shop can work on modern firmware at all. Between
 
 ### Toolbar
 
-- Icon-only and fixed: **Go To**, **Find** and **Segments** on the left, then the one control worth seeing rather than clicking — the **word size**, a menu button that says "2 Bytes". On the right: the difference arrows (or the *Files are identical* badge), the **pane layout** toggle, whose icon shows the arrangement the click will produce, and the **minimap** toggle. File operations are not there on purpose — dumps arrive by drop, and ⌘S saves them.
+- Icon-only and fixed: the **Tools** pull-down first — the wrench, beside it the name of the tool the tab is on, or "Tools" while it is on none — then **Go To**, **Find** and **Segments**, then the one control worth seeing rather than clicking: the **word size**, a menu button that says "2 Bytes". On the right: the difference arrows (or the *Files are identical* badge), the **pane layout** toggle, whose icon shows the arrangement the click will produce, and the **minimap** toggle. File operations are not there on purpose — dumps arrive by drop, and ⌘S saves them.
 
 ### Selection, clipboard, menus
 
