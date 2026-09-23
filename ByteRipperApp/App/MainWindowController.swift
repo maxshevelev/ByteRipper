@@ -306,7 +306,7 @@ final class MainWindowController: NSWindowController {
     }
 
     /// The Tools pull-down: the wrench, and beside it the name of the
-    /// tool-module this tab is on — "None" until one is picked
+    /// tool-module this tab is on — "Tools" until one is picked
     /// (`Design/TOOL_MODULES_PLAN.md`).
     ///
     /// A view-backed pull-down for the reason the word-size control is one: the
@@ -342,15 +342,14 @@ final class MainWindowController: NSWindowController {
         return item
     }
 
-    /// What the pull-down says when no tool-module is running: nothing.
+    /// What the pull-down says when no tool-module is running: its own name.
     ///
-    /// The name is worth its width only while there is a name to say. At rest
-    /// the item is the wrench and its chevron, like every other icon in this
-    /// toolbar — and the whole toolbar has to fit the width the window opens at
-    /// (§24.4), which a permanent "Tools" beside the wrench does not leave room
-    /// for. When a tool-module does start, the window has just grown by the
-    /// panel's width, so the room for its name arrives with it.
-    static let noToolTitle = ""
+    /// The item always says what it holds — the name of the tool-module in
+    /// force, or "Tools" while there is none. A wrench on its own is a picture
+    /// the reader has to recognise before they can use it, and this is the one
+    /// item in the toolbar whose whole job is naming what the tab is working
+    /// with; going blank at rest is exactly when it is least obvious.
+    static let noToolTitle = "Tools"
 
     /// The pane-layout toggle (§24.3). The icon and the tooltip name the
     /// arrangement the click will produce, and both are refreshed on every

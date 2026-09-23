@@ -71,13 +71,19 @@ final class ToolsToolbarTests: XCTestCase {
         let item = try XCTUnwrap(wc.window?.toolbar?.items.first { $0.itemIdentifier == .tools })
 
         item.validate()
-        XCTAssertEqual(button.menu?.items.first?.title, "",
-                       "at rest it is the wrench alone — the toolbar has to fit the launch width")
+        XCTAssertEqual(button.menu?.items.first?.title, "Tools",
+                       "with no tool-module running the item says what it is")
 
         wc.mainViewController.tools.activate(StubToolB.identifier, animated: false)
         item.validate()
 
         XCTAssertEqual(button.menu?.items.first?.title, StubToolB.title)
+
+        wc.mainViewController.tools.activate(nil, animated: false)
+        item.validate()
+
+        XCTAssertEqual(button.menu?.items.first?.title, "Tools",
+                       "and says it again once the panel is closed")
     }
 
     func testItCarriesTheWrench() throws {
