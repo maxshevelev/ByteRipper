@@ -1,3 +1,4 @@
+import AppPalette
 import Cocoa
 import ByteRipperCore
 
@@ -73,6 +74,10 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
     /// the same shape as `savePiece`: the open panel and the swap run from the
     /// window that presents the form. Returns whether the swap actually started.
     var replacePiece: ((Segment) -> Bool)?
+    /// Revert Segment to «file» (§21.7) — the same shape again: the alerts and
+    /// the swap run from the window that presents the form. Returns whether the
+    /// revert actually ran.
+    var revertPiece: ((Segment) -> Bool)?
 
     /// The popover on screen, if any: Escape closes it before it closes the form
     /// (§10.1), and it must not outlive the piece it is editing.
@@ -366,6 +371,12 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
     func reloadSegments() {
         let selected = selectedSegmentIndex
         segments = pane.segmentStore.segments
+        // The form follows the store from the moment it is wired, which can be
+        // before its view exists: a change made on the way to presenting it —
+        // a link recorded by the very command the form invoked (§21.7) — would
+        // otherwise reach a table that has not been built. The list itself is
+        // up to date either way, and `loadView` reloads once it has a table.
+        guard isViewLoaded, segmentTable != nil else { return }
         segmentTable.reloadData()
         updateTableHeight()
         // `reloadData` clears the table's own selection, so the form puts its
@@ -669,6 +680,13 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
                                    action: #selector(replaceSegmentFromFile(_:)), keyEquivalent: "")
         replace.target = self
 
+        // Revert Segment to «file» (§21.7): the piece goes back to the bytes of
+        // the file it came from. `validateMenuItem` names the file and hides the
+        // item for a piece that came from nowhere — most of them.
+        let revert = menu.addItem(withTitle: "Revert Segment to Source",
+                                  action: #selector(revertSegmentToSource(_:)), keyEquivalent: "")
+        revert.target = self
+
         menu.addItem(.separator())
 
         let edit = menu.addItem(withTitle: "Edit…",
@@ -716,6 +734,15 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
     @objc func replaceSegmentFromFile(_ sender: Any?) {
         guard let piece = pieceForMenuAction() else { return }
         if replacePiece?(piece) == true { closeForm() }
+    }
+
+    /// Revert Segment to «file» (§21.7): the piece under the click goes back to
+    /// the bytes of the file it came from. The form stays open and reloads — the
+    /// revert is a change to the partition the list is showing, not a write the
+    /// status bar has to report, and the row's mark is the point of doing it.
+    @objc func revertSegmentToSource(_ sender: Any?) {
+        guard let piece = pieceForMenuAction() else { return }
+        if revertPiece?(piece) == true { reloadSegments() }
     }
 
     // MARK: - The dialog's button row (§21.4)
@@ -781,6 +808,17 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         case #selector(replaceSegmentFromFile(_:)):
             menuItem.title = piece.map { "Replace Segment \($0.label) from File…" } ?? "Replace Segment from File…"
             return piece != nil
+        case #selector(revertSegmentToSource(_:)):
+            // The item is there only for a piece that came from a file: most
+            // pieces did not, and an item that is always present and almost
+            // always disabled says nothing about the one case it serves.
+            guard let piece, let source = pane.segmentSource(of: piece) else {
+                menuItem.isHidden = true
+                return false
+            }
+            menuItem.isHidden = false
+            menuItem.title = "Revert Segment \(piece.label) to “\(source.name)”"
+            return pane.canRevertSegment(piece)
         case #selector(editClickedSegment):
             menuItem.title = piece.map { "Edit Segment \($0.label)" } ?? "Edit…"
             return piece != nil
@@ -851,10 +889,90 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
             // An unnamed piece shows its label in the Label column, so the Name
             // column is simply empty — never blank in the way that hides the
             // piece, because the label beside it names it (§21.1).
-            cell.textField?.stringValue = segment.name
+            if let linked = linkedName(for: segment) {
+                cell.attributedText = linked.text
+                cell.toolTip = linked.explanation
+            } else {
+                cell.textField?.stringValue = segment.name
+            }
             return cell
         default:
             return nil
+        }
+    }
+
+    /// The Name column for a piece that came from a file (§21.7): the piece's
+    /// own name when it has one of its own, then the `link` symbol and the
+    /// file's name.
+    ///
+    /// When the piece no longer *is* that file's bytes the whole link run goes
+    /// red and wears the app's broken-link symbol, with the reason in brackets —
+    /// the same two states, the same two symbols and the same red the pane
+    /// header's link to a parent uses, so a link that has come apart reads the
+    /// same wherever it is shown. Nil for a piece nothing brought in.
+    private func linkedName(for segment: Segment) -> (text: NSAttributedString, explanation: String)? {
+        guard let source = pane.segmentSource(of: segment) else { return nil }
+        let state = pane.segmentLinkState(of: segment) ?? .matching
+        let intact = state == .matching
+        let tint: NSColor = intact ? .secondaryLabelColor : SemanticColors.bad
+        let font = NSFont.systemFont(ofSize: 12)
+
+        let text = NSMutableAttributedString()
+        // The piece's own name first, when the user gave it one that is not
+        // simply the file's: a join names the piece for the file, and printing
+        // the same name twice says nothing.
+        if !segment.name.isEmpty, segment.name != source.name {
+            text.append(NSAttributedString(string: segment.name + "  ", attributes: [
+                .font: font, .foregroundColor: NSColor.labelColor,
+            ]))
+        }
+        let symbol = NSImage(systemSymbolName: intact ? "link" : "xmark.octagon",
+                             accessibilityDescription: intact ? "Linked file" : "Link problem")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))
+        if let symbol {
+            symbol.isTemplate = true
+            let attachment = NSTextAttachment()
+            attachment.image = symbol
+            let glyph = NSMutableAttributedString(attachment: attachment)
+            glyph.addAttributes([.foregroundColor: tint], range: NSRange(location: 0, length: glyph.length))
+            text.append(glyph)
+            text.append(NSAttributedString(string: " ", attributes: [.font: font]))
+        }
+        var trailing = source.name
+        if let reason = Self.linkReason(state) { trailing += " (\(reason))" }
+        text.append(NSAttributedString(string: trailing, attributes: [
+            .font: font, .foregroundColor: tint,
+        ]))
+        return (text, Self.linkExplanation(state, source: source, segment: segment))
+    }
+
+    /// The bracketed word beside a linked file's name: why the piece is no
+    /// longer what that file holds. Nil while it still is.
+    static func linkReason(_ state: PaneViewModel.SegmentLinkState) -> String? {
+        switch state {
+        case .matching: return nil
+        case .edited: return "edited"
+        case .lengthChanged: return "length changed"
+        case .missing: return "file missing"
+        }
+    }
+
+    /// What the row says under the pointer — the same shape the pane header's
+    /// link explains itself with.
+    static func linkExplanation(_ state: PaneViewModel.SegmentLinkState,
+                                source: SegmentSources.Source,
+                                segment: Segment) -> String {
+        let from = "\(segment.label) came from “\(source.url.path)”"
+        switch state {
+        case .matching:
+            return from + ", and still holds its bytes."
+        case .edited:
+            return from + ", and has been changed since."
+        case .lengthChanged(let piece, let sourceLength):
+            return from + ", which is \(FilePaneView.friendlySize(sourceLength)) there "
+                + "against \(FilePaneView.friendlySize(piece)) here."
+        case .missing:
+            return from + ", which can no longer be read."
         }
     }
 
@@ -934,11 +1052,28 @@ private final class SegmentCellView: NSTableCellView {
         didSet { needsDisplay = true }
     }
 
+    /// Text in more than one colour — the Name column's link run (§21.7). A
+    /// colour set by hand has to follow the style by hand, and this cell's
+    /// colours *are* the message (grey link, red broken link), so they stay as
+    /// they are on a selected row, the way the label's pill does.
+    var attributedText: NSAttributedString? {
+        didSet {
+            guard let attributedText else { return }
+            textField?.attributedStringValue = attributedText
+        }
+    }
+
     override var backgroundStyle: NSView.BackgroundStyle {
         didSet { applyBackgroundStyle() }
     }
 
     private func applyBackgroundStyle() {
+        if let attributedText {
+            // Its colours say what state the link is in; the selection does not
+            // get to repaint them.
+            textField?.attributedStringValue = attributedText
+            return
+        }
         if pillTint != nil {
             // The text is on the pill, not on the selection: it keeps its resting
             // colour whether the row is selected or not (§21.4). The pill's own

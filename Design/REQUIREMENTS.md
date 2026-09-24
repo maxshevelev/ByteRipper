@@ -3397,10 +3397,16 @@ and every operation that writes is explicit about it.
   replaced by the contents of a file the user chooses. The command lives in the
   row's context menu and the strip's (§21.3) — *Replace Segment S<i> from File…*
   — never in the button row, which is for the whole partition.
-- **The file must match the piece's length.** A mismatch is refused with an alert
-  naming both sizes — the piece's length and the file's — because making it an
-  insert-and-shift is a decision, not a default. The open panel grants the one
+- **The file must match the piece's length, or the user must say otherwise.** A
+  mismatch is not refused outright: an alert names both sizes — the piece's
+  length and the file's — and offers to take the file's length, which adds or
+  removes the difference at the piece's tail and moves every segment after it.
+  Making it an insert-and-shift is a decision, not a default, so it is asked for
+  rather than assumed; a same-length swap never asks. The same question Revert
+  Segment asks (§21.7), so one rule serves both. The open panel grants the one
   file it names, not the folder around it (§5.2).
+- **The swapped piece links to the file it came from** (§21.7): its bytes are
+  that file's now, and Revert Segment can put them back.
 - **The swap streams in bounded chunks into one undo transaction.** The file is
   read in slices and each slice is written to the document; the whole swap is a
   single transaction, so undo takes the whole swap back as one step, and the file
@@ -3408,7 +3414,122 @@ and every operation that writes is explicit about it.
   as if it never happened.
 - **A same-length overwrite moves no cut** (§21.2): the document's size is
   unchanged, so the partition's boundaries do not shift; only the bytes under the
-  piece change.
+  piece change. A swap the user allowed to change the length moves the cut that
+  closed the piece out to its new end — an insert at a cut belongs to the piece
+  that *starts* there, so without that the added bytes would join the next piece.
+
+21.7 A piece that remembers the file it came from
+
+- **A piece may carry a link** to the file its bytes came from: which file, and
+  the stretch of it the piece stands for. Not every piece has one — a manual
+  split, a new file's one piece and most pieces do not — and a piece without one
+  behaves exactly as it always did.
+- **The partition names sources by id, not by file.** The partition is a value
+  the undo stack copies and compares; a URL in it would be an identity smuggled
+  into a value, and an open reader a resource smuggled into a snapshot. A
+  per-pane table says what each id is, and outlives every snapshot, so an
+  undone-and-redone join finds its sources still there.
+- **The extent is kept, not derived.** A piece's link records the stretch of the
+  source it stands for, which is not always the piece's own length: an insert
+  inside the piece leaves the piece longer, a delete leaves it shorter, and a
+  source rewritten on disk changes it from the other side. That difference is
+  what Revert Segment asks about.
+- **A link follows the content, the way a cut does** (§21.2), under one
+  invariant: the piece's byte at `offset` stands for the source's byte at
+  `offset − piece.start + extent.start`.
+  - *A cut* splits the link with the piece: both halves keep the source, at the
+    offsets they sit at in it.
+  - *A merge* leaves the absorbing piece's link, its extent grown by what it
+    absorbed; the absorbed piece's link goes with its name. Merging S0 shifts
+    the survivor's extent back by S0's length — right when both came from one
+    file, and dropped when the source has no room for it.
+  - *A cut moved* slides the extent of the piece that opens there, and moves the
+    far end of the piece before it. A slide below the source's start drops the
+    link rather than let it lie.
+  - *An insert* leaves every link alone. The inserted bytes have no source and
+    everything after them in the piece is off by the insert's length, so both
+    read as modified — which is what an insert already does to a plain file (§6).
+  - *A delete* leaves a run that kept its head where it was; a run that lost its
+    head opens that much further into its source.
+  - *A revert to saved* keeps the links of the pieces that survive the rebase; a
+    reset (open, close, Merge All) leaves none.
+- **A link is never dropped to be safe.** Misalignment paints red, which is
+  true — those bytes are not the source's bytes at that place. Dropping the link
+  would throw away a working Revert Segment to avoid a red byte that is correct.
+- **Links are made by acts that moved bytes in from a file**, never by hand:
+  - a **join** links the donor's piece to the donor file, *and* links the content
+    the pane already held to the file the join is about to take away from it
+    (§22.2), each piece at its own offsets. The second half is what makes the
+    join continuous: a byte patched before the join was red against the pane's
+    file, and stays red against the same file as the piece's source.
+  - **Replace Segment from File…** (§21.6) links the piece to the donor.
+  - Opening a file links nothing: while the document has a file, the document's
+    own attachment answers "modified against what?", and a link would only have
+    to be re-based on every Save As.
+- **A link supplies the baseline only while the document has no file of its
+  own.** Everything a byte is measured against is a *span* — a stretch of the
+  document, a reader, and the source offset it opens at:
+  - an attached document is one span over its saved file, and every byte past
+    its end is new: red means "not saved yet", unchanged;
+  - an image with no file of its own is one span per linked piece: red means
+    "differs from the file this stretch came from", and bytes no span covers are
+    unmarked, the way an untitled document's bytes always were;
+  - a part opened from a parent (§6) is one span over the bytes it was opened
+    with, unchanged.
+  Saving the image hands the baseline back to the saved file — red goes back to
+  meaning "not saved yet" — and the links stay, for Revert Segment, for the row's
+  mark, and for watching the sources.
+- **Revert Segment to «file»** puts one piece back to the bytes of the file it
+  came from — the inverse of the join, one piece at a time. It lives where every
+  other per-piece command does: the form's row menu, the strip's menu (§21.3),
+  and the offset context menu. It is present only for a piece that has a source,
+  and it names it — *Revert Segment S1 to “chip2.bin”* — and is disabled when
+  that file can no longer be read.
+  - Same length: it runs, one undo step, streamed in bounded chunks.
+  - Different length: it **asks**, naming both lengths and saying that every
+    segment after this one moves by the difference. Agreeing writes the stretch
+    both sides have in place and adds or removes the difference at the piece's
+    tail; the cut that closed the piece is pushed out to its new end, because an
+    insert at a cut belongs to the piece that *starts* there (§21.2).
+  - The link stays, re-based on what was actually restored: the bytes are still
+    that file's.
+  - **Replace Segment from File… asks the same question** rather than refusing a
+    mismatch outright (§21.6). One rule, two commands.
+- **A linked source is watched** the way the pane's own file is (§5.5). A change
+  drops the open reader — the link is to the *file*, not to the bytes it held
+  when it was linked — and asks: **Reload Segment** reverts every piece linked to
+  that source, back to front (a revert can change a piece's length, and the
+  pieces already done must not move underneath the ones still to do); **Keep
+  Current Contents** leaves the bytes, and the alert says what keeping means —
+  the marks are already measured against what is on disk now. Under XCTest the
+  prompt resolves to Keep, like every other blocking prompt.
+- **No write of the app's ever lands on a source.** One rule for every command
+  that names a file: Save As, Save Segment… and Save All as Separate Files…
+  (§21.5). A target that is a file some piece came from is refused and the panel
+  opens again — replacing a chip's dump with the image built out of it, or with
+  a piece of that image, would leave a segment linked to its own result and the
+  dump gone. There is no "Replace Anyway"; the useful answer is another name, or
+  another folder, and asking for it is the whole of the remedy.
+  - It holds even for a piece written over the very file it came from. "Put my
+    patched half back over the chip dump" is a real wish, but it is a Save As on
+    a copy, not a write that quietly unmakes the link.
+  - Save All is all or nothing (§21.5), so one part name landing on a source
+    stops the whole set; the folder is the only thing that command asks for, so
+    the folder is what there is to change.
+  - The untitled join result already routes ⌘S to Save As, and once it has a
+    file of its own ⌘S writes that file, which is never a source.
+- **The form's Name column says it** (§21.4): a linked piece shows the `link`
+  symbol and the file's name, with its own name first when the user gave it one
+  that is not simply the file's. A piece that is no longer that file's bytes goes
+  red, wears `xmark.octagon`, and carries the reason in brackets — *(edited)*,
+  *(length changed)*, *(file missing)* — the same two symbols and the same red
+  the pane header's link to a parent uses (§6), so a link that has come apart
+  reads the same wherever it is shown. The tooltip gives the full path and the
+  whole sentence. The verdict is compared in bounded chunks and cached against
+  the pane's content generation, so a list that reloads on every change does not
+  re-read a megabyte per row.
+- **Links are session-only**, like the partition itself (§21.1): closing the file
+  drops them, and nothing is persisted.
 
 22. JOIN
 =====================================================================
@@ -3502,7 +3623,10 @@ feature's Save All as Separate Files (§21.5).
 - A join creates a **cut** and names the pieces either side of it: the content
   the pane already held keeps the name of the file it was opened from —
   remembered even after the document detaches — and the joined bytes take the
-  name of the file they came from. Two joins in a row leave three pieces with the
+  name of the file they came from. They are the *last* piece: the cut at the old
+  end splits whichever piece ran to it, which in a dump that was already cut is
+  not piece 1. Both sides also **link** to the files they came from (§21.7), so
+  the image can still say what has been patched in each half. Two joins in a row leave three pieces with the
   right offsets, which is exactly what a bookmark at the seam could not do:
   bookmarks are absolute by decision (§20.1) and an insert at the start moves the
   first seam. Everything else about cuts — that they follow the content, how they

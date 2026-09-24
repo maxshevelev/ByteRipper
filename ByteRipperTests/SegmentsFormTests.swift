@@ -448,7 +448,9 @@ final class SegmentsFormTests: XCTestCase {
     // MARK: - The row's context menu
 
     /// The row menu carries what acts on one piece — Save Segment…, Replace
-    /// Segment from File…, Edit…, Merge — all aimed at the form. The titles are
+    /// Segment from File…, Revert Segment to Source, Edit…, Merge — all aimed at
+    /// the form. Revert is hidden by validation for a piece that came from
+    /// nowhere (§21.7), which is every piece here. The titles are
     /// bare placeholders until the menu is about to show; selecting a piece and
     /// validating renames every item to name it, the way the strip's menu does
     /// (§21.3). Both Save Segment… (Stage 4) and Replace Segment from File…
@@ -458,7 +460,7 @@ final class SegmentsFormTests: XCTestCase {
         let menu = try XCTUnwrap(form.segmentTable.menu)
         let titles = menu.items.map(\.title)
         XCTAssertEqual(titles, ["Save Segment…", "Replace Segment from File…",
-                                "", "Edit…", "Merge"])
+                                "Revert Segment to Source", "", "Edit…", "Merge"])
 
         for item in menu.items where !item.isSeparatorItem {
             XCTAssertTrue(item.target === form, "\(item.title) is aimed at the form")

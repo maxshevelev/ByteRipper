@@ -3,7 +3,8 @@ import XCTest
 @testable import ByteRipperCore
 
 /// §21.6 the segment replacer: a piece's bytes replaced by the contents of a
-/// donor, same length. The donor is streamed in bounded chunks and the whole
+/// donor — the same length, or, when the caller asks for it by name, the
+/// donor's (§21.7). The donor is streamed in bounded chunks and the whole
 /// swap is one undo transaction, so the tests drive it directly against an
 /// in-memory document and check the bytes, the transaction count, and the
 /// length-mismatch refusal.
@@ -75,6 +76,74 @@ final class SegmentReplacerTests: XCTestCase {
         }
         XCTAssertEqual(try doc.read(at: 0, length: 16), original,
                        "a refused swap changes nothing")
+        XCTAssertEqual(doc.size, 16)
+    }
+
+    // MARK: - A swap that changes the length (§21.7)
+
+    /// A longer donor writes the stretch both sides have in place and adds the
+    /// rest at the piece's tail, so the bytes after the piece move by exactly
+    /// the difference and nothing inside it is disturbed.
+    func testALongerDonorAddsItsTailAtThePiecesEnd() throws {
+        let doc = makeDocument([UInt8](0..<16))
+        let donor = ArrayStorage([0xA0, 0xA1, 0xA2, 0xA3])
+
+        let outcome = try SegmentReplacer.replace(range: 4..<6, in: doc,
+                                                  withContentsOf: donor,
+                                                  allowingLengthChange: true)
+
+        XCTAssertEqual(outcome, .inserted(at: 6, length: 2))
+        XCTAssertEqual(doc.size, 18)
+        XCTAssertEqual(try doc.read(at: 4, length: 4), [0xA0, 0xA1, 0xA2, 0xA3])
+        XCTAssertEqual(try doc.read(at: 8, length: 2), [0x06, 0x07],
+                       "the bytes after the piece moved right by the difference")
+        XCTAssertEqual(try doc.read(at: 0, length: 4), [UInt8](0..<4),
+                       "and the bytes before it did not move at all")
+    }
+
+    /// A shorter donor removes the leftover from the piece's tail, and the
+    /// bytes after it move left by the difference.
+    func testAShorterDonorCutsThePiecesTail() throws {
+        let doc = makeDocument([UInt8](0..<16))
+        let donor = ArrayStorage([0xA0, 0xA1])
+
+        let outcome = try SegmentReplacer.replace(range: 4..<8, in: doc,
+                                                  withContentsOf: donor,
+                                                  allowingLengthChange: true)
+
+        XCTAssertEqual(outcome, .deleted(range: 6..<8))
+        XCTAssertEqual(doc.size, 14)
+        XCTAssertEqual(try doc.read(at: 4, length: 2), [0xA0, 0xA1])
+        XCTAssertEqual(try doc.read(at: 6, length: 2), [0x08, 0x09])
+    }
+
+    /// The whole of a length-changing swap — the overwrite and the tail — is
+    /// one transaction, so undo takes it back in one step.
+    func testALengthChangingSwapIsOneTransaction() throws {
+        let doc = makeDocument([UInt8](0..<16))
+        let donor = ArrayStorage([0xA0, 0xA1, 0xA2, 0xA3])
+        try SegmentReplacer.replace(range: 4..<6, in: doc, withContentsOf: donor,
+                                    allowingLengthChange: true)
+
+        XCTAssertNotNil(try doc.undo())
+
+        XCTAssertEqual(doc.size, 16)
+        XCTAssertEqual(try doc.read(at: 0, length: 16), [UInt8](0..<16))
+        XCTAssertFalse(doc.undoHistory.canUndo, "one step took the whole swap back")
+    }
+
+    /// Without being asked for by name, a mismatch is still refused before a
+    /// byte is written: making it an insert-and-shift is a decision (§21.6).
+    func testAMismatchIsStillRefusedByDefault() throws {
+        let doc = makeDocument([UInt8](0..<16))
+        let donor = ArrayStorage([0xA0, 0xA1])
+
+        XCTAssertThrowsError(
+            try SegmentReplacer.replace(range: 4..<8, in: doc, withContentsOf: donor)
+        ) { error in
+            XCTAssertEqual(error as? SegmentReplaceError,
+                           .lengthMismatch(pieceLength: 4, donorLength: 2))
+        }
         XCTAssertEqual(doc.size, 16)
     }
 

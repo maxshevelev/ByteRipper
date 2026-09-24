@@ -1,6 +1,60 @@
 import Foundation
 import ByteRipperCore
 
+/// Which file a piece's bytes came from (§21.7). An id rather than the file
+/// itself: the partition is a value that undo copies and compares, and a URL —
+/// let alone an open reader — has no place in one. What the id stands for lives
+/// in the pane's `SegmentSources`, which outlives every snapshot, so an undo
+/// that brings a piece back brings its link back with it.
+struct SegmentSourceID: Hashable {
+    let raw: Int
+}
+
+/// A piece's link to the file its bytes came from (§21.7): which file, and the
+/// stretch of that file the piece stands for.
+///
+/// `sourceRange` is the piece's *extent in the source*, which is not always the
+/// piece's own length: an insert inside the piece leaves the piece longer than
+/// the stretch it came from, and a delete leaves it shorter. That difference is
+/// exactly what Revert Segment asks about before it restores the source's
+/// length, so it is kept rather than derived.
+struct SegmentLink: Equatable {
+    let source: SegmentSourceID
+    var sourceRange: Range<UInt64>
+
+    /// The source offset the piece's byte at `offset` stands for, given the
+    /// piece opens at `pieceStart`. Past the link's extent the answer is nil —
+    /// those bytes came from nowhere the link knows about.
+    func sourceOffset(for offset: UInt64, pieceStart: UInt64) -> UInt64? {
+        guard offset >= pieceStart else { return nil }
+        let within = offset - pieceStart
+        guard within < UInt64(sourceRange.count) else { return nil }
+        return sourceRange.lowerBound + within
+    }
+
+    /// The same link shifted by `delta` in the source — what a boundary move
+    /// does to a piece that gains or loses bytes at its front. Nil when the
+    /// shift would take the extent below the source's start: the piece's bytes
+    /// then stand in no fixed relation to the file, and a link that lies is
+    /// worse than none.
+    func shiftedStart(by delta: Int64) -> SegmentLink? {
+        let lower = Int64(sourceRange.lowerBound) + delta
+        guard lower >= 0 else { return nil }
+        let newLower = UInt64(lower)
+        guard newLower <= sourceRange.upperBound else { return nil }
+        return SegmentLink(source: source, sourceRange: newLower..<sourceRange.upperBound)
+    }
+
+    /// The same link with its extent grown or shrunk at the far end — what a
+    /// boundary move does to the piece *before* the cut, which gains or loses
+    /// bytes at its tail. Never shrinks past its own start.
+    func resizedEnd(by delta: Int64) -> SegmentLink {
+        let upper = Int64(sourceRange.upperBound) + delta
+        let clamped = UInt64(max(upper, Int64(sourceRange.lowerBound)))
+        return SegmentLink(source: source, sourceRange: sourceRange.lowerBound..<clamped)
+    }
+}
+
 /// One piece of the pane's content: a contiguous, non-overlapping stretch that,
 /// with its neighbours, covers the whole file (§21). A segmentation is a
 /// *partition* — an ordered list of pieces — so gaps and overlaps are impossible
@@ -16,6 +70,10 @@ struct Segment: Equatable {
     /// A name for the piece; empty means "no name" (still shown as S<i>, never
     /// blank). Survives renumbering.
     let name: String
+    /// The file this piece's bytes came from, when they came from one (§21.7).
+    /// Nil for a piece nothing brought in — a manual split, a new file's one
+    /// piece — which is most of them.
+    let link: SegmentLink?
 
     /// The piece's positional label — "S0", "S1", … in file order.
     var label: String { Self.label(for: index) }
@@ -42,10 +100,11 @@ struct Segment: Equatable {
     /// Built only by the partition that owns it: a `Segment` is a piece of one
     /// specific `Segmentation`, so it cannot be fabricated with boundaries no
     /// partition actually holds.
-    fileprivate init(index: Int, range: Range<UInt64>, name: String) {
+    fileprivate init(index: Int, range: Range<UInt64>, name: String, link: SegmentLink?) {
         self.index = index
         self.range = range
         self.name = name
+        self.link = link
     }
 }
 
@@ -58,6 +117,14 @@ struct Piece: Equatable {
     var start: UInt64
     /// The user's name for the piece; empty means "no name".
     var name: String
+    /// The file the piece's bytes came from, when they came from one (§21.7).
+    var link: SegmentLink?
+
+    init(start: UInt64, name: String, link: SegmentLink? = nil) {
+        self.start = start
+        self.name = name
+        self.link = link
+    }
 }
 
 /// The pane's segment partition: the file's size and its pieces, an immutable,
@@ -99,7 +166,7 @@ struct Segmentation: Equatable {
     var segments: [Segment] {
         let ends = pieces.dropFirst().map(\.start) + [contentSize]
         return pieces.enumerated().map { i, piece in
-            Segment(index: i, range: piece.start..<ends[i], name: piece.name)
+            Segment(index: i, range: piece.start..<ends[i], name: piece.name, link: piece.link)
         }
     }
 
@@ -108,7 +175,8 @@ struct Segmentation: Equatable {
     func segment(containing offset: UInt64) -> Segment? {
         guard let index = pieceIndex(containing: offset) else { return nil }
         let end = index + 1 < pieces.count ? pieces[index + 1].start : contentSize
-        return Segment(index: index, range: pieces[index].start..<end, name: pieces[index].name)
+        return Segment(index: index, range: pieces[index].start..<end, name: pieces[index].name,
+                       link: pieces[index].link)
     }
 
     /// The index of the piece whose range contains `offset` (the last piece that
@@ -121,6 +189,35 @@ struct Segmentation: Equatable {
         return nil
     }
 
+    // MARK: - Links (§21.7)
+
+    /// A link over `range`, or nil when the range is empty: a link that stands
+    /// for no bytes of the source says nothing, and Revert Segment would have
+    /// nothing to restore from it.
+    static func nonEmptyLink(_ source: SegmentSourceID, _ range: Range<UInt64>) -> SegmentLink? {
+        guard range.lowerBound < range.upperBound else { return nil }
+        return SegmentLink(source: source, sourceRange: range)
+    }
+
+    /// Links the piece at `index` to `link` (nil unlinks it). The one way a
+    /// link is set: a join, a replace-from-file, or the detach that turns the
+    /// pane's own file into a source (§21.7).
+    mutating func setLink(_ link: SegmentLink?, at index: Int) {
+        guard pieces.indices.contains(index) else { return }
+        pieces[index].link = link
+    }
+
+    /// Links every piece that has no link yet to `source`, each at its own
+    /// offsets — what a join does to the content the pane already held when
+    /// that content was a file the join is about to detach from (§21.7,
+    /// §22.2). Pieces that already carry a link (an earlier join's) keep it.
+    mutating func linkUnlinkedPieces(to source: SegmentSourceID) {
+        let ends = pieces.dropFirst().map(\.start) + [contentSize]
+        for i in pieces.indices where pieces[i].link == nil {
+            pieces[i].link = Self.nonEmptyLink(source, pieces[i].start..<ends[i])
+        }
+    }
+
     // MARK: - Editing the partition
 
     /// Adds a cut at `offset`, splitting the piece that contains it. The earlier
@@ -128,13 +225,28 @@ struct Segmentation: Equatable {
     /// range whose drawing changed (from the cut to the end), or nil when
     /// refused: `offset` at 0, at EOF, or already a cut — every piece must stay
     /// non-empty (§21 edge cases).
+    ///
+    /// A link splits with the piece (§21.7): both halves came from the same
+    /// file, at the offsets they sit at in it — which is why a cut inside a
+    /// joined half leaves two pieces that each still know where they came from.
     @discardableResult
     mutating func addCut(at offset: UInt64) -> Range<UInt64>? {
         guard offset > 0, offset < contentSize,
               !pieces.contains(where: { $0.start == offset }),
               let index = pieceIndex(containing: offset) else { return nil }
         // The cut opens a new piece at `offset`; the later piece renumbers.
-        pieces.insert(Piece(start: offset, name: ""), at: index + 1)
+        var newLink: SegmentLink?
+        if let link = pieces[index].link {
+            // Where the cut falls in the source: the document bytes the earlier
+            // half keeps, clamped to the extent the link actually covers (an
+            // insert can leave the piece longer than its source).
+            let taken = min(offset - pieces[index].start, UInt64(link.sourceRange.count))
+            let split = link.sourceRange.lowerBound + taken
+            pieces[index].link = Self.nonEmptyLink(link.source,
+                                                   link.sourceRange.lowerBound..<split)
+            newLink = Self.nonEmptyLink(link.source, split..<link.sourceRange.upperBound)
+        }
+        pieces.insert(Piece(start: offset, name: "", link: newLink), at: index + 1)
         return offset..<contentSize
     }
 
@@ -147,6 +259,11 @@ struct Segmentation: Equatable {
     mutating func removeCut(at offset: UInt64) -> Range<UInt64>? {
         guard let index = pieces.firstIndex(where: { $0.start == offset }), index > 0
         else { return nil }
+        // The earlier piece absorbs the later one's bytes, so its extent in its
+        // own source grows by as many (§21.7): the absorbed piece's link goes
+        // with it, the way its name does.
+        let end = index + 1 < pieces.count ? pieces[index + 1].start : contentSize
+        pieces[index - 1].link = pieces[index - 1].link?.resizedEnd(by: Int64(end - offset))
         pieces.remove(at: index)
         return offset..<contentSize
     }
@@ -162,14 +279,22 @@ struct Segmentation: Equatable {
     mutating func removePiece(at index: Int) -> Range<UInt64>? {
         guard pieces.count > 1, pieces.indices.contains(index) else { return nil }
         let removedStart = pieces[index].start
+        let removedEnd = index + 1 < pieces.count ? pieces[index + 1].start : contentSize
         if index == 0 {
             // The piece below absorbs S0 and takes its place: it reopens at 0
-            // and keeps its own name, so what was S1 is now S0.
+            // and keeps its own name, so what was S1 is now S0. It gains S0's
+            // bytes at its front, so its extent in its source opens that much
+            // earlier — and where the source has no room for them, the link is
+            // dropped rather than left claiming bytes that are not its (§21.7).
+            pieces[1].link = pieces[1].link?.shiftedStart(by: -Int64(removedEnd - removedStart))
             pieces[1].start = 0
             pieces.removeFirst()
         } else {
             // The piece above absorbs it and keeps its name; the removed piece
-            // is simply dropped from the partition.
+            // is simply dropped from the partition. Its bytes join the piece
+            // above, whose extent in its own source grows to match.
+            pieces[index - 1].link = pieces[index - 1].link?
+                .resizedEnd(by: Int64(removedEnd - removedStart))
             pieces.remove(at: index)
         }
         return removedStart..<contentSize
@@ -194,6 +319,13 @@ struct Segmentation: Equatable {
         let lower = pieces[i - 1].start
         let upper = i + 1 < pieces.count ? pieces[i + 1].start : contentSize
         guard offset > lower, offset < upper else { return nil }
+        // The boundary slides without the bytes moving, so both pieces' extents
+        // in their sources slide with it (§21.7): the piece that opens here
+        // gains or loses bytes at its front, the one before it at its tail. A
+        // slide that would take a front past its source's start drops the link.
+        let delta = Int64(offset) - Int64(from)
+        pieces[i].link = pieces[i].link?.shiftedStart(by: delta)
+        pieces[i - 1].link = pieces[i - 1].link?.resizedEnd(by: delta)
         pieces[i].start = offset
         return 0..<contentSize
     }
@@ -246,6 +378,30 @@ struct Segmentation: Equatable {
         }
     }
 
+    /// Applies an insert whose bytes belong to the piece at `index` although
+    /// they landed on its closing boundary — what a swap that made a piece
+    /// longer does (§21.6, §21.7).
+    ///
+    /// The ordinary `.insert` rule gives bytes added at a cut to the piece that
+    /// *starts* there (§21.2), which is right for an edit made at that offset
+    /// and wrong for this one: the bytes replaced a piece, so they are that
+    /// piece's. Every piece after it moves by `length`, and its own extent in
+    /// its source grows with it. Returns the offset range whose drawing changed.
+    @discardableResult
+    mutating func applyGrowth(of index: Int, by length: UInt64, newSize: UInt64) -> Range<UInt64>? {
+        guard pieces.indices.contains(index), length > 0 else {
+            contentSize = newSize
+            return nil
+        }
+        let boundary = index + 1 < pieces.count ? pieces[index + 1].start : contentSize
+        for i in pieces.indices where i > index {
+            pieces[i].start += length
+        }
+        pieces[index].link = pieces[index].link?.resizedEnd(by: Int64(length))
+        contentSize = newSize
+        return boundary..<newSize
+    }
+
     /// The delete half of `apply`: recompute the pieces that survive removing
     /// `[lo, hi)`.
     ///
@@ -294,8 +450,28 @@ struct Segmentation: Equatable {
             // The name it keeps: the first piece in the run that opens before
             // the deletion (a run that begins inside the deletion keeps the
             // name of the piece that opens at its shifted start).
-            let nameIndex = (0...j).first { bounds[$0] < lo } ?? j
-            newPieces.append(Piece(start: newStart, name: pieces[nameIndex].name))
+            // The name the run keeps: the first piece *of this run* that opens
+            // before the deletion — a run that begins inside the deletion keeps
+            // the name of the piece that opens at its shifted start, which is
+            // the last of the run. Searched from `i`, not from 0: the pieces
+            // before the run are not in it, and piece 0 opens before every
+            // deletion, so starting at 0 gave every later run piece 0's name.
+            let nameIndex = (i...j).first { bounds[$0] < lo } ?? j
+            // The link follows the name (§21.7), and moves only when the piece
+            // it names lost its head to the deletion: a run that keeps its head
+            // still opens on the byte it always did, and one that starts past
+            // the deletion moved whole — in both cases its extent in its source
+            // is unchanged. (The bytes a swallowed seam pulled up behind a run
+            // are simply not that source's, and read as modified, which is what
+            // they are.)
+            let anchor = bounds[nameIndex]
+            let link: SegmentLink?
+            if anchor >= lo, anchor < hi {
+                link = pieces[nameIndex].link?.shiftedStart(by: Int64(hi - anchor))
+            } else {
+                link = pieces[nameIndex].link
+            }
+            newPieces.append(Piece(start: newStart, name: pieces[nameIndex].name, link: link))
             i = j + 1
         }
 
@@ -427,12 +603,59 @@ final class SegmentStore {
         current.rename(index, to: name)
     }
 
+    // MARK: - Links (§21.7)
+
+    /// Links the piece at `index` to the stretch `sourceRange` of `source`, or
+    /// unlinks it with a nil `sourceRange`. A link decides what the piece's
+    /// bytes are painted *against*, so the piece repaints — unlike a rename,
+    /// which changes nothing on the dump.
+    func setLink(_ source: SegmentSourceID?, sourceRange: Range<UInt64>?, at index: Int) {
+        guard current.pieces.indices.contains(index) else { return }
+        let link = (source != nil && sourceRange != nil)
+            ? Segmentation.nonEmptyLink(source!, sourceRange!)
+            : nil
+        guard current.pieces[index].link != link else { return }
+        current.setLink(link, at: index)
+        onChange?(current.segments[index].range)
+    }
+
+    /// Links every piece that has no link yet to `source`, each at its own
+    /// offsets (§21.7): what a join does to the content the pane already held,
+    /// at the moment the join takes its file away from it (§22.2). Pieces that
+    /// already carry a link keep the one they have.
+    func linkUnlinkedPieces(to source: SegmentSourceID) {
+        let before = current.pieces
+        current.linkUnlinkedPieces(to: source)
+        guard current.pieces != before else { return }
+        onChange?(0..<contentSize)
+    }
+
+    /// Every source any piece is linked to, once each, in file order — what the
+    /// pane watches for external changes and what a save checks it is not about
+    /// to write over (§21.7).
+    var linkedSources: [SegmentSourceID] {
+        var seen: Set<SegmentSourceID> = []
+        return current.pieces.compactMap { piece in
+            guard let id = piece.link?.source, seen.insert(id).inserted else { return nil }
+            return id
+        }
+    }
+
     /// Applies the net edit a transaction produced, moving the pieces with the
     /// content (§21.2). Called from `PaneViewModel` with the same `DiffEdit` the
     /// comparison index and the minimap consume (§8.3), and `newSize` the file's
     /// size after the edit.
     func apply(_ edit: DiffEdit, newSize: UInt64) {
         if let range = current.apply(edit, newSize: newSize) {
+            onChange?(range)
+        }
+    }
+
+    /// Applies an insert whose bytes belong to the piece at `index` rather than
+    /// to the piece that starts where they landed (§21.6, §21.7) — what a swap
+    /// that made a piece longer does.
+    func applyGrowth(of index: Int, by length: UInt64, newSize: UInt64) {
+        if let range = current.applyGrowth(of: index, by: length, newSize: newSize) {
             onChange?(range)
         }
     }

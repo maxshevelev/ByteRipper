@@ -2664,6 +2664,19 @@ final class MainViewController: NSViewController {
         replace.target = self
         replace.representedObject = target
 
+        // Revert Segment to «file» (§21.7): only for a piece that came from a
+        // file — most do not, and an item that is always there and almost
+        // always disabled says nothing. It names the file, because that is the
+        // whole of what it will do.
+        let piece = pane.segmentStore.segments[pieceIndex]
+        if let source = pane.segmentSource(of: piece) {
+            let revert = menu.addItem(withTitle: "Revert Segment \(label) to “\(source.name)”",
+                                      action: #selector(minimapMenuRevertSegment(_:)), keyEquivalent: "")
+            revert.target = self
+            revert.representedObject = target
+            revert.isEnabled = pane.canRevertSegment(piece)
+        }
+
         menu.addItem(.separator())
 
         // Select Segment: the whole piece is selected — its full range, not a
@@ -2776,6 +2789,15 @@ final class MainViewController: NSViewController {
         // reads it to decide whether to close itself (§21.5). A strip menu has
         // nothing to close, so it is deliberately dropped.
         _ = savePiece(pane.segmentStore.segments[target.pieceIndex], of: pane)
+    }
+
+    /// Revert Segment to «file» from the strip's menu (§21.7): the piece under
+    /// the click goes back to the bytes of the file it came from.
+    @objc func minimapMenuRevertSegment(_ sender: Any?) {
+        guard let target = (sender as? NSMenuItem)?.representedObject as? SegmentMenuTarget,
+              let pane = surface.mappedPane(at: target.mapIndex), pane.isOpen,
+              target.pieceIndex < pane.segmentStore.segments.count else { return }
+        revertPiece(pane.segmentStore.segments[target.pieceIndex], of: pane)
     }
 
     /// Replace Segment from File… from the strip's menu (§21.6): the piece under
@@ -3611,6 +3633,13 @@ final class MainViewController: NSViewController {
                 onCancelled?()
                 return
             }
+            // A save never writes over a file the dump is built out of (§21.7).
+            // The user is sent back to the panel to choose another name, which
+            // is the only thing that helps here.
+            guard self.writeAvoidsSources([url], of: pane) else {
+                self.presentSaveAs(for: pane, onSaved: onSaved, onCancelled: onCancelled)
+                return
+            }
             do {
                 try pane.saveAs(to: url)
                 SandboxBookmarkStore.shared.record(url)
@@ -3780,6 +3809,17 @@ final class MainViewController: NSViewController {
         pane2.onExternalChange = { [weak self, weak pane2] in
             guard let pane2 else { return }
             self?.presentExternalChange(for: pane2)
+        }
+        // The same question for a file a *segment* came from (§21.7): the pane
+        // watches its sources the way it watches its own file, and the prompt
+        // lives here for the same reason.
+        pane1.onSegmentSourceChanged = { [weak self, weak pane1] source in
+            guard let pane1 else { return }
+            self?.presentSegmentSourceChange(for: pane1, source: source)
+        }
+        pane2.onSegmentSourceChanged = { [weak self, weak pane2] source in
+            guard let pane2 else { return }
+            self?.presentSegmentSourceChange(for: pane2, source: source)
         }
     }
 
@@ -4162,6 +4202,25 @@ final class MainViewController: NSViewController {
         }
         add("Split Here at \(offset.bareAddress)", #selector(splitHere(_:)))
         add("Merge", #selector(removeSegment(_:)))
+        // Revert Segment to «file» (§21.7): only where the piece under the
+        // click came from one, and named for it, the way the strip's menu is.
+        if let piece = pane.segmentStore.segment(containing: offset),
+           let source = pane.segmentSource(of: piece) {
+            let item = menu.addItem(withTitle: "Revert Segment \(piece.label) to “\(source.name)”",
+                                    action: #selector(revertSegmentAtOffset(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = target
+            item.isEnabled = pane.canRevertSegment(piece)
+        }
+    }
+
+    /// Offset context menu ▸ Revert Segment to «file» (§21.7): the piece the
+    /// right-clicked byte sits in goes back to the bytes of the file it came
+    /// from.
+    @objc func revertSegmentAtOffset(_ sender: Any?) {
+        guard let target = (sender as? NSMenuItem)?.representedObject as? OffsetContextTarget,
+              let piece = target.pane.segmentStore.segment(containing: target.offset) else { return }
+        revertPiece(piece, of: target.pane)
     }
 
     /// The bookmark block of the offset context menu (§20.3). One item marks and
@@ -5230,6 +5289,7 @@ final class MainViewController: NSViewController {
         form.saveAll = { [weak self] in self?.saveAllPieces(of: pane) ?? false }
         form.savePiece = { [weak self] piece in self?.savePiece(piece, of: pane) ?? false }
         form.replacePiece = { [weak self] piece in self?.replacePiece(piece, of: pane) ?? false }
+        form.revertPiece = { [weak self] piece in self?.revertPiece(piece, of: pane) ?? false }
         // The pane's `onSegmentsChanged` is set once per mode apply (§19.4.4):
         // it reloads this form when it is open and syncs the minimap's strip
         // whether or not it is, so a cut made here repaints the legend too.
@@ -5268,14 +5328,6 @@ final class MainViewController: NSViewController {
         panel.canCreateDirectories = true
         panel.prompt = "Choose"
         panel.message = "Choose the folder the segments will be written to."
-        let directory: URL?
-        if let segmentDirectoryPanel {
-            directory = segmentDirectoryPanel(panel)
-        } else {
-            directory = panel.runModal() == .OK ? panel.url : nil
-        }
-        guard let directory else { return false }
-
         // One file per piece, named for the document: `bios_S0.bin`, `bios_S1.bin`, …
         // The name the header shows, not the document's URL: an unsaved document
         // has no URL worth reading (it points at a temporary file called
@@ -5287,9 +5339,51 @@ final class MainViewController: NSViewController {
             SegmentWriter.Part(range: $0.range, name: "\(baseName)_\($0.label).bin")
         }
 
-        guard confirmSegmentWrite(parts: parts, in: directory) else { return false }
-        runSegmentWrite(parts: parts, from: storage, to: directory)
-        return true
+        // A folder in which one of those names is a segment's source sends the
+        // panel back up (§21.7). The folder is the only thing this command asks
+        // for, so it is the only thing there is to change — and the write is all
+        // or nothing (§21.5), so one name landing on a source stops the set.
+        while true {
+            let directory: URL?
+            if let segmentDirectoryPanel {
+                directory = segmentDirectoryPanel(panel)
+            } else {
+                directory = panel.runModal() == .OK ? panel.url : nil
+            }
+            guard let directory else { return false }
+            let targets = parts.map { directory.appendingPathComponent($0.name) }
+            guard writeAvoidsSources(targets, of: pane) else { continue }
+
+            guard confirmSegmentWrite(parts: parts, in: directory) else { return false }
+            runSegmentWrite(parts: parts, from: storage, to: directory)
+            return true
+        }
+    }
+
+    /// Whether a write to `urls` may go ahead, or lands on a file some piece
+    /// came from (§21.7). A write that would replace a source is refused and
+    /// named: those are the dumps the image was built out of, and replacing one
+    /// with a piece of the image leaves a segment linked to its own result and
+    /// the dump it was read from gone. The rule is the same one a Save As
+    /// follows, and it holds even for a piece written over the very file it came
+    /// from — "put my patched half back over the chip dump" is a real wish, but
+    /// it is Save As on a copy, not a write that quietly unmakes the link.
+    ///
+    /// Returns true when every name is free of sources.
+    private func writeAvoidsSources(_ urls: [URL], of pane: PaneViewModel) -> Bool {
+        let sources = urls.compactMap { pane.linkedSource(at: $0) }
+        guard let first = sources.first else { return true }
+        let names = Set(sources.map(\.name)).sorted().map { "“\($0)”" }
+        presentAlert(
+            title: sources.count == 1
+                ? "“\(first.name)” is a segment's source"
+                : "\(names.count) of these names are segment sources",
+            message: "This dump has \(sources.count == 1 ? "a segment" : "segments") that came from "
+                + "\(names.joined(separator: ", ")), and writing there would replace the "
+                + "\(sources.count == 1 ? "file that segment is" : "files those segments are") "
+                + "measured against. Choose another \(urls.count == 1 ? "name" : "folder")."
+        )
+        return false
     }
 
     /// Save Segment…: writes the one piece under the click to a file — the
@@ -5305,17 +5399,25 @@ final class MainViewController: NSViewController {
         panel.nameFieldStringValue = "\(baseName)_\(piece.label).bin"
         panel.allowedContentTypes = []
         panel.canCreateDirectories = true
-        let url: URL?
-        if let segmentSavePanel {
-            url = segmentSavePanel(panel)
-        } else {
-            url = panel.runModal() == .OK ? panel.url : nil
-        }
-        guard let url else { return false }
+        // A name that would replace a segment's source sends the panel back up,
+        // the way Save As does (§21.7) — the useful answer is another name, and
+        // asking for it is the whole of the remedy. The `segmentSavePanel` seam
+        // is asked again each time round, so a test that drives it answers the
+        // second question as a user would.
+        while true {
+            let url: URL?
+            if let segmentSavePanel {
+                url = segmentSavePanel(panel)
+            } else {
+                url = panel.runModal() == .OK ? panel.url : nil
+            }
+            guard let url else { return false }
+            guard writeAvoidsSources([url], of: pane) else { continue }
 
-        let part = SegmentWriter.Part(range: piece.range, name: url.lastPathComponent)
-        runSegmentWrite(parts: [part], from: storage, to: url.deletingLastPathComponent())
-        return true
+            let part = SegmentWriter.Part(range: piece.range, name: url.lastPathComponent)
+            runSegmentWrite(parts: [part], from: storage, to: url.deletingLastPathComponent())
+            return true
+        }
     }
 
     /// Replace Segment from File…: reads the one piece under the click from a
@@ -5346,17 +5448,117 @@ final class MainViewController: NSViewController {
         } catch let error as SegmentReplaceError {
             switch error {
             case .lengthMismatch(let pieceLength, let donorLength):
-                presentAlert(
-                    title: "File size does not match the segment",
-                    message: "\(piece.label) is \(FilePaneView.friendlySize(pieceLength)) bytes, "
-                        + "but the file is \(FilePaneView.friendlySize(donorLength)). "
-                        + "The file must be exactly the same length to replace the piece."
-                )
+                // A mismatch is a question, not a refusal (§21.6): the file can
+                // take the piece's place at its own length, and the pieces after
+                // it move by the difference. Only the user can say whether that
+                // is what they meant, so only the user is asked — and a plain
+                // same-length swap never sees this.
+                guard confirmSegmentLengthChange(
+                    title: "Replace \(piece.label) at the file's length?",
+                    piece: piece, pieceLength: pieceLength,
+                    sourceName: url.lastPathComponent, sourceLength: donorLength,
+                    confirmTitle: "Replace and Resize") else { return false }
+                do {
+                    try pane.replaceSegment(piece, withContentsOf: url, allowingLengthChange: true)
+                    return true
+                } catch {
+                    presentFileError("Replacing the segment failed.", error, url: url)
+                    return false
+                }
             }
-            return false
         } catch {
             presentFileError("Replacing the segment failed.", error, url: url)
             return false
+        }
+    }
+
+    // MARK: - Revert Segment to its source file (§21.7)
+
+    /// Revert Segment to «file»: puts the piece's bytes back to the file they
+    /// came from — the inverse of the join that brought them in, one piece at a
+    /// time. One undo step, and the link stays: the bytes are still that file's.
+    ///
+    /// The lengths are the one thing that can have come apart — an insert or a
+    /// delete inside the piece, or the source rewritten a different size — and
+    /// then the user is asked before the pieces after it are moved. Returns
+    /// whether the revert actually ran.
+    @discardableResult
+    func revertPiece(_ piece: Segment, of pane: PaneViewModel) -> Bool {
+        guard pane.isOpen, let source = pane.segmentSource(of: piece) else { return false }
+        guard let donor = pane.segmentRevertDonor(piece) else {
+            presentAlert(
+                title: "“\(source.name)” cannot be read",
+                message: "\(piece.label) came from it, but it is no longer there to go back to. "
+                    + "Nothing in the dump was changed."
+            )
+            return false
+        }
+        let pieceLength = UInt64(piece.range.count)
+        var allowLengthChange = false
+        if donor.size != pieceLength {
+            guard confirmSegmentLengthChange(
+                title: "Restore \(piece.label) at the source's length?",
+                piece: piece, pieceLength: pieceLength,
+                sourceName: source.name, sourceLength: donor.size,
+                confirmTitle: "Restore Length") else { return false }
+            allowLengthChange = true
+        }
+        do {
+            try pane.revertSegment(piece, allowingLengthChange: allowLengthChange)
+            return true
+        } catch {
+            presentFileError("Reverting the segment failed.", error, url: source.url)
+            return false
+        }
+    }
+
+    /// The one question a swap asks when the piece and the file are not the same
+    /// length (§21.6, §21.7): both lengths named, and what agreeing to it moves.
+    /// A same-length swap never asks.
+    private func confirmSegmentLengthChange(title: String, piece: Segment,
+                                            pieceLength: UInt64, sourceName: String,
+                                            sourceLength: UInt64,
+                                            confirmTitle: String) -> Bool {
+        let grows = sourceLength > pieceLength
+        let shift = grows ? sourceLength - pieceLength : pieceLength - sourceLength
+        let message = "\(piece.label) is \(FilePaneView.friendlySize(pieceLength)), "
+            + "and “\(sourceName)” is \(FilePaneView.friendlySize(sourceLength)). "
+            + "Taking the file's length \(grows ? "adds" : "removes") "
+            + "\(FilePaneView.friendlySize(shift)) at the end of the segment, "
+            + "so every segment after it moves by that much."
+        return confirmAlert(title: title, message: message, confirmTitle: confirmTitle)
+            == .alertFirstButtonReturn
+    }
+
+    /// A file some piece came from changed on disk (§21.7) — the same question
+    /// the pane's own file gets (§5.5), asked for one source: reload the pieces
+    /// that came from it, or keep what the dump holds.
+    ///
+    /// Keeping is not doing nothing: the link is to the *file*, so the segment's
+    /// marks are already measured against what is on disk now. The alert says so
+    /// rather than pretending the choice is only about bytes.
+    func presentSegmentSourceChange(for pane: PaneViewModel, source id: SegmentSourceID) {
+        guard pane.isOpen, let source = pane.segmentSources.source(id) else { return }
+        let pieces = pane.segmentStore.segments.filter { $0.link?.source == id }
+        guard !pieces.isEmpty else { return }
+        let names = pieces.map(\.label).joined(separator: ", ")
+        let alert = NSAlert()
+        alert.messageText = "Segment source changed on disk"
+        alert.informativeText = "“\(source.name)” has been changed by another program. "
+            + "\(pieces.count == 1 ? "Segment" : "Segments") \(names) came from it, and "
+            + "\(pieces.count == 1 ? "is" : "are") now compared against its new contents. "
+            + "Reload to take the new bytes into the dump."
+        alert.addButton(withTitle: "Reload \(pieces.count == 1 ? "Segment" : "Segments")")
+        alert.addButton(withTitle: "Keep Current Contents")
+        guard Self.presentModal(alert, defaultInTest: .alertSecondButtonReturn)  // Keep in tests
+            == .alertFirstButtonReturn else { return }
+        // Back to front: reverting a piece can change its length, which moves
+        // every piece after it — the ones already done stay where they were.
+        for piece in pieces.reversed() {
+            guard let current = pane.segmentStore.segments.first(where: {
+                $0.range.lowerBound == piece.range.lowerBound
+            }) else { continue }
+            revertPiece(current, of: pane)
         }
     }
 
@@ -6712,8 +6914,8 @@ extension MainViewController: MinimapHost {
 
     func overviewSource(for pane: PaneViewModel) -> SurfaceMinimapController.OverviewSource {
         SurfaceMinimapController.OverviewSource(
-            storage: pane.byteStorage, saved: pane.savedStorage, size: pane.fileSize,
-            edited: pane.editedRanges, marksModified: pane.marksModifiedBytes,
+            storage: pane.byteStorage, baseline: pane.modifiedBaseline, size: pane.fileSize,
+            edited: pane.editedRanges,
             differences: comparisonCoordinator.index)
     }
 
@@ -6887,6 +7089,20 @@ extension MainViewController: NSMenuItemValidation {
              #selector(deletePaneSelection(_:)):
             // Right-click selection actions act on the pane they were built for.
             return (menuItem.representedObject as? OffsetContextTarget)?.pane.isOpen ?? false
+        case #selector(revertSegmentAtOffset(_:)):
+            // The item is built only where the piece has a source (§21.7); it
+            // is dimmed when that file can no longer be read.
+            guard let target = menuItem.representedObject as? OffsetContextTarget,
+                  target.pane.isOpen,
+                  let piece = target.pane.segmentStore.segment(containing: target.offset)
+            else { return false }
+            return target.pane.canRevertSegment(piece)
+        case #selector(minimapMenuRevertSegment(_:)):
+            guard let target = menuItem.representedObject as? SegmentMenuTarget,
+                  let pane = surface.mappedPane(at: target.mapIndex), pane.isOpen,
+                  target.pieceIndex < pane.segmentStore.segments.count
+            else { return false }
+            return pane.canRevertSegment(pane.segmentStore.segments[target.pieceIndex])
         case #selector(splitHere(_:)):
             // Split Here at «address» opens the Add Cut popover pre-filled with the
             // right-clicked offset; the popover validates the offset as it is

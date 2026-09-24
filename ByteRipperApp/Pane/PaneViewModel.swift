@@ -212,6 +212,21 @@ final class PaneViewModel: HexViewDataSource {
     /// open, close, and revert.
     private(set) var segmentStore: SegmentStore
 
+    /// What the partition's `SegmentSourceID`s stand for (§21.7): the files
+    /// pieces came from. Outlives every snapshot the undo stack holds, so an
+    /// undone-and-redone join finds its sources still here.
+    let segmentSources = SegmentSources()
+
+    /// Watchers on the linked source files (§21.7), one per source, so a chip
+    /// dump rewritten by the programmer's software while the joined image is
+    /// open is noticed the way a pane's own file is (§5.5).
+    private var sourceWatchers: [SegmentSourceID: FileChangeWatcher] = [:]
+
+    /// Fired when a file some piece is linked to changed on disk, with the
+    /// source that changed. The controller prompts (Reload / Keep), the way it
+    /// does for a pane's own file.
+    var onSegmentSourceChanged: ((SegmentSourceID) -> Void)?
+
     /// The pane's shared, lazily-built UEFI tree and MEA analysis cache — one
     /// instance for as long as this pane holds its current file, reached by
     /// every tool-module session through `PaneToolHost` rather than each
@@ -795,6 +810,10 @@ final class PaneViewModel: HexViewDataSource {
         // above keeps the reset's hooks — it only replaces the partition, which
         // is valid unchanged because the two contents have the same size.
         segmentStore.restore(source.segmentStore.snapshot())
+        // The partition came across, so the links in it did: the copy has to
+        // know what their ids stand for (§21.7, §23).
+        segmentSources.adopt(source.segmentSources)
+        refreshSourceWatchers()
         // The copy is a different document: it was never searched.
         clearMatches()
         uefiState.reset()
@@ -826,6 +845,9 @@ final class PaneViewModel: HexViewDataSource {
         segmentUndoStack.removeAll()
         segmentRedoStack.removeAll()
         pendingSegmentSnapshot = nil
+        // The links go with the partition (§21.7): nothing is left watching a
+        // file this pane no longer shows a byte of.
+        stopSourceWatchers()
         // A tab linked to this pane shows its link as broken.
         announceContentChange()
     }
@@ -953,7 +975,78 @@ final class PaneViewModel: HexViewDataSource {
     /// a part's against the bytes it was taken out as. A plain untitled
     /// document has no reference — every byte would read as modified, and the
     /// dirty marker already says it is unsaved.
-    var marksModifiedBytes: Bool { !isUntitled || savedStorage != nil }
+    var marksModifiedBytes: Bool { modifiedBaseline.marksAnything }
+
+    /// What this pane's bytes are painted against, as one value (§21.7).
+    ///
+    /// The document's saved file answers it while there is one: "modified"
+    /// means "not saved yet", and only the file the next save writes to can say
+    /// that. With no file behind the document — the image a join leaves — the
+    /// question has no answer at the document's level, and the pieces answer it
+    /// themselves: each linked piece is measured against the file its bytes
+    /// came from, so a dump joined out of two chips still shows what has been
+    /// patched in each half. Pieces with no link are left unmarked, the way an
+    /// untitled document's bytes always were.
+    var modifiedBaseline: ModifiedBaseline {
+        let links = segmentLinkSpans
+        if links.isEmpty {
+            guard let saved = savedStorage else { return .none }
+            // A file behind the document answers the whole of it, and past its
+            // end every byte is new.
+            return ModifiedBaseline(
+                spans: [ModifiedBaseline.Span(range: 0..<saved.size, storage: saved, sourceOffset: 0)],
+                beyondFrom: saved.size)
+        }
+        // An image with no file of its own is answered by its pieces. Where it
+        // still has a reference of its own — a tab opened from a part of another
+        // document, joined to since (§6) — that reference answers the stretches
+        // no piece came from, so joining into such a tab does not blank the
+        // marks on the part it started as.
+        var spans = links
+        if let saved = savedStorage, saved.size > 0 {
+            // The gaps between the linked pieces, in file order — `links` is
+            // built from the pieces, so it already is.
+            var at = UInt64(0)
+            for span in links {
+                let upper = min(span.range.lowerBound, saved.size)
+                if at < upper {
+                    spans.append(ModifiedBaseline.Span(range: at..<upper,
+                                                       storage: saved, sourceOffset: at))
+                }
+                at = max(at, span.range.upperBound)
+            }
+            if at < saved.size {
+                spans.append(ModifiedBaseline.Span(range: at..<saved.size,
+                                                   storage: saved, sourceOffset: at))
+            }
+            spans.sort { $0.range.lowerBound < $1.range.lowerBound }
+        }
+        return ModifiedBaseline(spans: spans, beyondFrom: nil)
+    }
+
+    /// The linked pieces as baseline spans, in file order. Empty while the
+    /// document has a file of its own: "modified" then means "not saved yet",
+    /// and only the file the next save writes to can answer that (§21.7).
+    private var segmentLinkSpans: [ModifiedBaseline.Span] {
+        guard isUntitled else { return [] }
+        var spans: [ModifiedBaseline.Span] = []
+        for piece in segmentStore.segments {
+            guard let link = piece.link,
+                  let storage = segmentSources.reader(link.source) else { continue }
+            // The span is the whole piece, with the stretch it came from as its
+            // limit: bytes past that limit are inside the piece and came from
+            // nowhere — an insert grew it beyond what it was taken from — so
+            // they read as new, the same answer they would get in a file that
+            // outgrew its saved copy.
+            guard piece.range.lowerBound < piece.range.upperBound else { continue }
+            spans.append(ModifiedBaseline.Span(
+                range: piece.range,
+                storage: storage,
+                sourceOffset: link.sourceRange.lowerBound,
+                sourceLimit: link.sourceRange.upperBound))
+        }
+        return spans
+    }
 
     private func startWatching(_ url: URL) {
         changeWatcher?.stop()
@@ -996,6 +1089,9 @@ final class PaneViewModel: HexViewDataSource {
     /// `preserveSegments`).
     private func resetSegments(for doc: BinaryDocument) {
         segmentStore.reset(size: doc.size, name: doc.url.lastPathComponent)
+        // A fresh file is one piece of itself: whatever the pane was linked to
+        // belonged to what it held before (§21.7).
+        stopSourceWatchers()
         segmentUndoStack.removeAll()
         segmentRedoStack.removeAll()
         pendingSegmentSnapshot = nil
@@ -1081,6 +1177,10 @@ final class PaneViewModel: HexViewDataSource {
         segmentRedoStack.append(contentsOf: afterStates)
         segmentRedoStack.append(segmentStore.snapshot())   // after(t_last) = current
         segmentStore.restore(popped.first ?? segmentStore.snapshot())
+        // The restored partition may carry links the current one did not, or
+        // drop ones it did (undoing a join is exactly that), so the watchers
+        // follow it (§21.7).
+        refreshSourceWatchers()
     }
 
     /// Restores the partition after a redo that reapplied `step` transactions —
@@ -1096,6 +1196,7 @@ final class PaneViewModel: HexViewDataSource {
         segmentUndoStack.append(segmentStore.snapshot())   // before(t₁) = current
         segmentUndoStack.append(contentsOf: popped.dropLast())
         segmentStore.restore(popped.last ?? segmentStore.snapshot())
+        refreshSourceWatchers()
     }
 
     /// Moves the caret's input region to `region` (set when the user clicks the
@@ -1139,25 +1240,23 @@ final class PaneViewModel: HexViewDataSource {
         let n = min(count, presentCount)
 
         let current = (try? doc.read(at: start, length: n)) ?? []
-        let saved = (try? savedStorage?.read(at: start, length: n)) ?? []
-        let savedSize = savedStorage?.size ?? 0
+        // What each byte is measured against (§21.7): the saved file, or — in
+        // an image with no file of its own — each piece's own source.
+        let references = modifiedBaseline.references(in: start..<start + UInt64(n))
         // Live visible diff (§8.3 rule 6): read the companion's bytes for the
         // same absolute range. Immediate, exact, and self-consistent with the
         // background block index (which only drives navigation).
         let other = companionBytes(in: start..<start + UInt64(n))
         let otherSize = companion?.fileSize ?? 0
-        let marksModified = marksModifiedBytes
 
         for i in 0..<n {
             let offset = start + UInt64(i)
             let byte = current.indices.contains(i) ? current[i] : 0
             var isModified = false
-            if marksModified {
-                if offset >= savedSize {
-                    isModified = true
-                } else if saved.indices.contains(i) {
-                    isModified = saved[i] != byte
-                }
+            switch references.indices.contains(i) ? references[i] : .unmarked {
+            case .unmarked: isModified = false
+            case .beyond: isModified = true
+            case .byte(let reference): isModified = reference != byte
             }
             var isDifferent = false
             if let other {
@@ -1772,25 +1871,44 @@ final class PaneViewModel: HexViewDataSource {
 
     // MARK: - Replace a piece from a file (§21.6)
 
-    /// Replaces `piece`'s bytes with the contents of the file at `url`, which
-    /// must match the piece's length (§21.6). The file is opened as the chunked
-    /// reader and streamed in, so it is never loaded whole into RAM.
-    func replaceSegment(_ piece: Segment, withContentsOf url: URL) throws {
+    /// Replaces `piece`'s bytes with the contents of the file at `url` (§21.6).
+    /// The file is opened as the chunked reader and streamed in, so it is never
+    /// loaded whole into RAM. The piece then links to that file (§21.7): its
+    /// bytes came from there, and Revert Segment can put them back.
+    ///
+    /// The file must match the piece's length unless `allowingLengthChange` is
+    /// set — the caller sets it once the user has agreed to the resize.
+    func replaceSegment(_ piece: Segment, withContentsOf url: URL,
+                        allowingLengthChange: Bool = false) throws {
         let donor = try FileBackedStorage(url: url)
-        try replaceSegment(piece, withContentsOf: donor)
+        try replaceSegment(piece, withContentsOf: donor,
+                           allowingLengthChange: allowingLengthChange,
+                           linkingTo: segmentSources.id(for: url),
+                           sourceRange: 0..<donor.size)
     }
 
-    /// The chunked, same-length swap, given an already-open donor (§21.6). The
-    /// donor must match the piece's length; the whole swap is one transaction, so
-    /// undo takes it back as one step. A same-length overwrite moves no cut, so
-    /// there is no `applySegmentEdit` — only the content-change repaint.
-    func replaceSegment(_ piece: Segment, withContentsOf donor: any ByteStorage) throws {
+    /// The chunked swap, given an already-open donor (§21.6). The whole swap is
+    /// one transaction, so undo takes it back as one step. A same-length
+    /// overwrite moves no cut, so there is no `applySegmentEdit` — only the
+    /// content-change repaint; a swap that changed the length adds or removes
+    /// the difference at the piece's tail, and the cuts after it move with it.
+    ///
+    /// `link`/`sourceRange` record where the bytes came from (§21.7), so the
+    /// piece can be measured against that file and put back from it. Nil leaves
+    /// the piece's link as it was.
+    func replaceSegment(_ piece: Segment, withContentsOf donor: any ByteStorage,
+                        allowingLengthChange: Bool = false,
+                        linkingTo link: SegmentSourceID? = nil,
+                        sourceRange: Range<UInt64>? = nil) throws {
         guard let doc = document else { return }
         breakTypingSeries()
         let sizeBefore = doc.size
         beginSegmentEdit()
+        let outcome: SegmentReplaceOutcome
         do {
-            try SegmentReplacer.replace(range: piece.range, in: doc, withContentsOf: donor)
+            outcome = try SegmentReplacer.replace(range: piece.range, in: doc,
+                                                  withContentsOf: donor,
+                                                  allowingLengthChange: allowingLengthChange)
         } catch {
             // The gesture recorded nothing (a refused length, or a mid-stream
             // failure rolled back), so the captured snapshot must not leak into
@@ -1798,12 +1916,190 @@ final class PaneViewModel: HexViewDataSource {
             discardPendingSegmentSnapshot()
             throw error
         }
-        // The engine's `.overwrite` recomputes the range, which covers the swap
-        // (a same-length overwrite, so the size is unchanged).
-        signalEdit(.overwrite(range: piece.range))
-        notifyAfterEdit(range: piece.range, sizeBefore: sizeBefore)
+        // The tail the swap added or removed is what moves an offset: the
+        // partition follows it, and the cut that closed the piece is put back on
+        // the piece's new end — an insert at a cut belongs to the piece that
+        // *starts* there (§21.2), which here is the next one, not this one.
+        switch outcome {
+        case .none:
+            signalEdit(.overwrite(range: piece.range))
+        case .inserted(let at, let length):
+            signalEdit(.overwrite(range: piece.range.lowerBound..<at))
+            // The added bytes are this piece's, not the next piece's: they
+            // replaced it, so the boundary that closed it moves out past them
+            // and every piece after it moves whole — links and all (§21.7). The
+            // ordinary `.insert` rule would hand them to the piece that starts
+            // at the boundary (§21.2), which is right for an edit made there
+            // and wrong for a swap.
+            segmentStore.applyGrowth(of: piece.index, by: length, newSize: doc.size)
+            signalEdit(.insert(at: at, length: length))
+        case .deleted(let range):
+            signalEdit(.overwrite(range: piece.range.lowerBound..<range.lowerBound))
+            applySegmentEdit(.delete(range: range))
+            signalEdit(.delete(range: range))
+        }
+        if let link, let sourceRange {
+            segmentStore.setLink(link, sourceRange: sourceRange,
+                                 at: min(piece.index, segmentStore.segments.count - 1))
+            refreshSourceWatchers()
+        }
+        notifyAfterEdit(range: piece.range.lowerBound..<max(piece.range.upperBound, doc.size),
+                        sizeBefore: sizeBefore)
         notifyCompanionContentFullyChanged()
     }
+
+
+    // MARK: - Segment source links (§21.7)
+
+    /// How a linked piece stands to the file its bytes came from — what the
+    /// Segments form says beside the file's name, and what decides whether
+    /// Revert Segment has to ask about the length first.
+    enum SegmentLinkState: Equatable {
+        /// The piece is byte-for-byte the stretch of the file it came from.
+        case matching
+        /// Same length, different bytes: the piece has been patched since.
+        case edited
+        /// The piece no longer spans what it came from — an insert or a delete
+        /// inside it, or the file itself has a different length now.
+        case lengthChanged(piece: UInt64, source: UInt64)
+        /// The file cannot be read any more: deleted, renamed, or moved.
+        case missing
+    }
+
+    /// The file `piece` came from, or nil when nothing brought it in (§21.7) —
+    /// a manual split, or a new file's one piece.
+    func segmentSource(of piece: Segment) -> SegmentSources.Source? {
+        guard let link = piece.link else { return nil }
+        return segmentSources.source(link.source)
+    }
+
+    /// How `piece` stands to its source, or nil when it has none. Compared in
+    /// bounded chunks and cached against `contentGeneration`, so a form that
+    /// reloads on every change does not re-read a megabyte per row.
+    func segmentLinkState(of piece: Segment) -> SegmentLinkState? {
+        guard let link = piece.link else { return nil }
+        let key = SegmentLinkStateKey(start: piece.range.lowerBound,
+                                      length: UInt64(piece.range.count),
+                                      sourceRange: link.sourceRange)
+        if let cached = linkStateCache[key], cached.generation == contentGeneration {
+            return cached.state
+        }
+        let state = computeSegmentLinkState(piece, link)
+        linkStateCache[key] = (contentGeneration, state)
+        return state
+    }
+
+    private func computeSegmentLinkState(_ piece: Segment, _ link: SegmentLink) -> SegmentLinkState {
+        guard let doc = document, let reader = segmentSources.reader(link.source) else { return .missing }
+        // The stretch the link claims, as much of it as the file still holds: a
+        // source rewritten shorter is a length change, not a missing file.
+        let available = link.sourceRange.lowerBound < reader.size
+            ? min(UInt64(link.sourceRange.count), reader.size - link.sourceRange.lowerBound)
+            : 0
+        let pieceLength = UInt64(piece.range.count)
+        guard available == pieceLength, pieceLength > 0 else {
+            return .lengthChanged(piece: pieceLength, source: available)
+        }
+        var offset = UInt64(0)
+        while offset < pieceLength {
+            let step = Int(min(UInt64(SegmentSources.compareChunk), pieceLength - offset))
+            guard let mine = try? doc.read(at: piece.range.lowerBound + offset, length: step),
+                  let theirs = try? reader.read(at: link.sourceRange.lowerBound + offset, length: step),
+                  mine.count == step, theirs.count == step else { return .missing }
+            if mine != theirs { return .edited }
+            offset += UInt64(step)
+        }
+        return .matching
+    }
+
+    /// Whether Revert Segment is offered for `piece`: it has a link, and the
+    /// file behind it can still be read.
+    func canRevertSegment(_ piece: Segment) -> Bool {
+        guard let link = piece.link, segmentSources.reader(link.source) != nil else { return false }
+        return !(segmentLinkState(of: piece) == .missing)
+    }
+
+    /// The bytes Revert Segment would put back, as a storage of its own: the
+    /// stretch of the source file the piece stands for, clamped to what the
+    /// file still holds. Nil when there is no readable source.
+    func segmentRevertDonor(_ piece: Segment) -> (any ByteStorage)? {
+        guard let link = piece.link, let reader = segmentSources.reader(link.source) else { return nil }
+        let donor = SlicedStorage(base: reader, range: link.sourceRange)
+        return donor.size > 0 ? donor : nil
+    }
+
+    /// Puts `piece`'s bytes back to the file it came from (§21.7) — one undo
+    /// step, and the link stays: the bytes are still that file's.
+    ///
+    /// `allowingLengthChange` is the answer to the question the caller asks
+    /// when the piece and its source no longer have the same length: with it
+    /// the piece is restored at the source's length, and the pieces after it
+    /// move; without it a mismatch is refused, the way a replace is (§21.6).
+    func revertSegment(_ piece: Segment, allowingLengthChange: Bool = false) throws {
+        guard let link = piece.link, let donor = segmentRevertDonor(piece) else { return }
+        // The stretch actually restored: the link's, clamped to what the file
+        // still holds, so a source that shrank re-links to what it now is.
+        let restored = link.sourceRange.lowerBound..<(link.sourceRange.lowerBound + donor.size)
+        try replaceSegment(piece, withContentsOf: donor,
+                           allowingLengthChange: allowingLengthChange,
+                           linkingTo: link.source,
+                           sourceRange: restored)
+    }
+
+    /// Whether saving to `url` would write over a file some piece came from
+    /// (§21.7). A save must not: the sources are the dumps the image was built
+    /// out of, and replacing one with the image leaves a link pointing at its
+    /// own result.
+    func linkedSource(at url: URL) -> SegmentSources.Source? {
+        guard let id = segmentSources.existingID(for: url),
+              segmentStore.linkedSources.contains(id) else { return nil }
+        return segmentSources.source(id)
+    }
+
+    /// Starts a watcher on every source some piece is linked to, and stops the
+    /// ones nothing points at any more (§21.7). Called whenever a link is made
+    /// or the partition is restored under one.
+    func refreshSourceWatchers() {
+        let wanted = Set(segmentStore.linkedSources)
+        for (id, watcher) in sourceWatchers where !wanted.contains(id) {
+            watcher.stop()
+            sourceWatchers[id] = nil
+        }
+        for id in wanted where sourceWatchers[id] == nil {
+            guard let url = segmentSources.source(id)?.url else { continue }
+            let watcher = FileChangeWatcher(url: url)
+            watcher.onChange = { [weak self] in
+                guard let self, isOpen else { return }
+                // The link is to the file, not to the bytes it held when it was
+                // linked: the open reader goes, so the next read is of what is
+                // on disk now, and the pane says so before the marks change
+                // under the user (§21.7).
+                segmentSources.invalidate(id)
+                linkStateCache.removeAll()
+                onSavedStateChanged?()
+                notify(contentChange: .bytes(in: 0..<fileSize))
+                onSegmentSourceChanged?(id)
+            }
+            sourceWatchers[id] = watcher
+        }
+    }
+
+    private func stopSourceWatchers() {
+        for watcher in sourceWatchers.values { watcher.stop() }
+        sourceWatchers.removeAll()
+        segmentSources.closeReaders()
+        linkStateCache.removeAll()
+    }
+
+    /// Which piece a cached link verdict belongs to. A piece has no identity of
+    /// its own (the label is positional and renumbers), so the key is what the
+    /// verdict was actually measured over.
+    private struct SegmentLinkStateKey: Hashable {
+        let start: UInt64
+        let length: UInt64
+        let sourceRange: Range<UInt64>
+    }
+    private var linkStateCache: [SegmentLinkStateKey: (generation: Int, state: SegmentLinkState)] = [:]
 
     // MARK: - Join a file (§22)
 
@@ -1816,7 +2112,8 @@ final class PaneViewModel: HexViewDataSource {
         try join(contentsOf: FileBackedStorage(url: url),
                  named: url.lastPathComponent,
                  at: position,
-                 becoming: joinedName)
+                 becoming: joinedName,
+                 sourceURL: url)
     }
 
     /// The chunked join, given an already-open source and the name to give the
@@ -1833,8 +2130,14 @@ final class PaneViewModel: HexViewDataSource {
     /// has to step over the names in use across the whole app and a pane can see
     /// only its own window. Nil leaves the image unnamed, which is what a pane
     /// that had already detached wants: it keeps what it is wearing.
+    /// `sourceURL` is the file the donor's bytes are being read from, when
+    /// there is one: the joined piece links to it, so the image the join leaves
+    /// still knows which half came from which chip and can be measured against
+    /// it (§21.7). A donor that is not a file — a storage handed in by a test —
+    /// joins without a link.
     func join(contentsOf source: any ByteStorage, named sourceName: String,
-              at position: JoinPosition, becoming joinedName: String? = nil) throws {
+              at position: JoinPosition, becoming joinedName: String? = nil,
+              sourceURL: URL? = nil) throws {
         guard let doc = document else { return }
         breakTypingSeries()
         let sizeBefore = doc.size
@@ -1845,6 +2148,16 @@ final class PaneViewModel: HexViewDataSource {
         // segment undo stack — undoing the join then restores the partition to
         // what it was. The seam cut and renames below are the post-join state.
         beginSegmentEdit()
+        // The join is about to take the document's file away from it (§22.2),
+        // so that file becomes what the content the pane already holds is
+        // measured against: every piece that has no source of its own is linked
+        // to it, at the offsets it sits at there (§21.7). Done before the
+        // insert, while those offsets are still the file's, and after the
+        // snapshot, so undoing the join — which gives the file back — takes the
+        // links with it.
+        let preJoinSource = isUntitled ? nil : segmentSources.id(for: doc.url)
+        if let preJoinSource { segmentStore.linkUnlinkedPieces(to: preJoinSource) }
+        let joinedSource = sourceURL.map { segmentSources.id(for: $0) }
         try doc.join(contentsOf: source, at: position)
         // The insert moves the partition with the content and grows the content
         // size (§21.2). This must run before the seam cut below: a cut is
@@ -1863,6 +2176,7 @@ final class PaneViewModel: HexViewDataSource {
             // piece takes the source's name (there is no original content to
             // name, and a cut at 0 or at EOF would be refused).
             segmentStore.rename(0, to: sourceName)
+            segmentStore.setLink(joinedSource, sourceRange: 0..<sourceSize, at: 0)
         } else {
             let seam = (position == .start) ? sourceSize : sizeBefore
             // For an insert at the start the cut splits the piece that opens at
@@ -1878,10 +2192,15 @@ final class PaneViewModel: HexViewDataSource {
                 // is the original content (addCut left it unnamed, so name it).
                 segmentStore.rename(0, to: sourceName)
                 segmentStore.rename(1, to: originalName)
+                segmentStore.setLink(joinedSource, sourceRange: 0..<sourceSize, at: 0)
             } else {
-                // Piece 0 is the original content (addCut kept its name); piece
-                // 1 is the joined bytes (take the source's name).
-                segmentStore.rename(1, to: sourceName)
+                // The joined bytes are the last piece — the cut at the old end
+                // split the piece that ran to it, whichever piece that was. The
+                // content the pane already held keeps its own names (addCut left
+                // them alone), and the new tail takes the source's.
+                let joined = segmentStore.segments.count - 1
+                segmentStore.rename(joined, to: sourceName)
+                segmentStore.setLink(joinedSource, sourceRange: 0..<sourceSize, at: joined)
             }
         }
         // The caret sits at the start of the added part (§22.5) — `doc.join`
@@ -1906,6 +2225,7 @@ final class PaneViewModel: HexViewDataSource {
         isUntitled = true
         if wasAttached { untitledName = joinedName }
         refreshSavedStorage()
+        refreshSourceWatchers()
         changeWatcher?.stop()
         changeWatcher = nil
         // The join is a length-changing edit: the whole pane repaints, the

@@ -1646,8 +1646,8 @@ final class MinimapTests: XCTestCase {
             blocks: differences.map { DiffBlock(kind: .different, range: $0) }
         )
         let source = SurfaceMinimapController.OverviewSource(
-            storage: MemoryBackedStorage(bytes: bytes), saved: nil,
-            size: UInt64(bytes.count), edited: [], marksModified: false,
+            storage: MemoryBackedStorage(bytes: bytes), baseline: .none,
+            size: UInt64(bytes.count), edited: [],
             differences: index
         )
         return SurfaceMinimapController.overviewRows(source: source, extent: UInt64(bytes.count),

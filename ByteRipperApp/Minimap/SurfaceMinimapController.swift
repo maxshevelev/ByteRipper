@@ -85,14 +85,14 @@ import UEFIImage
     /// the row engine directly.
     struct OverviewSource: Sendable {
         let storage: (any ByteStorage)?
-        let saved: (any ByteStorage)?
+        /// What the bytes are painted modified against (§6, §21.7): the saved
+        /// file, or — in an image with no file of its own — each linked piece's
+        /// own source.
+        let baseline: ModifiedBaseline
         let size: UInt64
         /// Where the edit overlay has written — the only offsets a modified byte
         /// can sit at.
         let edited: [Range<UInt64>]
-        /// Whether `saved` is something to paint modified bytes against
-        /// (`PaneViewModel.marksModifiedBytes`).
-        let marksModified: Bool
         /// The comparison index, kept whole rather than flattened into a list of
         /// differing ranges: the rows being computed ask it for the blocks in
         /// their own window (§8). Flattening it here walked every block in the
@@ -286,8 +286,7 @@ import UEFIImage
         // Bytes outside the edited ranges cannot differ from the saved copy, so
         // comparing a cell whole is safe: the untouched part of it compares
         // equal and contributes nothing.
-        if source.marksModified, !source.edited.isEmpty {
-            let savedSize = source.saved?.size ?? 0
+        if source.baseline.marksAnything, !source.edited.isEmpty {
             for row in rows {
                 if shouldCancel() { return nil }
                 let rowStart = start(ofRow: row)
@@ -302,8 +301,10 @@ import UEFIImage
                 }) else { continue }
                 guard let bytes = try? storage.read(at: rowStart, length: Int(readEnd - rowStart)),
                       !bytes.isEmpty else { continue }
-                let savedBytes = source.saved
-                    .flatMap { try? $0.read(at: rowStart, length: Int(readEnd - rowStart)) } ?? []
+                // One read of the references per row, whichever sources answer
+                // for it (§21.7): a row inside a joined half is measured
+                // against that half's own file.
+                let block = source.baseline.block(in: rowStart..<readEnd)
                 let index = row - rows.lowerBound
 
                 guard span >= UInt64(columns) else {
@@ -311,9 +312,12 @@ import UEFIImage
                     // stretch each one over the cells it covers.
                     for offsetInRow in 0..<bytes.count {
                         let absolute = rowStart + UInt64(offsetInRow)
-                        let changed = absolute >= savedSize
-                            || (savedBytes.indices.contains(offsetInRow)
-                                ? savedBytes[offsetInRow] != bytes[offsetInRow] : true)
+                        let changed: Bool
+                        switch block.reference(at: absolute) {
+                        case .unmarked: changed = false
+                        case .beyond: changed = true
+                        case .byte(let reference): changed = reference != bytes[offsetInRow]
+                        }
                         guard changed else { continue }
                         for column in stretchedColumns(forByteAt: UInt64(offsetInRow), ofSpan: span) {
                             modified[index] |= UInt16(1) << UInt16(column)
@@ -328,21 +332,41 @@ import UEFIImage
                     let from = Int(sliceStart - rowStart)
                     let to = Int(min(sliceEnd, readEnd) - rowStart)
                     guard from < to, to <= bytes.count else { continue }
-                    // Bytes past the saved file's end are new by definition.
-                    if sliceStart + UInt64(to - from) > savedSize {
+                    let slice = sliceStart..<(rowStart + UInt64(to))
+                    // Bytes past their reference's end are new by definition,
+                    // and bytes with no reference at all are never modified —
+                    // both answered without reading one.
+                    if block.touchesBeyond(slice) {
                         modified[index] |= UInt16(1) << UInt16(column)
                         continue
                     }
-                    guard savedBytes.count >= to else {
-                        modified[index] |= UInt16(1) << UInt16(column)
+                    if block.isUnreferenced(slice) { continue }
+                    if block.isFullyCovered(slice) {
+                        // The whole slice has a reference in one buffer: one
+                        // memcmp, the way the saved file was always compared.
+                        let differs = bytes.withUnsafeBufferPointer { current in
+                            block.bytes.withUnsafeBufferPointer { reference in
+                                memcmp(current.baseAddress! + from, reference.baseAddress! + from, to - from) != 0
+                            }
+                        }
+                        if differs { modified[index] |= UInt16(1) << UInt16(column) }
                         continue
                     }
-                    let differs = bytes.withUnsafeBufferPointer { current in
-                        savedBytes.withUnsafeBufferPointer { saved in
-                            memcmp(current.baseAddress! + from, saved.baseAddress! + from, to - from) != 0
+                    // A slice straddling two sources' edges: the handful of
+                    // bytes at a seam, walked one by one.
+                    for offsetInRow in from..<to {
+                        let absolute = rowStart + UInt64(offsetInRow)
+                        let changed: Bool
+                        switch block.reference(at: absolute) {
+                        case .unmarked: changed = false
+                        case .beyond: changed = true
+                        case .byte(let reference): changed = reference != bytes[offsetInRow]
+                        }
+                        if changed {
+                            modified[index] |= UInt16(1) << UInt16(column)
+                            break
                         }
                     }
-                    if differs { modified[index] |= UInt16(1) << UInt16(column) }
                 }
             }
         }
