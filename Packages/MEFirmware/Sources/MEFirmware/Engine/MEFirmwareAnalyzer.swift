@@ -760,8 +760,21 @@ public actor MEFirmwareAnalyzer {
         // One read serves both file systems: the EFS walk below needs the same
         // table (its own `EFST` half, and the `FTBL` flags beside it), and the
         // source answers the second ask out of what the first fetched.
+        //
+        // The chipset-table read below asks the same table a third question:
+        // which record of an ID-keyed (0xC) Intel Configuration is the
+        // `mphytbl*` file, a thing only the `FTBL` row keyed by its File ID
+        // says.
+        let configRecordSize = MFSHomeDecoder.configRecordSize(
+            variant: identity.variant, major: identity.major,
+            minor: identity.minor, platform: mfsInfo?.ftblPlatform ?? -1)
+        let intelConfiguration = Self.moduleBody(named: "intl.cfg",
+                                                 of: codePartition,
+                                                 in: region, baseOffset: baseOffset)
         var fileTable: FileTable? = nil
-        if mfsVolume?.usesFTBL == true || efsVolume != nil {
+        if mfsVolume?.usesFTBL == true || efsVolume != nil
+            || (configRecordSize == 0xC
+                && (mfsInfo != nil || intelConfiguration != nil)) {
             fileTable = try? await data.fileTable()
             if fileTable?.isEmpty == true { fileTable = nil }
         }
@@ -839,12 +852,14 @@ public actor MEFirmwareAnalyzer {
         // rather than guessing the stride from the layout, which would read one
         // struct as the other and print a table of nonsense.
         var mfsConfigurations: [MFSConfigDecode] = []
+        var mfsConfigurationsByID: [MFSConfigIDDecode] = []
         if let info = mfsInfo {
             let decoded = MFSHomeDecoder.configurations(
                 files: info.files, variant: identity.variant,
                 major: identity.major, minor: identity.minor,
                 platform: info.ftblPlatform)
             mfsConfigurations = decoded.byName
+            mfsConfigurationsByID = decoded.byID
             mfsVolume?.configurations = decoded.byName.map {
                 MFSConfiguration(owningFile: $0.owningFile,
                                  records: $0.records.map(Self.configRecord))
@@ -881,18 +896,48 @@ public actor MEFirmwareAnalyzer {
             oemConfiguration = oem
         }
 
-        // Phase 9 (identity-gated): the file-6 Intel Configuration's Chipset
-        // Initialization Tables (upstream mphytbl/pch_init_anl). mphytbl* file
-        // records are already sliced out of file 6 by the config decode retained
-        // in `mfsInfo`; only their *stepping letters* are identity-gated
-        // (variant/major/minor/build + manifest date decide absolute vs bitfield
-        // vs build rules), so the decode is deferred past identity. Unlike the
-        // Home Directory it is not gated on `vfs_starts_at_0` — a legacy volume's
-        // config stream is decoded regardless of where its files start. Best-
-        // effort: no mphytbl records → nil, no Issues.
-        if mfsVolume?.usesFTBL == false, let info = mfsInfo {
+        // Phase 9 (identity-gated, database for the ID-keyed layouts): the
+        // Intel Configuration's Chipset Initialization Tables (upstream
+        // mphytbl/pch_init_anl). Only the tables' *stepping letters* are
+        // identity-gated (variant/major/minor/build + manifest date decide
+        // absolute vs bitfield vs build rules), so the decode is deferred past
+        // identity. Unlike the Home Directory it is not gated on
+        // `vfs_starts_at_0` — a config stream is read wherever its files start.
+        //
+        // Two sources, in upstream's own order: the MFS volume's low-level file
+        // 6 first, then the FTPR `intl.cfg` module, which *replaces* whatever
+        // the volume said — with its own empty answer too, exactly as
+        // `ext_anl` overwrites `pch_init_final` (MEA.py 5999–6009). A CSME
+        // 15/16 FTBL volume carries no file 6 at all, so `intl.cfg` is the only
+        // copy it has. Best-effort throughout: no mphytbl record, or no file
+        // table to recognise one by, → nil and no Issues.
+        //
+        // The override needs a volume to hang on: `pchInit` is a field of
+        // `MFSVolume`, so an image with an `intl.cfg` and no MFS at all — which
+        // upstream still reads, its `get_cfg_rec_size` defaulting without a
+        // platform — has nowhere to put the answer and keeps none. No dump in
+        // the set is one.
+        if let info = mfsInfo {
+            mfsVolume?.pchInit = configRecordSize == 0x1C
+                ? PCHInitDecoder.decode(
+                    files: info.files, configurations: mfsConfigurations,
+                    variant: identity.variant, major: identity.major,
+                    minor: identity.minor, build: identity.build,
+                    year: manifest.year, month: manifest.month, day: manifest.day)
+                : PCHInitDecoder.decode(
+                    files: info.files, configurationsByID: mfsConfigurationsByID,
+                    fileTable: fileTable, platform: info.ftblPlatform,
+                    dictionary: info.ftblDictionary,
+                    variant: identity.variant, major: identity.major,
+                    minor: identity.minor, build: identity.build,
+                    year: manifest.year, month: manifest.month, day: manifest.day)
+        }
+        if let stream = intelConfiguration, mfsVolume != nil {
             mfsVolume?.pchInit = PCHInitDecoder.decode(
-                files: info.files, configurations: mfsConfigurations,
+                intelConfiguration: stream, recordSize: configRecordSize,
+                fileTable: fileTable,
+                platform: mfsInfo?.ftblPlatform ?? -1,
+                dictionary: mfsInfo?.ftblDictionary ?? -1,
                 variant: identity.variant, major: identity.major,
                 minor: identity.minor, build: identity.build,
                 year: manifest.year, month: manifest.month, day: manifest.day)
@@ -1061,6 +1106,7 @@ public actor MEFirmwareAnalyzer {
                 presentFileIndices: mfsInfo?.files
                     .filter { !$0.content.isEmpty }
                     .map(\.index) ?? [],
+                efsHoldsFiles: efsVolume?.files?.last.map { $0.storedSize > 0 } ?? false,
                 hasConfiguration: configurationPresent),
             // Row 12a is CSME 11's alone, the way upstream gates it, so the
             // token is read only there — a later family's row cell 4 means
@@ -1214,18 +1260,33 @@ public actor MEFirmwareAnalyzer {
                                   sevenOne: version(entries.sevenOne))
     }
 
-    /// What is known about an image's chipset initialisation table: the
-    /// decoded aggregate when there is one, "absent" when the volume was read
-    /// and holds none — and "unknown" for a file-table volume with files in
-    /// it, whose configuration this engine cannot read yet (it needs
-    /// `FileTable.dat` naming) and which may well carry one.
+    /// One `$CPD` module's bytes as they sit in the region: the module
+    /// directory's own offset from the `$CPD` base, its own size, and no
+    /// decompression — the configuration modules read this way are stored
+    /// plain, and upstream slices them straight out of the buffer (MEA.py
+    /// 5999). Nil when the partition carries no such module, when the module is
+    /// empty the way upstream's `entry_empty` counts empty (no bytes, or all
+    /// 0xFF), or when its extent runs past the region.
+    private static func moduleBody(named name: String, of partition: CodePartition?,
+                                   in region: Data, baseOffset: Int) -> Data? {
+        guard let partition,
+              let module = partition.modules.first(where: { $0.name == name }),
+              module.size > 0 else { return nil }
+        let start = partition.offset - baseOffset + module.offset
+        guard start >= 0, start + module.size <= region.count else { return nil }
+        let body = region.subdata(in: (region.startIndex + start)
+                                    ..< (region.startIndex + start + module.size))
+        return body.allSatisfy { $0 == 0xFF } ? nil : body
+    }
+
+    /// Whether the image carries a chipset initialisation table — the thing
+    /// that decides whether a CSME platform is named at all. Both of the
+    /// streams that can hold one (the volume's file 6, the FTPR `intl.cfg`)
+    /// have been read by the time this is asked, so the aggregate answers it
+    /// outright: upstream's own gate is the emptiness of `pch_init_final`.
     private static func chipsetInitTable(of volume: MFSVolume?)
         -> CSEPlatformNames.ChipsetInitTable {
-        if volume?.pchInit?.chipsets.isEmpty == false { return .present }
-        if volume?.usesFTBL == true, (volume?.presentFileCount ?? 0) > 0 {
-            return .unknown
-        }
-        return .absent
+        volume?.pchInit?.chipsets.isEmpty == false ? .present : .absent
     }
 
     /// Validate the chosen manifest's RSA signature against its protected-data

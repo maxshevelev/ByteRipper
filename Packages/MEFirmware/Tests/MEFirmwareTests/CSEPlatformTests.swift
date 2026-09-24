@@ -30,12 +30,9 @@ final class CSEPlatformTests: XCTestCase {
     }
 
     /// The row belongs to the firmware whose chipset is otherwise unknown: an
-    /// image whose initialisation table names one gets no Chipset Support row,
-    /// and neither does one whose file system this engine cannot read — it
-    /// cannot tell whether such a table is in there.
+    /// image whose initialisation table names one gets no Chipset Support row.
     func testTheInitialisationTableTakesTheRowInstead() {
         XCTAssertNil(name(.csme, 16, 1, .present))
-        XCTAssertNil(name(.csme, 16, 1, .unknown))
         XCTAssertEqual(name(.csme, 16, 1, .absent), "ADP/RPP")
     }
 

@@ -428,11 +428,9 @@ enum MFSParser {
 /// decoders do not.
 ///
 /// Deliberately scoped to the *legacy* membership rule: an FTBL-mode volume
-/// (CSME 15/16) names its files through the FileTable.dat tables (a later
-/// increment), so its raw FAT indices do not map to upstream's semantic set and
-/// the row stays Unconfigured even when the volume carries files. The CSME
-/// EFS/OEM-config/CDMD upgrade rules of MEA.py 13050–13051 are likewise out of
-/// this row's scope. Both decisions are recorded in the increment plan.
+/// (CSME 15/16) names its files through the FileTable.dat tables, so its raw
+/// FAT indices do not map to upstream's semantic set and nothing is claimed
+/// from them. Such a volume is answered by the two raises that follow instead. Both decisions are recorded in the increment plan.
 enum MFSStateDecoder {
     /// The File System State (row 17), in upstream's three steps:
     ///
@@ -442,21 +440,19 @@ enum MFSStateDecoder {
     ///    start at offset 0 (CSME 15/16, `usesFTBL`) has no reserved files by
     ///    index at all: upstream's own loop breaks out on `vfs_starts_at_0`
     ///    before reading one, so nothing is claimed from indices there;
-    /// 2. failing that, a configuration partition of any kind — a `fitc.cfg`
+    /// 2. an EFS volume that holds file contents raises the state to
+    ///    Initialized from wherever it stood (`efs_init`, 13050) — which bytes
+    ///    of an EFS are a file is a question only the `FileTable.dat` EFST
+    ///    table answers, so this one is the volume's *decoded* file list, not
+    ///    a fact of the flash. `efsHoldsFiles` is upstream's own
+    ///    `bool(file_data_all)`: its loop keeps only the last entry it read, so
+    ///    what it tests is whether the **last** EFS file has bytes;
+    /// 3. failing both, a configuration partition of any kind — a `fitc.cfg`
     ///    module, a FITC / CDMD / MFSB partition — means the firmware has at
-    ///    least been configured (13051).
-    ///
-    /// One step between the two is not ported: an EFS volume that holds file
-    /// contents raises the state to Initialized from any state (13050,
-    /// `efs_init`). Which bytes of an EFS are a file is a question only the
-    /// `FileTable.dat` EFST table answers — it names each entry's offset in
-    /// the volume's assembled data area — and that table is not parsed here
-    /// yet. So a CSME 15/16 image whose file system is written but whose
-    /// configuration partitions are present reads Configured where the console
-    /// reads Initialized: one step short, from a rule that does hold, rather
-    /// than a guess at the one that is missing.
+    ///    least been configured (13051). Upstream reaches this one through an
+    ///    `elif`, so a volume raised by step 2 never sees it.
     static func state(usesFTBL: Bool, presentFileIndices: [Int],
-                      hasConfiguration: Bool) -> MFSState {
+                      efsHoldsFiles: Bool, hasConfiguration: Bool) -> MFSState {
         var state = MFSState.unconfigured
         if !usesFTBL {
             if presentFileIndices.contains(where: { [0, 1, 2, 3, 4, 5, 8].contains($0) }) {
@@ -465,7 +461,9 @@ enum MFSStateDecoder {
                 state = .configured
             }
         }
-        if state == .unconfigured, hasConfiguration {
+        if state != .initialized, efsHoldsFiles {
+            state = .initialized
+        } else if state == .unconfigured, hasConfiguration {
             state = .configured
         }
         return state

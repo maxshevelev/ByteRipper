@@ -20,8 +20,12 @@ Companion to `upstream-map.md` (the row ledger) and `result-model.md`.
 | `old.bin` | 16 MiB | csme CSME **11.8.92.4222** prod whole-flash (FD) | Oldest CSE case; pre-IFWI (no CSE-LT) → `fpt_start = marker − 0x10`; legacy MFS oracle — 524 files |
 | `new.bin` | 24 MiB | csme CSME **16.1.25.2020** prod whole-flash | Newest whole-flash oracle; CSME-16 regions (CDMD, ELog), unpermuted EFS, FTBL-mode MFS with 0 used files |
 | `ME 7.bin` | 8 MiB | me ME **7.0.0.1193** prod (Slim, CPT) | The pre-CSE oracle, added 2026-09-10: the only dump that exercises rows 13 (Patsburg Support No) and 21 (Downgrade Blacklist 7.0 `<= 7.0.0.1172`, 7.1 Empty), the pre-CSE `$FPT` leg of row 18 (0x17D000) and the ME-7 platform table (CPT) |
+| `CSME16.1.BIN` | 16 MiB + 0x110 | csme CSME **16.1.25.1991** prod whole-flash | Added 2026-09-24. The dump that found the chipset gap: an FTBL volume with 140 files and *no* file 6, whose chipset (ADP-LP A) lives only in FTPR > `intl.cfg`. Also the Initialized-by-EFS case of row 17 |
 
-The dumps now live in `~/Desktop/ME` (they moved there on 2026-09-10).
+The dumps live in `~/Desktop/ME`, and the five older ones were renamed there
+(`old.bin` → `CSME 11.bin`, `DATMAAMBAC0.BIN` → `CSME 12.BIN`, `1.bin`/`2.rom`
+→ `CSME 15.bin`, `new.bin` → `CSME 16.bin`); this document still calls them by
+the names of the pass that first used them.
 
 Every dump decodes cleanly (`issues` empty except the two faithful notes
 below). The engine's numbers reproduced the known oracles exactly on all five.
@@ -212,12 +216,12 @@ design, each with its reason recorded in the map.
 | 43 `CSE_Layout_*` flags | redundancy (1.7 Flags bit0) + CRC-32 validity | per-field flag-table *display* of each header — DB/UI label layer |
 | ~~65 EFS pages~~ | **done 2026-09-17** — pages, System header, index permutation and CRCs byte-verified on 1.bin; the file walk (data area cut at the `EFST` offsets, split by the `FTBL` Integrity flags) oracle-verified 12/12 on `CSME 15.bin` | — |
 | 66 MFS volume/pages | page sort, `Crc16_14` de-obfuscation, header + FAT facts — byte-verified on both legacy dumps | — (structural complete; feeds rows below) |
-| 67 MFS files + records/home | FAT-chain file walk, **both** config record layouts (identity-selected), home directory + Integrity, backup decode, `mfs_home13_anl` naming + split | `mphytbl` inside a 0xC stream — upstream finds it by each record's FTBL *name* |
+| ~~67 MFS files + records/home~~ | FAT-chain file walk, **both** config record layouts (identity-selected), home directory + Integrity, backup decode, `mfs_home13_anl` naming + split, and **`mphytbl` inside a 0xC stream (done 2026-09-24)** — each record named through the `FTBL` row keyed by its File ID | — |
 | ~~68 FITC/UTFL~~ | **done 2026-09-17** — rev-1 structural CRCs byte-verified on 1.bin, the config-*record* walk 94/94 on `CSME 15.bin` + 56/56 on `CSME 16.bin` (contents included), and `UTFL_Header` on the two dumps that carry one | — |
 | 69 (FS deferral note) | the on-flash EFS/FITC regions, structure *and* content, and the unlock token's flags (rows 65/67/68) | the binary FTBL/EFST tables |
-| 71 FS drivers | `ext_anl`/`mod_anl`, `mfs_cfg_anl` (both record layouts), `mfs_home_anl`, backup, and `efs_anl`/`fitc_anl` whole — file walk and config records included | `mphytbl` over a 0xC stream; the text sinks of row 73 |
+| 71 FS drivers | `ext_anl`/`mod_anl`, `mfs_cfg_anl` (both record layouts, `mphytbl` included), `mfs_home_anl`, backup, and `efs_anl`/`fitc_anl` whole — file walk and config records included | the text sinks of row 73 |
 | 72 `mfs_anl` structural | MFS scan surfaced as `mfsVolume` + Issues | — (the `partial` tag predates the file-walk/record increments; see 66/67) |
-| 81 PMC/PCHC/PHY/PCH-init | family descriptor (platform/SKU/stepping) oracle-verified on 1.bin; PCH-init real-dump-verified (above) | the `_parse` loops — thin row-aggregation wrappers adding only DB-name text |
+| 81 PMC/PCHC/PHY/PCH-init | family descriptor (platform/SKU/stepping) oracle-verified on 1.bin; PCH-init real-dump-verified on all six dumps, from the volume's file 6 *and* the FTPR `intl.cfg` that overrides it (2026-09-24) | the `_parse` loops — thin row-aggregation wrappers adding only DB-name text |
 
 ### The 7 open rows and their reasons
 
@@ -238,6 +242,31 @@ the record — they were the last of what `FileTable.dat` was holding up.
 | ~~65~~ | EFS file contents | **done 2026-09-17** — `EFSVolume.files` (revision 36), names in the panel; 12/12 against upstream's `-unp86` EFS File Records on `CSME 15.bin`, content sizes cross-checked against the unpacked files' own lengths |
 | 134 | `cse_unpack` | file-extraction/repair writer — an output feature, not analysis facts |
 | 135 | per-family pipeline chain | thin print/orchestration driver over the ported descriptor rows |
+
+## The 2026-09-24 pass — the chipset gap
+
+A sixth dump (`CSME16.1.BIN`) read `Chipset Unknown` where the console reads
+`ADP-LP A`. Three parked increments turned out to share one expired blocker —
+"FileTable.dat is not parsed here yet", which stopped being true when the
+analyzer started fetching the table for the MFS integrity split and the EFS
+walk. All three closed together:
+
+* **`mphytbl` over a 0xC stream** — each record named through the `FTBL` row
+  keyed by its File ID (MEA.py 8546).
+* **FTPR > `intl.cfg` as a chipset source** — the copy upstream *prefers* over
+  the volume's own file 6 and overwrites it with (MEA.py 5999–6009). The only
+  source a CSME 15/16 image has. This fixed `CSME 15.bin` too, which had been
+  printing the `Chipset Stepping B` fallback row instead of `Chipset TGP-LP B`.
+* **`efs_init`** — row 17's EFS raise (MEA.py 13050), now that the volume's
+  file list exists.
+
+Two smaller divergences went with them: the row-6a cell printed only the last
+chipset where upstream prints the total cell over all of them, and the
+Chipset Support gate carried an `.unknown` state for FTBL volumes that is no
+longer needed — both streams are read before it is asked.
+
+All six dumps now match the console on the Chipset, Chipset Support and File
+System State rows.
 
 ## What *done* means
 

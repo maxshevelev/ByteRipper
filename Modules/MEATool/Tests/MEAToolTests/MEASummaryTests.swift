@@ -69,6 +69,10 @@ final class MEASummaryTests: XCTestCase {
     /// A full MFS volume, with the pch_init aggregation's `chipsets` when the
     /// analysis carried a Chipset Initialization decode.
     private func mfsJSON(chipset: String? = nil, steppings: String = "") -> [String: Any] {
+        mfsJSON(chipsets: chipset.map { [($0, steppings)] })
+    }
+
+    private func mfsJSON(chipsets: [(String, String)]?) -> [String: Any] {
         var volume: [String: Any] = [
             "offset": 0x70000, "pageSize": 0x1000, "pageCount": 0x40,
             "systemPageCount": 1, "dataPageCount": 0x3F,
@@ -80,10 +84,11 @@ final class MEASummaryTests: XCTestCase {
             "files": [["index": 0, "size": 0x200]],
             "configurations": [], "reservedIntegrity": [],
         ]
-        if let chipset {
-            volume["pchInit"] = ["records": [],
-                                 "chipsets": [["chipset": chipset,
-                                               "steppings": steppings]]]
+        if let chipsets {
+            volume["pchInit"] = [
+                "records": [],
+                "chipsets": chipsets.map { ["chipset": $0.0, "steppings": $0.1] },
+            ]
         }
         return volume
     }
@@ -274,6 +279,15 @@ final class MEASummaryTests: XCTestCase {
         ])
         XCTAssertEqual(value("Chipset", in: tableRows(bare)),
                        .value("CNP/CMP-H"))
+
+        // Every chipset the tables named, one per line: upstream prints the
+        // total cell its aggregation appends, not the last row of it.
+        let several = try analysis([
+            "manifest": manifestJSON(),
+            "mfsVolume": mfsJSON(chipsets: [("SPT/KBP-LP", "C"), ("SPT-H", "BA")]),
+        ])
+        XCTAssertEqual(value("Chipset", in: tableRows(several)),
+                       .value("SPT/KBP-LP C\nSPT-H B,A"))
 
         // No initialisation table, but a recorded stepping: each letter of it
         // is a stepping of its own, as the console reads them.

@@ -458,15 +458,22 @@ public enum MEASummary {
         }
     }
 
-    /// The 6a display cell: the last per-chipset aggregate record as
-    /// `"<chipset> <letters,comma-joined>"` — the exact form of the console
-    /// row — or just the chipset when it carried no stepping letters.
+    /// The 6a display cell: **every** chipset the initialisation tables named,
+    /// each as `"<chipset> <letters,comma-joined>"` and one per line. That is
+    /// upstream's own cell — it prints `pch_init_final[-1][0]`, the total row
+    /// its aggregation appends, which is exactly this join (MEA.py 9126–9130).
+    /// An image with one chipset, which is most of them, reads as that one
+    /// chipset; a chipset that carried no stepping letters reads as its name
+    /// alone.
     private static func chipsetCell(_ pchInit: MFSPCHInit?) -> String? {
-        guard let last = pchInit?.chipsets.last, !last.chipset.isEmpty else {
-            return nil
-        }
-        let letters = last.steppings.map(String.init).joined(separator: ",")
-        return letters.isEmpty ? last.chipset : "\(last.chipset) \(letters)"
+        guard let chipsets = pchInit?.chipsets, !chipsets.isEmpty else { return nil }
+        let rows = chipsets
+            .filter { !$0.chipset.isEmpty }
+            .map { chipset -> String in
+                let letters = chipset.steppings.map(String.init).joined(separator: ",")
+                return letters.isEmpty ? chipset.chipset : "\(chipset.chipset) \(letters)"
+            }
+        return rows.isEmpty ? nil : rows.joined(separator: "\n")
     }
 
     /// The Stock / Update / Extracted axis word for a firmware `type`, nil when

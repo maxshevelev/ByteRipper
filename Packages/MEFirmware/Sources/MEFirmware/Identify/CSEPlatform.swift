@@ -9,26 +9,22 @@ import Foundation
 /// initialisation table**: where one exists the Chipset row already says which
 /// chipset and stepping the firmware initialises, and upstream leaves
 /// `platform` at its `'NaN'` default so the summary prints no Chipset Support
-/// row at all. That gate is why the row is absent on three of the four CSME
-/// oracles and present as "ADP/RPP" on the CSME-16 one, whose FTBL-mode file
-/// system has no such table.
+/// row at all. That gate is why the row is absent on four of the five CSME
+/// oracles and present as "ADP/RPP" on the CSME-16 one alone, whose own
+/// `intl.cfg` carries a zero-length `mphytbl` record that upstream skips.
 ///
 /// Not ported: the (CS)SPS names, which upstream picks from the `CSE_Ext_50`
 /// SKU-platform cell before falling back to the initialisation table
 /// (13408–13429), and the GSC ones. Those families come back nil, and the row
 /// then stays off the table rather than showing a guess.
 enum CSEPlatformNames {
-    /// What is known about the image's chipset initialisation table — the
-    /// thing whose presence decides whether a CSME platform is named at all.
-    ///
-    /// `.unknown` is the honest answer for a file-table (FTBL) volume that
-    /// holds files: upstream decodes its configuration with `FileTable.dat`
-    /// and would find any initialisation table in it, this engine does not yet
-    /// — so it cannot say the table is absent, and must not name a platform
-    /// upstream would leave unnamed (measured: the CSME-15 oracle, whose
-    /// console prints "Chipset TGP/EBG-H A" and no Chipset Support row).
+    /// Whether the image carries a chipset initialisation table — the thing
+    /// whose presence decides whether a CSME platform is named at all.
+    /// Answered from the decoded aggregate, which by then has read both of the
+    /// streams that can hold one: the MFS volume's low-level file 6 and the
+    /// FTPR `intl.cfg` module.
     enum ChipsetInitTable {
-        case present, absent, unknown
+        case present, absent
     }
 
     /// The platform name, or nil when this family and version name none —

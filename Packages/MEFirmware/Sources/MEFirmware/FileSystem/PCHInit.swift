@@ -1,23 +1,34 @@
 import Foundation
 
-/// Chipset Initialization Table decode of a legacy MFS volume's Intel
-/// Configuration (low-level file 6), upstream `mphytbl` (MEA.py 8956) +
-/// `pch_init_anl` (MEA.py 9097).
+/// Chipset Initialization Table decode of an Intel Configuration stream,
+/// upstream `mphytbl` (MEA.py 8956) + `pch_init_anl` (MEA.py 9097).
 ///
-/// A file-6 Configuration stream (`MFS_Config_Record_0x1C`) lists *file*
-/// records whose names begin `mphytbl`. Each such record's content — sliced
-/// out of the file-6 bytes by the record's own offset/size, exactly as upstream
-/// passes `buffer[rec_offset:rec_offset+rec_size]` — is a chipset init table:
-/// its first bytes name the chipset platform, a stepping nibble and an init
-/// table revision. Which stepping rule decodes the nibble is chosen by the
-/// engine identity (`variant`/`major`/`minor`/`build`) and the manifest date,
-/// so this decode runs only after identification. `pch_dict` (MEA.py 10839)
-/// and the `pch_stp_val` letter table are compile-time constants.
+/// The stream is a list of *file* records over one blob of bytes: each record
+/// says where its file's content sits inside that same blob, exactly as
+/// upstream slices `buffer[rec_offset:rec_offset+rec_size]`. A record named
+/// `mphytbl*` is a chipset init table — its first bytes name the chipset
+/// platform, a stepping nibble and an init table revision. Which stepping rule
+/// decodes the nibble is chosen by the engine identity (`variant`/`major`/
+/// `minor`/`build`) and the manifest date, so this decode runs only after
+/// identification. `pch_dict` (MEA.py 10839) and the `pch_stp_val` letter table
+/// are compile-time constants.
 ///
-/// Only the *legacy* (non-FTBL) config layout is in scope: upstream calls
-/// mphytbl from both the 0x1C and the 0xC (FileTable.dat) config branches, and
-/// the latter — like all FTBL naming — is a later increment. A `usesFTBL`
-/// volume therefore never decodes here.
+/// Three streams carry one, and upstream reads all three through the same
+/// `mfs_cfg_anl`:
+///
+/// * the MFS volume's low-level file 6 in the **named** 0x1C layout (CSME
+///   11/12 and their analogues), whose records spell the file name themselves;
+/// * the same file 6 in the **ID-keyed** 0xC layout (CSME 13–16), whose
+///   records carry a File ID and are named by the `FTBL` row `FileTable.dat`
+///   keys under it;
+/// * the FTPR `$CPD` module **`intl.cfg`**, which is file 6 kept as a module.
+///
+/// The third one *wins*: upstream prefers the FTPR copy over the MFS one "when
+/// possible (i.e. MFS & FTPR) or necessary (i.e. FTPR only, MFS empty)" and
+/// overwrites `pch_init_final` with whatever it yields, empty included (MEA.py
+/// 5999–6009). That is the only source a CSME 15/16 image has: its FTBL volume
+/// carries no file 6 at all, which is why those images read no chipset until
+/// `intl.cfg` is read.
 enum PCHInitDecoder {
 
     /// `pch_dict`, MEA.py 10839–10856: chipset-ID byte/nibble → platform label.
@@ -32,12 +43,19 @@ enum PCHInitDecoder {
     /// `pch_stp_val`, MEA.py 8957: stepping nibble 0–15 → letter A–P.
     private static let steppingLetters = Array("ABCDEFGHIJKLMNOP").map(String.init)
 
-    /// Decode a volume's Intel Configuration into the Chipset Initialization
-    /// Table facts. Returns nil when the volume carries no mphytbl* file
-    /// records (upstream's `pch_init_info` stays empty and mphytbl never
-    /// fires). `files`/`configurations` are the volume's parsed low-level files
-    /// and legacy config decodes; the decoder uses the owning-file-6 config's
-    /// file records and slices their content from file 6's own bytes.
+    /// One configuration record reduced to what the chipset scan needs: what
+    /// the file is called, and where its bytes sit in the stream carrying it.
+    struct NamedRecord {
+        var name: String
+        var offset: Int
+        var size: Int
+    }
+
+    /// The **named** (0x1C) Intel Configuration of an MFS volume: low-level
+    /// file 6 and the records the volume decode already read out of it.
+    /// Returns nil when the volume carries no file 6, no configuration owned by
+    /// it, or no `mphytbl*` record in it (upstream's `pch_init_info` stays empty
+    /// and mphytbl never fires).
     static func decode(files: [MFSLowLevelFile],
                        configurations: [MFSConfigDecode],
                        variant: String, major: Int, minor: Int, build: Int,
@@ -45,26 +63,100 @@ enum PCHInitDecoder {
         guard let intel = files.first(where: { $0.index == 6 }),
               let config = configurations.first(where: { $0.owningFile == 6 })
         else { return nil }
+        let records = config.records
+            .filter { !$0.isFolder }
+            .map { NamedRecord(name: $0.name, offset: $0.offset, size: $0.size) }
+        return decode(stream: intel.content, records: records,
+                      variant: variant, major: major, minor: minor, build: build,
+                      year: year, month: month, day: day)
+    }
 
-        var records: [MFSPCHInitRecord] = []
-        for record in config.records {
-            guard !record.isFolder,
-                  record.name.hasPrefix("mphytbl"),
-                  record.size > 0, record.offset >= 0,
-                  record.offset + record.size <= intel.content.count
-            else { continue }
-            let table = intel.content.subdata(in: record.offset..<(record.offset + record.size))
-            guard let decoded = Self.decodeTable(table, variant: variant,
-                                                 major: major, minor: minor,
-                                                 build: build, year: year,
-                                                 month: month, day: day)
-            else { continue }
-            records.append(decoded)
+    /// The **ID-keyed** (0xC) Intel Configuration of an MFS volume: the same
+    /// low-level file 6, whose records name nothing themselves — the `FTBL`
+    /// row `FileTable.dat` keys under each record's File ID does (upstream
+    /// `mfs_cfg_anl`'s 0xC branch, MEA.py 8546). Without a table no record can
+    /// be recognised as a chipset table, and the answer is nil rather than a
+    /// guess.
+    static func decode(files: [MFSLowLevelFile],
+                       configurationsByID: [MFSConfigIDDecode],
+                       fileTable: FileTable?, platform: Int, dictionary: Int,
+                       variant: String, major: Int, minor: Int, build: Int,
+                       year: Int, month: Int, day: Int) -> MFSPCHInit? {
+        guard let intel = files.first(where: { $0.index == 6 }),
+              let config = configurationsByID.first(where: { $0.owningFile == 6 })
+        else { return nil }
+        return decode(stream: intel.content,
+                      records: named(config.records, fileTable: fileTable,
+                                     platform: platform, dictionary: dictionary),
+                      variant: variant, major: major, minor: minor, build: build,
+                      year: year, month: month, day: day)
+    }
+
+    /// An Intel Configuration read straight off its own bytes — the FTPR
+    /// `$CPD` module `intl.cfg`, which upstream hands to `mfs_cfg_anl` exactly
+    /// as it hands it a volume's file 6 (MEA.py 6008). `recordSize` is the
+    /// identity's own `get_cfg_rec_size`; the 0xC layout needs the file table
+    /// to name its records, the 0x1C one does not.
+    static func decode(intelConfiguration stream: Data, recordSize: Int,
+                       fileTable: FileTable?, platform: Int, dictionary: Int,
+                       variant: String, major: Int, minor: Int, build: Int,
+                       year: Int, month: Int, day: Int) -> MFSPCHInit? {
+        let records: [NamedRecord]
+        if recordSize == 0x1C {
+            records = (MFSParser.decodeConfigRecords(stream) ?? [])
+                .filter { !$0.isFolder }
+                .map { NamedRecord(name: $0.name, offset: $0.offset, size: $0.size) }
+        } else {
+            records = named(MFSParser.decodeConfigIDRecords(stream) ?? [],
+                            fileTable: fileTable,
+                            platform: platform, dictionary: dictionary)
         }
-        guard !records.isEmpty else { return nil }
+        return decode(stream: stream, records: records,
+                      variant: variant, major: major, minor: minor, build: build,
+                      year: year, month: month, day: day)
+    }
 
-        return MFSPCHInit(records: records,
-                          chipsets: Self.aggregate(records))
+    /// What `FileTable.dat` calls each ID-keyed record's file, as the *base
+    /// name* upstream tests (`rec_name = os.path.basename(rec_file)`, MEA.py
+    /// 8552). A record the table has no row for reads as upstream's own
+    /// `/Unknown/<ID>.bin` fallback, which no chipset table is ever called.
+    private static func named(_ records: [MFSRawConfigIDRecord],
+                              fileTable: FileTable?,
+                              platform: Int, dictionary: Int) -> [NamedRecord] {
+        records.map { record in
+            let path = fileTable?.record(withFileID: record.fileID,
+                                         platform: platform,
+                                         dictionary: dictionary)?.path
+            let name = path.map { String($0.split(separator: "/").last ?? "") }
+                ?? String(format: "%08X.bin", record.fileID)
+            return NamedRecord(name: name, offset: record.offset, size: record.size)
+        }
+    }
+
+    /// One configuration stream → the Chipset Initialization Table facts.
+    /// Returns nil when nothing in it is an `mphytbl*` file with bytes behind
+    /// it: upstream's `pch_init_info` then stays empty and `pch_init_anl`
+    /// returns its empty list.
+    private static func decode(stream: Data, records: [NamedRecord],
+                               variant: String, major: Int, minor: Int, build: Int,
+                               year: Int, month: Int, day: Int) -> MFSPCHInit? {
+        var decoded: [MFSPCHInitRecord] = []
+        for record in records {
+            guard record.name.hasPrefix("mphytbl"),
+                  record.size > 0, record.offset >= 0,
+                  record.offset + record.size <= stream.count
+            else { continue }
+            let table = stream.subdata(in: record.offset..<(record.offset + record.size))
+            guard let table = Self.decodeTable(table, variant: variant,
+                                               major: major, minor: minor,
+                                               build: build, year: year,
+                                               month: month, day: day)
+            else { continue }
+            decoded.append(table)
+        }
+        guard !decoded.isEmpty else { return nil }
+
+        return MFSPCHInit(records: decoded, chipsets: Self.aggregate(decoded))
     }
 
     /// One mphytbl* table → its chipset platform, stepping letters and init

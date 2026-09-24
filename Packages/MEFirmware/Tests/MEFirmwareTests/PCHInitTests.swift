@@ -323,4 +323,158 @@ final class PCHInitTests: XCTestCase {
                                            variant: "CSME", major: 12, minor: 0, build: 0,
                                            year: 2018, month: 1, day: 25))
     }
+
+    // MARK: - decode (the ID-keyed layouts, named through FileTable.dat)
+
+    /// The `FTBL` half of a real table, cut to the two rows these tests join
+    /// on: the chipset table's File ID and one that is not it. Copied from
+    /// `FileTable.dat` platform `10` / dictionary `0A` — what a CSME 16.1
+    /// volume header points at.
+    private static let ftblJSON = """
+    {
+      "10": {
+        "0A": {
+          "FTBL": {
+            "10038900": "/home/chipsetinit/mphytbl,1,0,0,1576,316,55,6,33554848",
+            "1003A200": "/home/bup/bup_sku/hw_binding,0,0,0,0,0,0,7,0"
+          }
+        }
+      }
+    }
+    """
+
+    private static func le32(_ value: Int) -> Data {
+        Data([UInt8(value & 0xFF), UInt8((value >> 8) & 0xFF),
+              UInt8((value >> 16) & 0xFF), UInt8((value >> 24) & 0xFF)])
+    }
+
+    private static func le16(_ value: Int) -> Data {
+        Data([UInt8(value & 0xFF), UInt8((value >> 8) & 0xFF)])
+    }
+
+    /// One ID-keyed (0xC) Configuration stream: the record count, that many
+    /// `MFS_Config_Record_0xC` entries, then the bytes they point at — with
+    /// offsets into the whole stream, the way a real one's are.
+    private static func idStream(_ entries: [(id: Int, body: Data)]) -> Data {
+        var head = le32(entries.count)
+        var body = Data()
+        let base = 4 + entries.count * 0xC
+        for entry in entries {
+            head.append(le32(entry.id))
+            head.append(le32(base + body.count))
+            head.append(le16(entry.body.count))
+            head.append(le16(0))
+            body.append(entry.body)
+        }
+        return head + body
+    }
+
+    /// The same stream in the named (0x1C) layout, for the FTPR copy of a
+    /// legacy image's file 6.
+    private static func namedStream(_ entries: [(name: String, body: Data)]) -> Data {
+        var head = le32(entries.count)
+        var body = Data()
+        let base = 4 + entries.count * 0x1C
+        for entry in entries {
+            var name = Data(entry.name.utf8)
+            name.append(Data(repeating: 0, count: max(0, 0xC - name.count)))
+            head.append(name.prefix(0xC))              // @0x00 FileName
+            head.append(le16(0))                       // @0x0C Reserved
+            head.append(le16(0))                       // @0x0E AccessMode (RecordType 0 = file)
+            head.append(le16(0))                       // @0x10 DeployOptions
+            head.append(le16(entry.body.count))        // @0x12 FileSize
+            head.append(le16(0))                       // @0x14 OwnerUserID
+            head.append(le16(0))                       // @0x16 OwnerGroupID
+            head.append(le32(base + body.count))       // @0x18 FileOffset
+            body.append(entry.body)
+        }
+        return head + body
+    }
+
+    func testIDKeyedFileSixIsNamedThroughTheFileTable() throws {
+        let stream = Self.idStream([
+            (0x1003_A200, Data([0, 0, 0, 0])),
+            (0x1003_8900, Self.newTable(chipset: 0x12, stepping: 0, revision: 8)),
+        ])
+        let files = [MFSLowLevelFile(index: 6, content: stream)]
+        let configs = [MFSConfigIDDecode(
+            owningFile: 6,
+            records: try XCTUnwrap(MFSParser.decodeConfigIDRecords(stream)))]
+
+        let out = try XCTUnwrap(PCHInitDecoder.decode(
+            files: files, configurationsByID: configs,
+            fileTable: try FileTable.parse(Self.ftblJSON),
+            platform: 0x10, dictionary: 0x0A,
+            variant: "CSME", major: 16, minor: 1, build: 1991,
+            year: 2022, month: 8, day: 29))
+
+        XCTAssertEqual(out.chipsets.map(\.chipset), ["ADP-LP"])
+        XCTAssertEqual(out.chipsets.map(\.steppings), ["A"])
+    }
+
+    /// Without the table no record can be recognised as a chipset table: the
+    /// ID is all the stream says, and upstream's own fallback name for an
+    /// unkeyed row (`/Unknown/<ID>.bin`) is not one.
+    func testIDKeyedFileSixWithoutATableNamesNothing() throws {
+        let stream = Self.idStream([
+            (0x1003_8900, Self.newTable(chipset: 0x12, stepping: 0, revision: 8)),
+        ])
+        let configs = [MFSConfigIDDecode(
+            owningFile: 6,
+            records: try XCTUnwrap(MFSParser.decodeConfigIDRecords(stream)))]
+        XCTAssertNil(PCHInitDecoder.decode(
+            files: [MFSLowLevelFile(index: 6, content: stream)],
+            configurationsByID: configs, fileTable: nil,
+            platform: 0x10, dictionary: 0x0A,
+            variant: "CSME", major: 16, minor: 1, build: 1991,
+            year: 2022, month: 8, day: 29))
+    }
+
+    // MARK: - decode (the FTPR intl.cfg stream)
+
+    /// The CSME 15/16 case: the volume carries no file 6 at all and the FTPR
+    /// module is the only Intel Configuration there is.
+    func testIntelConfigurationStreamReadsTheIDKeyedLayout() throws {
+        let stream = Self.idStream([
+            (0x1003_A200, Data([0])),
+            (0x1003_8900, Self.newTable(chipset: 0x12, stepping: 0, revision: 8)),
+        ])
+        let out = try XCTUnwrap(PCHInitDecoder.decode(
+            intelConfiguration: stream, recordSize: 0xC,
+            fileTable: try FileTable.parse(Self.ftblJSON),
+            platform: 0x10, dictionary: 0x0A,
+            variant: "CSME", major: 16, minor: 1, build: 1991,
+            year: 2022, month: 8, day: 29))
+        XCTAssertEqual(out.chipsets.map(\.chipset), ["ADP-LP"])
+        XCTAssertEqual(out.chipsets.map(\.steppings), ["A"])
+    }
+
+    /// A record with no bytes behind it is not a table: upstream's
+    /// `and rec_data` drops it, which is why the CSME 16 oracle reads no
+    /// chipset although its `intl.cfg` does list an `mphytbl` row.
+    func testAZeroLengthChipsetRecordIsSkipped() throws {
+        let stream = Self.idStream([(0x1003_8900, Data())])
+        XCTAssertNil(PCHInitDecoder.decode(
+            intelConfiguration: stream, recordSize: 0xC,
+            fileTable: try FileTable.parse(Self.ftblJSON),
+            platform: 0x10, dictionary: 0x0A,
+            variant: "CSME", major: 16, minor: 1, build: 1991,
+            year: 2022, month: 8, day: 29))
+    }
+
+    /// The same module in the named layout — a legacy image whose FTPR keeps a
+    /// copy of file 6 needs no table to read it.
+    func testIntelConfigurationStreamReadsTheNamedLayout() throws {
+        let stream = Self.namedStream([
+            ("other", Data([0, 0, 0, 0])),
+            ("mphytbl0", Self.oldTable(chipset: 0xC, stepping: 0x5, revision: 4)),
+        ])
+        let out = try XCTUnwrap(PCHInitDecoder.decode(
+            intelConfiguration: stream, recordSize: 0x1C,
+            fileTable: nil, platform: -1, dictionary: -1,
+            variant: "CSME", major: 12, minor: 0, build: 1091,
+            year: 2018, month: 1, day: 25))
+        XCTAssertEqual(out.chipsets.map(\.chipset), ["CNP/CMP-LP"])
+        XCTAssertEqual(out.chipsets.map(\.steppings), ["CA"])
+    }
 }
