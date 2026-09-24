@@ -2918,6 +2918,41 @@ final class MainViewController: NSViewController {
         }
     }
 
+    /// File ▸ Open Recent ▸ «file»: re-opens the row's file through the normal
+    /// pipeline, so placement, the "already open in the other pane or window"
+    /// refusal, and the dirty-replace confirmation all apply unchanged.
+    ///
+    /// The sandbox grant is re-earned from the recorded security-scoped
+    /// bookmark first — that is the whole reason the bookmark store keeps the
+    /// file accessible across launches. The plain-URL fallback is defensive:
+    /// every recorded file has a bookmark (the record is paired in
+    /// `openIntoPane`), so this only matters for a list that predates the
+    /// pairing, and a failure there is the ordinary open error.
+    @objc func openRecentFile(_ sender: NSMenuItem) {
+        guard let path = sender.representedObject as? String else { return }
+        // Validation already greys a row whose file is gone; this is the
+        // second gate for the file that vanished between the menu drawing and
+        // the click.
+        guard FileManager.default.fileExists(atPath: path) else {
+            presentAlert(title: "File not found",
+                         message: "“\((path as NSString).lastPathComponent)” is no longer there.")
+            return
+        }
+        let url = SandboxBookmarkStore.shared.resolveAndStartAccess(path: path)
+            ?? URL(fileURLWithPath: path)
+        openFiles([url])
+    }
+
+    /// File ▸ Open Recent ▸ **Clear Menu**: wipes the list. No confirmation —
+    /// the same reading as the Find bar's Clear Recents, which also just
+    /// clears. The menu is still open while this runs, so its rows go now
+    /// rather than waiting for the next `menuNeedsUpdate` — the sender is the
+    /// row the user clicked, and its menu is the Open Recent submenu.
+    @objc func clearRecentFiles(_ sender: NSMenuItem) {
+        RecentFilesStore.clear()
+        sender.menu?.removeAllItems()
+    }
+
     /// Opens the given URLs into panes. Internal so the app's open entry points
     /// share one pipeline: the Open panel, drops, and Launch Services
     /// "Open with" (AppDelegate.application(_:open:)) all land here.
@@ -3121,6 +3156,7 @@ final class MainViewController: NSViewController {
                 // above is this route's own — asking is the controller's job,
                 // doing is the pane's.
                 try pane.open(url: url)
+                _ = RecentFilesStore.record(url)
                 return true
             } catch {
                 presentError("Could not reload file.", error)
@@ -3138,6 +3174,9 @@ final class MainViewController: NSViewController {
         do {
             try pane.open(url: url)
             SandboxBookmarkStore.shared.record(url)
+            // A successful open is what the recent list is: record it beside
+            // the bookmark, and a re-open through this same pipeline bumps it.
+            _ = RecentFilesStore.record(url)
             return true
         } catch {
             presentFileError("Could not open file.", error, url: url)
@@ -6890,6 +6929,17 @@ extension MainViewController: NSMenuItemValidation {
             // Radio state: check the item matching the current word size (§6).
             menuItem.state = menuItem.tag == WordSize.current.rawValue ? .on : .off
             return true
+        case #selector(openRecentFile(_:)):
+            // A recent row stands for a file on disk, so it is available only
+            // while the file it names is still there. A path that went away is
+            // greyed rather than clicked-into-an-alert.
+            return (menuItem.representedObject as? String)
+                .map(FileManager.default.fileExists(atPath:)) ?? false
+        case #selector(clearRecentFiles(_:)):
+            // The delegate builds the item only while the list is non-empty, so
+            // validation just agrees with it — and if the list emptied between
+            // the menu drawing and now, the item goes grey too.
+            return !RecentFilesStore.recent.isEmpty
         default:
             return true
         }

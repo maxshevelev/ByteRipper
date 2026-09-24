@@ -201,6 +201,14 @@ enum MainMenu {
         // to put here.
         add("New Tab", #selector(MainViewController.newTab(_:)), "t")
         add("Open…", #selector(MainViewController.presentOpenPanel), "o")
+        // Open Recent: a submenu parent like "Word Size" — no action, no key
+        // equivalent, its own submenu empty at build time. The list of opened
+        // files keeps changing as files open, so the rows are rebuilt on every
+        // display by the submenu's delegate (`OpenRecentMenuController`),
+        // which `applicationDidFinishLaunching` wires on.
+        let openRecent = NSMenuItem(title: "Open Recent", action: nil, keyEquivalent: "")
+        openRecent.submenu = NSMenu(title: "Open Recent")
+        fileMenu.addItem(openRecent)
         fileMenu.addItem(.separator())
         add("Save", #selector(MainViewController.saveDocument), "s")
         add("Save As…", #selector(MainViewController.saveDocumentAs), "S")

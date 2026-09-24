@@ -32,6 +32,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// something above the windows can answer that.
     private lazy var openDocuments = OpenDocumentRegistry()
 
+    /// The File menu's Open Recent submenu refreshes its rows from
+    /// `RecentFilesStore` before each display; the bar belongs to the app, so
+    /// the app owns what fills it. Lazy, the way the Settings window is: the
+    /// delegate is wired on while the menu bar is built, but building it costs
+    /// nothing and this keeps it next to the windows it serves.
+    private lazy var openRecentMenuController = OpenRecentMenuController()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The panels read their zoom from a package, which cannot see the app
         // and so cannot know that a test run reads a suite of its own
@@ -51,6 +58,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // for ever: one machine had 9 434 of them, 14 MB of preferences, nearly
         // all pointing at temporary files the test suite had deleted.
         SandboxBookmarkStore.shared.pruneNow()
+        // The recent-files list keeps its own copy of "what is on disk" and
+        // would otherwise keep a deleted file's row for ever — prune it here,
+        // the same way, at the same moment.
+        RecentFilesStore.pruneMissing()
         // The pattern library reads itself and, when it is published to a
         // shared file, merges what is there and starts watching it (§11). At
         // launch rather than on first use: a Mac that has not opened the Find
@@ -70,6 +81,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // window is key.
         let mainMenu = MainMenu.build(settingsTarget: self)
         NSApp.mainMenu = mainMenu
+        // The File menu's Open Recent submenu is built empty (its rows depend
+        // on what has been opened, which the build cannot know); hand it the
+        // delegate that rebuilds the rows before each display.
+        if let fileMenu = mainMenu.items.compactMap(\.submenu).first(where: { $0.title == "File" }),
+           let openRecentMenu = fileMenu.items.first(where: { $0.title == "Open Recent" })?.submenu {
+            openRecentMenu.delegate = openRecentMenuController
+        }
         // Handing AppKit the Window submenu is what puts the open windows in it,
         // with Bring All to Front above them — worth having the moment there is
         // more than one window, and the place the system also hangs its own tab

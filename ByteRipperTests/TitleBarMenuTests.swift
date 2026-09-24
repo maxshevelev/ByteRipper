@@ -27,6 +27,7 @@ final class TitleBarMenuTests: XCTestCase {
         .title("New Window"),
         .title("New Tab"),
         .title("Open…"),
+        .title("Open Recent"),
         .separator,
         .title("Save"),
         .title("Save As…"),
@@ -99,13 +100,18 @@ final class TitleBarMenuTests: XCTestCase {
         XCTAssertEqual(titlesAndSeparators(of: menu), fileMenuItems)
 
         for item in menu.items where !item.isSeparatorItem {
-            XCTAssertNil(item.target,
-                         "\(item.title) must travel the responder chain, not a fixed target")
+            // Open Recent is a submenu parent, not a command: no target of its
+            // own (AppKit's synthesized submenuAction: is how a submenu opens).
+            if item.submenu == nil {
+                XCTAssertNil(item.target,
+                             "\(item.title) must travel the responder chain, not a fixed target")
+            }
         }
 
         // Duplicate carries no key equivalent: ⌘D is Toggle Bookmark (§20).
-        // "N" is ⇧⌘N — the capital carries the shift.
-        let expectedKeys = ["n", "N", "t", "o", nil, "s", "S", "", "", nil, "", "", nil, "", nil, "w", "W"]
+        // "N" is ⇧⌘N — the capital carries the shift. Open Recent's submenu
+        // parent carries "" — the submenu takes no key.
+        let expectedKeys = ["n", "N", "t", "o", "", nil, "s", "S", "", "", nil, "", "", nil, "", nil, "w", "W"]
         let keys = menu.items.map { $0.isSeparatorItem ? nil : $0.keyEquivalent }
         XCTAssertEqual(keys, expectedKeys, "the File menu's key equivalents")
     }
