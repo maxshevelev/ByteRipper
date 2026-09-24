@@ -54,6 +54,17 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     public var manifest: ManifestSummary?     // $MN2/$MAN facts + security fields
     public var codePartition: CodePartition?  // $CPD: entries, extensions, modules
     public var mfsVolume: MFSVolume?          // MFS volume facts, when an FPT "MFS" region decodes
+    /// Chipset Initialization Tables (row 6a, upstream `pch_init_final`): the
+    /// image's *final* answer, after every Intel Configuration that carries one
+    /// has been read in upstream's own order — the MFS volume's low-level file
+    /// 6 first, then the FTPR `$CPD` module `intl.cfg`, which replaces it with
+    /// whatever it yields, nothing included (MEA.py 5999–6009).
+    ///
+    /// Distinct from `mfsVolume.pchInit`, which stays what *that volume* held:
+    /// on a CSME 15/16 image the volume holds nothing at all and this is the
+    /// only chipset there is, and where both exist and disagree this one is the
+    /// answer the Chipset row and the Chipset Support gate read.
+    public var chipsetInit: MFSPCHInit? = nil
     public var mfsBackup: MFSBackup? = nil    // MFS *backup*-state area decode (FPT "MFSB",
                                               // or a main "MFS" region in backup state)
     public var cseLayoutTable: CSELayoutTable? = nil  // IFWI 1.6/1.7 CSE Layout Table inventory
@@ -978,6 +989,11 @@ public struct MFSVolume: Codable, Sendable, Equatable {
     public var reservedIntegrity: [MFSReservedFileIntegrity]  // trailing Integrity
                                           // headers of reserved low-level files
                                           // 1–5 (upstream 7901–7929)
+    /// What *this volume's* own file-6 Intel Configuration held (upstream's
+    /// `mfs_cfg_anl` over low-level file 6, either record layout). The image's
+    /// final answer is `FirmwareAnalysis.chipsetInit`, which the FTPR
+    /// `intl.cfg` may replace this with; an FTBL volume carries no file 6 and
+    /// so leaves this nil while the image still names a chipset.
     public var pchInit: MFSPCHInit?       // file-6 Intel Configuration > Chipset
                                           // Initialization Table decode (upstream
                                           // mphytbl/pch_init_anl), when the volume
@@ -2152,5 +2168,10 @@ public enum EngineModelRevision {
     /// `OEMConfiguration.records` / `.recordsByID`. Which record struct a stream
     /// carries is an identity answer (`get_cfg_rec_size`), so the decode moved
     /// to the identity-gated phase for both sizes.
-    public static let current = 38
+    ///
+    /// 39 adds `chipsetInit`: the image's final Chipset Initialization Tables,
+    /// which are no longer a fact of the MFS volume — upstream reads them from
+    /// the FTPR `intl.cfg` module too, and prefers that copy. `MFSVolume.pchInit`
+    /// keeps its meaning and now holds only what that volume itself carried.
+    public static let current = 39
 }

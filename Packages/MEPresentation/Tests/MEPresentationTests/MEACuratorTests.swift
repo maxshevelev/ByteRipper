@@ -84,6 +84,46 @@ final class MEACuratorTests: XCTestCase {
                         "File System (MFS)", "Checksums", "Issues"])
     }
 
+    /// The image's final Chipset Initialization tables get a root of their own
+    /// only when the MFS volume's node is not already showing them — which is
+    /// the CSME 15/16 shape, where the FTPR `intl.cfg` is the only copy.
+    func testChipsetInitIsARootOnlyWhenTheVolumeDoesNotShowIt() throws {
+        let tables: [String: Any] = [
+            "records": [],
+            "chipsets": [["chipset": "ADP-LP", "steppings": "A"]],
+        ]
+        // No volume copy: the root carries it.
+        let fromFTPR = try analysis(["chipsetInit": tables])
+        let root = try XCTUnwrap(find("Chipset Initialization",
+                                      in: MEACurator.present(fromFTPR)))
+        XCTAssertEqual(root.children.map(\.title), ["ADP-LP"])
+        XCTAssertEqual(field("Chipsets", in: root), "1")
+
+        // The volume holds the same tables: one node, under the volume.
+        var volume = mfsJSON()
+        volume["pchInit"] = tables
+        let fromVolume = try analysis(["mfsVolume": volume, "chipsetInit": tables])
+        let roots = MEACurator.present(fromVolume)
+        XCTAssertNil(find("Chipset Initialization", in: roots))
+        XCTAssertNotNil(child("Chipset Initialization",
+                              of: try XCTUnwrap(find("File System (MFS)", in: roots))))
+
+        // The two disagree — the FTPR copy replaced the volume's — so each is
+        // shown where it came from.
+        var other = tables
+        other["chipsets"] = [["chipset": "TGP-LP", "steppings": "B"]]
+        volume["pchInit"] = other
+        let disagreeing = try analysis(["mfsVolume": volume, "chipsetInit": tables])
+        let both = MEACurator.present(disagreeing)
+        XCTAssertEqual(find("Chipset Initialization", in: both)?.children.map(\.title),
+                       ["ADP-LP"])
+        XCTAssertEqual(
+            child("Chipset Initialization",
+                  of: try XCTUnwrap(find("File System (MFS)", in: both)))?
+                .children.map(\.title),
+            ["TGP-LP"])
+    }
+
     func testPathsAreStablePerRootAndChild() throws {
         let a = try analysis([
             "regions": [regionJSON(name: "FTPR", offset: 0x1000, size: 0x1000),

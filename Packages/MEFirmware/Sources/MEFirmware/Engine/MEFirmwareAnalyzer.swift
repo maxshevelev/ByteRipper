@@ -912,11 +912,12 @@ public actor MEFirmwareAnalyzer {
         // copy it has. Best-effort throughout: no mphytbl record, or no file
         // table to recognise one by, → nil and no Issues.
         //
-        // The override needs a volume to hang on: `pchInit` is a field of
-        // `MFSVolume`, so an image with an `intl.cfg` and no MFS at all — which
-        // upstream still reads, its `get_cfg_rec_size` defaulting without a
-        // platform — has nowhere to put the answer and keeps none. No dump in
-        // the set is one.
+        // The two land in two places, because they are two facts:
+        // `mfsVolume.pchInit` keeps what that volume held, and `chipsetInit`
+        // carries the image's answer — which is why the override needs no
+        // volume to hang on and an `intl.cfg` beside an MFS-less image is read
+        // like any other (upstream reaches that case too, its
+        // `get_cfg_rec_size` defaulting without a platform).
         if let info = mfsInfo {
             mfsVolume?.pchInit = configRecordSize == 0x1C
                 ? PCHInitDecoder.decode(
@@ -932,8 +933,9 @@ public actor MEFirmwareAnalyzer {
                     minor: identity.minor, build: identity.build,
                     year: manifest.year, month: manifest.month, day: manifest.day)
         }
-        if let stream = intelConfiguration, mfsVolume != nil {
-            mfsVolume?.pchInit = PCHInitDecoder.decode(
+        var chipsetInit = mfsVolume?.pchInit
+        if let stream = intelConfiguration {
+            chipsetInit = PCHInitDecoder.decode(
                 intelConfiguration: stream, recordSize: configRecordSize,
                 fileTable: fileTable,
                 platform: mfsInfo?.ftblPlatform ?? -1,
@@ -1066,7 +1068,7 @@ public actor MEFirmwareAnalyzer {
                 ?? CSEPlatformNames.name(
                     family: identity.family, major: identity.major,
                     minor: identity.minor,
-                    chipsetInitTable: Self.chipsetInitTable(of: mfsVolume))
+                    chipsetInitTable: Self.chipsetInitTable(of: chipsetInit))
                 ?? "",
             // The main table's stepping: an IUP image's own derived letter,
             // else what the database records for this firmware.
@@ -1083,6 +1085,7 @@ public actor MEFirmwareAnalyzer {
             manifest: manifestSummary,
             codePartition: codePartition,
             mfsVolume: mfsVolume,
+            chipsetInit: chipsetInit,
             mfsBackup: mfsBackup,
             cseLayoutTable: cseLayoutTable,
             bootPartitions: bootPartitions,
@@ -1280,13 +1283,13 @@ public actor MEFirmwareAnalyzer {
     }
 
     /// Whether the image carries a chipset initialisation table — the thing
-    /// that decides whether a CSME platform is named at all. Both of the
-    /// streams that can hold one (the volume's file 6, the FTPR `intl.cfg`)
-    /// have been read by the time this is asked, so the aggregate answers it
-    /// outright: upstream's own gate is the emptiness of `pch_init_final`.
-    private static func chipsetInitTable(of volume: MFSVolume?)
+    /// that decides whether a CSME platform is named at all. Asked of the
+    /// image's final aggregate, which by then has read both of the streams that
+    /// can hold one (the volume's file 6, the FTPR `intl.cfg`): upstream's own
+    /// gate is the emptiness of `pch_init_final`.
+    private static func chipsetInitTable(of chipsetInit: MFSPCHInit?)
         -> CSEPlatformNames.ChipsetInitTable {
-        volume?.pchInit?.chipsets.isEmpty == false ? .present : .absent
+        chipsetInit?.chipsets.isEmpty == false ? .present : .absent
     }
 
     /// Validate the chosen manifest's RSA signature against its protected-data

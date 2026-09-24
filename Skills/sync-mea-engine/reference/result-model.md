@@ -62,6 +62,7 @@ public struct FirmwareAnalysis: Codable, Identifiable {
     public var regions: [FPTRegion]          // FPT/partition table if present
     public var manifest: ManifestSummary?    // $MN2/$MAN facts + security fields
     public var codePartition: CodePartition? // $CPD: entries, extensions, modules
+    public var chipsetInit: MFSPCHInit?      // final Chipset Initialization Tables (rev 39)
     public var issues: [Issue]               // notes / warnings / errors
 }
 
@@ -97,6 +98,23 @@ public struct Issue: Codable, Identifiable {
     public var module: String?           // the $CPD module a module check is about (ids 7, 19)
 }
 ```
+
+### A fact that outgrew its nesting
+
+`chipsetInit` (revision 39) is the worked example of the additive rule doing
+its job. The Chipset Initialization Tables first arrived under
+`MFSVolume.pchInit`, because the only stream then read was the volume's
+low-level file 6. Upstream reads a second one — the FTPR `$CPD` module
+`intl.cfg`, which it *prefers* — and on a CSME 15/16 image that is the only
+copy there is: the volume holds no file 6 at all.
+
+Moving the field would have been a rename, which this contract forbids. What
+went in instead is a new top-level optional, and the old field kept its
+meaning rather than its contents: `mfsVolume.pchInit` is what *that volume*
+held, `chipsetInit` is the image's answer. They are equal on a legacy image,
+differ where the FTPR copy replaced the volume's, and only the second one
+exists on an image with no MFS. Two facts, two fields, nothing removed — and
+the panel shows each where it came from.
 
 ## How upstream's console tables map to it
 

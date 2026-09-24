@@ -265,6 +265,13 @@ chipset where upstream prints the total cell over all of them, and the
 Chipset Support gate carried an `.unknown` state for FTBL volumes that is no
 longer needed — both streams are read before it is asked.
 
+The result model gained one field for it, additively: `FirmwareAnalysis`
+`chipsetInit` (revision 39) is the image's answer, while `MFSVolume.pchInit`
+keeps its meaning and holds only what that volume itself carried. On the six
+dumps the two are equal on `CSME 11.bin` / `CSME 12.BIN`, the volume's is nil
+and the image's is not on `CSME 15.bin` / `CSME16.1.BIN`, and both are nil on
+`CSME 16.bin` / `ME 7.bin`.
+
 All six dumps now match the console on the Chipset, Chipset Support and File
 System State rows.
 

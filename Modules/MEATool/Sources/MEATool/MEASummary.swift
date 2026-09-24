@@ -111,7 +111,7 @@ public enum MEASummary {
         // Only for an image the engine named: upstream gates the pair on the
         // variant, which an unidentified file has none of.
         if identified, hasChipsetRow(analysis) {
-            if let chipset = chipsetCell(analysis.mfsVolume?.pchInit) {
+            if let chipset = chipsetCell(analysis.chipsetInit) {
                 add("Chipset", .value(chipset))
             } else if let stepping = analysis.chipsetStepping, !stepping.isEmpty {
                 add("Chipset Stepping", .value(MEAText.chipsetStepping(stepping)))
@@ -458,7 +458,9 @@ public enum MEASummary {
         }
     }
 
-    /// The 6a display cell: **every** chipset the initialisation tables named,
+    /// The 6a display cell, over the image's *final* aggregate (the FTPR
+    /// `intl.cfg` replaces the MFS volume's own copy, so `mfsVolume.pchInit` is
+    /// not always the answer): **every** chipset the initialisation tables named,
     /// each as `"<chipset> <letters,comma-joined>"` and one per line. That is
     /// upstream's own cell — it prints `pch_init_final[-1][0]`, the total row
     /// its aggregation appends, which is exactly this join (MEA.py 9126–9130).

@@ -43,6 +43,7 @@ public enum MEACurator {
         add(mfsVolume(analysis, mfsNames, configPaths))
 
         // Fact groups — everything else a dump carried, each only when present.
+        add(chipsetInitGroup(analysis))
         add(backupGroup(analysis))
         add(efsGroup(analysis, efsNames))
         add(oemGroup(analysis, configPaths))
@@ -472,6 +473,18 @@ public enum MEACurator {
                        subtitle: "\(kind) #\(record.fileIndex)",
                        fields: fields,
                        children: record.children.map { homeRow($0) })
+    }
+
+    /// The image's *final* Chipset Initialization Tables, as a root of their
+    /// own — but only when they are not the ones the MFS volume's node already
+    /// shows. A legacy image reads its tables out of the volume and says so
+    /// there; a CSME 15/16 one has them from the FTPR `intl.cfg` and no volume
+    /// node to put them under, and an image whose two copies disagree gets both
+    /// rows, each where it came from.
+    private static func chipsetInitGroup(_ a: FirmwareAnalysis) -> MEANode? {
+        guard let chipsetInit = a.chipsetInit,
+              chipsetInit != a.mfsVolume?.pchInit else { return nil }
+        return pchGroup(chipsetInit)
     }
 
     private static func pchGroup(_ pch: MFSPCHInit) -> MEANode {

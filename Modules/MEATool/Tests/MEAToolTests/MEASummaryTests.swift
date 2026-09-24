@@ -72,6 +72,14 @@ final class MEASummaryTests: XCTestCase {
         mfsJSON(chipsets: chipset.map { [($0, steppings)] })
     }
 
+    /// The image's final Chipset Initialization aggregate — what the Chipset
+    /// row reads. A legacy image's is the copy its MFS volume holds, so the
+    /// fixtures set both, the way the engine fills them.
+    private func chipsetInitJSON(_ chipsets: [(String, String)]) -> [String: Any] {
+        ["records": [],
+         "chipsets": chipsets.map { ["chipset": $0.0, "steppings": $0.1] }]
+    }
+
     private func mfsJSON(chipsets: [(String, String)]?) -> [String: Any] {
         var volume: [String: Any] = [
             "offset": 0x70000, "pageSize": 0x1000, "pageCount": 0x40,
@@ -127,6 +135,7 @@ final class MEASummaryTests: XCTestCase {
             "manufactureDate": referenceInterval(year: 2018, month: 5, day: 6),
             "mfsState": "initialized",
             "mfsVolume": mfsJSON(chipset: "CNP/CMP-H", steppings: "BA"),
+            "chipsetInit": chipsetInitJSON([("CNP/CMP-H", "BA")]),
             "bootPartitions": bootPartitionsJSON(),
             "firmwareSizeBytes": 0x27C000,
             "fwUpdateSupport": "no",
@@ -276,6 +285,7 @@ final class MEASummaryTests: XCTestCase {
         let bare = try analysis([
             "manifest": manifestJSON(),
             "mfsVolume": mfsJSON(chipset: "CNP/CMP-H", steppings: ""),
+            "chipsetInit": chipsetInitJSON([("CNP/CMP-H", "")]),
         ])
         XCTAssertEqual(value("Chipset", in: tableRows(bare)),
                        .value("CNP/CMP-H"))
@@ -285,6 +295,7 @@ final class MEASummaryTests: XCTestCase {
         let several = try analysis([
             "manifest": manifestJSON(),
             "mfsVolume": mfsJSON(chipsets: [("SPT/KBP-LP", "C"), ("SPT-H", "BA")]),
+            "chipsetInit": chipsetInitJSON([("SPT/KBP-LP", "C"), ("SPT-H", "BA")]),
         ])
         XCTAssertEqual(value("Chipset", in: tableRows(several)),
                        .value("SPT/KBP-LP C\nSPT-H B,A"))
@@ -298,6 +309,16 @@ final class MEASummaryTests: XCTestCase {
         let rows = tableRows(stepped)
         XCTAssertEqual(value("Chipset Stepping", in: rows), .value("B, A"))
         XCTAssertNil(value("Chipset", in: rows))
+
+        // A CSME 15/16 image: the tables came from the FTPR `intl.cfg`, so the
+        // MFS volume holds none and the row reads the image's own aggregate.
+        let fromFTPR = try analysis([
+            "manifest": manifestJSON(),
+            "mfsVolume": mfsJSON(),
+            "chipsetInit": chipsetInitJSON([("ADP-LP", "A")]),
+        ])
+        XCTAssertEqual(value("Chipset", in: tableRows(fromFTPR)),
+                       .value("ADP-LP A"))
 
         // Neither: upstream's own answer for a firmware whose database row
         // says nothing about its chipset.
@@ -317,6 +338,7 @@ final class MEASummaryTests: XCTestCase {
             "family": "pchc", "variant": "PCHC",
             "manifest": manifestJSON(),
             "mfsVolume": mfsJSON(chipset: "CNP/CMP-H", steppings: "BA"),
+            "chipsetInit": chipsetInitJSON([("CNP/CMP-H", "BA")]),
         ])
         XCTAssertNil(value("Chipset", in: tableRows(pchc)))
         XCTAssertNil(value("Chipset Stepping", in: tableRows(pchc)))
