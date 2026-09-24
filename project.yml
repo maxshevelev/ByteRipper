@@ -205,8 +205,23 @@ targets:
         # it with the marketing name would hand every existing user an empty
         # app: no settings, no pattern library, no access to the files they had
         # open, and two copies in /Applications. An identifier is not a name,
-        # and this one never changes.
-        PRODUCT_BUNDLE_IDENTIFIER: dev.maxik.DumpCompare
+        # and this one never changes for a shipped build.
+        #
+        # The one exception is the test host. The identifier is what macOS keys
+        # the sandbox container and the preferences domain by, and AppKit
+        # autosaves — a window's frame, a nav panel's size, a split position —
+        # write to the app domain inside AppKit itself, through no seam of ours.
+        # The app suite runs the real app as its host, so a host wearing this
+        # identifier writes the user's own settings on every run. `Scripts/run-
+        # tests.sh` overrides `BYTERIPPER_APP_BUNDLE_ID` to one the test host
+        # alone wears, which is a throwaway container and preferences domain.
+        # The indirection (this variable rather than a bare identifier) is what
+        # stands between the real identifier and that override; only this target
+        # consumes the variable, so the override cannot reach the test bundle,
+        # whose identifier is a literal. `AppDefaults` refuses to start the
+        # suite if a test host is still wearing the real identifier below.
+        BYTERIPPER_APP_BUNDLE_ID: dev.maxik.DumpCompare
+        PRODUCT_BUNDLE_IDENTIFIER: $(BYTERIPPER_APP_BUNDLE_ID)
         PRODUCT_NAME: ByteRipper
         MARKETING_VERSION: "0.8.4"
         CURRENT_PROJECT_VERSION: "16"
@@ -270,6 +285,13 @@ schemes:
       config: Debug
     test:
       config: Debug
+      # The host runs under `dev.maxik.ByteRipper.TestsHost` (a throwaway
+      # container and preferences domain) because `Scripts/run-tests.sh` passes
+      # the `BYTERIPPER_APP_BUNDLE_ID` override on the command line — the
+      # scheme itself cannot carry it (XcodeGen drops test-action build
+      # settings, so it is the runner's job). `AppDefaults` fatals if a test
+      # host runs without that override, so an isolated run is the only one
+      # that can proceed.
       targets:
         - ByteRipperTests
     profile:

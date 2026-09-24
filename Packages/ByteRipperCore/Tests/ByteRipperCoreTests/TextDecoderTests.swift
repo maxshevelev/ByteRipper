@@ -230,6 +230,14 @@ final class TextDecoderTests: XCTestCase {
     }
 
     private func removeSuite(_ suite: String) {
+        // Clear the domain so the next test (and a re-run) starts empty. The
+        // suite's *file* is not deleted here: this is a `swift test` run, not a
+        // sandboxed one, so `cfprefsd` persists it into the developer's own
+        // `~/Library/Preferences/` — and it re-flushes the file the instant this
+        // process exits, after this runs, so a deletion here cannot stick
+        // (measured with the full `CFPreferences` removal API). `Scripts/run-
+        // tests.sh` deletes the leftover file after the run, from a process that
+        // is no longer a `cfprefsd` client.
         UserDefaults().removePersistentDomain(forName: suite)
     }
 

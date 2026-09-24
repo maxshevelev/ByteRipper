@@ -58,12 +58,34 @@ report() {   # keeps the counts, the failures, and any death of the test host
     ' | tail -21
 }
 
+# The app suite runs sandboxed under its own bundle id, so its `UserDefaults`
+# never reach the developer's real preferences. The *package* tests run via
+# `swift test`, which is not sandboxed: `cfprefsd` persists their `UserDefaults`
+# suites into the developer's own `~/Library/Preferences/`. No environment
+# override steers that (measured: `NSHomeDirectory()` and `cfprefsd` both ignore
+# `$HOME`), and a cleanup inside the test is undone the moment the test process
+# exits — `cfprefsd` re-flushes a domain on client death, after every `tearDown`
+# has run (measured with the full `CFPreferences` removal API: the file is gone
+# in-process and back by the time the process dies). The only deletion that
+# sticks is this one, from here, once the process is gone. Only the exact suites
+# the package tests are known to create are removed — never a broad glob.
+sweep_package_test_prefs() {
+    local dir="$HOME/Library/Preferences"
+    [ -d "$dir" ] || return 0
+    # `TextDecodingTests-<uuid>.plist`: one per `TextDecoderTests` case, a fresh
+    # UUID suite each. `ToolRowMarksTests.plist`: its fixed suite. Nothing else a
+    # package test writes lands here.
+    rm -f "$dir"/TextDecodingTests-*.plist "$dir"/ToolRowMarksTests.plist 2>/dev/null
+    return 0
+}
+
 if [ "$packages" = yes ] && [ -z "$only" ]; then
     for package in $(ls -d ./*/Package.swift ./*/*/Package.swift 2>/dev/null \
                      | sed 's|/Package.swift$||' | sort); do
         echo "── ${package#./}"
         ( cd "$package" && swift test 2>&1 ) | report | tail -1
         [ "${PIPESTATUS[0]:-0}" -ne 0 ] && failed=1
+        sweep_package_test_prefs
     done
 fi
 
@@ -84,9 +106,18 @@ last=""
 run_group() {
     [ -z "$args" ] && return
     echo "── group $group: $first … $last"
+    # The test host under its own bundle identifier: its sandbox container and
+    # preferences domain are its own, so a run leaves nothing in the user's
+    # real settings — including the autosaves AppKit writes on the host's
+    # behalf (a window frame, a panel's size), which take no app-level seam.
+    # The scheme cannot carry this (XcodeGen drops test-action build settings),
+    # so the runner is the one place that must say it; a hand-run xcodebuild
+    # that forgets is refused by the AppDefaults guard rather than left to
+    # write the user's settings.
     # shellcheck disable=SC2086
     xcodebuild -project ByteRipper.xcodeproj -scheme ByteRipper \
         -derivedDataPath "$derived" -parallel-testing-enabled NO \
+        BYTERIPPER_APP_BUNDLE_ID=dev.maxik.ByteRipper.TestsHost \
         $args test 2>&1 | report
     status=${PIPESTATUS[0]}
     [ "$status" -ne 0 ] && failed=1
