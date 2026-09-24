@@ -554,6 +554,56 @@ from where it was put — and that removing and re-marking loses its name.
   marked row, autoscrolling past the bottom edge while still carrying the mark,
   releasing on mouse up, and an unmarked address still selecting.
 
+### Added after the fragment panels — §20.7, one list seen from two addresses
+
+A fragment panel shows a part of a file the window already has open. Its marks
+were its own at first, and that was wrong in the way that is easy to miss: a
+bookmark is a row of a *file*, and the panel is a window onto that file, not a
+different one. A mark put on the ME region in the dump was not on the ME region
+in the part taken out of it, so a row worth coming back to had to be marked twice
+and the two marks then drifted apart independently.
+
+The list is the window's, and a pane reads it at its own offsets.
+
+- `BookmarkSpace` is the whole of the translation: the `BookmarkStore`, plus the
+  pane's byte 0 in its address space. The tab's two panes hold it at `origin: 0`;
+  a panel holds it at the part's offset in its parent — the parent's own plus
+  `DocumentOrigin.sourceRange.lowerBound`, so a part opened out of a part
+  composes without anything counting the depth. Every verb takes and returns the
+  pane's offsets, so nothing outside the type has to know which space the number
+  in its hand is in.
+- **The grid is rounded up going in and down coming out.** A part need not begin
+  on a row boundary. Of the sixteen byte offsets a panel row covers in the list,
+  exactly one is a row of the list — the first at or after `local + origin` — so
+  that is the one a mark made on that row goes to, and `localRow` (which rounds
+  down) is then its exact inverse. Rounding both ways down was the first attempt
+  and it moved a mark one row up every time it was read back.
+- The fan-out is the window's existing bookmark signal, extended:
+  `FragmentPanels.bookmarksChanged(atStoreRow:)` repaints the row in each panel
+  the row falls in, at that panel's offset, and syncs its map's margin. A row
+  outside a part reaches that panel as nothing, because there is no row of it to
+  repaint.
+- The mark's **tooltip** in a panel says the row's address in the file the mark
+  belongs to, named — the address it has everywhere else, and the one thing the
+  panel's own Offset column cannot show. It shows for an unnamed mark too: there
+  it is not a repetition of what is drawn on the mark, it is the other address.
+  In the dump the tooltip stays the bare name, as before.
+- A panel **torn off into a tab** takes the marks at the part's own offsets: the
+  tab is about those bytes, and its list is in their addresses.
+- **A decompressed body is the exception**, and it is the exception for the
+  reason the first design was reaching for: its bytes are what a compressed
+  section unpacks to, so no offset in them is an offset in the list. That pane is
+  given no space at all, which is what makes every consequence fall out of one
+  fact — nothing is drawn, nothing can be made, the offset menu carries no
+  bookmark block, ⌘D and ⇧⌘D validate off, and the Go To form opens with its list
+  closed (dimmed title, no keyboard, no menu) over a sentence naming the part it
+  was decompressed from. Closed rather than empty, because an empty list reads as
+  "you have not made any", which is a different thing.
+- Tests: `BookmarkSpaceTests` — the arithmetic (both directions, an unaligned
+  part's round trip, two panel rows never sharing a list row), a mark in either
+  place repainting the other, a part of a part composing, the tooltip's three
+  cases, and the decompressed body's list, commands, menu and form.
+
 ### Order and independence
 
 Stages 1 and 2 are the feature's spine and must go in order. Stage 3 depends on 1

@@ -3057,6 +3057,47 @@ which would lose its name.
   involved, the open form's list re-sorts, and an edit popover on the row the
   mark left closes with it (§20.3).
 
+20.7 A fragment panel's marks
+
+A fragment panel shows a part of a file the window already has open
+(`Design/FRAGMENT_PANELS_PLAN.md`). Its marks are **the window's marks**, seen
+at the part's own offsets: a bookmark is a row of a file, and the panel is a
+window onto that file, not a different one.
+
+- A mark made in the dump shows in every panel the row falls in, at the offset
+  that part has it at; a mark made in a panel shows in the dump at the offset the
+  file has it at. One row worth coming back to is marked once, wherever it is
+  marked.
+- A part's offset is its offset in its parent, plus its parent's own — a part
+  taken out of a part is at the sum, and the addresses are the file's throughout.
+- A mark on a row the part does not cover is simply not in the part. It stays in
+  the window's list: the panel is a window onto the list, never a copy of it.
+- The mark's tooltip in a panel says the row's address in the file the mark
+  belongs to, and which file that is. That is the address the mark has everywhere
+  else and the one thing the panel's own Offset column cannot show, so it is said
+  for an unnamed mark too — there it is not a repetition of the address drawn on
+  the mark, it is the other one. In a pane showing a file whole the tooltip stays
+  the bare name (§20.2).
+- Everything else about a mark is unchanged in a panel: the Offset column mark,
+  the minimap's margin, ⌘D and ⇧⌘D, the offset menu, dragging, and the form's
+  list, all in the part's own addresses.
+- A panel torn off into a tab of its own takes the marks at the part's offsets,
+  as a copy — the tab is about those bytes, and its list is in their addresses.
+
+**Decompressed parts are the exception.** Where a panel holds what a compressed
+section unpacks to, its bytes are not the file's bytes and no offset in them is
+an offset in the file's list.
+
+- Marks are neither shown nor made there: nothing is drawn in the Offset column
+  or the minimap's margin, the offset menu carries no bookmark block at all, and
+  ⌘D and ⇧⌘D are disabled.
+- The Go To form still opens — an address can still be gone to — but its bookmark
+  half is closed: its title is dimmed, the list takes neither the keyboard nor a
+  right-click, and in place of the list it says that bookmarks are not available
+  here, naming the part these bytes were decompressed from and the file whose
+  offsets do not reach them. Closed and explained rather than empty: an empty
+  list would say "you have not made any", which is a different thing.
+
 =====================================================================
 21. SEGMENTS
 =====================================================================

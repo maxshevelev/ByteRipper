@@ -33,19 +33,14 @@ import Cocoa
         let surface: DocumentSurface
         let paneView: FilePaneView
         let view: FragmentPanelView
-        /// The panel's own marks. A part's offsets are its own, so it does not
-        /// read the window's list (§20, and the rule the tab route already
-        /// followed).
-        let bookmarks: BookmarkStore
 
         init(id: FragmentDock.PanelID, pane: PaneViewModel, surface: DocumentSurface,
-             paneView: FilePaneView, view: FragmentPanelView, bookmarks: BookmarkStore) {
+             paneView: FilePaneView, view: FragmentPanelView) {
             self.id = id
             self.pane = pane
             self.surface = surface
             self.paneView = paneView
             self.view = view
-            self.bookmarks = bookmarks
         }
     }
 
@@ -129,21 +124,17 @@ import Cocoa
     func open(_ bytes: [UInt8], named name: String, origin: DocumentOrigin? = nil,
               animated: Bool = true) -> FragmentDock.PanelID? {
         let pane = PaneViewModel()
-        let marks = BookmarkStore()
-        pane.bookmarkStore = marks
         pane.openBytes(bytes, named: name, origin: origin)
-        return adopt(pane, bookmarks: marks, animated: animated)
+        return adopt(pane, animated: animated)
     }
 
     /// Takes a pane that already exists as a panel of its own and raises it —
     /// the other half of `release`, and what a panel dragged back in from
     /// somewhere else will arrive through.
     @discardableResult
-    func adopt(_ pane: PaneViewModel, bookmarks: BookmarkStore? = nil,
-               animated: Bool = true) -> FragmentDock.PanelID? {
+    func adopt(_ pane: PaneViewModel, animated: Bool = true) -> FragmentDock.PanelID? {
         guard let host else { return nil }
-        let bookmarks = bookmarks ?? BookmarkStore()
-        pane.bookmarkStore = bookmarks
+        pane.bookmarks = bookmarkSpace(for: pane, in: host)
         let surface = DocumentSurface(host: host)
         // The panel's tool-module reads the part, not whatever the tab's active
         // pane is — the panel is a surface with exactly one pane.
@@ -154,7 +145,7 @@ import Cocoa
         let view = FragmentPanelView(content: surface.view)
         let opened = dock.open()
         entries[opened.id] = Entry(id: opened.id, pane: pane, surface: surface,
-                                   paneView: paneView, view: view, bookmarks: bookmarks)
+                                   paneView: paneView, view: view)
         // After the id exists: the ✕ closes *this* panel, and the tool that
         // hears about an edit is this surface's.
         host.wireFragmentPaneView(paneView, for: pane, panel: opened.id, surface: surface)
@@ -163,14 +154,48 @@ import Cocoa
             self?.beginPullDown(opened.id, from: event)
         }
         host.prepareFragmentMinimap(of: surface, pane: pane, paneView: paneView)
-        // The panel's own list, and the only thing reading it: the pane it
-        // marks and the map beside it.
-        bookmarks.onChange = { [weak self, weak pane, weak surface] row in
-            pane?.onBookmarksChanged?(row)
-            if let surface { self?.host?.syncFragmentMinimapBookmarks(of: surface) }
-        }
         apply(opened.transition, animated: animated)
         return opened.id
+    }
+
+    /// Where a part's marks live: the window's list, at the part's own offsets
+    /// (§20.7).
+    ///
+    /// The list is shared, so a mark made in the dump shows in the panel at the
+    /// offset the part has it at, and one made in the panel shows in the dump at
+    /// the offset the file has it at. The offset is the parent's own plus the
+    /// part's within it, which is what makes a part opened out of a part come
+    /// out right without this having to know how deep it is.
+    ///
+    /// Nil — no marks at all — for a decompressed body, and for anything opened
+    /// out of one: its bytes are not the file's bytes, so the file's offsets do
+    /// not reach them and a mark in either place would mean nothing in the
+    /// other.
+    private func bookmarkSpace(for pane: PaneViewModel,
+                               in host: MainViewController) -> BookmarkSpace? {
+        guard let origin = pane.origin else {
+            // Not a part of anything: it reads the window's list as the dump
+            // does, at the dump's own offsets.
+            return BookmarkSpace(store: host.windowModel.bookmarkStore)
+        }
+        guard origin.kind == .copy, let parent = origin.parent?.bookmarks else { return nil }
+        return BookmarkSpace(store: parent.store,
+                             origin: parent.origin + origin.sourceRange.lowerBound)
+    }
+
+    /// A mark changed in the list the panels share: every panel the row falls
+    /// in repaints it at its own offset, and its map's margin follows (§20.7).
+    ///
+    /// The tab's own two panes are told by the window; this is the rest of the
+    /// same fan-out, and it runs per panel because each has its own offset into
+    /// the one list.
+    func bookmarksChanged(atStoreRow row: UInt64) {
+        for id in dock.panels {
+            guard let entry = entries[id], let space = entry.pane.bookmarks,
+                  let local = space.localRow(forStoreRow: row) else { continue }
+            entry.pane.onBookmarksChanged?(local)
+            host?.syncFragmentMinimapBookmarks(of: entry.surface)
+        }
     }
 
     // MARK: - Raising and folding
@@ -223,14 +248,17 @@ import Cocoa
     /// undo, and the link to the parent, which is the pane's own property and
     /// so travels with it.
     ///
-    /// Its marks come too, as a copy: they were made against the part's own
-    /// offsets and mean the same rows wherever it lands. The pane itself leaves
-    /// with no list, because it is about to be given its new home's.
+    /// Its marks come too, as a copy at the part's own offsets: what the panel
+    /// showed is what the tab will show, and the tab is about those bytes, so
+    /// its list is in their offsets rather than the parent file's (§20.7). A
+    /// panel with no list of its own — a decompressed body — brings none. The
+    /// pane itself leaves without one, because it is about to be given its new
+    /// home's.
     func release(_ id: FragmentDock.PanelID,
                  animated: Bool = true) -> (pane: PaneViewModel, bookmarks: [Bookmark])? {
         guard let entry = entries[id] else { return nil }
-        let marks = entry.bookmarks.bookmarks
-        entry.pane.bookmarkStore = nil
+        let marks = entry.pane.bookmarks?.bookmarks ?? []
+        entry.pane.bookmarks = nil
         apply(dock.remove(id), animated: animated)
         return (entry.pane, marks)
     }

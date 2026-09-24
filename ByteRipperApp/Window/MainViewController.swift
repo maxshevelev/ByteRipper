@@ -887,7 +887,11 @@ final class MainViewController: NSViewController {
         // to show what the store holds (§20.5), and the minimap's margins, where
         // the same list is marked (§19.4.3).
         windowModel.onBookmarksChanged = { [weak self] row in
-            self?.dismissEditPopoverIfItsMarkIsGone(row: row)
+            // The panels share the list (§20.7), each at its own offset into
+            // it: they repaint the row it falls on, or nothing when it falls
+            // outside the part.
+            self?.fragments.bookmarksChanged(atStoreRow: row)
+            self?.dismissEditPopoverIfItsMarkIsGone(storeRow: row)
             self?.openGoToForm?.reloadBookmarks()
             surface.minimap.syncBookmarks()
             // The empty window shows the list too, and it is the only thing it
@@ -3973,8 +3977,13 @@ final class MainViewController: NSViewController {
         // bookmark commands below by their own separators.
         menu.addItem(.separator())
         addSegmentMenuItems(to: menu, for: pane, offset: offset)
-        menu.addItem(.separator())
-        addBookmarkMenuItems(to: menu, for: pane, offset: offset)
+        // No bookmark block at all where the pane has no list (§20.7): a
+        // decompressed body's offsets reach nothing in the file's list, so
+        // there is no row here to mark.
+        if pane.bookmarks != nil {
+            menu.addItem(.separator())
+            addBookmarkMenuItems(to: menu, for: pane, offset: offset)
+        }
         return menu
     }
 
@@ -4130,7 +4139,7 @@ final class MainViewController: NSViewController {
             item.representedObject = target
         }
         add("Toggle Bookmark at \(address)", #selector(toggleBookmarkAtOffset(_:)))
-        if windowModel.bookmarkStore.bookmark(atRowContaining: offset) != nil {
+        if pane.bookmarks?.bookmark(atRowContaining: offset) != nil {
             add("Edit Bookmark…", #selector(editBookmarkAtOffset(_:)))
         }
     }
@@ -4795,8 +4804,8 @@ final class MainViewController: NSViewController {
     /// Return the one for "mark it and call it this". A row that is already
     /// marked is unmarked on the spot, with no popover to dismiss.
     private func toggleBookmarkInPane(_ pane: PaneViewModel, rowContaining offset: UInt64) {
-        guard pane.isOpen else { return }
-        if windowModel.bookmarkStore.remove(rowContaining: offset) { return }
+        guard pane.isOpen, let marks = pane.bookmarks else { return }
+        if marks.remove(rowContaining: offset) { return }
         markAndNameBookmark(in: pane, rowContaining: offset)
     }
 
@@ -4810,16 +4819,16 @@ final class MainViewController: NSViewController {
     /// They land on the new mark only once the naming is committed — see
     /// `onCommit` below, which acts on the row the popover settled on.
     private func markAndNameBookmark(in pane: PaneViewModel, rowContaining offset: UInt64) {
-        let store = windowModel.bookmarkStore
+        guard let marks = pane.bookmarks else { return }
         let row = BookmarkStore.row(containing: offset)
-        store.add(rowContaining: row)
+        marks.add(rowContaining: row)
         presentBookmarkEditPopover(
             in: pane, row: row, existingName: nil,
             onCommit: { [weak self] target, name in
-                self?.applyBookmarkEdit(from: row, to: target, name: name)
+                marks.edit(rowContaining: row, to: target, name: name)
                 self?.revealBookmark(at: target, in: pane)
             },
-            onCancel: { store.remove(rowContaining: row) }
+            onCancel: { marks.remove(rowContaining: row) }
         )
     }
 
@@ -4842,8 +4851,8 @@ final class MainViewController: NSViewController {
     /// so a toggle here would silently take an existing bookmark away on a click
     /// landing a row off.
     func handleOffsetDoubleClick(in pane: PaneViewModel, rowContaining offset: UInt64) {
-        guard pane.isOpen else { return }
-        if windowModel.bookmarkStore.bookmark(atRowContaining: offset) != nil {
+        guard pane.isOpen, let marks = pane.bookmarks else { return }
+        if marks.bookmark(atRowContaining: offset) != nil {
             editBookmarkInPane(pane, rowContaining: offset)
         } else {
             markAndNameBookmark(in: pane, rowContaining: offset)
@@ -4878,27 +4887,22 @@ final class MainViewController: NSViewController {
     /// name — in the same popover (§20.3). Only for a row that carries one: Esc
     /// leaves the bookmark exactly as it was.
     private func editBookmarkInPane(_ pane: PaneViewModel, rowContaining offset: UInt64) {
-        guard pane.isOpen,
-              let existing = windowModel.bookmarkStore.bookmark(atRowContaining: offset) else { return }
-        let store = windowModel.bookmarkStore
+        guard pane.isOpen, let marks = pane.bookmarks,
+              let existing = marks.bookmark(atRowContaining: offset) else { return }
         presentBookmarkEditPopover(
             in: pane, row: existing.row, existingName: existing.name,
-            onCommit: { [weak self] target, name in
-                self?.applyBookmarkEdit(from: existing.row, to: target, name: name)
+            // The name, and the address when it changed. A moved bookmark is the
+            // same bookmark — it leaves the old row and arrives on the new one
+            // named, rather than being removed and re-made, so nothing in
+            // between sees a bookmark without its name (§20.3).
+            onCommit: { target, name in
+                marks.edit(rowContaining: existing.row, to: target, name: name)
             },
             onCancel: {},
             // Removing is offered only here, on a bookmark that already exists:
             // a mark still being named is taken away by its Esc (§20.3).
-            onDelete: { store.remove(rowContaining: existing.row) }
+            onDelete: { marks.remove(rowContaining: existing.row) }
         )
-    }
-
-    /// Applies what the popover was edited to: the name, and the address when it
-    /// changed. A moved bookmark is the same bookmark — it leaves the old row and
-    /// arrives on the new one named, rather than being removed and re-made, so
-    /// nothing in between sees a bookmark without its name (§20.3).
-    private func applyBookmarkEdit(from row: UInt64, to target: UInt64, name: String) {
-        windowModel.bookmarkStore.edit(rowContaining: row, to: target, name: name)
     }
 
     /// A request to edit a bookmark: which row, in which pane, the name it
@@ -4923,11 +4927,14 @@ final class MainViewController: NSViewController {
     /// behaviour is what those tests are about.
     var bookmarkEditPresenter: ((BookmarkEditRequest) -> () -> Void)?
 
-    /// The editing session on screen: the row it is about, and how to close it
-    /// without saving. Held because it must not outlive its mark (§20.3).
-    private var openEditing: (row: UInt64, dismiss: () -> Void)?
+    /// The editing session on screen: the pane it is in, the row of that pane
+    /// it is about, and how to close it without saving. Held because it must not
+    /// outlive its mark (§20.3). The pane comes with the row because a row is
+    /// only an address in some pane's offsets — a panel's are the part's
+    /// (§20.7).
+    private var openEditing: (pane: PaneViewModel, row: UInt64, dismiss: () -> Void)?
 
-    /// The row an edit popover is open for, if any.
+    /// The row an edit popover is open for, in its own pane's offsets, if any.
     var editingRow: UInt64? { openEditing?.row }
 
     /// Presents the edit popover on `pane`'s mark (§20.3), replacing any session
@@ -4958,19 +4965,19 @@ final class MainViewController: NSViewController {
             }
         )
         if let bookmarkEditPresenter {
-            openEditing = (row, bookmarkEditPresenter(request))
+            openEditing = (pane, row, bookmarkEditPresenter(request))
             return
         }
-        guard let paneView = filePaneView(for: pane) else { return }
-        let store = windowModel.bookmarkStore
+        guard let paneView = filePaneView(for: pane), let marks = pane.bookmarks else { return }
         let controller = paneView.presentBookmarkEditPopover(
             rowContaining: row, existingName: existingName,
             // One row holds one bookmark (§20.1), so an address already marked is
-            // not an address this bookmark can be given.
-            rowIsFree: { store.bookmark(atRowContaining: $0) == nil },
+            // not an address this bookmark can be given. Asked in this pane's
+            // offsets, which in a panel are the part's (§20.7).
+            rowIsFree: { marks.bookmark(atRowContaining: $0) == nil },
             onCommit: request.commit, onCancel: request.cancel, onDelete: request.delete
         )
-        openEditing = (row, { controller.abandon() })
+        openEditing = (pane, row, { controller.abandon() })
     }
 
     /// Closes the edit popover when the mark it is editing disappears. Every
@@ -4978,9 +4985,13 @@ final class MainViewController: NSViewController {
     /// equivalent reaches the menu through an open popover), the context menu,
     /// and the form's list — so no removal path has to remember to do this
     /// (§20.3).
-    private func dismissEditPopoverIfItsMarkIsGone(row: UInt64) {
-        guard let openEditing, openEditing.row == row,
-              windowModel.bookmarkStore.bookmark(atRowContaining: row) == nil else { return }
+    /// `storeRow` is the row in the list's own offsets, which is what the
+    /// window's signal carries; the popover's row is its pane's, so the two are
+    /// compared in the pane's space (§20.7).
+    private func dismissEditPopoverIfItsMarkIsGone(storeRow: UInt64) {
+        guard let openEditing, let marks = openEditing.pane.bookmarks,
+              marks.localRow(forStoreRow: storeRow) == openEditing.row,
+              marks.bookmark(atRowContaining: openEditing.row) == nil else { return }
         self.openEditing = nil
         openEditing.dismiss()
     }
@@ -5115,7 +5126,12 @@ final class MainViewController: NSViewController {
     private func presentGoToForm(focus: GoToBookmarksController.Focus) {
         guard activePane.isOpen else { return }
         let form = GoToBookmarksController(
-            store: windowModel.bookmarkStore, focus: focus,
+            // The list at the ACTIVE pane's offsets: opened over a fragment
+            // panel the form lists the part's addresses, and going to one goes
+            // to it in the part (§20.7). Opened over a panel that has no list —
+            // a decompressed body — it opens with the list closed and says why.
+            bookmarks: activePane.bookmarks, focus: focus,
+            unavailable: bookmarksUnavailableMessage(for: activePane),
             rowBytes: { [weak self] row in self?.bookmarkRowBytes(row) },
             onGo: { [weak self] offset in self?.goTo(offset: offset) }
         )
@@ -5127,6 +5143,20 @@ final class MainViewController: NSViewController {
         // A window, not a sheet: it holds a list the user manages, and it is
         // centred over the window it navigates.
         presentAsModalWindow(form)
+    }
+
+    /// Why the form's bookmark list is closed in `pane`, or nil when it is open
+    /// (§20.7).
+    ///
+    /// Only a decompressed body reaches this with a reason: its bytes are what
+    /// a compressed section unpacks to, so no offset in them is an offset in the
+    /// file the marks are about. Saying so is the point — an empty list would
+    /// read as "you have not made any", which is a different thing entirely.
+    private func bookmarksUnavailableMessage(for pane: PaneViewModel) -> String? {
+        guard pane.bookmarks == nil else { return nil }
+        guard let origin = pane.origin else { return "Bookmarks are not available here." }
+        return "Bookmarks are not available here: these bytes were decompressed from "
+            + "“\(origin.partName)”, so no offset in them is an offset in \(origin.parentName)."
     }
 
     /// Segments…: the partition's own form — the pieces in a table with a row
@@ -5374,6 +5404,24 @@ final class MainViewController: NSViewController {
     /// The jump itself (§10.1) — the same act whether the offset was typed or
     /// picked from the bookmark list.
     private func goTo(offset: UInt64) {
+        // A panel is one pane over one part, and the part's offsets are its
+        // own: a jump asked for there is that pane's to make, and the tab's
+        // dump behind it was not what was asked to move (§20.7).
+        if let panelPane = fragments.frontPane {
+            let target = min(offset, panelPane.fileSize)
+            if offset > panelPane.fileSize {
+                presentAlert(
+                    title: "Offset beyond end of file",
+                    message: "Offset \(String(format: "0x%X", offset)) is beyond the end of "
+                        + "\(panelPane.status.fileName) (\(String(format: "0x%X", panelPane.fileSize)) bytes). Moved to the end."
+                )
+            }
+            panelPane.moveCaret(to: target)
+            let panelView = filePaneView(for: panelPane)
+            panelView?.revealOffsetCentered(target)
+            panelView?.focusHexView()
+            return
+        }
         let largerSize = max(windowModel.pane1.fileSize, windowModel.pane2.fileSize)
         if offset > largerSize {
             presentAlert(
@@ -6692,14 +6740,18 @@ extension MainViewController: NSMenuItemValidation {
              #selector(selectBlock),
              #selector(goToPosition),
              #selector(findPattern),
-             #selector(selectAllBytes),
-             #selector(toggleBookmark):
+             #selector(selectAllBytes):
             return activePane.isOpen
+        case #selector(toggleBookmark):
+            // Nothing to mark where the pane has no list: a decompressed body's
+            // rows are at no address in the file the marks belong to (§20.7).
+            return activePane.isOpen && activePane.bookmarks != nil
         case #selector(editBookmark):
             // There is nothing to edit on a row that carries no mark, and ⌘D is
             // what makes one (§20.3).
             return activePane.isOpen
-                && windowModel.bookmarkStore.bookmark(atRowContaining: activePane.hexSelection().start) != nil
+                && activePane.bookmarks?
+                    .bookmark(atRowContaining: activePane.hexSelection().start) != nil
         case #selector(addCut):
             // A cut needs bytes to split: an empty pane has none (§21.3).
             return activePane.isOpen && activePane.fileSize > 0

@@ -70,6 +70,12 @@ protocol HexViewDataSource: AnyObject {
     /// tooltip says, what VoiceOver reads, whether a right-clicked address
     /// carries a mark — where the per-range set above serves the drawing.
     func hexBookmark(atRowContaining offset: UInt64) -> Bookmark?
+    /// What the mark's tooltip says on the row containing `offset`, and "" for
+    /// a row that has nothing to say (§20.2). The view asks rather than
+    /// composing it from the bookmark, because what is worth saying depends on
+    /// what the pane's offsets are — in a fragment panel a mark's row has an
+    /// address in the file it belongs to as well (§20.7).
+    func hexBookmarkTooltip(atRowContaining offset: UInt64) -> String
     func hexSelection() -> SelectionModel
     /// The byte the caret logically occupies for reveal purposes: the moving
     /// edge of the selection (last byte when extended forward, first byte when
@@ -764,22 +770,22 @@ final class HexView: NSView, NSViewToolTipOwner {
         bookmarkTooltipRect = column
     }
 
-    /// A marked row's NAME under the pointer, and nothing else: the address is
-    /// right there under the pointer, drawn on the mark, so a tooltip repeating
-    /// it would explain a thing to itself. An unmarked row, and a marked row with
-    /// no name, return "" — no tooltip at all (§20.3). The minimap's marks say
-    /// the address as well, because there the arrow's position only approximates
-    /// it (§19.4.3).
+    /// What the marked row under the pointer has to say — its name in a pane
+    /// showing a file whole, since the address is right there on the mark and a
+    /// tooltip repeating it would explain a thing to itself; its address in the
+    /// parent file as well in a fragment panel, where the one on the mark is the
+    /// part's (§20.7). An unmarked row, and a marked row with nothing to add,
+    /// return "" — no tooltip at all (§20.3). The minimap's marks say the
+    /// address in every pane, because there the arrow's position only
+    /// approximates it (§19.4.3).
     func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag,
               point: NSPoint, userData data: UnsafeMutableRawPointer?) -> String {
         guard let dataSource else { return "" }
         let hoveredRow = Int(floor(point.y / currentLayout.rowHeight))
         guard hoveredRow >= 0 else { return "" }
         let offset = currentLayout.byteOffset(row: hoveredRow, column: 0)
-        guard offset < dataSource.scrollExtent,
-              let bookmark = dataSource.hexBookmark(atRowContaining: offset),
-              !bookmark.name.isEmpty else { return "" }
-        return bookmark.name
+        guard offset < dataSource.scrollExtent else { return "" }
+        return dataSource.hexBookmarkTooltip(atRowContaining: offset)
     }
 
     // MARK: - Accessibility (§15)

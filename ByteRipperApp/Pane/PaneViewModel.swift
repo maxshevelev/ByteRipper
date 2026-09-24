@@ -164,11 +164,6 @@ final class PaneViewModel: HexViewDataSource {
     /// mirror redraws. Nil in single-file mode. Weak to avoid a retain cycle.
     weak var companion: PaneViewModel?
 
-    /// The window's shared bookmark list (§20): one instance on the
-    /// `WindowViewModel`, reached by both panes, so a marked row shows at the
-    /// same height in both panes of a comparison. Strong — the store holds no
-    /// pane, so there is no cycle — and nil on a bare pane (unit tests) that
-    /// has no window behind it.
     /// A stable identity for this pane, for as long as it exists.
     ///
     /// The pane's own, not its document's: a pane keeps it when it moves into
@@ -178,11 +173,42 @@ final class PaneViewModel: HexViewDataSource {
     /// (`Design/PANE_DRAG_PLAN.md`).
     let dragID = UUID()
 
-    var bookmarkStore: BookmarkStore?
+    /// The window's shared bookmark list and where this pane sits in it (§20,
+    /// §20.7): one list on the `WindowViewModel`, reached by both panes at
+    /// offset 0 — so a marked row shows at the same height in both panes of a
+    /// comparison — and by every fragment panel at the offset its part was
+    /// taken out at.
+    ///
+    /// Strong: the store holds no pane, so there is no cycle. Nil on a bare
+    /// pane (unit tests) that has no window behind it, and nil on a panel
+    /// showing a decompressed body, whose bytes the file's offsets do not reach
+    /// — there, marks are neither drawn nor made.
+    ///
+    /// Set by whoever puts the pane somewhere: a window gives its own list, a
+    /// fragment panel gives the same list at the part's offset. Nothing works
+    /// this out from the pane itself, because the answer is about where the
+    /// pane is being shown, not about what it holds.
+    var bookmarks: BookmarkSpace?
+
+    /// The file this pane's bookmarks belong to: the document at the far end of
+    /// the chain of parts this pane was opened out of, whose offsets the list
+    /// is in. Nil for a pane that is itself that document.
+    ///
+    /// Walked rather than remembered, so it follows a Save As in the parent the
+    /// way the origin's own header link does.
+    var bookmarkHostName: String? {
+        var next = origin?.parent
+        var name: String?
+        while let pane = next {
+            name = pane.status.fileName
+            next = pane.origin?.parent
+        }
+        return name
+    }
 
     /// The pane's segment partition (§21): one per pane, beside `document` —
     /// segments describe one file's make-up, not the window's (the opposite of
-    /// `bookmarkStore`, which is the window's). Created once per pane; reset on
+    /// `bookmarks`, which is the window's). Created once per pane; reset on
     /// open, close, and revert.
     private(set) var segmentStore: SegmentStore
 
@@ -1161,7 +1187,7 @@ final class PaneViewModel: HexViewDataSource {
     /// row, the same shape as `hexByteStates`. Empty when the pane has no
     /// store behind it.
     func hexBookmarkedRows(in range: Range<UInt64>) -> Set<UInt64> {
-        bookmarkStore?.rows(in: range) ?? []
+        bookmarks?.rows(in: range) ?? []
     }
 
     /// The segment pieces in `range`, with the palette index that tints each,
@@ -1222,7 +1248,26 @@ final class PaneViewModel: HexViewDataSource {
     /// tooltip and VoiceOver read, and what tells a right-clicked address from
     /// an unmarked one.
     func hexBookmark(atRowContaining offset: UInt64) -> Bookmark? {
-        bookmarkStore?.bookmark(atRowContaining: offset)
+        bookmarks?.bookmark(atRowContaining: offset)
+    }
+
+    /// What the mark's tooltip says on the row containing `offset`, and "" when
+    /// there is nothing to say (§20.2, §20.7).
+    ///
+    /// In a pane showing a file whole that is the mark's name and nothing else:
+    /// the address is drawn on the mark, right under the pointer, and a tooltip
+    /// repeating it would explain a thing to itself. In a fragment panel the
+    /// address under the pointer is the *part's*, so the tooltip adds the one
+    /// the same row has in the file the mark belongs to — which is the address
+    /// the user will come back to it by, and the only place the panel says it.
+    /// That line shows for an unnamed mark too, because there it is not a
+    /// repetition of anything.
+    func hexBookmarkTooltip(atRowContaining offset: UInt64) -> String {
+        guard let bookmarks, let mark = bookmarks.bookmark(atRowContaining: offset) else { return "" }
+        guard bookmarks.isShifted else { return mark.name }
+        let there = bookmarks.storeRow(forRowContaining: offset).hexAddress
+        let line = bookmarkHostName.map { "\(there) in \($0)" } ?? there
+        return mark.name.isEmpty ? line : "\(mark.name)\n\(line)"
     }
 
     func hexSelection() -> SelectionModel {

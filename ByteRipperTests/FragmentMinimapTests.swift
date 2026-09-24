@@ -97,21 +97,47 @@ final class FragmentMinimapTests: XCTestCase {
 
     /// The panel's map marks the panel's own list. A part's offsets are its
     /// own, so the dump's marks would be marks in the wrong file.
-    func testThePanelsMapMarksThePanelsOwnList() throws {
+    func testThePanelsMapMarksTheSharedListAtThePartsOffsets() throws {
         let (controller, window, url) = try makeController()
         defer { cleanup(controller, url) }
-        _ = controller.windowModel.bookmarkStore.add(rowContaining: 0x100)
-        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
-                                                       named: "part", animated: false))
+        let bytes = [UInt8](repeating: 0, count: 0x80)
+        let origin = try XCTUnwrap(DocumentOrigin(parent: controller.windowModel.pane1,
+                                                  source: 0x100..<0x180, partName: "part",
+                                                  layout: .image, content: bytes))
+        _ = controller.windowModel.bookmarkStore.add(rowContaining: 0x110)
+        let id = try XCTUnwrap(controller.openFragment(bytes, named: "part", origin: origin,
+                                                       animated: false))
         window.layoutIfNeeded()
         let surface = try XCTUnwrap(controller.fragments.surface(id))
-        XCTAssertTrue(surface.minimapView.bookmarks.isEmpty,
-                      "the dump's marks are not the part's")
+        XCTAssertEqual(surface.minimapView.bookmarks.map(\.row), [0x10],
+                       "the dump's mark, at the offset the part has it at")
 
-        try XCTUnwrap(controller.fragments.pane(id)).bookmarkStore?.toggle(rowContaining: 0x10)
+        try XCTUnwrap(controller.fragments.pane(id)).bookmarks?.toggle(rowContaining: 0x20)
 
-        XCTAssertEqual(surface.minimapView.bookmarks.count, 1, "its own list reaches its own map")
-        XCTAssertEqual(controller.minimapView.bookmarks.count, 1, "and the tab's map is untouched")
+        XCTAssertEqual(surface.minimapView.bookmarks.map(\.row), [0x10, 0x20])
+        XCTAssertEqual(controller.minimapView.bookmarks.map(\.row), [0x110, 0x120],
+                       "and the tab's map has both, at the dump's offsets")
+    }
+
+    /// A decompressed body has no marks at all: the file's offsets do not reach
+    /// its bytes, so its map carries nothing however the window's list grows.
+    func testADecompressedPanelsMapCarriesNoMarks() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let bytes = [UInt8](repeating: 0, count: 0x80)
+        let origin = try XCTUnwrap(DocumentOrigin(parent: controller.windowModel.pane1,
+                                                  source: 0x100..<0x180, partName: "body",
+                                                  layout: .image, kind: .decompressed,
+                                                  content: bytes))
+        _ = controller.windowModel.bookmarkStore.add(rowContaining: 0x110)
+        let id = try XCTUnwrap(controller.openFragment(bytes, named: "body", origin: origin,
+                                                       animated: false))
+        window.layoutIfNeeded()
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+
+        XCTAssertTrue(surface.minimapView.bookmarks.isEmpty)
+        XCTAssertNil(try XCTUnwrap(controller.fragments.pane(id)).bookmarks,
+                     "and there is no list to add one to")
     }
 
     /// A search in the part re-marks the part's own map, not the dump's behind

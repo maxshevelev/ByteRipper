@@ -19,6 +19,10 @@ final class OffsetContextMenuTests: XCTestCase {
     private func makePane(_ bytes: [UInt8]) throws -> (FilePaneView, PaneViewModel, HexView, NSWindow, URL) {
         let url = try tempFile(bytes)
         let pane = PaneViewModel()
+        // A pane in a window reads that window's list (§20.7), and the offset
+        // menu's bookmark block is the pane's to have — a bare pane has no list
+        // and so no block.
+        pane.bookmarks = BookmarkSpace(store: BookmarkStore())
         try pane.open(url: url)
         let filePane = FilePaneView(viewModel: pane)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
@@ -288,7 +292,9 @@ final class OffsetContextMenuTests: XCTestCase {
     /// it ("24", not "0x24").
     func testCopyOffsetCopiesHexOffsetToClipboard() {
         let controller = MainViewController()
-        let menu = controller.makeOffsetMenu(for: PaneViewModel(), offset: 0x24)
+        let pane = PaneViewModel()
+        pane.bookmarks = BookmarkSpace(store: BookmarkStore())
+        let menu = controller.makeOffsetMenu(for: pane, offset: 0x24)
 
         XCTAssertEqual(menu.items.count, 8,
                        "Copy offset, separator, Select Block from Here at «addr», separator, " +

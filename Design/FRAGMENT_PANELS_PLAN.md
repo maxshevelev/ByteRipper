@@ -154,11 +154,28 @@ about *which* pill is up is.
 
 ## Bookmarks
 
-A fragment panel gets its own `BookmarkStore`. This is not new policy: it is
-what the tab route already does and says, in `openBytesInNewTabForTool` — the
-window's marks stay behind because their offsets are the dump's, not the part's.
-A window's list is shared by its two panes because a mark is an absolute offset
-and means the same row in both (§20). A part's offsets are its own.
+A fragment panel reads **the window's list**, at the part's own offsets (§20.7).
+
+The first version gave every panel a `BookmarkStore` of its own, reasoning that a
+part's offsets are its own. That is true of the offsets and false of the marks: a
+bookmark is a row of a *file*, and a panel is a window onto that file, not a
+different one. A mark put on the ME region in the dump should be on the ME region
+in the part taken out of it, and it was not — the two lists could not see each
+other, so marking a row twice was the only way to have it marked in both places.
+
+`BookmarkSpace` is the fix and the whole of it: the list, plus where the pane's
+byte 0 sits in it. The tab's two panes get it at offset 0 (a mark is an absolute
+offset and means the same row in both, §20), and a panel gets it at the part's
+offset in its parent — the parent's own plus `sourceRange.lowerBound`, so a part
+opened out of a part composes without anyone counting the depth. Every verb is in
+the pane's offsets and the translation lives in that one type.
+
+A **decompressed** body is the exception, and it is the exception for the reason
+the original decision was reaching for: those bytes are not the file's bytes, so
+no offset in them is an offset in the list. Its pane gets no space at all — marks
+are neither drawn nor made, the offset menu carries no bookmark block, ⌘D and
+⇧⌘D are off, and the Go To form opens with its list closed over a sentence
+saying why rather than looking merely empty.
 
 ## Tearing a panel off into a tab
 
@@ -176,7 +193,9 @@ once (§4.1 rule 6 is never in question).
 `origin` is a property of the pane, so **the link to the parent survives the
 move**: a part torn off into a tab still knows where it came from and still has
 Update in Parent, exactly as a part opened into a tab does today. The panel's own
-bookmarks travel as the copy `adoptPane` seeds.
+bookmarks travel as the copy `adoptPane` seeds — at the part's own offsets,
+because the tab it lands in is about those bytes and its list is in their
+addresses, not the parent file's.
 
 What leaves the dock is the surface, not the pane alone: its tool session ends
 where its pane does (`tools.paneLeft`), and the tab opens the same tool-module

@@ -24,8 +24,8 @@ final class WindowViewModel {
     init() {
         // Both panes read the same list; the reference is set once here rather
         // than on every mode apply, because the panes are persistent objects.
-        pane1.bookmarkStore = bookmarkStore
-        pane2.bookmarkStore = bookmarkStore
+        pane1.bookmarks = BookmarkSpace(store: bookmarkStore)
+        pane2.bookmarks = BookmarkSpace(store: bookmarkStore)
         // The store's single change signal fans out to both panes: a bookmark
         // is an absolute offset (§8), so the row a mark appears on is the same
         // height in both panes of a comparison, and both must redraw it (§20).
@@ -81,9 +81,9 @@ final class WindowViewModel {
             pane1 = pane2
         }
         pane2 = PaneViewModel()
-        pane2.bookmarkStore = bookmarkStore
+        pane2.bookmarks = BookmarkSpace(store: bookmarkStore)
         activePaneIndex = 0
-        detached.bookmarkStore = nil
+        detached.bookmarks = nil
         return detached
     }
 
@@ -96,7 +96,10 @@ final class WindowViewModel {
     ///
     /// The caller is responsible for whatever was in `index` before.
     func adopt(_ pane: PaneViewModel, at index: Int = 0) {
-        pane.bookmarkStore = bookmarkStore
+        // At offset 0: a pane in a window shows its document whole, even one
+        // that arrived as a part torn off a panel — the tab it lands in is
+        // about those bytes, and its list is in their offsets (§20.7).
+        pane.bookmarks = BookmarkSpace(store: bookmarkStore)
         if index == 0 {
             pane1 = pane
         } else {

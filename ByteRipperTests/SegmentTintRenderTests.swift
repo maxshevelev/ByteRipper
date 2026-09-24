@@ -203,7 +203,7 @@ final class SegmentTintRenderTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url) }
         XCTAssertTrue(pane.segmentStore.addCut(at: 16))
         let store = BookmarkStore()
-        pane.bookmarkStore = store
+        pane.bookmarks = BookmarkSpace(store: store)
         store.add(rowContaining: 0)
         hexView.reloadData()
         let layout = hexView.hexLayout

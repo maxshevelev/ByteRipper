@@ -139,7 +139,7 @@ final class BookmarkDragTests: XCTestCase {
 
         let pane = PaneViewModel()
         let store = BookmarkStore()
-        pane.bookmarkStore = store
+        pane.bookmarks = BookmarkSpace(store: store)
         store.onChange = { [weak pane] row in pane?.onBookmarksChanged?(row) }
         try pane.open(url: url)
 

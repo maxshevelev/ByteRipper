@@ -835,7 +835,7 @@ final class FilePaneView: NSView {
         // Dragging a mark moves the bookmark itself (§20.6) — the store decides
         // where it lands, since it is the one that knows which rows are taken.
         hexView.onBookmarkDrag = { [weak viewModel] from, to, lastRow in
-            viewModel?.bookmarkStore?.move(rowContaining: from, to: to, lastRow: lastRow)
+            viewModel?.bookmarks?.move(rowContaining: from, to: to, lastRow: lastRow)
         }
     }
 

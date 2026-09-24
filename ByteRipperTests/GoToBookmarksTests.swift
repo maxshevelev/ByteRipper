@@ -57,7 +57,7 @@ final class GoToBookmarksTests: XCTestCase {
         // Stands in for the active pane's storage: `fill` bytes up to
         // `fileSize`, and nothing at all past it.
         let form = GoToBookmarksController(
-            store: store, focus: focus,
+            bookmarks: BookmarkSpace(store: store), focus: focus,
             rowBytes: { row in
                 guard row < fileSize else { return nil }
                 let length = Int(min(16, fileSize - row))

@@ -890,9 +890,11 @@ import UEFIImage
     /// actually shows is the minimap's own geometry to decide, and the names come
     /// along because hovering a mark names it.
     func syncBookmarks() {
-        // The list the panes this surface maps are reading: the tab's for its
-        // own two, and a fragment panel's own, whose offsets are the part's.
-        view.setBookmarks(panes().first?.bookmarkStore?.bookmarks ?? [])
+        // The list the panes this surface maps are reading, at those panes'
+        // own offsets: the window's list for the tab's two, and the same list
+        // shifted onto the part for a fragment panel (§20.7). Empty for a panel
+        // that has no list at all — a decompressed body.
+        view.setBookmarks(panes().first?.bookmarks?.bookmarks ?? [])
     }
 
     /// Hands the minimap the search's matches for the overview (§11).

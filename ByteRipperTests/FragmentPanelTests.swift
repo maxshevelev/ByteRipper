@@ -191,7 +191,7 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertTrue(controller.fragments.isEmpty, "the dock has let it go")
         XCTAssertTrue(released.pane.isOpen, "but the document is still open, to be put somewhere")
         XCTAssertEqual(released.pane.fileSize, 2)
-        XCTAssertNil(released.pane.bookmarkStore,
+        XCTAssertNil(released.pane.bookmarks,
                      "it travels with no list, to take its new home's")
         released.pane.close()
     }
@@ -609,14 +609,15 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertEqual(tab.windowModel.pane1.fileSize, 3)
     }
 
-    /// Its marks go with it: they were made against the part's own offsets and
-    /// mean the same rows wherever it lands.
+    /// Its marks go with it, at the part's own offsets: the tab it lands in is
+    /// about those bytes, so its list is in their addresses rather than the
+    /// parent file's.
     func testThePanelsMarksTravelWithIt() throws {
         let (controller, _) = makeController()
         defer { cleanup(controller) }
         let id = try XCTUnwrap(controller.openFragment([UInt8](0..<64), named: "part",
                                                        animated: false))
-        try XCTUnwrap(controller.fragments.pane(id)).bookmarkStore?.toggle(rowContaining: 0x20)
+        try XCTUnwrap(controller.fragments.pane(id)).bookmarks?.toggle(rowContaining: 0x20)
         let tab = MainViewController()
         defer { tab.windowModel.pane1.close() }
         controller.makeSiblingTab = { tab }
@@ -684,20 +685,72 @@ final class FragmentPanelTests: XCTestCase {
 
     // MARK: - What a panel keeps to itself
 
-    /// A part's offsets are its own, so its marks are its own: a bookmark made
-    /// in a panel is not a bookmark in the window's list.
-    func testAPanelsMarksAreItsOwn() throws {
-        let (controller, _) = makeController()
+    /// The list is the window's, and a panel reads it at the part's own offsets
+    /// (§20.7): a mark made in the panel is a mark in the dump, at the address
+    /// the file has that row at.
+    func testAPanelSharesTheWindowsListAtThePartsOffsets() throws {
+        let (controller, _) = try makeControllerWithAPart(at: 0x100, length: 0x40)
         defer { cleanup(controller) }
-        let id = try XCTUnwrap(controller.openFragment([UInt8](0..<64), named: "part",
-                                                       animated: false))
+        let id = try XCTUnwrap(controller.fragments.dock.panels.first)
         let pane = try XCTUnwrap(controller.fragments.pane(id))
 
-        pane.bookmarkStore?.toggle(rowContaining: 0)
+        pane.bookmarks?.toggle(rowContaining: 0x20)
 
-        XCTAssertEqual(pane.bookmarkStore?.bookmarks.count, 1)
-        XCTAssertTrue(controller.windowModel.bookmarkStore.bookmarks.isEmpty,
-                      "the window's list is about the dump's offsets, not the part's")
+        XCTAssertEqual(controller.windowModel.bookmarkStore.bookmarks.map(\.row), [0x120],
+                       "the dump's list has it at the dump's address")
+        XCTAssertEqual(pane.bookmarks?.bookmarks.map(\.row), [0x20],
+                       "and the panel has the same mark at the part's")
+    }
+
+    /// And the other way round: a mark made in the dump shows in the panel,
+    /// shifted onto the part, while one outside the part is simply not in it.
+    func testTheDumpsMarksShowInThePanelAtThePartsOffsets() throws {
+        let (controller, _) = try makeControllerWithAPart(at: 0x100, length: 0x40)
+        defer { cleanup(controller) }
+        let pane = try XCTUnwrap(controller.fragments.pane(
+            try XCTUnwrap(controller.fragments.dock.panels.first)))
+
+        controller.windowModel.bookmarkStore.add(rowContaining: 0x110, name: "inside")
+        controller.windowModel.bookmarkStore.add(rowContaining: 0x10, name: "above")
+
+        XCTAssertEqual(pane.bookmarks?.bookmarks.map { [$0.row: $0.name] },
+                       [[0x10: "inside"]])
+    }
+
+    /// A decompressed body is the exception: its bytes are not the file's
+    /// bytes, so it reads no list and can add to none (§20.7).
+    func testADecompressedPartHasNoMarksAtAll() throws {
+        let (controller, _) = try makeControllerWithAPart(at: 0x100, length: 0x40,
+                                                          kind: .decompressed)
+        defer { cleanup(controller) }
+        let pane = try XCTUnwrap(controller.fragments.pane(
+            try XCTUnwrap(controller.fragments.dock.panels.first)))
+        controller.windowModel.bookmarkStore.add(rowContaining: 0x110)
+
+        XCTAssertNil(pane.bookmarks)
+        XCTAssertTrue(pane.hexBookmarkedRows(in: 0..<0x40).isEmpty)
+        XCTAssertNil(pane.hexBookmark(atRowContaining: 0x10))
+    }
+
+    /// A controller with a file open in pane 1 and a panel holding the part of
+    /// it at `offset`, which is what the shared list is about.
+    private func makeControllerWithAPart(
+        at offset: UInt64, length: Int, kind: DocumentOrigin.Kind = .copy
+    ) throws -> (MainViewController, NSWindow) {
+        let (controller, window) = makeController()
+        let url = try tempFile([UInt8](repeating: 0xAA, count: 0x400))
+        addTeardownBlock { try? FileManager.default.removeItem(at: url) }
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        window.layoutIfNeeded()
+        let bytes = [UInt8](repeating: 0xAA, count: length)
+        let origin = try XCTUnwrap(DocumentOrigin(
+            parent: controller.windowModel.pane1,
+            source: offset..<(offset + UInt64(length)), partName: "part",
+            layout: .image, kind: kind, content: bytes))
+        _ = controller.openFragment(bytes, named: "part", origin: origin, animated: false)
+        window.layoutIfNeeded()
+        return (controller, window)
     }
 
     /// The pill is marked once the part holds an edit — a dot, since the pill

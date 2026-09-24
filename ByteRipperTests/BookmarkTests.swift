@@ -209,8 +209,8 @@ final class BookmarkTests: XCTestCase {
         paneA.companion = paneB
         paneB.companion = paneA
         let store = BookmarkStore()
-        paneA.bookmarkStore = store
-        paneB.bookmarkStore = store
+        paneA.bookmarks = BookmarkSpace(store: store)
+        paneB.bookmarks = BookmarkSpace(store: store)
 
         let hexA = HexView()
         hexA.appearance = NSAppearance(named: .aqua)
@@ -287,7 +287,7 @@ final class BookmarkTests: XCTestCase {
         let pane = PaneViewModel()
         try pane.open(url: url)
         let store = BookmarkStore()
-        pane.bookmarkStore = store
+        pane.bookmarks = BookmarkSpace(store: store)
 
         let hex = HexView()
         hex.appearance = NSAppearance(named: .aqua)
@@ -350,7 +350,7 @@ final class BookmarkTests: XCTestCase {
         let pane = PaneViewModel()
         try pane.open(url: url)
         let store = BookmarkStore()
-        pane.bookmarkStore = store
+        pane.bookmarks = BookmarkSpace(store: store)
 
         let hex = HexView()
         hex.appearance = NSAppearance(named: .aqua)
@@ -538,7 +538,7 @@ final class BookmarkTests: XCTestCase {
         let pane = PaneViewModel()
         try pane.open(url: url)
         let store = BookmarkStore()
-        pane.bookmarkStore = store
+        pane.bookmarks = BookmarkSpace(store: store)
         store.add(rowContaining: 16)
 
         let hex = HexView()
@@ -805,7 +805,7 @@ final class BookmarkTests: XCTestCase {
         let pane = PaneViewModel()
         try pane.open(url: url)
         let store = BookmarkStore()
-        pane.bookmarkStore = store
+        pane.bookmarks = BookmarkSpace(store: store)
         store.add(rowContaining: 20, name: "ME region")
 
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
@@ -1287,7 +1287,7 @@ final class BookmarkTests: XCTestCase {
         let pane = PaneViewModel()
         try pane.open(url: url)
         let store = BookmarkStore()
-        pane.bookmarkStore = store
+        pane.bookmarks = BookmarkSpace(store: store)
 
         let hex = HexView()
         hex.dataSource = pane
@@ -1321,7 +1321,7 @@ final class BookmarkTests: XCTestCase {
         let pane = PaneViewModel()
         try pane.open(url: url)
         let store = BookmarkStore()
-        pane.bookmarkStore = store
+        pane.bookmarks = BookmarkSpace(store: store)
         let hex = HexView()
         hex.dataSource = pane
         hex.delegate = pane

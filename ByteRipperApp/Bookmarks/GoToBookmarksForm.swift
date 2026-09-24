@@ -64,7 +64,16 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
 
     let focus: Focus
 
-    private let store: BookmarkStore
+    /// The list at the pane's own offsets (§20.7), or nil when the pane has
+    /// none — a fragment panel showing a decompressed body. Nil closes the
+    /// list half of the form: there is nothing to list, nothing to mark, and
+    /// `unavailable` says why.
+    private let space: BookmarkSpace?
+
+    /// What the closed list says instead of "no bookmarks yet". Nil when the
+    /// list is open.
+    let unavailable: String?
+
     private let onGo: (UInt64) -> Void
 
     /// The bytes of a bookmarked row in the ACTIVE pane, or nil when the row is
@@ -106,10 +115,11 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         static let name = NSUserInterfaceItemIdentifier("bookmarkName")
     }
 
-    init(store: BookmarkStore, focus: Focus,
+    init(bookmarks: BookmarkSpace?, focus: Focus, unavailable: String? = nil,
          rowBytes: @escaping (UInt64) -> [UInt8]?,
          onGo: @escaping (UInt64) -> Void) {
-        self.store = store
+        space = bookmarks
+        self.unavailable = unavailable
         self.focus = focus
         self.rowBytes = rowBytes
         self.onGo = onGo
@@ -161,7 +171,9 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
 
         listLabel = NSTextField(labelWithString: "Bookmarks")
         listLabel.font = .systemFont(ofSize: 12, weight: .semibold)
-        listLabel.textColor = .secondaryLabelColor
+        // Dimmed over a closed list, the way a disabled control's title is: the
+        // half of the form that still works must be the one that looks alive.
+        listLabel.textColor = space == nil ? .tertiaryLabelColor : .secondaryLabelColor
         root.addArrangedSubview(listLabel)
 
         let scrollView = makeTable()
@@ -194,8 +206,7 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
 
         // The empty state sits over the table rather than in it: a table with one
         // pseudo-row would answer ⌫ and Return as if it held a bookmark.
-        emptyLabel = NSTextField(wrappingLabelWithString:
-            "No bookmarks yet. ⌘D marks the row your caret is on, so you can come back to it.")
+        emptyLabel = NSTextField(wrappingLabelWithString: unavailable ?? Self.noBookmarksYetText)
         emptyLabel.font = .systemFont(ofSize: 12)
         emptyLabel.textColor = .secondaryLabelColor
         emptyLabel.alignment = .center
@@ -340,6 +351,17 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
                                   action: #selector(deleteClickedBookmark), keyEquivalent: "")
         remove.target = self
         table.menu = menu
+        // A closed list is closed to the keyboard and the mouse as well as to
+        // the eye (§20.7): Tab walks past it, ⌫ and Return mean nothing in it,
+        // and it offers no menu — there is no bookmark here for any of them to
+        // act on, and a live-looking list over an explanation of why there is
+        // none would be the form arguing with itself.
+        if space == nil {
+            table.refusesFirstResponder = true
+            table.onReturn = nil
+            table.onDelete = nil
+            table.menu = nil
+        }
         bookmarkTable = table
 
         let scrollView = NSScrollView()
@@ -378,6 +400,10 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         switch focus {
         case .offsetField:
             view.window?.makeFirstResponder(offsetCombo)
+        case .bookmarks where space == nil:
+            // Nothing to pick from and nothing to manage: the keyboard goes
+            // where it can still do something (§20.7).
+            view.window?.makeFirstResponder(offsetCombo)
         case .bookmarks:
             view.window?.makeFirstResponder(bookmarkTable)
             // Opened for the list, the list offers its first one — the lowest
@@ -395,7 +421,7 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
     /// and by the window when a bookmark changes under it (§20.2).
     func reloadBookmarks() {
         let selected = selectedBookmarkRow
-        bookmarks = store.bookmarks
+        bookmarks = space?.bookmarks ?? []
         bookmarkTable.reloadData()
         emptyLabel.isHidden = !bookmarks.isEmpty
         updateTableHeight()
@@ -627,13 +653,13 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
             // One row holds one bookmark (§20.1), so a row already marked is not
             // a row this one can be given.
             rowIsFree: { [weak self] row in
-                guard let self else { return true }
-                return store.bookmark(atRowContaining: row) == nil
+                guard let self, let space else { return true }
+                return space.bookmark(atRowContaining: row) == nil
             },
             onCommit: { [weak self] target, name in
-                guard let self else { return }
+                guard let self, let space else { return }
                 openEditPopover = nil
-                store.edit(rowContaining: bookmark.row, to: target, name: name)
+                space.edit(rowContaining: bookmark.row, to: target, name: name)
                 reloadBookmarks()
                 // The bookmark that was being edited stays selected, at whatever
                 // row it now sits: it is what the user was working on, and an
@@ -666,8 +692,8 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
     }
 
     private func removeBookmark(atRow row: Int) {
-        guard row >= 0, row < bookmarks.count else { return }
-        store.remove(rowContaining: bookmarks[row].row)
+        guard row >= 0, row < bookmarks.count, let space else { return }
+        space.remove(rowContaining: bookmarks[row].row)
         reloadBookmarks()
         // The bookmark the selection pointed at is gone, so the neighbour takes
         // it — the row that slid up into its place, or the new last row.
@@ -757,6 +783,11 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
     }
 
     static let pastEndOfFileText = "Past the end of the file"
+
+    /// What the list says when it is open and empty — the other half of the
+    /// `unavailable` message, which is what it says when it is closed (§20.7).
+    static let noBookmarksYetText =
+        "No bookmarks yet. ⌘D marks the row your caret is on, so you can come back to it."
 
     /// The width an eight-digit address needs, in the font the list draws it in,
     /// plus the room the cell's label leaves either side.

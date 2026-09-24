@@ -443,7 +443,7 @@ final class MultiWindowTests: XCTestCase {
 
         asker.openFiles([wanted])
 
-        XCTAssertIdentical(asker.windowModel.pane1.bookmarkStore, asker.windowModel.bookmarkStore)
+        XCTAssertIdentical(asker.windowModel.pane1.bookmarks?.store, asker.windowModel.bookmarkStore)
         XCTAssertEqual(asker.windowModel.bookmarkStore.bookmarks.map(\.name), ["ours"],
                        "the receiving window's list, unmerged")
     }

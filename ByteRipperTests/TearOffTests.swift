@@ -117,7 +117,7 @@ final class TearOffTests: XCTestCase {
         let moved = source.windowModel.pane2
         source.openPaneInNewTab(paneMenuItem(for: moved, in: source))
 
-        XCTAssertIdentical(moved.bookmarkStore, destination.windowModel.bookmarkStore)
+        XCTAssertIdentical(moved.bookmarks?.store, destination.windowModel.bookmarkStore)
     }
 
     /// Seeding replaces the list and sorts it by row, the invariant every other
