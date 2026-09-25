@@ -1,4 +1,4 @@
-@source-sha 0d34c2d8b08174bc6a1246ddc4d7b438fa706deedf597b349fc23605bf3e749a
+@source-sha 2fd3fc0df69cc8280fcc73f40237361e81462716c76bbd5ee0945fbd1b8ca0f5
 # Sichern
 
 > Roter Text heißt, die Änderung gibt es nur hier. Sichern Sie, und sie steht in der Datei.
@@ -21,8 +21,8 @@ ByteRipper beobachtet die geöffnete Datei. Schreibt etwas anderes sie neu — e
 Manche Dokumente sind mit Absicht unbenannt und haben keinen Pfad, weshalb ⌘S fragt, wohin damit:
 
 - **Ablage ▸ Neue Datei** (⌘N).
-- Das Ergebnis eines [[topic:join-duplicate|Zusammenfügens]]: zwei Chip-Lesevorgänge zu verbinden ergibt ein *neues* Image, und ein versehentliches ⌘S darf es nicht über eine der Hälften schreiben.
+- Das Ergebnis eines [[topic:join-duplicate|Zusammenfügens]]: zwei Dumps zu verbinden ergibt ein *neues* Image, und ein versehentliches ⌘S darf es nicht über eine der Hälften schreiben.
 - Das Ergebnis von **Duplizieren**.
 - Ein Teil, der aus einem Image geholt wurde.
 
-! Bewahren Sie das ursprüngliche Lesen. Sichern Sie Ihre geänderte Fassung unter neuem Namen — `board_patched.bin` neben `board_original.bin`. Ein überschriebener Dump ist ein Chip, den Sie erneut lesen müssen, und auf einer Platine mit toter Versorgung gelingt das womöglich kein zweites Mal.
+! Bewahren Sie den ursprünglichen Dump. Sichern Sie Ihre geänderte Fassung unter neuem Namen — `board_patched.bin` neben `board_original.bin`. Ein überschriebener Dump ist ein Chip, den Sie erneut lesen müssen, und auf einer Platine mit toter Versorgung gelingt das womöglich kein zweites Mal.

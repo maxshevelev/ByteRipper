@@ -1,4 +1,4 @@
-@source-sha 3ac1ba2bc6d063174996e8014146026eb8b2d993abeff2e2ab36b34b84168484
+@source-sha c63f02a4bb2402100e065f329f2f9f2b70fc2d34c961bc6cf040c9910ac00f82
 # Dateien öffnen: A und B
 
 > Das Fenster hat zwei Plätze. Eine Datei ist schlicht ein Editor; eine zweite Datei fügt den Vergleich hinzu. Bearbeiten geht in beiden Bereichen, so oder so.
@@ -20,7 +20,7 @@ Datei B ist optional. Außer dem Vergleich selbst braucht nichts eine zweite Dat
 
 ## Bereiche, Tabs und Fenster
 
-Jeder Bereichskopf nennt seine Datei, ihre Größe und ob es ungesicherte Änderungen gibt. Das ✕ im Kopf schließt diesen Bereich und lässt den anderen offen.
+Jeder Bereichskopf nennt seine Datei und ob es ungesicherte Änderungen gibt; die Größe steht in der Statuszeile darunter. Das ✕ im Kopf schließt diesen Bereich und lässt den anderen offen.
 
 Ein Fenster kann mehrere Tabs halten (**Ablage ▸ Neuer Tab**, ⌘T), jeder mit eigenem Plätzepaar. So hält man mehrere Platinen auf einem Bildschirm auseinander: ein Tab pro Auftrag.
 

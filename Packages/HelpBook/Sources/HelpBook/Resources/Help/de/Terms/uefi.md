@@ -1,4 +1,4 @@
-@source-sha 56083e90f9759005baa6c75f3253ad0bd2aa44c5fa734fee811a1645fe54a90f
+@source-sha dcd4681a1a2ffb8ce2fc44e384f318e60ac50f64064296c78b2841d37bd1d072
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -216,6 +216,21 @@ Jeder Eintrag ist eine Variable mit Namen (`BootOrder`, `PK`, `Setup`), Herstell
 Im selben Bereich finden sich verwandte Speicher: **FTW** (der Eintrag eines fehlertoleranten Schreibvorgangs — das Journal, das ein Variablen-Update einen Stromausfall überstehen lässt), **EVSA**, **FDC**, **CMDB** und herstellereigene Flash-Maps. Das sind die Antworten verschiedener Hersteller auf dieselbe Aufgabe.
 
 @see term:nvram
+
+@term dmi
+@name DMI (Desktop Management Interface)
+@short Die standardisierten Angaben, die eine Maschine über sich selbst meldet — Seriennummer, UUID, Modell — und der Teil des Abbilds, in dem sie stehen.
+
+DMI ist ein DMTF-Standard, und in der Praxis meinen „DMI" und „SMBIOS" dasselbe: die Tabellen, die die Firmware veröffentlicht, damit ein Betriebssystem sagen kann, auf welcher Maschine es läuft. `dmidecode` unter Linux liest genau diese.
+
+Für die Werkbank zählt, dass dort die Identität der Platine selbst liegt: die Seriennummern von System und Baseboard, die Maschinen-UUID, die Inventarnummer, der Modellname. All das wird im Werk geschrieben und nicht berechnet. Eine Platine mit leeren Feldern verliert Garantieabfrage, Lizenzaktivierung und Verwaltungswerkzeuge.
+
+Verlorene Felder sind nicht immer endgültig verloren. Einige Hersteller — darunter HP und Acer — liefern Service-Werkzeuge, die die Identität neu schreiben; Seriennummer und der Rest werden vom Aufkleber am Gehäuse oder auf der Platine übernommen. Wo es ein solches Werkzeug nicht gibt, bleibt die Übernahme aus dem alten Dump.
+
+Wo diese Felder im Abbild stehen, ist nicht standardisiert. Jeder Hersteller legt sie dorthin, wo er will, und die Aufteilung wandert von Generation zu Generation — deshalb ist das Übertragen Vergleichsarbeit und nichts, was ein Werkzeug abnimmt.
+
+@see term:serial-data
+@see topic:recipe-board-data
 
 @term slic
 @name SLIC / MSDM

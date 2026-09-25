@@ -1,9 +1,9 @@
-@source-sha bdcf8003c81129a4b87e46aac80bc72557e1143fe1ab8fb86bd5c9b0e535c7ad
+@source-sha 8f9bbd252cd28de6f45b63694abf58b5be6c4a2086d75cd5c6e46e4880d774a0
 # Zusammenfügen und Duplizieren
 
-> Zwei Chips zu einem Image, und eine Vorher-Kopie zum Ändern.
+> Die Dumps zweier Chips zu einem Image, und eine Vorher-Kopie zum Ändern.
 
-## Zusammenfügen: zwei SPI-Chips, ein Image
+## Zusammenfügen: die Dumps zweier SPI-Chips zu einem Image
 
 Bei vielen Platinen ist das BIOS auf zwei SPI-Flash-Chips verteilt. Lesen Sie beide, dann:
 

@@ -15,7 +15,7 @@ The [[topic:tool-uefi|UEFI Structure]] panel checks the headers it reads as it r
 ## What a bad checksum actually tells you
 
 - **You edited inside the structure**, which is expected while patching — fix it before you flash.
-- **The dump is damaged**, if you have not edited anything. A checksum failure on a fresh read is a sign of a bad read or a genuinely corrupted chip. Read the chip again before concluding anything.
+- **The dump is damaged**, if you have not edited anything. A checksum failure in a fresh dump is a sign of a bad read or a genuinely corrupted chip. Read the chip again before concluding anything.
 - **The structure is not what the parser thinks it is.** A checksum failure in a region the panel is unsure about may mean the panel mis-identified it rather than that the bytes are wrong.
 
 ## What Fix Checksum cannot do

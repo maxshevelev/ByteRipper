@@ -324,6 +324,63 @@ building images. Step 3 is 4–8 hours once the offsets are known, more if the
 fields turn out to live in SMIP and a reader has to be written for it.
 
 
+### Find and read the DMI area, vendor by vendor and generation by generation
+
+**What.** Say where a dump keeps the machine's identity — the DMI/SMBIOS
+fields: system and baseboard serial numbers, the machine UUID, the asset tag,
+the model name — and read them out. At minimum, mark the range in the tree; at
+best, list the fields with their values so two dumps can be compared field by
+field instead of byte by byte.
+
+**Why.** This is the data a repair must not lose, and today the help can only
+tell a reader to go looking for it. `term:dmi` says as much in as many words:
+where the fields sit is not standardised, each vendor puts them where it
+likes, and the layout moves between generations. That sentence is an honest
+description of the state of things and a poor answer to the question a bench
+actually has, which is *are my serial numbers in this file, and where*.
+
+It also closes the loop on the donor workflow. `topic:recipe-board-data` lists
+the areas to carry across and the reader finds them by eye; the DMI area is the
+one on that list with no structure behind it. And it explains a failure a bench
+meets constantly: a dump pulled off the internet often has this area wiped for
+privacy, so a board flashed with it comes up with blank fields — which some
+firmware refuses to boot with.
+
+**How.** This is a survey before it is a parser, and the survey is the work.
+
+1. **Collect.** Dumps from several vendors and several generations, each with
+   known serial numbers — ideally read off the sticker — so a candidate range
+   can be confirmed rather than guessed. The strings are usually ASCII and
+   usually findable by searching for a serial that is already known, which is
+   what makes a labelled corpus the whole foundation here.
+2. **Locate.** For each vendor, find where the fields live relative to
+   something the parser already names — an FFS file's GUID, an NVRAM variable,
+   a padding block between volumes. A range expressed against a structure
+   survives a firmware update; a bare offset does not.
+3. **Decode what is worth decoding.** SMBIOS tables have a published layout
+   (the DMTF specification), so where a real table is present the fields read
+   out properly. Some vendors instead keep a private blob that the firmware
+   copies into the tables at boot, and that blob is vendor-specific reverse
+   engineering — name the range and stop there rather than guess at fields.
+
+The rule this project already follows applies: name what is confirmed, mark the
+rest unknown, and never print a field the bytes do not justify
+(`topic:provenance`).
+
+**Touches.** A reader in `UEFIImage` beside the other content detectors, the
+UEFI panel's tree marks and detail rows, and the `dmi` glossary entry, which
+would lose its "not standardised, go and compare" paragraph for the vendors
+that get covered.
+
+**Needs.** The labelled corpus of step 1. Without dumps whose serial numbers
+are known independently, nothing here can be confirmed, and a wrong answer here
+sends somebody's serial number onto the wrong board.
+
+**Cost.** Open-ended by nature, and worth doing one vendor at a time: 4–8 hours
+for the first vendor including the reader and its tests, less for each one
+after that, and the survey is however long the corpus takes to gather.
+
+
 ## Later
 
 ### An editable zone — a region a tool-module opens for editing

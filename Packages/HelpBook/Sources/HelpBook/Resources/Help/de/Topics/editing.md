@@ -1,4 +1,4 @@
-@source-sha c6bcc3bde37e9cfc525f353b3c5bc5fcef1bb161783f36c0fdc6388962b695bb
+@source-sha c7dbb76065e5cc37b3dc974c06ffefcfc6881c4c9e2e027cd3bc03f20d0e24ce
 # Bytes bearbeiten
 
 > Schreiben Sie über das, was da ist. Alles, was die Länge der Datei ändert, fragt vorher.
@@ -26,7 +26,7 @@ Es gibt sie, und jeder fragt, bevor er handelt:
 
 Die Rückfragen lassen sich in den [[topic:settings|Einstellungen ▸ Bearbeiten]] abschalten oder über das Kästchen „Nicht mehr fragen“ im Dialog selbst. Sie sind eingeschaltet, weil genau diese Änderungen einen strukturierten Dump still ruinieren.
 
-! Bei einem SPI-Dump, der zu einem Programmer soll, darf sich die Länge nicht ändern. Der Chip hat eine feste Größe. Wenn Sie in einem Flash-Image gerade Bytes einfügen oder löschen wollen: halten Sie inne und arbeiten Sie stattdessen mit Überschreiben und Füllen — siehe [[topic:bench-safety|Regeln am Arbeitsplatz]].
+! Bei einem SPI-Dump, der zu einem Programmer soll, darf sich die Länge nicht ändern. Die Kapazität des Chips ist fest. Wenn Sie in einem Flash-Image gerade Bytes einfügen oder löschen wollen: halten Sie inne und arbeiten Sie stattdessen mit Überschreiben und Füllen — siehe [[topic:bench-safety|Regeln am Arbeitsplatz]].
 
 ## Widerrufen
 

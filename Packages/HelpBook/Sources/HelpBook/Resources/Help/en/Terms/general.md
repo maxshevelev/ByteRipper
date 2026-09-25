@@ -2,7 +2,7 @@
 @name Dump
 @short The contents of a chip, read out into a file.
 
-A dump is what a programmer gives you when it reads a flash chip: every byte, in order, starting at address zero. Its size is the chip's size.
+A dump is what a programmer gives you when it reads a flash chip: every byte, in order, starting at address zero. Its size is the chip's capacity.
 
 Because the file is the chip, an address in the file is an address on the chip — which is why ByteRipper compares by address and never shifts one file against another.
 
@@ -77,11 +77,11 @@ A zone is an outline rather than a background fill, so it never hides a differen
 
 @term flash-chip
 @name SPI flash chip
-@short The chip the firmware lives on: fixed size, erased to `FF`.
+@short The chip the firmware lives on: a fixed capacity, erased to `FF`.
 
 A serial flash chip holds the board's firmware. Two properties matter here:
 
-- **Its size is fixed.** An image for an 8 MB chip must be exactly 8 MB. This is why nothing on a bench should ever change a dump's length.
+- **Its capacity is fixed.** An image for an 8 MB chip must be exactly 8 MB. This is why nothing on a bench should ever change a dump's length.
 - **Erased means `FF`.** Flash erases to all ones. A long run of `FF` in a dump is empty space, not damage; a long run of `00` usually is written data.
 
 @see topic:bench-safety

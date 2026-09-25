@@ -1,4 +1,4 @@
-@source-sha ebeb1cbcdd16b28da02ae0e7425e45a3a8021c37cefebd3d1a09a6a693ca6ed4
+@source-sha 1b370b990677dd2ed70f8d88a2aee456f461c5569cbb7f8d987d6db2d0b37678
 # Ihr erster Vergleich
 
 > Öffnen Sie den schlechten Dump und einen guten und lassen Sie sich zeigen, wo sie auseinandergehen.
@@ -16,11 +16,11 @@ Ein Vergleich zweier Dumps derselben Platine sieht meist nach einem von vier Bil
 
 - **Fast nichts unterscheidet sich.** Eine Handvoll Bytes, alle in einem kleinen Bereich. Dieser Bereich enthält fast immer platinenspezifische Daten: eine MAC-Adresse, eine Seriennummer, eine Maschinen-UUID, eine gesicherte Setup-Variable. Siehe [[topic:recipe-board-data|Platinenspezifische Daten bewahren]].
 - **Ein großer Block unterscheidet sich, der Rest stimmt überein.** Verschiedene Firmware-Versionen, oder eine Region wurde gelöscht oder beschädigt. Das [[topic:tool-uefi|UEFI-Panel]] sagt Ihnen, welche.
-- **Ab einer bestimmten Adresse unterscheidet sich alles.** Die Dateien sind unterschiedlich groß, oder eine wurde mit den falschen Chip-Einstellungen gelesen. Prüfen Sie zuerst die Größen in den Bereichsköpfen.
+- **Ab einer bestimmten Adresse unterscheidet sich alles.** Die Dateien sind unterschiedlich groß, oder eine wurde mit den falschen Chip-Einstellungen gelesen. Prüfen Sie zuerst die Größen in den Statuszeilen.
 - **Die ganze Datei unterscheidet sich.** Verschiedene Chips, ein falscher Dump, oder eine Datei ist komprimiert oder verschlüsselt. Vergleichen Sie Größen und die ersten 16 Bytes, bevor Sie weitergehen.
 
 ## Wenn die Dateien verschieden groß sind
 
-ByteRipper vergleicht sie trotzdem, ab Adresse null, und markiert den Rest, den nur eine Datei hat. 8 MB gegen 16 MB ist fast immer ein Lesefehler und kein echter Unterschied: viele Programmer schlagen von sich aus die falsche Chipgröße vor.
+ByteRipper vergleicht sie trotzdem, ab Adresse null, und markiert den Rest, den nur eine Datei hat. 8 MB gegen 16 MB ist fast immer ein Lesefehler und kein echter Unterschied: viele Programmer schlagen von sich aus die falsche Kapazität vor.
 
 Siehe auch: [[topic:navigation|Sich bewegen]], [[topic:colors|Was die Farben bedeuten]].

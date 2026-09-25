@@ -1,9 +1,9 @@
-@source-sha 706f95fa86c6618391fdb4c75bae8d19654f40c5a638a33dd975bdc2f1e99bd2
+@source-sha 50639b45cd239c47487ba73158f9994115e84384ab2392b9c9a01ceab9c59869
 @term dump
 @name Dump
 @short Der Inhalt eines Chips, in eine Datei ausgelesen.
 
-Ein Dump ist das, was ein Programmer liefert, wenn er einen Flash-Chip ausliest: jedes Byte der Reihe nach, beginnend bei Adresse null. Seine Größe ist die Größe des Chips.
+Ein Dump ist das, was ein Programmer liefert, wenn er einen Flash-Chip ausliest: jedes Byte der Reihe nach, beginnend bei Adresse null. Seine Größe ist die Kapazität des Chips.
 
 Weil die Datei der Chip ist, ist ein Offset in der Datei eine Adresse auf dem Chip — deshalb vergleicht ByteRipper nach Adresse und verschiebt nie eine Datei gegen die andere.
 
@@ -78,7 +78,7 @@ Eine Zone ist ein Umriss und keine Hintergrundfüllung, verdeckt also nie einen 
 
 @term flash-chip
 @name SPI-Flash-Chip
-@short Der Chip, auf dem die Firmware liegt: feste Größe, gelöscht heißt `FF`.
+@short Der Chip, in dem die Firmware steckt: feste Kapazität, gelöscht heißt `FF`.
 
 Ein serieller Flash-Chip trägt die Firmware der Platine. Zwei Eigenschaften zählen hier:
 

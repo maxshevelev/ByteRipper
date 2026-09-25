@@ -1,20 +1,20 @@
 # Bench Rules
 
-> The short list of ways to ruin a dump, and how not to.
+> Ways to ruin a dump (and how to avoid them).
 
 ## Keep the original
 
-Save the chip read exactly as it came off the programmer, and never edit that file. Work on a copy — or use **File ▸ Duplicate** and patch the duplicate. A board with a failed power rail may not survive a second read.
+Save the original dump, read off the chip, exactly as it came off the programmer, and never edit that file. Work on a copy — or use **File ▸ Duplicate** and patch the duplicate. A board with a failed power rail may not survive a second read.
 
 ## Never change the length of a flash image
 
-A chip is a fixed size. Every address inside a firmware image is absolute: the flash descriptor names region boundaries, the [[term:fit|FIT]] points at microcode by address, a signature covers a fixed range.
+A chip's capacity is fixed. Every address inside a firmware image is absolute: the flash descriptor names region boundaries, the [[term:fit|FIT]] points at microcode by address, a signature covers a fixed range.
 
-Overwrite and fill are safe. Paste Insert, Delete Bytes and Insert Mode are not, on a dump — the app asks before any of them for this reason. Before you flash, check the file's size in the pane header against the size of the chip.
+Overwrite and fill are relatively safe: they do not change the length. Paste Insert, Delete Bytes and Insert Mode are not, on a dump — the app asks before any of them for this reason. Before you flash, check the file's size in the status bar against the capacity of the chip.
 
 ## Mind what is board-unique
 
-A donor dump from the internet carries the donor's identity. Flash it raw and the board comes up with someone else's MAC address, serial number and machine UUID — or with none at all, which some firmware refuses to boot with. See [[topic:recipe-board-data|Keeping board-unique data]].
+A donor dump from the internet may carry the donor's identity. Flash it raw and the board comes up with someone else's MAC address, serial number and machine UUID. It may equally carry none: dumps shared on the internet often have the [[term:dmi|DMI]] area wiped so that nobody's data travels with them, and a board that comes up with those fields empty is one whose warranty lookup and OEM activation stop working. See [[topic:recipe-board-data|Keeping board-unique data]].
 
 ## Signed and locked regions
 
@@ -29,6 +29,6 @@ Knowing this before you patch is the difference between a five-minute fix and a 
 ## Verify before you flash
 
 1. No red bytes left — every edit is saved ([[topic:saving|Saving]]).
-2. The file's size is exactly the chip's size.
+2. The file's size is exactly the chip's capacity.
 3. If you changed a header, its checksum is right — the [[topic:tool-uefi|UEFI panel]] flags bad ones and can fix them.
 4. Compare your patched file against the original one last time ([[topic:first-comparison|comparison]]) and look at every difference. Every one of them should be a change you meant to make.

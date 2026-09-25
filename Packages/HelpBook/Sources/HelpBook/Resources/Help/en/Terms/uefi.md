@@ -216,6 +216,21 @@ Related stores you may see in the same area: **FTW** (a fault-tolerant write rec
 
 @see term:nvram
 
+@term dmi
+@name DMI (Desktop Management Interface)
+@short The standard set of facts a machine reports about itself — serial number, UUID, model — and the part of the image they are written into.
+
+DMI is a DMTF standard, and in practice "DMI" and "SMBIOS" name the same thing: the tables the firmware publishes so that an operating system can say what machine it is running on. `dmidecode` on Linux reads exactly these.
+
+What matters on a bench is that a board's own identity lives there: the system and baseboard serial numbers, the machine UUID, the asset tag, the model name. All of it is written at the factory rather than computed. A board with those fields blank loses warranty lookup, licence activation and management tooling.
+
+Lost fields are not always lost for good. Some vendors — HP and Acer among them — ship service utilities that write the identity again, taking the serial number and the rest off the sticker on the case or on the board. Where no such utility exists, carrying the fields over from the old dump is what is left.
+
+Where the fields sit inside the image is not standardised. Each vendor puts them where it likes and the layout moves between generations, which is why moving them across is a comparison job rather than something a tool can do for you.
+
+@see term:serial-data
+@see topic:recipe-board-data
+
 @term slic
 @name SLIC / MSDM
 @short Windows OEM licence data stored in the firmware.

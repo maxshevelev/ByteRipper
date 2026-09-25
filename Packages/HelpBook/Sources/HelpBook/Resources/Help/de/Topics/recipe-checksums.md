@@ -1,4 +1,4 @@
-@source-sha 2f7d96a4d8eceab5ef904166dca91b0db93119c5c62b7c9731b7c61864ef84f7
+@source-sha 700e7b1f7d94b3dc9c9fcfb8ef794c9bb43511bc47fdb014c77d2d6edce7ab93
 # Prüfsummen prüfen und korrigieren
 
 > Eine Struktur, die ihre eigene Prüfsumme trägt, wird abgewiesen, wenn Sie sie ändern und den alten Wert stehen lassen.
@@ -16,7 +16,7 @@ Die [[topic:tool-uefi|UEFI-Struktur]] prüft die Header, während sie sie liest:
 ## Was eine nicht aufgehende Prüfsumme wirklich sagt
 
 - **Sie haben innerhalb der Struktur geändert**, was beim Ändern zu erwarten ist — korrigieren Sie sie vor dem Schreiben.
-- **Der Dump ist beschädigt**, wenn Sie nichts geändert haben. Eine nicht aufgehende Prüfsumme bei einem frischen Lesen ist ein Zeichen für ein schlechtes Lesen oder einen wirklich beschädigten Chip. Lesen Sie den Chip erneut, bevor Sie etwas daraus schließen.
+- **Der Dump ist beschädigt**, wenn Sie nichts geändert haben. Eine nicht aufgehende Prüfsumme in einem frischen Dump ist ein Zeichen für ein schlechtes Lesen oder einen wirklich beschädigten Chip. Lesen Sie den Chip erneut, bevor Sie etwas daraus schließen.
 - **Die Struktur ist nicht das, wofür der Parser sie hält.** Eine nicht aufgehende Prüfsumme in einer Region, bei der das Panel unsicher ist, kann heißen, dass das Panel sie falsch zugeordnet hat, und nicht, dass die Bytes falsch sind.
 
 ## Was „Prüfsumme korrigieren“ nicht kann

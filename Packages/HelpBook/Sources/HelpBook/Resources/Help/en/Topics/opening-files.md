@@ -26,7 +26,7 @@ File B is optional. Nothing needs a second file except the comparison itself.
 
 ## Panes, tabs and windows
 
-Each pane header names its file, its size and whether it has unsaved changes. The ✕ in the header closes that pane and leaves the other one open.
+Each pane header names its file and whether it has unsaved changes; the status bar below it gives the size. The ✕ in the header closes that pane and leaves the other one open.
 
 A window can hold several tabs (**File ▸ New Tab**, ⌘T), each with its own pair of slots. That is how several boards are kept apart on one screen: one tab per job.
 

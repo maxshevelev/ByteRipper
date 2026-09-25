@@ -35,7 +35,7 @@ These exist, and each one asks before it acts:
 
 The confirmations can be switched off in [[topic:settings|Settings ▸ Editing]] or with the "do not ask again" box on the dialog itself. They are on by default because these are exactly the edits that quietly ruin a structured dump.
 
-! On an SPI dump destined for a programmer, the file's length must not change. The chip is a fixed size. If you are about to insert or delete bytes in a flash image, stop and use overwrite and fill instead — see [[topic:bench-safety|Bench rules]].
+! On an SPI dump destined for a programmer, the file's length must not change. The chip's capacity is fixed. If you are about to insert or delete bytes in a flash image, stop and use overwrite and fill instead — see [[topic:bench-safety|Bench rules]].
 
 ## Undo
 

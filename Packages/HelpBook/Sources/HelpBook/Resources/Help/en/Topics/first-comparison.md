@@ -15,11 +15,11 @@ A comparison of two dumps of the same board usually looks like one of these:
 
 - **Almost nothing differs.** A handful of bytes, all in one small area. That area is nearly always board-unique data — a MAC address, a serial number, a machine UUID, a saved setup variable. See [[topic:recipe-board-data|Keeping board-unique data]].
 - **One large block differs and the rest matches.** Different firmware versions, or one region has been erased or corrupted. The [[topic:tool-uefi|UEFI panel]] will say which region it is.
-- **Everything differs from some address on.** The two files are not the same size, or one of them was read with the wrong chip settings. Check the sizes in the pane headers first.
+- **Everything differs from some address on.** The two files are not the same size, or one of them was read with the wrong chip settings. Check the sizes in the status bars first.
 - **The whole file differs.** Different chips, a wrong dump, or one file is compressed or encrypted. Compare the sizes and the first 16 bytes before going further.
 
 ## If the two files are different sizes
 
-ByteRipper still compares them, from address zero, and marks the tail that only one file has. A 8 MB dump against a 16 MB dump is almost always a wrong read rather than a real difference — many programmers default to the wrong chip size.
+ByteRipper still compares them, from address zero, and marks the tail that only one file has. A 8 MB dump against a 16 MB dump is almost always a wrong read rather than a real difference — many programmers default to the wrong capacity.
 
 See also: [[topic:navigation|Moving around]], [[topic:colors|What the colours mean]].

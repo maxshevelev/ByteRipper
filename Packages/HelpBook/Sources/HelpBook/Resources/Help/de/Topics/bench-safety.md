@@ -1,21 +1,21 @@
-@source-sha a27b4712e300d9955d29180c4f4a2009cd6b5b7d029a736900a973967e7470b1
+@source-sha b8cd876c2f7113e8f94f197cb46035ddfdce16278956438872c3efa0b947ec6f
 # Regeln am Arbeitsplatz
 
-> Die kurze Liste der Wege, einen Dump zu ruinieren, und wie man es lässt.
+> Wege, einen Dump zu ruinieren (und wie man sie vermeidet).
 
 ## Bewahren Sie das Original
 
-Sichern Sie das Lesen des Chips genau so, wie es vom Programmer kam, und ändern Sie diese Datei nie. Arbeiten Sie mit einer Kopie — oder nehmen Sie **Ablage ▸ Duplizieren** und ändern Sie das Duplikat. Eine Platine mit ausgefallener Versorgung übersteht ein zweites Lesen vielleicht nicht.
+Sichern Sie den ursprünglichen Dump, vom Chip gelesen, genau so, wie er vom Programmer kam, und ändern Sie diese Datei nie. Arbeiten Sie mit einer Kopie — oder nehmen Sie **Ablage ▸ Duplizieren** und ändern Sie das Duplikat. Eine Platine mit ausgefallener Versorgung übersteht ein zweites Lesen vielleicht nicht.
 
 ## Ändern Sie nie die Länge eines Flash-Images
 
-Ein Chip hat eine feste Größe. Jede Adresse in einem Firmware-Image ist absolut: der Descriptor nennt Regionsgrenzen, die [[term:fit|FIT]] zeigt über Adressen auf Microcode, eine Signatur deckt einen festen Bereich ab.
+Die Kapazität eines Chips ist fest. Jede Adresse in einem Firmware-Image ist absolut: der Descriptor nennt Regionsgrenzen, die [[term:fit|FIT]] zeigt über Adressen auf Microcode, eine Signatur deckt einen festen Bereich ab.
 
-Überschreiben und Füllen sind sicher. „Einsetzen mit Verschieben“, „Bytes löschen“ und der Einfügemodus sind es bei einem Dump nicht — deshalb fragt das Programm vor jedem davon. Prüfen Sie vor dem Schreiben die Dateigröße im Bereichskopf gegen die Größe des Chips.
+Überschreiben und Füllen sind vergleichsweise sicher: Sie ändern die Länge nicht. „Einsetzen mit Verschieben“, „Bytes löschen“ und der Einfügemodus sind es bei einem Dump nicht — deshalb fragt das Programm vor jedem davon. Prüfen Sie vor dem Flashen die Dateigröße in der Statuszeile gegen die Kapazität des Chips.
 
 ## Denken Sie an das, was platinenspezifisch ist
 
-Ein Spenderdump aus dem Netz trägt die Identität des Spenders. Schreiben Sie ihn roh, kommt die Platine mit fremder MAC-Adresse, fremder Seriennummer und fremder Maschinen-UUID hoch — oder ganz ohne, womit manche Firmware nicht startet. Siehe [[topic:recipe-board-data|Platinenspezifische Daten bewahren]].
+Ein Spenderdump aus dem Netz kann die Identität des Spenders tragen. Schreiben Sie ihn roh, kommt die Platine mit fremder MAC-Adresse, fremder Seriennummer und fremder Maschinen-UUID hoch. Er kann sie aber auch gar nicht tragen: In Dumps, die im Netz geteilt werden, ist der [[term:dmi|DMI]]-Bereich oft gelöscht, damit keine fremden Daten mitreisen — und mit leeren Feldern funktionieren Garantieabfrage und OEM-Aktivierung nicht mehr. Siehe [[topic:recipe-board-data|Platinenspezifische Daten bewahren]].
 
 ## Signierte und gesperrte Regionen
 
@@ -30,6 +30,6 @@ Das vor dem Ändern zu wissen ist der Unterschied zwischen einer Fünf-Minuten-R
 ## Prüfen Sie vor dem Schreiben
 
 1. Kein Rot mehr — jede Änderung ist gesichert ([[topic:saving|Sichern]]).
-2. Die Dateigröße ist exakt die Chipgröße.
+2. Die Dateigröße entspricht exakt der Kapazität des Chips.
 3. Haben Sie einen Header geändert, stimmt seine Prüfsumme; das [[topic:tool-uefi|UEFI-Panel]] markiert falsche und kann sie korrigieren.
-4. Vergleichen Sie die geänderte Datei ein letztes Mal mit dem ursprünglichen Lesen ([[topic:first-comparison|Vergleich]]) und sehen Sie sich jeden Unterschied an. Jeder sollte eine Änderung sein, die Sie so wollten.
+4. Vergleichen Sie die geänderte Datei ein letztes Mal mit dem ursprünglichen Dump ([[topic:first-comparison|Vergleich]]) und sehen Sie sich jeden Unterschied an. Jeder sollte eine Änderung sein, die Sie so wollten.

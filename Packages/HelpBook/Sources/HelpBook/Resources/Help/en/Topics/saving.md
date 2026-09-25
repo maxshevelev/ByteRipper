@@ -25,8 +25,8 @@ ByteRipper watches the file it opened. If something else rewrites it — your pr
 Some documents are deliberately untitled and have no path, so ⌘S asks where to put them:
 
 - **File ▸ New File** (⌘N).
-- The result of a [[topic:join-duplicate|join]]: joining two chip reads makes a *new* image, and an accidental ⌘S must not write it over one of the halves.
+- The result of a [[topic:join-duplicate|join]]: joining two dumps makes a *new* image, and an accidental ⌘S must not write it over one of the halves.
 - The result of **Duplicate**.
 - A part opened out of an image.
 
-! Keep the original read. Save your patched version under a new name — `board_patched.bin` beside `board_original.bin`. A dump you overwrote is a chip you have to read again, and on a board with a dead power rail that may not be possible twice.
+! Keep the original dump. Save your patched version under a new name — `board_patched.bin` beside `board_original.bin`. A dump you overwrote is a chip you have to read again, and on a board with a dead power rail that may not be possible twice.
