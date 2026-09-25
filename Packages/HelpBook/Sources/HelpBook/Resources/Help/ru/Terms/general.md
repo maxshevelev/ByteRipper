@@ -1,4 +1,4 @@
-@source-sha 46e983b1e2576b8bf47eba6c04de5ab2d86cc346b439dca6e49c586a885e8f8d
+@source-sha 706f95fa86c6618391fdb4c75bae8d19654f40c5a638a33dd975bdc2f1e99bd2
 @term dump
 @name Дамп
 @short Содержимое микросхемы, считанное в файл.
@@ -140,7 +140,7 @@ UEFI заменил BIOS описанным интерфейсом между п
 @name PCH / ICH / FCH
 @short Чипсет: вторая микросхема на плате; ей принадлежит SPI Flash с прошивкой.
 
-Названия Intel по возрасту: сначала ICH (I/O Controller Hub), затем PCH (Platform Controller Hub). У AMD то же самое называется FCH (Fusion Controller Hub).
+Названия Intel по возрасту: сначала ICH (I/O Controller Hub), затем PCH (Platform Controller Hub). У AMD то же самое называется FCH (Fusion Controller Hub). Все три кончаются на Hub — отсюда и «хаб», которым его чаще всего и называют в мастерской наравне с «чипсетом».
 
 Для нас он важен по двум причинам. Прошивку читает чипсет, а не процессор, и он же решает, какому мастеру можно писать в какой [[term:region|регион]]. И у Intel внутри него физически находится [[term:me|Management Engine]] — вместе с [[term:otp|фьюзами]], в которых лежит конфигурация [[term:boot-guard|Boot Guard]] этой платы.
 

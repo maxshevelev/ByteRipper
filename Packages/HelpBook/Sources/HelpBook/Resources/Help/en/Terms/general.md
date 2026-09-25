@@ -139,7 +139,7 @@ Some platforms run the bus in dual or quad mode — two or four data lines inste
 @name PCH / ICH / FCH
 @short The chipset: the companion chip that owns the firmware flash.
 
-Intel's names for it, oldest first: ICH (I/O Controller Hub), then PCH (Platform Controller Hub). AMD's equivalent is the FCH (Fusion Controller Hub).
+Intel's names for it, oldest first: ICH (I/O Controller Hub), then PCH (Platform Controller Hub). AMD's equivalent is the FCH (Fusion Controller Hub). All three end in Hub, which is why a bench calls it the hub as readily as the chipset.
 
 It matters twice over here. The chipset, not the CPU, reads the flash and enforces which master may write which [[term:region|region]]. And on Intel it physically contains the [[term:me|Management Engine]], along with the [[term:otp|fuses]] that hold a board's [[term:boot-guard|Boot Guard]] configuration.
 

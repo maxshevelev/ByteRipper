@@ -1,4 +1,4 @@
-@source-sha 46e983b1e2576b8bf47eba6c04de5ab2d86cc346b439dca6e49c586a885e8f8d
+@source-sha 706f95fa86c6618391fdb4c75bae8d19654f40c5a638a33dd975bdc2f1e99bd2
 @term dump
 @name Dump
 @short Der Inhalt eines Chips, in eine Datei ausgelesen.
@@ -140,7 +140,7 @@ Manche Plattformen fahren den Bus im Dual- oder Quad-Modus, mit zwei oder vier D
 @name PCH / ICH / FCH
 @short Der Chipsatz: der zweite Baustein auf dem Board, dem der Firmware-Flash gehört.
 
-Intels Namen dafür, vom ältesten an: ICH (I/O Controller Hub), dann PCH (Platform Controller Hub). AMDs Gegenstück heißt FCH (Fusion Controller Hub).
+Intels Namen dafür, vom ältesten an: ICH (I/O Controller Hub), dann PCH (Platform Controller Hub). AMDs Gegenstück heißt FCH (Fusion Controller Hub). Alle drei enden auf Hub — deshalb sagt die Werkbank ebenso oft Hub wie Chipsatz.
 
 Hier ist er gleich doppelt wichtig. Den Flash liest der Chipsatz, nicht die CPU, und er setzt auch durch, welcher Master welche [[term:region|Region]] beschreiben darf. Und bei Intel sitzt die [[term:me|Management Engine]] physisch in ihm — zusammen mit den [[term:otp|Fuses]], in denen die [[term:boot-guard|Boot-Guard]]-Konfiguration des Boards liegt.
 
