@@ -1,4 +1,4 @@
-@source-sha 704571988dcc5649d770c4ae2b1f6e2ad4a55385ad2dcb8ad158a8ea68b0dba0
+@source-sha 61dbfd9aebbadb84caaa5f735d9c335015356c87417feb0cc380a6be1f871a8b
 @term me
 @name Intel ME / CSME
 @short Ein kleiner Prozessor im Chipsatz, mit eigener Firmware in einer eigenen Flash-Region.
@@ -121,6 +121,90 @@ Per Definition platinenspezifisch: hier hat der Hersteller gesagt, was die Engin
 
 @see term:fitc
 @see topic:recipe-board-data
+
+@term me-configuration
+@name Konfiguration der ME-Region
+@short Der boardspezifische Teil einer ME-Region — alles darin, was nicht Intels eigener Code ist.
+
+Eine ME-Region besteht überwiegend aus Firmware, die Intel geschrieben hat und die auf jedem Board dieser Generation identisch ist. Darin eingemischt ist ein kleiner Teil, der zu *diesem* Board gehört und vom Hersteller mit Intels Flash Image Tool geschrieben wurde:
+
+- **`fitc.cfg`** — das eigene Konfigurationsmodul dieses Werkzeugs, im betrieblichen [[term:cpd|`$CPD`]].
+- **Die Partitionen `FITC`, `CDMD`, `MFSB`** — Konfiguration als eigenständige Partitionen.
+- **Einträge der [[term:oem-config|OEM Configuration]]** — die Antworten des Herstellers, abgelegt in [[term:mfs|MFS]] oder [[term:efs|EFS]].
+- **[[term:utok|UTOK]] und OEM-Berechtigungseinträge**, wo ein Board sie hat.
+
+Ein Teil davon beschreibt das *Board*: wie viele SPI-Chips, welche Funktionen der Engine freigegeben sind, was die Plattform darf. Ein Teil beschreibt die *Maschine* — das hat die Engine geschrieben, nachdem sie gelaufen war.
+
+Diese Zweiteilung ist der Grund, warum eine ME-Region von einem Spender nicht einfach austauschbar ist. Sie trägt die Antworten des Spenders auf beide Arten von Frage.
+
+@see term:file-system-state
+@see topic:recipe-board-data
+
+@term file-system-state
+@name File System State
+@short Wie weit das eigene Dateisystem der Engine eingerichtet ist: Unconfigured, Configured oder Initialized.
+
+Das [[term:mfs|MFS]]- oder [[term:efs|EFS]]-Volume ist das Dateisystem der Engine. Woraus es besteht, sagt, wie weit dieses Abbild von der Stock-Firmware entfernt ist, die Intel ausliefert, und das [[topic:tool-me|ME-Panel]] zeigt es als eine Zeile.
+
+- **Unconfigured** — nichts im Volume sagt, dass es überhaupt eingerichtet wurde. Ein sauberes Abbild, so wie es von Intel kommt.
+- **Configured** — die Einstellungen des Herstellers sind da: Dateien der OEM Configuration oder des Home-Verzeichnisses im Volume oder eine Konfigurationspartition im Abbild. Der Boardhersteller hat seine Antworten geschrieben; die Engine muss dafür nie gelaufen sein.
+- **Initialized** — im Volume liegen die Low-Level-Dateien, die die Engine sich selbst anlegt. Das Dateisystem wurde an Ort und Stelle initialisiert.
+
+Warum das zählt, bevor Sie etwas auf ein Board schreiben: Die Zeile sagt, welche Art von Abbild Sie in der Hand haben. Eine Stock-Region von Intel ist Unconfigured und trägt überhaupt keine Boardeinstellungen; ein Dump von einer laufenden Maschine ist Initialized und trägt deren Einstellungen. Das eine dorthin zu setzen, wo das andere hingehört, ist genau der Weg zu einem Board ohne eigene oder mit fremden Einstellungen.
+
+! Dass eine saubere Region Unconfigured ist, ist kein Fehler. So soll sie ankommen; gefüllt wird sie danach vom Werkzeug des Herstellers und dann von der Engine selbst.
+
+@see term:me-configuration
+@see topic:recipe-me-check
+
+@term hap
+@name HAP-Bit
+@short Ein [[term:soft-straps|Soft-Strap]] im Flash-Deskriptor, der die Engine nach ihrem frühen Start anhalten lässt.
+
+Intel hat es für ein US-Regierungsprogramm eingebaut, die High Assurance Platform, und es ist das Bit, das die Werkzeuge zum Abschalten der ME setzen. Ab ME 11 heißt es HAP; das Gegenstück älterer Generationen ist als AltMeDisable bekannt. In beiden Fällen liegt es im PCH-Strap-Abschnitt des Deskriptors und nicht in der ME-Region.
+
+Die Engine startet weiterhin und prüft weiterhin ihre eigene Firmware. Das Bit hält sie nur davon ab, weiterzugehen.
+
+ByteRipper dekodiert es nicht. Seine Position wandert mit der Chipsatzgeneration, und Intel dokumentiert sie nicht — deshalb nennt das Deskriptor-Panel die Anzahl der Strap-Wörter und überlässt das Lesen eines bestimmten Bits einem Werkzeug, das dafür gebaut ist.
+
+! Dieses Bit zu setzen ist keine Reparatur. Ein Board mit tatsächlich beschädigter ME-Region kommt meist gar nicht hoch, und die Engine abzuschalten ändert daran nichts.
+
+@see term:soft-straps
+@see term:flash-descriptor
+
+@term ptt
+@name PTT
+@short „Platform Trust Technology“ — ein TPM, das die Management Engine bereitstellt, ohne eigenen Baustein.
+
+Mit aktiviertem PTT zeigt die Engine dem Betriebssystem ein TPM. Auf den meisten Notebooks liegen dort die Schlüssel von BitLocker — deshalb kann eine Arbeit, die den Zustand der Engine zurücksetzt, eine Platte hinterlassen, die niemand mehr öffnet.
+
+PTT kann am Werk auch dauerhaft in den [[term:otp|Fuses]] des Chipsatzes abgeschaltet werden.
+
+! Bevor Sie die ME-Region einer Maschine mit verschlüsselter Platte anfassen, fragen Sie nach dem Wiederherstellungsschlüssel. Danach ist es zu spät.
+
+@see term:me
+@see topic:bench-safety
+
+@term amt
+@name AMT
+@short „Active Management Technology“ — Fernwartung durch die Engine, unabhängig vom Betriebssystem.
+
+AMT ist die Funktion, um die herum die Management Engine überhaupt gebaut wurde: Eine Administration erreicht die Maschine über das Netz, während sie ausgeschaltet oder ihr Betriebssystem tot ist. Sie findet sich auf Geschäftsmodellen, und was dafür eingerichtet wird, gehört zu dem, was die Engine im [[term:mfs|MFS]] hält.
+
+@see term:me
+@see term:mfs
+
+@term me-power-states
+@name M0 / M3 / M-Off
+@short Die Engine hat eigene Energiezustände — deshalb kann sie laufen, während die Maschine „aus“ ist.
+
+- **M0** — die Engine läuft, und der Host ist an.
+- **M1** und **M3** — die Engine ist voll versorgt, der Host nicht. In M3 steht ihr der Hauptspeicher nicht zur Verfügung.
+- **M-Off** — die Engine ist aus; nichts ist versorgt.
+
+Welche davon eine Plattform tatsächlich umsetzt, hängt von ihrem Aufbau ab. Für die Werkbank heißt das praktisch: Eine Maschine, die am Netz hängt, ist keine tote Maschine.
+
+@see term:me
 
 @term mfs-backup
 @name MFS-Sicherung (`MFSB`)

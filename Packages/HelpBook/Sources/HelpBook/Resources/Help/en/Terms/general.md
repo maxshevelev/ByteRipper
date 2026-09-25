@@ -93,3 +93,119 @@ A serial flash chip holds the board's firmware. Two properties matter here:
 ByteRipper works on files. Getting the bytes off the chip and back onto it is the programmer's job — a clip, a socket or an in-circuit connection, driven by its own software.
 
 That separation is deliberate: the app can be used on a dump from any programmer, and it can never write to a board by accident.
+
+@term bios
+@name BIOS
+@short "Basic Input/Output System" — the firmware that brings a PC up before any operating system runs.
+
+The BIOS is the first code the processor executes. It identifies and initialises the hardware, runs the [[term:post|power-on self-test]], and hands control to a boot loader on a drive.
+
+Strictly the word means the older, pre-UEFI firmware, and what a modern board runs is [[term:uefi|UEFI]]. On a bench the two are used interchangeably, and "the BIOS chip" means the flash the firmware lives on whichever it is.
+
+@see term:uefi
+@see term:bios-region
+
+@term uefi
+@name UEFI
+@short "Unified Extensible Firmware Interface" — the standard modern PC firmware, and the format this app reads.
+
+UEFI replaced the BIOS with a specified interface between the firmware and the operating system, and with firmware built out of drivers and applications instead of one monolithic blob. That modularity is why a UEFI image opens as a tree of volumes, files and sections rather than as a wall of code.
+
+The reference implementation is the open-source TianoCore EDK II. Independent BIOS vendors fork it, board makers modify it again, and that chain is why two images for two different boards can be laid out alike and share almost no bytes.
+
+@see term:bios
+@see topic:tool-uefi
+
+@term post
+@name POST
+@short "Power-On Self-Test" — the firmware's own check of the hardware, before anything boots.
+
+The firmware identifies and tests memory, video and storage before it looks for an operating system. A board that "does not POST" never got through this, which on a repair bench usually means the early firmware, the [[term:me|Management Engine]] or the hardware itself — not the operating system.
+
+@see topic:bench-safety
+
+@term spi
+@name SPI
+@short "Serial Peripheral Interface" — the few-wire bus the firmware chip hangs on.
+
+The flash chip talks to the chipset over four signals plus power. It is slow and simple, which is why a programmer with a clip can speak it, and why a full dump of a 16 MB part takes minutes rather than seconds.
+
+Some platforms run the bus in dual or quad mode — two or four data lines instead of one. Which mode a board uses is configured in the [[term:flash-descriptor|descriptor]]'s [[term:soft-straps|straps]].
+
+@see term:flash-chip
+@see term:programmer
+
+@term pch
+@name PCH / ICH / FCH
+@short The chipset: the companion chip that owns the firmware flash.
+
+Intel's names for it, oldest first: ICH (I/O Controller Hub), then PCH (Platform Controller Hub). AMD's equivalent is the FCH (Fusion Controller Hub).
+
+It matters twice over here. The chipset, not the CPU, reads the flash and enforces which master may write which [[term:region|region]]. And on Intel it physically contains the [[term:me|Management Engine]], along with the [[term:otp|fuses]] that hold a board's [[term:boot-guard|Boot Guard]] configuration.
+
+@see term:region
+@see term:otp
+
+@term ec
+@name EC
+@short "Embedded Controller" — the small microcontroller that runs the keyboard, fans, battery and power sequencing.
+
+On a laptop the EC is powered before anything else and decides whether the main system comes up at all. It has firmware of its own, which may sit on a separate chip or share the same flash as the BIOS.
+
+@see term:ec-region
+@see term:ec-firmware
+
+@term otp
+@name OTP / fuses
+@short "One-Time Programmable" — bits inside a chip that can be set once and never cleared.
+
+Field-programmable fuses are burned at the end of manufacturing. Once set they are read-only for good: no firmware, no programmer and no amount of rewriting the flash changes them.
+
+That is the whole reason [[term:boot-guard|Boot Guard]] cannot be switched off from a dump. Its configuration, and the hash of the board vendor's key, live in fuses inside the chipset.
+
+@see term:boot-guard
+@see term:pch
+
+@term lpc
+@name LPC
+@short "Low Pin Count" — an old, slow bus still used for the embedded controller and TPM headers.
+
+Some boards can be configured to read firmware over LPC rather than SPI. Even then an Intel platform still needs a valid [[term:flash-descriptor|descriptor]] on the SPI bus.
+
+@see term:spi
+
+@term bmc
+@name BMC
+@short "Baseboard Management Controller" — a server board's remote-management processor, with firmware of its own.
+
+A BMC is a server's equivalent of the management hardware a desktop does not have: it runs while the machine is off and serves a remote console. Its firmware is a separate image on a separate chip, not part of a UEFI dump.
+
+@term psp
+@name AMD PSP
+@short "Platform Security Processor" — AMD's counterpart to the Intel Management Engine.
+
+The PSP is a small processor inside the AMD chipset with firmware and a boot role of its own. Unlike the [[term:me-region|ME region]] it is not a region the descriptor declares: on an AMD image the PSP firmware sits embedded between the UEFI filesystems.
+
+@see term:me
+
+@term ibv
+@name OEM / IBV / ODM
+@short Who made which part of the firmware you are looking at.
+
+- **IBV** — Independent BIOS Vendor: AMI, Insyde, Phoenix. They take EDK II and build the firmware platform an OEM starts from.
+- **OEM** — the brand on the case: Dell, HP, ASUS, Lenovo. They configure and extend the IBV's firmware.
+- **ODM** — the factory that actually designs and builds the board.
+
+Worth keeping straight when reading an image: the volume and file layout is usually the IBV's, while the settings, the logo and the [[term:serial-data|board-specific data]] are the OEM's.
+
+@see term:serial-data
+
+@term tcb
+@name TCB
+@short "Trusted Computing Base" — the part of a system that everything else has to trust, because nothing checks it.
+
+Every verification chain ends somewhere. On an Intel board it ends in the CPU's microcode and the chipset's [[term:otp|fuses]]: they check the [[term:acm|ACM]], which checks the manifests, which check the firmware — and nothing checks them. That is the TCB.
+
+The practical reading: the smaller the part nobody verifies, the better, and anything you can change in a dump is by definition outside it.
+
+@see term:boot-guard

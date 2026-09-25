@@ -1,4 +1,4 @@
-@source-sha e1de2461e3f9d0b69938f23e33e1fa4c58ead11e40bdfb0e7eccf828e2c20c45
+@source-sha f673e90be7a23b14cc800c0dd1d2efca893563b93c54d0d77ef80fd306297464
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -11,6 +11,32 @@ Am Arbeitsplatz schaut man zuerst hierher: ist der Descriptor beschädigt, ist j
 
 @see term:region
 @see topic:tool-uefi
+
+@term descriptor-mode
+@name Deskriptor-Modus
+@short Ob der Chipsatz den Flash als ein durchgehendes BIOS liest oder als Karte aus Regionen.
+
+Bis zum ICH7 enthielt ein Firmware-Chip BIOS-Code und sonst nichts: keinen Deskriptor, keine Regionen, keine Zugriffsrechte. Ab dem ICH8 kann der Chipsatz auf zwei Arten starten. Der **Deskriptor-Modus** legt einen [[term:flash-descriptor|Flash-Deskriptor]] in die ersten `0x1000` Bytes, teilt den Chip in [[term:region|Regionen]] mit eigenen Rechten und macht [[term:me|Management Engine]], [[term:gbe-region|GbE-Region]] und [[term:soft-straps|Soft-Straps]] überhaupt erst möglich. Der **Modus ohne Deskriptor** ist die alte durchgehende Aufteilung.
+
+Jeder aktuelle Intel-PCH verlangt einen gültigen Deskriptor; den Modus ohne Deskriptor gibt es nicht mehr. Ein Dump von einem heutigen Board ohne die Signatur `0FF0A55A` am Anfang ist also schlecht gelesen oder unvollständig und keine alte Aufteilung.
+
+Ein Board im Deskriptor-Modus kann seine Firmware außerdem auf **zwei Flash-Chips** verteilen. Das Abbild ist dann beides hintereinander — 4 MB gefolgt von 2 MB ergeben ein Abbild von 6 MB — und beide müssen gelesen und zusammengefügt werden, bevor sich hiervon irgendetwas parsen lässt. Genau dafür ist das [[topic:join-duplicate|Zusammenfügen eines zweiten Dumps]] da.
+
+@see term:flash-descriptor
+@see topic:join-duplicate
+
+@term soft-straps
+@name Soft-Straps
+@short Einstellungen für Chipsatz und CPU, die im Deskriptor liegen und beim Einschalten gelesen werden, vor jeder Firmware.
+
+Ein Strap ist ein Konfigurationsbit, das das Silizium selbst liest. Hard-Straps sind Widerstände auf dem Board; Soft-Straps sind dasselbe, nur im [[term:flash-descriptor|Deskriptor]] — nur deshalb stehen sie überhaupt im Dump.
+
+Die PCH-Straps sagen, wie viele Flash-Chips es gibt, wie schnell sie getaktet werden dürfen, ob der Bus im Dual- oder Quad-Modus läuft, und tragen unter vielem anderen das [[term:hap|HAP-Bit]], mit dem die Management Engine per Software stillgelegt wird. Die CPU-Straps sind überwiegend Debug-Einstellungen: Kernzahl, Hyper-Threading.
+
+ByteRipper nennt die Anzahl der Strap-Wörter im Deskriptor und nicht, was jedes einzelne bedeutet. Ihre Belegung wechselt mit jeder Chipsatzgeneration, und kaum etwas davon ist veröffentlicht; eine Zahl, die das Programm nicht begründen kann, zeigt es nicht.
+
+@see term:flash-descriptor
+@see term:hap
 
 @term region
 @name Region
@@ -68,6 +94,17 @@ Was darin steht, hängt ganz am Hersteller. Behandeln Sie sie als möglicherweis
 
 In Notebooks liegt die EC-Firmware mal als eigene Region im selben SPI-Chip wie das BIOS, mal in einem eigenen Chip. Eine Platine, die gar nicht angeht oder sofort wieder ausgeht, ist häufiger ein EC- als ein BIOS-Problem.
 
+@term ifwi
+@name IFWI
+@short „Integrated Firmware Image“ — eine andere Aufteilung des ganzen Chips, zu finden auf Atom- und TXE-Plattformen.
+
+Statt der gewohnten getrennten Regionen trägt ein IFWI-Abbild eine IFWI-Region, die in zwei **logische Bootpartitionen** geteilt ist (LBP1 und LBP2, gleich groß). Jede beginnt mit einer [[term:bpdt|BPDT]], die die darin liegenden Unterpartitionen auflistet: die Firmware der Engine, die IA-Firmware — das ist das BIOS —, die des Power-Management-Controllers, den CPU-Mikrocode. Eine eigene logische Datenregion hält die nichtflüchtigen Daten und das UEFI-[[term:nvram|NVRAM]].
+
+Üblich dort, wo die Firmware auf eMMC statt auf einem SPI-Baustein liegt.
+
+@see term:bpdt
+@see term:region
+
 @term volume
 @name Firmware-Volume (FV)
 @short Ein Container in der BIOS-Region, der Dateien enthält. Sein Header beginnt mit `_FVH`.
@@ -123,6 +160,41 @@ Gelöschtes Padding ist die Füllmasse eines Dumps — meist `FF`. Der Baum blen
 Padding, das **Daten enthält**, wird immer aufgeführt: da liegt etwas, ob der Parser es versteht oder nicht.
 
 @see term:free-space
+
+@term ec-firmware
+@name EC-Firmware in einem BIOS-Abbild
+@short Der Code des Embedded Controllers, der oft in der BIOS-Region liegt, ohne dass ihn dort etwas benennt.
+
+Seit Skylake kann ein Board eine richtige [[term:ec-region|EC-Region]] haben, die der Deskriptor deklariert. Davor — und auf etlichen Boards auch danach — ist die EC-Firmware schlicht ein Block in der BIOS-Region, den der Parser als [[term:padding|Füllung]] zeigt, meist als die erste.
+
+Woran man sie üblicherweise erkennt:
+
+- **Die Größe.** Verbreitet sind 128 KB (131 072 Bytes) und 192 KB (196 608 Bytes).
+- **ITE-Controller** beginnen mit einer Folge von `A5`-Bytes — `A5 A5 A5 A5 A5 A5`.
+- **ENE-Controller** tragen die Zeichenfolge `ENE` in den ersten Bytes.
+- **Microchip-Firmware (MEC)** liegt häufiger im ersten Volume der BIOS-Region als in einer Füllung.
+
+! Das sind Anzeichen und kein Beweis, und sie stammen aus einer einzelnen Quelle der Community, nicht aus einem Datenblatt. Ein Block ganz ohne Kennzeichen ist völlig normal. Geklärt wird das so, wie dieses Programm gebaut ist: durch den Vergleich mit einem bekannt guten Dump desselben Boards.
+
+@see term:ec-region
+@see topic:recipe-donor
+
+@term serial-data
+@name Seriennummern, MAC und Lizenzdaten
+@short Boardspezifische Daten, die eine Reparatur überleben müssen — und die Stellen, an denen sie sich verstecken.
+
+Ein sauberes Abbild vom Hersteller trägt weder die Seriennummer dieses Boards noch seine MAC-Adresse noch seine Windows-Lizenz. Sie aus dem alten Dump herüberzuholen ist oft die ganze Arbeit, und ein universelles Werkzeug dafür gibt es nicht: Es läuft auf den Vergleich zweier Abbilder hinaus, und dafür ist dieses Programm da.
+
+Wo zu suchen ist:
+
+- **[[term:nvram|NVRAM]]** — die meisten Einstellungen und viele Seriennummern.
+- **[[term:padding|Füllung]] zwischen Strukturen.** Auf den meisten Intel-Notebooks von ASUS liegen Seriennummer, Windows-Schlüssel und einige Einstellungen im *zweiten* nicht leeren Füllblock der BIOS-Region.
+- **`SMBiosFlashData`** — eine ASUS-Struktur mit der GUID `FD44820B-F1AB-41C0-AE4E-0C55556EB9BD`, die Seriendaten und MAC-Adresse enthält.
+- **[[term:gbe-region|GbE-Region]]** — die MAC-Adresse auf Boards mit Intel-Netzwerkcontroller. Nicht jeder Hersteller legt sie dorthin.
+- **[[term:slic|SLIC / MSDM]]** — die OEM-Windows-Lizenz.
+
+@see topic:recipe-board-data
+@see topic:recipe-donor
 
 @term nvram
 @name NVRAM
@@ -183,15 +255,163 @@ Weil die Adressen absolut sind, darf sich nichts bewegen, worauf eine FIT zeigt.
 @see topic:tool-fit
 @see topic:recipe-microcode
 
+@term reset-vector
+@name Reset-Vektor
+@short Die Adresse, an der ein x86-Prozessor zu arbeiten beginnt: ganz oben im Adressraum, bei `0xFFFFFFF0`.
+
+Das obere Ende der Adresskarte liegt am Firmware-Chip, also kommt der allererste Befehl, den die CPU je ausführt, aus dem Flash — sechzehn Bytes vor dem Ende des Abbilds, und darin ein Sprung in die [[term:sec-phase|Security-Phase]]. Der Zeiger auf die [[term:fit|FIT]] liegt knapp darunter, bei `0xFFFFFFC0`.
+
+Auf einem heutigen Board ist das nicht mehr der Anfang der Geschichte. Die [[term:me|Management Engine]] läuft zuerst an und nimmt die CPU erst danach aus dem Reset; der [[term:microcode|Mikrocode]], den die FIT nennt, wird vor dem Reset-Vektor angewendet; und auf einer [[term:boot-guard|Boot-Guard]]-Plattform hat längst ein [[term:acm|ACM]] den Code geprüft, zu dem der Reset-Vektor gehört. Der Reset-Vektor ist früh, aber nicht der Erste.
+
+@see term:fit
+@see term:sec-phase
+
+@term sec-phase
+@name SEC (Security-Phase)
+@short Die erste UEFI-Phase: eine Maschine, in der noch kein Speicher arbeitet.
+
+In SEC ist das System vollständig unkonfiguriert — die CPU ist noch im 16-Bit-Modus, DRAM läuft nicht. Die ganze Aufgabe der Phase ist, bis zur nächsten zu kommen: in den 32-Bit-Modus wechseln, einen vorläufigen Speicher einrichten (meist den CPU-Cache als RAM), den Flash in den Adressraum einblenden, [[term:pei-phase|PEI]] prüfen und übergeben.
+
+@see term:reset-vector
+@see term:ibb
+
+@term pei-phase
+@name PEI (Pre-EFI Initialization)
+@short Die Phase, die den Speicher hochbringt, Modul für Modul.
+
+Die PEI-Module — PEIMs — laufen in der Reihenfolge ihrer Abhängigkeiten: Cache und Takt der CPU, der Speichercontroller, der I/O-Hub und schließlich das DRAM selbst. PEI endet mit der Prüfung des Bootmodus: Eine Rückkehr aus S3 geht ins Boot-Script, alles andere übergibt an [[term:dxe-phase|DXE]].
+
+Jedes PEIM liegt als eigene [[term:ffs-file|FFS-Datei]] eines eigenen Typs im Abbild — deshalb lohnt sich die Spalte „Typ“ in der Panel-Ansicht, wenn man frühen von spätem Code unterscheiden will.
+
+@see term:sec-phase
+@see term:ibb
+
+@term dxe-phase
+@name DXE / BDS
+@short Die Phase, in der die eigentlichen Treiber laufen, und die, die auswählt, wovon gebootet wird.
+
+Der größte Teil eines Firmware-Abbilds sind DXE-Treiber: Laufwerke, Netzwerk, Grafik, die Setup-Bildschirme, die Zutaten des Herstellers. Sie werden in den [[term:volume|Volumes]] gefunden, auf ihre Bedingungen geprüft und ausgeführt, bis keiner mehr übrig ist. Danach entscheidet der Treiber Boot Device Select (BDS), wovon gebootet wird, und tut es.
+
+DXE ist der Teil, den [[term:boot-guard|Boot Guard]] nicht selbst prüft — siehe [[term:ibb|IBB / OBB]]. Deshalb kann eine Änderung hier auf einem Board durchgehen, auf dem eine Änderung am Bootblock nie durchginge.
+
+@see term:volume
+@see term:ibb
+
 @term boot-guard
 @name Boot Guard
-@short Eine Hardware-Prüfung, dass Teile der Firmware vom Platinenhersteller signiert sind.
+@short Eine im Silizium verankerte Prüfung, dass die frühe Firmware die ist, die der Boardhersteller signiert hat.
 
-Auf einer Plattform mit gesetztem Boot Guard prüft der Prozessor ein signiertes Manifest über deklarierte Flash-Bereiche, bevor er irgendetwas davon ausführt. Diese **geschützten Bereiche** sind im Image benannt, und das [[topic:tool-uefi|UEFI-Panel]] zählt sie in seiner Übersichtszeile.
+Boot Guard macht das Silizium und nicht die Firmware zu dem, was entscheidet, ob die Firmware laufen darf. Was bei einer fehlgeschlagenen Prüfung geschieht, steht am Ende der Fertigung in den [[term:otp|Fuses]] des Chipsatzes fest, und nichts, was in den Flash geschrieben wird, ändert daran etwas.
 
-! Bytes innerhalb eines geschützten Bereichs lassen sich nicht ändern. Die Signatur passt dann nicht mehr, und ohne den privaten Schlüssel des Herstellers lässt sie sich nicht neu berechnen. Kein Werkzeug behebt das; genau das ist der Sinn der Sache.
+Wie ein Board mit Boot Guard hochkommt:
 
+1. Die [[term:me|Management Engine]] startet aus ihrem eigenen ROM auf dem Die, prüft ihre eigene Firmware und nimmt erst danach die Haupt-CPU aus dem Reset.
+2. Die CPU findet die [[term:fit|FIT]] und wendet den [[term:microcode|Mikrocode]] an, den die Tabelle nennt.
+3. Die CPU lädt das Startup-[[term:acm|ACM]], das die FIT nennt, und führt es aus dem Cache aus. Der Mikrocode prüft das ACM gegen einen Schlüssel, den Intel in den Prozessor gebrannt hat — die Kette beginnt also bei etwas, dem das Silizium ohnehin vertraut.
+4. Das ACM liest den Schlüssel-Hash des Herstellers und das [[term:boot-guard-profile|Profil]] aus den Fuses des Chipsatzes.
+5. Das ACM prüft das [[term:key-manifest|Key Manifest]] im Abbild gegen diesen gebrannten Hash. Das ist das Glied, das *diesen* Flash an *diesen* Chipsatz bindet.
+6. Das Key Manifest bürgt für den Schlüssel, der die [[term:boot-policy|Boot Policy]] signiert; die Boot Policy nennt die Bereiche des [[term:ibb|IBB]] und ihre Hashes; das ACM prüft sie.
+7. Erst dann läuft der [[term:reset-vector|Reset-Vektor]] — innerhalb von Code, der bereits geprüft ist.
+
+Welche Bereiche abgedeckt sind, erklärt das Abbild selbst. Das [[topic:tool-uefi|UEFI-Panel]] zählt diese **geschützten Bereiche** in seiner Zusammenfassungszeile.
+
+! Bytes innerhalb eines geschützten Bereichs lassen sich nicht ändern. Die Signatur passt dann nicht mehr, und ohne den privaten Schlüssel des Herstellers ist sie nicht neu zu berechnen. Kein Werkzeug repariert das; genau darin besteht der Sinn der Sache.
+
+@see term:boot-guard-profile
 @see topic:bench-safety
+
+@term acm
+@name ACM (Authenticated Code Module)
+@short Ein kleines signiertes Modul, das die CPU aus ihrem eigenen Cache ausführt, bevor es brauchbaren Speicher gibt.
+
+Ein ACM ist von Intel signiert und wird vom Mikrocode der CPU gegen einen im Die gebrannten Schlüssel geprüft. Nur das macht es zum ersten Glied einer Vertrauenskette: Im Flash bürgt nichts für es.
+
+Das **Startup-ACM** ist dasjenige, das [[term:boot-guard|Boot Guard]] benutzt. Ein Eintrag in der [[term:fit|FIT]] benennt es, und es hat die strengste Platzierungsregel der ganzen Tabelle: In dem Bereich, aus dem es läuft, darf nichts außer ihm selbst stehen.
+
+@see term:fit
+@see term:boot-guard
+
+@term key-manifest
+@name Boot Guard Key Manifest (KM)
+@short Die Hälfte der Bindung „dieser Flash — dieser Chipsatz“, die im Abbild liegt.
+
+Das Key Manifest enthält den öffentlichen Schlüssel des Boardherstellers und den Hash des Schlüssels, der die [[term:boot-policy|Boot Policy]] signiert. Das Startup-[[term:acm|ACM]] hasht den Herstellerschlüssel darin und vergleicht das Ergebnis mit dem Wert, der in die [[term:otp|Fuses]] des Chipsatzes gebrannt ist.
+
+Dieser gebrannte Hash ist alles, was das Silizium über den Hersteller weiß: ein Wert, einmal gesetzt, nie neu geschrieben. Er ist es, der ein signiertes Abbild zu einer Boardfamilie gehören lässt statt zu Firmware im Allgemeinen.
+
+! Das Key Manifest durch ein selbst signiertes zu ersetzen funktioniert nicht: Ihr Schlüssel hasht zu etwas anderem, und der gebrannte Wert lässt sich nicht daran anpassen. Die Reparatur besteht darin, die Originalbytes des Herstellers zurückzuschreiben — ein weiterer Grund, warum der Sicherungsdump die wertvollste Datei an der Werkbank ist.
+
+@see term:boot-policy
+@see term:boot-guard
+
+@term boot-policy
+@name Boot Policy Manifest (BPM)
+@short Was genau geschützt ist: die Bereiche des Bootblocks und ihre Hashes.
+
+Die Boot Policy nennt die Bereiche, aus denen der [[term:ibb|Initial Boot Block]] besteht, und hält für jeden einen Hash fest, damit das [[term:acm|ACM]] genau diese Bytes prüfen kann. Signiert ist sie mit einem Schlüssel, für den das [[term:key-manifest|Key Manifest]] bürgt — so erbt sie das Vertrauen, das die Fuses begonnen haben.
+
+Die geschützten Bereiche, die das [[topic:tool-uefi|UEFI-Panel]] zählt, sind die, die hier deklariert werden.
+
+@see term:key-manifest
+@see term:ibb
+
+@term ibb
+@name IBB / OBB
+@short „Initial Boot Block“ — der Teil der Firmware, den Boot Guard selbst prüft; der Rest ist Sache des Herstellers.
+
+Der IBB ist ungefähr der Code von [[term:sec-phase|SEC]] und [[term:pei-phase|PEI]]: die frühe Firmware bis zu dem Punkt, an dem der Speicher arbeitet. Genau den hasht das [[term:acm|ACM]] und vergleicht ihn mit der [[term:boot-policy|Boot Policy]].
+
+Alles danach ist der **OBB**, der „OEM Boot Block“, praktisch die [[term:dxe-phase|DXE]]-Hälfte. Vom IBB wird erwartet, dass er den OBB prüft, bevor er ihn ausführt — mit Code, den der Boardhersteller schreibt. Ob ein bestimmter Hersteller das tut, bleibt ihm überlassen.
+
+Daher kommt es, dass ein Panel manche Bereiche als geschützt kennzeichnet und andere nicht, und dass dieselbe Art von Änderung im einen Teil eines Abbilds unmöglich und im anderen Alltag ist.
+
+@see term:boot-guard
+@see term:boot-policy
+
+@term boot-guard-profile
+@name Boot-Guard-Profil
+@short Was das Board tut, wenn die Prüfung fehlschlägt — in den Chipsatz gebrannt, nicht im Abbild gespeichert.
+
+Drei voneinander unabhängige Dinge, und die Namen setzen sich daraus zusammen:
+
+- **Verified Boot (V)** — die Firmware wird gegen die Signatur geprüft und bei Abweichung abgelehnt.
+- **Measured Boot (M)** — die Firmware wird in das TPM gehasht, damit später etwas bemerken kann, dass sie sich geändert hat. Für sich genommen hält es nichts auf.
+- **Durchsetzung** — sofortiges Abschalten, Abschalten nach einem Timeout oder gar nichts.
+
+Die Profile in ihrer üblichen Schreibweise:
+
+- `No_FVME` — Boot Guard abgeschaltet.
+- `VE` — Verified Boot, Abschalten nach Timeout.
+- `VME` — Verified und Measured, Abschalten nach Timeout.
+- `VM` — Verified und Measured, aber **ohne Durchsetzung**: Das Board bootet trotzdem.
+- `FVE` — Verified Boot, sofortiges Abschalten.
+- `FVME` — Verified und Measured, sofortiges Abschalten.
+
+Den *gebrannten* Wert liest kein Werkzeug aus einem Dump, ByteRipper eingeschlossen: Er liegt in den [[term:otp|Fuses]] des Chipsatzes, und nichts im Abbild sagt, womit ein bestimmter Chipsatz gebrannt wurde.
+
+Wohl aber kann ein Abbild sagen, womit es brennen *würde*. Auf Silizium mit noch ungebrannten Fuses — etwa nach einem Tausch des Hubs — liegen das Profil und der Schlüssel-Hash des Herstellers als Konfiguration in der [[term:me-region|ME-Region]], von Intels Image-Werkzeug dort hineingeschrieben, und daneben steht die Einstellung, ob sie beim ersten Einschalten des Boards übernommen werden. Diese beiden Felder liest ByteRipper noch nicht. Was es heute zeigt, sind die [[term:boot-policy|geschützten Bereiche]], die das Abbild deklariert.
+
+! Ein Board mit dem Profil `VM` bootet auch mit verändertem Bootblock. Genau deshalb macht eine Änderung, die auf einer Maschine „funktioniert hat“, die nächste zum Briefbeschwerer: Das Profil ist eine Eigenschaft des Boards, nicht des Abbilds.
+
+@see term:boot-guard
+@see term:otp
+
+@term secure-boot
+@name Secure Boot
+@short Etwas anderes als Boot Guard: Hier prüft die Firmware den Bootloader des Betriebssystems.
+
+Secure Boot gehört zur UEFI-Spezifikation und liegt im [[term:nvram|NVRAM]] als ein Satz von Datenbanken:
+
+- **db** — die Datenbank erlaubter Abbilder: Schlüssel und Hashes von Bootloadern, die laufen dürfen.
+- **dbx** — die Datenbank verbotener Abbilder, die Widerrufsliste.
+- **dbt** und **dbr** — die Datenbanken für Zeitstempel und Wiederherstellung.
+
+Darüber stehen die Key Exchange Keys (**KEK**), die diese Datenbanken aktualisieren dürfen, und der Platform Key (**PK**), dem die KEKs gehören und der den Eigentümer des Boards vertritt.
+
+! Nicht mit [[term:boot-guard|Boot Guard]] verwechseln. Secure Boot schaut nach außen, auf das, was die Firmware zu booten im Begriff ist, und lässt sich im Setup abschalten. Boot Guard schaut nach innen, auf die Firmware selbst, und lässt sich gar nicht abschalten. Wer NVRAM von einem Spender übernimmt, ersetzt damit die Secure-Boot-Schlüssel dieser Maschine durch die des Spenders — ein häufiger Grund dafür, dass eine reparierte Maschine ein Betriebssystem nicht mehr bootet, mit dem vorher alles in Ordnung war.
+
+@see term:nvram
+@see term:boot-guard
 
 @term top-swap
 @name Top Swap

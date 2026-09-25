@@ -170,6 +170,160 @@ and the ME tool's REQUIREMENTS lines.
 add 2–3 for the host seam if reaching the other pane's analysis turns out not
 to be there yet.
 
+### Name the EC firmware sitting in a BIOS region's padding
+
+**What.** A padding block inside the BIOS region that is really the embedded
+controller's firmware gets named as such — "EC firmware (ITE, 128 KB)" instead
+of a bare `Padding` row.
+
+**Why.** On a laptop the EC firmware is one of the two or three things a bench
+actually goes looking for, and before Skylake there is no [[EC region]] to find
+it in: it is simply a block in the BIOS region, usually the first padding, with
+nothing naming it. Today the tree shows it as padding of some size and the
+reader has to know what that size means. Naming it turns a guess into a row.
+
+**How.** Three markers, from the repair guide's *Identifying EC Firmware*
+(`ISpillMyDrink/UEFI-Repair-Guide` wiki) and to be checked against real dumps
+before shipping:
+
+- **ITE** — the body opens with a run of `A5` bytes (`A5 A5 A5 A5 A5 A5`).
+- **ENE** — the string `ENE` in the first bytes.
+- **Microchip (MEC)** — usually inside the BIOS region's first volume rather
+  than in padding, so probably out of scope for the first pass.
+- **Size** as corroboration, not as the test on its own: 128 KB (131 072) and
+  192 KB (196 608) are the common ones.
+
+A padding node already carries a `name`, so this is a detector and a name, not
+a model change: `UEFIParser` builds the node, and the detector belongs beside
+it in `UEFIImage` as a pure function over the first bytes and the length, unit
+tested on fixtures. Say *what it looks like*, never *what it is* — a marker is
+evidence, and a block with no marker stays padding.
+
+**Touches.** `UEFIParser` (and `NvramParser`'s padding, which is a different
+padding and must not be touched), a new `ECFirmware` reader in `UEFIImage`, a
+glossary term that already exists (`term:ec-firmware`).
+
+**Cost.** 2–4 hours with the fixtures. Needs real ITE and ENE dumps to confirm
+the markers before it ships.
+
+### Mark the NVRAM variables that hold a password
+
+**What.** A VSS entry known to carry a supervisor password is marked in the
+tree and says so in the detail panel.
+
+**Why.** Two benches want this for opposite reasons and both are legitimate:
+transplanting NVRAM from a donor carries the donor's password across, and a
+machine locked by a password its owner has lost is a routine repair. Either
+way the first question is *which record is it*, and today the reader has to
+know the name by heart.
+
+**How.** A name table, the same shape as `NvramGuids`:
+
+- **`AMITSESetup`** — AMI. Stores the supervisor password as cleartext, as
+  XOR-encoded bytes, or as a SHA-1 hash, depending on the implementation.
+- **`HP_BIOSAdminScancode`** — HP. A SHA-1 hash of the scancode sequence.
+
+The VSS parser already reads a variable's name, so this is a lookup and a mark:
+a row mark (`Design/ROW_MARKS.md`) and a line in the detail saying what the
+record holds. It says what the record *is for*, not what the value is — the
+app does not decode, crack or clear anything, and the help says as much.
+
+**Touches.** `NvramParser` / a new name table in `UEFIImage`, `UEFINodeDetail`,
+`UEFITreeMarks`, and the `nvram`/`vss` glossary entries.
+
+**Cost.** 2–3 hours. Both names come from the repair guide's *Non-Volatile RAM*
+page and want confirming on real images first.
+
+
+### Read the platform configuration MFIT wrote into the ME region
+
+**What.** Say, from the dump alone, what this image will do to a chipset whose
+fuses are still unburned: whether it commits them on first boot at all, and
+with which Boot Guard profile. Two fields to start with, both written by
+Intel's Modular Flash Image Tool when the image was built:
+
+- **`EOM on First Boot Enabled`** (MFIT: Intel ME Kernel → End of Manufacturing
+  Configuration). Left enabled, the hub or SoC burns its field-programmable
+  fuses with this image's configuration the first time the board is powered,
+  once and for good. Set to No, it does not — which is how a bench test-runs a
+  board with a replaced hub.
+- **The Boot Guard profile** (MFIT: Platform Protection → Boot Guard
+  Configuration, 0…5). What gets burned, if it burns.
+
+The neighbouring **Hash Key Configuration for Bootguard / ISH** — the OEM
+public key hash and the key manifest path — is worth naming in the same breath,
+because the repair guides are emphatic that it must not be zeroed.
+
+**Why.** It answers the question a bench actually has in front of a dump with a
+new hub under it: *will this image fuse the silicon, and into what?* Today that
+is only knowable by opening MFIT, which needs the right version of a tool most
+benches do not have, and which parses the whole image to tell you two fields.
+Reading it out of the bytes gives the whole configuration picture of a dump
+without leaving the app.
+
+It is also the honest end of the Boot Guard story the glossary now tells. The
+help says the profile lives in fuses and no tool reads it from a dump — which
+is true of the *burned* value, and beside the point for an unburned part.
+
+**How.** Three steps, and only the first can start today.
+
+1. **Interpret the access masks we already read.** `DescriptorInfo.masters`
+   and `biosAccess` are decoded and shown as hex (`UEFINodeDetail`, §2). The
+   community guides note that switching `EOM on First Boot` to No makes MFIT
+   open the SPI region permissions all the way — read and write `0xFFFF` for
+   every region — so wide-open masks are evidence the image was built for a
+   manufacturing-mode test run, and narrowed ones evidence of a production
+   image. A one-line verdict under the table ("the host may read and write
+   every region" / "access is narrowed") costs nothing and is read straight
+   off bytes already parsed. It is a *sign*, not the field: early MFIT versions
+   do not touch the permissions when the flag changes, and the guides tell the
+   reader to set them by hand — so the two can disagree, and the wording must
+   not promise otherwise.
+
+2. **Find the fields by differential build.** MFIT saves its configuration as
+   XML and builds a `.bin` from it, so the same image can be built twice
+   differing in exactly one setting. Build a pair for the Boot Guard profile
+   (0 against 5), a second pair for `EOM on First Boot` (Yes against No), and
+   diff each pair in ByteRipper: the difference is a handful of bytes, and it
+   gives the offset and the encoding at once. A third build at profile 3
+   confirms the encoding rather than assuming it is the raw number. The two
+   XMLs beside the two images are the Rosetta stone — the same settings in
+   words. This is the rare case where a layout can be established without
+   reverse engineering, and it is exactly the job this app is for.
+
+3. **Decode and show.** Where the bytes land decides the shape. On Atom/TXE
+   layouts FIT's platform settings go into the **SMIP** partition, which both
+   `MEFirmware` and ME Analyzer name (BPDT type 0, CSE extension 40) and
+   neither opens. On client CSME the same settings go through the FITC/MFS
+   configuration, whose records `FITCParser` already reads (`oemConfiguration`,
+   ID-keyed with FTBL paths) without interpreting their payloads. Settling
+   which of the two carries these fields on Alder Lake is part of step 2.
+
+Nothing is shown before step 2 produces a diff. A profile guessed from one
+dump is a guess, and this is a field where a wrong answer costs somebody a
+board.
+
+**Touches.** `DescriptorInfo` / `UEFINodeDetail` for step 1;
+`MEFirmware` (`FileSystem/EFS.swift`'s FITC reader, or a new SMIP reader) and
+the ME panel's summary for step 3; the `boot-guard-profile` and `hap` glossary
+entries, which currently say the profile cannot be read from an image and would
+need the distinction between burned and unburned spelled out.
+
+**Needs.** Pairs of MFIT XML + built image differing in one field, from a
+platform with a dump to match — Alder Lake, CSME 16.0, is the obvious first
+one. Without them step 2 cannot start, and steps 2 and 3 are most of the work.
+
+**Source.** The behaviour above is from Intel's System Tools guide (FPT
+`-CLOSEMNF`, the FIT Platform Protection tab) and from a repair-community
+guide to cleaning 16.x ME regions, which documents the MFIT tabs and the
+permission side effect. Community material: the experiment in step 2 is what
+turns it into something the app may act on.
+
+**Cost.** Step 1 is an hour. Step 2 is an evening at the bench, most of it
+building images. Step 3 is 4–8 hours once the offsets are known, more if the
+fields turn out to live in SMIP and a reader has to be written for it.
+
+
 ## Later
 
 ### An editable zone — a region a tool-module opens for editing
