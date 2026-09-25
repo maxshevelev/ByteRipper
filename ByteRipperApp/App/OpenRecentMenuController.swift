@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 
 /// Populates File ▸ Open Recent on display, and stands in as its delegate.
 ///
@@ -28,13 +29,16 @@ final class OpenRecentMenuController: NSObject, NSMenuDelegate {
                 keyEquivalent: "")
             item.representedObject = path
             // The name is what a row shows; the path is what it stands for,
-            // and two names can collide.
+            // and two names can collide. Set directly rather than through
+            // `ControlHelp`: a menu item's own title is what a screen reader
+            // reads, so the path is extra detail for the eye — the same
+            // exception a label makes.
             item.toolTip = path
             menu.addItem(item)
         }
         if !RecentFilesStore.recent.isEmpty {
             menu.addItem(
-                withTitle: "Clear Menu",
+                withTitle: L("Clear Menu"),
                 action: #selector(MainViewController.clearRecentFiles(_:)),
                 keyEquivalent: ""
             )

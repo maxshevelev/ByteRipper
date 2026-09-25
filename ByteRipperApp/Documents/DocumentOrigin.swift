@@ -1,6 +1,7 @@
 import CryptoKit
 import Foundation
 import ByteRipperCore
+import Localization
 import UEFIImage
 
 /// Where an untitled tab's bytes came from: a part of another open document — a
@@ -150,37 +151,35 @@ import UEFIImage
     func planUpdate(from child: PaneViewModel) -> Update {
         guard let parent, state != .parentClosed else {
             return .refused(
-                title: "The parent is closed",
-                message: "“\(parentName)” is no longer open, so there is nothing to put “\(partName)” back into."
+                title: L("The parent is closed"),
+                message: L("“%1$@” is no longer open, so there is nothing to put “%2$@” back into.", parentName, partName)
             )
         }
         guard !parent.status.isReadOnly else {
             return .refused(
-                title: "“\(parentName)” is read-only",
-                message: "Its bytes cannot be changed, so “\(partName)” cannot be put back into it."
+                title: L("“%1$@” is read-only", parentName),
+                message: L("Its bytes cannot be changed, so “%1$@” cannot be put back into it.", partName)
             )
         }
         guard let document = child.document,
               let bytes = try? document.read(at: 0, length: Int(document.size))
         else {
-            return .refused(title: "The tab could not be read", message: "Nothing was changed in \(parentName).")
+            return .refused(title: L("The tab could not be read"), message: L("Nothing was changed in %1$@.", parentName))
         }
         if let rebuildTarget {
             return .rebuild(target: rebuildTarget, bytes: bytes, confirm: state == .sourceChanged)
         }
         guard kind == .copy else {
             return .refused(
-                title: "This cannot be put back",
-                message: "These bytes were decompressed from “\(partName)” in \(parentName), "
-                    + "and where they belong in it was not recorded when the tab was opened."
+                title: L("This cannot be put back"),
+                message: L("These bytes were decompressed from “%1$@” in %2$@, and where they belong in it was not recorded when the tab was opened.", partName, parentName)
             )
         }
         guard UInt64(bytes.count) == UInt64(sourceRange.count) else {
             return .refused(
-                title: "The length changed",
-                message: "“\(partName)” is \(Self.hex(sourceRange.count)) bytes in \(parentName), "
-                    + "and this tab is \(Self.hex(bytes.count)). A part goes back only at its own length: "
-                    + "the bytes after it in the file are not this tab's to move."
+                title: L("The length changed"),
+                message: L("“%1$@” is %2$@ bytes in %3$@, and this tab is %4$@. A part goes back only at its own length: another length would shift every byte after it, and the file structure may be affected.",
+                           partName, Self.hex(sourceRange.count), parentName, Self.hex(bytes.count))
             )
         }
         return .overwrite(offset: sourceRange.lowerBound, bytes: bytes, confirm: state == .sourceChanged)

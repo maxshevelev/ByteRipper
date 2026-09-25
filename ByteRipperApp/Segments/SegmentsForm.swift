@@ -3,6 +3,7 @@ import Cocoa
 import ByteRipperCore
 import HelpBook
 import HelpUI
+import Localization
 
 /// The Segments form (§21.4): the place the partition is read and edited —
 /// modal, like Go To. The table lists the pieces in file order (label, start,
@@ -18,6 +19,7 @@ import HelpUI
 /// form needs the dump to move underneath it — a cut is made by typing an offset
 /// in the popover, not by aiming at a row.
 @MainActor
+// help: window.segments-form
 final class SegmentsFormController: NSViewController, NSTableViewDataSource, NSTableViewDelegate, NSMenuItemValidation {
     /// The pane whose partition the form shows. One form, one pane: the segments
     /// of the file the user is looking at (§21.1), not the window's.
@@ -179,23 +181,23 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
     /// then two small borderless icon buttons at the left, the same width (§21.4).
     private func makeTable() -> NSScrollView {
         let labelColumn = NSTableColumn(identifier: ColumnID.label)
-        labelColumn.title = "Segment"
+        labelColumn.title = L("Segment")
         labelColumn.width = 64
         labelColumn.minWidth = 56
         labelColumn.maxWidth = 96
 
         let startColumn = NSTableColumn(identifier: ColumnID.start)
-        startColumn.title = "Start"
+        startColumn.title = L("Start")
         startColumn.width = 96
         startColumn.minWidth = 72
 
         let sizeColumn = NSTableColumn(identifier: ColumnID.size)
-        sizeColumn.title = "Size"
+        sizeColumn.title = L("Size")
         sizeColumn.width = 72
         sizeColumn.minWidth = 48
 
         let nameColumn = NSTableColumn(identifier: ColumnID.name)
-        nameColumn.title = "Name"
+        nameColumn.title = L("Name")
         nameColumn.width = 240
         nameColumn.minWidth = 80
 
@@ -225,7 +227,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         // content in a page of banding — the pieces are the pattern here.
         table.doubleAction = #selector(rowDoubleClicked)
         table.target = self
-        table.setAccessibilityLabel("Segments")
+        table.setAccessibilityLabel(L("Segments"))
         table.onReturn = { [weak self] in self?.goToSelectedSegment() }
         table.onDelete = { [weak self] in self?.removeSelectedSegment() }
         // A right-click offers what acts on the piece under it (§21.4) — the same
@@ -281,8 +283,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         plus.imagePosition = .imageOnly
         plus.isBordered = false
         plus.contentTintColor = .secondaryLabelColor
-        plus.toolTip = "Add Cut…"
-        plus.setAccessibilityLabel("Add Cut")
+        ControlHelp.describe(plus, name: L("Add Cut"), tooltip: L("Add Cut…"))
         plus.translatesAutoresizingMaskIntoConstraints = false
         addButton = plus
 
@@ -294,8 +295,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         minus.imagePosition = .imageOnly
         minus.isBordered = false
         minus.contentTintColor = .secondaryLabelColor
-        minus.toolTip = "Merge"
-        minus.setAccessibilityLabel("Merge")
+        ControlHelp.describe(minus, L("Merge"))
         minus.translatesAutoresizingMaskIntoConstraints = false
         removeButton = minus
 
@@ -321,7 +321,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         // Merge All, at the left of the row (§21.4): it undoes the whole
         // partition at once, so it sits apart from the per-piece `−` in the
         // footer and asks before acting.
-        let removeAll = NSButton(title: "Merge All",
+        let removeAll = NSButton(title: L("Merge All"),
                                  target: self, action: #selector(removeAllPressed))
         removeAllButton = removeAll
 
@@ -331,14 +331,14 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         // Save All as Separate Files… writes the partition out as its pieces
         // (§21.5): the controller's directory panel, the overwrite confirmation,
         // and the write with its status-bar progress.
-        let saveAll = NSButton(title: "Save All as Separate Files…",
+        let saveAll = NSButton(title: L("Save All as Separate Files…"),
                                target: self, action: #selector(saveAllPressed))
         saveAllButton = saveAll
 
         // Close, not Cancel: nothing in this form is undone by leaving it. A
         // piece edited, added or removed from the list is already so, and the
         // form is a view of the partition, not a draft of one.
-        let close = NSButton(title: "Close", target: self, action: #selector(closePressed))
+        let close = NSButton(title: L("Close"), target: self, action: #selector(closePressed))
         close.keyEquivalent = "\u{1B}"  // Esc — at rest it closes the form.
         closeButton = close
 
@@ -499,9 +499,8 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         // neighbour it merges into — "Merge S1 into S0" — so the icon-only
         // button says what it will do, the way the menu items do. With nothing
         // selected there is no piece to name, so it falls back to "Merge".
-        let title = selectedSegment?.mergeTitle ?? "Merge"
-        removeButton.toolTip = title
-        removeButton.setAccessibilityLabel(title)
+        let title = selectedSegment?.mergeTitle ?? L("Merge")
+        ControlHelp.describe(removeButton, title)
     }
 
     // MARK: - The row editor (§21.4)
@@ -677,30 +676,30 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
 
         // Save Segment… writes one piece to a file (§21.5) — Stage 4. Present now
         // so the row's shape is the final one; its action lands with that stage.
-        let save = menu.addItem(withTitle: "Save Segment…",
+        let save = menu.addItem(withTitle: L("Save Segment…"),
                                 action: #selector(saveSegment(_:)), keyEquivalent: "")
         save.target = self
 
         // Replace Segment from File… reads one piece from a file (§21.6) — Stage
         // 6. The same arrangement: the shape now, the act with the stage.
-        let replace = menu.addItem(withTitle: "Replace Segment from File…",
+        let replace = menu.addItem(withTitle: L("Replace Segment from File…"),
                                    action: #selector(replaceSegmentFromFile(_:)), keyEquivalent: "")
         replace.target = self
 
         // Revert Segment to «file» (§21.7): the piece goes back to the bytes of
         // the file it came from. `validateMenuItem` names the file and hides the
         // item for a piece that came from nowhere — most of them.
-        let revert = menu.addItem(withTitle: "Revert Segment to Source",
+        let revert = menu.addItem(withTitle: L("Revert Segment to Source"),
                                   action: #selector(revertSegmentToSource(_:)), keyEquivalent: "")
         revert.target = self
 
         menu.addItem(.separator())
 
-        let edit = menu.addItem(withTitle: "Edit…",
+        let edit = menu.addItem(withTitle: L("Edit…"),
                                 action: #selector(editClickedSegment), keyEquivalent: "")
         edit.target = self
 
-        let remove = menu.addItem(withTitle: "Merge",
+        let remove = menu.addItem(withTitle: L("Merge"),
                                   action: #selector(removeClickedSegment), keyEquivalent: "")
         remove.target = self
 
@@ -769,11 +768,11 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
     /// The confirmation for Merge All, as a real alert.
     private func presentRemoveAllConfirmation() -> Bool {
         let alert = NSAlert()
-        alert.messageText = "Merge All?"
-        alert.informativeText = "This merges every piece into a single segment. The bytes are untouched — only the cuts are removed."
+        alert.messageText = L("Merge All?")
+        alert.informativeText = L("This merges every piece into a single segment. The bytes are untouched — only the cuts are removed.")
         alert.alertStyle = .warning
-        alert.addButton(withTitle: "Merge All")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Merge All"))
+        alert.addButton(withTitle: L("Cancel"))
         return alert.runModal() == .alertFirstButtonReturn
     }
 
@@ -824,7 +823,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
                 return false
             }
             menuItem.isHidden = false
-            menuItem.title = "Revert Segment \(piece.label) to “\(source.name)”"
+            menuItem.title = L("Revert Segment %1$@ to “%2$@”", piece.label, source.name)
             return pane.canRevertSegment(piece)
         case #selector(editClickedSegment):
             menuItem.title = piece.map { "Edit Segment \($0.label)" } ?? "Edit…"
@@ -832,7 +831,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         case #selector(removeClickedSegment):
             // Name the piece and the neighbour it merges into, so the menu says
             // what it will do (§21.4) — "Merge S1 into S0", not a bare "Merge".
-            menuItem.title = piece?.mergeTitle ?? "Merge"
+            menuItem.title = piece?.mergeTitle ?? L("Merge")
             return piece != nil && pane.segmentStore.segments.count > 1
         default:
             return true
@@ -898,7 +897,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
             // piece, because the label beside it names it (§21.1).
             if let linked = linkedName(for: segment) {
                 cell.attributedText = linked.text
-                cell.toolTip = linked.explanation
+                ControlHelp.describe(cell, linked.explanation)
             } else {
                 cell.textField?.stringValue = segment.name
             }

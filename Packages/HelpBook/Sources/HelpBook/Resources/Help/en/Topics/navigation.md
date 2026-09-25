@@ -2,6 +2,15 @@
 
 > Jump between differences, jump to an address, or stand on a byte and read where you are.
 
+@covers menu.edit.select-block
+@covers menu.edit.select-all
+@covers menu.edit.go-to
+@covers menu.view.next-difference
+@covers menu.view.previous-difference
+@covers menu.view.next-same
+@covers menu.view.previous-same
+@covers window.go-to-form
+
 ## Between differences
 
 - **⌥⌘→** — next difference, **⌥⌘←** — previous difference.

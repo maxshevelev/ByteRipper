@@ -1,5 +1,6 @@
 import Foundation
 import ByteRipperCore
+import Localization
 
 /// Which file a piece's bytes came from (§21.7). An id rather than the file
 /// itself: the partition is a value that undo copies and compares, and a URL —
@@ -94,7 +95,7 @@ struct Segment: Equatable {
     var mergeTitle: String { Self.mergeTitle(for: index) }
     static func mergeTitle(for index: Int) -> String {
         let neighbour = index == 0 ? 1 : index - 1
-        return "Merge \(label(for: index)) into \(label(for: neighbour))"
+        return L("Merge %1$@ into %2$@", label(for: index), label(for: neighbour))
     }
 
     /// Built only by the partition that owns it: a `Segment` is a piece of one

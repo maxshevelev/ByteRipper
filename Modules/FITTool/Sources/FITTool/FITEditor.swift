@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import ToolModuleKit
 import UEFIImage
 
@@ -48,43 +49,37 @@ public enum FITEditProblem: Equatable, Sendable, Error {
     public var message: String {
         switch self {
         case .notMicrocode:
-            return "That file does not start with an Intel microcode header."
+            return L("That file does not start with an Intel microcode header.")
         case .microcodeChecksumIsWrong:
-            return "That microcode's checksum does not add up — its dwords should sum to zero."
+            return L("That microcode's checksum does not add up — its dwords should sum to zero.")
         case .noMicrocodeToFollow:
-            return "There is no microcode in this table to put a new one after."
-
+            return L("There is no microcode in this table to put a new one after.")
         case .theTableCannotGrow(let after):
-            return "The table has no empty slot, and the sixteen bytes after it are not free —"
-                + " they are " + after + "."
-
+            return L("The table has no empty slot, and the sixteen bytes after it are not free — they are %1$@.",
+                     after)
         case .theRunCannotGrow(let needed, let inside):
-            return "The microcode run needs 0x" + String(needed, radix: 16, uppercase: true)
-                + " more bytes than are free after it, in " + inside + "."
+            return L("The microcode run needs 0x%1$@ more bytes than are free after it, in %2$@.",
+                     String(needed, radix: 16, uppercase: true), inside)
         case .cannotRemoveTheHeader:
-            return "The header is not an entry."
+            return L("The header is not an entry.")
         case .cannotRemoveTheLastMicrocode:
-            return "A FIT needs at least one microcode entry."
+            return L("A FIT needs at least one microcode entry.")
         case .notAMicrocodeRow:
-            return "Only a microcode entry can be removed."
+            return L("Only a microcode entry can be removed.")
         case .noSuchEntry:
-            return "That entry is no longer in the table."
+            return L("That entry is no longer in the table.")
         case .noTable:
-            return "There is no FIT table in this file to change."
+            return L("There is no FIT table in this file to change.")
         case .insideProtectedRange(let name, let at):
-            return "The change writes at 0x" + String(at, radix: 16, uppercase: true)
-                + " inside a " + name + ": the processor checks it before the firmware runs,"
-                + " and with Boot Guard enforced the platform would not start. Nothing was changed."
+            return L("The change writes at 0x%1$@ inside a %2$@: the processor checks it before the firmware runs, and with Boot Guard enforced the platform would not start. Nothing was changed.",
+                     String(at, radix: 16, uppercase: true), name)
         case .topSwapCopiesDiffer(let backup):
-            return "This image keeps a Top Swap backup of the boot block at 0x"
-                + String(backup.lowerBound, radix: 16, uppercase: true) + "–0x"
-                + String(backup.upperBound, radix: 16, uppercase: true)
-                + ", and it is not the same as the block the FIT is in, so the change cannot be"
-                + " made in both. Nothing was changed."
+            return L("This image keeps a Top Swap backup of the boot block at 0x%1$@–0x%2$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed.",
+                     String(backup.lowerBound, radix: 16, uppercase: true),
+                     String(backup.upperBound, radix: 16, uppercase: true))
         case .topSwapWriteCrossesTheBlocks(let at):
-            return "The change writes at 0x" + String(at, radix: 16, uppercase: true)
-                + " across a Top Swap block boundary, where it cannot be made in both copies."
-                + " Nothing was changed."
+            return L("The change writes at 0x%1$@ across a Top Swap block boundary, where it cannot be made in both copies. Nothing was changed.",
+                     String(at, radix: 16, uppercase: true))
         }
     }
 }
@@ -176,12 +171,12 @@ public enum FITEditor {
         image: UEFIImage?,
         reader: ImageReader
     ) -> (range: Range<UInt64>, name: String) {
-        guard let image else { return (offset..<reader.count, "the rest of the file") }
+        guard let image else { return (offset..<reader.count, L("the rest of the file")) }
         let chain = image.nodes(containing: offset)
         for node in chain.reversed() where node.kind != .microcode {
             return (node.range, node.name)
         }
-        return (offset..<reader.count, "the rest of the file")
+        return (offset..<reader.count, L("the rest of the file"))
     }
 
     /// Everywhere a *new* component may go, nearest first.
@@ -397,8 +392,8 @@ public enum FITEditor {
             if range.kind.isIBB {
                 return .failure(.insideProtectedRange(name: range.kind.name, at: at))
             }
-            let warning = "It writes at 0x" + String(at, radix: 16, uppercase: true) + " inside a "
-                + range.kind.name + ": the hash the firmware checks it against no longer matches."
+            let warning = L("It writes at 0x%1$@ inside a %2$@: the hash the firmware checks it against no longer matches.",
+                            String(at, radix: 16, uppercase: true), range.kind.name)
             if !warnings.contains(warning) { warnings.append(warning) }
         }
         record(&outcome, warnings)

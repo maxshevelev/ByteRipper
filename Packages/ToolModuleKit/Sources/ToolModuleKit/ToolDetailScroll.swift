@@ -1,6 +1,7 @@
 import AppKit
 import HelpBook
 import HelpUI
+import Localization
 
 /// A panel's scrolling detail: a column of label/value rows that starts at the
 /// top, is as wide as the visible area, and scrolls only once it outgrows it.
@@ -234,6 +235,7 @@ import HelpUI
     /// that decided which node is in focus — which is why the term is a value
     /// the panel hands over rather than something guessed here from the rows'
     /// labels.
+    // help: panel.node-term
     public func setTerm(_ id: HelpTermID?) {
         // A term the book has no entry for is the same as none: the button
         // would open a popover with nothing in it.
@@ -241,8 +243,7 @@ import HelpUI
         term = known
         termButton.isHidden = known == nil
         if let known, let name = HelpPresenter.book.term(known)?.name {
-            termButton.toolTip = "What is \(name)?"
-            termButton.setAccessibilityLabel("What is \(name)?")
+            ControlHelp.describe(termButton, L("What is %1$@?", name))
         }
     }
 

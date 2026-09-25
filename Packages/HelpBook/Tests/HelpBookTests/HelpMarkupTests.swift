@@ -1,3 +1,4 @@
+import Localization
 import XCTest
 @testable import HelpBook
 
@@ -125,12 +126,12 @@ final class HelpFileFormatTests: XCTestCase {
         XCTAssertEqual(names["reading"], "Reading a Dump")
     }
 
-    /// The language directory the reader gets: an exact match, then the plain
-    /// language behind a region, then English.
-    func testLanguageChoice() {
-        XCTAssertEqual(HelpLoader.pick(from: ["de"], available: ["en", "de"]), "de")
-        XCTAssertEqual(HelpLoader.pick(from: ["de-AT"], available: ["en", "de"]), "de")
-        XCTAssertEqual(HelpLoader.pick(from: ["fr"], available: ["en", "de"]), "en")
-        XCTAssertEqual(HelpLoader.pick(from: [], available: ["en"]), "en")
+    /// A language the book has not been written in yet falls back to English
+    /// rather than throwing: the UI may be translated before the help is, and
+    /// an English page beats no page.
+    func testALanguageTheBookLacksFallsBackToEnglish() throws {
+        let book = try HelpLoader.load(language: "ja")
+        XCTAssertEqual(book.language, "en")
+        XCTAssertFalse(book.isEmpty)
     }
 }

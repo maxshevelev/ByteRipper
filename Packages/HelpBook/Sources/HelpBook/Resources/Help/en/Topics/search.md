@@ -2,6 +2,12 @@
 
 > ⌘F. Hex bytes or text, over the whole dump, in the background.
 
+@covers menu.edit.find
+@covers menu.edit.use-selection
+@covers window.find-bar
+@covers window.search-results
+@covers settings.patterns
+
 The find bar searches the **active pane**, over its current contents — your unsaved edits included.
 
 ## Hex
@@ -26,6 +32,6 @@ Every match is filled in a quiet grey, everywhere in the file; the one you are s
 
 **⌘E** loads the current selection as the search pattern without searching — select some bytes in one dump, press ⌘E, then look for them in the other.
 
-Patterns can be named and kept in a library (**Settings ▸ Favorites**), which is where a bench keeps the signatures it looks for every day: `_FVH`, `$FPT`, `24 00 00 00` and so on. The library can be synced from a folder, so a shop can share one.
+Patterns can be named and kept in a pattern library (**Settings ▸ Search Patterns**), which is where a bench keeps the signatures it looks for every day: `_FVH`, `$FPT`, `24 00 00 00` and so on. The library can be synced from a folder, so a shop can share one.
 
 See also: [[topic:bookmarks|Bookmarks]] for marking what you found.

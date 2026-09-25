@@ -1,11 +1,12 @@
 import Foundation
+import Localization
 import MEFirmware
 
 /// Deterministic value formatting for the curated tree — the one shared voice
 /// behind every label/value pair and hex subtitle. Offsets are bare uppercase
 /// hex; sizes carry their decimal byte count; flags/CRCs are width-padded.
 ///
-/// Public because two panels format through it: the Full Tree's curator and the
+/// Public because two panels format through it: the Full Info tab's curator and the
 /// ME Analyzer's Summary tab (the latter lives in `MEATool`, a different module).
 public enum MEAText {
     // MARK: Hex
@@ -40,8 +41,30 @@ public enum MEAText {
         guard offset >= 0, size > 0 else { return nil }
         return UInt64(offset)..<UInt64(offset + size)
     }
-    public static func count(_ n: Int, _ noun: String) -> String {
-        n == 1 ? "1 \(noun)" : "\(n) \(noun)s"
+    /// The things a curated node counts in its subtitle.
+    ///
+    /// An enum and not a noun to append an "s" to: Russian has three forms
+    /// where English has two, and no rule gets from "region" to «регионов».
+    /// Each case is two whole phrases a translator can write out.
+    public enum CountedNoun {
+        case entry, row, block, module, file, image, issue, record, region,
+             table, partition
+    }
+
+    public static func count(_ n: Int, _ noun: CountedNoun) -> String {
+        switch noun {
+        case .entry: return n == 1 ? L("1 entry") : L("%1$@ entries", n)
+        case .row: return n == 1 ? L("1 row") : L("%1$@ rows", n)
+        case .block: return n == 1 ? L("1 block") : L("%1$@ blocks", n)
+        case .module: return n == 1 ? L("1 module") : L("%1$@ modules", n)
+        case .file: return n == 1 ? L("1 file") : L("%1$@ files", n)
+        case .image: return n == 1 ? L("1 image") : L("%1$@ images", n)
+        case .issue: return n == 1 ? L("1 issue") : L("%1$@ issues", n)
+        case .record: return n == 1 ? L("1 record") : L("%1$@ records", n)
+        case .region: return n == 1 ? L("1 region") : L("%1$@ regions", n)
+        case .table: return n == 1 ? L("1 table") : L("%1$@ tables", n)
+        case .partition: return n == 1 ? L("1 partition") : L("%1$@ partitions", n)
+        }
     }
 
     // MARK: Words

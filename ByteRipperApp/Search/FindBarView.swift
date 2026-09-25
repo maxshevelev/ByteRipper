@@ -3,6 +3,7 @@ import Cocoa
 import ByteRipperCore
 import HelpBook
 import HelpUI
+import Localization
 
 /// The non-modal Find bar shown at the top of the window (§11), modelled after
 /// TextEdit: a `Find` label, an editable pattern combo that stretches to fill
@@ -14,6 +15,7 @@ import HelpUI
 /// - The bar stays open after a search — only the selection moves.
 /// - Picking an item from the pattern's history list loads that search (pattern
 ///   + encoding) but does NOT run it; only Enter, `<` and `>` search.
+// help: window.find-bar
 final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
     /// What the field is asking for (§11).
     ///
@@ -176,7 +178,7 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         refreshThemeColors()
         addSubview(separator)
 
-        let findLabel = NSTextField(labelWithString: "Find")
+        let findLabel = NSTextField(labelWithString: L("Find"))
         findLabel.font = .systemFont(ofSize: 13, weight: .semibold)
 
         setUpPatternField()
@@ -287,7 +289,7 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
     }
 
     private func setUpPatternField() {
-        patternField.setAccessibilityLabel("Find")
+        patternField.setAccessibilityLabel(L("Find"))
         patternField.target = self
         patternField.action = #selector(patternFieldAction)
         // Return searches; typing does not. A search is a scan of the file,
@@ -312,7 +314,7 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
 
     private func setUpEncodingPopup() {
         encodingPopup.addItems(withTitles: SearchEncoding.allCases.map(Self.title(for:)))
-        encodingPopup.setAccessibilityLabel("Encoding")
+        encodingPopup.setAccessibilityLabel(L("Encoding"))
         encodingPopup.target = self
         encodingPopup.action = #selector(encodingChanged)
     }
@@ -335,14 +337,13 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         caseButton.isBordered = false
         caseButton.imagePosition = .imageOnly
         caseButton.image = NSImage(systemSymbolName: "textformat",
-                                   accessibilityDescription: "Case Sensitive")
+                                   accessibilityDescription: L("Case Sensitive"))
         // Push-on/push-off rather than `.toggle`: the same button type the
         // toolbar's insert-mode toggle uses (§24.2), which draws a lit platter
         // in the on state. `.toggle` swaps `image` for `alternateImage`, and
         // with no alternate image there was nothing to see either way.
         caseButton.setButtonType(.pushOnPushOff)
-        caseButton.setAccessibilityLabel("Case Sensitive")
-        caseButton.toolTip = "Case Sensitive"
+        ControlHelp.describe(caseButton, L("Case Sensitive"))
         caseButton.target = self
         caseButton.action = #selector(caseToggled)
         syncCaseButtonAppearance()
@@ -369,9 +370,13 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
             pointSize: Self.iconPointSize, weight: on ? .semibold : .regular)
         // Only ever seen while the toggle is on the bar, so it names the two
         // states and nothing else (§11).
-        caseButton.toolTip = on
-            ? "Case Sensitive — matching exactly"
-            : "Case Sensitive — off, upper and lower case match"
+        // The name and the explanation are not the same sentence here: a
+        // screen reader wants the control's name and its state, the tooltip
+        // wants the whole answer (`ControlHelp`).
+        ControlHelp.describe(caseButton, name: L("Case Sensitive"),
+                             tooltip: on
+                                 ? L("Case Sensitive — matching exactly")
+                                 : L("Case Sensitive — off, upper and lower case match"))
     }
 
     /// The Smart Search toggle: the same borderless glyph the case toggle is,
@@ -382,9 +387,9 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         smartButton.isBordered = false
         smartButton.imagePosition = .imageOnly
         smartButton.image = NSImage(systemSymbolName: "wand.and.sparkles",
-                                    accessibilityDescription: "Smart Search")
+                                    accessibilityDescription: L("Smart Search"))
         smartButton.setButtonType(.pushOnPushOff)
-        smartButton.setAccessibilityLabel("Smart Search")
+        smartButton.setAccessibilityLabel(L("Smart Search"))
         smartButton.target = self
         smartButton.action = #selector(smartToggled)
         smartButton.state = Self.storedSmartSearch ? .on : .off
@@ -404,9 +409,10 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         smartButton.contentTintColor = on ? .controlAccentColor : .secondaryLabelColor
         smartButton.symbolConfiguration = NSImage.SymbolConfiguration(
             pointSize: Self.iconPointSize, weight: on ? .semibold : .regular)
-        smartButton.toolTip = on
-            ? "Smart Search — the encoding is whichever one finds a match"
-            : "Smart Search — off, searching the chosen encoding only"
+        ControlHelp.describe(smartButton, name: L("Smart Search"),
+                             tooltip: on
+                                 ? L("Smart Search — the encoding is whichever one finds a match")
+                                 : L("Smart Search — off, searching the chosen encoding only"))
     }
 
     @objc private func smartToggled() {
@@ -424,7 +430,7 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         countLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         countLabel.textColor = .secondaryLabelColor
         countLabel.alignment = .right
-        countLabel.setAccessibilityLabel("Matches")
+        countLabel.setAccessibilityLabel(L("Matches"))
         countLabel.translatesAutoresizingMaskIntoConstraints = false
         // Nothing to show until a search says otherwise; `show(count:)` brings
         // the label back and takes it away again (§11).
@@ -440,7 +446,7 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         countLabel.widthAnchor.constraint(greaterThanOrEqualToConstant: ceil(width)).isActive = true
 
         warningView.image = NSImage(systemSymbolName: "exclamationmark.triangle",
-                                    accessibilityDescription: "Warning")
+                                    accessibilityDescription: L("Warning"))
         warningView.symbolConfiguration = NSImage.SymbolConfiguration(
             pointSize: Self.iconPointSize, weight: .regular)
         warningView.contentTintColor = .secondaryLabelColor
@@ -488,14 +494,14 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
             countLabel.toolTip = patternError.detail
             countLabel.isHidden = false
             warningView.isHidden = true
-            warningView.toolTip = nil
+            ControlHelp.describe(warningView, nil)
             return
         }
         countLabel.textColor = .secondaryLabelColor
         countLabel.stringValue = count?.text ?? ""
         countLabel.isHidden = count == nil
         countLabel.toolTip = count?.warning
-        warningView.toolTip = count?.warning
+        ControlHelp.describe(warningView, count?.warning)
         warningView.isHidden = count?.warning == nil
         // No search yet is not "no matches": the stepper is how a search is
         // started, so it stays live until a scan has actually come back empty.
@@ -539,7 +545,8 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
     private func setResultsShown(_ shown: Bool) {
         resultsShown = shown
         findAllButton.contentTintColor = shown ? .controlAccentColor : .secondaryLabelColor
-        findAllButton.toolTip = shown ? "Hide Search Results" : "Show Search Results"
+        ControlHelp.describe(findAllButton, name: L("Search Results"),
+                             tooltip: shown ? L("Hide Search Results") : L("Show Search Results"))
     }
 
     private var resultsShown = false
@@ -632,7 +639,7 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         navControl.setToolTip("Find Next", forSegment: Self.nextSegment)
         // The segments' own accessibility comes from the images' descriptions;
         // the control needs a name of its own for the group (§15).
-        navControl.setAccessibilityLabel("Find Previous / Find Next")
+        navControl.setAccessibilityLabel(L("Find Previous / Find Next"))
         navControl.translatesAutoresizingMaskIntoConstraints = false
     }
 
@@ -648,20 +655,20 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         findAllButton.imagePosition = .imageOnly
         findAllButton.contentTintColor = .secondaryLabelColor
         findAllButton.image = NSImage(systemSymbolName: "list.bullet",
-                                      accessibilityDescription: "Find All")
+                                      accessibilityDescription: L("Find All"))
         findAllButton.symbolConfiguration = NSImage.SymbolConfiguration(
             pointSize: Self.iconPointSize, weight: .regular)
-        findAllButton.setAccessibilityLabel("Search Results")
-        findAllButton.toolTip = "Show Search Results"
+        ControlHelp.describe(findAllButton, name: L("Search Results"),
+                             tooltip: L("Show Search Results"))
         findAllButton.target = self
         findAllButton.action = #selector(findAllPressed)
     }
 
     private func setUpDoneButton() {
-        doneButton.title = "Done"
+        doneButton.title = L("Done")
         doneButton.target = self
         doneButton.action = #selector(donePressed)
-        doneButton.setAccessibilityLabel("Done")
+        doneButton.setAccessibilityLabel(L("Done"))
         // Escape is *not* wired here any more. It belongs to the pattern
         // field: the first press closes the field's menu, the second clears
         // the field — which ends the search, since clearing is a text change
@@ -781,18 +788,18 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         let menu = NSMenu()
         let recents = FindHistoryStore.recent
         if !recents.isEmpty {
-            menu.addItem(Self.menuHeader("Recent Queries", symbol: "clock"))
+            menu.addItem(Self.menuHeader(L("Recent Queries"), symbol: "clock"))
             for entry in recents { menu.addItem(patternItem(for: entry)) }
             menu.addItem(.separator())
         }
-        menu.addItem(command("Add to Favorites", #selector(addToFavorites)))
+        menu.addItem(command(L("Save Search Pattern"), #selector(addToFavorites)))
         if !recents.isEmpty {
-            menu.addItem(command("Clear Recents", #selector(clearRecents)))
+            menu.addItem(command(L("Clear Recents"), #selector(clearRecents)))
         }
         let favorites = FavoritePatternStore.favorites
         if !favorites.isEmpty {
             menu.addItem(.separator())
-            menu.addItem(Self.menuHeader("Favorites", symbol: "star.fill"))
+            menu.addItem(Self.menuHeader(L("Search Patterns"), symbol: "star.fill"))
             for entry in favorites { menu.addItem(patternItem(for: entry)) }
         }
         menu.addItem(.separator())
@@ -807,10 +814,10 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
     /// the place the user actually is — says nothing about it. So the row says
     /// it, in red, in the same words the tab uses (§11).
     private func manageItem() -> NSMenuItem {
-        let item = command("Manage Favorites…", #selector(manageFavorites))
+        let item = command(L("Manage Search Patterns…"), #selector(manageFavorites))
         guard let problem = FavoritePatternStore.syncProblem else { return item }
         let title = NSMutableAttributedString(
-            string: "Manage Favorites…",
+            string: L("Manage Search Patterns…"),
             attributes: [.font: NSFont.systemFont(ofSize: Self.menuRowSize)])
         title.append(NSAttributedString(
             string: "  \(problem)",
@@ -871,7 +878,7 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
             // into the store. It stays pickable — the pick puts it in the field
             // and the bar says what is wrong with it (§11) — and says so here.
             item.image = NSImage(systemSymbolName: "exclamationmark.octagon.fill",
-                                 accessibilityDescription: "Invalid pattern")
+                                 accessibilityDescription: L("Invalid pattern"))
         }
         return item
     }

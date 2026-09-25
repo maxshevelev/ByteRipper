@@ -2,6 +2,9 @@
 
 > Addresses worth coming back to, marked on the row and shared by both panes.
 
+@covers menu.edit.bookmark-toggle
+@covers menu.edit.bookmark-edit
+
 **⌘D** marks (or unmarks) the row the caret is on. The row's offset column turns into a coloured arrow with the address written on it, and the row is marked in the [[topic:minimap|minimap]]'s margin.
 
 - **⇧⌘D** gives the mark a name, or edits the name it has. A mark with no name shows its address.

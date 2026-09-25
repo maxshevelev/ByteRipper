@@ -1,4 +1,6 @@
 import Cocoa
+import HelpUI
+import Localization
 
 /// The status-bar strip for one background operation: a name label, a
 /// bar-style determinate progress indicator, and a (×) cancel button. Shown by
@@ -41,12 +43,11 @@ final class OperationStatusView: NSView {
         barWidth.priority = .defaultHigh
         barWidth.isActive = true
 
-        cancelButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Cancel operation")
+        cancelButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: L("Cancel operation"))
         cancelButton.isBordered = false
         cancelButton.imagePosition = .imageOnly
         cancelButton.contentTintColor = .secondaryLabelColor
-        cancelButton.setAccessibilityLabel("Cancel operation")  // §15
-        cancelButton.toolTip = "Cancel operation"
+        ControlHelp.describe(cancelButton, L("Cancel operation"))
         cancelButton.target = self
         cancelButton.action = #selector(cancelPressed)
 

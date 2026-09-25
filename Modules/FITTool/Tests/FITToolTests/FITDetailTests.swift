@@ -44,7 +44,7 @@ final class FITDetailTests: XCTestCase {
         // A row whose own Size field is zero says so in words: the area holds
         // nothing, and "0" reads like a number that was measured.
         XCTAssertEqual(value(detail!, "Size"), "Empty")
-        XCTAssertEqual(value(detail!, "Revision"), "1.00")
+        XCTAssertEqual(value(detail!, "Version"), "1.00")
         // The checksum byte is the header's, so a row that is not the header
         // does not show one.
         XCTAssertNil(value(detail!, "Checksum"))

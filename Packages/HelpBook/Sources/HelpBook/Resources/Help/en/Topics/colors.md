@@ -2,6 +2,8 @@
 
 > Background says "different from the other file". Red text says "changed and not yet saved".
 
+@covers settings.comparison
+
 The two states are separate on purpose, and a byte can wear both at once.
 
 ## Difference — a background colour

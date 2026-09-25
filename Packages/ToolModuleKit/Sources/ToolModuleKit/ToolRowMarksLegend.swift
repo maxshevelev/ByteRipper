@@ -1,4 +1,5 @@
 import AppKit
+import Localization
 
 /// The legend every panel that marks its rows carries (`Design/ROW_MARKS.md`
 /// §6): a disclosure strip under the table, one line collapsed, a line per mark
@@ -8,6 +9,7 @@ import AppKit
 /// (`ToolRowMark`), so what it says a mark means is what the rows mean by it.
 /// Both its states — open or shut, markings on or off — are remembered per
 /// panel, in the store every panel setting lives in (`ToolPanelFont.defaults`).
+// help: panel.row-marks-legend
 @MainActor public final class ToolRowMarksLegend: NSView {
     /// A line only one panel has: a verdict symbol and what it says.
     public struct VerdictEntry {
@@ -32,7 +34,7 @@ import AppKit
     private let verdicts: [VerdictEntry]
     private let disclosure = NSButton()
     private let titleButton = NSButton()
-    private let showSwitch = NSButton(checkboxWithTitle: "Show markings", target: nil, action: nil)
+    private let showSwitch = NSButton(checkboxWithTitle: L("Show markings"), target: nil, action: nil)
     private let entries = NSStackView()
     private var zoomObserver: NSObjectProtocol?
 
@@ -116,7 +118,7 @@ import AppKit
         disclosure.title = ""
         disclosure.target = self
         disclosure.action = #selector(disclosureClicked)
-        disclosure.setAccessibilityLabel("Legend")
+        disclosure.setAccessibilityLabel(L("Legend"))
 
         titleButton.isBordered = false
         titleButton.target = self
@@ -178,7 +180,7 @@ import AppKit
     }
 
     private func applyFont() {
-        titleButton.attributedTitle = NSAttributedString(string: "Legend", attributes: [
+        titleButton.attributedTitle = NSAttributedString(string: L("Legend"), attributes: [
             .font: ToolPanelFont.body(),
             .foregroundColor: NSColor.secondaryLabelColor
         ])

@@ -207,7 +207,7 @@ final class LibraryConflictTests: XCTestCase {
 
         let menu = try XCTUnwrap(bar.patternMenuForTests)
         let manage = try XCTUnwrap(menu.items.first {
-            ($0.attributedTitle?.string ?? $0.title).hasPrefix("Manage Favorites…")
+            ($0.attributedTitle?.string ?? $0.title).hasPrefix("Manage Search Patterns…")
         })
         let title = try XCTUnwrap(manage.attributedTitle)
         XCTAssertTrue(title.string.contains("1 conflicting change"), title.string)
@@ -224,7 +224,7 @@ final class LibraryConflictTests: XCTestCase {
         FavoritePatternStore.resolve([FavoritePatternStore.conflicts[0].id: .keepOurs])
         bar.prepareForShow()
         let after = try XCTUnwrap(bar.patternMenuForTests?.items.first {
-            ($0.attributedTitle?.string ?? $0.title).hasPrefix("Manage Favorites…")
+            ($0.attributedTitle?.string ?? $0.title).hasPrefix("Manage Search Patterns…")
         })
         XCTAssertNil(after.image)
         XCTAssertFalse((after.attributedTitle?.string ?? "").contains("conflicting"))

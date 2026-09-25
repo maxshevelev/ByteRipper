@@ -24,11 +24,22 @@ let package = Package(
     products: [
         .library(name: "HelpBook", targets: ["HelpBook"])
     ],
+    // Which language to read the book in is not the book's own decision: it
+    // is the app's one language setting, which a user can override in
+    // Settings. The pure half of that lives here.
+    dependencies: [
+        .package(path: "../Localization")
+    ],
     targets: [
         // `.copy` rather than `.process`: the directory tree *is* the format —
         // `Help/<language>/Topics/<id>.md` — and processing is free to flatten
         // it, which would put two languages' `overview.md` in one place.
-        .target(name: "HelpBook", resources: [.copy("Resources/Help")]),
-        .testTarget(name: "HelpBookTests", dependencies: ["HelpBook"])
+        .target(name: "HelpBook",
+                dependencies: [.product(name: "Localization", package: "Localization")],
+                resources: [.copy("Resources/Help")]),
+        .testTarget(name: "HelpBookTests", dependencies: [
+            "HelpBook",
+            .product(name: "Localization", package: "Localization")
+        ])
     ]
 )

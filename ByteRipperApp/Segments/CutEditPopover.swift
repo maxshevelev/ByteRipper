@@ -1,6 +1,7 @@
 import AppPalette
 import Cocoa
 import ByteRipperCore
+import Localization
 
 /// The popover that makes a cut (§21.3): a field for **where** the cut goes
 /// and a field for **what the piece that starts there is called**. The offset
@@ -153,7 +154,7 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
         offset.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         offset.delegate = self
         offset.translatesAutoresizingMaskIntoConstraints = false
-        offset.setAccessibilityLabel("Cut offset")
+        offset.setAccessibilityLabel(L("Cut offset"))
         offsetField = offset
 
         // A plain field: AppKit selects its whole text on focus, which is what
@@ -163,10 +164,10 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
         // with the piece's current name, so renaming does not start from blank.
         let description = NSTextField(string: prefillDescription)
         description.font = .systemFont(ofSize: 12)
-        description.placeholderString = "Description"
+        description.placeholderString = L("Description")
         description.delegate = self
         description.translatesAutoresizingMaskIntoConstraints = false
-        description.setAccessibilityLabel("Segment description")
+        description.setAccessibilityLabel(L("Segment description"))
         descriptionField = description
 
         // The piece's label and range, above the two fields — the popover says
@@ -178,7 +179,7 @@ final class CutEditPopoverController: NSViewController, NSTextFieldDelegate {
             label.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
             label.textColor = .secondaryLabelColor
             label.translatesAutoresizingMaskIntoConstraints = false
-            label.setAccessibilityLabel("Segment")
+            label.setAccessibilityLabel(L("Segment"))
             headerLabel = label
         }
 

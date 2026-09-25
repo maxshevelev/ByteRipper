@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import ToolModuleKit
 import UEFIImage
 
@@ -55,7 +56,7 @@ public struct UEFIDetailTable: Equatable, Sendable {
 
         /// A permission, as the word and the colour that go with it.
         public static func permission(_ allowed: Bool) -> Cell {
-            Cell(allowed ? "Yes" : "No", tone: allowed ? .yes : .no)
+            Cell(allowed ? L("Yes") : L("No"), tone: allowed ? .yes : .no)
         }
     }
 
@@ -132,9 +133,9 @@ public enum UEFIDetail {
            let extended = MicrocodeHeader.read(at: node.header.lowerBound, in: reader)?.extendedTable,
            !extended.signatures.isEmpty {
             tables.append(UEFIDetailTable(
-                title: "Extended signatures",
+                title: L("Extended signatures"),
                 symbol: "cpu",
-                columns: ["CPUID", "Processor", "Platforms", "Checksum"],
+                columns: [L("CPUID"), L("Processor"), L("Platforms"), L("Checksum")],
                 rows: extended.signatures.map { signature in
                     [
                         .init(MicrocodeHeader.cpuid(signature.processorSignature)),
@@ -149,7 +150,7 @@ public enum UEFIDetail {
         if let ranges = image.protectedRanges {
             let touching = ranges.ranges(touching: node, in: image)
             if !touching.isEmpty {
-                fields.append(.init("Protection", protectionCaveat))
+                fields.append(.init(L("Protection"), protectionCaveat))
                 tables.append(protectedByTable(touching))
             }
         }
@@ -161,19 +162,18 @@ public enum UEFIDetail {
     /// What the image cannot say (`BOOT_GUARD_PROTECTED_RANGES.md` §8): the
     /// Boot Guard profile is in the PCH's fuses, not in the BIOS region.
     public static let protectionCaveat =
-        "Whether Boot Guard is enforced is set in the chipset's fuses, not in this image: "
-        + "the marks say what an edit would break if it is. Vendor hashes are checked by the firmware itself."
+        L("Whether Boot Guard is enforced is set in the chipset's fuses, not in this image: the marks say what an edit would break if it is. Vendor hashes are checked by the firmware itself.")
 
     /// Every range that shares a byte with the node: what it is, where it is,
     /// where the list naming it is, and what hashing it found (§9.3).
     static func protectedByTable(_ ranges: [ProtectedRange]) -> UEFIDetailTable {
         UEFIDetailTable(
-            title: "Protected by",
+            title: L("Protected by"),
             symbol: "lock.shield",
-            columns: ["Range", "Kind", "Listed at", "Hash"],
+            columns: [L("Range"), L("Kind"), L("Listed at"), L("Hash")],
             rows: ranges.map { range in
                 [
-                    .init(range.range.map { "\(hex($0.lowerBound))–\(hex($0.upperBound))" } ?? "Not placed"),
+                    .init(range.range.map { "\(hex($0.lowerBound))–\(hex($0.upperBound))" } ?? L("Not placed")),
                     .init(range.kind.name),
                     .init(hex(range.source.lowerBound)),
                     verdictCell(range)
@@ -186,15 +186,16 @@ public enum UEFIDetail {
         let algorithms = range.digests.map(\.algorithmName).joined(separator: ", ")
         switch range.verdict {
         case .matches:
-            return .init("\(algorithms) matches", tone: .yes)
+            return .init(L("%1$@ matches", algorithms), tone: .yes)
         case .mismatch:
             // An IBB mismatch is not a verdict yet (§6.1).
-            return .init(range.kind.isIBB ? "\(algorithms) differs (unconfirmed)" : "\(algorithms) differs",
+            return .init(range.kind.isIBB ? L("%1$@ differs (unconfirmed)", algorithms)
+                                          : L("%1$@ differs", algorithms),
                          tone: .no)
         case .unsupported(let algorithm):
-            return .init("\(TCGHash.name(algorithm)) not computed")
+            return .init(L("%1$@ not computed", TCGHash.name(algorithm)))
         case .unchecked:
-            return .init("Not checked")
+            return .init(L("Not checked"))
         }
     }
 
@@ -202,9 +203,14 @@ public enum UEFIDetail {
 
     private static func commonFields(for node: UEFINode, image: UEFIImage) -> [UEFIDetailField] {
         var fields: [UEFIDetailField] = []
-        fields.append(.init("Kind", kindLabel(node.kind)))
+        // These are this panel's own words for a node — how it is laid out and
+        // what it is — and not fields of anything on disk, so they translate.
+        // Everything `headerFields` adds below is read out of a structure and
+        // keeps the spec's own name: a bench reads those beside the PI spec or
+        // beside UEFITool, and a translated `Signature` cannot be looked up.
+        fields.append(.init(L("Kind"), kindLabel(node.kind)))
         if node.subtype != nil {
-            fields.append(.init("Type", typeText(node)))
+            fields.append(.init(L("Type"), typeText(node)))
         }
         if let guid = node.guid {
             fields.append(.init("GUID", guidText(guid)))
@@ -214,31 +220,31 @@ public enum UEFIDetail {
         if case .decompressed(let chain) = node.space, let outermost = chain.first {
             let section = image.innermostNode(containing: outermost)
                 .flatMap { $0.header.lowerBound == outermost ? $0.name : nil }
-                ?? "Compressed section"
-            var text = "\(section) at \(hex(outermost))"
-            if chain.count > 1 { text += ", \(chain.count) compressed sections deep" }
-            fields.append(.init("Decompressed from", text))
+                ?? L("Compressed section")
+            var text = L("%1$@ at %2$@", section, hex(outermost))
+            if chain.count > 1 { text = L("%1$@, %2$@ compressed sections deep", text, chain.count) }
+            fields.append(.init(L("Decompressed from"), text))
         }
-        fields.append(.init("Header", rangeText(node.header)))
-        fields.append(.init("Body", rangeText(node.body)))
+        fields.append(.init(L("Header"), rangeText(node.header)))
+        fields.append(.init(L("Body"), rangeText(node.body)))
         if !node.tail.isEmpty {
-            fields.append(.init("Tail", rangeText(node.tail)))
+            fields.append(.init(L("Tail"), rangeText(node.tail)))
         }
-        fields.append(.init("Total", rangeText(node.range)))
+        fields.append(.init(L("Total"), rangeText(node.range)))
 
         var flags: [String] = []
-        if node.isFixed { flags.append("fixed") }
-        if node.isCompressed { flags.append("compressed") }
-        if node.isErased { flags.append("erased") }
+        if node.isFixed { flags.append(L("fixed")) }
+        if node.isCompressed { flags.append(L("compressed")) }
+        if node.isErased { flags.append(L("erased")) }
         if !flags.isEmpty {
-            fields.append(.init("Flags", flags.joined(separator: ", ")))
+            fields.append(.init(L("Flags"), flags.joined(separator: ", ")))
         }
 
         // A compressed node's address means nothing — the decompressor puts it
         // wherever it likes — so the one thing worth showing is skipped there.
         if !node.isCompressed,
            let address = image.address(forOffset: node.range.lowerBound) {
-            fields.append(.init("Address", hex(address)))
+            fields.append(.init(L("Address"), hex(address)))
         }
         return fields
     }
@@ -563,9 +569,9 @@ public enum UEFIDetail {
         var tables: [UEFIDetailTable] = []
         if !descriptor.masters.isEmpty {
             tables.append(UEFIDetailTable(
-                title: "Region access settings",
+                title: L("Region access settings"),
                 symbol: "key",
-                columns: ["Master", "Read", "Write"],
+                columns: [L("Master"), L("Read"), L("Write")],
                 rows: descriptor.masters.map { master in
                     [.init(master.name),
                      .init(mask(master.read, digits: descriptor.maskDigits)),
@@ -575,9 +581,9 @@ public enum UEFIDetail {
         }
         if !descriptor.biosAccess.isEmpty {
             tables.append(UEFIDetailTable(
-                title: "BIOS access table",
+                title: L("BIOS access table"),
                 symbol: "lock.shield",
-                columns: ["Region", "Read", "Write"],
+                columns: [L("Region"), L("Read"), L("Write")],
                 rows: descriptor.biosAccess.map { access in
                     [.init(access.region),
                      .permission(access.read),
@@ -587,14 +593,14 @@ public enum UEFIDetail {
         }
         if !descriptor.chips.isEmpty {
             tables.append(UEFIDetailTable(
-                title: "Flash chips in VSCC table",
+                title: L("Flash chips in VSCC table"),
                 // The square chip the ME panel waits under, so the two panels
                 // draw the same thing for the same idea.
                 symbol: "cpu",
-                columns: ["JEDEC ID", "Chip"],
+                columns: [L("JEDEC ID"), L("Chip")],
                 rows: descriptor.chips.map { chip in
                     [.init(String(format: "%06X", chip.jedecID)),
-                     .init(chip.name ?? "Unknown")]
+                     .init(chip.name ?? L("Unknown"))]
                 }
             ))
         }
@@ -745,9 +751,9 @@ public enum UEFIDetail {
         case .flashMapEntry: return UEFITypes.typeName(UEFITypes.Item.phoenixFlashMapEntry.rawValue)
         case .flashDeviceMapStore: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapStore.rawValue)
         case .flashDeviceMapEntry: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue)
-        case .padding: return "Padding"
-        case .freeSpace: return "Free space"
-        case .nonUEFIData: return "Non-UEFI data"
+        case .padding: return L("Padding")
+        case .freeSpace: return L("Free space")
+        case .nonUEFIData: return L("Non-UEFI data")
         }
     }
 

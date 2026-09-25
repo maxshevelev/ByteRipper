@@ -20,12 +20,16 @@ let package = Package(
         .library(name: "HelpUI", targets: ["HelpUI"])
     ],
     dependencies: [
+        // Every word this shows the user comes from the one catalogue the
+        // whole app is translated in.
+        .package(path: "../Localization"),
         .package(path: "../HelpBook"),
         .package(path: "../AppPalette"),
         .package(path: "../ALSplitView")
     ],
     targets: [
         .target(name: "HelpUI", dependencies: [
+            .product(name: "Localization", package: "Localization"),
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "AppPalette", package: "AppPalette"),
             .product(name: "ALSplitView", package: "ALSplitView")

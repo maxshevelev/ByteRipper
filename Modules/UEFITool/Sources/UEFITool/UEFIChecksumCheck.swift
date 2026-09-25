@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import UEFIImage
 
 /// A checksum a node of a known kind carries, so a caller can say which one of
@@ -19,10 +20,10 @@ public enum UEFIChecksumField: String, Hashable, Sendable {
     /// rather than only that one is.
     public var label: String {
         switch self {
-        case .volume: return "volume header"
-        case .fileHeader: return "file header"
-        case .fileBody: return "file body"
-        case .microcode: return "microcode"
+        case .volume: return L("volume header")
+        case .fileHeader: return L("file header")
+        case .fileBody: return L("file body")
+        case .microcode: return L("microcode")
         }
     }
 }

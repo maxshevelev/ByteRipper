@@ -31,17 +31,22 @@ let package = Package(
         .library(name: "UEFIImage", targets: ["UEFIImage"])
     ],
     dependencies: [
-        .package(path: "../FirmwareCompression")
+        .package(path: "../FirmwareCompression"),
+        // The parser names the gaps it finds — "Free space", "Padding" — and
+        // those names are what the tree's Name column shows a reader.
+        .package(path: "../Localization")
     ],
     targets: [
         .target(name: "UEFIImage", dependencies: [
-            .product(name: "FirmwareCompression", package: "FirmwareCompression")
+            .product(name: "FirmwareCompression", package: "FirmwareCompression"),
+            .product(name: "Localization", package: "Localization")
         ]),
         .testTarget(
             name: "UEFIImageTests",
             dependencies: [
                 "UEFIImage",
                 .product(name: "FirmwareCompression", package: "FirmwareCompression"),
+                .product(name: "Localization", package: "Localization"),
                 // The encoders, to build a compressed section byte by byte.
                 .product(name: "FirmwareCompressionTestSupport", package: "FirmwareCompression")
             ]

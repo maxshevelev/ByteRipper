@@ -179,7 +179,7 @@ public struct MicrocodeHeader: Equatable, Sendable {
             MicrocodeField("CPUID", Self.cpuid(processorSignature)),
             MicrocodeField("Processor", Self.processorText(processorSignature)),
             // "Update revision", so it does not read as the same thing as a FIT
-            // entry's own Revision.
+            // entry's own Version.
             MicrocodeField("Update revision", Self.hex(updateRevision)),
             MicrocodeField("Date", date),
             MicrocodeField("Platform IDs", Self.hex(platformIDs)),

@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// The arithmetic every layer of this format checks itself with
 /// (`Design/UEFI/UEFI_IMAGE_FORMAT.md` §0).
@@ -99,6 +100,12 @@ public enum Checksums {
     /// it should be, so a reader can write it back by hand as well as by Fix:
     /// `0x5C (Invalid), should be 0x5A`. One spelling of it, so a checksum
     /// that carries a validity bit reads the same in every panel that shows it.
+    ///
+    /// The verdict is this library's own word, not a field of anything on
+    /// disk, so it translates — the value beside it stays the hex a bench
+    /// compares. The whole line is one key per case rather than a glued-on
+    /// `(Valid)`: a language puts the brackets, the comma and the verb where
+    /// its own grammar wants them.
     public static func text(
         _ value: some BinaryInteger,
         valid: Bool,
@@ -106,11 +113,11 @@ public enum Checksums {
         digits: Int = 2
     ) -> String {
         let padded = hex(UInt64(truncatingIfNeeded: value), digits: digits)
-        if valid { return "\(padded) (Valid)" }
+        if valid { return L("%1$@ (Valid)", padded) }
         if let expected {
-            return "\(padded) (Invalid), should be \(hex(expected, digits: digits))"
+            return L("%1$@ (Invalid), should be %2$@", padded, hex(expected, digits: digits))
         }
-        return "\(padded) (Invalid)"
+        return L("%1$@ (Invalid)", padded)
     }
 
     /// A hex value padded to a field's width — `0x0005` for digits 4.

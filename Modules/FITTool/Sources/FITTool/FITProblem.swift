@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// Something wrong with the table, or with the image around it.
 ///
@@ -74,50 +75,50 @@ public struct FITProblem: Equatable, Sendable {
     }
 
     public var message: String {
-        inBackup ? "Top Swap backup: " + ownMessage : ownMessage
+        inBackup ? L("Top Swap backup: %1$@", ownMessage) : ownMessage
     }
 
     private var ownMessage: String {
         switch kind {
         case .imageHasNoPointer:
-            return "The image is too small to hold a FIT pointer"
+            return L("The image is too small to hold a FIT pointer")
         case .pointerLeadsOutsideTheImage(let address):
-            return "The FIT pointer, \(hex(address)), is outside this image"
+            return L("The FIT pointer, %1$@, is outside this image", hex(address))
         case .noTableAtThePointer(let address):
-            return "No FIT signature at \(hex(address)), where the pointer leads"
+            return L("No FIT signature at %1$@, where the pointer leads", hex(address))
         case .tableHasNoEntries:
-            return "The header says the table has no entries"
+            return L("The header says the table has no entries")
         case .tableRunsPastTheEnd(let entries):
-            return "The header claims \(entries) entries, which runs past the end of the image"
+            return L("The header claims %1$@ entries, which runs past the end of the image", entries)
         case .firstEntryIsNotTheHeader(let type):
-            return "The first entry is type \(hex(UInt64(type))), not the header"
+            return L("The first entry is type %1$@, not the header", hex(UInt64(type)))
         case .secondHeader:
-            return "A second header entry, where there may be only one"
+            return L("A second header entry, where there may be only one")
         case .typesOutOfOrder(let previous, let type):
-            return "Type \(hex(UInt64(type))) after type \(hex(UInt64(previous))): "
-                + "entries must not decrease in type"
+            return L("Type %1$@ after type %2$@: entries must not decrease in type",
+                     hex(UInt64(type)), hex(UInt64(previous)))
         case .checksumMismatch(let stored, let computed):
-            return "The table checksum is \(hex(UInt64(stored))), and should be "
-                + hex(UInt64(computed))
+            return L("The table checksum is %1$@, and should be %2$@",
+                     hex(UInt64(stored)), hex(UInt64(computed)))
         case .noMicrocodeEntry:
-            return "No microcode entry, and there must be at least one"
+            return L("No microcode entry, and there must be at least one")
         case .addressOutsideTheImage(let address):
-            return "\(hex(address)) is outside this image"
+            return L("%1$@ is outside this image", hex(address))
         case .addressNotAligned(let address):
-            return "\(hex(address)) is not aligned to 16 bytes"
+            return L("%1$@ is not aligned to 16 bytes", hex(address))
         case .notMicrocodeAtTheAddress(let address):
-            return "No microcode header at \(hex(address)), and it is not an empty slot"
+            return L("No microcode header at %1$@, and it is not an empty slot", hex(address))
         case .reservedIsNotZero(let value):
-            return "The reserved byte is \(hex(UInt64(value))), and should be zero"
+            return L("The reserved byte is %1$@, and should be zero", hex(UInt64(value)))
         case .topSwapBackupHasNoTable(let backupAt):
-            return "The Top Swap backup at \(hex(backupAt)) has no FIT where its pointer leads"
+            return L("The Top Swap backup at %1$@ has no FIT where its pointer leads", hex(backupAt))
         case .topSwapTableDiffers(let at):
-            return "The Top Swap backup's FIT at \(hex(at)) is not the same as this one"
+            return L("The Top Swap backup's FIT at %1$@ is not the same as this one", hex(at))
         case .topSwapEntryDiffers:
-            return "this entry, or what it points at, is not the same as in the top block"
+            return L("this entry, or what it points at, is not the same as in the top block")
         case .topSwapBlockDiffers(let backup):
-            return "The Top Swap backup at \(hex(backup.lowerBound)) holds the same FIT, but other bytes"
-                + " of the block differ, so microcode changes are refused until the copies agree"
+            return L("The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree",
+                     hex(backup.lowerBound))
         }
     }
 

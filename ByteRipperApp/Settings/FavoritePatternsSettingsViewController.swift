@@ -1,6 +1,8 @@
 import AppPalette
 import Cocoa
 import ByteRipperCore
+import HelpUI
+import Localization
 
 /// The Favorites tab of the Settings window (§11): the named patterns the user
 /// keeps, in the order they keep them in.
@@ -78,7 +80,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: "Favorites")
+        let titleLabel = NSTextField(labelWithString: L("Search Patterns"))
         titleLabel.font = .boldSystemFont(ofSize: 15)
 
         let list = makeTable()
@@ -93,10 +95,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         let location = makeLocationRow()
 
         let caption = NSTextField(wrappingLabelWithString:
-            "Patterns you keep, with the encoding they are read in. They appear under "
-            + "Favorites in the Find bar's search menu, where picking one fills the bar "
-            + "and searches. Drag rows to reorder them — the menu lists them in this order. "
-            + "Keep the library in a synced folder to have it on another Mac.")
+            L("Patterns you keep, with the encoding they are read in. They appear under Search Patterns in the Find bar's search menu, where picking one fills the bar and searches. Drag rows to reorder them — the menu lists them in this order. Keep the pattern library in a synced folder to have it on another Mac."))
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 4
@@ -137,7 +136,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             // on one line. Wider than the others because four columns have to
             // fit — the tab bar keeps its own width, and the window follows the
             // tab that is showing.
-            root.widthAnchor.constraint(equalToConstant: Self.tabWidth),
+            SettingsMetrics.pinnedWidth(of: root, preferring: 540),
         ])
         view = root
 
@@ -204,11 +203,14 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             return column
         }
         let fixed = Self.nameWidth + Self.encodingWidth + Self.caseWidth
-        table.addTableColumn(column(ColumnID.name, "Name", width: Self.nameWidth))
-        table.addTableColumn(column(ColumnID.pattern, "Pattern",
+        table.addTableColumn(column(ColumnID.name, L("Name"), width: Self.nameWidth))
+        table.addTableColumn(column(ColumnID.pattern, L("Pattern"),
                                     width: max(90, Self.columnsWidth - fixed), grows: true))
-        table.addTableColumn(column(ColumnID.encoding, "Encoding", width: Self.encodingWidth))
-        table.addTableColumn(column(ColumnID.caseRule, "Match Case", width: Self.caseWidth))
+        table.addTableColumn(column(ColumnID.encoding, L("Encoding"), width: Self.encodingWidth))
+        // A narrow column takes the short word; the checkbox below it, which
+        // a screen reader reads on its own, keeps the whole phrase.
+        table.addTableColumn(column(ColumnID.caseRule, L("Match Case", context: "column"),
+                                    width: Self.caseWidth))
         // The pattern is fitted by hand in `viewDidLayout`: AppKit's own column
         // autoresizing left 83 pt of the table empty on the right, which is the
         // width the pattern was supposed to be given.
@@ -252,28 +254,26 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         locationLabel = label
 
-        let resolve = NSButton(title: "Resolve…", target: self, action: #selector(resolvePressed))
+        let resolve = NSButton(title: L("Resolve…"), target: self, action: #selector(resolvePressed))
         resolve.bezelStyle = .rounded
         resolve.controlSize = .small
         resolve.isHidden = true
         resolveButton = resolve
 
-        let move = NSButton(title: "Move…", target: self, action: #selector(movePressed))
+        let move = NSButton(title: L("Move…"), target: self, action: #selector(movePressed))
         move.bezelStyle = .rounded
         move.controlSize = .small
-        move.toolTip = "Keep the library in a folder of your own — a synced one puts it on your other Macs, "
-            + "and one that already has a library joins it"
+        ControlHelp.describe(move, L("Keep the pattern library in a folder of your own — a synced one puts it on your other Macs, and one that already has a library joins it"))
         moveButton = move
 
         // The title is the state it produces, in the words the line above uses
         // for that state — "Use This Mac" named a machine and left the rest to
         // be guessed at.
-        let keepHere = NSButton(title: "Keep on This Mac", target: self,
+        let keepHere = NSButton(title: L("Keep on This Mac"), target: self,
                                 action: #selector(keepHerePressed))
         keepHere.bezelStyle = .rounded
         keepHere.controlSize = .small
-        keepHere.toolTip = "Stop publishing to the folder and keep the library in the app's "
-            + "own storage — your other Macs stop seeing your changes"
+        ControlHelp.describe(keepHere, L("Stop publishing to the folder and keep the pattern library in the app's own storage — your other Macs stop seeing your changes"))
         keepHereButton = keepHere
 
         // The path on a line of its own, the commands under it. A path is the
@@ -317,10 +317,10 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             // in the secondary grey the rest of the line uses it read as
             // furniture.
             locationLabel.textColor = SemanticColors.bad
-            let problem = FavoritePatternStore.syncProblem ?? "conflicting changes"
+            let problem = FavoritePatternStore.syncProblem ?? L("conflicting changes")
             var text = conflicts.count == 1
-                ? "\(problem) — the library is read-only until it is answered"
-                : "\(problem) — the library is read-only until they are answered"
+                ? L("%1$@ — the library is read-only until it is answered", problem)
+                : L("%1$@ — the library is read-only until they are answered", problem)
             // And what stops an answer from taking effect, if anything does. A
             // question that cannot be published is one the user can answer for
             // ever without the answer going anywhere, and showing only the
@@ -328,16 +328,15 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             // return here, hiding the very failure that made the conflict
             // unanswerable.
             if !FavoritePatternStore.hasFolderAccess {
-                text += ". macOS is not letting the app write to the library folder — "
-                    + "choose it again with Move…"
+                text += L(". macOS is not letting the app write to the library folder — choose it again with Move…")
             } else if let failure = FavoritePatternStore.publishError {
-                text += ". Answering cannot be published: \(failure.localizedDescription)"
+                text += L(". Answering cannot be published: %1$@", failure.localizedDescription)
             } else if FavoritePatternStore.answerDidNotTake {
                 // The one case where pressing Apply changes nothing and nothing
                 // is broken: the shared library moved while the sheet was open,
                 // so the answer was about a version that is no longer there.
-                text = "The shared library changed while you were answering — "
-                    + "\(problem) to look at again"
+                text = L("The shared library changed while you were answering — %1$@ to look at again",
+                         problem)
             }
             locationLabel.stringValue = text
             locationLabel.toolTip = FavoritePatternStore.publishError.map { "\($0)" }
@@ -347,7 +346,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         }
         moveButton?.isHidden = false
         if let folder = FavoritePatternStore.sharedFolder, let url = FavoritePatternStore.sharedURL {
-            var text = "Library folder: \(Self.readablePath(of: folder))"
+            var text = L("Library folder: %1$@", Self.readablePath(of: folder))
             // A publish that cannot happen is said here, and said as what to do
             // about it. Silence was what made a library published to a file
             // that had since been moved in the Finder look like an app that had
@@ -355,8 +354,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             if !FavoritePatternStore.hasFolderAccess {
                 // The grant is gone rather than the folder. Said as the thing
                 // to do about it, because there is exactly one.
-                text += " — macOS is no longer letting the app write there; "
-                    + "choose the folder again with Move…"
+                text += L(" — macOS is no longer letting the app write there; choose the folder again with Move…")
                 locationLabel.textColor = SemanticColors.bad
                 locationLabel.toolTip = url.path
             } else if let failure = FavoritePatternStore.publishError {
@@ -365,18 +363,18 @@ final class FavoritePatternsSettingsViewController: NSViewController,
                 // "cannot be written" says nothing a report can be made from.
                 let missing = !FileManager.default.fileExists(atPath: url.path)
                 text += missing
-                    ? " — that file is no longer there; use Move… to point at it again"
-                    : " — cannot be published: \(failure.localizedDescription)"
+                    ? L(" — that file is no longer there; use Move… to point at it again")
+                    : L(" — cannot be published: %1$@", failure.localizedDescription)
                 if let published = FavoritePatternStore.lastPublished {
-                    text += " (last published \(Self.times.string(from: published)))"
+                    text += L(" (last published %1$@)", Self.times.string(from: published))
                 }
                 locationLabel.toolTip = "\(url.path)\n\n\(failure)"
                 locationLabel.textColor = SemanticColors.bad
             } else {
                 locationLabel.textColor = .secondaryLabelColor
                 text += FavoritePatternStore.lastPublished.map {
-                    " — published \(Self.times.string(from: $0))"
-                } ?? " — not published yet"
+                    L(" — published %1$@", Self.times.string(from: $0))
+                } ?? L(" — not published yet")
             }
             locationLabel.stringValue = text
             // The whole path on hover, for a folder deep enough to truncate.
@@ -384,7 +382,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             keepHereButton?.isHidden = false
         } else {
             locationLabel.textColor = .secondaryLabelColor
-            locationLabel.stringValue = "Library: on this Mac only"
+            locationLabel.stringValue = L("Pattern library: on this Mac only")
             locationLabel.toolTip = FavoritesFile.url.path
             keepHereButton?.isHidden = true
         }
@@ -453,8 +451,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             // There is a file and this Mac cannot read it — most often one
             // iCloud has not finished downloading. Publishing into it would
             // write over something unread, so it is refused and said.
-            show(message: "The library already in “\(folder.lastPathComponent)” cannot be read "
-                    + "yet — if it is in iCloud Drive, wait for it to download and try again.")
+            show(message: L("The pattern library already in “%1$@” cannot be read yet — if it is in iCloud Drive, wait for it to download and try again.", folder.lastPathComponent))
         }
     }
 
@@ -544,21 +541,18 @@ final class FavoritePatternsSettingsViewController: NSViewController,
                 // Said, not swallowed: this used to set a message that the
                 // refresh straight after it wiped, so a removal that could not
                 // happen looked exactly like one that had.
-                show(message: "“\(previous.lastPathComponent)” could not be moved to the Trash: "
-                        + removal.localizedDescription)
+                show(message: L("“%1$@” could not be moved to the Trash: %2$@",
+                                previous.lastPathComponent, removal.localizedDescription))
             }
         }
     }
 
     private func askAboutRemoving(at url: URL) -> Bool {
         let alert = NSAlert()
-        alert.messageText = "Move the library file left behind to the Trash?"
-        alert.informativeText = "“\(Self.readablePath(of: url))” is no longer where the library "
-            + "lives, and its copy of the patterns will not be updated again.\n\nIf it is in a "
-            + "synced folder, trashing it removes it on your other Macs too — keep it if one of "
-            + "them publishes there."
-        alert.addButton(withTitle: "Keep It")
-        alert.addButton(withTitle: "Move to Trash")
+        alert.messageText = L("Move the pattern library file left behind to the Trash?")
+        alert.informativeText = L("“%1$@” is no longer where the pattern library lives, and its copy of the patterns will not be updated again.\n\nIf it is in a synced folder, trashing it removes it on your other Macs too — keep it if one of them publishes there.", Self.readablePath(of: url))
+        alert.addButton(withTitle: L("Keep It"))
+        alert.addButton(withTitle: L("Move to Trash"))
         alert.buttons.last?.hasDestructiveAction = true
         return alert.runModal() == .alertSecondButtonReturn
     }
@@ -568,7 +562,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
     /// pointed at a folder this app cannot read itself.
     private func runFolderPanel() -> URL? {
         let panel = NSOpenPanel()
-        panel.title = "Keep Pattern Library"
+        panel.title = L("Keep Pattern Library")
         panel.message = "Choose the folder to keep the pattern library in. Each Mac writes its "
             + "own file there and reads the others. "
             + "A folder your Mac syncs — iCloud Drive, Google Drive, Dropbox — puts the library "
@@ -585,13 +579,12 @@ final class FavoritePatternsSettingsViewController: NSViewController,
     /// The three answers to "that folder already holds a library" (§11).
     private func askAboutFile(in folder: URL) -> LibrarySync.Adoption? {
         let alert = NSAlert()
-        alert.messageText = "“\(folder.lastPathComponent)” already holds patterns"
-        alert.informativeText = "Merging keeps both lists, which is usually what you want when "
-            + "setting up a second Mac."
-        alert.addButton(withTitle: "Merge")
-        alert.addButton(withTitle: "Use the Folder's Patterns")
-        alert.addButton(withTitle: "Replace What Is There")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L("“%1$@” already holds patterns", folder.lastPathComponent)
+        alert.informativeText = L("Merging keeps both lists, which is usually what you want when setting up a second Mac.")
+        alert.addButton(withTitle: L("Merge"))
+        alert.addButton(withTitle: L("Use the Folder's Patterns"))
+        alert.addButton(withTitle: L("Replace What Is There"))
+        alert.addButton(withTitle: L("Cancel"))
         switch alert.runModal() {
         case .alertFirstButtonReturn: return .merge
         case .alertSecondButtonReturn: return .takeTheFile
@@ -603,7 +596,9 @@ final class FavoritePatternsSettingsViewController: NSViewController,
     // MARK: - How wide each column is
 
     /// The tab's own width, which every column has to fit inside.
-    static let tabWidth: CGFloat = 540
+    /// This tab's table needs more room than the others; it still may not
+    /// be narrower than the toolbar's own labels need.
+    static var tabWidth: CGFloat { SettingsMetrics.width(preferring: 540) }
     /// What the table loses to the form's margins, its bezel and the inset
     /// style's own padding before a column can use any of it. A starting point
     /// only: what the columns end up with is measured (`fitThePatternColumn`).
@@ -614,7 +609,9 @@ final class FavoritePatternsSettingsViewController: NSViewController,
     /// A name is short — "Capsule header", "ME FPT" — and the pattern is not:
     /// sixteen bytes of hex is a long line, and every point the name does not
     /// need is a point of it the user would otherwise scroll to read.
-    static let nameWidth: CGFloat = 110
+    /// Wide enough for a name, and never narrower than its own header —
+    /// which is translated, and «Название» is not "Name".
+    static var nameWidth: CGFloat { ceil(max(110, headerWidth(of: L("Name")))) }
 
     /// As wide as the encodings actually are, and not a character more.
     ///
@@ -629,11 +626,14 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             .max() ?? 0
         // The popup's disclosure arrow and the cell's own inset, which the
         // string knows nothing about.
-        return ceil(max(widest + 26, headerWidth(of: "Encoding")))
+        return ceil(max(widest + 26, headerWidth(of: L("Encoding"))))
     }
 
-    /// The checkbox is 16 pt wide; what has to fit is the *header*.
-    static var caseWidth: CGFloat { ceil(headerWidth(of: "Match Case")) }
+    /// The checkbox is 16 pt wide; what has to fit is the *header* — and the
+    /// header is translated, so it is measured rather than assumed. Sizing
+    /// this column from the English "Match Case" is what cut «Регистр»'s
+    /// longer predecessor off.
+    static var caseWidth: CGFloat { ceil(headerWidth(of: L("Match Case", context: "column"))) }
 
     private static func headerWidth(of title: String) -> CGFloat {
         let font = NSFont.systemFont(ofSize: 11)
@@ -668,8 +668,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         plus.imagePosition = .imageOnly
         plus.isBordered = false
         plus.contentTintColor = .secondaryLabelColor
-        plus.toolTip = "Add a pattern"
-        plus.setAccessibilityLabel("Add Favorite")
+        ControlHelp.describe(plus, name: L("Add Pattern"), tooltip: L("Add a pattern"))
         addButton = plus
 
         let minus = NSButton(title: "", target: self, action: #selector(removePressed))
@@ -677,8 +676,8 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         minus.imagePosition = .imageOnly
         minus.isBordered = false
         minus.contentTintColor = .secondaryLabelColor
-        minus.toolTip = "Remove the selected pattern"
-        minus.setAccessibilityLabel("Remove Favorite")
+        ControlHelp.describe(minus, name: L("Remove Pattern"),
+                             tooltip: L("Remove the selected pattern"))
         minus.isEnabled = false
         removeButton = minus
 
@@ -772,9 +771,9 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         let entry = rows[row]
         switch id {
         case ColumnID.name:
-            return field(entry.name, placeholder: "Name", column: id, row: row)
+            return field(entry.name, placeholder: L("Name"), column: id, row: row)
         case ColumnID.pattern:
-            return field(entry.pattern, placeholder: "Pattern", column: id, row: row)
+            return field(entry.pattern, placeholder: L("Pattern"), column: id, row: row)
         case ColumnID.encoding:
             let popup = NSPopUpButton()
             popup.isBordered = false
@@ -787,7 +786,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             popup.target = self
             popup.action = #selector(encodingPicked(_:))
             popup.isEnabled = FavoritePatternStore.conflicts.isEmpty
-            popup.setAccessibilityLabel("Encoding")
+            popup.setAccessibilityLabel(L("Encoding"))
             return cell(around: popup, inset: 0)
         case ColumnID.caseRule:
             let checkbox = NSButton(checkboxWithTitle: "", target: self,
@@ -797,7 +796,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             // Hex is byte-exact whatever the flag holds, so there is nothing to
             // tick (§11) — the same reason the bar's toggle leaves the bar.
             checkbox.isEnabled = entry.encoding != .hex && FavoritePatternStore.conflicts.isEmpty
-            checkbox.setAccessibilityLabel("Match Case")
+            checkbox.setAccessibilityLabel(L("Match Case"))
             return cell(around: checkbox, inset: 2)
         default:
             return nil

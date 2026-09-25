@@ -1,6 +1,7 @@
 import ALSplitView
 import AppKit
 import HelpBook
+import Localization
 
 /// The help window: the contents on the left, the page on the right.
 ///
@@ -33,8 +34,8 @@ import HelpBook
     private let splitter = ALSplitView()
     private let backForward = NSSegmentedControl(
         images: [
-            NSImage(systemSymbolName: "chevron.left", accessibilityDescription: "Back")!,
-            NSImage(systemSymbolName: "chevron.right", accessibilityDescription: "Forward")!
+            NSImage(systemSymbolName: "chevron.left", accessibilityDescription: L("Back"))!,
+            NSImage(systemSymbolName: "chevron.right", accessibilityDescription: L("Forward"))!
         ],
         trackingMode: .momentary, target: nil, action: nil
     )
@@ -49,7 +50,7 @@ import HelpBook
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false
         )
-        window.title = "ByteRipper Help"
+        window.title = L("ByteRipper Help")
         window.minSize = NSSize(width: 620, height: 400)
         // Closed and reopened, not rebuilt: the reader's place in the book is
         // worth keeping across a close, and a released window would lose it.
@@ -110,7 +111,7 @@ import HelpBook
     private func makeContent() -> NSView {
         let root = NSView()
 
-        searchField.placeholderString = "Search Help"
+        searchField.placeholderString = L("Search Help")
         searchField.target = self
         searchField.action = #selector(searchChanged)
         // Fires on every keystroke rather than only on Return: the book is

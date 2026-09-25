@@ -1,11 +1,13 @@
 import ALSplitView
 import AppPalette
 import AppKit
+import HelpUI
+import Localization
 import MEATool
 import MEPresentation
 import ToolModuleKit
 
-/// The panel: a Summary / Full Tree switch — the MEA-style summary on the
+/// The panel: a Summary / Full Info switch — the MEA-style summary on the
 /// first tab, the analysis tree (with the focused row's detail below it) on the
 /// second.
 ///
@@ -17,7 +19,7 @@ import ToolModuleKit
     /// The user picked a row in the tree, or cleared it. The value is the row's
     /// tree path — the identity a parked session keeps.
     var onSelect: (([Int]?) -> Void)?
-    /// The user picked a tab (0 = Summary, 1 = Full Tree).
+    /// The user picked a tab (0 = Summary, 1 = Full Info).
     var onTabChanged: ((Int) -> Void)?
     /// The status row's Try Again was pressed, after a failed analysis.
     var onRetry: (() -> Void)?
@@ -43,7 +45,7 @@ import ToolModuleKit
     /// again until the stack ran out.
     private var isShowingState = false
 
-    private let tabs = NSSegmentedControl(labels: ["Summary", "Full Tree"],
+    private let tabs = NSSegmentedControl(labels: [L("Summary"), L("Full Info")],
                                           trackingMode: .selectOne,
                                           target: nil, action: nil)
     /// Taking the summary somewhere else: as text to paste into a note or a
@@ -75,7 +77,7 @@ import ToolModuleKit
     private let summaryScroll = ToolDetailScroll()
     private let splitter = ALSplitView()
     private let noticeLabel = NSTextField(labelWithString: "")
-    private let retryButton = NSButton(title: "Try Again", target: nil, action: nil)
+    private let retryButton = NSButton(title: L("Try Again"), target: nil, action: nil)
     private let progressBar = NSProgressIndicator()
     private let bottomRow = NSStackView()
     /// The panel draws at the app's zoom (`ToolPanelFont`); this tells it when
@@ -111,9 +113,9 @@ import ToolModuleKit
 
         var title: String {
             switch self {
-            case .waiting: return "Analyzing the ME firmware…"
-            case .empty: return "No ME firmware"
-            case .failed: return "The analysis did not finish"
+            case .waiting: return L("Analyzing the ME firmware…")
+            case .empty: return L("No ME firmware")
+            case .failed: return L("The analysis did not finish")
             }
         }
 
@@ -122,9 +124,9 @@ import ToolModuleKit
         /// red, so the caption points at it rather than repeating it.
         var caption: String {
             switch self {
-            case .waiting: return "Reading the region and its partitions."
-            case .empty: return "Nothing in this file reads as Intel ME firmware."
-            case .failed: return "The line below says what went wrong."
+            case .waiting: return L("Reading the region and its partitions.")
+            case .empty: return L("Nothing in this file reads as Intel ME firmware.")
+            case .failed: return L("The line below says what went wrong.")
             }
         }
     }
@@ -369,8 +371,8 @@ import ToolModuleKit
     /// as text to paste, and the whole page as a picture.
     private func configureSummaryActions() {
         for (button, symbol, name, action) in [
-            (copyButton, Self.copySummaryGlyph, "Copy Summary", #selector(copySummary)),
-            (screenshotButton, Self.copyScreenshotGlyph, "Copy Screenshot", #selector(copyScreenshot)),
+            (copyButton, Self.copySummaryGlyph, L("Copy Summary"), #selector(copySummary)),
+            (screenshotButton, Self.copyScreenshotGlyph, L("Copy Screenshot"), #selector(copyScreenshot)),
         ] {
             button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: name)?
                 .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))
@@ -381,8 +383,7 @@ import ToolModuleKit
             button.controlSize = .small
             button.isBordered = false
             button.contentTintColor = .secondaryLabelColor
-            button.toolTip = name
-            button.setAccessibilityLabel(name)
+            ControlHelp.describe(button, name)
             button.target = self
             button.action = action
             button.translatesAutoresizingMaskIntoConstraints = false
@@ -429,7 +430,7 @@ import ToolModuleKit
         outline.delegate = self
 
         let name = NSTableColumn(identifier: Column.name)
-        name.title = "Name"
+        name.title = L("Name")
         name.width = Self.nameWidth
         name.resizingMask = [.autoresizingMask, .userResizingMask]
         outline.addTableColumn(name)
@@ -446,7 +447,7 @@ import ToolModuleKit
     }
 
     /// Which content the selected tab shows: the summary for Summary, the tree
-    /// (with its detail below) for Full Tree — and, for either of them with
+    /// (with its detail below) for Full Info — and, for either of them with
     /// nothing in it yet, the placeholder saying why. A tab is empty for the
     /// same three reasons on both sides, and while the ME region is being read
     /// an empty tree is a wait, not an answer; an empty outline with a spinner
@@ -763,8 +764,8 @@ import ToolModuleKit
         detail.setTerm(focus?.helpTerm)
         guard let focus, !focus.fields.isEmpty else {
             detail.showPlaceholder(focus == nil
-                ? "Select a row to see what it is."
-                : "Nothing more to show for this row.")
+                ? L("Select a row to see what it is.")
+                : L("Nothing more to show for this row."))
             return
         }
         detail.prepareForRows(subject: focus.title)

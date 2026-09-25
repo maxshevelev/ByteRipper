@@ -2,6 +2,16 @@
 
 > Type over what is there. Anything that changes the file's length asks first.
 
+@covers menu.edit.undo
+@covers menu.edit.redo
+@covers menu.edit.copy
+@covers menu.edit.paste
+@covers menu.edit.paste-insert
+@covers menu.edit.delete-bytes
+@covers menu.edit.insert-mode
+@covers menu.edit.fill
+@covers settings.editing
+
 Click into the hex column and type hex digits; click into the text column and type characters. Both edit the same bytes.
 
 In hex, the first digit you type changes the high nibble and the second the low one, then the caret moves on. In the text column a printable character writes its byte; anything that is not ASCII is ignored.

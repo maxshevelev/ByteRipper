@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import UEFIImage
 
 /// What the structure tree says about each node, decided here so the view
@@ -122,12 +123,13 @@ public enum UEFITreeDisplay {
     /// the image is, which is known from the top level alone.
     public static func summary(of image: UEFIImage?) -> String {
         guard let image else { return "" }
-        guard !image.roots.isEmpty else { return "Nothing here looks like a firmware image." }
+        guard !image.roots.isEmpty else { return L("Nothing here looks like a firmware image.") }
         // The image names protected ranges at all: the one thing about it
         // that says some edits are not free (`BOOT_GUARD_PROTECTED_RANGES.md` §9.3).
         if let ranges = image.protectedRanges, !ranges.ranges.isEmpty {
             let count = ranges.ranges.count
-            return titleLead(of: image) + " · \(count) protected range\(count == 1 ? "" : "s")"
+            return titleLead(of: image) + " · " + (count == 1
+                ? L("1 protected range") : L("%1$@ protected ranges", count))
         }
         return titleLead(of: image)
     }
@@ -165,7 +167,7 @@ public enum UEFITreeDisplay {
         // A pad file (`EFI_FV_FILETYPE_FFS_PAD`) has a GUID only because every
         // file header does — all ones, as a rule — and it names nothing.
         if node.kind == .file, node.subtype == 0xF0 {
-            return "Padding file"
+            return L("Padding file")
         }
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind) : node.name
@@ -207,9 +209,12 @@ public enum UEFITreeDisplay {
         case .flashMapEntry: return UEFITypes.typeName(UEFITypes.Item.phoenixFlashMapEntry.rawValue)
         case .flashDeviceMapStore: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapStore.rawValue)
         case .flashDeviceMapEntry: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue)
-        case .padding: return "Padding"
-        case .freeSpace: return "Free space"
-        case .nonUEFIData: return "Non-UEFI data"
+        // UEFITool's own words for the gaps between structures — not names
+        // the PI spec gives anything, so they translate. The kinds above are
+        // the spec's and stay in its English.
+        case .padding: return L("Padding")
+        case .freeSpace: return L("Free space")
+        case .nonUEFIData: return L("Non-UEFI data")
         }
     }
 }

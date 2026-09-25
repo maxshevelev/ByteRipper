@@ -1,6 +1,13 @@
 # Opening Files: A and B
 
-> The window has two slots. One file is an editor; two files are a comparison.
+> The window has two slots. One file is simply an editor; a second file adds the comparison. Editing works in both panes either way.
+
+@covers menu.file.new
+@covers menu.file.new-window
+@covers menu.file.new-tab
+@covers menu.file.open
+@covers menu.file.close
+@covers menu.file.close-window
 
 The window holds two file slots, **File A** and **File B**. Which slot a file lands in decides what happens:
 

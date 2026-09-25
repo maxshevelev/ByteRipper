@@ -2,6 +2,8 @@
 
 > The Firmware Interface Table: what the CPU is told to load before it runs BIOS code, and whether it is still there.
 
+@covers panel.fit
+
 **Tools ▸ FIT Table** finds the [[term:fit|Firmware Interface Table]] in the image and lists its entries.
 
 The FIT sits near the top of the flash and is found through a pointer at a fixed address below `4 GB`. Each entry has an address, a size and a type: a [[term:microcode|microcode update]], an ACM, a Boot Guard manifest, a TXT policy record.

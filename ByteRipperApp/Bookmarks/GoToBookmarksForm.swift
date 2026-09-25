@@ -3,6 +3,7 @@ import Cocoa
 import ByteRipperCore
 import HelpBook
 import HelpUI
+import Localization
 
 // MARK: - Recently typed offsets (§10.1)
 
@@ -56,6 +57,7 @@ enum GoToHistoryStore {
 /// the selection, a double click on a name edits it in place — so nothing about
 /// a bookmark lives in two places.
 @MainActor
+// help: window.go-to-form
 final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NSTableViewDelegate {
     /// Which half of the form the keyboard starts in: ⌘L is about typing an
     /// address, ⌥⌘B about picking one that is already marked.
@@ -171,7 +173,7 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         ])
         root.addArrangedSubview(errorRow)
 
-        listLabel = NSTextField(labelWithString: "Bookmarks")
+        listLabel = NSTextField(labelWithString: L("Bookmarks"))
         listLabel.font = .systemFont(ofSize: 12, weight: .semibold)
         // Dimmed over a closed list, the way a disabled control's title is: the
         // half of the form that still works must be the one that looks alive.
@@ -259,7 +261,7 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
     static let fieldRowSpacing: CGFloat = 8
 
     private func makeOffsetRow() -> NSView {
-        let label = NSTextField(labelWithString: "Offset:")
+        let label = NSTextField(labelWithString: L("Offset:"))
         label.font = .systemFont(ofSize: 12)
         label.textColor = .secondaryLabelColor
         label.translatesAutoresizingMaskIntoConstraints = false
@@ -281,11 +283,11 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         // fills the field, and losing focus submits nothing (§10).
         combo.cell?.sendsActionOnEndEditing = false
         combo.delegate = self
-        combo.setAccessibilityLabel("Offset")
+        combo.setAccessibilityLabel(L("Offset"))
         combo.translatesAutoresizingMaskIntoConstraints = false
         offsetCombo = combo
 
-        let go = NSButton(title: "Go To", target: self, action: #selector(goToTypedOffset))
+        let go = NSButton(title: L("Go To"), target: self, action: #selector(goToTypedOffset))
         go.translatesAutoresizingMaskIntoConstraints = false
         // No Return key equivalent: a default button would claim Return from
         // the whole window, and Return in the bookmark list has to mean the
@@ -305,7 +307,7 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
 
     private func makeTable() -> NSScrollView {
         let offsetColumn = NSTableColumn(identifier: ColumnID.offset)
-        offsetColumn.title = "Offset"
+        offsetColumn.title = L("Offset")
         // Exactly as wide as an address and no wider: eight bare hex digits
         // measured in the dump's own font, so a larger font in Settings cannot
         // clip them (§3.2) and everything else on the row belongs to the name —
@@ -317,7 +319,7 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         offsetColumn.minWidth = addressWidth
         offsetColumn.maxWidth = addressWidth
         let nameColumn = NSTableColumn(identifier: ColumnID.name)
-        nameColumn.title = "Name"
+        nameColumn.title = L("Name")
         nameColumn.width = 320
         nameColumn.minWidth = 80
 
@@ -340,16 +342,16 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         // of content in a page of banding — the addresses are the pattern here.
         table.doubleAction = #selector(rowDoubleClicked)
         table.target = self
-        table.setAccessibilityLabel("Bookmarks")
+        table.setAccessibilityLabel(L("Bookmarks"))
         table.onReturn = { [weak self] in self?.goToSelectedBookmark() }
         table.onDelete = { [weak self] in self?.removeSelectedBookmark() }
         // A right-click offers the one thing the list does that a key does not
         // announce: ⌫ removes a bookmark, but nothing on screen says so (§20.5).
         let menu = NSMenu()
-        let edit = menu.addItem(withTitle: "Edit Bookmark…",
+        let edit = menu.addItem(withTitle: L("Edit Bookmark…"),
                                 action: #selector(editClickedBookmark), keyEquivalent: "")
         edit.target = self
-        let remove = menu.addItem(withTitle: "Delete Bookmark",
+        let remove = menu.addItem(withTitle: L("Delete Bookmark"),
                                   action: #selector(deleteClickedBookmark), keyEquivalent: "")
         remove.target = self
         table.menu = menu
@@ -382,7 +384,7 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         // Close, not Cancel: nothing in this form is undone by leaving it. A
         // bookmark edited or removed from the list is already edited or removed,
         // and a jump has closed the window by then anyway.
-        let cancel = NSButton(title: "Close", target: self, action: #selector(cancelPressed))
+        let cancel = NSButton(title: L("Close"), target: self, action: #selector(cancelPressed))
         cancel.keyEquivalent = "\u{1B}"  // Esc — at rest it closes the form.
         cancelButton = cancel
 
@@ -566,7 +568,7 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
     }
 
     private func showValidationError() {
-        errorLabel.stringValue = "Invalid offset — use hex with 0x prefix or decimal."
+        errorLabel.stringValue = L("Invalid offset — use hex with 0x prefix or decimal.")
     }
 
     /// Return in the list: the selected bookmark. With nothing selected nothing

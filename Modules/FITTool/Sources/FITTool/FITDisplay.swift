@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import ToolModuleKit
 import UEFIImage
 
@@ -120,11 +121,11 @@ public enum FITRowCommand: Equatable, Sendable {
 
     public var title: String {
         switch self {
-        case .copyCPUID: return "Copy CPUID"
-        case .goToOffset: return "Go to Offset"
-        case .replaceMicrocode: return "Replace Microcode"
-        case .removeMicrocode: return "Remove Microcode"
-        case .fixChecksum: return "Fix Checksum"
+        case .copyCPUID: return L("Copy CPUID")
+        case .goToOffset: return L("Go to Offset")
+        case .replaceMicrocode: return L("Replace Microcode")
+        case .removeMicrocode: return L("Remove Microcode")
+        case .fixChecksum: return L("Fix Checksum")
         }
     }
 }
@@ -370,12 +371,18 @@ public enum FITPresenter {
     /// The line above the backup's rows: where the copy is, that it is not
     /// changed on its own, and whether it agrees with the table.
     private static func heading(of backup: FITBackupReading) -> String {
-        let place = "Top Swap backup at \(hex(backup.block.backup.lowerBound)) · read-only"
+        // One whole heading per state: the tail is a clause, not a word, and
+        // languages put it in their own order.
+        let place = hex(backup.block.backup.lowerBound)
         switch backup.status {
-        case .identical: return place + " · same as above"
-        case .otherBytesDiffer: return place + " · same table, other bytes differ"
-        case .tableDiffers: return place + " · differs from the table above"
-        case .noTable: return place + " · no table"
+        case .identical:
+            return L("Top Swap backup at %1$@ · read-only · same as above", place)
+        case .otherBytesDiffer:
+            return L("Top Swap backup at %1$@ · read-only · same table, other bytes differ", place)
+        case .tableDiffers:
+            return L("Top Swap backup at %1$@ · read-only · differs from the table above", place)
+        case .noTable:
+            return L("Top Swap backup at %1$@ · read-only · no table", place)
         }
     }
 
@@ -390,7 +397,8 @@ public enum FITPresenter {
         if let backup {
             writes.append(ToolTransaction.Write(offset: offset - backup.size, bytes: [table.computedChecksum]))
         }
-        return ToolTransaction(name: "Fix FIT Checksum", writes: writes)
+        // The undo step's name, which the Edit menu reads back as "Undo …".
+        return ToolTransaction(name: L("Fix FIT Checksum"), writes: writes)
     }
 
     // MARK: - Text
@@ -398,34 +406,34 @@ public enum FITPresenter {
     private static func summary(of report: FITReport) -> String {
         guard let table = report.table else {
             return report.candidates.isEmpty
-                ? "No FIT table in this file."
-                : "No FIT table where the pointer leads. A signature sits at "
-                    + report.candidates.map { hex($0) }.joined(separator: ", ") + "."
+                ? L("No FIT table in this file.")
+                : L("No FIT table where the pointer leads. A signature sits at %1$@.",
+                    report.candidates.map { hex($0) }.joined(separator: ", "))
         }
         // The count includes the header row: the panel shows the header as a
         // row of the table, so the number the summary says is the number of
         // rows a reader counts, header included.
         let count = table.rows.count
         var parts = [
-            "FIT at \(hex(table.range.lowerBound))",
-            "\(count) " + (count == 1 ? "entry" : "entries")
+            L("FIT at %1$@", hex(table.range.lowerBound)),
+            count == 1 ? L("1 entry") : L("%1$@ entries", count)
         ]
         if report.addressDiffIsAssumed {
             // Said every time, because it is true every time for a region cut
             // out of a dump — and there every address in the table is wrong by
             // whatever was cut off in front of it.
-            parts.append("addresses assumed")
+            parts.append(L("addresses assumed"))
         }
         if let backup = report.backup {
             switch backup.status {
-            case .identical: parts.append("Top Swap backup matches")
-            case .otherBytesDiffer, .tableDiffers, .noTable: parts.append("Top Swap backup differs")
+            case .identical: parts.append(L("Top Swap backup matches"))
+            case .otherBytesDiffer, .tableDiffers, .noTable: parts.append(L("Top Swap backup differs"))
             }
         }
         if !table.checksumIsChecked {
-            parts.append("checksum unused")
+            parts.append(L("checksum unused"))
         } else if table.checksumIsCorrect {
-            parts.append("checksum \(hex(UInt64(table.storedChecksum), digits: 2))")
+            parts.append(L("checksum %1$@", hex(UInt64(table.storedChecksum), digits: 2)))
             // A wrong checksum is not restated here: it is a problem, and the
             // list below already says so in red, where it is meant to be read.
         }
@@ -445,7 +453,7 @@ public enum FITPresenter {
     /// mystery.
     private static func sizeText(of row: FITRow) -> String {
         if row.entry.isHeader {
-            return "\(row.entry.size) rows"
+            return L("%1$@ rows", row.entry.size)
         }
         guard let size = row.effectiveSize else { return "0" }
         return hex(size)
@@ -475,24 +483,23 @@ public enum FITPresenter {
             guard row.entry.isHeader else { return "" }
             // "Rows" and not "entries": the field counts the header along with
             // them, where the summary above counts what there is to look at.
-            return "\(row.entry.size) "
-                + (row.entry.size == 1 ? "row" : "rows")
+            return (row.entry.size == 1 ? L("1 row") : L("%1$@ rows", row.entry.size))
                 + " · \(hex(row.entry.sizeInBytes))"
         case .indexIORegisters:
-            return "Index/IO registers, not an address"
+            return L("Index/IO registers, not an address")
         case .outsideTheImage:
-            return "outside this image"
+            return L("outside this image")
         case .microcode(let header):
             // The CPUID is what a bench hunts for, so it leads; the offset and
             // the size have their own columns, and the date closes the line.
             parts = [
-                "CPUID \(cpuid(header.processorSignature))",
-                "r.\(String(header.updateRevision, radix: 16, uppercase: true))"
+                L("CPUID %1$@", cpuid(header.processorSignature)),
+                L("r.%1$@", String(header.updateRevision, radix: 16, uppercase: true))
             ]
             parts.append(header.date)
             return parts.joined(separator: " · ")
         case .emptyMicrocodeSlot:
-            parts = ["empty slot"]
+            parts = [L("empty slot")]
         case .bytes(let offset, let description):
             // The address leads, and the name of what is there follows it in
             // brackets — because the name arrives second. The tree names an
@@ -535,32 +542,38 @@ public enum FITPresenter {
         focus: Int?
     ) -> ZoneMap {
         var zones = [
-            Zone(id: tableZoneID, name: "FIT table", range: table.range),
+            Zone(id: tableZoneID, name: L("FIT table"), range: table.range),
             Zone(
                 id: pointerZoneID,
-                name: "FIT pointer",
+                name: L("FIT pointer"),
                 range: table.pointerOffset..<(table.pointerOffset + 4)
             )
         ]
         if let backup {
-            zones.append(Zone(id: backupTableZoneID, name: "Backup FIT table", range: backup.range))
-            zones.append(Zone(id: backupPointerZoneID, name: "Backup FIT pointer",
+            zones.append(Zone(id: backupTableZoneID, name: L("Backup FIT table"), range: backup.range))
+            zones.append(Zone(id: backupPointerZoneID, name: L("Backup FIT pointer"),
                               range: backup.pointerOffset..<(backup.pointerOffset + 4)))
         }
         for row in rows {
-            let prefix = row.isBackup ? "Backup " : ""
+            // "Backup" is a whole word in front of a whole name, and a
+            // language that puts it after — or inflects it — cannot reach a
+            // prefix glued on here. So each name is one string with the row's
+            // own words in it.
             zones.append(Zone(
                 id: row.zoneID,
-                name: "\(prefix)#\(row.displayNumber) \(row.typeText)",
+                name: row.isBackup
+                    ? L("Backup #%1$@ %2$@", row.displayNumber, row.typeText)
+                    : L("#%1$@ %2$@", row.displayNumber, row.typeText),
                 range: row.rowRange
             ))
             if let target = row.targetRange {
                 // Named by CPUID where there is one: that is what a bench is
                 // looking for when it goes hunting for a microcode in a dump.
+                let named = row.cpuidText.map { L("CPUID %1$@", $0) }
+                    ?? (row.targetText.isEmpty ? L("#%1$@", row.displayNumber) : row.targetText)
                 zones.append(Zone(
                     id: targetZoneID(row.key),
-                    name: prefix + (row.cpuidText.map { "CPUID \($0)" }
-                        ?? (row.targetText.isEmpty ? "#\(row.displayNumber)" : row.targetText)),
+                    name: row.isBackup ? L("Backup %1$@", named) : named,
                     range: target
                 ))
             }

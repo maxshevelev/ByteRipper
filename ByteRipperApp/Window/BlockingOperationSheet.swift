@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 
 /// A sheet for a long operation that has to run to its end with its window left
 /// alone: what is being done, how far it has got, and a Cancel.
@@ -19,7 +20,7 @@ import Cocoa
     /// What the operation is doing now.
     let phaseLabel = NSTextField(wrappingLabelWithString: "")
     let progressBar = NSProgressIndicator()
-    let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
+    let cancelButton = NSButton(title: L("Cancel"), target: nil, action: nil)
     let operation: BackgroundOperation
 
     private static let width: CGFloat = 380
@@ -105,7 +106,7 @@ import Cocoa
 
     @objc private func cancelPressed() {
         cancelButton.isEnabled = false
-        phaseLabel.stringValue = "Cancelling…"
+        phaseLabel.stringValue = L("Cancelling…")
         operation.cancel()
     }
 

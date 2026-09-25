@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 
 /// The persisted comparison behaviour (§10.3.1): how far apart differing bytes
 /// may sit and still count as one change for Next/Previous Difference.
@@ -51,10 +52,10 @@ final class ComparisonSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: "Comparison")
+        let titleLabel = NSTextField(labelWithString: L("Comparison"))
         titleLabel.font = .boldSystemFont(ofSize: 15)
 
-        let groupingLabel = NSTextField(labelWithString: "Group Differences Within:")
+        let groupingLabel = NSTextField(labelWithString: L("Group Differences Within:"))
         groupingPopup.target = self
         groupingPopup.action = #selector(groupingChanged(_:))
         groupingPopup.widthAnchor.constraint(equalToConstant: 200).isActive = true
@@ -68,9 +69,7 @@ final class ComparisonSettingsViewController: NSViewController {
         grid.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let caption = NSTextField(wrappingLabelWithString:
-            "Next / Previous Difference steps between changes, not bytes: differing bytes closer "
-            + "together than this belong to one change. A smaller value stops more often. "
-            + "Byte highlighting is always per byte.")
+            L("Next / Previous Difference steps between changes, not bytes: differing bytes closer together than this belong to one change. A smaller value stops more often. Byte highlighting is always per byte."))
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 3
@@ -94,7 +93,7 @@ final class ComparisonSettingsViewController: NSViewController {
             // Exact width: the window sizes to this view's fitting size, and a
             // wrapping label's ideal width is its full one-line text, so only a
             // fixed width makes it wrap and the fitting size come out right.
-            root.widthAnchor.constraint(equalToConstant: 480),
+            SettingsMetrics.pinnedWidth(of: root),
         ])
         view = root
 
@@ -125,8 +124,18 @@ final class ComparisonSettingsViewController: NSViewController {
 
     /// "256 bytes (16 rows)" — the byte count is what the grouping actually
     /// measures; the row count is how it reads on screen.
+    ///
+    /// One whole phrase per choice, because both nouns decline: Russian wants
+    /// «16 байт (1 строка)», «32 байта (2 строки)», «256 байт (16 строк)», and
+    /// no arithmetic on `gap` gets there. The default is for a gap nobody has
+    /// offered yet, and reads in numbers alone.
     private static func title(for gap: UInt64) -> String {
-        let rows = gap / 16
-        return "\(gap) bytes (\(rows) row\(rows == 1 ? "" : "s"))"
+        switch gap {
+        case 16: return L("16 bytes (1 row)")
+        case 32: return L("32 bytes (2 rows)")
+        case 64: return L("64 bytes (4 rows)")
+        case 256: return L("256 bytes (16 rows)")
+        default: return L("%1$@ bytes (%2$@ rows)", gap, gap / 16)
+        }
     }
 }

@@ -211,7 +211,7 @@ final class MEAToolFlowTests: XCTestCase {
         let panel = try panel()
         let tabs = try XCTUnwrap(
             descendants(of: panel, NSSegmentedControl.self).first {
-                $0.segmentCount == 2 && $0.label(forSegment: 1) == "Full Tree"
+                $0.segmentCount == 2 && $0.label(forSegment: 1) == "Full Info"
             },
             "the panel's own Summary / Full Tree switch")
         tabs.selectedSegment = 1
@@ -242,7 +242,7 @@ final class MEAToolFlowTests: XCTestCase {
                 $0.segmentCount == 2
             })
         XCTAssertEqual(tabs.label(forSegment: 0), "Summary")
-        XCTAssertEqual(tabs.label(forSegment: 1), "Full Tree")
+        XCTAssertEqual(tabs.label(forSegment: 1), "Full Info")
         XCTAssertEqual(tabs.selectedSegment, 0)
 
         let text = descendants(of: panel, NSTextField.self).map(\.stringValue)
@@ -833,7 +833,7 @@ final class MEAToolFlowTests: XCTestCase {
         // and its ancestors opened.
         let panel = try panel()
         let tabs = try XCTUnwrap(descendants(of: panel, NSSegmentedControl.self).first {
-            $0.segmentCount == 2 && $0.label(forSegment: 1) == "Full Tree"
+            $0.segmentCount == 2 && $0.label(forSegment: 1) == "Full Info"
         })
         XCTAssertEqual(tabs.selectedSegment, 1, "the parked tab comes back")
         let outlineAfter = try outline()

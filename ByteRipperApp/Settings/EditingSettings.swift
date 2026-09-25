@@ -1,6 +1,7 @@
 import Cocoa
 import HelpBook
 import HelpUI
+import Localization
 
 /// The persisted editing behaviour: whether the edits that shift the file ask
 /// first (§7.2).
@@ -46,17 +47,15 @@ final class EditingSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: "Editing")
+        let titleLabel = NSTextField(labelWithString: L("Editing"))
         titleLabel.font = .boldSystemFont(ofSize: 15)
 
-        warnCheckbox.title = "Ask before edits that shift the file"
+        warnCheckbox.title = L("Ask before edits that shift the file")
         warnCheckbox.target = self
         warnCheckbox.action = #selector(warnChanged(_:))
 
         let caption = NSTextField(wrappingLabelWithString:
-            "Insert mode, Paste Insert and Delete Bytes move every byte after the edit, "
-            + "so they ask first. Turn this off to edit without the dialog — the edits stay "
-            + "undoable, and insert mode still shows INS in the status bar.")
+            L("Insert mode, Paste Insert and Delete Bytes move every byte after the edit, so they ask first. Turn this off to edit without the dialog — the edits stay undoable, and insert mode still shows INS in the status bar."))
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 3
@@ -93,7 +92,7 @@ final class EditingSettingsViewController: NSViewController {
             // Exact width: the window sizes to this view's fitting size, and a
             // wrapping label's ideal width is its full one-line text, so only a
             // fixed width makes it wrap and the fitting size come out right.
-            root.widthAnchor.constraint(equalToConstant: 480),
+            SettingsMetrics.pinnedWidth(of: root),
         ])
         view = root
         refresh()

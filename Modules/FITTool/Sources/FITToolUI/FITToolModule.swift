@@ -1,6 +1,7 @@
 import AppKit
 import FITTool
 import HelpBook
+import Localization
 import ToolModuleKit
 import UEFIContentSource
 import UEFIImage
@@ -14,8 +15,9 @@ import UEFIImage
 /// address is followed to see what is actually there, which is the check the
 /// post-mortem in §11 turns on.
 public enum FITToolModule: ToolModule {
+    // help: panel.fit
     public static let identifier = "dev.maxik.tool.fit"
-    public static let title = "FIT Table"
+    public static let title = L("FIT Table")
     public static let helpTopic: HelpTopicID? = .toolFIT
     /// Six columns of table need the room; the minimap is happy at 120 and this
     /// is not (`Design/TOOL_MODULES_PLAN.md`).
@@ -138,7 +140,7 @@ struct FITParkedState: ToolSessionState {
     public var viewController: NSViewController { controller }
 
     public func start() {
-        controller.say("Reading…")
+        controller.say(L("Reading…"))
         // The catalogue starts loading now — a row's "latest" verdict and the
         // add form's list are answered from this one fetch, cached for the
         // session, not fetched again for every sheet.
@@ -222,7 +224,7 @@ struct FITParkedState: ToolSessionState {
                 self.isParsing = false
                 self.controller.endBusy()
                 self.show(.empty)
-                self.fail("Could not read the file.")
+                self.fail(L("Could not read the file."))
                 return
             }
             guard self.generation == generation else { return }
@@ -382,13 +384,14 @@ struct FITParkedState: ToolSessionState {
     private static func advice(for report: FITReport) -> String {
         guard report.table != nil else {
             return report.candidates.isEmpty
-                ? "Nothing here looks like a firmware image with a FIT."
-                : "The pointer and the table disagree. Double-click a problem to look."
+                ? L("Nothing here looks like a firmware image with a FIT.")
+                : L("The pointer and the table disagree. Double-click a problem to look.")
         }
         let errors = report.problems.filter { $0.severity == .error }.count
-        if errors == 0 { return "Every rule in the specification checks out." }
-        return "\(errors) " + (errors == 1 ? "problem" : "problems")
-            + " — double-click one to go there."
+        if errors == 0 { return L("Every rule in the specification checks out.") }
+        return errors == 1
+            ? L("1 problem — double-click it to go there.")
+            : L("%1$@ problems — double-click one to go there.", errors)
     }
 
     /// Whether the line under the buttons is one this session put there in
@@ -512,7 +515,7 @@ struct FITParkedState: ToolSessionState {
         }
         FITToolSession.pasteboard.clearContents()
         FITToolSession.pasteboard.setString(cpuid, forType: .string)
-        controller.say("CPUID \(cpuid) copied.")
+        controller.say(L("CPUID %1$@ copied.", cpuid))
     }
 
     private func goToProblem(_ index: Int) {
@@ -602,7 +605,7 @@ struct FITParkedState: ToolSessionState {
             return
         }
         if catalogueLoad == nil { loadCatalogue() }
-        form.say("Fetching the list from github.com…", busy: true)
+        form.say(L("Fetching the list from github.com…"), busy: true)
     }
 
     /// The row's "Replace Microcode": the same catalogue, but the form names
@@ -638,13 +641,13 @@ struct FITParkedState: ToolSessionState {
     }
 
     private func download(_ entry: MicrocodeCatalogueEntry) {
-        form?.say("Fetching \(entry.fileName)…", busy: true)
+        form?.say(L("Fetching %1$@…", entry.fileName), busy: true)
         let source = FITToolSession.microcodeSource
         Task { [weak self] in
             do {
                 let bytes = try await source.download(entry)
                 self?.closeForm()
-                self?.addMicrocode(bytes, describedAs: "CPUID \(entry.cpuidText)")
+                self?.addMicrocode(bytes, describedAs: L("CPUID %1$@", entry.cpuidText))
             } catch {
                 self?.fail(error.localizedDescription, inTheForm: true)
             }
@@ -654,13 +657,13 @@ struct FITParkedState: ToolSessionState {
     /// The replace half of the form's button: fetch the picked component, close
     /// the form, and swap it into the row the form was opened from.
     private func replaceMicrocode(_ entry: MicrocodeCatalogueEntry, at index: Int) {
-        form?.say("Fetching \(entry.fileName)…", busy: true)
+        form?.say(L("Fetching %1$@…", entry.fileName), busy: true)
         let source = FITToolSession.microcodeSource
         Task { [weak self] in
             do {
                 let bytes = try await source.download(entry)
                 self?.closeForm()
-                self?.replaceMicrocode(bytes, at: index, describedAs: "CPUID \(entry.cpuidText)")
+                self?.replaceMicrocode(bytes, at: index, describedAs: L("CPUID %1$@", entry.cpuidText))
             } catch {
                 self?.fail(error.localizedDescription, inTheForm: true)
             }
@@ -692,7 +695,7 @@ struct FITParkedState: ToolSessionState {
     /// place in a test suite.
     public func addMicrocode(_ component: [UInt8], describedAs description: String) {
         guard !host.isReadOnly else {
-            fail("This file is open read-only.")
+            fail(L("This file is open read-only."))
             return
         }
         controller.showBusy()
@@ -700,7 +703,7 @@ struct FITParkedState: ToolSessionState {
             guard let self else { return }
             guard let tree = await self.readyTree() else {
                 self.controller.endBusy()
-                self.fail("Could not read the file.")
+                self.fail(L("Could not read the file."))
                 return
             }
             let prepared = await self.prepareAdd(component, in: tree)
@@ -723,7 +726,7 @@ struct FITParkedState: ToolSessionState {
     /// place in a test suite.
     public func replaceMicrocode(_ component: [UInt8], at index: Int, describedAs description: String) {
         guard !host.isReadOnly else {
-            fail("This file is open read-only.")
+            fail(L("This file is open read-only."))
             return
         }
         controller.showBusy()
@@ -731,7 +734,7 @@ struct FITParkedState: ToolSessionState {
             guard let self else { return }
             guard let tree = await self.readyTree() else {
                 self.controller.endBusy()
-                self.fail("Could not read the file.")
+                self.fail(L("Could not read the file."))
                 return
             }
             let prepared = await self.prepareReplace(index, component, in: tree)
@@ -752,7 +755,7 @@ struct FITParkedState: ToolSessionState {
     /// a bench wants back.
     public func removeMicrocode(at index: Int) {
         guard !host.isReadOnly else {
-            fail("This file is open read-only.")
+            fail(L("This file is open read-only."))
             return
         }
         controller.showBusy()
@@ -760,7 +763,7 @@ struct FITParkedState: ToolSessionState {
             guard let self else { return }
             guard let tree = await self.readyTree() else {
                 self.controller.endBusy()
-                self.fail("Could not read the file.")
+                self.fail(L("Could not read the file."))
                 return
             }
             let prepared = await self.prepareRemove(index, in: tree)
@@ -778,9 +781,9 @@ struct FITParkedState: ToolSessionState {
         do {
             try host.apply(transaction)
             noticeAnswersTheUser = true
-            controller.say(note + " ⌘Z takes it back.")
+            controller.say(note + " " + L("⌘Z takes it back."))
         } catch {
-            fail("Could not write: \(error)")
+            fail(L("Could not write: %1$@", error))
         }
     }
 
@@ -837,9 +840,11 @@ struct FITParkedState: ToolSessionState {
     /// component written into one breaks its hash whether it arrived in new
     /// space or over an old one.
     private static func protectionNote(_ warnings: [String]?) -> String {
-        guard let warnings else { return " Boot Guard and vendor protected ranges were not checked." }
+        guard let warnings else {
+            return " " + L("Boot Guard and vendor protected ranges were not checked.")
+        }
         guard !warnings.isEmpty else {
-            return " Nothing was written inside a Boot Guard or vendor protected range."
+            return " " + L("Nothing was written inside a Boot Guard or vendor protected range.")
         }
         return " " + warnings.joined(separator: " ")
     }
@@ -848,8 +853,8 @@ struct FITParkedState: ToolSessionState {
     /// because it is a second place in the file the edit wrote to.
     private static func topSwapNote(_ backup: Range<UInt64>?) -> String {
         guard let backup else { return "" }
-        return " The Top Swap backup at 0x" + String(backup.lowerBound, radix: 16, uppercase: true)
-            + " got the same change."
+        return " " + L("The Top Swap backup at 0x%1$@ got the same change.",
+                       String(backup.lowerBound, radix: 16, uppercase: true))
     }
 
     /// What the panel says afterwards, with what the protected ranges said.
@@ -857,16 +862,23 @@ struct FITParkedState: ToolSessionState {
         let at = "0x" + String(outcome.range.lowerBound, radix: 16, uppercase: true)
         let caveat = topSwapNote(outcome.topSwapBackup) + protectionNote(outcome.protectionWarnings)
         guard let replaced = outcome.replaced else {
-            return "Added \(description) at \(at)." + caveat
+            return L("Added %1$@ at %2$@.", description, at) + caveat
         }
+        // Whole sentences per case: the count decides the noun's form, and
+        // English's "s" is not a form any other language can be built from.
         let was = String(replaced.updateRevision, radix: 16, uppercase: true)
-        var note = "Replaced \(description) — revision \(was) — at \(at)"
-        if outcome.moved > 0 {
-            note += ", and \(outcome.moved) microcode"
-                + (outcome.moved == 1 ? "" : "s")
-                + " behind it moved to suit the new size"
+        let note: String
+        switch outcome.moved {
+        case 0:
+            note = L("Replaced %1$@ — revision %2$@ — at %3$@.", description, was, at)
+        case 1:
+            note = L("Replaced %1$@ — revision %2$@ — at %3$@, and 1 microcode behind it moved to suit the new size.",
+                     description, was, at)
+        default:
+            note = L("Replaced %1$@ — revision %2$@ — at %3$@, and %4$@ microcodes behind it moved to suit the new size.",
+                     description, was, at, outcome.moved)
         }
-        return note + "." + caveat
+        return note + caveat
     }
 
     private func prepareRemove(
@@ -907,15 +919,15 @@ struct FITParkedState: ToolSessionState {
     /// address, and anything outside the FIT that named it will not know —
     /// Boot Guard being the one that matters.
     private static func note(for outcome: FITRemovalOutcome) -> String {
-        var parts = ["Entry \(outcome.entryIndex) and its component are gone"]
+        var parts = [L("Entry %1$@ and its component are gone", outcome.entryIndex)]
         if outcome.moved > 0 {
-            parts.append("\(outcome.moved) microcode"
-                + (outcome.moved == 1 ? "" : "s")
-                + " moved up and the rows now point there")
+            parts.append(outcome.moved == 1
+                ? L("1 microcode moved up and the rows now point there")
+                : L("%1$@ microcodes moved up and the rows now point there", outcome.moved))
         }
         if let erased = outcome.erased {
-            parts.append("0x" + String(erased.count, radix: 16, uppercase: true)
-                + " bytes erased at the end of the run")
+            parts.append(L("0x%1$@ bytes erased at the end of the run",
+                           String(erased.count, radix: 16, uppercase: true)))
         }
         return parts.joined(separator: "; ") + "."
             + topSwapNote(outcome.topSwapBackup) + protectionNote(outcome.protectionWarnings)
@@ -934,8 +946,8 @@ struct FITParkedState: ToolSessionState {
             try host.apply(transaction)
             noticeAnswersTheUser = true
             controller.say((transaction.writes.count > 1
-                ? "Checksum written, in the Top Swap backup's table too."
-                : "Checksum written.") + " ⌘Z takes it back.")
+                ? L("Checksum written, in the Top Swap backup's table too.")
+                : L("Checksum written.")) + " " + L("⌘Z takes it back."))
         } catch {
             fail("Could not write: \(error)")
         }

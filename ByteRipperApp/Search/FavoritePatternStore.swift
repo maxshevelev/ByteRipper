@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import ByteRipperCore
 
 /// The patterns the user keeps: named searches that survive use of the app
@@ -154,11 +155,12 @@ enum FavoritePatternStore {
     static var syncProblem: String? {
         let count = conflicts.count
         if count > 0 {
-            return count == 1 ? "1 conflicting change" : "\(count) conflicting changes"
+            return count == 1 ? L("1 conflicting change")
+                : L("%1$@ conflicting changes", count)
         }
         guard sharedFolder != nil else { return nil }
-        if !LibraryLocation.hasAccess { return "no access to the library folder" }
-        if publishError != nil { return "not syncing" }
+        if !LibraryLocation.hasAccess { return L("no access to the library folder") }
+        if publishError != nil { return L("not syncing") }
         return nil
     }
 

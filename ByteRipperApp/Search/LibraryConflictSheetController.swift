@@ -1,5 +1,6 @@
 import Cocoa
 import ByteRipperCore
+import Localization
 
 /// The questions a merge could not answer, put to the user
 /// (`Design/FAVORITES_SYNC_PLAN.md`).
@@ -37,10 +38,9 @@ final class LibraryConflictSheetController: SheetViewController {
          onResolve: @escaping ([UUID: LibraryResolution]) -> Void) {
         self.conflicts = conflicts
         self.onResolve = onResolve
-        super.init(title: conflicts.count == 1 ? "One conflicting change"
-                       : "\(conflicts.count) conflicting changes",
-                   message: "This Mac and the shared library were both changed before either "
-                       + "saw the other. Choose which to keep.")
+        super.init(title: conflicts.count == 1 ? L("One conflicting change")
+                       : L("%1$@ conflicting changes", conflicts.count),
+                   message: L("This Mac and the shared library were both changed before either saw the other. Choose which to keep."))
         for conflict in conflicts { answers[conflict.id] = .keepOurs }
     }
 
@@ -62,11 +62,10 @@ final class LibraryConflictSheetController: SheetViewController {
             table.widthAnchor.constraint(equalTo: view.widthAnchor,
                                          constant: -2 * Self.sheetInset),
         ])
-        submitButton.title = "Apply"
+        submitButton.title = L("Apply")
         // "Later" rather than "Cancel": the questions do not go away, the
         // library stays read-only, and the tab goes on offering the sheet.
-        buttonRow.arrangedSubviews.compactMap { $0 as? NSButton }
-            .first { $0.title == "Cancel" }?.title = "Later"
+        cancelButton.title = L("Later")
     }
 
     private func makeTable() -> NSView {
@@ -90,10 +89,10 @@ final class LibraryConflictSheetController: SheetViewController {
         // The four together must fit the sheet's width less its insets, or the
         // last one is squeezed to an ellipsis — which is the column the user
         // has to *use*.
-        table.addTableColumn(column(ColumnID.pattern, "Entry", width: 130))
-        table.addTableColumn(column(ColumnID.ours, "This Mac", width: 190))
-        table.addTableColumn(column(ColumnID.theirs, "Shared Library", width: 190))
-        table.addTableColumn(column(ColumnID.choice, "Keep", width: 140))
+        table.addTableColumn(column(ColumnID.pattern, L("Entry"), width: 130))
+        table.addTableColumn(column(ColumnID.ours, L("This Mac"), width: 190))
+        table.addTableColumn(column(ColumnID.theirs, L("Shared Library"), width: 190))
+        table.addTableColumn(column(ColumnID.choice, L("Keep"), width: 140))
         self.table = table
 
         let scrollView = NSScrollView()
@@ -112,8 +111,8 @@ final class LibraryConflictSheetController: SheetViewController {
     /// For someone who knows which machine was right and does not want six
     /// questions.
     private func makeBulkRow() -> NSView {
-        let mine = NSButton(title: "Keep All Mine", target: self, action: #selector(keepAllMine))
-        let theirs = NSButton(title: "Keep All Theirs", target: self, action: #selector(keepAllTheirs))
+        let mine = NSButton(title: L("Keep All Mine"), target: self, action: #selector(keepAllMine))
+        let theirs = NSButton(title: L("Keep All Theirs"), target: self, action: #selector(keepAllTheirs))
         for button in [mine, theirs] {
             button.bezelStyle = .rounded
             button.controlSize = .small
@@ -146,7 +145,8 @@ final class LibraryConflictSheetController: SheetViewController {
         case .bothEdited(let ours, _), .duplicate(let ours, _):
             return describe(ours)
         case .editedAndDeleted(let entry, _, let deletedHere):
-            return deletedHere ? "Deleted here" : "\(describe(entry)) — changed here"
+            return deletedHere ? L("Deleted here")
+                : L("%1$@ — changed here", describe(entry))
         }
     }
 
@@ -155,8 +155,8 @@ final class LibraryConflictSheetController: SheetViewController {
         case .bothEdited(_, let theirs), .duplicate(_, let theirs):
             return describe(theirs)
         case .editedAndDeleted(let entry, let deletedBy, let deletedHere):
-            if deletedHere { return "\(describe(entry)) — changed on another Mac" }
-            return deletedBy.isEmpty ? "Deleted" : "Deleted on another Mac"
+            if deletedHere { return L("%1$@ — changed on another Mac", describe(entry)) }
+            return deletedBy.isEmpty ? L("Deleted") : L("Deleted on another Mac")
         }
     }
 
@@ -183,9 +183,12 @@ final class LibraryConflictSheetController: SheetViewController {
     private func titles(for conflict: LibraryConflict) -> [String] {
         if case .editedAndDeleted(_, _, let deletedHere) = conflict {
             // Always this machine's side first, as every other row reads.
-            return deletedHere ? ["The deletion", "Their version"] : ["Mine", "The deletion"]
+            return deletedHere ? [L("The deletion"), L("Their version")]
+                : [L("Mine"), L("The deletion")]
         }
-        return allowsKeepingBoth(conflict) ? ["This Mac", "Shared", "Both"] : ["This Mac", "Shared"]
+        return allowsKeepingBoth(conflict)
+            ? [L("This Mac"), L("Shared"), L("Both")]
+            : [L("This Mac"), L("Shared")]
     }
 
     @objc private func keepAllMine() {

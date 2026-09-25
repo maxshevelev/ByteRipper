@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// Display word size (§6): the hex dump groups its bytes into words of this
 /// many bytes, separating words with spaces. One byte — today's byte-per-cell
@@ -21,8 +22,17 @@ enum WordSize: Int, CaseIterable {
 
     /// How the size is named in the View menu and on the toolbar's menu button
     /// (§24.2): "1 Byte", "2 Bytes".
+    ///
+    /// One whole phrase per case rather than a number glued to a suffix:
+    /// English has two plural forms here and Russian three, and «1 байт,
+    /// 2 байта, 8 байт» cannot be reached from `rawValue` and an "s".
     var title: String {
-        "\(rawValue) \(rawValue == 1 ? "Byte" : "Bytes")"
+        switch self {
+        case .one: return L("1 Byte")
+        case .two: return L("2 Bytes")
+        case .four: return L("4 Bytes")
+        case .eight: return L("8 Bytes")
+        }
     }
 
     /// Persists `size` and notifies observers to re-lay out (§6).

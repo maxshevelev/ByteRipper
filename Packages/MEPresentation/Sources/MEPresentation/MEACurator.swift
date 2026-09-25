@@ -1,8 +1,9 @@
 import Foundation
 import HelpBook
+import Localization
 import MEFirmware
 
-/// Turns a `FirmwareAnalysis` into the curated tree the «Full Tree» tab
+/// Turns a `FirmwareAnalysis` into the curated tree the «Full Info» tab
 /// shows — hand-named groups in a fixed order, one per *present* top-level
 /// structure of the model, leaves carrying the byte ranges the panel reveals.
 ///
@@ -96,7 +97,7 @@ public enum MEACurator {
                                              minor: fit.minor, hotfix: fit.hotfix,
                                              build: fit.build))
         }
-        return MEANode(path: [], title: "Firmware",
+        return MEANode(path: [], title: L("Firmware"),
                        subtitle: "\(MEAText.family(a.family)) · \(a.version.text)",
                        fields: fields, helpTerm: HelpTermID("me"))
     }
@@ -112,14 +113,14 @@ public enum MEACurator {
             append(&fields, "Size", MEAText.size(region.size))
             append(&fields, "Flags", MEAText.hex32(region.flags))
             return MEANode(path: [],
-                           title: region.name.isEmpty ? "(unnamed)" : region.name,
+                           title: region.name.isEmpty ? L("(unnamed)") : region.name,
                            subtitle: MEAText.range(region.offset, region.size),
                            range: MEAText.rangeValue(region.offset, region.size),
                            fields: fields,
                            isEmptySection: region.size == 0)
         }
-        return MEANode(path: [], title: "Regions (FPT)",
-                       subtitle: MEAText.count(rows.count, "region"),
+        return MEANode(path: [], title: L("Regions (FPT)"),
+                       subtitle: MEAText.count(rows.count, .region),
                        children: rows, helpTerm: HelpTermID("fpt"))
     }
 
@@ -140,7 +141,7 @@ public enum MEACurator {
             append(&fields, "Size", MEAText.size(p.size))
             append(&fields, "Empty", MEAText.yesNo(p.empty))
             return MEANode(path: [],
-                           title: p.name.isEmpty ? "(unnamed)" : p.name,
+                           title: p.name.isEmpty ? L("(unnamed)") : p.name,
                            subtitle: MEAText.range(p.offset, p.size),
                            range: p.empty ? nil : MEAText.rangeValue(p.offset, p.size),
                            fields: fields,
@@ -148,10 +149,10 @@ public enum MEACurator {
                            // size, or one whose content is erased.
                            isEmptySection: p.empty)
         }
-        return MEANode(path: [], title: "CSE Layout Table",
-                       subtitle: MEAText.count(table.partitions.count, "partition"),
+        return MEANode(path: [], title: L("CSE Layout Table"),
+                       subtitle: MEAText.count(table.partitions.count, .partition),
                        fields: header, children: rows,
-                       marks: MEATreeMarks.table(named: "CSE Layout Table",
+                       marks: MEATreeMarks.table(named: L("CSE Layout Table"),
                                                  checksumValid: table.checksumValid),
                        helpTerm: HelpTermID("cse-layout-table"))
     }
@@ -186,20 +187,20 @@ public enum MEACurator {
                 append(&fields, "Size", MEAText.size(e.size))
                 append(&fields, "Empty", MEAText.yesNo(e.empty))
                 return MEANode(path: [],
-                               title: e.name.isEmpty ? "(unnamed)" : e.name,
+                               title: e.name.isEmpty ? L("(unnamed)") : e.name,
                                subtitle: MEAText.range(e.offset, e.size),
                                range: e.empty ? nil : MEAText.rangeValue(e.offset, e.size),
                                fields: fields,
                                isEmptySection: e.empty)
             }
             return MEANode(path: [], title: bpdt.partitionName,
-                           subtitle: MEAText.count(bpdt.entries.count, "entry"),
+                           subtitle: MEAText.count(bpdt.entries.count, .entry),
                            fields: header, children: entries,
                            marks: MEATreeMarks.table(named: "BPDT",
                                                      checksumValid: bpdt.checksumValid))
         }
-        return MEANode(path: [], title: "Boot Partitions (BPDT)",
-                       subtitle: MEAText.count(tables.count, "table"),
+        return MEANode(path: [], title: L("Boot Partitions (BPDT)"),
+                       subtitle: MEAText.count(tables.count, .table),
                        children: rows, helpTerm: HelpTermID("bpdt"))
     }
 
@@ -239,17 +240,17 @@ public enum MEACurator {
                                isEmptySection: m.size == 0,
                                marks: MEATreeMarks.module(m, in: cp, analysis: a))
             }
-            children.append(MEANode(path: [], title: "Modules",
-                                    subtitle: MEAText.count(moduleRows.count, "module"),
+            children.append(MEANode(path: [], title: L("Modules"),
+                                    subtitle: MEAText.count(moduleRows.count, .module),
                                     children: moduleRows))
         }
         if let extensions = cp.extensions, !extensions.isEmpty {
             let extRows = extensions.map { MEACurator.extensionRow($0) }
-            children.append(MEANode(path: [], title: "Extensions",
-                                    subtitle: MEAText.count(extRows.count, "block"),
+            children.append(MEANode(path: [], title: L("Extensions"),
+                                    subtitle: MEAText.count(extRows.count, .block),
                                     children: extRows))
         }
-        return MEANode(path: [], title: "Code Partition ($CPD)",
+        return MEANode(path: [], title: L("Code Partition ($CPD)"),
                        subtitle: "\(cp.name) · \(cp.headerVersion == 1 ? "R1" : "R2")",
                        fields: header, children: children,
                        marks: MEATreeMarks.codePartition(cp),
@@ -321,7 +322,7 @@ public enum MEACurator {
         if let ready = m.productionReady {
             append(&fields, "Production Ready", MEAText.yesNo(ready))
         }
-        return MEANode(path: [], title: "Manifest",
+        return MEANode(path: [], title: L("Manifest"),
                        subtitle: "\(m.tag) · \(MEAText.manifestFormat(m.format))",
                        fields: fields,
                        marks: MEATreeMarks.manifest(a),
@@ -358,17 +359,17 @@ public enum MEACurator {
         var children: [MEANode] = []
         if !vol.files.isEmpty {
             let rows = vol.files.map { mfsFileRow($0, names) }
-            children.append(MEANode(path: [], title: "Files",
-                                    subtitle: MEAText.count(rows.count, "file"),
+            children.append(MEANode(path: [], title: L("Files"),
+                                    subtitle: MEAText.count(rows.count, .file),
                                     children: rows))
         }
         if !vol.configurations.isEmpty {
             let rows = vol.configurations.enumerated().map { i, c -> MEANode in
-                MEANode(path: [], title: "Configuration \(i)",
+                MEANode(path: [], title: L("Configuration %1$@", i),
                         fields: MEAValueText.fields(of: c))
             }
-            children.append(MEANode(path: [], title: "Configurations",
-                                    subtitle: MEAText.count(rows.count, "record"),
+            children.append(MEANode(path: [], title: L("Configurations"),
+                                    subtitle: MEAText.count(rows.count, .record),
                                     children: rows))
         }
         // The newer layouts' Configuration streams: records that identify their
@@ -388,15 +389,15 @@ public enum MEACurator {
         }
         if !vol.reservedIntegrity.isEmpty {
             let rows = vol.reservedIntegrity.enumerated().map { i, r -> MEANode in
-                MEANode(path: [], title: "Integrity \(i + 1)",
+                MEANode(path: [], title: L("Integrity %1$@", i + 1),
                         fields: MEAValueText.fields(of: r))
             }
-            children.append(MEANode(path: [], title: "File Integrity",
-                                    subtitle: MEAText.count(rows.count, "table"),
+            children.append(MEANode(path: [], title: L("File Integrity"),
+                                    subtitle: MEAText.count(rows.count, .table),
                                     children: rows))
         }
-        return MEANode(path: [], title: "File System (MFS)",
-                       subtitle: MEAText.count(vol.presentFileCount, "file"),
+        return MEANode(path: [], title: L("File System (MFS)"),
+                       subtitle: MEAText.count(vol.presentFileCount, .file),
                        fields: header, children: children,
                        helpTerm: HelpTermID("mfs"))
     }
@@ -433,7 +434,7 @@ public enum MEACurator {
         // would be lost among them.
         var children: [MEANode] = []
         if let integrity = file.integrity {
-            children.append(MEANode(path: [], title: "Integrity",
+            children.append(MEANode(path: [], title: L("Integrity"),
                                     subtitle: MEAText.size(integrity.size),
                                     fields: MEAValueText.fields(of: integrity)))
         }
@@ -459,8 +460,8 @@ public enum MEACurator {
         append(&fields, "Record Size", MEAText.hex(home.homeRecordSize))
         append(&fields, "Root Records", String(home.rootRecordCount))
         let rows = home.entries.map { homeRow($0) }
-        return MEANode(path: [], title: "Home Directory",
-                       subtitle: MEAText.count(home.entries.count, "entry"),
+        return MEANode(path: [], title: L("Home Directory"),
+                       subtitle: MEAText.count(home.entries.count, .entry),
                        fields: fields, children: rows)
     }
 
@@ -498,10 +499,10 @@ public enum MEACurator {
         append(&fields, "Chipsets", String(pch.chipsets.count))
         let rows = pch.chipsets.map { c -> MEANode in
             MEANode(path: [], title: c.chipset, subtitle: c.steppings,
-                    fields: [MEAField("Chipset", c.chipset),
-                             MEAField("Steppings", c.steppings)])
+                    fields: [MEAField(L("Chipset"), c.chipset),
+                             MEAField(L("Steppings"), c.steppings)])
         }
-        return MEANode(path: [], title: "Chipset Initialization",
+        return MEANode(path: [], title: L("Chipset Initialization"),
                        fields: fields, children: rows,
                        helpTerm: HelpTermID("pch-init"))
     }
@@ -540,12 +541,12 @@ public enum MEACurator {
             append(&fields, "Header CRC Valid", MEAText.yesNo(entry.headerCRCValid))
             append(&fields, "Data CRC", MEAText.hex32(entry.dataCRCStored))
             append(&fields, "Data CRC Valid", MEAText.yesNo(entry.dataCRCValid))
-            return MEANode(path: [], title: "Entry \(entry.fileIndex)",
+            return MEANode(path: [], title: L("Entry %1$@", entry.fileIndex),
                            subtitle: backupFileNames[entry.fileIndex]
                                ?? "low-level file \(entry.fileIndex)",
                            fields: fields)
         }
-        return MEANode(path: [], title: "MFS Backup",
+        return MEANode(path: [], title: L("MFS Backup"),
                        subtitle: backup.format == .r1 ? "R1" : "R0",
                        fields: fields, children: rows,
                        helpTerm: HelpTermID("mfs-backup"))
@@ -573,11 +574,11 @@ public enum MEACurator {
         let files = efs.files ?? []
         if !files.isEmpty {
             let rows = files.map { efsFileRow($0, names) }
-            children.append(MEANode(path: [], title: "Files",
-                                    subtitle: MEAText.count(rows.count, "file"),
+            children.append(MEANode(path: [], title: L("Files"),
+                                    subtitle: MEAText.count(rows.count, .file),
                                     children: rows))
         }
-        return MEANode(path: [], title: "EFS Volume",
+        return MEANode(path: [], title: L("EFS Volume"),
                        subtitle: MEAText.offset(efs.offset),
                        fields: fields, children: children,
                        helpTerm: HelpTermID("efs"))
@@ -612,7 +613,7 @@ public enum MEACurator {
         }
         var children: [MEANode] = []
         if let integrity = file.integrity {
-            children.append(MEANode(path: [], title: "Integrity",
+            children.append(MEANode(path: [], title: L("Integrity"),
                                     subtitle: MEAText.size(integrity.size),
                                     fields: MEAValueText.fields(of: integrity)))
         }
@@ -643,7 +644,7 @@ public enum MEACurator {
         var children: [MEANode] = []
         if !byID.isEmpty {
             children.append(configByIDGroup(byID,
-                                            title: "Configuration Records",
+                                            title: L("Configuration Records"),
                                             paths: paths,
                                             payloadOffset: oem.payloadOffset))
         }
@@ -653,11 +654,11 @@ public enum MEACurator {
                         subtitle: MEAText.size(record.size),
                         fields: MEAValueText.fields(of: record))
             }
-            children.append(MEANode(path: [], title: "Configuration Records",
-                                    subtitle: MEAText.count(rows.count, "record"),
+            children.append(MEANode(path: [], title: L("Configuration Records"),
+                                    subtitle: MEAText.count(rows.count, .record),
                                     children: rows))
         }
-        return MEANode(path: [], title: "OEM Configuration",
+        return MEANode(path: [], title: L("OEM Configuration"),
                        subtitle: MEAText.offset(oem.offset),
                        fields: fields, children: children,
                        helpTerm: HelpTermID("oem-config"))
@@ -714,7 +715,7 @@ public enum MEACurator {
                                         payloadOffset: Int?) -> MEANode {
         let rows = records.map { configIDRow($0, paths, payloadOffset) }
         return MEANode(path: [], title: title,
-                       subtitle: MEAText.count(rows.count, "record"),
+                       subtitle: MEAText.count(rows.count, .record),
                        children: rows)
     }
 
@@ -763,16 +764,16 @@ public enum MEACurator {
         append(&fields, "Declared Modules", String(dir.declaredModules))
         append(&fields, "Decoded Modules", String(dir.modules.count))
         let rows = dir.modules.enumerated().map { i, m -> MEANode in
-            MEANode(path: [], title: "Module \(i + 1)",
+            MEANode(path: [], title: L("Module %1$@", i + 1),
                     fields: MEAValueText.fields(of: m))
         }
-        return MEANode(path: [], title: "$MME Directory", fields: fields, children: rows,
+        return MEANode(path: [], title: L("$MME Directory"), fields: fields, children: rows,
                        helpTerm: HelpTermID("mme"))
     }
 
     private static func gscGroup(_ a: FirmwareAnalysis) -> MEANode? {
         guard let gsc = a.gscInfo else { return nil }
-        return MEANode(path: [], title: "GSC Info",
+        return MEANode(path: [], title: L("GSC Info"),
                        fields: MEAValueText.fields(of: gsc),
                        helpTerm: HelpTermID("gsc"))
     }
@@ -780,12 +781,12 @@ public enum MEACurator {
     private static func oromGroup(_ a: FirmwareAnalysis) -> MEANode? {
         guard let images = a.oromImages, !images.isEmpty else { return nil }
         let rows = images.enumerated().map { i, img -> MEANode in
-            MEANode(path: [], title: "Image \(i + 1)",
+            MEANode(path: [], title: L("Image %1$@", i + 1),
                     subtitle: MEAText.offset(img.offset),
                     fields: MEAValueText.fields(of: img))
         }
-        return MEANode(path: [], title: "OROM Images",
-                       subtitle: MEAText.count(rows.count, "image"),
+        return MEANode(path: [], title: L("OROM Images"),
+                       subtitle: MEAText.count(rows.count, .image),
                        children: rows, helpTerm: HelpTermID("orom"))
     }
 
@@ -797,7 +798,7 @@ public enum MEACurator {
         let children = rows.enumerated().map { i, r -> MEANode in
             var fields = MEAValueText.fields(of: r)
             fields.removeAll { $0.label == "unknown0" }   // raw open word, low signal
-            return MEANode(path: [], title: "R\(r.variant.rawValue.uppercased()) #\(r.id)",
+            return MEANode(path: [], title: L("R%1$@ #%2$@", r.variant.rawValue.uppercased(), r.id),
                            fields: fields, marks: marks)
         }
         // Upstream's leftover report: what the rbe / pm tables list that no
@@ -807,23 +808,22 @@ public enum MEACurator {
         if let unmatched = a.unmatchedMetadataHashes {
             // Every hash accounted for is a check that passed: the done mark.
             fields.append(unmatched.isEmpty
-                ? MEAField("Unmatched Hashes", "None", tone: .good)
-                : MEAField("Unmatched Hashes", String(unmatched.count)))
+                ? MEAField(L("Unmatched Hashes"), L("None"), tone: .good)
+                : MEAField(L("Unmatched Hashes"), String(unmatched.count)))
             if !unmatched.isEmpty {
                 let rows = unmatched.enumerated().map { i, hash in
-                    MEANode(path: [], title: "Hash \(i + 1)", subtitle: String(hash.prefix(16)) + "…",
-                            fields: [MEAField("Hash", hash)], marks: marks)
+                    MEANode(path: [], title: L("Hash %1$@", i + 1), subtitle: String(hash.prefix(16)) + "…",
+                            fields: [MEAField(L("Hash"), hash)], marks: marks)
                 }
                 nodes.append(MEANode(
-                    path: [], title: "Unmatched Hashes", subtitle: String(unmatched.count),
-                    fields: [MEAField("Meaning",
-                        "Listed by the rbe or pm metadata table, and hashed to by no module of the image — "
-                            + "most often an encrypted module (NFTP pavp, PCOD), which cannot be hashed as it is loaded")],
+                    path: [], title: L("Unmatched Hashes"), subtitle: String(unmatched.count),
+                    fields: [MEAField(L("Meaning"),
+                        L("Listed by the rbe or pm metadata table, and hashed to by no module of the image — most often an encrypted module (NFTP pavp, PCOD), which cannot be hashed as it is loaded"))],
                     children: rows, marks: marks))
             }
         }
-        return MEANode(path: [], title: "RBE/PM Metadata",
-                       subtitle: MEAText.count(children.count, "row"),
+        return MEANode(path: [], title: L("RBE/PM Metadata"),
+                       subtitle: MEAText.count(children.count, .row),
                        fields: fields, children: nodes, marks: marks,
                        helpTerm: HelpTermID("rbe-pm"))
     }
@@ -867,11 +867,11 @@ public enum MEACurator {
             let name = MEAText.title(issue.severity.rawValue)
             return MEANode(path: [], title: name,
                            subtitle: issue.message,
-                           fields: [MEAField("Severity", name),
-                                    MEAField("Message", issue.message)])
+                           fields: [MEAField(L("Severity"), name),
+                                    MEAField(L("Message"), issue.message)])
         }
-        return MEANode(path: [], title: "Issues",
-                       subtitle: MEAText.count(rows.count, "issue"),
+        return MEANode(path: [], title: L("Issues"),
+                       subtitle: MEAText.count(rows.count, .issue),
                        children: rows)
     }
 

@@ -10,12 +10,19 @@ public struct HelpTopic: Equatable, Sendable, Identifiable {
     /// the page did not bother.
     public var summary: String
     public var blocks: [HelpBlock]
+    /// The pieces of functionality this page explains, by the anchor the code
+    /// declares them under (`Skills/help-coverage`). Metadata, never shown —
+    /// what it is for is the check that new functionality did not ship without
+    /// a page.
+    public var covers: [String]
 
-    public init(id: HelpTopicID, title: String, summary: String, blocks: [HelpBlock]) {
+    public init(id: HelpTopicID, title: String, summary: String,
+                blocks: [HelpBlock], covers: [String] = []) {
         self.id = id
         self.title = title
         self.summary = summary
         self.blocks = blocks
+        self.covers = covers
     }
 
     /// Title, summary and body as one string — what a search over the book

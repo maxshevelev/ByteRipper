@@ -25,6 +25,9 @@ let package = Package(
         .library(name: "MEPresentation", targets: ["MEPresentation"])
     ],
     dependencies: [
+        // Every word this shows the user comes from the one catalogue the
+        // whole app is translated in.
+        .package(path: "../Localization"),
         .package(path: "../MEFirmware"),
         .package(path: "../ToolModuleKit"),
         // The glossary a row points at. A `HelpTermID` on the node rather than
@@ -35,6 +38,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "MEPresentation", dependencies: [
+            .product(name: "Localization", package: "Localization"),
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "HelpBook", package: "HelpBook")

@@ -1,6 +1,7 @@
 import Cocoa
 import HelpBook
 import HelpUI
+import Localization
 
 /// The tool-module panel's chrome: a header naming the tool-module and the file
 /// it is working on, a close button, and the tool-module's own view below
@@ -72,8 +73,7 @@ final class ToolPanelView: NSView {
     /// gestures that move it.
     private let fileSelector = NSPopUpButton()
     private lazy var closeButton = HeaderButton.make(
-        symbol: "xmark", label: "Close the tool panel",
-        tooltip: "Close the tool panel", target: self, action: #selector(closeClicked)
+        symbol: "xmark", describes: L("Close the tool panel"), target: self, action: #selector(closeClicked)
     )
     /// The `?` beside the ✕: the page about the instrument in the panel.
     ///
@@ -82,8 +82,7 @@ final class ToolPanelView: NSView {
     /// same kind of mark (`HeaderButton`). It is hidden for a tool-module that
     /// names no page, so the header never offers a button that opens nothing.
     private lazy var helpButton = HeaderButton.make(
-        symbol: "questionmark.circle", label: "Help for this tool",
-        tooltip: "Help for this tool", target: self, action: #selector(helpClicked)
+        symbol: "questionmark.circle", describes: L("Help for this tool"), target: self, action: #selector(helpClicked)
     )
     /// The page the `?` opens, from the tool-module the panel is showing.
     private var helpTopic: HelpTopicID?
@@ -456,14 +455,14 @@ final class ToolPanelView: NSView {
 
     /// The page the header's `?` offers, or nil to take the button away. Set
     /// with the title, from the tool-module the panel is showing.
+    // help: panel.help-button
     func setHelpTopic(_ topic: HelpTopicID?) {
         helpTopic = topic
         helpButton.isHidden = topic == nil
         if let topic, let title = Help.shared.topic(topic)?.title {
             // The tooltip names the page rather than saying "Help", the way
             // every other `?` in the app does (`HelpButton`).
-            helpButton.toolTip = "Help: " + title
-            helpButton.setAccessibilityLabel("Help: " + title)
+            ControlHelp.describe(helpButton, L("Help: ") + title)
         }
     }
 

@@ -1,6 +1,7 @@
 import Cocoa
 import HelpBook
 import HelpUI
+import Localization
 import ToolModuleKit
 
 @MainActor
@@ -46,6 +47,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // and so cannot know that a test run reads a suite of its own
         // (`AppDefaults`). Before anything draws, tell it.
         ToolPanelFont.defaults = AppDefaults.store
+        // Which language the app speaks, before anything says a word in it:
+        // the menu bar below is built from translated strings, and so is every
+        // window after it (`Design/LOCALIZATION.md`).
+        AppDefaults.startLocalization()
         // Tabs are windows. Turning this on is what gives the app the system's
         // tab bar, ⌘T through `newWindowForTab(_:)`, ⌃Tab and ⌘1…⌘9, dragging a
         // tab out into its own window and dragging one back in, and the Window
@@ -348,12 +353,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// away, or stay.
     private func confirmReviewingChanges(_ count: Int) -> NSApplication.ModalResponse {
         let alert = NSAlert()
-        alert.messageText = "You have \(count) documents with unsaved changes. "
-            + "Do you want to review these changes before quitting?"
-        alert.informativeText = "If you don’t review your documents, all your changes will be lost."
-        alert.addButton(withTitle: "Review Changes…")
-        alert.addButton(withTitle: "Discard Changes")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L("You have %1$@ documents with unsaved changes. Do you want to review these changes before quitting?", count)
+        alert.informativeText = L("If you don’t review your documents, all your changes will be lost.")
+        alert.addButton(withTitle: L("Review Changes…"))
+        alert.addButton(withTitle: L("Discard Changes"))
+        alert.addButton(withTitle: L("Cancel"))
         // Cancel in tests: quitting must never be the thing that throws work
         // away while a suite is running.
         return MainViewController.presentModal(alert, defaultInTest: .alertThirdButtonReturn)

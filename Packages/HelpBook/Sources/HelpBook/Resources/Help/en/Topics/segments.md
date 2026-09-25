@@ -2,6 +2,11 @@
 
 > Mark the seams of an image, then save each piece as its own file.
 
+@covers menu.edit.add-cut
+@covers menu.edit.merge
+@covers menu.edit.segments
+@covers window.segments-form
+
 A segmentation splits the pane's file into **pieces**: contiguous, never overlapping, always covering the whole file. Every open file starts as one piece — itself.
 
 Nothing about a segment changes the bytes. It is a way of *reading* a file; the only thing that writes is the explicit save.

@@ -1,4 +1,6 @@
 import Cocoa
+import HelpUI
+import Localization
 
 /// One pill in the dock: a folded fragment panel, or the one that is up
 /// (`Design/FRAGMENT_PANELS_PLAN.md`).
@@ -53,15 +55,14 @@ final class FragmentPillView: NSView {
         dot.isHidden = true
         dot.setContentHuggingPriority(.required, for: .horizontal)
 
-        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close")
+        closeButton.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: L("Close"))
         closeButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 8, weight: .semibold)
         closeButton.isBordered = false
         closeButton.imagePosition = .imageOnly
         closeButton.contentTintColor = .secondaryLabelColor
         closeButton.target = self
         closeButton.action = #selector(closeTapped)
-        closeButton.setAccessibilityLabel("Close “\(title)”")
-        closeButton.toolTip = "Close “\(title)”"
+        ControlHelp.describe(closeButton, L("Close “%1$@”", title))
 
         for subview in [icon, label, dot, closeButton] as [NSView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
@@ -95,8 +96,7 @@ final class FragmentPillView: NSView {
         set {
             label.stringValue = newValue
             setAccessibilityLabel(newValue)
-            closeButton.setAccessibilityLabel("Close “\(newValue)”")
-            closeButton.toolTip = "Close “\(newValue)”"
+            ControlHelp.describe(closeButton, L("Close “%1$@”", newValue))
         }
     }
 
@@ -113,12 +113,12 @@ final class FragmentPillView: NSView {
         // pill is not a control the menu bar knows about, and both items act on
         // this panel alone.
         menu.autoenablesItems = false
-        let tearOff = menu.addItem(withTitle: "Open in New Tab",
+        let tearOff = menu.addItem(withTitle: L("Open in New Tab"),
                                    action: #selector(tearOffTapped), keyEquivalent: "")
         tearOff.target = self
         tearOff.isEnabled = canTearOff
         menu.addItem(.separator())
-        let close = menu.addItem(withTitle: "Close “\(title)”",
+        let close = menu.addItem(withTitle: L("Close “%1$@”", title),
                                  action: #selector(closeTapped), keyEquivalent: "")
         close.target = self
         return menu
@@ -152,6 +152,7 @@ final class FragmentPillView: NSView {
 /// It takes its own height rather than lying over the panes, the way the New
 /// Tab strip at the other end does: a dock drawn over a pane's status bar would
 /// hide the one line that says where the caret is.
+// help: window.fragments
 final class FragmentDockStrip: NSView {
     static let height: CGFloat = 36
 

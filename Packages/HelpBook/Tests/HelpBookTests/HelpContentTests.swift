@@ -114,3 +114,37 @@ final class HelpContentTests: XCTestCase {
         }
     }
 }
+
+/// The anchors a page declares — the join between the help and the
+/// functionality it explains (`Skills/help-coverage`).
+extension HelpContentTests {
+    /// Metadata is read out of the page, not shown in it. A reader must never
+    /// meet `@covers menu.file.append` in the middle of a paragraph.
+    func testCoverageAnchorsAreNotPartOfWhatTheReaderSees() {
+        for topic in book.topics {
+            let text = HelpMarkup.plainText(topic.blocks) + topic.summary + topic.title
+            XCTAssertFalse(text.contains("@covers"),
+                           "\(topic.id.rawValue) shows its own bookkeeping")
+            XCTAssertFalse(text.contains("@source-sha"),
+                           "\(topic.id.rawValue) shows its own fingerprint")
+        }
+        for term in book.terms {
+            XCTAssertFalse(HelpMarkup.plainText(term.blocks).contains("@"),
+                           "\(term.id.rawValue) shows its own bookkeeping")
+        }
+    }
+
+    /// The pages do carry anchors — a book that covers nothing would pass the
+    /// test above by saying nothing at all.
+    func testThePagesDeclareWhatTheyCover() {
+        let covered = Set(book.topics.flatMap(\.covers))
+        XCTAssertGreaterThan(covered.count, 40,
+                             "the help covers almost no declared functionality")
+        // An anchor is a lowercase dotted path; anything else is a typo that
+        // the coverage script would report as both uncovered and orphaned.
+        for anchor in covered {
+            XCTAssertEqual(anchor, anchor.lowercased(), "\(anchor) is not lowercase")
+            XCTAssertTrue(anchor.contains("."), "\(anchor) is not a dotted path")
+        }
+    }
+}

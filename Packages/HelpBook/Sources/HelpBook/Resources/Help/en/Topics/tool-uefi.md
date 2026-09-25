@@ -2,6 +2,9 @@
 
 > The map of a firmware image: which region, which volume, which file, and where.
 
+@covers panel.uefi
+@covers panel.uefi.fix-checksum
+
 **Tools ▸ UEFI Structure** reads the open dump as an Intel/UEFI flash image and shows it as a tree. The title line above the tree says what the image as a whole is.
 
 ## The tree

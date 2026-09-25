@@ -2,6 +2,10 @@
 
 > A hex editor built around one question a repair bench asks all day: how is this chip's contents different from the one that works?
 
+@covers window.empty-state
+@covers menu.help.book
+@covers menu.view.full-screen
+
 ByteRipper opens one or two binary files and shows every byte of them. When two files are open it compares them **byte by byte at the same address**, and paints every place they disagree.
 
 That is the whole idea. On a repair bench the file is usually a **dump** — the contents of a BIOS chip, an EC chip or an ME region, read off the board with a programmer. The question is almost never "what does this file mean" but "what is wrong with this one compared to one that boots".

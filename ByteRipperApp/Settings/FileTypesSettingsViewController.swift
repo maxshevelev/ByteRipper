@@ -1,4 +1,6 @@
 import Cocoa
+import HelpUI
+import Localization
 
 /// The File Types tab of the Settings window (§25): the extensions the app
 /// offers to open on a double-click, each row saying which app opens it now and
@@ -61,16 +63,14 @@ final class FileTypesSettingsViewController: NSViewController,
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: "File Types")
+        let titleLabel = NSTextField(labelWithString: L("File Types"))
         titleLabel.font = .boldSystemFont(ofSize: 15)
 
         let list = makeTable()
         let footer = makeFooter()
 
         let caption = NSTextField(wrappingLabelWithString:
-            "Ticking a type asks macOS to open files with that extension in ByteRipper; "
-            + "macOS may ask you to confirm. Unticking hands the type back to the app it "
-            + "was taken from. Add any extension you keep dumps under — it works the same.")
+            L("Ticking a type asks macOS to open files with that extension in ByteRipper; macOS may ask you to confirm. Unticking hands the type back to the app it was taken from. Add any extension you keep dumps under — it works the same."))
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 4
@@ -101,7 +101,7 @@ final class FileTypesSettingsViewController: NSViewController,
             // Exact width, like every other tab: a wrapping label's ideal width
             // is its whole text on one line, so only a fixed width makes it wrap
             // and the fitting size come out right.
-            root.widthAnchor.constraint(equalToConstant: 480),
+            SettingsMetrics.pinnedWidth(of: root),
         ])
         view = root
 
@@ -133,9 +133,9 @@ final class FileTypesSettingsViewController: NSViewController,
             column.width = width
             return column
         }
-        table.addTableColumn(column(ColumnID.enabled, "Open With ByteRipper", width: 160))
-        table.addTableColumn(column(ColumnID.ext, "Extension", width: 90))
-        table.addTableColumn(column(ColumnID.handler, "Opens With Now", width: 170))
+        table.addTableColumn(column(ColumnID.enabled, L("Open With ByteRipper"), width: 160))
+        table.addTableColumn(column(ColumnID.ext, L("Extension"), width: 90))
+        table.addTableColumn(column(ColumnID.handler, L("Opens With Now"), width: 170))
         self.table = table
 
         let scrollView = NSScrollView()
@@ -177,8 +177,7 @@ final class FileTypesSettingsViewController: NSViewController,
         plus.imagePosition = .imageOnly
         plus.isBordered = false
         plus.contentTintColor = .secondaryLabelColor
-        plus.toolTip = "Add a file extension…"
-        plus.setAccessibilityLabel("Add File Type")
+        ControlHelp.describe(plus, name: L("Add File Type"), tooltip: L("Add a file extension…"))
         addButton = plus
 
         let minus = NSButton(title: "", target: self, action: #selector(removePressed))
@@ -186,8 +185,8 @@ final class FileTypesSettingsViewController: NSViewController,
         minus.imagePosition = .imageOnly
         minus.isBordered = false
         minus.contentTintColor = .secondaryLabelColor
-        minus.toolTip = "Remove the selected file extension"
-        minus.setAccessibilityLabel("Remove File Type")
+        ControlHelp.describe(minus, name: L("Remove File Type"),
+                             tooltip: L("Remove the selected file extension"))
         minus.isEnabled = false
         removeButton = minus
 
@@ -220,7 +219,7 @@ final class FileTypesSettingsViewController: NSViewController,
             let checkbox = NSButton(checkboxWithTitle: "", target: self, action: #selector(togglePressed(_:)))
             checkbox.tag = row
             checkbox.state = isSelfDefault(entry.ext) ? .on : .off
-            checkbox.setAccessibilityLabel("Open .\(entry.ext) with ByteRipper")
+            checkbox.setAccessibilityLabel(L("Open .%1$@ with ByteRipper", entry.ext))
             let cell = NSTableCellView()
             checkbox.translatesAutoresizingMaskIntoConstraints = false
             cell.addSubview(checkbox)
@@ -361,9 +360,9 @@ final class FileTypesSettingsViewController: NSViewController,
     /// The plain informational alert behind `presentMessage`.
     static func showMessage(_ text: String) {
         let alert = NSAlert()
-        alert.messageText = "File Types"
+        alert.messageText = L("File Types")
         alert.informativeText = text
-        alert.addButton(withTitle: "OK")
+        alert.addButton(withTitle: L("OK"))
         alert.runModal()
     }
 
@@ -372,10 +371,10 @@ final class FileTypesSettingsViewController: NSViewController,
     private func prompt() -> String? {
         if let promptForExtension { return promptForExtension() }
         let alert = NSAlert()
-        alert.messageText = "Add File Type"
-        alert.informativeText = "The file extension to open with ByteRipper, for example dump."
-        alert.addButton(withTitle: "Add")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L("Add File Type")
+        alert.informativeText = L("The file extension to open with ByteRipper, for example dump.")
+        alert.addButton(withTitle: L("Add"))
+        alert.addButton(withTitle: L("Cancel"))
         let field = NSTextField(frame: NSRect(x: 0, y: 0, width: 200, height: 24))
         alert.accessoryView = field
         alert.window.initialFirstResponder = field

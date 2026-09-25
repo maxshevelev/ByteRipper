@@ -1,5 +1,7 @@
 import AppKit
 import AppPalette
+import HelpUI
+import Localization
 
 /// A table in a tool-module's panel, drawn at the panel's size
 /// (`ToolPanelFont`) rather than at one of AppKit's three fixed row styles.
@@ -188,7 +190,7 @@ import AppPalette
         // icon's width in.
         guard let problem else {
             icon.isHidden = true
-            icon.toolTip = nil
+            ControlHelp.describe(icon, nil)
             return
         }
         let mark: ToolRowMark = problem.isError ? .error : .caution
@@ -199,7 +201,7 @@ import AppPalette
         icon.image?.isTemplate = true
         icon.contentTintColor = mark.tint
         icon.symbolConfiguration = .init(pointSize: ToolPanelFont.size, weight: .regular)
-        icon.toolTip = problem.lines.isEmpty ? nil : problem.lines.joined(separator: "\n")
+        ControlHelp.describe(icon, problem.lines.isEmpty ? nil : problem.lines.joined(separator: "\n"))
         icon.isHidden = false
     }
 
@@ -214,7 +216,7 @@ import AppPalette
             guard index < roles.count else {
                 badge.isHidden = true
                 badge.image = nil
-                badge.toolTip = nil
+                ControlHelp.describe(badge, nil)
                 continue
             }
             let role = roles[index]
@@ -223,7 +225,7 @@ import AppPalette
             badge.image?.isTemplate = true
             badge.contentTintColor = role.mark.tint
             badge.symbolConfiguration = .init(pointSize: ToolPanelFont.size, weight: .regular)
-            badge.toolTip = role.toolTip
+            ControlHelp.describe(badge, role.toolTip)
             badge.isHidden = false
         }
     }
@@ -234,7 +236,7 @@ import AppPalette
     public static func dress(_ cell: NSTableCellView, with marks: ToolRowMarks) {
         setProblem(marks.problem, on: cell)
         setBadges(marks.roles, on: cell)
-        cell.toolTip = marks.summary
+        ControlHelp.describe(cell, marks.summary)
     }
 
     private static func makeBadge(tag: Int) -> NSImageView {
@@ -264,7 +266,7 @@ import AppPalette
         let warning = NSImageView()
         let symbol = NSImage(
             systemSymbolName: ToolRowMark.error.symbol ?? "",
-            accessibilityDescription: "Invalid"
+            accessibilityDescription: L("Invalid")
         )
         symbol?.isTemplate = true
         warning.image = symbol
@@ -299,7 +301,7 @@ import AppPalette
         guard let symbol, let tint else {
             marker.isHidden = true
             marker.image = nil
-            marker.toolTip = nil
+            ControlHelp.describe(marker, nil)
             return
         }
         marker.isHidden = false
@@ -312,7 +314,7 @@ import AppPalette
         marker.symbolConfiguration = .init(
             pointSize: ToolPanelFont.size, weight: .regular
         )
-        marker.toolTip = toolTip
+        ControlHelp.describe(marker, toolTip)
     }
 
     /// Draws `cell`'s marker as a verdict of the shared catalogue — its symbol

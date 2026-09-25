@@ -3,7 +3,8 @@ import XCTest
 @testable import ByteRipper
 
 /// The Settings window sizes itself to each tab's content: the width is the
-/// tab's fixed width (480, or 620 for Text Decoding), the height is the
+/// tab's own (the shared measured width, or more where a tab asks for it —
+/// Text Decoding wants 620), the height is the
 /// content's fitting height, and switching tabs resizes the window rather than
 /// stretching the tab to the previous tab's size.
 @MainActor
@@ -27,9 +28,13 @@ final class SettingsWindowSizeTests: XCTestCase {
         let window = try XCTUnwrap(settings.window)
         window.makeKeyAndOrderFront(nil)
 
+        // Not literal numbers any more: the width is measured from the
+        // toolbar's translated labels, so a tab is either the shared base
+        // width or its own larger preference.
+        let base = SettingsMetrics.width()
         let expectedWidth: [(String, CGFloat)] = [
-            ("Appearance", 480), ("Layout", 480), ("Comparison", 480),
-            ("Editing", 480), ("TextDecoding", 620),
+            ("Appearance", base), ("Layout", base), ("Comparison", base),
+            ("Editing", base), ("TextDecoding", SettingsMetrics.width(preferring: 620)),
         ]
         for (id, width) in expectedWidth {
             try switchTo(settings, id)

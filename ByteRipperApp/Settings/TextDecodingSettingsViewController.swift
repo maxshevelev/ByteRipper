@@ -1,6 +1,7 @@
 import AppPalette
 import Cocoa
 import ByteRipperCore
+import Localization
 
 /// The "Text Decoding" pane of the Settings window (§3.4): the active decoding
 /// table and placeholder character, plus a live 16×16 preview of the effective
@@ -17,18 +18,18 @@ final class TextDecodingSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: "Text Decoding")
+        let titleLabel = NSTextField(labelWithString: L("Text Decoding"))
         titleLabel.font = .boldSystemFont(ofSize: 15)
 
         // Decoding table popup.
-        let tableLabel = NSTextField(labelWithString: "Decoding table:")
+        let tableLabel = NSTextField(labelWithString: L("Decoding table:"))
         tablePopup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         tablePopup.target = self
         tablePopup.action = #selector(tableChanged(_:))
         tablePopup.widthAnchor.constraint(equalToConstant: 220).isActive = true
 
         // Placeholder character field (exactly one character).
-        let placeholderLabel = NSTextField(labelWithString: "Placeholder character:")
+        let placeholderLabel = NSTextField(labelWithString: L("Placeholder character:"))
         placeholderField.placeholderString = "."
         placeholderField.delegate = self
         placeholderField.alignment = .center
@@ -47,13 +48,13 @@ final class TextDecodingSettingsViewController: NSViewController {
 
         // Live preview.
         let previewCaption = NSTextField(wrappingLabelWithString:
-            "All 256 byte values decoded with the current table. Row headers are the byte value in hex.")
+            L("All 256 byte values decoded with the current table. Row headers are the byte value in hex."))
         previewCaption.font = .systemFont(ofSize: 11)
         previewCaption.textColor = .secondaryLabelColor
         previewCaption.maximumNumberOfLines = 2
         previewCaption.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        let resetButton = NSButton(title: "Reset to Defaults", target: self, action: #selector(resetTapped))
+        let resetButton = NSButton(title: L("Reset to Defaults"), target: self, action: #selector(resetTapped))
         // `.push` is the current name of the standard rounded bezel (was
         // `.rounded`).
         resetButton.bezelStyle = .push
@@ -96,7 +97,7 @@ final class TextDecodingSettingsViewController: NSViewController {
             // Let the caption wrap at the controls' width, not the preview's.
             previewCaption.widthAnchor.constraint(lessThanOrEqualTo: grid.widthAnchor),
             // Exact width: the window sizes to this view's fitting size per tab.
-            root.widthAnchor.constraint(equalToConstant: 620),
+            SettingsMetrics.pinnedWidth(of: root, preferring: 620),
         ])
         view = root
 

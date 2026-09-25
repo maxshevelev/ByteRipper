@@ -2,6 +2,10 @@
 
 > Two chips into one image, and a before-copy to patch against.
 
+@covers menu.file.insert-at-start
+@covers menu.file.append
+@covers menu.file.duplicate
+
 ## Join: two SPI chips, one image
 
 Plenty of boards split the BIOS across two SPI flash chips. Read both, then:

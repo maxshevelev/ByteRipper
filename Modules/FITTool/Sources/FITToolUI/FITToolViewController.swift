@@ -2,6 +2,8 @@ import ALSplitView
 import AppPalette
 import AppKit
 import FITTool
+import HelpUI
+import Localization
 import ToolModuleKit
 
 /// The panel: the table's entries above, what is wrong with them below.
@@ -89,10 +91,10 @@ import ToolModuleKit
     private static let entryColumns:
     [(id: NSUserInterfaceItemIdentifier, title: String, width: CGFloat, minWidth: CGFloat)] = [
         (Column.index, "#", 20, 20),
-        (Column.type, "Type", 96, 56),
-        (Column.address, "Address", 76, 76),
-        (Column.size, "Size", 84, 40),
-        (Column.target, "Points at", 300, 80)
+        (Column.type, L("Type"), 96, 56),
+        (Column.address, L("Address", context: "column"), 76, 76),
+        (Column.size, L("Size"), 84, 40),
+        (Column.target, L("Points at"), 300, 80)
     ]
     /// The columns that give way, in order, once "Points at" is down to its
     /// floor and the table is still wider than the panel — and get their
@@ -123,7 +125,7 @@ import ToolModuleKit
         summaryLabel.translatesAutoresizingMaskIntoConstraints = false
         // The title names the table; clicking it takes the dump there and puts
         // the whole table in focus rather than a row.
-        summaryLabel.toolTip = "Show the whole table in the dump"
+        summaryLabel.toolTip = L("Show the whole table in the dump")
         summaryLabel.addGestureRecognizer(
             NSClickGestureRecognizer(target: self, action: #selector(summaryClicked))
         )
@@ -166,7 +168,7 @@ import ToolModuleKit
         // and rounds the selection, and this list is a strip of lines under
         // the table rather than a table of its own.
         problems.style = .plain
-        column(problems, Column.problem, "Problem", Self.problemColumnWidth)
+        column(problems, Column.problem, L("Problem"), Self.problemColumnWidth)
 
         // The rows, the headers and the widths — laid out just above for text
         // at `ToolPanelFont.designSize` — follow the app's zoom, so this comes
@@ -212,13 +214,13 @@ import ToolModuleKit
             button.controlSize = .small
             button.target = self
             button.action = action
-            button.toolTip = tip
+            ControlHelp.describe(button, tip)
             button.translatesAutoresizingMaskIntoConstraints = false
         }
         // Remove and Fix Checksum are not buttons: they are offered where they
         // apply, in the row's menu, rather than on a bar that is always there.
-        button(addButton, "Add Microcode…", #selector(addMicrocodeClicked),
-               "Put a microcode in the image and name it in the table")
+        button(addButton, L("Add Microcode…"), #selector(addMicrocodeClicked),
+               L("Put a microcode in the image and name it in the table"))
 
         let buttons = NSStackView(views: [addButton])
         buttons.orientation = .horizontal
@@ -503,7 +505,7 @@ import ToolModuleKit
         detailSubject = subject
         guard !rowDetail.fields.isEmpty else {
             detail.showPlaceholder(rowDetail.title.isEmpty
-                ? "Select a row to see what it is."
+                ? L("Select a row to see what it is.")
                 : rowDetail.title)
             return
         }

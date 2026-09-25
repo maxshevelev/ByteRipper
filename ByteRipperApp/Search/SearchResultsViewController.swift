@@ -1,5 +1,7 @@
 import Cocoa
 import ByteRipperCore
+import HelpUI
+import Localization
 
 /// The Search All results panel (§11): a header ("Search results (NNN)" + a ×)
 /// above a scrollable table listing every match of the pattern — one row per
@@ -32,6 +34,7 @@ import ByteRipperCore
 /// reads bytes lazily per visible row, so a Search All with thousands of matches
 /// renders and scrolls without materializing every excerpt.
 @MainActor
+// help: window.search-results
 final class SearchResultsViewController: NSViewController {
     /// What the panel is showing (§11) — derived from the pane's set on every
     /// read, never a copy of it.
@@ -234,12 +237,11 @@ final class SearchResultsViewController: NSViewController {
         headerLabel.translatesAutoresizingMaskIntoConstraints = false
 
         closeButton.image = NSImage(systemSymbolName: "xmark",
-                                    accessibilityDescription: "Close search results")
+                                    accessibilityDescription: L("Close search results"))
         closeButton.isBordered = false
         closeButton.imagePosition = .imageOnly
         closeButton.contentTintColor = .secondaryLabelColor
-        closeButton.setAccessibilityLabel("Close search results")
-        closeButton.toolTip = "Close search results"
+        ControlHelp.describe(closeButton, L("Close search results"))
         closeButton.target = self
         closeButton.action = #selector(closePressed)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
@@ -378,15 +380,15 @@ final class SearchResultsViewController: NSViewController {
         // (§11). `minWidth` is only a floor for the user's own dragging, and it
         // is lowered when the content turns out narrower than it.
         let offsetColumn = NSTableColumn(identifier: ColumnID.offset)
-        offsetColumn.title = "Offset"
+        offsetColumn.title = L("Offset")
         offsetColumn.width = 90
         offsetColumn.minWidth = 40
         let hexColumn = NSTableColumn(identifier: ColumnID.hex)
-        hexColumn.title = "Excerpt Hex"
+        hexColumn.title = L("Excerpt Hex")
         hexColumn.width = 300
         hexColumn.minWidth = 60
         let textColumn = NSTableColumn(identifier: ColumnID.text)
-        textColumn.title = "Excerpt Text"
+        textColumn.title = L("Excerpt Text")
         textColumn.width = 200
         textColumn.minWidth = 40
         tableView.addTableColumn(offsetColumn)
@@ -404,7 +406,7 @@ final class SearchResultsViewController: NSViewController {
         // Single-click a row to jump to its match (§11).
         tableView.target = self
         tableView.action = #selector(rowClicked)
-        tableView.setAccessibilityLabel("Search results")
+        tableView.setAccessibilityLabel(L("Search results"))
 
         scrollView.documentView = tableView
     }
@@ -418,19 +420,18 @@ final class SearchResultsViewController: NSViewController {
             messageLabel.isHidden = true
             scrollView.isHidden = false
         case .tooMany(let total):
-            messageLabel.stringValue = "\(Self.grouped(total)) matches — too many to list. "
-                + "Refine the pattern."
+            messageLabel.stringValue = L("%1$@ matches — too many to list. Refine the pattern.", Self.grouped(total))
             messageLabel.isHidden = false
             scrollView.isHidden = true
         case .empty:
             // A search that replaced the panel's rows with nothing says so
             // where the rows were. An empty table would read as a panel that
             // failed to load rather than as a pattern that occurs nowhere.
-            messageLabel.stringValue = "No matches."
+            messageLabel.stringValue = L("No matches.")
             messageLabel.isHidden = false
             scrollView.isHidden = true
         case .searching:
-            messageLabel.stringValue = "Searching…"
+            messageLabel.stringValue = L("Searching…")
             messageLabel.isHidden = false
             scrollView.isHidden = true
         }
@@ -478,12 +479,16 @@ final class SearchResultsViewController: NSViewController {
         let searching = !(matchSet?.isComplete ?? true)
         switch content {
         case .matches(let total), .tooMany(let total):
-            let count = searching ? "\(Self.grouped(total)), searching…" : Self.grouped(total)
-            headerLabel.stringValue = "Search results (\(count))"
+            // Two whole headings rather than an English word interpolated
+            // into a translated shell: "searching…" glued into the count read
+            // as «Результаты поиска (1 234, searching…)».
+            headerLabel.stringValue = searching
+                ? L("Search results (%1$@, searching…)", Self.grouped(total))
+                : L("Search results (%1$@)", Self.grouped(total))
         case .searching:
-            headerLabel.stringValue = "Search results (searching…)"
+            headerLabel.stringValue = L("Search results (searching…)")
         case .empty:
-            headerLabel.stringValue = "Search results (0)"
+            headerLabel.stringValue = L("Search results (0)")
         }
     }
 

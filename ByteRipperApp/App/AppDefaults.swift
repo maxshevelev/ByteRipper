@@ -1,4 +1,6 @@
 import Foundation
+import HelpBook
+import Localization
 
 /// The one `UserDefaults` the app reads and writes.
 ///
@@ -66,4 +68,25 @@ enum AppDefaults {
     /// decides `store` above, asked by the few places that have to behave
     /// differently under test for a reason other than a stored value.
     static var isUnderTest: Bool { store !== UserDefaults.standard }
+
+    /// Points the words at the same store everything else here uses, and —
+    /// under test — pins the language.
+    ///
+    /// The pin is not tidiness. The suite asserts on what the app *says*
+    /// ("None", "Stub A", "Merge S1 into S0"), and the language a run comes
+    /// out in would otherwise be the language of the Mac it runs on: the same
+    /// suite would pass in Frankfurt and fail in Moscow, for no reason in the
+    /// code. English is the language the keys are written in, so it is the one
+    /// a test can assert against.
+    ///
+    /// Called once, as early as anything reads a word — before the menu bar is
+    /// built.
+    static func startLocalization() {
+        Localization.defaults = store
+        if isUnderTest {
+            store.set(LanguageChoice.fixed(.english).storedValue, forKey: Localization.choiceKey)
+        }
+        Localization.reload()
+        Help.reload()
+    }
 }

@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 
 /// The app's appearance theme (§3.2): follow the system, or force light or
 /// dark. Persisted app-wide and applied to `NSApp.appearance`, so every window
@@ -52,14 +53,18 @@ enum AppTheme: String, CaseIterable {
     }
 
     /// The title shown for this theme in the Settings popup.
+    ///
+    /// Carried in the `theme` context: English says "System" for the theme
+    /// and for the font, and a language that inflects needs two words —
+    /// «Системная тема» but «Системный шрифт».
     var title: String {
         switch self {
         case .system:
-            return "System"
+            return L("System", context: "theme")
         case .light:
-            return "Light"
+            return L("Light", context: "theme")
         case .dark:
-            return "Dark"
+            return L("Dark", context: "theme")
         }
     }
 }

@@ -1,6 +1,8 @@
 import AppKit
 import AppPalette
 import FITTool
+import HelpUI
+import Localization
 import ToolModuleKit
 
 /// The sheet for adding a microcode: the catalogue from
@@ -40,7 +42,7 @@ import ToolModuleKit
     let table = NSTableView()
     private let scrollView = NSScrollView()
     private let searchField = NSSearchField()
-    private let onlyInImage = NSButton(checkboxWithTitle: "Only CPUIDs in this image",
+    private let onlyInImage = NSButton(checkboxWithTitle: L("Only CPUIDs in this image"),
                                        target: nil, action: nil)
     /// Wraps rather than truncates: a line naming the file being fetched runs
     /// past the room beside the buttons, and one that could only be one line
@@ -67,17 +69,17 @@ import ToolModuleKit
         // where it cannot be missed. In replace mode the title says what is
         // happening to the row the form was opened from.
         let title = NSTextField(labelWithString: isReplacing
-            ? "Replace Intel Microcode" : "Add Intel Microcode")
+            ? L("Replace Intel Microcode") : L("Add Intel Microcode"))
         title.font = .systemFont(ofSize: 13, weight: .semibold)
         let source = NSTextField(labelWithString:
-            "From github.com/platomav/CPUMicrocodes — a FIT names no other kind.")
+            L("From github.com/platomav/CPUMicrocodes — a FIT only ever names Intel microcode."))
         source.font = .systemFont(ofSize: 11)
         source.textColor = .secondaryLabelColor
 
         // The list is searched by what a bench writes down and looks up: the
         // CPUID. The revision and the file name are the catalogue's, not the
         // user's, and matching them is a guess about which of the two they meant.
-        searchField.placeholderString = "CPUID"
+        searchField.placeholderString = L("CPUID")
         searchField.target = self
         searchField.action = #selector(narrow)
         onlyInImage.target = self
@@ -87,7 +89,7 @@ import ToolModuleKit
         // "replace it with a newer one" — rather than to everything the image
         // has.
         if isReplacing, let targetCpuidText {
-            onlyInImage.title = "Only CPUID \(targetCpuidText)"
+            onlyInImage.title = L("Only CPUID %1$@", targetCpuidText)
         }
         // Off to begin with: picking a vendor is asking to see what that vendor
         // has, and narrowing it before the user has looked would hide most of
@@ -105,12 +107,14 @@ import ToolModuleKit
         table.delegate = self
         table.target = self
         table.doubleAction = #selector(addClicked)
-        column(Column.cpuid, "CPUID", 70)
-        column(Column.platform, "Plat", 46)
-        column(Column.revision, "Revision", 74)
-        column(Column.date, "Date", 90)
-        column(Column.release, "Release", 74)
-        column(Column.size, "Size", 70)
+        column(Column.cpuid, L("CPUID"), 70)
+        // The narrowest column in the form; the word has to be an abbreviation
+        // in every language, so it is one the translator chooses.
+        column(Column.platform, L("column|Plat"), 46)
+        column(Column.revision, L("Revision"), 74)
+        column(Column.date, L("Date"), 90)
+        column(Column.release, L("Release"), 74)
+        column(Column.size, L("Size"), 70)
 
         scrollView.documentView = table
         scrollView.hasVerticalScroller = true
@@ -131,15 +135,15 @@ import ToolModuleKit
             button.keyEquivalent = key
             return button
         }
-        addButton.title = isReplacing ? "Replace" : "Add"
+        addButton.title = isReplacing ? L("Replace") : L("Add")
         addButton.bezelStyle = .rounded
         addButton.keyEquivalent = "\r"
         addButton.target = self
         addButton.action = #selector(addClicked)
         addButton.isEnabled = false
-        let cancel = button("Cancel", #selector(cancelClicked), "\u{1b}")
-        let chooseFile = button("Choose File…", #selector(chooseFileClicked))
-        chooseFile.toolTip = "Add a microcode you already have, without the network"
+        let cancel = button(L("Cancel"), #selector(cancelClicked), "\u{1b}")
+        let chooseFile = button(L("Choose File…"), #selector(chooseFileClicked))
+        ControlHelp.describe(chooseFile, L("Add a microcode you already have, without the network"))
 
         let filters = NSStackView(views: [onlyInImage, searchField])
         filters.orientation = .horizontal
@@ -228,8 +232,8 @@ import ToolModuleKit
         guard !entries.isEmpty else { return say("") }
         let total = MicrocodeCatalogue.counts(in: entries)[.intel] ?? 0
         say(shown.count == total
-            ? "\(total) Intel microcodes"
-            : "\(shown.count) of \(total) Intel microcodes")
+            ? L("%1$@ Intel microcodes", total)
+            : L("%1$@ of %2$@ Intel microcodes", shown.count, total))
     }
 
     @objc private func addClicked() {
@@ -258,7 +262,7 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
         case Column.revision: cell.textField?.stringValue = entry.revisionText
         case Column.date: cell.textField?.stringValue = entry.date
         case Column.release:
-            cell.textField?.stringValue = entry.isProduction ? "PRD" : "pre-release"
+            cell.textField?.stringValue = entry.isProduction ? L("PRD") : L("pre-release")
             cell.textField?.font = .systemFont(ofSize: 11)
             // A pre-release is worth telling apart before it goes into a board.
             cell.textField?.textColor = entry.isProduction ? .labelColor : .systemOrange
@@ -275,10 +279,10 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
         // a CPUID the table already names is replaced rather than added a second
         // time, and the button says which it will be before it is pressed.
         if isReplacing {
-            addButton.title = (selectedEntry?.cpuid == targetCpuid) ? "Update" : "Replace"
+            addButton.title = (selectedEntry?.cpuid == targetCpuid) ? L("Update") : L("Replace")
         } else {
             let replaces = selectedEntry?.cpuid.map(cpuidsInTheImage.contains) ?? false
-            addButton.title = replaces ? "Replace" : "Add"
+            addButton.title = replaces ? L("Replace") : L("Add")
         }
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// Reads the book off disk.
 ///
@@ -28,14 +29,18 @@ public enum HelpLoader {
         }
     }
 
-    /// The book in the language the user reads, from the package's own bundle.
+    /// The book in `language`, from the package's own bundle.
     ///
-    /// `preferred` is what the caller thinks the user reads — the app passes
-    /// `Locale.preferredLanguages`, a test passes one name. The first of them
-    /// with a directory of its own wins; a regional name (`de-AT`) matches the
-    /// plain language directory (`de`) before giving up.
-    public static func load(preferred languages: [String] = Locale.preferredLanguages,
-                            bundle: Bundle? = nil) throws -> HelpBook {
+    /// Which language that is has one answer for the whole app and it is not
+    /// this package's to give: `Localization.resolvedLanguage()` combines the
+    /// Mac's own languages with the user's override in Settings, and `Help`
+    /// asks it. This takes the answer, so a test can load any language it
+    /// likes without moving the app's setting.
+    ///
+    /// A language with no directory of its own falls back to English rather
+    /// than throwing: the app may ship a translated UI before its help has
+    /// caught up, and an English page is worth more than no page.
+    public static func load(language: String, bundle: Bundle? = nil) throws -> HelpBook {
         // `Bundle.module` is internal to the target, so it cannot stand as a
         // default argument of a public function — it is resolved here instead.
         guard let base = (bundle ?? .module).url(forResource: root, withExtension: nil) else {
@@ -44,21 +49,8 @@ public enum HelpLoader {
         let available = (try? FileManager.default.contentsOfDirectory(
             at: base, includingPropertiesForKeys: nil
         ))?.filter(\.hasDirectoryPath).map { $0.lastPathComponent } ?? []
-        let language = pick(from: languages, available: available)
-        return try load(language: language, base: base)
-    }
-
-    /// Which directory under `Help/` serves `languages`. Exposed so the choice
-    /// can be tested without a bundle on disk.
-    public static func pick(from languages: [String], available: [String]) -> String {
-        for wanted in languages {
-            if available.contains(wanted) { return wanted }
-            // `de-AT`, `pt-BR`: the region says nothing about the words in a
-            // help book, so the plain language answers for it.
-            let plain = String(wanted.prefix(while: { $0 != "-" && $0 != "_" }))
-            if available.contains(plain) { return plain }
-        }
-        return fallbackLanguage
+        return try load(language: available.contains(language) ? language : fallbackLanguage,
+                        base: base)
     }
 
     static func load(language: String, base: URL) throws -> HelpBook {
@@ -135,15 +127,27 @@ enum HelpSectionFile {
 }
 
 /// A page: `# Title` on the first line, an optional `> ` summary, then markup.
+///
+/// Lines beginning `@` are **metadata, not prose** — `@covers` names the piece
+/// of functionality this page explains (`Skills/help-coverage`) and
+/// `@source-sha` records the English a translation was made from. They are
+/// read out here and never reach the reader: a page is judged on what it says,
+/// and the bookkeeping that keeps it honest is not part of that.
 enum HelpTopicFile {
     static func parse(_ source: String, id: HelpTopicID) -> HelpTopic {
         var title = ""
         var summary = ""
         var body: [String] = []
+        var covers: [String] = []
         var inHeader = true
 
         for line in source.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if let anchor = HelpSectionFile.value(of: "@covers", in: trimmed) {
+                covers.append(anchor)
+                continue
+            }
+            if trimmed.hasPrefix("@") { continue }
             if inHeader {
                 if trimmed.isEmpty { continue }
                 if title.isEmpty, trimmed.hasPrefix("# ") {
@@ -161,7 +165,8 @@ enum HelpTopicFile {
         return HelpTopic(id: id,
                          title: title.isEmpty ? id.rawValue : title,
                          summary: summary,
-                         blocks: HelpMarkup.parse(body.joined(separator: "\n")))
+                         blocks: HelpMarkup.parse(body.joined(separator: "\n")),
+                         covers: covers)
     }
 }
 
@@ -209,6 +214,10 @@ enum HelpTermFile {
                 short = value
             } else if let value = HelpSectionFile.value(of: "@see", in: trimmed) {
                 if let link = parseLink(value) { seeAlso.append(link) }
+            } else if trimmed.hasPrefix("@") {
+                // Metadata (`@covers`, `@source-sha`): read by the coverage
+                // script, never shown to a reader.
+                continue
             } else if id != nil {
                 body.append(line)
             }

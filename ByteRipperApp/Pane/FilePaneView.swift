@@ -1,6 +1,8 @@
 import Cocoa
 import ALSplitView
 import AppPalette
+import HelpUI
+import Localization
 
 /// One file pane (§3.4, §15): a header (file name, `*` dirty, read-only lock,
 /// comparison-mode close button), the virtualized hex dump, and a status bar.
@@ -73,8 +75,7 @@ final class FilePaneView: NSView {
     /// readout. Stored because a very narrow pane has to be able to take them
     /// away — see `layout()`.
     private lazy var closeButton = HeaderButton.make(
-        symbol: "xmark", label: "Close pane",
-        tooltip: "Close pane", target: self, action: #selector(closeTapped)
+        symbol: "xmark", describes: L("Close pane"), target: self, action: #selector(closeTapped)
     )
     /// Folds a fragment panel into its pill. Hidden — and taking no width —
     /// on the tab's own panes, which have no pill to fold into.
@@ -82,8 +83,8 @@ final class FilePaneView: NSView {
     /// The gesture does the same thing and does it better, but a gesture is not
     /// discoverable and, in the web edition, not there at all.
     private lazy var collapseButton = HeaderButton.make(
-        symbol: "chevron.down", label: "Collapse panel",
-        tooltip: "Collapse into the dock", target: self, action: #selector(collapseTapped)
+        symbol: "chevron.down", describes: L("Collapse panel"),
+        tooltip: L("Collapse into the dock"), target: self, action: #selector(collapseTapped)
     )
     private var collapseWidth: NSLayoutConstraint?
     private var collapseGap: NSLayoutConstraint?
@@ -373,7 +374,7 @@ final class FilePaneView: NSView {
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         // A 12 pt outline document in front of the title; the symbol swaps to
         // "document.fill" in `updateHeader` when the file becomes dirty.
-        documentIcon.image = NSImage(systemSymbolName: "document", accessibilityDescription: "File document")
+        documentIcon.image = NSImage(systemSymbolName: "document", accessibilityDescription: L("File document"))
         documentIcon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 12, weight: .medium)
         documentIcon.contentTintColor = .secondaryLabelColor
         documentIcon.imageScaling = .scaleProportionallyUpOrDown
@@ -1513,7 +1514,7 @@ final class FilePaneView: NSView {
             linkButton.image = nil
             linkSymbolName = nil
             linkButton.title = ""
-            linkButton.toolTip = nil
+            ControlHelp.describe(linkButton, nil)
             observeParent(nil)
             return
         }
@@ -1532,8 +1533,7 @@ final class FilePaneView: NSView {
             .font: NSFont.systemFont(ofSize: 11),
             .foregroundColor: tint
         ])
-        linkButton.toolTip = origin.explanation
-        linkButton.setAccessibilityLabel(origin.explanation)
+        ControlHelp.describe(linkButton, origin.explanation)
         linkCollapsed?.isActive = false
         linkButton.isHidden = bounds.width < Self.trailingChromeMinWidth
         observeParent(origin.parent)
@@ -1707,7 +1707,7 @@ extension FilePaneView: NSTextFieldDelegate {
         field.usesSingleLineMode = true
         field.lineBreakMode = .byClipping
         field.cell?.isScrollable = true
-        field.setAccessibilityLabel("File name")
+        field.setAccessibilityLabel(L("File name"))
         field.translatesAutoresizingMaskIntoConstraints = false
         header.addSubview(field)
         // Where the title is, and no narrower than a name can be read in. Every

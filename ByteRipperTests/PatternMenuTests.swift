@@ -80,13 +80,13 @@ final class PatternMenuTests: XCTestCase {
             "Recent Queries",
             "\"DE AD\"  Hex bytes",
             "───",
-            "Add to Favorites",
+            "Save Search Pattern",
             "Clear Recents",
             "───",
-            "Favorites",
+            "Search Patterns",
             "ME FPT: \"$FPT\"  ASCII, ignore case",
             "───",
-            "Manage Favorites…",
+            "Manage Search Patterns…",
         ])
     }
 
@@ -99,7 +99,7 @@ final class PatternMenuTests: XCTestCase {
 
         let headers = try menu().items.filter { $0.action == nil && !$0.isSeparatorItem }
         XCTAssertEqual(headers.map { $0.attributedTitle?.string },
-                       ["Recent Queries", "Favorites"])
+                       ["Recent Queries", "Search Patterns"])
         XCTAssertTrue(headers.allSatisfy { !$0.isEnabled }, "a header is not a row to pick")
         XCTAssertTrue(headers.allSatisfy { $0.image != nil }, "and it carries its icon")
     }
@@ -111,7 +111,7 @@ final class PatternMenuTests: XCTestCase {
     func testEmptyListsShowNoHeaderAndNoClear() throws {
         bar.prepareForShow()
 
-        XCTAssertEqual(try shape(), ["Add to Favorites", "───", "Manage Favorites…"])
+        XCTAssertEqual(try shape(), ["Save Search Pattern", "───", "Manage Search Patterns…"])
     }
 
     // MARK: - The row format
@@ -214,7 +214,7 @@ final class PatternMenuTests: XCTestCase {
         bar.setPatternForTests("windows")
         bar.setEncodingForTests(.utf16LE)
 
-        XCTAssertTrue(bar.pickCommandForTests("Add to Favorites"))
+        XCTAssertTrue(bar.pickCommandForTests("Save Search Pattern"))
 
         XCTAssertEqual(offered?.pattern, "windows")
         XCTAssertEqual(offered?.encoding, .utf16LE)
@@ -234,7 +234,7 @@ final class PatternMenuTests: XCTestCase {
         XCTAssertTrue(FindHistoryStore.recent.isEmpty)
         XCTAssertEqual(FavoritePatternStore.favorites.count, 1, "the favourites stay")
         XCTAssertFalse(try shape().contains("Recent Queries"), "and the section goes")
-        XCTAssertTrue(try shape().contains("Favorites"))
+        XCTAssertTrue(try shape().contains("Search Patterns"))
     }
 
     /// With an empty field there is nothing to keep, so the command is dimmed
@@ -243,7 +243,7 @@ final class PatternMenuTests: XCTestCase {
     /// every keystroke and the menu is a template built far less often.
     func testAddToFavoritesIsDeadOnAnEmptyField() throws {
         bar.prepareForShow()
-        let item = try XCTUnwrap(try menu().items.first { $0.title == "Add to Favorites" })
+        let item = try XCTUnwrap(try menu().items.first { $0.title == "Save Search Pattern" })
 
         bar.setPatternForTests("   ")
         XCTAssertFalse(bar.validateMenuItem(item), "whitespace is not a pattern")
@@ -252,7 +252,7 @@ final class PatternMenuTests: XCTestCase {
         XCTAssertTrue(bar.validateMenuItem(item))
 
         // And the commands that work on nothing are unaffected.
-        let manage = try XCTUnwrap(try menu().items.first { $0.title == "Manage Favorites…" })
+        let manage = try XCTUnwrap(try menu().items.first { $0.title == "Manage Search Patterns…" })
         bar.setPatternForTests("")
         XCTAssertTrue(bar.validateMenuItem(manage))
     }
@@ -262,7 +262,7 @@ final class PatternMenuTests: XCTestCase {
         var opened = 0
         bar.onManageFavorites = { opened += 1 }
 
-        XCTAssertTrue(bar.pickCommandForTests("Manage Favorites…"))
+        XCTAssertTrue(bar.pickCommandForTests("Manage Search Patterns…"))
 
         XCTAssertEqual(opened, 1)
     }

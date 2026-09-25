@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 import ByteRipperCore
 
 /// The targeted drop destinations in single-file mode (§4.3, amended by §22.4).
@@ -13,10 +14,10 @@ enum SingleFileDropTarget {
 
     var title: String {
         switch self {
-        case .insertAtStart: return "Insert at Start"
-        case .replace: return "Replace Current File"
-        case .appendAtEnd: return "Append at End"
-        case .addSecond: return "Open as Second File"
+        case .insertAtStart: return L("Insert at Start")
+        case .replace: return L("Replace Current File")
+        case .appendAtEnd: return L("Append at End")
+        case .addSecond: return L("Open as Second File")
         }
     }
 

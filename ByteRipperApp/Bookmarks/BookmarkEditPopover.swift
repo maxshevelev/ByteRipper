@@ -1,6 +1,7 @@
 import AppPalette
 import Cocoa
 import ByteRipperCore
+import Localization
 
 /// The popover that edits a bookmark (§20.3), in the shape Xcode gives a
 /// breakpoint: it appears on the mark the moment the mark appears, with the caret
@@ -90,7 +91,7 @@ final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate
         offset.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         offset.delegate = self
         offset.translatesAutoresizingMaskIntoConstraints = false
-        offset.setAccessibilityLabel("Bookmark offset")
+        offset.setAccessibilityLabel(L("Bookmark offset"))
         offsetField = offset
 
         // A plain field: AppKit selects its whole text on focus, which is what a
@@ -99,10 +100,10 @@ final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate
         // needs no label beside it and can have the popover's whole width.
         let name = NSTextField(string: initialName)
         name.font = .systemFont(ofSize: 12)
-        name.placeholderString = "Name"
+        name.placeholderString = L("Name")
         name.delegate = self
         name.translatesAutoresizingMaskIntoConstraints = false
-        name.setAccessibilityLabel("Bookmark name")
+        name.setAccessibilityLabel(L("Bookmark name"))
         nameField = name
 
         // Two lines: where the bookmark is, and what it is called. Return and Esc
@@ -113,10 +114,10 @@ final class BookmarkEditPopoverController: NSViewController, NSTextFieldDelegate
         // that (§20.3).
         var rows: [NSView] = [offset, name]
         if onDelete != nil {
-            let delete = NSButton(title: "Delete", target: self, action: #selector(deletePressed))
+            let delete = NSButton(title: L("Delete"), target: self, action: #selector(deletePressed))
             delete.controlSize = .small
             delete.translatesAutoresizingMaskIntoConstraints = false
-            delete.setAccessibilityLabel("Delete bookmark")
+            delete.setAccessibilityLabel(L("Delete bookmark"))
             deleteButton = delete
             rows.append(delete)
         }

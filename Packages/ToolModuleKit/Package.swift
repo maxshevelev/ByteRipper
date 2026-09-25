@@ -28,6 +28,9 @@ let package = Package(
     // compile-time name and a test failure in the book rather than an empty
     // window on a bench. The pure half only — nothing here draws the help.
     dependencies: [
+        // Every word this shows the user comes from the one catalogue the
+        // whole app is translated in.
+        .package(path: "../Localization"),
         .package(path: "../AppPalette"),
         .package(path: "../HelpBook"),
         // The `?` the shared detail list carries for the row in focus, and the
@@ -39,15 +42,22 @@ let package = Package(
     targets: [
         .target(name: "ToolModuleKit",
                 dependencies: [
+                    .product(name: "Localization", package: "Localization"),
                     .product(name: "AppPalette", package: "AppPalette"),
                     .product(name: "HelpBook", package: "HelpBook"),
                     .product(name: "HelpUI", package: "HelpUI")
                 ]),
         .testTarget(
             name: "ToolModuleKitTests",
+            // Everything the target under test links, declared again: a
+            // `@testable` import re-typechecks the module's interface, and a
+            // product it can see but this cannot is an error only `swift test`
+            // reports (measured — `swift build` was green).
             dependencies: [
                 "ToolModuleKit",
-                .product(name: "HelpBook", package: "HelpBook")
+                .product(name: "HelpBook", package: "HelpBook"),
+                .product(name: "HelpUI", package: "HelpUI"),
+                .product(name: "Localization", package: "Localization")
             ]
         )
     ]

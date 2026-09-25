@@ -2,6 +2,11 @@
 
 > Red text means the change exists only here. Save, and it is in the file.
 
+@covers menu.file.save
+@covers menu.file.save-as
+@covers menu.file.revert
+@covers menu.file.update-in-parent
+
 - **⌘S — Save.** Writes the pane's document back to its file. An untitled document opens a save panel instead.
 - **⇧⌘S — Save As…** Writes it somewhere new, and the pane follows the new file.
 - **File ▸ Revert to Saved** throws your edits away and re-reads the file from disk.

@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 import ToolModuleKit
 
 /// User-configurable hex-view appearance (§3.2): the monospaced font (family

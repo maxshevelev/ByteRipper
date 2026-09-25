@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import FreshData
 import UEFIImage
 
@@ -33,12 +34,11 @@ public enum GuidsSourceError: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .offline(let underlying):
-            return "Could not reach github.com: \(underlying)"
+            return L("Could not reach github.com: %1$@", underlying)
         case .badResponse(let status):
-            return "github.com answered \(status)."
+            return L("github.com answered %1$@.", status)
         case .rateLimited:
-            return "GitHub is rate-limiting this address. The names shown are the"
-                + " ones shipped in the build, and they will refresh on the next open."
+            return L("GitHub is rate-limiting this address. The names shown are the ones shipped in the build, and they will refresh on the next open.")
         }
     }
 }

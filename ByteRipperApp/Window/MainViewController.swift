@@ -1,4 +1,6 @@
 import Cocoa
+import HelpUI
+import Localization
 import UniformTypeIdentifiers
 import ByteRipperCore
 import ToolModuleKit
@@ -46,13 +48,12 @@ final class MainViewController: NSViewController {
 
     private func askAboutFileOpenElsewhere(named name: String) -> AlreadyOpenChoice {
         let alert = NSAlert()
-        alert.messageText = "“\(name)” is already open"
-        alert.informativeText = "A file is open in one place at a time, so it cannot be opened "
-            + "here as well. Show it where it is, or move that pane into this tab."
-        alert.addButton(withTitle: "Show in Its Tab")
-        alert.addButton(withTitle: "Move to This Tab")
+        alert.messageText = L("“%1$@” is already open", name)
+        alert.informativeText = L("A file is open in one place at a time, so it cannot be opened here as well. Show it where it is, or move that pane into this tab.")
+        alert.addButton(withTitle: L("Show in Its Tab"))
+        alert.addButton(withTitle: L("Move to This Tab"))
         // AppKit gives a button titled "Cancel" the Escape key.
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Cancel"))
         switch Self.presentModal(alert, defaultInTest: .alertFirstButtonReturn) {
         case .alertFirstButtonReturn: return .show
         case .alertSecondButtonReturn: return .move
@@ -1783,10 +1784,9 @@ final class MainViewController: NSViewController {
         do {
             let size = (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(UInt64.init) ?? 0
             guard size <= Self.toolFileSizeLimitForTesting else {
-                presentAlert(title: "That file is too large",
-                             message: "“\(url.lastPathComponent)” is \(size) bytes. "
-                                + "A tool can be handed at most "
-                                + "\(Self.toolFileSizeLimitForTesting) bytes.")
+                presentAlert(title: L("That file is too large"),
+                             message: L("“%1$@” is %2$@ bytes. A tool can be handed at most %3$@ bytes.",
+                                        url.lastPathComponent, size, Self.toolFileSizeLimitForTesting))
                 return nil
             }
             return ToolFile(name: url.lastPathComponent, bytes: [UInt8](try Data(contentsOf: url)))
@@ -2007,12 +2007,11 @@ final class MainViewController: NSViewController {
 
     private func confirmClosingUnreturnedPart(_ origin: DocumentOrigin) -> NSApplication.ModalResponse {
         let alert = NSAlert()
-        alert.messageText = "Put “\(origin.partName)” back into \(origin.parentName)?"
-        alert.informativeText = "It has changes \(origin.parentName) has not got. "
-            + "Closing this panel without putting them back loses them."
-        alert.addButton(withTitle: "Update in Parent")
-        alert.addButton(withTitle: "Close Anyway")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L("Put “%1$@” back into %2$@?", origin.partName, origin.parentName)
+        alert.informativeText = L("It has changes %1$@ has not got. Closing this panel without putting them back loses them.", origin.parentName)
+        alert.addButton(withTitle: L("Update in Parent"))
+        alert.addButton(withTitle: L("Close Anyway"))
+        alert.addButton(withTitle: L("Cancel"))
         if let fragmentCloseConfirm {
             return fragmentCloseConfirm(alert)
         }
@@ -2062,10 +2061,10 @@ final class MainViewController: NSViewController {
     /// Update in Parent stops being on offer for them.
     private func confirmStranding(_ count: Int, closing name: String) -> Bool {
         let alert = NSAlert()
-        alert.messageText = "Close “\(name)”?"
+        alert.messageText = L("Close “%1$@”?", name)
         alert.informativeText = Self.strandingSentence(count)
         alert.addButton(withTitle: Self.strandingCloseButton(count))
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Cancel"))
         if let fragmentCloseConfirm {
             return fragmentCloseConfirm(alert) == .alertFirstButtonReturn
         }
@@ -2175,14 +2174,14 @@ final class MainViewController: NSViewController {
                     ?? self).view.window
                 switch result {
                 case .failure(let refusal):
-                    self.presentSheetAlert(title: "“\(origin.partName)” cannot be put back",
+                    self.presentSheetAlert(title: L("“%1$@” cannot be put back", origin.partName),
                                            message: refusal.message, on: sheetWindow)
                 case .success(let plan):
                     // Worked out over the bytes as they were when asked.
                     guard parent.contentGeneration == generation, parent.document === document else {
                         self.presentSheetAlert(
-                            title: "“\(origin.parentName)” changed",
-                            message: "It changed while the update was being worked out. Nothing was written.",
+                            title: L("“%1$@” changed", origin.parentName),
+                            message: L("It changed while the update was being worked out. Nothing was written."),
                             on: sheetWindow
                         )
                         return
@@ -2197,9 +2196,9 @@ final class MainViewController: NSViewController {
                     else { return }
                     self.revealUpdateDestination(from: pane, to: parent)
                     self.presentSheetAlert(
-                        title: "Updated “\(origin.parentName)”",
+                        title: L("Updated “%1$@”", origin.parentName),
                         message: plan.warnings.isEmpty
-                            ? "Nothing was written inside a Boot Guard or vendor protected range."
+                            ? L("Nothing was written inside a Boot Guard or vendor protected range.")
                             : plan.warnings.joined(separator: "\n\n"),
                         on: sheetWindow
                     )
@@ -2254,7 +2253,7 @@ final class MainViewController: NSViewController {
         }
         handle.operation = operation
         BlockingOperationSheet.present(
-            operation, title: "Updating “\(origin.parentName)” from “\(origin.partName)”", from: owner)
+            operation, title: L("Updating “%1$@” from “%2$@”", origin.parentName, origin.partName), from: owner)
         return operation
     }
 
@@ -2281,11 +2280,10 @@ final class MainViewController: NSViewController {
     /// those changes is the reader's call.
     private func confirmOverwritingChangedSource(of origin: DocumentOrigin) -> Bool {
         let alert = NSAlert()
-        alert.messageText = "“\(origin.partName)” has changed in \(origin.parentName)"
-        alert.informativeText = "Its bytes there are no longer the ones this part was opened from. "
-            + "Updating overwrites those changes with this part's bytes."
-        alert.addButton(withTitle: "Overwrite")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L("“%1$@” has changed in %2$@", origin.partName, origin.parentName)
+        alert.informativeText = L("Its bytes there are no longer the ones this part was opened from. Updating overwrites those changes with this part's bytes.")
+        alert.addButton(withTitle: L("Overwrite"))
+        alert.addButton(withTitle: L("Cancel"))
         if let updateConfirm {
             return updateConfirm(alert) == .alertFirstButtonReturn
         }
@@ -2298,10 +2296,10 @@ final class MainViewController: NSViewController {
     /// is something to put back into a parent that is still open.
     private func validateUpdateInParent(_ item: NSMenuItem, for pane: PaneViewModel?) -> Bool {
         guard let pane, let origin = pane.origin else {
-            item.title = "Update in Parent"
+            item.title = L("Update in Parent")
             return false
         }
-        item.title = "Update in “\(origin.parentName)”"
+        item.title = L("Update in “%1$@”", origin.parentName)
         return pane.isOpen && origin.state != .parentClosed && origin.hasChanges(in: pane)
     }
 
@@ -2671,14 +2669,14 @@ final class MainViewController: NSViewController {
         let menu = NSMenu()
 
         // Save Segment… writes one piece to a file (§21.5).
-        let save = menu.addItem(withTitle: "Save Segment \(label)…",
+        let save = menu.addItem(withTitle: L("Save Segment %1$@…", label),
                                 action: #selector(segmentMenuSaveSegment(_:)), keyEquivalent: "")
         save.target = self
         save.representedObject = target
 
         // Replace Segment from File… reads one piece from a file (§21.6): the
         // donor-region swap, the inverse of Save Segment.
-        let replace = menu.addItem(withTitle: "Replace Segment \(label) from File…",
+        let replace = menu.addItem(withTitle: L("Replace Segment %1$@ from File…", label),
                                    action: #selector(segmentMenuReplaceSegment(_:)), keyEquivalent: "")
         replace.target = self
         replace.representedObject = target
@@ -2689,7 +2687,7 @@ final class MainViewController: NSViewController {
         // whole of what it will do.
         let piece = pane.segmentStore.segments[pieceIndex]
         if let source = pane.segmentSource(of: piece) {
-            let revert = menu.addItem(withTitle: "Revert Segment \(label) to “\(source.name)”",
+            let revert = menu.addItem(withTitle: L("Revert Segment %1$@ to “%2$@”", label, source.name),
                                       action: #selector(segmentMenuRevertSegment(_:)), keyEquivalent: "")
             revert.target = self
             revert.representedObject = target
@@ -2700,7 +2698,7 @@ final class MainViewController: NSViewController {
 
         // Select Segment: the whole piece is selected — its full range, not a
         // caret at its start (§21.3).
-        let select = menu.addItem(withTitle: "Select Segment \(label)",
+        let select = menu.addItem(withTitle: L("Select Segment %1$@", label),
                                   action: #selector(segmentMenuSelectSegment(_:)), keyEquivalent: "")
         select.target = self
         select.representedObject = target
@@ -2708,7 +2706,7 @@ final class MainViewController: NSViewController {
         // Edit Segment: the popover that edits this piece — its offset and its
         // name — anchored where the menu opened, not the form with the table of
         // all segments (§21.4).
-        let edit = menu.addItem(withTitle: "Edit Segment \(label)",
+        let edit = menu.addItem(withTitle: L("Edit Segment %1$@", label),
                                 action: #selector(segmentMenuEditSegment(_:)), keyEquivalent: "")
         edit.target = self
         edit.representedObject = target
@@ -2977,8 +2975,8 @@ final class MainViewController: NSViewController {
         // second gate for the file that vanished between the menu drawing and
         // the click.
         guard FileManager.default.fileExists(atPath: path) else {
-            presentAlert(title: "File not found",
-                         message: "“\((path as NSString).lastPathComponent)” is no longer there.")
+            presentAlert(title: L("File not found"),
+                         message: L("“%1$@” is no longer there.", (path as NSString).lastPathComponent))
             return
         }
         let url = SandboxBookmarkStore.shared.resolveAndStartAccess(path: path)
@@ -3129,24 +3127,24 @@ final class MainViewController: NSViewController {
     private func openableFiles(from urls: [URL]) -> [URL] {
         let files = urls.filter(isOpenableFile)
         if files.count < urls.count {
-            presentAlert(title: "Some files could not be opened",
-                         message: "Directories and packages are not supported.")
+            presentAlert(title: L("Some files could not be opened"),
+                         message: L("Directories and packages are not supported."))
         }
         return files
     }
 
     private func notifyIgnored(count: Int) {
         let noun = count == 1 ? "file was" : "files were"
-        presentAlert(title: "Additional files ignored",
-                     message: "\(count) \(noun) not opened because only two files can be compared at once.")
+        presentAlert(title: L("Additional files ignored"),
+                     message: L("%1$@ %2$@ not opened because only two files can be compared at once.", count, noun))
     }
 
     /// The join-band variant of the ignored-files notice (§22.4): a join takes
     /// one file, so the extras are not joined, not opened.
     private func notifyJoinIgnored(count: Int) {
         let noun = count == 1 ? "file was" : "files were"
-        presentAlert(title: "Additional files ignored",
-                     message: "\(count) \(noun) not joined because only one file can be joined at a time.")
+        presentAlert(title: L("Additional files ignored"),
+                     message: L("%1$@ %2$@ not joined because only one file can be joined at a time.", count, noun))
     }
 
     /// Opens `url` into the pane at `index`, enforcing §4.1 rules 4–6 (dirty
@@ -3161,8 +3159,8 @@ final class MainViewController: NSViewController {
                 // The other pane of this window. There is nowhere to send the
                 // user that they are not already looking at, so the refusal is
                 // the whole answer.
-                presentAlert(title: "File already open",
-                             message: "“\(url.lastPathComponent)” is already open in the other pane and cannot be opened twice.")
+                presentAlert(title: L("File already open"),
+                             message: L("“%1$@” is already open in the other pane and cannot be opened twice.", url.lastPathComponent))
             } else {
                 // Another window or tab has it. "Cannot be opened twice" is true
                 // but useless there — the file is on screen — and so is silently
@@ -3187,9 +3185,9 @@ final class MainViewController: NSViewController {
         // Rule 5: same file already open in the target pane → reload/no-op.
         if pane.isOpen, FileIdentity(url: url) == pane.document?.identity {
             if pane.status.isDirty {
-                let response = confirmAlert(title: "Reload file?",
-                                            message: "“\(url.lastPathComponent)” has unsaved changes. Reload and discard them?",
-                                            confirmTitle: "Reload",
+                let response = confirmAlert(title: L("Reload file?"),
+                                            message: L("“%1$@” has unsaved changes. Reload and discard them?", url.lastPathComponent),
+                                            confirmTitle: L("Reload"),
                                             destructive: true)
                 guard response == .alertFirstButtonReturn else { return false }
             }
@@ -3235,11 +3233,11 @@ final class MainViewController: NSViewController {
     private func confirmReplaceDirtyPane(_ pane: PaneViewModel, onSaved: (() -> Void)? = nil) -> Bool {
         guard pane.isOpen, pane.status.isDirty else { return true }
         let alert = NSAlert()
-        alert.messageText = "Replace unsaved changes?"
-        alert.informativeText = "“\(pane.status.fileName)” has unsaved changes. Save and replace, or replace without saving?"
-        alert.addButton(withTitle: "Save and Replace")
-        alert.addButton(withTitle: "Replace Without Saving")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L("Replace unsaved changes?")
+        alert.informativeText = L("“%1$@” has unsaved changes. Save and replace, or replace without saving?", pane.status.fileName)
+        alert.addButton(withTitle: L("Save and Replace"))
+        alert.addButton(withTitle: L("Replace Without Saving"))
+        alert.addButton(withTitle: L("Cancel"))
         switch Self.presentModal(alert, defaultInTest: .alertThirdButtonReturn) {  // Cancel in tests
         case .alertFirstButtonReturn:  // Save and Replace
             if pane.isUntitled {
@@ -3340,11 +3338,10 @@ final class MainViewController: NSViewController {
     /// act and deserves the same words.
     private func confirmJoinToItself(named name: String, verb: String) -> Bool {
         let alert = NSAlert()
-        alert.messageText = "Join “\(name)” to itself?"
-        alert.informativeText = "This doubles the content: the same bytes twice, one copy "
-            + "after the other."
+        alert.messageText = L("Join “%1$@” to itself?", name)
+        alert.informativeText = L("This doubles the content: the same bytes twice, one copy after the other.")
         alert.addButton(withTitle: verb)
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Cancel"))
         // Cancel in tests, and Cancel is where the Escape key lands.
         return Self.presentModal(alert, defaultInTest: .alertSecondButtonReturn)
             == .alertFirstButtonReturn
@@ -3356,10 +3353,10 @@ final class MainViewController: NSViewController {
     private func confirmJoinWithUnsavedChanges(_ pane: PaneViewModel, verb: String) -> Bool {
         guard pane.status.isDirty, !pane.isUntitled else { return true }
         let alert = NSAlert()
-        alert.messageText = "Join with unsaved changes?"
-        alert.informativeText = "“\(pane.status.fileName)” has unsaved changes. They travel into the joined image; the file on disk keeps its saved bytes."
+        alert.messageText = L("Join with unsaved changes?")
+        alert.informativeText = L("“%1$@” has unsaved changes. They travel into the joined image; the file on disk keeps its saved bytes.", pane.status.fileName)
         alert.addButton(withTitle: verb)
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Cancel"))
         if let joinConfirm {
             return joinConfirm(alert) == .alertFirstButtonReturn
         }
@@ -3391,8 +3388,8 @@ final class MainViewController: NSViewController {
         } catch let error as JoinError {
             switch error {
             case .emptySource:
-                presentAlert(title: "File is empty",
-                             message: "“\(url.lastPathComponent)” has no bytes to join.")
+                presentAlert(title: L("File is empty"),
+                             message: L("“%1$@” has no bytes to join.", url.lastPathComponent))
             }
             return
         } catch {
@@ -3457,8 +3454,8 @@ final class MainViewController: NSViewController {
         } catch let error as JoinError {
             switch error {
             case .emptySource:
-                presentAlert(title: "Pane is empty",
-                             message: "“\(sourceName)” has no bytes to join.")
+                presentAlert(title: L("Pane is empty"),
+                             message: L("“%1$@” has no bytes to join.", sourceName))
             }
             return
         } catch {
@@ -3726,9 +3723,9 @@ final class MainViewController: NSViewController {
         guard pane.isOpen, !pane.isUntitled else { return }  // nothing on disk to revert to
         if pane.status.isDirty {
             let response = confirmAlert(
-                title: "Revert to saved version?",
-                message: "All unsaved changes will be discarded.",
-                confirmTitle: "Revert",
+                title: L("Revert to saved version?"),
+                message: L("All unsaved changes will be discarded."),
+                confirmTitle: L("Revert"),
                 destructive: true
             )
             guard response == .alertFirstButtonReturn else { return }
@@ -3747,9 +3744,9 @@ final class MainViewController: NSViewController {
         guard let origin = pane.origin else { return }
         if pane.status.isDirty {
             let response = confirmAlert(
-                title: "Revert to the original bytes?",
-                message: "Every change made since “\(origin.partName)” was opened from \(origin.parentName) will be discarded.",
-                confirmTitle: "Revert",
+                title: L("Revert to the original bytes?"),
+                message: L("Every change made since “%1$@” was opened from %2$@ will be discarded.", origin.partName, origin.parentName),
+                confirmTitle: L("Revert"),
                 destructive: true
             )
             guard response == .alertFirstButtonReturn else { return }
@@ -3762,10 +3759,10 @@ final class MainViewController: NSViewController {
     private func validateRevert(_ item: NSMenuItem, for pane: PaneViewModel?) -> Bool {
         guard let pane else { return false }
         if pane.canRevertToOriginal {
-            item.title = "Revert to Original"
+            item.title = L("Revert to Original")
             return true
         }
-        item.title = "Revert to Saved"
+        item.title = L("Revert to Saved")
         // Nothing on disk to revert an untitled document to.
         return pane.isOpen && !pane.isUntitled
     }
@@ -3853,11 +3850,11 @@ final class MainViewController: NSViewController {
         let name = pane.status.fileName
         if pane.status.isDirty {
             let alert = NSAlert()
-            alert.messageText = "File changed on disk"
-            alert.informativeText = "“\(name)” has been changed by another program and has unsaved local changes."
-            alert.addButton(withTitle: "Reload and Discard Changes")
-            alert.addButton(withTitle: "Keep Local Changes")
-            alert.addButton(withTitle: "Save As…")
+            alert.messageText = L("File changed on disk")
+            alert.informativeText = L("“%1$@” has been changed by another program and has unsaved local changes.", name)
+            alert.addButton(withTitle: L("Reload and Discard Changes"))
+            alert.addButton(withTitle: L("Keep Local Changes"))
+            alert.addButton(withTitle: L("Save As…"))
             switch Self.presentModal(alert, defaultInTest: .alertSecondButtonReturn) {  // Keep Local Changes in tests
             case .alertFirstButtonReturn:
                 do {
@@ -3872,10 +3869,10 @@ final class MainViewController: NSViewController {
             }
         } else {
             let alert = NSAlert()
-            alert.messageText = "File changed on disk"
-            alert.informativeText = "“\(name)” has been changed by another program. Reload to see the latest version?"
-            alert.addButton(withTitle: "Reload")
-            alert.addButton(withTitle: "Keep Current Contents")
+            alert.messageText = L("File changed on disk")
+            alert.informativeText = L("“%1$@” has been changed by another program. Reload to see the latest version?", name)
+            alert.addButton(withTitle: L("Reload"))
+            alert.addButton(withTitle: L("Keep Current Contents"))
             if Self.presentModal(alert, defaultInTest: .alertSecondButtonReturn) == .alertFirstButtonReturn {  // Keep in tests
                 do {
                     try pane.revert()
@@ -3981,45 +3978,45 @@ final class MainViewController: NSViewController {
     /// separate block holds Swap Panels, which is mode-scoped (comparison only)
     /// and so carries no `representedObject`.
     func makePaneMenu(for pane: PaneViewModel) -> NSMenu {
-        let menu = NSMenu(title: "File")
+        let menu = NSMenu(title: L("File"))
         func add(_ title: String, _ action: Selector, _ key: String) {
             let item = menu.addItem(withTitle: title, action: action, keyEquivalent: key)
             item.target = self
             item.representedObject = pane
         }
-        add("New File", #selector(newDocumentInPane(_:)), "n")
-        add("Open…", #selector(openInPane(_:)), "o")
+        add(L("New File"), #selector(newDocumentInPane(_:)), "n")
+        add(L("Open…"), #selector(openInPane(_:)), "o")
         menu.addItem(.separator())
-        add("Save", #selector(savePaneDocument(_:)), "s")
-        add("Save As…", #selector(savePaneDocumentAs(_:)), "S")
+        add(L("Save"), #selector(savePaneDocument(_:)), "s")
+        add(L("Save As…"), #selector(savePaneDocumentAs(_:)), "S")
         // Rename (§23) sits with the two Saves because it is the third thing
         // that decides what this document is called — and the only one of them
         // that writes nothing. Enabled for an unsaved document alone; a file's
         // name is its file's.
-        add("Rename", #selector(renamePaneDocument(_:)), "")
-        add("Revert to Saved", #selector(revertPaneDocument(_:)), "")
+        add(L("Rename"), #selector(renamePaneDocument(_:)), "")
+        add(L("Revert to Saved"), #selector(revertPaneDocument(_:)), "")
         // Update in Parent (`Design/UEFI/UPDATE_IN_PARENT.md` §3): with the
         // Saves, for a tab opened from a part of another document.
-        add("Update in Parent", #selector(updatePaneInParent(_:)), "")
+        add(L("Update in Parent"), #selector(updatePaneInParent(_:)), "")
         menu.addItem(.separator())
         // The join twins (§22.1): beside the file-scoped commands, acting on
         // THIS pane (the menu's representedObject) rather than the active one.
         // Insert (at the start) is grouped with the edit commands above;
         // Append (at the end) sits in its own block — the menu bar's File
         // submenu's order, mirrored here.
-        add("Insert File at Start…", #selector(insertFileAtStartInPane(_:)), "")
-        add("Append File…", #selector(appendFileInPane(_:)), "")
+        add(L("Insert File at Start…"), #selector(insertFileAtStartInPane(_:)), "")
+        add(L("Append File…"), #selector(appendFileInPane(_:)), "")
         menu.addItem(.separator())
         // Duplicate (§23): the other direction from the joins — this pane's
         // content goes out into the free pane, rather than a file coming in. Its
         // own block, because it is the only item here that is about the window's
         // second pane.
-        add("Duplicate", #selector(duplicatePaneDocument(_:)), "")
+        add(L("Duplicate"), #selector(duplicatePaneDocument(_:)), "")
         // Open in New Tab: the same subject as Duplicate — where this document
         // lives — pointing the other way. Duplicate sends a copy into the free
         // pane; this sends the document itself out to a tab of its own, leaving
         // the comparison behind as a single file (`Design/TABS_PLAN.md`).
-        add("Open in New Tab", #selector(openPaneInNewTab(_:)), "")
+        add(L("Open in New Tab"), #selector(openPaneInNewTab(_:)), "")
         menu.addItem(.separator())
         // Copy File Name / Copy Full Path are header-only, like Show in Finder
         // below: they put THIS pane's file's name (or its whole path) on the
@@ -4027,19 +4024,19 @@ final class MainViewController: NSViewController {
         // (active-pane) doesn't duplicate them. They need a real file to copy —
         // nothing for an empty pane, no name or path for an untitled document —
         // so validation disables them there, the same rule as Show in Finder.
-        add("Copy File Name", #selector(copyPaneFileName(_:)), "")
-        add("Copy Full Path", #selector(copyPaneFullPath(_:)), "")
+        add(L("Copy File Name"), #selector(copyPaneFileName(_:)), "")
+        add(L("Copy Full Path"), #selector(copyPaneFullPath(_:)), "")
         menu.addItem(.separator())
         // Show in Finder is header-only: it reveals THIS pane's file in the
         // Finder, which is a per-pane act, so the menu bar's File submenu
         // (active-pane) doesn't duplicate it. It keeps its own block between
         // the two join commands.
-        add("Show in Finder", #selector(showPaneInFinder(_:)), "")
-        add("Close", #selector(closePaneDocument(_:)), "w")
+        add(L("Show in Finder"), #selector(showPaneInFinder(_:)), "")
+        add(L("Close"), #selector(closePaneDocument(_:)), "w")
         // Swap Panels is a comparison-mode command, not a per-pane File action,
         // so it gets its own block and targets `swapPanes` directly.
         menu.addItem(.separator())
-        let swapItem = menu.addItem(withTitle: "Swap Panels",
+        let swapItem = menu.addItem(withTitle: L("Swap Panels"),
                                     action: #selector(swapPanes),
                                     keyEquivalent: "")
         swapItem.target = self
@@ -4058,19 +4055,19 @@ final class MainViewController: NSViewController {
     /// the piece's own Save/Replace/Select/Edit beside it, the same items the
     /// strip's menu offers for the piece under the pointer.
     func makeOffsetMenu(for pane: PaneViewModel, offset: UInt64) -> NSMenu {
-        let menu = NSMenu(title: "Offset")
+        let menu = NSMenu(title: L("Offset"))
         let selection = pane.hexSelection()
         if !selection.isEmpty, offset >= selection.start, offset < selection.end {
             addSelectionMenuItems(to: menu, for: pane, offset: offset)
             menu.addItem(.separator())
         }
-        let copy = menu.addItem(withTitle: "Copy offset",
+        let copy = menu.addItem(withTitle: L("Copy offset"),
                                 action: #selector(copyOffset(_:)),
                                 keyEquivalent: "")
         copy.target = self
         copy.representedObject = OffsetContextTarget(pane: pane, offset: offset)
         menu.addItem(.separator())
-        let select = menu.addItem(withTitle: "Select Block from Here at \(offset.bareAddress)",
+        let select = menu.addItem(withTitle: L("Select Block from Here at %1$@", offset.bareAddress),
                                   action: #selector(selectBlockFromHere(_:)),
                                   keyEquivalent: "")
         select.target = self
@@ -4108,9 +4105,9 @@ final class MainViewController: NSViewController {
     /// one number, two readings of it, and the menu has to say which is which.
     /// The hex one is bare, without the prefix the readout above it wears.
     func makeSizeMenu(size: UInt64, form: StatusLabel.SizeForm) -> NSMenu {
-        let menu = NSMenu(title: "File Size")
+        let menu = NSMenu(title: L("File Size"))
         let named = form == .hex ? "Copy hex size" : "Copy size"
-        let copy = menu.addItem(withTitle: "\(named) \(StatusLabel.copyText(size, as: form))",
+        let copy = menu.addItem(withTitle: L("%1$@ %2$@", named, StatusLabel.copyText(size, as: form)),
                                 action: #selector(copyStatusValue(_:)),
                                 keyEquivalent: "")
         copy.target = self
@@ -4128,8 +4125,8 @@ final class MainViewController: NSViewController {
     /// goes next: an offset field takes `0x` followed by hex, and leading zeros
     /// are hex.
     func makeStatusOffsetMenu(digits: String) -> NSMenu {
-        let menu = NSMenu(title: "Offset")
-        let copy = menu.addItem(withTitle: "Copy offset \(digits)",
+        let menu = NSMenu(title: L("Offset"))
+        let copy = menu.addItem(withTitle: L("Copy offset %1$@", digits),
                                 action: #selector(copyStatusValue(_:)),
                                 keyEquivalent: "")
         copy.target = self
@@ -4171,8 +4168,8 @@ final class MainViewController: NSViewController {
         // One zone is a single named item — there is nothing to choose between —
         // and several become a submenu, innermost first, listing every zone.
         if zones.count > 1 {
-            let parent = menu.addItem(withTitle: "Select Zone", action: nil, keyEquivalent: "")
-            let submenu = NSMenu(title: "Select Zone")
+            let parent = menu.addItem(withTitle: L("Select Zone"), action: nil, keyEquivalent: "")
+            let submenu = NSMenu(title: L("Select Zone"))
             for zone in zones { submenu.addItem(item(zone.name, #selector(selectZone(_:)), zone)) }
             parent.submenu = submenu
         } else {
@@ -4181,9 +4178,9 @@ final class MainViewController: NSViewController {
         // Open Zone mirrors the choice, taking the picked zone's bytes
         // out into a document of their own.
         if zones.count > 1 {
-            let parent = menu.addItem(withTitle: "Open Zone",
+            let parent = menu.addItem(withTitle: L("Open Zone"),
                                       action: nil, keyEquivalent: "")
-            let submenu = NSMenu(title: "Open Zone")
+            let submenu = NSMenu(title: L("Open Zone"))
             for zone in zones {
                 submenu.addItem(item(zone.name, #selector(openZoneInPanel(_:)), zone))
             }
@@ -4194,8 +4191,8 @@ final class MainViewController: NSViewController {
         }
         // Save Zone as… mirrors the choice, writing the picked zone's bytes out.
         if zones.count > 1 {
-            let parent = menu.addItem(withTitle: "Save Zone as…", action: nil, keyEquivalent: "")
-            let submenu = NSMenu(title: "Save Zone as…")
+            let parent = menu.addItem(withTitle: L("Save Zone as…"), action: nil, keyEquivalent: "")
+            let submenu = NSMenu(title: L("Save Zone as…"))
             for zone in zones { submenu.addItem(item(zone.name, #selector(saveZone(_:)), zone)) }
             parent.submenu = submenu
         } else {
@@ -4233,7 +4230,7 @@ final class MainViewController: NSViewController {
             item.target = self
             item.representedObject = target
         }
-        add("Split Here at \(offset.bareAddress)", #selector(splitHere(_:)))
+        add(L("Split Here at %1$@", offset.bareAddress), #selector(splitHere(_:)))
         // The rest of the block works on a partition: with no cuts there is one
         // whole-file piece and nothing to save out, swap, select, rename or
         // merge, so the block stays Split Here alone (§21.3).
@@ -4250,15 +4247,19 @@ final class MainViewController: NSViewController {
                     item.representedObject = pieceTarget
                 }
                 menu.addItem(.separator())
-                pieceItem("Save Segment \(piece.label)…", #selector(segmentMenuSaveSegment(_:)))
-                pieceItem("Replace Segment \(piece.label) from File…", #selector(segmentMenuReplaceSegment(_:)))
+                pieceItem(L("Save Segment %1$@…", piece.label),
+                          #selector(segmentMenuSaveSegment(_:)))
+                pieceItem(L("Replace Segment %1$@ from File…", piece.label),
+                          #selector(segmentMenuReplaceSegment(_:)))
                 menu.addItem(.separator())
                 // Select/Edit/Merge grouped as the strip's menu has them: the
                 // selection- and partition-shaping acts after the file I/O.
-                pieceItem("Select Segment \(piece.label)", #selector(segmentMenuSelectSegment(_:)))
-                pieceItem("Edit Segment \(piece.label)", #selector(segmentMenuEditSegment(_:)))
+                pieceItem(L("Select Segment %1$@", piece.label),
+                          #selector(segmentMenuSelectSegment(_:)))
+                pieceItem(L("Edit Segment %1$@", piece.label),
+                          #selector(segmentMenuEditSegment(_:)))
             }
-            add("Merge", #selector(removeSegment(_:)))
+            add(L("Merge"), #selector(removeSegment(_:)))
         }
         // Revert Segment to «file» (§21.7): only where the piece under the
         // click came from one, and named for it, the way the strip's menu is.
@@ -4266,7 +4267,7 @@ final class MainViewController: NSViewController {
         // with no cuts — a whole-file piece can have been replaced from one.
         if let piece = pane.segmentStore.segment(containing: offset),
            let source = pane.segmentSource(of: piece) {
-            let item = menu.addItem(withTitle: "Revert Segment \(piece.label) to “\(source.name)”",
+            let item = menu.addItem(withTitle: L("Revert Segment %1$@ to “%2$@”", piece.label, source.name),
                                     action: #selector(revertSegmentAtOffset(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = target
@@ -4309,9 +4310,9 @@ final class MainViewController: NSViewController {
             item.target = self
             item.representedObject = target
         }
-        add("Toggle Bookmark at \(address)", #selector(toggleBookmarkAtOffset(_:)))
+        add(L("Toggle Bookmark at %1$@", address), #selector(toggleBookmarkAtOffset(_:)))
         if pane.bookmarks?.bookmark(atRowContaining: offset) != nil {
-            add("Edit Bookmark…", #selector(editBookmarkAtOffset(_:)))
+            add(L("Edit Bookmark…"), #selector(editBookmarkAtOffset(_:)))
         }
     }
 
@@ -4320,22 +4321,22 @@ final class MainViewController: NSViewController {
     /// selection, exactly as the offset items below resolve the pane.
     private func addSelectionMenuItems(to menu: NSMenu, for pane: PaneViewModel, offset: UInt64) {
         let target = OffsetContextTarget(pane: pane, offset: offset)
-        let copy = menu.addItem(withTitle: "Copy",
+        let copy = menu.addItem(withTitle: L("Copy"),
                                 action: #selector(copyPaneSelection(_:)),
                                 keyEquivalent: "")
         copy.target = self
         copy.representedObject = target
-        let save = menu.addItem(withTitle: "Save Selection as…",
+        let save = menu.addItem(withTitle: L("Save Selection as…"),
                                 action: #selector(savePaneSelectionAs(_:)),
                                 keyEquivalent: "")
         save.target = self
         save.representedObject = target
-        let fill = menu.addItem(withTitle: "Fill Selection with…",
+        let fill = menu.addItem(withTitle: L("Fill Selection with…"),
                                 action: #selector(fillPaneSelection(_:)),
                                 keyEquivalent: "")
         fill.target = self
         fill.representedObject = target
-        let delete = menu.addItem(withTitle: "Delete Bytes…",
+        let delete = menu.addItem(withTitle: L("Delete Bytes…"),
                                   action: #selector(deletePaneSelection(_:)),
                                   keyEquivalent: "")
         delete.target = self
@@ -4671,9 +4672,10 @@ final class MainViewController: NSViewController {
         guard !bytes.isEmpty else { return }
         let offset = pane.caretOffset
         let response = confirmAlert(
-            title: "Paste Insert?",
-            message: "Insert \(bytes.count) byte(s) at offset \(String(format: "0x%X", offset)). Existing bytes from this offset on will shift.",
-            confirmTitle: "Insert",
+            title: L("Paste Insert?"),
+            message: L("Insert %1$@ byte(s) at offset %2$@. Existing bytes from this offset on will shift.",
+                       bytes.count, String(format: "0x%X", offset)),
+            confirmTitle: L("Insert"),
             destructive: true,
             suppressible: true
         )
@@ -4726,9 +4728,10 @@ final class MainViewController: NSViewController {
         let start = selection.start
         let count = selection.isEmpty ? 1 : selection.count
         let response = confirmAlert(
-            title: "Delete \(count) byte(s)?",
-            message: "Bytes from offset \(String(format: "0x%X", start)) will be removed. Subsequent offsets will shift — the file structure may be affected.",
-            confirmTitle: "Delete",
+            title: L("Delete %1$@ byte(s)?", count),
+            message: L("Bytes from offset %1$@ will be removed. Subsequent offsets will shift — the file structure may be affected.",
+                       String(format: "0x%X", start)),
+            confirmTitle: L("Delete"),
             destructive: true,
             suppressible: true
         )
@@ -4764,9 +4767,12 @@ final class MainViewController: NSViewController {
             guard let self, let pane else { return true }
             let offset = pane.caretOffset
             let response = self.confirmAlert(
-                title: "Insert?",
-                message: "Inserting at offset \(String(format: "0x%X", offset)) shifts every byte from here on — the file structure may be affected.",
-                confirmTitle: "Insert",
+                title: L("Insert?"),
+                message: L("Inserting at offset %1$@ shifts every byte from here on — the file structure may be affected.",
+                           String(format: "0x%X", offset)),
+                // Typing, not pasting: English says "Insert" for both, and a
+                // language that does not has somewhere to say so.
+                confirmTitle: L("Insert", context: "typing"),
                 destructive: true,
                 suppressible: true
             )
@@ -5449,12 +5455,30 @@ final class MainViewController: NSViewController {
         let names = Set(sources.map(\.name)).sorted().map { "“\($0)”" }
         presentAlert(
             title: sources.count == 1
-                ? "“\(first.name)” is a segment's source"
-                : "\(names.count) of these names are segment sources",
-            message: "This dump has \(sources.count == 1 ? "a segment" : "segments") that came from "
-                + "\(names.joined(separator: ", ")), and writing there would replace the "
-                + "\(sources.count == 1 ? "file that segment is" : "files those segments are") "
-                + "measured against. Choose another \(urls.count == 1 ? "name" : "folder")."
+                ? L("“%1$@” is a segment's source", first.name)
+                : L("%1$@ of these names are segment sources", names.count),
+            // One whole sentence per plural form, and per branch. A
+            // translation cannot reach inside a sentence English glued
+            // together from pieces: dropping a bare «папку» into "Choose
+            // another %2$@" gave «Выберите другое папку», because Russian
+            // agrees the adjective with the noun's gender and English does
+            // not agree anything with anything.
+            message: {
+                switch (sources.count == 1, urls.count == 1) {
+                case (true, true):
+                    return L("This dump has a segment that came from %1$@, and writing there would replace the file that segment is measured against. Choose another name.",
+                             names.joined(separator: ", "))
+                case (true, false):
+                    return L("This dump has a segment that came from %1$@, and writing there would replace the file that segment is measured against. Choose another folder.",
+                             names.joined(separator: ", "))
+                case (false, true):
+                    return L("This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another name.",
+                             names.joined(separator: ", "))
+                case (false, false):
+                    return L("This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another folder.",
+                             names.joined(separator: ", "))
+                }
+            }()
         )
         return false
     }
@@ -5527,10 +5551,10 @@ final class MainViewController: NSViewController {
                 // is what they meant, so only the user is asked — and a plain
                 // same-length swap never sees this.
                 guard confirmSegmentLengthChange(
-                    title: "Replace \(piece.label) at the file's length?",
+                    title: L("Replace %1$@ at the file's length?", piece.label),
                     piece: piece, pieceLength: pieceLength,
                     sourceName: url.lastPathComponent, sourceLength: donorLength,
-                    confirmTitle: "Replace and Resize") else { return false }
+                    confirmTitle: L("Replace and Resize")) else { return false }
                 do {
                     try pane.replaceSegment(piece, withContentsOf: url, allowingLengthChange: true)
                     return true
@@ -5560,9 +5584,8 @@ final class MainViewController: NSViewController {
         guard pane.isOpen, let source = pane.segmentSource(of: piece) else { return false }
         guard let donor = pane.segmentRevertDonor(piece) else {
             presentAlert(
-                title: "“\(source.name)” cannot be read",
-                message: "\(piece.label) came from it, but it is no longer there to go back to. "
-                    + "Nothing in the dump was changed."
+                title: L("“%1$@” cannot be read", source.name),
+                message: L("%1$@ came from it, but it is no longer there to go back to. Nothing in the dump was changed.", piece.label)
             )
             return false
         }
@@ -5570,10 +5593,10 @@ final class MainViewController: NSViewController {
         var allowLengthChange = false
         if donor.size != pieceLength {
             guard confirmSegmentLengthChange(
-                title: "Restore \(piece.label) at the source's length?",
+                title: L("Restore %1$@ at the source's length?", piece.label),
                 piece: piece, pieceLength: pieceLength,
                 sourceName: source.name, sourceLength: donor.size,
-                confirmTitle: "Restore Length") else { return false }
+                confirmTitle: L("Restore Length")) else { return false }
             allowLengthChange = true
         }
         do {
@@ -5594,11 +5617,18 @@ final class MainViewController: NSViewController {
                                             confirmTitle: String) -> Bool {
         let grows = sourceLength > pieceLength
         let shift = grows ? sourceLength - pieceLength : pieceLength - sourceLength
-        let message = "\(piece.label) is \(FilePaneView.friendlySize(pieceLength)), "
-            + "and “\(sourceName)” is \(FilePaneView.friendlySize(sourceLength)). "
-            + "Taking the file's length \(grows ? "adds" : "removes") "
-            + "\(FilePaneView.friendlySize(shift)) at the end of the segment, "
-            + "so every segment after it moves by that much."
+        // Two whole sentences rather than one assembled from five pieces with
+        // an English adds/removes inside it: the message was built in English
+        // and shown under a translated title.
+        let message = grows
+            ? L("%1$@ is %2$@, and “%3$@” is %4$@. Taking the file's length adds %5$@ at the end of the segment, so every segment after it moves by that much.",
+                piece.label, FilePaneView.friendlySize(pieceLength),
+                sourceName, FilePaneView.friendlySize(sourceLength),
+                FilePaneView.friendlySize(shift))
+            : L("%1$@ is %2$@, and “%3$@” is %4$@. Taking the file's length removes %5$@ from the end of the segment, so every segment after it moves by that much.",
+                piece.label, FilePaneView.friendlySize(pieceLength),
+                sourceName, FilePaneView.friendlySize(sourceLength),
+                FilePaneView.friendlySize(shift))
         return confirmAlert(title: title, message: message, confirmTitle: confirmTitle)
             == .alertFirstButtonReturn
     }
@@ -5616,13 +5646,17 @@ final class MainViewController: NSViewController {
         guard !pieces.isEmpty else { return }
         let names = pieces.map(\.label).joined(separator: ", ")
         let alert = NSAlert()
-        alert.messageText = "Segment source changed on disk"
-        alert.informativeText = "“\(source.name)” has been changed by another program. "
-            + "\(pieces.count == 1 ? "Segment" : "Segments") \(names) came from it, and "
-            + "\(pieces.count == 1 ? "is" : "are") now compared against its new contents. "
-            + "Reload to take the new bytes into the dump."
-        alert.addButton(withTitle: "Reload \(pieces.count == 1 ? "Segment" : "Segments")")
-        alert.addButton(withTitle: "Keep Current Contents")
+        alert.messageText = L("Segment source changed on disk")
+        // One sentence per plural form rather than a sentence assembled from
+        // three pieces: Russian has three forms where English has two, and a
+        // translation cannot reach inside a sentence English glued together.
+        alert.informativeText = pieces.count == 1
+            ? L("“%1$@” has been changed by another program. Segment %2$@ came from it, and is now compared against its new contents. Reload to take the new bytes into the dump.",
+                source.name, names)
+            : L("“%1$@” has been changed by another program. Segments %2$@ came from it, and are now compared against its new contents. Reload to take the new bytes into the dump.",
+                source.name, names)
+        alert.addButton(withTitle: pieces.count == 1 ? L("Reload Segment") : L("Reload Segments"))
+        alert.addButton(withTitle: L("Keep Current Contents"))
         guard Self.presentModal(alert, defaultInTest: .alertSecondButtonReturn)  // Keep in tests
             == .alertFirstButtonReturn else { return }
         // Back to front: reverting a piece can change its length, which moves
@@ -5649,15 +5683,20 @@ final class MainViewController: NSViewController {
             fileManager.fileExists(atPath: directory.appendingPathComponent($0.name).path)
         }
         let alert = NSAlert()
-        alert.messageText = "Save \(parts.count) Segment\(parts.count == 1 ? "" : "s")?"
+        // One whole sentence per plural form: English has two and Russian
+        // three, and a title glued together from a count and a suffix cannot
+        // be translated into either.
+        alert.messageText = parts.count == 1
+            ? L("Save 1 segment?")
+            : L("Save %1$@ segments?", parts.count)
         var informative = lines.joined(separator: "\n")
         if !existing.isEmpty {
-            informative += "\n\nThese files will be replaced:\n"
+            informative += "\n\n" + L("These files will be replaced:") + "\n"
                 + existing.map(\.name).joined(separator: "\n")
         }
         alert.informativeText = informative
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Save"))
+        alert.addButton(withTitle: L("Cancel"))
         let response: NSApplication.ModalResponse
         if let segmentWriteConfirm {
             response = segmentWriteConfirm(alert)
@@ -5725,9 +5764,10 @@ final class MainViewController: NSViewController {
             let target = min(offset, panelPane.fileSize)
             if offset > panelPane.fileSize {
                 presentAlert(
-                    title: "Offset beyond end of file",
-                    message: "Offset \(String(format: "0x%X", offset)) is beyond the end of "
-                        + "\(panelPane.status.fileName) (\(String(format: "0x%X", panelPane.fileSize)) bytes). Moved to the end."
+                    title: L("Offset beyond end of file"),
+                    message: L("Offset %1$@ is beyond the end of %2$@ (%3$@ bytes). Moved to the end.",
+                               String(format: "0x%X", offset), panelPane.status.fileName,
+                               String(format: "0x%X", panelPane.fileSize))
                 )
             }
             panelPane.moveCaret(to: target)
@@ -5739,8 +5779,9 @@ final class MainViewController: NSViewController {
         let largerSize = max(windowModel.pane1.fileSize, windowModel.pane2.fileSize)
         if offset > largerSize {
             presentAlert(
-                title: "Offset beyond end of file",
-                message: "Offset \(String(format: "0x%X", offset)) is beyond the end of the file(s) (\(String(format: "0x%X", largerSize)) bytes). Moved to the end."
+                title: L("Offset beyond end of file"),
+                message: L("Offset %1$@ is beyond the end of the file(s) (%2$@ bytes). Moved to the end.",
+                           String(format: "0x%X", offset), String(format: "0x%X", largerSize))
             )
         }
         let target = min(offset, largerSize)
@@ -6564,13 +6605,13 @@ final class MainViewController: NSViewController {
         alert.messageText = title
         alert.informativeText = message
         alert.addButton(withTitle: confirmTitle)
-        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: L("Cancel"))
         if destructive {
             alert.buttons.first?.hasDestructiveAction = true
         }
         if suppressible {
             alert.showsSuppressionButton = true
-            alert.suppressionButton?.title = "Do not ask again"
+            alert.suppressionButton?.title = L("Do not ask again")
         }
         let response = Self.presentModal(alert, defaultInTest: .alertSecondButtonReturn)  // Cancel in tests
         if suppressible { Self.applySuppression(of: alert) }
@@ -6590,11 +6631,11 @@ final class MainViewController: NSViewController {
     @discardableResult
     private func confirmSaveDiscardCancel() -> NSApplication.ModalResponse {
         let alert = NSAlert()
-        alert.messageText = "Save changes before closing?"
-        alert.informativeText = "Do you want to save the changes you made?"
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Don't Save")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L("Save changes before closing?")
+        alert.informativeText = L("Do you want to save the changes you made?")
+        alert.addButton(withTitle: L("Save"))
+        alert.addButton(withTitle: L("Don't Save"))
+        alert.addButton(withTitle: L("Cancel"))
         return Self.presentModal(alert, defaultInTest: .alertThirdButtonReturn)  // Cancel in tests
     }
 
@@ -6644,8 +6685,8 @@ final class MainViewController: NSViewController {
     func presentFileError(_ title: String, _ error: Error, url: URL?) {
         if isSandboxAccessDenied(error) {
             let name = url?.lastPathComponent ?? "the file"
-            presentAlert(title: "Access denied",
-                         message: "ByteRipper cannot access “\(name)”. Choose it again with File > Open to grant access.")
+            presentAlert(title: L("Access denied"),
+                         message: L("ByteRipper cannot access “%1$@”. Choose it again with File > Open to grant access.", name))
         } else {
             presentError(title, error)
         }
@@ -6870,11 +6911,11 @@ extension MainViewController: NSWindowDelegate {
 
         let names = dirty.map { "“\($0.status.fileName)”" }.joined(separator: ", ")
         let alert = NSAlert()
-        alert.messageText = "Save changes before closing?"
-        alert.informativeText = "The following files have unsaved changes: \(names)."
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Don't Save")
-        alert.addButton(withTitle: "Cancel")
+        alert.messageText = L("Save changes before closing?")
+        alert.informativeText = L("The following files have unsaved changes: %1$@.", names)
+        alert.addButton(withTitle: L("Save"))
+        alert.addButton(withTitle: L("Don't Save"))
+        alert.addButton(withTitle: L("Cancel"))
         switch Self.presentModal(alert, defaultInTest: .alertThirdButtonReturn) {  // Cancel in tests (abort close)
         case .alertFirstButtonReturn:
             // Untitled panes have no file yet, so their "Save" runs a Save As
@@ -6962,7 +7003,9 @@ extension MainViewController: NSToolbarItemValidation {
             let offersStacked = LayoutSettings.isVertical
             item.image = NSImage(systemSymbolName: offersStacked ? "square.split.1x2" : "square.split.2x1",
                                  accessibilityDescription: offersStacked ? "Stack Panes" : "Side-by-Side Panes")
-            item.toolTip = offersStacked ? "Stack the panes" : "Place the panes side by side"
+            ControlHelp.describe(item, name: L("Pane Layout"),
+                                 tooltip: offersStacked ? L("Stack the panes")
+                                                       : L("Place the panes side by side"))
             return windowPanesAreReachable && mode == .comparison
         default:
             return true
@@ -7029,7 +7072,7 @@ extension MainViewController: NSMenuItemValidation {
             // A Show/Hide item names what it will do, so the title flips with
             // the panel's state (§19). Always enabled: the minimap works with
             // no file open too (it just has nothing to draw).
-            menuItem.title = surface.minimapPanelVisible ? "Hide Minimap" : "Show Minimap"
+            menuItem.title = surface.minimapPanelVisible ? L("Hide Minimap") : L("Show Minimap")
             return true
         case #selector(toggleInsertMode):
             // A checked toggle reading the ACTIVE pane's mode: the mode is per
@@ -7042,10 +7085,10 @@ extension MainViewController: NSMenuItemValidation {
             // A step made on the user's behalf by something with a name of its
             // own says what it was — "Undo Add Microcode" (§26). Ordinary
             // editing has no name, and the item stays the bare verb.
-            menuItem.title = activePane.undoLabel.map { "Undo \($0)" } ?? "Undo"
+            menuItem.title = activePane.undoLabel.map { L("Undo %1$@", $0) } ?? L("Undo")
             return activePane.isOpen
         case #selector(redoEdit):
-            menuItem.title = activePane.redoLabel.map { "Redo \($0)" } ?? "Redo"
+            menuItem.title = activePane.redoLabel.map { L("Redo %1$@", $0) } ?? L("Redo")
             return activePane.isOpen
         case #selector(saveDocument),
              #selector(saveDocumentAs),
@@ -7085,7 +7128,7 @@ extension MainViewController: NSMenuItemValidation {
             let piece = pane.segmentStore.segment(containing: position)
             // Name the piece and the neighbour it merges into, so the menu says
             // what it will do (§21.3) — "Merge S1 into S0", not a bare "Merge".
-            menuItem.title = piece.map { $0.mergeTitle } ?? "Merge"
+            menuItem.title = piece.map { $0.mergeTitle } ?? L("Merge")
             return piece != nil && pane.segmentStore.current.pieces.count > 1
         case #selector(updateInParent):
             return validateUpdateInParent(menuItem, for: activePane)

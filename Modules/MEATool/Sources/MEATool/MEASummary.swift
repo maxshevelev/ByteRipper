@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import MEFirmware
 import MEPresentation
 import ToolModuleKit
@@ -304,7 +305,7 @@ public enum MEASummary {
                 MEASummaryRow(MEAText.title(issue.severity.rawValue),
                               .value(issue.message))
             }
-            blocks.append(MEASummaryBlock(title: "Messages", rows: messages))
+            blocks.append(MEASummaryBlock(title: L("Messages"), rows: messages))
         }
         return blocks
     }

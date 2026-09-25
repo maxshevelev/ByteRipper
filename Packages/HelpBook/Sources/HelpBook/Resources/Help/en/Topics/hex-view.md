@@ -2,6 +2,11 @@
 
 > Sixteen bytes to a row, the address on the left, the text on the right.
 
+@covers menu.view.word-size
+@covers menu.view.zoom
+@covers settings.appearance
+@covers settings.text-decoding
+
 Each pane shows its file as a standard hex dump:
 
 - **The offset column** on the left is the address of the first byte of the row, in hex and zero-based. This is the number that matters on a bench: it is the position on the chip.

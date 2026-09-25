@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import ToolModuleKit
 import UEFIImage
 
@@ -51,7 +52,7 @@ public enum UEFITreeMarks {
             opens = isOpen && node.children.contains { $0.space != node.space }
             if failed {
                 cautions.append(decompressionFailure(of: node, in: image)
-                    ?? "\(compression.algorithm) data did not decompress")
+                    ?? L("%1$@ data did not decompress", compression.algorithm))
             }
         }
 
@@ -87,8 +88,8 @@ public enum UEFITreeMarks {
     public static func checksumText(_ fields: Set<UEFIChecksumField>) -> String {
         let names = fields.map(\.label).sorted()
         return names.count == 1
-            ? "Invalid \(names[0]) checksum"
-            : "Invalid checksums: \(names.joined(separator: ", "))"
+            ? L("Invalid %1$@ checksum", names[0])
+            : L("Invalid checksums: %1$@", names.joined(separator: ", "))
     }
 
     /// The words on the badge of a node that holds a list of protected ranges
@@ -97,11 +98,11 @@ public enum UEFITreeMarks {
         guard node.space == .file else { return nil }
         switch node.kind {
         case .file where node.guid == KnownGUIDs.amiHashFile:
-            return "Holds the AMI vendor hash table: ranges the firmware checks at boot"
+            return L("Holds the AMI vendor hash table: ranges the firmware checks at boot")
         case .file where node.guid == KnownGUIDs.phoenixHashFile:
-            return "Holds the Phoenix vendor hash table: ranges the firmware checks at boot"
+            return L("Holds the Phoenix vendor hash table: ranges the firmware checks at boot")
         case .flashDeviceMapStore:
-            return "Holds the Insyde flash device map: ranges the firmware checks at boot"
+            return L("Holds the Insyde flash device map: ranges the firmware checks at boot")
         default:
             return nil
         }
@@ -127,11 +128,11 @@ public enum UEFITreeMarks {
             guard startsHere || namesIt else { continue }
             switch range.verdict {
             case .mismatch:
-                let text = "\(range.kind.name)\(at(range)) does not match its hash"
+                let text = L("%1$@%2$@ does not match its hash", range.kind.name, at(range))
                 if range.kind.isIBB { cautions.append(text) } else { errors.append(text) }
             case .unsupported(let algorithm):
-                cautions.append("\(range.kind.name)\(at(range)) could not be checked: "
-                                + "\(TCGHash.name(algorithm)) is not computed here")
+                cautions.append(L("%1$@%2$@ could not be checked: %3$@ is not computed here",
+                                  range.kind.name, at(range), TCGHash.name(algorithm)))
             case .matches, .unchecked:
                 break
             }
@@ -155,10 +156,10 @@ public enum UEFITreeMarks {
         }
         let section = image.innermostNode(containing: outermost)
             .flatMap { $0.header.lowerBound == outermost ? $0.name : nil }
-            ?? "a compressed section"
+            ?? L("a compressed section")
         let hex = "0x" + String(outermost, radix: 16, uppercase: true)
-        var text = "Decompressed from \(section) at \(hex)"
-        if chain.count > 1 { text += ", \(chain.count) compressed sections deep" }
+        var text = L("Decompressed from %1$@ at %2$@", section, hex)
+        if chain.count > 1 { text = L("%1$@, %2$@ compressed sections deep", text, chain.count) }
         return text
     }
 

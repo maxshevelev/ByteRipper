@@ -2,6 +2,8 @@ import ALSplitView
 import AppKit
 import HelpBook
 import AppPalette
+import HelpUI
+import Localization
 import MEPresentation
 import ToolModuleKit
 import UEFIImage
@@ -166,7 +168,7 @@ import UEFITool
     private let revealButton = NSButton()
     /// Whether the tree lists empty padding, in the title row beside the
     /// panel's other control.
-    private let paddingToggle = NSButton(checkboxWithTitle: "Show Empty Padding", target: nil, action: nil)
+    private let paddingToggle = NSButton(checkboxWithTitle: L("Show Empty Padding"), target: nil, action: nil)
     private let outline = UEFIOutlineView()
     private let outlineScroll = NSScrollView()
     /// The tree and its legend, as one pane of the splitter: the legend
@@ -235,7 +237,7 @@ import UEFITool
         // header: the glyph carries the meaning, not a bezel.
         revealButton.image = NSImage(
             systemSymbolName: "dot.scope",
-            accessibilityDescription: "Reveal node at caret"
+            accessibilityDescription: L("Reveal node at caret")
         )
         revealButton.symbolConfiguration = NSImage.SymbolConfiguration(
             pointSize: 12, weight: .regular
@@ -243,7 +245,7 @@ import UEFITool
         revealButton.isBordered = false
         revealButton.imagePosition = .imageOnly
         revealButton.contentTintColor = .secondaryLabelColor
-        revealButton.toolTip = "Show the node under the caret in the tree"
+        ControlHelp.describe(revealButton, L("Show the node under the caret in the tree"))
         revealButton.target = self
         revealButton.action = #selector(revealClicked)
         revealButton.translatesAutoresizingMaskIntoConstraints = false
@@ -253,7 +255,7 @@ import UEFITool
         paddingToggle.state = showsEmptyPadding ? .on : .off
         paddingToggle.target = self
         paddingToggle.action = #selector(paddingToggleClicked)
-        paddingToggle.toolTip = "List the padding nobody wrote to — erased bytes between structures"
+        ControlHelp.describe(paddingToggle, L("List the padding nobody wrote to — erased bytes between structures"))
         paddingToggle.setContentCompressionResistancePriority(.defaultHigh + 1, for: .horizontal)
         paddingToggle.translatesAutoresizingMaskIntoConstraints = false
         // The title gives way first: a long image name truncates before the
@@ -399,7 +401,7 @@ import UEFITool
         outline.onRowReclick = { [weak self] row in self?.chooseNode(atRow: row) }
 
         let name = NSTableColumn(identifier: Column.name)
-        name.title = "Name"
+        name.title = L("Name")
         name.width = Self.nameWidth
         // Draggable, and the one column that also takes the slack when the
         // panel is resized. Without `.userResizingMask` a column cannot be
@@ -409,13 +411,13 @@ import UEFITool
         outline.outlineTableColumn = name
 
         let type = NSTableColumn(identifier: Column.type)
-        type.title = "Type"
+        type.title = L("Type")
         type.width = Self.typeWidth
         type.resizingMask = .userResizingMask
         outline.addTableColumn(type)
 
         let subtype = NSTableColumn(identifier: Column.subtype)
-        subtype.title = "Subtype"
+        subtype.title = L("Subtype")
         subtype.width = Self.subtypeWidth
         subtype.resizingMask = .userResizingMask
         outline.addTableColumn(subtype)
@@ -799,7 +801,7 @@ import UEFITool
             summaryLabel.textColor = .labelColor
             return
         }
-        summaryLabel.toolTip = "Show the whole image in the dump"
+        summaryLabel.toolTip = L("Show the whole image in the dump")
         summaryLabel.textColor = focus == presented.title?.id ? .controlAccentColor : .labelColor
     }
 
@@ -813,7 +815,7 @@ import UEFITool
         detail.setTerm(detailTerm)
         guard !node.fields.isEmpty else {
             detail.showPlaceholder(node.title.isEmpty
-                ? "Select a node to see what it is."
+                ? L("Select a node to see what it is.")
                 : node.title)
             return
         }
@@ -1442,7 +1444,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         var items: [NSMenuItem] = []
         if !(badChecksums[node.id]?.isEmpty ?? true), node.space == .file {
             let item = NSMenuItem(
-                title: "Fix Checksum",
+                title: L("Fix Checksum"),
                 action: #selector(fixChecksumClicked(_:)),
                 keyEquivalent: ""
             )

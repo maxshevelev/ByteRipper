@@ -8,9 +8,9 @@ Open the dump, turn on **Tools ▸ ME Analyzer**, and read the Summary tab.
 
 - **"Nothing in this file reads as Intel ME firmware."** Either the dump has no ME region (an AMD board, an older platform, an EC dump) or the region has been erased. Check the [[topic:tool-uefi|UEFI panel]]: if there is an ME region in the descriptor and it is full of `FF`, it has been erased or "cleaned".
 - **A version and an SKU.** The region is there and its headers parse. Compare the version against what the board should have — a version from a different platform generation is a donor image from the wrong machine.
-- **Messages in the summary.** The analysis raises what it noticed. Read them; they are the short version of what the Full Tree would tell you.
+- **Messages in the summary.** The analysis raises what it noticed. Read them; they are the short version of what Full Info would tell you.
 
-## Full Tree checks
+## Full Info checks
 
 - The [[term:fpt|$FPT]] lists the partitions the region declares. If a partition's bytes are not actually there, or its size does not match what the table says, the region is truncated — a very common result of a bad dump or a partial flash.
 - The [[term:cpd|code partitions]] and their modules should be present and their sizes consistent.

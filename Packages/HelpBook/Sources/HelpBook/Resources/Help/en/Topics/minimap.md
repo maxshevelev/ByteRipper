@@ -2,6 +2,10 @@
 
 > The shape of the whole dump in one column, and a way to move by pointing.
 
+@covers menu.view.minimap
+@covers menu.view.minimap-overview
+@covers window.minimap
+
 **View ▸ Show Minimap** (⇧⌘M), or the button at the right end of the toolbar, opens a narrow column beside the dump. In comparison mode it shows both files, split the way the panes are.
 
 ## Two modes

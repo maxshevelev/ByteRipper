@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 
 /// The persisted default pane-layout direction (§3.3): the arrangement a new
 /// comparison opens with. Shared by `ComparisonView` (reads it when building a
@@ -30,17 +31,17 @@ final class LayoutSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: "Layout")
+        let titleLabel = NSTextField(labelWithString: L("Layout"))
         titleLabel.font = .boldSystemFont(ofSize: 15)
 
         // Layout direction row: the split orientation a new comparison opens in.
-        let layoutLabel = NSTextField(labelWithString: "Layout Direction:")
+        let layoutLabel = NSTextField(labelWithString: L("Layout Direction:"))
         layoutDirectionPopup.target = self
         layoutDirectionPopup.action = #selector(layoutDirectionChanged(_:))
         layoutDirectionPopup.widthAnchor.constraint(equalToConstant: 200).isActive = true
 
         // Word size row: how many bytes each hex word groups (§6).
-        let wordSizeLabel = NSTextField(labelWithString: "Word Size:")
+        let wordSizeLabel = NSTextField(labelWithString: L("Word Size:"))
         wordSizePopup.target = self
         wordSizePopup.action = #selector(wordSizeChanged(_:))
         wordSizePopup.widthAnchor.constraint(equalToConstant: 200).isActive = true
@@ -55,7 +56,7 @@ final class LayoutSettingsViewController: NSViewController {
         grid.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
         let caption = NSTextField(wrappingLabelWithString:
-            "These are the defaults a new comparison opens with. Word Size also applies to the hex views already open.")
+            L("These are the defaults a new comparison opens with. Word Size also applies to the hex views already open."))
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 2
@@ -79,7 +80,7 @@ final class LayoutSettingsViewController: NSViewController {
             // Exact width: the window sizes to this view's fitting size, and a
             // wrapping label's ideal width is its full one-line text, so only a
             // fixed width makes it wrap and the fitting size come out right.
-            root.widthAnchor.constraint(equalToConstant: 480),
+            SettingsMetrics.pinnedWidth(of: root),
         ])
         view = root
 
@@ -96,13 +97,13 @@ final class LayoutSettingsViewController: NSViewController {
     /// Loads the current settings into the controls.
     private func syncControls() {
         layoutDirectionPopup.removeAllItems()
-        layoutDirectionPopup.addItem(withTitle: "Left / Right")
-        layoutDirectionPopup.addItem(withTitle: "Top / Bottom")
+        layoutDirectionPopup.addItem(withTitle: L("Left / Right"))
+        layoutDirectionPopup.addItem(withTitle: L("Top / Bottom"))
         layoutDirectionPopup.selectItem(at: LayoutSettings.isVertical ? 0 : 1)
 
         wordSizePopup.removeAllItems()
         for size in WordSize.allCases {
-            let item = wordSizePopup.menu!.addItem(withTitle: size == .one ? "1 Byte" : "\(size.rawValue) Bytes",
+            let item = wordSizePopup.menu!.addItem(withTitle: size.title,
                                                    action: nil, keyEquivalent: "")
             item.representedObject = size
         }

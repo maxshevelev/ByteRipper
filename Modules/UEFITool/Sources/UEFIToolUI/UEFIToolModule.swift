@@ -1,5 +1,6 @@
 import AppKit
 import HelpBook
+import Localization
 import MEFirmware
 import MEPresentation
 import MEReads
@@ -17,8 +18,9 @@ import UEFITool
 /// assuming: the tree is the parser's, and the detail is the node's header read
 /// back through the same reader.
 public enum UEFIToolModule: ToolModule {
+    // help: panel.uefi
     public static let identifier = "dev.maxik.tool.uefi-structure"
-    public static let title = "UEFI Structure"
+    public static let title = L("UEFI Structure")
     public static let helpTopic: HelpTopicID? = .toolUEFI
     /// Three columns — name, type, subtype — and a list of label/value fields:
     /// the same room the FIT table takes, more than the minimap's 120.
@@ -415,7 +417,7 @@ private struct ChecksumPass: Sendable {
 
         guard let tree else {
             controller.endBusy()
-            controller.say("Could not read the file.", asProblem: true)
+            controller.say(L("Could not read the file."), asProblem: true)
             show(publish: true)
             return
         }
@@ -424,7 +426,7 @@ private struct ChecksumPass: Sendable {
         // it is a signature scan of the whole file, and until it lands there
         // is nothing to draw. An Intel image is there before the bar is drawn.
         if !tree.isReady, !noticeAnswersTheUser {
-            controller.say("Reading UEFI…")
+            controller.say(L("Reading UEFI…"))
             controller.showBusy()
         }
         show(publish: true, rowsChanged: true)
@@ -818,7 +820,7 @@ private struct ChecksumPass: Sendable {
         onFailure failed: (@MainActor () -> Void)? = nil
     ) {
         guard let snapshot = try? host.snapshot() else {
-            controller.say("Could not read the file.", asProblem: true)
+            controller.say(L("Could not read the file."), asProblem: true)
             // The panel holds the region's row shut on the open that brought us
             // here, and has its "Loading…" clock on it besides. Nothing is going
             // to land, so the open is over and the row is released.
@@ -845,7 +847,7 @@ private struct ChecksumPass: Sendable {
         let run = meRun
         let generation = self.generation
         let analyzer = self.analyzer
-        controller.say("Reading ME…")
+        controller.say(L("Reading ME…"))
         controller.showBusy()
         // The analysis is about to run: the region's row earns a "Loading…" row
         // if it is slow enough, the way a UEFI branch does.
@@ -1192,22 +1194,23 @@ private struct ChecksumPass: Sendable {
     ///
     /// Public because a right-click cannot be simulated — this is the level the
     /// app's tests drive, the same way FIT's `fixChecksum()` is.
+    // help: panel.uefi.fix-checksum
     public func fixChecksum(for nodeID: NodeID) {
         guard !host.isReadOnly else {
-            fail("This file is open read-only.")
+            fail(L("This file is open read-only."))
             return
         }
         guard let tree, tree.isReady, let image = currentImage,
               let node = image.node(nodeID)
         else {
-            fail("Could not read the file.")
+            fail(L("Could not read the file."))
             return
         }
         // The file holds these bytes compressed. The repair is an offset into
         // a buffer, and writing it would mean compressing the section again —
         // which this panel does not do (`COMPRESSED_SECTIONS.md` §7).
         guard node.space == .file else {
-            fail("This checksum is inside a compressed section, which the file holds compressed.")
+            fail(L("This checksum is inside a compressed section, which the file holds compressed."))
             return
         }
         let revision = UEFIChecksumCheck.volumeRevision(of: node, in: image)
@@ -1225,7 +1228,7 @@ private struct ChecksumPass: Sendable {
                 return
             }
             let transaction = ToolTransaction(
-                name: "Fix Checksum",
+                name: L("Fix Checksum"),
                 writes: repairs.map {
                     ToolTransaction.Write(offset: $0.offset, bytes: $0.bytes)
                 }
@@ -1233,9 +1236,9 @@ private struct ChecksumPass: Sendable {
             do {
                 try self.host.apply(transaction)
                 self.noticeAnswersTheUser = true
-                self.controller.say("Checksum written. ⌘Z takes it back.")
+                self.controller.say(L("Checksum written.") + " " + L("⌘Z takes it back."))
             } catch {
-                self.fail("Could not write: \(error)")
+                self.fail(L("Could not write: %1$@", error))
             }
         }
     }
@@ -1265,13 +1268,13 @@ private struct ChecksumPass: Sendable {
     /// Public because a right-click cannot be simulated — the level the app's
     /// tests drive, like `fixChecksum(for:)`.
     public func exportDecompressed(for nodeID: NodeID) {
-        withDecompressedBytes(of: nodeID, nothing: "There is nothing decompressed to export here.") {
+        withDecompressedBytes(of: nodeID, nothing: L("There is nothing decompressed to export here.")) {
             [weak self] export, bytes in
             guard let self,
                   await self.host.exportFile(bytes, suggestedName: export.suggestedName)
             else { return }
             self.noticeAnswersTheUser = true
-            self.controller.say("Exported \(bytes.count) bytes.")
+            self.controller.say(L("Exported %1$@ bytes.", bytes.count))
         }
     }
 
@@ -1294,7 +1297,7 @@ private struct ChecksumPass: Sendable {
         }
         let chosenLayout = layout
         let chosenSource = source
-        withDecompressedBytes(of: nodeID, nothing: "There is nothing decompressed to open here.") {
+        withDecompressedBytes(of: nodeID, nothing: L("There is nothing decompressed to open here.")) {
             [weak self] export, bytes in
             guard let self, let source = chosenSource else { return }
             let name = export.tabName(fileName: self.host.fileName)
@@ -1323,7 +1326,7 @@ private struct ChecksumPass: Sendable {
         guard let tree, tree.isReady, let node = tree.image().node(nodeID),
               let open = UEFIPresenter.nodeOpen(for: node, in: tree.image(), body: body)
         else {
-            fail("There is nothing to open here.")
+            fail(L("There is nothing to open here."))
             return
         }
         let readers = tree.spaceReaders
@@ -1334,7 +1337,7 @@ private struct ChecksumPass: Sendable {
             guard let self else { return }
             self.controller.endBusy()
             guard let bytes, !bytes.isEmpty else {
-                self.fail("Those bytes could not be read.")
+                self.fail(L("Those bytes could not be read."))
                 return
             }
             guard let provider = self.treeProvider else {
@@ -1382,7 +1385,7 @@ private struct ChecksumPass: Sendable {
             guard let self else { return }
             self.controller.endBusy()
             guard let bytes else {
-                self.fail("The section does not decompress.")
+                self.fail(L("The section does not decompress."))
                 return
             }
             await use(export, bytes)

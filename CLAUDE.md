@@ -41,6 +41,34 @@ Packages:
 - After adding a package or a source file: `xcodegen generate`. The test script
   finds a new package by itself.
 
+Localization (`Design/LOCALIZATION.md`):
+- English, Russian and German. **Every user-visible string goes through
+  `L("The English text")`** — the key is the English, so an untranslated string
+  falls back to correct English. Placeholders are positional (`%1$@`), never a
+  live interpolation inside the key.
+- The audience is a **service-centre technician**. Use the trade's word where
+  the language has a settled one (`прошивка`, `дамп`, `Prüfsumme`), and keep
+  the English term where it has none — `$FPT`, `$CPD`, `MFS`, `BPDT`,
+  `Boot Guard`, `FIT`, `SVN` are the same in every language. Explain a term,
+  never invent a national name for it. Prefer the bench's word to the
+  dictionary's: «адрес» not «смещение», «разрез» not «рез», «сегмент» not
+  «кусок».
+- `Packages/MEFirmware`'s diagnostics stay in upstream's English: the sync
+  skill compares them with MEAnalyzer.
+- **A control's words come from `ControlHelp`** — one phrase, or `name:` plus
+  `tooltip:` when what it *is* and what it *does* are different sentences.
+  Never a tooltip in one place and an accessibility label in another.
+- **Anchors are not optional.** Any user-visible functionality — a menu
+  command, a settings control, a panel, a form — declares `// help: <anchor>`
+  at the site that implements it, and the page that explains it declares
+  `@covers <anchor>`. After touching user-visible behaviour, an English help
+  page, or any translation, run:
+  `python3 Skills/help-coverage/scripts/help_coverage.py`
+  It reports functionality with no help, help for functionality that is gone,
+  translations that have fallen behind their English (`@source-sha`), and
+  strings a language has not got. Re-translate, then `--bless` the file — never
+  bless a page you did not actually bring in line.
+
 Help:
 - `Packages/HelpBook` is the content (pure, no AppKit), `Packages/HelpUI` draws
   it. `Design/HELP.md` is the full description.

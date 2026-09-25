@@ -14,11 +14,20 @@ let package = Package(
     products: [
         .library(name: "ByteRipperCore", targets: ["ByteRipperCore"])
     ],
+    dependencies: [
+        .package(path: "../Localization")
+    ],
     targets: [
-        .target(name: "ByteRipperCore"),
+        .target(
+            name: "ByteRipperCore",
+            dependencies: [.product(name: "Localization", package: "Localization")]
+        ),
         .testTarget(
             name: "ByteRipperCoreTests",
-            dependencies: ["ByteRipperCore"]
+            dependencies: [
+                "ByteRipperCore",
+                .product(name: "Localization", package: "Localization"),
+            ]
         )
     ]
 )

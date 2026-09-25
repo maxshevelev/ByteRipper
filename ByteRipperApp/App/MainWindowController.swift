@@ -1,5 +1,7 @@
 import AppPalette
 import Cocoa
+import HelpUI
+import Localization
 
 final class MainWindowController: NSWindowController {
     /// Shared by every window the app makes, so any two of them can be tabs of
@@ -192,19 +194,25 @@ final class MainWindowController: NSWindowController {
     /// controller and skip the responder chain (§10.3).
     private func makeDiffNavigationGroup() -> NSToolbarItemGroup {
         func navItem(_ identifier: NSToolbarItem.Identifier, _ symbol: String,
-                     _ label: String, _ action: Selector) -> NSToolbarItem {
+                     _ label: String, _ phrase: String, _ action: Selector) -> NSToolbarItem {
             let item = NSToolbarItem(itemIdentifier: identifier)
             item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
             item.label = label
             item.target = mainViewController
             item.action = action
+            // These two had no tooltip at all while every other toolbar button
+            // had one — the drift `ControlHelp` exists to end. The name stays
+            // the short word the toolbar shows.
+            ControlHelp.describe(item, name: label, tooltip: phrase)
             return item
         }
         let group = NSToolbarItemGroup(itemIdentifier: .diffNavigation)
         group.subitems = [
-            navItem(.previousDifference, "backward", "Prev Diff",
+            navItem(.previousDifference, "backward", L("Prev Diff"),
+                    L("Go to the previous difference between the files"),
                     #selector(MainViewController.previousDifference)),
-            navItem(.nextDifference, "forward", "Next Diff",
+            navItem(.nextDifference, "forward", L("Next Diff"),
+                    L("Go to the next difference between the files"),
                     #selector(MainViewController.nextDifference)),
         ]
         group.controlRepresentation = .expanded
@@ -216,8 +224,8 @@ final class MainWindowController: NSWindowController {
     /// must live in a custom view — a standard item's label would not render.
     private func makeFilesIdenticalItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .filesIdentical)
-        item.label = "Files are identical"
-        item.paletteLabel = "Files are identical"
+        item.label = L("Files are identical")
+        item.paletteLabel = L("Files are identical")
         item.view = makeFilesIdenticalBadgeView()
         return item
     }
@@ -231,11 +239,11 @@ final class MainWindowController: NSWindowController {
         let icon = NSImageView()
         icon.translatesAutoresizingMaskIntoConstraints = false
         icon.image = NSImage(systemSymbolName: "checkmark.circle.fill",
-                             accessibilityDescription: "Files are identical")
+                             accessibilityDescription: L("Files are identical"))
         icon.contentTintColor = SemanticColors.good
         icon.imageScaling = .scaleProportionallyUpOrDown
 
-        let label = NSTextField(labelWithString: "Files are identical")
+        let label = NSTextField(labelWithString: L("Files are identical"))
         label.translatesAutoresizingMaskIntoConstraints = false
         label.font = .systemFont(ofSize: NSFont.systemFontSize)
         label.textColor = .labelColor
@@ -254,7 +262,7 @@ final class MainWindowController: NSWindowController {
             // label — fully determined, so the toolbar sizes the item to it.
             container.heightAnchor.constraint(equalTo: label.heightAnchor),
         ])
-        container.setAccessibilityLabel("Files are identical")
+        container.setAccessibilityLabel(L("Files are identical"))
         return container
     }
 
@@ -270,7 +278,7 @@ final class MainWindowController: NSWindowController {
         item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
         item.label = label
         item.paletteLabel = label
-        item.toolTip = toolTip
+        ControlHelp.describe(item, name: label, tooltip: toolTip)
         item.target = mainViewController
         item.action = action
         return item
@@ -295,11 +303,11 @@ final class MainWindowController: NSWindowController {
         button.target = mainViewController
         button.action = #selector(MainViewController.setWordSize(_:))
         button.sizeToFit()
-        button.setAccessibilityLabel("Word Size")
+        button.setAccessibilityLabel(L("Word Size"))
         item.view = button
-        item.label = "Word Size"
-        item.paletteLabel = "Word Size"
-        item.toolTip = "Bytes per word in the hex grid"
+        item.label = L("Word Size")
+        item.paletteLabel = L("Word Size")
+        ControlHelp.describe(item, L("Bytes per word in the hex grid"))
         item.target = mainViewController
         item.action = #selector(MainViewController.setWordSize(_:))
         return item
@@ -328,15 +336,15 @@ final class MainWindowController: NSWindowController {
         for row in menu.items { row.target = mainViewController }
         let title = NSMenuItem(title: MainWindowController.noToolTitle, action: nil, keyEquivalent: "")
         title.image = NSImage(systemSymbolName: "wrench.and.screwdriver",
-                              accessibilityDescription: "Tools")
+                              accessibilityDescription: L("Tools"))
         menu.insertItem(title, at: 0)
         button.menu = menu
         button.sizeToFit()
-        button.setAccessibilityLabel("Tools")
+        button.setAccessibilityLabel(L("Tools"))
         item.view = button
-        item.label = "Tools"
-        item.paletteLabel = "Tools"
-        item.toolTip = "The tool-module this tab is working with"
+        item.label = L("Tools")
+        item.paletteLabel = L("Tools")
+        ControlHelp.describe(item, L("The tool-module this tab is working with"))
         item.target = mainViewController
         item.action = #selector(MainViewController.activateTool(_:))
         return item
@@ -349,7 +357,9 @@ final class MainWindowController: NSWindowController {
     /// the reader has to recognise before they can use it, and this is the one
     /// item in the toolbar whose whole job is naming what the tab is working
     /// with; going blank at rest is exactly when it is least obvious.
-    static let noToolTitle = "Tools"
+    /// Computed, not stored: a `static let` would freeze the word at first
+    /// touch, and the language is settled before the toolbar is built.
+    static var noToolTitle: String { L("Tools") }
 
     /// The pane-layout toggle (§24.3). The icon and the tooltip name the
     /// arrangement the click will produce, and both are refreshed on every
@@ -358,7 +368,7 @@ final class MainWindowController: NSWindowController {
         makeCommandItem(
             .paneLayout,
             symbol: LayoutSettings.isVertical ? "square.split.1x2" : "square.split.2x1",
-            label: "Pane Layout",
+            label: L("Pane Layout"),
             toolTip: LayoutSettings.isVertical ? "Stack the panes" : "Place the panes side by side",
             action: #selector(MainViewController.togglePaneLayout)
         )
@@ -454,8 +464,8 @@ extension MainWindowController: NSToolbarDelegate {
             return filesIdenticalItem
         case .goTo:
             if goToItem == nil {
-                goToItem = makeCommandItem(.goTo, symbol: "dot.scope", label: "Go To",
-                                           toolTip: "Go to an offset or a bookmark",
+                goToItem = makeCommandItem(.goTo, symbol: "dot.scope", label: L("Go To"),
+                                           toolTip: L("Go to an offset or a bookmark"),
                                            action: #selector(MainViewController.goToPosition))
             }
             return goToItem
@@ -463,8 +473,8 @@ extension MainWindowController: NSToolbarDelegate {
             if findItem == nil {
                 // The button is a switch, not the menu's command: pressing it
                 // again closes the bar, the way Done does.
-                findItem = makeCommandItem(.find, symbol: "magnifyingglass", label: "Find",
-                                           toolTip: "Find a byte pattern",
+                findItem = makeCommandItem(.find, symbol: "magnifyingglass", label: L("Find"),
+                                           toolTip: L("Find bytes or text"),
                                            action: #selector(MainViewController.toggleFindBar))
             }
             return findItem
@@ -472,8 +482,8 @@ extension MainWindowController: NSToolbarDelegate {
             if segmentsItem == nil {
                 segmentsItem = makeCommandItem(.segments,
                                                symbol: "square.stack.3d.up",
-                                               label: "Segments",
-                                               toolTip: "The file's cuts and pieces",
+                                               label: L("Segments"),
+                                               toolTip: L("The file's cuts and pieces"),
                                                action: #selector(MainViewController.showSegments))
             }
             return segmentsItem
@@ -496,10 +506,10 @@ extension MainWindowController: NSToolbarDelegate {
             if minimapToggleItem == nil {
                 let item = NSToolbarItem(itemIdentifier: .toggleMinimap)
                 item.image = NSImage(systemSymbolName: "sidebar.right",
-                                     accessibilityDescription: "Toggle Minimap")
-                item.label = "Minimap"
-                item.paletteLabel = "Minimap"
-                item.toolTip = "Show or hide the minimap"
+                                     accessibilityDescription: L("Toggle Minimap"))
+                item.label = L("Minimap")
+                item.paletteLabel = L("Minimap")
+                ControlHelp.describe(item, L("Show or hide the minimap"))
                 item.target = mainViewController
                 item.action = #selector(MainViewController.toggleMinimap)
                 minimapToggleItem = item

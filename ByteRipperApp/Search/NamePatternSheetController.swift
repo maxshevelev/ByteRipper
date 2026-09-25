@@ -1,5 +1,6 @@
 import Cocoa
 import ByteRipperCore
+import Localization
 
 /// Keeps the pattern in the Find bar's field, under a name (§11,
 /// `Design/PATTERN_LIBRARY_IDEA.md`).
@@ -21,7 +22,7 @@ final class NamePatternSheetController: SheetViewController {
     init(entry: SearchPatternEntry, onKeep: @escaping (SearchPatternEntry) -> Void) {
         self.entry = entry
         self.onKeep = onKeep
-        super.init(title: "Add to Favorites", message: Self.describe(entry))
+        super.init(title: L("Save Search Pattern"), message: Self.describe(entry))
     }
 
     required init?(coder: NSCoder) {
@@ -42,8 +43,8 @@ final class NamePatternSheetController: SheetViewController {
         // Empty rather than pre-filled with the pattern: a name that repeats
         // the pattern is a row that says the same thing twice, and the pattern
         // is already on the line above.
-        nameField = addFieldRow(label: "Name:", initial: "")
-        submitButton.title = "Add"
+        nameField = addFieldRow(label: L("Name:"), initial: "")
+        submitButton.title = L("Add")
     }
 
     override func firstField() -> NSView? { nameField }

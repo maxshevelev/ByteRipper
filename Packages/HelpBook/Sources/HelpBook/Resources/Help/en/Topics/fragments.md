@@ -2,6 +2,8 @@
 
 > Pull one piece out of an image, work on it as its own file, and put it back.
 
+@covers window.fragments
+
 When a [[topic:tools-overview|firmware panel]] hands you a part of the image — a region, a volume, one module, the decompressed body of a section — it opens as a **fragment panel**: a panel that rises from the bottom of the window, over the dump it came out of.
 
 The parent stays visible above it. Folded down, the fragment becomes a pill in the dock along the window's bottom edge, so the pills in that dock are the parts you have pulled out of *this* image.

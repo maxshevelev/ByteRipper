@@ -2,6 +2,11 @@
 
 > Instruments that read the open dump and tell you what is in it.
 
+@covers menu.tools.none
+@covers panel.help-button
+@covers panel.node-term
+@covers panel.row-marks-legend
+
 The **Tools** menu turns on one panel at a time, beside the dump. Each one reads the file the pane holds and shows its own view of it:
 
 - **[[topic:tool-uefi|UEFI Structure]]** — the layout of a firmware image: the flash regions, the volumes, the files and sections inside them, the NVRAM stores.

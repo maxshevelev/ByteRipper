@@ -1,5 +1,6 @@
 import AppKit
 import HelpBook
+import Localization
 import ToolModuleKit
 import ZoneSketch
 
@@ -15,8 +16,9 @@ import ZoneSketch
 /// It is also useful on its own: marking out the regions of an unfamiliar image
 /// by hand is what a bench does with a pencil today.
 public enum ZoneSketchModule: ToolModule {
+    // help: panel.zones
     public static let identifier = "dev.maxik.tool.zonesketch"
-    public static let title = "Zone Sketch"
+    public static let title = L("Zone Sketch")
     public static let helpTopic: HelpTopicID? = .toolZones
     public static let preferredPanelWidth: CGFloat = 320
 

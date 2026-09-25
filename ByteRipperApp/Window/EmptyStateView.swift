@@ -2,6 +2,7 @@ import AppPalette
 import Cocoa
 import HelpBook
 import HelpUI
+import Localization
 
 /// Placeholder shown in empty mode (§3.1): a large system icon that opens the
 /// file picker on click, a "Drop files here" headline, the up-to-two-files
@@ -11,6 +12,7 @@ import HelpUI
 /// A newer release, when there is one, is announced under the version it is
 /// newer than. The view is told about it rather than looking for it: asking
 /// github.com is the app's business, not a view's (`GitHubReleases`).
+// help: window.empty-state
 final class EmptyStateView: NSView {
     /// Fired with the dropped file URLs; the view controller applies §4.3 rules.
     var onOpenFiles: (([URL]) -> Void)?
@@ -71,7 +73,7 @@ final class EmptyStateView: NSView {
     /// second bookmark.
     private var bookmarkScrollHeight: NSLayoutConstraint?
     private var bookmarkScrollWidth: NSLayoutConstraint?
-    private let bookmarkHeading = NSTextField(labelWithString: "Bookmarks")
+    private let bookmarkHeading = NSTextField(labelWithString: L("Bookmarks"))
     private var bookmarkSection: NSStackView?
 
     /// The tallest the list gets before it scrolls. A window kept open only for
@@ -134,15 +136,15 @@ final class EmptyStateView: NSView {
         // it is held. `.momentaryChange` would swap in `alternateImage`, which
         // this button does not have, so a press showed nothing.
         openButton.contentTintColor = Self.iconColor
-        openButton.setAccessibilityLabel("Open File")  // §15
+        openButton.setAccessibilityLabel(L("Open File"))  // §15
 
-        let titleLabel = NSTextField(labelWithString: "Drop files here")
+        let titleLabel = NSTextField(labelWithString: L("Drop files here"))
         titleLabel.font = .systemFont(ofSize: 20, weight: .semibold)
         titleLabel.alignment = .center
         titleLabel.textColor = Self.iconColor
 
         let hintLabel = NSTextField(labelWithString:
-            "Up to two files can be compared side by side."
+            L("Up to two files can be compared side by side.")
         )
         hintLabel.textColor = .secondaryLabelColor
         hintLabel.alignment = .center
@@ -154,7 +156,7 @@ final class EmptyStateView: NSView {
         // that, and the `?` sits beside the hint rather than in the stack's own
         // column so the landing screen keeps its shape.
         let help = HelpButton.standard(for: .topic(.overview),
-                                       tooltip: "What ByteRipper is for")
+                                       tooltip: L("What ByteRipper is for"))
         let hintRow = NSStackView(views: [hintLabel, help])
         hintRow.orientation = .horizontal
         hintRow.alignment = .centerY
@@ -371,10 +373,12 @@ final class EmptyStateView: NSView {
         releasePage = release.page
         releaseText = "Version \(release.version.text) is available on GitHub"
         releaseButton.attributedTitle = Self.releaseLineText(releaseText)
-        releaseButton.toolTip = release.page.absoluteString
-        releaseButton.setAccessibilityLabel(
-            "Version \(release.version.text) is available — open its page on GitHub"
-        )
+        // One phrase, not two: the tooltip used to be the bare URL while a
+        // screen reader heard a sentence. The sentence is the better answer
+        // for both — the button's own title already says where it goes.
+        ControlHelp.describe(releaseButton,
+                             L("Version %1$@ is available — open its page on GitHub",
+                               release.version.text))
         releaseButton.isHidden = false
     }
 
@@ -413,7 +417,7 @@ final class EmptyStateView: NSView {
         guard size != currentIconSize else { return }
         currentIconSize = size
         let config = NSImage.SymbolConfiguration(pointSize: size, weight: .light)
-        guard let image = NSImage(systemSymbolName: "plus.viewfinder", accessibilityDescription: "Open File")?
+        guard let image = NSImage(systemSymbolName: "plus.viewfinder", accessibilityDescription: L("Open File"))?
             .withSymbolConfiguration(config) else { return }
         openButton.image = image
         // SF Symbol glyphs sit inside their image with built-in padding that

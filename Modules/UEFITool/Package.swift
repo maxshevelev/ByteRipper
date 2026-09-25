@@ -23,12 +23,19 @@ let package = Package(
         .library(name: "UEFIToolUI", targets: ["UEFIToolUI"])
     ],
     dependencies: [
+        // Every word this shows the user comes from the one catalogue the
+        // whole app is translated in.
+        .package(path: "../../Packages/Localization"),
         .package(path: "../../Packages/ALSplitView"),
         // The help book: a tool-module names the page its panel header's `?`
         // opens (`ToolModule.helpTopic`), and the firmware panels key a row's
         // term to a glossary entry. The pure half only — the `?` itself and
         // the popover are drawn by the app and by `ToolModuleKit`.
         .package(path: "../../Packages/HelpBook"),
+        // The `?` button, the per-term popover and `ControlHelp` — the one way
+        // a control says what it does.
+        .package(path: "../../Packages/HelpUI"),
+
         .package(path: "../../Packages/ToolModuleKit"),
         .package(path: "../../Packages/AppPalette"),
         .package(path: "../../Packages/UEFIImage"),
@@ -46,11 +53,14 @@ let package = Package(
     ],
     targets: [
         .target(name: "UEFITool", dependencies: [
+            .product(name: "Localization", package: "Localization"),
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage")
         ]),
         .target(name: "UEFIToolUI", dependencies: [
+            .product(name: "HelpUI", package: "HelpUI"),
+            .product(name: "Localization", package: "Localization"),
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "FreshData", package: "FreshData"),
             .product(name: "AppPalette", package: "AppPalette"),

@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// Watches a file on disk for external modifications (§5.5).
 ///

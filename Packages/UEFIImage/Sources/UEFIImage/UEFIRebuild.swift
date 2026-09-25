@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import FirmwareCompression
 
 /// Putting an edited part back into the image it came out of
@@ -798,7 +799,7 @@ public enum UEFIRebuild {
                 let free = bigger.children[last].body
                 bigger.children[last].body = free.lowerBound..<bigger.body.upperBound
             } else {
-                var tail = UEFINode(kind: .freeSpace, name: "Free space",
+                var tail = UEFINode(kind: .freeSpace, name: L("Free space"),
                                     range: volume.body.upperBound..<bigger.body.upperBound, isErased: true)
                 tail.space = space
                 tail.id = NodeID([-1])

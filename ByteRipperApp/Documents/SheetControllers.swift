@@ -1,6 +1,7 @@
 import AppPalette
 import Cocoa
 import ByteRipperCore
+import Localization
 
 // MARK: - Shared sheet chrome
 
@@ -39,6 +40,11 @@ class SheetViewController: NSViewController {
     private(set) var errorLabel: NSTextField!
     private(set) var buttonRow: NSStackView!
     private(set) var submitButton: NSButton!
+    /// The Esc button, so a subclass that wants it to say something else
+    /// can say so. Matching it by its title instead worked only while the
+    /// title was English: `L("Cancel")` is «Отмена» in Russian, and the
+    /// relabel then found nothing and left the wrong word standing.
+    private(set) var cancelButton: NSButton!
 
     var onSubmit: (() -> Void)?
     var onCancel: (() -> Void)?
@@ -109,11 +115,12 @@ class SheetViewController: NSViewController {
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         buttonRow.addArrangedSubview(spacer)
 
-        let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelPressed))
+        let cancel = NSButton(title: L("Cancel"), target: self, action: #selector(cancelPressed))
         cancel.keyEquivalent = "\u{1B}"  // Esc
         buttonRow.addArrangedSubview(cancel)
+        cancelButton = cancel
 
-        let submit = NSButton(title: "OK", target: self, action: #selector(submitPressed))
+        let submit = NSButton(title: L("OK"), target: self, action: #selector(submitPressed))
         submit.keyEquivalent = "\r"
         buttonRow.addArrangedSubview(submit)
         submitButton = submit
@@ -298,9 +305,9 @@ final class SelectBlockSheetController: SheetViewController {
         // «address»", §10.2): the Start field shows that address, the Length option is
         // already the active one, and a sentence saying both was the sheet
         // narrating its own fields back at the user.
-        super.init(title: "Select Block",
+        super.init(title: L("Select Block"),
                    message: presetStart == nil
-                       ? "Select a byte range by absolute offsets. End is the block's last byte."
+                       ? L("Select a byte range by absolute offsets. End is the block's last byte.")
                        : nil)
     }
 
@@ -316,19 +323,19 @@ final class SelectBlockSheetController: SheetViewController {
         // beginning of the file, or to its end. They only read the Start field —
         // the End/Length option is irrelevant to a selection that runs to a file
         // boundary.
-        toBeginningButton = NSButton(title: "To Beginning", target: self, action: #selector(toBeginningPressed))
-        toEndButton = NSButton(title: "To End", target: self, action: #selector(toEndPressed))
+        toBeginningButton = NSButton(title: L("To Beginning"), target: self, action: #selector(toBeginningPressed))
+        toEndButton = NSButton(title: L("To End"), target: self, action: #selector(toEndPressed))
         buttonRow.insertArrangedSubview(toBeginningButton, at: 0)
         buttonRow.insertArrangedSubview(toEndButton, at: 1)
 
-        startField = addFieldRow(label: "Start:",
+        startField = addFieldRow(label: L("Start:"),
                                  initial: presetStart.map { String(format: "0x%X", $0) } ?? "0x")
 
-        let end = addRadioFieldRow(title: "End", action: #selector(modeRadioChanged(_:)))
+        let end = addRadioFieldRow(title: L("End"), action: #selector(modeRadioChanged(_:)))
         endRadio = end.radio
         endField = end.field
 
-        let length = addRadioFieldRow(title: "Length", action: #selector(modeRadioChanged(_:)))
+        let length = addRadioFieldRow(title: L("Length"), action: #selector(modeRadioChanged(_:)))
         lengthRadio = length.radio
         lengthField = length.field
 
@@ -523,8 +530,8 @@ final class FillSheetController: SheetViewController {
 
     init(selectionCount: UInt64, onFill: @escaping ([UInt8]) -> Void) {
         self.onFill = onFill
-        super.init(title: "Fill Selection with…",
-                   message: "Fill the selected \(selectionCount) byte(s) by repeating the byte sequence.")
+        super.init(title: L("Fill Selection with…"),
+                   message: L("Fill the selected %1$@ byte(s) by repeating the byte sequence.", selectionCount))
     }
 
     required init?(coder: NSCoder) {
@@ -533,7 +540,7 @@ final class FillSheetController: SheetViewController {
 
     override func loadView() {
         super.loadView()
-        bytesField = addFieldRow(label: "Bytes:", initial: FillPatternStore.last)
+        bytesField = addFieldRow(label: L("Bytes:"), initial: FillPatternStore.last)
     }
 
     override func firstField() -> NSView? { bytesField }

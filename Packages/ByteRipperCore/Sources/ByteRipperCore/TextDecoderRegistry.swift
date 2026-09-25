@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// Descriptors and factory for built-in text decoder tables.
 public enum TextDecoderRegistry {
@@ -10,7 +11,7 @@ public enum TextDecoderRegistry {
         [
             TextDecoderDescriptor(identifier: "cp1252", displayName: "Windows-1252"),
             TextDecoderDescriptor(identifier: "isoLatin1", displayName: "ISO-8859-1"),
-            TextDecoderDescriptor(identifier: "strictASCII", displayName: "Strict ASCII"),
+            TextDecoderDescriptor(identifier: "strictASCII", displayName: L("Strict ASCII")),
         ]
     }
 
@@ -28,7 +29,7 @@ public enum TextDecoderRegistry {
             name = "ISO-8859-1"
         case "strictASCII":
             table = strictASCIIScalars
-            name = "Strict ASCII"
+            name = L("Strict ASCII")
         default:
             table = cp1252Scalars
             name = "Windows-1252"

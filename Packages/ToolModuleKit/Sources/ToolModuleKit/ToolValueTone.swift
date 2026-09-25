@@ -1,5 +1,6 @@
 import AppKit
 import AppPalette
+import Localization
 
 /// How a labelled value is drawn — the colour intent the side that knows the
 /// fact behind a value decides (e.g. a File System State's status). The view
@@ -65,7 +66,7 @@ public enum ToolValueTone: Sendable, Equatable, Hashable {
         let font = font(for: value)
         let result = NSMutableAttributedString()
         if self == .good, let tick = NSImage(systemSymbolName: "checkmark",
-                                             accessibilityDescription: "Done")?
+                                             accessibilityDescription: L("Done"))?
             .withSymbolConfiguration(
                 NSImage.SymbolConfiguration(pointSize: font.pointSize, weight: .regular)
                     .applying(NSImage.SymbolConfiguration(paletteColors: [color]))

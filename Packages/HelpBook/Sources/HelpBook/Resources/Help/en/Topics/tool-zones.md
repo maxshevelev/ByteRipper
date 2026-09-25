@@ -2,6 +2,8 @@
 
 > Mark out the areas of an unfamiliar image by hand.
 
+@covers panel.zones
+
 **Tools ▸ Zone Sketch** is a notepad for byte ranges. Select some bytes in the dump, give the range a name and a colour, and it is drawn as a zone over the hex view and in the [[topic:minimap|minimap]].
 
 It parses nothing and knows nothing about any format. That is what makes it useful for the images the other panels cannot read: an EC firmware, a battery controller dump, an unfamiliar SPI chip off a board nobody has documented.

@@ -1,5 +1,6 @@
 import AppKit
 import HelpBook
+import Localization
 import MEFirmware
 import MEATool
 import MEPresentation
@@ -18,8 +19,9 @@ import UEFIImage
 /// — and each parse runs off the main actor behind an indeterminate bar, because
 /// `MEFirmwareAnalyzer.analyze` reports no fractions of its own.
 public enum MEAToolModule: ToolModule {
+    // help: panel.me
     public static let identifier = "dev.maxik.tool.me-analyzer"
-    public static let title = "ME Analyzer"
+    public static let title = L("ME Analyzer")
     public static let helpTopic: HelpTopicID? = .toolME
     /// Two columns — a name and a compact second line (range/count) — plus the
     /// detail list below: the same room the UEFI tree takes.
@@ -79,7 +81,7 @@ struct MEAParkedState: ToolSessionState {
     /// The user's selection as a tree path. Nil before a choice, and after a
     /// re-parse that lost the row.
     private var focusPath: [Int]?
-    /// Which tab the panel is on (0 = Summary, 1 = Full Tree).
+    /// Which tab the panel is on (0 = Summary, 1 = Full Info).
     private var tabIndex = 0
     /// Which parse is the current one. A file edited twice in quick succession
     /// starts two, and the one that finishes second is not necessarily the one
@@ -119,11 +121,11 @@ struct MEAParkedState: ToolSessionState {
         // clicked (`ToolHost.showNotice`).
         controller.onSummaryCopied = { [weak self] in
             self?.host.showNotice(symbol: MEAToolViewController.copySummaryGlyph,
-                                  lines: ["Summary Copied"])
+                                  lines: [L("Summary Copied")])
         }
         controller.onScreenshotCopied = { [weak self] in
             self?.host.showNotice(symbol: MEAToolViewController.copyScreenshotGlyph,
-                                  lines: ["Screenshot Copied"])
+                                  lines: [L("Screenshot Copied")])
         }
     }
 
@@ -212,7 +214,7 @@ struct MEAParkedState: ToolSessionState {
             focusPath = nil
             controller.showSummary([])
             controller.setPlaceholder(.failed)
-            controller.say("Could not read the file: \(error)", asProblem: true)
+            controller.say(L("Could not read the file: %1$@", error), asProblem: true)
             show()
             return
         }
@@ -256,7 +258,7 @@ struct MEAParkedState: ToolSessionState {
         analysis = nil
         // Named, not just "Reading…": three panels can be the one on screen and
         // each reads something different, so the line says which this is.
-        controller.say("Reading ME…")
+        controller.say(L("Reading ME…"))
         // The empty tab is the whole panel until the analysis lands, so it says
         // what is being waited for rather than promising a summary.
         controller.setPlaceholder(.waiting)

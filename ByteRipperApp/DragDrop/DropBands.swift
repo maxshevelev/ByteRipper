@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 
 /// One targeted drop zone's visual: a quiet milky plate at idle, flooded with a
 /// translucent accent-blue fill on hover, and a caption on its own frosted-glass
@@ -58,7 +59,7 @@ final class DropTargetView: NSView {
         // slot.
         refusalIcon.translatesAutoresizingMaskIntoConstraints = false
         refusalIcon.image = NSImage(systemSymbolName: "nosign",
-                                    accessibilityDescription: "Not allowed here")?
+                                    accessibilityDescription: L("Not allowed here"))?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 30, weight: .semibold))
         refusalIcon.contentTintColor = .secondaryLabelColor
         refusalIcon.isHidden = true
@@ -696,7 +697,7 @@ final class NewTabDropStrip: NSView {
     /// promising a move. See `PaneDropBandsView.onCopyModifierChanged`.
     var onCopyModifierChanged: ((Bool) -> Void)?
 
-    private let target = DropTargetView(title: "Open in New Tab")
+    private let target = DropTargetView(title: L("Open in New Tab"))
     private var dragActive = false
     /// What the strip is captioned for: a pane says "Move to New Tab", a file
     /// "Open in New Tab", and only the pane's caption answers the modifier.
@@ -760,10 +761,10 @@ final class NewTabDropStrip: NSView {
     /// a new tab, a pane moves into one.
     func setTitle(forPane isPane: Bool, copying: Bool = false) {
         guard isPane else {
-            target.setTitle("Open in New Tab")
+            target.setTitle(L("Open in New Tab"))
             return
         }
-        target.setTitle(copying ? "Duplicate to New Tab" : "Move to New Tab")
+        target.setTitle(copying ? L("Duplicate to New Tab") : L("Move to New Tab"))
     }
 
     /// The strip's caption, so a test can read what it is promising.

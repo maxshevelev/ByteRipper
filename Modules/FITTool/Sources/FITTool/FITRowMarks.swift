@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import ToolModuleKit
 import UEFIImage
 
@@ -24,9 +25,9 @@ public enum FITRowMarks {
     public static func holdsChecks(type: UInt8) -> String? {
         switch type {
         case FIT.keyManifestType:
-            return "Holds the Boot Guard Key Manifest: the key the Boot Policy is signed with"
+            return L("Holds the Boot Guard Key Manifest: the key the Boot Policy is signed with")
         case FIT.bootPolicyType:
-            return "Holds the Boot Guard Boot Policy: the IBB segments and the hash they are checked against"
+            return L("Holds the Boot Guard Boot Policy: the IBB segments and the hash they are checked against")
         default:
             return nil
         }
@@ -45,10 +46,10 @@ public enum FITRowMarks {
         }
         if case .microcode(let header) = row.model.target, !header.checksumIsCorrect {
             if let computed = header.computedChecksum {
-                errors.append("Invalid microcode image checksum: \(hex(header.checksum)), "
-                              + "should be \(hex(computed))")
+                errors.append(L("Invalid microcode image checksum: %1$@, should be %2$@",
+                                hex(header.checksum), hex(computed)))
             } else {
-                cautions.append("The microcode image cannot be read whole, so its checksum is not checked")
+                cautions.append(L("The microcode image cannot be read whole, so its checksum is not checked"))
             }
         }
         var roles = holdsChecks(type: row.model.entry.type).map { [ToolRowMarks.Role.holdsChecks($0)] } ?? []
@@ -71,15 +72,13 @@ public enum FITRowMarks {
     public static func verdict(of state: MicrocodeLatest) -> (mark: ToolRowMark, toolTip: String)? {
         switch state {
         case .latest:
-            return (.newest, "Newest revision the catalogue lists for this processor and platform")
+            return (.newest, L("Newest revision the catalogue lists for this processor and platform"))
         case .outdated(let newest):
-            return (.newerListed, "Catalogue lists a newer revision (r.\(revision(newest)))")
+            return (.newerListed, L("Catalogue lists a newer revision (r.%1$@)", revision(newest)))
         case .undecided(let newest):
             return (.newerMaybe,
-                    "Catalogue lists a newer revision (r.\(revision(newest))) "
-                        + "whose platforms only partly overlap this one's — whether it "
-                        + "serves this board depends on the board's own platform ID, "
-                        + "which the image does not carry")
+                    L("Catalogue lists a newer revision (r.%1$@) whose platforms only partly overlap this one's — whether it serves this board depends on the board's own platform ID, which the image does not carry",
+                      revision(newest)))
         case .notRated:
             return nil
         }

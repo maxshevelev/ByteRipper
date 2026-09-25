@@ -2,6 +2,8 @@
 
 > What Intel's Management Engine firmware in this image is, and what it is made of.
 
+@covers panel.me
+
 **Tools ▸ ME Analyzer** runs an analysis of the [[term:me-region|ME region]] and shows it on two tabs.
 
 ## Summary
@@ -10,7 +12,7 @@ The report a bench reads first: the firmware family and version, the [[term:sku|
 
 Copy it as text (for a note or a job sheet) or as a picture, with the two buttons in the tab row.
 
-## Full Tree
+## Full Info
 
 Everything the analysis decoded, as a tree of the real structures in the region, each row standing for real bytes: the [[term:fpt|partition table]], the [[term:cpd|code partitions]] and their modules, the [[term:manifest|manifests]], the [[term:mfs|file system]] and its configuration, the [[term:oem-config|OEM configuration]], the [[term:utok|unlock tokens]].
 

@@ -1,8 +1,9 @@
 import Foundation
+import Localization
 import MEFirmware
 import ToolModuleKit
 
-/// What a row of the ME Full Tree wears besides its text (`Design/ROW_MARKS.md`
+/// What a row of the ME Full Info tree wears besides its text (`Design/ROW_MARKS.md`
 /// §5.3), decided here so it is tested without a window, in the icons of the one
 /// catalogue every firmware panel draws from.
 ///
@@ -80,7 +81,7 @@ public enum MEATreeMarks {
     public static func codePartition(_ partition: CodePartition) -> ToolRowMarks {
         guard partition.checksumValid == false else { return .none }
         let kind = partition.headerVersion == 1 ? "Checksum-8" : "CRC-32"
-        return ToolRowMarks(problem: .error(["Invalid $CPD \(kind) checksum"]))
+        return ToolRowMarks(problem: .error([L("Invalid $CPD %1$@ checksum", kind)]))
     }
 
     /// The manifest's row: it holds the hashes the modules are checked
@@ -88,15 +89,15 @@ public enum MEATreeMarks {
     public static func manifest(_ analysis: FirmwareAnalysis) -> ToolRowMarks {
         ToolRowMarks(
             problem: analysis.rsaSignatureValid == false
-                ? .error(["The manifest's RSA signature does not check out"]) : nil,
-            roles: [.holdsChecks("Holds the hashes the partition's modules are checked against")]
+                ? .error([L("The manifest's RSA signature does not check out")]) : nil,
+            roles: [.holdsChecks(L("Holds the hashes the partition's modules are checked against"))]
         )
     }
 
     /// A layout table's row: its CRC-32, where its version has one.
     public static func table(named name: String, checksumValid: Bool?) -> ToolRowMarks {
         guard checksumValid == false else { return .none }
-        return ToolRowMarks(problem: .error(["Invalid \(name) CRC-32"]))
+        return ToolRowMarks(problem: .error([L("Invalid %1$@ CRC-32", name)]))
     }
 
     /// The RBE/PM Metadata rows: the rail when the module they were read out
@@ -107,7 +108,8 @@ public enum MEATreeMarks {
               let compression = storage(of: module, in: partition).compression
         else { return .none }
         return ToolRowMarks(
-            decompressedFrom: "Read out of the \(module.name) module, stored \(compression) compressed"
+            decompressedFrom: L("Read out of the %1$@ module, stored %2$@ compressed",
+                                module.name, compression)
         )
     }
 }

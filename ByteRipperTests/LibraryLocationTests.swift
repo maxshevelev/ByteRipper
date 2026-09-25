@@ -86,7 +86,7 @@ final class LibraryLocationTests: XCTestCase {
     func testItSaysTheLibraryIsOnThisMacOnly() {
         openTab()
 
-        XCTAssertEqual(tab.locationLabel.stringValue, "Library: on this Mac only")
+        XCTAssertEqual(tab.locationLabel.stringValue, "Pattern library: on this Mac only")
         XCTAssertTrue(tab.keepHereButton.isHidden, "nothing to come back from")
     }
 
@@ -529,7 +529,7 @@ final class LibraryLocationTests: XCTestCase {
 
         XCTAssertNil(FavoritePatternStore.sharedURL)
         XCTAssertEqual(FavoritePatternStore.favorites.map(\.name), ["ME FPT"])
-        XCTAssertEqual(tab.locationLabel.stringValue, "Library: on this Mac only")
+        XCTAssertEqual(tab.locationLabel.stringValue, "Pattern library: on this Mac only")
         XCTAssertTrue(FileManager.default.fileExists(atPath: sharedURL.path),
                       "the file is not taken away from wherever it was")
     }

@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import ToolModuleKit
 import UEFIImage
 
@@ -51,7 +52,7 @@ public enum UEFIPresenter {
               section.space == .file, section.header.lowerBound == outermost
         else { return .empty }
         let name = node.name.isEmpty ? "Compressed" : node.name
-        return zones(of: section, named: "\(name) (in \(section.name))")
+        return zones(of: section, named: L("%1$@ (in %2$@)", name, section.name))
     }
 
     private static func zones(of node: UEFINode, named name: String) -> ZoneMap {

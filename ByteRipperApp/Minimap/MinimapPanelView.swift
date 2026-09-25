@@ -1,4 +1,6 @@
 import Cocoa
+import HelpUI
+import Localization
 
 /// The minimap panel's chrome (§19.2): a header carrying the Local/Overview
 /// switch, the map below it, and a status bar that reports a full overview
@@ -14,11 +16,12 @@ import Cocoa
 /// The mode switch is in the header because the choice is one a reader makes
 /// constantly — a local map to read the bytes around the caret, an overview to
 /// find the region to go to — and a menu item alone (§15) hides it.
+// help: window.minimap
 final class MinimapPanelView: NSView {
     let mapView: MinimapView
 
     /// Local ⇄ Overview (§19.4). Internal so tests can click it.
-    let modeSwitch = NSSegmentedControl(labels: ["Local", "Overview"],
+    let modeSwitch = NSSegmentedControl(labels: [L("Local"), L("Overview")],
                                        trackingMode: .selectOne, target: nil, action: nil)
 
     /// The status bar's progress bar and its caption, shown only while a rebuild
@@ -68,8 +71,8 @@ final class MinimapPanelView: NSView {
         modeSwitch.target = self
         modeSwitch.action = #selector(modeChanged)
         modeSwitch.selectedSegment = 0
-        modeSwitch.setAccessibilityLabel("Minimap mode")
-        modeSwitch.toolTip = "Whether the minimap shows the bytes around the caret or the whole file"
+        ControlHelp.describe(modeSwitch, name: L("Minimap mode"),
+                             tooltip: L("Whether the minimap shows the bytes around the caret or the whole file"))
         modeSwitch.translatesAutoresizingMaskIntoConstraints = false
         // A narrow panel must be allowed to squeeze the labels rather than push
         // the panel wider than its clamp (§19.2).
@@ -231,7 +234,7 @@ final class MinimapPanelView: NSView {
             progressLabel.isHidden = true
             return
         }
-        progressLabel.stringValue = "Building"
+        progressLabel.stringValue = L("Building")
         progressBar.doubleValue = min(1, max(0, fraction))
         progressBar.isHidden = false
         progressLabel.isHidden = false

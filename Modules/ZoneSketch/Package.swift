@@ -24,11 +24,18 @@ let package = Package(
         .library(name: "ZoneSketchUI", targets: ["ZoneSketchUI"])
     ],
     dependencies: [
+        // Every word this shows the user comes from the one catalogue the
+        // whole app is translated in.
+        .package(path: "../../Packages/Localization"),
         // The help book: a tool-module names the page its panel header's `?`
         // opens (`ToolModule.helpTopic`), and the firmware panels key a row's
         // term to a glossary entry. The pure half only — the `?` itself and
         // the popover are drawn by the app and by `ToolModuleKit`.
         .package(path: "../../Packages/HelpBook"),
+        // The `?` button, the per-term popover and `ControlHelp` — the one way
+        // a control says what it does.
+        .package(path: "../../Packages/HelpUI"),
+
         .package(path: "../../Packages/ToolModuleKit")
     ],
     targets: [
@@ -36,6 +43,8 @@ let package = Package(
             .product(name: "ToolModuleKit", package: "ToolModuleKit")
         ]),
         .target(name: "ZoneSketchUI", dependencies: [
+            .product(name: "HelpUI", package: "HelpUI"),
+            .product(name: "Localization", package: "Localization"),
             .product(name: "HelpBook", package: "HelpBook"),
             "ZoneSketch",
             .product(name: "ToolModuleKit", package: "ToolModuleKit")

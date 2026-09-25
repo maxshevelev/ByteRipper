@@ -1,4 +1,6 @@
 import AppKit
+import HelpUI
+import Localization
 import ToolModuleKit
 import ZoneSketch
 
@@ -54,10 +56,10 @@ import ZoneSketch
         table.doubleAction = #selector(rowDoubleClicked)
 
         let name = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("name"))
-        name.title = "Zone"
+        name.title = L("Zone")
         name.width = 150
         let range = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("range"))
-        range.title = "Offsets"
+        range.title = L("Offsets")
         range.width = 130
         table.addTableColumn(name)
         table.addTableColumn(range)
@@ -72,7 +74,7 @@ import ZoneSketch
             button.controlSize = .small
             button.target = self
             button.action = action
-            button.toolTip = tip
+            ControlHelp.describe(button, tip)
             button.translatesAutoresizingMaskIntoConstraints = false
         }
         button(addButton, "Add from Selection", #selector(addClicked),

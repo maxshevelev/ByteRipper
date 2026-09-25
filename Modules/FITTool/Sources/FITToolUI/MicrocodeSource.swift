@@ -1,4 +1,5 @@
 import FITTool
+import Localization
 import Foundation
 import FreshData
 
@@ -35,12 +36,11 @@ public enum MicrocodeSourceError: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .offline(let underlying):
-            return "Could not reach github.com: \(underlying)"
+            return L("Could not reach github.com: %1$@", underlying)
         case .badResponse(let status):
-            return "github.com answered \(status)."
+            return L("github.com answered %1$@.", status)
         case .rateLimited:
-            return "GitHub is rate-limiting this address. Try again in a few minutes,"
-                + " or use Choose File… with a microcode you already have."
+            return L("GitHub is rate-limiting this address. Try again in a few minutes, or use Choose File… with a microcode you already have.")
         }
     }
 }

@@ -1,5 +1,6 @@
 import AppKit
 import HelpBook
+import Localization
 
 /// One term, explained where it is being read: a popover off the `?` beside a
 /// panel's detail list.
@@ -50,7 +51,7 @@ import HelpBook
             HelpPresenter.show(link)
         }
 
-        let more = NSButton(title: "Open in Help", target: self, action: #selector(openInHelp))
+        let more = NSButton(title: L("Open in Help"), target: self, action: #selector(openInHelp))
         more.bezelStyle = .rounded
         more.controlSize = .small
         more.translatesAutoresizingMaskIntoConstraints = false

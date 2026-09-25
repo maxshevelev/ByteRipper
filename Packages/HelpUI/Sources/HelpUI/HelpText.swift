@@ -1,6 +1,7 @@
 import AppKit
 import AppPalette
 import HelpBook
+import Localization
 
 /// Turns the book's blocks into the attributed text a view draws.
 ///

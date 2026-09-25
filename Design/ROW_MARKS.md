@@ -147,7 +147,7 @@ after it, the red octagon.
 | Problem | the validator's problems for the row — an error the red octagon, a caution-level one (a reserved byte that is not zero) the orange circle — and a microcode image whose own dword checksum does not add up (error), or that cannot be read whole to check (caution) |
 | Badges | `lock.shield` on the Boot Guard Key Manifest (`0x0B`) and Boot Policy (`0x0C`) rows — they define the IBB; `shield.lefthalf.filled` when the component is partly covered |
 
-### 5.3. ME Analyzer — the Full Tree
+### 5.3. ME Analyzer — Full Info
 
 | Channel | Meaning here |
 | --- | --- |
