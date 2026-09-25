@@ -2620,22 +2620,34 @@ final class MainViewController: NSViewController {
         }
     }
 
-    /// The piece a strip-menu item acts on, carried in the item's
-    /// `representedObject` — the way the offset menu carries its target.
+    /// The piece a segment-menu item acts on, carried in the item's
+    /// `representedObject` — the way the offset menu carries its target. The
+    /// pane is the one the menu was built for — the strip's, the dump's own —
+    /// resolved when the menu is built rather than looked up again in the
+    /// action: a fragment panel's pane is not on the minimap at all, so a map
+    /// index would not reach it.
     /// Internal so a test can verify the piece an item carries.
     final class SegmentMenuTarget: NSObject {
-        let mapIndex: Int
+        let pane: PaneViewModel
         let pieceIndex: Int
-        /// The pointer's own spot on the strip when the menu was opened, in the
-        /// minimap's coordinates — the anchor the Edit popover points at, so it
-        /// opens where the menu did rather than at the piece's whole block
-        /// (§21.4).
-        let point: NSPoint
-        init(mapIndex: Int, pieceIndex: Int, point: NSPoint) {
-            self.mapIndex = mapIndex
+        /// Where the item's Edit popover hangs off: the view that anchors it and
+        /// the rect within that view — the pointer's own spot on the strip for
+        /// the strip's menu, the right-clicked byte's cell in the hex view for
+        /// the dump's own — so the popover opens where the menu did rather than
+        /// at the piece's whole block (§21.4).
+        let anchor: SegmentMenuAnchor
+        init(pane: PaneViewModel, pieceIndex: Int, anchor: SegmentMenuAnchor) {
+            self.pane = pane
             self.pieceIndex = pieceIndex
-            self.point = point
+            self.anchor = anchor
         }
+    }
+
+    /// The anchor a segment Edit popover hangs off (§21.4): the view to show it
+    /// from and the rect in that view's coordinates to point it at.
+    struct SegmentMenuAnchor {
+        let view: NSView
+        let rect: NSRect
     }
 
     /// The right-click menu the segment strip offers for a piece: what acts on
@@ -2645,7 +2657,14 @@ final class MainViewController: NSViewController {
     private func makeMinimapSegmentMenu(mapIndex: Int, pieceIndex: Int, point: NSPoint) -> NSMenu? {
         guard let pane = surface.mappedPane(at: mapIndex), pane.isOpen,
               pieceIndex < pane.segmentStore.segments.count else { return nil }
-        let target = SegmentMenuTarget(mapIndex: mapIndex, pieceIndex: pieceIndex, point: point)
+        // The pane is resolved here, at build time — the action only carries it
+        // out. The anchor is the pointer's own spot on the strip: the Edit
+        // popover opens where the menu did (§21.4).
+        let target = SegmentMenuTarget(
+            pane: pane, pieceIndex: pieceIndex,
+            anchor: SegmentMenuAnchor(
+                view: surface.minimapView,
+                rect: NSRect(origin: point, size: NSSize(width: 0.1, height: 0.1))))
         // The piece's label names it in every item, so the menu says what it will
         // act on — "Select Segment S1", not a bare "Select Segment" (§21.3).
         let label = pane.segmentStore.segments[pieceIndex].label
@@ -2653,14 +2672,14 @@ final class MainViewController: NSViewController {
 
         // Save Segment… writes one piece to a file (§21.5).
         let save = menu.addItem(withTitle: "Save Segment \(label)…",
-                                action: #selector(minimapMenuSaveSegment(_:)), keyEquivalent: "")
+                                action: #selector(segmentMenuSaveSegment(_:)), keyEquivalent: "")
         save.target = self
         save.representedObject = target
 
         // Replace Segment from File… reads one piece from a file (§21.6): the
         // donor-region swap, the inverse of Save Segment.
         let replace = menu.addItem(withTitle: "Replace Segment \(label) from File…",
-                                   action: #selector(minimapMenuReplaceSegment(_:)), keyEquivalent: "")
+                                   action: #selector(segmentMenuReplaceSegment(_:)), keyEquivalent: "")
         replace.target = self
         replace.representedObject = target
 
@@ -2671,7 +2690,7 @@ final class MainViewController: NSViewController {
         let piece = pane.segmentStore.segments[pieceIndex]
         if let source = pane.segmentSource(of: piece) {
             let revert = menu.addItem(withTitle: "Revert Segment \(label) to “\(source.name)”",
-                                      action: #selector(minimapMenuRevertSegment(_:)), keyEquivalent: "")
+                                      action: #selector(segmentMenuRevertSegment(_:)), keyEquivalent: "")
             revert.target = self
             revert.representedObject = target
             revert.isEnabled = pane.canRevertSegment(piece)
@@ -2682,7 +2701,7 @@ final class MainViewController: NSViewController {
         // Select Segment: the whole piece is selected — its full range, not a
         // caret at its start (§21.3).
         let select = menu.addItem(withTitle: "Select Segment \(label)",
-                                  action: #selector(minimapMenuSelectSegment(_:)), keyEquivalent: "")
+                                  action: #selector(segmentMenuSelectSegment(_:)), keyEquivalent: "")
         select.target = self
         select.representedObject = target
 
@@ -2690,7 +2709,7 @@ final class MainViewController: NSViewController {
         // name — anchored where the menu opened, not the form with the table of
         // all segments (§21.4).
         let edit = menu.addItem(withTitle: "Edit Segment \(label)",
-                                action: #selector(minimapMenuEditSegment(_:)), keyEquivalent: "")
+                                action: #selector(segmentMenuEditSegment(_:)), keyEquivalent: "")
         edit.target = self
         edit.representedObject = target
 
@@ -2699,7 +2718,7 @@ final class MainViewController: NSViewController {
         // the piece and the neighbour it merges into, so the menu says what it
         // will do without a second look.
         let remove = menu.addItem(withTitle: Segment.mergeTitle(for: pieceIndex),
-                                  action: #selector(minimapMenuRemoveSegment(_:)), keyEquivalent: "")
+                                  action: #selector(segmentMenuRemoveSegment(_:)), keyEquivalent: "")
         remove.target = self
         remove.representedObject = target
         return menu
@@ -2779,59 +2798,62 @@ final class MainViewController: NSViewController {
         tools(reading: pane).zoneSelected(zone.id, in: pane)
     }
 
-    /// Save Segment… from the strip's menu: the piece under the click, written to
-    /// a file (§21.5) — the same act as the form's row menu.
-    @objc private func minimapMenuSaveSegment(_ sender: NSMenuItem) {
+    /// Save Segment… from the strip's or the dump's own menu: the piece the item
+    /// carries, written to a file (§21.5) — the same act as the form's row menu.
+    @objc private func segmentMenuSaveSegment(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? SegmentMenuTarget,
-              let pane = surface.mappedPane(at: target.mapIndex), pane.isOpen,
-              target.pieceIndex < pane.segmentStore.segments.count else { return }
+              target.pane.isOpen,
+              target.pieceIndex < target.pane.segmentStore.segments.count else { return }
         // The Bool says whether the write actually started — the Segments form
-        // reads it to decide whether to close itself (§21.5). A strip menu has
+        // reads it to decide whether to close itself (§21.5). A context menu has
         // nothing to close, so it is deliberately dropped.
-        _ = savePiece(pane.segmentStore.segments[target.pieceIndex], of: pane)
+        _ = savePiece(target.pane.segmentStore.segments[target.pieceIndex], of: target.pane)
     }
 
-    /// Revert Segment to «file» from the strip's menu (§21.7): the piece under
-    /// the click goes back to the bytes of the file it came from.
-    @objc func minimapMenuRevertSegment(_ sender: Any?) {
-        guard let target = (sender as? NSMenuItem)?.representedObject as? SegmentMenuTarget,
-              let pane = surface.mappedPane(at: target.mapIndex), pane.isOpen,
-              target.pieceIndex < pane.segmentStore.segments.count else { return }
-        revertPiece(pane.segmentStore.segments[target.pieceIndex], of: pane)
-    }
-
-    /// Replace Segment from File… from the strip's menu (§21.6): the piece under
-    /// the click, its bytes replaced from a file — the same act as the form's row
-    /// menu.
-    @objc private func minimapMenuReplaceSegment(_ sender: NSMenuItem) {
+    /// Revert Segment to «file» from the strip's or the dump's own menu (§21.7):
+    /// the piece the item carries goes back to the bytes of the file it came
+    /// from — present only where that piece has a source.
+    @objc private func segmentMenuRevertSegment(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? SegmentMenuTarget,
-              let pane = surface.mappedPane(at: target.mapIndex), pane.isOpen,
-              target.pieceIndex < pane.segmentStore.segments.count else { return }
-        // Dropped for the same reason as in `minimapMenuSaveSegment`.
-        _ = replacePiece(pane.segmentStore.segments[target.pieceIndex], of: pane)
+              target.pane.isOpen,
+              target.pieceIndex < target.pane.segmentStore.segments.count else { return }
+        revertPiece(target.pane.segmentStore.segments[target.pieceIndex], of: target.pane)
+    }
+
+    /// Replace Segment from File… from the strip's or the dump's own menu
+    /// (§21.6): the piece the item carries, its bytes replaced from a file — the
+    /// same act as the form's row menu.
+    @objc private func segmentMenuReplaceSegment(_ sender: NSMenuItem) {
+        guard let target = sender.representedObject as? SegmentMenuTarget,
+              target.pane.isOpen,
+              target.pieceIndex < target.pane.segmentStore.segments.count else { return }
+        // Dropped for the same reason as in `segmentMenuSaveSegment`.
+        _ = replacePiece(target.pane.segmentStore.segments[target.pieceIndex], of: target.pane)
     }
 
     /// Select Segment from the strip's menu: the whole piece is selected — its
     /// full range, not a caret at its start (§21.3). The reveal puts the
     /// selection's start in view so the selection is seen to begin.
-    @objc private func minimapMenuSelectSegment(_ sender: NSMenuItem) {
+    @objc private func segmentMenuSelectSegment(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? SegmentMenuTarget,
-              let pane = surface.mappedPane(at: target.mapIndex), pane.isOpen,
-              target.pieceIndex < pane.segmentStore.segments.count else { return }
+              target.pane.isOpen,
+              target.pieceIndex < target.pane.segmentStore.segments.count else { return }
+        let pane = target.pane
         let piece = pane.segmentStore.segments[target.pieceIndex]
         pane.select(range: piece.range)
         filePaneView(for: pane)?.revealOffsetCentered(piece.range.lowerBound)
     }
 
-    /// Edit… from the strip's menu: the popover that edits this piece — its
-    /// offset (movable within the interval the cut bounds, locked to 0 for S0)
-    /// and its name — anchored to the piece's own block on the strip (§21.4).
-    /// Not the form with the table of all segments.
-    @objc private func minimapMenuEditSegment(_ sender: NSMenuItem) {
+    /// Edit… from the strip's or the dump's own menu: the popover that edits
+    /// this piece — its offset (movable within the interval the cut bounds,
+    /// locked to 0 for S0) and its name — anchored where the menu was opened
+    /// (§21.4). Not the form with the table of all segments.
+    @objc private func segmentMenuEditSegment(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? SegmentMenuTarget,
-              let pane = surface.mappedPane(at: target.mapIndex), pane.isOpen,
-              target.pieceIndex < pane.segmentStore.segments.count else { return }
+              target.pane.isOpen,
+              target.pieceIndex < target.pane.segmentStore.segments.count else { return }
         let index = target.pieceIndex
+        let pane = target.pane
         let segment = pane.segmentStore.segments[index]
         let store = pane.segmentStore
         let validate: (UInt64) -> Bool
@@ -2871,22 +2893,21 @@ final class MainViewController: NSViewController {
             },
             onCancel: nil
         )
-        // Anchor the popover at the pointer's own spot on the strip, so it opens
-        // where the menu was opened — not at the piece's whole block (§21.4).
-        // The point was captured when the menu was built and stored in the
+        // The popover opens where the menu was opened — the pointer's own spot
+        // on the strip, or the right-clicked byte's cell in the dump (§21.4).
+        // The anchor was captured when the menu was built and stored in the
         // target, so it is still here when the action fires.
-        let anchor = NSRect(origin: target.point, size: .init(width: 0.1, height: 0.1))
-        controller.show(relativeTo: anchor, of: surface.minimapView)
+        controller.show(relativeTo: target.anchor.rect, of: target.anchor.view)
     }
 
     /// Merge from the strip's menu: the piece's bytes merge into a neighbour
     /// that keeps its name (§21.3) — the same act as the form's row menu, on
     /// the piece under the pointer.
-    @objc private func minimapMenuRemoveSegment(_ sender: NSMenuItem) {
+    @objc private func segmentMenuRemoveSegment(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? SegmentMenuTarget,
-              let pane = surface.mappedPane(at: target.mapIndex), pane.isOpen,
-              target.pieceIndex < pane.segmentStore.segments.count else { return }
-        pane.segmentStore.removePiece(at: target.pieceIndex)
+              target.pane.isOpen,
+              target.pieceIndex < target.pane.segmentStore.segments.count else { return }
+        target.pane.segmentStore.removePiece(at: target.pieceIndex)
     }
 
     // MARK: - Helpers
@@ -4031,7 +4052,11 @@ final class MainViewController: NSViewController {
     /// §4/§5) and the clicked offset (§10.2). When the clicked byte lies inside
     /// the pane's current selection, the menu instead leads with selection-scoped
     /// actions — Copy, Fill Selection with…, Delete Bytes — that act on the
-    /// right-clicked pane's selection, never the active pane's (§10.2).
+    /// right-clicked pane's selection, never the active pane's (§10.2). Between
+    /// them and the bookmark block sits the segment block (§21.3): Split Here
+    /// for the position, and — when the right-clicked byte is inside a piece —
+    /// that piece's own Save/Replace/Select/Edit beside it, the same items the
+    /// strip's menu offers for the piece under the pointer.
     func makeOffsetMenu(for pane: PaneViewModel, offset: UInt64) -> NSMenu {
         let menu = NSMenu(title: "Offset")
         let selection = pane.hexSelection()
@@ -4193,6 +4218,11 @@ final class MainViewController: NSViewController {
     /// act on the right-clicked position — the thing the menu was opened on.
     /// The Merge item's title is renamed by validation to name the piece and its
     /// neighbour ("Merge S1 into S0").
+    ///
+    /// Between them, the block offers what the strip's menu offers for a piece
+    /// (§21.3) — Save Segment…, Replace Segment from File…, Select Segment and
+    /// Edit Segment — the same items and the same actions, acting on the piece
+    /// the right-clicked byte sits in rather than the piece under the pointer.
     private func addSegmentMenuItems(to menu: NSMenu, for pane: PaneViewModel, offset: UInt64) {
         let target = OffsetContextTarget(pane: pane, offset: offset)
         func add(_ title: String, _ action: Selector) {
@@ -4201,6 +4231,26 @@ final class MainViewController: NSViewController {
             item.representedObject = target
         }
         add("Split Here at \(offset.bareAddress)", #selector(splitHere(_:)))
+        // The piece the right-clicked byte sits in: a pane without bytes has
+        // none, and the block stays the position's own pair.
+        if let piece = pane.segmentStore.segment(containing: offset) {
+            let pieceTarget = SegmentMenuTarget(
+                pane: pane, pieceIndex: piece.index,
+                anchor: segmentEditAnchor(for: offset, in: pane))
+            func pieceItem(_ title: String, _ action: Selector) {
+                let item = menu.addItem(withTitle: title, action: action, keyEquivalent: "")
+                item.target = self
+                item.representedObject = pieceTarget
+            }
+            menu.addItem(.separator())
+            pieceItem("Save Segment \(piece.label)…", #selector(segmentMenuSaveSegment(_:)))
+            pieceItem("Replace Segment \(piece.label) from File…", #selector(segmentMenuReplaceSegment(_:)))
+            menu.addItem(.separator())
+            // Select/Edit/Merge grouped as the strip's menu has them: the
+            // selection- and partition-shaping acts after the file I/O.
+            pieceItem("Select Segment \(piece.label)", #selector(segmentMenuSelectSegment(_:)))
+            pieceItem("Edit Segment \(piece.label)", #selector(segmentMenuEditSegment(_:)))
+        }
         add("Merge", #selector(removeSegment(_:)))
         // Revert Segment to «file» (§21.7): only where the piece under the
         // click came from one, and named for it, the way the strip's menu is.
@@ -4221,6 +4271,19 @@ final class MainViewController: NSViewController {
         guard let target = (sender as? NSMenuItem)?.representedObject as? OffsetContextTarget,
               let piece = target.pane.segmentStore.segment(containing: target.offset) else { return }
         revertPiece(piece, of: target.pane)
+    }
+
+    /// Where the dump's own Edit Segment popover hangs off (§21.4): the
+    /// right-clicked byte's own cell in its hex view — the byte the menu was
+    /// opened on. Without a pane view (a menu built off-screen, as in a test)
+    /// it falls back to the controller's view with a degenerate rect, where the
+    /// popover simply has nothing particular to point at.
+    private func segmentEditAnchor(for offset: UInt64, in pane: PaneViewModel) -> SegmentMenuAnchor {
+        if let paneView = filePaneView(for: pane) {
+            let (view, rect) = paneView.byteCellAnchor(for: offset)
+            return SegmentMenuAnchor(view: view, rect: rect)
+        }
+        return SegmentMenuAnchor(view: viewIfLoaded ?? NSView(), rect: .zero)
     }
 
     /// The bookmark block of the offset context menu (§20.3). One item marks and
@@ -7097,12 +7160,14 @@ extension MainViewController: NSMenuItemValidation {
                   let piece = target.pane.segmentStore.segment(containing: target.offset)
             else { return false }
             return target.pane.canRevertSegment(piece)
-        case #selector(minimapMenuRevertSegment(_:)):
+        case #selector(segmentMenuRevertSegment(_:)):
+            // The item is built only where the piece has a source (§21.7); it
+            // is dimmed when that file can no longer be read.
             guard let target = menuItem.representedObject as? SegmentMenuTarget,
-                  let pane = surface.mappedPane(at: target.mapIndex), pane.isOpen,
-                  target.pieceIndex < pane.segmentStore.segments.count
+                  target.pane.isOpen,
+                  target.pieceIndex < target.pane.segmentStore.segments.count
             else { return false }
-            return pane.canRevertSegment(pane.segmentStore.segments[target.pieceIndex])
+            return target.pane.canRevertSegment(target.pane.segmentStore.segments[target.pieceIndex])
         case #selector(splitHere(_:)):
             // Split Here at «address» opens the Add Cut popover pre-filled with the
             // right-clicked offset; the popover validates the offset as it is
@@ -7110,6 +7175,16 @@ extension MainViewController: NSMenuItemValidation {
             guard let target = menuItem.representedObject as? OffsetContextTarget,
                   target.pane.isOpen else { return false }
             return target.pane.fileSize > 0
+        case #selector(segmentMenuSaveSegment(_:)),
+             #selector(segmentMenuReplaceSegment(_:)),
+             #selector(segmentMenuEditSegment(_:)),
+             #selector(segmentMenuSelectSegment(_:)),
+             #selector(segmentMenuRemoveSegment(_:)):
+            // The item carries the piece it acts on; the piece's pane must still
+            // be open and the piece still exist — a merge made from under the
+            // menu would renumber it (§21.3).
+            guard let target = menuItem.representedObject as? SegmentMenuTarget else { return false }
+            return target.pane.isOpen && target.pieceIndex < target.pane.segmentStore.segments.count
         case #selector(fillSelectionWithBytes):
             let pane = activePane
             return pane.isOpen && !pane.hexSelection().isEmpty

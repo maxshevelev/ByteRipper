@@ -290,27 +290,33 @@ final class OffsetContextMenuTests: XCTestCase {
     /// offset to the clipboard as BARE hex digits — no "0x" prefix, so a paste
     /// into an offset field (which already carries its own "0x") doesn't double
     /// it ("24", not "0x24").
-    func testCopyOffsetCopiesHexOffsetToClipboard() {
+    func testCopyOffsetCopiesHexOffsetToClipboard() throws {
+        // 48 bytes: 0x24, the offset the menu is built on, must be a byte of
+        // the file — the segment block names the piece that byte sits in.
+        let url = try tempFile([UInt8](repeating: 0x11, count: 48))
+        defer { try? FileManager.default.removeItem(at: url) }
         let controller = MainViewController()
         let pane = PaneViewModel()
         pane.bookmarks = BookmarkSpace(store: BookmarkStore())
+        try pane.open(url: url)
         let menu = controller.makeOffsetMenu(for: pane, offset: 0x24)
 
-        XCTAssertEqual(menu.items.count, 8,
-                       "Copy offset, separator, Select Block from Here at «addr», separator, " +
-                       "Split Here at «addr», Merge, separator, Toggle Bookmark at «addr»")
-        XCTAssertEqual(menu.items[0].title, "Copy offset")
+        // The pane is one piece (S0) at this point, so the segment block carries
+        // the piece's own items between Split Here and Merge.
+        XCTAssertEqual(menu.items.map(\.title),
+                       ["Copy offset", "",
+                        "Select Block from Here at 00000024", "",
+                        "Split Here at 00000024", "",
+                        "Save Segment S0…", "Replace Segment S0 from File…", "",
+                        "Select Segment S0", "Edit Segment S0", "Merge", "",
+                        "Toggle Bookmark at 00000020"])
         XCTAssertEqual(menu.items[0].action, #selector(MainViewController.copyOffset(_:)))
-        XCTAssertTrue(menu.items[1].isSeparatorItem)
-        XCTAssertEqual(menu.items[2].title, "Select Block from Here at 00000024")
         XCTAssertEqual(menu.items[2].action, #selector(MainViewController.selectBlockFromHere(_:)))
         // The segment block: its own separators, Split Here and Merge.
-        XCTAssertTrue(menu.items[3].isSeparatorItem)
         XCTAssertEqual(menu.items[4].title, "Split Here at 00000024")
         XCTAssertEqual(menu.items[4].action, #selector(MainViewController.splitHere(_:)))
-        XCTAssertEqual(menu.items[5].title, "Merge")
-        XCTAssertEqual(menu.items[5].action, #selector(MainViewController.removeSegment(_:)))
-        XCTAssertTrue(menu.items[6].isSeparatorItem)
+        XCTAssertEqual(menu.items[11].title, "Merge")
+        XCTAssertEqual(menu.items[11].action, #selector(MainViewController.removeSegment(_:)))
 
         // Snapshot the clipboard so the test leaves it untouched. Restore by
         // re-writing the string — resurrecting `pasteboardItems` throws
@@ -353,8 +359,12 @@ final class OffsetContextMenuTests: XCTestCase {
                         "",                     // separator
                         "Copy offset", "",
                         "Select Block from Here at 00000014", "",
-                        // The segment block: its own separators (§21.3).
-                        "Split Here at 00000014", "Merge", "",
+                        // The segment block: its own separators (§21.3) — Split
+                        // Here for the position, the piece's own Save/Replace/
+                        // Select/Edit for the piece the byte sits in.
+                        "Split Here at 00000014", "",
+                        "Save Segment S0…", "Replace Segment S0 from File…", "",
+                        "Select Segment S0", "Edit Segment S0", "Merge", "",
                         // The bookmark block: one item marks and unmarks, and an
                         // unmarked row has nothing to rename (§20.3).
                         "Toggle Bookmark at 00000010"])
@@ -384,12 +394,14 @@ final class OffsetContextMenuTests: XCTestCase {
                        "the selection start byte is inside the selection")
 
         // 0x20 is `end` itself — one past the last selected byte — and 0x24 is
-        // well clear of it; both keep the plain menu, all five items of it.
+        // well clear of it; both keep the plain menu.
         for outside: UInt64 in [0x20, 0x24] {
             let menu = controller.makeOffsetMenu(for: pane, offset: outside)
             XCTAssertEqual(menu.items.map(\.title),
                            ["Copy offset", "", "Select Block from Here at \(outside.bareAddress)", "",
-                            "Split Here at \(outside.bareAddress)", "Merge", "",
+                            "Split Here at \(outside.bareAddress)", "",
+                            "Save Segment S0…", "Replace Segment S0 from File…", "",
+                            "Select Segment S0", "Edit Segment S0", "Merge", "",
                             "Toggle Bookmark at \(BookmarkStore.row(containing: outside).bareAddress)"],
                            "0x\(String(outside, radix: 16)) is outside: no selection actions")
         }
@@ -470,5 +482,116 @@ final class OffsetContextMenuTests: XCTestCase {
         let saveItem = try XCTUnwrap(menu.items.first { $0.title == "Save Selection as…" })
         _ = NSApp.sendAction(saveItem.action!, to: saveItem.target, from: saveItem)
         XCTAssertFalse(FileManager.default.fileExists(atPath: destination.path))
+    }
+
+    // MARK: - The piece's own items (§21.3)
+
+    /// A pane over a real temp file, no window — the menu is built for it
+    /// directly. The caller removes the file when done.
+    private func barePane(_ bytes: [UInt8]) throws -> (PaneViewModel, URL) {
+        let url = try tempFile(bytes)
+        let pane = PaneViewModel()
+        try pane.open(url: url)
+        return (pane, url)
+    }
+
+    /// The offset menu's Save/Replace/Edit act on the piece the right-clicked
+    /// byte sits in — the same items the strip's menu offers for the piece under
+    /// the pointer, carrying that piece in their `representedObject` (§21.3).
+    func testTheSegmentItemsCarryThePieceTheClickedByteSitsIn() throws {
+        let (pane, url) = try barePane([UInt8](repeating: 0x11, count: 16))
+        defer { try? FileManager.default.removeItem(at: url) }
+        pane.segmentStore.addCut(at: 8)   // S0 = [0,8), S1 = [8,16)
+        let controller = MainViewController()
+
+        func pieceItem(_ title: String, at offset: UInt64) throws -> NSMenuItem {
+            let menu = controller.makeOffsetMenu(for: pane, offset: offset)
+            return try XCTUnwrap(menu.items.first { $0.title == title },
+                                 "the offset menu must offer \(title)")
+        }
+
+        // A byte in S1: the items name S1 and carry it.
+        for title in ["Save Segment S1…", "Replace Segment S1 from File…",
+                      "Select Segment S1", "Edit Segment S1"] {
+            let item = try pieceItem(title, at: 12)
+            let target = try XCTUnwrap(item.representedObject as? MainViewController.SegmentMenuTarget,
+                                       "\(title) carries its piece")
+            XCTAssertEqual(target.pieceIndex, 1,
+                           "\(title) acts on S1, the piece the byte sits in")
+            XCTAssertTrue(controller.validateMenuItem(item), "\(title) is enabled for an open pane")
+        }
+        // A byte in S0: the same items name S0.
+        for title in ["Save Segment S0…", "Replace Segment S0 from File…",
+                      "Select Segment S0", "Edit Segment S0"] {
+            let item = try pieceItem(title, at: 4)
+            let target = try XCTUnwrap(item.representedObject as? MainViewController.SegmentMenuTarget)
+            XCTAssertEqual(target.pieceIndex, 0, "\(title) acts on S0, the piece the byte sits in")
+        }
+
+        // Select Segment from the offset menu selects the whole piece — its
+        // full range, not a caret at its start (§21.3).
+        let select = try pieceItem("Select Segment S1", at: 12)
+        _ = NSApp.sendAction(select.action!, to: select.target, from: select)
+        let selection = pane.hexSelection()
+        XCTAssertEqual(selection.start, 8, "the selection opens at S1's start")
+        XCTAssertEqual(selection.end, 16, "and runs to S1's end")
+    }
+
+    /// Save Segment… from the offset menu writes the right-clicked byte's piece
+    /// to the URL the save panel returns — the same act as the strip's menu and
+    /// the form's row menu (§21.5), on the right-clicked pane, not the active one.
+    func testSaveSegmentFromTheOffsetMenuWritesTheClickedBytesPiece() throws {
+        let (pane, url) = try barePane([UInt8](0..<16))   // the byte named by its offset
+        defer { try? FileManager.default.removeItem(at: url) }
+        pane.segmentStore.addCut(at: 8)
+
+        let destination = FileManager.default.temporaryDirectory
+            .appendingPathComponent("segment-save-\(UUID().uuidString).bin")
+        defer { try? FileManager.default.removeItem(at: destination) }
+        let controller = MainViewController()   // active pane is empty
+        controller.segmentSavePanel = { _ in destination }
+        // Synchronous write, the way the strip's tests pin it: the real runner
+        // writes off the main actor, and the assertion would race it.
+        var writeError: Error?
+        controller.segmentWriteRunner = { parts, storage, dir in
+            do { try SegmentWriter.write(parts, from: storage, to: dir) }
+            catch { writeError = error }
+        }
+
+        let menu = controller.makeOffsetMenu(for: pane, offset: 12)   // a byte in S1
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Save Segment S1…" })
+        _ = NSApp.sendAction(item.action!, to: item.target, from: item)
+        XCTAssertNil(writeError, "the write must not fail")
+
+        XCTAssertEqual([UInt8](try Data(contentsOf: destination)), [UInt8](8..<16),
+                       "the written file holds the clicked byte's piece, not the active pane's")
+    }
+
+    /// Replace Segment from File… from the offset menu swaps the right-clicked
+    /// byte's piece from the file the open panel returns — same length only
+    /// (§21.6), on the right-clicked pane.
+    func testReplaceSegmentFromTheOffsetMenuSwapsTheClickedBytesPiece() throws {
+        let (pane, url) = try barePane([UInt8](repeating: 0x11, count: 16))
+        defer { try? FileManager.default.removeItem(at: url) }
+        pane.segmentStore.addCut(at: 8)
+
+        let donor = FileManager.default.temporaryDirectory
+            .appendingPathComponent("segment-donor-\(UUID().uuidString).bin")
+        try Data([UInt8](repeating: 0xAB, count: 8)).write(to: donor)
+        defer { try? FileManager.default.removeItem(at: donor) }
+        let controller = MainViewController()   // active pane is empty
+        controller.segmentOpenPanel = { _ in donor }
+
+        let menu = controller.makeOffsetMenu(for: pane, offset: 12)   // a byte in S1
+        let item = try XCTUnwrap(menu.items.first { $0.title == "Replace Segment S1 from File…" })
+        _ = NSApp.sendAction(item.action!, to: item.target, from: item)
+
+        let storage = try XCTUnwrap(pane.byteStorage)
+        XCTAssertEqual([UInt8](try storage.read(at: 8, length: 8)),
+                       [UInt8](repeating: 0xAB, count: 8),
+                       "S1 holds the donor's bytes")
+        XCTAssertEqual([UInt8](try storage.read(at: 0, length: 8)),
+                       [UInt8](repeating: 0x11, count: 8),
+                       "S0 is untouched")
     }
 }

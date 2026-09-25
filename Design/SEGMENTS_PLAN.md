@@ -426,10 +426,15 @@ status bar says which piece the caret is in.
   opens, pre-filled with the address the menu was opened on. This is how a cut
   normally gets made; Add Cut… is for an offset you know as a number rather than
   as a position.
-- The segment pair (**Split Here**, **Merge**) sits in the context menu
-  as its own block between separators, distinct from the selection and bookmark
-  commands, and is the same block whether the menu was opened on a byte or on the
-  Offset column's address.
+- The segment block sits in the context menu as its own block between separators,
+  distinct from the selection and bookmark commands, and is the same block whether
+  the menu was opened on a byte or on the Offset column's address. It carries
+  **Split Here** and **Merge** for the right-clicked position, and — when that
+  position is inside a piece — the piece's own items beside them: **Save Segment
+  S\<i\>…**, **Replace Segment S\<i\> from File…**, **Select Segment S\<i\>**
+  and **Edit Segment S\<i\>**, the same items and actions the strip's menu
+  offers for the piece under the pointer (§21.3), acting on the piece the
+  right-clicked byte sits in.
 - The popover is the *same* editor that changes an existing cut (stage 3), so one
   panel creates and edits, as one popover does for a bookmark (§20.3).
 - `HexViewDataSource.hexSegmentSpans(in:)` answering, for a drawn row range, the
@@ -469,9 +474,11 @@ status bar says which piece the caret is in.
     address — on a byte and on the Offset column's address alike — anchored to
     that byte, while **Add Cut…** presents the same popover centred in the pane,
     not anchored to the caret;
-  - the menu items and their validation, the segment pair set off between
-    separators, and **Merge** naming the piece and its neighbour (the
-    caret's piece in the Edit menu, the right-clicked byte's in the offset menu);
+  - the menu items and their validation, the segment block set off between
+    separators — Split Here, Merge, and the piece's own Save/Replace/Select/
+    Edit when the right-clicked byte sits in a piece — and **Merge** naming the
+    piece and its neighbour (the caret's piece in the Edit menu, the
+    right-clicked byte's in the offset menu);
     a redraw test asserting a cut invalidates its own rows and not the document;
   - `testTheStatusBarNamesTheCaretsPiece` as one block `S1: <start>-<end>
     (length)`, bare hex, and its single-piece silence.

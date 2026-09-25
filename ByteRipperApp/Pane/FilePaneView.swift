@@ -957,6 +957,14 @@ final class FilePaneView: NSView {
         return controller
     }
 
+    /// The anchor the dump's own Edit Segment popover hangs off (§21.4): the
+    /// clicked byte's own cell, in the hex view's coordinates, with the hex
+    /// view itself. The pane view gives it because the anchor rect is the hex
+    /// view's to give — the same reason `presentCutEditPopover` lives here.
+    func byteCellAnchor(for offset: UInt64) -> (view: NSView, rect: NSRect) {
+        (hexView, hexView.byteCellRect(for: offset))
+    }
+
     /// Shows a transient message (e.g. "No match found.") in the status bar,
     /// replacing the regular status for a couple of seconds, then restoring it.
     /// Used by the Find bar for errors and empty results (§11).
