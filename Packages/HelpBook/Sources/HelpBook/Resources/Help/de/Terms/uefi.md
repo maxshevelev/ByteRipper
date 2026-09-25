@@ -1,4 +1,4 @@
-@source-sha f673e90be7a23b14cc800c0dd1d2efca893563b93c54d0d77ef80fd306297464
+@source-sha 82da379f9678a9fffee258e99d7fa27b52523c2ff78470204360062703555252
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -387,9 +387,9 @@ Die Profile in ihrer üblichen Schreibweise:
 - `FVE` — Verified Boot, sofortiges Abschalten.
 - `FVME` — Verified und Measured, sofortiges Abschalten.
 
-Den *gebrannten* Wert liest kein Werkzeug aus einem Dump, ByteRipper eingeschlossen: Er liegt in den [[term:otp|Fuses]] des Chipsatzes, und nichts im Abbild sagt, womit ein bestimmter Chipsatz gebrannt wurde.
+Den *gebrannten* Wert bekommt kein Werkzeug aus dem Die eines [[term:pch|Chipsatzes]] heraus, der bereits auf einem Board verbaut ist, ByteRipper eingeschlossen: Er liegt in den [[term:otp|Fuses]], und nichts im Abbild sagt, womit ein bestimmtes Exemplar gebrannt wurde.
 
-Wohl aber kann ein Abbild sagen, womit es brennen *würde*. Auf Silizium mit noch ungebrannten Fuses — etwa nach einem Tausch des Hubs — liegen das Profil und der Schlüssel-Hash des Herstellers als Konfiguration in der [[term:me-region|ME-Region]], von Intels Image-Werkzeug dort hineingeschrieben, und daneben steht die Einstellung, ob sie beim ersten Einschalten des Boards übernommen werden. Diese beiden Felder liest ByteRipper noch nicht. Was es heute zeigt, sind die [[term:boot-policy|geschützten Bereiche]], die das Abbild deklariert.
+Wohl aber kann ein Abbild sagen, womit es einen neuen [[term:pch|Chipsatz]] brennen wird, der noch nie auf einem Board verbaut war. Genau das ist der Fall nach einem Tausch des Hubs: Das Profil und der Schlüssel-Hash des Herstellers liegen als Konfiguration in der [[term:me-region|ME-Region]], von Intels Image-Werkzeug dort hineingeschrieben, und daneben steht die Einstellung, ob sie beim ersten Einschalten des Boards übernommen werden. Diese beiden Felder liest ByteRipper noch nicht. Was es heute zeigt, sind die [[term:boot-policy|geschützten Bereiche]], die das Abbild deklariert.
 
 ! Ein Board mit dem Profil `VM` bootet auch mit verändertem Bootblock. Genau deshalb macht eine Änderung, die auf einer Maschine „funktioniert hat“, die nächste zum Briefbeschwerer: Das Profil ist eine Eigenschaft des Boards, nicht des Abbilds.
 

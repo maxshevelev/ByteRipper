@@ -386,9 +386,9 @@ The profiles as they are usually written:
 - `FVE` — verified boot, immediate shutdown.
 - `FVME` — verified and measured, immediate shutdown.
 
-The *burned* value cannot be read out of a dump, ByteRipper included: it lives in the chipset's [[term:otp|fuses]], and nothing in the image says what a particular chipset was fused with.
+No tool can pull the *burned* value out of the silicon of a [[term:pch|chipset]] already installed on a board, ByteRipper included: it lives in the [[term:otp|fuses]], and nothing in the image says what a particular part was fused with.
 
-What an image can say is what it *would* burn. On a part whose fuses are still unburned — a replaced hub — the profile and the vendor's key hash are configuration that Intel's image tool wrote into the [[term:me-region|ME region]], and whether they are committed the first time the board is powered is a setting beside them. ByteRipper does not read those two fields yet. What it shows today is the [[term:boot-policy|protected ranges]] the image declares.
+What an image can say is what it will burn into a new [[term:pch|chipset]] that has never been installed on a board. That is the case after a hub is replaced: the profile and the vendor's key hash are configuration that Intel's image tool wrote into the [[term:me-region|ME region]], and whether they are committed the first time the board is powered is a setting beside them. ByteRipper does not read those two fields yet. What it shows today is the [[term:boot-policy|protected ranges]] the image declares.
 
 ! A board on `VM` boots with a modified boot block. That is exactly why a modification that "worked" on one machine bricks the next one — the profile is a property of the board, not of the image.
 

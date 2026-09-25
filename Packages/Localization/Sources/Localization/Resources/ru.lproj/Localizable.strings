@@ -703,6 +703,7 @@
 "column|Plat" = "Плат";
 "compressed" = "сжатый";
 "conflicting changes" = "расхождения";
+"differing %1$@" = "различий %1$@";
 "empty slot" = "пустой слот";
 "empty slot (FF FF FF FF)" = "пустой слот (FF FF FF FF)";
 "erased" = "стёртый";

@@ -6,7 +6,7 @@
 1. Öffnen Sie den Dump, den Sie untersuchen: **Ablage ▸ Öffnen…** (⌘O), oder ziehen Sie die Datei ins Fenster.
 2. Öffnen Sie die zweite genauso. Sie landet in der anderen Hälfte des Fensters — jetzt hat das Programm **Datei A** links und **Datei B** rechts.
 3. Achten Sie auf die Farbe. Jedes Byte, das sich zwischen beiden Dateien unterscheidet, trägt den Unterschieds-Hintergrund. Eine lange Strecke Farbe heißt, ein ganzer Bereich unterscheidet sich; einzelne verstreute Zellen heißen, ein paar Bytes tun es.
-4. Springen Sie zwischen den Unterschieden statt zu scrollen: **⌥⌘→** zum nächsten, **⌥⌘←** zum vorherigen. Die Statuszeile nennt, wie viel des Images sich unterscheidet — `differing 0.4%` — als Anteil an der längeren Datei, byteweise gezählt.
+4. Springen Sie zwischen den Unterschieden statt zu scrollen: **⌥⌘→** zum nächsten, **⌥⌘←** zum vorherigen. Die Statuszeile nennt, wie viel des Images sich unterscheidet — `Unterschiede 0.4%` — als Anteil an der längeren Datei, byteweise gezählt.
 5. Lesen Sie in der Statuszeile den Offset der aktuellen Position. In einem Firmware-Dump sagt Ihnen dieser Offset, *welchen Teil* des Images Sie ansehen.
 6. Schalten Sie ein Firmware-Panel ein — **Werkzeuge ▸ UEFI-Struktur** — und die Offsets hören auf, Zahlen zu sein: das Panel benennt die Region oder das Volume, in die jede Adresse fällt.
 

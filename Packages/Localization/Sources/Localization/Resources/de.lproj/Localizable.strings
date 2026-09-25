@@ -703,6 +703,7 @@
 "column|Plat" = "Plat";
 "compressed" = "komprimiert";
 "conflicting changes" = "abweichende Änderungen";
+"differing %1$@" = "Unterschiede %1$@";
 "empty slot" = "leerer Slot";
 "empty slot (FF FF FF FF)" = "leerer Slot (FF FF FF FF)";
 "erased" = "gelöscht";

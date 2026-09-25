@@ -1,4 +1,5 @@
 import ByteRipperCore
+import Localization
 
 /// What the panes' status bar says about an open comparison (§14.4): how much
 /// of it differs, as a share of the comparison's extent.
@@ -40,7 +41,11 @@ struct ComparisonSummary: Equatable {
         // The decimal is always there, even at a whole value: the readout is a
         // number the user reads while editing, and "differing 25%" growing a
         // decimal place on the next keystroke would make it jump.
-        return "differing \(tenths / 10).\(tenths % 10)%"
+        //
+        // The number is formatted first and poured in whole, so the key carries
+        // no literal `%` for the formatter to read as a placeholder — and so a
+        // language that puts the share before the word can do that.
+        return L("differing %1$@", "\(tenths / 10).\(tenths % 10)%")
     }
 
     /// The share in tenths of a percent, rounded up — the smallest number of

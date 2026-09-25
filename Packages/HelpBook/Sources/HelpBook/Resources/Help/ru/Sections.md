@@ -12,7 +12,7 @@
 @name Панели прошивок
 
 @section bench
-@name На мастерской
+@name В мастерской
 
 @section settings
 @name Настройки
