@@ -434,7 +434,11 @@ status bar says which piece the caret is in.
   S\<i\>…**, **Replace Segment S\<i\> from File…**, **Select Segment S\<i\>**
   and **Edit Segment S\<i\>**, the same items and actions the strip's menu
   offers for the piece under the pointer (§21.3), acting on the piece the
-  right-clicked byte sits in.
+  right-clicked byte sits in. Those items and **Merge** work on a partition, so
+  they appear only once the pane is cut into more than one piece: a pane with
+  no cuts offers **Split Here** alone, because there is no neighbour to merge
+  into and no partition to save, swap or rename. (Revert Segment to «file», the
+  source file's item, is excepted — it shows whenever the piece has a source.)
 - The popover is the *same* editor that changes an existing cut (stage 3), so one
   panel creates and edits, as one popover does for a bookmark (§20.3).
 - `HexViewDataSource.hexSegmentSpans(in:)` answering, for a drawn row range, the

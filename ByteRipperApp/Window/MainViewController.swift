@@ -4054,8 +4054,8 @@ final class MainViewController: NSViewController {
     /// actions — Copy, Fill Selection with…, Delete Bytes — that act on the
     /// right-clicked pane's selection, never the active pane's (§10.2). Between
     /// them and the bookmark block sits the segment block (§21.3): Split Here
-    /// for the position, and — when the right-clicked byte is inside a piece —
-    /// that piece's own Save/Replace/Select/Edit beside it, the same items the
+    /// for the position, and — once the pane is cut into more than one piece —
+    /// the piece's own Save/Replace/Select/Edit beside it, the same items the
     /// strip's menu offers for the piece under the pointer.
     func makeOffsetMenu(for pane: PaneViewModel, offset: UInt64) -> NSMenu {
         let menu = NSMenu(title: "Offset")
@@ -4223,6 +4223,9 @@ final class MainViewController: NSViewController {
     /// (§21.3) — Save Segment…, Replace Segment from File…, Select Segment and
     /// Edit Segment — the same items and the same actions, acting on the piece
     /// the right-clicked byte sits in rather than the piece under the pointer.
+    /// Those items and Merge work on a partition, so they appear only when the
+    /// pane is cut into more than one piece: with no cuts the block is Split
+    /// Here alone (Revert Segment, the source file's item, excepted).
     private func addSegmentMenuItems(to menu: NSMenu, for pane: PaneViewModel, offset: UInt64) {
         let target = OffsetContextTarget(pane: pane, offset: offset)
         func add(_ title: String, _ action: Selector) {
@@ -4231,29 +4234,36 @@ final class MainViewController: NSViewController {
             item.representedObject = target
         }
         add("Split Here at \(offset.bareAddress)", #selector(splitHere(_:)))
-        // The piece the right-clicked byte sits in: a pane without bytes has
-        // none, and the block stays the position's own pair.
-        if let piece = pane.segmentStore.segment(containing: offset) {
-            let pieceTarget = SegmentMenuTarget(
-                pane: pane, pieceIndex: piece.index,
-                anchor: segmentEditAnchor(for: offset, in: pane))
-            func pieceItem(_ title: String, _ action: Selector) {
-                let item = menu.addItem(withTitle: title, action: action, keyEquivalent: "")
-                item.target = self
-                item.representedObject = pieceTarget
+        // The rest of the block works on a partition: with no cuts there is one
+        // whole-file piece and nothing to save out, swap, select, rename or
+        // merge, so the block stays Split Here alone (§21.3).
+        if pane.segmentStore.segments.count > 1 {
+            // The piece the right-clicked byte sits in: a pane without bytes
+            // has none, and the block stays the position's own pair.
+            if let piece = pane.segmentStore.segment(containing: offset) {
+                let pieceTarget = SegmentMenuTarget(
+                    pane: pane, pieceIndex: piece.index,
+                    anchor: segmentEditAnchor(for: offset, in: pane))
+                func pieceItem(_ title: String, _ action: Selector) {
+                    let item = menu.addItem(withTitle: title, action: action, keyEquivalent: "")
+                    item.target = self
+                    item.representedObject = pieceTarget
+                }
+                menu.addItem(.separator())
+                pieceItem("Save Segment \(piece.label)…", #selector(segmentMenuSaveSegment(_:)))
+                pieceItem("Replace Segment \(piece.label) from File…", #selector(segmentMenuReplaceSegment(_:)))
+                menu.addItem(.separator())
+                // Select/Edit/Merge grouped as the strip's menu has them: the
+                // selection- and partition-shaping acts after the file I/O.
+                pieceItem("Select Segment \(piece.label)", #selector(segmentMenuSelectSegment(_:)))
+                pieceItem("Edit Segment \(piece.label)", #selector(segmentMenuEditSegment(_:)))
             }
-            menu.addItem(.separator())
-            pieceItem("Save Segment \(piece.label)…", #selector(segmentMenuSaveSegment(_:)))
-            pieceItem("Replace Segment \(piece.label) from File…", #selector(segmentMenuReplaceSegment(_:)))
-            menu.addItem(.separator())
-            // Select/Edit/Merge grouped as the strip's menu has them: the
-            // selection- and partition-shaping acts after the file I/O.
-            pieceItem("Select Segment \(piece.label)", #selector(segmentMenuSelectSegment(_:)))
-            pieceItem("Edit Segment \(piece.label)", #selector(segmentMenuEditSegment(_:)))
+            add("Merge", #selector(removeSegment(_:)))
         }
-        add("Merge", #selector(removeSegment(_:)))
         // Revert Segment to «file» (§21.7): only where the piece under the
         // click came from one, and named for it, the way the strip's menu is.
+        // It is the source file's item, not the partition's, so it shows even
+        // with no cuts — a whole-file piece can have been replaced from one.
         if let piece = pane.segmentStore.segment(containing: offset),
            let source = pane.segmentSource(of: piece) {
             let item = menu.addItem(withTitle: "Revert Segment \(piece.label) to “\(source.name)”",

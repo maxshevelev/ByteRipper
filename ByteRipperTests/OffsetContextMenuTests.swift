@@ -301,22 +301,19 @@ final class OffsetContextMenuTests: XCTestCase {
         try pane.open(url: url)
         let menu = controller.makeOffsetMenu(for: pane, offset: 0x24)
 
-        // The pane is one piece (S0) at this point, so the segment block carries
-        // the piece's own items between Split Here and Merge.
+        // The pane has no cuts, so the segment block is Split Here alone —
+        // no Merge (there is no neighbour) and no piece items, which work on
+        // a partition that does not exist yet (§21.3).
         XCTAssertEqual(menu.items.map(\.title),
                        ["Copy offset", "",
                         "Select Block from Here at 00000024", "",
                         "Split Here at 00000024", "",
-                        "Save Segment S0…", "Replace Segment S0 from File…", "",
-                        "Select Segment S0", "Edit Segment S0", "Merge", "",
                         "Toggle Bookmark at 00000020"])
         XCTAssertEqual(menu.items[0].action, #selector(MainViewController.copyOffset(_:)))
         XCTAssertEqual(menu.items[2].action, #selector(MainViewController.selectBlockFromHere(_:)))
-        // The segment block: its own separators, Split Here and Merge.
+        // The segment block: with no cuts it is the one position item.
         XCTAssertEqual(menu.items[4].title, "Split Here at 00000024")
         XCTAssertEqual(menu.items[4].action, #selector(MainViewController.splitHere(_:)))
-        XCTAssertEqual(menu.items[11].title, "Merge")
-        XCTAssertEqual(menu.items[11].action, #selector(MainViewController.removeSegment(_:)))
 
         // Snapshot the clipboard so the test leaves it untouched. Restore by
         // re-writing the string — resurrecting `pasteboardItems` throws
@@ -359,12 +356,10 @@ final class OffsetContextMenuTests: XCTestCase {
                         "",                     // separator
                         "Copy offset", "",
                         "Select Block from Here at 00000014", "",
-                        // The segment block: its own separators (§21.3) — Split
-                        // Here for the position, the piece's own Save/Replace/
-                        // Select/Edit for the piece the byte sits in.
+                        // The segment block: the pane has no cuts, so it is
+                        // Split Here alone — the piece items and Merge work on
+                        // a partition that does not exist yet (§21.3).
                         "Split Here at 00000014", "",
-                        "Save Segment S0…", "Replace Segment S0 from File…", "",
-                        "Select Segment S0", "Edit Segment S0", "Merge", "",
                         // The bookmark block: one item marks and unmarks, and an
                         // unmarked row has nothing to rename (§20.3).
                         "Toggle Bookmark at 00000010"])
@@ -400,8 +395,6 @@ final class OffsetContextMenuTests: XCTestCase {
             XCTAssertEqual(menu.items.map(\.title),
                            ["Copy offset", "", "Select Block from Here at \(outside.bareAddress)", "",
                             "Split Here at \(outside.bareAddress)", "",
-                            "Save Segment S0…", "Replace Segment S0 from File…", "",
-                            "Select Segment S0", "Edit Segment S0", "Merge", "",
                             "Toggle Bookmark at \(BookmarkStore.row(containing: outside).bareAddress)"],
                            "0x\(String(outside, radix: 16)) is outside: no selection actions")
         }
