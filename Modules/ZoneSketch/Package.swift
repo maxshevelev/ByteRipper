@@ -24,6 +24,11 @@ let package = Package(
         .library(name: "ZoneSketchUI", targets: ["ZoneSketchUI"])
     ],
     dependencies: [
+        // The help book: a tool-module names the page its panel header's `?`
+        // opens (`ToolModule.helpTopic`), and the firmware panels key a row's
+        // term to a glossary entry. The pure half only — the `?` itself and
+        // the popover are drawn by the app and by `ToolModuleKit`.
+        .package(path: "../../Packages/HelpBook"),
         .package(path: "../../Packages/ToolModuleKit")
     ],
     targets: [
@@ -31,6 +36,7 @@ let package = Package(
             .product(name: "ToolModuleKit", package: "ToolModuleKit")
         ]),
         .target(name: "ZoneSketchUI", dependencies: [
+            .product(name: "HelpBook", package: "HelpBook"),
             "ZoneSketch",
             .product(name: "ToolModuleKit", package: "ToolModuleKit")
         ]),

@@ -172,6 +172,10 @@ import ToolModuleKit
         runningIdentifier = module.identifier
         zones = .empty
         panel.setTitle(module.title)
+        // What the header's `?` opens: the page about this instrument, which
+        // the tool-module names on the seam (`ToolModule.helpTopic`). A module
+        // that names none leaves the header without a button.
+        panel.setHelpTopic(module.helpTopic)
         // The tick and the visible name are the header's state as much as the
         // session's, so they are read here rather than left to whoever started
         // the session to remember to say them.

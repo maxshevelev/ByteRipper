@@ -1,4 +1,6 @@
 import Cocoa
+import HelpBook
+import HelpUI
 import ToolModuleKit
 
 @MainActor
@@ -79,7 +81,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // The menu bar belongs to the application, not to a window: it is built
         // once, here, and its commands travel the responder chain to whichever
         // window is key.
-        let mainMenu = MainMenu.build(settingsTarget: self)
+        let mainMenu = MainMenu.build(appTarget: self)
         NSApp.mainMenu = mainMenu
         // The File menu's Open Recent submenu is built empty (its rows depend
         // on what has been opened, which the build cannot know); hand it the
@@ -214,6 +216,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @objc func showSettings(_ sender: Any?) {
         settingsWindowController.showWindow(sender)
+    }
+
+    /// Every item of the Help menu, and the ⌘? that opens the first of them.
+    ///
+    /// The page to open travels in the item's `representedObject`; an item
+    /// without one — which no item here is, but a menu built elsewhere could be
+    /// — opens the book at its first page rather than doing nothing.
+    ///
+    /// It lives on the app delegate because help belongs to no window: it has
+    /// to work with none open, which is exactly when a new user needs it.
+    ///
+    /// **Not `showHelp(_:)`.** That is `NSApplication`'s own action, and
+    /// `NSApplication` sits in the responder chain ahead of its delegate — so
+    /// an item wired to that name never reached this method at all. AppKit
+    /// answered it by looking for the help book named in the Info.plist,
+    /// finding none, and putting up "Help isn't available for ByteRipper"
+    /// (measured, on every item of the menu). The name is distinctive for the
+    /// same reason `increaseHexFontSize` is: these dispatch to whoever answers
+    /// first.
+    @objc func showHelpBook(_ sender: Any?) {
+        let link = (sender as? NSMenuItem)?.representedObject as? HelpLink
+        HelpPresenter.show(link ?? .topic(.overview))
     }
 
     /// App ▸ About ByteRipper: the standard panel, with credits that say where

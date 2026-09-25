@@ -69,6 +69,14 @@ packages:
   # which both firmware tool-modules link and no target here depends on.
   UEFIContentSource:
     path: Packages/UEFIContentSource
+  # The help: what the app has to say about itself, and what the words in the
+  # firmware panels mean. Two packages, because one is pure content a test can
+  # walk without a window and the other draws it. The app and every panel that
+  # carries a `?` link the UI half; the pure half comes with it.
+  HelpBook:
+    path: Packages/HelpBook
+  HelpUI:
+    path: Packages/HelpUI
   ZoneSketch:
     path: Modules/ZoneSketch
   FITTool:
@@ -115,6 +123,10 @@ targets:
       # the tool-modules' live sources hold theirs: fetched once, re-checked
       # once a day, and silent when it cannot be made.
       - package: FreshData
+      # The help window and the `?` buttons that open it at a page.
+      - package: HelpUI
+      # The book itself: the app names the pages its `?` buttons open.
+      - package: HelpBook
       # One line per tool-module the app ships. The registry lists them; this is
       # what puts them in the binary.
       - package: ZoneSketch
@@ -254,6 +266,8 @@ targets:
       - package: ToolModuleKit
       - package: AppPalette
       - package: UEFIImage
+      - package: HelpBook
+      - package: HelpUI
       - package: ZoneSketch
         product: ZoneSketchUI
       - package: FITTool

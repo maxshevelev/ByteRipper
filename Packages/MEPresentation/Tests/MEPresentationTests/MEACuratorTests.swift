@@ -1,4 +1,5 @@
 import XCTest
+import HelpBook
 import MEFirmware
 @testable import MEPresentation
 
@@ -508,5 +509,40 @@ final class MEACuratorTests: XCTestCase {
          "fileBytes": 0x200,
          "files": [["index": 0, "size": 0x200]],
          "configurations": [], "reservedIntegrity": []]
+    }
+
+    // MARK: - The glossary a row points at
+
+    /// Every term a curated node names is one the book holds.
+    ///
+    /// The compiler checks the *spelling* of a `HelpTermID` and nothing else;
+    /// this is what catches a node pointing at an entry nobody wrote, which on
+    /// a bench is a `?` that opens an empty popover.
+    func testEveryHelpTermANodeNamesIsInTheGlossary() throws {
+        let a = try analysis([
+            "regions": [regionJSON(name: "FTPR", offset: 0x1000, size: 0x2000)],
+        ])
+        var seen: Set<HelpTermID> = []
+        func walk(_ node: MEANode) {
+            if let term = node.helpTerm { seen.insert(term) }
+            node.children.forEach(walk)
+        }
+        MEACurator.present(a).forEach(walk)
+
+        XCTAssertFalse(seen.isEmpty, "no node named a term at all")
+        for term in seen.sorted() {
+            XCTAssertNotNil(Help.shared.term(term),
+                            "a node points at “\(term.rawValue)”, which is not in the glossary")
+        }
+    }
+
+    /// The groups a reader is most likely to ask about carry one.
+    func testTheFirmwareAndPartitionTableRowsExplainThemselves() throws {
+        let a = try analysis([
+            "regions": [regionJSON(name: "FTPR", offset: 0x1000, size: 0x2000)],
+        ])
+        let roots = MEACurator.present(a)
+        XCTAssertEqual(find("Firmware", in: roots)?.helpTerm, HelpTermID("me"))
+        XCTAssertEqual(find("Regions (FPT)", in: roots)?.helpTerm, HelpTermID("fpt"))
     }
 }

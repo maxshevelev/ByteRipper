@@ -1,6 +1,8 @@
 import AppPalette
 import Cocoa
 import ByteRipperCore
+import HelpBook
+import HelpUI
 
 /// The non-modal Find bar shown at the top of the window (§11), modelled after
 /// TextEdit: a `Find` label, an editable pattern combo that stretches to fill
@@ -207,6 +209,12 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         stack.addArrangedSubview(warningView)
         stack.addArrangedSubview(navControl)
         stack.addArrangedSubview(findAllButton)
+        // The bar's own `?`, before the ✕ that shuts it: hex against text, what
+        // the encodings are for, and the pattern library. A quiet glyph rather
+        // than the platform's round button — the bar is a strip of borderless
+        // icon controls, and a bezel here would be the one thing on it wearing
+        // one (§11).
+        stack.addArrangedSubview(HelpButton.inline(for: .topic(.search)))
         stack.addArrangedSubview(doneButton)
         addSubview(stack)
 

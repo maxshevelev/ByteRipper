@@ -1,6 +1,8 @@
 import AppPalette
 import Cocoa
 import ByteRipperCore
+import HelpBook
+import HelpUI
 
 /// The Segments form (§21.4): the place the partition is read and edited —
 /// modal, like Go To. The table lists the pieces in file order (label, start,
@@ -340,7 +342,12 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         close.keyEquivalent = "\u{1B}"  // Esc — at rest it closes the form.
         closeButton = close
 
-        let row = NSStackView(views: [removeAll, spacer, saveAll, close])
+        // The platform's round `?` at the leading edge of the button row, where
+        // every Mac dialog puts it: what a cut is, how the pieces are saved, and
+        // why a cut moves with the bytes while a bookmark does not.
+        let help = HelpButton.standard(for: .topic(.segments))
+
+        let row = NSStackView(views: [help, removeAll, spacer, saveAll, close])
         row.orientation = .horizontal
         row.spacing = 8
         row.translatesAutoresizingMaskIntoConstraints = false

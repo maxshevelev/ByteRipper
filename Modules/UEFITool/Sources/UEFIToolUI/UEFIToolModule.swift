@@ -1,4 +1,5 @@
 import AppKit
+import HelpBook
 import MEFirmware
 import MEPresentation
 import MEReads
@@ -18,6 +19,7 @@ import UEFITool
 public enum UEFIToolModule: ToolModule {
     public static let identifier = "dev.maxik.tool.uefi-structure"
     public static let title = "UEFI Structure"
+    public static let helpTopic: HelpTopicID? = .toolUEFI
     /// Three columns — name, type, subtype — and a list of label/value fields:
     /// the same room the FIT table takes, more than the minimap's 120.
     public static let preferredPanelWidth: CGFloat = 480
@@ -678,7 +680,11 @@ private struct ChecksumPass: Sendable {
             } ?? .empty
         }
         controller.show(
-            image: image, tree: tree, focus: focus, detail: detail, catalogue: guids,
+            image: image, tree: tree, focus: focus, detail: detail,
+            // An ME row carries its own term (the curator named it); a UEFI
+            // node's comes from its kind. Whichever of the two is in focus.
+            helpTerm: meNode?.helpTerm ?? node.flatMap(UEFIHelpTerms.term(for:)),
+            catalogue: guids,
             badChecksums: checksumProblems, canWrite: !host.isReadOnly, isBuilding: false,
             rowsChanged: rowsChanged,
             meRoots: meRoots, meFocus: meFocus

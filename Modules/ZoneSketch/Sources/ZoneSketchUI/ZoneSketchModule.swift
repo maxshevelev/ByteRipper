@@ -1,4 +1,5 @@
 import AppKit
+import HelpBook
 import ToolModuleKit
 import ZoneSketch
 
@@ -16,6 +17,7 @@ import ZoneSketch
 public enum ZoneSketchModule: ToolModule {
     public static let identifier = "dev.maxik.tool.zonesketch"
     public static let title = "Zone Sketch"
+    public static let helpTopic: HelpTopicID? = .toolZones
     public static let preferredPanelWidth: CGFloat = 320
 
     @MainActor public static func makeSession(host: any ToolHost) -> any ToolSession {

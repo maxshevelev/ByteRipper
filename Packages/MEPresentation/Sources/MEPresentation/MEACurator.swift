@@ -1,4 +1,5 @@
 import Foundation
+import HelpBook
 import MEFirmware
 
 /// Turns a `FirmwareAnalysis` into the curated tree the «Full Tree» tab
@@ -97,7 +98,7 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "Firmware",
                        subtitle: "\(MEAText.family(a.family)) · \(a.version.text)",
-                       fields: fields)
+                       fields: fields, helpTerm: HelpTermID("me"))
     }
 
     // MARK: - Regions (FPT)
@@ -119,7 +120,7 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "Regions (FPT)",
                        subtitle: MEAText.count(rows.count, "region"),
-                       children: rows)
+                       children: rows, helpTerm: HelpTermID("fpt"))
     }
 
     // MARK: - CSE Layout Table
@@ -151,7 +152,8 @@ public enum MEACurator {
                        subtitle: MEAText.count(table.partitions.count, "partition"),
                        fields: header, children: rows,
                        marks: MEATreeMarks.table(named: "CSE Layout Table",
-                                                 checksumValid: table.checksumValid))
+                                                 checksumValid: table.checksumValid),
+                       helpTerm: HelpTermID("cse-layout-table"))
     }
 
     // MARK: - Boot Partitions (BPDT)
@@ -198,7 +200,7 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "Boot Partitions (BPDT)",
                        subtitle: MEAText.count(tables.count, "table"),
-                       children: rows)
+                       children: rows, helpTerm: HelpTermID("bpdt"))
     }
 
     // MARK: - Code Partition ($CPD)
@@ -250,7 +252,8 @@ public enum MEACurator {
         return MEANode(path: [], title: "Code Partition ($CPD)",
                        subtitle: "\(cp.name) · \(cp.headerVersion == 1 ? "R1" : "R2")",
                        fields: header, children: children,
-                       marks: MEATreeMarks.codePartition(cp))
+                       marks: MEATreeMarks.codePartition(cp),
+                       helpTerm: HelpTermID("cpd"))
     }
 
     private static func extensionRow(_ ext: CPDExtension) -> MEANode {
@@ -321,7 +324,8 @@ public enum MEACurator {
         return MEANode(path: [], title: "Manifest",
                        subtitle: "\(m.tag) · \(MEAText.manifestFormat(m.format))",
                        fields: fields,
-                       marks: MEATreeMarks.manifest(a))
+                       marks: MEATreeMarks.manifest(a),
+                       helpTerm: HelpTermID("manifest"))
     }
 
     // MARK: - File System (MFS)
@@ -393,7 +397,8 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "File System (MFS)",
                        subtitle: MEAText.count(vol.presentFileCount, "file"),
-                       fields: header, children: children)
+                       fields: header, children: children,
+                       helpTerm: HelpTermID("mfs"))
     }
 
     /// One present low-level file. Numbered where nothing names it — which is
@@ -497,7 +502,8 @@ public enum MEACurator {
                              MEAField("Steppings", c.steppings)])
         }
         return MEANode(path: [], title: "Chipset Initialization",
-                       fields: fields, children: rows)
+                       fields: fields, children: rows,
+                       helpTerm: HelpTermID("pch-init"))
     }
 
     // MARK: - Fact groups (opaque structures, dumped)
@@ -541,7 +547,8 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "MFS Backup",
                        subtitle: backup.format == .r1 ? "R1" : "R0",
-                       fields: fields, children: rows)
+                       fields: fields, children: rows,
+                       helpTerm: HelpTermID("mfs-backup"))
     }
 
     private static let backupFileNames: [Int: String] = [
@@ -572,7 +579,8 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "EFS Volume",
                        subtitle: MEAText.offset(efs.offset),
-                       fields: fields, children: children)
+                       fields: fields, children: children,
+                       helpTerm: HelpTermID("efs"))
     }
 
     /// One EFS file. Its name and path are the two tables' text; the sizes and
@@ -651,7 +659,8 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "OEM Configuration",
                        subtitle: MEAText.offset(oem.offset),
-                       fields: fields, children: children)
+                       fields: fields, children: children,
+                       helpTerm: HelpTermID("oem-config"))
     }
 
     /// The Unlock Token Flags an unlock-token partition ends with, one node per
@@ -676,7 +685,8 @@ public enum MEACurator {
                     ? "Unlock Token" : "Unlock Token (\(token.partition))",
                 subtitle: MEAText.offset(token.offset),
                 range: MEAText.rangeValue(token.offset, UnlockTokenFlags.size),
-                fields: fields)
+                fields: fields,
+                helpTerm: HelpTermID("utok"))
         }
     }
 
@@ -756,13 +766,15 @@ public enum MEACurator {
             MEANode(path: [], title: "Module \(i + 1)",
                     fields: MEAValueText.fields(of: m))
         }
-        return MEANode(path: [], title: "$MME Directory", fields: fields, children: rows)
+        return MEANode(path: [], title: "$MME Directory", fields: fields, children: rows,
+                       helpTerm: HelpTermID("mme"))
     }
 
     private static func gscGroup(_ a: FirmwareAnalysis) -> MEANode? {
         guard let gsc = a.gscInfo else { return nil }
         return MEANode(path: [], title: "GSC Info",
-                       fields: MEAValueText.fields(of: gsc))
+                       fields: MEAValueText.fields(of: gsc),
+                       helpTerm: HelpTermID("gsc"))
     }
 
     private static func oromGroup(_ a: FirmwareAnalysis) -> MEANode? {
@@ -774,7 +786,7 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "OROM Images",
                        subtitle: MEAText.count(rows.count, "image"),
-                       children: rows)
+                       children: rows, helpTerm: HelpTermID("orom"))
     }
 
     private static func rbeGroup(_ a: FirmwareAnalysis) -> MEANode? {
@@ -812,7 +824,8 @@ public enum MEACurator {
         }
         return MEANode(path: [], title: "RBE/PM Metadata",
                        subtitle: MEAText.count(children.count, "row"),
-                       fields: fields, children: nodes, marks: marks)
+                       fields: fields, children: nodes, marks: marks,
+                       helpTerm: HelpTermID("rbe-pm"))
     }
 
     /// What the checksums group is called, and what its rows read before they

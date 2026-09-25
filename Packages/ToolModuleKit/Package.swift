@@ -21,15 +21,34 @@ let package = Package(
     // The app's colours. This draws — the tables here put a marker beside a
     // value — and a marker's colour is a meaning, so it comes from the palette
     // rather than from a system colour picked by hand.
+    //
+    // The help book, for the one thing the seam carries about it: which page a
+    // tool-module's panel header offers. A `HelpTopicID` rather than a bare
+    // string, so a panel pointing at a page that does not exist is a
+    // compile-time name and a test failure in the book rather than an empty
+    // window on a bench. The pure half only — nothing here draws the help.
     dependencies: [
-        .package(path: "../AppPalette")
+        .package(path: "../AppPalette"),
+        .package(path: "../HelpBook"),
+        // The `?` the shared detail list carries for the row in focus, and the
+        // popover it opens. Here rather than in each panel so that "what is
+        // this row" is the same button in the same corner in both of them —
+        // the argument that put the row-marks legend here too.
+        .package(path: "../HelpUI")
     ],
     targets: [
         .target(name: "ToolModuleKit",
-                dependencies: [.product(name: "AppPalette", package: "AppPalette")]),
+                dependencies: [
+                    .product(name: "AppPalette", package: "AppPalette"),
+                    .product(name: "HelpBook", package: "HelpBook"),
+                    .product(name: "HelpUI", package: "HelpUI")
+                ]),
         .testTarget(
             name: "ToolModuleKitTests",
-            dependencies: ["ToolModuleKit"]
+            dependencies: [
+                "ToolModuleKit",
+                .product(name: "HelpBook", package: "HelpBook")
+            ]
         )
     ]
 )

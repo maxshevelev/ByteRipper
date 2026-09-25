@@ -26,15 +26,22 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../MEFirmware"),
-        .package(path: "../ToolModuleKit")
+        .package(path: "../ToolModuleKit"),
+        // The glossary a row points at. A `HelpTermID` on the node rather than
+        // a lookup by title in the panel: the tree is hand-named here, so this
+        // is the one place that knows what a row *is*, and a title is a label
+        // that may be translated while an id is not.
+        .package(path: "../HelpBook")
     ],
     targets: [
         .target(name: "MEPresentation", dependencies: [
             .product(name: "MEFirmware", package: "MEFirmware"),
-            .product(name: "ToolModuleKit", package: "ToolModuleKit")
+            .product(name: "ToolModuleKit", package: "ToolModuleKit"),
+            .product(name: "HelpBook", package: "HelpBook")
         ]),
         .testTarget(name: "MEPresentationTests", dependencies: [
             "MEPresentation",
+            .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit")
         ])

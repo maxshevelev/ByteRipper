@@ -1,4 +1,5 @@
 import Cocoa
+import HelpBook
 import XCTest
 import ToolModuleKit
 @testable import ByteRipper
@@ -82,6 +83,9 @@ enum StubToolA: ToolModule {
     static let identifier = "dev.maxik.tool.stubA"
     static let title = "Stub A"
     static let preferredPanelWidth: CGFloat = 300
+    /// One stub names a help page and the other does not, so the panel header's
+    /// `?` can be tested in both of the states it has.
+    static let helpTopic: HelpTopicID? = .toolsOverview
     static let log = ToolStubLog()
 
     @MainActor static func makeSession(host: any ToolHost) -> any ToolSession {

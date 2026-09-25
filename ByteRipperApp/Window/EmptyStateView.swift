@@ -1,5 +1,7 @@
 import AppPalette
 import Cocoa
+import HelpBook
+import HelpUI
 
 /// Placeholder shown in empty mode (§3.1): a large system icon that opens the
 /// file picker on click, a "Drop files here" headline, the up-to-two-files
@@ -146,6 +148,18 @@ final class EmptyStateView: NSView {
         hintLabel.alignment = .center
         hintLabel.font = .systemFont(ofSize: 13)
 
+        // The one screen where a `?` is worth more than anywhere else: a window
+        // with nothing open is where a new user arrives, and "what is this for"
+        // is the question they have. It opens the page that answers exactly
+        // that, and the `?` sits beside the hint rather than in the stack's own
+        // column so the landing screen keeps its shape.
+        let help = HelpButton.standard(for: .topic(.overview),
+                                       tooltip: "What ByteRipper is for")
+        let hintRow = NSStackView(views: [hintLabel, help])
+        hintRow.orientation = .horizontal
+        hintRow.alignment = .centerY
+        hintRow.spacing = 6
+
         // Which app this is and which build of it, under the hint: the one line
         // that answers "what am I looking at" on a window with no file open, and
         // what a bug report gets quoted from.
@@ -180,10 +194,10 @@ final class EmptyStateView: NSView {
         stackView.translatesAutoresizingMaskIntoConstraints = false
         stackView.addArrangedSubview(openButton)
         stackView.addArrangedSubview(titleLabel)
-        stackView.addArrangedSubview(hintLabel)
+        stackView.addArrangedSubview(hintRow)
         stackView.addArrangedSubview(versionBlock)
         stackView.addArrangedSubview(makeBookmarkSection())
-        stackView.setCustomSpacing(Self.versionGap, after: hintLabel)
+        stackView.setCustomSpacing(Self.versionGap, after: hintRow)
         // More air than the stack's usual rhythm: the list is a different
         // subject from the landing screen above it, not the next line of it.
         stackView.setCustomSpacing(Self.bookmarkSectionGap, after: versionBlock)

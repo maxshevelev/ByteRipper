@@ -756,6 +756,11 @@ import ToolModuleKit
 
     /// Rebuilds the detail list from the focused row's own fields.
     private func renderDetail(_ focus: MEANode?) {
+        // What the `?` in the list's corner explains: the glossary entry the
+        // curator gave this row. Set before the early return as well, so a row
+        // with no fields — an empty section — still offers the paragraph that
+        // says what such a row *is*.
+        detail.setTerm(focus?.helpTerm)
         guard let focus, !focus.fields.isEmpty else {
             detail.showPlaceholder(focus == nil
                 ? "Select a row to see what it is."

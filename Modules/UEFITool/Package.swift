@@ -24,6 +24,11 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../../Packages/ALSplitView"),
+        // The help book: a tool-module names the page its panel header's `?`
+        // opens (`ToolModule.helpTopic`), and the firmware panels key a row's
+        // term to a glossary entry. The pure half only — the `?` itself and
+        // the popover are drawn by the app and by `ToolModuleKit`.
+        .package(path: "../../Packages/HelpBook"),
         .package(path: "../../Packages/ToolModuleKit"),
         .package(path: "../../Packages/AppPalette"),
         .package(path: "../../Packages/UEFIImage"),
@@ -41,10 +46,12 @@ let package = Package(
     ],
     targets: [
         .target(name: "UEFITool", dependencies: [
+            .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage")
         ]),
         .target(name: "UEFIToolUI", dependencies: [
+            .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "FreshData", package: "FreshData"),
             .product(name: "AppPalette", package: "AppPalette"),
             "UEFITool",
@@ -58,6 +65,7 @@ let package = Package(
         ]),
         .testTarget(name: "UEFIToolTests", dependencies: [
             "UEFITool",
+            .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "FirmwareCompressionTestSupport", package: "FirmwareCompression")

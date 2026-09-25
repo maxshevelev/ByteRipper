@@ -1,5 +1,6 @@
 import ALSplitView
 import AppKit
+import HelpBook
 import AppPalette
 import MEPresentation
 import ToolModuleKit
@@ -79,6 +80,9 @@ import UEFITool
     /// size without waiting for the next parse — a zoom is not a re-read.
     private var detailShown: UEFINodeDetail = .empty
     private var detailSubject = ""
+    /// The glossary entry the detail list's `?` opens, kept beside the detail
+    /// itself so a re-render at a new type size keeps the button.
+    private var detailTerm: HelpTermID?
     /// The GUID catalogue the names are read from. The session owns it — it
     /// downloads a fresh one in the background and passes it in on every show —
     /// so the tree shows the GUIDs themselves at first paint and the catalogue
@@ -462,6 +466,11 @@ import UEFITool
         tree: LazyUEFITree?,
         focus: NodeID?,
         detail: UEFINodeDetail,
+        /// What the `?` in the detail list's corner explains: the glossary
+        /// entry for the node in focus. Decided by the session, which is what
+        /// holds the node — the panel is handed a `UEFINodeDetail`, which is
+        /// fields and has no kind to ask about.
+        helpTerm: HelpTermID? = nil,
         catalogue: GuidsCatalogue,
         badChecksums: [NodeID: Set<UEFIChecksumField>],
         canWrite: Bool,
@@ -507,6 +516,7 @@ import UEFITool
             summaryLabel.toolTip = [summaryLabel.toolTip, UEFIDetail.protectionCaveat]
                 .compactMap { $0 }.joined(separator: "\n\n")
         }
+        detailTerm = helpTerm
         renderDetail(detail, subject: focus?.description ?? "")
         queueRefresh(rowsChanged: rowsChanged)
     }
@@ -797,6 +807,10 @@ import UEFITool
     private func renderDetail(_ node: UEFINodeDetail, subject: String) {
         detailShown = node
         detailSubject = subject
+        // What the `?` in the list's corner explains. Set before the early
+        // return too: a node with no fields to list is still a node whose kind
+        // the glossary can name.
+        detail.setTerm(detailTerm)
         guard !node.fields.isEmpty else {
             detail.showPlaceholder(node.title.isEmpty
                 ? "Select a node to see what it is."

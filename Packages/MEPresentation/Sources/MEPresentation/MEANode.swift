@@ -1,4 +1,5 @@
 import Foundation
+import HelpBook
 import ToolModuleKit
 
 /// One label/value row of a node's detail list — the panel's lower pane, the
@@ -62,6 +63,15 @@ public struct MEANode: Sendable, Equatable, Hashable, Identifiable {
     /// node is built (`MEATreeMarks`), since everything it is decided from is in
     /// the analysis the node comes out of.
     public var marks: ToolRowMarks
+    /// Which glossary entry says what this row *is* — what the `?` beside the
+    /// detail list opens for it.
+    ///
+    /// Decided here, with the name, because this is the one place that knows a
+    /// row is the partition table rather than a row that happens to be called
+    /// "Regions (FPT)". Nil for a row whose own name is the whole answer (a
+    /// file called `home/bup/si_features` is not a term), and the panel then
+    /// draws no button rather than one that opens nothing.
+    public var helpTerm: HelpTermID?
 
     public var id: [Int] { path }
 
@@ -78,7 +88,8 @@ public struct MEANode: Sendable, Equatable, Hashable, Identifiable {
         fields: [MEAField] = [],
         children: [MEANode] = [],
         isEmptySection: Bool = false,
-        marks: ToolRowMarks = .none
+        marks: ToolRowMarks = .none,
+        helpTerm: HelpTermID? = nil
     ) {
         self.path = path
         self.title = title
@@ -88,6 +99,7 @@ public struct MEANode: Sendable, Equatable, Hashable, Identifiable {
         self.children = children
         self.isEmptySection = isEmptySection
         self.marks = marks
+        self.helpTerm = helpTerm
     }
 }
 

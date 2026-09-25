@@ -1,4 +1,5 @@
 import AppKit
+import HelpBook
 import MEFirmware
 import MEATool
 import MEPresentation
@@ -19,6 +20,7 @@ import UEFIImage
 public enum MEAToolModule: ToolModule {
     public static let identifier = "dev.maxik.tool.me-analyzer"
     public static let title = "ME Analyzer"
+    public static let helpTopic: HelpTopicID? = .toolME
     /// Two columns — a name and a compact second line (range/count) — plus the
     /// detail list below: the same room the UEFI tree takes.
     public static let preferredPanelWidth: CGFloat = 480

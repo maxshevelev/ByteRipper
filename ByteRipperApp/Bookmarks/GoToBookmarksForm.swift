@@ -1,6 +1,8 @@
 import AppPalette
 import Cocoa
 import ByteRipperCore
+import HelpBook
+import HelpUI
 
 // MARK: - Recently typed offsets (§10.1)
 
@@ -384,7 +386,13 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         cancel.keyEquivalent = "\u{1B}"  // Esc — at rest it closes the form.
         cancelButton = cancel
 
-        let row = NSStackView(views: [spacer, cancel])
+        // The form answers one question — "go where?" — out of two halves, and
+        // the `?` opens the page about the half a reader is more likely to be
+        // stuck on: what a bookmark is and why it is the window's rather than a
+        // file's.
+        let help = HelpButton.standard(for: .topic(.bookmarks))
+
+        let row = NSStackView(views: [help, spacer, cancel])
         row.orientation = .horizontal
         row.spacing = 8
         row.translatesAutoresizingMaskIntoConstraints = false

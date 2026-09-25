@@ -41,6 +41,24 @@ Packages:
 - After adding a package or a source file: `xcodegen generate`. The test script
   finds a new package by itself.
 
+Help:
+- `Packages/HelpBook` is the content (pure, no AppKit), `Packages/HelpUI` draws
+  it. `Design/HELP.md` is the full description.
+- **Structure is code, words are resources.** A page is a `HelpTopicID` listed
+  in `HelpContents`; what a reader reads is a file under
+  `Packages/HelpBook/Sources/HelpBook/Resources/Help/<language>/`. Never a
+  user-visible help string in Swift — the app is meant to be translatable, and
+  a language is a directory beside `en` with nothing else to edit.
+- Adding a page means adding its id, listing it, and writing its file; the
+  tests then require it in every shipped language, and require every link in
+  the book to resolve.
+- A `?` is `HelpButton.standard(for:)` in a form or a dialog and
+  `HelpButton.inline(for:)` in a panel's chrome. A tool-module names its page
+  on the seam (`ToolModule.helpTopic`); a firmware panel names the term for the
+  row in focus (`ToolDetailScroll.setTerm`).
+- Write for a repair bench, in plain language, and say what is uncertain. A
+  field nobody has documented is called unknown in the panel and in the help.
+
 Skills:
 - Skills live in the repo, committed under `Skills/<name>/` — that is the durable
   home; a `git clone` carries them. Layout: `SKILL.md` (frontmatter `name` /

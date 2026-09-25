@@ -1,5 +1,6 @@
 import AppKit
 import FITTool
+import HelpBook
 import ToolModuleKit
 import UEFIContentSource
 import UEFIImage
@@ -15,6 +16,7 @@ import UEFIImage
 public enum FITToolModule: ToolModule {
     public static let identifier = "dev.maxik.tool.fit"
     public static let title = "FIT Table"
+    public static let helpTopic: HelpTopicID? = .toolFIT
     /// Six columns of table need the room; the minimap is happy at 120 and this
     /// is not (`Design/TOOL_MODULES_PLAN.md`).
     public static let preferredPanelWidth: CGFloat = 480

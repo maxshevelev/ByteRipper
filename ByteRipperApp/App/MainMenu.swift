@@ -1,4 +1,5 @@
 import Cocoa
+import HelpBook
 
 /// The application's menu bar (§4, §5, §7, §10.3, §11, §12), built in code
 /// rather than from a nib.
@@ -10,10 +11,13 @@ import Cocoa
 /// `MainViewController`. A menu addressed to one particular controller would go
 /// on addressing it after the user switched to another tab.
 enum MainMenu {
-    /// Builds the whole bar. `settingsTarget` receives ⌘, — an explicit target
-    /// rather than the responder chain, so the key works even while the hex
-    /// view, which swallows unmodified keystrokes, is first responder.
-    static func build(settingsTarget: AnyObject) -> NSMenu {
+    /// Builds the whole bar. `appTarget` receives the two commands that belong
+    /// to the application rather than to a document — Settings… (⌘,) and every
+    /// item of the Help menu — as an explicit target rather than through the
+    /// responder chain, so they work while the hex view, which swallows
+    /// unmodified keystrokes, is first responder, and while AppKit would
+    /// otherwise answer for them (see `makeHelpMenu`).
+    static func build(appTarget: AnyObject) -> NSMenu {
         let mainMenu = NSMenu()
 
         // App menu
@@ -34,7 +38,7 @@ enum MainMenu {
             action: #selector(AppDelegate.showSettings(_:)),
             keyEquivalent: ","
         )
-        settingsItem.target = settingsTarget
+        settingsItem.target = appTarget
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide ByteRipper", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(.separator())
@@ -75,9 +79,63 @@ enum MainMenu {
         // Help menu
         let helpItem = NSMenuItem()
         mainMenu.addItem(helpItem)
-        helpItem.submenu = NSMenu(title: "Help")
+        helpItem.submenu = makeHelpMenu(target: appTarget)
 
         return mainMenu
+    }
+
+    /// Builds the app menu bar's Help submenu.
+    ///
+    /// The first item is what every Mac app puts there, on the key every Mac
+    /// app puts it on. Under it are the three doors a bench actually walks
+    /// through — what the app is for, the rules for not ruining a dump, and the
+    /// glossaries the firmware panels' words are explained in — because the one
+    /// thing a help menu can do better than a window is start the reader
+    /// somewhere useful.
+    ///
+    /// Every item carries its destination in `representedObject` as the
+    /// `HelpLink` itself, so one action serves the whole menu and nothing here
+    /// matches on a title.
+    ///
+    /// **Explicit target, and a name of our own**, which is two guards against
+    /// the same thing — an item of a menu titled "Help" being answered by
+    /// AppKit instead of by us:
+    ///
+    /// - The action is `showHelpBook(_:)`, not `showHelp(_:)`. The latter is
+    ///   `NSApplication`'s own action, and `NSApplication` is in the responder
+    ///   chain ahead of its delegate, so every item wired to that name was
+    ///   answered by AppKit looking for a help book the app does not have:
+    ///   "Help isn't available for ByteRipper" (measured).
+    /// - The target is the app delegate rather than the responder chain, for
+    ///   the reason Settings… carries one: help belongs to no window and must
+    ///   work with none open, and with a hex view — which swallows plain
+    ///   keystrokes — as first responder.
+    ///
+    /// A glossary item opens its first entry, which is how the window's
+    /// contents comes to be showing that glossary open — the sidebar expands
+    /// whichever group holds the page it is told to show.
+    static func makeHelpMenu(target: AnyObject? = nil) -> NSMenu {
+        let helpMenu = NSMenu(title: "Help")
+
+        func add(_ title: String, _ link: HelpLink, key: String = "") {
+            let item = helpMenu.addItem(withTitle: title,
+                                        action: #selector(AppDelegate.showHelpBook(_:)),
+                                        keyEquivalent: key)
+            item.representedObject = link
+            item.target = target
+        }
+
+        // ⌘? is the platform's own help key: ⇧⌘/ , which AppKit spells as "?"
+        // with Command alone.
+        add("ByteRipper Help", .topic(.overview), key: "?")
+        helpMenu.addItem(.separator())
+        add("Getting Started", .topic(.firstComparison))
+        add("Bench Rules", .topic(.benchSafety))
+        helpMenu.addItem(.separator())
+        add("Glossary: UEFI Images", .term(HelpTermID("flash-descriptor")))
+        add("Glossary: Intel ME", .term(HelpTermID("fpt")))
+        add("Where This Knowledge Comes From", .topic(.provenance))
+        return helpMenu
     }
 
     /// Builds the app menu bar's Tools submenu: None, then every tool-module

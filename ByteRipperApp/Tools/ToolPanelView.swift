@@ -1,4 +1,6 @@
 import Cocoa
+import HelpBook
+import HelpUI
 
 /// The tool-module panel's chrome: a header naming the tool-module and the file
 /// it is working on, a close button, and the tool-module's own view below
@@ -73,6 +75,18 @@ final class ToolPanelView: NSView {
         symbol: "xmark", label: "Close the tool panel",
         tooltip: "Close the tool panel", target: self, action: #selector(closeClicked)
     )
+    /// The `?` beside the ✕: the page about the instrument in the panel.
+    ///
+    /// Drawn as the header's own glyph rather than as the platform's round help
+    /// button — a 28-point bar cannot hold a bezel, and the ✕ next to it is the
+    /// same kind of mark (`HeaderButton`). It is hidden for a tool-module that
+    /// names no page, so the header never offers a button that opens nothing.
+    private lazy var helpButton = HeaderButton.make(
+        symbol: "questionmark.circle", label: "Help for this tool",
+        tooltip: "Help for this tool", target: self, action: #selector(helpClicked)
+    )
+    /// The page the `?` opens, from the tool-module the panel is showing.
+    private var helpTopic: HelpTopicID?
     private let bottomSeparator = NSView()
     private let trailingSeparator = NSView()
     /// Where the tool-module's view goes.
@@ -194,6 +208,7 @@ final class ToolPanelView: NSView {
         header.addSubview(iconView)
         header.addSubview(titleLabel)
         header.addSubview(fileSelector)
+        header.addSubview(helpButton)
         header.addSubview(closeButton)
         header.addSubview(bottomSeparator)
 
@@ -220,7 +235,13 @@ final class ToolPanelView: NSView {
         gap.priority = .defaultHigh - 1
         let trailing = closeButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -6)
         trailing.priority = .defaultHigh
-        let toClose = fileSelector.trailingAnchor.constraint(lessThanOrEqualTo: closeButton.leadingAnchor,
+        // The `?` sits inside the ✕'s end of the bar, and the file name gives
+        // way before either of them — the same order the ranking below sets
+        // out. Its own gap is at the ✕'s priority, because the pair is one
+        // block of chrome that stays put while the header is squeezed.
+        let toHelp = helpButton.trailingAnchor.constraint(equalTo: closeButton.leadingAnchor, constant: -4)
+        toHelp.priority = .defaultHigh
+        let toClose = fileSelector.trailingAnchor.constraint(lessThanOrEqualTo: helpButton.leadingAnchor,
                                                              constant: -6)
         toClose.priority = .defaultHigh - 1
 
@@ -273,13 +294,17 @@ final class ToolPanelView: NSView {
             headerHeight,
             header.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor),
 
-            leading, afterIcon, gap, trailing, toClose,
+            leading, afterIcon, gap, trailing, toHelp, toClose,
             iconView.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             fileSelector.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             closeButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             closeButton.widthAnchor.constraint(equalToConstant: HeaderButton.side),
             closeButton.heightAnchor.constraint(equalToConstant: HeaderButton.side),
+
+            helpButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            helpButton.widthAnchor.constraint(equalToConstant: HeaderButton.side),
+            helpButton.heightAnchor.constraint(equalToConstant: HeaderButton.side),
 
             bottomSeparator.leadingAnchor.constraint(equalTo: header.leadingAnchor),
             bottomSeparator.trailingAnchor.constraint(equalTo: header.trailingAnchor),
@@ -422,6 +447,34 @@ final class ToolPanelView: NSView {
 
     @objc private func closeClicked() {
         onClose?()
+    }
+
+    @objc private func helpClicked() {
+        guard let helpTopic else { return }
+        HelpPresenter.show(topic: helpTopic)
+    }
+
+    /// The page the header's `?` offers, or nil to take the button away. Set
+    /// with the title, from the tool-module the panel is showing.
+    func setHelpTopic(_ topic: HelpTopicID?) {
+        helpTopic = topic
+        helpButton.isHidden = topic == nil
+        if let topic, let title = Help.shared.topic(topic)?.title {
+            // The tooltip names the page rather than saying "Help", the way
+            // every other `?` in the app does (`HelpButton`).
+            helpButton.toolTip = "Help: " + title
+            helpButton.setAccessibilityLabel("Help: " + title)
+        }
+    }
+
+    /// What the header's `?` opens, for the tests. Nil when it carries none.
+    var shownHelpTopic: HelpTopicID? { helpButton.isHidden ? nil : helpTopic }
+
+    /// Where the `?` and the ✕ landed in the header, for the test that keeps
+    /// the pair in the bar and in that order. Nil while no page is offered.
+    var helpButtonFrameInHeader: (frame: NSRect, closeFrame: NSRect)? {
+        guard !helpButton.isHidden else { return nil }
+        return (helpButton.frame, closeButton.frame)
     }
 
     /// The tool-module's half of the header. The file half is the selector, and
