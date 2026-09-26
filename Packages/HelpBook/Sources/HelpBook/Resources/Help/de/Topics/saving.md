@@ -1,4 +1,4 @@
-@source-sha 2fd3fc0df69cc8280fcc73f40237361e81462716c76bbd5ee0945fbd1b8ca0f5
+@source-sha 304bb3ae2b757249f4048345b23ef60b41fdee06a420f389779a1095610670eb
 # Sichern
 
 > Roter Text heißt, die Änderung gibt es nur hier. Sichern Sie, und sie steht in der Datei.
@@ -25,4 +25,4 @@ Manche Dokumente sind mit Absicht unbenannt und haben keinen Pfad, weshalb ⌘S 
 - Das Ergebnis von **Duplizieren**.
 - Ein Fragment, das aus einem Image geholt wurde.
 
-! Bewahren Sie den ursprünglichen Dump. Sichern Sie Ihre geänderte Fassung unter neuem Namen — `board_patched.bin` neben `board_original.bin`. Ein überschriebener Dump ist ein Chip, den Sie erneut lesen müssen, und auf einer Platine mit toter Versorgung gelingt das womöglich kein zweites Mal.
+! Bewahren Sie den ursprünglichen Dump. Sichern Sie Ihre geänderte Fassung unter neuem Namen — `board_patched.bin` neben `board_original.bin`. Ein überschriebener Dump ist ein Chip, den Sie erneut lesen müssen, und nach einem Spannungsfehler gelingt das womöglich kein zweites Mal.
