@@ -1,4 +1,4 @@
-@source-sha d3e626fafba28450270f52aaa3ac54c2530e260f26362e3b53375d56efb55520
+@source-sha 8a6771703acb00d0e7a84ab62d9dcdb4ea8d78e6c9160f5ae9c91a8f8958bdce
 # Dateien öffnen: ein Bereich oder zwei
 
 > Ein Tab hält zwei Dateibereiche. Eine Datei ist schlicht ein Editor; eine zweite Datei fügt den Vergleich hinzu. Bearbeiten geht in beiden Bereichen, so oder so.
@@ -12,8 +12,8 @@ Der zweite Bereich ist optional. Außer dem Vergleich selbst braucht nichts eine
 
 ## Wege, einen Dump zu öffnen
 
-- **Ablage ▸ Öffnen…** (⌘O). Halten beide Bereiche eine Datei, fragt das Programm, welcher ersetzt werden soll.
-- **Ziehen und Ablegen.** Ziehen Sie eine Datei aufs Fenster; die Ablagebänder zeigen, wo sie landet — diesen Bereich ersetzen, daneben öffnen, in einem neuen Tab öffnen. Zwei Dateien auf einmal belegen beide Bereiche.
+- **Ablage ▸ Öffnen…** (⌘O). Sind beide Bereiche leer, füllen die ersten beiden gewählten Dateien sie; ist einer frei, geht die Datei dorthin; sind beide belegt, ersetzt sie den **aktiven** Bereich. Was darüber hinaus gewählt ist, wird nicht geöffnet.
+- **Ziehen und Ablegen.** Ziehen Sie eine Datei aufs Fenster; die Ablagebänder zeigen, wo sie landet — diesen Bereich ersetzen, daneben öffnen, in einem neuen Tab öffnen. Zwei Dateien auf einmal: die zweite öffnet im anderen Bereich, sofern dieser frei ist.
 - **Ablage ▸ Benutzte Dokumente** — die Dumps, die Sie zuletzt offen hatten.
 - **Aus dem Finder**, wenn ByteRipper als Programm für die Endung eingetragen ist (siehe [[topic:settings|Einstellungen]]).
 - **Ablage ▸ Neue Datei** (⌘N) legt eine leere unbenannte Datei an — ein Ort, in den sich Bytes einsetzen lassen.

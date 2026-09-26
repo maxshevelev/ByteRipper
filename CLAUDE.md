@@ -68,6 +68,14 @@ Localization (`Design/LOCALIZATION.md`):
   translations that have fallen behind their English (`@source-sha`), and
   strings a language has not got. Re-translate, then `--bless` the file — never
   bless a page you did not actually bring in line.
+- **A name the help puts in bold is a promise.** After renaming anything
+  user-visible, or editing a page that quotes the interface, also run:
+  `python3 Skills/help-names/scripts/help_names.py`
+  It looks up every `**Menu ▸ Item**` the book names in that language's
+  strings. A miss is the page drifting from the app, the app needing the
+  page's better name, or a control reaching the screen without `L()` — which
+  the coverage check cannot see, since it only knows the strings that went
+  through `L()`.
 
 Help:
 - `Packages/HelpBook` is the content (pure, no AppKit), `Packages/HelpUI` draws

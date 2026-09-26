@@ -18,8 +18,8 @@ The second pane is optional. Nothing needs a second file except the comparison i
 
 ## Ways to open a dump
 
-- **File ▸ Open…** (⌘O). If both panes hold a file, the app asks which one to replace.
-- **Drag and drop.** Drag a file onto the window and the drop bands show where it will land — replace this pane, open beside it, or open in a new tab. Dropping two files at once fills both panes.
+- **File ▸ Open…** (⌘O). With both panes empty the first two files you pick fill them; with one pane free the file goes there; with both full it replaces the **active** pane. Anything selected beyond that is not opened.
+- **Drag and drop.** Drag a file onto the window and the drop bands show where it will land — replace this pane, open beside it, or open in a new tab. Drop two files at once and the second opens in the other pane, if that pane is free.
 - **File ▸ Open Recent** — the dumps you had open lately.
 - **From Finder**, if ByteRipper is set as the handler for the extension (see [[topic:settings|Settings]]).
 - **File ▸ New File** (⌘N) makes an empty untitled file — somewhere to paste bytes into.
