@@ -144,8 +144,12 @@ public enum UEFIPresenter {
     public static func nodeOpenTitle(for node: UEFINode, body: Bool) -> String? {
         let range = body ? node.body : node.range
         guard !range.isEmpty, !(body && range == node.range) else { return nil }
-        guard !node.name.isEmpty else { return body ? "Open Node Body" : "Open Node" }
-        return body ? "Open Body of “\(node.name)”" : "Open “\(node.name)”"
+        guard !node.name.isEmpty else {
+            return body ? L("Open Node Body") : L("Open Node")
+        }
+        // The name is poured in, never spelled into the key: a key built at
+        // run time is a key no translator can find.
+        return body ? L("Open Body of “%1$@”", node.name) : L("Open “%1$@”", node.name)
     }
 
     public static func nodeOpen(for node: UEFINode, in image: UEFIImage, body: Bool) -> NodeOpen? {
@@ -204,8 +208,8 @@ public enum UEFIPresenter {
                 space: node.space.inside(sectionAt: node.header.lowerBound),
                 range: nil,
                 suggestedName: marked + ".bin",
-                menuTitle: "Export Decompressed Body…",
-                openTitle: "Open Decompressed Body"
+                menuTitle: L("Export Decompressed Body…"),
+                openTitle: L("Open Decompressed Body")
             )
         }
         if node.space != .file {
@@ -213,8 +217,8 @@ public enum UEFIPresenter {
                 space: node.space,
                 range: node.range,
                 suggestedName: marked + ".bin",
-                menuTitle: "Export Decompressed Bytes…",
-                openTitle: "Open Decompressed Bytes"
+                menuTitle: L("Export Decompressed Bytes…"),
+                openTitle: L("Open Decompressed Bytes")
             )
         }
         return nil

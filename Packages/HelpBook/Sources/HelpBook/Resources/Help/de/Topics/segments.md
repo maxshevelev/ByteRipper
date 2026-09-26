@@ -1,4 +1,4 @@
-@source-sha 9b27792eae413a20562fb652f540ae1fc26ca7fb29312720e9c9e3f7fd34e553
+@source-sha adf8c1475438e25ec516c35c647d66b7d9f52ccaeb4c3d4db5ef9726e576db2b
 # Segmente: einen Dump in Teile schneiden
 
 > Die Nähte eines Images markieren und dann jedes Segment als eigene Datei sichern.
@@ -18,7 +18,7 @@ Segmente heißen **S0, S1, S2 …** in Dateireihenfolge und nummerieren sich neu
 
 ## Die Teile sichern
 
-Das Segmentformular kann **alle Segmente in einem Rutsch als einzelne Dateien sichern**. Zusammen mit [[topic:join-duplicate|Datei anhängen…]] ist das der Ablauf für eine Platine mit zwei SPI-Chips:
+Das Segmentformular kann in einem Rutsch **Alle als einzelne Dateien sichern…**. Zusammen mit [[topic:join-duplicate|Datei anhängen…]] ist das der Ablauf für eine Platine mit zwei SPI-Chips:
 
 1. Beide Chips lesen — zwei Dateien.
 2. Eine öffnen und die andere **anhängen** — jetzt ist das ganze BIOS ein Image.

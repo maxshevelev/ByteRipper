@@ -1,10 +1,10 @@
-@source-sha 5d3ae8fc151a284d8dfe45e71ad989594c0c6d10694635a10fc7d77e10709713
+@source-sha db527ce8bec31620666e61cf895c10ee155153b783071da4f769edbbb917c244
 # Ihr erster Vergleich
 
 > Öffnen Sie den schlechten Dump und einen guten und lassen Sie sich zeigen, wo sie auseinandergehen.
 
 1. Öffnen Sie den Dump, den Sie untersuchen: **Ablage ▸ Öffnen…** (⌘O), oder ziehen Sie die Datei ins Fenster.
-2. Öffnen Sie die zweite genauso. Sie landet in der anderen Hälfte des Fensters — jetzt hat das Programm **Datei A** links und **Datei B** rechts.
+2. Öffnen Sie die zweite genauso. Sie landet im anderen Dateibereich — jetzt sind es zwei, und der Vergleich läuft.
 3. Achten Sie auf die Farbe. Jedes Byte, das sich zwischen beiden Dateien unterscheidet, trägt den Unterschieds-Hintergrund. Eine lange Strecke Farbe heißt, ein ganzer Bereich unterscheidet sich; einzelne verstreute Zellen heißen, ein paar Bytes tun es.
 4. Springen Sie zwischen den Unterschieden statt zu scrollen: **⌥⌘→** zum nächsten, **⌥⌘←** zum vorherigen. Die Statuszeile nennt, wie viel des Images sich unterscheidet — `Unterschiede 0.4%` — als Anteil an der längeren Datei, byteweise gezählt.
 5. Lesen Sie in der Statuszeile den Offset der aktuellen Position. In einem Firmware-Dump sagt Ihnen dieser Offset, *welchen Teil* des Images Sie ansehen.
