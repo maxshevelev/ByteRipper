@@ -6,7 +6,7 @@
 - **⌘S — Sichern.** Schreibt das Dokument des Bereichs zurück in seine Datei. Ein unbenanntes Dokument öffnet stattdessen ein Sicherungsfenster.
 - **⇧⌘S — Sichern unter…** Schreibt es an einen neuen Ort, und der Bereich folgt der neuen Datei.
 - **Ablage ▸ Auf gesicherten Stand zurücksetzen** wirft Ihre Änderungen weg und liest die Datei neu vom Volume.
-- **Ablage ▸ In der Quelle aktualisieren** ist das dritte Ziel: für einen [[topic:fragments|Teil-Bereich]] schreibt es den Teil zurück in das Image, aus dem er stammt, statt in eine Datei.
+- **Ablage ▸ In der Quelle aktualisieren** ist das dritte Ziel: für einen [[topic:fragments|Fragment-Bereich]] schreibt es das Fragment zurück in das Image, aus dem es stammt, statt in eine Datei.
 
 ## Was ungesichert ist
 
@@ -23,6 +23,6 @@ Manche Dokumente sind mit Absicht unbenannt und haben keinen Pfad, weshalb ⌘S 
 - **Ablage ▸ Neue Datei** (⌘N).
 - Das Ergebnis eines [[topic:join-duplicate|Zusammenfügens]]: zwei Dumps zu verbinden ergibt ein *neues* Image, und ein versehentliches ⌘S darf es nicht über eine der Hälften schreiben.
 - Das Ergebnis von **Duplizieren**.
-- Ein Teil, der aus einem Image geholt wurde.
+- Ein Fragment, das aus einem Image geholt wurde.
 
 ! Bewahren Sie den ursprünglichen Dump. Sichern Sie Ihre geänderte Fassung unter neuem Namen — `board_patched.bin` neben `board_original.bin`. Ein überschriebener Dump ist ein Chip, den Sie erneut lesen müssen, und auf einer Platine mit toter Versorgung gelingt das womöglich kein zweites Mal.

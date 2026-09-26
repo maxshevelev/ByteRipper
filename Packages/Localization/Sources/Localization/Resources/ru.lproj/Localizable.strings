@@ -322,7 +322,7 @@
 "It has changes %1$@ has not got. Closing this panel without putting them back loses them." = "Здесь есть изменения, которых нет в %1$@. Закрыть панель, не записав их, — значит потерять их.";
 "It writes at 0x%1$@ inside a %2$@: the hash the firmware checks it against no longer matches." = "Пишет по 0x%1$@ внутрь %2$@: хеш, с которым прошивка это сверяет, больше не совпадает.";
 "Its bytes cannot be changed, so “%1$@” cannot be put back into it." = "Его байты изменить нельзя, поэтому «%1$@» туда не записать.";
-"Its bytes there are no longer the ones this part was opened from. Updating overwrites those changes with this part's bytes." = "Байты там уже не те, из которых была открыта эта часть. Запись перезапишет те изменения байтами этой части.";
+"Its bytes there are no longer the ones this part was opened from. Updating overwrites those changes with this part's bytes." = "Байты там уже не те, из которых был открыт этот фрагмент. Запись перезапишет те изменения байтами фрагмента.";
 "JEDEC ID" = "JEDEC ID";
 "Join with unsaved changes?" = "Объединить с несохранёнными изменениями?";
 "Join “%1$@” to itself?" = "Объединить «%1$@» с самим собой?";

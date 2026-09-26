@@ -18,6 +18,6 @@ Das Menü **Werkzeuge** schaltet jeweils ein Panel neben dem Dump ein. Jedes lie
 - **Sie sagen, worin sie unsicher sind.** Ein Feld, das niemand dokumentiert hat, behält seinen rohen Wert und heißt unbekannt, statt einen selbstsicheren Namen zu bekommen. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
 - **Die Zeilenmarkierungen** — die Balken, Abzeichen und Warnzeichen — erklärt der Streifen **Legende** unter der Tabelle jedes Panels.
 
-## Ein Stück herausholen
+## Ein Fragment herausholen
 
-Klicken Sie einen Knoten mit rechts an, lässt er sich als [[topic:fragments|Teil-Bereich]] öffnen: die Bytes des Knotens als eigenes Dokument über dem Image, aus dem sie stammen. So wird ein einzelnes Modul, eine Region oder eine entpackte Sektion herausgeholt, untersucht und zurückgeschrieben.
+Klicken Sie einen Knoten mit rechts an, lässt er sich als [[topic:fragments|Fragment-Bereich]] öffnen: die Bytes des Knotens als eigenes Dokument über dem Image, aus dem sie stammen. So wird ein einzelnes Modul, eine Region oder eine entpackte Sektion herausgeholt, untersucht und zurückgeschrieben.

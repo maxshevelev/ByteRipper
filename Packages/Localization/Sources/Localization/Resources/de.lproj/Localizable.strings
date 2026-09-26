@@ -322,7 +322,7 @@
 "It has changes %1$@ has not got. Closing this panel without putting them back loses them." = "Hier gibt es Änderungen, die %1$@ nicht hat. Wer diesen Bereich schließt, ohne sie zurückzuschreiben, verliert sie.";
 "It writes at 0x%1$@ inside a %2$@: the hash the firmware checks it against no longer matches." = "Sie schreibt bei 0x%1$@ in %2$@: der Hash, gegen den die Firmware das prüft, stimmt nicht mehr.";
 "Its bytes cannot be changed, so “%1$@” cannot be put back into it." = "Seine Bytes lassen sich nicht ändern, deshalb kann „%1$@“ nicht zurückgeschrieben werden.";
-"Its bytes there are no longer the ones this part was opened from. Updating overwrites those changes with this part's bytes." = "Die Bytes dort sind nicht mehr die, aus denen dieser Teil geöffnet wurde. Das Aktualisieren überschreibt jene Änderungen mit den Bytes dieses Teils.";
+"Its bytes there are no longer the ones this part was opened from. Updating overwrites those changes with this part's bytes." = "Die Bytes dort sind nicht mehr die, aus denen dieses Fragment geöffnet wurde. Das Aktualisieren überschreibt jene Änderungen mit den Bytes dieses Fragments.";
 "JEDEC ID" = "JEDEC ID";
 "Join with unsaved changes?" = "Mit ungesicherten Änderungen zusammenfügen?";
 "Join “%1$@” to itself?" = "„%1$@“ mit sich selbst zusammenfügen?";
@@ -745,7 +745,7 @@
 "“%1$@” has unsaved changes. Reload and discard them?" = "„%1$@“ hat ungesicherte Änderungen. Neu laden und verwerfen?";
 "“%1$@” has unsaved changes. Save and replace, or replace without saving?" = "„%1$@“ hat ungesicherte Änderungen. Sichern und ersetzen oder ohne Sichern ersetzen?";
 "“%1$@” has unsaved changes. They travel into the joined image; the file on disk keeps its saved bytes." = "„%1$@“ hat ungesicherte Änderungen. Sie wandern in das zusammengefügte Image; die Datei auf dem Volume behält ihre gesicherten Bytes.";
-"“%1$@” is %2$@ bytes in %3$@, and this tab is %4$@. A part goes back only at its own length: another length would shift every byte after it, and the file structure may be affected." = "„%1$@“ belegt %2$@ Bytes in %3$@, dieser Tab dagegen %4$@. Ein Teil geht nur in seiner eigenen Länge zurück: bei einer anderen Länge verschöben sich alle Bytes dahinter, und die Dateistruktur kann darunter leiden.";
+"“%1$@” is %2$@ bytes in %3$@, and this tab is %4$@. A part goes back only at its own length: another length would shift every byte after it, and the file structure may be affected." = "„%1$@“ belegt %2$@ Bytes in %3$@, dieser Tab dagegen %4$@. Ein Fragment geht nur in seiner eigenen Länge zurück: bei einer anderen Länge verschöben sich alle Bytes dahinter, und die Dateistruktur kann darunter leiden.";
 "“%1$@” is %2$@ bytes. A tool can be handed at most %3$@ bytes." = "„%1$@“ ist %2$@ Bytes groß. Einem Werkzeug lassen sich höchstens %3$@ Bytes übergeben.";
 "“%1$@” is a segment's source" = "„%1$@“ ist die Quelle eines Segments";
 "“%1$@” is already open" = "„%1$@“ ist bereits geöffnet";

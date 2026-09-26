@@ -30,4 +30,4 @@ Die Rückfragen lassen sich in den [[topic:settings|Einstellungen ▸ Bearbeiten
 
 ## Widerrufen
 
-Jede Änderung ist ein Widerrufsschritt (⌘Z), auch die großen: ein Zusammenfügen, ein Füllen, ein Schreibvorgang eines [[topic:tools-overview|Firmware-Panels]], ein in die Quelle zurückgeschriebener Teil. Widerrufen gilt je Dokument.
+Jede Änderung ist ein Widerrufsschritt (⌘Z), auch die großen: ein Zusammenfügen, ein Füllen, ein Schreibvorgang eines [[topic:tools-overview|Firmware-Panels]], ein in die Quelle zurückgeschriebenes Fragment. Widerrufen gilt je Dokument.
