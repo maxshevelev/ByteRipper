@@ -28,13 +28,13 @@ The second pane is optional. Nothing needs a second file except the comparison i
 
 Each pane header names its file and whether it has unsaved changes; the status bar below it gives the size. The ✕ in the header closes that pane and leaves the other one open.
 
-A window can hold several tabs (**File ▸ New Tab**, ⌘T), each with its own pair of panes. That is how several boards are kept apart on one screen: one tab per job.
+A window can hold several tabs (**File ▸ New Tab**, ⌘T), each with its own pair of panes to compare in. That is how several boards are kept apart on one screen: BIOS dumps compared in one tab, EC dumps in the next.
 
 ## If the file is already open
 
 A file is open in one place at a time, and the app holds to that:
 
-- **In the other pane of this tab** — it refuses and says so. The same dump cannot sit in both panes, so a file cannot be compared with itself.
+- **In the other pane of this tab** — it refuses and says so. The same dump cannot sit in both panes, so a file cannot be compared with itself. Your own edits show anyway, in red; and when two copies side by side are what you want, use **File ▸ Duplicate**.
 - **In another tab or window** — it offers a choice: show the file where it is, or move that pane into this tab.
 - **In this very pane** — it re-reads the file from disk. With unsaved edits it asks first, because re-reading discards them.
 

@@ -1,4 +1,4 @@
-@source-sha 8a6771703acb00d0e7a84ab62d9dcdb4ea8d78e6c9160f5ae9c91a8f8958bdce
+@source-sha c0b92c937b7f99993a108601e69412f7f7bebab1e1f30745cc6dbaa22f465462
 # Dateien öffnen: ein Bereich oder zwei
 
 > Ein Tab hält zwei Dateibereiche. Eine Datei ist schlicht ein Editor; eine zweite Datei fügt den Vergleich hinzu. Bearbeiten geht in beiden Bereichen, so oder so.
@@ -22,13 +22,13 @@ Der zweite Bereich ist optional. Außer dem Vergleich selbst braucht nichts eine
 
 Jeder Bereichskopf nennt seine Datei und ob es ungesicherte Änderungen gibt; die Größe steht in der Statuszeile darunter. Das ✕ im Kopf schließt diesen Bereich und lässt den anderen offen.
 
-Ein Fenster kann mehrere Tabs halten (**Ablage ▸ Neuer Tab**, ⌘T), jeder mit eigenem Paar Dateibereiche. So hält man mehrere Platinen auf einem Bildschirm auseinander: ein Tab pro Auftrag.
+Ein Fenster kann mehrere Tabs halten (**Ablage ▸ Neuer Tab**, ⌘T), jeder mit eigenem Paar Dateibereiche zum Vergleichen. So hält man mehrere Platinen auf einem Bildschirm auseinander: BIOS-Dumps im einen Tab verglichen, EC-Dumps im nächsten.
 
 ## Wenn die Datei schon offen ist
 
 Eine Datei ist immer nur an einer Stelle geöffnet, und daran hält sich das Programm:
 
-- **Im anderen Bereich dieses Tabs** — es lehnt ab und sagt es. Derselbe Dump kann nicht in beiden Bereichen liegen, eine Datei lässt sich also nicht mit sich selbst vergleichen.
+- **Im anderen Bereich dieses Tabs** — es lehnt ab und sagt es. Derselbe Dump kann nicht in beiden Bereichen liegen, eine Datei lässt sich also nicht mit sich selbst vergleichen. Ihre eigenen Änderungen sieht man ohnehin, in Rot; und wenn Sie wirklich zwei Kopien nebeneinander brauchen, nehmen Sie **Ablage ▸ Duplizieren**.
 - **In einem anderen Tab oder Fenster** — es bietet die Wahl: die Datei dort zeigen, wo sie offen ist, oder jenen Bereich in dieses Tab holen.
 - **Im selben Bereich** — es liest die Datei neu von der Platte. Bei ungesicherten Änderungen fragt es vorher, denn das Neulesen verwirft sie.
 
