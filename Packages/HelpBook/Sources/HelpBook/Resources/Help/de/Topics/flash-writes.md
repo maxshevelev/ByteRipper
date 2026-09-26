@@ -1,4 +1,4 @@
-@source-sha 074c107d0bc4bd3c0cc480ccbc19415a7be413207e39f03245ab035a27a5534b
+@source-sha c197e7f89f4fc087d4858430b7ff6648a79bf1fa32bfd42424878d609b0248ee
 # Wer in den Flash schreibt
 
 > Nur der Chipsatz hat Leitungen zum Chip. Alles auf der Platine, das Firmware schreiben will, muss ihn fragen — und wer was fragen darf, entscheidet der Descriptor.
@@ -50,6 +50,12 @@ Nichts davon steht im Dump, also kann kein Bereich es zeigen und keine Änderung
 
 ## Der Service-Übergang
 
-Intels Chipsätze tragen einen **Flash Descriptor Security Override**: einen Strap, gedacht für die Fertigung, der vollen Lese- und Schreibzugriff auf alle Regionen öffnet. Manche Desktop-Platinen führen ihn als Jumper heraus; auf Notebooks ist es meist ein Pin des Audio-Codecs, der beim Einschalten gehalten werden muss. Damit entsperren Service-Prozeduren einen Descriptor, ohne die Platine für einen Programmer zu öffnen. Intel dokumentiert das nicht öffentlich: Was die Reparatur-Community darüber weiß, ist gemessen und nicht aus einem Datenblatt gelesen. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
+Intels Chipsätze tragen einen **Flash Descriptor Security Override**: einen Servicemodus, der vollen Lese- und Schreibzugriff auf alle Regionen öffnet, bis zum nächsten Neustart. Eingeschaltet wird er nicht von einem Programm, sondern von einem Draht auf der Platine:
+
+- Auf Chipsätzen der 6er-Serie und neuer wird der Pin `HDA_SDO` des Audio-Codecs über die steigende Flanke von `PWROK` auf seine 3,3-V-Versorgung gelegt — gehalten, während das System startet, und losgelassen, sobald die Firmware zu laden beginnt.
+- Vor 2011 (5er-Serie und älter) wurde stattdessen im selben Moment `GPIO33` auf Masse gezogen.
+- Manche Hersteller führen dasselbe als Jumper oder Schalter heraus.
+
+Damit liest oder überschreibt eine Service-Prozedur eine gesperrte Region mit einem Werkzeug, ohne den Chip von der Platine zu nehmen. Ein öffentliches Datenblatt beschreibt das nicht: es steht in Intels Plattform-Leitfäden für Hersteller, und am Arbeitsplatz ist es aus den Anleitungen der Reparatur-Community bekannt. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
 
 Siehe auch: [[topic:bench-safety|Regeln am Arbeitsplatz]], [[term:flash-descriptor|Flash descriptor]].

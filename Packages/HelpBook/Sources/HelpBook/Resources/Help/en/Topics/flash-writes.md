@@ -49,6 +49,12 @@ None of this is in the dump, so no panel can show it and no edit can change it. 
 
 ## The service override
 
-Intel's chipsets carry a **Flash Descriptor Security Override**: a strap meant for manufacturing that grants full read and write access to every region. Some desktop boards expose it as a jumper; on laptops it is usually a pin on the audio codec that has to be held during power-up. This is what service procedures use to unlock a descriptor without opening the board up to a programmer. Intel does not document it publicly — what the repair community knows about it was measured, not read off a datasheet. See [[topic:provenance|Where this knowledge comes from]].
+Intel's chipsets carry a **Flash Descriptor Security Override**: a servicing mode that opens full read and write access to every region until the next reboot. It is not switched on by a program but by a wire on the board:
+
+- On 6-series chipsets and later, the audio codec's `HDA_SDO` pin is shorted to its 3.3 V supply across the rising edge of `PWROK` — held while the system starts, released once the firmware begins to load.
+- Before 2011 (5-series and older) it was `GPIO33` pulled to ground at the same moment instead.
+- Some vendors bring the same thing out as a jumper or a switch.
+
+This is what a service procedure uses to read or rewrite a locked region with a utility, without taking the chip off the board. No public datasheet describes it: it is written down in Intel's platform guides for manufacturers, and on a bench it is known from the repair community's own instructions. See [[topic:provenance|Where this knowledge comes from]].
 
 See also: [[topic:bench-safety|Bench rules]], [[term:flash-descriptor|Flash descriptor]].
