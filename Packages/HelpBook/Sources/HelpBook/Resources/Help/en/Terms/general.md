@@ -82,7 +82,7 @@ A zone is an outline rather than a background fill, so it never hides a differen
 A serial flash chip holds the board's firmware. Two properties matter here:
 
 - **Its capacity is fixed.** An image for an 8 MB chip must be exactly 8 MB. This is why nothing on a bench should ever change a dump's length.
-- **Erased means `FF`.** Flash erases to all ones. A long run of `FF` in a dump is empty space, not damage; a long run of `00` usually is written data.
+- **Erased means `FF`.** Flash erases to all ones. A long run of `FF` in a dump is empty space, not damage; a long run of `00` usually is written data. One exception: in a dump taken from the running system, `FF` can also mean a region the tool was not allowed to read — see [[topic:flash-writes|Who writes to the flash]].
 
 @see topic:bench-safety
 
@@ -141,7 +141,7 @@ Some platforms run the bus in dual or quad mode — two or four data lines inste
 
 Intel's names for it, oldest first: ICH (I/O Controller Hub), then PCH (Platform Controller Hub). AMD's equivalent is the FCH (Fusion Controller Hub). All three end in Hub, which is why a bench calls it the hub as readily as the chipset.
 
-It matters twice over here. The chipset, not the CPU, reads the flash and enforces which master may write which [[term:region|region]]. And on Intel it physically contains the [[term:me|Management Engine]], along with the [[term:otp|fuses]] that hold a board's [[term:boot-guard|Boot Guard]] configuration.
+It matters twice over here. The chipset, not the CPU, reads the flash and enforces which [[term:flash-master|master]] may write which [[term:region|region]]. And on Intel it physically contains the [[term:me|Management Engine]], along with the [[term:otp|fuses]] that hold a board's [[term:boot-guard|Boot Guard]] configuration.
 
 @see term:region
 @see term:otp

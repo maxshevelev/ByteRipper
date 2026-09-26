@@ -1,4 +1,4 @@
-@source-sha 412ff6b78d5ca87a1e5f70ad6401b308b6a40f95619160c8478b051fb6d97d9a
+@source-sha fe4c7d7220e03763d9edeae4c519e16cd678d1fc04e411adee89e1919a8c5bea
 @term dump
 @name Dump
 @short Der Inhalt eines Chips, in eine Datei ausgelesen.
@@ -83,7 +83,7 @@ Eine Zone ist ein Umriss und keine Hintergrundfüllung, verdeckt also nie einen 
 Ein serieller Flash-Chip trägt die Firmware der Platine. Zwei Eigenschaften zählen hier:
 
 - **Seine Größe steht fest.** Ein Image für einen 8-MB-Chip muss exakt 8 MB groß sein. Deshalb darf am Arbeitsplatz nichts die Länge eines Dumps verändern.
-- **Gelöscht heißt `FF`.** Flash wird auf Einsen gelöscht. Eine lange Kette `FF` im Dump ist leerer Raum, kein Schaden; eine lange Kette `00` ist dagegen meist beschriebene Fläche.
+- **Gelöscht heißt `FF`.** Flash wird auf Einsen gelöscht. Eine lange Kette `FF` im Dump ist leerer Raum, kein Schaden; eine lange Kette `00` ist dagegen meist beschriebene Fläche. Eine Ausnahme: In einem Dump aus dem laufenden System kann `FF` auch eine Region meinen, die das Werkzeug nicht lesen durfte — siehe [[topic:flash-writes|Wer in den Flash schreibt]].
 
 @see topic:bench-safety
 
@@ -142,7 +142,7 @@ Manche Plattformen fahren den Bus im Dual- oder Quad-Modus, mit zwei oder vier D
 
 Intels Namen dafür, vom ältesten an: ICH (I/O Controller Hub), dann PCH (Platform Controller Hub). AMDs Gegenstück heißt FCH (Fusion Controller Hub). Alle drei enden auf Hub — deshalb sagt die Werkbank ebenso oft Hub wie Chipsatz.
 
-Hier ist er gleich doppelt wichtig. Den Flash liest der Chipsatz, nicht die CPU, und er setzt auch durch, welcher Master welche [[term:region|Region]] beschreiben darf. Und bei Intel sitzt die [[term:me|Management Engine]] physisch in ihm — zusammen mit den [[term:otp|Fuses]], in denen die [[term:boot-guard|Boot-Guard]]-Konfiguration des Boards liegt.
+Hier ist er gleich doppelt wichtig. Den Flash liest der Chipsatz, nicht die CPU, und er setzt auch durch, welcher [[term:flash-master|Master]] welche [[term:region|Region]] beschreiben darf. Und bei Intel sitzt die [[term:me|Management Engine]] physisch in ihm — zusammen mit den [[term:otp|Fuses]], in denen die [[term:boot-guard|Boot-Guard]]-Konfiguration des Boards liegt.
 
 @see term:region
 @see term:otp

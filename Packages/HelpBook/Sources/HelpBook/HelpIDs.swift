@@ -64,6 +64,7 @@ extension HelpTopicID {
     public static let saving = HelpTopicID("saving")
     public static let joinDuplicate = HelpTopicID("join-duplicate")
     public static let benchSafety = HelpTopicID("bench-safety")
+    public static let flashWrites = HelpTopicID("flash-writes")
 
     // The firmware panels
     public static let toolsOverview = HelpTopicID("tools-overview")

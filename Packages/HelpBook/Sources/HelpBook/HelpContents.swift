@@ -45,7 +45,8 @@ public enum HelpContents {
             .editing,
             .saving,
             .joinDuplicate,
-            .benchSafety
+            .benchSafety,
+            .flashWrites
         ]),
         ("firmware", [
             .toolsOverview,
