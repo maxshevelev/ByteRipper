@@ -1,4 +1,4 @@
-@source-sha 3bf6345b1b6fd8f3a90e2c4a1d92da54b47e5c7cd713814f3e3034c143a90a65
+@source-sha 51a06cfe8bdf01aa38abf63e75edcd17557ec04ceb1bbe21751bd1da916cbcda
 # Откуда взяты эти знания
 
 > Стоит прочитать один раз, прежде чем доверять панели плату.

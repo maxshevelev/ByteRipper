@@ -1,11 +1,11 @@
-@source-sha c63f02a4bb2402100e065f329f2f9f2b70fc2d34c961bc6cf040c9910ac00f82
+@source-sha 2efed79ef105a8180e46226484dc343b1d8267d94dfa036291bf12f2145d17b1
 # Dateien öffnen: A und B
 
 > Das Fenster hat zwei Plätze. Eine Datei ist schlicht ein Editor; eine zweite Datei fügt den Vergleich hinzu. Bearbeiten geht in beiden Bereichen, so oder so.
 
 Das Fenster hält zwei Dateiplätze, **Datei A** und **Datei B**. Wo eine Datei landet, entscheidet, was geschieht:
 
-- **Eine Datei offen** — Einzeldatei-Modus. Das Fenster ist ein Hex-Editor für diese Datei; Bearbeiten, Suchen und die Firmware-Panels arbeiten wie gewohnt.
+- **Eine Datei offen** — Einzeldatei-Modus. Das Fenster ist ein Hex-Editor für diese Datei; Bearbeiten, Suchen und die Werkzeugbereiche arbeiten wie gewohnt.
 - **Zwei Dateien offen** — Vergleichsmodus. Die Dumps stehen nebeneinander (oder übereinander, siehe **Darstellung ▸ Fensteraufteilung wechseln**), und jedes abweichende Byte ist gefärbt.
 
 Datei B ist optional. Außer dem Vergleich selbst braucht nichts eine zweite Datei.

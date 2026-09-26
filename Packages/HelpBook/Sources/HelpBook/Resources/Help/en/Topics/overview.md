@@ -30,5 +30,5 @@ That is on purpose. A flash dump has a fixed layout: an address is a position on
 
 - [[topic:first-comparison|Your first comparison]] — the five minutes that show what the app is.
 - [[topic:hex-view|Reading the hex view]] and [[topic:colors|What the colours mean]].
-- [[topic:tools-overview|The firmware panels]], once you want to know what is inside the image rather than only what changed.
+- [[topic:tools-overview|The tool panels]], once you want to know what is inside the image rather than only what changed.
 - [[topic:bench-safety|Bench rules]] — ways to ruin a dump, and how to avoid them.

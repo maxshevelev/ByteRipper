@@ -1,4 +1,4 @@
-@source-sha de0850a4c7d3576788c8db9133a4f8b438d708a02b2ac249a323a56a4478ebde
+@source-sha f15d7d5bd1817ab695d45fadc3d4a442d9e63242ad893b90348901b686f5b14f
 # Die Minimap
 
 > Die Gestalt des ganzen Dumps in einer Spalte, und ein Weg, sich durch Zeigen zu bewegen.
@@ -20,7 +20,7 @@ Eine kleine Datei öffnet lokal, eine große in der Übersicht. Die Übersicht w
 - **Ihre ungesicherten Änderungen.**
 - **Suchtreffer** als Tintenstriche, der aktuelle als helle Platte.
 - **Zeilen mit Lesezeichen**, am Rand.
-- **Zonen**, die ein [[topic:tools-overview|Firmware-Panel]] veröffentlicht hat, sodass die Regionen des Images als Bänder sichtbar werden.
+- **Zonen**, die ein [[topic:tools-overview|Werkzeugbereich]] veröffentlicht hat, sodass die Regionen des Images als Bänder sichtbar werden.
 
 Ein Klick in die Karte springt dorthin. Das Ziehen des Ansichtsrahmens scrollt.
 

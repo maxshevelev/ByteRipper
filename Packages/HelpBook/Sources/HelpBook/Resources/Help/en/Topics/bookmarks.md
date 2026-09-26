@@ -22,4 +22,4 @@ Bookmarks live as long as the window, not as long as the file. Closing a file an
 
 ## On the bench
 
-Mark the starts of the regions you care about before you begin — descriptor, ME, BIOS, NVRAM, the block you are about to patch — and the whole job becomes ⌘L and a Return instead of typing addresses. A firmware panel will tell you those addresses: select a node and read its offset.
+Mark the starts of the regions you care about before you begin — descriptor, ME, BIOS, NVRAM, the block you are about to patch — and the whole job becomes ⌘L and a Return instead of typing addresses. A tool panel will tell you those addresses: select a node and read its offset.

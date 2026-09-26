@@ -1,5 +1,5 @@
-@source-sha d946f8646eda3019de6182265aa8d945e0813dde48c32b58a671d4054e4cf9fe
-# Die Firmware-Panels
+@source-sha 47b7aac97fe4fedc6e2f73b2b463b174f571c317c12ee46abaeff71e526ad53d
+# Die Werkzeugbereiche
 
 > Werkzeuge, die den geöffneten Dump lesen und sagen, was darin ist.
 

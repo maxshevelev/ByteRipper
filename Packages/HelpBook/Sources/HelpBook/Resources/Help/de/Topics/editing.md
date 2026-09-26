@@ -1,4 +1,4 @@
-@source-sha c7dbb76065e5cc37b3dc974c06ffefcfc6881c4c9e2e027cd3bc03f20d0e24ce
+@source-sha 28526db7c9f2ab82da8792c7a95fc70f8caca91060639a67487b5f9a166f7546
 # Bytes bearbeiten
 
 > Schreiben Sie über das, was da ist. Alles, was die Länge der Datei ändert, fragt vorher.
@@ -30,4 +30,4 @@ Die Rückfragen lassen sich in den [[topic:settings|Einstellungen ▸ Bearbeiten
 
 ## Widerrufen
 
-Jede Änderung ist ein Widerrufsschritt (⌘Z), auch die großen: ein Zusammenfügen, ein Füllen, ein Schreibvorgang eines [[topic:tools-overview|Firmware-Panels]], ein in die Quelle zurückgeschriebenes Fragment. Widerrufen gilt je Dokument.
+Jede Änderung ist ein Widerrufsschritt (⌘Z), auch die großen: ein Zusammenfügen, ein Füllen, ein Schreibvorgang eines [[topic:tools-overview|Werkzeugbereichs]], ein in die Quelle zurückgeschriebenes Fragment. Widerrufen gilt je Dokument.

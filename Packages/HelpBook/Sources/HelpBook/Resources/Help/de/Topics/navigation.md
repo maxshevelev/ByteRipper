@@ -1,4 +1,4 @@
-@source-sha f932d0f2d3cf001420d60c9baf25cf8ca692f336970fbc4a2f18ea4f5e56b5ef
+@source-sha 1ece1b5e9062445d3daf3c010a9d12debe5901e6810706a0378badfdfd03a8c1
 # Sich bewegen
 
 > Zwischen Unterschieden springen, zu einer Adresse springen oder auf einem Byte stehen und ablesen, wo man ist.
@@ -23,7 +23,7 @@ Im Vergleichsmodus bewegt der Sprung **beide** Bereiche: sie sind an dieselbe Ad
 
 ## Einen Block auswählen
 
-**Bearbeiten ▸ Block auswählen…** wählt einen Bereich über Zahlen statt über die Maus: Anfang und Ende, oder Anfang und Länge. Beide Felder nehmen Hex mit `0x` und schlichtes Dezimal. Das ist der verlässliche Weg, eine Region auszuwählen, deren Grenzen Sie in einem Firmware-Panel abgelesen haben.
+**Bearbeiten ▸ Block auswählen…** wählt einen Bereich über Zahlen statt über die Maus: Anfang und Ende, oder Anfang und Länge. Beide Felder nehmen Hex mit `0x` und schlichtes Dezimal. Das ist der verlässliche Weg, eine Region auszuwählen, deren Grenzen Sie in einem Werkzeugbereich abgelesen haben.
 
 ! Bereiche sind intern halboffen — die Endadresse ist das erste Byte, das **nicht** dazugehört. Dialoge dürfen ein einschließendes Ende anbieten; sie rechnen es um.
 

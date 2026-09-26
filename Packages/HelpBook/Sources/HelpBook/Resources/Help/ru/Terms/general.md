@@ -1,4 +1,4 @@
-@source-sha 50639b45cd239c47487ba73158f9994115e84384ab2392b9c9a01ceab9c59869
+@source-sha 412ff6b78d5ca87a1e5f70ad6401b308b6a40f95619160c8478b051fb6d97d9a
 @term dump
 @name Дамп
 @short Содержимое микросхемы, считанное в файл.

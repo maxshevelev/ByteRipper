@@ -1,4 +1,4 @@
-@source-sha c7a96942f00c54ab57762da7a2540dd96a0625c085f7a78f48b324b77dcea2db
+@source-sha a11949761e639131067002ce60139db90cdc83f0cd8f0bc4f20c5a356ae44b0e
 # Wofür ByteRipper da ist
 
 > Ein Hex-Editor rund um die eine Frage, die ein Reparaturplatz den ganzen Tag stellt: worin unterscheidet sich der Inhalt dieses Chips von dem, der funktioniert?
@@ -27,5 +27,5 @@ Das ist Absicht. Ein Flash-Dump hat eine feste Aufteilung: eine Adresse ist eine
 
 - [[topic:first-comparison|Ihr erster Vergleich]] — die fünf Minuten, die zeigen, was dieses Programm ist.
 - [[topic:hex-view|Die Hex-Ansicht lesen]] und [[topic:colors|Was die Farben bedeuten]].
-- [[topic:tools-overview|Die Firmware-Panels]], sobald Sie wissen wollen, was im Image steckt und nicht nur, was sich geändert hat.
+- [[topic:tools-overview|Die Werkzeugbereiche]], sobald Sie wissen wollen, was im Image steckt und nicht nur, was sich geändert hat.
 - [[topic:bench-safety|Regeln am Arbeitsplatz]] — Wege, einen Dump zu ruinieren, und wie man sie vermeidet.

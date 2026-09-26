@@ -1,4 +1,4 @@
-@source-sha 3c8d3baf89c6b1b44addb88216d9c18b4cfd00a5f9d00a21ae76202d3cbeb261
+@source-sha 0020217c81ce763d49e74cda5e896c111571159936ae0220c2e26f227bee876d
 # Was die Farben bedeuten
 
 > Der Hintergrund sagt „anders als in der anderen Datei“. Roter Text sagt „geändert und noch nicht gesichert“.
@@ -26,6 +26,6 @@ Ein Byte, das sich sowohl von der anderen Datei unterscheidet als auch von Ihnen
 - **Die Auswahl** ist die übliche Hervorhebung und verdeckt nie den Unterschied oder das Rot.
 - **Suchtreffer** sind in dem ruhigen Grau gefüllt, das die Plattform für eine Auswahl ohne Fokus verwendet; der Treffer, auf dem Sie stehen, ist eine angehobene gelbe Blase. Ein Treffer auf einem Unterschied liest sich als Unterschied — zwei Dateien auseinanderzuhalten ist das, wofür es das Programm gibt.
 - **Eine Zeile mit Lesezeichen** verwandelt ihre Offset-Spalte in einen farbigen Pfeil mit der Adresse darauf. Markiert wird die Zeile, nicht die Bytes, den Zuständen darüber kommt das nie in die Quere.
-- **Zonen** — die farbigen Umrisse, die ein [[topic:tools-overview|Firmware-Panel]] zeichnet — markieren den Byte-Bereich einer Struktur. Eine Zone ist ein Umriss samt Tönung, keine Füllung, und kann deshalb über Unterschieden liegen, ohne sie zu verdecken.
+- **Zonen** — die farbigen Umrisse, die ein [[topic:tools-overview|Werkzeugbereich]] zeichnet — markieren den Byte-Bereich einer Struktur. Eine Zone ist ein Umriss samt Tönung, keine Füllung, und kann deshalb über Unterschieden liegen, ohne sie zu verdecken.
 
 ByteRipper folgt dem Erscheinungsbild des Systems, all das hat also auch eine dunkle Fassung. Die Palette steht in den [[topic:settings|Einstellungen ▸ Darstellung]].

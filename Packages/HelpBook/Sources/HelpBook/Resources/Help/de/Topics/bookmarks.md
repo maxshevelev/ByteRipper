@@ -1,4 +1,4 @@
-@source-sha 77a50b915acdaf5357e77df42f62d6c1ae6304a4265b40c677f6f685c026985b
+@source-sha 696705e386c81065684d96f8ed8dab712aeaed312ac886e349c1fc5c29791a82
 # Lesezeichen
 
 > Adressen, zu denen es sich zurückzukommen lohnt: auf der Zeile markiert und von beiden Bereichen geteilt.
@@ -20,4 +20,4 @@ Lesezeichen leben, solange das Fenster lebt, nicht die Datei. Eine Datei zu schl
 
 ## Am Arbeitsplatz
 
-Markieren Sie vorab die Anfänge der Regionen, die Sie angehen — Descriptor, ME, BIOS, NVRAM, den Block, den Sie ändern wollen — und die ganze Arbeit wird zu ⌘L und Return statt zu getippten Adressen. Die Adressen nennt Ihnen ein Firmware-Panel: Knoten auswählen und Offset ablesen.
+Markieren Sie vorab die Anfänge der Regionen, die Sie angehen — Descriptor, ME, BIOS, NVRAM, den Block, den Sie ändern wollen — und die ganze Arbeit wird zu ⌘L und Return statt zu getippten Adressen. Die Adressen nennt Ihnen ein Werkzeugbereich: Knoten auswählen und Offset ablesen.
