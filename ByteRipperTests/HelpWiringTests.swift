@@ -140,7 +140,7 @@ final class HelpDestinationsTests: XCTestCase {
         let pointed: [HelpTopicID] = [
             .overview, .firstComparison, .benchSafety, .provenance,
             .search, .segments, .bookmarks, .editing, .settings,
-            .toolsOverview, .toolUEFI, .toolME, .toolFIT, .toolZones
+            .toolsOverview, .toolUEFI, .toolME, .toolFIT
         ]
         for id in pointed {
             XCTAssertNotNil(Help.shared.topic(id), "no page for \(id.rawValue)")
@@ -151,7 +151,9 @@ final class HelpDestinationsTests: XCTestCase {
     /// pages is written. A panel nobody explained is a panel with a `?` that
     /// opens nothing.
     func testEveryShippedToolModuleHasItsPage() {
-        for module in ToolRegistry.modules {
+        // `shipping`, not `modules`: a debug build adds Zone Sketch, which
+        // is a demonstration of the seam and names no page on purpose.
+        for module in ToolRegistry.shipping {
             guard let topic = module.helpTopic else {
                 return XCTFail("\(module.title) names no help page")
             }

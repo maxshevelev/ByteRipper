@@ -53,7 +53,6 @@ public enum HelpContents {
             .toolUEFI,
             .toolME,
             .toolFIT,
-            .toolZones,
             .databases,
             .provenance
         ]),

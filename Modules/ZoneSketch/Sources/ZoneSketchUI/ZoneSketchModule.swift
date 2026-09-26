@@ -16,10 +16,14 @@ import ZoneSketch
 /// It is also useful on its own: marking out the regions of an unfamiliar image
 /// by hand is what a bench does with a pencil today.
 public enum ZoneSketchModule: ToolModule {
-    // help: panel.zones
     public static let identifier = "dev.maxik.tool.zonesketch"
     public static let title = L("Zone Sketch")
-    public static let helpTopic: HelpTopicID? = .toolZones
+    /// No help page, and no `// help:` anchor either. A reader of the book
+    /// never meets this panel: `ToolRegistry` offers it in a debug build
+    /// only, so a page about it would describe something a shipping app
+    /// does not have. The two go together — an anchor is a promise that
+    /// the book explains a thing the user can reach.
+    public static let helpTopic: HelpTopicID? = nil
     public static let preferredPanelWidth: CGFloat = 320
 
     @MainActor public static func makeSession(host: any ToolHost) -> any ToolSession {

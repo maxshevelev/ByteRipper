@@ -1,4 +1,4 @@
-@source-sha 7633b218be3e03ef530bc955599e27375128daf7910555f7655f80d37f130591
+@source-sha 90ad1994f5bd0c9357a53366615841603f86ddb9d6f3cd781c9cf9da88055302
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -470,4 +470,3 @@ Kein Fehler. Hersteller legen ständig Eigenes in Firmware-Images, und ein EC-Im
 
 Es ist aber die Stelle, an der man nachsieht, wenn etwas nicht aufgeht: eine Region, die Volumes sein sollte und sich als Nicht-UEFI-Daten liest, ist eine beschädigte Region.
 
-@see topic:tool-zones

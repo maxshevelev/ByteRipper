@@ -1,4 +1,4 @@
-@source-sha fe4c7d7220e03763d9edeae4c519e16cd678d1fc04e411adee89e1919a8c5bea
+@source-sha 2270ebab424f7c2af96c8e29493795c28d5bfd8859eac5956be9830dc36bbbbd
 @term dump
 @name Дамп
 @short Содержимое чипа памяти, считанное в файл.
@@ -74,7 +74,6 @@ GUID выглядит так: `8C8CE578-8A3D-4F1C-9935-896185C32DD3`. В обр�
 Зона — контур, а не заливка фона, поэтому она никогда не скрывает под собой различие или несохранённую правку.
 
 @see topic:tools-overview
-@see topic:tool-zones
 
 @term flash-chip
 @name Чип SPI-Flash памяти

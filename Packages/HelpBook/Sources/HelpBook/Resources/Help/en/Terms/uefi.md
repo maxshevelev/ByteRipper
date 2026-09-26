@@ -469,4 +469,3 @@ Not an error. Vendors put their own data in firmware images all the time, and an
 
 It is, however, where to look when something does not add up: a region that should be volumes and reads as non-UEFI data is a corrupted region.
 
-@see topic:tool-zones
