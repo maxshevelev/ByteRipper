@@ -1,4 +1,4 @@
-@source-sha a11949761e639131067002ce60139db90cdc83f0cd8f0bc4f20c5a356ae44b0e
+@source-sha dd39c6352b436be233412ce74a3834a030830fe3b59ddf7c57e425c18bbeb9c3
 # Wofür ByteRipper da ist
 
 > Ein Hex-Editor rund um die eine Frage, die ein Reparaturplatz den ganzen Tag stellt: worin unterscheidet sich der Inhalt dieses Chips von dem, der funktioniert?
@@ -22,6 +22,10 @@ ByteRipper vergleicht nur nach Adresse. Es sucht nie denselben Byte-Block an ein
 Das ist Absicht. Ein Flash-Dump hat eine feste Aufteilung: eine Adresse ist eine Position auf dem Chip, und ein verschobenes Byte ist ein Byte an der falschen Stelle, kein übereinstimmendes. Ein Werkzeug, das zwei Dumps „ausrichtet“, verbirgt genau die Fehler, die zu finden sind.
 
 ! ByteRipper spricht nie mit einem Programmer und schreibt nie auf Hardware. Es bearbeitet Dateien. Den Chip zu lesen und wieder zu beschreiben ist Sache Ihres Programmers.
+
+## Wie Sie dieses Buch öffnen
+
+Das **?** in der Symbolleiste öffnet dieselbe kurze Liste wie das Menü **Hilfe**: diese Seite, den ersten Vergleich, die Regeln am Arbeitsplatz und die Glossare. ⌘? öffnet das Buch von überall aus auf dieser Seite.
 
 ## Wie es weitergeht
 

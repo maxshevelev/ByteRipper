@@ -85,7 +85,7 @@ final class ToolbarValidationTests: XCTestCase {
         XCTAssertEqual(window.toolbar?.items.map(\.itemIdentifier),
                        [.tools, .space,
                         .goTo, .find, .segments, .space, .wordSize,
-                        .flexibleSpace, .diffNavigation, .space, .paneLayout, .space, .toggleMinimap])
+                        .flexibleSpace, .diffNavigation, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
 
         controller.windowModel.pane2.close()
         controller.apply(mode: .singleFile)
@@ -178,7 +178,7 @@ final class ToolbarValidationTests: XCTestCase {
         XCTAssertEqual(window.toolbar?.items.map(\.itemIdentifier),
                        [.tools, .space,
                         .goTo, .find, .segments, .space, .wordSize,
-                        .flexibleSpace, .filesIdentical, .space, .paneLayout, .space, .toggleMinimap])
+                        .flexibleSpace, .filesIdentical, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
 
         // The badge reads as "Files are identical" to assistive tech. The item is
         // in the toolbar by now; its view reaches the hierarchy a turn or two

@@ -36,6 +36,7 @@ final class MainWindowController: NSWindowController {
     private(set) var segmentsItem: NSToolbarItem?
     private(set) var wordSizeItem: NSToolbarItem?
     private(set) var paneLayoutItem: NSToolbarItem?
+    private(set) var helpItem: NSToolbarItem?
     /// The Tools pull-down (Design/TOOL_MODULES_PLAN.md): the wrench, and the
     /// name of the tool-module the tab is on.
     private(set) var toolsItem: NSToolbarItem?
@@ -374,6 +375,36 @@ final class MainWindowController: NSWindowController {
         )
     }
 
+    /// The Help pull-down: a question mark, and under it the same doors the
+    /// Help menu opens.
+    ///
+    /// A pull-down rather than a plain button because the book has more than
+    /// one starting point and picking the right one is most of the value. The
+    /// menu is `MainMenu.makeHelpMenu()`, the same builder the menu bar uses,
+    /// so the toolbar can never offer a shorter list; a fresh instance each
+    /// time, because one `NSMenu` cannot hang in two places at once.
+    ///
+    /// `NSMenuToolbarItem` rather than the view-backed pull-down the Tools item
+    /// uses (§24.2). Tools is a view because it has to show the NAME of the
+    /// tool-module in force; this one has only an icon to show, and an
+    /// `NSPopUpButton` with an empty title is as wide as one with a word in it
+    /// — wide enough to push the minimap toggle into the overflow menu at the
+    /// width the window opens at (measured, `testTheWholeToolbarFitsTheLaunchWidth`).
+    ///
+    /// No target and no action: this is the one item with nothing to validate,
+    /// since the book is there whatever the window holds.
+    // help: toolbar.help
+    private func makeHelpItem() -> NSToolbarItem {
+        let item = NSMenuToolbarItem(itemIdentifier: .help)
+        item.image = NSImage(systemSymbolName: "questionmark.circle",
+                             accessibilityDescription: L("Help", context: "menu"))
+        item.menu = MainMenu.makeHelpMenu(target: NSApp.delegate)
+        item.label = L("Help", context: "menu")
+        item.paletteLabel = L("Help", context: "menu")
+        ControlHelp.describe(item, L("Where to start reading the help book"))
+        return item
+    }
+
 }
 
 // MARK: - Toolbar
@@ -402,6 +433,8 @@ extension NSToolbarItem.Identifier {
     static let paneLayout = NSToolbarItem.Identifier("PaneLayout")
     /// The Tools pull-down (Design/TOOL_MODULES_PLAN.md).
     static let tools = NSToolbarItem.Identifier("Tools")
+    /// The Help pull-down, beside the pane-arrangement toggle.
+    static let help = NSToolbarItem.Identifier("Help")
 }
 
 /// A toolbar item whose content is a control of our own. AppKit's own
@@ -423,25 +456,26 @@ extension MainWindowController: NSToolbarDelegate {
         // from the default items and the diff block ends up on the LEFT edge.
         [.flexibleSpace, .space,
          .tools, .goTo, .find, .segments, .wordSize,
-         .diffNavigation, .filesIdentical, .paneLayout, .toggleMinimap]
+         .diffNavigation, .filesIdentical, .help, .paneLayout, .toggleMinimap]
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         // Two groups, and the flexible space between them pins the right-hand
         // one to the toolbar's edge (§24). Left: what acts on the dump in the
         // active pane, then — past a space — the one control that carries a
-        // state, the word size. Right: the difference plaque, the pane
-        // arrangement, the minimap. Every gap is a system space item, not a custom empty view:
-        // AppKit draws a single background platter around adjacent items, and a
-        // view-backed spacer joins its neighbour's platter — a wide capsule
-        // with the icon shoved against its edge.
+        // state, the word size. Right: the difference plaque, the help book,
+        // the pane arrangement, the minimap. Every gap is a system space item,
+        // not a custom empty view: AppKit draws a single background platter
+        // around adjacent items, and a view-backed spacer joins its
+        // neighbour's platter — a wide capsule with the icon shoved against
+        // its edge.
         // Tools comes first, on the edge its panel opens from, and a fixed
         // space separates it from the commands: it is the one control here
         // that changes what the window CONTAINS rather than what it does to
         // the dump.
         [.tools, .space,
          .goTo, .find, .segments, .space, .wordSize,
-         .flexibleSpace, .diffNavigation, .space, .paneLayout, .space, .toggleMinimap]
+         .flexibleSpace, .diffNavigation, .space, .help, .space, .paneLayout, .space, .toggleMinimap]
     }
 
     func toolbar(_ toolbar: NSToolbar,
@@ -502,6 +536,11 @@ extension MainWindowController: NSToolbarDelegate {
                 paneLayoutItem = makePaneLayoutItem()
             }
             return paneLayoutItem
+        case .help:
+            if helpItem == nil {
+                helpItem = makeHelpItem()
+            }
+            return helpItem
         case .toggleMinimap:
             if minimapToggleItem == nil {
                 let item = NSToolbarItem(itemIdentifier: .toggleMinimap)

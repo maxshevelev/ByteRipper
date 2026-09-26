@@ -6736,9 +6736,12 @@ final class MainViewController: NSViewController {
     /// large word size makes the hex grid narrow enough for that to happen.
     ///
     /// Measured, not computed: the items' widths are AppKit's, and they differ
-    /// between releases. 600 pt clears the measured threshold (570 pt on macOS
-    /// 26, less on 14, where the toolbar metrics are tighter) with a margin.
-    static let toolbarFitWidth: CGFloat = 600
+    /// between releases. 730 pt clears the measured threshold with a margin —
+    /// 695 pt on macOS 26 with the Help pull-down in place, 620 pt without it,
+    /// and less on 14, where the toolbar metrics are tighter. The probe is
+    /// `testTheWholeToolbarFitsTheLaunchWidth`: it opens the window at exactly
+    /// this width and fails if AppKit hid anything.
+    static let toolbarFitWidth: CGFloat = 730
 
     /// Ideal content width the window should be when zoomed (double-click on the
     /// title bar / Window > Zoom): the hex grid width for a single pane, or

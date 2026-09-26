@@ -1,4 +1,5 @@
 import Cocoa
+import HelpBook
 import XCTest
 @testable import ByteRipper
 
@@ -62,8 +63,8 @@ final class ToolbarItemsTests: XCTestCase {
     /// The order is the layout: the Tools pull-down on the edge its panel opens
     /// from, a space, the document commands, a space, the one stateful control
     /// — the word size — the flexible space that pins the right-hand group to
-    /// the window's edge, then the difference plaque, the pane arrangement and
-    /// the minimap — each set apart by a system space (§24).
+    /// the window's edge, then the difference plaque, the help book, the pane
+    /// arrangement and the minimap — each set apart by a system space (§24).
     func testTheToolbarIsTwoGroupsSplitByTheFlexibleSpace() throws {
         let (wc, window) = makeWindow()
         defer { wc.close() }
@@ -72,13 +73,13 @@ final class ToolbarItemsTests: XCTestCase {
         XCTAssertEqual(wc.toolbarDefaultItemIdentifiers(toolbar),
                        [.tools, .space,
                         .goTo, .find, .segments, .space, .wordSize,
-                        .flexibleSpace, .diffNavigation, .space, .paneLayout, .space, .toggleMinimap])
+                        .flexibleSpace, .diffNavigation, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
         // The live items, with no file open: the difference block is carried
         // only in comparison mode (§10.3), everything else is always there.
         XCTAssertEqual(toolbar.items.map(\.itemIdentifier),
                        [.tools, .space,
                         .goTo, .find, .segments, .space, .wordSize,
-                        .flexibleSpace, .space, .paneLayout, .space, .toggleMinimap])
+                        .flexibleSpace, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
     }
 
     /// The insert-mode button is gone from the toolbar (§24.2): the mode is the
@@ -257,5 +258,35 @@ final class ToolbarItemsTests: XCTestCase {
         controller.apply(mode: .singleFile)
         window.toolbar?.validateVisibleItems()
         XCTAssertFalse(layout.isEnabled, "one pane left: nothing to arrange")
+    }
+
+    /// The Help pull-down carries the menu bar's Help submenu, whole.
+    ///
+    /// The list is asserted against `MainMenu.makeHelpMenu()` rather than
+    /// against titles spelled here: the toolbar and the menu bar are built from
+    /// the same call, and a test that repeated the titles would go on passing
+    /// after the two drifted apart.
+    func testTheHelpPullDownCarriesTheHelpMenu() throws {
+        let (wc, window) = makeWindow()
+        defer { wc.close() }
+
+        let help = try item(window, .help)
+        XCTAssertTrue(help is NSMenuToolbarItem,
+                      "a menu item, not a view: a pull-down button does not fit the width")
+        XCTAssertTrue(help.isEnabled, "nothing open: the book is still there")
+        XCTAssertNotNil(help.image, "it shows the question mark")
+        XCTAssertNotNil(help.toolTip, "and says what it opens on hover")
+
+        let rows = try XCTUnwrap((help as? NSMenuToolbarItem)?.menu.items)
+        XCTAssertEqual(rows.map(\.title), MainMenu.makeHelpMenu().items.map(\.title),
+                       "the same doors the menu bar offers, in the same order")
+        for row in rows where !row.isSeparatorItem {
+            XCTAssertEqual(row.action, #selector(AppDelegate.showHelpBook(_:)),
+                           "\(row.title) opens the book, not AppKit's missing one")
+            XCTAssertTrue(row.representedObject is HelpLink,
+                          "\(row.title) carries its destination")
+            XCTAssertIdentical(row.target as AnyObject?, NSApp.delegate as AnyObject?,
+                               "\(row.title) is answered by the app, not by the key window")
+        }
     }
 }

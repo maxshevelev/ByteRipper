@@ -394,7 +394,7 @@ final class MinimapTests: XCTestCase {
         XCTAssertEqual(wc.toolbarDefaultItemIdentifiers(toolbar),
                        [.tools, .space,
                         .goTo, .find, .segments, .space, .wordSize,
-                        .flexibleSpace, .diffNavigation, .space, .paneLayout, .space, .toggleMinimap],
+                        .flexibleSpace, .diffNavigation, .space, .help, .space, .paneLayout, .space, .toggleMinimap],
                        "flexible space pins the right-hand group to the edge; a system space keeps "
                        + "the toggle past the pane-layout item, which is past the diff block (§24)")
         _ = pumpUntil(1.0) { toolbar.items.contains { $0.itemIdentifier == .toggleMinimap } }

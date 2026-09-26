@@ -682,6 +682,7 @@
 "What ByteRipper is for" = "Wofür ByteRipper da ist";
 "What is %1$@?" = "Was ist %1$@?";
 "Where This Knowledge Comes From" = "Woher dieses Wissen stammt";
+"Where to start reading the help book" = "Wo Sie in der Hilfe anfangen";
 "Whether Boot Guard is enforced is set in the chipset's fuses, not in this image: the marks say what an edit would break if it is. Vendor hashes are checked by the firmware itself." = "Ob Boot Guard erzwungen wird, steht in den Fuses des Chipsatzes, nicht in diesem Image: die Markierungen sagen, was eine Änderung bräche, wenn er es wird. Hersteller-Hashes prüft die Firmware selbst.";
 "Whether the minimap shows the bytes around the caret or the whole file" = "Ob die Minimap die Bytes um die Einfügemarke oder die ganze Datei zeigt";
 "Word Size" = "Wortbreite";

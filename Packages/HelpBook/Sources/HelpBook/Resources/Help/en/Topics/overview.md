@@ -4,6 +4,7 @@
 
 @covers window.empty-state
 @covers menu.help.book
+@covers toolbar.help
 @covers menu.view.full-screen
 
 ByteRipper opens one or two binary files and shows every byte of them. When two files are open it compares them **byte by byte at the same address**, and paints every place they disagree.
@@ -25,6 +26,10 @@ ByteRipper compares by address only. It never tries to find the same block of by
 That is on purpose. A flash dump has a fixed layout: an address is a position on the chip, and a byte that moved is a byte in the wrong place, not a byte that matched. A tool that "aligned" two dumps would hide exactly the faults worth finding.
 
 ! ByteRipper never talks to a programmer and never writes to hardware. It edits files. Reading the chip and writing it back is your programmer's job.
+
+## Reaching this book
+
+The **?** in the toolbar opens the same short list the **Help** menu holds: this page, the first comparison, the bench rules and the glossaries. ⌘? opens the book at this page from anywhere in the app.
 
 ## Where to go next
 
