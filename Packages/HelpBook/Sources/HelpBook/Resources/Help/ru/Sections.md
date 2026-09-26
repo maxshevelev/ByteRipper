@@ -9,7 +9,7 @@
 @name Правка дампа
 
 @section firmware
-@name Панели прошивок
+@name Инструментальные панели
 
 @section bench
 @name В мастерской
