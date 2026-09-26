@@ -1,4 +1,4 @@
-@source-sha 91b29f36fd9efea1e978955f73fdbf7abd0c845ec43c4725730de2a38fd475a4
+@source-sha 06b42111ba3c7f7b1b5a73f3e3efd1ecb7015c19d3b5c1e6f8ef00a9302bfa1b
 # Wer in den Flash schreibt
 
 > Nur der Chipsatz hat Leitungen zum Chip. Alles auf der Platine, das Firmware schreiben will, muss ihn fragen — und wer was fragen darf, entscheidet der Descriptor.
@@ -25,6 +25,17 @@ Ein heute gelesener Chip und die Datei, die gestern hineingeschrieben wurde, sti
 Der [[term:flash-descriptor|Descriptor]] nennt vier [[term:flash-master|Master]] — BIOS, ME, GbE und EC — und gibt jedem eine Lese- und eine Schreibmaske über die [[term:region|Regionen]]. Ein Flash-Werkzeug, das auf der CPU läuft, *ist* der BIOS-Master. Wo der Descriptor diesem Master kein Schreibrecht auf eine Region gibt, weist der Chipsatz den Schreibvorgang ab, und Wiederholen ändert daran nichts.
 
 ! Lesen ist genauso geregelt, und das trifft am härtesten. Eine Region, die der BIOS-Master nicht lesen darf, lässt sich aus dem laufenden System überhaupt nicht auslesen. Manche Programme verweigern das Lesen des ganzen Chips, andere füllen das Ungelesene mit `FF` und geben eine Warnung aus. `FF` in einem im System erstellten Dump kann also „durfte nicht gelesen werden“ heißen statt „gelöscht“ — und der Vergleich zeigt dann eine ganze Region als einen riesigen Unterschied, den es gar nicht gibt. Ein Dump vom Programmer hat solche Löcher nicht.
+
+## Schreiben heißt nicht Ausführen
+
+Die Masken entscheiden nur eines: ob geschrieben werden darf. Ob das Geschriebene dann läuft, ist eine andere Frage, und sie wird beim Start beantwortet, von Prüfungen, die mit dem Descriptor nichts zu tun haben:
+
+- [[term:boot-guard|Boot Guard]] prüft den Bootblock, bevor die CPU ihn ausführt. Die Signatur prüft nicht der Chipsatz: das tut das [[term:acm|ACM]], gestartet vom Mikrocode der CPU, und der Hash des Wurzelschlüssels liegt in den [[term:otp|Fuses]] des Chipsatzes.
+- Die ME-Region prüft die Engine selbst, während sie hochkommt.
+
+Daher die Trennung, an der eine Änderung scheitert, die sauber geschrieben wurde. Ein Programmer umgeht die Masken — er kann jedes Byte in jede Region schreiben. Gegen die Prüfungen beim Start richtet er nichts aus: eine Änderung innerhalb des [[term:ibb|IBB]] oder in der ME-Region wird geschrieben und danach abgewiesen.
+
+Alles aber, was diese Prüfungen nicht abdecken — NVRAM, der [[term:dmi|DMI]]-Bereich, die [[term:ec|EC]]-Firmware und oft auch die DXE-Treiber ([[term:ibb|IBB / OBB]] sagt, wann) —, schreibt ein Programmer, und es läuft. Darauf ruht die Reparatur.
 
 ## Die Sperren, von denen der Descriptor nichts weiß
 

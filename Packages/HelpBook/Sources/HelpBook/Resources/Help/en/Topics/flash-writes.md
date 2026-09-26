@@ -25,6 +25,17 @@ The [[term:flash-descriptor|descriptor]] names four [[term:flash-master|masters]
 
 ! Reading is gated the same way, and this one bites hardest. A region the BIOS master may not read cannot be dumped from the running system at all. Some tools refuse the whole read; others fill the gap with `FF` and print a warning. So `FF` in a dump taken in-system can mean "not allowed to read" rather than "erased" — and a comparison then shows a whole region as one enormous difference that is not really there. A dump taken with a programmer has no such holes.
 
+## Writing is not running
+
+The masks decide one thing only: whether the write is allowed. Whether what was written will then work is a different question, and it is answered at boot, by checks that have nothing to do with the descriptor:
+
+- [[term:boot-guard|Boot Guard]] verifies the boot block before the CPU executes it. The chipset does not check that signature: the [[term:acm|ACM]], started by CPU microcode, does, and the hash of the root key sits in the chipset's [[term:otp|fuses]].
+- The ME region is verified by the engine itself, as it comes up.
+
+That is the split behind a patch that goes in and still fails. A programmer defeats the masks — it can write any byte into any region. It can do nothing about the checks at boot: an edit inside the [[term:ibb|IBB]] or in the ME region will be written and then rejected.
+
+Everything those checks do not cover, though — NVRAM, the [[term:dmi|DMI]] area, [[term:ec|EC]] firmware, and often the DXE drivers as well ([[term:ibb|IBB / OBB]] says when) — is written by a programmer and simply works. That is what repair rests on.
+
 ## The locks the descriptor knows nothing about
 
 The descriptor is one gate of several, and the others live in chipset registers rather than in the image:
