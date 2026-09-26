@@ -1,14 +1,13 @@
-@source-sha 07792f8cb2f8b27e730054b4b346dd0c8c87ae1d6dc44b54debdcca9983b70d9
+@source-sha 07c7be833f3e16c86454f7e69f49c72c89b7ad9738d3fcb825adaea2a76882f4
 # Wer in den Flash schreibt
 
-> Nur der Chipsatz hat Leitungen zum Chip. Alles auf der Platine, das Firmware schreiben will, muss ihn fragen — und wer was fragen darf, entscheidet der Descriptor.
+> Nur der Chipsatz hat Leitungen zum Chip. Alles auf der Platine, das den Flash lesen oder schreiben will, geht durch ihn, und wer was darf, steht im Descriptor.
 
-Bytes kommen auf zwei Wegen in den Flash-Chip, und aus dem Unterschied folgt fast alles, was in der Werkstatt Rätsel aufgibt.
+Firmware kommt bauartbedingt auf einem Weg in den Chip: über den Chipsatz. Der einzige SPI-Controller der Platine sitzt im [[term:pch|Chipsatz]], also kommen die Firmware auf der CPU, ein Flash-Werkzeug, die [[term:me|Management Engine]] und der Netzwerk-Controller nur über ihn an den Chip — und er prüft ihre Rechte am Descriptor, bevor er gehorcht.
 
-- **Über den Chipsatz**, während die Platine läuft. Der einzige SPI-Controller der Platine sitzt im [[term:pch|Chipsatz]], also kommen die Firmware auf der CPU, ein Flash-Werkzeug, die [[term:me|Management Engine]] und der Netzwerk-Controller nur über ihn an den Chip.
-- **An den Beinchen des Chips selbst**, mit einem [[term:programmer|Programmer]] — Klammer, Sockel oder in der Schaltung. Der Chipsatz ist daran nicht beteiligt und auf einer Platine in Reparatur meist nicht einmal versorgt.
+Ein [[term:programmer|Programmer]] gehört nicht zu dieser Bauweise. Er spricht die Beinchen des Chips direkt an, und es ist niemand da, den er fragen könnte: keine Rechte, keine Prüfungen. Das ist kein zweiter regulärer Weg, sondern ein Schritt außerhalb dessen, wie die Plattform gebaut ist — so kommt ein Dump von einer toten Platine, und so gehen Bytes wieder hinein, wenn der Chipsatz sie nicht mehr schreibt.
 
-Der erste Weg wird kontrolliert. Der zweite nicht.
+! Keine Prüfung beim Schreiben heißt nicht, dass es gar keine gibt. Die Rechte zäunen genau das ein, was die Plattform beim Start prüft. Ein Programmer nimmt den Zaun weg, nicht die Prüfung: eine Änderung in einem geschützten Bereich wird ohne ein Wort der Klage geschrieben und wird zu einer Platine, die nicht mehr startet. Bevor Sie eine Region ändern, finden Sie heraus, wer sie prüft — die Abschnitte unten sagen es.
 
 ## Die Platine schreibt ständig in ihren eigenen Flash
 

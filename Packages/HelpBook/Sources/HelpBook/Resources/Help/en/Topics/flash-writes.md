@@ -1,13 +1,12 @@
 # Who Writes to the Flash
 
-> Only the chipset has wires to the chip. Everything on the board that wants to write firmware has to ask it, and the descriptor decides who may ask for what.
+> Only the chipset has wires to the chip. Everything on the board that wants to read or write the flash goes through it, and the descriptor holds who is allowed what.
 
-Bytes reach the flash chip two ways, and most of what puzzles a bench follows from the difference between them.
+Firmware is written to the chip one way by design: through the chipset. The [[term:pch|chipset]] holds the only SPI controller on the board, so firmware on the CPU, a flashing utility, the [[term:me|Management Engine]] and the network controller all reach the chip by asking it — and it checks their permissions against the descriptor before it obeys.
 
-- **Through the chipset**, while the board runs. The [[term:pch|chipset]] holds the only SPI controller on the board, so firmware on the CPU, a flashing utility, the [[term:me|Management Engine]] and the network controller all reach the chip by asking it.
-- **On the chip's own pins**, with a [[term:programmer|programmer]] — a clip, a socket, or wired in circuit. The chipset is not involved, and on a board being repaired it is usually not even powered.
+A [[term:programmer|programmer]] is not part of that design. It drives the chip's own pins, and there is nobody to ask: no permissions, no checks. It is not a second normal route but a step outside how the platform was built — the way a dump comes off a dead board, and the way bytes go back in when the chipset will no longer write them.
 
-The first is policed. The second is not.
+! No check at write time does not mean no check at all. The permissions fence off exactly what the platform verifies when it starts. A programmer removes the fence, not the verification: an edit inside a protected range is written without a word of complaint and turns into a board that will not boot. Before patching a region, know who checks it — the sections below say who.
 
 ## The board writes to its own flash all the time
 
