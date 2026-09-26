@@ -77,6 +77,26 @@ final class HelpContentTests: XCTestCase {
         }
     }
 
+    /// Source links are checked for shape, not for reachability: a test that
+    /// went to the network would fail on a train. https and a host is what a
+    /// reader needs to be able to get there at all.
+    func testEverySourceLinkIsUsable() {
+        for topic in book.topics {
+            for url in HelpMarkup.webLinks(in: topic.blocks) {
+                XCTAssertEqual(url.scheme, "https",
+                               "\(topic.id.rawValue) cites \(url) over something other than https")
+                XCTAssertNotNil(url.host, "\(topic.id.rawValue) cites \(url), which has no host")
+            }
+        }
+        for term in book.terms {
+            for url in HelpMarkup.webLinks(in: term.blocks) {
+                XCTAssertEqual(url.scheme, "https",
+                               "the term \(term.id.rawValue) cites \(url) over something other than https")
+                XCTAssertNotNil(url.host, "the term \(term.id.rawValue) cites \(url), which has no host")
+            }
+        }
+    }
+
     /// Every language ships the same pages. Adding `de` without translating a
     /// page is fine — the loader falls back word by word — but a page that
     /// exists in *no* language is a page nobody can read.

@@ -219,6 +219,15 @@ public enum HelpText {
                     .foregroundColor: NSColor.linkColor,
                     .cursor: NSCursor.pointingHand
                 ]))
+            case .web(let words, let destination):
+                // The URL as written, in no scheme of ours, so the text view
+                // hands the click to the system and the browser opens it.
+                text.append(NSAttributedString(string: words, attributes: [
+                    .font: body,
+                    .link: destination,
+                    .foregroundColor: NSColor.linkColor,
+                    .cursor: NSCursor.pointingHand
+                ]))
             }
         }
         text.append(NSAttributedString(string: "\n"))

@@ -1,4 +1,4 @@
-@source-sha c197e7f89f4fc087d4858430b7ff6648a79bf1fa32bfd42424878d609b0248ee
+@source-sha 07792f8cb2f8b27e730054b4b346dd0c8c87ae1d6dc44b54debdcca9983b70d9
 # Wer in den Flash schreibt
 
 > Nur der Chipsatz hat Leitungen zum Chip. Alles auf der Platine, das Firmware schreiben will, muss ihn fragen — und wer was fragen darf, entscheidet der Descriptor.
@@ -24,7 +24,7 @@ Ein heute gelesener Chip und die Datei, die gestern hineingeschrieben wurde, sti
 
 Der [[term:flash-descriptor|Descriptor]] nennt vier [[term:flash-master|Master]] — BIOS, ME, GbE und EC — und gibt jedem eine Lese- und eine Schreibmaske über die [[term:region|Regionen]]. Ein Flash-Werkzeug, das auf der CPU läuft, *ist* der BIOS-Master. Wo der Descriptor diesem Master kein Schreibrecht auf eine Region gibt, weist der Chipsatz den Schreibvorgang ab, und Wiederholen ändert daran nichts.
 
-! Lesen ist genauso geregelt, und das trifft am härtesten. Eine Region, die der BIOS-Master nicht lesen darf, lässt sich aus dem laufenden System überhaupt nicht auslesen. Manche Programme verweigern das Lesen des ganzen Chips, andere füllen das Ungelesene mit `FF` und geben eine Warnung aus. `FF` in einem im System erstellten Dump kann also „durfte nicht gelesen werden“ heißen statt „gelöscht“ — und der Vergleich zeigt dann eine ganze Region als einen riesigen Unterschied, den es gar nicht gibt. Ein Dump vom Programmer hat solche Löcher nicht.
+! Lesen ist genauso geregelt, und das trifft am härtesten. Eine Region, die der BIOS-Master nicht lesen darf, lässt sich aus dem laufenden System überhaupt nicht auslesen. Manche Programme verweigern das Lesen des ganzen Chips, andere füllen das Ungelesene mit `FF` und geben eine Warnung aus. `FF` in einem im System erstellten Dump kann also „durfte nicht gelesen werden“ heißen statt „gelöscht“ — und der Vergleich zeigt dann eine ganze Region als einen riesigen Unterschied, den es gar nicht gibt. Ein Dump vom Programmer hat solche Löcher nicht. So ist es bei flashrom dokumentiert: standardmäßig verweigert es das Lesen und füllt nur dann mit `FF`, wenn man ihm sagt, es solle die Fehler übergehen ([[web:https://flashrom.org/classic_cli_manpage.html|die Manualseite von flashrom]]).
 
 ## Schreiben heißt nicht Ausführen
 
@@ -46,7 +46,7 @@ Der Descriptor ist nur eine von mehreren Schranken, und die übrigen liegen in R
 - **Protected Range Registers** — bis zu fünf Adressbereiche, die die Firmware beim Start sperrt; sie halten sogar gegen den System-Management-Modus.
 - **Flash Configuration Lockdown** — friert diese Bereiche bis zum nächsten Plattform-Reset ein.
 
-Nichts davon steht im Dump, also kann kein Bereich es zeigen und keine Änderung es ändern. Es erklärt aber einen Schreibvorgang, der abgewiesen wird, obwohl der Descriptor ihn klar erlaubt.
+Nichts davon steht im Dump, also kann kein Bereich es zeigen und keine Änderung es ändern. Es erklärt aber einen Schreibvorgang, der abgewiesen wird, obwohl der Descriptor ihn klar erlaubt. Die Register stehen in den Datenblättern der Chipsätze; eine kurze Darstellung, wie die vier zusammenspielen, gibt es [[web:https://eclypsium.com/blog/firmware-security-realizations-part-3-spi-write-protections/|bei Eclypsium]].
 
 ## Der Service-Übergang
 
@@ -56,6 +56,6 @@ Intels Chipsätze tragen einen **Flash Descriptor Security Override**: einen Ser
 - Vor 2011 (5er-Serie und älter) wurde stattdessen im selben Moment `GPIO33` auf Masse gezogen.
 - Manche Hersteller führen dasselbe als Jumper oder Schalter heraus.
 
-Damit liest oder überschreibt eine Service-Prozedur eine gesperrte Region mit einem Werkzeug, ohne den Chip von der Platine zu nehmen. Ein öffentliches Datenblatt beschreibt das nicht: es steht in Intels Plattform-Leitfäden für Hersteller, und am Arbeitsplatz ist es aus den Anleitungen der Reparatur-Community bekannt. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
+Damit liest oder überschreibt eine Service-Prozedur eine gesperrte Region mit einem Werkzeug, ohne den Chip von der Platine zu nehmen. Ein öffentliches Datenblatt beschreibt das nicht: es steht in Intels Plattform-Leitfäden für Hersteller, und am Arbeitsplatz ist es aus den Anleitungen der Reparatur-Community bekannt — am ausführlichsten in [[web:https://winraid.level1techs.com/t/guide-unlock-intel-flash-descriptor-read-write-access-permissions-for-spi-servicing/32449|der Win-RAID-Anleitung zum Entsperren des Descriptor-Zugriffs]], woher auch das oben Gesagte stammt. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
 
 Siehe auch: [[topic:bench-safety|Regeln am Arbeitsplatz]], [[term:flash-descriptor|Flash descriptor]].

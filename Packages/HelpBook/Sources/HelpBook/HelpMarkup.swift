@@ -14,6 +14,14 @@ public enum HelpSpan: Equatable, Sendable {
     case code(String)
     /// `text` is what the reader sees; `link` is where it goes.
     case link(text: String, link: HelpLink)
+    /// A link out of the book, to a page on the web. Separate from `link`
+    /// because the book's own destinations are pages a `?` button or the
+    /// contents list can also point at, and neither can point at the web.
+    ///
+    /// It exists for one job: a page that states something a datasheet does not
+    /// document has to say where the claim comes from, and a reader who wants
+    /// to check has to be able to get there.
+    case web(text: String, url: URL)
 }
 
 /// One block of a page. A page is a list of these, in the order they were
@@ -49,6 +57,8 @@ public enum HelpBlock: Equatable, Sendable {
 /// - a blank line ends a block; consecutive lines of prose are one paragraph.
 /// - `**bold**`, `` `code` ``, `[[topic:id]]`, `[[term:id]]`, and either link
 ///   form with `|` and the words to show: `[[term:fpt|the partition table]]`.
+/// - `[[web:https://…|the words to show]]` — a link out to a source. https
+///   only: a page of ours will not send a reader over plain http.
 public enum HelpMarkup {
     public static func parse(_ source: String) -> [HelpBlock] {
         var blocks: [HelpBlock] = []
@@ -177,10 +187,10 @@ public enum HelpMarkup {
         return result
     }
 
-    /// `topic:opening-files`, `term:fpt`, or either with `|the words to show`.
-    /// Nil for anything else, which leaves the brackets in the text as written
-    /// — a page that says `[[` and means it reads as it was typed rather than
-    /// losing the line.
+    /// `topic:opening-files`, `term:fpt`, `web:https://…`, or any of them with
+    /// `|the words to show`. Nil for anything else, which leaves the brackets
+    /// in the text as written — a page that says `[[` and means it reads as it
+    /// was typed rather than losing the line.
     private static func linkSpan(_ body: String) -> HelpSpan? {
         let parts = body.split(separator: "|", maxSplits: 1, omittingEmptySubsequences: false)
         let target = parts[0].trimmingCharacters(in: .whitespaces)
@@ -194,6 +204,12 @@ public enum HelpMarkup {
             return .link(text: shown.isEmpty ? id : shown, link: .topic(HelpTopicID(id)))
         case "term":
             return .link(text: shown.isEmpty ? id : shown, link: .term(HelpTermID(id)))
+        case "web":
+            // https only, and a URL the system can actually open. A source
+            // link that silently renders as prose is better than one that
+            // renders as a link and goes nowhere.
+            guard id.hasPrefix("https://"), let url = URL(string: id) else { return nil }
+            return .web(text: shown.isEmpty ? id : shown, url: url)
         default:
             return nil
         }
@@ -219,7 +235,7 @@ public enum HelpMarkup {
         spans.map { span in
             switch span {
             case .text(let t), .strong(let t), .code(let t): return t
-            case .link(let text, _): return text
+            case .link(let text, _), .web(let text, _): return text
             }
         }.joined()
     }
@@ -238,5 +254,21 @@ public enum HelpMarkup {
 
     private static func links(in spans: [HelpSpan]) -> [HelpLink] {
         spans.compactMap { if case .link(_, let link) = $0 { return link } else { return nil } }
+    }
+
+    /// Every link out of the book a page carries — what the tests check for
+    /// reachability rather than for a destination inside the book.
+    public static func webLinks(in blocks: [HelpBlock]) -> [URL] {
+        blocks.flatMap { block -> [URL] in
+            switch block {
+            case .heading: return []
+            case .paragraph(let spans), .caution(let spans): return webLinks(in: spans)
+            case .bullets(let items), .steps(let items): return items.flatMap(webLinks(in:))
+            }
+        }
+    }
+
+    private static func webLinks(in spans: [HelpSpan]) -> [URL] {
+        spans.compactMap { if case .web(_, let url) = $0 { return url } else { return nil } }
     }
 }

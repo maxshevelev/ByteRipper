@@ -23,7 +23,7 @@ So a chip read today and the file flashed into it yesterday will not match, even
 
 The [[term:flash-descriptor|descriptor]] names four [[term:flash-master|masters]] — BIOS, ME, GbE and EC — and gives each a read mask and a write mask over the [[term:region|regions]]. A flashing utility running on the CPU *is* the BIOS master. Where the descriptor does not grant that master write access to a region, the chipset refuses the write, and repeating it changes nothing.
 
-! Reading is gated the same way, and this one bites hardest. A region the BIOS master may not read cannot be dumped from the running system at all. Some tools refuse the whole read; others fill the gap with `FF` and print a warning. So `FF` in a dump taken in-system can mean "not allowed to read" rather than "erased" — and a comparison then shows a whole region as one enormous difference that is not really there. A dump taken with a programmer has no such holes.
+! Reading is gated the same way, and this one bites hardest. A region the BIOS master may not read cannot be dumped from the running system at all. Some tools refuse the whole read; others fill the gap with `FF` and print a warning. So `FF` in a dump taken in-system can mean "not allowed to read" rather than "erased" — and a comparison then shows a whole region as one enormous difference that is not really there. A dump taken with a programmer has no such holes. That is flashrom's documented behaviour: it refuses the read by default and fills with `FF` only when told to ignore the errors ([[web:https://flashrom.org/classic_cli_manpage.html|flashrom's manual page]]).
 
 ## Writing is not running
 
@@ -45,7 +45,7 @@ The descriptor is one gate of several, and the others live in chipset registers 
 - **Protected Range Registers** — up to five address ranges the firmware locks at boot, which hold even against system management mode.
 - **Flash Configuration Lockdown** — freezes those ranges until the next platform reset.
 
-None of this is in the dump, so no panel can show it and no edit can change it. It is the explanation for a write refused while the descriptor plainly allows it.
+None of this is in the dump, so no panel can show it and no edit can change it. It is the explanation for a write refused while the descriptor plainly allows it. The registers are in the chipset datasheets; a short account of how the four fit together is [[web:https://eclypsium.com/blog/firmware-security-realizations-part-3-spi-write-protections/|Eclypsium's]].
 
 ## The service override
 
@@ -55,6 +55,6 @@ Intel's chipsets carry a **Flash Descriptor Security Override**: a servicing mod
 - Before 2011 (5-series and older) it was `GPIO33` pulled to ground at the same moment instead.
 - Some vendors bring the same thing out as a jumper or a switch.
 
-This is what a service procedure uses to read or rewrite a locked region with a utility, without taking the chip off the board. No public datasheet describes it: it is written down in Intel's platform guides for manufacturers, and on a bench it is known from the repair community's own instructions. See [[topic:provenance|Where this knowledge comes from]].
+This is what a service procedure uses to read or rewrite a locked region with a utility, without taking the chip off the board. No public datasheet describes it: it is written down in Intel's platform guides for manufacturers, and on a bench it is known from the repair community's own instructions — the fullest of them being [[web:https://winraid.level1techs.com/t/guide-unlock-intel-flash-descriptor-read-write-access-permissions-for-spi-servicing/32449|the Win-RAID guide to unlocking descriptor access]], which is where the detail above comes from. See [[topic:provenance|Where this knowledge comes from]].
 
 See also: [[topic:bench-safety|Bench rules]], [[term:flash-descriptor|Flash descriptor]].

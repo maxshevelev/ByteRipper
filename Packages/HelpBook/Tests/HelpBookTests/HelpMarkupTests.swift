@@ -73,6 +73,41 @@ final class HelpMarkupTests: XCTestCase {
         let blocks = HelpMarkup.parse("go to [[topic:settings|Settings]] now")
         XCTAssertEqual(HelpMarkup.plainText(blocks), "go to Settings now")
     }
+
+    /// A link out of the book, for a page that has to name where a claim came
+    /// from. It is a span of its own, not a `HelpLink`: nothing in the book can
+    /// navigate to it.
+    func testAWebLinkIsItsOwnSpan() throws {
+        let url = try XCTUnwrap(URL(string: "https://example.org/guide"))
+        XCTAssertEqual(HelpMarkup.spans("see [[web:https://example.org/guide|the guide]]"), [
+            .text("see "),
+            .web(text: "the guide", url: url)
+        ])
+    }
+
+    /// Without its own words a source link shows the address, which is the
+    /// honest fallback: the reader can still see where it goes.
+    func testAWebLinkWithoutWordsShowsItsAddress() throws {
+        let url = try XCTUnwrap(URL(string: "https://example.org/x"))
+        XCTAssertEqual(HelpMarkup.spans("[[web:https://example.org/x]]"), [
+            .web(text: "https://example.org/x", url: url)
+        ])
+    }
+
+    /// Anything but https stays as written rather than becoming a link. A book
+    /// of ours does not send a reader over plain http, and a link that renders
+    /// but goes nowhere is worse than visible brackets.
+    func testOnlyHTTPSBecomesALink() {
+        XCTAssertEqual(HelpMarkup.spans("[[web:http://example.org]]"),
+                       [.text("[[web:http://example.org]]")])
+        XCTAssertEqual(HelpMarkup.spans("[[web:ftp://example.org]]"),
+                       [.text("[[web:ftp://example.org]]")])
+    }
+
+    func testPlainTextReadsAWebLinkAsItsWords() {
+        let blocks = HelpMarkup.parse("measured, see [[web:https://example.org|the guide]]")
+        XCTAssertEqual(HelpMarkup.plainText(blocks), "measured, see the guide")
+    }
 }
 
 /// The file formats around the markup: a page's header, a term's fields, the
