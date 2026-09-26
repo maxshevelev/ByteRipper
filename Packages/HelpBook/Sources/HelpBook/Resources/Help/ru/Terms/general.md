@@ -77,7 +77,7 @@ GUID выглядит так: `8C8CE578-8A3D-4F1C-9935-896185C32DD3`. В обр�
 @see topic:tool-zones
 
 @term flash-chip
-@name SPI Flash (чип SPI-Flash памяти)
+@name Чип SPI-Flash памяти
 @short Чип, в котором находится прошивка: ёмкость фиксирована, в стёртом виде — `FF`.
 
 Прошивка платы находится в чипе памяти — SPI Flash. Важны два её свойства:
