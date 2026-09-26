@@ -33,7 +33,7 @@ The masks decide one thing only: whether a write through the chipset is allowed.
 
 That is the split behind a patch that goes in and still fails. A programmer defeats the masks — it can write any byte into any region. It can do nothing about the checks at boot: an edit inside the [[term:ibb|IBB]] or in the ME region will be written and then rejected.
 
-Everything those checks do not cover, though — NVRAM, the [[term:dmi|DMI]] area, [[term:ec|EC]] firmware, and often the DXE drivers as well ([[term:ibb|IBB / OBB]] says when) — is written by a programmer and simply works. That is what repair rests on.
+Everything those checks do not cover, though — NVRAM, the [[term:dmi|DMI]] area, [[term:ec|EC]] firmware, and often the DXE drivers as well ([[term:ibb|IBB / OBB]] says when) — is written by a programmer and simply works. A part of the work on dumps lives there: restoring a board's own data, putting settings back, tuning a BIOS.
 
 ## The locks the descriptor knows nothing about
 

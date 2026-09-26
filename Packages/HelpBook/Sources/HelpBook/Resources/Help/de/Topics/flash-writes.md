@@ -1,4 +1,4 @@
-@source-sha 07c7be833f3e16c86454f7e69f49c72c89b7ad9738d3fcb825adaea2a76882f4
+@source-sha 0e5854de202df3ba8a8a38b77c212d530cb1aa33172b932320fef94c79cc0768
 # Wer in den Flash schreibt
 
 > Nur der Chipsatz hat Leitungen zum Chip. Alles auf der Platine, das den Flash lesen oder schreiben will, geht durch ihn, und wer was darf, steht im Descriptor.
@@ -34,7 +34,7 @@ Die Masken entscheiden nur eines: ob über den Chipsatz geschrieben werden darf.
 
 Daher die Trennung, an der eine Änderung scheitert, die sauber geschrieben wurde. Ein Programmer umgeht die Masken — er kann jedes Byte in jede Region schreiben. Gegen die Prüfungen beim Start richtet er nichts aus: eine Änderung innerhalb des [[term:ibb|IBB]] oder in der ME-Region wird geschrieben und danach abgewiesen.
 
-Alles aber, was diese Prüfungen nicht abdecken — NVRAM, der [[term:dmi|DMI]]-Bereich, die [[term:ec|EC]]-Firmware und oft auch die DXE-Treiber ([[term:ibb|IBB / OBB]] sagt, wann) —, schreibt ein Programmer, und es läuft. Darauf ruht die Reparatur.
+Alles aber, was diese Prüfungen nicht abdecken — NVRAM, der [[term:dmi|DMI]]-Bereich, die [[term:ec|EC]]-Firmware und oft auch die DXE-Treiber ([[term:ibb|IBB / OBB]] sagt, wann) —, schreibt ein Programmer, und es läuft. Ein Teil der Arbeit an Dumps liegt dort: die platinenspezifischen Daten wiederherstellen, Einstellungen zurückholen, ein BIOS anpassen.
 
 ## Die Sperren, von denen der Descriptor nichts weiß
 
