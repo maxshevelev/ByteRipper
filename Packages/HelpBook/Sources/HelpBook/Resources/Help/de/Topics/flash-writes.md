@@ -1,4 +1,4 @@
-@source-sha 06b42111ba3c7f7b1b5a73f3e3efd1ecb7015c19d3b5c1e6f8ef00a9302bfa1b
+@source-sha 8bac3ba50abeff48a803bf39a284c1f5bb45908ed34b7ecc7467a4c9ecd9dccf
 # Wer in den Flash schreibt
 
 > Nur der Chipsatz hat Leitungen zum Chip. Alles auf der Platine, das Firmware schreiben will, muss ihn fragen — und wer was fragen darf, entscheidet der Descriptor.
@@ -28,7 +28,7 @@ Der [[term:flash-descriptor|Descriptor]] nennt vier [[term:flash-master|Master]]
 
 ## Schreiben heißt nicht Ausführen
 
-Die Masken entscheiden nur eines: ob geschrieben werden darf. Ob das Geschriebene dann läuft, ist eine andere Frage, und sie wird beim Start beantwortet, von Prüfungen, die mit dem Descriptor nichts zu tun haben:
+Die Masken entscheiden nur eines: ob über den Chipsatz geschrieben werden darf. Ob das Geschriebene dann läuft, ist eine andere Frage, und sie wird beim Start beantwortet, von Prüfungen, die mit dem Descriptor nichts zu tun haben:
 
 - [[term:boot-guard|Boot Guard]] prüft den Bootblock, bevor die CPU ihn ausführt. Die Signatur prüft nicht der Chipsatz: das tut das [[term:acm|ACM]], gestartet vom Mikrocode der CPU, und der Hash des Wurzelschlüssels liegt in den [[term:otp|Fuses]] des Chipsatzes.
 - Die ME-Region prüft die Engine selbst, während sie hochkommt.

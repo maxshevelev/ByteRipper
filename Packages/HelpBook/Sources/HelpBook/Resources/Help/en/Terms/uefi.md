@@ -22,7 +22,7 @@ The [[term:flash-descriptor|descriptor]] does not grant access to programs. It g
 - **GbE** — the wired network controller, for its own region.
 - **EC** — the [[term:ec|embedded controller]], and only in descriptor version 2, from Skylake on.
 
-Each master carries a read mask and a write mask, one bit per [[term:region|region]]. The masks govern writing and nothing else: a [[term:programmer|programmer]] does not ask them, and the bytes go into any region. The difference shows at the next start — the [[term:acm|ACM]] checks the boot block, the engine checks its own region — and an edit inside the [[term:ibb|IBB]] or in the ME region ends up written and rejected. What those checks do not cover stays written, and works.
+Each master carries a read mask and a write mask, one bit per [[term:region|region]]. The masks govern writing through the chipset and nothing else: a [[term:programmer|programmer]] does not ask them, and the bytes go into any region. The difference shows at the next start — the [[term:acm|ACM]] checks the boot block, the engine checks its own region — and an edit inside the [[term:ibb|IBB]] or in the ME region ends up written and rejected. What those checks do not cover stays written, and works.
 
 @see topic:flash-writes
 @see term:flash-descriptor

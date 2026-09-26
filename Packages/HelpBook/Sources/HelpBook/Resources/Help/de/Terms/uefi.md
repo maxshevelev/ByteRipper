@@ -1,4 +1,4 @@
-@source-sha 9c63f8105dcd18b88008d791e652cfd089c7fbd262eb3abef0041606129e6328
+@source-sha 7633b218be3e03ef530bc955599e27375128daf7910555f7655f80d37f130591
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -23,7 +23,7 @@ Der [[term:flash-descriptor|Descriptor]] vergibt Rechte nicht an Programme, sond
 - **GbE** — der kabelgebundene Netzwerk-Controller, für seine eigene Region.
 - **EC** — der [[term:ec|Embedded Controller]], und nur im Descriptor der Version 2, ab Skylake.
 
-Jeder Master trägt eine Lese- und eine Schreibmaske, ein Bit je [[term:region|Region]]. Die Masken regeln nur das Schreiben: ein [[term:programmer|Programmer]] fragt sie nicht, und die Bytes landen in jeder Region. Der Unterschied zeigt sich beim nächsten Start — das [[term:acm|ACM]] prüft den Bootblock, die Engine ihre eigene Region —, und eine Änderung im [[term:ibb|IBB]] oder in der ME-Region ist dann geschrieben und abgewiesen. Was diese Prüfungen nicht abdecken, bleibt geschrieben und läuft.
+Jeder Master trägt eine Lese- und eine Schreibmaske, ein Bit je [[term:region|Region]]. Die Masken regeln nur das Schreiben über den Chipsatz: ein [[term:programmer|Programmer]] fragt sie nicht, und die Bytes landen in jeder Region. Der Unterschied zeigt sich beim nächsten Start — das [[term:acm|ACM]] prüft den Bootblock, die Engine ihre eigene Region —, und eine Änderung im [[term:ibb|IBB]] oder in der ME-Region ist dann geschrieben und abgewiesen. Was diese Prüfungen nicht abdecken, bleibt geschrieben und läuft.
 
 @see topic:flash-writes
 @see term:flash-descriptor

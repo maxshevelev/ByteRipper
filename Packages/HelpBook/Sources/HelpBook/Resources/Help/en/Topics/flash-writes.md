@@ -27,7 +27,7 @@ The [[term:flash-descriptor|descriptor]] names four [[term:flash-master|masters]
 
 ## Writing is not running
 
-The masks decide one thing only: whether the write is allowed. Whether what was written will then work is a different question, and it is answered at boot, by checks that have nothing to do with the descriptor:
+The masks decide one thing only: whether a write through the chipset is allowed. Whether what was written will then work is a different question, and it is answered at boot, by checks that have nothing to do with the descriptor:
 
 - [[term:boot-guard|Boot Guard]] verifies the boot block before the CPU executes it. The chipset does not check that signature: the [[term:acm|ACM]], started by CPU microcode, does, and the hash of the root key sits in the chipset's [[term:otp|fuses]].
 - The ME region is verified by the engine itself, as it comes up.
