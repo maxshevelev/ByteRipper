@@ -22,7 +22,7 @@ Modern Intel platforms verify parts of the image before the CPU runs them, and t
 
 - If the image has [[term:boot-guard|Boot Guard]] protected ranges, the [[topic:tool-uefi|UEFI panel]] says so in its summary line. Bytes inside a protected range cannot be changed without the platform refusing to boot — the signature check will fail, and you cannot re-sign it.
 - The [[term:me-region|ME region]] is verified by the engine itself, on the [[term:pch|chipset]] die. Patching it by hand is pointless: the engine will not accept the changed region, and instead of a board with a patched ME you get one that hangs or reboots on a timer.
-- The descriptor's [[term:flash-master|master]] permissions decide what can be written **through the chipset** — by a tool such as Intel FPT, or by a vendor's BIOS update. A programmer wired to the chip itself goes past the chipset and is not asked. [[topic:flash-writes|Who writes to the flash]] has the whole of it.
+- The descriptor's [[term:flash-master|master]] permissions decide what can be written **through the chipset** — by a tool such as Intel FPT (Flash Programming Tool), or by a vendor's BIOS update. A programmer wired to the chip itself goes past the chipset and is not asked. [[topic:flash-writes|Who writes to the flash]] has the whole of it.
 
 Knowing this before you patch is the difference between a five-minute fix and a bricked board.
 

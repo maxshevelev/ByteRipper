@@ -1,4 +1,4 @@
-@source-sha 8d0e2a6b6b36b8d0685ae6872e7c6071bcce5c195c85b4a5ce0469c1698376c6
+@source-sha 23abc9023c1f7afb854f2549bf79a5c1e7a35b483a2bd32132679acd7066c164
 # Regeln am Arbeitsplatz
 
 > Wege, einen Dump zu ruinieren (und wie man sie vermeidet).
@@ -23,7 +23,7 @@ Moderne Intel-Plattformen prüfen Teile des Images, bevor die CPU sie ausführt,
 
 - Hat das Image geschützte Bereiche von [[term:boot-guard|Boot Guard]], sagt das [[topic:tool-uefi|UEFI-Panel]] es in seiner Übersichtszeile. Bytes darin lassen sich nicht ändern, ohne dass die Plattform den Start verweigert: die Signaturprüfung schlägt fehl, und die Signatur neu berechnen können Sie nicht.
 - Die [[term:me-region|ME-Region]] prüft die Engine selbst, auf dem Die des [[term:pch|Chipsatzes]]. Sie von Hand zu ändern bringt nichts: die Engine nimmt die geänderte Region nicht an, und statt einer Platine mit geänderter ME bekommen Sie eine, die hängt oder im Takt neu startet.
-- Die [[term:flash-master|Master]]-Rechte im Descriptor entscheiden, was **über den Chipsatz** geschrieben werden kann — von einem Werkzeug wie Intel FPT oder einem BIOS-Update des Herstellers. Ein Programmer, der am Chip selbst hängt, geht am Chipsatz vorbei und wird nicht gefragt. Ausführlich: [[topic:flash-writes|Wer in den Flash schreibt]].
+- Die [[term:flash-master|Master]]-Rechte im Descriptor entscheiden, was **über den Chipsatz** geschrieben werden kann — von einem Werkzeug wie Intel FPT (Flash Programming Tool) oder einem BIOS-Update des Herstellers. Ein Programmer, der am Chip selbst hängt, geht am Chipsatz vorbei und wird nicht gefragt. Ausführlich: [[topic:flash-writes|Wer in den Flash schreibt]].
 
 Das vor dem Ändern zu wissen ist der Unterschied zwischen einer Fünf-Minuten-Reparatur und einem Briefbeschwerer.
 

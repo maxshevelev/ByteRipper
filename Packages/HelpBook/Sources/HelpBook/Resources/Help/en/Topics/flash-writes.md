@@ -15,7 +15,7 @@ Not only when someone updates the firmware:
 
 - You change a setting in Setup and press F10, and the firmware writes the [[term:vss|NVRAM]] store back into the [[term:bios-region|BIOS region]].
 - The Management Engine writes its own [[term:mfs|MFS]] — configuration, counters, state.
-- A vendor's update tool, or Intel's FPT, rewrites a whole region from the running system.
+- A vendor's update tool, or Intel's FPT (Flash Programming Tool), rewrites a whole region from the running system.
 
 So a chip read today and the file flashed into it yesterday will not match, even if nobody touched the board on purpose: NVRAM and MFS moved on their own. That is the first thing to suspect when a comparison shows differences nobody can account for.
 

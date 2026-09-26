@@ -1,4 +1,4 @@
-@source-sha 8bac3ba50abeff48a803bf39a284c1f5bb45908ed34b7ecc7467a4c9ecd9dccf
+@source-sha 074c107d0bc4bd3c0cc480ccbc19415a7be413207e39f03245ab035a27a5534b
 # Wer in den Flash schreibt
 
 > Nur der Chipsatz hat Leitungen zum Chip. Alles auf der Platine, das Firmware schreiben will, muss ihn fragen — und wer was fragen darf, entscheidet der Descriptor.
@@ -16,7 +16,7 @@ Und nicht nur, wenn jemand die Firmware aktualisiert:
 
 - Sie ändern eine Einstellung im Setup und drücken F10, und die Firmware schreibt den [[term:vss|NVRAM]]-Speicher zurück in die [[term:bios-region|BIOS-Region]].
 - Die Management Engine schreibt ihre eigene [[term:mfs|MFS]]: Konfiguration, Zähler, Zustand.
-- Ein Update-Werkzeug des Herstellers oder Intels FPT schreibt aus dem laufenden System eine ganze Region neu.
+- Ein Update-Werkzeug des Herstellers oder Intels FPT (Flash Programming Tool) schreibt aus dem laufenden System eine ganze Region neu.
 
 Ein heute gelesener Chip und die Datei, die gestern hineingeschrieben wurde, stimmen deshalb nicht überein, auch wenn niemand die Platine absichtlich angefasst hat: NVRAM und MFS haben sich von selbst bewegt. Das ist das Erste, was zu vermuten ist, wenn ein Vergleich Unterschiede zeigt, für die es keine Erklärung gibt.
 
