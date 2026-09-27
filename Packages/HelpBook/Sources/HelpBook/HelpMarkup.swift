@@ -9,7 +9,9 @@ import Foundation
 /// as prose, and to point at the page that explains the word it just used.
 public enum HelpSpan: Equatable, Sendable {
     case text(String)
-    case strong(String)
+    /// Bold is a run of the other forms, not a word: a bolded link stays a
+    /// link, only the weight changes. Bold cannot nest in bold.
+    case strong([HelpSpan])
     /// Shown monospaced: an offset, a signature, a menu path typed as it is.
     case code(String)
     /// `text` is what the reader sees; `link` is where it goes.
@@ -57,6 +59,8 @@ public enum HelpBlock: Equatable, Sendable {
 /// - a blank line ends a block; consecutive lines of prose are one paragraph.
 /// - `**bold**`, `` `code` ``, `[[topic:id]]`, `[[term:id]]`, and either link
 ///   form with `|` and the words to show: `[[term:fpt|the partition table]]`.
+///   Bold may hold words and links — the book's list idiom is
+///   `- **[[term:fpt|the table]]** — …` — but cannot nest in bold.
 /// - `[[web:https://…|the words to show]]` — a link out to a source. https
 ///   only: a page of ours will not send a reader over plain http.
 public enum HelpMarkup {
@@ -144,9 +148,10 @@ public enum HelpMarkup {
     /// One line of text, cut into its runs.
     ///
     /// Scanned once, left to right, rather than run through a chain of regular
-    /// expressions: the four forms cannot nest — a link's text is words, an
-    /// emphasis holds no code — so a single pass is both the simplest reading
-    /// and the one with no order-of-application surprises.
+    /// expressions: the forms cannot nest, except that emphasis is a run of
+    /// the other forms — a bolded link stays a link, only the weight changes.
+    /// A single pass is both the simplest reading and the one with no
+    /// order-of-application surprises.
     public static func spans(_ line: String) -> [HelpSpan] {
         var result: [HelpSpan] = []
         var plain = ""
@@ -161,7 +166,8 @@ public enum HelpMarkup {
         while let next = rest.first {
             if rest.hasPrefix("**"), let end = rest.dropFirst(2).range(of: "**") {
                 flushPlain()
-                result.append(.strong(String(rest[rest.index(rest.startIndex, offsetBy: 2)..<end.lowerBound])))
+                let inner = String(rest[rest.index(rest.startIndex, offsetBy: 2)..<end.lowerBound])
+                result.append(.strong(spans(inner)))
                 rest = rest[end.upperBound...]
                 continue
             }
@@ -234,7 +240,8 @@ public enum HelpMarkup {
     public static func plainText(_ spans: [HelpSpan]) -> String {
         spans.map { span in
             switch span {
-            case .text(let t), .strong(let t), .code(let t): return t
+            case .text(let t), .code(let t): return t
+            case .strong(let runs): return plainText(runs)
             case .link(let text, _), .web(let text, _): return text
             }
         }.joined()
@@ -252,8 +259,13 @@ public enum HelpMarkup {
         }
     }
 
+    /// Bold may hold a link, so a flat walk flattens it one level first.
+    private static func flattened(_ spans: [HelpSpan]) -> [HelpSpan] {
+        spans.flatMap { if case .strong(let runs) = $0 { return runs } else { return [$0] } }
+    }
+
     private static func links(in spans: [HelpSpan]) -> [HelpLink] {
-        spans.compactMap { if case .link(_, let link) = $0 { return link } else { return nil } }
+        flattened(spans).compactMap { if case .link(_, let link) = $0 { return link } else { return nil } }
     }
 
     /// Every link out of the book a page carries — what the tests check for
@@ -269,6 +281,6 @@ public enum HelpMarkup {
     }
 
     private static func webLinks(in spans: [HelpSpan]) -> [URL] {
-        spans.compactMap { if case .web(_, let url) = $0 { return url } else { return nil } }
+        flattened(spans).compactMap { if case .web(_, let url) = $0 { return url } else { return nil } }
     }
 }

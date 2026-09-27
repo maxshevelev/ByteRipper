@@ -50,8 +50,39 @@ final class HelpMarkupTests: XCTestCase {
 
     func testInlineForms() {
         XCTAssertEqual(HelpMarkup.spans("a **b** c `0xFF` d"), [
-            .text("a "), .strong("b"), .text(" c "), .code("0xFF"), .text(" d")
+            .text("a "), .strong([.text("b")]), .text(" c "), .code("0xFF"), .text(" d")
         ])
+    }
+
+    /// Bold is a run of the other forms, not a word: a bolded link stays a
+    /// link. This is the book's list idiom — `- **[[term:fpt|the table]]** — …`
+    /// — and the parser that swallowed the brackets into the bold is how a page
+    /// printed its own source.
+    func testBoldMayHoldALink() {
+        XCTAssertEqual(HelpMarkup.spans("**[[term:fpt|the table]]**"), [
+            .strong([.link(text: "the table", link: .term(HelpTermID("fpt")))])
+        ])
+    }
+
+    func testBoldMayHoldWordsAndALink() {
+        XCTAssertEqual(HelpMarkup.spans("**Config of [[term:fpt|the table]]**"), [
+            .strong([.text("Config of "), .link(text: "the table", link: .term(HelpTermID("fpt")))])
+        ])
+    }
+
+    /// A link inside bold still counts as a link: the walk that proves the book
+    /// has no link into nothing must descend into bold.
+    func testLinksDescendIntoBold() {
+        let blocks = HelpMarkup.parse("- **[[topic:settings|Settings]]** — the words")
+        XCTAssertEqual(HelpMarkup.links(in: blocks), [.topic(HelpTopicID("settings"))])
+        XCTAssertEqual(HelpMarkup.plainText(blocks), "Settings — the words")
+    }
+
+    /// A source link inside bold keeps its address, for the same reason.
+    func testWebLinksDescendIntoBold() throws {
+        let url = try XCTUnwrap(URL(string: "https://example.org/guide"))
+        let blocks = HelpMarkup.parse("see **[[web:https://example.org/guide|the guide]]**")
+        XCTAssertEqual(HelpMarkup.webLinks(in: blocks), [url])
     }
 
     func testLinksWithAndWithoutTheirOwnWords() {

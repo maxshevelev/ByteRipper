@@ -75,7 +75,8 @@ Six rules, because every one of them is a rule a translator has to keep:
   numbers them, so a step inserted in a translation cannot be misnumbered)
 - `! text` — a caution, drawn in the palette's caution colour
 - a blank line ends a block
-- `**bold**`, `` `code` ``
+- `**bold**`, `` `code` `` — bold may hold words and links: the book's list
+  idiom is `- **[[term:fpt|the table]]** — …`; bold cannot nest
 - `[[topic:id]]` / `[[term:id]]`, either with `|the words to show`
 
 Not `AttributedString(markdown:)`: the book needs `[[term:fpt]]` to come out as

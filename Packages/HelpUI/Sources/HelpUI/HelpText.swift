@@ -193,18 +193,31 @@ public enum HelpText {
                              style: NSParagraphStyle,
                              color: NSColor = .labelColor) -> NSAttributedString {
         let text = NSMutableAttributedString()
-        let body = NSFont.systemFont(ofSize: Size.body)
+        append(spans, to: text, color: color, bold: false)
+        text.append(NSAttributedString(string: "\n"))
+        text.addAttribute(.paragraphStyle, value: style,
+                          range: NSRange(location: 0, length: text.length))
+        return text
+    }
+
+    /// A bold span holds a run of the other forms, so the walk is a descent:
+    /// a bolded link keeps its link, only the weight changes.
+    private static func append(
+        _ spans: [HelpSpan],
+        to text: NSMutableAttributedString,
+        color: NSColor,
+        bold: Bool
+    ) {
+        let body = bold ? NSFont.systemFont(ofSize: Size.body, weight: .semibold)
+                        : NSFont.systemFont(ofSize: Size.body)
         for span in spans {
             switch span {
             case .text(let words):
                 text.append(NSAttributedString(string: words, attributes: [
                     .font: body, .foregroundColor: color
                 ]))
-            case .strong(let words):
-                text.append(NSAttributedString(string: words, attributes: [
-                    .font: NSFont.systemFont(ofSize: Size.body, weight: .semibold),
-                    .foregroundColor: color
-                ]))
+            case .strong(let runs):
+                append(runs, to: text, color: color, bold: true)
             case .code(let words):
                 // The dump's own kind of type for a value the reader will go
                 // and look for in the dump.
@@ -230,10 +243,6 @@ public enum HelpText {
                 ]))
             }
         }
-        text.append(NSAttributedString(string: "\n"))
-        text.addAttribute(.paragraphStyle, value: style,
-                          range: NSRange(location: 0, length: text.length))
-        return text
     }
 
     /// The see-also list's rows: a link with nothing but the destination's own
