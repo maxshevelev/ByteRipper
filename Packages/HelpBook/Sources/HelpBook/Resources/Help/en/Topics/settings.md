@@ -16,4 +16,4 @@
 - **Search Patterns** — the named search patterns, and the folder they can be synced from so a shop shares one pattern library ([[topic:search|Finding bytes]]).
 - **File Types** — which extensions open in ByteRipper from Finder. `.rom` and `.dump` are the app's own; `.bin` and anything else are offered here because the system already has a handler for them.
 
-Settings are app-wide, not per window: the font size you pick applies to every open dump, which is deliberate — a dump zoomed in one window and not in another would be an invisible second preference.
+Settings are app-wide, not per window: the font size you pick applies to every open dump.

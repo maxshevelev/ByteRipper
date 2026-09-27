@@ -1,4 +1,4 @@
-@source-sha 28bc9a6d6cd60fba5e6d1777558b3fa7622fb9c364469d36587a42dcfae1dc2d
+@source-sha 97e5e9c49299489a7a40fedb4cf198dee01d6d1fe4eadf762735ae610b7c943b
 # Einstellungen
 
 > ⌘, — die programmweiten Einstellungen.
@@ -12,4 +12,4 @@
 - **Dateitypen** — welche Endungen aus dem Finder in ByteRipper öffnen. `.rom` und `.dump` gehören dem Programm; `.bin` und alles Weitere werden hier angeboten, weil das System dafür bereits ein Programm kennt.
 - **Sprache** — dem Mac folgen oder eine eigene wählen. Die Hilfe wechselt sofort, Menüs und Fenster nach einem Neustart. Firmware-Begriffe bleiben in jeder Sprache englisch: so heißen sie in den Datenblättern und in den übrigen Werkzeugen.
 
-Die Einstellungen gelten programmweit, nicht je Fenster: die gewählte Schriftgröße gilt für jeden geöffneten Dump. Das ist Absicht — ein in einem Fenster vergrößerter und im anderen nicht vergrößerter Dump wäre eine zweite, unsichtbare Einstellung.
+Die Einstellungen gelten programmweit, nicht je Fenster: die gewählte Schriftgröße gilt für jeden geöffneten Dump.

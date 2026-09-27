@@ -1,11 +1,11 @@
-@source-sha 8cea7c0af68823bcaf98208751f7461bb2665138a07e2580b4de817fea0fffa1
+@source-sha cff3b656ebcd0ff367612503f5376313eaab33a886b4530a4153aa5ddea7100f
 # Einen Dump mit einem Spender reparieren
 
 > Die übliche Arbeit: eine Platine, die nicht startet, ein beschädigter Dump und ein gutes Image von woanders.
 
 Das Ziel ist fast nie, das Spender-Image komplett zu schreiben. Es ist, herauszufinden, **was kaputt ist**, und nur das hinüberzuholen.
 
-1. **Lesen Sie den Chip des Patienten** und sichern Sie den Dump unberührt. Lesen Sie zweimal und vergleichen Sie die beiden Dumps miteinander — unterscheiden sie sich, ist das Lesen unzuverlässig (schlechter Kontakt, schwache Versorgung, eine noch teilweise versorgte Platine), und alles danach bedeutet nichts.
+1. **Lesen Sie den Chip des Patienten** und sichern Sie den Dump unberührt. Lesen Sie zweimal und vergleichen Sie die beiden Dumps miteinander — unterscheiden sie sich, ist das Lesen unzuverlässig (schlechter Kontakt, schwache Versorgung), und alles danach bedeutet nichts.
 2. **Öffnen Sie Patient und Spender** nebeneinander ([[topic:first-comparison|Vergleich]]).
 3. **Prüfen Sie die Größen** in den Statuszeilen. Verschiedene Größen heißen verschiedene Chips oder ein falsches Lesen — klären Sie das zuerst.
 4. **Schalten Sie die [[topic:tool-uefi|UEFI-Struktur]]** für den Patienten ein. Der Baum sagt Ihnen, zu welcher Region jede Adresse gehört.

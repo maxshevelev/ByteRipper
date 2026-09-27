@@ -1,4 +1,4 @@
-@source-sha 1ece1b5e9062445d3daf3c010a9d12debe5901e6810706a0378badfdfd03a8c1
+@source-sha b8fcfd4b6855326cb198389d91e977dd04ac5e2e094ef486f4efc0e68673f197
 # Sich bewegen
 
 > Zwischen Unterschieden springen, zu einer Adresse springen oder auf einem Byte stehen und ablesen, wo man ist.
@@ -29,6 +29,6 @@ Im Vergleichsmodus bewegt der Sprung **beide** Bereiche: sie sind an dieselbe Ad
 
 ## Den anderen Bereich mitführen
 
-Die beiden Bereiche bleiben gekoppelt: Scrollposition, Einfügemarke und Auswahl. Das macht einen Vergleich lesbar. **Darstellung ▸ Bereiche tauschen** vertauscht A und B, falls Sie sie andersherum geöffnet haben.
+Die beiden Bereiche bleiben gekoppelt: Scrollposition, Einfügemarke und Auswahl. Das macht einen Vergleich lesbar. **Darstellung ▸ Bereiche tauschen** tauscht die Dateien zwischen den Bereichen, falls Sie sie andersherum geöffnet haben.
 
 Siehe auch: [[topic:minimap|Die Minimap]] — sich durch Zeigen bewegen statt über Adressen.

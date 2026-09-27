@@ -37,6 +37,6 @@ In comparison mode the jump moves **both** panes: they are locked to the same ad
 
 ## Following the other pane
 
-The two panes stay locked: scroll position, caret and selection. That is what makes a comparison readable. **View ▸ Swap Panels** exchanges A and B if you opened them the wrong way round.
+The two panes stay locked: scroll position, caret and selection. That is what makes a comparison readable. **View ▸ Swap Panels** exchanges the files between the panes if you opened them the wrong way round.
 
 See also: [[topic:minimap|The minimap]] for moving by pointing rather than by address.
