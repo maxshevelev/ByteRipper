@@ -1,4 +1,4 @@
-@source-sha e4569ebe87f63bce99430d872ca9b633f5ffdf4eff0e8c7653b12d480cd561cd
+@source-sha bebe23178dcc4682aa11b1228cdd408139c01d326fe8734f3215397e2b23cde4
 # Was die Farben bedeuten
 
 > Ein orangefarbener Hintergrund sagt „anders als in der anderen Datei“. Roter Text sagt „geändert und noch nicht gesichert“.
@@ -9,7 +9,7 @@ Die beiden Zustände sind mit Absicht getrennt, und ein Byte kann beide zugleich
 
 Im Vergleichsmodus wird jedes Byte, das sich vom Byte an **derselben Adresse** in der anderen Datei unterscheidet, **orange** hinterlegt: eine lasierende Fläche über den eigenen Ebenen des Dumps, die diese daher nicht verdeckt. Sonst nutzt nichts diesen Hintergrund.
 
-Die Farbe ist nicht einstellbar; das dunkle Erscheinungsbild nimmt ihre dunklere Variante, die ebenfalls orange ist. Die [[topic:minimap|Minimap]] kennzeichnet Unterschiede in derselben Farbe.
+Das dunkle Erscheinungsbild verwendet ihre dunklere Variante, die ebenfalls orange ist. Die [[topic:minimap|Minimap]] kennzeichnet Unterschiede in derselben Farbe.
 
 Ist eine Datei kürzer, gelten die Bytes, die nur die längere hat, ebenfalls als Unterschiede, und die kürzere zeigt an ihrer Stelle leere EOF-Zellen in einem eigenen, gedämpften Stil, damit ein zu kurz gelesener Dump nicht wie eine Datei voller Nullen aussieht.
 
@@ -30,4 +30,4 @@ Ein Byte, das sowohl von der anderen Datei abweicht als auch geändert wurde, tr
 - **Eine Zeile mit Lesezeichen** stellt ihre Adresse auf einem **violetten** Pfeil dar, und in derselben Farbe ist das Lesezeichen am Rand der Minimap markiert. Markiert wird die Zeile, nicht die Bytes, und die vorstehenden Zustände bleiben davon unberührt.
 - **Zonen**, mit denen ein [[topic:tools-overview|Werkzeug]] den Byte-Bereich einer Struktur markiert, werden für die Zone im Fokus **blau** und für die übrigen **gelb** umrissen. Eine Zone ist ein Umriss samt Tönung, keine Füllung, und kann deshalb über Unterschieden liegen, ohne sie zu verdecken.
 
-ByteRipper folgt dem Erscheinungsbild des Systems, jede dieser Farben hat also auch eine dunkle Fassung. Die Farben selbst sind nicht einstellbar: In den [[topic:settings|Einstellungen ▸ Darstellung]] werden Schrift, Schriftgröße und Zeilenhöhe festgelegt.
+ByteRipper folgt dem Erscheinungsbild des Systems, jede dieser Farben hat also auch eine dunkle Fassung.

@@ -1,9 +1,9 @@
-@source-sha b035d4fa7a3f3785c961f3507a83c116d555a646e93fb005d94d41ac8001a003
+@source-sha d3dcb36e1baa80e4d7c47dcb6a5c58eda771a32d64118e0657c0a484709b99ec
 # Lesezeichen
 
 > Markierte Adressen, zu denen schnell zurückgekehrt werden kann: auf der Zeile angezeigt und beiden Bereichen gemeinsam.
 
-**⌘D** setzt ein Lesezeichen auf der Zeile, auf der die Einfügemarke steht, oder entfernt ein vorhandenes. Die Adresse dieser Zeile wird dann auf einem farbigen Pfeil dargestellt, und die Zeile wird am Rand der [[topic:minimap|Minimap]] durch einen farbigen Zeiger markiert.
+**⌘D** setzt ein Lesezeichen auf der Zeile, auf der die Einfügemarke steht, oder entfernt ein vorhandenes. Die Adresse dieser Zeile wird dann auf einem violetten Pfeil dargestellt, und die Zeile wird in derselben Farbe am Rand der [[topic:minimap|Minimap]] markiert.
 
 - **⇧⌘D** gibt dem Lesezeichen einen Namen oder ändert den vorhandenen. Ein Lesezeichen ohne Namen zeigt seine Adresse.
 - **⌘L** öffnet „Gehe zu“, und die untere Hälfte dieses Fensters ist die Lesezeichenliste: Tab bringt die Tastatur hinein, Return springt zum ausgewählten Lesezeichen.
@@ -14,7 +14,7 @@ Ein Lesezeichen markiert eine **Zeile**, kein Byte: Die Adresse wird auf ein Vie
 
 Ein Lesezeichen hält eine **absolute Adresse** und gehört zum Fenster, nicht zu einer Datei. In einem Vergleich zeigen beide Bereiche dasselbe Lesezeichen auf derselben Höhe, sodass `0x1FE000` in beiden Dumps auf dieselbe Stelle verweist.
 
-Weil die Adresse absolut ist, verschiebt das Einfügen oder Löschen von Bytes den Inhalt, nicht aber das Lesezeichen. Eine Markierung, die mit den Bytes wandert, ist ein [[topic:segments|Segmentschnitt]].
+Weil die Adresse absolut ist, verschiebt das Einfügen oder Löschen von Bytes den Inhalt, nicht aber das Lesezeichen. Anders als ein Lesezeichen ist ein [[topic:segments|Segmentschnitt]] eine Markierung, die mit den Bytes wandert, wenn sich Daten in der Datei verschieben.
 
 Lesezeichen bestehen, solange das Fenster besteht, nicht die Datei: Eine Datei zu schließen und wieder zu öffnen behält sie.
 

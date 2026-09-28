@@ -1,4 +1,4 @@
-@source-sha ea0adeb4f4bf003fdff91c41dcfd1914a3fc0e22ec651fda21e395bdcdd74cb0
+@source-sha 406e4f09da3d6d95bdf64a973da82fdc713f90c978c0410c9c730517034d4a97
 # Die Minimap
 
 > Die Gestalt des ganzen Dumps in einer Spalte und die Bewegung darin mit dem Zeiger.
@@ -16,10 +16,10 @@ Eine kleine Datei öffnet lokal, eine große in der Übersicht. Die Übersicht w
 
 ## Was sie markiert
 
-- **Unterschiede** in der Unterschiedsfarbe — deshalb ist sie beim Vergleichen nützlich: man sieht sofort, ob sich zwei Dumps in einem Block unterscheiden oder überall.
+- **Unterschiede** in Orange, was in einer Ansicht zeigt, ob zwei Dumps sich in einem Block oder durchgehend unterscheiden.
 - **Ungesicherte Änderungen.**
 - **Suchtreffer** als Tintenstriche, der aktuelle als helle Platte.
-- **Zeilen mit Lesezeichen**, am Rand.
+- **Zeilen mit Lesezeichen**, violett, am Rand.
 - **Zonen**, die ein [[topic:tools-overview|Werkzeug]] veröffentlicht hat, sodass die Regionen des Images als Bänder sichtbar werden.
 
 Ein Klick in die Karte bewegt die Einfügemarke an die angeklickte Stelle. Das Ziehen des Ansichtsrahmens scrollt den Bereich.

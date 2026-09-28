@@ -5,7 +5,7 @@
 @covers menu.edit.bookmark-toggle
 @covers menu.edit.bookmark-edit
 
-**⌘D** sets a bookmark on the row the caret is on, or removes the one that is there. The address of that row is then drawn on a coloured arrow, and the row is marked in the margin of the [[topic:minimap|minimap]] by a coloured pointer.
+**⌘D** sets a bookmark on the row the caret is on, or removes the one that is there. The address of that row is then drawn on a purple arrow, and the row is marked in the same colour in the margin of the [[topic:minimap|minimap]].
 
 - **⇧⌘D** gives the bookmark a name, or edits the name it has. A bookmark with no name displays its address.
 - **⌘L** opens Go To, and the lower half of that window is the bookmark list: Tab moves the keyboard into it, Return jumps to the selected bookmark.
@@ -16,7 +16,7 @@ A bookmark marks a **row**, not a byte: the address is rounded down to a multipl
 
 A bookmark is an **absolute address**, and it belongs to the window rather than to a file. In a comparison both panes display the same bookmark at the same height, so that `0x1FE000` refers to the same place in both dumps.
 
-Because the address is absolute, inserting or deleting bytes moves the content but not the bookmark. A mark that travels with the bytes is a [[topic:segments|segment]] cut instead.
+Because the address is absolute, inserting or deleting bytes moves the content but not the bookmark. Unlike a bookmark, a [[topic:segments|segment]] cut is a mark that travels with the bytes when data in the file shifts.
 
 Bookmarks last as long as the window, not as long as the file: closing a file and reopening it retains them.
 

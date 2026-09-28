@@ -19,10 +19,10 @@ A small file opens in Local, a big one in Overview. Overview is only offered whi
 
 ## What it marks
 
-- **Differences**, in the difference colour, which shows in one view whether two dumps differ in a single block or throughout.
+- **Differences**, in orange, which shows in one view whether two dumps differ in a single block or throughout.
 - **Unsaved edits**.
 - **Search matches**, as strokes, with the current one as a bright plate.
-- **Bookmarked rows**, in the margin.
+- **Bookmarked rows**, in purple, in the margin.
 - **Zones** published by a [[topic:tools-overview|tool panel]], which renders the regions of an image as bands.
 
 A click in the map moves to the position clicked. Dragging the viewport box scrolls the pane.

@@ -1,4 +1,4 @@
-@source-sha 479126d937f533f62f47b8cdbb0837623782c986ed2e16d11c3e7a76adce0b4c
+@source-sha b04618d5c7b83f5ec0fe6aec0c3b8159cf51a2af0ca2760ed5a0249591523ff7
 @term dump
 @name Dump
 @short Der Inhalt eines Chips, in eine Datei ausgelesen.
@@ -67,7 +67,7 @@ Für sich genommen bedeutet eine GUID nichts — deshalb lädt das Programm eine
 
 @term zone
 @name Zone
-@short Der farbige Umriss, mit dem ein Werkzeug einen Byte-Bereich im Dump markiert.
+@short Der Umriss, mit dem ein Werkzeug einen Byte-Bereich im Dump markiert: blau im Fokus, sonst gelb.
 
 Wählen Sie eine Zeile in einem Werkzeugbereich, veröffentlicht er deren Byte-Bereich als Zone: ein Umriss samt Tönung über diesen Bytes in der Hex-Ansicht und ein Band in der [[topic:minimap|Minimap]].
 

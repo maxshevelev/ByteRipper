@@ -66,7 +66,7 @@ GUIDs mean nothing on their own, which is why the app fetches a [[topic:database
 
 @term zone
 @name Zone
-@short The coloured outline a tool draws over a byte range in the dump.
+@short The outline — blue in focus, yellow otherwise — a tool draws over a byte range in the dump.
 
 Selecting a row in a tool publishes that row's byte range as a zone: an outline and a tint over those bytes in the hex view and a band in the [[topic:minimap|minimap]].
 
