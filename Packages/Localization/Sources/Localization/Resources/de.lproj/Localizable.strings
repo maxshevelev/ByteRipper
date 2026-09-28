@@ -25,6 +25,10 @@
 "%1$@ bytes" = "%1$@ Bytes";
 "%1$@ bytes (%2$@ rows)" = "%1$@ Bytes (%2$@ Zeilen)";
 "%1$@ came from it, but it is no longer there to go back to. Nothing in the dump was changed." = "%1$@ stammt daraus, aber es ist nicht mehr da, um zurückzukehren. Im Dump wurde nichts geändert.";
+"%1$@ came from “%2$@”, and has been changed since." = "%1$@ stammt aus „%2$@“ und wurde seitdem geändert.";
+"%1$@ came from “%2$@”, and still holds its bytes." = "%1$@ stammt aus „%2$@“ und enthält weiterhin dessen Bytes.";
+"%1$@ came from “%2$@”, which can no longer be read." = "%1$@ stammt aus „%2$@“, das sich nicht mehr lesen lässt.";
+"%1$@ came from “%2$@”, which is %3$@ there against %4$@ here." = "%1$@ stammt aus „%2$@“: dort %3$@, hier %4$@.";
 "%1$@ conflicting changes" = "%1$@ abweichende Änderungen";
 "%1$@ data did not decompress" = "%1$@-Daten ließen sich nicht entpacken";
 "%1$@ differs" = "%1$@ weicht ab";
@@ -546,6 +550,7 @@
 "Segment" = "Segment";
 "Segment description" = "Segmentbeschreibung";
 "Segment source changed on disk" = "Segmentquelle auf dem Volume geändert";
+"Segments — %1$@" = "Segmente — %1$@";
 "Segments" = "Segmente";
 "Segments…" = "Segmente…";
 "Select All" = "Alles auswählen";
@@ -713,14 +718,17 @@
 "compressed" = "komprimiert";
 "conflicting changes" = "abweichende Änderungen";
 "differing %1$@" = "Unterschiede %1$@";
+"edited" = "geändert";
 "empty slot" = "leerer Slot";
 "empty slot (FF FF FF FF)" = "leerer Slot (FF FF FF FF)";
 "erased" = "gelöscht";
 "file body" = "Datei-Rumpf";
 "file header" = "Datei-Kopf";
+"file missing" = "Datei fehlt";
 "fit|Offset" = "Offset in der Datei";
 "fixed" = "fest";
 "github.com answered %1$@." = "github.com antwortete %1$@.";
+"length changed" = "Länge geändert";
 "menu|Edit" = "Bearbeiten";
 "menu|File" = "Ablage";
 "menu|Help" = "Hilfe";

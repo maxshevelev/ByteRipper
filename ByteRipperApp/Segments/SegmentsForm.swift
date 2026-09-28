@@ -110,7 +110,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         // partition is shown (§21.4) — "Segments — <file>", or just "Segments"
         // for an untitled pane, which has no file to name.
         let fileName = pane.isUntitled ? "" : (pane.document?.url.lastPathComponent ?? "")
-        title = fileName.isEmpty ? "Segments" : "Segments — \(fileName)"
+        title = fileName.isEmpty ? L("Segments") : L("Segments — %1$@", fileName)
     }
 
     @available(*, unavailable)
@@ -957,28 +957,36 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
     static func linkReason(_ state: PaneViewModel.SegmentLinkState) -> String? {
         switch state {
         case .matching: return nil
-        case .edited: return "edited"
-        case .lengthChanged: return "length changed"
-        case .missing: return "file missing"
+        case .edited: return L("edited")
+        case .lengthChanged: return L("length changed")
+        case .missing: return L("file missing")
         }
     }
 
     /// What the row says under the pointer — the same shape the pane header's
     /// link explains itself with.
+    ///
+    /// Each state is one whole sentence rather than a stem with a tail glued
+    /// on: the piece's label and the file's path sit in different places in
+    /// different languages, and a sentence assembled by `+` can only be
+    /// translated into the word order English happens to have.
     static func linkExplanation(_ state: PaneViewModel.SegmentLinkState,
                                 source: SegmentSources.Source,
                                 segment: Segment) -> String {
-        let from = "\(segment.label) came from “\(source.url.path)”"
+        let label = segment.label
+        let path = source.url.path
         switch state {
         case .matching:
-            return from + ", and still holds its bytes."
+            return L("%1$@ came from “%2$@”, and still holds its bytes.", label, path)
         case .edited:
-            return from + ", and has been changed since."
+            return L("%1$@ came from “%2$@”, and has been changed since.", label, path)
         case .lengthChanged(let piece, let sourceLength):
-            return from + ", which is \(FilePaneView.friendlySize(sourceLength)) there "
-                + "against \(FilePaneView.friendlySize(piece)) here."
+            return L("%1$@ came from “%2$@”, which is %3$@ there against %4$@ here.",
+                     label, path,
+                     FilePaneView.friendlySize(sourceLength),
+                     FilePaneView.friendlySize(piece))
         case .missing:
-            return from + ", which can no longer be read."
+            return L("%1$@ came from “%2$@”, which can no longer be read.", label, path)
         }
     }
 

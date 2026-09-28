@@ -25,6 +25,10 @@
 "%1$@ bytes" = "байт: %1$@";
 "%1$@ bytes (%2$@ rows)" = "%1$@ байт (%2$@ строк)";
 "%1$@ came from it, but it is no longer there to go back to. Nothing in the dump was changed." = "%1$@ взят оттуда, но возвращаться уже некуда. В дампе ничего не изменено.";
+"%1$@ came from “%2$@”, and has been changed since." = "%1$@ пришёл из «%2$@» и был изменён после этого.";
+"%1$@ came from “%2$@”, and still holds its bytes." = "%1$@ пришёл из «%2$@» и по-прежнему содержит его байты.";
+"%1$@ came from “%2$@”, which can no longer be read." = "%1$@ пришёл из «%2$@», который больше не читается.";
+"%1$@ came from “%2$@”, which is %3$@ there against %4$@ here." = "%1$@ пришёл из «%2$@»: там %3$@, здесь %4$@.";
 "%1$@ conflicting changes" = "Расхождений: %1$@";
 "%1$@ data did not decompress" = "данные %1$@ не распаковались";
 "%1$@ differs" = "%1$@ не совпал";
@@ -546,6 +550,7 @@
 "Segment" = "Сегмент";
 "Segment description" = "Описание сегмента";
 "Segment source changed on disk" = "Источник сегмента изменился на диске";
+"Segments — %1$@" = "Сегменты — %1$@";
 "Segments" = "Сегменты";
 "Segments…" = "Сегменты…";
 "Select All" = "Выделить всё";
@@ -713,14 +718,17 @@
 "compressed" = "сжатый";
 "conflicting changes" = "расхождения";
 "differing %1$@" = "различий %1$@";
+"edited" = "изменён";
 "empty slot" = "пустой слот";
 "empty slot (FF FF FF FF)" = "пустой слот (FF FF FF FF)";
 "erased" = "стёртый";
 "file body" = "тело файла";
 "file header" = "заголовок файла";
+"file missing" = "файл недоступен";
 "fit|Offset" = "Адрес в файле";
 "fixed" = "фиксированный";
 "github.com answered %1$@." = "github.com ответил %1$@.";
+"length changed" = "длина изменилась";
 "menu|Edit" = "Правка";
 "menu|File" = "Файл";
 "menu|Help" = "Справка";
