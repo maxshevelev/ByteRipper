@@ -1,14 +1,16 @@
 # What the Colours Mean
 
-> Background says "different from the other file". Red text says "changed and not yet saved".
+> An orange background says "different from the other file". Red text says "changed and not yet saved".
 
 @covers settings.comparison
 
 The two states are separate on purpose, and a byte can wear both at once.
 
-## Difference — a background colour
+## Difference — an orange background
 
-In comparison mode, every byte that differs from the byte at the **same address** in the other file is given the difference background. Nothing else uses that background.
+In comparison mode, every byte that differs from the byte at the **same address** in the other file is painted **orange**: a translucent wash over the dump's own layers, which it therefore does not hide. Nothing else uses that background.
+
+The colour is not configurable; the dark appearance takes its darker variant, which is orange as well. The [[topic:minimap|minimap]] marks differences in the same colour.
 
 If one file is shorter, the bytes that only the longer file has are differences too, and the shorter file shows empty EOF cells in their place — a muted, distinct style, so a short read never looks like a file full of zeros.
 

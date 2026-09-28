@@ -4,7 +4,7 @@
 
 1. Open the dump to be examined: **File ▸ Open…** (⌘O), or drag the file onto the window.
 2. Open the second file the same way. It lands in the other file pane, and the comparison starts automatically.
-3. Observe the colour of the bytes. Every byte that differs between the two files is painted with the difference background. A long stretch of colour means a whole area differs; isolated cells mean individual bytes differ.
+3. Observe the colour of the bytes. Every byte that differs between the two files is painted **orange**. A long stretch of colour means a whole area differs; isolated cells mean individual bytes differ.
 4. Move between the differences: **⌥⌘→** to the next one, **⌥⌘←** to the previous one. The status bar reports the proportion of the image that differs — `differing 0.4%` — counted per byte against the length of the longer file.
 5. The status bar reports the address of the current caret position.
 6. Turn on a tool — **Tools ▸ UEFI Structure**. It decodes the structure of the file and presents the dump as a tree of named regions and volumes. **Reveal node at caret** in the panel's header opens the node of that tree which the caret's address falls in.

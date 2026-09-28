@@ -1,13 +1,15 @@
-@source-sha 8d3d53c8287c12e41cf5d23eabc32c115e04bbc87a0174641ea92b0cd99c03a9
+@source-sha 4acb9993b2376f850452e7878b9fd1c0b3fc1d028ba27f2dff81fe0285ae44c8
 # Was die Farben bedeuten
 
-> Der Hintergrund sagt „anders als in der anderen Datei“. Roter Text sagt „geändert und noch nicht gesichert“.
+> Ein orangefarbener Hintergrund sagt „anders als in der anderen Datei“. Roter Text sagt „geändert und noch nicht gesichert“.
 
 Die beiden Zustände sind mit Absicht getrennt, und ein Byte kann beide zugleich tragen.
 
-## Unterschied — eine Hintergrundfarbe
+## Unterschied — ein orangefarbener Hintergrund
 
-Im Vergleichsmodus bekommt jedes Byte, das sich vom Byte an **derselben Adresse** in der anderen Datei unterscheidet, den Unterschieds-Hintergrund. Sonst nutzt ihn nichts.
+Im Vergleichsmodus wird jedes Byte, das sich vom Byte an **derselben Adresse** in der anderen Datei unterscheidet, **orange** hinterlegt: eine lasierende Fläche über den eigenen Ebenen des Dumps, die diese daher nicht verdeckt. Sonst nutzt nichts diesen Hintergrund.
+
+Die Farbe ist nicht einstellbar; das dunkle Erscheinungsbild nimmt ihre dunklere Variante, die ebenfalls orange ist. Die [[topic:minimap|Minimap]] kennzeichnet Unterschiede in derselben Farbe.
 
 Ist eine Datei kürzer, gelten die Bytes, die nur die längere hat, ebenfalls als Unterschiede, und die kürzere zeigt an ihrer Stelle leere EOF-Zellen in einem eigenen, gedämpften Stil, damit ein zu kurz gelesener Dump nicht wie eine Datei voller Nullen aussieht.
 
