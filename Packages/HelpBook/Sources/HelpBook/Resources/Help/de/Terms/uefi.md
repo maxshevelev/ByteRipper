@@ -1,11 +1,11 @@
-@source-sha 10e681d8895ddb4345f8400427d74061d72c54e44aedd5a7b9bd8f87d420151d
+@source-sha 447ec9090ae162e30a7bfe19a18250266f9098f7070e44d4374d0e9dcf832fdd
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
 
 Der Descriptor liegt ganz am Anfang des Dumps und sagt, wo jede [[term:region|Region]] beginnt und endet, welche [[term:flash-master|Master]] sie lesen oder beschreiben dürfen und wie die Straps des Chips gesetzt sind.
 
-Er ist die einzige Struktur hier mit echter Hersteller-Dokumentation — beschrieben in Intels Programming Guides zum Chipsatz —, was dem Panel hier mehr als Reverse Engineering unter die Füße legt.
+Er ist die einzige Struktur hier mit echter Hersteller-Dokumentation — beschrieben in Intels Programming Guides zum Chipsatz —, sodass das, was das Werkzeug darüber sagt, auf mehr als Reverse Engineering ruht.
 
 Ist der Descriptor beschädigt, ist jede danach gerechnete Adresse unzuverlässig.
 
@@ -144,7 +144,7 @@ Eine Zeile mit lesbarem Namen wie „DxeCore“ ist eine FFS-Datei, deren GUID d
 @see term:pad-file
 
 @term pad-file
-@name Füll-Datei
+@name Padding-Datei
 @short Eine Datei, die es nur gibt, damit die nächste echte Datei dort beginnt, wo sie soll.
 
 Eine GUID hat sie nur, weil jeder Datei-Header eine hat — in der Regel lauter Einsen —, und sie benennt nichts. Sie zu übergehen kostet nichts.
@@ -155,7 +155,7 @@ Eine GUID hat sie nur, weil jeder Datei-Header eine hat — in der Regel lauter 
 
 Eine Datei besteht aus Sektionen, und Sektionen können ineinander liegen. Die üblichen sind das ausführbare Abbild (PE32), eine komprimierte Sektion (in der wieder Sektionen stecken), eine Oberflächensektion (der lesbare Name der Datei) und eine Versionssektion.
 
-Eine **komprimierte Sektion** kann ByteRipper entpackt öffnen — das Panel klappt sie auf und zeigt, was wirklich darin steckt.
+Eine **komprimierte Sektion** kann ByteRipper entpackt öffnen — das Werkzeug klappt sie auf und zeigt, was wirklich darin steckt.
 
 @see topic:fragments
 
@@ -163,7 +163,7 @@ Eine **komprimierte Sektion** kann ByteRipper entpackt öffnen — das Panel kla
 @name Freier Speicher
 @short Der unbeschriebene Rest eines Volumes hinter seiner letzten Datei.
 
-Das Panel führt ihn mit Absicht auf: daran sieht man, ob noch ein Modul in ein Volume passt, und seine Größe ist eine schnelle Probe darauf, dass das Längenfeld des Volumes stimmt.
+Das Werkzeug führt ihn mit Absicht auf: daran sieht man, ob noch ein Modul in ein Volume passt, und seine Größe ist eine schnelle Probe darauf, dass das Längenfeld des Volumes stimmt.
 
 @see term:padding
 
@@ -344,7 +344,7 @@ Wie ein Board mit Boot Guard hochkommt:
 6. Das Key Manifest bürgt für den Schlüssel, der die [[term:boot-policy|Boot Policy]] signiert; die Boot Policy nennt die Bereiche des [[term:ibb|IBB]] und ihre Hashes; das ACM prüft sie.
 7. Erst dann läuft der [[term:reset-vector|Reset-Vektor]] — innerhalb von Code, der bereits geprüft ist.
 
-Welche Bereiche abgedeckt sind, erklärt das Abbild selbst. Das [[topic:tool-uefi|UEFI-Panel]] zählt diese **geschützten Bereiche** in seiner Zusammenfassungszeile.
+Welche Bereiche abgedeckt sind, erklärt das Abbild selbst. Das [[topic:tool-uefi|UEFI-Werkzeug]] zählt diese **geschützten Bereiche** in seiner Zusammenfassungszeile.
 
 ! Bytes innerhalb eines geschützten Bereichs lassen sich nicht ändern. Die Signatur passt dann nicht mehr, und ohne den privaten Schlüssel des Herstellers ist sie nicht neu zu berechnen. Kein Werkzeug repariert das; genau darin besteht der Sinn der Sache.
 
@@ -381,7 +381,7 @@ Dieser gebrannte Hash ist alles, was das Silizium über den Hersteller weiß: ei
 
 Die Boot Policy nennt die Bereiche, aus denen der [[term:ibb|Initial Boot Block]] besteht, und hält für jeden einen Hash fest, damit das [[term:acm|ACM]] genau diese Bytes prüfen kann. Signiert ist sie mit einem Schlüssel, für den das [[term:key-manifest|Key Manifest]] bürgt — so erbt sie das Vertrauen, das die Fuses begonnen haben.
 
-Die geschützten Bereiche, die das [[topic:tool-uefi|UEFI-Panel]] zählt, sind die, die hier deklariert werden.
+Die geschützten Bereiche, die das [[topic:tool-uefi|UEFI-Werkzeug]] zählt, sind die, die hier deklariert werden.
 
 @see term:key-manifest
 @see term:ibb
@@ -394,7 +394,7 @@ Der IBB ist ungefähr der Code von [[term:sec-phase|SEC]] und [[term:pei-phase|P
 
 Alles danach ist der **OBB**, der „OEM Boot Block“, praktisch die [[term:dxe-phase|DXE]]-Hälfte. Vom IBB wird erwartet, dass er den OBB prüft, bevor er ihn ausführt — mit Code, den der Boardhersteller schreibt. Ob ein bestimmter Hersteller das tut, bleibt ihm überlassen.
 
-Daher kommt es, dass ein Panel manche Bereiche als geschützt kennzeichnet und andere nicht, und dass dieselbe Art von Änderung im einen Teil eines Abbilds unmöglich und im anderen Alltag ist.
+Daher kommt es, dass ein Werkzeug manche Bereiche als geschützt kennzeichnet und andere nicht, und dass dieselbe Art von Änderung im einen Teil eines Abbilds unmöglich und im anderen Alltag ist.
 
 @see term:boot-guard
 @see term:boot-policy

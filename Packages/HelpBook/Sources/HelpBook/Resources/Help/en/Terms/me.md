@@ -107,7 +107,7 @@ On CSME 15 and later the configuration moved into its own flash partitions — E
 @name FITC / OEM Configuration
 @short The settings the board vendor chose, written by Intel's Flash Image Tool.
 
-FIT (Flash Image Tool) is Intel's own utility for assembling a flash image; the vendor uses it to set the engine's options for a board. What it wrote is this partition, and the panel labels it "OEM Configuration".
+FIT (Flash Image Tool) is Intel's own utility for assembling a flash image; the vendor uses it to set the engine's options for a board. What it wrote is this partition, and the tool labels it "OEM Configuration".
 
 The names of these settings — and phrases like "OEM configurable" and paths such as `/home/bup/si_features` — are Intel's own, from that tool's configuration files.
 
@@ -145,7 +145,7 @@ That split is the reason an ME region from a donor is not simply interchangeable
 @name File System State
 @short How far the engine's own file system has been set up: Unconfigured, Configured or Initialized.
 
-The [[term:mfs|MFS]] or [[term:efs|EFS]] volume is the engine's file system. What is inside it says how far this image has travelled from the stock firmware Intel ships, and the [[topic:tool-me|ME panel]] reports it as one row.
+The [[term:mfs|MFS]] or [[term:efs|EFS]] volume is the engine's file system. What is inside it says how far this image has travelled from the stock firmware Intel ships, and the [[topic:tool-me|ME tool]] reports it as one row.
 
 - **Unconfigured** — nothing in the volume says it has been set up at all. A clean image, as it comes from Intel.
 - **Configured** — the vendor's settings are present: OEM Configuration or home-directory files in the volume, or a configuration partition in the image. The board maker has written its answers; the engine has not necessarily ever run.
@@ -166,7 +166,7 @@ Intel added it for a United States government programme, the High Assurance Plat
 
 The engine still starts and still verifies its own firmware. The bit only stops it going further.
 
-ByteRipper does not decode it. Its position moves with the chipset generation and Intel does not document it, so the descriptor panel says how many strap words there are and leaves reading a particular bit to a tool built for that.
+ByteRipper does not decode it. Its position moves with the chipset generation and Intel does not document it, so the tool says how many strap words there are and leaves reading a particular bit to a tool built for that.
 
 ! Setting this bit is not a repair. A board whose ME region is actually damaged usually will not come up at all, and disabling the engine afterwards does not change that.
 
@@ -246,7 +246,7 @@ This is why saving an ME region and restoring it later does not always work the 
 
 The engine's code modules are compressed; some with LZMA, some with a Huffman scheme whose dictionaries are not published. ByteRipper fetches the community dictionaries with the [[topic:databases|ME database]] and can unpack the common versions.
 
-A module the panel shows as Huffman but cannot expand is a module whose dictionary version is not available — not damage.
+A module the tool shows as Huffman but cannot expand is a module whose dictionary version is not available — not damage.
 
 @term iup
 @name IUP (Independently Updated Partition)
@@ -254,7 +254,7 @@ A module the panel shows as Huffman but cannot expand is a module whose dictiona
 
 Parts of the platform firmware are shipped and updated separately from the engine itself — the Power Management Controller, the chipset configuration, the USB Type-C physical layer. Each has its own manifest, version and chipset target.
 
-An IUP from a different chipset stepping is a genuine incompatibility, even when the engine version matches. The panel names the chipset and stepping each IUP is built for.
+An IUP from a different chipset stepping is a genuine incompatibility, even when the engine version matches. The tool names the chipset and stepping each IUP is built for.
 
 @see term:cpd
 
@@ -262,7 +262,7 @@ An IUP from a different chipset stepping is a genuine incompatibility, even when
 @name RBE / BUP / `pm`
 @short The engine's earliest boot modules, and the metadata tables inside them.
 
-`RBE` and `BUP` (bring-up) are the first code the engine runs; `pm` is the power-management module. Their bodies carry metadata tables that name hardware by vendor and device ID, which is what lets the panel say which silicon a firmware is for.
+`RBE` and `BUP` (bring-up) are the first code the engine runs; `pm` is the power-management module. Their bodies carry metadata tables that name hardware by vendor and device ID, which is what lets the tool say which silicon a firmware is for.
 
 Deep internals. Useful to read, not useful to edit.
 
@@ -294,7 +294,7 @@ A mismatch between the SKU in the image and the board is a common reason a donor
 @name GSC
 @short Graphics System Controller firmware — the same container format, for a graphics device.
 
-Some images are not chipset engine firmware at all but firmware for a graphics device, using the same `$FPT`-and-manifests layout. The panel recognises them and reads the "INFO" partition that describes the image and the partitions in it.
+Some images are not chipset engine firmware at all but firmware for a graphics device, using the same `$FPT`-and-manifests layout. The tool recognises them and reads the "INFO" partition that describes the image and the partitions in it.
 
 @term orom
 @name Option ROM (OROM)
@@ -314,7 +314,7 @@ The layout before `$CPD`: older generations of ME firmware list their modules in
 @name CSE Layout Table
 @short The map of a whole-flash IFWI image: where the boot, data and temporary areas are.
 
-On newer platforms the flash holds an IFWI image whose parts are described by a layout table rather than by a single `$FPT`. The panel reads it to find where the partition table itself lives.
+On newer platforms the flash holds an IFWI image whose parts are described by a layout table rather than by a single `$FPT`. The tool reads it to find where the partition table itself lives.
 
 @see term:fpt
 @see term:bpdt

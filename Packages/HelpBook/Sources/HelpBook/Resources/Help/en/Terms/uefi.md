@@ -4,7 +4,7 @@
 
 The descriptor sits at the very start of the dump and says where every [[term:region|region]] begins and ends, which [[term:flash-master|masters]] may read or write each one, and how the chip's own straps are configured.
 
-It is the one structure here with real vendor documentation — it is described in Intel's chipset programming guides — so what the panel says about it rests on more than reverse engineering.
+It is the one structure here with real vendor documentation — it is described in Intel's chipset programming guides — so what the tool says about it rests on more than reverse engineering.
 
 If the descriptor is damaged, every address that follows it is unreliable.
 
@@ -154,7 +154,7 @@ It has a GUID because every file header does — usually all ones — and that G
 
 A file is made of sections, and sections can nest. The common ones are the executable image (PE32), a compressed section (which holds more sections inside it), a user-interface section (the readable name of the file) and a version section.
 
-A **compressed section** can be opened decompressed in ByteRipper — the panel expands it and shows you what is actually inside.
+A **compressed section** can be opened decompressed in ByteRipper — the tool expands it and shows what is actually inside.
 
 @see topic:fragments
 
@@ -162,7 +162,7 @@ A **compressed section** can be opened decompressed in ByteRipper — the panel 
 @name Free space
 @short The unwritten room left in a volume after its last file.
 
-Listed by the panel on purpose: it is what tells you whether a module could be added to a volume, and its size is a quick sanity check that the volume's own length field is right.
+Listed by the tool on purpose: it is what tells you whether a module could be added to a volume, and its size is a quick sanity check that the volume's own length field is right.
 
 @see term:padding
 
@@ -343,7 +343,7 @@ How a Boot Guard board comes up:
 6. The Key Manifest vouches for the key that signs the [[term:boot-policy|Boot Policy]]; the Boot Policy names the ranges of the [[term:ibb|IBB]] and their hashes; the ACM verifies them.
 7. Only then does the [[term:reset-vector|reset vector]] run, inside code that has already been checked.
 
-The image declares which ranges are covered. The [[topic:tool-uefi|UEFI panel]] counts those **protected ranges** in its summary line.
+The image declares which ranges are covered. The [[topic:tool-uefi|UEFI tool]] counts those **protected ranges** in its summary line.
 
 ! Bytes inside a protected range cannot be changed. The signature will not match, and it cannot be recomputed without the vendor's private key. No tool fixes this; it is the point of the feature.
 
@@ -380,7 +380,7 @@ That fused hash is the whole of what the silicon knows about the vendor — one 
 
 The Boot Policy names the ranges that make up the [[term:ibb|Initial Boot Block]] and records a hash for each, so the [[term:acm|ACM]] can verify precisely those bytes. It is signed by a key the [[term:key-manifest|Key Manifest]] vouches for, which is how it inherits the trust the fuses started.
 
-The protected ranges the [[topic:tool-uefi|UEFI panel]] counts are the ones this manifest declares.
+The protected ranges the [[topic:tool-uefi|UEFI tool]] counts are the ones this manifest declares.
 
 @see term:key-manifest
 @see term:ibb
@@ -393,7 +393,7 @@ The IBB is roughly the [[term:sec-phase|SEC]] and [[term:pei-phase|PEI]] code: t
 
 Everything after it is the **OBB**, the "OEM Boot Block" — in practice the [[term:dxe-phase|DXE]] half. The IBB is expected to verify the OBB before running it, using code the board vendor writes. Whether a given vendor actually does is up to that vendor.
 
-This is why a panel marks some ranges as protected and others not, and why the same kind of edit can be impossible in one part of an image and routine in another.
+This is why a tool marks some ranges as protected and others not, and why the same kind of edit can be impossible in one part of an image and routine in another.
 
 @see term:boot-guard
 @see term:boot-policy

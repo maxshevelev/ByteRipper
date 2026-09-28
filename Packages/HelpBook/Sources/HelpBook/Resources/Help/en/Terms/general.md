@@ -17,7 +17,7 @@ Offsets in ByteRipper are zero-based and shown in hex. Offset `0` is the first b
 
 Everywhere the app takes an offset from you, hex needs the `0x` prefix and decimal needs no prefix.
 
-Ranges inside the app are half-open: `[start, end)`, where the end is the first byte *not* included. A dialog may let you type an inclusive end, and converts it for you.
+Where a range is given as a start and an end, the end is the address of the **last** byte of the range, not of the first byte after it.
 
 @see topic:navigation
 
@@ -66,9 +66,9 @@ GUIDs mean nothing on their own, which is why the app fetches a [[topic:database
 
 @term zone
 @name Zone
-@short The coloured outline a tool panel draws over a byte range in the dump.
+@short The coloured outline a tool draws over a byte range in the dump.
 
-When you select a row in a tool panel, it publishes that row's byte range as a zone: an outline and a tint over those bytes in the hex view and a band in the [[topic:minimap|minimap]].
+Selecting a row in a tool publishes that row's byte range as a zone: an outline and a tint over those bytes in the hex view and a band in the [[topic:minimap|minimap]].
 
 A zone is an outline rather than a background fill, so it never hides a difference or an unsaved edit underneath it.
 

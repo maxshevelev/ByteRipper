@@ -1,4 +1,4 @@
-@source-sha b1d66ebfbc1ed823761b22f5c18c54b4db55fea09d46f107334b79aa73418514
+@source-sha 3a47e3a2101272e30de3c52546adbf6abbd6e323fba8af052ea73c03778a42b6
 @term me
 @name Intel ME / CSME
 @short Ein kleiner Prozessor im Chipsatz, mit eigener Firmware in einer eigenen Flash-Region.
@@ -108,7 +108,7 @@ Ab CSME 15 ist die Konfiguration in eigene Flash-Partitionen gewandert — EFS u
 @name FITC / OEM-Konfiguration
 @short Die Einstellungen, die der Platinenhersteller gewählt hat, geschrieben von Intels Flash Image Tool.
 
-FIT (Flash Image Tool) ist Intels eigenes Werkzeug zum Zusammenbauen eines Flash-Images; damit setzt der Hersteller die Optionen der Engine für eine Platine. Was es geschrieben hat, ist diese Partition, und das Panel beschriftet sie mit „OEM Configuration“.
+FIT (Flash Image Tool) ist Intels eigenes Werkzeug zum Zusammenbauen eines Flash-Images; damit setzt der Hersteller die Optionen der Engine für eine Platine. Was es geschrieben hat, ist diese Partition, und das Werkzeug beschriftet sie mit „OEM Configuration“.
 
 Die Namen dieser Einstellungen — und Wendungen wie „OEM configurable“ und Pfade wie `/home/bup/si_features` — sind Intels eigene, aus den Konfigurationsdateien jenes Werkzeugs.
 
@@ -146,7 +146,7 @@ Diese Zweiteilung ist der Grund, warum eine ME-Region von einem Spender nicht ei
 @name File System State
 @short Wie weit das eigene Dateisystem der Engine eingerichtet ist: Unconfigured, Configured oder Initialized.
 
-Das [[term:mfs|MFS]]- oder [[term:efs|EFS]]-Volume ist das Dateisystem der Engine. Woraus es besteht, sagt, wie weit dieses Abbild von der Stock-Firmware entfernt ist, die Intel ausliefert, und das [[topic:tool-me|ME-Panel]] zeigt es als eine Zeile.
+Das [[term:mfs|MFS]]- oder [[term:efs|EFS]]-Volume ist das Dateisystem der Engine. Woraus es besteht, sagt, wie weit dieses Abbild von der Stock-Firmware entfernt ist, die Intel ausliefert, und das [[topic:tool-me|ME-Werkzeug]] zeigt es als eine Zeile.
 
 - **Unconfigured** — nichts im Volume sagt, dass es überhaupt eingerichtet wurde. Ein sauberes Abbild, so wie es von Intel kommt.
 - **Configured** — die Einstellungen des Herstellers sind da: Dateien der OEM Configuration oder des Home-Verzeichnisses im Volume oder eine Konfigurationspartition im Abbild. Der Boardhersteller hat seine Antworten geschrieben; die Engine muss dafür nie gelaufen sein.
@@ -167,7 +167,7 @@ Intel hat es für ein US-Regierungsprogramm eingebaut, die High Assurance Platfo
 
 Die Engine startet weiterhin und prüft weiterhin ihre eigene Firmware. Das Bit hält sie nur davon ab, weiterzugehen.
 
-ByteRipper dekodiert es nicht. Seine Position wandert mit der Chipsatzgeneration, und Intel dokumentiert sie nicht — deshalb nennt das Deskriptor-Panel die Anzahl der Strap-Wörter und überlässt das Lesen eines bestimmten Bits einem Werkzeug, das dafür gebaut ist.
+ByteRipper dekodiert es nicht. Seine Position wandert mit der Chipsatzgeneration, und Intel dokumentiert sie nicht — deshalb nennt das Werkzeug die Anzahl der Strap-Wörter und überlässt das Lesen eines bestimmten Bits einem Werkzeug, das dafür gebaut ist.
 
 ! Dieses Bit zu setzen ist keine Reparatur. Ein Board mit tatsächlich beschädigter ME-Region kommt meist gar nicht hoch, und die Engine abzuschalten ändert daran nichts.
 
@@ -247,7 +247,7 @@ Deshalb führt es nicht immer zum erwarteten Ergebnis, eine ME-Region zu sichern
 
 Der Code der Engine ist komprimiert: teils mit LZMA, teils mit einem Huffman-Verfahren, dessen Wörterbücher nicht veröffentlicht sind. ByteRipper lädt die Wörterbücher der Gemeinschaft zusammen mit der [[topic:databases|ME-Datenbank]] und entpackt die gängigen Versionen.
 
-Ein Modul, das das Panel als Huffman anzeigt, aber nicht aufklappt, ist eines, für dessen Wörterbuch-Version kein Wörterbuch vorliegt — kein Schaden.
+Ein Modul, das das Werkzeug als Huffman anzeigt, aber nicht aufklappt, ist eines, für dessen Wörterbuch-Version kein Wörterbuch vorliegt — kein Schaden.
 
 @term iup
 @name IUP (Independently Updated Partition)
@@ -263,7 +263,7 @@ Ein IUP von einem anderen Chipsatz-Stepping ist eine tatsächliche Inkompatibili
 @name RBE / BUP / `pm`
 @short Die frühesten Boot-Module der Engine und die Metadatentabellen darin.
 
-`RBE` und `BUP` (Bring-up) sind der erste Code, den die Engine ausführt; `pm` ist das Modul für die Energieverwaltung. In ihren Rümpfen liegen Metadatentabellen, die Hardware über Vendor- und Device-ID benennen — daran erkennt das Panel, für welches Silizium eine Firmware gebaut ist.
+`RBE` und `BUP` (Bring-up) sind der erste Code, den die Engine ausführt; `pm` ist das Modul für die Energieverwaltung. In ihren Rümpfen liegen Metadatentabellen, die Hardware über Vendor- und Device-ID benennen — daran erkennt das Werkzeug, für welches Silizium eine Firmware gebaut ist.
 
 Tiefe Interna. Zu lesen nützlich, zu ändern nicht.
 
@@ -295,7 +295,7 @@ Ein Auseinanderfallen von SKU im Image und Platine ist ein häufiger Grund, waru
 @name GSC
 @short Firmware des Graphics System Controller — dasselbe Containerformat, für ein Grafikgerät.
 
-Manche Images sind gar keine Chipsatz-Engine-Firmware, sondern Firmware für ein Grafikgerät in derselben Aufteilung aus `$FPT` und Manifesten. Das Panel erkennt sie und liest die Partition „INFO“, die das Image und seine Partitionen beschreibt.
+Manche Images sind gar keine Chipsatz-Engine-Firmware, sondern Firmware für ein Grafikgerät in derselben Aufteilung aus `$FPT` und Manifesten. Das Werkzeug erkennt sie und liest die Partition „INFO“, die das Image und seine Partitionen beschreibt.
 
 @term orom
 @name Option-ROM (OROM)
@@ -315,7 +315,7 @@ Die Aufteilung vor `$CPD`: ältere ME-Firmware-Generationen führen ihre Module 
 @name CSE Layout Table
 @short Die Karte eines vollständigen IFWI-Images: wo Boot-, Daten- und Temp-Bereiche liegen.
 
-Auf neueren Plattformen liegt im Flash ein IFWI-Image, dessen Teile von einer Layout-Tabelle statt von einer einzelnen `$FPT` beschrieben werden. Das Panel liest sie, um zu finden, wo die Partitionstabelle selbst liegt.
+Auf neueren Plattformen liegt im Flash ein IFWI-Image, dessen Teile von einer Layout-Tabelle statt von einer einzelnen `$FPT` beschrieben werden. Das Werkzeug liest sie, um zu finden, wo die Partitionstabelle selbst liegt.
 
 @see term:fpt
 @see term:bpdt

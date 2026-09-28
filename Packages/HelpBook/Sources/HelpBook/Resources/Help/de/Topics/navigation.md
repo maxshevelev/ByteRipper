@@ -1,4 +1,4 @@
-@source-sha b30ed97f2c97f49dd21d21da75fb6c5acd5cdc53cb0129db643ec5b01c073db8
+@source-sha e3d74f4854a896eb517f8c6a41556308ddafebb2834260c066dc75ed51b0bdef
 # Sich bewegen
 
 > Zwischen Unterschieden springen, zu einer Adresse springen oder auf einem Byte stehen und ablesen, wo man ist.
@@ -23,9 +23,9 @@ Im Vergleichsmodus bewegt der Sprung **beide** Bereiche, die an dieselbe Adresse
 
 ## Einen Block auswählen
 
-**Bearbeiten ▸ Block auswählen…** wählt einen Bereich über Zahlen statt über die Maus: Anfang und Ende oder Anfang und Länge. Beide Felder nehmen Hexadezimalwerte mit dem Präfix `0x` und schlichtes Dezimal entgegen. So wird ein Bereich, dessen Grenzen ein Werkzeug genannt hat, genau ausgewählt.
+**Bearbeiten ▸ Block auswählen…** wählt einen Bereich über Zahlen statt über die Maus: Anfang und Ende oder Anfang und Länge. Beide Felder nehmen Hexadezimalwerte mit dem Präfix `0x` und schlichtes Dezimal entgegen. Der Befehl dient der Auswahl von Hand, wenn Anfang, Ende oder Länge eines Bereichs bekannt oder errechnet sind.
 
-! Bereiche sind programmintern halboffen: Die Endadresse ist das erste Byte, das **nicht** dazugehört. Ein Dialog darf ein einschließendes Ende annehmen und rechnet es um.
+! **Ende** ist die Adresse des letzten Bytes der Auswahl und nicht die des ersten Bytes dahinter. Ein Anfang `0x1000` mit einem Ende `0x1FFF` wählt daher genau `0x1000` Bytes aus.
 
 ## Den anderen Bereich mitführen
 

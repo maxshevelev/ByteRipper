@@ -1,4 +1,4 @@
-@source-sha 111f848b948752d81dd66aecd55900ccdfc8001856ccf184fce1169b0fb51391
+@source-sha 479126d937f533f62f47b8cdbb0837623782c986ed2e16d11c3e7a76adce0b4c
 @term dump
 @name Dump
 @short Der Inhalt eines Chips, in eine Datei ausgelesen.
@@ -18,7 +18,7 @@ Offsets sind in ByteRipper nullbasiert und werden hexadezimal angezeigt. Offset 
 
 Überall, wo das Programm einen Offset entgegennimmt, braucht Hex das Präfix `0x` und Dezimal gar keines.
 
-Bereiche sind intern halboffen: `[Anfang, Ende)`, wobei das Ende das erste Byte ist, das **nicht** dazugehört. Ein Dialog darf ein einschließendes Ende anbieten und rechnet es für Sie um.
+Wird ein Bereich als Anfang und Ende angegeben, ist das Ende die Adresse des **letzten** Bytes des Bereichs und nicht die des ersten Bytes dahinter.
 
 @see topic:navigation
 
@@ -67,7 +67,7 @@ Für sich genommen bedeutet eine GUID nichts — deshalb lädt das Programm eine
 
 @term zone
 @name Zone
-@short Der farbige Umriss, mit dem ein Werkzeugbereich einen Byte-Bereich im Dump markiert.
+@short Der farbige Umriss, mit dem ein Werkzeug einen Byte-Bereich im Dump markiert.
 
 Wählen Sie eine Zeile in einem Werkzeugbereich, veröffentlicht er deren Byte-Bereich als Zone: ein Umriss samt Tönung über diesen Bytes in der Hex-Ansicht und ein Band in der [[topic:minimap|Minimap]].
 

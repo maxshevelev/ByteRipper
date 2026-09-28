@@ -31,9 +31,9 @@ In comparison mode the jump moves **both** panes, which are locked to the same a
 
 ## Selecting a block
 
-**Edit ▸ Select Block…** selects a range by number rather than by dragging: start and end, or start and length. Both fields accept hex with the `0x` prefix and plain decimal. This is how a range whose boundaries were read from a tool panel is selected exactly.
+**Edit ▸ Select Block…** selects a range by number rather than by dragging: start and end, or start and length. Both fields accept hex with the `0x` prefix and plain decimal. The command is for selecting by hand, where the start, the end or the length of a range is known or has been worked out.
 
-! Ranges inside the program are half-open: the end address is the first byte *not* included in the range. A dialog may accept an inclusive end, and converts it.
+! **End** is the address of the last byte of the selection, not of the first byte after it. A start of `0x1000` with an end of `0x1FFF` therefore selects exactly `0x1000` bytes.
 
 ## Following the other pane
 

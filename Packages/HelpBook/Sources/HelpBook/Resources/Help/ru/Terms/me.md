@@ -1,4 +1,4 @@
-@source-sha b1d66ebfbc1ed823761b22f5c18c54b4db55fea09d46f107334b79aa73418514
+@source-sha 3a47e3a2101272e30de3c52546adbf6abbd6e323fba8af052ea73c03778a42b6
 @term me
 @name Intel ME / CSME
 @short Маленький процессор внутри чипсета со своей прошивкой в отдельном регионе флеш-памяти.
