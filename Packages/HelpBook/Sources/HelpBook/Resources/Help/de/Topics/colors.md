@@ -1,4 +1,4 @@
-@source-sha 4acb9993b2376f850452e7878b9fd1c0b3fc1d028ba27f2dff81fe0285ae44c8
+@source-sha e4569ebe87f63bce99430d872ca9b633f5ffdf4eff0e8c7653b12d480cd561cd
 # Was die Farben bedeuten
 
 > Ein orangefarbener Hintergrund sagt „anders als in der anderen Datei“. Roter Text sagt „geändert und noch nicht gesichert“.
@@ -21,13 +21,13 @@ Rote Bytes sind Änderungen, die nur innerhalb von ByteRipper bestehen und nicht
 
 ## Beide Zustände zugleich
 
-Ein Byte, das sowohl von der anderen Datei abweicht als auch geändert wurde, trägt **beide** Zustände: den Unterschieds-Hintergrund mit roten Ziffern darüber. Die Zustände sind voneinander unabhängig, und keiner verdeckt den anderen.
+Ein Byte, das sowohl von der anderen Datei abweicht als auch geändert wurde, trägt **beide** Zustände: den orangefarbenen Hintergrund mit roten Ziffern darüber. Die Zustände sind voneinander unabhängig, und keiner verdeckt den anderen.
 
 ## Die übrigen Markierungen
 
-- **Die Auswahl** ist die übliche Hervorhebung und verdeckt nie den Unterschied oder das Rot.
+- **Die Auswahl** ist die übliche Hervorhebung des Systems und verdeckt weder den orangefarbenen Hintergrund noch die roten Ziffern.
 - **Suchtreffer** sind in dem Grau gefüllt, das die Plattform für eine Auswahl ohne Fokus verwendet; der aktuelle Treffer wird als angehobene gelbe Blase dargestellt. Ein Treffer auf einem abweichenden Byte wird als Unterschied dargestellt, der Vergleich hat Vorrang.
-- **Eine Zeile mit Lesezeichen** hebt ihre Adresse durch einen farbigen Pfeil hervor. Markiert wird die Zeile, nicht die Bytes, und die vorstehenden Zustände bleiben davon unberührt.
-- **Zonen** — die farbigen Umrisse, die ein [[topic:tools-overview|Werkzeugbereich]] zeichnet — markieren den Byte-Bereich einer Struktur. Eine Zone ist ein Umriss samt Tönung, keine Füllung, und kann deshalb über Unterschieden liegen, ohne sie zu verdecken.
+- **Eine Zeile mit Lesezeichen** stellt ihre Adresse auf einem **violetten** Pfeil dar, und in derselben Farbe ist das Lesezeichen am Rand der Minimap markiert. Markiert wird die Zeile, nicht die Bytes, und die vorstehenden Zustände bleiben davon unberührt.
+- **Zonen**, mit denen ein [[topic:tools-overview|Werkzeug]] den Byte-Bereich einer Struktur markiert, werden für die Zone im Fokus **blau** und für die übrigen **gelb** umrissen. Eine Zone ist ein Umriss samt Tönung, keine Füllung, und kann deshalb über Unterschieden liegen, ohne sie zu verdecken.
 
-ByteRipper folgt dem Erscheinungsbild des Systems, all das hat also auch eine dunkle Fassung. Die Palette steht in den [[topic:settings|Einstellungen ▸ Darstellung]].
+ByteRipper folgt dem Erscheinungsbild des Systems, jede dieser Farben hat also auch eine dunkle Fassung. Die Farben selbst sind nicht einstellbar: In den [[topic:settings|Einstellungen ▸ Darstellung]] werden Schrift, Schriftgröße und Zeilenhöhe festgelegt.

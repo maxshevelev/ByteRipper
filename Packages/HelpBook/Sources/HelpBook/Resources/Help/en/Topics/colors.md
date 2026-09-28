@@ -22,13 +22,13 @@ Red bytes are changes that exist only inside ByteRipper and not in the file on d
 
 ## Both states at once
 
-A byte that both differs from the other file and has been edited carries **both**: the difference background, with red digits over it. The two states are independent, and neither suppresses the other.
+A byte that both differs from the other file and has been edited carries **both**: the orange background, with red digits over it. The two states are independent, and neither suppresses the other.
 
 ## The other marks
 
-- **The selection** is the standard highlight, and never conceals the difference background or the red.
+- **The selection** is the system's standard highlight, and never conceals the orange background or the red digits.
 - **Search matches** are filled in the system's unfocused-selection grey; the current match is drawn as a raised yellow bubble. A match over a differing byte is displayed as a difference, the comparison taking precedence.
-- **A bookmarked row** draws its offset column as a coloured arrow with the address over it. It marks the row rather than the bytes, and does not affect the states above.
-- **Zones** — the coloured outlines a [[topic:tools-overview|tool panel]] draws over the dump — mark a structure's byte range. A zone is an outline and a tint, not a background, so it can sit over differences without hiding them.
+- **A bookmarked row** draws its address on a **purple** arrow, and the bookmark is marked in the minimap's margin in the same colour. It marks the row rather than the bytes, and does not affect the states above.
+- **Zones**, with which a [[topic:tools-overview|tool]] marks a structure's byte range, are outlined in **blue** for the zone in focus and in **yellow** for the others. A zone is an outline and a tint, not a background, so it can sit over differences without hiding them.
 
-ByteRipper follows the system appearance, so all of this has a dark-mode form too. The palette is in [[topic:settings|Settings ▸ Appearance]].
+ByteRipper follows the system appearance, so each of these colours has a dark form as well. The colours themselves are not configurable: [[topic:settings|Settings ▸ Appearance]] sets the font, its size and the row height.
