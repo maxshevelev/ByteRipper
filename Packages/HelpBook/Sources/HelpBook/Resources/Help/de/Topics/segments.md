@@ -1,4 +1,4 @@
-@source-sha 053c8c1a48732d591bd408ca8930f006c4ffe5c39d5e9754b65733b054ec5096
+@source-sha 12fce6021758e2ff87710b0f0417d44eec90a3c0e6a9ff7a4c37d02a05ebc2b5
 # Segmente: einen Dump in Teile schneiden
 
 > Die inneren Grenzen eines Images markieren und jedes Teil als eigene Datei sichern.
@@ -10,7 +10,7 @@ An den Bytes ändert ein Segment nichts: Es ist eine Art, die Datei zu *lesen*, 
 ## Einen Schnitt setzen
 
 - Ein Rechtsklick in den Dump und der Befehl **Hier bei „Adresse“ schneiden** schneiden an der Einfügemarke.
-- **Bearbeiten ▸ Schnitt hinzufügen…** nimmt die Adresse als Zahl entgegen.
+- **Bearbeiten ▸ Schnitt hinzufügen…** nimmt die Adresse als Zahl entgegen. Nach dem Bestätigen springt die Einfügemarke auf den neuen Schnitt, und die Ansicht zentriert ihn.
 - **Bearbeiten ▸ Zusammenführen** entfernt den Schnitt vor dem Segment, in dem die Einfügemarke steht, und führt es mit seinem Nachbarn zusammen.
 - **Bearbeiten ▸ Segmente…** (⌥⌘S) öffnet die Liste: alle Segmente, ihre Bereiche, ihre Namen und die Tasten, die auf alle zugleich wirken.
 
@@ -24,6 +24,26 @@ Das Segmentformular enthält **Alle als einzelne Dateien sichern…**, was alle 
 2. Eine wird geöffnet und die andere angehängt, sodass die gesamte Firmware ein Image ist.
 3. Das Image wird als eine Datei verglichen, durchsucht, bearbeitet und vom [[topic:tool-uefi|UEFI-Werkzeug]] decodiert, das ein zusammenhängendes Image erwartet.
 4. Die Grenze, an der die beiden Dateien zusammentrafen, ist bereits ein Schnitt, sodass **Alle als einzelne Dateien sichern** die beiden Hälften genau an dieser Grenze zurückgibt.
+
+## Was ein Teil von der Datei behält, aus der er stammt
+
+Ein Teil, der über **Datei anhängen…**, **Datei am Anfang einfügen…** oder **Segment aus Datei ersetzen…** ins Image gekommen ist, behält eine Verbindung zu dieser Datei: Die Datei entspricht dem Teil als Ganzes.
+
+Das Segmentformular zeigt neben dem Teil den Namen der verbundenen Datei und, wo der Teil ihr nicht mehr entspricht, den Grund:
+
+- **geändert** — dieselbe Länge, andere Bytes: Der Teil wurde seit dem Hinzufügen bearbeitet;
+- **Länge geändert** — der Teil und die Datei haben nicht mehr dieselbe Länge. Das folgt entweder aus Bytes, die im Teil eingefügt oder gelöscht wurden, oder daraus, dass die Datei auf dem Volume jetzt eine andere Länge hat;
+- **Datei fehlt** — die Datei wurde gelöscht, umbenannt oder verschoben und lässt sich nicht mehr lesen.
+
+Verglichen wird mit dem, was die Datei auf dem Volume derzeit enthält; eine außerhalb des Programms geänderte Datei zeigt sich also in derselben Zeile.
+
+## Einen Teil aus seiner Datei zurückholen
+
+**Segment aus Quelle wiederherstellen** schreibt die Bytes der verbundenen Datei zurück in den Teil. Das ist ein Widerrufsschritt, und die Verbindung bleibt: Die Bytes gehören weiterhin zu jener Datei.
+
+Der Befehl wird angeboten, solange die verbundene Datei verfügbar ist; ein Teil ohne Verbindung hat ihn nicht. Haben der Teil und die Datei nicht mehr dieselbe Länge, fragt das Programm, bevor es die Länge ändert.
+
+Die Verbindung übersteht das Widerrufen: Der Schritt, der einen Teil zurückbringt, bringt auch seine Verbindung mit.
 
 ! Ein Schnitt wandert mit den Bytes: Davor eingefügte Daten verschieben ihn. Ein [[topic:bookmarks|Lesezeichen]] verhält sich umgekehrt und bleibt an seiner Adresse. Ein Schnitt bezeichnet die Grenze eines Bereichs, ein Lesezeichen eine Adresse.
 

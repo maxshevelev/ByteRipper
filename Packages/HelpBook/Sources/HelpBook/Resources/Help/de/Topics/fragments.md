@@ -1,11 +1,11 @@
-@source-sha 1c9f31aeb56039daab40e1a18491e151581715677509004c941470f302cee8de
+@source-sha 6f8b8fe4337306b512db14e087d74a60a4040c75275e2254f690869134ffef89
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
 
 Ein Teil eines Images, den ein [[topic:tools-overview|Werkzeug]] bereitstellt — eine Region, ein Volume, ein Modul, der entpackte Rumpf einer Sektion —, öffnet sich als **Fragment-Bereich**: ein Bereich, der von unten über den Dump fährt, aus dem der Teil stammt.
 
-Die Quelle bleibt darüber sichtbar. Eingeklappt wird das Fragment zu einer Pille im Dock am unteren Fensterrand; die Pillen dort entsprechen den Teilen, die aus *diesem* Image entnommen wurden.
+Die Quelle bleibt darüber sichtbar. Eingeklappt wird das Fragment zu einer Pille im Dock am unteren Fensterrand. Ein Dock dient dem ganzen Tab: Es fasst die Teile, die aus beiden geöffneten Images entnommen wurden.
 
 ## Was ein Fragment unterstützt
 

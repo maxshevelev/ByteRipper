@@ -1,4 +1,4 @@
-@source-sha 27e01a3af57e9fb43c57156d4336ec597c3b3941f4d1527752d62c90f74ca446
+@source-sha 2d015eb5a31a6ac164d9ff244c8007c9f12220f411b28f0a6b729cd15e435348
 # Sichern
 
 > Rot kennzeichnet ein Byte, das von der Datei auf dem Volume abweicht. Das Sichern schreibt diese Bytes in die Datei, und das Rot wird aufgehoben.
@@ -8,7 +8,7 @@
 - **Ablage ▸ Auf gesicherten Stand zurücksetzen** verwirft die Änderungen und liest die Datei neu vom Volume.
 - **Ablage ▸ In der Quelle aktualisieren** ist das dritte Ziel: für einen [[topic:fragments|Fragment-Bereich]] schreibt es das Fragment zurück in das Image, aus dem es stammt, statt in eine Datei.
 
-## Was ungesichert ist
+## Wenn die Datei nicht gesichert ist
 
 Geänderte Bytes erscheinen **rot**, bis sie gesichert sind, und der Bereichskopf weist das Dokument als geändert aus. Das Sichern hebt beide Kennzeichen auf.
 

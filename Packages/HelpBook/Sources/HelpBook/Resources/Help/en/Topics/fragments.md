@@ -6,7 +6,7 @@
 
 A part of an image supplied by a [[topic:tools-overview|tool panel]] — a region, a volume, a module, the decompressed body of a section — opens as a **fragment panel**: a panel that rises from the bottom of the window, over the dump it was taken from.
 
-The parent remains visible above it. Folded down, the fragment becomes a pill in the dock along the bottom edge of the window; the pills in that dock are the parts extracted from *this* image.
+The parent remains visible above it. Folded down, the fragment becomes a pill in the dock along the bottom edge of the window. One dock serves the tab: it holds the parts extracted from both open images.
 
 ## What a fragment supports
 

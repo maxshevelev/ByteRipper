@@ -12,7 +12,7 @@
 - **File ▸ Revert to Saved** discards the edits and re-reads the file from disk.
 - **File ▸ Update in Parent** is the third destination: for a [[topic:fragments|fragment panel]], it writes the part back into the image it came out of instead of to a file.
 
-## What is unsaved
+## If the file is not saved
 
 Edited bytes are drawn in **red** until they are saved, and the pane header reports the document as modified. Both indications are cleared by saving.
 
