@@ -41,7 +41,9 @@ An encoding chosen by hand sets where the search starts, and so does an entry pi
 
 Every match in the file is filled in grey; the current one is drawn as a raised yellow bubble. **‹ ›** move between them and the bar reports the count. Over a large dump the search runs in the background and can be cancelled, and matches appear as they are found.
 
-**Search All** opens a list of results that can be clicked through, and marks the matches in the [[topic:minimap|minimap]], where their distribution over the image is visible.
+The matches are marked in the [[topic:minimap|minimap]] as well, where their distribution over the image is visible.
+
+**Search Results** in the find bar opens a list of what was found, which can be clicked through; pressing it again closes the list.
 
 ## Patterns you use often
 

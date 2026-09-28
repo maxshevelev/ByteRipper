@@ -1,4 +1,4 @@
-@source-sha b65a800fa3c8a1efc657dcf6ffeb48ca7689aa8318752b1be0eafeee65937e38
+@source-sha a1386f146da312400b217d7afd7023e79980d0236f93cc2bc8148b1df125be4b
 # Bytes und Text finden
 
 > ⌘F. Suche nach einer Byte-Folge oder einer Zeichenfolge über den ganzen Dump, im Hintergrund.
@@ -36,7 +36,9 @@ Eine von Hand gewählte Codierung legt fest, wo die Suche beginnt; ebenso ein Ei
 
 Jeder Treffer in der Datei ist grau gefüllt; der aktuelle wird als angehobene gelbe Blase dargestellt. **‹ ›** bewegen zwischen ihnen, und die Leiste nennt die Anzahl. Über einen großen Dump läuft die Suche im Hintergrund und lässt sich abbrechen; die Treffer erscheinen, während sie gefunden werden.
 
-**Alle suchen** öffnet eine Ergebnisliste zum Durchklicken und markiert die Treffer in der [[topic:minimap|Minimap]], in der ihre Verteilung über das Image sichtbar wird.
+Die Treffer werden auch in der [[topic:minimap|Minimap]] markiert, in der ihre Verteilung über das Image sichtbar wird.
+
+**Suchergebnisse** in der Suchleiste öffnet eine Liste des Gefundenen, die sich durchklicken lässt; ein erneuter Druck schließt sie.
 
 ## Häufig gebrauchte Muster
 
