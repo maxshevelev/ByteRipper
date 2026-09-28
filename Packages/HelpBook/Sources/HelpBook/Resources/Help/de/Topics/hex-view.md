@@ -1,11 +1,11 @@
-@source-sha b4b5c6e52139d632a56c7ed3a1afc0900ef0effbaf7c20d92f685dada0e05be6
+@source-sha e7824fe9c95d147e43ab85f8ee46d3020fe469d0aa51fc5386394f3462c2a71e
 # Die Hex-Ansicht lesen
 
 > Sechzehn Bytes je Zeile, der Offset links, der Text rechts.
 
 Jeder Bereich zeigt seine Datei als gewöhnlichen Hex-Dump:
 
-- **Die Offset-Spalte** links ist die Adresse des ersten Bytes der Zeile, hexadezimal und nullbasiert. Am Arbeitsplatz zählt diese Zahl: sie ist die Position auf dem Chip.
+- **Die Offset-Spalte** links ist die Adresse des ersten Bytes der Zeile, hexadezimal und nullbasiert. Bei einem unmittelbar vom Baustein gelesenen Dump ist sie die Position auf diesem Baustein.
 - **Sechzehn Byte-Werte** je Zeile, je zwei Hex-Ziffern in Großbuchstaben, in zwei Achtergruppen geteilt, damit das Auge mitzählen kann.
 - **Der decodierte Text** rechts. Die Bytes `0x20`–`0x7E` erscheinen als Zeichen, alles andere als Punkt. Andere Codierungen lassen sich in den Einstellungen wählen.
 

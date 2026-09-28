@@ -1,4 +1,4 @@
-@source-sha 0020217c81ce763d49e74cda5e896c111571159936ae0220c2e26f227bee876d
+@source-sha 8d3d53c8287c12e41cf5d23eabc32c115e04bbc87a0174641ea92b0cd99c03a9
 # Was die Farben bedeuten
 
 > Der Hintergrund sagt „anders als in der anderen Datei“. Roter Text sagt „geändert und noch nicht gesichert“.
@@ -9,23 +9,23 @@ Die beiden Zustände sind mit Absicht getrennt, und ein Byte kann beide zugleich
 
 Im Vergleichsmodus bekommt jedes Byte, das sich vom Byte an **derselben Adresse** in der anderen Datei unterscheidet, den Unterschieds-Hintergrund. Sonst nutzt ihn nichts.
 
-Ist eine Datei kürzer, sind die Bytes, die nur die längere hat, ebenfalls Unterschiede, und die kürzere zeigt an ihrer Stelle leere EOF-Zellen — gedämpft und eigens gestaltet, damit ein zu kurz gelesener Dump nie wie eine Datei voller Nullen aussieht.
+Ist eine Datei kürzer, gelten die Bytes, die nur die längere hat, ebenfalls als Unterschiede, und die kürzere zeigt an ihrer Stelle leere EOF-Zellen in einem eigenen, gedämpften Stil, damit ein zu kurz gelesener Dump nicht wie eine Datei voller Nullen aussieht.
 
 ## Ungesicherte Änderung — roter Text
 
-Ein Byte, das Sie geändert, aber noch nicht auf das Volume geschrieben haben, erscheint **rot**. Sichern Sie die Datei, und das Rot verschwindet: jetzt steht das Byte so in der Datei.
+Ein Byte, das geändert, aber noch nicht auf das Volume geschrieben wurde, erscheint **rot**. Nach dem Sichern der Datei wird das Rot aufgehoben: Das Byte steht dann so in der Datei.
 
-Diesen Zustand prüft man, bevor man eine Datei an einen Programmer gibt: rote Bytes sind Änderungen, die es nur innerhalb von ByteRipper gibt.
+Rote Bytes sind Änderungen, die nur innerhalb von ByteRipper bestehen und nicht in der Datei auf dem Volume.
 
-## Beides zugleich
+## Beide Zustände zugleich
 
-Ein Byte, das sich sowohl von der anderen Datei unterscheidet als auch von Ihnen geändert wurde, trägt **beides**: den Unterschieds-Hintergrund mit roten Ziffern darauf. So sieht ein Patch in Arbeit normalerweise aus — Sie ändern das Byte ja gerade deshalb, weil es sich unterscheidet.
+Ein Byte, das sowohl von der anderen Datei abweicht als auch geändert wurde, trägt **beide** Zustände: den Unterschieds-Hintergrund mit roten Ziffern darüber. Die Zustände sind voneinander unabhängig, und keiner verdeckt den anderen.
 
 ## Die übrigen Markierungen
 
 - **Die Auswahl** ist die übliche Hervorhebung und verdeckt nie den Unterschied oder das Rot.
-- **Suchtreffer** sind in dem ruhigen Grau gefüllt, das die Plattform für eine Auswahl ohne Fokus verwendet; der Treffer, auf dem Sie stehen, ist eine angehobene gelbe Blase. Ein Treffer auf einem Unterschied liest sich als Unterschied — zwei Dateien auseinanderzuhalten ist das, wofür es das Programm gibt.
-- **Eine Zeile mit Lesezeichen** verwandelt ihre Offset-Spalte in einen farbigen Pfeil mit der Adresse darauf. Markiert wird die Zeile, nicht die Bytes, den Zuständen darüber kommt das nie in die Quere.
+- **Suchtreffer** sind in dem Grau gefüllt, das die Plattform für eine Auswahl ohne Fokus verwendet; der aktuelle Treffer wird als angehobene gelbe Blase dargestellt. Ein Treffer auf einem abweichenden Byte wird als Unterschied dargestellt, der Vergleich hat Vorrang.
+- **Eine Zeile mit Lesezeichen** hebt ihre Adresse durch einen farbigen Pfeil hervor. Markiert wird die Zeile, nicht die Bytes, und die vorstehenden Zustände bleiben davon unberührt.
 - **Zonen** — die farbigen Umrisse, die ein [[topic:tools-overview|Werkzeugbereich]] zeichnet — markieren den Byte-Bereich einer Struktur. Eine Zone ist ein Umriss samt Tönung, keine Füllung, und kann deshalb über Unterschieden liegen, ohne sie zu verdecken.
 
 ByteRipper folgt dem Erscheinungsbild des Systems, all das hat also auch eine dunkle Fassung. Die Palette steht in den [[topic:settings|Einstellungen ▸ Darstellung]].

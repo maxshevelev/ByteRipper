@@ -1,6 +1,6 @@
 # Moving Around
 
-> Jump between differences, jump to an address, or stand on a byte and read where you are.
+> Moving between differences, moving to an address, and selecting a range by number.
 
 @covers menu.edit.select-block
 @covers menu.edit.select-all
@@ -14,9 +14,9 @@
 ## Between differences
 
 - **⌥⌘→** — next difference, **⌥⌘←** — previous difference.
-- **⇧⌥⌘→ / ⇧⌥⌘←** — next / previous *same* block: the start of the next stretch where the files agree. Useful when most of the image differs and what you want is the islands that match.
+- **⇧⌥⌘→ / ⇧⌥⌘←** — next / previous *matching* block: the start of the next stretch over which the two files agree. This is the complementary movement for an image in which most addresses differ.
 
-A "difference" for navigation is a whole run of differing bytes, not each byte in it: a 4 KB block that differs is one stop, not four thousand.
+For the purpose of this movement a difference is a whole run of differing bytes rather than each byte in it: a differing block of 4 KB is one stop, not four thousand.
 
 ## To an address
 
@@ -25,18 +25,18 @@ A "difference" for navigation is a whole run of differing bytes, not each byte i
 - `0x1FE00` — hex, with the `0x` prefix (already in the field).
 - `130560` — decimal, without a prefix.
 
-The field remembers the last ten addresses you jumped to. Below it is the [[topic:bookmarks|bookmark list]] — Tab moves the keyboard there, and Return jumps to the selected mark. Both halves are one window because they answer one question.
+The field retains the last ten addresses entered. Below it is the [[topic:bookmarks|bookmark list]]: Tab moves the keyboard there, and Return jumps to the selected bookmark.
 
-In comparison mode the jump moves **both** panes: they are locked to the same address, which is what makes the side-by-side view mean anything.
+In comparison mode the jump moves **both** panes, which are locked to the same address.
 
 ## Selecting a block
 
-**Edit ▸ Select Block…** selects a range by numbers rather than by dragging: start and end, or start and length. Both accept hex with `0x` and plain decimal. This is the reliable way to select a region whose boundaries you read off a tool panel.
+**Edit ▸ Select Block…** selects a range by number rather than by dragging: start and end, or start and length. Both fields accept hex with the `0x` prefix and plain decimal. This is how a range whose boundaries were read from a tool panel is selected exactly.
 
-! Ranges inside the app are half-open — the end address is the first byte *not* in the range. Dialogs may offer an inclusive end; they convert it for you.
+! Ranges inside the program are half-open: the end address is the first byte *not* included in the range. A dialog may accept an inclusive end, and converts it.
 
 ## Following the other pane
 
-The two panes stay locked: scroll position, caret and selection. That is what makes a comparison readable. **View ▸ Swap Panels** exchanges the files between the panes if you opened them the wrong way round.
+The two panes are locked together in scroll position, caret and selection. **View ▸ Swap Panels** exchanges the files between the panes.
 
-See also: [[topic:minimap|The minimap]] for moving by pointing rather than by address.
+See also: [[topic:minimap|The Minimap]], for moving by pointing rather than by address.

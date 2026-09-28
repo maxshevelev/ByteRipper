@@ -8,30 +8,30 @@
 @covers window.search-results
 @covers settings.patterns
 
-The find bar searches the **active pane**, over its current contents — your unsaved edits included.
+The find bar searches the **active pane**, over its current contents, unsaved edits included.
 
 ## Hex
 
-Type a byte sequence: `DEADBEEF`, `DE AD BE EF`, `0xDE 0xAD`. Spaces are optional. After the search the field is rewritten in the dump's own form — uppercase pairs, one space between — so you can hold the pattern against the bytes on screen.
+A byte sequence is entered as `DEADBEEF`, `DE AD BE EF` or `0xDE 0xAD`; spaces are optional. Once the search has been started the field is rewritten in the form the dump itself uses — uppercase pairs separated by single spaces — so that the pattern can be held against the bytes on screen.
 
-Hex search is always exact. Bytes have no upper and lower case, so the case toggle is not offered there at all.
+A hex search is always exact. Bytes have no case, and the case option is therefore not offered for it.
 
 ## Text
 
-Pick an encoding — ASCII, UTF-8, UTF-16 LE or UTF-16 BE — and type the string. It is encoded to bytes and matched exactly on those bytes. UTF-16 LE is the one that finds most strings in UEFI firmware; ASCII finds most strings in an option ROM or an EC image.
+An encoding is chosen — ASCII, UTF-8, UTF-16 LE or UTF-16 BE — and the string is entered. It is encoded to bytes and matched exactly on those bytes. Most strings in UEFI firmware are held as UTF-16 LE; most strings in an option ROM or an embedded-controller image are held as ASCII.
 
 Case-insensitive matching is offered for text.
 
 ## While a search is running
 
-Every match is filled in a quiet grey, everywhere in the file; the one you are standing on is a raised yellow bubble. **‹ ›** walk between them, and the bar keeps the count. Over a big dump the search runs in the background and can be cancelled; the matches appear as they are found.
+Every match in the file is filled in grey; the current one is drawn as a raised yellow bubble. **‹ ›** move between them and the bar reports the count. Over a large dump the search runs in the background and can be cancelled, and matches appear as they are found.
 
-**Search All** opens a results list you can click through, and marks the matches in the [[topic:minimap|minimap]] so you can see how they are spread over the image.
+**Search All** opens a list of results that can be clicked through, and marks the matches in the [[topic:minimap|minimap]], where their distribution over the image is visible.
 
 ## Patterns you use often
 
-**⌘E** loads the current selection as the search pattern without searching — select some bytes in one dump, press ⌘E, then look for them in the other.
+**⌘E** loads the current selection as the search pattern without starting a search, which is how a sequence selected in one dump is then looked for in the other.
 
-Patterns can be named and kept in a pattern library (**Settings ▸ Search Patterns**), which is where a bench keeps the signatures it looks for every day: `_FVH`, `$FPT`, `24 00 00 00` and so on. The library can be synced from a folder, so a shop can share one.
+Patterns can be named and kept in a pattern library (**Settings ▸ Search Patterns**) — for instance the recurring signatures `_FVH`, `$FPT` or `24 00 00 00`. The library can be synchronised through a folder so that it is shared by several installations.
 
-See also: [[topic:bookmarks|Bookmarks]] for marking what you found.
+See also: [[topic:bookmarks|Bookmarks]], for marking an address that was found.

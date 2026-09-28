@@ -1,4 +1,4 @@
-@source-sha a2aca387fe10ab244727fe167d5112585bed885b9a7c380554e7d425eafde036
+@source-sha 3452da34addcd41415536c69bddf52401283182cf4000a97577f72b24afa4e1f
 # Bytes und Text finden
 
 > ⌘F. Hex-Bytes oder Text, über den ganzen Dump, im Hintergrund.
@@ -27,6 +27,6 @@ Jeder Treffer ist überall in der Datei ruhig grau gefüllt; der, auf dem Sie st
 
 **⌘E** übernimmt die Auswahl als Suchmuster, ohne zu suchen: Bytes in einem Dump auswählen, ⌘E drücken, im anderen danach suchen.
 
-Muster lassen sich benennen und in einer Musterbibliothek halten (**Einstellungen ▸ Suchmuster**) — dort hält eine Werkstatt die Signaturen, nach denen sie täglich sucht: `_FVH`, `$FPT`, `24 00 00 00` und so fort. Die Bibliothek lässt sich über einen Ordner abgleichen, sodass eine Werkstatt eine gemeinsame hat.
+Muster lassen sich benennen und in einer Musterbibliothek halten (**Einstellungen ▸ Suchmuster**) — etwa regelmäßig gebrauchte Signaturen wie `_FVH`, `$FPT` oder `24 00 00 00`. Die Bibliothek lässt sich über einen Ordner abgleichen, sodass mehrere Installationen dieselbe verwenden.
 
 Siehe auch: [[topic:bookmarks|Lesezeichen]], um Gefundenes zu markieren.

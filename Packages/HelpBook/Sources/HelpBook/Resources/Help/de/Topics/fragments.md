@@ -1,4 +1,4 @@
-@source-sha f1e29585cabe2021a26841d2342ba44d7a03f38898d6c0e37990ebff1359b93b
+@source-sha 1c9f31aeb56039daab40e1a18491e151581715677509004c941470f302cee8de
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Ein Fragment aus einem Image holen, als eigene Datei bearbeiten und zurückschreiben.
@@ -27,4 +27,4 @@ Die Aktualisierung prüft, bevor sie schreibt, und sagt, warum sie es nicht tut:
 
 Eine komprimierte UEFI-Sektion lässt sich **entpackt** öffnen. Sie sehen dann nicht die Bytes der Datei, sondern das, wozu sie sich entfalten. Geändert und zurückgeschrieben, wird das Ganze neu komprimiert und das Image um die neue Größe herum neu gelegt. Rechnen Sie damit, dass das Ergebnis nicht Byte für Byte dem Original des Herstellers gleicht, selbst wenn Sie nichts ändern: ein anderer Kompressor macht aus derselben Eingabe eine andere Ausgabe.
 
-Siehe auch: [[topic:saving|Sichern]], [[topic:bench-safety|Regeln am Arbeitsplatz]].
+Siehe auch: [[topic:saving|Sichern]], [[topic:bench-safety|Einschränkungen beim Bearbeiten eines Images]].
