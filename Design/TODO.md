@@ -18,6 +18,44 @@ be held to — they are there to tell a half-day from a week.
 
 ## Next
 
+### Copy a selected block straight into the other pane
+
+**What.** A command that takes the selection in one pane and writes it over the
+same address range in the other, without the clipboard: select, invoke, done.
+Both directions — into the inactive pane, and from it — plus the obvious
+keyboard equivalents. One undo step in the receiving document, named for what it
+did ("Undo Copy to Other Pane").
+
+**Why.** Moving a range between two dumps is the operation the app exists for,
+and today it takes four steps: select the range in the source, ⌘C, select the
+same range in the destination, ⌘V. The middle two are pure ceremony — the
+address is identical on both sides, which is the whole premise of comparing by
+absolute offset. The clipboard also makes the operation lossy in one direction:
+a stray ⌘C anywhere in between silently replaces what was about to be written,
+and nothing says so. The help currently has to spell the four steps out, which
+is a sign the command is missing rather than the page being unclear
+(`Help/*/Topics/recipe-donor.md`).
+
+A range is not always something a tool found — often it is an address and a
+length known from elsewhere or worked out by hand — so this belongs on the
+selection, not on the zone machinery that tool panels already have.
+
+**How.** The selection already carries the range, and `ToolTransaction` already
+applies a write to a document as one undoable step, so the new part is small: a
+menu command in Edit, a guard for the cases that cannot work (no second pane, a
+read-only destination, a range that runs past the end of the shorter file), and
+the sentence each refusal says. Overwrite only — never shifting — the same rule
+the paste already follows.
+
+Worth deciding at the same time: whether the command offers to write at the
+*caret* in the destination rather than at the same address, which is what a
+transfer between images of different layout would want. The same-address case is
+the common one and should be the default; a second command rather than a mode.
+
+**Cost.** Half a day for the same-address command and its refusals, with tests
+on the transaction and the guards. The caret-relative variant is another half
+day and can wait for someone to ask for it.
+
 ### Instant hover callouts, the way Xcode shows them
 
 **What.** A small floating capsule — text on a rounded background with a shadow —
@@ -382,6 +420,68 @@ after that, and the survey is however long the corpus takes to gather.
 
 
 ## Later
+
+### A calculator in the fields that take an address or a length
+
+**What.** Anywhere the app asks for an offset or a length, make simple
+arithmetic available on what has been typed: add and subtract, in decimal and in
+hex, with the result written back into the field. The field keeps taking a plain
+number as it does now; the calculator is an affordance next to it, not a mode
+the field enters.
+
+**Why.** The numbers in this work arrive as arithmetic rather than as constants.
+A region starts at `0x1FE000` and the interesting structure is `0x40` further
+in; a component is `0x2C000` long and the tail to erase is that minus the header;
+a range read from a panel has to be turned into start-and-length for a field that
+wants start-and-end. Today all of that happens in a separate calculator app, in
+a different number base, and gets typed back by hand — which is exactly the step
+a wrong digit slips into, in a program where a wrong address is a wrong write.
+
+**Where.** Every point that takes an address or a length, which today is:
+
+- **Go To** (⌘L) — the offset combo, which also keeps the last ten addresses
+  (`GoToBookmarksForm.swift:264`).
+- **A bookmark's address** — the edit popover's offset field, which is how a
+  mark is moved without dragging it (`BookmarkEditPopover.swift:90`).
+- **Select Block…** — start, plus end or length, the one place where the same
+  range is entered two different ways (`SheetControllers.swift:331`).
+- **Add Cut…** and the cut popover — where a segment boundary is typed
+  (`CutEditPopover.swift:153`, the private `OffsetField`).
+- **Delete Bytes…** and **Paste Insert…** — a count rather than an address, and
+  arithmetic reaches them for the same reason.
+- **Fill Selection with…** — a byte pattern rather than an offset
+  (`SheetControllers.swift:543`); it belongs on the list because the field is
+  hex and the habit should be the same, not because sums are wanted there.
+
+They share no control today: `HexInputField` is private to the sheets,
+`OffsetField` private to the segment popover, and Go To uses a combo of its own.
+So the first question is whether to lift one shared address field out and give
+the calculator to it once — which is what keeps this from becoming six separate
+features, and is worth doing even if the calculator never follows.
+
+**The case to cover.** The one that comes up constantly, and the one to test
+first: an address in hex — usually the current offset, taken from the status bar
+or read off a panel — plus or minus a length that is known in decimal. `0x1FE000
++ 4096`. `0x2C0000 - 1024`. The two bases meet inside one expression, neither
+side gets converted by hand, and the result goes back into the field in the base
+that field works in, which for an address is hex. Everything else the parser can
+do is a bonus; this case not working is the feature not working.
+
+**How.** Smallest version that is still worth having: accept an expression in
+the field itself, so `0x1FE000 + 4096` and `196608 - 0x200` evaluate on Return
+and leave the result behind. Only `+` and `-`, only integers, mixed bases allowed
+within one expression, and no precedence to get wrong. That needs a parser of
+perhaps thirty lines in a package where it can be tested, plus the error state
+for an expression that does not evaluate — the field already has one for a
+number it cannot read.
+
+A visible pad with buttons, if it turns out to be wanted, sits on top of the same
+evaluation and is a separate decision about the interface, not about the feature.
+
+**Cost.** A day for the expression form, most of it tests on the parser: bases,
+overflow past the end of the file, whitespace, a lone operator, an empty field.
+Lifting a shared address field out first is what makes it a day rather than six
+— and that lift is its own half-day, with the existing forms as its tests.
 
 ### An editable zone — a region a tool-module opens for editing
 
