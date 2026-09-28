@@ -1,4 +1,4 @@
-@source-sha c9691ee7c3610a27c029dd6579e3f1a4fc31dc8e672dc74a3b82253fa0eb6248
+@source-sha b1d66ebfbc1ed823761b22f5c18c54b4db55fea09d46f107334b79aa73418514
 @term me
 @name Intel ME / CSME
 @short Ein kleiner Prozessor im Chipsatz, mit eigener Firmware in einer eigenen Flash-Region.
@@ -18,7 +18,7 @@ Ihre Firmware liegt in der [[term:me-region|ME-Region]] desselben SPI-Chips wie 
 
 `$FPT` ist die erste Struktur, nach der die Analyse sucht. Jede Zeile nennt eine Partition — mit einem Vier-Zeichen-Namen wie `FTPR`, `NFTP`, `MFS`, `UTOK` — und gibt ihren Offset, ihre Größe und einige Flags an.
 
-Am Arbeitsplatz beantwortet `$FPT` die Frage „ist die Region vollständig?“. Fehlt eine in der Tabelle deklarierte Partition tatsächlich, oder passt ihre Größe nicht, ist die Region abgeschnitten oder beschädigt.
+Die `$FPT` beantwortet die Frage nach der Vollständigkeit einer Region: Fehlt eine in der Tabelle deklarierte Partition tatsächlich, oder passt ihre Größe nicht, ist die Region abgeschnitten oder beschädigt.
 
 Intels Flash-Werkzeug heißt ebenfalls FPT — Flash Programming Tool. Gemeinsam sind nur die drei Buchstaben: dieses `$FPT` ist eine Tabelle im Image, jenes ein Programm, das Images schreibt.
 
@@ -61,7 +61,7 @@ Manche Tags sind gut verstanden und benannt; der Rest erscheint mit seiner Numme
 
 Behebt Intel ein Sicherheitsproblem, trägt die korrigierte Firmware ein höheres SVN. Die Plattform merkt sich das höchste je gesehene SVN und weist alles Niedrigere ab — das ist Anti-Rollback.
 
-Am Arbeitsplatz erklärt das, warum ein Downgrade still scheitern kann: das Image ist in Ordnung, und die Plattform nimmt es trotzdem nicht. **TCB SVN** ist dasselbe für die Trusted Computing Base.
+Das erklärt, warum ein Downgrade ohne Fehlermeldung scheitern kann: Das Image ist in Ordnung, und die Plattform nimmt es dennoch nicht an. **TCB SVN** ist dasselbe für die Trusted Computing Base.
 
 @see term:arb-svn
 @see term:vcn
@@ -204,7 +204,7 @@ AMT ist die Funktion, um die herum die Management Engine überhaupt gebaut wurde
 - **M1** und **M3** — die Engine ist voll versorgt, der Host nicht. In M3 steht ihr der Hauptspeicher nicht zur Verfügung.
 - **M-Off** — die Engine ist aus; nichts ist versorgt.
 
-Welche davon eine Plattform tatsächlich umsetzt, hängt von ihrem Aufbau ab. Für die Werkbank heißt das praktisch: Eine Maschine, die am Netz hängt, ist keine tote Maschine.
+Welche davon eine Plattform tatsächlich umsetzt, hängt von ihrem Aufbau ab. Daraus folgt, dass eine Maschine, die am Netz hängt, nicht vollständig stromlos ist.
 
 @see term:me
 
@@ -222,7 +222,11 @@ Ein Bereich, der mit der Kennung `MFSB` statt mit einem Seiten-Tag beginnt. Dass
 
 Jede geschützte Datei im [[term:mfs|Dateisystem]] hat einen Eintrag mit dem Hash, den sie haben sollte, samt Nonce und einem [[term:anti-replay|Anti-Replay]]-Zähler. Die Engine prüft ihn, bevor sie der Datei traut.
 
-Am Arbeitsplatz: deshalb kann man keinen Wert im ME-Dateisystem ändern und erwarten, dass er benutzt wird. Die Änderung wird bemerkt.
+Der Hash ist ein **geschlüsselter** HMAC, und Flags in derselben Tabelle halten fest, ob die Datei zusätzlich verschlüsselt ist: Integrität und Vertraulichkeit werden getrennt und mit getrennten Schlüsseln geschützt. Veröffentlichte Untersuchungen des Dateisystems beschreiben vier davon — je ein Intel- und ein Nicht-Intel-Schlüssel für jeden der beiden Zwecke —, abgeleitet aus der [[term:svn|SVN]] und aus einem Root-Geheimnis in den Fuses des Chipsatzes, das für den einzelnen Baustein eindeutig ist ([[web:https://blackhat.com/docs/eu-17/materials/eu-17-Sklyarov-Intel-ME-Flash-File-System-Explained-wp.pdf|Intel ME: Flash File System Explained]]).
+
+Daraus folgt zweierlei. Ein Werkzeug kann die Tabelle decodieren, aber nicht prüfen, da der Schlüssel nicht im Image steht. Und die geschützten Dateien sind an genau den Baustein gebunden, auf dem sie geschrieben wurden: Ein anderer Chipsatz leitet andere Schlüssel ab und nimmt sie nicht an.
+
+Ein im ME-Dateisystem geänderter Wert wird deshalb nicht verwendet: Die Änderung wird bei der Prüfung erkannt. Eine als Ganzes auf eine andere Platine übertragene Region wird ebenso wenig angenommen.
 
 @see term:anti-replay
 
@@ -251,7 +255,7 @@ Ein Modul, das das Panel als Huffman anzeigt, aber nicht aufklappt, ist eines, f
 
 Teile der Plattform-Firmware werden getrennt von der Engine ausgeliefert und aktualisiert — der Power Management Controller, die Chipsatz-Konfiguration, die USB-Type-C-Physik. Jeder Teil hat eigenes Manifest, eigene Version und eigenen Ziel-Chipsatz.
 
-Am Arbeitsplatz: ein IUP von einem anderen Chipsatz-Stepping ist eine echte Inkompatibilität, auch wenn die Engine-Version passt. Das Panel nennt Chipsatz und Stepping, für die jedes IUP gebaut ist.
+Ein IUP von einem anderen Chipsatz-Stepping ist eine tatsächliche Inkompatibilität, auch wenn die Engine-Version passt. Das Werkzeug nennt Chipsatz und Stepping, für die jedes IUP gebaut ist.
 
 @see term:cpd
 

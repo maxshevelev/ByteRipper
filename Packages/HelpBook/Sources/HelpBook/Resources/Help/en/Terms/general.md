@@ -80,7 +80,7 @@ A zone is an outline rather than a background fill, so it never hides a differen
 
 A serial flash chip holds the board's firmware. Two properties matter here:
 
-- **Its capacity is fixed.** An image for an 8 MB chip must be exactly 8 MB. This is why nothing on a bench should ever change a dump's length.
+- **Its capacity is fixed.** An image for an 8 MB chip must be exactly 8 MB. Nothing may therefore change the length of a dump.
 - **Erased means `FF`.** Flash erases to all ones. A long run of `FF` in a dump is empty space, not damage; a long run of `00` usually is written data. One exception: in a dump taken from the running system, `FF` can also mean a region the tool was not allowed to read — see [[topic:flash-writes|Who writes to the flash]].
 
 @see topic:bench-safety
@@ -99,7 +99,7 @@ That separation is deliberate: the app can be used on a dump from any programmer
 
 The BIOS is the first code the processor executes. It identifies and initialises the hardware, runs the [[term:post|power-on self-test]], and hands control to a boot loader on a drive.
 
-Strictly the word means the older, pre-UEFI firmware, and what a modern board runs is [[term:uefi|UEFI]]. On a bench the two are used interchangeably, and "the BIOS chip" means the flash the firmware lives on whichever it is.
+Strictly the word means the older, pre-UEFI firmware, and what a modern board runs is [[term:uefi|UEFI]]. In practice the two are used interchangeably, and "the BIOS chip" denotes the flash memory the firmware resides in, whichever it is.
 
 @see term:uefi
 @see term:bios-region
@@ -119,7 +119,7 @@ The reference implementation is the open-source TianoCore EDK II. Independent BI
 @name POST
 @short "Power-On Self-Test" — the firmware's own check of the hardware, before anything boots.
 
-The firmware identifies and tests memory, video and storage before it looks for an operating system. A board that "does not POST" never got through this, which on a repair bench usually means the early firmware, the [[term:me|Management Engine]] or the hardware itself — not the operating system.
+The firmware identifies and tests memory, video and storage before it looks for an operating system. A board that "does not POST" never got through this stage, which places the fault in the early firmware, the [[term:me|Management Engine]] or the hardware itself rather than in the operating system.
 
 @see topic:bench-safety
 
@@ -138,7 +138,7 @@ Some platforms run the bus in dual or quad mode — two or four data lines inste
 @name PCH / ICH / FCH
 @short The chipset: the companion chip that owns the firmware flash.
 
-Intel's names for it, oldest first: ICH (I/O Controller Hub), then PCH (Platform Controller Hub). AMD's equivalent is the FCH (Fusion Controller Hub). All three end in Hub, which is why a bench calls it the hub as readily as the chipset.
+Intel's names for it, oldest first: ICH (I/O Controller Hub), then PCH (Platform Controller Hub). AMD's equivalent is the FCH (Fusion Controller Hub). All three end in Hub, which is why it is commonly called the hub as readily as the chipset.
 
 It matters twice over here. The chipset, not the CPU, reads the flash and enforces which [[term:flash-master|master]] may write which [[term:region|region]]. And on Intel it physically contains the [[term:me|Management Engine]], along with the [[term:otp|fuses]] that hold a board's [[term:boot-guard|Boot Guard]] configuration.
 

@@ -6,7 +6,7 @@ The descriptor sits at the very start of the dump and says where every [[term:re
 
 It is the one structure here with real vendor documentation — it is described in Intel's chipset programming guides — so what the panel says about it rests on more than reverse engineering.
 
-On a bench it is the first thing to look at: if the descriptor is damaged, every offset that follows is unreliable, and the board usually will not start at all.
+If the descriptor is damaged, every address that follows it is unreliable.
 
 @see term:region
 @see topic:tool-uefi
@@ -57,7 +57,7 @@ ByteRipper reports how many strap words the descriptor holds and not what each o
 @name Region
 @short A top-level area of the flash, defined by the descriptor.
 
-The descriptor divides the chip into regions — descriptor, BIOS, ME, GbE, PDR, EC and others — each with a start and an end address. A region is the unit a bench usually moves between images, because each one is a self-contained format.
+The descriptor divides the chip into regions — descriptor, BIOS, ME, GbE, PDR, EC and others — each with a start and an end address. A region is the unit normally moved between images, each one being a self-contained format.
 
 @see term:flash-descriptor
 @see term:bios-region
@@ -217,7 +217,7 @@ Where to look:
 
 NVRAM lives in its own area of the BIOS region, in a format that depends on the firmware vendor. ByteRipper reads the common ones — [[term:vss|VSS/VSS2]], FTW, EVSA, FDC and a few vendor-specific stores — and lists the variables in them.
 
-On a bench NVRAM matters for two reasons: it is usually safe to take from a donor (the firmware rebuilds what it needs), and corruption there is a common cause of a board that hangs at the vendor logo or forgets its settings every boot.
+Two properties of NVRAM are worth noting: the firmware rebuilds most of what it needs when the store is absent, and the store is written on every change rather than only on a firmware update.
 
 @see term:vss
 @see topic:recipe-board-data
@@ -238,7 +238,7 @@ Related stores you may see in the same area: **FTW** (a fault-tolerant write rec
 
 DMI is a DMTF standard, and in practice "DMI" and "SMBIOS" name the same thing: the tables the firmware publishes so that an operating system can say what machine it is running on. `dmidecode` on Linux reads exactly these.
 
-What matters on a bench is that a board's own identity lives there: the system and baseboard serial numbers, the machine UUID, the asset tag, the model name. All of it is written at the factory rather than computed. A board with those fields blank loses warranty lookup, licence activation and management tooling.
+A board's own identity is held there: the system and baseboard serial numbers, the machine UUID, the asset tag, the model name. All of it is written at the factory rather than computed. A board with those fields blank loses warranty lookup, licence activation and management tooling.
 
 Lost fields are not always lost for good. Some vendors — HP and Acer among them — ship service utilities that write the identity again, taking the serial number and the rest off the sticker on the case or on the board. Where no such utility exists, carrying the fields over from the old dump is what is left.
 
@@ -369,7 +369,7 @@ The Key Manifest carries the board vendor's public key, and the hash of the key 
 
 That fused hash is the whole of what the silicon knows about the vendor — one value, set once, never rewritten. It is what makes a signed image belong to a board family rather than to firmware in general.
 
-! Replacing the Key Manifest with one signed by a key of your own does not work: your key hashes to something else, and the fused value cannot be changed to match it. Writing the vendor's original bytes back is the fix — which is one more reason the backup dump is the most valuable file on the bench.
+! Replacing the Key Manifest with one signed by a key of your own does not work: your key hashes to something else, and the fused value cannot be changed to match it. Only the manufacturer's original bytes, written back, restore it.
 
 @see term:boot-policy
 @see term:boot-guard
@@ -449,7 +449,7 @@ Above them are the Key Exchange Keys (**KEK**), which are allowed to update thos
 
 The board keeps two boot blocks and a chipset bit chooses which one the CPU sees. It is a recovery mechanism: a bad flash of one copy can be survivable.
 
-Worth knowing on a bench because it means an image may legitimately contain two nearly identical boot blocks, and a comparison will show them both.
+An image may therefore legitimately contain two nearly identical boot blocks, and a comparison reports both.
 
 @see topic:tool-fit
 
@@ -467,5 +467,5 @@ Worth knowing on a bench because it means an image may legitimately contain two 
 
 Not an error. Vendors put their own data in firmware images all the time, and an EC image or an option ROM inside a BIOS region is a format of its own.
 
-It is, however, where to look when something does not add up: a region that should be volumes and reads as non-UEFI data is a corrupted region.
+A region that should consist of volumes and reads as non-UEFI data is, however, a corrupted region.
 

@@ -17,7 +17,7 @@ Its firmware lives in the [[term:me-region|ME region]] of the same SPI chip as t
 
 `$FPT` is the first structure the analysis looks for. Each row names a partition — by a four-character name like `FTPR`, `NFTP`, `MFS`, `UTOK` — and gives its offset, its size and some flags.
 
-On a bench the `$FPT` answers "is this region complete?". If a partition the table declares is not actually there, or its size does not match, the region is truncated or damaged.
+The `$FPT` is what answers whether a region is complete. If a partition the table declares is not actually present, or its size does not match, the region is truncated or damaged.
 
 Intel's flashing utility is called FPT as well — Flash Programming Tool. The three letters are all the two share: this `$FPT` is a table inside the image, that one is a program that writes images.
 
@@ -60,7 +60,7 @@ Some tags are well understood and named; the rest are shown by their number with
 
 When Intel fixes a security problem, the fixed firmware carries a higher SVN. The platform records the highest SVN it has seen and refuses anything lower — that is anti-rollback.
 
-On a bench this is why a downgrade can fail silently: the image is fine, and the platform rejects it anyway. **TCB SVN** is the same idea for the trusted computing base.
+This is why a downgrade can fail without an error: the image is intact, and the platform rejects it regardless. **TCB SVN** is the same idea for the trusted computing base.
 
 @see term:arb-svn
 @see term:vcn
@@ -203,7 +203,7 @@ AMT is the feature the Management Engine was built around: an administrator can 
 - **M1** and **M3** — the engine is fully powered while the host is not. In M3 main memory is not available to it.
 - **M-Off** — the engine is shut down; nothing is powered.
 
-Which of these a given platform actually implements depends on its design. The practical point for a bench: a machine that is plugged in is not an inert machine.
+Which of these a given platform actually implements depends on its design. It follows that a machine connected to power is not an inert machine.
 
 @see term:me
 
@@ -221,7 +221,11 @@ An area opening with the `MFSB` signature instead of a page tag. Its presence is
 
 Each protected file in the [[term:mfs|file system]] has an entry recording what it should hash to, with a nonce and an [[term:anti-replay|anti-replay]] counter. The engine checks it before trusting the file.
 
-On the bench: this is why you cannot edit a value in the ME file system and expect it to be used. The edit is detected.
+The hash is a **keyed** HMAC, and flags in the same table record whether the file is encrypted as well: integrity and confidentiality are protected separately, by separate keys. Published research into the file system describes four of them — an Intel and a non-Intel key for each of the two purposes — derived from the [[term:svn|SVN]] and from a root secret held in the chipset's fuses, which is unique to the individual part ([[web:https://blackhat.com/docs/eu-17/materials/eu-17-Sklyarov-Intel-ME-Flash-File-System-Explained-wp.pdf|Intel ME: Flash File System Explained]]).
+
+Two things follow. A tool can decode the table but cannot verify it, the key not being in the image. And the protected files are bound to the one part they were written on: another chipset derives different keys and does not accept them.
+
+A value edited in the ME file system is therefore not used: the edit is detected. A whole region moved to another board is not accepted either.
 
 @see term:anti-replay
 
@@ -250,7 +254,7 @@ A module the panel shows as Huffman but cannot expand is a module whose dictiona
 
 Parts of the platform firmware are shipped and updated separately from the engine itself — the Power Management Controller, the chipset configuration, the USB Type-C physical layer. Each has its own manifest, version and chipset target.
 
-On a bench: an IUP from a different chipset stepping is a real incompatibility, even when the engine version matches. The panel names the chipset and stepping each IUP is built for.
+An IUP from a different chipset stepping is a genuine incompatibility, even when the engine version matches. The panel names the chipset and stepping each IUP is built for.
 
 @see term:cpd
 

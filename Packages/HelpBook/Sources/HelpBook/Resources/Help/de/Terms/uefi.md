@@ -1,4 +1,4 @@
-@source-sha 90ad1994f5bd0c9357a53366615841603f86ddb9d6f3cd781c9cf9da88055302
+@source-sha 10e681d8895ddb4345f8400427d74061d72c54e44aedd5a7b9bd8f87d420151d
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -7,7 +7,7 @@ Der Descriptor liegt ganz am Anfang des Dumps und sagt, wo jede [[term:region|Re
 
 Er ist die einzige Struktur hier mit echter Hersteller-Dokumentation — beschrieben in Intels Programming Guides zum Chipsatz —, was dem Panel hier mehr als Reverse Engineering unter die Füße legt.
 
-Am Arbeitsplatz schaut man zuerst hierher: ist der Descriptor beschädigt, ist jede Adresse danach unzuverlässig, und die Platine startet meist gar nicht.
+Ist der Descriptor beschädigt, ist jede danach gerechnete Adresse unzuverlässig.
 
 @see term:region
 @see topic:tool-uefi
@@ -58,7 +58,7 @@ ByteRipper nennt die Anzahl der Strap-Wörter im Deskriptor und nicht, was jedes
 @name Region
 @short Ein Bereich des Flash auf oberster Ebene, vom Descriptor festgelegt.
 
-Der Descriptor teilt den Chip in Regionen — Descriptor, BIOS, ME, GbE, PDR, EC und weitere —, jede mit Anfangs- und Endadresse. Eine Region ist die Einheit, die am Arbeitsplatz üblicherweise zwischen Images wandert: jede ist ein für sich geschlossenes Format.
+Der Descriptor teilt den Chip in Regionen — Descriptor, BIOS, ME, GbE, PDR, EC und weitere —, jede mit Anfangs- und Endadresse. Eine Region ist die Einheit, die üblicherweise zwischen Images übertragen wird: Jede ist ein für sich geschlossenes Format.
 
 @see term:flash-descriptor
 @see term:bios-region
@@ -218,7 +218,7 @@ Wo zu suchen ist:
 
 NVRAM liegt in einem eigenen Bereich der BIOS-Region, in einem Format, das vom Firmware-Hersteller abhängt. ByteRipper liest die gängigen — [[term:vss|VSS/VSS2]], FTW, EVSA, FDC und einige herstellereigene — und führt die Variablen darin auf.
 
-Am Arbeitsplatz zählt NVRAM aus zwei Gründen: man kann ihn meist gefahrlos vom Spender übernehmen (die Firmware baut sich neu auf, was sie braucht), und seine Beschädigung ist eine häufige Ursache für eine Platine, die am Herstellerlogo hängt oder bei jedem Start ihre Einstellungen vergisst.
+Zwei Eigenschaften des NVRAM sind festzuhalten: Fehlenden Inhalt legt die Firmware größtenteils neu an, und geschrieben wird er bei jeder Änderung von Einstellungen und nicht nur bei einem Firmware-Update.
 
 @see term:vss
 @see topic:recipe-board-data
@@ -239,7 +239,7 @@ Im selben Bereich finden sich verwandte Speicher: **FTW** (der Eintrag eines feh
 
 DMI ist ein DMTF-Standard, und in der Praxis meinen „DMI" und „SMBIOS" dasselbe: die Tabellen, die die Firmware veröffentlicht, damit ein Betriebssystem sagen kann, auf welcher Maschine es läuft. `dmidecode` unter Linux liest genau diese.
 
-Für die Werkbank zählt, dass dort die Identität der Platine selbst liegt: die Seriennummern von System und Baseboard, die Maschinen-UUID, die Inventarnummer, der Modellname. All das wird im Werk geschrieben und nicht berechnet. Eine Platine mit leeren Feldern verliert Garantieabfrage, Lizenzaktivierung und Verwaltungswerkzeuge.
+Dort liegt die Identität der Platine selbst: die Seriennummern von System und Baseboard, die Maschinen-UUID, die Inventarnummer, der Modellname. All das wird im Werk geschrieben und nicht berechnet. Eine Platine mit leeren Feldern verliert Garantieabfrage, Lizenzaktivierung und Verwaltungswerkzeuge.
 
 Verlorene Felder sind nicht immer endgültig verloren. Einige Hersteller — darunter HP und Acer — liefern Service-Werkzeuge, die die Identität neu schreiben; Seriennummer und der Rest werden vom Aufkleber am Gehäuse oder auf der Platine übernommen. Wo es ein solches Werkzeug nicht gibt, bleibt die Übernahme aus dem alten Dump.
 
@@ -370,7 +370,7 @@ Das Key Manifest enthält den öffentlichen Schlüssel des Boardherstellers und 
 
 Dieser gebrannte Hash ist alles, was das Silizium über den Hersteller weiß: ein Wert, einmal gesetzt, nie neu geschrieben. Er ist es, der ein signiertes Abbild zu einer Boardfamilie gehören lässt statt zu Firmware im Allgemeinen.
 
-! Das Key Manifest durch ein selbst signiertes zu ersetzen funktioniert nicht: Ihr Schlüssel hasht zu etwas anderem, und der gebrannte Wert lässt sich nicht daran anpassen. Die Reparatur besteht darin, die Originalbytes des Herstellers zurückzuschreiben — ein weiterer Grund, warum der Sicherungsdump die wertvollste Datei an der Werkbank ist.
+! Das Key Manifest durch ein selbst signiertes zu ersetzen funktioniert nicht: Ihr Schlüssel hasht zu etwas anderem, und der gebrannte Wert lässt sich nicht daran anpassen. Nur die zurückgeschriebenen Originalbytes des Herstellers stellen diesen Zustand wieder her.
 
 @see term:boot-policy
 @see term:boot-guard
@@ -450,7 +450,7 @@ Darüber stehen die Key Exchange Keys (**KEK**), die diese Datenbanken aktualisi
 
 Die Platine hält zwei Boot-Blöcke, und ein Chipsatz-Bit entscheidet, welchen der Prozessor sieht. Das ist ein Wiederherstellungsmechanismus: ein missglücktes Beschreiben der einen Kopie kann überlebbar sein.
 
-Am Arbeitsplatz gut zu wissen, weil ein Image damit berechtigterweise zwei fast gleiche Boot-Blöcke enthalten kann — und ein Vergleich zeigt beide.
+Daraus folgt, dass ein Image berechtigterweise zwei fast gleiche Boot-Blöcke enthalten kann, und ein Vergleich zeigt beide.
 
 @see topic:tool-fit
 
@@ -468,5 +468,5 @@ Am Arbeitsplatz gut zu wissen, weil ein Image damit berechtigterweise zwei fast 
 
 Kein Fehler. Hersteller legen ständig Eigenes in Firmware-Images, und ein EC-Image oder ein Option-ROM innerhalb einer BIOS-Region ist ein Format für sich.
 
-Es ist aber die Stelle, an der man nachsieht, wenn etwas nicht aufgeht: eine Region, die Volumes sein sollte und sich als Nicht-UEFI-Daten liest, ist eine beschädigte Region.
+Eine Region, die aus Volumes bestehen sollte und sich als Nicht-UEFI-Daten liest, ist dagegen eine beschädigte Region.
 

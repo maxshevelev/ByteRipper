@@ -1,4 +1,4 @@
-@source-sha 2270ebab424f7c2af96c8e29493795c28d5bfd8859eac5956be9830dc36bbbbd
+@source-sha 111f848b948752d81dd66aecd55900ccdfc8001856ccf184fce1169b0fb51391
 @term dump
 @name Dump
 @short Der Inhalt eines Chips, in eine Datei ausgelesen.
@@ -81,7 +81,7 @@ Eine Zone ist ein Umriss und keine Hintergrundfüllung, verdeckt also nie einen 
 
 Ein serieller Flash-Chip trägt die Firmware der Platine. Zwei Eigenschaften zählen hier:
 
-- **Seine Größe steht fest.** Ein Image für einen 8-MB-Chip muss exakt 8 MB groß sein. Deshalb darf am Arbeitsplatz nichts die Länge eines Dumps verändern.
+- **Seine Größe steht fest.** Ein Image für einen 8-MB-Baustein muss exakt 8 MB groß sein, weshalb sich die Länge eines Dumps nicht ändern darf.
 - **Gelöscht heißt `FF`.** Flash wird auf Einsen gelöscht. Eine lange Kette `FF` im Dump ist leerer Raum, kein Schaden; eine lange Kette `00` ist dagegen meist beschriebene Fläche. Eine Ausnahme: In einem Dump aus dem laufenden System kann `FF` auch eine Region meinen, die das Werkzeug nicht lesen durfte — siehe [[topic:flash-writes|Wer in den Flash schreibt]].
 
 @see topic:bench-safety
@@ -100,7 +100,7 @@ Diese Trennung ist Absicht: das Programm lässt sich mit dem Dump jedes Programm
 
 Das BIOS ist der erste Code, den der Prozessor ausführt. Es erkennt und initialisiert die Hardware, fährt den [[term:post|Einschaltselbsttest]] und übergibt an einen Bootloader auf einem Laufwerk.
 
-Streng genommen meint das Wort die ältere Firmware vor UEFI; auf einem heutigen Board läuft [[term:uefi|UEFI]]. An der Werkbank werden beide Wörter nebeneinander benutzt, und „BIOS-Chip“ heißt der Flash mit der Firmware, egal welche davon es ist.
+Streng genommen meint das Wort die ältere Firmware vor UEFI; auf einem heutigen Board läuft [[term:uefi|UEFI]]. In der Praxis werden beide Wörter gleichbedeutend benutzt, und „BIOS-Chip“ bezeichnet den Flash-Baustein, in dem die Firmware liegt, welche davon es auch sei.
 
 @see term:uefi
 @see term:bios-region
@@ -120,7 +120,7 @@ Die Referenzimplementierung ist das quelloffene TianoCore EDK II. Firmware-Herst
 @name POST
 @short „Power-On Self-Test“ — die Prüfung der Hardware, die die Firmware selbst vornimmt, noch vor jedem Bootvorgang.
 
-Die Firmware erkennt und prüft Speicher, Grafik und Laufwerke, bevor sie nach einem Betriebssystem sucht. Ein Board, das „keinen POST macht“, ist bis dahin nicht gekommen — an der Werkbank heißt das: frühe Firmware, [[term:me|Management Engine]] oder die Hardware selbst, aber nicht das Betriebssystem.
+Die Firmware erkennt und prüft Speicher, Grafik und Laufwerke, bevor sie nach einem Betriebssystem sucht. Ein Board, das „keinen POST macht“, ist bis zu dieser Stufe nicht gekommen, womit die Ursache in der frühen Firmware, in der [[term:me|Management Engine]] oder in der Hardware selbst liegt und nicht im Betriebssystem.
 
 @see topic:bench-safety
 
@@ -139,7 +139,7 @@ Manche Plattformen fahren den Bus im Dual- oder Quad-Modus, mit zwei oder vier D
 @name PCH / ICH / FCH
 @short Der Chipsatz: der zweite Baustein auf dem Board, dem der Firmware-Flash gehört.
 
-Intels Namen dafür, vom ältesten an: ICH (I/O Controller Hub), dann PCH (Platform Controller Hub). AMDs Gegenstück heißt FCH (Fusion Controller Hub). Alle drei enden auf Hub — deshalb sagt die Werkbank ebenso oft Hub wie Chipsatz.
+Intels Namen dafür, vom ältesten an: ICH (I/O Controller Hub), dann PCH (Platform Controller Hub). AMDs Gegenstück heißt FCH (Fusion Controller Hub). Alle drei enden auf Hub — deshalb wird ebenso oft Hub wie Chipsatz gesagt.
 
 Hier ist er gleich doppelt wichtig. Den Flash liest der Chipsatz, nicht die CPU, und er setzt auch durch, welcher [[term:flash-master|Master]] welche [[term:region|Region]] beschreiben darf. Und bei Intel sitzt die [[term:me|Management Engine]] physisch in ihm — zusammen mit den [[term:otp|Fuses]], in denen die [[term:boot-guard|Boot-Guard]]-Konfiguration des Boards liegt.
 
