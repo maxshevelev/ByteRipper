@@ -112,6 +112,45 @@ final class SegmentCommandsTests: XCTestCase {
         _ = window
     }
 
+    /// Add Cut… takes an offset as a number, so the byte it names is usually
+    /// off-screen: committing lands the caret on the new cut, the way Go To
+    /// lands it on a typed address.
+    func testAddCutLandsTheCaretOnTheNewCut() throws {
+        let (controller, window, url) = try makeController([UInt8](repeating: 0x11, count: 4096))
+        defer { cleanup(controller, url) }
+        let pane = controller.windowModel.pane1
+        pane.setSelection(SelectionModel.empty(at: 0, fileSize: 4096))
+
+        var captured: MainViewController.CutEditRequest?
+        controller.cutEditPresenter = { captured = $0 }
+        controller.addCut()
+        controller.cutEditPresenter = nil
+        let request = try XCTUnwrap(captured, "Add Cut… must present the cut popover")
+
+        request.commit(0x800, "")
+
+        XCTAssertEqual(pane.segmentStore.cuts, [0x800], "the cut is made where the offset named")
+        XCTAssertEqual(pane.caretOffset, 0x800, "and the caret lands on it")
+        _ = window
+    }
+
+    /// Split Here is the pointer's own gesture: the byte is already in view, so
+    /// committing leaves the caret where the user had it.
+    func testSplitHereLeavesTheCaretAlone() throws {
+        let (controller, window, url) = try makeController([UInt8](repeating: 0x11, count: 4096))
+        defer { cleanup(controller, url) }
+        let pane = controller.windowModel.pane1
+        pane.setSelection(SelectionModel.empty(at: 0x10, fileSize: 4096))
+
+        let item = try splitItem(for: pane, offset: 0x800)
+        let request = try capturedSplitRequest(controller, item)
+        request.commit(0x800, "")
+
+        XCTAssertEqual(pane.segmentStore.cuts, [0x800], "the cut is still made")
+        XCTAssertEqual(pane.caretOffset, 0x10, "but the caret has not moved")
+        _ = window
+    }
+
     /// Right-clicking an address opens the popover pre-filled with the row's
     /// start — the offset the address names, not a byte within the row.
     func testSplitHereOpensThePopoverPrefilledWithTheClickedAddress() throws {

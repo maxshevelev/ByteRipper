@@ -5223,7 +5223,8 @@ final class MainViewController: NSViewController {
     /// pre-filled with a number, not a pointer at a byte.
     @objc func addCut() {
         let pane = activePane
-        presentCutEditPopover(in: pane, prefill: pane.caretOffset, anchoredToOffset: false)
+        presentCutEditPopover(in: pane, prefill: pane.caretOffset,
+                              anchoredToOffset: false, landsCaretOnTheCut: true)
     }
 
     /// Merge: merges the piece a position sits in into its neighbour (§21.3). It
@@ -5258,17 +5259,28 @@ final class MainViewController: NSViewController {
     /// it is typed; committing makes the cut and names the piece that starts
     /// there. With `anchoredToOffset` the popover hangs off that byte; without
     /// it (Add Cut…) it is centred in the pane's visible area.
+    ///
+    /// `landsCaretOnTheCut` puts the caret on the new cut and centres it, the
+    /// way Go To does for an address typed into a field. Add Cut… asks for an
+    /// offset as a number, so the byte it names is usually nowhere near the
+    /// screen, and leaving the view where it was would hide the cut at the
+    /// moment of making it. Split Here does not ask for this: its byte is the
+    /// one under the pointer, already in view.
     private func presentCutEditPopover(in pane: PaneViewModel, prefill: UInt64,
-                                       anchoredToOffset: Bool = true) {
+                                       anchoredToOffset: Bool = true,
+                                       landsCaretOnTheCut: Bool = false) {
         let request = CutEditRequest(
             pane: pane, prefillOffset: prefill, anchoredToOffset: anchoredToOffset,
-            commit: { offset, name in
+            commit: { [weak self] offset, name in
                 guard pane.segmentStore.addCut(at: offset) else { return }
                 // The cut splits the piece at `offset`; the new piece is the one
                 // that *starts* there, so it is the one the description names.
                 if let piece = pane.segmentStore.segment(containing: offset) {
                     pane.segmentStore.rename(piece.index, to: name)
                 }
+                guard landsCaretOnTheCut else { return }
+                pane.moveCaret(to: offset)
+                self?.filePaneView(for: pane)?.revealOffsetCentered(offset)
             }
         )
         if let cutEditPresenter {
