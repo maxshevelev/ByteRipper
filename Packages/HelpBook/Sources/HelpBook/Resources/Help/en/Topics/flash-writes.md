@@ -4,9 +4,9 @@
 
 Firmware is written to the chip one way by design: through the chipset. The [[term:pch|chipset]] holds the only SPI controller on the board, so firmware on the CPU, a flashing utility, the [[term:me|Management Engine]] and the network controller all reach the chip by asking it — and it checks their permissions against the descriptor before it obeys.
 
-A [[term:programmer|programmer]] is not part of that design. It drives the pins of the chip directly, and there is no party to ask: no permissions and no checks apply. It is not a second ordinary route but an operation outside the design of the platform, and it is how a dump is obtained from a board that does not start, and how bytes are written back when the chipset will no longer write them.
+A [[term:programmer|programmer]] drives the pins of the chip directly, bypassing the chipset. The descriptor's permissions do not apply to it: they are enforced by the chipset, which is not in that path.
 
-! The absence of a check at write time does not mean the absence of a check. The permissions fence off exactly what the platform verifies when it starts. A programmer removes the fence and not the verification: an edit inside a protected range is written without complaint and is then rejected at start-up. Which mechanism verifies which region is set out in the sections below.
+! An edit made by hand inside a protected area of the image is written without an error and is rejected when the board starts. Which areas are protected, and by what, is set out in the sections below.
 
 ## The board writes to its own flash all the time
 
@@ -28,12 +28,13 @@ The [[term:flash-descriptor|descriptor]] names four [[term:flash-master|masters]
 
 The masks decide one thing only: whether a write through the chipset is allowed. Whether what was written will then work is a different question, and it is answered at boot, by checks that have nothing to do with the descriptor:
 
-- [[term:boot-guard|Boot Guard]] verifies the boot block before the CPU executes it. The chipset does not check that signature: the [[term:acm|ACM]], started by CPU microcode, does, and the hash of the root key sits in the chipset's [[term:otp|fuses]].
-- The ME region is verified by the engine itself, as it comes up.
+- **The early part of the BIOS region.** [[term:boot-guard|Boot Guard]] verifies the [[term:ibb|IBB]] — the SEC and PEI code — before the processor executes it: the [[term:acm|ACM]], started by CPU microcode, checks the block's hashes against those recorded in the Boot Guard manifests, and the hash of the root key sits in the chipset's [[term:otp|fuses]]. A byte changed inside the IBB changes the hash, and the block fails the check.
+- **The rest of the BIOS region.** What lies beyond the IBB is the [[term:ibb|OBB]], and it is verified by the firmware itself, in code the board's manufacturer writes. Whether a given manufacturer does so, and how thoroughly, is that manufacturer's decision — which is why the same kind of edit is rejected in one part of an image and goes through in another.
+- **The ME region** is verified by the engine itself as it comes up; see [[topic:recipe-me-check|Reading the ME Region Report]].
 
-This is the distinction that accounts for a change which is written successfully and still has no effect. A programmer defeats the masks and can write any byte into any region; it has no effect on the checks performed at start-up, so an edit inside the [[term:ibb|IBB]] or in the ME region is written and then rejected.
+An edit inside a protected area is therefore written successfully and still has no effect: writing and the check at start-up are different mechanisms, and permission for the first promises nothing about the second.
 
-What those checks do not cover — the NVRAM store, the [[term:dmi|DMI]] area, [[term:ec|EC]] firmware, and frequently the DXE drivers as well ([[term:ibb|IBB / OBB]] states which) — is written by a programmer and takes effect.
+The areas those checks do not cover — the NVRAM store, the [[term:dmi|DMI]] area, [[term:ec|EC]] firmware, and frequently the DXE drivers as well — take effect once written.
 
 ## The locks the descriptor knows nothing about
 

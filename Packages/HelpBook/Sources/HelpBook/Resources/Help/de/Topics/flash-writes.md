@@ -1,13 +1,13 @@
-@source-sha 056f388cbfbcea2466012cb01cd6c728e5162c53615866ad19dbf34f80176ecf
+@source-sha da47a0704f6662db8ddf503b7783a83aedd104e39eae086454cb9985f2aa9483
 # Wer in den Flash schreibt
 
 > Nur der Chipsatz hat Leitungen zum Chip. Alles auf der Platine, das den Flash lesen oder schreiben will, geht durch ihn, und wer was darf, steht im Descriptor.
 
 Firmware kommt bauartbedingt auf einem Weg in den Chip: über den Chipsatz. Der einzige SPI-Controller der Platine sitzt im [[term:pch|Chipsatz]], also kommen die Firmware auf der CPU, ein Flash-Werkzeug, die [[term:me|Management Engine]] und der Netzwerk-Controller nur über ihn an den Chip — und er prüft ihre Rechte am Descriptor, bevor er gehorcht.
 
-Ein [[term:programmer|Programmer]] gehört nicht zu dieser Bauweise. Er spricht die Beinchen des Chips direkt an, und es ist niemand da, den er fragen könnte: keine Rechte, keine Prüfungen. Das ist kein zweiter regulärer Weg, sondern ein Schritt außerhalb dessen, wie die Plattform gebaut ist — so kommt ein Dump von einer toten Platine, und so gehen Bytes wieder hinein, wenn der Chipsatz sie nicht mehr schreibt.
+Ein [[term:programmer|Programmiergerät]] spricht die Anschlüsse des Bausteins unmittelbar an und geht am Chipsatz vorbei. Die Rechte aus dem Descriptor greifen dabei nicht: Durchgesetzt werden sie vom Chipsatz, der in diesem Weg nicht vorkommt.
 
-! Das Fehlen einer Prüfung beim Schreiben bedeutet nicht das Fehlen einer Prüfung. Die Rechte zäunen genau das ein, was die Plattform beim Start prüft. Ein Programmiergerät nimmt den Zaun weg, nicht die Prüfung: Eine Änderung in einem geschützten Bereich wird ohne Meldung geschrieben und beim Start zurückgewiesen. Welcher Mechanismus welche Region prüft, steht in den Abschnitten unten.
+! Eine von Hand in einen geschützten Bereich des Images eingebrachte Änderung wird ohne Fehlermeldung geschrieben und beim Start der Platine zurückgewiesen. Welche Bereiche geschützt sind und wodurch, steht in den Abschnitten unten.
 
 ## Die Platine schreibt ständig in ihren eigenen Flash
 
@@ -29,12 +29,13 @@ Der [[term:flash-descriptor|Descriptor]] nennt vier [[term:flash-master|Master]]
 
 Die Masken entscheiden nur eines: ob über den Chipsatz geschrieben werden darf. Ob das Geschriebene dann läuft, ist eine andere Frage, und sie wird beim Start beantwortet, von Prüfungen, die mit dem Descriptor nichts zu tun haben:
 
-- [[term:boot-guard|Boot Guard]] prüft den Bootblock, bevor die CPU ihn ausführt. Die Signatur prüft nicht der Chipsatz: das tut das [[term:acm|ACM]], gestartet vom Mikrocode der CPU, und der Hash des Wurzelschlüssels liegt in den [[term:otp|Fuses]] des Chipsatzes.
-- Die ME-Region prüft die Engine selbst, während sie hochkommt.
+- **Der frühe Teil der BIOS-Region.** [[term:boot-guard|Boot Guard]] prüft den [[term:ibb|IBB]] — den SEC- und PEI-Code —, bevor der Prozessor ihn ausführt: Das [[term:acm|ACM]], gestartet vom Mikrocode des Prozessors, vergleicht die Hashes des Blocks mit denen in den Boot-Guard-Manifesten, und der Hash des Wurzelschlüssels liegt in den [[term:otp|Fuses]] des Chipsatzes. Ein geändertes Byte im IBB ändert den Hash, und der Block besteht die Prüfung nicht.
+- **Der übrige Teil der BIOS-Region.** Was hinter dem IBB liegt, ist der [[term:ibb|OBB]], und ihn prüft die Firmware selbst, mit Code des Platinenherstellers. Ob ein bestimmter Hersteller das tut und wie gründlich, ist dessen Entscheidung — deshalb wird dieselbe Art von Änderung im einen Teil eines Images zurückgewiesen und geht im anderen durch.
+- **Die ME-Region** prüft die Engine selbst, während sie hochkommt; siehe [[topic:recipe-me-check|Den ME-Bericht lesen]].
 
-Daher die Trennung, an der eine Änderung scheitert, die sauber geschrieben wurde. Ein Programmer umgeht die Masken — er kann jedes Byte in jede Region schreiben. Gegen die Prüfungen beim Start richtet er nichts aus: eine Änderung innerhalb des [[term:ibb|IBB]] oder in der ME-Region wird geschrieben und danach abgewiesen.
+Eine Änderung in einem geschützten Bereich wird deshalb erfolgreich geschrieben und wirkt dennoch nicht: Schreiben und die Prüfung beim Start sind verschiedene Mechanismen, und die Erlaubnis für das eine sagt nichts über das andere.
 
-Alles aber, was diese Prüfungen nicht abdecken — NVRAM, der [[term:dmi|DMI]]-Bereich, die [[term:ec|EC]]-Firmware und oft auch die DXE-Treiber ([[term:ibb|IBB / OBB]] sagt, wann) —, schreibt ein Programmer, und es läuft. Ein Teil der Arbeit an Dumps liegt dort: die platinenspezifischen Daten wiederherstellen, Einstellungen zurückholen, ein BIOS anpassen.
+Die Bereiche, die diese Prüfungen nicht abdecken — der NVRAM-Speicher, der [[term:dmi|DMI]]-Bereich, die [[term:ec|EC]]-Firmware und oft auch die DXE-Treiber —, wirken, sobald sie geschrieben sind.
 
 ## Die Sperren, von denen der Descriptor nichts weiß
 
