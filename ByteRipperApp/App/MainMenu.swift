@@ -132,7 +132,7 @@ enum MainMenu {
         add(L("ByteRipper Help"), .topic(.overview), key: "?")
         helpMenu.addItem(.separator())
         add(L("Getting Started"), .topic(.firstComparison))
-        add(L("Bench Rules"), .topic(.benchSafety))
+        add(L("Editing Constraints"), .topic(.benchSafety))
         helpMenu.addItem(.separator())
         add(L("Glossary: UEFI Images"), .term(HelpTermID("flash-descriptor")))
         add(L("Glossary: Intel ME"), .term(HelpTermID("fpt")))

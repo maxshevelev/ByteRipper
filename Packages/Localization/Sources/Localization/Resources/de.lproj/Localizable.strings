@@ -119,7 +119,6 @@
 "Backup %1$@" = "Sicherung: %1$@";
 "Backup FIT pointer" = "FIT-Zeiger der Sicherung";
 "Backup FIT table" = "FIT-Tabelle der Sicherung";
-"Bench Rules" = "Regeln am Arbeitsplatz";
 "Bit position" = "Bitposition";
 "Body" = "Rumpf";
 "Bookmark name" = "Name des Lesezeichens";
@@ -213,6 +212,7 @@
 "EFS Volume" = "EFS-Volume";
 "Edit Bookmark…" = "Lesezeichen bearbeiten…";
 "Edit Segment %1$@" = "Segment %1$@ bearbeiten";
+"Editing Constraints" = "Einschränkungen beim Bearbeiten";
 "Editing" = "Bearbeiten";
 "Edit…" = "Bearbeiten…";
 "Empty" = "Leer";

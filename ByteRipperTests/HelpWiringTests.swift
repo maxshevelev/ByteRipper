@@ -13,7 +13,7 @@ final class HelpMenuTests: XCTestCase {
     func testTheMenuOffersTheBenchsOwnDoors() {
         let titles = MainMenu.makeHelpMenu().items.map(\.title)
         XCTAssertEqual(titles.first, "ByteRipper Help")
-        XCTAssertTrue(titles.contains("Bench Rules"))
+        XCTAssertTrue(titles.contains("Editing Constraints"))
         XCTAssertTrue(titles.contains("Glossary: Intel ME"))
     }
 

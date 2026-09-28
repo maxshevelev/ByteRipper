@@ -119,7 +119,6 @@
 "Backup %1$@" = "Резерв: %1$@";
 "Backup FIT pointer" = "Резервный указатель FIT";
 "Backup FIT table" = "Резервная таблица FIT";
-"Bench Rules" = "Правила мастерской";
 "Bit position" = "Позиция бита";
 "Body" = "Тело";
 "Bookmark name" = "Имя закладки";
@@ -213,6 +212,7 @@
 "EFS Volume" = "Том EFS";
 "Edit Bookmark…" = "Изменить закладку…";
 "Edit Segment %1$@" = "Параметры сегмента %1$@";
+"Editing Constraints" = "Ограничения при правке";
 "Editing" = "Редактирование";
 "Edit…" = "Изменить…";
 "Empty" = "Пусто";
