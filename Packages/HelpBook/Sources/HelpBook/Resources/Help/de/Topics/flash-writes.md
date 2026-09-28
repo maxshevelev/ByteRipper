@@ -1,4 +1,4 @@
-@source-sha 0e5854de202df3ba8a8a38b77c212d530cb1aa33172b932320fef94c79cc0768
+@source-sha 056f388cbfbcea2466012cb01cd6c728e5162c53615866ad19dbf34f80176ecf
 # Wer in den Flash schreibt
 
 > Nur der Chipsatz hat Leitungen zum Chip. Alles auf der Platine, das den Flash lesen oder schreiben will, geht durch ihn, und wer was darf, steht im Descriptor.
@@ -55,6 +55,6 @@ Intels Chipsätze tragen einen **Flash Descriptor Security Override**: einen Ser
 - Vor 2011 (5er-Serie und älter) wurde stattdessen im selben Moment `GPIO33` auf Masse gezogen.
 - Manche Hersteller führen dasselbe als Jumper oder Schalter heraus.
 
-Damit liest oder überschreibt eine Service-Prozedur eine gesperrte Region mit einem Werkzeug, ohne den Chip von der Platine zu nehmen. Ein öffentliches Datenblatt beschreibt das nicht: es steht in Intels Plattform-Leitfäden für Hersteller, und am Arbeitsplatz ist es aus den Anleitungen der Reparatur-Community bekannt — am ausführlichsten in [[web:https://winraid.level1techs.com/t/guide-unlock-intel-flash-descriptor-read-write-access-permissions-for-spi-servicing/32449|der Win-RAID-Anleitung zum Entsperren des Descriptor-Zugriffs]], woher auch das oben Gesagte stammt. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
+Damit liest oder überschreibt eine Service-Prozedur eine gesperrte Region mit einem Werkzeug, ohne den Chip von der Platine zu nehmen. Ein öffentliches Datenblatt beschreibt das nicht: es steht in Intels Plattform-Leitfäden für Hersteller, und in der Reparaturpraxis ist es aus den Anleitungen der Community bekannt — am ausführlichsten in [[web:https://winraid.level1techs.com/t/guide-unlock-intel-flash-descriptor-read-write-access-permissions-for-spi-servicing/32449|der Win-RAID-Anleitung zum Entsperren des Descriptor-Zugriffs]], woher auch das oben Gesagte stammt. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
 
-Siehe auch: [[topic:bench-safety|Regeln am Arbeitsplatz]], [[term:flash-descriptor|Flash descriptor]].
+Siehe auch: [[topic:bench-safety|Einschränkungen beim Bearbeiten eines Images]], [[term:flash-descriptor|Flash descriptor]].

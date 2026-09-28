@@ -1,4 +1,4 @@
-@source-sha 304bb3ae2b757249f4048345b23ef60b41fdee06a420f389779a1095610670eb
+@source-sha 27e01a3af57e9fb43c57156d4336ec597c3b3941f4d1527752d62c90f74ca446
 # Sichern
 
 > Roter Text heißt, die Änderung gibt es nur hier. Sichern Sie, und sie steht in der Datei.
@@ -10,19 +10,19 @@
 
 ## Was ungesichert ist
 
-Bytes, die Sie geändert haben, erscheinen **rot**, bis sie gesichert sind, und der Bereichskopf sagt, dass das Dokument geändert ist. Dieses Paar prüft man, bevor man eine Datei an einen Programmer gibt: kein Rot mehr, und der Kopf sauber.
+Geänderte Bytes erscheinen **rot**, bis sie gesichert sind, und der Bereichskopf weist das Dokument als geändert aus. Das Sichern hebt beide Kennzeichen auf.
 
-## Wenn sich die Datei unter Ihnen ändert
+## Wenn die Datei sich währenddessen ändert
 
-ByteRipper beobachtet die geöffnete Datei. Schreibt etwas anderes sie neu — etwa Ihre Programmer-Software, die den Chip in denselben Pfad ausliest — merkt das Programm es und sagt es, statt später still über den neuen Inhalt zu sichern.
+ByteRipper beobachtet die geöffnete Datei. Schreibt ein anderes Programm sie neu — etwa eine Programmiersoftware, die den Baustein in denselben Pfad ausliest —, wird das erkannt und gemeldet, statt dass ein späteres Sichern den neuen Inhalt stillschweigend überschreibt.
 
 ## Dokumente ohne Datei
 
-Manche Dokumente sind mit Absicht unbenannt und haben keinen Pfad, weshalb ⌘S fragt, wohin damit:
+Manche Dokumente haben ihrer Natur nach weder Namen noch Pfad, weshalb ⌘S fragt, wohin sie geschrieben werden sollen:
 
 - **Ablage ▸ Neue Datei** (⌘N).
-- Das Ergebnis eines [[topic:join-duplicate|Zusammenfügens]]: zwei Dumps zu verbinden ergibt ein *neues* Image, und ein versehentliches ⌘S darf es nicht über eine der Hälften schreiben.
+- Das Ergebnis eines [[topic:join-duplicate|Zusammenfügens]]: Zwei Dumps zu verbinden ergibt ein *neues* Image, das ⌘S nicht über eine der Hälften schreiben darf.
 - Das Ergebnis von **Duplizieren**.
 - Ein Fragment, das aus einem Image geholt wurde.
 
-! Bewahren Sie den ursprünglichen Dump. Sichern Sie Ihre geänderte Fassung unter neuem Namen — `board_patched.bin` neben `board_original.bin`. Ein überschriebener Dump ist ein Chip, den Sie erneut lesen müssen, und nach einem Spannungsfehler gelingt das womöglich kein zweites Mal.
+! **Sichern unter…** schreibt das bearbeitete Image in eine neue Datei und lässt die gelesene Datei unverändert. Ist der ursprüngliche Dump überschrieben, lässt er sich mit den Mitteln des Programms nicht wiederherstellen.

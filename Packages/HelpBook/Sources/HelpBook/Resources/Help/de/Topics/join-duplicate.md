@@ -1,4 +1,4 @@
-@source-sha 78a4d445a49856104cc3bb7b2d7b46b81abd3ad3dd0c0ec395464d1cf5c640e8
+@source-sha d809886e55a12fd94db869deb18a6b9ab40afd628128d707cf8b08d85410714c
 # Zusammenfügen und Duplizieren
 
 > Die Dumps zweier Chips zu einem Image, und eine Vorher-Kopie zum Ändern.
@@ -21,6 +21,6 @@ Daraus folgen zwei Dinge, die gut zu wissen sind:
 
 ## Duplizieren: eine Kopie des Dumps, wie er war
 
-**Ablage ▸ Duplizieren** kopiert den Inhalt des Bereichs als neues, ungesichertes Dokument in den freien Bereich. Verfügbar im Einzeldatei-Modus, wo es einen freien Bereich gibt.
+**Ablage ▸ Duplizieren** kopiert den Inhalt des Bereichs als neues, ungesichertes Dokument in den freien Bereich. Der Befehl steht im Einzeldatei-Modus zur Verfügung, in dem ein freier Bereich vorhanden ist.
 
-Das ist der schnellste Weg, mit Netz zu arbeiten: duplizieren, die Kopie ändern und beim Tippen zusehen, wie die Unterschiede neben dem Original erscheinen. Am Ende sichern Sie die Hälfte, die stimmt.
+Die Kopie wird bearbeitet, während die Ausgangsdatei daneben geöffnet bleibt, und der Vergleich weist jede Änderung beim Tippen als Unterschied aus. Gesichert werden kann jedes der beiden Dokumente.
