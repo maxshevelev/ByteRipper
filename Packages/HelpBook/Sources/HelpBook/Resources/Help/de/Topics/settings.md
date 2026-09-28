@@ -6,7 +6,7 @@
 - **Darstellung** — die nichtproportionale Schrift, ihre Größe und die Zeilenhöhe der Hex-Ansicht, und ob das Programm dem System folgt oder fest hell oder dunkel ist. Die Schriftgröße lässt sich auch über **⌘=** / **⌘−** im Menü „Darstellung“ ändern.
 - **Aufteilung** — wie die Bereiche angeordnet sind und was sich das Fenster merkt.
 - **Vergleich** — wie Unterschiede gezeigt und gezählt werden.
-- **Bearbeiten** — die Rückfragen vor Änderungen, die die Länge verändern ([[topic:editing|Bytes bearbeiten]]). Sie sind eingeschaltet; sie hier abzuschalten ist derselbe Schalter wie das Kästchen „Nicht mehr fragen“ in den Dialogen.
+- **Bearbeiten** — die Rückfragen vor Änderungen, welche die Länge der Datei verändern ([[topic:editing|Bytes bearbeiten]]). Sie sind voreingestellt, und es ist dieselbe Einstellung wie das Kästchen „Nicht mehr fragen“ in den Dialogen selbst.
 - **Textdecodierung** — die Codierung, mit der die Textspalte gelesen wird.
 - **Suchmuster** — die benannten Suchmuster und der Ordner, über den sich die Bibliothek zwischen mehreren Installationen abgleichen lässt ([[topic:search|Bytes und Text finden]]).
 - **Dateitypen** — welche Endungen aus dem Finder in ByteRipper öffnen. `.rom` und `.dump` gehören dem Programm; `.bin` und alles Weitere werden hier angeboten, weil das System dafür bereits ein Programm kennt.

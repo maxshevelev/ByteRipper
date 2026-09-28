@@ -1,11 +1,11 @@
 @source-sha 27e01a3af57e9fb43c57156d4336ec597c3b3941f4d1527752d62c90f74ca446
 # Sichern
 
-> Roter Text heißt, die Änderung gibt es nur hier. Sichern Sie, und sie steht in der Datei.
+> Rot kennzeichnet ein Byte, das von der Datei auf dem Volume abweicht. Das Sichern schreibt diese Bytes in die Datei, und das Rot wird aufgehoben.
 
-- **⌘S — Sichern.** Schreibt das Dokument des Bereichs zurück in seine Datei. Ein unbenanntes Dokument öffnet stattdessen ein Sicherungsfenster.
+- **⌘S — Sichern.** Schreibt das Dokument des Bereichs zurück in seine Datei. Ein unbenanntes Dokument öffnet stattdessen ein Sicherungsfenster, damit ein Name gewählt werden kann.
 - **⇧⌘S — Sichern unter…** Schreibt es an einen neuen Ort, und der Bereich folgt der neuen Datei.
-- **Ablage ▸ Auf gesicherten Stand zurücksetzen** wirft Ihre Änderungen weg und liest die Datei neu vom Volume.
+- **Ablage ▸ Auf gesicherten Stand zurücksetzen** verwirft die Änderungen und liest die Datei neu vom Volume.
 - **Ablage ▸ In der Quelle aktualisieren** ist das dritte Ziel: für einen [[topic:fragments|Fragment-Bereich]] schreibt es das Fragment zurück in das Image, aus dem es stammt, statt in eine Datei.
 
 ## Was ungesichert ist

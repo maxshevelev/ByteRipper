@@ -7,13 +7,13 @@ Firmware kommt bauartbedingt auf einem Weg in den Chip: über den Chipsatz. Der 
 
 Ein [[term:programmer|Programmer]] gehört nicht zu dieser Bauweise. Er spricht die Beinchen des Chips direkt an, und es ist niemand da, den er fragen könnte: keine Rechte, keine Prüfungen. Das ist kein zweiter regulärer Weg, sondern ein Schritt außerhalb dessen, wie die Plattform gebaut ist — so kommt ein Dump von einer toten Platine, und so gehen Bytes wieder hinein, wenn der Chipsatz sie nicht mehr schreibt.
 
-! Keine Prüfung beim Schreiben heißt nicht, dass es gar keine gibt. Die Rechte zäunen genau das ein, was die Plattform beim Start prüft. Ein Programmer nimmt den Zaun weg, nicht die Prüfung: eine Änderung in einem geschützten Bereich wird ohne ein Wort der Klage geschrieben und wird zu einer Platine, die nicht mehr startet. Bevor Sie eine Region ändern, finden Sie heraus, wer sie prüft — die Abschnitte unten sagen es.
+! Das Fehlen einer Prüfung beim Schreiben bedeutet nicht das Fehlen einer Prüfung. Die Rechte zäunen genau das ein, was die Plattform beim Start prüft. Ein Programmiergerät nimmt den Zaun weg, nicht die Prüfung: Eine Änderung in einem geschützten Bereich wird ohne Meldung geschrieben und beim Start zurückgewiesen. Welcher Mechanismus welche Region prüft, steht in den Abschnitten unten.
 
 ## Die Platine schreibt ständig in ihren eigenen Flash
 
 Und nicht nur, wenn jemand die Firmware aktualisiert:
 
-- Sie ändern eine Einstellung im Setup und drücken F10, und die Firmware schreibt den [[term:vss|NVRAM]]-Speicher zurück in die [[term:bios-region|BIOS-Region]].
+- Wird eine Einstellung im Setup geändert und mit F10 gesichert, schreibt die Firmware den [[term:vss|NVRAM]]-Speicher zurück in die [[term:bios-region|BIOS-Region]].
 - Die Management Engine schreibt ihre eigene [[term:mfs|MFS]]: Konfiguration, Zähler, Zustand.
 - Ein Update-Werkzeug des Herstellers oder Intels FPT (Flash Programming Tool) schreibt aus dem laufenden System eine ganze Region neu.
 

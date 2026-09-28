@@ -1,18 +1,18 @@
 @source-sha d809886e55a12fd94db869deb18a6b9ab40afd628128d707cf8b08d85410714c
 # Zusammenfügen und Duplizieren
 
-> Die Dumps zweier Chips zu einem Image, und eine Vorher-Kopie zum Ändern.
+> Die Dumps zweier Bausteine zu einem Image zusammenfügen und ein Image duplizieren, um die Kopie zu bearbeiten.
 
 ## Zusammenfügen: die Dumps zweier SPI-Chips zu einem Image
 
-Bei vielen Platinen ist das BIOS auf zwei SPI-Flash-Chips verteilt. Lesen Sie beide, öffnen Sie die erste, dann:
+Bei Platinen, deren Firmware in zwei SPI-Flash-Bausteinen liegt, werden beide gelesen und die erste Datei geöffnet. Dann:
 
 - **Ablage ▸ Datei anhängen…** — die Bytes der gewählten Datei kommen hinter den Inhalt des Bereichs.
 - **Ablage ▸ Datei am Anfang einfügen…** — sie kommen davor.
 
-Jetzt ist das ganze BIOS ein Image, und alles arbeitet damit normal: der Vergleich, die Suche, das [[topic:tool-uefi|UEFI-Panel]], das ein zusammenhängendes Image erwartet.
+Die gesamte Firmware ist dann ein Image, mit dem der Vergleich, die Suche und das [[topic:tool-uefi|UEFI-Werkzeug]] — das ein zusammenhängendes Image erwartet — normal arbeiten.
 
-Die Naht ist als [[topic:segments|Segmentschnitt]] festgehalten, sodass **Alle als einzelne Dateien sichern** Ihnen die beiden Hälften an derselben Grenze zurückgibt, bereit für je ihren Chip.
+Die Grenze ist als [[topic:segments|Segmentschnitt]] festgehalten, sodass **Alle als einzelne Dateien sichern** die beiden Hälften genau an dieser Grenze zurückgibt.
 
 Daraus folgen zwei Dinge, die gut zu wissen sind:
 

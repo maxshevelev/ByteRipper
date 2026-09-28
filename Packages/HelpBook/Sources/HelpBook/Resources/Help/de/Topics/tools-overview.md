@@ -11,12 +11,12 @@ Das Menü **Werkzeuge** schaltet jeweils einen Bereich neben dem Dump ein. Jedes
 
 ## Was sie gemeinsam haben
 
-- **Ein Panel ist an einen Bereich gebunden.** In einem Vergleich nennt sein Kopf die Datei, die es liest, und dort gibt es ein Klappmenü, um es auf die andere zu bewegen. In den anderen Bereich zu klicken bewegt es **nicht**: ein Werkzeug liest weiter die Datei, für die es geöffnet wurde.
-- **Sie lesen im Hintergrund.** Das Zerlegen eines 16-MB-Images blockiert das Fenster nie; eine Fortschrittszeile meldet es, und es lässt sich abbrechen.
+- **Ein Werkzeug ist an einen Bereich gebunden.** In einem Vergleich nennt der Kopf des Bereichs die Datei, die gelesen wird, und ein Menü dort bewegt das Werkzeug auf den anderen Bereich. In den anderen Bereich zu klicken bewegt es **nicht**: Es liest weiter die Datei, für die es geöffnet wurde.
+- **Das Decodieren läuft im Hintergrund.** Das Zerlegen eines 16-MB-Images blockiert das Fenster nicht; eine Fortschrittszeile meldet es, und es lässt sich abbrechen.
 - **Einen Knoten auszuwählen zeigt seine Bytes.** Ein Klick auf eine Zeile scrollt den Dump zu den Bytes, für die sie steht, und umrandet sie als **Zone**; damit ist der Name im Bereich mit einer Adresse in der Hex-Ansicht verbunden.
-- **Sie sagen, worin sie unsicher sind.** Ein Feld, das niemand dokumentiert hat, behält seinen rohen Wert und heißt unbekannt, statt einen selbstsicheren Namen zu bekommen. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
-- **Die Zeilenmarkierungen** — die Balken, Abzeichen und Warnzeichen — erklärt der Streifen **Legende** unter der Tabelle jedes Panels.
+- **Unsicherheit wird gemeldet.** Ein Feld, das nicht dokumentiert ist, behält seinen Rohwert und wird als unbekannt bezeichnet, statt einen sicher klingenden Namen zu bekommen. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
+- **Die Zeilenmarkierungen** — die Balken, Abzeichen und Warnzeichen — erklärt der Streifen **Legende** unter der Tabelle jedes Bereichs.
 
-## Ein Fragment herausholen
+## Einen Teil entnehmen
 
-Klicken Sie einen Knoten mit rechts an, lässt er sich als [[topic:fragments|Fragment-Bereich]] öffnen: die Bytes des Knotens als eigenes Dokument über dem Image, aus dem sie stammen. So wird ein einzelnes Modul, eine Region oder eine entpackte Sektion herausgeholt, untersucht und zurückgeschrieben.
+Das Kontextmenü eines Knotens öffnet ihn als [[topic:fragments|Fragment-Bereich]]: die Bytes des Knotens als eigenes Dokument über dem Image, aus dem sie stammen. So wird ein einzelnes Modul, eine Region oder eine entpackte Sektion entnommen, untersucht und zurückgeschrieben.
