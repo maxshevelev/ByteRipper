@@ -1,6 +1,6 @@
 # The Online Catalogues
 
-> Three public catalogues that give names to identifiers found in a dump. The program operates without them.
+> Three public catalogues that give names to identifiers found in a dump. Without access to them the program is fully functional, but does not display the additional information they provide.
 
 Part of what the tool panels display is not held in the file: it is a name the community has given to an identifier that the file carries. ByteRipper fetches three public catalogues over HTTPS for this purpose and retains each for one day:
 
@@ -21,6 +21,8 @@ A row reading "AmiBoardInfo · 0x7A0000 · 0x12C0" therefore states that the fil
 
 No function of the program requires the network. Without a connection, or where the request is blocked, the tools display identifiers in place of names and report nothing further: no dialogs and no repeated attempts. Everything read from the bytes is unaffected.
 
-Nothing about the open file is transmitted. These are reads of public lists, and the dump does not leave the machine.
+The requests go to fixed addresses of these catalogues, and a request carries nothing out of the open file: the program downloads a catalogue whole and matches it against the dump locally.
+
+Neither the bytes of the image nor the identifiers found in it are therefore transmitted. The dump does not leave the machine.
 
 The program additionally checks once a day whether a newer version of itself has been released. That is the fourth and last request it makes of the network.
