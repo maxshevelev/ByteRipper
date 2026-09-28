@@ -28,16 +28,16 @@ The second pane is optional. Nothing needs a second file except the comparison i
 
 Each pane header names its file and whether it has unsaved changes; the status bar below it gives the size. The ✕ in the header closes that pane and leaves the other one open.
 
-A window can hold several tabs (**File ▸ New Tab**, ⌘T), each with its own pair of panes to compare in. That is how several boards are kept apart on one screen: BIOS dumps compared in one tab, EC dumps in the next.
+A window can hold several tabs (**File ▸ New Tab**, ⌘T), each with its own pair of panes to compare in. Several unrelated comparisons are therefore held in one window: BIOS dumps in one tab, embedded-controller dumps in the next.
 
 ## If the file is already open
 
-A file is open in one place at a time, and the app holds to that:
+A file is open in one place at a time, and the program enforces this:
 
-- **In the other pane of this tab** — it refuses and says so. The same dump cannot sit in both panes, so a file cannot be compared with itself. Your own edits show anyway, in red; and when two copies side by side are what you want, use **File ▸ Duplicate**.
-- **In another tab or window** — it offers a choice: show the file where it is, or move that pane into this tab.
-- **In this very pane** — it re-reads the file from disk. With unsaved edits it asks first, because re-reading discards them.
+- **In the other pane of this tab** — it refuses and states the reason. The same file cannot occupy both panes, so a file cannot be compared with itself. Unsaved edits to a file are already distinguished by their red colour; where two copies side by side are required, **File ▸ Duplicate** produces one.
+- **In another tab or window** — it offers a choice: show the file where it is open, or move that pane into this tab.
+- **In this same pane** — it re-reads the file from disk. Where the pane holds unsaved edits it asks first, because re-reading discards them.
 
-! Replacing a pane that has unsaved edits asks first. There is no undo for a discarded pane.
+! Replacing the file in a pane that holds unsaved edits asks for confirmation. A discarded pane cannot be restored.
 
-See also: [[topic:join-duplicate|Joining and duplicating]], [[topic:large-files|Large dumps]].
+See also: [[topic:join-duplicate|Joining and Duplicating]], [[topic:large-files|Large Dumps]].

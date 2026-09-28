@@ -1,26 +1,17 @@
-@source-sha 456065fd82a20fd7ce72a5bbe26acbd2e07075ba638266801c53b85c33a87603
+@source-sha 1bbd3b410b67a58d52108e1d1b1515f5458c7e76b18d3066a5d2cf2f9e8410bb
 # Ihr erster Vergleich
 
-> Öffnen Sie den schlechten Dump und einen guten und lassen Sie sich zeigen, wo sie auseinandergehen.
+> Zwei Dumps öffnen, und das Programm nennt die Adressen, an denen sie sich unterscheiden.
 
 1. Öffnen Sie den Dump, den Sie untersuchen: **Ablage ▸ Öffnen…** (⌘O), oder ziehen Sie die Datei ins Fenster.
-2. Öffnen Sie die zweite genauso. Sie landet im anderen Dateibereich — jetzt sind es zwei, und der Vergleich läuft.
-3. Achten Sie auf die Farbe. Jedes Byte, das sich zwischen beiden Dateien unterscheidet, trägt den Unterschieds-Hintergrund. Eine lange Strecke Farbe heißt, ein ganzer Bereich unterscheidet sich; einzelne verstreute Zellen heißen, ein paar Bytes tun es.
-4. Springen Sie zwischen den Unterschieden statt zu scrollen: **⌥⌘→** zum nächsten, **⌥⌘←** zum vorherigen. Die Statuszeile nennt, wie viel des Images sich unterscheidet — `Unterschiede 0.4%` — als Anteil an der längeren Datei, byteweise gezählt.
-5. Lesen Sie in der Statuszeile den Offset der aktuellen Position. In einem Firmware-Dump sagt Ihnen dieser Offset, *welchen Teil* des Images Sie ansehen.
-6. Schalten Sie einen Werkzeugbereich ein — **Werkzeuge ▸ UEFI-Struktur** — und die Offsets hören auf, Zahlen zu sein: der Bereich zerlegt das Image und legt Ihren Dump als Baum benannter Regionen und Volumes aus. **Knoten an der Einfügemarke zeigen** im Kopf des Bereichs beantwortet, in welchen Knoten dieses Baums die Adresse fällt, auf der Sie stehen.
-
-## Das Ergebnis lesen
-
-Ein Vergleich zweier Dumps derselben Platine sieht meist nach einem von vier Bildern aus:
-
-- **Fast nichts unterscheidet sich.** Eine Handvoll Bytes, alle in einem kleinen Bereich. Dieser Bereich enthält fast immer platinenspezifische Daten: eine MAC-Adresse, eine Seriennummer, eine Maschinen-UUID, eine gesicherte Setup-Variable. Siehe [[topic:recipe-board-data|Platinenspezifische Daten bewahren]].
-- **Ein großer Block unterscheidet sich, der Rest stimmt überein.** Verschiedene Firmware-Versionen, oder eine Region wurde gelöscht oder beschädigt. Das [[topic:tool-uefi|UEFI-Panel]] sagt Ihnen, welche.
-- **Ab einer bestimmten Adresse unterscheidet sich alles.** Die Dateien sind unterschiedlich groß, oder eine wurde mit den falschen Chip-Einstellungen gelesen. Prüfen Sie zuerst die Größen in den Statuszeilen.
-- **Die ganze Datei unterscheidet sich.** Verschiedene Chips, ein falscher Dump, oder eine Datei ist komprimiert oder verschlüsselt. Vergleichen Sie Größen und die ersten 16 Bytes, bevor Sie weitergehen.
+2. Öffnen Sie die zweite Datei auf dieselbe Weise. Sie landet im anderen Dateibereich, und der Vergleich beginnt selbsttätig.
+3. Achten Sie auf die Farbe der Bytes. Jedes Byte, das sich zwischen den beiden Dateien unterscheidet, trägt den Unterschieds-Hintergrund. Eine lange Strecke Farbe bedeutet, dass ein ganzer Bereich abweicht; einzelne verstreute Zellen bedeuten, dass einzelne Bytes abweichen.
+4. Bewegen Sie sich zwischen den Unterschieden: **⌥⌘→** zum nächsten, **⌥⌘←** zum vorherigen. Die Statuszeile nennt den Anteil des Images, der abweicht — `Unterschiede 0.4%` — byteweise gezählt an der Länge der längeren Datei.
+5. Die Statuszeile nennt die Adresse der aktuellen Position der Einfügemarke.
+6. Schalten Sie ein Werkzeug ein — **Werkzeuge ▸ UEFI-Struktur**. Es decodiert den Aufbau der Datei und legt den Dump als Baum benannter Regionen und Volumes aus. **Knoten an der Einfügemarke zeigen** im Kopf des Bereichs öffnet den Knoten dieses Baums, in den die Adresse der Einfügemarke fällt.
 
 ## Wenn die Dateien verschieden groß sind
 
-ByteRipper vergleicht sie trotzdem, ab Adresse null, und markiert den Rest, den nur eine Datei hat. 8 MB gegen 16 MB ist fast immer ein Lesefehler und kein echter Unterschied: viele Programmer schlagen von sich aus die falsche Kapazität vor.
+ByteRipper vergleicht sie dennoch ab Adresse null und kennzeichnet den Rest der längeren Datei als abweichende Bytes.
 
 Siehe auch: [[topic:navigation|Sich bewegen]], [[topic:colors|Was die Farben bedeuten]].

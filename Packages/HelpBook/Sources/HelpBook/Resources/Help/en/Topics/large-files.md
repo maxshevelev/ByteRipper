@@ -11,6 +11,6 @@ What follows from that:
 - **Whole-file work is done in the background.** A full comparison, a search over the whole dump, a firmware parse: the window stays usable and a progress line appears at the bottom of the pane, with a button to cancel the operation.
 - **The visible comparison is immediate.** What you can see is compared as you scroll, even while the full count of differences is still being worked out.
 
-For a bench that means the file size is not a reason to choose a different tool. A full 16 MB SPI dump with an ME region, the joined dumps of two chips at 64 MB, an eMMC extract, a disk image of several terabytes — all of them are ordinary.
+The size of a file therefore places no practical limit on the work. A full 16 MB SPI dump containing an ME region, the joined dumps of two chips at 64 MB, an eMMC extract and a disk image of several terabytes are all handled the same way.
 
-See also: [[topic:minimap|The minimap]], which is how you see the shape of a big file at once.
+See also: [[topic:minimap|The Minimap]], which presents the shape of an entire file in one column.
