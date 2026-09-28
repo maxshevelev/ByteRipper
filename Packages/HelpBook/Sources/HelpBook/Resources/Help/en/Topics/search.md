@@ -18,9 +18,24 @@ A hex search is always exact. Bytes have no case, and the case option is therefo
 
 ## Text
 
-An encoding is chosen — ASCII, UTF-8, UTF-16 LE or UTF-16 BE — and the string is entered. It is encoded to bytes and matched exactly on those bytes. Most strings in UEFI firmware are held as UTF-16 LE; most strings in an option ROM or an embedded-controller image are held as ASCII.
+An encoding is chosen — ASCII, UTF-8, UTF-16 LE or UTF-16 BE — and the string is entered. It is encoded to bytes and matched exactly on those bytes.
 
 Case-insensitive matching is offered for text.
+
+## Smart Search
+
+A string in a dump is in whichever encoding the maker of the firmware happened to use, and the reader usually knows **what** they are looking for rather than **how it is written**. Smart Search removes that question: the encoding becomes a result of the search instead of a condition for it. That is why it is on by default — there is usually nothing to base a choice of encoding on beforehand.
+
+What was typed is looked for in one form after another until something is found:
+
+- Where it reads as a byte sequence — an even run of hex digits, `DEADBEEF`, or those digits in pairs, `DE AD BE EF` — it is looked for as bytes first and as text after.
+- Otherwise the encodings are tried in turn: ASCII, UTF-8, then UTF-16 LE and UTF-16 BE.
+- An encoding that cannot carry what was typed at all is left out: there is nothing to look for in it.
+- Attempts that come to the same bytes are merged into one pass. `abc` as ASCII and as UTF-8 is the same three bytes, and the dump is not read twice for one answer.
+
+The encoding that found the match is the one left selected in the popup, which is how the answer to the unasked question becomes visible. Where nothing is found, the program lists the encodings it tried.
+
+An encoding chosen by hand sets where the search starts, and so does an entry picked out of the search history, which carries its own encoding with it. In the rare case where Smart Search misses or finds more than was meant, it is switched off and only the chosen encoding is searched.
 
 ## While a search is running
 

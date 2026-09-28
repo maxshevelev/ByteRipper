@@ -1,32 +1,47 @@
-@source-sha 3452da34addcd41415536c69bddf52401283182cf4000a97577f72b24afa4e1f
+@source-sha b65a800fa3c8a1efc657dcf6ffeb48ca7689aa8318752b1be0eafeee65937e38
 # Bytes und Text finden
 
-> ⌘F. Hex-Bytes oder Text, über den ganzen Dump, im Hintergrund.
+> ⌘F. Suche nach einer Byte-Folge oder einer Zeichenfolge über den ganzen Dump, im Hintergrund.
 
-Die Suchleiste durchsucht den **aktiven Bereich**, über seinen aktuellen Inhalt — Ihre ungesicherten Änderungen eingeschlossen.
+Die Suchleiste durchsucht den **aktiven Bereich** über seinen aktuellen Inhalt, ungesicherte Änderungen eingeschlossen.
 
 ## Hex
 
-Geben Sie eine Byte-Folge ein: `DEADBEEF`, `DE AD BE EF`, `0xDE 0xAD`. Leerzeichen sind freigestellt. Nach der Suche wird das Feld in der Schreibweise des Dumps neu gesetzt — Großbuchstabenpaare mit je einem Leerzeichen —, damit Sie das Muster an die Bytes auf dem Bildschirm halten können.
+Eine Byte-Folge wird als `DEADBEEF`, `DE AD BE EF` oder `0xDE 0xAD` eingegeben; Leerzeichen sind freigestellt. Nach dem Start der Suche wird das Feld in der Schreibweise neu gesetzt, die der Dump selbst verwendet — Großbuchstabenpaare mit je einem Leerzeichen —, damit sich das Muster an die Bytes auf dem Bildschirm halten lässt.
 
-Die Hex-Suche ist immer exakt. Bytes haben keine Groß- und Kleinschreibung, deshalb wird der Schalter dafür dort gar nicht erst angeboten.
+Eine Hex-Suche ist immer exakt. Bytes haben keine Groß- und Kleinschreibung, und die entsprechende Option wird dafür deshalb nicht angeboten.
 
 ## Text
 
-Wählen Sie eine Codierung — ASCII, UTF-8, UTF-16 LE oder UTF-16 BE — und geben Sie die Zeichenfolge ein. Sie wird in Bytes codiert und exakt auf diesen Bytes gesucht. UTF-16 LE findet die meisten Zeichenfolgen in UEFI-Firmware, ASCII die meisten in einem Option-ROM oder EC-Image.
+Es wird eine Codierung gewählt — ASCII, UTF-8, UTF-16 LE oder UTF-16 BE — und die Zeichenfolge eingegeben. Sie wird in Bytes codiert und exakt auf diesen Bytes gesucht.
 
-Für Text wird das Suchen ohne Rücksicht auf Groß- und Kleinschreibung angeboten.
+Für Text wird die Suche ohne Rücksicht auf Groß- und Kleinschreibung angeboten.
+
+## Intelligente Suche
+
+Eine Zeichenfolge in einem Dump steht in der Codierung, die der Hersteller der Firmware gerade verwendet hat, und der Lesende weiß in der Regel, **was** er sucht, und nicht, **wie es geschrieben ist**. Die Intelligente Suche nimmt diese Frage weg: Die Codierung wird zum Ergebnis der Suche statt zu ihrer Bedingung. Deshalb ist sie voreingestellt — es gibt meist nichts, worauf sich eine Wahl der Codierung vorab stützen könnte.
+
+Das Eingegebene wird in einer Form nach der anderen gesucht, bis etwas gefunden wird:
+
+- Liest es sich als Byte-Folge — eine gerade Anzahl von Hex-Ziffern, `DEADBEEF`, oder dieselben Ziffern paarweise, `DE AD BE EF` —, wird es zuerst als Bytes und erst danach als Text gesucht.
+- Sonst werden die Codierungen der Reihe nach durchprobiert: ASCII, UTF-8, dann UTF-16 LE und UTF-16 BE.
+- Eine Codierung, die das Eingegebene überhaupt nicht darstellen kann, entfällt: In ihr gibt es nichts zu suchen.
+- Versuche, die auf dieselben Bytes hinauslaufen, werden zu einem Durchlauf zusammengefasst. `abc` als ASCII und als UTF-8 sind dieselben drei Bytes, und der Dump wird für eine Antwort nicht zweimal gelesen.
+
+Die Codierung, die den Treffer geliefert hat, bleibt im Einblendmenü ausgewählt — so wird die Antwort auf die nicht gestellte Frage sichtbar. Wird nichts gefunden, nennt das Programm die Codierungen, die es probiert hat.
+
+Eine von Hand gewählte Codierung legt fest, wo die Suche beginnt; ebenso ein Eintrag aus dem Suchverlauf, der seine eigene Codierung mitbringt. In den seltenen Fällen, in denen die Intelligente Suche danebengreift oder mehr findet als gemeint war, wird sie ausgeschaltet, und es wird nur die gewählte Codierung durchsucht.
 
 ## Während eine Suche läuft
 
-Jeder Treffer ist überall in der Datei ruhig grau gefüllt; der, auf dem Sie stehen, ist eine angehobene gelbe Blase. **‹ ›** gehen zwischen ihnen hin und her, und die Leiste zählt mit. Über einen großen Dump läuft die Suche im Hintergrund und lässt sich abbrechen; die Treffer erscheinen, während sie gefunden werden.
+Jeder Treffer in der Datei ist grau gefüllt; der aktuelle wird als angehobene gelbe Blase dargestellt. **‹ ›** bewegen zwischen ihnen, und die Leiste nennt die Anzahl. Über einen großen Dump läuft die Suche im Hintergrund und lässt sich abbrechen; die Treffer erscheinen, während sie gefunden werden.
 
-**Alle suchen** öffnet eine Ergebnisliste zum Durchklicken und markiert die Treffer in der [[topic:minimap|Minimap]] — so sieht man, wie sie über das Image verteilt sind.
+**Alle suchen** öffnet eine Ergebnisliste zum Durchklicken und markiert die Treffer in der [[topic:minimap|Minimap]], in der ihre Verteilung über das Image sichtbar wird.
 
-## Muster, die man oft braucht
+## Häufig gebrauchte Muster
 
-**⌘E** übernimmt die Auswahl als Suchmuster, ohne zu suchen: Bytes in einem Dump auswählen, ⌘E drücken, im anderen danach suchen.
+**⌘E** übernimmt die aktuelle Auswahl als Suchmuster, ohne eine Suche zu starten; so wird eine in einem Dump ausgewählte Folge im anderen gesucht.
 
 Muster lassen sich benennen und in einer Musterbibliothek halten (**Einstellungen ▸ Suchmuster**) — etwa regelmäßig gebrauchte Signaturen wie `_FVH`, `$FPT` oder `24 00 00 00`. Die Bibliothek lässt sich über einen Ordner abgleichen, sodass mehrere Installationen dieselbe verwenden.
 
-Siehe auch: [[topic:bookmarks|Lesezeichen]], um Gefundenes zu markieren.
+Siehe auch: [[topic:bookmarks|Lesezeichen]], um eine gefundene Adresse zu markieren.
