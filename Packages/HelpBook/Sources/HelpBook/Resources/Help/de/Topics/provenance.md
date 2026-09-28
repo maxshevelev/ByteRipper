@@ -1,4 +1,4 @@
-@source-sha ec5cab9e7b5a76e4b5235597586f6df3cd71db2f3d06b5709edad8e152252b00
+@source-sha 21b78197e571367b9759ddf36bbbc217037f9d58eec375b1cdc50e2436595f32
 # Woher dieses Wissen stammt
 
 > Einmal zu lesen, bevor Sie einem Panel eine Platine anvertrauen.
@@ -11,7 +11,7 @@ Die Werkzeugbereiche benennen Strukturen, für die **kein Hersteller je eine Spe
 - **Intels eigene Werkzeuge und deren Vokabular.** Intels Flash Image Tool *schreibt* diese Strukturen, und seine Konfigurationsdateien benennen die Einstellungen und die Pfade. Wo ein Feld „OEM configurable“ heißt, ist das Intels Wendung. Die Byte-Aufteilung dahinter ist nirgends veröffentlicht.
 - **Intels Übersichtsdokumente** — das öffentliche CSME-Sicherheits-White-Paper, die Unterlagen zum Debug-Unlock — benennen die Bestandteile und die Begriffe (Startablauf, Anti-Rollback, [[term:svn|SVN]] und [[term:vcn|VCN]]), ohne einen einzigen Offset zu nennen. Die einzige benachbarte Struktur mit echter Hersteller-Dokumentation ist der [[term:flash-descriptor|Flash Descriptor]], beschrieben in den Chipsatz-Programming-Guides.
 - **Übereinstimmung unabhängiger Arbeiten.** Eigenständige Forschung zu ME-Interna beschreibt dieselben Volumes, Ketten und Integritätstabellen, zu denen diese Zerlegung kommt — unabhängig davon erarbeitet. Übereinstimmung unabhängiger Arbeiten ist der stärkste äußere Beleg, den es hier gibt.
-- **Werkstattwissen, und es ist als solches gekennzeichnet.** Ein Teil dessen, was das Glossar sagt, ist gar keine Formatanalyse: wo ein Hersteller eine Seriennummer zu verstecken pflegt, womit die Firmware eines Embedded Controllers meist beginnt, welche NVRAM-Variable ein Passwort enthält. Das stammt aus Reparatur-Communitys — unter anderem aus dem Wiki *UEFI Repair Guide* — und kein Datenblatt deckt es. Die Hilfe sagt das überall dort, wo sie es benutzt: Das sind Anzeichen, die man gegen einen bekannt guten Dump prüft, und für sich genommen keine Diagnose.
+- **Beobachtungen aus der Reparaturpraxis, als solche gekennzeichnet.** Ein Teil dessen, was das Glossar festhält, ist keine Formatanalyse: wo ein Hersteller eine Seriennummer üblicherweise ablegt, womit die Firmware eines Embedded Controllers meist beginnt, welche NVRAM-Variable ein Passwort enthält. Das stammt aus Reparatur-Communitys — unter anderem aus dem Wiki *UEFI Repair Guide* — und kein Datenblatt deckt es. Das Handbuch sagt es überall dort, wo es sich darauf stützt, und nennt die Quelle.
 - **Die Bytes selbst.** Aufgehende [[term:crc|CRCs]], Hashes und Nonces genau dort, wo das Flag einer Tabelle sie ansagt, deklarierte Längen, die passen, Offsets, die auf die versprochenen Strukturen treffen. Das ist eine Prüfung der *Deutung* ohne Spezifikation — und das ist, worauf sich ein Panel ehrlich berufen kann.
 
 ## Wie die Panels sich deshalb verhalten

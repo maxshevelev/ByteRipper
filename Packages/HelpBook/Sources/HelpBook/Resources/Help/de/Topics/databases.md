@@ -1,4 +1,4 @@
-@source-sha e4cf6d4a2eec07b13eeeb9a1ca2079b5ae7daa949fb37259fc3d5df3c030e0ef
+@source-sha 1090a01d320c2ab5dfd68a9583666c0b228d52d9849565ecceb4f9879a13bdd0
 # Die Online-Kataloge
 
 > Drei öffentliche Listen, die Zahlen im Dump in Namen verwandeln. Ohne sie läuft das Programm.
@@ -11,7 +11,7 @@ Ein Teil dessen, was die Werkzeugbereiche zeigen, steht gar nicht in der Datei �
 
 ## Was Tatsache ist und was ein Name
 
-Diese Unterscheidung zählt am Arbeitsplatz, und die Panels halten sie:
+Die Werkzeuge halten die beiden Dinge auseinander:
 
 - **Die Bytes gehören der Datei.** Ein Offset, eine Größe, ein Versionsfeld, eine Prüfsumme — alles aus dem Image vor Ihnen gelesen.
 - **Der Name gehört dem Katalog.** Er ist eine Zuordnung der Gemeinschaft, er kann fehlen, und er kann falsch sein.

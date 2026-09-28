@@ -1,9 +1,9 @@
-@source-sha c5376c1174fadc1e40c983261653b412c5ac15854eefc75c2aa01e1b0e52dbff
+@source-sha 96ac7a7bfaedc57730e7a4f1f44b5105972083c55e0bd3ee13a9cec6cd6f94b3
 # Die Werkzeugbereiche
 
-> Werkzeuge, die den geöffneten Dump lesen und sagen, was darin ist.
+> Werkzeuge, die den geöffneten Dump decodieren und melden, welche Strukturen er enthält.
 
-Das Menü **Werkzeuge** schaltet jeweils ein Panel neben dem Dump ein. Jedes liest die Datei seines Bereichs und zeigt seine eigene Sicht darauf:
+Das Menü **Werkzeuge** schaltet jeweils einen Bereich neben dem Dump ein. Jedes Werkzeug liest die Datei des Dateibereichs, an den es gebunden ist, und zeigt seine eigene Sicht darauf:
 
 - **[[topic:tool-uefi|UEFI-Struktur]]** — die Aufteilung eines Firmware-Images: die Flash-Regionen, die Volumes, die Dateien und Sektionen darin, die NVRAM-Speicher.
 - **[[topic:tool-me|ME Analyzer]]** — was für eine Intel-Management-Engine-Firmware im Image steckt: ihre Version, ihre Partitionen, ihre Konfiguration.
@@ -13,7 +13,7 @@ Das Menü **Werkzeuge** schaltet jeweils ein Panel neben dem Dump ein. Jedes lie
 
 - **Ein Panel ist an einen Bereich gebunden.** In einem Vergleich nennt sein Kopf die Datei, die es liest, und dort gibt es ein Klappmenü, um es auf die andere zu bewegen. In den anderen Bereich zu klicken bewegt es **nicht**: ein Werkzeug liest weiter die Datei, für die es geöffnet wurde.
 - **Sie lesen im Hintergrund.** Das Zerlegen eines 16-MB-Images blockiert das Fenster nie; eine Fortschrittszeile meldet es, und es lässt sich abbrechen.
-- **Einen Knoten auszuwählen zeigt seine Bytes.** Klicken Sie eine Zeile, springt der Dump zu den Bytes, für die sie steht, und umreißt sie als **Zone**. Das ist die Verbindung zwischen einem Namen im Panel und einer Adresse in der Hex-Ansicht, und deshalb lohnen sich die Panels am Arbeitsplatz.
+- **Einen Knoten auszuwählen zeigt seine Bytes.** Ein Klick auf eine Zeile scrollt den Dump zu den Bytes, für die sie steht, und umrandet sie als **Zone**; damit ist der Name im Bereich mit einer Adresse in der Hex-Ansicht verbunden.
 - **Sie sagen, worin sie unsicher sind.** Ein Feld, das niemand dokumentiert hat, behält seinen rohen Wert und heißt unbekannt, statt einen selbstsicheren Namen zu bekommen. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
 - **Die Zeilenmarkierungen** — die Balken, Abzeichen und Warnzeichen — erklärt der Streifen **Legende** unter der Tabelle jedes Panels.
 
