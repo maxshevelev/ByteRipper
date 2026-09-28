@@ -1,4 +1,4 @@
-@source-sha 6040be81e5c699be6cba4c3a883c05b98e4aada1d5491ebbcedc7b00efa0676f
+@source-sha 239983ab70d561a682b788854512a1200cf00330279af5e1812071da73a8d22c
 # Microcode und die FIT-Tabelle
 
 > Was das Werkzeug „FIT-Tabelle“ über den Microcode eines Images meldet und was seine Befehle an der Tabelle ändern.
@@ -45,7 +45,9 @@ Der Befehl leistet dann Folgendes:
 Das Kontextmenü einer Microcode-Zeile enthält **Microcode ersetzen**, **Microcode entfernen**, **CPUID kopieren** und **Zum Offset springen**; die Header-Zeile enthält **Prüfsumme korrigieren**.
 
 - **Microcode ersetzen** tauscht das von der Zeile benannte Bauteil gegen ein anderes beliebiger Signatur. Die Zeile bleibt; ist das neue Bauteil anders groß, rücken die Bauteile dahinter nach, und die Einträge, die sie benennen, werden berichtigt.
-- **Microcode entfernen** nimmt den Eintrag aus der Tabelle, rückt die Bauteile dahinter in den frei gewordenen Platz nach und löscht die Bytes am Ende der Reihe. Entfernt werden kann nur ein Microcode-Eintrag: Wie weit reicht, worauf Einträge anderer Typen zeigen, ermittelt das Werkzeug nicht. Mindestens ein Microcode-Eintrag muss in der Tabelle verbleiben.
+- **Microcode entfernen** nimmt den Eintrag aus der Tabelle, rückt die Bauteile dahinter in den frei gewordenen Platz nach und löscht die Bytes am Ende der Reihe. Mindestens ein Microcode-Eintrag muss in der Tabelle verbleiben.
+
+Hinzufügen, Ersetzen und Entfernen werden nur für Microcode-Einträge unterstützt. Einträge anderer Typen — ein ACM, ein Boot-Guard-Manifest, ein Policy-Eintrag — zeigt und prüft das Werkzeug, ändert sie aber nicht.
 - **Prüfsumme korrigieren** schreibt den Wert, den der Header tragen müsste.
 
 ## Wenn eine Änderung abgelehnt wird

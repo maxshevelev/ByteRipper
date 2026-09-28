@@ -44,7 +44,9 @@ What the command then does:
 The context menu of a microcode row holds **Replace Microcode**, **Remove Microcode**, **Copy CPUID** and **Go to Offset**; the header row holds **Fix Checksum**.
 
 - **Replace Microcode** exchanges the component the row names for another of any signature. The row remains; components behind it move if the new component is of a different size, and the entries naming them are corrected.
-- **Remove Microcode** takes the entry out of the table, moves the components behind it up into the freed space and erases the bytes at the end of the run. Only a microcode entry can be removed; the extent of what any other entry points at is not something the tool measures. A table must retain at least one microcode entry.
+- **Remove Microcode** takes the entry out of the table, moves the components behind it up into the freed space and erases the bytes at the end of the run. A table must retain at least one microcode entry.
+
+Adding, replacing and removing are supported for microcode entries only. Entries of other types — an ACM, a Boot Guard manifest, a policy record — the tool reports and checks, but does not change.
 - **Fix Checksum** writes the checksum the header should carry.
 
 ## When a change is refused

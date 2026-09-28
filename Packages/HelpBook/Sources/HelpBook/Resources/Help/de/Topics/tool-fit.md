@@ -1,11 +1,19 @@
-@source-sha ea55a269d83a82fc01f731d02303cfa262e5302e136000bb2fbb81e99856b48f
+@source-sha ee1db93c7c3b50f3582125695b1ad44f4b66ceb879c921b92c8d91e65e42efb3
 # FIT-Tabelle
 
 > Die Firmware Interface Table: was der Prozessor laden soll, bevor er Firmware-Code ausführt, und ob diese Bauteile vorhanden sind.
 
 **Werkzeuge ▸ FIT-Tabelle** findet die [[term:fit|Firmware Interface Table]] im Image und führt ihre Einträge auf.
 
-Die Tabelle liegt nahe der oberen Grenze des Flash-Speichers und wird über einen Zeiger an einer festen Adresse knapp unterhalb von `4 GB` erreicht. Jeder Eintrag trägt eine Adresse, eine Größe und einen Typ: ein [[term:microcode|Microcode-Update]], ein ACM, ein Boot-Guard-Manifest, einen TXT-Policy-Eintrag.
+## Wie das Werkzeug die Tabelle findet
+
+Der Flash-Speicher ist an das Ende des 32-Bit-Adressraums eingeblendet, und an der festen Adresse `0xFFFFFFC0` liegt ein Zeiger auf die Tabelle. Das Werkzeug liest ihn, rechnet die Adresse in eine Position in der Datei um und prüft, ob dort tatsächlich die Signatur `_FIT_   ` steht. Wo die Tabelle liegt, bestimmt allein dieser Zeiger: Im Image selbst kann sie überall liegen.
+
+Führt der Zeiger aus dem Image hinaus oder steht an der genannten Adresse keine Signatur, meldet das Werkzeug das in der Liste der Verstöße, statt eine geratene Auswertung anzuzeigen. Nennt das Image den Versatz nicht, mit dem es in den Adressraum eingeblendet ist, nimmt das Werkzeug an, dass sein letztes Byte auf `0xFFFFFFFF` fällt, und kennzeichnet die Adressen als angenommen.
+
+## Was die Einträge tragen
+
+Jeder Eintrag trägt eine Adresse, eine Größe und einen Typ: ein [[term:microcode|Microcode-Update]], ein ACM, ein Boot-Guard-Manifest, einen TXT-Policy-Eintrag. Die Ausnahme ist ein Policy-Eintrag der Version 0: Seine ersten acht Byte sind ein Deskriptor von Index/IO-Registern und keine Adresse, und das Werkzeug stellt ihn auch so dar und nicht als Zeiger.
 
 ## Was das Werkzeug meldet
 

@@ -6,7 +6,15 @@
 
 **Tools ▸ FIT Table** locates the [[term:fit|Firmware Interface Table]] in the image and lists its entries.
 
-The table is held near the top of the flash memory and is reached through a pointer at a fixed address just below `4 GB`. Every entry carries an address, a size and a type: a [[term:microcode|microcode update]], an ACM, a Boot Guard manifest, a TXT policy record.
+## How the tool finds the table
+
+The flash memory is mapped to the end of the 32-bit address space, and at the fixed address `0xFFFFFFC0` lies a pointer to the table. The tool reads it, turns the address into a position in the file, and checks that the signature `_FIT_   ` is actually there. Only that pointer determines where the table is: within the image it may lie anywhere.
+
+Where the pointer leads outside the image, or there is no signature at the address it names, the tool reports it in the problem list rather than presenting a decode arrived at by guesswork. Where the image does not state the offset at which it is mapped into the address space, the tool takes its last byte to fall at `0xFFFFFFFF` and marks the addresses as assumed.
+
+## What the entries carry
+
+Every entry carries an address, a size and a type: a [[term:microcode|microcode update]], an ACM, a Boot Guard manifest, a TXT policy record. The exception is a policy entry of version 0: its first eight bytes are a descriptor of Index/IO registers rather than an address, and the tool presents it as such rather than as a pointer.
 
 ## What the tool reports
 
