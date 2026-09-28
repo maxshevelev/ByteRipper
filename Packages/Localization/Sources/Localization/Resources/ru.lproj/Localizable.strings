@@ -45,7 +45,7 @@
 "%1$@ of %2$@ Intel microcodes" = "%1$@ из %2$@ микрокодов Intel";
 "%1$@ of these names are segment sources" = "Источников сегментов среди этих имён: %1$@";
 "%1$@ partitions" = "разделов: %1$@";
-"%1$@ problems — double-click one to go there." = "Проблем: %1$@ — двойной щелчок переводит к любой из них.";
+"%1$@ problems — double-click one to go there." = "Проблем: %1$@ — двойной клик переводит к любой из них.";
 "%1$@ protected ranges" = "защищённых диапазонов: %1$@";
 "%1$@ records" = "записей: %1$@";
 "%1$@ regions" = "регионов: %1$@";
@@ -73,7 +73,7 @@
 "1 microcode moved up and the rows now point there" = "один микрокод сдвинут вверх, и строки теперь указывают туда";
 "1 module" = "1 модуль";
 "1 partition" = "1 раздел";
-"1 problem — double-click it to go there." = "Одна проблема — двойной щелчок переводит к ней.";
+"1 problem — double-click it to go there." = "Одна проблема — двойной клик переводит к ней.";
 "1 protected range" = "1 защищённый диапазон";
 "1 record" = "1 запись";
 "1 region" = "1 регион";
@@ -439,8 +439,8 @@
 "Overview" = "Обзор";
 "Overwrite" = "Перезаписать";
 "PRD" = "PRD";
-"Padding" = "Заполнитель";
-"Padding file" = "Файл-заполнитель";
+"Padding" = "Padding";
+"Padding file" = "Файл-padding";
 "Pane Layout" = "Расположение файловых панелей";
 "Pane is empty" = "Файловая панель пуста";
 "Paste" = "Вставить";
@@ -620,7 +620,7 @@
 "The microcode run needs 0x%1$@ more bytes than are free after it, in %2$@." = "Последовательности микрокодов не хватает 0x%1$@ байт сверх свободных за ней, в %2$@.";
 "The parent is closed" = "Исходный файл закрыт";
 "The pattern library already in “%1$@” cannot be read yet — if it is in iCloud Drive, wait for it to download and try again." = "Библиотеку шаблонов, уже лежащую в «%1$@», пока не прочитать — если это iCloud Drive, дождитесь загрузки и повторите.";
-"The pointer and the table disagree. Double-click a problem to look." = "Указатель и таблица расходятся. Дважды щёлкните по проблеме, чтобы посмотреть.";
+"The pointer and the table disagree. Double-click a problem to look." = "Указатель и таблица расходятся. Кликните дважды по проблеме, чтобы посмотреть.";
 "The reserved byte is %1$@, and should be zero" = "Зарезервированный байт равен %1$@, а должен быть нулём";
 "The section does not decompress." = "Секция не распаковывается.";
 "The shared library changed while you were answering — %1$@ to look at again" = "Общая библиотека изменилась, пока вы отвечали — %1$@ придётся посмотреть заново";
