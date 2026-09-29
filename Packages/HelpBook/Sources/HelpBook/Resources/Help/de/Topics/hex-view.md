@@ -1,4 +1,4 @@
-@source-sha e7824fe9c95d147e43ab85f8ee46d3020fe469d0aa51fc5386394f3462c2a71e
+@source-sha 4fcd793146755fe6f67f428b76048126af3dd38236a48daa809040bdb387765e
 # Die Hex-Ansicht lesen
 
 > Sechzehn Bytes je Zeile, der Offset links, der Text rechts.
@@ -19,5 +19,7 @@ Jeder Bereich zeigt seine Datei als gewöhnlichen Hex-Dump:
 ## Die Statuszeile
 
 Unter jedem Bereich: der Offset der Einfügemarke, die Größe der Auswahl, sofern vorhanden, die Größe der Datei und das Segment, in dem die Einfügemarke steht, wenn der Bereich [[topic:segments|Segmente]] hat. Auch eine Hintergrundarbeit — ein vollständiger Vergleich, eine Suche, ein Firmware-Parse — meldet sich hier, samt einer Möglichkeit abzubrechen.
+
+In einem Kasten rechts steht der Tippmodus: **OVR** für Überschreiben, **INS** für Einfügen. Er ist die einzige Anzeige der Leiste, auf die ein Klick wirkt: Ein Klick darauf schaltet den Modus um, was auch **Bearbeiten ▸ Einfügemodus** tut ([[topic:editing|Bytes bearbeiten]]).
 
 Siehe auch: [[topic:colors|Was die Farben bedeuten]], [[topic:navigation|Sich bewegen]].

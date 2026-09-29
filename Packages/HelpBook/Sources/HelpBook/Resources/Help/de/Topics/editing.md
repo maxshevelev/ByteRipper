@@ -1,4 +1,4 @@
-@source-sha 316bfd9b1d66d6bb5211dd78df12a91bc89ea5574659a09d575b250b8e8bfb9c
+@source-sha 82667368eb203fddd4b3796e380e1d75428ea233bd6ede4bf99e35e72084db1c
 # Bytes bearbeiten
 
 > Tippen überschreibt die vorhandenen Bytes. Jeder Vorgang, der die Länge der Datei ändert, fragt vorher nach.
@@ -22,7 +22,7 @@ Drei Vorgänge ändern sie doch, und jeder fragt vor der Ausführung nach:
 
 - **Bearbeiten ▸ Einsetzen mit Verschieben…** — einsetzen und alles dahinter verschieben.
 - **Bearbeiten ▸ Bytes löschen…** — wirklich löschen und alles dahinter verschieben.
-- **Bearbeiten ▸ Einfügemodus** (⌥⌘I) — ein Tippmodus, in dem Tasten einfügen und löschen statt zu überschreiben. Er fragt einmal je Datei statt bei jedem Anschlag, sagt es in der Statuszeile und ändert die Form der Einfügemarke.
+- **Bearbeiten ▸ Einfügemodus** (⌥⌘I) — ein Tippmodus, in dem Tasten einfügen und löschen statt zu überschreiben. Er fragt einmal je Datei statt bei jedem Anschlag, sagt es in der Statuszeile und ändert die Form der Einfügemarke. Ein Klick auf die Anzeige **OVR** / **INS** in der Statuszeile schaltet denselben Modus um ([[topic:hex-view|Die Hex-Ansicht lesen]]).
 
 Die Rückfragen lassen sich in den [[topic:settings|Einstellungen ▸ Bearbeiten]] abschalten oder über das Kästchen „Nicht mehr fragen“ im Dialog selbst. Sie sind voreingestellt, weil diese Vorgänge jede Adresse hinter der Stelle ändern, an der sie wirken.
 

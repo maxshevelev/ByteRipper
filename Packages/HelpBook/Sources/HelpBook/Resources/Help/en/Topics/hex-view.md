@@ -24,4 +24,6 @@ Each pane shows its file as a standard hex dump:
 
 Under each pane: the caret's offset, the size of the selection if there is one, the file's size, and the piece of the file the caret is in if the pane has [[topic:segments|segments]]. A background job — a full comparison, a search, a firmware parse — reports here too, with a way to cancel it.
 
+In a box at the right stands the typing mode: **OVR** for overwriting, **INS** for inserting. It is the one readout in the bar that a click acts on: clicking it flips the mode, which is what **Edit ▸ Insert Mode** does as well ([[topic:editing|Editing Bytes]]).
+
 See also: [[topic:colors|What the colours mean]], [[topic:navigation|Moving around]].
