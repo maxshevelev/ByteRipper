@@ -1366,7 +1366,7 @@ final class PaneViewModel: HexViewDataSource {
         guard let bookmarks, let mark = bookmarks.bookmark(atRowContaining: offset) else { return "" }
         guard bookmarks.isShifted else { return mark.name }
         let there = bookmarks.storeRow(forRowContaining: offset).hexAddress
-        let line = bookmarkHostName.map { "\(there) in \($0)" } ?? there
+        let line = bookmarkHostName.map { L("%1$@ in %2$@", there, $0) } ?? there
         return mark.name.isEmpty ? line : "\(mark.name)\n\(line)"
     }
 

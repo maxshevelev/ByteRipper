@@ -1,4 +1,4 @@
-@source-sha 6f8b8fe4337306b512db14e087d74a60a4040c75275e2254f690869134ffef89
+@source-sha 804d300f9693e33d2218ee6cb70ba9d93bf52229ae196c5fd756e430baa37000
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
@@ -14,6 +14,13 @@ Die Quelle bleibt darüber sichtbar. Eingeklappt wird das Fragment zu einer Pill
 - **Ablage ▸ In der Quelle aktualisieren** schreibt die geänderten Bytes zurück in den Bereich, aus dem sie stammen, als einen einzigen Widerrufsschritt im Quelldokument.
 - Sichern als eigene Datei auf dem Volume, wenn der entnommene Teil gebraucht wird und nicht die geänderte Quelle.
 
+## Eigene Minimap, eigener Werkzeugbereich
+
+Ein Fragment-Bereich ist eine eigenständige Lesefläche und nicht eine zweite Ansicht der Quelle; er trägt dieselben zwei Instrumente wie das Fenster:
+
+- **Eine eigene Minimap.** **Darstellung ▸ Minimap einblenden** (⇧⌘M) und die Taste ganz rechts in der Symbolleiste wirken auf den jeweils vordersten Bereich, sodass die Spalte neben einem Fragment das Fragment selbst abbildet: dessen Lesezeichen, dessen Segmentstreifen und die Zonen, die ein Werkzeug darin veröffentlicht hat.
+- **Ein eigener Werkzeugbereich.** Das Menü **Werkzeuge** und die Werkzeugtaste der Symbolleiste wirken ebenso auf den vordersten Bereich, und das dort geöffnete Werkzeug liest die Bytes des Fragments. Es ist an dieses eine Fragment gebunden: Wo sich ein Werkzeug im Fenster auf jede der geöffneten Dateien richten lässt, hat eines im Bereich eine einzige und bietet keinen Wechsel an.
+
 ## Wenn das Zurückschreiben abgelehnt wird
 
 Vor dem Schreiben werden die folgenden Bedingungen geprüft, und das Programm nennt die, an der es scheitert:
@@ -26,5 +33,21 @@ Vor dem Schreiben werden die folgenden Bedingungen geprüft, und das Programm ne
 ## Entpackte Fragmente
 
 Eine komprimierte UEFI-Sektion lässt sich **entpackt** öffnen. Angezeigt werden dann nicht die in der Datei gehaltenen Bytes, sondern das, wozu sie sich entfalten. Nach dem Bearbeiten und Zurückschreiben wird die Sektion neu komprimiert und das Image um die entstandene Größe herum neu gelegt. Das Ergebnis gleicht dem Original des Herstellers auch dann nicht Byte für Byte, wenn nichts geändert wurde, da ein anderer Kompressor aus derselben Eingabe eine andere Ausgabe erzeugt.
+
+## Ein Fragment als UEFI-Teilbaum
+
+Ein Fragment, das aus einem Knoten des Baums [[topic:tool-uefi|UEFI-Struktur]] geöffnet wurde, enthält die Bytes dieses Knotens; auf dem Fragment geöffnet, zerlegt UEFI-Struktur sie daher als eigenes Image: Was der Baum im Bereich zeigt, ist der Teilbaum unter jenem Knoten, mit den eigenen Adressen des Bereichs ab null.
+
+Dafür lohnt sich die entpackte Form. Ein Knoten innerhalb einer komprimierten Sektion hat in der Datei keine eigenen Bytes — der Baum in der Quelle liest ihn durch Entpacken, doch im Dump steht nichts davon, was sich markieren ließe, und die Zone, die ein fokussierter Knoten dort veröffentlicht, ist die ganze komprimierte Sektion, benannt nach dem Knoten wie nach der Sektion, in der er gefunden wurde. Öffnet man diese Sektion entpackt, liest der Baum des Bereichs die entfalteten Bytes, und jeder Knoten hat einen Bereich für sich: Ein fokussierter Knoten markiert dann genau seine Bytes, und das Zonenmenü des Dumps — **Zone auswählen**, **Zone öffnen**, **Zone sichern unter…** — wirkt auf sie. Eine komprimierte Sektion innerhalb des Fragments verhält sich eine Ebene tiefer genauso.
+
+## Lesezeichen zwischen Quelle und Fragmenten
+
+[[topic:bookmarks|Lesezeichen]] sind eine Liste je Tab, die sich die Bereiche und jeder Fragment-Bereich teilen. Ein Bereich zählt ab seinem eigenen ersten Byte, während die Liste die Adressen der Datei führt; eine Marke ist damit ein Byte unter zwei Adressen: `0x1F400` im Dump ist `0x400` in einem bei `0x1F000` entnommenen Teil. Eine Zeile an der einen Stelle zu markieren markiert sie an der anderen, und bei einem Teil, der aus einem Teil geöffnet wurde, addieren sich die Versätze.
+
+- Eine im Bereich gesetzte Marke erscheint sogleich im Bereich der Quelle, unter der Adresse, die das Byte in der Datei hat; eine im Dump gesetzte erscheint in jedem Bereich, dessen Teil jene Zeile abdeckt.
+- Eine Marke auf den Zeilen vor dem ersten Byte des Teils liegt nicht im Teil und wird dort nicht gezeichnet. Die Liste behält sie in jedem Fall.
+- Im Bereich nennt der Kurzhinweis einer Marke zusätzlich die Adresse, die sie in der Datei hat — die Adresse, unter der sie außerhalb des Bereichs zu finden ist.
+
+**Ein entpackter Teil hat überhaupt keine Lesezeichen.** Seine Bytes sind nicht die Bytes der Datei, also ist keine Adresse darin eine Adresse in der Datei, und eine Marke an der einen Stelle bedeutete an der anderen nichts. Der Bereich zeichnet keine und nimmt keine an, und **Gehe zu** nennt den Grund, statt eine leere Liste zu zeigen. Dasselbe gilt für alles, was aus einem entpackten Teil geöffnet wurde.
 
 Siehe auch: [[topic:saving|Sichern]], [[topic:bench-safety|Einschränkungen beim Bearbeiten eines Images]].
