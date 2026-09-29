@@ -1,4 +1,4 @@
-@source-sha b04618d5c7b83f5ec0fe6aec0c3b8159cf51a2af0ca2760ed5a0249591523ff7
+@source-sha 9efd752c377a9ce5418a20a97bf9d4fed9528f7a2aaab84532a0f04b8cc7632c
 @term dump
 @name Dump
 @short Der Inhalt eines Chips, in eine Datei ausgelesen.
@@ -170,7 +170,9 @@ Genau deshalb lässt sich [[term:boot-guard|Boot Guard]] nicht aus einem Dump he
 @name LPC
 @short „Low Pin Count“ — ein alter, langsamer Bus, der für Embedded Controller und TPM-Header noch in Gebrauch ist.
 
-Manche Boards lassen sich so konfigurieren, dass die Firmware über LPC statt über SPI gelesen wird. Selbst dann braucht eine Intel-Plattform noch einen gültigen [[term:flash-descriptor|Deskriptor]] am SPI-Bus.
+Der Bus, der den [[term:pch|Chipsatz]] mit langsamer Peripherie verbindet. Intel führte ihn 1998 als softwarekompatiblen Ersatz für ISA ein: statt eines breiten parallelen Busses vier multiplexierte Datenleitungen mit 33 MHz und insgesamt sieben Signale, was einem Baustein einige Dutzend Anschlüsse spart. Daher der Name.
+
+Über LPC spricht der Chipsatz mit dem Super I/O (Tastatur, Maus, serielle und parallele Schnittstelle), mit dem [[term:ec|Embedded Controller]] und mit dem TPM-Header. Auf älteren Plattformen lag auch die Firmware an ihm, in einem Firmware Hub. Heute liegt die Firmware auf [[term:spi|SPI]], und von dort stammen die Dumps, mit denen dieses Programm arbeitet; LPC selbst wird auf neueren Platinen von eSPI abgelöst.
 
 @see term:spi
 

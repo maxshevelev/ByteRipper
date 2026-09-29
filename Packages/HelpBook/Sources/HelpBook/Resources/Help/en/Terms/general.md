@@ -169,7 +169,9 @@ That is the whole reason [[term:boot-guard|Boot Guard]] cannot be switched off f
 @name LPC
 @short "Low Pin Count" — an old, slow bus still used for the embedded controller and TPM headers.
 
-Some boards can be configured to read firmware over LPC rather than SPI. Even then an Intel platform still needs a valid [[term:flash-descriptor|descriptor]] on the SPI bus.
+The bus that connects the [[term:pch|chipset]] to slow peripherals. Intel introduced it in 1998 to replace ISA while staying software-compatible with it: instead of a wide parallel bus, four multiplexed data lines at 33 MHz and seven signals in all, which saves a chip several dozen pins. Hence the name.
+
+Over LPC the chipset talks to the Super I/O (keyboard, mouse, serial and parallel ports), to the [[term:ec|embedded controller]] and to the TPM header. On older platforms the firmware sat on it too, in a Firmware Hub. The firmware now sits on [[term:spi|SPI]], which is the bus the dumps this program works with come off; LPC itself is giving way to eSPI on newer boards.
 
 @see term:spi
 
