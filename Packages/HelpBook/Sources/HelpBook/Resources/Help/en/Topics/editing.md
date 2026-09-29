@@ -28,7 +28,7 @@ This follows from the structure of a firmware image, in which an address is a po
 
 ## Copying into the other pane
 
-**Edit ▸ Copy to Other Pane** (⌥⌘C) writes the selection of the active pane into the other pane, over the same addresses. It is copy and paste in one step, without the clipboard and without selecting the range a second time. It requires two open files and a selection.
+**Edit ▸ Copy to Other Pane** (⌥⌘C) writes the selection of the active pane into the other pane, over the same addresses. It is copy and paste in one step, without the clipboard and without selecting the range a second time. It requires two open files and a selection. The same command is in the right-click menu over a selection; there it copies from the pane that was clicked, whether or not that pane is active.
 
 The copy overwrites, like ⌘V, and is one undo step in the file it was written into. After it the range is selected in that file. The step is undone there: the pane is made active and ⌘Z is pressed.
 

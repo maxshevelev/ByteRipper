@@ -4332,7 +4332,7 @@ final class MainViewController: NSViewController {
         }
     }
 
-    /// The three selection-scoped context-menu items (§10.2). Each carries the
+    /// The selection-scoped context-menu items (§10.2). Each carries the
     /// right-clicked pane (plus offset) so its action resolves THIS pane's
     /// selection, exactly as the offset items below resolve the pane.
     private func addSelectionMenuItems(to menu: NSMenu, for pane: PaneViewModel, offset: UInt64) {
@@ -4342,6 +4342,16 @@ final class MainViewController: NSViewController {
                                 keyEquivalent: "")
         copy.target = self
         copy.representedObject = target
+        // Only where there is another pane to copy into: a comparison, and a
+        // pane of the tab's own rather than a fragment panel's.
+        if mode == .comparison, pane === windowModel.pane1 || pane === windowModel.pane2 {
+            // help: menu.edit.copy-to-other-pane
+            let copyTo = menu.addItem(withTitle: L("Copy to Other Pane"),
+                                      action: #selector(copyPaneSelectionToOtherPane(_:)),
+                                      keyEquivalent: "")
+            copyTo.target = self
+            copyTo.representedObject = target
+        }
         let save = menu.addItem(withTitle: L("Save Selection as…"),
                                 action: #selector(savePaneSelectionAs(_:)),
                                 keyEquivalent: "")
@@ -4542,10 +4552,20 @@ final class MainViewController: NSViewController {
     /// an image's length is its chip's. One undo step in the receiving file.
     // help: menu.edit.copy-to-other-pane
     @objc func copyToOtherPane() {
-        guard canCopyToOtherPane else { return }
+        copySelectionToOtherPane(from: windowModel.activePane)
+    }
+
+    /// Context menu ▸ Copy to Other Pane: the RIGHT-CLICKED pane's selection,
+    /// which need not be the active pane's (§10.2).
+    @objc func copyPaneSelectionToOtherPane(_ sender: Any?) {
+        guard let target = offsetContextTarget(from: sender) else { return }
+        copySelectionToOtherPane(from: target.pane)
+    }
+
+    private func copySelectionToOtherPane(from source: PaneViewModel) {
+        guard canCopyToOtherPane(from: source) else { return }
         let name = L("Copy to Other Pane")
-        let source = windowModel.activePane
-        let destination = windowModel.activePaneIndex == 0 ? windowModel.pane2 : windowModel.pane1
+        let destination = source === windowModel.pane1 ? windowModel.pane2 : windowModel.pane1
         let selection = source.hexSelection()
         let range = selection.start..<selection.end
         guard !destination.status.isReadOnly else {
@@ -4576,13 +4596,15 @@ final class MainViewController: NSViewController {
         revealForTool(range, in: destination, select: true)
     }
 
-    /// Whether Copy to Other Pane can run: two files, neither behind a
-    /// fragment panel, and a selection in the active pane. The refusals that
-    /// need a sentence — a read-only destination, a range past its end — are
-    /// left to the command, which can say which file and which address.
-    private var canCopyToOtherPane: Bool {
+    /// Whether Copy to Other Pane can run from `source`: two files, neither
+    /// behind a fragment panel, `source` one of them — a fragment panel's pane
+    /// has no pane beside it — and a selection in it. The refusals that need a
+    /// sentence — a read-only destination, a range past its end — are left to
+    /// the command, which can say which file and which address.
+    private func canCopyToOtherPane(from source: PaneViewModel) -> Bool {
         mode == .comparison && windowPanesAreReachable
-            && !windowModel.activePane.hexSelection().isEmpty
+            && (source === windowModel.pane1 || source === windowModel.pane2)
+            && !source.hexSelection().isEmpty
     }
 
     /// Context menu > Save Selection as…: writes the RIGHT-CLICKED pane's
@@ -7335,7 +7357,10 @@ extension MainViewController: NSMenuItemValidation {
             let pane = activePane
             return pane.isOpen && !pane.hexSelection().isEmpty
         case #selector(copyToOtherPane):
-            return canCopyToOtherPane
+            return canCopyToOtherPane(from: windowModel.activePane)
+        case #selector(copyPaneSelectionToOtherPane(_:)):
+            guard let target = menuItem.representedObject as? OffsetContextTarget else { return false }
+            return canCopyToOtherPane(from: target.pane)
         case #selector(copySelection),
              #selector(useSelectionForFind):
             // Both act on the selection, so both are dimmed without one: ⌘E

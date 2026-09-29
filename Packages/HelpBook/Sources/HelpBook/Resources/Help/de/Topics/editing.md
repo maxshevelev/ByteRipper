@@ -1,4 +1,4 @@
-@source-sha 1e16fab387fe5ff669468921ed5f53a3210891310b9c91f329e0da017ec043e4
+@source-sha 24e87c062c97d062b6d4e122718c7ca81626119a9f69226e1d614a85e87b1df1
 # Bytes bearbeiten
 
 > Tippen überschreibt die vorhandenen Bytes. Jeder Vorgang, der die Länge der Datei ändert, fragt vorher nach.
@@ -18,7 +18,7 @@ Das folgt aus dem Aufbau eines Firmware-Images, in dem eine Adresse eine Positio
 
 ## In den anderen Bereich kopieren
 
-**Bearbeiten ▸ In den anderen Bereich kopieren** (⌥⌘C) schreibt die Auswahl des aktiven Bereichs in den anderen Bereich, über dieselben Adressen. Das ist Kopieren und Einsetzen in einem Schritt — ohne Zwischenablage und ohne den Bereich ein zweites Mal auszuwählen. Der Befehl braucht zwei geöffnete Dateien und eine Auswahl.
+**Bearbeiten ▸ In den anderen Bereich kopieren** (⌥⌘C) schreibt die Auswahl des aktiven Bereichs in den anderen Bereich, über dieselben Adressen. Das ist Kopieren und Einsetzen in einem Schritt — ohne Zwischenablage und ohne den Bereich ein zweites Mal auszuwählen. Der Befehl braucht zwei geöffnete Dateien und eine Auswahl. Derselbe Befehl steht im Kontextmenü über einer Auswahl; dort kopiert er aus dem Bereich, auf den geklickt wurde, ob dieser aktiv ist oder nicht.
 
 Die Kopie überschreibt wie ⌘V und ist ein Widerrufsschritt in der Datei, in die sie geschrieben wurde. Danach ist der Bereich in dieser Datei ausgewählt. Widerrufen wird der Schritt dort: Der Bereich wird aktiv gemacht, dann ⌘Z.
 
