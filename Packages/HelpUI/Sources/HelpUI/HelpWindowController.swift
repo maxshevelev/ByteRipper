@@ -270,7 +270,12 @@ import Localization
             case .term(let term): return HelpOutlineRow(kind: .term(term))
             }
         }
-        let title = hits.isEmpty ? "No results" : "\(hits.count) result\(hits.count == 1 ? "" : "s")"
+        let title: String
+        if hits.isEmpty {
+            title = L("No results")
+        } else {
+            title = hits.count == 1 ? L("1 result") : L("%1$@ results", hits.count)
+        }
         shown = [HelpOutlineRow(kind: .group(title), children: hits)]
         outline.reloadData()
         if let group = shown.first { outline.expandItem(group) }

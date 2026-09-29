@@ -21,6 +21,8 @@
 "%1$@ (Valid)" = "%1$@ (сходится)";
 "%1$@ (in %2$@)" = "%1$@ (в %2$@)";
 "%1$@ Bookmarks Here:" = "Здесь закладок: %1$@";
+"%1$@ compressed data that does not open here" = "Сжатые данные %1$@, которые здесь не раскрываются";
+"%1$@ compressed data that opens here" = "Сжатые данные %1$@, которые здесь раскрываются";
 "%1$@ Intel microcodes" = "микрокодов Intel: %1$@";
 "%1$@ at %2$@" = "%1$@ по %2$@";
 "%1$@ blocks" = "блоков: %1$@";
@@ -57,6 +59,7 @@
 "%1$@ protected ranges" = "защищённых диапазонов: %1$@";
 "%1$@ records" = "записей: %1$@";
 "%1$@ regions" = "регионов: %1$@";
+"%1$@ results" = "Результатов: %1$@";
 "%1$@ rows" = "строк: %1$@";
 "%1$@ selected" = "выделено %1$@";
 "%1$@ tables" = "таблиц: %1$@";
@@ -88,6 +91,7 @@
 "1 protected range" = "1 защищённый диапазон";
 "1 record" = "1 запись";
 "1 region" = "1 регион";
+"1 result" = "Один результат";
 "1 row" = "1 строка";
 "1 table" = "1 таблица";
 "16 bytes (1 row)" = "16 байт (1 строка)";
@@ -165,6 +169,8 @@
 "Close and Break Link" = "Закрыть и разорвать связь";
 "Close and Break Links" = "Закрыть и разорвать связи";
 "Coming soon" = "Появится позже";
+"Compressed: what it holds is listed under it, decompressed" = "Сжатые данные: их содержимое перечислено ниже в распакованном виде";
+"Could not be checked, or wants a second look" = "Проверить не удалось либо требуется дополнительная проверка";
 "Could not duplicate the file." = "Не удалось создать копию файла.";
 "Could not duplicate the pane." = "Не удалось создать копию файловой панели.";
 "Could not duplicate the panel." = "Не удалось создать копию панели.";
@@ -272,6 +278,7 @@
 "Empty (%1$@ Bookmarks)" = "Пусто (закладок: %1$@)";
 "Empty (1 Bookmark)" = "Пусто (одна закладка)";
 "Encoding" = "Кодировка";
+"Encrypted %1$@" = "%1$@ с шифрованием";
 "End" = "Конец";
 "End is beyond the end of the file." = "Конечный адрес находится за пределами файла.";
 "Enter a character" = "Введите символ";
@@ -359,18 +366,22 @@
 "Header" = "Заголовок";
 "Help for this tool" = "Справка по инструменту";
 "Help: " = "Справка: ";
+"Help: %1$@" = "Справка: %1$@";
 "Hex bytes" = "Байты hex";
 "Hex dump" = "Шестнадцатеричный дамп";
 "Hex dump — %1$@" = "Шестнадцатеричный дамп — %1$@";
 "Hide ByteRipper" = "Скрыть ByteRipper";
 "Hide Minimap" = "Скрыть миникарту";
 "Hide Search Results" = "Скрыть результаты поиска";
+"Holds compressed data that does not open here" = "Содержит сжатые данные, которые здесь не раскрываются";
+"Holds compressed data that opens here" = "Содержит сжатые данные, которые здесь раскрываются";
 "Holds the AMI vendor hash table: ranges the firmware checks at boot" = "Содержит таблицу хешей вендора AMI: диапазоны, которые прошивка проверяет при старте";
 "Holds the Boot Guard Boot Policy: the IBB segments and the hash they are checked against" = "Содержит Boot Guard Boot Policy: сегменты IBB и хеш, с которым они сверяются";
 "Holds the Boot Guard Key Manifest: the key the Boot Policy is signed with" = "Содержит Boot Guard Key Manifest: ключ, которым подписана Boot Policy";
 "Holds the Insyde flash device map: ranges the firmware checks at boot" = "Содержит Insyde flash device map: диапазоны, которые прошивка проверяет при старте";
 "Holds the Phoenix vendor hash table: ranges the firmware checks at boot" = "Содержит таблицу хешей вендора Phoenix: диапазоны, которые прошивка проверяет при старте";
 "Holds the hashes the partition's modules are checked against" = "Содержит хеши, с которыми сверяются модули раздела";
+"Holds what other structures are checked against" = "Содержит эталоны, по которым проверяются другие структуры";
 "Home Directory" = "Домашний каталог";
 "If you don’t review your documents, all your changes will be lost." = "Если не просмотреть документы, все изменения будут потеряны.";
 "ignore case" = "без учёта регистра";
@@ -389,6 +400,9 @@
 "Insert?" = "Вводить со сдвигом?";
 "Inserted %1$@ before %2$@. Total: %3$@." = "%1$@ вставлен в начало, перед %2$@. Итоговый размер: %3$@.";
 "Inserting at offset %1$@ shifts every byte from here on — the file structure may be affected." = "Вставка по адресу %1$@ сдвинет все последующие байты — структура файла может быть нарушена.";
+"Inside a range the firmware checks at boot" = "Внутри диапазона, который прошивка проверяет при запуске";
+"Inside the Boot Guard IBB" = "Внутри IBB Boot Guard";
+"Inside the Boot Guard IBB: an edit stops the platform booting" = "Внутри IBB Boot Guard: правка здесь останавливает запуск платформы";
 "Integrity" = "Целостность";
 "Integrity %1$@" = "Целостность %1$@";
 "Invalid" = "Неверно";
@@ -500,6 +514,7 @@
 "No microcode header at %1$@, and it is not an empty slot" = "По %1$@ нет заголовка микрокода, и это не пустой слот";
 "No more difference" = "Различий больше нет";
 "No more same block" = "Одинаковых блоков больше нет";
+"No results" = "Ничего не найдено";
 "Non-UEFI data" = "Данные не-UEFI";
 "None" = "Нет";
 "Not allowed here" = "Сюда нельзя";
@@ -557,6 +572,7 @@
 "Overwrite" = "Перезаписать";
 "Pane showing 0x%1$@ through 0x%2$@." = "Файловая панель показывает диапазон с 0x%1$@ по 0x%2$@.";
 "Panes showing 0x%1$@ through 0x%2$@." = "Файловые панели показывают диапазон с 0x%1$@ по 0x%2$@.";
+"Partly inside protected ranges" = "Частично попадает в защищённые диапазоны";
 "Paste Insert" = "Вставить со сдвигом";
 "Paste Insert failed." = "Не удалось вставить со сдвигом.";
 "PRD" = "PRD";
@@ -590,6 +606,7 @@
 "RBE/PM Metadata" = "Метаданные RBE/PM";
 "Range" = "Диапазон";
 "Read" = "Чтение";
+"Read out of compressed data, and the compressed data open on it" = "Прочитано из сжатых данных, и сжатые данные раскрыты на этой строке";
 "Read out of the %1$@ module, stored %2$@ compressed" = "Прочитано из модуля %1$@, хранится в сжатии %2$@";
 "Read-Only" = "Только для чтения";
 "Reading ME…" = "Чтение ME…";
@@ -680,6 +697,7 @@
 "Search results (0)" = "Результаты поиска (0)";
 "Search results (searching…)" = "Результаты поиска (ищу…)";
 "Searching…" = "Ищу…";
+"See also" = "Смотрите также";
 "Segment" = "Сегмент";
 "Segment description" = "Описание сегмента";
 "Segment source changed on disk" = "Источник сегмента изменился на диске";
@@ -721,6 +739,7 @@
 "Smart Search — the encoding is whichever one finds a match" = "Умный поиск — кодировка та, в которой нашлось совпадение";
 "Smart search." = "Умный поиск.";
 "Some files could not be opened" = "Некоторые файлы открыть не удалось";
+"Something is wrong: the pointer says what" = "Обнаружена ошибка: подробности — во всплывающей подсказке";
 "Split Here at %1$@" = "Разрезать здесь, по %1$@";
 "Stack Panes" = "Панели друг над другом";
 "Stack the panes" = "Расположить панели друг над другом";
@@ -745,12 +764,15 @@
 "That file is too large" = "Файл слишком велик";
 "That microcode's checksum does not add up — its dwords should sum to zero." = "Контрольная сумма этого микрокода не сходится — сумма его dword должна быть нулём.";
 "That pattern cannot be read as %1$@." = "Этот шаблон не читается как %1$@.";
+"The catalogue lists a newer revision for this board" = "Каталог содержит более свежую ревизию для этой платы";
+"The catalogue lists a newer revision that may not serve this board" = "Каталог содержит более свежую ревизию, которая может не подойти этой плате";
 "The catalogue of CPU microcodes the FIT tool's picker offers." = "Каталог микрокодов CPU, из которого предлагает выбор инструмент FIT.";
 "The clipboard does not contain raw bytes or a valid hex byte sequence." = "В буфере обмена нет ни двоичных данных, ни корректной шестнадцатеричной последовательности байтов.";
 "the file" = "этому файлу";
 "The FIT pointer, %1$@, is outside this image" = "Указатель FIT, %1$@, за пределами этого образа";
 "The library changed on your other Mac — open Resolve… again for the questions that are left." = "Библиотека изменилась на другом Mac — откройте «Разрешить конфликты…» ещё раз для оставшихся вопросов.";
 "The ME Analyzer tool's reading of Intel ME/CSME firmware, and the databases it checks a dump against (MEA.dat, Huffman.dat), fetched as the project publishes them." = "Разбор прошивок Intel ME/CSME инструментом ME Analyzer и базы данных, по которым сверяется дамп (MEA.dat, Huffman.dat), загружаемые по мере их публикации проектом.";
+"The newest revision the catalogue lists for this processor and platform" = "Самая свежая ревизия, которую каталог указывает для этого процессора и платформы";
 "the selection" = "выделение";
 "The Top Swap backup at %1$@ has no FIT where its pointer leads" = "В резервной копии Top Swap по %1$@ нет FIT там, куда ведёт её указатель";
 "The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree" = "Резервная копия Top Swap по %1$@ содержит ту же FIT, но прочие байты блока отличаются, поэтому правка микрокода запрещена, пока копии не совпадут";

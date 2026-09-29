@@ -70,7 +70,7 @@ public enum MEATreeMarks {
             let opens = !stored.isEncrypted && metadataModules.contains(module.name)
                 && !(analysis.rbePmMetadata ?? []).isEmpty
             roles.append(.compressed(
-                algorithm: stored.isEncrypted ? "Encrypted \(compression)" : compression,
+                algorithm: stored.isEncrypted ? L("Encrypted %1$@", compression) : compression,
                 decoded: opens
             ))
         }

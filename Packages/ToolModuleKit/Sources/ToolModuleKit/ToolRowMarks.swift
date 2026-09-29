@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// What a firmware panel says about one row besides its text
 /// (`Design/ROW_MARKS.md`): a value, decided in a tool-module's pure target
@@ -89,12 +90,14 @@ public struct ToolRowMarks: Hashable, Sendable {
     public var summary: String? {
         var parts: [String] = []
         switch protection {
-        case .ibb: parts.append("Inside the Boot Guard IBB")
-        case .firmware: parts.append("Inside a range the firmware checks at boot")
+        case .ibb: parts.append(L("Inside the Boot Guard IBB"))
+        case .firmware: parts.append(L("Inside a range the firmware checks at boot"))
         case nil: break
         }
         if let decompressedFrom { parts.append(decompressedFrom) }
-        if opensDecompressed { parts.append("Compressed: what it holds is listed under it, decompressed") }
+        if opensDecompressed {
+            parts.append(L("Compressed: what it holds is listed under it, decompressed"))
+        }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 }
@@ -140,29 +143,29 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
     public var meaning: String {
         switch self {
         case .protectedIBB:
-            return "Inside the Boot Guard IBB: an edit stops the platform booting"
+            return L("Inside the Boot Guard IBB: an edit stops the platform booting")
         case .protectedFirmware:
-            return "Inside a range the firmware checks at boot"
+            return L("Inside a range the firmware checks at boot")
         case .decompressed:
-            return "Read out of compressed data, and the compressed data open on it"
+            return L("Read out of compressed data, and the compressed data open on it")
         case .newest:
-            return "The newest revision the catalogue lists for this processor and platform"
+            return L("The newest revision the catalogue lists for this processor and platform")
         case .newerListed:
-            return "The catalogue lists a newer revision for this board"
+            return L("The catalogue lists a newer revision for this board")
         case .newerMaybe:
-            return "The catalogue lists a newer revision that may not serve this board"
+            return L("The catalogue lists a newer revision that may not serve this board")
         case .error:
-            return "Something is wrong: the pointer says what"
+            return L("Something is wrong: the pointer says what")
         case .caution:
-            return "Could not be checked, or wants a second look"
+            return L("Could not be checked, or wants a second look")
         case .compressed:
-            return "Holds compressed data that opens here"
+            return L("Holds compressed data that opens here")
         case .compressedUndecoded:
-            return "Holds compressed data that does not open here"
+            return L("Holds compressed data that does not open here")
         case .holdsChecks:
-            return "Holds what other structures are checked against"
+            return L("Holds what other structures are checked against")
         case .partlyProtected:
-            return "Partly inside protected ranges"
+            return L("Partly inside protected ranges")
         }
     }
 }

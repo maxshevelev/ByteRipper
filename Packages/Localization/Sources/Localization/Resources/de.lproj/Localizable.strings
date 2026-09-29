@@ -21,6 +21,8 @@
 "%1$@ (Valid)" = "%1$@ (stimmt)";
 "%1$@ (in %2$@)" = "%1$@ (in %2$@)";
 "%1$@ Bookmarks Here:" = "%1$@ Lesezeichen hier:";
+"%1$@ compressed data that does not open here" = "Mit %1$@ komprimierte Daten, die sich hier nicht öffnen lassen";
+"%1$@ compressed data that opens here" = "Mit %1$@ komprimierte Daten, die sich hier öffnen lassen";
 "%1$@ Intel microcodes" = "%1$@ Intel-Microcodes";
 "%1$@ at %2$@" = "%1$@ bei %2$@";
 "%1$@ blocks" = "%1$@ Blöcke";
@@ -57,6 +59,7 @@
 "%1$@ protected ranges" = "%1$@ geschützte Bereiche";
 "%1$@ records" = "%1$@ Sätze";
 "%1$@ regions" = "%1$@ Regionen";
+"%1$@ results" = "%1$@ Ergebnisse";
 "%1$@ rows" = "%1$@ Zeilen";
 "%1$@ selected" = "%1$@ ausgewählt";
 "%1$@ tables" = "%1$@ Tabellen";
@@ -88,6 +91,7 @@
 "1 protected range" = "1 geschützter Bereich";
 "1 record" = "1 Satz";
 "1 region" = "1 Region";
+"1 result" = "1 Ergebnis";
 "1 row" = "1 Zeile";
 "1 table" = "1 Tabelle";
 "16 bytes (1 row)" = "16 Bytes (1 Zeile)";
@@ -165,6 +169,8 @@
 "Close and Break Link" = "Schließen und Verbindung trennen";
 "Close and Break Links" = "Schließen und Verbindungen trennen";
 "Coming soon" = "Folgt später";
+"Compressed: what it holds is listed under it, decompressed" = "Komprimiert: der Inhalt steht darunter, dekomprimiert";
+"Could not be checked, or wants a second look" = "Ließ sich nicht prüfen oder verlangt einen zweiten Blick";
 "Could not duplicate the file." = "Die Datei konnte nicht dupliziert werden.";
 "Could not duplicate the pane." = "Der Bereich konnte nicht dupliziert werden.";
 "Could not duplicate the panel." = "Das Panel konnte nicht dupliziert werden.";
@@ -272,6 +278,7 @@
 "Empty (%1$@ Bookmarks)" = "Leer (%1$@ Lesezeichen)";
 "Empty (1 Bookmark)" = "Leer (1 Lesezeichen)";
 "Encoding" = "Codierung";
+"Encrypted %1$@" = "%1$@ (verschlüsselt)";
 "End" = "Ende";
 "End is beyond the end of the file." = "Das Ende liegt hinter dem Dateiende.";
 "Enter a character" = "Zeichen eingeben";
@@ -359,18 +366,22 @@
 "Header" = "Kopf";
 "Help for this tool" = "Hilfe zu diesem Werkzeug";
 "Help: " = "Hilfe: ";
+"Help: %1$@" = "Hilfe: %1$@";
 "Hex bytes" = "Hex-Bytes";
 "Hex dump" = "Hex-Dump";
 "Hex dump — %1$@" = "Hex-Dump — %1$@";
 "Hide ByteRipper" = "ByteRipper ausblenden";
 "Hide Minimap" = "Minimap ausblenden";
 "Hide Search Results" = "Suchergebnisse ausblenden";
+"Holds compressed data that does not open here" = "Enthält komprimierte Daten, die sich hier nicht öffnen lassen";
+"Holds compressed data that opens here" = "Enthält komprimierte Daten, die sich hier öffnen lassen";
 "Holds the AMI vendor hash table: ranges the firmware checks at boot" = "Enthält die AMI-Hersteller-Hashtabelle: Bereiche, die die Firmware beim Start prüft";
 "Holds the Boot Guard Boot Policy: the IBB segments and the hash they are checked against" = "Enthält die Boot Guard Boot Policy: die IBB-Segmente und den Hash, gegen den sie geprüft werden";
 "Holds the Boot Guard Key Manifest: the key the Boot Policy is signed with" = "Enthält das Boot Guard Key Manifest: den Schlüssel, mit dem die Boot Policy signiert ist";
 "Holds the Insyde flash device map: ranges the firmware checks at boot" = "Enthält die Insyde Flash Device Map: Bereiche, die die Firmware beim Start prüft";
 "Holds the Phoenix vendor hash table: ranges the firmware checks at boot" = "Enthält die Phoenix-Hersteller-Hashtabelle: Bereiche, die die Firmware beim Start prüft";
 "Holds the hashes the partition's modules are checked against" = "Enthält die Hashes, gegen die die Module der Partition geprüft werden";
+"Holds what other structures are checked against" = "Enthält die Referenz, gegen die andere Strukturen geprüft werden";
 "Home Directory" = "Home-Verzeichnis";
 "If you don’t review your documents, all your changes will be lost." = "Wenn Sie die Dokumente nicht durchsehen, gehen alle Änderungen verloren.";
 "ignore case" = "Groß-/Kleinschreibung ignorieren";
@@ -389,6 +400,9 @@
 "Insert?" = "Im Einfügemodus tippen?";
 "Inserted %1$@ before %2$@. Total: %3$@." = "%1$@ vor %2$@ eingefügt. Gesamt: %3$@.";
 "Inserting at offset %1$@ shifts every byte from here on — the file structure may be affected." = "Einfügen bei Offset %1$@ verschiebt jedes Byte ab hier — die Dateistruktur kann darunter leiden.";
+"Inside a range the firmware checks at boot" = "Innerhalb eines Bereichs, den die Firmware beim Start prüft";
+"Inside the Boot Guard IBB" = "Innerhalb des Boot-Guard-IBB";
+"Inside the Boot Guard IBB: an edit stops the platform booting" = "Innerhalb des Boot-Guard-IBB: eine Änderung verhindert den Start der Plattform";
 "Integrity" = "Integrität";
 "Integrity %1$@" = "Integrität %1$@";
 "Invalid" = "Ungültig";
@@ -500,6 +514,7 @@
 "No microcode header at %1$@, and it is not an empty slot" = "Kein Microcode-Kopf bei %1$@, und es ist kein leerer Slot";
 "No more difference" = "Keine weiteren Unterschiede";
 "No more same block" = "Keine weiteren gleichen Blöcke";
+"No results" = "Keine Ergebnisse";
 "Non-UEFI data" = "Nicht-UEFI-Daten";
 "None" = "Keine";
 "Not allowed here" = "Hier nicht erlaubt";
@@ -557,6 +572,7 @@
 "Overwrite" = "Überschreiben";
 "Pane showing 0x%1$@ through 0x%2$@." = "Bereich zeigt 0x%1$@ bis 0x%2$@.";
 "Panes showing 0x%1$@ through 0x%2$@." = "Bereiche zeigen 0x%1$@ bis 0x%2$@.";
+"Partly inside protected ranges" = "Teilweise innerhalb geschützter Bereiche";
 "Paste Insert" = "Mit Verschieben einsetzen";
 "Paste Insert failed." = "Einsetzen mit Verschieben fehlgeschlagen.";
 "PRD" = "PRD";
@@ -590,6 +606,7 @@
 "RBE/PM Metadata" = "RBE/PM-Metadaten";
 "Range" = "Bereich";
 "Read" = "Lesen";
+"Read out of compressed data, and the compressed data open on it" = "Aus komprimierten Daten gelesen, und die komprimierten Daten sind darauf geöffnet";
 "Read out of the %1$@ module, stored %2$@ compressed" = "Aus dem Modul %1$@ gelesen, gespeichert mit %2$@-Kompression";
 "Read-Only" = "Schreibgeschützt";
 "Reading ME…" = "ME wird gelesen…";
@@ -680,6 +697,7 @@
 "Search results (0)" = "Suchergebnisse (0)";
 "Search results (searching…)" = "Suchergebnisse (Suche läuft…)";
 "Searching…" = "Suche läuft…";
+"See also" = "Siehe auch";
 "Segment" = "Segment";
 "Segment description" = "Segmentbeschreibung";
 "Segment source changed on disk" = "Segmentquelle auf dem Volume geändert";
@@ -721,6 +739,7 @@
 "Smart Search — the encoding is whichever one finds a match" = "Intelligente Suche — die Codierung ist die, in der etwas gefunden wird";
 "Smart search." = "Intelligente Suche.";
 "Some files could not be opened" = "Einige Dateien ließen sich nicht öffnen";
+"Something is wrong: the pointer says what" = "Etwas stimmt nicht: der Zeiger sagt, was";
 "Split Here at %1$@" = "Hier bei %1$@ schneiden";
 "Stack Panes" = "Bereiche übereinander";
 "Stack the panes" = "Bereiche übereinander anordnen";
@@ -745,12 +764,15 @@
 "That file is too large" = "Diese Datei ist zu groß";
 "That microcode's checksum does not add up — its dwords should sum to zero." = "Die Prüfsumme dieses Microcodes geht nicht auf — die Summe seiner Dwords sollte null sein.";
 "That pattern cannot be read as %1$@." = "Dieses Muster lässt sich nicht als %1$@ lesen.";
+"The catalogue lists a newer revision for this board" = "Der Katalog führt eine neuere Revision für dieses Board";
+"The catalogue lists a newer revision that may not serve this board" = "Der Katalog führt eine neuere Revision, die zu diesem Board möglicherweise nicht passt";
 "The catalogue of CPU microcodes the FIT tool's picker offers." = "Der Katalog der CPU-Mikrocodes, den die Auswahl im FIT-Werkzeug anbietet.";
 "The clipboard does not contain raw bytes or a valid hex byte sequence." = "Die Zwischenablage enthält weder Rohbytes noch eine gültige Hex-Bytefolge.";
 "the file" = "diese Datei";
 "The FIT pointer, %1$@, is outside this image" = "Der FIT-Zeiger, %1$@, liegt außerhalb dieses Images";
 "The library changed on your other Mac — open Resolve… again for the questions that are left." = "Die Bibliothek hat sich auf Ihrem anderen Mac geändert — öffnen Sie „Konflikte lösen…“ erneut für die verbliebenen Fragen.";
 "The ME Analyzer tool's reading of Intel ME/CSME firmware, and the databases it checks a dump against (MEA.dat, Huffman.dat), fetched as the project publishes them." = "Die Auswertung von Intel-ME/CSME-Firmware durch das Werkzeug ME Analyzer und die Datenbanken, gegen die ein Dump geprüft wird (MEA.dat, Huffman.dat), jeweils in der vom Projekt veröffentlichten Fassung.";
+"The newest revision the catalogue lists for this processor and platform" = "Die neueste Revision, die der Katalog für diesen Prozessor und diese Plattform führt";
 "the selection" = "die Auswahl";
 "The Top Swap backup at %1$@ has no FIT where its pointer leads" = "Die Top-Swap-Sicherung bei %1$@ hat dort, wohin ihr Zeiger führt, keine FIT";
 "The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree" = "Die Top-Swap-Sicherung bei %1$@ enthält dieselbe FIT, aber andere Bytes des Blocks weichen ab; Microcode-Änderungen werden daher abgelehnt, bis die Kopien übereinstimmen";

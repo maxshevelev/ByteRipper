@@ -46,7 +46,7 @@ final class NamePatternSheetTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(name(sheet)).stringValue, "",
                        "the name starts empty — a pattern has none yet")
         let message = try XCTUnwrap(sheet.messageText)
-        XCTAssertTrue(message.contains("\"windows\""), message)
+        XCTAssertTrue(message.contains("“windows”"), message)
         XCTAssertTrue(message.contains("UTF-16 LE"), message)
         XCTAssertTrue(message.contains("ignore case"), message)
     }

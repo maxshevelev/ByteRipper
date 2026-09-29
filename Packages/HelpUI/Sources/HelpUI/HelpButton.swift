@@ -1,5 +1,6 @@
 import AppKit
 import HelpBook
+import Localization
 
 /// The question mark in a circle that opens the help at the page about what it
 /// stands beside.
@@ -77,9 +78,9 @@ import HelpBook
         let book = Help.shared
         switch link {
         case .topic(let id):
-            return "Help: " + (book.topic(id)?.title ?? id.rawValue)
+            return L("Help: %1$@", book.topic(id)?.title ?? id.rawValue)
         case .term(let id):
-            return "Help: " + (book.term(id)?.name ?? id.rawValue)
+            return L("Help: %1$@", book.term(id)?.name ?? id.rawValue)
         }
     }
 }

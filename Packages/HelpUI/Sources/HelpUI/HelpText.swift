@@ -68,7 +68,7 @@ public enum HelpText {
         text.append(summary(term.summary))
         text.append(render(term.blocks))
         if !term.seeAlso.isEmpty {
-            text.append(heading("See also"))
+            text.append(heading(L("See also")))
             text.append(render([.bullets(term.seeAlso.map { [linkSpan(for: $0)] })]))
         }
         return text

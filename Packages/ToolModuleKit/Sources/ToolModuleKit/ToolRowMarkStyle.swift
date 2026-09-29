@@ -1,5 +1,6 @@
 import AppKit
 import AppPalette
+import Localization
 
 /// How each mark is drawn (`Design/ROW_MARKS.md` §3, §4) — the one place the
 /// symbol names and the palette meanings are chosen, read by the cells, the
@@ -53,8 +54,8 @@ extension ToolRowMarks.Role {
         switch self {
         case .compressed(let algorithm, let decoded):
             return decoded
-                ? "\(algorithm) compressed data that opens here"
-                : "\(algorithm) compressed data that does not open here"
+                ? L("%1$@ compressed data that opens here", algorithm)
+                : L("%1$@ compressed data that does not open here", algorithm)
         case .holdsChecks(let words): return words
         case .partlyProtected: return ToolRowMark.partlyProtected.meaning
         }
