@@ -402,9 +402,9 @@
 "Insert?" = "Вводить со сдвигом?";
 "Inserted %1$@ before %2$@. Total: %3$@." = "%1$@ вставлен в начало, перед %2$@. Итоговый размер: %3$@.";
 "Inserting at offset %1$@ shifts every byte from here on — the file structure may be affected." = "Вставка по адресу %1$@ сдвинет все последующие байты — структура файла может быть нарушена.";
-"Inside a range the firmware checks at boot" = "Внутри диапазона, который прошивка проверяет при запуске";
-"Inside the Boot Guard IBB" = "Внутри IBB Boot Guard";
-"Inside the Boot Guard IBB: an edit stops the platform booting" = "Внутри IBB Boot Guard: правка здесь останавливает запуск платформы";
+"Inside a range the firmware checks at boot" = "Диапазон, который прошивка проверяет при запуске";
+"Inside the Boot Guard IBB" = "Область IBB Boot Guard";
+"Inside the Boot Guard IBB: an edit stops the platform booting" = "Область IBB Boot Guard: изменения здесь приводят к незапуску платформы";
 "Integrity" = "Целостность";
 "Integrity %1$@" = "Целостность %1$@";
 "Invalid" = "Неверно";
