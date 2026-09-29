@@ -242,7 +242,7 @@
 "Data register" = "Регистр данных";
 "Data sources" = "Источники данных";
 "Date" = "Дата";
-"Decoded text" = "Декодированный текст";
+"Decoded text" = "Декод. текст";
 "Decoding table:" = "Таблица декодирования:";
 "Decompressed from" = "Распаковано из";
 "Decompressed from %1$@ at %2$@" = "Распаковано из %1$@ по %2$@";
