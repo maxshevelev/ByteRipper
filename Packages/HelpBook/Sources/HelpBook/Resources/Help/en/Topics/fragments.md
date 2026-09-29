@@ -39,7 +39,7 @@ A compressed UEFI section can be opened *decompressed*. What is then displayed i
 
 A fragment opened from a node of the [[topic:tool-uefi|UEFI Structure]] tree holds that node's bytes, so opening UEFI Structure on the fragment parses them as an image of their own: what the panel's tree shows is the subtree under that node, at the panel's own addresses from zero.
 
-This is what the decompressed form is worth opening for. A node inside a compressed section has no bytes of its own in the file — the tree in the parent reads it by decompressing, but the dump holds nothing of it to mark, and the zone a focused node publishes there is the whole compressed section, named for both the node and the section it was found in. Open that section decompressed and the panel's own tree reads the expanded bytes, where every node has a range of its own: focusing a node then marks exactly its bytes, and the dump's zone menu — **Select Zone**, **Open Zone**, **Save Zone as…** — acts on them. A compressed section inside the fragment behaves the same way one level further down.
+Opening a compressed section decompressed is useful here. In the parent's pane a node inside a compressed section has no bytes of its own in the file, so the dump marks the whole compressed section. In a decompressed fragment every node has its own bytes: selecting a node marks exactly those bytes in the dump, and **Select Zone**, **Open Zone** and **Save Zone as…** work on them.
 
 ## Bookmarks across a parent and its fragments
 

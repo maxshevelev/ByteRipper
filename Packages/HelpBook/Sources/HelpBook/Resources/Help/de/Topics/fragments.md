@@ -1,4 +1,4 @@
-@source-sha 804d300f9693e33d2218ee6cb70ba9d93bf52229ae196c5fd756e430baa37000
+@source-sha fa446488fae5611d2a7dec8396b9f518a9c1f8a0e0d1a2a60b8488abf8a56309
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
@@ -38,7 +38,7 @@ Eine komprimierte UEFI-Sektion lässt sich **entpackt** öffnen. Angezeigt werde
 
 Ein Fragment, das aus einem Knoten des Baums [[topic:tool-uefi|UEFI-Struktur]] geöffnet wurde, enthält die Bytes dieses Knotens; auf dem Fragment geöffnet, zerlegt UEFI-Struktur sie daher als eigenes Image: Was der Baum im Bereich zeigt, ist der Teilbaum unter jenem Knoten, mit den eigenen Adressen des Bereichs ab null.
 
-Dafür lohnt sich die entpackte Form. Ein Knoten innerhalb einer komprimierten Sektion hat in der Datei keine eigenen Bytes — der Baum in der Quelle liest ihn durch Entpacken, doch im Dump steht nichts davon, was sich markieren ließe, und die Zone, die ein fokussierter Knoten dort veröffentlicht, ist die ganze komprimierte Sektion, benannt nach dem Knoten wie nach der Sektion, in der er gefunden wurde. Öffnet man diese Sektion entpackt, liest der Baum des Bereichs die entfalteten Bytes, und jeder Knoten hat einen Bereich für sich: Ein fokussierter Knoten markiert dann genau seine Bytes, und das Zonenmenü des Dumps — **Zone auswählen**, **Zone öffnen**, **Zone sichern unter…** — wirkt auf sie. Eine komprimierte Sektion innerhalb des Fragments verhält sich eine Ebene tiefer genauso.
+Hier ist es nützlich, eine komprimierte Sektion entpackt zu öffnen. Im Bereich der Quelle hat ein Knoten innerhalb einer komprimierten Sektion keine eigenen Bytes in der Datei; der Dump markiert deshalb die ganze komprimierte Sektion. In einem entpackten Fragment hat jeder Knoten eigene Bytes: Wird ein Knoten ausgewählt, markiert der Dump genau diese Bytes, und **Zone auswählen**, **Zone öffnen** und **Zone sichern unter…** wirken auf sie.
 
 ## Lesezeichen zwischen Quelle und Fragmenten
 
