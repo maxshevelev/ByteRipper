@@ -7,8 +7,8 @@
 
 ## Why it is shaped this way
 
-The TODO entry this grew out of (`Design/TODO.md`, "Help for the ME panel")
-asked for two things — a glossary of the ME panel's vocabulary and a note
+The notebook entry this grew out of ("Help for the ME panel", whose remainder
+is issue #15) asked for two things — a glossary of the ME panel's vocabulary and a note
 saying where the decode comes from — and made three decisions that still hold:
 
 - **Not an Apple Help book.** It is a build step and a bundle nobody maintains

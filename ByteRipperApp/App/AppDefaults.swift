@@ -9,9 +9,9 @@ import Localization
 /// its test host. Every test that set a word size, a theme, a layout direction
 /// or a fill pattern would otherwise be writing into the user's own settings —
 /// and reading whatever the user had left there, which is a test that passes or
-/// fails depending on the machine it runs on. The technical-debt note in
-/// `Design/TODO.md` about a test that lands 4 pt out only in a full run suspects
-/// exactly that kind of leftover.
+/// fails depending on the machine it runs on. The technical-debt note in issue
+/// #21 about a test that lands 4 pt out only in a full run suspects exactly that
+/// kind of leftover.
 ///
 /// Under a test run this is a suite of its own, wiped as the process starts, so
 /// every run begins from the app's defaults and ends leaving nothing behind.

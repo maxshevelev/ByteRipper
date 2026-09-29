@@ -25,7 +25,7 @@ public struct Zone: Equatable, Identifiable, Sendable {
     /// Half-open `[start, end)`, like every other byte range in this project.
     public var range: Range<UInt64>
     /// Reserved. The uses are real — protected by Boot Guard, padding, an empty
-    /// slot, a region open for editing (`Design/TODO.md`) — and each of them
+    /// slot, a region open for editing (issue #10) — and each of them
     /// wants a tool-module that has something to say first.
     public var kind: ZoneKind
 

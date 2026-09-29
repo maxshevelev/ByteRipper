@@ -15,7 +15,7 @@ own package, the registry and the Tools menu, the left panel, the zone map and
 its drawing, the edit transaction, and the file import/export seam.
 
 **Not in scope.** Any real parsing (a separate branch per tool-module),
-user-made zones, editable zones (`Design/TODO.md`), runtime-loadable plugins,
+user-made zones, editable zones (issue #10), runtime-loadable plugins,
 per-module settings, and restoring the active tool-module across a launch.
 
 ## Decisions taken
@@ -394,7 +394,8 @@ scan needed anyway.
 Two more things it deliberately leaves undone, both waiting on a tool-module
 that wants them: Boot Guard protected ranges (§10.4, which need the Boot Policy
 as well as the vendor hash files), and the innards of the flash descriptor
-beyond its region map. `Design/TODO.md` carries both.
+beyond its region map. The descriptor is issues #11 and #16; the protected
+ranges are taken apart in `Design/UEFI/BOOT_GUARD_PROTECTED_RANGES.md`.
 
 Editing is served by `UEFIChecksums`, which returns the *writes* a repair needs
 rather than performing them — a tool-module turns them into a `ToolTransaction`
@@ -472,7 +473,7 @@ for nothing else.
 What the tool cannot check is Boot Guard: the protected ranges are in structures
 `UEFIImage` does not read yet, and a component written inside one stops the
 platform booting. It says so after every add rather than pretending otherwise,
-and `Design/TODO.md` carries the work.
+and `Design/UEFI/BOOT_GUARD_PROTECTED_RANGES.md` carries the work.
 
 The panel's own parse runs off the main actor over `host.snapshot()`, through an
 adapter from `ToolContentReader` to `ByteSource` that lives in the tool-module

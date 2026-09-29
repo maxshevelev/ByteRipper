@@ -1,7 +1,8 @@
 # Find highlighting — every occurrence in the dump and on the map
 
 > The feature's name in the notebook was **"Highlight search matches in the
-> dump"** (`TODO.md`, Next). This plan is that entry grown up: the dump *and* the
+> dump"** (`Design/TODO.md`, before the notebook became the issue tracker).
+> This plan is that entry grown up: the dump *and* the
 > minimap, two states instead of one — Apple's own pair — and a match count in
 > the Find bar.
 >

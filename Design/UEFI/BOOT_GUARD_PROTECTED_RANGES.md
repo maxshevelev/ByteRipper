@@ -39,7 +39,7 @@ There are two families, and the difference matters to anyone editing:
 
 What an editor must take from this: a byte inside a protected range is not free
 to change, whatever the tree around it says. This is the check the FIT tool's
-microcode placement cannot make today (`Design/TODO.md`).
+microcode placement cannot make today.
 
 ---
 
