@@ -449,8 +449,8 @@ final class SegmentLinkCommandTests: XCTestCase {
     /// file, and names the file (§21.7).
     func testTheStripsMenuNamesTheSourceFile() throws {
         let (controller, pane, donorURL) = try makeJoined()
-        let menu = try XCTUnwrap(controller.minimapSegmentMenu(mapIndex: 0, pieceIndex: 1,
-                                                               point: .zero))
+        let menu = try XCTUnwrap(controller.minimapSegmentMenu(on: controller.surface, mapIndex: 0,
+                                                               pieceIndex: 1, point: .zero))
         let titles = menu.items.map(\.title)
         XCTAssertTrue(titles.contains("Revert Segment S1 to “\(donorURL.lastPathComponent)”"),
                       "the item says which file the piece would go back to: \(titles)")

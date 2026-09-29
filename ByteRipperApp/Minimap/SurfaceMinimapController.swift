@@ -31,9 +31,11 @@ import UEFIImage
     /// second map of a comparison means, as clicking its dump does.
     func activatePane(showingMapAt index: Int)
 
-    /// The gutter's and the strip's own menus, which are the tab's commands.
-    func minimapSegmentMenu(mapIndex: Int, pieceIndex: Int, point: NSPoint) -> NSMenu?
-    func minimapZoneMenu(mapIndex: Int, zoneID: Zone.ID) -> NSMenu?
+    /// The gutter's and the strip's own menus, which are the tab's commands,
+    /// for the map of `surface` — the tab's own, or a fragment panel's.
+    func minimapSegmentMenu(on surface: DocumentSurface, mapIndex: Int,
+                            pieceIndex: Int, point: NSPoint) -> NSMenu?
+    func minimapZoneMenu(on surface: DocumentSurface, mapIndex: Int, zoneID: Zone.ID) -> NSMenu?
 
     /// The window move that goes with showing or hiding this surface's panel,
     /// or nil for a surface that opens its panels inside the room it was given.
@@ -484,11 +486,11 @@ import UEFIImage
     // MARK: - The gutter's own menus, which are the tab's commands
 
     private func segmentMenu(mapIndex: Int, pieceIndex: Int, point: NSPoint) -> NSMenu? {
-        host?.minimapSegmentMenu(mapIndex: mapIndex, pieceIndex: pieceIndex, point: point)
+        host?.minimapSegmentMenu(on: surface, mapIndex: mapIndex, pieceIndex: pieceIndex, point: point)
     }
 
     private func zoneMenu(mapIndex: Int, zoneID: Zone.ID) -> NSMenu? {
-        host?.minimapZoneMenu(mapIndex: mapIndex, zoneID: zoneID)
+        host?.minimapZoneMenu(on: surface, mapIndex: mapIndex, zoneID: zoneID)
     }
 
     // MARK: - What this map is in the middle of
@@ -562,10 +564,9 @@ import UEFIImage
     ///
     /// Every closure names the surface it was wired for, so a second map — a
     /// fragment panel's — feeds from that panel's pane rather than from the
-    /// tab's. `menus` is off for a panel's map for now: the gutter's commands
-    /// are menu actions addressed to the tab, and pointing them at a surface is
-    /// its own change.
-    func wire(menus: Bool = true) {
+    /// tab's. The strip's and the gutter's menus are built by the host, which
+    /// is told which surface asked, so a panel's map offers them for its part.
+    func wire() {
         // The map is virtualized: it pulls the bytes of its visible window as it
         // draws, and a drag or a wheel over it scrolls the panes (§19).
         view.byteStates = { [weak self] mapIndex, range in
@@ -590,20 +591,16 @@ import UEFIImage
         view.segmentPieceName = { [weak self] mapIndex, pieceIndex in
             self?.segmentName(mapIndex: mapIndex, pieceIndex: pieceIndex) ?? ""
         }
-        if menus {
-            view.segmentStripMenu = { [weak self] mapIndex, pieceIndex, point in
-                self?.segmentMenu(mapIndex: mapIndex, pieceIndex: pieceIndex, point: point)
-            }
+        view.segmentStripMenu = { [weak self] mapIndex, pieceIndex, point in
+            self?.segmentMenu(mapIndex: mapIndex, pieceIndex: pieceIndex, point: point)
         }
         // And the zone gutter's, on the other side of each map (§19.4.5): the
         // commands that act on the zone under the pointer. Its name and range
         // are the bracket's own — a tool-module republishes its whole map
         // whenever anything about it changes, so there is nothing to ask for
         // live the way a segment's name has to be.
-        if menus {
-            view.zoneBracketMenu = { [weak self] mapIndex, zoneID in
-                self?.zoneMenu(mapIndex: mapIndex, zoneID: zoneID)
-            }
+        view.zoneBracketMenu = { [weak self] mapIndex, zoneID in
+            self?.zoneMenu(mapIndex: mapIndex, zoneID: zoneID)
         }
         // The overview bins the file into one row per pixel, so a resize changes
         // the bins and the summary has to be recomputed (§19.4).

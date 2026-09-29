@@ -1,5 +1,6 @@
 import ByteRipperCore
 import XCTest
+import ToolModuleKit
 import UEFIImage
 @testable import ByteRipper
 
@@ -244,5 +245,56 @@ final class FragmentMinimapTests: XCTestCase {
         let tabFeed = try XCTUnwrap(controller.minimapView.byteStates)
         XCTAssertEqual(tabFeed(0, 0x10..<0x11).map(\.isModified), [false],
                        "and the dump behind it is untouched")
+    }
+
+    // MARK: - The strip's and the gutter's menus
+
+    /// A right-click on the panel's segment strip offers the piece's menu,
+    /// and its items act on the part — not on the dump behind it, whose map
+    /// the window's own commands address.
+    func testThePanelsSegmentStripOffersItsMenuAndActsOnThePart() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                       named: "part", animated: false))
+        window.layoutIfNeeded()
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        XCTAssertTrue(part.segmentStore.addCut(at: 0x40), "precondition: the part has two pieces")
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+
+        let menu = try XCTUnwrap(surface.minimapView.segmentStripMenu?(0, 1, .zero),
+                                 "the panel's strip offers a menu")
+        let select = try XCTUnwrap(menu.items.first { $0.title == "Select Segment S1" },
+                                   "the menu names the part's own piece: \(menu.items.map(\.title))")
+        NSApp.sendAction(try XCTUnwrap(select.action), to: select.target, from: select)
+
+        let selection = part.hexSelection()
+        XCTAssertEqual(selection.start..<selection.end, 0x40..<0x80, "the part's piece is selected")
+        XCTAssertTrue(controller.windowModel.pane1.hexSelection().isEmpty,
+                      "and nothing in the dump behind it")
+    }
+
+    /// The same for the zone gutter: a bracket on the panel's map offers the
+    /// zone's menu, and Select selects the zone in the part.
+    func testThePanelsZoneGutterOffersItsMenuAndActsOnThePart() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                       named: "part", animated: false))
+        window.layoutIfNeeded()
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        part.setZones(ZoneMap(zones: [Zone(id: "hdr", name: "Header", range: 0x10..<0x20)]))
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        surface.minimap.syncZones()
+
+        let menu = try XCTUnwrap(surface.minimapView.zoneBracketMenu?(0, "hdr"),
+                                 "the panel's gutter offers a menu")
+        let select = try XCTUnwrap(menu.items.first { $0.title.hasPrefix("Select Zone") })
+        NSApp.sendAction(try XCTUnwrap(select.action), to: select.target, from: select)
+
+        let selection = part.hexSelection()
+        XCTAssertEqual(selection.start..<selection.end, 0x10..<0x20, "the part's zone is selected")
+        XCTAssertTrue(controller.windowModel.pane1.hexSelection().isEmpty,
+                      "and nothing in the dump behind it")
     }
 }

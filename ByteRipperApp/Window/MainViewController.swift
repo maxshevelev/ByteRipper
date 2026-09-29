@@ -239,7 +239,7 @@ final class MainViewController: NSViewController {
                                 paneView: FilePaneView) {
         surface.panesInMapOrder = { [pane] }
         surface.paneViewsInMapOrder = { [paneView] }
-        surface.minimap.wire(menus: false)
+        surface.minimap.wire()
         surface.minimap.track(paneView)
         surface.minimap.setPanelVisible(minimapPanelVisible, animated: false)
         surface.minimap.refreshMaps()
@@ -2656,7 +2656,11 @@ final class MainViewController: NSViewController {
     /// the piece under the pointer (§21.3) — the form's row menu with the strip's
     /// own Select. Each item carries the piece it acts on in its
     /// `representedObject`, the way the offset menu carries its target.
-    private func makeMinimapSegmentMenu(mapIndex: Int, pieceIndex: Int, point: NSPoint) -> NSMenu? {
+    ///
+    /// `surface` is the one whose map was clicked — the tab's, or a fragment
+    /// panel's — and the piece is looked up in the pane that map shows.
+    private func makeMinimapSegmentMenu(on surface: DocumentSurface, mapIndex: Int,
+                                        pieceIndex: Int, point: NSPoint) -> NSMenu? {
         guard let pane = surface.mappedPane(at: mapIndex), pane.isOpen,
               pieceIndex < pane.segmentStore.segments.count else { return nil }
         // The pane is resolved here, at build time — the action only carries it
@@ -2736,11 +2740,16 @@ final class MainViewController: NSViewController {
     /// (a tool-module keeps its ids across a rebuild, `Zone.id`). The action
     /// looks the zone up again, so it acts on the file as it is now or on
     /// nothing at all.
+    ///
+    /// The pane is resolved when the menu is built, from the map that was
+    /// clicked, as the strip's menu resolves its piece's: a fragment panel's
+    /// map is not the tab's, and an index into the tab's maps would find the
+    /// dump behind the panel instead of the part.
     final class ZoneMenuTarget: NSObject {
-        let mapIndex: Int
+        weak var pane: PaneViewModel?
         let zoneID: Zone.ID
-        init(mapIndex: Int, zoneID: Zone.ID) {
-            self.mapIndex = mapIndex
+        init(pane: PaneViewModel, zoneID: Zone.ID) {
+            self.pane = pane
             self.zoneID = zoneID
         }
     }
@@ -2754,7 +2763,8 @@ final class MainViewController: NSViewController {
     /// replacing a zone from a file, and the rest — belongs to the tool-module
     /// that knows what the zone *is*, and wants a tool-module with something to
     /// say first (`Zone.kind`).
-    private func makeMinimapZoneMenu(mapIndex: Int, zoneID: Zone.ID) -> NSMenu? {
+    private func makeMinimapZoneMenu(on surface: DocumentSurface, mapIndex: Int,
+                                     zoneID: Zone.ID) -> NSMenu? {
         guard let pane = surface.mappedPane(at: mapIndex), pane.isOpen,
               let zone = pane.zones.zones.first(where: { $0.id == zoneID }) else { return nil }
         let menu = NSMenu()
@@ -2768,7 +2778,7 @@ final class MainViewController: NSViewController {
         func item(_ title: String, _ action: Selector) -> NSMenuItem {
             let item = menu.addItem(withTitle: title, action: action, keyEquivalent: "")
             item.target = self
-            item.representedObject = ZoneMenuTarget(mapIndex: mapIndex, zoneID: zoneID)
+            item.representedObject = ZoneMenuTarget(pane: pane, zoneID: zoneID)
             return item
         }
         _ = item(L("Select Zone %1$@", named), #selector(minimapMenuSelectZone(_:)))
@@ -2781,7 +2791,7 @@ final class MainViewController: NSViewController {
     /// republished between the menu opening and the item being picked.
     @objc private func minimapMenuOpenZone(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? ZoneMenuTarget,
-              let pane = surface.mappedPane(at: target.mapIndex),
+              let pane = target.pane, pane.isOpen,
               let zone = pane.zones.zones.first(where: { $0.id == target.zoneID })
         else { return }
         openZone(zone, of: pane)
@@ -2793,7 +2803,7 @@ final class MainViewController: NSViewController {
     /// to select, and what the zone *stands for* only the tool-module knows.
     @objc private func minimapMenuSelectZone(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? ZoneMenuTarget,
-              let pane = surface.mappedPane(at: target.mapIndex), pane.isOpen,
+              let pane = target.pane, pane.isOpen,
               let zone = pane.zones.zones.first(where: { $0.id == target.zoneID }) else { return }
         pane.select(range: zone.range)
         filePaneView(for: pane)?.revealOffsetCentered(zone.range.lowerBound)
@@ -7124,12 +7134,13 @@ extension MainViewController: MinimapHost {
         activatePane(at: index)
     }
 
-    func minimapSegmentMenu(mapIndex: Int, pieceIndex: Int, point: NSPoint) -> NSMenu? {
-        makeMinimapSegmentMenu(mapIndex: mapIndex, pieceIndex: pieceIndex, point: point)
+    func minimapSegmentMenu(on surface: DocumentSurface, mapIndex: Int,
+                            pieceIndex: Int, point: NSPoint) -> NSMenu? {
+        makeMinimapSegmentMenu(on: surface, mapIndex: mapIndex, pieceIndex: pieceIndex, point: point)
     }
 
-    func minimapZoneMenu(mapIndex: Int, zoneID: Zone.ID) -> NSMenu? {
-        makeMinimapZoneMenu(mapIndex: mapIndex, zoneID: zoneID)
+    func minimapZoneMenu(on surface: DocumentSurface, mapIndex: Int, zoneID: Zone.ID) -> NSMenu? {
+        makeMinimapZoneMenu(on: surface, mapIndex: mapIndex, zoneID: zoneID)
     }
 }
 
