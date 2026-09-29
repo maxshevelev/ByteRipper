@@ -232,6 +232,7 @@
 "Copy Full Path" = "Скопировать полный путь";
 "Copy Screenshot" = "Скопировать снимок";
 "Copy Summary" = "Скопировать сводку";
+"Copy to Other Pane" = "Скопировать в другую файловую панель";
 "Copy offset" = "Скопировать адрес";
 "Copy offset %1$@" = "Скопировать адрес %1$@";
 "Could not reach github.com: %1$@" = "Не удалось связаться с github.com: %1$@";
@@ -775,6 +776,7 @@
 "The ME Analyzer tool's reading of Intel ME/CSME firmware, and the databases it checks a dump against (MEA.dat, Huffman.dat), fetched as the project publishes them." = "Разбор прошивок Intel ME/CSME инструментом ME Analyzer и базы данных, по которым сверяется дамп (MEA.dat, Huffman.dat), загружаемые по мере их публикации проектом.";
 "The newest revision the catalogue lists for this processor and platform" = "Самая свежая ревизия, которую каталог указывает для этого процессора и платформы";
 "the selection" = "выделение";
+"The selection ends at %1$@, past the end of “%2$@”, which ends at %3$@. Nothing was copied." = "Выделение доходит до адреса %1$@, а «%2$@» кончается на %3$@. Ничего не скопировано.";
 "The Top Swap backup at %1$@ has no FIT where its pointer leads" = "В резервной копии Top Swap по %1$@ нет FIT там, куда ведёт её указатель";
 "The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree" = "Резервная копия Top Swap по %1$@ содержит ту же FIT, но прочие байты блока отличаются, поэтому правка микрокода запрещена, пока копии не совпадут";
 "The Top Swap backup at 0x%1$@ got the same change." = "В резервную копию Top Swap по 0x%1$@ внесено то же изменение.";
@@ -962,5 +964,6 @@
 "“%1$@” is no longer where the pattern library lives, and its copy of the patterns will not be updated again.\n\nIf it is in a synced folder, trashing it removes it on your other Macs too — keep it if one of them publishes there." = "«%1$@» больше не хранит библиотеку шаблонов, и её копия обновляться не будет.\n\nЕсли папка синхронизируется, удаление уберёт файл и на других Mac — оставьте его, если оттуда публикует другой Mac.";
 "“%1$@” is not a file extension. Use letters and digits, for example dump or bin." = "«%1$@» не является расширением файла. Используйте буквы и цифры, например dump или bin.";
 "“%1$@” is not hex — use pairs like DE AD BE EF." = "«%1$@» не является шестнадцатеричной записью — используйте пары вида DE AD BE EF.";
+"“%1$@” is open read-only, so nothing can be written into it." = "«%1$@» открыт только для чтения, записать в него ничего нельзя.";
 "“%1$@” is read-only" = "«%1$@» доступен только для чтения";
 "⌘Z takes it back." = "⌘Z отменяет.";

@@ -360,6 +360,14 @@ enum MainMenu {
                                               keyEquivalent: "i")
         insertModeItem.keyEquivalentModifierMask = [.command, .option]
         editMenu.addItem(.separator())
+        // Copy and Paste in one step, without the clipboard: the selection goes
+        // to the same addresses in the other pane. ⌥ over the ⌘C it stands in for.
+        // help: menu.edit.copy-to-other-pane
+        let copyToItem = editMenu.addItem(withTitle: L("Copy to Other Pane"),
+                                          action: #selector(MainViewController.copyToOtherPane),
+                                          keyEquivalent: "c")
+        copyToItem.keyEquivalentModifierMask = [.command, .option]
+        editMenu.addItem(.separator())
         // Select Block leads the selection block: it selects a named block from
         // the caret, alongside Fill and Select All.
         // help: menu.edit.select-block

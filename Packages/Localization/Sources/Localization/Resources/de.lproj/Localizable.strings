@@ -232,6 +232,7 @@
 "Copy Full Path" = "Vollständigen Pfad kopieren";
 "Copy Screenshot" = "Bildschirmfoto kopieren";
 "Copy Summary" = "Übersicht kopieren";
+"Copy to Other Pane" = "In den anderen Bereich kopieren";
 "Copy offset" = "Offset kopieren";
 "Copy offset %1$@" = "Offset %1$@ kopieren";
 "Could not reach github.com: %1$@" = "github.com nicht erreichbar: %1$@";
@@ -775,6 +776,7 @@
 "The ME Analyzer tool's reading of Intel ME/CSME firmware, and the databases it checks a dump against (MEA.dat, Huffman.dat), fetched as the project publishes them." = "Die Auswertung von Intel-ME/CSME-Firmware durch das Werkzeug ME Analyzer und die Datenbanken, gegen die ein Dump geprüft wird (MEA.dat, Huffman.dat), jeweils in der vom Projekt veröffentlichten Fassung.";
 "The newest revision the catalogue lists for this processor and platform" = "Die neueste Revision, die der Katalog für diesen Prozessor und diese Plattform führt";
 "the selection" = "die Auswahl";
+"The selection ends at %1$@, past the end of “%2$@”, which ends at %3$@. Nothing was copied." = "Die Auswahl reicht bis %1$@, „%2$@“ endet aber bei %3$@. Es wurde nichts kopiert.";
 "The Top Swap backup at %1$@ has no FIT where its pointer leads" = "Die Top-Swap-Sicherung bei %1$@ hat dort, wohin ihr Zeiger führt, keine FIT";
 "The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree" = "Die Top-Swap-Sicherung bei %1$@ enthält dieselbe FIT, aber andere Bytes des Blocks weichen ab; Microcode-Änderungen werden daher abgelehnt, bis die Kopien übereinstimmen";
 "The Top Swap backup at 0x%1$@ got the same change." = "Die Top-Swap-Sicherung bei 0x%1$@ hat dieselbe Änderung erhalten.";
@@ -962,5 +964,6 @@
 "“%1$@” is no longer where the pattern library lives, and its copy of the patterns will not be updated again.\n\nIf it is in a synced folder, trashing it removes it on your other Macs too — keep it if one of them publishes there." = "„%1$@“ beherbergt die Musterbibliothek nicht mehr, und die dortige Kopie der Muster wird nicht mehr aktualisiert.\n\nLiegt der Ordner in einem Abgleich, entfernt der Papierkorb die Datei auch auf Ihren anderen Macs — behalten Sie sie, wenn einer von dort veröffentlicht.";
 "“%1$@” is not a file extension. Use letters and digits, for example dump or bin." = "„%1$@“ ist keine Dateiendung. Verwenden Sie Buchstaben und Ziffern, zum Beispiel dump oder bin.";
 "“%1$@” is not hex — use pairs like DE AD BE EF." = "„%1$@“ ist kein Hex — verwenden Sie Paare wie DE AD BE EF.";
+"“%1$@” is open read-only, so nothing can be written into it." = "„%1$@“ ist schreibgeschützt geöffnet; es lässt sich nichts hineinschreiben.";
 "“%1$@” is read-only" = "„%1$@“ ist schreibgeschützt";
 "⌘Z takes it back." = "⌘Z macht es rückgängig.";

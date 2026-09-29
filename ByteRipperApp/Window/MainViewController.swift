@@ -4519,6 +4519,62 @@ final class MainViewController: NSViewController {
         pasteboard.setString(ClipboardCodec.hexText(from: bytes), forType: .string)
     }
 
+    /// Edit ▸ Copy to Other Pane (⌥⌘C): the active pane's selection, written
+    /// over the same addresses in the other pane.
+    ///
+    /// The four steps it replaces — select, ⌘C, select the same range again,
+    /// ⌘V — spend two of them re-entering an address that is identical on both
+    /// sides by the premise of the app, and pass the bytes through a clipboard
+    /// any stray ⌘C in between would silently replace.
+    ///
+    /// Overwrite only, the rule paste follows: no byte moves, and a range that
+    /// runs past the end of the other file is refused rather than growing it —
+    /// an image's length is its chip's. One undo step in the receiving file.
+    // help: menu.edit.copy-to-other-pane
+    @objc func copyToOtherPane() {
+        guard canCopyToOtherPane else { return }
+        let name = L("Copy to Other Pane")
+        let source = windowModel.activePane
+        let destination = windowModel.activePaneIndex == 0 ? windowModel.pane2 : windowModel.pane1
+        let selection = source.hexSelection()
+        let range = selection.start..<selection.end
+        guard !destination.status.isReadOnly else {
+            presentAlert(title: name,
+                         message: L("“%1$@” is open read-only, so nothing can be written into it.",
+                                    destination.status.fileName))
+            return
+        }
+        guard range.upperBound <= destination.fileSize else {
+            presentAlert(title: name,
+                         message: L("The selection ends at %1$@, past the end of “%2$@”, which ends at %3$@. Nothing was copied.",
+                                    String(format: "0x%X", range.upperBound),
+                                    destination.status.fileName,
+                                    String(format: "0x%X", destination.fileSize)))
+            return
+        }
+        do {
+            guard let bytes = try source.document?.read(at: range.lowerBound, length: Int(range.count))
+            else { return }
+            try destination.applyToolWrites([(range.lowerBound, bytes)], named: name)
+        } catch {
+            presentError(name, error)
+            return
+        }
+        // The copy is shown where it landed, selected, so the reader can see
+        // it happened and what it covered — the receiving pane may well be
+        // scrolled somewhere else.
+        revealForTool(range, in: destination, select: true)
+    }
+
+    /// Whether Copy to Other Pane can run: two files, neither behind a
+    /// fragment panel, and a selection in the active pane. The refusals that
+    /// need a sentence — a read-only destination, a range past its end — are
+    /// left to the command, which can say which file and which address.
+    private var canCopyToOtherPane: Bool {
+        mode == .comparison && windowPanesAreReachable
+            && !windowModel.activePane.hexSelection().isEmpty
+    }
+
     /// Context menu > Save Selection as…: writes the RIGHT-CLICKED pane's
     /// selected bytes to a file the user names (§10.2). A read of the selection
     /// only — the source file is never written by this command, so it is offered
@@ -7267,6 +7323,8 @@ extension MainViewController: NSMenuItemValidation {
         case #selector(fillSelectionWithBytes):
             let pane = activePane
             return pane.isOpen && !pane.hexSelection().isEmpty
+        case #selector(copyToOtherPane):
+            return canCopyToOtherPane
         case #selector(copySelection),
              #selector(useSelectionForFind):
             // Both act on the selection, so both are dimmed without one: ⌘E
