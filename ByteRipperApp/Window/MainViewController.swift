@@ -1170,6 +1170,11 @@ final class MainViewController: NSViewController {
             wireStatusBar(pane, for: paneModel)
             // Close button: closing the last file returns to empty mode (§3.5).
             pane.onClose = { [weak self] in self?.closePane(at: 0) }
+            // The view may be the comparison's second pane, promoted when the
+            // first file closed, and it would still report focus as pane 2's —
+            // moving the active pointer to the slot that was just emptied, and
+            // greying out every command that needs a file. One pane, one slot.
+            pane.onActivate = nil
             // The link to a parent document, in a tab opened from a part of one.
             pane.onRevealOrigin = { [weak self, weak paneModel] in
                 guard let paneModel else { return }

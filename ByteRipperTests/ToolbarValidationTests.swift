@@ -324,4 +324,39 @@ final class ToolbarValidationTests: XCTestCase {
         XCTAssertTrue(has(window, .diffNavigation) && !has(window, .filesIdentical),
                       "and once the rebuild lands the differences, the arrows take the badge's place")
     }
+
+    /// Closing File A of a comparison promotes File B to the first slot, and
+    /// the toolbar's document commands must stay live for it: Go To, Find,
+    /// Segments, Tools and the word size all have a dump to act on.
+    func testClosingTheFirstFileOfAComparisonKeepsTheToolbarLive() throws {
+        let wc = makeWindow()
+        let window = wc.window!
+        let controller = wc.mainViewController
+        let urlA = try tempFile([UInt8](repeating: 0x11, count: 64))
+        let urlB = try tempFile([UInt8](repeating: 0x22, count: 64))
+        defer {
+            controller.windowModel.pane1.close()
+            controller.windowModel.pane2.close()
+            wc.close()
+            try? FileManager.default.removeItem(at: urlA)
+            try? FileManager.default.removeItem(at: urlB)
+        }
+        controller.openFiles([urlA])
+        controller.openFiles([urlB])
+        XCTAssertTrue(pumpUntil(2) { controller.mode == .comparison })
+
+        controller.closePane(at: 0)
+        XCTAssertEqual(controller.mode, .singleFile)
+        _ = pumpUntil(1) { false }
+        window.toolbar?.validateVisibleItems()
+
+        let live: [NSToolbarItem.Identifier] = [.tools, .goTo, .find, .segments, .wordSize]
+        for identifier in live {
+            let item = try XCTUnwrap(window.toolbar?.items.first { $0.itemIdentifier == identifier })
+            XCTAssertTrue(item.isEnabled, "\(identifier.rawValue) is enabled after File A closes")
+            if let control = item.view as? NSControl {
+                XCTAssertTrue(control.isEnabled, "\(identifier.rawValue)'s control is enabled")
+            }
+        }
+    }
 }

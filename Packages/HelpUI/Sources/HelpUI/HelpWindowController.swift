@@ -147,25 +147,34 @@ import Localization
             searchField.trailingAnchor.constraint(equalTo: sidebar.trailingAnchor, constant: -10)
         ]
         sideInsets.forEach { $0.priority = .defaultHigh }
+        // The bottom edges give way for the same reason: a pane 0 pt tall
+        // cannot hold the search field above the list, and a required bottom
+        // pin makes AppKit break the gap between them instead. Below the
+        // controls' own compression resistance, so at any real height they
+        // are met exactly.
+        let sidebarBottom = outlineScroll.bottomAnchor.constraint(equalTo: sidebar.bottomAnchor)
+        sidebarBottom.priority = .defaultHigh - 1
         NSLayoutConstraint.activate(sideInsets + [
             searchField.topAnchor.constraint(equalTo: sidebar.topAnchor, constant: 10),
             outlineScroll.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 8),
             outlineScroll.leadingAnchor.constraint(equalTo: sidebar.leadingAnchor),
             outlineScroll.trailingAnchor.constraint(equalTo: sidebar.trailingAnchor),
-            outlineScroll.bottomAnchor.constraint(equalTo: sidebar.bottomAnchor)
+            sidebarBottom
         ])
 
         let page = NSView()
         page.translatesAutoresizingMaskIntoConstraints = false
         page.addSubview(backForward)
         page.addSubview(body)
+        let pageBottom = body.bottomAnchor.constraint(equalTo: page.bottomAnchor)
+        pageBottom.priority = .defaultHigh - 1
         NSLayoutConstraint.activate([
             backForward.topAnchor.constraint(equalTo: page.topAnchor, constant: 10),
             backForward.leadingAnchor.constraint(equalTo: page.leadingAnchor, constant: 20),
             body.topAnchor.constraint(equalTo: backForward.bottomAnchor, constant: 6),
             body.leadingAnchor.constraint(equalTo: page.leadingAnchor),
             body.trailingAnchor.constraint(equalTo: page.trailingAnchor),
-            body.bottomAnchor.constraint(equalTo: page.bottomAnchor)
+            pageBottom
         ])
 
         body.onFollow = { [weak self] link in self?.show(link) }

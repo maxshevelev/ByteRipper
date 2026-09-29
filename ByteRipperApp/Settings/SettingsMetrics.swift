@@ -16,7 +16,10 @@ import Localization
 /// the widest thing in the window needs, whatever language it is in.
 @MainActor enum SettingsMetrics {
     /// What the layout was designed to; still the floor in English.
-    static let baseWidth: CGFloat = 480
+    ///
+    /// Nonisolated: it is the default argument of two methods below, and a
+    /// default argument is evaluated outside the actor.
+    nonisolated static let baseWidth: CGFloat = 480
 
     /// What a preference-style toolbar item takes beside its label.
     ///
