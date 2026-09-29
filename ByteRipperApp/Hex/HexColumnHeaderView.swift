@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 
 /// The pinned column header above the hex dump: the column names — "Offset",
 /// the sequential byte offsets "00".."0F" over the hex cells, and "Decoded
@@ -18,9 +19,11 @@ final class HexColumnHeaderView: NSView {
         didSet { needsDisplay = true }
     }
 
-    /// The column names at the row's edges.
-    private static let offsetTitle = "Offset"
-    private static let asciiTitle = "Decoded text"
+    /// The column names at the row's edges. Computed rather than stored: a
+    /// stored one would freeze the language that was current when the view was
+    /// first drawn.
+    private static var offsetTitle: String { L("Offset") }
+    private static var asciiTitle: String { L("Decoded text") }
 
     /// The sequential byte offset shown above a hex cell: "00".."0F", one
     /// two-digit index per byte, aligned with the byte's cell (§6).

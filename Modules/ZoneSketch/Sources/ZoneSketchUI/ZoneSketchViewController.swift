@@ -77,13 +77,13 @@ import ZoneSketch
             ControlHelp.describe(button, tip)
             button.translatesAutoresizingMaskIntoConstraints = false
         }
-        button(addButton, "Add from Selection", #selector(addClicked),
-               "Make a zone of what is selected in the dump")
-        button(removeButton, "Remove", #selector(removeClicked), "Forget the selected zone")
-        button(fillButton, "Fill FF", #selector(fillClicked),
-               "Write FF over the selected zone — one undo step")
-        button(exportButton, "Export…", #selector(exportClicked),
-               "Save the selected zone's bytes to a file")
+        button(addButton, L("Add from Selection"), #selector(addClicked),
+               L("Make a zone of what is selected in the dump"))
+        button(removeButton, L("Remove"), #selector(removeClicked), L("Forget the selected zone"))
+        button(fillButton, L("Fill FF"), #selector(fillClicked),
+               L("Write FF over the selected zone — one undo step"))
+        button(exportButton, L("Export…"), #selector(exportClicked),
+               L("Save the selected zone's bytes to a file"))
 
         noticeLabel.font = .systemFont(ofSize: 11)
         noticeLabel.textColor = .secondaryLabelColor
@@ -147,7 +147,7 @@ import ZoneSketch
         exportButton.isEnabled = hasFocus
         fillButton.isEnabled = hasFocus && canWrite
         if zones.isEmpty {
-            say("Select some bytes in the dump and press Add.")
+            say(L("Select some bytes in the dump and press Add."))
         }
     }
 

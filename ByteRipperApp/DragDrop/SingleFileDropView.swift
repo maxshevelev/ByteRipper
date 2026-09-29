@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 
 /// Single-file mode's content view (§4.3, amended by §22.4): wraps the
 /// `FilePaneView` and splits the window into two targeted drop regions along
@@ -270,7 +271,7 @@ final class SingleFileDropView: NSView {
             ?? paneDropOutcome?(paneID, .addSecond, draggedPaneIsCopying)
             ?? .none
         addTarget.setTitle(second.isDuplicate
-                           ? "Duplicate Here"
+                           ? L("Duplicate Here")
                            : SingleFileDropTarget.addSecond.title)
     }
 

@@ -350,7 +350,7 @@ final class MainViewController: NSViewController {
             try tab.windowModel.pane1.openDuplicate(of: source,
                                                     named: unsavedName(for: source))
         } catch {
-            presentFileError("Could not duplicate the pane.", error, url: nil)
+            presentFileError(L("Could not duplicate the pane."), error, url: nil)
             return
         }
         tab.windowModel.bookmarkStore.seed(origin.controller.windowModel.bookmarkStore.bookmarks)
@@ -377,7 +377,7 @@ final class MainViewController: NSViewController {
             do {
                 try tab.windowModel.pane1.openDuplicate(of: source, named: unsavedName(for: source))
             } catch {
-                presentFileError("Could not duplicate the panel.", error, url: nil)
+                presentFileError(L("Could not duplicate the panel."), error, url: nil)
                 return true
             }
             tab.apply(mode: .singleFile)
@@ -407,7 +407,7 @@ final class MainViewController: NSViewController {
         do {
             try target.openDuplicate(of: source, named: unsavedName(for: source))
         } catch {
-            presentFileError("Could not duplicate the pane.", error, url: nil)
+            presentFileError(L("Could not duplicate the pane."), error, url: nil)
             return
         }
         windowModel.setActivePane(index)
@@ -1541,8 +1541,8 @@ final class MainViewController: NSViewController {
             // it: the marks are the window's, not the file's (§20), so a window
             // kept open for them says how many it is keeping.
             let marks = windowModel.bookmarkStore.bookmarks.count
-            guard marks > 0 else { return "Empty" }
-            return marks == 1 ? "Empty (1 Bookmark)" : "Empty (\(marks) Bookmarks)"
+            guard marks > 0 else { return L("Empty") }
+            return marks == 1 ? L("Empty (1 Bookmark)") : L("Empty (%1$@ Bookmarks)", marks)
         case .singleFile:
             return windowModel.pane1.status.fileName
         case .comparison:
@@ -1791,7 +1791,7 @@ final class MainViewController: NSViewController {
             }
             return ToolFile(name: url.lastPathComponent, bytes: [UInt8](try Data(contentsOf: url)))
         } catch {
-            presentFileError("Could not read the file.", error, url: url)
+            presentFileError(L("Could not read the file."), error, url: url)
             return nil
         }
     }
@@ -1812,7 +1812,7 @@ final class MainViewController: NSViewController {
             try Data(bytes).write(to: url, options: .atomic)
             return true
         } catch {
-            presentFileError("Could not write the file.", error, url: url)
+            presentFileError(L("Could not write the file."), error, url: url)
             return false
         }
     }
@@ -2043,17 +2043,15 @@ final class MainViewController: NSViewController {
     /// being closed.
     static func strandingSentence(_ count: Int) -> String {
         count == 1
-            ? "One panel was opened out of it and will lose its way back. "
-                + "Its bytes stay as they are; only the way back goes."
-            : "\(count) panels were opened out of it and will lose their way back. "
-                + "Their bytes stay as they are; only the way back goes."
+            ? L("One panel was opened out of it and will lose its way back. Its bytes stay as they are; only the way back goes.")
+            : L("%1$@ panels were opened out of it and will lose their way back. Their bytes stay as they are; only the way back goes.", count)
     }
 
     /// What the button that goes ahead with it says. Not "Close": the button
     /// has to say what closing does that the reader would not have expected,
     /// and what it does is break the way back for something else.
     static func strandingCloseButton(_ count: Int) -> String {
-        count == 1 ? "Close and Break Link" : "Close and Break Links"
+        count == 1 ? L("Close and Break Link") : L("Close and Break Links")
     }
 
     /// Asked before a panel that other panels came out of is closed. Their link
@@ -2128,7 +2126,7 @@ final class MainViewController: NSViewController {
     @discardableResult
     func performUpdateInParent(of pane: PaneViewModel) -> Task<Void, Never>? {
         guard let origin = pane.origin, origin.hasChanges(in: pane) else { return nil }
-        let stepName = "Update from \(pane.status.fileName)"
+        let stepName = L("Update from %1$@", pane.status.fileName)
         switch origin.planUpdate(from: pane) {
         case .refused(let title, let message):
             presentAlert(title: title, message: message)
@@ -2155,7 +2153,7 @@ final class MainViewController: NSViewController {
                 // The parent's protected ranges, read by its tree: a change
                 // inside the IBB is refused and one inside a range the
                 // firmware checks is said (`UPDATE_IN_PARENT.md` §6.4).
-                operation.rename("Reading the protected ranges of “\(origin.parentName)”")
+                operation.rename(L("Reading the protected ranges of “%1$@”", origin.parentName))
                 let protected = await self?.protectedRanges(of: parent)?.rebuildRanges
                 let result = await Task.detached(priority: .userInitiated) {
                     UEFIRebuild.plan(bytes, at: target, in: file, protected: protected) { progress in
@@ -2244,7 +2242,7 @@ final class MainViewController: NSViewController {
         let owner = Self.controller(holding: parent, among: openDocuments?.controllers ?? []) ?? self
         owner.view.window?.makeKeyAndOrderFront(nil)
         let operation = BackgroundOperation(
-            name: "Getting ready"
+            name: L("Getting ready")
         ) { [handle] in
             handle.task?.cancel()
             // The plan cannot be stopped halfway, but its result is thrown
@@ -2271,7 +2269,8 @@ final class MainViewController: NSViewController {
             return true
         } catch {
             origin.restore(snapshot)
-            presentFileError("Could not update “\(origin.parentName)”.", error, url: parent.document?.url)
+            presentFileError(L("Could not update “%1$@”.", origin.parentName), error,
+                             url: parent.document?.url)
             return false
         }
     }
@@ -2758,7 +2757,7 @@ final class MainViewController: NSViewController {
         // — the same rule the strip's items follow with their labels (§21.3). An
         // unnamed zone is named by where it starts, which is all there is.
         let named = zone.name.isEmpty
-            ? "at \(zone.range.lowerBound.bareAddress)"
+            ? L("at %1$@", zone.range.lowerBound.bareAddress)
             : "“\(zone.name)”"
 
         func item(_ title: String, _ action: Selector) -> NSMenuItem {
@@ -2767,8 +2766,8 @@ final class MainViewController: NSViewController {
             item.representedObject = ZoneMenuTarget(mapIndex: mapIndex, zoneID: zoneID)
             return item
         }
-        _ = item("Select Zone \(named)", #selector(minimapMenuSelectZone(_:)))
-        _ = item("Open Zone \(named)", #selector(minimapMenuOpenZone(_:)))
+        _ = item(L("Select Zone %1$@", named), #selector(minimapMenuSelectZone(_:)))
+        _ = item(L("Open Zone %1$@", named), #selector(minimapMenuOpenZone(_:)))
         return menu
     }
 
@@ -3134,7 +3133,7 @@ final class MainViewController: NSViewController {
     }
 
     private func notifyIgnored(count: Int) {
-        let noun = count == 1 ? "file was" : "files were"
+        let noun = count == 1 ? L("file was") : L("files were")
         presentAlert(title: L("Additional files ignored"),
                      message: L("%1$@ %2$@ not opened because only two files can be compared at once.", count, noun))
     }
@@ -3142,7 +3141,7 @@ final class MainViewController: NSViewController {
     /// The join-band variant of the ignored-files notice (§22.4): a join takes
     /// one file, so the extras are not joined, not opened.
     private func notifyJoinIgnored(count: Int) {
-        let noun = count == 1 ? "file was" : "files were"
+        let noun = count == 1 ? L("file was") : L("files were")
         presentAlert(title: L("Additional files ignored"),
                      message: L("%1$@ %2$@ not joined because only one file can be joined at a time.", count, noun))
     }
@@ -3200,7 +3199,7 @@ final class MainViewController: NSViewController {
                 _ = RecentFilesStore.record(url)
                 return true
             } catch {
-                presentError("Could not reload file.", error)
+                presentError(L("Could not reload file."), error)
                 return false
             }
         }
@@ -3220,7 +3219,7 @@ final class MainViewController: NSViewController {
             _ = RecentFilesStore.record(url)
             return true
         } catch {
-            presentFileError("Could not open file.", error, url: url)
+            presentFileError(L("Could not open file."), error, url: url)
             return false
         }
     }
@@ -3248,7 +3247,7 @@ final class MainViewController: NSViewController {
                 try pane.save()
                 return true
             } catch {
-                presentError("Save failed.", error)
+                presentError(L("Save failed."), error)
                 return false
             }
         case .alertSecondButtonReturn:  // Replace Without Saving
@@ -3293,14 +3292,16 @@ final class MainViewController: NSViewController {
     /// Opens the one file, then joins it.
     private func joinFile(at position: JoinPosition, in pane: PaneViewModel) {
         guard pane.isOpen else { return }
-        let verb = (position == .start) ? "Insert" : "Append"
+        let verb = (position == .start) ? L("Insert") : L("Append")
 
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
         panel.prompt = verb
-        panel.message = "Choose the file to \(position == .start ? "insert at the start of" : "append to") the pane's content."
+        panel.message = position == .start
+            ? L("Choose the file to insert at the start of the pane's content.")
+            : L("Choose the file to append to the pane's content.")
         let url: URL?
         if let joinOpenPanel {
             url = joinOpenPanel(panel)
@@ -3367,7 +3368,7 @@ final class MainViewController: NSViewController {
 
     private func join(url: URL, at position: JoinPosition, in pane: PaneViewModel) {
         guard pane.isOpen else { return }
-        let verb = (position == .start) ? "Insert" : "Append"
+        let verb = (position == .start) ? L("Insert") : L("Append")
 
         // Asked before anything else, because it is the question of whether the
         // join was meant at all; the unsaved-changes prompt below is about the
@@ -3393,7 +3394,7 @@ final class MainViewController: NSViewController {
             }
             return
         } catch {
-            presentFileError("Could not join file.", error, url: url)
+            presentFileError(L("Could not join file."), error, url: url)
             return
         }
 
@@ -3407,8 +3408,8 @@ final class MainViewController: NSViewController {
         activateJoinedPane(pane)
 
         let message = (position == .start)
-            ? "Inserted \(url.lastPathComponent) before \(originalName). Total: \(size)."
-            : "Appended \(url.lastPathComponent) after \(originalName). Total: \(size)."
+            ? L("Inserted %1$@ before %2$@. Total: %3$@.", url.lastPathComponent, originalName, size)
+            : L("Appended %1$@ after %2$@. Total: %3$@.", url.lastPathComponent, originalName, size)
         filePaneView(for: pane)?.showTransientMessage(message)
     }
 
@@ -3434,7 +3435,7 @@ final class MainViewController: NSViewController {
                       into pane: PaneViewModel) {
         guard pane.isOpen, source.isOpen,
               let sourceStorage = source.byteStorage else { return }
-        let verb = (position == .start) ? "Insert" : "Append"
+        let verb = (position == .start) ? L("Insert") : L("Append")
         // A pane joined to itself is allowed, and asked about: the document
         // streams from its own storage, which `BinaryDocument.join` handles by
         // taking the source's size once and following the bytes as an insert at
@@ -3459,7 +3460,7 @@ final class MainViewController: NSViewController {
             }
             return
         } catch {
-            presentError("Could not join the pane.", error)
+            presentError(L("Could not join the pane."), error)
             return
         }
 
@@ -3467,8 +3468,8 @@ final class MainViewController: NSViewController {
 
         let size = ByteCountFormatter.string(fromByteCount: Int64(pane.fileSize), countStyle: .file)
         let message = (position == .start)
-            ? "Inserted \(sourceName) before \(originalName). Total: \(size)."
-            : "Appended \(sourceName) after \(originalName). Total: \(size)."
+            ? L("Inserted %1$@ before %2$@. Total: %3$@.", sourceName, originalName, size)
+            : L("Appended %1$@ after %2$@. Total: %3$@.", sourceName, originalName, size)
         filePaneView(for: pane)?.showTransientMessage(message)
     }
 
@@ -3519,7 +3520,7 @@ final class MainViewController: NSViewController {
         do {
             try target.openDuplicate(of: source, named: unsavedName(for: source))
         } catch {
-            presentFileError("Could not duplicate the file.", error, url: nil)
+            presentFileError(L("Could not duplicate the file."), error, url: nil)
             return
         }
 
@@ -3531,7 +3532,7 @@ final class MainViewController: NSViewController {
         // mode apply, which rebuilds the pane views.
         let size = ByteCountFormatter.string(fromByteCount: Int64(target.fileSize), countStyle: .file)
         filePaneView(for: target)?.showTransientMessage(
-            "Duplicated \(sourceName) as \(target.status.fileName). Size: \(size).")
+            L("Duplicated %1$@ as %2$@. Size: %3$@.", sourceName, target.status.fileName, size))
     }
 
     /// Whether Duplicate can act on `pane` (§23): the copy needs a free pane to
@@ -3614,7 +3615,7 @@ final class MainViewController: NSViewController {
         } catch DocumentError.fileIsReadOnly {
             presentSaveAs(for: pane)  // §5.4: read-only file auto-redirects to Save As
         } catch {
-            presentFileError("Save failed.", error, url: pane.document?.url)
+            presentFileError(L("Save failed."), error, url: pane.document?.url)
         }
     }
 
@@ -3663,7 +3664,7 @@ final class MainViewController: NSViewController {
                 SandboxBookmarkStore.shared.record(url)
                 onSaved?()
             } catch {
-                self.presentFileError("Save As failed.", error, url: url)
+                self.presentFileError(L("Save As failed."), error, url: url)
                 onCancelled?()
             }
         }
@@ -3685,7 +3686,7 @@ final class MainViewController: NSViewController {
             onSaved()
             return true
         } catch {
-            presentFileError("Save failed.", error, url: pane.document?.url)
+            presentFileError(L("Save failed."), error, url: pane.document?.url)
             onCancelled?()
             return false
         }
@@ -3733,7 +3734,7 @@ final class MainViewController: NSViewController {
         do {
             try pane.revert()
         } catch {
-            presentFileError("Revert failed.", error, url: pane.document?.url)
+            presentFileError(L("Revert failed."), error, url: pane.document?.url)
         }
     }
 
@@ -3860,7 +3861,7 @@ final class MainViewController: NSViewController {
                 do {
                     try pane.revert()
                 } catch {
-                    presentFileError("Reload failed.", error, url: pane.document?.url)
+                    presentFileError(L("Reload failed."), error, url: pane.document?.url)
                 }
             case .alertThirdButtonReturn:
                 presentSaveAs(for: pane)
@@ -3877,7 +3878,7 @@ final class MainViewController: NSViewController {
                 do {
                     try pane.revert()
                 } catch {
-                    presentFileError("Reload failed.", error, url: pane.document?.url)
+                    presentFileError(L("Reload failed."), error, url: pane.document?.url)
                 }
             }
         }
@@ -4106,7 +4107,7 @@ final class MainViewController: NSViewController {
     /// The hex one is bare, without the prefix the readout above it wears.
     func makeSizeMenu(size: UInt64, form: StatusLabel.SizeForm) -> NSMenu {
         let menu = NSMenu(title: L("File Size"))
-        let named = form == .hex ? "Copy hex size" : "Copy size"
+        let named = form == .hex ? L("Copy hex size") : L("Copy size")
         let copy = menu.addItem(withTitle: L("%1$@ %2$@", named, StatusLabel.copyText(size, as: form)),
                                 action: #selector(copyStatusValue(_:)),
                                 keyEquivalent: "")
@@ -4173,7 +4174,7 @@ final class MainViewController: NSViewController {
             for zone in zones { submenu.addItem(item(zone.name, #selector(selectZone(_:)), zone)) }
             parent.submenu = submenu
         } else {
-            menu.addItem(item("Select Zone “\(zones[0].name)”", #selector(selectZone(_:)), zones[0]))
+            menu.addItem(item(L("Select Zone “%1$@”", zones[0].name), #selector(selectZone(_:)), zones[0]))
         }
         // Open Zone mirrors the choice, taking the picked zone's bytes
         // out into a document of their own.
@@ -4186,7 +4187,7 @@ final class MainViewController: NSViewController {
             }
             parent.submenu = submenu
         } else {
-            menu.addItem(item("Open Zone “\(zones[0].name)”",
+            menu.addItem(item(L("Open Zone “%1$@”", zones[0].name),
                               #selector(openZoneInPanel(_:)), zones[0]))
         }
         // Save Zone as… mirrors the choice, writing the picked zone's bytes out.
@@ -4196,7 +4197,7 @@ final class MainViewController: NSViewController {
             for zone in zones { submenu.addItem(item(zone.name, #selector(saveZone(_:)), zone)) }
             parent.submenu = submenu
         } else {
-            menu.addItem(item("Save Zone “\(zones[0].name)” as…", #selector(saveZone(_:)), zones[0]))
+            menu.addItem(item(L("Save Zone “%1$@” as…", zones[0].name), #selector(saveZone(_:)), zones[0]))
         }
     }
 
@@ -4524,7 +4525,7 @@ final class MainViewController: NSViewController {
         let range = doc.selection.start..<doc.selection.end
         saveRange(range, of: target.pane,
                   suggestedName: exportName(fileName: target.pane.status.fileName, range: range),
-                  purpose: "the selection")
+                  purpose: L("the selection"))
     }
 
     /// Context menu > Save Zone as…: writes a zone a tool-module published to a
@@ -4538,7 +4539,7 @@ final class MainViewController: NSViewController {
         saveRange(zone.range, of: target.pane,
                   suggestedName: zoneExportName(fileName: target.pane.status.fileName,
                                                 zoneName: zone.name, range: zone.range),
-                  purpose: "the zone")
+                  purpose: L("the zone"))
     }
 
     /// Takes a zone's bytes out into a panel of their own.
@@ -4564,7 +4565,7 @@ final class MainViewController: NSViewController {
         do {
             bytes = try doc.read(at: zone.range.lowerBound, length: Int(zone.range.count))
         } catch {
-            presentFileError("Could not read the zone.", error, url: doc.url)
+            presentFileError(L("Could not read the zone."), error, url: doc.url)
             return
         }
         // Linked back to the zone, and told what the bytes are when the file's
@@ -4597,7 +4598,7 @@ final class MainViewController: NSViewController {
         do {
             bytes = try doc.read(at: range.lowerBound, length: Int(range.count))
         } catch {
-            presentFileError("Could not read \(purpose).", error, url: doc.url)
+            presentFileError(L("Could not read %1$@.", purpose), error, url: doc.url)
             return
         }
 
@@ -4614,7 +4615,7 @@ final class MainViewController: NSViewController {
         do {
             try Data(bytes).write(to: url, options: .atomic)
         } catch {
-            presentFileError("Could not save \(purpose).", error, url: url)
+            presentFileError(L("Could not save %1$@.", purpose), error, url: url)
         }
     }
 
@@ -4655,7 +4656,7 @@ final class MainViewController: NSViewController {
             let bytes = try pasteboardBytes()
             try pane.pasteWrite(bytes)
         } catch {
-            presentError("Paste", error)
+            presentError(L("Paste"), error)
         }
     }
 
@@ -4666,7 +4667,7 @@ final class MainViewController: NSViewController {
         do {
             bytes = try pasteboardBytes()
         } catch {
-            presentError("Paste Insert", error)
+            presentError(L("Paste Insert"), error)
             return
         }
         guard !bytes.isEmpty else { return }
@@ -4683,7 +4684,7 @@ final class MainViewController: NSViewController {
         do {
             try pane.pasteInsert(bytes)
         } catch {
-            presentError("Paste Insert failed.", error)
+            presentError(L("Paste Insert failed."), error)
         }
     }
 
@@ -4739,7 +4740,7 @@ final class MainViewController: NSViewController {
         do {
             try pane.deleteBytes(in: start..<(start + count))
         } catch {
-            presentError("Delete failed.", error)
+            presentError(L("Delete failed."), error)
         }
     }
 
@@ -4902,9 +4903,10 @@ final class MainViewController: NSViewController {
         let from = windowModel.activePane.caretOffset
         Task {
             guard let block = comparisonCoordinator.findBlock(kind: kind, direction: direction, from: from) else {
-                let what = kind == .different ? "difference" : "same block"
+                let message = kind == .different
+                    ? L("No more difference") : L("No more same block")
                 NSSound.beep()
-                comparisonView?.showNavigationMessage("No more \(what)")
+                comparisonView?.showNavigationMessage(message)
                 return
             }
             // Forward navigation lands on the block start; backward navigation
@@ -5343,9 +5345,9 @@ final class MainViewController: NSViewController {
     /// read as "you have not made any", which is a different thing entirely.
     private func bookmarksUnavailableMessage(for pane: PaneViewModel) -> String? {
         guard pane.bookmarks == nil else { return nil }
-        guard let origin = pane.origin else { return "Bookmarks are not available here." }
-        return "Bookmarks are not available here: these bytes were decompressed from "
-            + "“\(origin.partName)”, so no offset in them is an offset in \(origin.parentName)."
+        guard let origin = pane.origin else { return L("Bookmarks are not available here.") }
+        return L("Bookmarks are not available here: these bytes were decompressed from “%1$@”, so no offset in them is an offset in %2$@.",
+                 origin.partName, origin.parentName)
     }
 
     /// Segments…: the partition's own form — the pieces in a table with a row
@@ -5417,8 +5419,8 @@ final class MainViewController: NSViewController {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.canCreateDirectories = true
-        panel.prompt = "Choose"
-        panel.message = "Choose the folder the segments will be written to."
+        panel.prompt = L("Choose")
+        panel.message = L("Choose the folder the segments will be written to.")
         // One file per piece, named for the document: `bios_S0.bin`, `bios_S1.bin`, …
         // The name the header shows, not the document's URL: an unsaved document
         // has no URL worth reading (it points at a temporary file called
@@ -5541,8 +5543,8 @@ final class MainViewController: NSViewController {
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "Replace"
-        panel.message = "Choose the file whose bytes replace \(piece.label)."
+        panel.prompt = L("Replace")
+        panel.message = L("Choose the file whose bytes replace %1$@.", piece.label)
         let url: URL?
         if let segmentOpenPanel {
             url = segmentOpenPanel(panel)
@@ -5571,12 +5573,12 @@ final class MainViewController: NSViewController {
                     try pane.replaceSegment(piece, withContentsOf: url, allowingLengthChange: true)
                     return true
                 } catch {
-                    presentFileError("Replacing the segment failed.", error, url: url)
+                    presentFileError(L("Replacing the segment failed."), error, url: url)
                     return false
                 }
             }
         } catch {
-            presentFileError("Replacing the segment failed.", error, url: url)
+            presentFileError(L("Replacing the segment failed."), error, url: url)
             return false
         }
     }
@@ -5615,7 +5617,7 @@ final class MainViewController: NSViewController {
             try pane.revertSegment(piece, allowingLengthChange: allowLengthChange)
             return true
         } catch {
-            presentFileError("Reverting the segment failed.", error, url: source.url)
+            presentFileError(L("Reverting the segment failed."), error, url: source.url)
             return false
         }
     }
@@ -5730,7 +5732,10 @@ final class MainViewController: NSViewController {
         }
         segmentWriteTask?.cancel()
         segmentWriteOperation?.finish()
-        let operation = BackgroundOperation(name: "Writing \(parts.count) segment\(parts.count == 1 ? "" : "s")…") { [weak self] in
+        let writing = parts.count == 1
+            ? L("Writing 1 segment…")
+            : L("Writing %1$@ segments…", parts.count)
+        let operation = BackgroundOperation(name: writing) { [weak self] in
             self?.segmentWriteTask?.cancel()
         }
         segmentWriteOperation = operation
@@ -5749,7 +5754,7 @@ final class MainViewController: NSViewController {
                 operation.finish()
             } catch {
                 operation.finish()
-                self?.presentFileError("Saving segments failed.", error, url: directory)
+                self?.presentFileError(L("Saving segments failed."), error, url: directory)
             }
         }
     }
@@ -5863,8 +5868,8 @@ final class MainViewController: NSViewController {
         guard !selection.isEmpty else { return }
         guard selection.count <= Self.maxSelectionFindBytes else {
             showNotice(symbol: "exclamationmark.triangle", lines: [
-                "Selection too long to search for",
-                "Up to \(Self.maxSelectionFindBytes) bytes can be used as a find pattern.",
+                L("Selection too long to search for"),
+                L("Up to %1$@ bytes can be used as a find pattern.", Self.maxSelectionFindBytes),
             ])
             return
         }
@@ -6066,7 +6071,7 @@ final class MainViewController: NSViewController {
         // is what makes a second press find a search already under way.
         pane.setMatches(MatchSet(pattern: first.pattern, folding: first.folding,
                                  extent: pane.fileSize, starts: [], indexedUpTo: 0))
-        let operation = BackgroundOperation(name: "Searching…") { [weak self] in
+        let operation = BackgroundOperation(name: L("Searching…")) { [weak self] in
             self?.cancelFind()
         }
         findOperation = operation
@@ -6150,8 +6155,8 @@ final class MainViewController: NSViewController {
         if goal == .listTheMatches { presentSearchResults(for: pane) }
         if attempts.count > 1 {
             showNotice(symbol: "wand.and.sparkles",
-                       lines: ["Smart search."]
-                           + attempts.map { "\($0.label) — no results." })
+                       lines: [L("Smart search.")]
+                           + attempts.map { L("%1$@ — no results.", $0.label) })
         }
         handOffFocusAfterFind()
     }
@@ -6199,7 +6204,7 @@ final class MainViewController: NSViewController {
         // without one: it is a millisecond on a dump this side of a gigabyte,
         // and where it is not, this covers the same ground and reports the same
         // progress. Cancelling it stops both.
-        let operation = BackgroundOperation(name: "Searching…") { [weak self] in
+        let operation = BackgroundOperation(name: L("Searching…")) { [weak self] in
             self?.indexTask?.cancel()
             self?.findTask?.cancel()
         }
@@ -6331,7 +6336,7 @@ final class MainViewController: NSViewController {
         // Only the navigation task: `endIndexing()` is not called here, and
         // that is the point.
         cancelFind()
-        let operation = BackgroundOperation(name: "Searching…") { [weak self] in
+        let operation = BackgroundOperation(name: L("Searching…")) { [weak self] in
             self?.cancelFind()
         }
         findOperation = operation
@@ -6353,7 +6358,7 @@ final class MainViewController: NSViewController {
             operation.finish()
             guard !Task.isCancelled, pane.isOpen else { return }
             guard case .found(_, let range, let wrapped) = outcome else {
-                self.showFindMessage("Not found.")
+                self.showFindMessage(L("Not found."))
                 return
             }
             self.show(match: range, in: pane)
@@ -6566,7 +6571,7 @@ final class MainViewController: NSViewController {
     private func askToKeepPattern(_ entry: SearchPatternEntry) {
         let sheet = NamePatternSheetController(entry: entry) { [weak self] kept in
             guard FavoritePatternStore.add(kept) else { return }
-            self?.showNotice(symbol: "star.fill", lines: ["Added to Favorites", kept.name])
+            self?.showNotice(symbol: "star.fill", lines: [L("Added to Favorites"), kept.name])
         }
         presentAsSheet(sheet)
     }
@@ -6696,7 +6701,7 @@ final class MainViewController: NSViewController {
     /// clear "grant access" prompt (§16 sandbox access denied).
     func presentFileError(_ title: String, _ error: Error, url: URL?) {
         if isSandboxAccessDenied(error) {
-            let name = url?.lastPathComponent ?? "the file"
+            let name = url?.lastPathComponent ?? L("the file")
             presentAlert(title: L("Access denied"),
                          message: L("ByteRipper cannot access “%1$@”. Choose it again with File > Open to grant access.", name))
         } else {
@@ -6944,7 +6949,8 @@ extension MainViewController: NSWindowDelegate {
                 do {
                     try pane.save()
                 } catch {
-                    presentFileError("Could not save “\(pane.status.fileName)”.", error, url: pane.document?.url)
+                    presentFileError(L("Could not save “%1$@”.", pane.status.fileName), error,
+                                     url: pane.document?.url)
                     done(false)
                     return
                 }
@@ -7017,7 +7023,7 @@ extension MainViewController: NSToolbarItemValidation {
             // tooltip says it in words.
             let offersStacked = LayoutSettings.isVertical
             item.image = NSImage(systemSymbolName: offersStacked ? "square.split.1x2" : "square.split.2x1",
-                                 accessibilityDescription: offersStacked ? "Stack Panes" : "Side-by-Side Panes")
+                                 accessibilityDescription: offersStacked ? L("Stack Panes") : L("Side-by-Side Panes"))
             ControlHelp.describe(item, name: L("Pane Layout"),
                                  tooltip: offersStacked ? L("Stack the panes")
                                                        : L("Place the panes side by side"))
@@ -7313,7 +7319,7 @@ enum PasteError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noClipboardData:
-            return "The clipboard does not contain raw bytes or a valid hex byte sequence."
+            return L("The clipboard does not contain raw bytes or a valid hex byte sequence.")
         }
     }
 }

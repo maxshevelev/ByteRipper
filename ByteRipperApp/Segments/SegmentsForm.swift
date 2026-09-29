@@ -279,7 +279,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         }
 
         let plus = NSButton(title: "", target: self, action: #selector(addCutPressed))
-        plus.image = footerIcon("plus", "Add Cut")
+        plus.image = footerIcon("plus", L("Add Cut"))
         plus.imagePosition = .imageOnly
         plus.isBordered = false
         plus.contentTintColor = .secondaryLabelColor
@@ -291,7 +291,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         // merge title ("Merge S1 into S0") by updateRemoveButton, which runs on
         // every selection change; the "Merge" here is the unselected fallback.
         let minus = NSButton(title: "", target: self, action: #selector(removeCutPressed))
-        minus.image = footerIcon("minus", "Merge")
+        minus.image = footerIcon("minus", L("Merge"))
         minus.imagePosition = .imageOnly
         minus.isBordered = false
         minus.contentTintColor = .secondaryLabelColor
@@ -809,10 +809,11 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
         let piece = pieceForMenuAction()
         switch menuItem.action {
         case #selector(saveSegment(_:)):
-            menuItem.title = piece.map { "Save Segment \($0.label)…" } ?? "Save Segment…"
+            menuItem.title = piece.map { L("Save Segment %1$@…", $0.label) } ?? L("Save Segment…")
             return piece != nil
         case #selector(replaceSegmentFromFile(_:)):
-            menuItem.title = piece.map { "Replace Segment \($0.label) from File…" } ?? "Replace Segment from File…"
+            menuItem.title = piece.map { L("Replace Segment %1$@ from File…", $0.label) }
+                ?? L("Replace Segment from File…")
             return piece != nil
         case #selector(revertSegmentToSource(_:)):
             // The item is there only for a piece that came from a file: most
@@ -826,7 +827,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
             menuItem.title = L("Revert Segment %1$@ to “%2$@”", piece.label, source.name)
             return pane.canRevertSegment(piece)
         case #selector(editClickedSegment):
-            menuItem.title = piece.map { "Edit Segment \($0.label)" } ?? "Edit…"
+            menuItem.title = piece.map { L("Edit Segment %1$@", $0.label) } ?? L("Edit…")
             return piece != nil
         case #selector(removeClickedSegment):
             // Name the piece and the neighbour it merges into, so the menu says
@@ -933,7 +934,7 @@ final class SegmentsFormController: NSViewController, NSTableViewDataSource, NST
             ]))
         }
         let symbol = NSImage(systemSymbolName: intact ? "link" : "xmark.octagon",
-                             accessibilityDescription: intact ? "Linked file" : "Link problem")?
+                             accessibilityDescription: intact ? L("Linked file") : L("Link problem"))?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))
         if let symbol {
             symbol.isTemplate = true

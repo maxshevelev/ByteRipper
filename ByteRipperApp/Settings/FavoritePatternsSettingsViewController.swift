@@ -491,9 +491,8 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         let settled = FavoritePatternStore.conflicts.isEmpty
         sheet.closeBecauseTheQuestionsChanged()
         show(message: settled
-                ? "Those questions were answered on your other Mac, so they are settled here too."
-                : "The library changed on your other Mac — open Resolve… again for the questions "
-                    + "that are left.")
+                ? L("Those questions were answered on your other Mac, so they are settled here too.")
+                : L("The library changed on your other Mac — open Resolve… again for the questions that are left."))
     }
 
     /// How the resolver is put on screen. Behind a seam because a sheet has
@@ -563,11 +562,8 @@ final class FavoritePatternsSettingsViewController: NSViewController,
     private func runFolderPanel() -> URL? {
         let panel = NSOpenPanel()
         panel.title = L("Keep Pattern Library")
-        panel.message = "Choose the folder to keep the pattern library in. Each Mac writes its "
-            + "own file there and reads the others. "
-            + "A folder your Mac syncs — iCloud Drive, Google Drive, Dropbox — puts the library "
-            + "on your other machines."
-        panel.prompt = "Keep Here"
+        panel.message = L("Choose the folder to keep the pattern library in. Each Mac writes its own file there and reads the others. A folder your Mac syncs — iCloud Drive, Google Drive, Dropbox — puts the library on your other machines.")
+        panel.prompt = L("Keep Here")
         panel.directoryURL = LibraryLocation.suggestedFolder()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
@@ -664,7 +660,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         }
 
         let plus = NSButton(title: "", target: self, action: #selector(addPressed))
-        plus.image = footerIcon("plus", "Add Favorite")
+        plus.image = footerIcon("plus", L("Add Favorite"))
         plus.imagePosition = .imageOnly
         plus.isBordered = false
         plus.contentTintColor = .secondaryLabelColor
@@ -672,7 +668,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         addButton = plus
 
         let minus = NSButton(title: "", target: self, action: #selector(removePressed))
-        minus.image = footerIcon("minus", "Remove Favorite")
+        minus.image = footerIcon("minus", L("Remove Favorite"))
         minus.imagePosition = .imageOnly
         minus.isBordered = false
         minus.contentTintColor = .secondaryLabelColor
@@ -906,8 +902,8 @@ final class FavoritePatternsSettingsViewController: NSViewController,
 
     private static func complaint(about pattern: String, as encoding: SearchEncoding) -> String {
         encoding == .hex
-            ? "\"\(pattern)\" is not hex — use pairs like DE AD BE EF."
-            : "\"\(pattern)\" cannot be written in \(encoding.displayName)."
+            ? L("“%1$@” is not hex — use pairs like DE AD BE EF.", pattern)
+            : L("“%1$@” cannot be written in %2$@.", pattern, encoding.displayName)
     }
 
     // MARK: - Add and remove

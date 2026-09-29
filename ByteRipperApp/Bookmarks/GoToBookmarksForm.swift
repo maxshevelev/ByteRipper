@@ -130,7 +130,7 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
         super.init(nibName: nil, bundle: nil)
         // The presented window takes its title from here (§10.1): the form is
         // Go To, and the bookmarks are the places it already knows.
-        title = "Go To"
+        title = L("Go To")
     }
 
     @available(*, unavailable)
@@ -792,12 +792,13 @@ final class GoToBookmarksController: NSViewController, NSTableViewDataSource, NS
             ])
     }
 
-    static let pastEndOfFileText = "Past the end of the file"
+    static var pastEndOfFileText: String { L("Past the end of the file") }
 
     /// What the list says when it is open and empty — the other half of the
     /// `unavailable` message, which is what it says when it is closed (§20.7).
-    static let noBookmarksYetText =
-        "No bookmarks yet. ⌘D marks the row your caret is on, so you can come back to it."
+    static var noBookmarksYetText: String {
+        L("No bookmarks yet. ⌘D marks the row your caret is on, so you can come back to it.")
+    }
 
     /// The width an eight-digit address needs, in the font the list draws it in,
     /// plus the room the cell's label leaves either side.

@@ -1,5 +1,6 @@
-import Foundation
 import ByteRipperCore
+import Foundation
+import Localization
 
 /// What the Find bar says about the current search: the count, the position in
 /// it, and the one thing worth warning about (§11,
@@ -41,10 +42,10 @@ struct FindCount: Equatable {
     /// What the label shows. Grouped digits, because a six-figure count is a
     /// number the user has to read, not just notice.
     var text: String {
-        guard total > 0 else { return "Not found" }
+        guard total > 0 else { return L("Not found") }
         let count = Self.grouped(total)
         guard let ordinal else { return count }
-        return "\(Self.grouped(ordinal)) of \(count)"
+        return L("%1$@ of %2$@", Self.grouped(ordinal), count)
     }
 
     /// The sentence beside the count when something is being withheld, as the
@@ -55,10 +56,10 @@ struct FindCount: Equatable {
     var warning: String? {
         guard total > 0 else { return nil }
         if !isHighlightable {
-            return "Too many matches to highlight — navigation and the map still cover all of them."
+            return L("Too many matches to highlight — navigation and the map still cover all of them.")
         }
         if !isListable {
-            return "Too many matches to list. Refine the pattern."
+            return L("Too many matches to list. Refine the pattern.")
         }
         return nil
     }

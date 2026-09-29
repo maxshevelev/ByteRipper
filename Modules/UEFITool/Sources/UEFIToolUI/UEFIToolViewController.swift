@@ -1289,7 +1289,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
                 ?? ToolPanelTable.makeCell(identifier: identifier,
                                            warning: identifier == Column.name,
                                        badges: identifier == Column.name)
-            cell.textField?.stringValue = identifier == Column.name ? "Loading…" : ""
+            cell.textField?.stringValue = identifier == Column.name ? L("Loading…") : ""
             cell.textField?.font = ToolPanelFont.body()
             // The colour too: cells share one pool per column, so a cell that
             // was grey for an empty ME section would hand its grey on to a

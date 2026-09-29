@@ -1475,14 +1475,14 @@ final class FilePaneView: NSView {
         documentSymbolName = symbol
         documentIcon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
         if status.isUntitled {
-            documentIcon.setAccessibilityLabel(status.isDirty ? "Modified new file" : "New file")
+            documentIcon.setAccessibilityLabel(status.isDirty ? L("Modified new file") : L("New file"))
         } else {
-            documentIcon.setAccessibilityLabel(status.isDirty ? "Modified file" : "File document")
+            documentIcon.setAccessibilityLabel(status.isDirty ? L("Modified file") : L("File document"))
         }
-        lockLabel.stringValue = status.isReadOnly ? "🔒 Read-Only" : ""
+        lockLabel.stringValue = status.isReadOnly ? "🔒 " + L("Read-Only") : ""
         updateLink()
         // VoiceOver names the grid after its file (§15).
-        hexView.accessibilityTitle = "Hex dump — \(status.fileName)"
+        hexView.accessibilityTitle = L("Hex dump — %1$@", status.fileName)
         onHeaderChanged?()
     }
 
@@ -1580,12 +1580,12 @@ final class FilePaneView: NSView {
         // The offset is the line's first part, and the bar always leads with it:
         // the digits it draws here are the ones a right-click on them copies
         // (§3.4), so they are handed to the readout as the address's own text.
-        parts.append("Offset \(address(status.cursorOffset))")
+        parts.append(L("Offset %1$@", address(status.cursorOffset)))
         if status.selectionLength > 0 {
             // The selection's length, abbreviated and rounded to a whole value
             // of its unit, like the file size beside it (§3.4): "255 KB
             // selected", not "262144 selected".
-            parts.append("\(Self.friendlySize(status.selectionLength)) selected")
+            parts.append(L("%1$@ selected", Self.friendlySize(status.selectionLength)))
         }
         // The caret's piece, beside the offset (§21.3): one block,
         // "S1: <start>-<end> (length)" — bare hex, no 0x prefix, zero-padded to
@@ -1599,10 +1599,10 @@ final class FilePaneView: NSView {
         let sizeIndex = parts.count
         parts.append(Self.friendlySize(status.fileSize))
         if status.isDirty {
-            parts.append("Modified")
+            parts.append(L("Modified"))
         }
         if status.isReadOnly {
-            parts.append("Read-Only")
+            parts.append(L("Read-Only"))
         }
         if !comparisonInfo.isEmpty {
             parts.append(comparisonInfo)
@@ -1615,10 +1615,16 @@ final class FilePaneView: NSView {
     /// INS/OVR (§7.6). Red for insert — the colour of its caret and of a byte
     /// the user has changed but not saved: in this app red means "this is not
     /// the file you opened", which is exactly what the mode is about.
+    ///
+    /// `INS` and `OVR` stay English in every language on purpose: they are the
+    /// abbreviations every editor's status bar uses, and a national three-letter
+    /// coinage for them would be less legible than the one a reader already
+    /// knows. The accessibility label is a phrase rather than an abbreviation,
+    /// so it translates.
     private func updateTypingModeIndicator(_ isInsertMode: Bool) {
         typingModeLabel.stringValue = isInsertMode ? "INS" : "OVR"
         typingModeLabel.textColor = isInsertMode ? HexTheme.insertCaretColor : .secondaryLabelColor
-        typingModeLabel.setAccessibilityLabel(isInsertMode ? "Insert mode" : "Overwrite mode")
+        typingModeLabel.setAccessibilityLabel(isInsertMode ? L("Insert mode") : L("Overwrite mode"))
     }
 
     /// The app's byte-size format ("8 B", "255 KB", "4 MB") — whole values of

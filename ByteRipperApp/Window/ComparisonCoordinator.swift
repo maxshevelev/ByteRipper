@@ -1,5 +1,6 @@
-import Foundation
 import ByteRipperCore
+import Foundation
+import Localization
 
 /// Coordinates the background `DiffBlockIndex` lifecycle for comparison mode
 /// (§8.3, §10.3).
@@ -109,7 +110,7 @@ final class ComparisonCoordinator {
         applying = false
         isBuilding = true
         endBuildOperation()
-        let op = BackgroundOperation(name: "Indexing…") { [weak self] in
+        let op = BackgroundOperation(name: L("Indexing…")) { [weak self] in
             self?.cancelBuild()
         }
         operation = op

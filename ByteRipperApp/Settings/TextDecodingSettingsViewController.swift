@@ -186,13 +186,13 @@ extension TextDecodingSettingsViewController: NSTextFieldDelegate {
         let text = field.stringValue
         switch text.count {
         case 0:
-            showValidationError("Enter a character")
+            showValidationError(L("Enter a character"))
         case 1:
             validationLabel.isHidden = true
             apply(TextDecodingSettings(identifier: store.settings.identifier, placeholder: text.first!))
         default:
             // Multi-character: keep only the first and apply, or reject outright.
-            showValidationError("Exactly one character")
+            showValidationError(L("Exactly one character"))
         }
     }
 }

@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 import ToolModuleKit
 
 /// The minimap panel shown to the right of the hex panes (§19).
@@ -2693,29 +2694,30 @@ final class MinimapView: NSView, NSViewToolTipOwner {
 
     override func accessibilityRoleDescription() -> String? { "minimap" }
 
-    override func accessibilityLabel() -> String? { "Minimap" }
+    override func accessibilityLabel() -> String? { L("Minimap") }
 
     /// What the panes are showing, in the terms the hex dump announces (hex
     /// offsets, size in bytes) — that is the actionable fact here, since the
     /// map's own window follows the panes rather than moving on its own.
     override func accessibilityValue() -> Any? {
-        guard !maps.isEmpty else { return "No file open." }
+        guard !maps.isEmpty else { return L("No file open.") }
         let sizes = maps.map(\.fileSize)
         let sizeText = sizes.count > 1
-            ? "File sizes \(sizes[0]) and \(sizes[1]) bytes."
-            : "File size \(sizes[0]) bytes."
+            ? L("File sizes %1$@ and %2$@ bytes.", sizes[0], sizes[1])
+            : L("File size %1$@ bytes.", sizes[0])
         guard let visible = unifiedViewport() else {
-            return "Nothing visible. " + sizeText
+            return L("Nothing visible.") + " " + sizeText
         }
         let start = String(visible.lowerBound, radix: 16).uppercased()
         let end = String(visible.upperBound, radix: 16).uppercased()
-        let subject = maps.count > 1 ? "Panes" : "Pane"
-        return "\(subject) showing 0x\(start) through 0x\(end). " + sizeText
+        let showing = maps.count > 1
+            ? L("Panes showing 0x%1$@ through 0x%2$@.", start, end)
+            : L("Pane showing 0x%1$@ through 0x%2$@.", start, end)
+        return showing + " " + sizeText
     }
 
     override func accessibilityHelp() -> String? {
-        "Drag the highlighted band to scroll the file. "
-            + "Click elsewhere on the map to move the cursor to that byte."
+        L("Drag the highlighted band to scroll the file. Click elsewhere on the map to move the cursor to that byte.")
     }
 
     // MARK: - Dragging the viewport (§19)

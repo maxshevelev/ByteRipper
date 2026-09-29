@@ -1,6 +1,7 @@
 import AppPalette
-import Cocoa
 import ByteRipperCore
+import Cocoa
+import Localization
 
 /// What changed in the pane's content, so the hex view can invalidate only the
 /// affected rows or columns instead of repainting the whole pane — the content
@@ -151,7 +152,7 @@ final class HexView: NSView, NSViewToolTipOwner {
     }
 
     /// Accessible label for the grid, e.g. "Hex dump — File A" (§15).
-    var accessibilityTitle = "Hex dump"
+    var accessibilityTitle = L("Hex dump")
 
     /// The active text decoder for the decoded-text column. The view model
     /// rebuilds this whenever the user changes the decoding settings.
@@ -802,12 +803,14 @@ final class HexView: NSView, NSViewToolTipOwner {
         // way a bookmark reaches a screen reader while moving through the dump
         // (§15, §20.2).
         let mark = dataSource.hexBookmark(atRowContaining: selection.start)
-            .map { " Bookmarked row: \($0.displayName)." } ?? ""
+            .map { " " + L("Bookmarked row: %1$@.", $0.displayName) } ?? ""
+        let sizeText = L("File size %1$@ bytes.", size)
         if selection.isEmpty {
-            return "Offset 0x\(start).\(mark) File size \(size) bytes."
+            return L("Offset 0x%1$@.", start) + mark + " " + sizeText
         }
         let end = String(selection.end, radix: 16).uppercased()
-        return "Offset 0x\(start), \(selection.count) bytes selected through 0x\(end).\(mark) File size \(size) bytes."
+        return L("Offset 0x%1$@, %2$@ bytes selected through 0x%3$@.",
+                 start, selection.count, end) + mark + " " + sizeText
     }
 
     // MARK: - Focus

@@ -949,7 +949,7 @@ struct FITParkedState: ToolSessionState {
                 ? L("Checksum written, in the Top Swap backup's table too.")
                 : L("Checksum written.")) + " " + L("⌘Z takes it back."))
         } catch {
-            fail("Could not write: \(error)")
+            fail(L("Could not write: %1$@", error))
         }
     }
 }

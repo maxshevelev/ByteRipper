@@ -1,4 +1,5 @@
 import AppKit
+import Localization
 
 /// The paragraph under the standard About panel that says where the names
 /// ByteRipper shows come from — which open-source projects contributed data,
@@ -26,24 +27,21 @@ enum AboutCredits {
             author: "LongSoft",
             repository: URL(string: "https://github.com/LongSoft/UEFITool")!,
             profile: URL(string: "https://github.com/LongSoft")!,
-            taken: "The UEFI Structure tool's item types, NVRAM GUID constants"
-                + " and GUID-name catalogue (common/guids.csv)."
+            taken: L("The UEFI Structure tool's item types, NVRAM GUID constants and GUID-name catalogue (common/guids.csv).")
         ),
         Project(
             name: "MEAnalyzer",
             author: "platomav",
             repository: URL(string: "https://github.com/platomav/MEAnalyzer")!,
             profile: URL(string: "https://github.com/platomav")!,
-            taken: "The ME Analyzer tool's reading of Intel ME/CSME firmware,"
-                + " and the databases it checks a dump against (MEA.dat,"
-                + " Huffman.dat), fetched as the project publishes them."
+            taken: L("The ME Analyzer tool's reading of Intel ME/CSME firmware, and the databases it checks a dump against (MEA.dat, Huffman.dat), fetched as the project publishes them.")
         ),
         Project(
             name: "CPUMicrocodes",
             author: "platomav",
             repository: URL(string: "https://github.com/platomav/CPUMicrocodes")!,
             profile: URL(string: "https://github.com/platomav")!,
-            taken: "The catalogue of CPU microcodes the FIT tool's picker offers."
+            taken: L("The catalogue of CPU microcodes the FIT tool's picker offers.")
         ),
     ]
 
@@ -66,12 +64,12 @@ enum AboutCredits {
             ]))
         }
 
-        plain("Data sources\n", font: lead)
+        plain(L("Data sources") + "\n", font: lead)
         for project in projects {
             // The name opens the repository; the author's name opens their
             // profile; the bare address below is the same link made copyable.
             link(project.name, to: project.repository, font: lead)
-            plain(" by ")
+            plain(" " + L("by", context: "credits") + " ")
             link(project.author, to: project.profile)
             plain("\n")
             plain(project.taken + "\n", colour: .secondaryLabelColor)

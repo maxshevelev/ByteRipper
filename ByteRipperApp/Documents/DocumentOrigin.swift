@@ -125,11 +125,13 @@ import UEFIImage
 
     /// What the header's link says under the pointer.
     var explanation: String {
-        let from = "Opened from “\(partName)” in \(parentName)"
         switch state {
-        case .intact: return from + ". Click to show it there."
-        case .parentClosed: return from + ", which is no longer open."
-        case .sourceChanged: return from + ", which has changed there since."
+        case .intact:
+            return L("Opened from “%1$@” in %2$@. Click to show it there.", partName, parentName)
+        case .parentClosed:
+            return L("Opened from “%1$@” in %2$@, which is no longer open.", partName, parentName)
+        case .sourceChanged:
+            return L("Opened from “%1$@” in %2$@, which has changed there since.", partName, parentName)
         }
     }
 

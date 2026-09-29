@@ -459,7 +459,7 @@ public enum FITEditor {
             let writes = [changedPart(of: payload, at: old.offset, in: reader)].compactMap { $0 }
             return .success((
                 withContainerRepairs(
-                    ToolTransaction(name: "Replace Microcode", writes: writes),
+                    ToolTransaction(name: L("Replace Microcode"), writes: writes),
                     image: image, reader: reader, grownFile: nil
                 ),
                 FITEditOutcome(
@@ -504,7 +504,7 @@ public enum FITEditor {
             let landed = plan.freshOffset ?? old.offset
             return .success((
                 withContainerRepairs(
-                    ToolTransaction(name: "Replace Microcode", writes: writes),
+                    ToolTransaction(name: L("Replace Microcode"), writes: writes),
                     image: image, reader: reader, grownFile: plan.growth?.grown
                 ),
                 FITEditOutcome(
@@ -655,7 +655,7 @@ public enum FITEditor {
         ))
         return .success((
             withContainerRepairs(
-                ToolTransaction(name: "Add Microcode", writes: writes),
+                ToolTransaction(name: L("Add Microcode"), writes: writes),
                 image: image, reader: reader, grownFile: plan.growth?.grown
             ),
             FITEditOutcome(
@@ -763,7 +763,7 @@ public enum FITEditor {
         return checkingProtection(
             .success((
                 withContainerRepairs(
-                    ToolTransaction(name: "Remove Microcode", writes: writes),
+                    ToolTransaction(name: L("Remove Microcode"), writes: writes),
                     image: image, reader: reader
                 ),
                 FITRemovalOutcome(entryIndex: index, moved: moved, erased: erased)

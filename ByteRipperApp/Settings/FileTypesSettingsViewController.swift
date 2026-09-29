@@ -173,7 +173,7 @@ final class FileTypesSettingsViewController: NSViewController,
         }
 
         let plus = NSButton(title: "", target: self, action: #selector(addPressed))
-        plus.image = footerIcon("plus", "Add File Type")
+        plus.image = footerIcon("plus", L("Add File Type"))
         plus.imagePosition = .imageOnly
         plus.isBordered = false
         plus.contentTintColor = .secondaryLabelColor
@@ -181,7 +181,7 @@ final class FileTypesSettingsViewController: NSViewController,
         addButton = plus
 
         let minus = NSButton(title: "", target: self, action: #selector(removePressed))
-        minus.image = footerIcon("minus", "Remove File Type")
+        minus.image = footerIcon("minus", L("Remove File Type"))
         minus.imagePosition = .imageOnly
         minus.isBordered = false
         minus.contentTintColor = .secondaryLabelColor
@@ -315,9 +315,7 @@ final class FileTypesSettingsViewController: NSViewController,
     /// so (§25.3).
     private func unregister(_ entry: DefaultHandlerSettings.Entry) {
         guard let displaced = entry.displacedHandler else {
-            presentMessage("macOS has no way to un-set a default application. "
-                            + "Choose another app for .\(entry.ext) in Finder: select a file, "
-                            + "press ⌘I, and use Open with ▸ Change All.")
+            presentMessage(L("macOS has no way to un-set a default application. Choose another app for .%1$@ in Finder: select a file, press ⌘I, and use Open with ▸ Change All.", entry.ext))
             reload()
             return
         }
@@ -332,8 +330,7 @@ final class FileTypesSettingsViewController: NSViewController,
     @objc private func addPressed() {
         guard let raw = prompt() else { return }
         guard let ext = DefaultHandlerSettings.add(raw) else {
-            presentMessage("\"\(raw)\" is not a file extension. Use letters and digits, "
-                            + "for example dump or bin.")
+            presentMessage(L("“%1$@” is not a file extension. Use letters and digits, for example dump or bin.", raw))
             return
         }
         reload()
@@ -352,8 +349,7 @@ final class FileTypesSettingsViewController: NSViewController,
         DefaultHandlerSettings.remove(entry.ext)
         reload()
         if isSelfDefault(entry.ext) {
-            presentMessage("Removed .\(entry.ext) from the list. macOS still opens .\(entry.ext) "
-                            + "files with ByteRipper — put the type back and untick it to hand it over.")
+            presentMessage(L("Removed .%1$@ from the list. macOS still opens .%1$@ files with ByteRipper — put the type back and untick it to hand it over.", entry.ext))
         }
     }
 

@@ -405,27 +405,27 @@ final class SelectBlockSheetController: SheetViewController {
 
     override func validate() -> String? {
         guard let start = parse(startField.stringValue) else {
-            return "Invalid start offset."
+            return L("Invalid start offset.")
         }
         guard start <= fileSize else {
-            return "Start is beyond the end of the file."
+            return L("Start is beyond the end of the file.")
         }
         if endRadio.state == .on {
             guard let end = parse(endField.stringValue) else {
-                return "Invalid end offset."
+                return L("Invalid end offset.")
             }
             if start > end {
-                return "Start must not exceed end."
+                return L("Start must not exceed end.")
             }
             // End is the address of the block's LAST byte, so it must point at
             // a real byte — the maximum is fileSize - 1 (the selection's
             // half-open upper bound is end + 1).
             if end >= fileSize {
-                return "End is beyond the end of the file."
+                return L("End is beyond the end of the file.")
             }
         } else {
             guard parse(lengthField.stringValue) != nil else {
-                return "Invalid length."
+                return L("Invalid length.")
             }
         }
         return nil
@@ -451,10 +451,10 @@ final class SelectBlockSheetController: SheetViewController {
     /// validate only what they actually use.
     private func startError() -> String? {
         guard let start = parse(startField.stringValue) else {
-            return "Invalid start offset."
+            return L("Invalid start offset.")
         }
         guard start <= fileSize else {
-            return "Start is beyond the end of the file."
+            return L("Start is beyond the end of the file.")
         }
         return nil
     }
@@ -547,12 +547,12 @@ final class FillSheetController: SheetViewController {
 
     override func validate() -> String? {
         let text = bytesField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        if text.isEmpty { return "Enter at least one byte (e.g. FF)." }
+        if text.isEmpty { return L("Enter at least one byte (e.g. FF).") }
         do {
             _ = try SearchEngine.parsePattern(text, encoding: .hex)
             return nil
         } catch {
-            return "Invalid hex — use pairs like DE AD BE EF."
+            return L("Invalid hex — use pairs like DE AD BE EF.")
         }
     }
 

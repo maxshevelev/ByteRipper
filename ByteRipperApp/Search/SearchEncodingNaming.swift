@@ -1,5 +1,6 @@
 import Foundation
 import ByteRipperCore
+import Localization
 
 /// What the app *calls* an encoding: the Find bar's popup item, the label on a
 /// history entry, a line of Smart Search's notice (§11).
@@ -11,7 +12,7 @@ import ByteRipperCore
 extension SearchEncoding {
     var displayName: String {
         switch self {
-        case .hex: return "Hex bytes"
+        case .hex: return L("Hex bytes")
         case .ascii: return "ASCII"
         case .utf8: return "UTF-8"
         case .utf16LE: return "UTF-16 LE"

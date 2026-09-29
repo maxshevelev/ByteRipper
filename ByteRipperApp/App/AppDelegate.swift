@@ -91,15 +91,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // The File menu's Open Recent submenu is built empty (its rows depend
         // on what has been opened, which the build cannot know); hand it the
         // delegate that rebuilds the rows before each display.
-        if let fileMenu = mainMenu.items.compactMap(\.submenu).first(where: { $0.title == "File" }),
-           let openRecentMenu = fileMenu.items.first(where: { $0.title == "Open Recent" })?.submenu {
+        if let fileMenu = mainMenu.items.compactMap(\.submenu).first(where: { $0.title == L("File", context: "menu") }),
+           let openRecentMenu = fileMenu.items.first(where: { $0.title == L("Open Recent") })?.submenu {
             openRecentMenu.delegate = openRecentMenuController
         }
         // Handing AppKit the Window submenu is what puts the open windows in it,
         // with Bring All to Front above them — worth having the moment there is
         // more than one window, and the place the system also hangs its own tab
         // commands.
-        NSApp.windowsMenu = mainMenu.items.compactMap(\.submenu).first { $0.title == "Window" }
+        NSApp.windowsMenu = mainMenu.items.compactMap(\.submenu).first { $0.title == L("Window", context: "menu") }
         themeObserver = NotificationCenter.default.addObserver(
             forName: AppTheme.didChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in

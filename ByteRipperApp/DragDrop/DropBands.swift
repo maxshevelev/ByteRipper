@@ -524,9 +524,9 @@ final class PaneDropBandsView: NSView {
             return position == .start
                 ? SingleFileDropTarget.insertAtStart.title
                 : SingleFileDropTarget.appendAtEnd.title
-        case .swap: return "Swap Panes"
-        case .move: return "Move Here"
-        case .duplicate: return "Duplicate Here"
+        case .swap: return L("Swap Panes")
+        case .move: return L("Move Here")
+        case .duplicate: return L("Duplicate Here")
         case .none, .tearOff: return nil
         }
     }

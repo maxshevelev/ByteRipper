@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 
 /// The pane status bar's main readout — the one field the whole line is drawn
 /// in — with the caret's offset and the file size as the parts of it the pointer
@@ -63,7 +64,7 @@ final class StatusLabel: NSTextField {
     /// bytes)". 64-bit formats on purpose: `%d` would truncate a file over
     /// 2 GB to its low half.
     static func exactSizeText(_ bytes: UInt64) -> String {
-        "\(hexSizeText(bytes)) (\(bytes) bytes)"
+        L("%1$@ (%2$@ bytes)", hexSizeText(bytes), String(bytes))
     }
 
     /// What a right-click on one half of the exact form puts on the clipboard:

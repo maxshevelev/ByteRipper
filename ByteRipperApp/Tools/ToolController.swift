@@ -1,5 +1,6 @@
-import Cocoa
 import ByteRipperCore
+import Cocoa
+import Localization
 import ToolModuleKit
 
 /// The tool-module side of one tab: which one is active, and everything that
@@ -131,7 +132,7 @@ import ToolModuleKit
             ?? [owner.windowModel.pane1, owner.windowModel.pane2]
         let choices: [ToolPanelView.PaneChoice] = panes.map { pane in
             ToolPanelView.PaneChoice(
-                fileName: pane.isOpen ? pane.status.fileName : "No file",
+                fileName: pane.isOpen ? pane.status.fileName : L("No file"),
                 isBound: pane === boundPane,
                 isEnabled: pane.isOpen)
         }
@@ -154,7 +155,7 @@ import ToolModuleKit
         else { return nil }
         let pane = index == 0 ? owner.windowModel.pane1 : owner.windowModel.pane2
         guard pane.isOpen, pane !== boundPane else { return nil }
-        return "Show \(module.title) for \(pane.status.fileName)"
+        return L("Show %1$@ for %2$@", module.title, pane.status.fileName)
     }
 
     private func startSession(_ module: any ToolModule.Type, on pane: PaneViewModel) {

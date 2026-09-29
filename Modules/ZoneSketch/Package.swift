@@ -40,6 +40,7 @@ let package = Package(
     ],
     targets: [
         .target(name: "ZoneSketch", dependencies: [
+            .product(name: "Localization", package: "Localization"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit")
         ]),
         .target(name: "ZoneSketchUI", dependencies: [

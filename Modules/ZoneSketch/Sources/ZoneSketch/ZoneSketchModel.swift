@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import ToolModuleKit
 
 /// The zones the user has sketched, and everything decided about them.
@@ -35,7 +36,7 @@ public struct ZoneSketchModel: Equatable, Sendable {
         guard range.lowerBound < range.upperBound else { return nil }
         made += 1
         let zone = Zone(id: "sketch-\(made)",
-                        name: name.flatMap { $0.isEmpty ? nil : $0 } ?? "Zone \(made)",
+                        name: name.flatMap { $0.isEmpty ? nil : $0 } ?? L("Zone %1$@", made),
                         range: range)
         zones.append(zone)
         focus = zone.id
@@ -71,7 +72,7 @@ public struct ZoneSketchModel: Equatable, Sendable {
     public func fillFocused(with byte: UInt8) -> ToolTransaction? {
         guard let zone = focused else { return nil }
         let count = Int(zone.range.upperBound - zone.range.lowerBound)
-        return ToolTransaction(name: "Fill \(zone.name)",
+        return ToolTransaction(name: L("Fill %1$@", zone.name),
                                offset: zone.range.lowerBound,
                                bytes: [UInt8](repeating: byte, count: count))
     }

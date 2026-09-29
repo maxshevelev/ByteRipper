@@ -33,9 +33,9 @@ final class NamePatternSheetController: SheetViewController {
     private static func describe(_ entry: SearchPatternEntry) -> String {
         let flags = entry.encoding == .hex
             ? entry.encoding.displayName
-            : "\(entry.encoding.displayName), "
-                + (entry.caseSensitive ? "match case" : "ignore case")
-        return "Keeping \"\(entry.pattern)\" — \(flags)."
+            : entry.encoding.displayName + ", "
+                + (entry.caseSensitive ? L("match case") : L("ignore case"))
+        return L("Keeping “%1$@” — %2$@.", entry.pattern, flags)
     }
 
     override func loadView() {
@@ -51,13 +51,13 @@ final class NamePatternSheetController: SheetViewController {
 
     override func validate() -> String? {
         let name = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        if name.isEmpty { return "Enter a name — it is what the menu shows." }
-        if !entry.isUsable { return "That pattern cannot be read as \(entry.encoding.displayName)." }
+        if name.isEmpty { return L("Enter a name — it is what the menu shows.") }
+        if !entry.isUsable { return L("That pattern cannot be read as %1$@.", entry.encoding.displayName) }
         if let kept = FavoritePatternStore.existing(for: entry) {
             // The same search under two names is two answers to one question,
             // so the sheet says which name it is already kept under and lets
             // the user rename it in the form rather than adding a second row.
-            return "Already a favourite, as \"\(kept.name)\"."
+            return L("Already a favourite, as “%1$@”.", kept.name)
         }
         return nil
     }

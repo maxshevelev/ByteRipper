@@ -287,8 +287,8 @@ final class EmptyStateView: NSView {
         guard !bookmarks.isEmpty else { return }
 
         bookmarkHeading.stringValue = bookmarks.count == 1
-            ? "1 Bookmark Here:"
-            : "\(bookmarks.count) Bookmarks Here:"
+            ? L("1 Bookmark Here:")
+            : L("%1$@ Bookmarks Here:", bookmarks.count)
         for bookmark in bookmarks {
             let address = NSTextField(labelWithString: bookmark.row.bareAddress)
             // The dump's address shape, in the bookmark colour: the same purple
@@ -371,7 +371,7 @@ final class EmptyStateView: NSView {
     /// again every time the last file is closed.
     func showAvailableRelease(_ release: Release) {
         releasePage = release.page
-        releaseText = "Version \(release.version.text) is available on GitHub"
+        releaseText = L("Version %1$@ is available on GitHub", release.version.text)
         releaseButton.attributedTitle = Self.releaseLineText(releaseText)
         // One phrase, not two: the tooltip used to be the bare URL while a
         // screen reader heard a sentence. The sentence is the better answer

@@ -1,5 +1,6 @@
-import Foundation
 import ByteRipperCore
+import Foundation
+import Localization
 import ToolModuleKit
 
 /// The visual state of a single byte in the hex grid (§6).
@@ -1442,7 +1443,7 @@ final class PaneViewModel: HexViewDataSource {
         guard let doc = document else { return PaneStatus(isInsertMode: isInsertMode) }
         let caret = doc.selection.start
         return PaneStatus(
-            fileName: isUntitled ? (untitledName ?? "Untitled") : doc.url.lastPathComponent,
+            fileName: isUntitled ? (untitledName ?? L("Untitled")) : doc.url.lastPathComponent,
             fileSize: doc.size,
             cursorOffset: caret,
             selectionLength: doc.selection.count,

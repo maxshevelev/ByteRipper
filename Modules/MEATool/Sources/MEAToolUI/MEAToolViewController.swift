@@ -576,7 +576,7 @@ import ToolModuleKit
                     // The same weight the panel gives a status-toned value.
                     emphasized = row.tone.isStatus
                 case .comingSoon:
-                    value = "Coming soon"
+                    value = L("Coming soon")
                     emphasized = false
                 }
                 text.append(NSAttributedString(string: value + "\n", attributes: [
@@ -742,7 +742,7 @@ import ToolModuleKit
             value.attributedStringValue = row.tone.attributedValue(text)
             value.isSelectable = true
         case .comingSoon:
-            value = ToolWrappingLabel(string: "Coming soon")
+            value = ToolWrappingLabel(string: L("Coming soon"))
             value.font = ToolPanelFont.body()
             value.textColor = .secondaryLabelColor
         }

@@ -628,15 +628,15 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
                 ?? NSImage()
         }
         navControl = NSSegmentedControl(
-            images: [chevron("chevron.left", "Find Previous"),
-                     chevron("chevron.right", "Find Next")],
+            images: [chevron("chevron.left", L("Find Previous")),
+                     chevron("chevron.right", L("Find Next"))],
             trackingMode: .momentary,
             target: self,
             action: #selector(navPressed(_:))
         )
         navControl.segmentStyle = .automatic
-        navControl.setToolTip("Find Previous", forSegment: Self.previousSegment)
-        navControl.setToolTip("Find Next", forSegment: Self.nextSegment)
+        navControl.setToolTip(L("Find Previous"), forSegment: Self.previousSegment)
+        navControl.setToolTip(L("Find Next"), forSegment: Self.nextSegment)
         // The segments' own accessibility comes from the images' descriptions;
         // the control needs a name of its own for the group (§15).
         navControl.setAccessibilityLabel(L("Find Previous / Find Next"))
@@ -866,8 +866,8 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
         title.append(NSAttributedString(string: "\"\(entry.pattern)\"", attributes: row))
         let flags = entry.encoding == .hex
             ? entry.encoding.displayName
-            : "\(entry.encoding.displayName), "
-                + (entry.caseSensitive ? "match case" : "ignore case")
+            : entry.encoding.displayName + ", "
+                + (entry.caseSensitive ? L("match case") : L("ignore case"))
         title.append(NSAttributedString(
             string: "  \(flags)",
             attributes: [.font: NSFont.systemFont(ofSize: Self.menuFlagSize),
@@ -1118,8 +1118,8 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
 
     /// The model found no encoding that can read what is in the field (§11).
     func reportNoUsablePattern() {
-        show(patternError: "Invalid pattern",
-             detail: "No encoding in the list can read that pattern.")
+        show(patternError: L("Invalid pattern"),
+             detail: L("No encoding in the list can read that pattern."))
     }
 
     /// What was typed, at the moment a search was started, waiting to be
@@ -1294,16 +1294,16 @@ final class FindBarView: NSView, NSSearchFieldDelegate, NSMenuItemValidation {
     /// The short form shown where the count goes. One wording for every way a
     /// pattern can fail to be one: the bar has room for a verdict, and the
     /// sentence that says which failure it was rides along as the tooltip.
-    private static func errorLabel(for error: Error) -> String { "Invalid pattern" }
+    private static func errorLabel(for error: Error) -> String { L("Invalid pattern") }
 
     private static func errorText(for error: Error) -> String {
         if let searchError = error as? SearchError {
             switch searchError {
-            case .emptyPattern: return "Enter a non-empty pattern."
-            case .invalidHexPattern: return "Invalid hex — use pairs like DE AD BE EF."
-            case .undecodableText: return "Text cannot be encoded in the selected encoding."
+            case .emptyPattern: return L("Enter a non-empty pattern.")
+            case .invalidHexPattern: return L("Invalid hex — use pairs like DE AD BE EF.")
+            case .undecodableText: return L("Text cannot be encoded in the selected encoding.")
             }
         }
-        return "Invalid pattern."
+        return L("Invalid pattern.")
     }
 }

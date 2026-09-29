@@ -727,7 +727,7 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
         // is read (§7.3), but it is the same 1.00 on almost every row — so it
         // lives where a curious pointer finds it rather than in a column.
         cell.textField?.toolTip = column.identifier == Column.type
-            ? "Version \(entry.versionText)"
+            ? L("Version %1$@", entry.versionText)
             : (entry.targetText.isEmpty ? nil : entry.targetText)
         return cell
     }

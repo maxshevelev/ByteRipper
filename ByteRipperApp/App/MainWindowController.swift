@@ -370,7 +370,7 @@ final class MainWindowController: NSWindowController {
             .paneLayout,
             symbol: LayoutSettings.isVertical ? "square.split.1x2" : "square.split.2x1",
             label: L("Pane Layout"),
-            toolTip: LayoutSettings.isVertical ? "Stack the panes" : "Place the panes side by side",
+            toolTip: LayoutSettings.isVertical ? L("Stack the panes") : L("Place the panes side by side"),
             action: #selector(MainViewController.togglePaneLayout)
         )
     }

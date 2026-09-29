@@ -91,7 +91,7 @@ public enum ZoneSketchModule: ToolModule {
         // anything.
         let range = host.selection ?? host.caret..<min(host.caret + 16, host.contentSize)
         guard model.add(range) != nil else {
-            controller.say("Put the caret somewhere in the dump first.")
+            controller.say(L("Put the caret somewhere in the dump first."))
             return
         }
         refresh()
@@ -123,9 +123,10 @@ public enum ZoneSketchModule: ToolModule {
         guard let transaction = model.fillFocused(with: 0xFF) else { return }
         do {
             try host.apply(transaction)
-            controller.say("Filled \(model.focused?.name ?? "the zone") with FF. ⌘Z takes it back.")
+            controller.say(L("Filled %1$@ with FF. ⌘Z takes it back.",
+                             model.focused?.name ?? L("the zone")))
         } catch {
-            controller.say("Could not write: \(error)")
+            controller.say(L("Could not write: %1$@", error))
         }
     }
 
