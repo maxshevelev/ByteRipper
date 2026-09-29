@@ -111,7 +111,7 @@ Publishing is outward-facing: confirm with the user before `git push` and
 ### 8. Verify
 
 ```bash
-gh release view v<version> --json name,tagName,isLatest,assets
+gh release view v<version> --json name,tagName,isDraft,isPrerelease,assets
 gh api repos/maxshevelev/ByteRipper/releases/latest --jq .tag_name
 ```
 
