@@ -465,9 +465,13 @@ import Cocoa
     /// the first frame drawn is already the panel as it will be.
     /// The rectangle a panel folds into: its pill, in the coordinates the panel
     /// itself is placed in. Nil when the dock has no pill for it yet, which is
-    /// the moment a panel is being opened.
+    /// the moment a panel is being opened — or has one not laid out yet, with
+    /// no size: a flight onto that is a transform scaling the panel to zero,
+    /// and a label inside it drawn in that state trips AppKit's
+    /// "contentsScale != 0" assertion (macOS 15), killing the process.
     private func pillRect(for id: FragmentDock.PanelID) -> NSRect? {
-        guard let inStrip = strip.pillFrame(for: id) else { return nil }
+        guard let inStrip = strip.pillFrame(for: id),
+              inStrip.width > 0, inStrip.height > 0 else { return nil }
         return container.convert(inStrip, from: strip)
     }
 
