@@ -114,7 +114,9 @@ Skills:
 Running the tests:
 - `Scripts/run-tests.sh` — every Swift package, then the app suite in groups,
   one group at a time. `-o <regex>` runs only the classes whose names match;
-  `--no-packages` skips the packages.
+  `--group <n>` runs only group n, numbered as a full run prints it;
+  `--no-packages` skips the packages. A test host that hangs in its exit
+  (macOS 15) stops its group with a ⚠️ line instead of hanging the run.
 - Never run two `xcodebuild test` invocations at once: they share one UI
   session, and the tests that wait on a window, an animation or a panel then
   fail for reasons that are not bugs.

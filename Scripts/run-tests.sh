@@ -15,6 +15,7 @@
 #     Scripts/run-tests.sh                 # every package, then every group
 #     Scripts/run-tests.sh -g 20           # bigger groups, fewer launches
 #     Scripts/run-tests.sh -o Library      # only the classes whose name matches
+#     Scripts/run-tests.sh --group 6       # only group 6, as a full run cuts it
 #     Scripts/run-tests.sh --no-packages   # skip the packages, run the app only
 #
 # The packages are found by looking for a `Package.swift` beside this project or
@@ -22,21 +23,25 @@
 # every one of them lives — so a new package is picked up without an edit here.
 #
 # Groups are cut from the class names as they are found, so a new test file
-# needs no edit here.
+# needs no edit here. `--group` counts them the same way, so the number a run
+# prints is the one to pass back — with the same `-g`, and without `-o`, which
+# would cut different groups. It skips the packages, as `-o` does.
 set -u
 
 cd "$(dirname "$0")/.." || exit 1
 
 size=12
 only=""
+only_group=""
 packages=yes
 
 while [ $# -gt 0 ]; do
     case "$1" in
         -g) size="$2"; shift 2 ;;
         -o) only="$2"; shift 2 ;;
+        --group) only_group="$2"; shift 2 ;;
         --no-packages|--no-core) packages=no; shift ;;
-        -h|--help) sed -n '3,25p' "$0"; exit 0 ;;
+        -h|--help) sed -n '3,28p' "$0"; exit 0 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -79,7 +84,11 @@ sweep_package_test_prefs() {
     return 0
 }
 
-if [ "$packages" = yes ] && [ -z "$only" ]; then
+case "$only_group" in
+    ''|*[!0-9]*) [ -n "$only_group" ] && { echo "--group takes a number: $only_group" >&2; exit 2; } ;;
+esac
+
+if [ "$packages" = yes ] && [ -z "$only" ] && [ -z "$only_group" ]; then
     for package in $(ls -d ./*/Package.swift ./*/*/Package.swift 2>/dev/null \
                      | sed 's|/Package.swift$||' | sort); do
         echo "── ${package#./}"
@@ -98,14 +107,37 @@ fi
 
 total=$(echo "$classes" | wc -l | tr -d ' ')
 group=1
+ran=0
 index=0
 args=""
 first=""
 last=""
 
+# On macOS 15 a test host can hang in the kernel's exit instead of dying: `ps`
+# shows it as `(ByteRipper)` in state `?E` under launchd, `kill -9` does not
+# reach it, and only a reboot clears it. xcodebuild waits for it forever, so a
+# run that meets one never ends. This lists the hosts in that state, so a group
+# can tell a new one from those left by earlier runs.
+wedged_hosts() {
+    ps -Ao pid=,ppid=,stat=,command= \
+        | awk '$2 == 1 && $3 ~ /E/ && $4 == "(ByteRipper)" { print $1 }' | sort
+}
+
+# How long a host may sit in its exit before the group is given up on. A host
+# that is dying passes through that state in well under a second.
+wedge_grace=30
+
 run_group() {
     [ -z "$args" ] && return
+    if [ -n "$only_group" ] && [ "$group" -ne "$only_group" ]; then
+        group=$((group + 1)) args="" first=""
+        return
+    fi
+    ran=$((ran + 1))
     echo "── group $group: $first … $last"
+    local before pidfile statusfile runner xcpid wedged since=0
+    before=$(wedged_hosts)
+    pidfile=$(mktemp) statusfile=$(mktemp)
     # The test host under its own bundle identifier: its sandbox container and
     # preferences domain are its own, so a run leaves nothing in the user's
     # real settings — including the autosaves AppKit writes on the host's
@@ -114,13 +146,37 @@ run_group() {
     # so the runner is the one place that must say it; a hand-run xcodebuild
     # that forgets is refused by the AppDefaults guard rather than left to
     # write the user's settings.
-    # shellcheck disable=SC2086
-    xcodebuild -project ByteRipper.xcodeproj -scheme ByteRipper \
-        -derivedDataPath "$derived" -parallel-testing-enabled NO \
-        BYTERIPPER_APP_BUNDLE_ID=dev.maxik.ByteRipper.TestsHost \
-        $args test 2>&1 | report
-    status=${PIPESTATUS[0]}
-    [ "$status" -ne 0 ] && failed=1
+    # xcodebuild runs in the background so the group can be watched: a host
+    # that hangs in its exit is not waited on, the group is stopped and said
+    # to have failed, and the run goes on to the next one.
+    (
+        # shellcheck disable=SC2086
+        xcodebuild -project ByteRipper.xcodeproj -scheme ByteRipper \
+            -derivedDataPath "$derived" -parallel-testing-enabled NO \
+            BYTERIPPER_APP_BUNDLE_ID=dev.maxik.ByteRipper.TestsHost \
+            $args test 2>&1 &
+        echo $! > "$pidfile"
+        wait $!
+        echo $? > "$statusfile"
+    ) 2>/dev/null | report &   # 2>: the shell's own "Terminated" when a group is stopped
+    runner=$!
+    while kill -0 "$runner" 2>/dev/null; do
+        sleep 2
+        wedged=$(comm -13 <(echo "$before") <(wedged_hosts) | tr '\n' ' ')
+        if [ -z "${wedged// /}" ]; then since=0; continue; fi
+        since=$((since + 2))
+        [ "$since" -lt "$wedge_grace" ] && continue
+        xcpid=$(cat "$pidfile" 2>/dev/null)
+        [ -n "$xcpid" ] && kill "$xcpid" 2>/dev/null
+        wait "$runner" 2>/dev/null
+        echo "  ⚠️  the test host hung in its exit (pid ${wedged% }) — group stopped; only a reboot clears it"
+        echo 1 > "$statusfile"
+        break
+    done
+    wait "$runner" 2>/dev/null
+    status=$(cat "$statusfile" 2>/dev/null)
+    rm -f "$pidfile" "$statusfile"
+    [ "${status:-1}" -ne 0 ] && failed=1
     group=$((group + 1))
     args=""
     first=""
@@ -137,6 +193,11 @@ for class in $classes; do
 done
 run_group
 
-echo "── $total classes in $((group - 1)) group(s)"
+if [ -n "$only_group" ]; then
+    [ "$ran" -eq 0 ] && { echo "no group $only_group: $total classes make $((group - 1)) group(s) of $size"; exit 1; }
+    echo "── group $only_group of $((group - 1))"
+else
+    echo "── $total classes in $((group - 1)) group(s)"
+fi
 [ "$failed" -ne 0 ] && { echo "── something failed"; exit 1; }
 echo "── all green"
