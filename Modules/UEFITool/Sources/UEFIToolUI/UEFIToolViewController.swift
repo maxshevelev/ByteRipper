@@ -67,6 +67,9 @@ import UEFITool
     /// from, and what materializes a branch when a row is opened. Nil only
     /// before the first `show`, or when there is no file to read.
     private var tree: LazyUEFITree?
+    /// The rows of the branch `childrenList` last listed, and what they were
+    /// listed from.
+    private var listedChildren: (id: NodeID, children: [UEFINode], showsEmptyPadding: Bool, rows: [Any])?
     /// True while the tree's top level is still being worked out — a signature
     /// scan of a chip dump with no descriptor, which is the one thing about
     /// opening an image that is never instant. The outline shows one
@@ -1079,13 +1082,32 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             return meRoots.map { meRow($0.path) }
         }
         if !node.children.isEmpty {
-            return UEFITreeDisplay.listed(node.children, showsEmptyPadding: showsEmptyPadding)
+            // AppKit asks for a branch's children one index at a time, and
+            // building the list each time made opening a branch of thousands
+            // of rows — a Dell DVAR store has 3 300 — quadratic: seconds with
+            // the window frozen. The list is kept for the branch last asked
+            // about, as long as the node still has the very same children —
+            // the same array storage, which the kept copy holds on to, so the
+            // storage cannot be freed and reused for another array.
+            if let listed = listedChildren, listed.id == id, listed.showsEmptyPadding == showsEmptyPadding,
+               Self.sameStorage(listed.children, node.children) {
+                return listed.rows
+            }
+            let rows: [Any] = UEFITreeDisplay.listed(node.children, showsEmptyPadding: showsEmptyPadding)
                 .map { row($0.id) }
+            listedChildren = (id, node.children, showsEmptyPadding, rows)
+            return rows
         }
         guard node.isExpandable else { return [] }
         if showingPlaceholder.contains(id) { return [placeholder(under: id)] }
         beginOpening(id)
         return showingPlaceholder.contains(id) ? [placeholder(under: id)] : []
+    }
+
+    private static func sameStorage(_ a: [UEFINode], _ b: [UEFINode]) -> Bool {
+        a.count == b.count && a.withUnsafeBufferPointer { left in
+            b.withUnsafeBufferPointer { right in left.baseAddress == right.baseAddress }
+        }
     }
 
     /// A row the reader clicked open whose branch has not been read yet stays

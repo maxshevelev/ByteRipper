@@ -144,13 +144,17 @@ public enum UEFIDetail {
 
         // A variable's entry: whose copy it is where the tree calls it
         // Invalid, and every copy the store keeps of it.
-        if node.kind == .vssEntry || node.kind == .nvarEntry,
+        if node.kind == .vssEntry || node.kind == .nvarEntry || node.kind == .dvarEntry,
            !node.id.path.isEmpty, let store = image.node(NodeID(Array(node.id.path.dropLast()))) {
             let history = NvramVariableHistory.of(node, in: store, reader: reader)
             let variable = history.map { ($0.name, $0.guid) }
                 ?? NvramVariableHistory.variable(of: node, in: store, reader: reader)
             if let variable, variable.0 != node.name {
-                fields.append(.init(L("Variable"), variable.0))
+                // A Dell variable is a number, and only its namespace says whose.
+                let text = node.kind == .dvarEntry
+                    ? variable.1.map { "\($0) · \(variable.0)" } ?? variable.0
+                    : variable.0
+                fields.append(.init(L("Variable"), text))
             }
             if let history {
                 tables.append(historyTable(history, focus: node.id, reader: reader))
@@ -196,6 +200,39 @@ public enum UEFIDetail {
         // recognised and measured: its bytes are exactly the picture's.
         let picture = node.kind == .picture ? reader.bytes(node.body) : nil
         return UEFINodeDetail(title: title, fields: fields, tables: tables, picture: picture)
+    }
+
+    // MARK: - A Dell DVAR entry
+
+    /// The header the reference prints for a DVAR entry: the state by its
+    /// name, the flags and type, the namespace id it is filed under, the name
+    /// id and the data size.
+    private static func dvarFields(_ node: UEFINode, reader: ImageReader) -> [UEFIDetailField] {
+        let h = node.header.lowerBound
+        guard let raw = reader.bytes(at: h, count: 5) else { return [] }
+        let state = 0xFF - raw[0], flags = 0xFF - raw[1], type = 0xFF - raw[2]
+        let stateNames: [UInt8: String] = [0x01: "Storing", 0x05: "Stored", 0x15: "Deleting", 0x55: "Deleted"]
+        var fields: [UEFIDetailField] = [
+            .init("State", stateNames[state].map { "\(hex(state)) (\($0))" } ?? hex(state)),
+            .init("Entry flags", bits(flags, [(0x02, "NameId"), (0x04, "NamespaceGuid")])),
+            .init("Type", hex(type)),
+            .init("Attributes", hex(0xFF - raw[3])),
+            .init("Namespace ID", hex(0xFF - raw[4])),
+        ]
+        // Past the namespace's GUID, when the entry declares one, the name id
+        // and the data size, one or two bytes each by the type.
+        var cursor = h + 5 + (flags & 0x04 != 0 ? 16 : 0)
+        let wideName = type != 0x00, wideSize = type == 0x05
+        if let nameId = wideName ? reader.uint16(at: cursor).map({ 0xFFFF - $0 })
+                                 : reader.uint8(at: cursor).map({ UInt16(0xFF - $0) }) {
+            fields.append(.init("Name ID", hex(nameId)))
+        }
+        cursor += wideName ? 2 : 1
+        if let size = wideSize ? reader.uint16(at: cursor).map({ 0xFFFF - $0 })
+                               : reader.uint8(at: cursor).map({ UInt16(0xFF - $0) }) {
+            fields.append(.init("Data size", sizeText(size)))
+        }
+        return fields
     }
 
     // MARK: - What a BIOS Version Data Table lists
@@ -724,6 +761,13 @@ public enum UEFIDetail {
         case .nvarGuidStore:
             fields.append(.init("GUIDs", "\(node.body.count / 16)"))
 
+        // Every DVAR field is stored as its complement; these are the values.
+        case .dvarStore:
+            if let flags = reader.uint8(at: h + 8) { fields.append(.init("Store flags", hex(0xFF - flags))) }
+
+        case .dvarEntry:
+            fields += dvarFields(node, reader: reader)
+
         // FDC and CMDB stores, and a SysF variable, are read as leaves in the
         // reference: the panel has nothing to add to their common fields.
         case .fdcStore, .cmdbStore, .sysFEntry:
@@ -1163,6 +1207,8 @@ public enum UEFIDetail {
         case .flashDeviceMapEntry: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue)
         case .nvarEntry: return UEFITypes.typeName(UEFITypes.Item.nvarEntry.rawValue)
         case .nvarGuidStore: return UEFITypes.typeName(UEFITypes.Item.nvarGuidStore.rawValue)
+        case .dvarStore: return UEFITypes.typeName(UEFITypes.Item.dellDvarStore.rawValue)
+        case .dvarEntry: return UEFITypes.typeName(UEFITypes.Item.dellDvarEntry.rawValue)
         case .startupApData: return UEFITypes.typeName(UEFITypes.Item.startupApDataEntry.rawValue)
         case .padding: return L("Padding")
         case .freeSpace: return L("Free space")
@@ -1194,7 +1240,7 @@ public enum UEFIDetail {
             return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? hex(subtype)
         // An NVRAM entry and a SLIC blob carry a derived subtype; name it from
         // the table, keeping the number where the table has no word.
-        case .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .slicData, .nvarEntry, .startupApData:
+        case .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .slicData, .nvarEntry, .dvarEntry, .startupApData:
             return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? hex(subtype)
         default: return hex(subtype)
         }

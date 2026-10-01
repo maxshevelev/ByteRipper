@@ -1057,6 +1057,27 @@ drops the whole store; and a data-only entry looks for its chain among all the
 entries before it, including the first, which the reference's backward loop
 skips.
 
+**Dell DVAR** is an element of the raw-area scan (`DvarParser.swift`): `DVAR`,
+then a size and a flags byte, each stored as its complement (`0xFFFFFFFF - n`,
+`0xFF - n`) like every field after it. A candidate is a store only when its size
+fits what is left and its entries read to the end; anything less leaves no
+node and no diagnostic, since the four bytes turn up in Dell's own code — four
+times on the dump at hand, in two drivers and their Top Swap copies. Entries
+follow back to back until one opens on `0xFF`: state, flags, type, attributes
+and a namespace id; the namespace's GUID when the flags declare one
+(`NameId | NamespaceGuid`, `0x06`); the name id and data size, 8 or 16 bits
+each by the type (`0x00`, `0x04`, `0x05`); the data. A NameId entry takes its
+namespace's GUID from whichever entry declared that id first, anywhere in the
+store, and is `Invalid` unless stored (`0x05`); a declaration is shown valid
+whatever its state, as the reference does, though the value it carries is
+superseded like any other — `NvramStoreFill` and `NvramVariableHistory` go by
+the state alone. An entry of an unknown state, flags or type ends the walk: the
+rest is padding and `unknownDvarEntry`; a namespace no entry declares is
+`dvarNamespaceMissing`. The rows are named `<namespace> · <name id>`. On the two
+Dell dumps with stores — one store of `0x1F000` in the BIOS region's raw area,
+two of `0x7000` in a volume's non-UEFI data — every store and entry matches
+UEFIExtract by offset, size and subtype: 3 304 and 1 916 rows.
+
 **Phoenix EVSA.** The store's signature is the bytes `EVSA`,
 `NVRAM_EVSA_STORE_SIGNATURE = 0x41535645` read little-endian. Besides the
 NVRAM volume, Phoenix keeps an EVSA store — the Secure Boot defaults among

@@ -116,6 +116,11 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         /// polarity is read (§5.5). Its checksums are not checked: the
         /// firmware does not take the file.
         case fileHeaderMarkedInvalid(state: UInt8)
+        /// A Dell DVAR entry of a state, flags or type the format is not known
+        /// to use: the rest of the store is kept as padding (§9).
+        case unknownDvarEntry
+        /// A DVAR variable whose namespace id no entry of the store declares.
+        case dvarNamespaceMissing
 
         public var severity: Severity {
             switch self {
@@ -129,7 +134,7 @@ public struct UEFIDiagnostic: Equatable, Sendable {
                  .protectedRangeHashMismatch, .unsupportedHashAlgorithm,
                  .unknownVendorHashFileSize, .unknownRevision,
                  .unknownFlashDeviceMapEntries, .nonUEFIDataInPadFile,
-                 .fileHeaderMarkedInvalid:
+                 .fileHeaderMarkedInvalid, .unknownDvarEntry, .dvarNamespaceMissing:
                 return .warning
             }
         }
@@ -226,6 +231,10 @@ public struct UEFIDiagnostic: Equatable, Sendable {
             return "NVAR entry cannot be read; the store is kept as padding from here"
         case .fileHeaderMarkedInvalid(let state):
             return "file state \(hex(UInt64(state))) marks its header invalid; its checksums are not checked"
+        case .unknownDvarEntry:
+            return "DVAR entry of an unknown state, flags or type; the store is kept as padding from here"
+        case .dvarNamespaceMissing:
+            return "DVAR variable names a namespace no entry of the store declares"
         }
     }
 

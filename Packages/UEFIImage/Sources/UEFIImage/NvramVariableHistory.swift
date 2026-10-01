@@ -14,7 +14,9 @@ import Foundation
 /// marked entry `Invalid` as UEFITool does. An NVAR variable is a chain — the
 /// first entry carries the name and GUID, later links only data — or a run of
 /// whole entries, each superseded one with its valid bit cleared; a
-/// superseded entry's name, GUID and value are read as if it were valid.
+/// superseded entry's name, GUID and value are read as if it were valid. A
+/// Dell DVAR variable is a name id in a namespace, and an entry's state says
+/// whether it is the copy in force (`DVAR.copies`).
 ///
 /// The history is the store's, not the image's: the defaults a board keeps in
 /// another store are another variable's copies.
@@ -59,7 +61,7 @@ public struct NvramVariableHistory: Equatable, Sendable {
     /// entries are `store`'s children. Nil when `entry` is not a VSS or NVAR
     /// entry, its variable cannot be told, or the store keeps one copy of it.
     public static func of(_ entry: UEFINode, in store: UEFINode, reader: ImageReader) -> NvramVariableHistory? {
-        guard entry.kind == .vssEntry || entry.kind == .nvarEntry else { return nil }
+        guard entry.kind == .vssEntry || entry.kind == .nvarEntry || entry.kind == .dvarEntry else { return nil }
         let copies = self.copies(in: store, reader: reader)
         guard let mine = copies.first(where: { $0.entry == entry.id }) else { return nil }
         let versions = copies.filter { $0.key == mine.key }
@@ -83,7 +85,7 @@ public struct NvramVariableHistory: Equatable, Sendable {
     /// The variable `entry` is a copy of — its name and GUID — read from the
     /// bytes where the tree cannot name it. Nil when it cannot be told.
     public static func variable(of entry: UEFINode, in store: UEFINode, reader: ImageReader) -> (name: String, guid: EFIGUID?)? {
-        guard entry.kind == .vssEntry || entry.kind == .nvarEntry else { return nil }
+        guard entry.kind == .vssEntry || entry.kind == .nvarEntry || entry.kind == .dvarEntry else { return nil }
         return copies(in: store, reader: reader).first { $0.entry == entry.id }
             .map { ($0.key.name, $0.key.guid) }
     }
@@ -122,6 +124,12 @@ public struct NvramVariableHistory: Equatable, Sendable {
 
     /// Every entry of the store that can be told whose copy it is.
     private static func copies(in store: UEFINode, reader: ImageReader) -> [Copy] {
+        if store.kind == .dvarStore {
+            return DVAR.copies(in: store, reader: reader).map {
+                Copy(entry: $0.node.id, offset: $0.node.header.lowerBound,
+                     key: Key(name: $0.name, guid: $0.guid), value: $0.node.body, isCurrent: $0.isCurrent)
+            }
+        }
         let entries = store.children.filter { $0.kind == .vssEntry || $0.kind == .nvarEntry }
         guard let first = entries.first else { return [] }
         return first.kind == .vssEntry

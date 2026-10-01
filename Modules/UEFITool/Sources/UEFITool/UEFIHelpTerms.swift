@@ -74,6 +74,10 @@ public enum UEFIHelpTerms {
         // different: which of a variable's entries holds its value now.
         case .nvarEntry, .nvarGuidStore:
             return HelpTermID("nvar")
+        // Dell's store names its variables by number, which is what a reader
+        // needs explained.
+        case .dvarStore, .dvarEntry:
+            return HelpTermID("dvar")
         }
     }
 

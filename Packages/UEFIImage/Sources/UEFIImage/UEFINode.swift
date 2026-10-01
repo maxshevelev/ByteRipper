@@ -215,6 +215,11 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     case nvarEntry
     /// The table of GUIDs at an NVAR store's end, which entries name by index.
     case nvarGuidStore
+    /// A Dell DVAR store, found by the raw-area scan, and one of its entries
+    /// (§9). An entry's name is its name id in hex and its GUID its
+    /// namespace's, as the reference shows them.
+    case dvarStore
+    case dvarEntry
     /// An Insyde H2O Flash Device Map, found by the raw-area scan, and one of
     /// its entries — the ranges it names are protected
     /// (`BOOT_GUARD_PROTECTED_RANGES.md` §5.3).

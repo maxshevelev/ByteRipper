@@ -623,6 +623,29 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(rows.last?[0].text, "50")
     }
 
+    /// A Dell variable is a number in a namespace: its row says both, and its
+    /// detail the header's fields, each complemented back.
+    func testADvarEntryIsNamedByItsNamespaceAndNumber() {
+        let namespace = EFIGUID("417ACEE0-6FA9-4A82-99D7-F9B1DD271E48")!
+        // Stored, NameId and NamespaceGuid, 8-bit fields, attributes 7, id 1,
+        // the GUID, name id 0x40, two bytes of data.
+        let bytes: [UInt8] = [0xFA, 0xF9, 0xFF, 0xF8, 0xFE] + namespace.bytes + [0xBF, 0xFD, 0x01, 0x02]
+        let entry = UEFINode(kind: .dvarEntry, subtype: UEFITypes.Sub.namespaceGuidDvarEntry, name: "40",
+                             guid: namespace, header: 0..<23, body: 23..<25, isFixed: true)
+        let image = UEFIImage(size: 25, roots: [entry])
+        let detail = UEFIDetail.build(for: image.roots[0], image: image, reader: ImageReader(bytes))
+
+        XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: .empty), "417ACEE0-6FA9-4A82-99D7-F9B1DD271E48 · 40")
+        XCTAssertEqual(UEFITreeDisplay.typeText(for: entry), "DVAR entry")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: entry), "NamespaceGuid")
+        XCTAssertEqual(field(detail, "State"), "0x5 (Stored)")
+        XCTAssertEqual(field(detail, "Entry flags"), "0x6 (NameId, NamespaceGuid)")
+        XCTAssertEqual(field(detail, "Namespace ID"), "0x1")
+        XCTAssertEqual(field(detail, "Name ID"), "0x40")
+        XCTAssertEqual(field(detail, "Data size"), "0x2 (2)")
+        XCTAssertEqual(UEFIHelpTerms.term(for: entry)?.rawValue, "dvar")
+    }
+
     /// The version table's region shows what the table states.
     func testABVDTRegionShowsTheVersionsTheTableStates() {
         let built = TestUEFI.bvdtRegion()

@@ -34,6 +34,8 @@ extension UEFINode {
         case .flashMapEntry: return UEFITypes.Item.phoenixFlashMapEntry.rawValue
         case .nvarEntry: return UEFITypes.Item.nvarEntry.rawValue
         case .nvarGuidStore: return UEFITypes.Item.nvarGuidStore.rawValue
+        case .dvarStore: return UEFITypes.Item.dellDvarStore.rawValue
+        case .dvarEntry: return UEFITypes.Item.dellDvarEntry.rawValue
         case .flashDeviceMapStore: return UEFITypes.Item.insydeFlashDeviceMapStore.rawValue
         case .flashDeviceMapEntry: return UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue
         case .startupApData: return UEFITypes.Item.startupApDataEntry.rawValue
@@ -71,11 +73,11 @@ extension UEFINode {
         // A store is one kind and no more: its type byte is the item type, and
         // the entry subtypes live on the children, not on the store.
         case .vssStore, .vss2Store, .ftwStore, .fdcStore, .sysFStore, .flashMapStore,
-             .evsaStore, .cmdbStore:
+             .evsaStore, .cmdbStore, .dvarStore:
             return nil
         // An entry and a SLIC blob carry the subtype the parser derived — the
         // byte is not on the node, the parser worked it out from the header.
-        case .slicData, .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .nvarEntry:
+        case .slicData, .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .nvarEntry, .dvarEntry:
             return subtype
         case .nvarGuidStore:
             return nil

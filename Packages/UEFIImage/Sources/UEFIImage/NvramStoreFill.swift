@@ -41,7 +41,7 @@ public struct NvramStoreFill: Equatable, Sendable {
         size == 0 ? 0 : Int(used * 100 / size)
     }
 
-    static let entryKinds: Set<UEFINodeKind> = [.vssEntry, .sysFEntry, .evsaEntry, .nvarEntry]
+    static let entryKinds: Set<UEFINodeKind> = [.vssEntry, .sysFEntry, .evsaEntry, .nvarEntry, .dvarEntry]
 
     /// The fill of the store `node` is, or nil when it holds no entries.
     /// `reader` reads the space the node is in.
@@ -54,6 +54,22 @@ public struct NvramStoreFill: Equatable, Sendable {
             current: 0, superseded: 0, deleted: 0
         )
         struct Key: Hashable { var name: String; var guid: EFIGUID? }
+        // A DVAR entry's state says which copy is in force, and its variable
+        // is read from its header whatever the tree calls it.
+        if node.kind == .dvarStore {
+            let copies = DVAR.copies(in: node, reader: reader)
+            let live = Set(copies.filter(\.isCurrent).map { Key(name: $0.name, guid: $0.guid) })
+            for copy in copies {
+                if copy.isCurrent {
+                    fill.current += 1
+                } else if live.contains(Key(name: copy.name, guid: copy.guid)) {
+                    fill.superseded += 1
+                } else {
+                    fill.deleted += 1
+                }
+            }
+            return fill
+        }
         func isMarked(_ entry: UEFINode) -> Bool {
             switch entry.subtype {
             case UEFITypes.Sub.invalidNvarEntry, UEFITypes.Sub.invalidLinkNvarEntry,

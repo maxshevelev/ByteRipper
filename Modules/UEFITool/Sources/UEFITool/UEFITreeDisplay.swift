@@ -201,6 +201,12 @@ public enum UEFITreeDisplay {
             }
             return L("Padding file")
         }
+        // A Dell variable is a number in a namespace, and the row says both:
+        // the namespace by its name where the catalogue knows it.
+        if node.kind == .dvarEntry, let guid = node.guid {
+            let namespace = catalogue.name(of: guid) ?? NvramGuids.name(of: guid) ?? guid.description
+            return "\(namespace) · \(node.name)"
+        }
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind) : node.name
         }
@@ -253,6 +259,8 @@ public enum UEFITreeDisplay {
         case .flashDeviceMapEntry: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue)
         case .nvarEntry: return UEFITypes.typeName(UEFITypes.Item.nvarEntry.rawValue)
         case .nvarGuidStore: return UEFITypes.typeName(UEFITypes.Item.nvarGuidStore.rawValue)
+        case .dvarStore: return UEFITypes.typeName(UEFITypes.Item.dellDvarStore.rawValue)
+        case .dvarEntry: return UEFITypes.typeName(UEFITypes.Item.dellDvarEntry.rawValue)
         case .startupApData: return UEFITypes.typeName(UEFITypes.Item.startupApDataEntry.rawValue)
         // UEFITool's own words for the gaps between structures — not names
         // the PI spec gives anything, so they translate. The kinds above are

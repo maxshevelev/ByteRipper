@@ -224,7 +224,7 @@ final class Parser {
                     | UInt32(bytes[index + 2]) << 16
                     | UInt32(bytes[index + 3]) << 24
                 let at = offset + UInt64(index)
-                if let found = element(atSignature: dword, at: at, in: range, depth: depth) {
+                if let found = element(atSignature: dword, at: at, in: range, emptyByte: emptyByte, depth: depth) {
                     nodes += padding(from: claimed, to: found.range.lowerBound, emptyByte: emptyByte)
                     nodes.append(found)
                     claimed = found.range.upperBound
@@ -256,6 +256,7 @@ final class Parser {
         atSignature dword: UInt32,
         at offset: UInt64,
         in range: Range<UInt64>,
+        emptyByte: UInt8,
         depth: Int
     ) -> UEFINode? {
         switch dword {
@@ -266,6 +267,8 @@ final class Parser {
             return parseMicrocode(at: offset, limit: range.upperBound)
         case FlashDeviceMap.signature:
             return parseFlashDeviceMap(at: offset, limit: range.upperBound)
+        case DVAR.signature:
+            return parseDvarStore(at: offset, limit: range.upperBound, emptyByte: emptyByte)
         case Picture.jfifSignature, Picture.exifSignature, Picture.pngSignature, Picture.gifSignature:
             return parsePicture(at: offset, limit: range.upperBound)
         // A BMP announces itself in two bytes, and its header has to check
