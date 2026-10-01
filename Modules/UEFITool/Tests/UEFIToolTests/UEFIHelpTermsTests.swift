@@ -60,6 +60,19 @@ final class UEFIHelpTermsTests: XCTestCase {
         }
     }
 
+    /// Insyde's flash device map lays out the chip and holds no variables:
+    /// it has a page of its own, and so does each region whose type has one.
+    func testTheFlashDeviceMapHasItsOwnEntry() {
+        for kind: UEFINodeKind in [.flashDeviceMapStore, .flashDeviceMapEntry, .flashDeviceMapRegion] {
+            XCTAssertEqual(UEFIHelpTerms.term(for: node(kind)), HelpTermID("flash-device-map"), "\(kind)")
+        }
+        func region(_ type: EFIGUID) -> UEFINode {
+            UEFINode(kind: .flashDeviceMapRegion, name: "", guid: type, header: 0..<0, body: 0..<0x10)
+        }
+        XCTAssertEqual(UEFIHelpTerms.term(for: region(FlashDeviceMap.ecFirmware)), HelpTermID("ec-firmware"))
+        XCTAssertEqual(UEFIHelpTerms.term(for: region(FlashDeviceMap.variableDefaults)), HelpTermID("vss"))
+    }
+
     /// An NVAR entry has a page of its own: what a reader asks of it is which
     /// of a variable's entries holds the value now.
     func testAnNvarEntryHasItsOwnEntry() {

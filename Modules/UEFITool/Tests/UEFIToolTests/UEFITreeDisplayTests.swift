@@ -137,6 +137,18 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: named), "Variable Defaults")
     }
 
+    /// The region an entry names is called the same, and reads as padding in
+    /// the Type column, as UEFITool shows those bytes.
+    func testAFlashDeviceMapRegionIsNamedByItsType() {
+        let region = UEFINode(
+            kind: .flashDeviceMapRegion, name: "EC Firmware", guid: FlashDeviceMap.ecFirmware,
+            header: 0..<0, body: 0..<0x40000
+        )
+        let named = GuidsCatalogue(names: [FlashDeviceMap.ecFirmware: "Something else"])
+        XCTAssertEqual(UEFITreeDisplay.name(for: region, catalogue: named), "EC Firmware")
+        XCTAssertEqual(UEFITreeDisplay.typeText(for: region), "Padding")
+    }
+
     /// A pad file is named by what its body turned out to hold, the way
     /// UEFITool renames it.
     func testAPadFileIsNamedByWhatItHolds() {

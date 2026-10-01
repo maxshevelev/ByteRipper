@@ -184,7 +184,9 @@ public enum UEFITreeDisplay {
         }
         // A flash device map entry's GUID is a region *type*, and UEFITool
         // names the row by what the type is: "Variable Defaults", "Password".
-        if node.kind == .flashDeviceMapEntry, let type = FlashDeviceMap.regionTypeName(guid) {
+        // The region the entry names is called the same.
+        if node.kind == .flashDeviceMapEntry || node.kind == .flashDeviceMapRegion,
+           let type = FlashDeviceMap.regionTypeName(guid) {
             return type
         }
         // The community catalogue first; the NVRAM classifier names the GUIDs
@@ -230,6 +232,7 @@ public enum UEFITreeDisplay {
         case .padding: return L("Padding")
         case .freeSpace: return L("Free space")
         case .nonUEFIData: return L("Non-UEFI data")
+        case .flashDeviceMapRegion: return L("Flash device map region")
         }
     }
 }

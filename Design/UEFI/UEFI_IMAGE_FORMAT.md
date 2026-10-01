@@ -1010,21 +1010,33 @@ FTW store begins. A store whose variables are damaged has nothing but that run
 to bound it, where a sized store has its size; an Apple `$SVS` / `$NSS` store
 with the marker is still refused.
 
-**Insyde Variable Defaults** are read beyond the reference
-(`FlashDeviceMapParser.swift`). Insyde keeps the firmware's default variables
-as a run of `$VSS` stores back to back, outside every volume, in the range its
-flash device map gives the type `VAR_DEFAULT` (`D9DDACA2-…`); UEFITool shows
-that range as padding. When a raw-area scan finds a flash device map, each
-`VAR_DEFAULT` range that lies inside a stretch of padding the same scan left is
-walked as an NVRAM volume body, and the padding around it stays. The map's
-addresses are placed with `FdBaseAddress + RegionOffset − addressDiff` — the
-arithmetic of the protected ranges — and since the second pass has not run yet,
-`addressDiff` comes from a Volume Top File at the image's tail; with none
-there, the range stays padding. A second `VAR_DEFAULT` entry usually names the
-FDC store, already read inside the NVRAM volume, and has nothing to add. The
-word at offset 10 of these stores' headers is `0` or `1`, store by store, and
-what it means is not known. The map's entries are named by region type, as
-UEFITool names them.
+**The regions of an Insyde flash device map** are read beyond the reference
+(`FlashDeviceMapParser.swift`). The map lays out the whole image, and several of
+the ranges it names sit outside every volume with no signature of their own —
+the EC firmware, the BIOS version table, the SMBIOS update, the MSDM table,
+Lenovo's EEPROM and password regions, the default variables — so UEFITool
+shows them as padding. When a raw-area scan finds a flash device map, each range
+one of its entries names that lies wholly inside a stretch of padding the same
+scan left becomes a `flashDeviceMapRegion` node, named by its region type the
+way UEFITool names the entries, fixed, and the padding around it stays. A range
+that is already something else — a volume, the NVRAM volume's stores, the map
+itself — is left to what read it. Entries are placed in address order, so of
+two that overlap the first is placed and the other stays out; a board that
+carries the map twice names each range once. The map's addresses are placed
+with `FdBaseAddress + RegionOffset − addressDiff` — the arithmetic of the
+protected ranges — and since the second pass has not run yet, `addressDiff`
+comes from a Volume Top File at the image's tail; with none there, the ranges
+stay padding. A region classifies as UEFITool's `Padding`, with the empty or
+non-empty subtype, since that is what the reference calls the bytes; only its
+name says what the map makes of them.
+
+A region of type `VAR_DEFAULT` (`D9DDACA2-…`) holds **Insyde Variable
+Defaults**: the firmware's default variables, as a run of `$VSS` stores back to
+back. It is walked as an NVRAM volume body, and the stores and the erased rest
+are its children; an erased one has none. A second `VAR_DEFAULT` entry usually
+names the FDC store, already read inside the NVRAM volume, and has nothing to
+add. The word at offset 10 of these stores' headers is `0` or `1`, store by
+store, and what it means is not known. Every other region is a leaf.
 
 The Insyde Flash Device Map deserves a mention of its own, since it lays out the
 whole image:

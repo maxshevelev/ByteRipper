@@ -25,7 +25,9 @@ public enum FlashDeviceMap {
 
     /// `INSYDE_FLASH_MAP_REGION_VAR_DEFAULT_GUID`: a range of `$VSS` stores
     /// holding the firmware's default variables, outside every volume.
-    static let variableDefaults = KnownGUIDs.guid("D9DDACA2-0816-48F3-ADED-6B71656B248A")
+    public static let variableDefaults = KnownGUIDs.guid("D9DDACA2-0816-48F3-ADED-6B71656B248A")
+    /// `INSYDE_FLASH_MAP_REGION_EC_GUID`: the embedded controller's firmware.
+    public static let ecFirmware = KnownGUIDs.guid("A73EF3BF-33CC-43A9-B39C-A912C7489A57")
 
     /// What a region of this type is, in UEFITool's words
     /// (`insydeFlashDeviceMapEntryTypeGuidToUString`), or nil for a type it
@@ -160,37 +162,42 @@ extension Parser {
 }
 
 extension Parser {
-    /// `nodes` — what a raw-area scan found — with the Insyde Variable Default
-    /// regions its flash device maps name read as NVRAM (`UEFI_IMAGE_FORMAT.md`
-    /// §9).
+    /// `nodes` — what a raw-area scan found — with the regions its flash
+    /// device maps name read out of the padding (`UEFI_IMAGE_FORMAT.md` §9).
     ///
-    /// Insyde keeps the firmware's default variables in a run of `$VSS`
-    /// stores outside every volume, so the scan reads them as padding, and so
-    /// does UEFITool. The flash device map says where they are: an entry of
-    /// type `VAR_DEFAULT`. That range, when it lies inside a stretch of
-    /// padding, is walked the way an NVRAM volume's body is, and the padding
-    /// around it stays padding. Nothing is searched for: a store is read only
-    /// where the map puts one.
+    /// Insyde's map lays out the whole image, and some of what it names sits
+    /// outside every volume with no signature of its own: the EC firmware, the
+    /// BIOS version table, the SMBIOS update, the passwords, the default
+    /// variables. The scan reads those bytes as padding, and so does UEFITool.
+    /// Each such range that lies wholly inside a stretch of padding becomes a
+    /// region named by its type, and the padding around it stays padding.
+    /// Nothing is searched for: a region is only where the map puts one, and a
+    /// range already read as something else — a volume, the NVRAM stores — is
+    /// left to what read it.
+    ///
+    /// A `VAR_DEFAULT` region holds a run of `$VSS` stores — the firmware's
+    /// default variables — and is walked the way an NVRAM volume's body is.
+    /// The other regions are leaves: what is inside them is read, where it is
+    /// read at all, by the region's own type.
     ///
     /// The map gives physical addresses, and this runs before the second pass
     /// has worked out the mapping — so it takes it from a Volume Top File at
     /// the image's tail, as address resolution does first. An image with no
     /// VTF at its tail — a BIOS region followed by another region — keeps the
-    /// range as padding. An entry that lands in something already read, such
-    /// as the FDC store inside the NVRAM volume, has nothing left to do.
-    func readingVariableDefaults(_ nodes: [UEFINode], emptyByte: UInt8, depth: Int) -> [UEFINode] {
+    /// ranges as padding.
+    func readingMapRegions(_ nodes: [UEFINode], emptyByte: UInt8, depth: Int) -> [UEFINode] {
         let maps = nodes.filter { $0.kind == .flashDeviceMapStore }
         guard !maps.isEmpty, let addressDiff = addressDiffFromTail() else { return nodes }
 
-        var ranges: [Range<UInt64>] = []
+        var regions: [(type: EFIGUID, range: Range<UInt64>)] = []
         for map in maps {
             guard let base = reader.uint64(at: map.header.lowerBound + FlashDeviceMap.baseAddressOffset) else {
                 continue
             }
-            for entry in map.children
-            where entry.kind == .flashDeviceMapEntry && entry.guid == FlashDeviceMap.variableDefaults {
+            for entry in map.children where entry.kind == .flashDeviceMapEntry {
                 let at = entry.header.lowerBound
-                guard let offset = reader.uint64(at: at + FlashDeviceMap.regionOffsetOffset),
+                guard let type = entry.guid,
+                      let offset = reader.uint64(at: at + FlashDeviceMap.regionOffsetOffset),
                       let size = reader.uint64(at: at + FlashDeviceMap.regionSizeOffset)
                 else { continue }
                 // The same arithmetic the protected ranges use (§5.3): 32 bits,
@@ -200,25 +207,50 @@ extension Parser {
                 let start = address - addressDiff
                 let range = start..<(start + UInt64(UInt32(truncatingIfNeeded: size)))
                 // A board can carry the map twice, and both copies name the
-                // same range.
-                if !range.isEmpty, !ranges.contains(range) { ranges.append(range) }
+                // same ranges.
+                if !range.isEmpty, !regions.contains(where: { $0.type == type && $0.range == range }) {
+                    regions.append((type, range))
+                }
             }
         }
+        // In address order, so where two entries overlap the one that starts
+        // first is placed and the other, no longer inside padding, stays out.
+        regions.sort { $0.range.lowerBound < $1.range.lowerBound }
 
         var result = nodes
-        for range in ranges {
+        for region in regions {
             guard let index = result.firstIndex(where: {
-                $0.kind == .padding && $0.range.lowerBound <= range.lowerBound && range.upperBound <= $0.range.upperBound
+                $0.kind == .padding
+                    && $0.range.lowerBound <= region.range.lowerBound
+                    && region.range.upperBound <= $0.range.upperBound
             }) else { continue }
-            let stores = walkNvramVolumeBody(range, emptyByte: emptyByte, depth: depth + 1)
-            // A region nobody has written is padding still, and says so.
-            guard stores.contains(where: { $0.kind != .padding && $0.kind != .freeSpace }) else { continue }
+            var children: [UEFINode] = []
+            if region.type == FlashDeviceMap.variableDefaults {
+                let stores = walkNvramVolumeBody(region.range, emptyByte: emptyByte, depth: depth + 1)
+                // A region nobody has written holds no stores, and says so by
+                // having no children.
+                if stores.contains(where: { $0.kind != .padding && $0.kind != .freeSpace }) {
+                    children = stores
+                }
+            }
             let around = result[index].range
             result.replaceSubrange(
                 index...index,
-                with: padding(from: around.lowerBound, to: range.lowerBound, emptyByte: emptyByte)
-                    + stores
-                    + padding(from: range.upperBound, to: around.upperBound, emptyByte: emptyByte)
+                with: padding(from: around.lowerBound, to: region.range.lowerBound, emptyByte: emptyByte)
+                    + [UEFINode(
+                        kind: .flashDeviceMapRegion,
+                        name: FlashDeviceMap.regionTypeName(region.type)
+                            ?? KnownGUIDs.name(of: region.type) ?? "Flash device map region",
+                        guid: region.type,
+                        header: region.range.lowerBound..<region.range.lowerBound,
+                        body: region.range,
+                        // The map pins it: it is where the map says, or the
+                        // firmware does not find it.
+                        isFixed: true,
+                        isErased: children.isEmpty && reader.isFilled(region.range, with: emptyByte),
+                        children: children
+                    )]
+                    + padding(from: region.range.upperBound, to: around.upperBound, emptyByte: emptyByte)
             )
         }
         return result

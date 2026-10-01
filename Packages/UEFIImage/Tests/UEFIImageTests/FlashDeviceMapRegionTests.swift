@@ -1,13 +1,15 @@
 import XCTest
 @testable import UEFIImage
 
-/// Insyde's Variable Default region (`UEFI_IMAGE_FORMAT.md` §9): a run of
-/// `$VSS` stores outside every volume, which the raw-area scan reads as
-/// padding — and reads as stores where the flash device map says they are.
-final class InsydeVariableDefaultsTests: XCTestCase {
+/// The regions an Insyde flash device map names (`UEFI_IMAGE_FORMAT.md` §9):
+/// ranges outside every volume, with no signature, which the raw-area scan
+/// reads as padding — and reads as regions named by type where the map says
+/// they are. A Variable Defaults region is read further, as its `$VSS` stores.
+final class FlashDeviceMapRegionTests: XCTestCase {
     private static let size: UInt64 = 0x10000
     private static let base: UInt64 = 0x1_0000_0000 - size
     private static let password = KnownGUIDs.guid("C0027E32-8EE5-4D17-9B28-BA50166C4CB4")
+    private static let unnamed = KnownGUIDs.guid("0BADF00D-0000-4000-8000-000000000001")
 
     private typealias Entry = (type: EFIGUID, offset: UInt64, size: UInt64)
 
@@ -71,27 +73,69 @@ final class InsydeVariableDefaultsTests: XCTestCase {
         parsed.roots[0].children
     }
 
-    func testTheRegionTheMapNamesReadsAsItsStores() {
+    private func regions(_ nodes: [UEFINode]) -> [UEFINode] {
+        nodes.filter { $0.kind == .flashDeviceMapRegion }
+    }
+
+    func testTheVariableDefaultsRegionReadsAsItsStores() {
         let parsed = UEFIParser.parse(Self.image())
         let nodes = top(parsed)
-        let stores = nodes.filter { $0.kind == .vssStore }
+        let defaults = regions(nodes).first { $0.guid == FlashDeviceMap.variableDefaults }!
+        let stores = defaults.children.filter { $0.kind == .vssStore }
 
+        XCTAssertEqual(defaults.range, 0x1000..<0x3000)
+        XCTAssertEqual(defaults.name, "Variable Defaults")
         XCTAssertEqual(stores.map(\.range), [
             0x1000..<(0x1000 + UInt64(Self.firstStore.count)),
             (0x1000 + UInt64(Self.firstStore.count))..<(0x1000 + UInt64(Self.firstStore.count + Self.secondStore.count)),
         ])
         XCTAssertEqual(stores[0].children.map(\.name), ["Setup", "PchSetup"])
         XCTAssertEqual(stores[1].children.map(\.name), ["SaSetup"])
+        XCTAssertEqual(defaults.children.last?.kind, .freeSpace)
+        XCTAssertEqual(defaults.children.last?.range.upperBound, 0x3000)
         XCTAssertTrue(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+    }
 
-        // The padding before the region and the erased rest of it stay what
-        // they were; nothing outside the range the map names is touched.
-        let index = nodes.firstIndex { $0.kind == .vssStore }!
+    /// Every other region is a leaf named by its type, and the padding around
+    /// it stays what it was: nothing outside the range the map names is
+    /// touched.
+    func testARegionIsCutOutOfThePaddingAndNamedByItsType() {
+        let nodes = top(UEFIParser.parse(Self.image()))
+        let found = regions(nodes)
+
+        XCTAssertEqual(found.map(\.name), ["Variable Defaults", "Password"])
+        XCTAssertEqual(found.map(\.range), [0x1000..<0x3000, 0x3000..<0x3100])
+        XCTAssertEqual(found[1].guid, Self.password)
+        XCTAssertTrue(found[1].children.isEmpty)
+        XCTAssertTrue(found.allSatisfy(\.isFixed))
+
+        let index = nodes.firstIndex { $0.kind == .flashDeviceMapRegion }!
         XCTAssertEqual(nodes[index - 1].range, 0..<0x1000)
         XCTAssertEqual(nodes[index - 1].kind, .padding)
-        XCTAssertEqual(nodes[index + 2].kind, .freeSpace)
-        XCTAssertEqual(nodes[index + 2].range.upperBound, 0x3000)
-        XCTAssertEqual(nodes[index + 3].range, 0x3000..<0x4000)
+        XCTAssertEqual(nodes[index + 2].range, 0x3100..<0x4000)
+        XCTAssertEqual(nodes[index + 2].kind, .padding)
+    }
+
+    /// The Type column keeps UEFITool's word for these bytes, and the
+    /// subtype says whether anything was written.
+    func testARegionClassifiesAsPadding() {
+        let nodes = top(UEFIParser.parse(Self.image()))
+        let password = regions(nodes).first { $0.guid == Self.password }!
+        let defaults = regions(nodes).first { $0.guid == FlashDeviceMap.variableDefaults }!
+
+        XCTAssertEqual(password.uefiItemType, UEFITypes.Item.padding.rawValue)
+        XCTAssertTrue(password.isErased)
+        XCTAssertEqual(password.uefiItemSubtype, UEFITypes.Sub.onePadding)
+        XCTAssertFalse(defaults.isErased)
+        XCTAssertEqual(defaults.uefiItemSubtype, UEFITypes.Sub.dataPadding)
+    }
+
+    /// A type UEFITool does not name is still a region, called what it is.
+    func testARegionOfAnUnnamedTypeKeepsItsGUID() {
+        let entries: [Entry] = [(Self.unnamed, 0x2000, 0x800)]
+        let found = regions(top(UEFIParser.parse(Self.image(maps: [entries]))))
+        XCTAssertEqual(found.map(\.guid), [Self.unnamed])
+        XCTAssertEqual(found.first?.name, "Flash device map region")
     }
 
     /// The map's rows are named by region type, the way UEFITool names them.
@@ -101,25 +145,39 @@ final class InsydeVariableDefaultsTests: XCTestCase {
     }
 
     /// Without a Volume Top File at the tail there is no address to place the
-    /// range by, and it stays padding.
-    func testWithNoVolumeTopFileAtTheTailTheRegionStaysPadding() {
+    /// ranges by, and they stay padding.
+    func testWithNoVolumeTopFileAtTheTailTheRegionsStayPadding() {
         let nodes = top(UEFIParser.parse(Self.image(trailing: 0x100)))
+        XCTAssertTrue(regions(nodes).isEmpty)
         XCTAssertFalse(nodes.contains { $0.kind == .vssStore })
     }
 
-    /// A region nobody wrote is padding still.
-    func testAnErasedRegionStaysPadding() {
-        let nodes = top(UEFIParser.parse(Self.image(defaults: [])))
-        XCTAssertFalse(nodes.contains { $0.kind == .vssStore || $0.kind == .freeSpace })
-        XCTAssertEqual(nodes[0].range, 0..<0x4000)
+    /// A Variable Defaults region nobody wrote is a region still, with no
+    /// stores in it.
+    func testAnErasedVariableDefaultsRegionHoldsNoStores() {
+        let defaults = regions(top(UEFIParser.parse(Self.image(defaults: [])))).first {
+            $0.guid == FlashDeviceMap.variableDefaults
+        }!
+        XCTAssertTrue(defaults.children.isEmpty)
+        XCTAssertTrue(defaults.isErased)
     }
 
-    /// A board can carry the map twice; the range is read once.
+    /// A board can carry the map twice; each range is read once.
     func testTwoMapsNamingTheSameRegionReadItOnce() {
         let entries: [Entry] = [(FlashDeviceMap.variableDefaults, 0x1000, 0x2000)]
         let nodes = top(UEFIParser.parse(Self.image(maps: [entries, entries])))
-        XCTAssertEqual(nodes.filter { $0.kind == .vssStore }.count, 2)
+        XCTAssertEqual(regions(nodes).count, 1)
+        XCTAssertEqual(regions(nodes)[0].children.filter { $0.kind == .vssStore }.count, 2)
         XCTAssertEqual(nodes.filter { $0.kind == .flashDeviceMapStore }.count, 2)
+    }
+
+    /// Where two entries overlap, the one that starts first is placed, and the
+    /// other — no longer inside padding — stays out.
+    func testOfTwoOverlappingEntriesTheFirstByAddressIsPlaced() {
+        let entries: [Entry] = [(Self.password, 0x2800, 0x1000), (Self.unnamed, 0x2000, 0x1000)]
+        let found = regions(top(UEFIParser.parse(Self.image(defaults: [], maps: [entries]))))
+        XCTAssertEqual(found.map(\.guid), [Self.unnamed])
+        XCTAssertEqual(found.map(\.range), [0x2000..<0x3000])
     }
 
     /// An entry that lands in something already read — here the volume — has
@@ -127,7 +185,7 @@ final class InsydeVariableDefaultsTests: XCTestCase {
     func testAnEntryOutsidePaddingChangesNothing() {
         let entries: [Entry] = [(FlashDeviceMap.variableDefaults, 0xF000, 0x100)]
         let nodes = top(UEFIParser.parse(Self.image(maps: [entries])))
-        XCTAssertFalse(nodes.contains { $0.kind == .vssStore })
+        XCTAssertTrue(regions(nodes).isEmpty)
         XCTAssertEqual(nodes.last?.kind, .volume)
     }
 }

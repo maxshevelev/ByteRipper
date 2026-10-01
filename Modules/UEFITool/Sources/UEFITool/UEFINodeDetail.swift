@@ -541,7 +541,9 @@ public enum UEFIDetail {
         case .fdcStore, .cmdbStore, .sysFEntry:
             break
 
-        case .padding, .freeSpace, .nonUEFIData, .startupApData:
+        // A map region has no header either: the map says where it is and
+        // what type it is, and the type is the common "GUID" field.
+        case .padding, .freeSpace, .nonUEFIData, .startupApData, .flashDeviceMapRegion:
             // No header of their own: the size the common "Total" carries is
             // the whole of what there is to say.
             break
@@ -824,6 +826,7 @@ public enum UEFIDetail {
         case .padding: return L("Padding")
         case .freeSpace: return L("Free space")
         case .nonUEFIData: return L("Non-UEFI data")
+        case .flashDeviceMapRegion: return L("Flash device map region")
         }
     }
 

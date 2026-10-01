@@ -39,15 +39,30 @@ public enum UEFIHelpTerms {
         // differ by vendor and the difference is not what a reader on a bench
         // is asking about.
         case .vssStore, .vss2Store, .ftwStore, .fdcStore, .sysFStore,
-             .flashMapStore, .evsaStore, .cmdbStore,
-             .flashDeviceMapStore:
+             .flashMapStore, .evsaStore, .cmdbStore:
             return HelpTermID("vss")
-        case .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .flashDeviceMapEntry:
+        case .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry:
             return HelpTermID("vss")
+        // Insyde's map holds no variables: it lays out the chip.
+        case .flashDeviceMapStore, .flashDeviceMapEntry:
+            return HelpTermID("flash-device-map")
+        case .flashDeviceMapRegion:
+            return mapRegion(node.guid)
         // AMI's store is the exception, because what a reader asks of it is
         // different: which of a variable's entries holds its value now.
         case .nvarEntry, .nvarGuidStore:
             return HelpTermID("nvar")
+        }
+    }
+
+    /// A map region whose type has a page of its own goes there — the EC
+    /// firmware, the default variables — and the rest to the page about the
+    /// map, which says what its regions are.
+    private static func mapRegion(_ type: EFIGUID?) -> HelpTermID {
+        switch type {
+        case FlashDeviceMap.ecFirmware: return HelpTermID("ec-firmware")
+        case FlashDeviceMap.variableDefaults: return HelpTermID("vss")
+        default: return HelpTermID("flash-device-map")
         }
     }
 
