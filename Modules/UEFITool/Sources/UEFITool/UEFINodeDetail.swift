@@ -136,6 +136,12 @@ public enum UEFIDetail {
         let title = node.name.isEmpty ? kindLabel(node.kind) : node.name
         var tables: [UEFIDetailTable] = []
 
+        // What the BVDT's `$BME$` record lists, placed in the file.
+        if node.kind == .flashDeviceMapRegion, node.guid == FlashDeviceMap.biosVersionDataTable,
+           let table = InsydeBVDT.read(node.body, in: reader), !table.listedRanges.isEmpty {
+            tables.append(listedRangesTable(table.listedRanges, near: node, in: image))
+        }
+
         // A variable's entry: whose copy it is where the tree calls it
         // Invalid, and every copy the store keeps of it.
         if node.kind == .vssEntry || node.kind == .nvarEntry,
@@ -190,6 +196,55 @@ public enum UEFIDetail {
         // recognised and measured: its bytes are exactly the picture's.
         let picture = node.kind == .picture ? reader.bytes(node.body) : nil
         return UEFINodeDetail(title: title, fields: fields, tables: tables, picture: picture)
+    }
+
+    // MARK: - What a BIOS Version Data Table lists
+
+    /// `$BME$`'s ranges, which are offsets into the BIOS region, as addresses
+    /// in the file, and the node each one is exactly — the BVDT's own region,
+    /// a volume — where one is. What the list is for is not known, so the
+    /// table says where and not why.
+    private static func listedRangesTable(_ ranges: [Range<UInt64>], near node: UEFINode, in image: UEFIImage) -> UEFIDetailTable {
+        // A dump of the BIOS region alone starts with it.
+        let bios = image.nodes(containing: node.range.lowerBound).first {
+            $0.kind == .region && $0.subtype == UInt8(FlashRegionType.bios.rawValue)
+        }?.range.lowerBound ?? 0
+        return UEFIDetailTable(
+            title: L("Ranges listed in $BME$"),
+            symbol: "list.bullet.rectangle",
+            columns: [L("Start"), L("Size"), L("Holds")],
+            rows: ranges.map { range in
+                let placed = (bios + range.lowerBound)..<(bios + range.upperBound)
+                let holder = image.allNodes.first { $0.space == .file && $0.range == placed && $0.kind != .region }
+                return [.init(hex(placed.lowerBound)), .init(sizeText(UInt64(range.count))),
+                        .init(holder.map(holderText) ?? "—")]
+            }
+        )
+    }
+
+    /// A volume's name is its file system, which alone does not say it is
+    /// one; anything else is named by what it is.
+    private static func holderText(_ node: UEFINode) -> String {
+        if node.kind == .volume { return kindLabel(.volume) + " " + node.name }
+        return node.name.isEmpty ? kindLabel(node.kind) : node.name
+    }
+
+    /// Microsoft's compiler version, and the Visual Studio it shipped with.
+    private static func compilerText(_ version: UInt16) -> String {
+        let product: String?
+        switch version {
+        case 1400: product = "Visual Studio 2005"
+        case 1500: product = "Visual Studio 2008"
+        case 1600: product = "Visual Studio 2010"
+        case 1700: product = "Visual Studio 2012"
+        case 1800: product = "Visual Studio 2013"
+        case 1900: product = "Visual Studio 2015"
+        case 1910...1916: product = "Visual Studio 2017"
+        case 1920...1929: product = "Visual Studio 2019"
+        case 1930...1949: product = "Visual Studio 2022"
+        default: product = nil
+        }
+        return product.map { "MSC \(version) (\($0))" } ?? "MSC \(version)"
     }
 
     // MARK: - A variable's copies
@@ -684,6 +739,11 @@ public enum UEFIDetail {
                 if let product = table.productName { fields.append(.init("Product name", product)) }
                 if let kernel = table.kernelVersion { fields.append(.init("Kernel version", kernel)) }
                 if let date = table.releaseDate { fields.append(.init("Release date", date)) }
+                if let compiler = table.compilerVersion { fields.append(.init("Compiler", compilerText(compiler))) }
+                // The board's identity to a capsule update, and the version
+                // it would be compared with.
+                if let esrtClass = table.esrtClass { fields.append(.init("ESRT firmware class", esrtClass.description)) }
+                if let esrtVersion = table.esrtVersion { fields.append(.init("ESRT version", hex(esrtVersion))) }
             }
             if node.guid == FlashDeviceMap.ecFirmware, !node.children.contains(where: { $0.kind == .ecImage }) {
                 fields += iteFields(node, reader: reader)

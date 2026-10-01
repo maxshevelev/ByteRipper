@@ -633,6 +633,23 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Product name"), "S370-IAU")
         XCTAssertEqual(field(detail, "Kernel version"), "05.44.02")
         XCTAssertEqual(field(detail, "Release date"), "2022-07-21")
+        XCTAssertEqual(field(detail, "Compiler"), "MSC 1600 (Visual Studio 2010)")
+        XCTAssertEqual(field(detail, "ESRT firmware class"), "F102E4FC-EB52-4FD9-8098-E51308E275F7")
+        XCTAssertEqual(field(detail, "ESRT version"), "0x52440031")
+    }
+
+    /// The ranges `$BME$` lists, placed in the file, each with what is exactly
+    /// there — and a dash where nothing is.
+    func testABVDTRegionListsTheRangesOfItsBMERecord() throws {
+        let built = TestUEFI.bvdtRegion()
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let table = try XCTUnwrap(detail.tables.first { $0.title == "Ranges listed in $BME$" })
+
+        XCTAssertEqual(table.columns, ["Start", "Size", "Holds"])
+        XCTAssertEqual(table.rows.map { $0.map(\.text) }, [
+            ["0x0", "0x1000 (4096)", "BIOS Version Data Table"],
+            ["0x100000", "0x100000 (1048576)", "—"],
+        ])
     }
 
     /// A checksum that does not match says what it should be.

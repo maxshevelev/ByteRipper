@@ -435,7 +435,16 @@ enum TestUEFI {
         bytes += field("JKCN31WW", length: 0x19)
         bytes += field("S370-IAU", length: 0x1A)
         bytes += field("05.44.02", length: 0x26)
-        bytes += Array("$RDATE".utf8) + [0x22, 0x07, 0x21] + Array("$ENDOFBVDT".utf8)
+        // Two ranges — the table's own region, and a megabyte where nothing
+        // is — then the compiler, the date and the ESRT entry, as SPI_ALL's.
+        bytes += Array("$BME$".utf8) + [0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x24,
+                                        0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x10, 0x00, 0xFF]
+        bytes += Array("$_MSC_VER=".utf8) + [0x40, 0x06]
+        bytes += Array("$RDATE".utf8) + [0x22, 0x07, 0x21]
+        bytes += Array("$ESRT".utf8) + [0x31, 0x00, 0x44, 0x52,
+                                        0xFC, 0xE4, 0x02, 0xF1, 0x52, 0xEB, 0xD9, 0x4F,
+                                        0x80, 0x98, 0xE5, 0x13, 0x08, 0xE2, 0x75, 0xF7]
+        bytes += Array("$ENDOFBVDT".utf8)
         bytes += [UInt8](repeating: 0xFF, count: 0x1000 - bytes.count)
         let node = UEFINode(
             kind: .flashDeviceMapRegion,

@@ -1108,7 +1108,7 @@ store, and what it means is not known. Every other region is a leaf.
 
 A region of type `BVDT` (`32415DFC-…`) holds Insyde's **BIOS Version Data
 Table**, which the details panel reads (`InsydeBVDT.swift`). No specification
-is published; the layout is what the five Insyde dumps at hand agree on:
+is published; the layout is what the six Insyde dumps at hand agree on:
 
 | Offset | Content |
 |---|---|
@@ -1120,10 +1120,30 @@ is published; the layout is what the five Insyde dumps at hand agree on:
 | `0x66` | erased up to `0x12F` |
 | `0x12F` | `$`-tagged records — `$BME$`, `$_MSC_VER=`, `$RDATE`, `$ESRT`, `$QUIRK` — ending with `$ENDOFBVDT` |
 
-Only `$RDATE` among the records is read: three BCD bytes, year (`20YY`),
-month, day. That it is the release date is an inference — on every dump it fits
-the BIOS version — and the help says so. A string whose `$` is missing, or that
-holds no printable text, is not shown.
+The records, each found by its tag before `$ENDOFBVDT`:
+
+- `$RDATE` — three BCD bytes, year (`20YY`), month, day. That it is the release
+  date is an inference — on every dump it fits the BIOS version — and the help
+  says so.
+- `$_MSC_VER=` — a 16-bit number, the value of Microsoft's compiler macro of
+  that name: 1600 (Visual Studio 2010) on four boards, 1900 (2015) on two.
+- `$ESRT` — a 32-bit version, then a GUID: the board's entry in the EFI System
+  Resource Table. The GUID is the firmware class — `94F9614C-…` on
+  `all.orig.bin` is the hardware ID `UEFI\RES_{…}` that Lenovo's "System
+  Firmware" update packages for that board target. The version's low byte is
+  the BIOS build number on four of the five boards (`J2CN57WW` → `0x70224057`);
+  `CSME 12`'s (`XMGCF500P0402` → `0x57004002`) does not follow it. Four of the
+  six end the record with `8B 01 00 00`, which is not read.
+- `$BME$` — up to three pairs of a 32-bit offset into the BIOS region and a
+  32-bit size, a `$` after each but the last; a slot of size `0xFFFFFFFF` is not
+  in use. On every dump the first is the BVDT region itself and the second one
+  FFSv2 volume exactly, whose only file is `1FAE4D78-…`, EDK2's
+  `MicrocodeUpdates`; `CSME 12` has a third, its second EC Firmware region. What
+  the list is for is not known; the panel places the ranges in the file and
+  names what lies exactly there.
+- `$QUIRK`, on `CSME 16` only, is not read.
+
+A string whose `$` is missing, or that holds no printable text, is not shown.
 
 **EC firmware** is read where it is found (`ECFirmware.swift`, `ITEFirmware.swift`).
 Two vendors' images are recognised, each on a 4 KiB boundary:

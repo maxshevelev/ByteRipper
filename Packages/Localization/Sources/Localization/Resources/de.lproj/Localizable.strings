@@ -1036,3 +1036,5 @@
 "%1$@ earlier copies not shown" = "Frühere Kopien nicht angezeigt: %1$@";
 "size %1$@ → %2$@" = "Größe %1$@ → %2$@";
 "changed bytes: %1$@, at %2$@" = "geänderte Bytes: %1$@, bei %2$@";
+"Ranges listed in $BME$" = "Bereiche in $BME$";
+"Holds" = "Inhalt";
