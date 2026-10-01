@@ -93,17 +93,6 @@ final class NvramParseTests: XCTestCase {
         XCTAssertEqual(entries[1].name, "SetupMode")
     }
 
-    /// A store whose size field is the "no size" marker (0xFFFFFFFF) is not a
-    /// store at all: the reference parser refuses it, so the body is padding.
-    func testANoSizeMarkerIsNotAStore() {
-        let store = TestNVRAM.vssStore(
-            variables: [TestNVRAM.vssVariable(name: "BootOrder")],
-            size: 0xFFFF_FFFF
-        )
-        let parsed = parse(TestNVRAM.nvramVolume(stores: [store]))
-        XCTAssertEqual(parsed.roots[0].children.map(\.kind), [.padding])
-    }
-
     /// A store whose size field overruns the body is cut at the body's end, not
     /// believed past it.
     func testAStoreSizeThatOverrunsTheBodyIsCut() {

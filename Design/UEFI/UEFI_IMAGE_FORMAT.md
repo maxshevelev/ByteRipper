@@ -971,6 +971,19 @@ others — in the raw section of a file with the GUID
 NVRAM volume's does. On a Lenovo dump with both, the 30 entries read as
 UEFIExtract reads them.
 
+**A `$VSS` store with no size** is measured rather than refused, beyond the
+reference. Insyde leaves the size field of the board's live variable store at
+`0xFFFFFFFF`, the "no size" marker — the flash device map's `Variables` region
+says how big it is — and UEFITool, refusing the marker, shows the store as
+padding. Outside an FDC (where the FDC's body gives the size), a plain `$VSS`
+store with the marker that opens on a variable is read by its own structure:
+variables while the `0x55AA` marker holds, then the erase byte, and the store
+ends where the erased run does, or at the body's end. On the one Lenovo dump
+with such a store this lands exactly on the `Variables` region's end, where the
+FTW store begins. A store whose variables are damaged has nothing but that run
+to bound it, where a sized store has its size; an Apple `$SVS` / `$NSS` store
+with the marker is still refused.
+
 **Insyde Variable Defaults** are read beyond the reference
 (`FlashDeviceMapParser.swift`). Insyde keeps the firmware's default variables
 as a run of `$VSS` stores back to back, outside every volume, in the range its

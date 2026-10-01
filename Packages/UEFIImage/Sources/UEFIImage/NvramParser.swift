@@ -256,6 +256,9 @@ extension Parser {
         // refused, the way the reference parser refuses it.
         if storeSize == 0xFFFF_FFFF, let override = fdcStoreSizeOverride, override < 0xFFFF_FFFF, signature == NVRAM.vssSignature {
             storeSize = UInt32(override)
+        } else if storeSize == 0xFFFF_FFFF, signature == NVRAM.vssSignature,
+                  let measured = unsizedVssStoreSize(at: offset, body: body, emptyByte: emptyByte) {
+            storeSize = UInt32(measured)
         }
 
         // The reference parser refuses a size that is not strictly between the
@@ -284,6 +287,32 @@ extension Parser {
             isFixed: true,
             children: entries
         )
+    }
+
+    /// How far a `$VSS` store reaches whose size field holds the "no size"
+    /// marker outside an FDC: to the end of the free space after its last
+    /// variable, or to the end of the body.
+    ///
+    /// Insyde leaves the size of the board's live variable store unset —
+    /// the flash device map's `Variables` region says how big it is, and the
+    /// firmware takes it from there. The reference parser refuses such a
+    /// store, so the board's current settings read as padding. This reads
+    /// them by the store's own structure instead: variables while the marker
+    /// holds, then erased bytes, and the store ends where the erased bytes do —
+    /// which on a Lenovo dump is exactly where the map's region ends and the
+    /// FTW store begins. A store that does not open on a variable is not
+    /// measured, and stays padding as before.
+    private func unsizedVssStoreSize(at offset: UInt64, body: Range<UInt64>, emptyByte: UInt8) -> UInt64? {
+        let headerEnd = offset + NVRAM.vssStoreHeaderSize
+        guard headerEnd < body.upperBound,
+              reader.uint8(at: headerEnd) == NVRAM.variableMarkerFirst
+        else { return nil }
+        let variables = vssVariables(in: headerEnd..<body.upperBound, storeEnd: body.upperBound, emptyByte: emptyByte)
+        guard let last = variables.last(where: { $0.kind == .vssEntry }) else { return nil }
+        let end = reader.firstOffset(
+            in: last.range.upperBound..<body.upperBound, notEqualTo: emptyByte
+        ) ?? body.upperBound
+        return end - offset
     }
 
     /// The variables of a VSS store, walked until the marker stops.
