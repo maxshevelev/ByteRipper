@@ -18,6 +18,7 @@
 "%1$@ (Invalid)" = "%1$@ (stimmt nicht)";
 "%1$@ (Invalid), should be %2$@" = "%1$@ (stimmt nicht), sollte %2$@ sein";
 "%1$@ (Not checked)" = "%1$@ (nicht geprüft)";
+"%1$@ (Top Swap copy)" = "%1$@ (Top-Swap-Kopie)";
 "%1$@ (Valid)" = "%1$@ (stimmt)";
 "%1$@ (in %2$@)" = "%1$@ (in %2$@)";
 "%1$@ Bookmarks Here:" = "%1$@ Lesezeichen hier:";
@@ -136,6 +137,9 @@
 "Appended %1$@ after %2$@. Total: %3$@." = "%1$@ nach %2$@ angehängt. Gesamt: %3$@.";
 "Apply" = "Anwenden";
 "Ask before edits that shift the file" = "Vor Änderungen fragen, die die Datei verschieben";
+"Copied at %1$@–%2$@; %3$@" = "Kopie bei %1$@–%2$@; %3$@";
+"Copy of %1$@–%2$@; %3$@" = "Kopie des Blocks %1$@–%2$@; %3$@";
+"Top Swap" = "Top Swap";
 "at %1$@" = "bei %1$@";
 "BIOS access table" = "BIOS-Zugriffstabelle";
 "Back" = "Zurück";
@@ -777,6 +781,8 @@
 "The catalogue lists a newer revision that may not serve this board" = "Der Katalog führt eine neuere Revision, die zu diesem Board möglicherweise nicht passt";
 "The catalogue of CPU microcodes the FIT tool's picker offers." = "Der Katalog der CPU-Mikrocodes, den die Auswahl im FIT-Werkzeug anbietet.";
 "The clipboard does not contain raw bytes or a valid hex byte sequence." = "Die Zwischenablage enthält weder Rohbytes noch eine gültige Hex-Bytefolge.";
+"the copies differ" = "die Kopien unterscheiden sich";
+"the copies match" = "die Kopien stimmen überein";
 "the file" = "diese Datei";
 "The FIT pointer, %1$@, is outside this image" = "Der FIT-Zeiger, %1$@, liegt außerhalb dieses Images";
 "The library changed on your other Mac — open Resolve… again for the questions that are left." = "Die Bibliothek hat sich auf Ihrem anderen Mac geändert — öffnen Sie „Konflikte lösen…“ erneut für die verbliebenen Fragen.";

@@ -1171,6 +1171,21 @@ inside a volume inside a compressed section inside a volume inside a GUID-define
 section: twelve rows, past the 16 the limit once was, which cut eight branches
 off with a false "nesting is too deep". It is 32.
 
+**Find the Top Swap copy.** A chipset with Top Swap set maps the block directly
+below the BIOS region's top block at the top of memory, so a board can start
+from a second copy of its boot block (`TopSwap.swift`). The block's size is a
+strap whose place in the descriptor moves between PCH generations, so the copy
+is recognised by what it must hold: one block lower, a FIT pointer with the same
+value and a `_FIT_` table at the same distance — tried for every power of two
+from 64 KiB to 16 MiB. It is found with the protected ranges, since it needs the
+addresses and goes through the same FIT, and the two copies are compared there,
+off the main thread: four dumps at hand carry one, a 4 MiB block each, and all
+four copies match. The structure panel marks the copy's outermost rows — those
+inside the block whose parent is not — "(Top Swap copy)", says in the details
+of both blocks' outermost rows where the other copy is and whether they match,
+and sends the copy's `?` to the Top Swap entry. The FIT tool-module edits both
+copies through the same type.
+
 **Bounds-check at every step.** Every size field is read from untrusted data.
 Before any `mid(offset, size)`, check `offset + size <= buffer.size()` allowing
 for overflow (add in a 64-bit type, or compare by subtracting).

@@ -110,15 +110,26 @@ public struct ProtectedRanges: Equatable, Sendable {
     public var obbDigests: [ProtectedRange.Digest]
     /// What the reading had to complain about.
     public var diagnostics: [UEFIDiagnostic]
+    /// The Top Swap copy of the block the FIT is in, when the image keeps
+    /// one. Read with the ranges because it is found through the same FIT, and
+    /// because its ranges are the top block's: the ACM checks whichever copy
+    /// the chipset maps at the top.
+    public var topSwap: TopSwapCopy?
+    /// Whether the two copies were the same bytes when this was read.
+    public var topSwapCopiesMatch: Bool
 
     public init(
         ranges: [ProtectedRange] = [],
         obbDigests: [ProtectedRange.Digest] = [],
-        diagnostics: [UEFIDiagnostic] = []
+        diagnostics: [UEFIDiagnostic] = [],
+        topSwap: TopSwapCopy? = nil,
+        topSwapCopiesMatch: Bool = false
     ) {
         self.ranges = ranges
         self.obbDigests = obbDigests
         self.diagnostics = diagnostics
+        self.topSwap = topSwap
+        self.topSwapCopiesMatch = topSwapCopiesMatch
     }
 
     /// Whether the image names any protection at all.
@@ -199,7 +210,12 @@ public struct ProtectedRanges: Equatable, Sendable {
         reading.readBootPolicies()
         reading.readVendorHashFiles()
         reading.readFlashDeviceMaps()
-        return reading.finish()
+        var ranges = reading.finish()
+        if let copy = TopSwapCopy.find(in: image, reader: readers.file) {
+            ranges.topSwap = copy
+            ranges.topSwapCopiesMatch = copy.copiesMatch(in: readers.file)
+        }
+        return ranges
     }
 }
 

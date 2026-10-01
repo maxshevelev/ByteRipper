@@ -685,7 +685,7 @@ private struct ChecksumPass: Sendable {
             image: image, tree: tree, focus: focus, detail: detail,
             // An ME row carries its own term (the curator named it); a UEFI
             // node's comes from its kind. Whichever of the two is in focus.
-            helpTerm: meNode?.helpTerm ?? node.flatMap(UEFIHelpTerms.term(for:)),
+            helpTerm: meNode?.helpTerm ?? node.flatMap { UEFIHelpTerms.term(for: $0, in: image) },
             catalogue: guids,
             badChecksums: checksumProblems, canWrite: !host.isReadOnly, isBuilding: false,
             rowsChanged: rowsChanged,

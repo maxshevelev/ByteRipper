@@ -2,71 +2,22 @@ import Foundation
 import ToolModuleKit
 import UEFIImage
 
-/// The Top Swap backup of the block the FIT lives in.
+/// The Top Swap backup of the block the FIT lives in: `UEFIImage`'s
+/// `TopSwapCopy`, which the structure panel names too, with what editing the
+/// table needs of it.
 ///
-/// A chipset with Top Swap set maps the block directly below the top block of
-/// the BIOS region at the top of memory instead, so a board can start from a
-/// second copy of its boot block while the first is being rewritten. Such an
-/// image carries the top block twice — the same volumes, microcode and ACM, and
-/// a FIT of its own at the same place in the block naming the same addresses —
-/// and a change to the table has to land in both. A change to one leaves the
-/// machine starting, after a swap, from a copy that no longer agrees with the
-/// other.
-///
-/// The block's size is a chipset strap whose place in the descriptor moves
-/// from one PCH generation to the next, so the copy is recognised by what it has
-/// to hold instead: the FIT pointer with the same value, and the `_FIT_` table
-/// at the same distance below.
-public struct FITTopSwapBackup: Equatable, Sendable {
-    /// The top block, ending where the address space does.
-    public var top: Range<UInt64>
-    /// Its copy, directly below.
-    public var backup: Range<UInt64>
+/// Such an image carries the top block twice — the same volumes, microcode and
+/// ACM, and a FIT of its own at the same place in the block naming the same
+/// addresses — and a change to the table has to land in both. A change to one
+/// leaves the machine starting, after a swap, from a copy that no longer agrees
+/// with the other.
+public typealias FITTopSwapBackup = TopSwapCopy
 
-    public var size: UInt64 { top.upperBound - top.lowerBound }
-
-    /// The sizes a Top Swap block comes in: a power of two from 64 KiB to 16 MiB.
-    static let smallestBlock: UInt64 = 0x1_0000
-    static let largestBlock: UInt64 = 0x100_0000
-
+extension TopSwapCopy {
     /// The backup of the block holding `table`, or nil when the image has none.
-    public static func find(for table: FITTable, in reader: ImageReader) -> FITTopSwapBackup? {
-        let topEnd = table.pointerOffset + (0x1_0000_0000 - FIT.pointerAddress)
-        var size = smallestBlock
-        while size <= largestBlock, size * 2 <= topEnd {
-            let top = (topEnd - size)..<topEnd
-            if top.lowerBound <= table.range.lowerBound, table.range.upperBound <= top.upperBound,
-               reader.uint32(at: table.pointerOffset - size).map(UInt64.init) == table.pointerAddress,
-               reader.uint64(at: table.range.lowerBound - size) == FIT.signature {
-                return FITTopSwapBackup(top: top, backup: (top.lowerBound - size)..<top.lowerBound)
-            }
-            size *= 2
-        }
-        return nil
-    }
-
-    /// Where an offset is once the blocks trade places: a byte of either block
-    /// is the same byte of the other, and everything else stays put.
-    public func swap(_ offset: UInt64) -> UInt64 {
-        if top.contains(offset) { return offset - size }
-        if backup.contains(offset) { return offset + size }
-        return offset
-    }
-
-    /// Whether the two copies are the same bytes — the one state in which a
-    /// change worked out for the top block is right for the backup as well.
-    public func copiesMatch(in reader: ImageReader) -> Bool {
-        let chunk: UInt64 = 0x1_0000
-        var offset: UInt64 = 0
-        while offset < size {
-            let count = min(chunk, size - offset)
-            guard let upper = reader.bytes(at: top.lowerBound + offset, count: count),
-                  let lower = reader.bytes(at: backup.lowerBound + offset, count: count),
-                  upper == lower
-            else { return false }
-            offset += count
-        }
-        return true
+    public static func find(for table: FITTable, in reader: ImageReader) -> TopSwapCopy? {
+        find(pointerOffset: table.pointerOffset, pointerAddress: table.pointerAddress,
+             table: table.range, in: reader)
     }
 
     /// `transaction`, with every write into the top block made at the same

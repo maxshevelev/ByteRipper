@@ -1401,7 +1401,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         case Column.subtype:
             return UEFITreeDisplay.subtypeText(for: node)
         default:
-            return UEFITreeDisplay.name(for: node, catalogue: catalogue)
+            return UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image)
         }
     }
 

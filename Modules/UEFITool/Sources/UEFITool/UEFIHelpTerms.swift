@@ -14,6 +14,14 @@ import UEFIImage
 /// answer: a `?` that opens a page saying "a section is a section" is worse
 /// than no `?` at all.
 public enum UEFIHelpTerms {
+    /// With `image`, a node at the top of a Top Swap copy goes to the page
+    /// about Top Swap: what a reader asks of it is why the volumes are there
+    /// twice.
+    public static func term(for node: UEFINode, in image: UEFIImage) -> HelpTermID? {
+        if case .copy = UEFITopSwap.role(of: node, in: image) { return HelpTermID("top-swap") }
+        return term(for: node)
+    }
+
     public static func term(for node: UEFINode) -> HelpTermID? {
         switch node.kind {
         case .capsule: return HelpTermID("capsule")

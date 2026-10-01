@@ -18,6 +18,7 @@
 "%1$@ (Invalid)" = "%1$@ (не сходится)";
 "%1$@ (Invalid), should be %2$@" = "%1$@ (не сходится), ожидается %2$@";
 "%1$@ (Not checked)" = "%1$@ (не проверяется)";
+"%1$@ (Top Swap copy)" = "%1$@ (копия Top Swap)";
 "%1$@ (Valid)" = "%1$@ (сходится)";
 "%1$@ (in %2$@)" = "%1$@ (в %2$@)";
 "%1$@ Bookmarks Here:" = "Здесь закладок: %1$@";
@@ -136,6 +137,9 @@
 "Appended %1$@ after %2$@. Total: %3$@." = "%1$@ добавлен в конец, после %2$@. Итоговый размер: %3$@.";
 "Apply" = "Применить";
 "Ask before edits that shift the file" = "Спрашивать перед правками, сдвигающими файл";
+"Copied at %1$@–%2$@; %3$@" = "Копия расположена по адресу %1$@–%2$@; %3$@";
+"Copy of %1$@–%2$@; %3$@" = "Копия блока %1$@–%2$@; %3$@";
+"Top Swap" = "Top Swap";
 "at %1$@" = "по адресу %1$@";
 "BIOS access table" = "Таблица доступа BIOS";
 "Back" = "Назад";
@@ -777,6 +781,8 @@
 "The catalogue lists a newer revision that may not serve this board" = "Каталог содержит более свежую ревизию, которая может не подойти этой плате";
 "The catalogue of CPU microcodes the FIT tool's picker offers." = "Каталог микрокодов CPU, из которого предлагает выбор инструмент FIT.";
 "The clipboard does not contain raw bytes or a valid hex byte sequence." = "В буфере обмена нет ни двоичных данных, ни корректной шестнадцатеричной последовательности байтов.";
+"the copies differ" = "копии различаются";
+"the copies match" = "копии совпадают";
 "the file" = "этому файлу";
 "The FIT pointer, %1$@, is outside this image" = "Указатель FIT, %1$@, за пределами этого образа";
 "The library changed on your other Mac — open Resolve… again for the questions that are left." = "Библиотека изменилась на другом Mac — откройте «Разрешить конфликты…» ещё раз для оставшихся вопросов.";

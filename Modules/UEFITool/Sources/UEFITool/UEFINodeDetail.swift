@@ -116,6 +116,9 @@ public enum UEFIDetail {
     ) -> UEFINodeDetail {
         var fields = commonFields(for: node, image: image)
         fields += headerFields(for: node, reader: reader, repairs: repairs)
+        if let topSwap = UEFITopSwap.detail(for: node, in: image) {
+            fields.append(.init(L("Top Swap"), topSwap))
+        }
         if let fill = NvramStoreFill.of(node, reader: reader) {
             fields += fillFields(fill)
         }
