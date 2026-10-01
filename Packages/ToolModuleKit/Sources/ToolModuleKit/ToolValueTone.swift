@@ -89,6 +89,12 @@ public enum ToolValueTone: Sendable, Equatable, Hashable {
     /// colour, and the mark a passed check carries. The one call every panel
     /// makes, so the same fact cannot read two ways in two of them.
     public func draw(_ field: NSTextField, value: String) {
+        // The field's own font and colour as well as the string's: a selectable
+        // field hands its text to the field editor on a click, and the editor
+        // takes the cell's font — the system default, a size smaller than the
+        // panel's zoom — for whatever the attributes do not pin down.
+        field.font = font(for: value)
+        field.textColor = color
         field.attributedStringValue = attributedValue(value)
     }
 }

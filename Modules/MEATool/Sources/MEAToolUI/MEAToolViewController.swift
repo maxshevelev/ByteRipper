@@ -739,7 +739,7 @@ import ToolModuleKit
             // A status-toned value is bold as well as coloured, and a passed
             // check carries its tick — all of it from the tone, which is the
             // same rendering the tree's detail and the UEFI Structure's use.
-            value.attributedStringValue = row.tone.attributedValue(text)
+            row.tone.draw(value, value: text)
             value.isSelectable = true
         case .comingSoon:
             value = ToolWrappingLabel(string: L("Coming soon"))
