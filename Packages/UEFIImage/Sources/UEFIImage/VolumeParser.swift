@@ -15,6 +15,11 @@ enum FV {
     static let maxBlockMapEntries = 0x1000
     static let erasePolarity: UInt32 = 0x0000_0800
     static let checksumOffset = 0x32
+    /// A Mac's microcode volume: no FFS inside, a run of microcode images
+    /// after a header the reference takes as `0x100` bytes, whatever the
+    /// header says of itself (`EFI_APPLE_MICROCODE_VOLUME_HEADER_SIZE`).
+    static let appleMicrocodeFileSystem = KnownGUIDs.guid("153D2197-29BD-44DC-AC59-887F70E41A6B")
+    static let appleMicrocodeHeaderSize: UInt64 = 0x100
 }
 
 /// A volume header that passed every test in §3.1 — which is what separates a
@@ -84,7 +89,11 @@ extension Parser {
                 extendedHeaderMissing = true
             }
         }
-        guard let aligned = alignUp(headerSize, to: 8), aligned <= fvLength else { return nil }
+        guard var aligned = alignUp(headerSize, to: 8), aligned <= fvLength else { return nil }
+        if fileSystem == FV.appleMicrocodeFileSystem {
+            guard FV.appleMicrocodeHeaderSize <= fvLength else { return nil }
+            aligned = FV.appleMicrocodeHeaderSize
+        }
 
         return VolumeHeader(
             offset: offset,
@@ -197,6 +206,9 @@ extension Parser {
         if NvramGuids.isStoreVolume(header.fileSystem) {
             return walkNvramVolumeBody(body, emptyByte: header.emptyByte, depth: depth + 1)
         }
+        if header.fileSystem == FV.appleMicrocodeFileSystem {
+            return walkMicrocodeVolumeBody(body, emptyByte: header.emptyByte)
+        }
         guard let ffsVersion = KnownGUIDs.ffsVersion(ofFileSystem: header.fileSystem) else {
             // A volume we cannot read the inside of still keeps its bytes (§3.4).
             note(.unknownFileSystem(header.fileSystem), at: header.offset + 0x10)
@@ -306,5 +318,33 @@ extension Parser {
             }
         }
         return node
+    }
+}
+
+extension Parser {
+    /// An Apple microcode volume's body: microcode images back to back, and
+    /// whatever follows the last of them as padding (UEFITool's
+    /// `parseMicrocodeVolumeBody`).
+    ///
+    /// The walk stops at the first stretch that is not a microcode, as the
+    /// reference's does — at an erased tail, or at bytes whose header does not
+    /// read — and keeps the rest as one padding node. A microcode that runs
+    /// past the body is cut and reported, as one found anywhere else is.
+    func walkMicrocodeVolumeBody(_ body: Range<UInt64>, emptyByte: UInt8) -> [UEFINode] {
+        var nodes: [UEFINode] = []
+        var offset = body.lowerBound
+        while offset < body.upperBound {
+            let rest = offset..<body.upperBound
+            guard !reader.isFilled(rest, with: 0x00), !reader.isFilled(rest, with: 0xFF),
+                  reader.uint32(at: offset) == Microcode.headerType,
+                  let microcode = parseMicrocode(at: offset, limit: body.upperBound),
+                  microcode.range.upperBound > offset
+            else {
+                return nodes + padding(from: offset, to: body.upperBound, emptyByte: emptyByte)
+            }
+            nodes.append(microcode)
+            offset = microcode.range.upperBound
+        }
+        return nodes
     }
 }

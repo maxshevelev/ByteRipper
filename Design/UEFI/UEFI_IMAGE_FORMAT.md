@@ -366,6 +366,13 @@ The `FFSv2Volumes` / `FFSv3Volumes` lists in the implementation hold every GUID
 treated as the corresponding version of FFS. A volume with an unknown GUID is
 not parsed as FFS — its body is kept as opaque data.
 
+The Apple microcode volume's body is a run of microcode images and no FFS
+(`walkMicrocodeVolumeBody`): read from the fixed `0x100`, one image after
+another, until the rest is all `0x00` or all `0xFF`, or until bytes whose header
+does not read as a microcode; the rest is one padding node. That is UEFITool's
+`parseMicrocodeVolumeBody`, and on a MacBook dump with two such volumes the
+two readings agree node for node.
+
 ### 3.5. Attributes and alignment
 
 `EFI_FVB_ERASE_POLARITY = 0x00000800` decides `emptyByte`: set → `0xFF`, clear →
