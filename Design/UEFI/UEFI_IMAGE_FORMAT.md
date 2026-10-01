@@ -1270,6 +1270,22 @@ typedef struct {
 
 ---
 
+**A variable's history.** Until a reclaim, a store keeps the earlier copies of a variable as well
+(`NvramVariableHistory`). A copy belongs to a variable by name and GUID, within
+one store. A VSS entry carries both whether marked or not; a marked one's name
+is read from the bytes, since the tree calls it `Invalid`. A `$VSS` entry's
+value starts after the name, as long as the header's name size says; a VSS2
+entry's body is its value. An NVAR variable is a chain — the head names it,
+data-only links take the name of the entry whose `next` points at them, the
+last link is current — or a run of whole entries, each superseded one with its
+valid bit cleared and its GUID, name and extended header still in it; those are
+read as if valid (`readNvarEntry(asIfValid:)`), which the walk itself does
+not do, as the reference does not. A variable with no current copy was deleted
+as its last copy. On every dump at hand every entry is told whose copy it is;
+`all.orig.bin` keeps seven `BootOrder`s and three `Setup`s,
+`MemoryOverwriteRequestControl` up to 317 copies (one per boot). EVSA and
+SysF entries are not read for this yet.
+
 ## 10. The second pass
 
 Runs after the tree has been built, and needs a VTF that was found and is not

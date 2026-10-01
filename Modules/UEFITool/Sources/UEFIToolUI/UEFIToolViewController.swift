@@ -949,15 +949,29 @@ import UEFITool
         grid.setContentHuggingPriority(.required, for: .horizontal)
         grid.translatesAutoresizingMaskIntoConstraints = false
 
-        grid.addRow(with: table.columns.map { column in
+        // In a list narrower than the table, the last column gives way — cut
+        // short, with the whole text on hover — and every other keeps its
+        // width: a column of numbers squeezed to one letter says nothing.
+        let last = table.columns.count - 1
+        func fitted(_ field: NSTextField, column: Int) -> NSTextField {
+            if column == last {
+                field.lineBreakMode = .byTruncatingTail
+                field.setContentCompressionResistancePriority(.defaultHigh - 10, for: .horizontal)
+                field.toolTip = field.stringValue
+            } else {
+                field.setContentCompressionResistancePriority(.required, for: .horizontal)
+            }
+            return field
+        }
+        grid.addRow(with: table.columns.enumerated().map { index, column in
             let cell = NSTextField(labelWithString: column)
             cell.font = ToolPanelFont.body()
             cell.textColor = .secondaryLabelColor
-            return cell
+            return fitted(cell, column: index)
         })
         for row in table.rows {
-            grid.addRow(with: row.map { cell in
-                let field = NSTextField(labelWithString: cell.text)
+            grid.addRow(with: row.enumerated().map { index, cell in
+                let field = fitted(NSTextField(labelWithString: cell.text), column: index)
                 // A permission is read by its colour as much as by its word,
                 // which is the whole point of drawing this as a table: a column
                 // of green with one red in it answers at a glance.

@@ -146,7 +146,7 @@ extension Parser {
 
     /// The fields of one entry, its parts laid out as header, data and
     /// extended header.
-    private struct NvarEntry {
+    struct NvarEntry {
         var offset: UInt64
         var end: UInt64
         var next: UInt32
@@ -163,10 +163,21 @@ extension Parser {
         var isDataOnly: Bool { attributes & NVAR.dataOnly != 0 }
     }
 
+    private func readNvarEntry(at offset: UInt64, store: Range<UInt64>) -> NvarEntry? {
+        Self.readNvarEntry(at: offset, store: store, reader: reader)
+    }
+
     /// The entry at `offset`, or nil when it does not read: the signature is
     /// not whole, the size is too small for the header or runs past the store,
     /// the name has no end, or the extended header claims more than the data.
-    private func readNvarEntry(at offset: UInt64, store: Range<UInt64>) -> NvarEntry? {
+    ///
+    /// The walk reads a superseded entry — its valid bit cleared — as the
+    /// reference does, as a header and a body; `asIfValid` reads its GUID,
+    /// name and extended header too, which a variable's history needs to
+    /// tell whose copy it was (`NvramVariableHistory`).
+    static func readNvarEntry(
+        at offset: UInt64, store: Range<UInt64>, reader: ImageReader, asIfValid: Bool = false
+    ) -> NvarEntry? {
         guard reader.uint32(at: offset) == NVAR.signature,
               let size = reader.uint16(at: offset + 4),
               UInt64(size) > NVAR.headerSize,
@@ -184,7 +195,8 @@ extension Parser {
 
         // A valid entry that is not a later link carries its GUID, or its
         // index into the store's table, and then its name.
-        if entry.isValid && !entry.isDataOnly {
+        let readsAsValid = entry.isValid || asIfValid
+        if readsAsValid && !entry.isDataOnly {
             if attributes & NVAR.localGuid != 0 {
                 guard cursor + NVAR.guidSize <= end, let guid = reader.guid(at: cursor) else { return nil }
                 entry.localGuid = guid
@@ -222,7 +234,7 @@ extension Parser {
         // size. The reference takes the size only when it is big enough to be
         // one, and only on a valid entry.
         var extendedSize: UInt64 = 0
-        if entry.isValid, attributes & NVAR.extendedHeader != 0,
+        if readsAsValid, attributes & NVAR.extendedHeader != 0,
            UInt64(size) > NVAR.headerSize + 2,
            let field = reader.uint16(at: end - 2),
            UInt64(field) >= NVAR.extendedHeaderMinimum {

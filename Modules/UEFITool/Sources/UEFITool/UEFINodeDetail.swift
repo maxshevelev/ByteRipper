@@ -136,6 +136,21 @@ public enum UEFIDetail {
         let title = node.name.isEmpty ? kindLabel(node.kind) : node.name
         var tables: [UEFIDetailTable] = []
 
+        // A variable's entry: whose copy it is where the tree calls it
+        // Invalid, and every copy the store keeps of it.
+        if node.kind == .vssEntry || node.kind == .nvarEntry,
+           !node.id.path.isEmpty, let store = image.node(NodeID(Array(node.id.path.dropLast()))) {
+            let history = NvramVariableHistory.of(node, in: store, reader: reader)
+            let variable = history.map { ($0.name, $0.guid) }
+                ?? NvramVariableHistory.variable(of: node, in: store, reader: reader)
+            if let variable, variable.0 != node.name {
+                fields.append(.init(L("Variable"), variable.0))
+            }
+            if let history {
+                tables.append(historyTable(history, focus: node.id, reader: reader))
+            }
+        }
+
         // A descriptor says more about itself than a header's worth of fields,
         // and two of the things it says are grids.
         if node.kind == .flashDescriptor,
@@ -175,6 +190,76 @@ public enum UEFIDetail {
         // recognised and measured: its bytes are exactly the picture's.
         let picture = node.kind == .picture ? reader.bytes(node.body) : nil
         return UEFINodeDetail(title: title, fields: fields, tables: tables, picture: picture)
+    }
+
+    // MARK: - A variable's copies
+
+    /// The most copies the table lists. A variable written on every boot
+    /// keeps hundreds; the latest are the ones worth reading.
+    static let historyRows = 40
+
+    /// Every copy the store keeps of the variable, oldest first: where it is,
+    /// what it is now, how long its value is, and what it changed against the
+    /// copy before. The entry in focus is marked. Past `historyRows` the
+    /// earliest copies are left out, except the one in focus.
+    static func historyTable(_ history: NvramVariableHistory, focus: NodeID, reader: ImageReader) -> UEFIDetailTable {
+        let versions = history.versions
+        let firstShown = max(0, versions.count - historyRows)
+        var rows: [[UEFIDetailTable.Cell]] = []
+        if firstShown > 0 {
+            if let focused = versions.firstIndex(where: { $0.entry == focus }), focused < firstShown {
+                rows.append(historyRow(versions, focused, focus: focus, reader: reader))
+            }
+            rows.append([.init("…"), .init(L("%1$@ earlier copies not shown", firstShown)),
+                         .init(""), .init(""), .init("")])
+        }
+        for index in firstShown..<versions.count {
+            rows.append(historyRow(versions, index, focus: focus, reader: reader))
+        }
+        return UEFIDetailTable(
+            title: L("Variable history"),
+            symbol: "clock.arrow.circlepath",
+            columns: [L("Copy", context: "variable"), L("Address", context: "variable"), L("State"),
+                      L("Size"), L("Change")],
+            rows: rows
+        )
+    }
+
+    private static func historyRow(
+        _ versions: [NvramVariableHistory.Version], _ index: Int, focus: NodeID, reader: ImageReader
+    ) -> [UEFIDetailTable.Cell] {
+        let version = versions[index]
+        let number = "\(index + 1)"
+        let state: String
+        switch version.state {
+        case .current: state = L("Current")
+        case .superseded: state = L("Superseded")
+        case .deleted: state = L("Deleted", context: "variable")
+        }
+        let change = index == 0 ? "—"
+            : NvramVariableHistory.change(from: versions[index - 1], to: version, reader: reader)
+                .map(changeText) ?? "—"
+        return [.init(version.entry == focus ? "▸ " + number : number),
+                .init(hex(version.offset)), .init(state),
+                .init("\(version.value.count)"), .init(change)]
+    }
+
+    /// What a copy changed: its size, if that moved, and where its bytes
+    /// differ — offsets into the value, the first few runs of them.
+    private static func changeText(_ change: NvramVariableHistory.Change) -> String {
+        guard !change.isNone else { return L("No change") }
+        var parts: [String] = []
+        if change.oldSize != change.newSize {
+            parts.append(L("size %1$@ → %2$@", change.oldSize, change.newSize))
+        }
+        if !change.changed.isEmpty {
+            var runs = change.changed.prefix(4).map { run in
+                run.count == 1 ? "+" + hex(run.lowerBound) : "+" + hex(run.lowerBound) + "–" + hex(run.upperBound - 1)
+            }
+            if change.changed.count > 4 { runs.append("…") }
+            parts.append(L("changed bytes: %1$@, at %2$@", change.changedBytes, runs.joined(separator: ", ")))
+        }
+        return parts.joined(separator: "; ")
     }
 
     // MARK: - How full a variable store is

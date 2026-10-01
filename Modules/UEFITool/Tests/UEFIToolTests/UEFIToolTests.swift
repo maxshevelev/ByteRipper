@@ -551,6 +551,78 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Deleted entries"), "0")
     }
 
+    /// A VSS2 store holding `copies` of Setup — the values given, all but the
+    /// last marked — and one other variable, as the parser lays it out: the
+    /// header through the name, then the value.
+    private func setupHistory(_ copies: [[UInt8]]) -> (UEFIImage, ImageReader) {
+        var bytes = [UInt8](repeating: 0xFF, count: 0x1C)
+        var entries: [UEFINode] = []
+        func variable(_ name: String, _ value: [UInt8], marked: Bool) {
+            let offset = UInt64(bytes.count)
+            let ucs2: [UInt8] = name.utf16.flatMap { [UInt8($0 & 0xFF), UInt8($0 >> 8)] } + [0, 0]
+            func u32(_ value: Int) -> [UInt8] { (0..<4).map { UInt8(truncatingIfNeeded: value >> (8 * $0)) } }
+            bytes += [0xAA, 0x55, marked ? 0x3C : 0x3F, 0x00, 0x03, 0x00, 0x00, 0x00]
+            bytes += u32(ucs2.count)
+            bytes += u32(value.count)
+            bytes += [UInt8](repeating: 0x11, count: 16)
+            bytes += ucs2
+            let nameEnd = UInt64(bytes.count)
+            bytes += value
+            entries.append(UEFINode(
+                kind: .vssEntry,
+                subtype: marked ? UEFITypes.Sub.invalidVssEntry : UEFITypes.Sub.standardVssEntry,
+                name: marked ? "Invalid" : name, guid: EFIGUID(bytes: [UInt8](repeating: 0x11, count: 16)),
+                header: offset..<nameEnd, body: nameEnd..<UInt64(bytes.count), isFixed: true))
+        }
+        variable("Lang", [0x65], marked: false)
+        for (index, value) in copies.enumerated() {
+            variable("Setup", value, marked: index < copies.count - 1)
+        }
+        let store = UEFINode(kind: .vss2Store, name: "VSS2 store", header: 0..<0x1C,
+                             body: 0x1C..<UInt64(bytes.count), children: entries)
+        return (UEFIImage(size: UInt64(bytes.count), roots: [store]), ImageReader(bytes))
+    }
+
+    /// A marked entry names the variable it is a copy of, and every copy is a
+    /// row: where it is, what it is now, its size, and what it changed.
+    func testAVariablesCopiesAreAHistoryTable() throws {
+        let (image, reader) = setupHistory([[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 1, 1, 0, 5]])
+        let focus = image.roots[0].children[2]
+        let detail = UEFIDetail.build(for: focus, image: image, reader: reader)
+        let table = try XCTUnwrap(detail.tables.first { $0.title == "Variable history" })
+
+        XCTAssertEqual(field(detail, "Variable"), "Setup", "the tree calls it Invalid")
+        XCTAssertEqual(table.columns, ["Copy", "Address", "State", "Size", "Change"])
+        XCTAssertEqual(table.rows.map { $0[0].text }, ["1", "▸ 2", "3", "4"])
+        XCTAssertEqual(table.rows.map { $0[1].text }, image.roots[0].children.dropFirst().map { "0x" + String($0.range.lowerBound, radix: 16, uppercase: true) })
+        XCTAssertEqual(table.rows.map { $0[2].text }, ["Superseded", "Superseded", "Superseded", "Current"])
+        XCTAssertEqual(table.rows.map { $0[3].text }, ["4", "4", "4", "5"])
+        XCTAssertEqual(table.rows.map { $0[4].text }, [
+            "—", "changed bytes: 2, at +0x1–0x2", "No change", "size 4 → 5",
+        ])
+    }
+
+    /// A variable the store keeps once has no history, and a live entry needs
+    /// no name of its variable beside its own.
+    func testAVariableWithOneCopyHasNoHistory() {
+        let (image, reader) = setupHistory([[1]])
+        let detail = UEFIDetail.build(for: image.roots[0].children[1], image: image, reader: reader)
+        XCTAssertNil(detail.tables.first { $0.title == "Variable history" })
+        XCTAssertNil(field(detail, "Variable"))
+    }
+
+    /// Hundreds of copies list the latest, and the one in focus however old.
+    func testALongHistoryShowsTheLatestCopies() throws {
+        let (image, reader) = setupHistory((0..<50).map { [UInt8($0)] })
+        let detail = UEFIDetail.build(for: image.roots[0].children[1], image: image, reader: reader)
+        let rows = try XCTUnwrap(detail.tables.first { $0.title == "Variable history" }).rows
+
+        XCTAssertEqual(rows.count, UEFIDetail.historyRows + 2)
+        XCTAssertEqual(rows[0][0].text, "▸ 1")
+        XCTAssertEqual(rows[1][1].text, "10 earlier copies not shown")
+        XCTAssertEqual(rows.last?[0].text, "50")
+    }
+
     /// The version table's region shows what the table states.
     func testABVDTRegionShowsTheVersionsTheTableStates() {
         let built = TestUEFI.bvdtRegion()

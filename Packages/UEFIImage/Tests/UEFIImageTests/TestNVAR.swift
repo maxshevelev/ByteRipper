@@ -46,6 +46,15 @@ enum TestNVAR {
         return writer.bytes
     }
 
+    /// A whole entry the firmware has since superseded: written valid, with
+    /// its GUID and name, then its valid bit cleared — which is all the
+    /// firmware does to it.
+    static func supersededEntry(name: String, data: [UInt8]) -> [UInt8] {
+        var bytes = entry(name: name, data: data)
+        bytes[9] &= ~NVAR.valid
+        return bytes
+    }
+
     /// A later link of a chain: no GUID and no name, only data.
     static func dataEntry(next: UInt32 = NVAR.noNext, data: [UInt8], valid: Bool = true) -> [UInt8] {
         entry(attributes: (valid ? NVAR.valid : 0) | NVAR.dataOnly, next: next, data: data)
