@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// `EFI_FFS_FILE_HEADER` and its variants (§5).
 enum FFS {
@@ -21,6 +22,13 @@ enum FFS {
     static let fixedChecksum2: UInt8 = 0xAA   // revision 2
 
     static let padType: UInt8 = 0xF0
+    /// `RECOVERY_STARTUP_AP_DATA_X86_128K`: what EDK2's GenFv writes into the
+    /// pad file in front of the Volume Top File — `jmp far F000:FFD0`, then
+    /// zeros and two bytes the reference matches as written.
+    static let startupApDataX86_128K: [UInt8] = [
+        0xEA, 0xD0, 0xFF, 0x00, 0xF0, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x27, 0x2D,
+    ]
     static let rawType: UInt8 = 0x01
     /// `EFI_FV_FILETYPE_ALL`: never a file's real type, and read the way a raw
     /// file is where it turns up.
@@ -140,6 +148,8 @@ extension Parser {
             // the FIT panel uses, and the empty slots after them. It reads as
             // those, the way UEFITool shows it, rather than as one blob.
             children = scanRawArea(body, emptyByte: emptyByte, depth: depth + 1)
+        } else if type == FFS.padType, !body.isEmpty {
+            children = padFileBody(body, emptyByte: emptyByte)
         }
 
         let node = UEFINode(
@@ -157,6 +167,41 @@ extension Parser {
             children: children
         )
         return ParsedFile(node: node, size: end - offset)
+    }
+
+    /// A pad file's body, the way UEFITool's `parsePadFileBody` reads it: an
+    /// erased body is nothing; otherwise the erased bytes up to the first
+    /// written one — rounded down to eight, and only when there are eight —
+    /// are free space, and the rest is either the Startup AP data or data that
+    /// has no business in a pad file, which is reported.
+    private func padFileBody(_ body: Range<UInt64>, emptyByte: UInt8) -> [UEFINode] {
+        guard let firstWritten = reader.firstOffset(in: body, notEqualTo: emptyByte) else { return [] }
+        var dataStart = body.lowerBound
+        var nodes: [UEFINode] = []
+        let leading = firstWritten - body.lowerBound
+        if leading >= 8 {
+            dataStart = body.lowerBound + leading / 8 * 8
+            nodes.append(UEFINode(
+                kind: .freeSpace, name: L("Free space"),
+                range: body.lowerBound..<dataStart, isErased: true
+            ))
+        }
+        let data = dataStart..<body.upperBound
+        let signature = FFS.startupApDataX86_128K
+        if reader.bytes(at: dataStart, count: UInt64(signature.count)) == signature {
+            nodes.append(UEFINode(
+                kind: .startupApData,
+                subtype: UEFITypes.Sub.x86128kStartupApDataEntry,
+                name: "Startup AP data",
+                header: dataStart..<dataStart,
+                body: data,
+                isFixed: true
+            ))
+        } else {
+            note(.nonUEFIDataInPadFile, at: dataStart)
+            nodes.append(UEFINode(kind: .padding, name: L("Non-UEFI data"), range: data))
+        }
+        return nodes
     }
 
     /// The name a person gave the file, if one of its sections carries one.

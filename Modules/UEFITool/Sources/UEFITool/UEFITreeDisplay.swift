@@ -167,6 +167,13 @@ public enum UEFITreeDisplay {
         // A pad file (`EFI_FV_FILETYPE_FFS_PAD`) has a GUID only because every
         // file header does — all ones, as a rule — and it names nothing.
         if node.kind == .file, node.subtype == 0xF0 {
+            // What its body turned out to hold, the way UEFITool renames it.
+            if node.children.contains(where: { $0.kind == .startupApData }) {
+                return L("Startup AP data padding file")
+            }
+            if node.children.contains(where: { $0.kind == .padding && !$0.isErased }) {
+                return L("Non-empty padding file")
+            }
             return L("Padding file")
         }
         guard let guid = node.guid else {
@@ -216,6 +223,7 @@ public enum UEFITreeDisplay {
         case .flashDeviceMapEntry: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue)
         case .nvarEntry: return UEFITypes.typeName(UEFITypes.Item.nvarEntry.rawValue)
         case .nvarGuidStore: return UEFITypes.typeName(UEFITypes.Item.nvarGuidStore.rawValue)
+        case .startupApData: return UEFITypes.typeName(UEFITypes.Item.startupApDataEntry.rawValue)
         // UEFITool's own words for the gaps between structures — not names
         // the PI spec gives anything, so they translate. The kinds above are
         // the spec's and stay in its English.

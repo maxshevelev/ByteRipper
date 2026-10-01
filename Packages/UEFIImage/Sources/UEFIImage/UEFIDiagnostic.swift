@@ -103,6 +103,10 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         /// A flash device map whose entries are of a size or format nobody has
         /// described; the store is kept whole.
         case unknownFlashDeviceMapEntries(size: UInt32, format: UInt8)
+        /// A pad file whose body holds something other than the erase byte
+        /// and is not the Startup AP data: a pad file is meant to be empty,
+        /// so data in one is either a vendor's or damage.
+        case nonUEFIDataInPadFile
         /// An NVAR entry that does not read — a broken signature, a size that
         /// is too small or runs past the store, a name with no end. The walk
         /// stops, and the store from here on is kept as padding; at the
@@ -120,7 +124,7 @@ public struct UEFIDiagnostic: Equatable, Sendable {
                  .protectedRangeOutsideImage, .protectedRangeNotPlaced,
                  .protectedRangeHashMismatch, .unsupportedHashAlgorithm,
                  .unknownVendorHashFileSize, .unknownRevision,
-                 .unknownFlashDeviceMapEntries:
+                 .unknownFlashDeviceMapEntries, .nonUEFIDataInPadFile:
                 return .warning
             }
         }
@@ -211,6 +215,8 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case .unknownFlashDeviceMapEntries(let size, let format):
             return "Insyde flash device map entries of \(hex(UInt64(size))) bytes in format "
                 + "\(hex(UInt64(format))) are of no known layout"
+        case .nonUEFIDataInPadFile:
+            return "padding file holds data that is not UEFI"
         case .unreadableNvarEntry:
             return "NVAR entry cannot be read; the store is kept as padding from here"
         }

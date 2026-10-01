@@ -216,6 +216,10 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     /// (`BOOT_GUARD_PROTECTED_RANGES.md` §5.3).
     case flashDeviceMapStore
     case flashDeviceMapEntry
+    /// The x86 Startup AP data EDK2's GenFv writes into the pad file before
+    /// the Volume Top File: a far jump the application processors start at.
+    /// It is code at a fixed address, so it does not move.
+    case startupApData
     /// Space between elements that belongs to no structure.
     case padding
     /// The unused tail of a volume's body (§5.8).

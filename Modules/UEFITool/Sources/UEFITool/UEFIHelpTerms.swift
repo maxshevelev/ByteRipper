@@ -27,6 +27,9 @@ public enum UEFIHelpTerms {
         case .file: return node.subtype == 0xF0 ? HelpTermID("pad-file") : HelpTermID("ffs-file")
         case .section: return HelpTermID("section")
         case .microcode: return HelpTermID("microcode")
+        // The Startup AP data lives in a pad file and is why that pad file
+        // must stay where it is; the page about pad files says so.
+        case .startupApData: return HelpTermID("pad-file")
         case .padding: return HelpTermID("padding")
         case .freeSpace: return HelpTermID("free-space")
         case .nonUEFIData: return HelpTermID("non-uefi-data")

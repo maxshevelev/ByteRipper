@@ -36,6 +36,7 @@ extension UEFINode {
         case .nvarGuidStore: return UEFITypes.Item.nvarGuidStore.rawValue
         case .flashDeviceMapStore: return UEFITypes.Item.insydeFlashDeviceMapStore.rawValue
         case .flashDeviceMapEntry: return UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue
+        case .startupApData: return UEFITypes.Item.startupApDataEntry.rawValue
         case .padding: return UEFITypes.Item.padding.rawValue
         case .freeSpace: return UEFITypes.Item.freeSpace.rawValue
         // Data nobody claimed is a run of bytes with a type, not a structure, so
@@ -79,6 +80,9 @@ extension UEFINode {
         // UEFITool names no subtypes for the flash device map.
         case .flashDeviceMapStore, .flashDeviceMapEntry:
             return nil
+        case .startupApData:
+            // The one form UEFITool recognises.
+            return UEFITypes.Sub.x86128kStartupApDataEntry
         case .padding:
             return Self.paddingSubtype(of: self)
         case .freeSpace:

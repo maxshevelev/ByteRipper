@@ -137,6 +137,22 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: named), "Variable Defaults")
     }
 
+    /// A pad file is named by what its body turned out to hold, the way
+    /// UEFITool renames it.
+    func testAPadFileIsNamedByWhatItHolds() {
+        func pad(_ children: [UEFINode]) -> UEFINode {
+            UEFINode(kind: .file, subtype: 0xF0, name: "Padding file", guid: .zero,
+                     header: 0..<0x18, body: 0x18..<0x100, children: children)
+        }
+        let startup = UEFINode(kind: .startupApData, name: "Startup AP data", header: 0x40..<0x40, body: 0x40..<0x100)
+        let data = UEFINode(kind: .padding, name: "Non-UEFI data", range: 0x40..<0x100)
+        let free = UEFINode(kind: .freeSpace, name: "Free space", range: 0x18..<0x40, isErased: true)
+
+        XCTAssertEqual(UEFITreeDisplay.name(for: pad([]), catalogue: .empty), "Padding file")
+        XCTAssertEqual(UEFITreeDisplay.name(for: pad([free, startup]), catalogue: .empty), "Startup AP data padding file")
+        XCTAssertEqual(UEFITreeDisplay.name(for: pad([free, data]), catalogue: .empty), "Non-empty padding file")
+    }
+
     /// A node without a GUID keeps the name the parser gave it.
     func testANodeWithoutAGuidKeepsItsParserName() {
         let freeSpace = UEFINode(kind: .freeSpace, name: "Tail", range: 0..<0x100)

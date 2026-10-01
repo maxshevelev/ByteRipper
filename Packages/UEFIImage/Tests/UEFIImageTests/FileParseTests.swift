@@ -60,8 +60,10 @@ final class FileParseTests: XCTestCase {
         let file = volume([TestImage.file(type: 0xF0, body: [1, 2])]).children[0]
 
         XCTAssertEqual(file.name, "Padding file")
+        // An erased one is no defect; one holding data is reported, the way
+        // the reference reports it (`PadFileBodyTests`).
         XCTAssertTrue(UEFIParser.parse(TestImage.volume(files: [
-            TestImage.file(type: 0xF0, body: [1, 2])
+            TestImage.file(type: 0xF0, body: [0xFF, 0xFF])
         ])).diagnostics.isEmpty)
     }
 

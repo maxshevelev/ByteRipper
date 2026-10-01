@@ -580,6 +580,8 @@
 "PRD" = "PRD";
 "Padding" = "Padding";
 "Padding file" = "Файл-padding";
+"Startup AP data padding file" = "Файл-padding со Startup AP data";
+"Non-empty padding file" = "Непустой файл-padding";
 "Pane Layout" = "Расположение файловых панелей";
 "Pane is empty" = "Файловая панель пуста";
 "Past the end of the file" = "За концом файла";

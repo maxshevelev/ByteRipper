@@ -628,6 +628,18 @@ typedef struct {
 The value `0x12345678` in these fields means "not filled in" (EDK2 leaves a
 placeholder).
 
+**A pad file's body** (type `0xF0`) is read the way UEFITool's
+`parsePadFileBody` reads it. All erase byte: nothing. Otherwise the erased
+bytes up to the first written one are free space — rounded down to a multiple
+of eight, and only when there are at least eight — and the rest is one node:
+the **Startup AP data** when it opens with EDK2's
+`RECOVERY_STARTUP_AP_DATA_X86_128K` (`EA D0 FF 00 F0`, `jmp far F000:FFD0`,
+then zeros and `27 2D`), which GenFv writes into the pad file in front of the
+VTF and which is fixed; anything else is **Non-UEFI data**, reported as a
+warning. The file is then shown as a Startup AP data or a non-empty padding
+file. On the Lenovo dumps at hand the data in two such pad files is a Boot
+Guard key manifest (`__KEYM__`), which UEFITool reports the same way.
+
 ### 5.8. Walking a volume's body
 
 ```

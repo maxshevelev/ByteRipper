@@ -541,7 +541,7 @@ public enum UEFIDetail {
         case .fdcStore, .cmdbStore, .sysFEntry:
             break
 
-        case .padding, .freeSpace, .nonUEFIData:
+        case .padding, .freeSpace, .nonUEFIData, .startupApData:
             // No header of their own: the size the common "Total" carries is
             // the whole of what there is to say.
             break
@@ -820,6 +820,7 @@ public enum UEFIDetail {
         case .flashDeviceMapEntry: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue)
         case .nvarEntry: return UEFITypes.typeName(UEFITypes.Item.nvarEntry.rawValue)
         case .nvarGuidStore: return UEFITypes.typeName(UEFITypes.Item.nvarGuidStore.rawValue)
+        case .startupApData: return UEFITypes.typeName(UEFITypes.Item.startupApDataEntry.rawValue)
         case .padding: return L("Padding")
         case .freeSpace: return L("Free space")
         case .nonUEFIData: return L("Non-UEFI data")
@@ -846,7 +847,7 @@ public enum UEFIDetail {
             return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? hex(subtype)
         // An NVRAM entry and a SLIC blob carry a derived subtype; name it from
         // the table, keeping the number where the table has no word.
-        case .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .slicData, .nvarEntry:
+        case .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .slicData, .nvarEntry, .startupApData:
             return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? hex(subtype)
         default: return hex(subtype)
         }

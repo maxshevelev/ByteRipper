@@ -580,6 +580,8 @@
 "PRD" = "PRD";
 "Padding" = "Padding";
 "Padding file" = "Padding-Datei";
+"Startup AP data padding file" = "Padding-Datei mit Startup AP data";
+"Non-empty padding file" = "Nicht leere Padding-Datei";
 "Pane Layout" = "Bereichsaufteilung";
 "Pane is empty" = "Bereich ist leer";
 "Past the end of the file" = "Hinter dem Ende der Datei";
