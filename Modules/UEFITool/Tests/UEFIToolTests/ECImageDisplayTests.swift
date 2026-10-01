@@ -30,7 +30,7 @@ final class ECImageDisplayTests: XCTestCase {
         let (image, _) = built()
         let names = image.roots[0].children.filter { $0.kind == .ecImage }
             .map { UEFITreeDisplay.name(for: $0, catalogue: GuidsCatalogue(names: [:]), in: image) }
-        XCTAssertEqual(names, ["Microchip MEC image", "Microchip MEC image (copy)"])
+        XCTAssertEqual(names, ["Microchip MEC image, 4 KB", "Microchip MEC image, 4 KB (copy)"])
     }
 
     func testTheDetailsSayWhatTheImageIsAndWhatItCopies() {
