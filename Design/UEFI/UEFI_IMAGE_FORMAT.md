@@ -628,6 +628,20 @@ typedef struct {
 The value `0x12345678` in these fields means "not filled in" (EDK2 leaves a
 placeholder).
 
+**A raw file's body** (type `0x01`, and `0x00`, which is never a real type
+and is read the same way) follows UEFITool's `parseFileBody`. After the NVAR
+store files: an AMI ROM hole (`05CA01FC-0FC1-11DC-9011-00173153EBA8` up to
+`05CA020B-…`) stays whole and is fixed; a Phoenix hash file is left to the
+protected ranges; anything else is probed, quietly, as a run of sections —
+each section's size at least a header and within the body, its type's own
+header there (5 bytes for compression, 20 for GUID-defined, 16 for freeform,
+2 for version, 4 for a postcode), a GUID-defined section's `DataOffset` within
+it, the next one four-aligned, unknown types allowed — and walked as sections
+when it reads as them. Otherwise the body is a raw area (§4), which finds the
+microcode of the store the FIT points into, volumes and the rest; a raw area
+that finds nothing leaves the file a leaf, as the reference leaves it. On the
+Lenovo dump with 22 raw files, every one has the children UEFIExtract gives it.
+
 **A pad file's body** (type `0xF0`) is read the way UEFITool's
 `parsePadFileBody` reads it. All erase byte: nothing. Otherwise the erased
 bytes up to the first written one are free space — rounded down to a multiple

@@ -23,6 +23,20 @@ enum Section {
     /// `EFI_GUID_DEFINED_SECTION`: a GUID, a `DataOffset` and attributes.
     static let guidDefinedHeaderSize: UInt64 = 20
 
+    /// What each type puts after the common header, as far as a probe needs
+    /// to know (`parse*SectionHeader` in the reference): a section shorter
+    /// than this is not the section its type says.
+    static func typeHeaderSize(_ type: UInt8) -> UInt64 {
+        switch type {
+        case compression: return compressionHeaderSize
+        case guidDefined: return guidDefinedHeaderSize
+        case 0x18: return 16      // freeform subtype GUID
+        case 0x14: return 2       // version: the build number
+        case 0x20, 0xF0: return 4 // Insyde and Phoenix postcode
+        default: return 0
+        }
+    }
+
     /// §6.1. A vendor type nobody documented keeps its number.
     static func typeName(_ type: UInt8) -> String {
         switch type {
@@ -134,6 +148,43 @@ extension Parser {
             offset = next
         }
         return nodes
+    }
+
+    /// Whether `body` reads as a run of sections, the way the reference's
+    /// probe asks before it reads a raw file's body as one: every section's
+    /// size at least a header and within what is left, every type's own
+    /// header there, a GUID-defined section's `DataOffset` inside it, and the
+    /// next section four-aligned. Unknown types pass, as they do there. Reads
+    /// and reports nothing — a raw file that is not sections is no defect.
+    func readsAsSectionRun(_ body: Range<UInt64>, ffsVersion: Int) -> Bool {
+        var offset = body.lowerBound
+        while offset < body.upperBound {
+            let remaining = body.upperBound - offset
+            guard remaining >= Section.headerSize,
+                  let shortSize = reader.uint24(at: offset),
+                  let type = reader.uint8(at: offset + 3)
+            else { return false }
+            var headerSize = Section.headerSize
+            var size = UInt64(shortSize)
+            if ffsVersion == 3 && shortSize == Section.extendedSizeMarker {
+                guard remaining >= Section.extendedHeaderSize,
+                      let extended = reader.uint32(at: offset + 4)
+                else { return false }
+                headerSize = Section.extendedHeaderSize
+                size = UInt64(extended)
+            }
+            guard size >= Section.headerSize, size <= remaining,
+                  size >= headerSize + Section.typeHeaderSize(type)
+            else { return false }
+            if type == Section.guidDefined {
+                guard let dataOffset = reader.uint16(at: offset + headerSize + 16),
+                      UInt64(dataOffset) <= size
+                else { return false }
+            }
+            guard let next = alignUp(offset + size - body.lowerBound, to: Section.alignment) else { return false }
+            offset = body.lowerBound + next
+        }
+        return true
     }
 
     private func parseSection(

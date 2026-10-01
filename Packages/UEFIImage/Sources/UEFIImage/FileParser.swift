@@ -36,6 +36,18 @@ enum FFS {
 
     /// The files whose body is an AMI NVAR store (§9): the store itself, and
     /// the two sets of defaults the firmware falls back to.
+    /// AMI's ROM holes: files whose place in the flash is fixed and whose
+    /// body is the vendor's, not structure (`AMI_ROM_HOLE_FILE_GUID_0..15`).
+    static func isRomHole(_ guid: EFIGUID) -> Bool {
+        let bytes = guid.bytes
+        // 05CA01FC-0FC1-11DC-9011-00173153EBA8 up to 05CA020B-…: the first
+        // dword counts, the rest is the same.
+        let first = UInt32(bytes[0]) | UInt32(bytes[1]) << 8 | UInt32(bytes[2]) << 16 | UInt32(bytes[3]) << 24
+        return (0x05CA_01FC...0x05CA_020B).contains(first)
+            && Array(bytes[4...]) == Array(romHoleTail)
+    }
+    private static let romHoleTail = KnownGUIDs.guid("05CA01FC-0FC1-11DC-9011-00173153EBA8").bytes[4...]
+
     static func holdsNvarStore(_ guid: EFIGUID, type: UInt8) -> Bool {
         (type == rawType || type == allType)
             && (guid == NvramGuids.nvramNvarStoreFileGuid
@@ -133,21 +145,37 @@ extension Parser {
         // both polarities still reads (§5.5).
         let emptyByte: UInt8 = state & FFS.erasePolarity != 0 ? 0xFF : 0x00
         var children: [UEFINode] = []
+        var isRomHole = false
         if FFS.holdsNvarStore(name, type: type), !body.isEmpty {
             // The body is the store, with no header of its own; when it does
             // not read as one, the file stays a leaf and the parse says why.
             children = parseNvarStore(body, emptyByte: emptyByte, probe: false, depth: depth + 1) ?? []
+        } else if type == FFS.rawType || type == FFS.allType, !body.isEmpty {
+            // A raw file's body is whatever its owner put there, read the way
+            // the reference reads it (`parseFileBody`): an AMI ROM hole is the
+            // vendor's and stays whole, and fixed; a Phoenix hash file is read
+            // by the protected ranges; anything else is sections when it reads
+            // as sections, and otherwise a raw area — which is where volumes,
+            // microcode and the rest are found inside one.
+            if FFS.isRomHole(name) {
+                isRomHole = true
+            } else if name != KnownGUIDs.phoenixHashFile {
+                if readsAsSectionRun(body, ffsVersion: ffsVersion) {
+                    children = walkSections(
+                        body, ffsVersion: ffsVersion, emptyByte: emptyByte, depth: depth + 1, fileGuid: name
+                    )
+                } else {
+                    // A raw area with nothing in it leaves the file a leaf, as
+                    // the reference leaves it: one padding row the size of the
+                    // body would say nothing the file's own row does not.
+                    let found = scanRawArea(body, emptyByte: emptyByte, depth: depth + 1)
+                    children = found.contains { $0.kind != .padding } ? found : []
+                }
+            }
         } else if FFS.hasSections(type), !body.isEmpty {
             children = walkSections(
                 body, ffsVersion: ffsVersion, emptyByte: emptyByte, depth: depth + 1, fileGuid: name
             )
-        } else if type == FFS.rawType, !body.isEmpty,
-                  MicrocodeHeader.read(at: body.lowerBound, in: reader) != nil {
-            // A raw file that opens on a microcode image is the store the FIT
-            // points into: a run of images, each checked by the header reader
-            // the FIT panel uses, and the empty slots after them. It reads as
-            // those, the way UEFITool shows it, rather than as one blob.
-            children = scanRawArea(body, emptyByte: emptyByte, depth: depth + 1)
         } else if type == FFS.padType, !body.isEmpty {
             children = padFileBody(body, emptyByte: emptyByte)
         }
@@ -163,7 +191,7 @@ extension Parser {
             header: offset..<(offset + headerSize),
             body: body,
             tail: tail,
-            isFixed: attributes & FFS.fixed != 0,
+            isFixed: attributes & FFS.fixed != 0 || isRomHole,
             children: children
         )
         return ParsedFile(node: node, size: end - offset)
