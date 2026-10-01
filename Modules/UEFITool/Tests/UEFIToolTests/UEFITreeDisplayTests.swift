@@ -117,6 +117,13 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertEqual(UEFITreeDisplay.name(for: built.node, catalogue: named), "BootOrder")
     }
 
+    /// An NVAR variable is named the same way, for the same reason.
+    func testAnNvarVariableIsNamedByItsNameNotItsGuid() {
+        let built = TestUEFI.nvarEntry()
+        let named = GuidsCatalogue(names: [built.node.guid!: "Something else"])
+        XCTAssertEqual(UEFITreeDisplay.name(for: built.node, catalogue: named), "Setup")
+    }
+
     /// A node without a GUID keeps the name the parser gave it.
     func testANodeWithoutAGuidKeepsItsParserName() {
         let freeSpace = UEFINode(kind: .freeSpace, name: "Tail", range: 0..<0x100)

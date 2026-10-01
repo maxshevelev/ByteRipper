@@ -159,7 +159,7 @@ public enum UEFITreeDisplay {
     /// node without a GUID keeps the name the parser gave it, falling back to
     /// its kind when the parser had nothing to say.
     ///
-    /// A VSS variable is the one node whose GUID is not its identity: the name
+    /// A VSS or NVAR variable is the one node whose GUID is not its identity: the name
     /// the parser decoded — "BootOrder", "PK" — is what a reader looks for, and
     /// many variables share the single vendor GUID that owns them. So its row
     /// keeps the parser's name; the GUID still shows in the details panel.
@@ -172,7 +172,7 @@ public enum UEFITreeDisplay {
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind) : node.name
         }
-        if node.kind == .vssEntry, !node.name.isEmpty {
+        if node.kind == .vssEntry || node.kind == .nvarEntry, !node.name.isEmpty {
             return node.name
         }
         // The community catalogue first; the NVRAM classifier names the GUIDs
@@ -209,6 +209,8 @@ public enum UEFITreeDisplay {
         case .flashMapEntry: return UEFITypes.typeName(UEFITypes.Item.phoenixFlashMapEntry.rawValue)
         case .flashDeviceMapStore: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapStore.rawValue)
         case .flashDeviceMapEntry: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue)
+        case .nvarEntry: return UEFITypes.typeName(UEFITypes.Item.nvarEntry.rawValue)
+        case .nvarGuidStore: return UEFITypes.typeName(UEFITypes.Item.nvarGuidStore.rawValue)
         // UEFITool's own words for the gaps between structures — not names
         // the PI spec gives anything, so they translate. The kinds above are
         // the spec's and stay in its English.

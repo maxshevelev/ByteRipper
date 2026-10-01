@@ -32,6 +32,8 @@ extension UEFINode {
         case .sysFEntry: return UEFITypes.Item.sysFEntry.rawValue
         case .evsaEntry: return UEFITypes.Item.evsaEntry.rawValue
         case .flashMapEntry: return UEFITypes.Item.phoenixFlashMapEntry.rawValue
+        case .nvarEntry: return UEFITypes.Item.nvarEntry.rawValue
+        case .nvarGuidStore: return UEFITypes.Item.nvarGuidStore.rawValue
         case .flashDeviceMapStore: return UEFITypes.Item.insydeFlashDeviceMapStore.rawValue
         case .flashDeviceMapEntry: return UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue
         case .padding: return UEFITypes.Item.padding.rawValue
@@ -70,8 +72,10 @@ extension UEFINode {
             return nil
         // An entry and a SLIC blob carry the subtype the parser derived — the
         // byte is not on the node, the parser worked it out from the header.
-        case .slicData, .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry:
+        case .slicData, .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .nvarEntry:
             return subtype
+        case .nvarGuidStore:
+            return nil
         // UEFITool names no subtypes for the flash device map.
         case .flashDeviceMapStore, .flashDeviceMapEntry:
             return nil

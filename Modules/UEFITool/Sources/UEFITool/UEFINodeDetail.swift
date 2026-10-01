@@ -530,6 +530,12 @@ public enum UEFIDetail {
             default: break
             }
 
+        case .nvarEntry:
+            fields += nvarFields(node, reader: reader)
+
+        case .nvarGuidStore:
+            fields.append(.init("GUIDs", "\(node.body.count / 16)"))
+
         // FDC and CMDB stores, and a SysF variable, are read as leaves in the
         // reference: the panel has nothing to add to their common fields.
         case .fdcStore, .cmdbStore, .sysFEntry:
@@ -632,6 +638,67 @@ public enum UEFIDetail {
         (0x0000_0020, "TimeBasedAuthWrite"),
         (0x0000_0040, "AppendWrite"),
         (0x8000_0000, "AppleChecksum"),
+    ]
+
+    /// What an NVAR entry's header and extended header say (§9). The GUID is
+    /// the common "GUID" field — the parser found it, in the entry or in the
+    /// store's table, or took it from the chain for a later link.
+    private static func nvarFields(_ node: UEFINode, reader: ImageReader) -> [UEFIDetailField] {
+        let h = node.header.lowerBound
+        var fields: [UEFIDetailField] = []
+        guard let attributes = reader.uint8(at: h + 9) else { return fields }
+        fields.append(.init("Attributes", bits(attributes, nvarAttributeBits)))
+        // `next` is relative to the entry; the row says where it lands.
+        if let next = reader.uint24(at: h + 6), next != 0xFF_FFFF {
+            fields.append(.init("Next entry", hex(h + UInt64(next))))
+        }
+        // An entry that names its GUID by index carries the index right
+        // after the header — on a valid entry that is not a later link.
+        if attributes & 0x80 != 0, attributes & 0x08 == 0, attributes & 0x04 == 0,
+           let index = reader.uint8(at: h + 10) {
+            fields.append(.init("GUID index", "\(index)"))
+        }
+
+        // The extended header is the entry's tail: its attributes first, then
+        // a timestamp and a hash when the variable is time-authenticated, and
+        // the checksum and the header's own size last.
+        let tail = node.tail
+        guard tail.count >= 3, let extended = reader.uint8(at: tail.lowerBound) else { return fields }
+        fields.append(.init("Extended attributes", bits(extended, nvarExtendedAttributeBits)))
+        if extended & 0x20 != 0, tail.count >= 1 + 8 + 2,
+           let timestamp = reader.uint64(at: tail.lowerBound + 1) {
+            fields.append(.init("Timestamp", hex(timestamp)))
+            if attributes & 0x08 == 0, tail.count >= 1 + 8 + 32 + 2,
+               let hash = reader.bytes(at: tail.lowerBound + 9, count: 32) {
+                fields.append(.init("Hash", hash.map { String(format: "%02X", $0) }.joined()))
+            }
+        }
+        if let checksum = NvarChecksum.read(node, in: reader) {
+            fields.append(.init(
+                "Checksum",
+                Checksums.text(checksum.stored, valid: checksum.valid, expected: UInt64(checksum.expected))
+            ))
+        }
+        return fields
+    }
+
+    /// The NVAR attribute bits, in the reference parser's words.
+    private static let nvarAttributeBits: [(UInt8, String)] = [
+        (0x01, "Runtime"),
+        (0x02, "AsciiName"),
+        (0x04, "Guid"),
+        (0x08, "DataOnly"),
+        (0x10, "ExtHeader"),
+        (0x20, "HwErrorRecord"),
+        (0x40, "AuthWrite"),
+        (0x80, "Valid"),
+    ]
+
+    /// The NVAR extended attribute bits; the others are unknown.
+    private static let nvarExtendedAttributeBits: [(UInt8, String)] = [
+        (0x01, "Checksum"),
+        (0x10, "AuthWrite"),
+        (0x20, "TimeBasedAuthWrite"),
     ]
 
     /// The EVSA data-entry attribute bits. A data entry shares the VSS words
@@ -751,6 +818,8 @@ public enum UEFIDetail {
         case .flashMapEntry: return UEFITypes.typeName(UEFITypes.Item.phoenixFlashMapEntry.rawValue)
         case .flashDeviceMapStore: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapStore.rawValue)
         case .flashDeviceMapEntry: return UEFITypes.typeName(UEFITypes.Item.insydeFlashDeviceMapEntry.rawValue)
+        case .nvarEntry: return UEFITypes.typeName(UEFITypes.Item.nvarEntry.rawValue)
+        case .nvarGuidStore: return UEFITypes.typeName(UEFITypes.Item.nvarGuidStore.rawValue)
         case .padding: return L("Padding")
         case .freeSpace: return L("Free space")
         case .nonUEFIData: return L("Non-UEFI data")
@@ -777,7 +846,7 @@ public enum UEFIDetail {
             return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? hex(subtype)
         // An NVRAM entry and a SLIC blob carry a derived subtype; name it from
         // the table, keeping the number where the table has no word.
-        case .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .slicData:
+        case .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .slicData, .nvarEntry:
             return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? hex(subtype)
         default: return hex(subtype)
         }

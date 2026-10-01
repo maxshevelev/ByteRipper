@@ -942,6 +942,20 @@ areas and volumes with an NVRAM GUID. The formats supported (the details are in
 For a general-purpose parser it is sensible to pick NVRAM stores out as opaque
 elements first and parse them on demand.
 
+**AMI NVAR** is not found by a signature search but by where it lives
+(`NvarParser.swift`): the body of a raw file with the store GUID
+(`CEF5B9A3-…`), the PEI defaults GUID (`77D3DC50-…`) or the BB defaults GUID
+(`AF516361-…`); the raw section of the external defaults file (`9221315B-…`);
+and any other raw section whose body opens `NVAR`, tried quietly. The store has
+no header: entries back to back, free space, and a GUID table at the end whose
+length is the highest index an entry names. Entries sit directly under the file
+or section, with the header, data and extended header as `header`, `body` and
+`tail`. Two departures from the reference: an entry that does not read keeps
+the entries before it and turns the rest into padding, where the reference
+drops the whole store; and a data-only entry looks for its chain among all the
+entries before it, including the first, which the reference's backward loop
+skips.
+
 The Insyde Flash Device Map deserves a mention of its own, since it lays out the
 whole image:
 

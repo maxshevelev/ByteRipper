@@ -370,6 +370,40 @@ enum TestUEFI {
         return Built(bytes: pad(w.bytes, to: 32), node: node, image: image(node, totalSize: 32))
     }
 
+    /// An AMI NVAR entry (§9): `NVAR`, the size, a 24-bit `next`, the
+    /// attributes, the GUID and an ASCII name, the data, and a four-byte
+    /// extended header — its attributes, a checksum and its own size. The
+    /// checksum is right unless `wrongBy` says how far off to make it.
+    static func nvarEntry(next: UInt32 = 0x40, data: [UInt8] = [0x10, 0x20], wrongBy: UInt8 = 0) -> Built {
+        let attributes: UInt8 = 0x80 | 0x10 | 0x04 | 0x02   // valid, ext header, GUID, ASCII name
+        let name = Array("Setup".utf8) + [0]
+        let size = 10 + 16 + name.count + data.count + 4
+        var w = Writer()
+        w.u32(0x5241_564E)     // NVAR
+        w.u16(UInt16(size))
+        w.u24(next)
+        w.u8(attributes)
+        w.guid(EFIGUID(low: 0x1111_1111, high: 0x2222_2222))
+        w.raw(name)
+        w.raw(data)
+        w.raw([0x01, 0x00, 0x04, 0x00])   // checksum present, checksum, size 4
+        var bytes = w.bytes
+        let dataStart = 10 + 16 + name.count
+        let sum = bytes[dataStart...].reduce(UInt8(0), &+) &+ bytes[4] &+ bytes[5] &+ attributes
+        bytes[size - 3] = (0 &- sum) &+ wrongBy
+        let node = UEFINode(
+            kind: .nvarEntry,
+            subtype: next == 0xFF_FFFF ? UEFITypes.Sub.fullNvarEntry : UEFITypes.Sub.linkNvarEntry,
+            name: "Setup",
+            guid: EFIGUID(low: 0x1111_1111, high: 0x2222_2222),
+            header: 0..<UInt64(dataStart),
+            body: UInt64(dataStart)..<UInt64(size - 4),
+            tail: UInt64(size - 4)..<UInt64(size),
+            isFixed: true
+        )
+        return Built(bytes: bytes, node: node, image: image(node, totalSize: UInt64(size)))
+    }
+
     /// An FTW working block's 28-byte header: the signature GUID, the header
     /// CRC32, the state, and the 32-bit write-queue size (§9).
     static func nvramFtwStore(crc: UInt32 = 0x1234_5678, state: UInt8 = 0x01) -> Built {

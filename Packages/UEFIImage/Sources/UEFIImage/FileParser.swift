@@ -22,6 +22,18 @@ enum FFS {
 
     static let padType: UInt8 = 0xF0
     static let rawType: UInt8 = 0x01
+    /// `EFI_FV_FILETYPE_ALL`: never a file's real type, and read the way a raw
+    /// file is where it turns up.
+    static let allType: UInt8 = 0x00
+
+    /// The files whose body is an AMI NVAR store (§9): the store itself, and
+    /// the two sets of defaults the firmware falls back to.
+    static func holdsNvarStore(_ guid: EFIGUID, type: UInt8) -> Bool {
+        (type == rawType || type == allType)
+            && (guid == NvramGuids.nvramNvarStoreFileGuid
+                || guid == NvramGuids.nvramNvarPeiExternalDefaultsFileGuid
+                || guid == NvramGuids.nvramNvarBbDefaultsFileGuid)
+    }
     /// In the file's *state* byte, not its attributes (§5.5).
     static let erasePolarity: UInt8 = 0x80
 
@@ -113,9 +125,13 @@ extension Parser {
         // both polarities still reads (§5.5).
         let emptyByte: UInt8 = state & FFS.erasePolarity != 0 ? 0xFF : 0x00
         var children: [UEFINode] = []
-        if FFS.hasSections(type), !body.isEmpty {
+        if FFS.holdsNvarStore(name, type: type), !body.isEmpty {
+            // The body is the store, with no header of its own; when it does
+            // not read as one, the file stays a leaf and the parse says why.
+            children = parseNvarStore(body, emptyByte: emptyByte, probe: false, depth: depth + 1) ?? []
+        } else if FFS.hasSections(type), !body.isEmpty {
             children = walkSections(
-                body, ffsVersion: ffsVersion, emptyByte: emptyByte, depth: depth + 1
+                body, ffsVersion: ffsVersion, emptyByte: emptyByte, depth: depth + 1, fileGuid: name
             )
         } else if type == FFS.rawType, !body.isEmpty,
                   MicrocodeHeader.read(at: body.lowerBound, in: reader) != nil {

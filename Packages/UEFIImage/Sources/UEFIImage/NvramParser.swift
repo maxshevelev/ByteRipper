@@ -214,7 +214,7 @@ extension Parser {
 
     /// A run of bytes between NVRAM stores. All the erase byte is free space;
     /// anything in it is padding somebody put there.
-    private func nvramPadding(from start: UInt64, to end: UInt64, emptyByte: UInt8) -> [UEFINode] {
+    func nvramPadding(from start: UInt64, to end: UInt64, emptyByte: UInt8) -> [UEFINode] {
         guard start < end else { return [] }
         let range = start..<end
         if reader.isFilled(range, with: emptyByte) {

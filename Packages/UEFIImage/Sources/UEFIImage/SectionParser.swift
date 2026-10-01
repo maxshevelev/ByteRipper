@@ -66,11 +66,16 @@ extension Parser {
     /// and the rule of this project is no third-party code. A compressed
     /// section is a leaf that says which algorithm it is, and the day one is
     /// implemented it grows children instead.
+    ///
+    /// `fileGuid` is the file the sections belong to, when the walk knows it:
+    /// a raw section means something different in some files (§9). A buffer
+    /// decompressed from a section is walked without it.
     func walkSections(
         _ body: Range<UInt64>,
         ffsVersion: Int,
         emptyByte: UInt8,
-        depth: Int
+        depth: Int,
+        fileGuid: EFIGUID? = nil
     ) -> [UEFINode] {
         guard depth < limits.maxDepth else {
             note(.recursionLimit, at: body.lowerBound)
@@ -119,7 +124,7 @@ extension Parser {
 
             nodes.append(parseSection(
                 at: offset, end: end, headerSize: headerSize, type: type,
-                ffsVersion: ffsVersion, emptyByte: emptyByte, depth: depth
+                ffsVersion: ffsVersion, emptyByte: emptyByte, depth: depth, fileGuid: fileGuid
             ))
 
             guard let next = alignUp(end - body.lowerBound, to: Section.alignment)
@@ -138,7 +143,8 @@ extension Parser {
         type: UInt8,
         ffsVersion: Int,
         emptyByte: UInt8,
-        depth: Int
+        depth: Int,
+        fileGuid: EFIGUID?
     ) -> UEFINode {
         var name = Section.typeName(type)
         var guid: EFIGUID?
@@ -210,8 +216,17 @@ extension Parser {
         if !body.isEmpty {
             if readsBodyAsSections {
                 children = walkSections(
-                    body, ffsVersion: ffsVersion, emptyByte: emptyByte, depth: depth + 1
+                    body, ffsVersion: ffsVersion, emptyByte: emptyByte, depth: depth + 1, fileGuid: fileGuid
                 )
+            } else if type == Section.raw {
+                // The external defaults file's raw section is an NVAR store and
+                // is meant to read as one. Any other raw section is tried, the
+                // way the reference tries every one: a store opens `NVAR`, so a
+                // body that does not costs one read to turn down (§9).
+                let isDefaults = fileGuid == NvramGuids.nvramNvarExternalDefaultsFileGuid
+                children = parseNvarStore(
+                    body, emptyByte: emptyByte, probe: !isDefaults, depth: depth + 1
+                ) ?? []
             } else if type == Section.firmwareVolumeImage {
                 // A volume inside a section, and files inside that: the point at
                 // which this format starts over one level down (§6.4).

@@ -491,6 +491,36 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Checksum"), Checksums.text(built.bytes[1], valid: true))
     }
 
+    /// An NVAR entry shows its attributes in the reference's words, where its
+    /// chain goes next, and what its extended header says — the checksum
+    /// checked the same way the parser checks it.
+    func testAnNvarEntryReadsItsAttributesNextAndExtendedHeader() {
+        let built = TestUEFI.nvarEntry()
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+
+        XCTAssertEqual(detail.title, "Setup")
+        XCTAssertEqual(field(detail, "Kind"), "NVAR entry")
+        XCTAssertEqual(field(detail, "Attributes"), "0x96 (AsciiName, Guid, ExtHeader, Valid)")
+        XCTAssertEqual(field(detail, "Next entry"), "0x40")
+        XCTAssertNil(field(detail, "GUID index"))
+        XCTAssertEqual(field(detail, "Extended attributes"), "0x1 (Checksum)")
+        let stored = built.bytes[built.bytes.count - 3]
+        XCTAssertEqual(field(detail, "Checksum"), Checksums.text(stored, valid: true))
+    }
+
+    /// A checksum that does not match says what it should be.
+    func testAnNvarEntryWithAWrongChecksumSaysWhatItShouldBe() {
+        let built = TestUEFI.nvarEntry(next: 0xFF_FFFF, wrongBy: 1)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+
+        XCTAssertNil(field(detail, "Next entry"))
+        let stored = built.bytes[built.bytes.count - 3]
+        XCTAssertEqual(
+            field(detail, "Checksum"),
+            Checksums.text(stored, valid: false, expected: UInt64(stored &- 1))
+        )
+    }
+
     /// A SLIC marker's OEM id and table id are stored ASCII, and the windows
     /// flag is the fixed word the parser accepts — shown as that word, never as
     /// the byte soup its little-endian layout would spell.

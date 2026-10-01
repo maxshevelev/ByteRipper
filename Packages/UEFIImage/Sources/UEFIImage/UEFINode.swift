@@ -205,6 +205,12 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     case sysFEntry
     case evsaEntry
     case flashMapEntry
+    /// An AMI NVAR entry (§9). Not under a store node of its own: an NVAR
+    /// store has no header, and its entries sit straight under the file or
+    /// raw section whose body it is, the way UEFITool shows them.
+    case nvarEntry
+    /// The table of GUIDs at an NVAR store's end, which entries name by index.
+    case nvarGuidStore
     /// An Insyde H2O Flash Device Map, found by the raw-area scan, and one of
     /// its entries — the ranges it names are protected
     /// (`BOOT_GUARD_PROTECTED_RANGES.md` §5.3).

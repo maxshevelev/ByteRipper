@@ -36,6 +36,8 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         /// An NVRAM store: the VSS / VSS2 / FTW and the rest that make up an
         /// NVRAM volume body (§9).
         case nvramStore
+        /// An AMI NVAR entry (§9).
+        case nvarEntry
         /// An Intel Boot Guard Boot Policy Manifest
         /// (`BOOT_GUARD_PROTECTED_RANGES.md` §4).
         case bootPolicy
@@ -101,10 +103,15 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         /// A flash device map whose entries are of a size or format nobody has
         /// described; the store is kept whole.
         case unknownFlashDeviceMapEntries(size: UInt32, format: UInt8)
+        /// An NVAR entry that does not read — a broken signature, a size that
+        /// is too small or runs past the store, a name with no end. The walk
+        /// stops, and the store from here on is kept as padding; at the
+        /// store's first byte, the body is not an NVAR store at all.
+        case unreadableNvarEntry
 
         public var severity: Severity {
             switch self {
-            case .truncated, .zeroSize, .recursionLimit:
+            case .truncated, .zeroSize, .recursionLimit, .unreadableNvarEntry:
                 return .error
             case .checksumMismatch, .sizeMismatch, .unknownFileSystem,
                  .unknownType, .addressesUnknown, .overlappingRegions,
@@ -204,6 +211,8 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case .unknownFlashDeviceMapEntries(let size, let format):
             return "Insyde flash device map entries of \(hex(UInt64(size))) bytes in format "
                 + "\(hex(UInt64(format))) are of no known layout"
+        case .unreadableNvarEntry:
+            return "NVAR entry cannot be read; the store is kept as padding from here"
         }
     }
 
@@ -235,6 +244,7 @@ extension UEFIDiagnostic.Structure {
         case .microcodeHeader: return "microcode header"
         case .resetVector: return "reset vector"
         case .nvramStore: return "NVRAM store"
+        case .nvarEntry: return "NVAR entry"
         case .bootPolicy: return "Boot Policy Manifest"
         case .vendorHashFile: return "vendor hash table"
         case .flashDeviceMap: return "Insyde flash device map"

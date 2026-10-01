@@ -41,6 +41,10 @@ public enum UEFIHelpTerms {
             return HelpTermID("vss")
         case .vssEntry, .sysFEntry, .evsaEntry, .flashMapEntry, .flashDeviceMapEntry:
             return HelpTermID("vss")
+        // AMI's store is the exception, because what a reader asks of it is
+        // different: which of a variable's entries holds its value now.
+        case .nvarEntry, .nvarGuidStore:
+            return HelpTermID("nvar")
         }
     }
 

@@ -60,6 +60,14 @@ final class UEFIHelpTermsTests: XCTestCase {
         }
     }
 
+    /// An NVAR entry has a page of its own: what a reader asks of it is which
+    /// of a variable's entries holds the value now.
+    func testAnNvarEntryHasItsOwnEntry() {
+        for kind: UEFINodeKind in [.nvarEntry, .nvarGuidStore] {
+            XCTAssertEqual(UEFIHelpTerms.term(for: node(kind)), HelpTermID("nvar"), "\(kind)")
+        }
+    }
+
     /// The test that matters: every node kind the parser can produce maps to a
     /// term the book holds. A `?` that opens nothing is worse than no `?`.
     func testEveryKindMapsToATermTheBookHolds() {
