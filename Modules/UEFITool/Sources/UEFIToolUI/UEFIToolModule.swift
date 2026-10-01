@@ -246,6 +246,9 @@ private struct ChecksumPass: Sendable {
         controller.onOpenNode = { [weak self] nodeID, body in
             self?.openNodeInPanel(for: nodeID, body: body)
         }
+        controller.onGoToTopSwapCounterpart = { [weak self] nodeID in
+            self?.goToTopSwapCounterpart(of: nodeID)
+        }
         controller.onOpenRowsChanged = { [weak self] in self?.rememberOpenRows() }
         controller.onSelectME = { [weak self] path in self?.selectME(path) }
         controller.onOpenMERegion = { [weak self] id in self?.openMERegion(id) }
@@ -1194,6 +1197,27 @@ private struct ChecksumPass: Sendable {
     ///
     /// Public because a right-click cannot be simulated — this is the level the
     /// app's tests drive, the same way FIT's `fixChecksum()` is.
+    /// Selects the twin of `nodeID` in the other Top Swap block — the same
+    /// bytes one block up or down — opening the branches on the way, and
+    /// brings it on screen in the dump, so the two copies of a volume or a
+    /// file can be told apart by stepping between them.
+    ///
+    /// Public because a right-click cannot be simulated — the level the app's
+    /// tests drive, as with `fixChecksum(for:)`.
+    // help: panel.uefi.top-swap
+    public func goToTopSwapCounterpart(of nodeID: NodeID) {
+        guard let tree, tree.isReady, let image = currentImage, let node = image.node(nodeID),
+              let counterpart = UEFITopSwap.counterpart(of: node, in: image)
+        else { return }
+        controller.showBusy()
+        tree.materialize(containing: counterpart.range.lowerBound) { [weak self] chain in
+            guard let self else { return }
+            self.controller.endBusy()
+            guard let twin = UEFITopSwap.twin(of: counterpart, in: chain) else { return }
+            self.select(twin.id)
+        }
+    }
+
     // help: panel.uefi.fix-checksum
     public func fixChecksum(for nodeID: NodeID) {
         guard !host.isReadOnly else {

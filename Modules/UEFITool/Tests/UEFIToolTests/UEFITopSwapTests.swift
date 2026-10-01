@@ -60,9 +60,44 @@ final class UEFITopSwapTests: XCTestCase {
         XCTAssertEqual(UEFIHelpTerms.term(for: node(image, [0, 1]), in: image), HelpTermID("volume"))
     }
 
+    /// Any node of either block has a twin one block away, of the same kind:
+    /// down into the copy from the top block, up out of it.
+    func testEveryNodeInEitherBlockHasATwin() {
+        let image = image()
+        let file = UEFITopSwap.counterpart(of: node(image, [0, 1, 0]), in: image)
+        XCTAssertEqual(file?.range, 0x48..<0x100)
+        XCTAssertEqual(file?.kind, .file)
+        XCTAssertEqual(file?.isInCopy, true)
+        XCTAssertEqual(file?.menuTitle, "Go to Top Swap Copy")
+
+        let volume = UEFITopSwap.counterpart(of: node(image, [0, 0]), in: image)
+        XCTAssertEqual(volume?.range, 0x1_0000..<0x2_0000)
+        XCTAssertEqual(volume?.isInCopy, false)
+        XCTAssertEqual(volume?.menuTitle, "Go to Original")
+
+        // The region holds both blocks and is in neither.
+        XCTAssertNil(UEFITopSwap.counterpart(of: node(image, [0]), in: image))
+    }
+
+    /// The twin is the node of that range and kind among those covering its
+    /// first byte; where the copies drifted apart, the innermost node that
+    /// still holds the range.
+    func testTheTwinIsFoundAmongTheNodesCoveringIt() {
+        let image = image()
+        let counterpart = UEFITopSwap.counterpart(of: node(image, [0, 1, 0]), in: image)!
+        let chain = image.nodes(containing: counterpart.range.lowerBound)
+        XCTAssertEqual(UEFITopSwap.twin(of: counterpart, in: chain)?.id, NodeID([0, 0, 0]))
+
+        var drifted = counterpart
+        drifted.kind = .section
+        XCTAssertEqual(UEFITopSwap.twin(of: drifted, in: chain)?.id, NodeID([0, 0, 0]),
+                       "no section there: the file holding the range is as near as it gets")
+    }
+
     /// Without the ranges read there is no copy to speak of.
     func testWithoutTheRangesReadNothingIsSaid() {
         let bare = UEFIImage(size: 0x2_0000, roots: image().roots)
         XCTAssertNil(UEFITopSwap.role(of: node(bare, [0, 0]), in: bare))
+        XCTAssertNil(UEFITopSwap.counterpart(of: node(bare, [0, 0]), in: bare))
     }
 }

@@ -139,6 +139,8 @@
 "Ask before edits that shift the file" = "Vor Änderungen fragen, die die Datei verschieben";
 "Copied at %1$@–%2$@; %3$@" = "Kopie bei %1$@–%2$@; %3$@";
 "Copy of %1$@–%2$@; %3$@" = "Kopie des Blocks %1$@–%2$@; %3$@";
+"Go to Original" = "Zum Original";
+"Go to Top Swap Copy" = "Zur Top-Swap-Kopie";
 "Top Swap" = "Top Swap";
 "at %1$@" = "bei %1$@";
 "BIOS access table" = "BIOS-Zugriffstabelle";

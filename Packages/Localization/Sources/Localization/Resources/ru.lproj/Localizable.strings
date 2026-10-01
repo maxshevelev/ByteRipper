@@ -139,6 +139,8 @@
 "Ask before edits that shift the file" = "Спрашивать перед правками, сдвигающими файл";
 "Copied at %1$@–%2$@; %3$@" = "Копия расположена по адресу %1$@–%2$@; %3$@";
 "Copy of %1$@–%2$@; %3$@" = "Копия блока %1$@–%2$@; %3$@";
+"Go to Original" = "Перейти к оригиналу";
+"Go to Top Swap Copy" = "Перейти к копии Top Swap";
 "Top Swap" = "Top Swap";
 "at %1$@" = "по адресу %1$@";
 "BIOS access table" = "Таблица доступа BIOS";

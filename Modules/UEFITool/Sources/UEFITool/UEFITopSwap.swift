@@ -28,6 +28,49 @@ public enum UEFITopSwap {
         return nil
     }
 
+    /// Where a node's twin in the other block is: the same bytes one block
+    /// up or down, and a node of the same kind. Any node of the file lying
+    /// wholly inside either block has one — a file in the copy, a section in
+    /// the top block — so a reader can step between the two and see what
+    /// stands for what.
+    public struct Counterpart: Equatable, Sendable {
+        /// The twin's range.
+        public var range: Range<UInt64>
+        public var kind: UEFINodeKind
+        /// Whether the twin is in the copy, so the step goes down.
+        public var isInCopy: Bool
+
+        /// The menu item that steps there.
+        public var menuTitle: String {
+            isInCopy ? L("Go to Top Swap Copy") : L("Go to Original")
+        }
+    }
+
+    public static func counterpart(of node: UEFINode, in image: UEFIImage) -> Counterpart? {
+        guard node.space == .file, let copy = image.protectedRanges?.topSwap else { return nil }
+        if encloses(copy.top, node.range) {
+            return Counterpart(range: shifted(node.range, by: -Int64(copy.size)), kind: node.kind, isInCopy: true)
+        }
+        if encloses(copy.backup, node.range) {
+            return Counterpart(range: shifted(node.range, by: Int64(copy.size)), kind: node.kind, isInCopy: false)
+        }
+        return nil
+    }
+
+    /// The twin among `chain` — the nodes covering its first byte, outermost
+    /// first: the one with the same range and kind. Where the copies have
+    /// drifted apart and no node matches, the innermost node that still holds
+    /// the whole range, so the step lands as near as the tree allows.
+    public static func twin(of counterpart: Counterpart, in chain: [UEFINode]) -> UEFINode? {
+        chain.last { $0.range == counterpart.range && $0.kind == counterpart.kind }
+            ?? chain.last { $0.space == .file && encloses($0.range, counterpart.range) }
+    }
+
+    private static func shifted(_ range: Range<UInt64>, by delta: Int64) -> Range<UInt64> {
+        let lower = UInt64(Int64(range.lowerBound) + delta)
+        return lower..<(lower + UInt64(range.count))
+    }
+
     private static func isOutermost(_ node: UEFINode, in block: Range<UInt64>, image: UEFIImage) -> Bool {
         guard encloses(block, node.range) else { return false }
         guard !node.id.path.isEmpty, let parent = image.node(NodeID(Array(node.id.path.dropLast()))) else {

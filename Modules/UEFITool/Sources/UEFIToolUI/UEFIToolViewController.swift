@@ -31,6 +31,8 @@ import UEFITool
 
     /// A flagged node's Fix Checksum menu item was chosen.
     var onFixChecksum: ((NodeID) -> Void)?
+    /// A node in a Top Swap block asked for its twin in the other block.
+    var onGoToTopSwapCounterpart: ((NodeID) -> Void)?
     /// An opened compressed section's — or a node inside one's — export item
     /// was chosen.
     var onExportDecompressed: ((NodeID) -> Void)?
@@ -1468,6 +1470,18 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = NodeOpenTarget(id: node.id, body: body)
             items.append(item)
         }
+        // A node of either Top Swap block steps to its twin in the other, so
+        // the reader sees which copy of a volume or file stands for which.
+        if let image, let counterpart = UEFITopSwap.counterpart(of: node, in: image) {
+            let item = NSMenuItem(
+                title: counterpart.menuTitle,
+                action: #selector(goToTopSwapCounterpartClicked(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = node.id
+            items.append(item)
+        }
         if let export = UEFIPresenter.decompressedExport(for: node) {
             let open = NSMenuItem(
                 title: export.openTitle,
@@ -1500,6 +1514,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     @objc private func openNodeClicked(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? NodeOpenTarget else { return }
         onOpenNode?(target.id, target.body)
+    }
+
+    @objc private func goToTopSwapCounterpartClicked(_ sender: NSMenuItem) {
+        guard let nodeID = sender.representedObject as? NodeID else { return }
+        onGoToTopSwapCounterpart?(nodeID)
     }
 
     @objc private func fixChecksumClicked(_ sender: NSMenuItem) {
