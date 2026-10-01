@@ -455,7 +455,7 @@ enum TestUEFI {
     ) -> Built {
         var bytes: [UInt8] = [0xEC, 0]   // type, checksum patched below
         bytes += [0x14, 0x00]            // header size, 20
-        bytes += (0..<4).map { UInt8((0x4156_5345 >> (8 * $0)) & 0xFF) } // EVSA
+        bytes += Array("EVSA".utf8)
         bytes += (0..<4).map { UInt8((attributes >> (8 * $0)) & 0xFF) }
         bytes += (0..<4).map { UInt8((UInt32(totalSize) >> (8 * $0)) & 0xFF) }
         bytes += [0, 0, 0, 0]            // reserved

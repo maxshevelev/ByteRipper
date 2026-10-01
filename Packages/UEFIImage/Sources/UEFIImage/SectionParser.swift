@@ -218,6 +218,11 @@ extension Parser {
                 children = walkSections(
                     body, ffsVersion: ffsVersion, emptyByte: emptyByte, depth: depth + 1, fileGuid: fileGuid
                 )
+            } else if type == Section.raw && fileGuid == NvramGuids.ffsPhoenixRawSectionEvsaGuid {
+                // Phoenix keeps an EVSA store — the Secure Boot defaults among
+                // others — in the raw section of a file of its own, and its
+                // body reads as an NVRAM volume's does (§9).
+                children = walkNvramVolumeBody(body, emptyByte: emptyByte, depth: depth + 1)
             } else if type == Section.raw {
                 // The external defaults file's raw section is an NVAR store and
                 // is meant to read as one. Any other raw section is tried, the

@@ -70,7 +70,7 @@ enum NVRAM {
     // Phoenix EVSA entry types: the store itself and the entries inside it. A
     // store is type 0xEC; the recognized entries are the guid, name and data
     // kinds below, and anything else ends the store.
-    static let evsaSignature: UInt32 = 0x4156_5345 // EVSA
+    static let evsaSignature: UInt32 = 0x4153_5645 // EVSA
     static let evsaStoreHeaderSize: UInt64 = 20
     static let evsaEntryTypeStore: UInt8 = 0xEC
     static let evsaEntryTypeGuid1: UInt8 = 0xED

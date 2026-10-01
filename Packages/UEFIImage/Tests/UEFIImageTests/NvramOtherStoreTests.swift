@@ -237,6 +237,42 @@ final class NvramOtherStoreTests: XCTestCase {
         XCTAssertEqual(parsed.roots[0].children.map(\.kind), [.padding])
     }
 
+    /// The signature is the four bytes `EVSA` as the store spells them — not
+    /// whatever the parser's constant says: a store written byte for byte is
+    /// read, one with the bytes swapped is not.
+    func testTheSignatureIsTheBytesEVSA() {
+        let entries = [TestNVRAM.evsaNameEntry(name: "Lang", id: 1)]
+        let right = parse(TestNVRAM.nvramVolume(stores: [TestNVRAM.evsaStore(entries: entries)]))
+        XCTAssertEqual(right.roots[0].children.first?.kind, .evsaStore)
+
+        let swapped = TestNVRAM.evsaStore(entries: entries, signature: Array("ESVA".utf8))
+        XCTAssertFalse(parse(TestNVRAM.nvramVolume(stores: [swapped])).roots[0].children.contains {
+            $0.kind == .evsaStore
+        })
+    }
+
+    /// Phoenix keeps an EVSA store in the raw section of a file of its own,
+    /// and the section's body reads as an NVRAM volume's does.
+    func testAPhoenixEvsaFilesRawSectionReadsAsItsStore() {
+        let store = TestNVRAM.evsaStore(entries: [
+            TestNVRAM.evsaGuidEntry(guid: guid("11111111-2222-3333-4444-555555555555"), id: 1),
+            TestNVRAM.evsaNameEntry(name: "PK", id: 2),
+            TestNVRAM.evsaDataEntry(guidId: 1, varId: 2, data: [0x01]),
+        ])
+        let bytes = TestImage.volume(length: 0x400, files: [
+            TestImage.sectionedFile(
+                guid: NvramGuids.ffsPhoenixRawSectionEvsaGuid, type: 0x02,
+                sections: [TestImage.section(type: Section.raw, body: store)]
+            ),
+        ])
+        let parsed = parse(bytes)
+        let section = parsed.roots[0].children[0].children[0]
+
+        XCTAssertEqual(section.children.map(\.kind), [.evsaStore])
+        XCTAssertEqual(section.children[0].children.filter { $0.subtype == UEFITypes.Sub.dataEvsaEntry }.map(\.name), ["PK"])
+        XCTAssertTrue(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
+    }
+
     // MARK: - Phoenix CMDB, Microsoft SLIC
 
     /// A CMDB store is a leaf: the parser reads its header and keeps the rest

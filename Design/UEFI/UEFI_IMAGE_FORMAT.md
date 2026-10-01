@@ -963,6 +963,14 @@ drops the whole store; and a data-only entry looks for its chain among all the
 entries before it, including the first, which the reference's backward loop
 skips.
 
+**Phoenix EVSA.** The store's signature is the bytes `EVSA`,
+`NVRAM_EVSA_STORE_SIGNATURE = 0x41535645` read little-endian. Besides the
+NVRAM volume, Phoenix keeps an EVSA store — the Secure Boot defaults among
+others — in the raw section of a file with the GUID
+`FFS_PHOENIX_RAW_SECTION_EVSA_GUID` (`DAB78572-…`), whose body reads as an
+NVRAM volume's does. On a Lenovo dump with both, the 30 entries read as
+UEFIExtract reads them.
+
 **Insyde Variable Defaults** are read beyond the reference
 (`FlashDeviceMapParser.swift`). Insyde keeps the firmware's default variables
 as a run of `$VSS` stores back to back, outside every volume, in the range its

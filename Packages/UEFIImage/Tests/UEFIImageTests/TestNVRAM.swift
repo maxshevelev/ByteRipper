@@ -402,7 +402,7 @@ enum TestNVRAM {
     /// makes a store that overruns its body.
     static func evsaStore(
         entries: [[UInt8]] = [],
-        signature: UInt32 = NVRAM.evsaSignature,
+        signature: [UInt8] = Array("EVSA".utf8),
         freeSpace: UInt64 = 0x10,
         size: UInt32? = nil
     ) -> [UInt8] {
@@ -416,7 +416,10 @@ enum TestNVRAM {
         header.u8(NVRAM.evsaEntryTypeStore)          // 0xEC
         header.u8(0)                                 // checksum
         header.u16(UInt16(NVRAM.evsaStoreHeaderSize))
-        header.u32(signature)
+        // Spelled out, not taken from the parser's constant: a fixture built
+        // from the constant under test agrees with it whatever it says, which
+        // is how a signature reading `ESVA` passed every test here.
+        header.raw(signature)
         header.u32(0)                                // attributes
         header.u32(storeSize)
         header.u32(0)                                // reserved
