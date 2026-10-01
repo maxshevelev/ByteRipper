@@ -85,9 +85,13 @@ import ALSplitView
     /// It is also what says this surface is a panel's, which is why the tool
     /// panel stops taking drops the moment it is set: a part has no file to
     /// replace, and the pane a drop would reach for is one of the tab's, under
-    /// the panel and out of sight.
+    /// the panel and out of sight. For the same reason the tool panel's header
+    /// stops naming the file: the panel's own header does.
     var pinnedPane: PaneViewModel? {
-        didSet { tools.panel.takesDrops = pinnedPane == nil }
+        didSet {
+            tools.panel.takesDrops = pinnedPane == nil
+            tools.panel.showsFileSelector = pinnedPane == nil
+        }
     }
 
 

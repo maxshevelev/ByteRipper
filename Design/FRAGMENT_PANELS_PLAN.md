@@ -60,7 +60,7 @@ right for them.
 ┌──────────────────────────────┐
 │▒ File A / File B ▒▒▒▒▒▒▒▒▒▒▒▒│ ← the parent shows above
 ├──────────────────────────────┤ ← the panel's shadow falls upward
-│ NVRAM @0x300000 · bios.bin ⌄ │ ← the same header a pane has, link and all
+│ NVRAM @0x300000 · bios.bin ⌄ │ ← the pane's header, across the whole panel
 │ ┌───────┬──────────┬───────┐ │
 │ │ tool  │ hex      │ map   │ │
 │ └───────┴──────────┴───────┘ │
@@ -81,6 +81,11 @@ Tab strip and above the dock — so a panel never covers either, and the strip
 stays reachable for dragging a panel out to a tab while one is up. In a window
 too short for the panel to be useful the peek gives way before the panel does,
 and in one shorter still the panel takes what there is.
+
+The header is the pane's own title bar, taken out of the pane
+(`FilePaneView.hoistHeader()`) and laid edge to edge above the tool, the dump
+and the map: a part is the only file its panel holds, so it is the one name on
+the panel, and the tool panel's header does not repeat it or offer a selector.
 
 At most one panel is expanded. Clicking another pill folds the open one down and
 raises that one, in one animation.

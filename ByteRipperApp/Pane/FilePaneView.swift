@@ -22,6 +22,29 @@ final class FilePaneView: NSView {
     /// to it via `paneMenu` (§4/§5).
     private let header = PaneHeaderView()
 
+    /// Whether the header has been handed to a fragment panel
+    /// (`hoistHeader()`) and no longer sits in this view.
+    private(set) var isHeaderHoisted = false
+
+    /// Takes the title bar out of the pane so a fragment panel can lay it across
+    /// its whole width, above the tool, the dump and the map
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
+    ///
+    /// It is the same view, not a copy: the name, the link back, the lock, the ⌄
+    /// and the ✕, the rename field, the pull-down and the pane's File menu stay
+    /// wired to this pane, and whoever takes it only has to place it. The dump's
+    /// column header moves up to where the title bar was.
+    func hoistHeader() -> NSView {
+        guard !isHeaderHoisted else { return header }
+        isHeaderHoisted = true
+        // Removing the view drops the constraints it shares with this one,
+        // including the column header's pin to its bottom edge.
+        header.removeFromSuperview()
+        columnHeader.topAnchor.constraint(equalTo: topAnchor).isActive = true
+        needsLayout = true
+        return header
+    }
+
     /// Ideal width of this pane's hex content, for zoom-to-fit (§3.1).
     var hexContentWidth: CGFloat { hexView.hexContentWidth }
 
@@ -1097,10 +1120,13 @@ final class FilePaneView: NSView {
     override func layout() {
         super.layout()
         let fits = bounds.width >= Self.trailingChromeMinWidth
-        closeButton.isHidden = !fits
-        collapseButton.isHidden = !fits || onCollapse == nil
-        lockLabel.isHidden = !fits
-        linkButton.isHidden = !fits || viewModel.origin == nil
+        // A header the panel has taken is as wide as the panel, not as the dump
+        // beside the tool: its chrome fits whenever the panel does.
+        let headerFits = fits || isHeaderHoisted
+        closeButton.isHidden = !headerFits
+        collapseButton.isHidden = !headerFits || onCollapse == nil
+        lockLabel.isHidden = !headerFits
+        linkButton.isHidden = !headerFits || viewModel.origin == nil
         // Both halves of the bar's own chrome go together: the indicator is
         // pinned to the bar rather than arranged in the stack, so hiding the
         // stack no longer takes it with it.

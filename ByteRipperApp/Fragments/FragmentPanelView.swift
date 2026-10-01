@@ -312,10 +312,12 @@ final class FragmentPanelHost: NSView {
 /// One fragment panel: the chrome around a `DocumentSurface`, and the thing
 /// that is actually animated (`Design/FRAGMENT_PANELS_PLAN.md`).
 ///
-/// It carries no header of its own. The header with the part's name and the
-/// link back to the parent is the pane's own, inside the surface — the
-/// requirement that the panel look like an ordinary hex panel is met by it
-/// being one.
+/// One header runs across the whole panel, above the tool, the dump and the
+/// map: the pane's own title bar — the part's name, the link back to the
+/// parent, the ⌄ and the ✕ — taken out of the pane and laid edge to edge. A
+/// part is the only file its panel holds, so there is no second name for the
+/// tool's header or the map's to say, and nothing for the dump's header to be
+/// shared with.
 final class FragmentPanelView: NSView {
     static let cornerRadius: CGFloat = 10
 
@@ -327,7 +329,12 @@ final class FragmentPanelView: NSView {
     /// outside its own bounds.
     private let body = NSView()
 
-    init(content: NSView) {
+    /// The strip the header is laid in: placed by frame like everything in the
+    /// panel, with the header pinned inside it by the constraints it was built
+    /// with — its own height among them, which a frame-placed view cannot carry.
+    private let headerHost = NSView()
+
+    init(header: NSView, content: NSView) {
         super.init(frame: .zero)
         wantsLayer = true
         // Cast upward, onto the file the part came out of. In a view that is
@@ -352,14 +359,33 @@ final class FragmentPanelView: NSView {
         // body around it took the panel's size, which is a whole panel of
         // nothing.
         content.translatesAutoresizingMaskIntoConstraints = true
+        self.content = content
         body.addSubview(content)
+        header.translatesAutoresizingMaskIntoConstraints = false
+        headerHost.addSubview(header)
+        NSLayoutConstraint.activate([
+            header.topAnchor.constraint(equalTo: headerHost.topAnchor),
+            header.leadingAnchor.constraint(equalTo: headerHost.leadingAnchor),
+            header.trailingAnchor.constraint(equalTo: headerHost.trailingAnchor),
+        ])
+        body.addSubview(headerHost)
     }
+
+    /// The surface under the header.
+    private var content: NSView?
+
+    /// The height of the strip across the top: the pane's title bar.
+    static let headerHeight = FilePaneView.headerHeight
 
     override func layout() {
         super.layout()
         body.frame = bounds
-        // The surface's split is the body's one subview, and it fills it.
-        for held in body.subviews { held.frame = body.bounds }
+        // Not flipped: the header is at the top, the surface takes the rest.
+        let headerHeight = min(Self.headerHeight, body.bounds.height)
+        headerHost.frame = NSRect(x: 0, y: body.bounds.height - headerHeight,
+                                  width: body.bounds.width, height: headerHeight)
+        content?.frame = NSRect(x: 0, y: 0, width: body.bounds.width,
+                                height: body.bounds.height - headerHeight)
     }
 
     @available(*, unavailable)
