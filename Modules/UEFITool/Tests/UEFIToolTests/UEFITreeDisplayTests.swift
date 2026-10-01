@@ -124,6 +124,19 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertEqual(UEFITreeDisplay.name(for: built.node, catalogue: named), "Setup")
     }
 
+    /// A flash device map entry's GUID is a region type, and the row says
+    /// which — the way UEFITool names it — even where the catalogue has a
+    /// name of its own for the GUID.
+    func testAFlashDeviceMapEntryIsNamedByItsRegionType() {
+        let guid = EFIGUID("D9DDACA2-0816-48F3-ADED-6B71656B248A")!
+        let entry = UEFINode(
+            kind: .flashDeviceMapEntry, name: "Variable Defaults", guid: guid,
+            header: 0..<0x54, body: 0x54..<0x54
+        )
+        let named = GuidsCatalogue(names: [guid: "Something else"])
+        XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: named), "Variable Defaults")
+    }
+
     /// A node without a GUID keeps the name the parser gave it.
     func testANodeWithoutAGuidKeepsItsParserName() {
         let freeSpace = UEFINode(kind: .freeSpace, name: "Tail", range: 0..<0x100)

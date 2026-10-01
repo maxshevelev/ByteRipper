@@ -175,6 +175,11 @@ public enum UEFITreeDisplay {
         if node.kind == .vssEntry || node.kind == .nvarEntry, !node.name.isEmpty {
             return node.name
         }
+        // A flash device map entry's GUID is a region *type*, and UEFITool
+        // names the row by what the type is: "Variable Defaults", "Password".
+        if node.kind == .flashDeviceMapEntry, let type = FlashDeviceMap.regionTypeName(guid) {
+            return type
+        }
         // The community catalogue first; the NVRAM classifier names the GUIDs
         // it knows while the catalogue has no name for them; the GUID itself
         // is the last resort.

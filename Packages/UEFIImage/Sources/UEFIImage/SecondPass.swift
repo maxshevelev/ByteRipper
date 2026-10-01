@@ -66,16 +66,29 @@ extension Parser {
     /// Separated from finding one because there are two ways to find one — the
     /// walk above, and the tail look below.
     func secondPass(anchoredOn vtf: UEFINode) -> SecondPass {
-        let top = vtf.range.upperBound
-        guard top <= 0x1_0000_0000 else {
+        guard let addressDiff = Self.addressDiff(anchoredOn: vtf) else {
             note(.addressesUnknown, at: vtf.range.lowerBound)
             return SecondPass()
         }
-        let addressDiff = 0x1_0000_0000 - top
         return SecondPass(
             addressDiff: addressDiff,
             resetVector: readResetVector(addressDiff: addressDiff, within: vtf)
         )
+    }
+
+    /// What a Volume Top File says the image is mapped at: its last byte is
+    /// `0xFFFFFFFF`. Nil when it ends too far into the file for that.
+    static func addressDiff(anchoredOn vtf: UEFINode) -> UInt64? {
+        let top = vtf.range.upperBound
+        guard top <= 0x1_0000_0000 else { return nil }
+        return 0x1_0000_0000 - top
+    }
+
+    /// The mapping a Volume Top File at the image's tail fixes, without the
+    /// rest of the second pass — for a reading that needs an address while the
+    /// tree is still being built.
+    func addressDiffFromTail() -> UInt64? {
+        volumeTopFileInTail().flatMap(Self.addressDiff(anchoredOn:))
     }
 
     /// The Volume Top File found where the format says it has to be, rather

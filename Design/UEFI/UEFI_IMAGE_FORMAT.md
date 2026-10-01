@@ -956,6 +956,22 @@ drops the whole store; and a data-only entry looks for its chain among all the
 entries before it, including the first, which the reference's backward loop
 skips.
 
+**Insyde Variable Defaults** are read beyond the reference
+(`FlashDeviceMapParser.swift`). Insyde keeps the firmware's default variables
+as a run of `$VSS` stores back to back, outside every volume, in the range its
+flash device map gives the type `VAR_DEFAULT` (`D9DDACA2-…`); UEFITool shows
+that range as padding. When a raw-area scan finds a flash device map, each
+`VAR_DEFAULT` range that lies inside a stretch of padding the same scan left is
+walked as an NVRAM volume body, and the padding around it stays. The map's
+addresses are placed with `FdBaseAddress + RegionOffset − addressDiff` — the
+arithmetic of the protected ranges — and since the second pass has not run yet,
+`addressDiff` comes from a Volume Top File at the image's tail; with none
+there, the range stays padding. A second `VAR_DEFAULT` entry usually names the
+FDC store, already read inside the NVRAM volume, and has nothing to add. The
+word at offset 10 of these stores' headers is `0` or `1`, store by store, and
+what it means is not known. The map's entries are named by region type, as
+UEFITool names them.
+
 The Insyde Flash Device Map deserves a mention of its own, since it lays out the
 whole image:
 
