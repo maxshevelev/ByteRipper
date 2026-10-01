@@ -120,7 +120,10 @@ public enum UEFIDetail {
         repairs: [ChecksumRepair] = []
     ) -> UEFINodeDetail {
         var fields = commonFields(for: node, image: image)
-        fields += headerFields(for: node, reader: reader, repairs: repairs)
+        fields += headerFields(
+            for: node, reader: reader, repairs: repairs,
+            volumeErasePolarity: node.kind == .file
+                ? UEFIChecksumCheck.volumeErasePolarity(of: node, in: image, reader: reader) : nil)
         if node.kind == .ecImage {
             fields += ecImageFields(node, image: image, reader: reader)
         }
@@ -285,7 +288,8 @@ public enum UEFIDetail {
     private static func headerFields(
         for node: UEFINode,
         reader: ImageReader,
-        repairs: [ChecksumRepair]
+        repairs: [ChecksumRepair],
+        volumeErasePolarity: Bool?
     ) -> [UEFIDetailField] {
         let h = node.header.lowerBound
         var fields: [UEFIDetailField] = []
@@ -320,14 +324,27 @@ public enum UEFIDetail {
             } else if let largeSize = reader.uint64(at: h + 0x18) {
                 fields.append(.init("Size", sizeText(largeSize)))
             }
-            if let state = reader.uint8(at: h + 0x17) {
-                fields.append(.init("State", bits(state, [(0x80, "Erase polarity")])))
+            // A state that marks the header invalid says so, and the sums are
+            // shown unchecked rather than valid: the file owes none (§5.5).
+            let state = reader.uint8(at: h + 0x17)
+            let markedInvalid = state.map {
+                FileState.marksHeaderInvalid($0, volumeErasePolarity: volumeErasePolarity)
+            } ?? false
+            if let state {
+                let text = bits(state, [(0x80, "Erase polarity")])
+                fields.append(markedInvalid
+                    ? .init("State", L("%1$@ — header marked invalid", text), tone: .caution)
+                    : .init("State", text))
             }
             if let headerChecksum = reader.uint8(at: h + 0x10) {
-                fields.append(checksumRow("Header checksum", headerChecksum, digits: 2, repairs: repairs, checksumOffset: h + 0x10))
+                fields.append(markedInvalid
+                    ? .init("Header checksum", L("%1$@ (not checked)", hex(headerChecksum)))
+                    : checksumRow("Header checksum", headerChecksum, digits: 2, repairs: repairs, checksumOffset: h + 0x10))
             }
             if let bodyChecksum = reader.uint8(at: h + 0x11) {
-                fields.append(checksumRow("Body checksum", bodyChecksum, digits: 2, repairs: repairs, checksumOffset: h + 0x11))
+                fields.append(markedInvalid
+                    ? .init("Body checksum", L("%1$@ (not checked)", hex(bodyChecksum)))
+                    : checksumRow("Body checksum", bodyChecksum, digits: 2, repairs: repairs, checksumOffset: h + 0x11))
             }
 
         case .section:

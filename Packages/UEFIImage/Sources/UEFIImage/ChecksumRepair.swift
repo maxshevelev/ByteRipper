@@ -26,10 +26,13 @@ public struct ChecksumRepair: Equatable, Sendable {
 /// the reason this cascade is two steps and not ten.
 public enum UEFIChecksums {
     /// What to write after a file's body or header changed (§5.4). Returns only
-    /// what actually differs, so an empty result means nothing needs fixing.
+    /// what actually differs, so an empty result means nothing needs fixing —
+    /// which is also the answer for a file whose state marks its header
+    /// invalid, since it owes no checksum (`FileState.marksHeaderInvalid`).
     public static func repairs(
         for file: UEFINode,
         volumeRevision: UInt8,
+        volumeErasePolarity: Bool? = nil,
         in reader: ImageReader
     ) -> [ChecksumRepair] {
         guard file.kind == .file,
@@ -37,7 +40,8 @@ public enum UEFIChecksums {
               let storedBody = reader.uint8(at: file.header.lowerBound + 0x11),
               let attributes = reader.uint8(at: file.header.lowerBound + 0x13),
               let state = reader.uint8(at: file.header.lowerBound + 0x17),
-              let headerBytes = reader.bytes(file.header)
+              let headerBytes = reader.bytes(file.header),
+              !FileState.marksHeaderInvalid(state, volumeErasePolarity: volumeErasePolarity)
         else { return [] }
 
         var repairs: [ChecksumRepair] = []

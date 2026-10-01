@@ -614,10 +614,24 @@ EFI_FILE_HEADER_INVALID      0x20
 EFI_FILE_ERASE_POLARITY      0x80
 ```
 
-The state bits are written in ascending order and are **inverted** if the
-volume's erase polarity is 0. A file's `emptyByte` comes from its own
+The state bits are written in ascending order and are stored **inverted**
+when the erase polarity is 1: a bit is set by clearing it, so a file with its
+header and data valid stores `0xF8`. A file's `emptyByte` comes from its own
 `State & EFI_FILE_ERASE_POLARITY` rather than from the volume — which is what
 makes mixed cases readable.
+
+A file whose state marks its header invalid — `HEADER_INVALID` set, or
+`HEADER_VALID` not set — under the volume's erase polarity **and** under its
+own polarity bit owes no checksum: the firmware does not take it. ByteRipper
+reports it once as `fileHeaderMarkedInvalid`, with its state, and checks
+neither sum; the panel shows them as not checked and offers no repair
+(`FileState.marksHeaderInvalid`). This departs from the reference, which checks
+the sums of every file. The one such file at hand is HP's `AAF32C78-…` in the
+"HP FS" volume of `SPI_EF4019_256Mbit`: state `0x00` in a polarity 1 volume,
+every bit written, body four zero bytes, and two stale sums that UEFIExtract
+reports too. Invalid under one reading only is a file written under the other
+polarity, and is checked: `1.bin`'s `D6078613-…` stores `0x07` in a polarity 1
+volume — valid under its own bit — and keeps its body checksum warning.
 
 ### 5.6. File types
 

@@ -64,6 +64,41 @@ enum FFS {
     }
 }
 
+/// What a file's state byte says (§5.5).
+public enum FileState {
+    static let headerValid: UInt8 = 0x02
+    static let headerInvalid: UInt8 = 0x20
+
+    /// Whether the state marks the file's header as not to be trusted — not
+    /// marked valid, or marked invalid — read under the volume's erase
+    /// polarity *and* under the file's own polarity bit. A file marked so owes
+    /// no checksum: the firmware does not take its header, and a sum over it
+    /// says nothing. Under one reading only it is a file written under the
+    /// other polarity, which `1.bin` has one of, valid the other way round, so
+    /// its checksums are still checked. Nil for the volume's polarity when the
+    /// file is read without its volume.
+    public static func marksHeaderInvalid(_ state: UInt8, volumeErasePolarity: Bool?) -> Bool {
+        func invalid(_ logical: UInt8) -> Bool {
+            logical & headerInvalid != 0 || logical & headerValid == 0
+        }
+        // Under an erase polarity of 1 a bit is set by clearing it, so the
+        // byte reads inverted.
+        func logical(_ polarity: Bool) -> UInt8 { polarity ? ~state : state }
+        let own = invalid(logical(state & FFS.erasePolarity != 0))
+        guard let volumeErasePolarity else { return own }
+        return own && invalid(logical(volumeErasePolarity))
+    }
+
+    /// A volume's erase polarity, from its header's attributes (§3.5); nil
+    /// for a node that is not a volume or a header that does not read.
+    public static func erasePolarity(ofVolume volume: UEFINode, in reader: ImageReader) -> Bool? {
+        guard volume.kind == .volume,
+              let attributes = reader.uint32(at: volume.header.lowerBound + 0x2C)
+        else { return nil }
+        return attributes & FV.erasePolarity != 0
+    }
+}
+
 extension Parser {
     struct ParsedFile {
         var node: UEFINode
@@ -79,6 +114,7 @@ extension Parser {
         limit: UInt64,
         ffsVersion: Int,
         volumeRevision: UInt8,
+        volumeErasePolarity: Bool? = nil,
         depth: Int
     ) -> ParsedFile? {
         guard let name = reader.guid(at: offset),
@@ -127,15 +163,21 @@ extension Parser {
         let body = (offset + headerSize)..<(end - tailSize)
         let tail = (end - tailSize)..<end
 
-        verifyFileChecksums(
-            at: offset,
-            headerSize: headerSize,
-            body: body,
-            headerChecksum: headerChecksum,
-            bodyChecksum: bodyChecksum,
-            attributes: attributes,
-            volumeRevision: volumeRevision
-        )
+        // A file its own state marks invalid is reported as that, and its
+        // checksums are not held against it (§5.5).
+        if FileState.marksHeaderInvalid(state, volumeErasePolarity: volumeErasePolarity) {
+            note(.fileHeaderMarkedInvalid(state: state), at: offset + 0x17)
+        } else {
+            verifyFileChecksums(
+                at: offset,
+                headerSize: headerSize,
+                body: body,
+                headerChecksum: headerChecksum,
+                bodyChecksum: bodyChecksum,
+                attributes: attributes,
+                volumeRevision: volumeRevision
+            )
+        }
         if type > 0x0F && type != FFS.padType {
             note(.unknownType(.fileHeader, type), at: offset + 0x12)
         }

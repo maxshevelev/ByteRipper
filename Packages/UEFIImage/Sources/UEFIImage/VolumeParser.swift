@@ -252,6 +252,7 @@ extension Parser {
                 limit: body.upperBound,
                 ffsVersion: ffsVersion,
                 volumeRevision: volumeRevision,
+                volumeErasePolarity: emptyByte == 0xFF,
                 depth: depth
             ) else { break }
 

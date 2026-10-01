@@ -115,6 +115,28 @@ final class FileParseTests: XCTestCase {
         XCTAssertEqual(stored, 0x11)
     }
 
+    /// A file whose state marks its header invalid — `0x00` in an erase
+    /// polarity 1 volume, as HP's "HP FS" volume has one — owes no checksum:
+    /// it is reported as marked, once, and its stale sums are not (§5.5).
+    func testAFileMarkedInvalidIsReportedAsThatAndNotForItsChecksums() {
+        let parsed = parse([TestImage.file(state: 0x00, body: [1, 2], headerChecksum: 0x11, bodyChecksum: 0x22)])
+
+        XCTAssertEqual(parsed.roots[0].children.first?.kind, .file)
+        XCTAssertEqual(parsed.diagnostics.map(\.kind), [.fileHeaderMarkedInvalid(state: 0x00)])
+        XCTAssertEqual(parsed.diagnostics.first?.offset, 0x48 + 0x17)
+        XCTAssertEqual(parsed.diagnostics.first?.severity, .warning)
+    }
+
+    /// A state valid under the file's own polarity bit is a file written
+    /// under the other polarity, not one marked invalid, and its sums are
+    /// still checked — `1.bin` has one.
+    func testAFileValidUnderItsOwnPolarityIsStillChecked() {
+        let parsed = parse([TestImage.file(state: 0x07, body: [1, 2], bodyChecksum: FFS.fixedChecksum)])
+
+        XCTAssertEqual(parsed.diagnostics.map(\.kind),
+                       [.checksumMismatch(.fileBody, stored: 0x5A, computed: 0xAA)])
+    }
+
     /// A file without the checksum attribute carries a fixed value in the
     /// field, and which fixed value depends on the volume's revision (§5.4).
     func testAWrongFixedBodyChecksumIsReported() {

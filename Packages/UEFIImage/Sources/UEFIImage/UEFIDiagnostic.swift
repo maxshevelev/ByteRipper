@@ -112,6 +112,10 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         /// stops, and the store from here on is kept as padding; at the
         /// store's first byte, the body is not an NVAR store at all.
         case unreadableNvarEntry
+        /// A file whose state byte marks its header invalid, however the
+        /// polarity is read (§5.5). Its checksums are not checked: the
+        /// firmware does not take the file.
+        case fileHeaderMarkedInvalid(state: UInt8)
 
         public var severity: Severity {
             switch self {
@@ -124,7 +128,8 @@ public struct UEFIDiagnostic: Equatable, Sendable {
                  .protectedRangeOutsideImage, .protectedRangeNotPlaced,
                  .protectedRangeHashMismatch, .unsupportedHashAlgorithm,
                  .unknownVendorHashFileSize, .unknownRevision,
-                 .unknownFlashDeviceMapEntries, .nonUEFIDataInPadFile:
+                 .unknownFlashDeviceMapEntries, .nonUEFIDataInPadFile,
+                 .fileHeaderMarkedInvalid:
                 return .warning
             }
         }
@@ -219,6 +224,8 @@ public struct UEFIDiagnostic: Equatable, Sendable {
             return "padding file holds data that is not UEFI"
         case .unreadableNvarEntry:
             return "NVAR entry cannot be read; the store is kept as padding from here"
+        case .fileHeaderMarkedInvalid(let state):
+            return "file state \(hex(UInt64(state))) marks its header invalid; its checksums are not checked"
         }
     }
 

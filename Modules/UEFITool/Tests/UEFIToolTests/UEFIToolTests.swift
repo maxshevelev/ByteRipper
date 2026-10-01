@@ -183,7 +183,7 @@ final class UEFIDetailTests: XCTestCase {
     }
 
     func testAFileNamesItsTypeAndReadsBackItsHeader() {
-        let built = TestUEFI.file(type: 0x07, attributes: 0x04, size: 0x100, state: 0x80)
+        let built = TestUEFI.file(type: 0x07, attributes: 0x04, size: 0x100, state: 0xF8)
         let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
 
         XCTAssertEqual(detail.title, "Volume Top File")
@@ -191,10 +191,26 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Type"), "Driver")
         XCTAssertEqual(field(detail, "Attributes"), "0x4 (Fixed)")
         XCTAssertEqual(field(detail, "Size"), "0x100 (256)")
-        XCTAssertEqual(field(detail, "State"), "0x80 (Erase polarity)")
+        XCTAssertEqual(field(detail, "State"), "0xF8 (Erase polarity)")
         XCTAssertEqual(field(detail, "Header checksum"), "0xAA (Valid)")
         XCTAssertEqual(field(detail, "Body checksum"), "0xBB (Valid)")
         XCTAssertEqual(field(detail, "Header"), "0x0 · 0x18 (24) bytes")
+    }
+
+    /// A file whose state marks its header invalid says so, and its sums are
+    /// shown unchecked rather than wrong: it owes none, and there is nothing
+    /// for Fix Checksum to write (§5.5).
+    func testAFileMarkedInvalidShowsItsSumsUnchecked() throws {
+        let built = TestUEFI.file(state: 0x00)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let state = try XCTUnwrap(detail.fields.first { $0.label == "State" })
+
+        XCTAssertEqual(state.value, "0x0 — header marked invalid")
+        XCTAssertEqual(state.tone, .caution)
+        XCTAssertEqual(field(detail, "Header checksum"), "0xAA (not checked)")
+        XCTAssertEqual(field(detail, "Body checksum"), "0xBB (not checked)")
+        XCTAssertTrue(UEFIChecksumCheck.repairs(for: built.node, volumeRevision: nil, in: built.reader).isEmpty)
+        XCTAssertTrue(UEFIChecksumCheck.repairs(for: built.node, volumeRevision: 2, in: built.reader).isEmpty)
     }
 
     /// A large file leaves the three-byte size at zero and keeps the real one

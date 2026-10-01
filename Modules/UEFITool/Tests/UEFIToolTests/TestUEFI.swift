@@ -87,7 +87,7 @@ enum TestUEFI {
         type: UInt8 = 0x07,
         attributes: UInt8 = 0x04,
         size: UInt32 = 0x100,
-        state: UInt8 = 0x80,
+        state: UInt8 = 0xF8,
         headerChecksum: UInt8 = 0xAA,
         bodyChecksum: UInt8 = 0xBB,
         guid: EFIGUID = KnownGUIDs.volumeTopFile,

@@ -46,14 +46,24 @@ public enum UEFIChecksumCheck {
     /// revision — `0x5A` for revision 1, `0xAA` for revision 2. Volumes and
     /// microcode check themselves, so their repair never asks.
     public static func volumeRevision(of node: UEFINode, in image: UEFIImage) -> UInt8? {
-        // The innermost volume covering the node: `allNodes` runs outermost
-        // first, so the last containing volume is the deepest one.
-        // In the node's own space: a volume in the file and a file in a
-        // decompressed buffer share no offsets worth comparing.
+        volume(of: node, in: image)?.subtype
+    }
+
+    /// The erase polarity of the volume a node lives in, which is what a
+    /// file's state byte is read under (`FileState.marksHeaderInvalid`).
+    public static func volumeErasePolarity(of node: UEFINode, in image: UEFIImage, reader: ImageReader) -> Bool? {
+        volume(of: node, in: image).flatMap { FileState.erasePolarity(ofVolume: $0, in: reader) }
+    }
+
+    /// The innermost volume covering the node: `allNodes` runs outermost
+    /// first, so the last containing volume is the deepest one. In the node's
+    /// own space: a volume in the file and a file in a decompressed buffer
+    /// share no offsets worth comparing.
+    private static func volume(of node: UEFINode, in image: UEFIImage) -> UEFINode? {
         image.allNodes.reversed().first { candidate in
             candidate.kind == .volume && candidate.space == node.space
                 && candidate.range.contains(node.header.lowerBound)
-        }?.subtype
+        }
     }
 
     /// The writes that put a node's checksums right, or [] when they already
@@ -65,6 +75,7 @@ public enum UEFIChecksumCheck {
     public static func repairs(
         for node: UEFINode,
         volumeRevision: UInt8?,
+        volumeErasePolarity: Bool? = nil,
         in reader: ImageReader
     ) -> [ChecksumRepair] {
         switch node.kind {
@@ -76,7 +87,8 @@ public enum UEFIChecksumCheck {
             guard let volumeRevision else {
                 return fileHeaderRepairs(for: node, in: reader)
             }
-            return UEFIChecksums.repairs(for: node, volumeRevision: volumeRevision, in: reader)
+            return UEFIChecksums.repairs(for: node, volumeRevision: volumeRevision,
+                                         volumeErasePolarity: volumeErasePolarity, in: reader)
         default:
             return []
         }
@@ -119,8 +131,11 @@ public enum UEFIChecksumCheck {
             if let only, !only.contains(node.id) { continue }
             // A section on the way in that no longer decodes has nothing to read.
             guard let reader = readers.reader(for: node.space) else { continue }
-            let revision = node.kind == .file ? volumeRevision(of: node, in: image) : nil
-            let nodeRepairs = repairs(for: node, volumeRevision: revision, in: reader)
+            let volume = node.kind == .file ? volume(of: node, in: image) : nil
+            let nodeRepairs = repairs(
+                for: node, volumeRevision: volume?.subtype,
+                volumeErasePolarity: volume.flatMap { FileState.erasePolarity(ofVolume: $0, in: reader) },
+                in: reader)
             guard !nodeRepairs.isEmpty else { continue }
             result[node.id] = nodeRepairs
         }
@@ -195,7 +210,8 @@ public enum UEFIChecksumCheck {
         guard let storedHeader = reader.uint8(at: h + 0x10),
               let storedBody = reader.uint8(at: h + 0x11),
               let state = reader.uint8(at: h + 0x17),
-              let headerBytes = reader.bytes(file.header)
+              let headerBytes = reader.bytes(file.header),
+              !FileState.marksHeaderInvalid(state, volumeErasePolarity: nil)
         else { return [] }
         let sum = Checksums.sum8(headerBytes) &- storedHeader &- storedBody &- state
         let computed = 0 &- sum

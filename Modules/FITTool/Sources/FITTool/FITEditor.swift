@@ -886,8 +886,11 @@ public enum FITEditor {
             // A file that grew is checked over its new extent, not the one the
             // parse found.
             if let grownFile, grownFile.id == file.id { file = grownFile }
-            let revision = chain.last { $0.kind == .volume }?.subtype ?? 2
-            for repair in UEFIChecksums.repairs(for: file, volumeRevision: revision, in: after) {
+            let volume = chain.last { $0.kind == .volume }
+            let revision = volume?.subtype ?? 2
+            let polarity = volume.flatMap { FileState.erasePolarity(ofVolume: $0, in: after) }
+            for repair in UEFIChecksums.repairs(for: file, volumeRevision: revision,
+                                                volumeErasePolarity: polarity, in: after) {
                 let range = repair.offset..<(repair.offset + UInt64(repair.bytes.count))
                 if let index = repaired.writes.firstIndex(where: {
                     $0.offset <= range.lowerBound

@@ -1242,10 +1242,11 @@ private struct ChecksumPass: Sendable {
         }
         let revision = UEFIChecksumCheck.volumeRevision(of: node, in: image)
         let reader = tree.imageReader
+        let polarity = UEFIChecksumCheck.volumeErasePolarity(of: node, in: image, reader: reader)
         controller.showBusy()
         Task { [weak self] in
             let repairs = await UEFIToolSession.prepareChecksumFix(
-                node, volumeRevision: revision, reader: reader
+                node, volumeRevision: revision, volumeErasePolarity: polarity, reader: reader
             )
             guard let self else { return }
             self.controller.endBusy()
@@ -1275,11 +1276,13 @@ private struct ChecksumPass: Sendable {
     private nonisolated static func prepareChecksumFix(
         _ node: UEFINode,
         volumeRevision: UInt8?,
+        volumeErasePolarity: Bool?,
         reader: ImageReader
     ) async -> [ChecksumRepair]? {
         await Task.detached(priority: .userInitiated) {
             let repairs = UEFIChecksumCheck.repairs(
-                for: node, volumeRevision: volumeRevision, in: reader
+                for: node, volumeRevision: volumeRevision,
+                volumeErasePolarity: volumeErasePolarity, in: reader
             )
             return repairs.isEmpty ? nil : repairs
         }.value
