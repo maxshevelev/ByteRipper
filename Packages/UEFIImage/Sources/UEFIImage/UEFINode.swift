@@ -222,6 +222,11 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     /// bytes as padding, and so does the Type column: the map, not anything
     /// in the bytes, says what they are.
     case flashDeviceMapRegion
+    /// One embedded controller image among several in a block of EC
+    /// firmware — padding, a map region, the descriptor's EC region — from
+    /// its start to its last written byte (`UEFI_IMAGE_FORMAT.md` §9). Like a
+    /// map region, it classifies as UEFITool's padding.
+    case ecImage
     /// The x86 Startup AP data EDK2's GenFv writes into the pad file before
     /// the Volume Top File: a far jump the application processors start at.
     /// It is code at a fixed address, so it does not move.

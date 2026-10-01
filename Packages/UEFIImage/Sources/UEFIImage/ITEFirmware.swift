@@ -66,24 +66,3 @@ public struct ITEFirmware: Equatable, Sendable {
             && block[14] == 0x55 && block[15] == 0x55
     }
 }
-
-extension Parser {
-    /// `nodes` with every stretch of padding — or EC Firmware region — that
-    /// opens on an ITE image named by the identification it carries
-    /// (`UEFI_IMAGE_FORMAT.md` §9). The bytes stay what they were; only the
-    /// name says what they look like.
-    func namingECFirmware(_ nodes: [UEFINode]) -> [UEFINode] {
-        nodes.map { node in
-            let candidate = node.kind == .padding && !node.isErased
-                || node.kind == .flashDeviceMapRegion && node.guid == FlashDeviceMap.ecFirmware
-            guard candidate,
-                  let firmware = ITEFirmware.read(at: node.range.lowerBound, limit: node.range.upperBound, in: reader)
-            else { return node }
-            var named = node
-            named.name = node.kind == .padding
-                ? "\(ITEFirmware.paddingNamePrefix)\(firmware.identification))"
-                : "\(node.name) (\(firmware.identification))"
-            return named
-        }
-    }
-}

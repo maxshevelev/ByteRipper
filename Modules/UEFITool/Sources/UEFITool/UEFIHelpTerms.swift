@@ -42,6 +42,8 @@ public enum UEFIHelpTerms {
         // what it looks like.
         case .padding where node.name.hasPrefix(ITEFirmware.paddingNamePrefix):
             return HelpTermID("ec-firmware")
+        case .ecImage:
+            return HelpTermID("ec-firmware")
         case .padding: return HelpTermID("padding")
         case .freeSpace: return HelpTermID("free-space")
         case .nonUEFIData: return HelpTermID("non-uefi-data")

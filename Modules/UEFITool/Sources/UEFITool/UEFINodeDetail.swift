@@ -116,6 +116,9 @@ public enum UEFIDetail {
     ) -> UEFINodeDetail {
         var fields = commonFields(for: node, image: image)
         fields += headerFields(for: node, reader: reader, repairs: repairs)
+        if node.kind == .ecImage {
+            fields += ecImageFields(node, image: image, reader: reader)
+        }
         if let topSwap = UEFITopSwap.detail(for: node, in: image) {
             fields.append(.init(L("Top Swap"), topSwap))
         }
@@ -572,17 +575,49 @@ public enum UEFIDetail {
                 if let kernel = table.kernelVersion { fields.append(.init("Kernel version", kernel)) }
                 if let date = table.releaseDate { fields.append(.init("Release date", date)) }
             }
-            if node.guid == FlashDeviceMap.ecFirmware {
+            if node.guid == FlashDeviceMap.ecFirmware, !node.children.contains(where: { $0.kind == .ecImage }) {
                 fields += iteFields(node, reader: reader)
             }
 
         case .padding where node.name.hasPrefix(ITEFirmware.paddingNamePrefix):
-            fields += iteFields(node, reader: reader)
+            // With a row per image, the rows say it.
+            if !node.children.contains(where: { $0.kind == .ecImage }) {
+                fields += iteFields(node, reader: reader)
+            }
+
+        // Read in `build`, which has the block the image sits in.
+        case .ecImage:
+            break
 
         case .padding, .freeSpace, .nonUEFIData, .startupApData:
             // No header of their own: the size the common "Total" carries is
             // the whole of what there is to say.
             break
+        }
+        return fields
+    }
+
+    /// What an EC image row adds: who made it, what it says it is, how long
+    /// it is, and which earlier image in the block it copies. Read again from
+    /// the block the image sits in, since a copy is told by the images before
+    /// it.
+    private static func ecImageFields(_ node: UEFINode, image: UEFIImage, reader: ImageReader) -> [UEFIDetailField] {
+        let block = node.id.path.isEmpty ? nil : image.node(NodeID(Array(node.id.path.dropLast())))
+        guard let block,
+              let found = ECImage.all(in: block.body, reader: reader).first(where: { $0.start == node.range.lowerBound })
+        else { return [] }
+        var fields: [UEFIDetailField] = []
+        switch found.vendor {
+        case .ite(let identification):
+            fields.append(.init(L("Vendor"), "ITE"))
+            fields.append(.init("ITE identification", identification))
+        case .microchip:
+            fields.append(.init(L("Vendor"), "Microchip"))
+            fields.append(.init("Signature", "PHCM"))
+        }
+        fields.append(.init(L("Written"), sizeText(found.written)))
+        if let original = found.copyOf {
+            fields.append(.init(L("Copy of"), hex(original)))
         }
         return fields
     }
@@ -871,6 +906,7 @@ public enum UEFIDetail {
         case .freeSpace: return L("Free space")
         case .nonUEFIData: return L("Non-UEFI data")
         case .flashDeviceMapRegion: return L("Flash device map region")
+        case .ecImage: return L("EC firmware image")
         }
     }
 

@@ -20,6 +20,7 @@
 "%1$@ (Not checked)" = "%1$@ (nicht geprüft)";
 "%1$@ (Top Swap copy)" = "%1$@ (Top-Swap-Kopie)";
 "%1$@ (Valid)" = "%1$@ (stimmt)";
+"%1$@ (copy)" = "%1$@ (Kopie)";
 "%1$@ (in %2$@)" = "%1$@ (in %2$@)";
 "%1$@ Bookmarks Here:" = "%1$@ Lesezeichen hier:";
 "%1$@ compressed data that does not open here" = "Mit %1$@ komprimierte Daten, die sich hier nicht öffnen lassen";
@@ -138,10 +139,14 @@
 "Apply" = "Anwenden";
 "Ask before edits that shift the file" = "Vor Änderungen fragen, die die Datei verschieben";
 "Copied at %1$@–%2$@; %3$@" = "Kopie bei %1$@–%2$@; %3$@";
+"Copy of" = "Kopie des Abbilds bei";
 "Copy of %1$@–%2$@; %3$@" = "Kopie des Blocks %1$@–%2$@; %3$@";
+"EC firmware image" = "EC-Firmware-Abbild";
 "Go to Original" = "Zum Original";
 "Go to Top Swap Copy" = "Zur Top-Swap-Kopie";
 "Top Swap" = "Top Swap";
+"Vendor" = "Hersteller";
+"Written" = "Beschrieben";
 "at %1$@" = "bei %1$@";
 "BIOS access table" = "BIOS-Zugriffstabelle";
 "Back" = "Zurück";

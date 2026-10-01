@@ -180,7 +180,7 @@ extension Parser {
         if region.type == .descriptor {
             return descriptorNode(region.range)
         }
-        return UEFINode(
+        let node = UEFINode(
             kind: .region,
             subtype: UInt8(region.type.rawValue),
             name: region.type.label,
@@ -192,6 +192,13 @@ extension Parser {
             isExpandable: region.type.readsAsRawArea,
             childDepth: depth + 1
         )
+        // The EC region is read here rather than when opened: a look at each
+        // 4 KiB boundary of a megabyte or so, not a scan, and the name it gives
+        // the row belongs on it before anything is opened.
+        if region.type == .ec {
+            return readingECFirmware(node, emptyByte: Parser.defaultEmptyByte) ?? node
+        }
+        return node
     }
 
     private func descriptorNode(_ range: Range<UInt64>) -> UEFINode {

@@ -173,6 +173,11 @@ public enum UEFITreeDisplay {
     }
 
     private static func baseName(for node: UEFINode, catalogue: GuidsCatalogue) -> String {
+        // An EC image is named by what it carries; a copy of an earlier one in
+        // the same block says so.
+        if node.kind == .ecImage, node.subtype == ECImage.copySubtype {
+            return L("%1$@ (copy)", node.name)
+        }
         // A pad file (`EFI_FV_FILETYPE_FFS_PAD`) has a GUID only because every
         // file header does — all ones, as a rule — and it names nothing.
         if node.kind == .file, node.subtype == 0xF0 {
@@ -245,6 +250,7 @@ public enum UEFITreeDisplay {
         case .freeSpace: return L("Free space")
         case .nonUEFIData: return L("Non-UEFI data")
         case .flashDeviceMapRegion: return L("Flash device map region")
+        case .ecImage: return L("EC firmware image")
         }
     }
 }
