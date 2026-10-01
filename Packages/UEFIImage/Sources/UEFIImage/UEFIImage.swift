@@ -26,6 +26,10 @@ public struct UEFIImage: Sendable {
     /// (`BOOT_GUARD_PROTECTED_RANGES.md` §9.1). Nil means not read — which is
     /// not the same as an image that names none.
     public let protectedRanges: ProtectedRanges?
+    /// What Dell's Setup forms say each DVAR variable is, once they have been
+    /// read (`DellSetup`). Nil means not read; an image with no forms reads
+    /// as an empty catalogue.
+    public let dvarSettings: DellSetup.Catalogue?
 
     public init(
         size: UInt64,
@@ -33,7 +37,8 @@ public struct UEFIImage: Sendable {
         diagnostics: [UEFIDiagnostic] = [],
         addressDiff: UInt64? = nil,
         resetVector: ResetVector? = nil,
-        protectedRanges: ProtectedRanges? = nil
+        protectedRanges: ProtectedRanges? = nil,
+        dvarSettings: DellSetup.Catalogue? = nil
     ) {
         self.init(
             size: size,
@@ -41,7 +46,8 @@ public struct UEFIImage: Sendable {
             diagnostics: diagnostics,
             addressDiff: addressDiff,
             resetVector: resetVector,
-            protectedRanges: protectedRanges
+            protectedRanges: protectedRanges,
+            dvarSettings: dvarSettings
         )
     }
 
@@ -51,7 +57,8 @@ public struct UEFIImage: Sendable {
         diagnostics: [UEFIDiagnostic],
         addressDiff: UInt64?,
         resetVector: ResetVector?,
-        protectedRanges: ProtectedRanges?
+        protectedRanges: ProtectedRanges?,
+        dvarSettings: DellSetup.Catalogue?
     ) {
         self.size = size
         self.roots = stampedRoots
@@ -59,6 +66,7 @@ public struct UEFIImage: Sendable {
         self.addressDiff = addressDiff
         self.resetVector = resetVector
         self.protectedRanges = protectedRanges
+        self.dvarSettings = dvarSettings
     }
 
     /// This image with its protected ranges read, and what reading them had
@@ -70,7 +78,8 @@ public struct UEFIImage: Sendable {
             diagnostics: diagnostics + ranges.diagnostics,
             addressDiff: addressDiff,
             resetVector: resetVector,
-            protectedRanges: ranges
+            protectedRanges: ranges,
+            dvarSettings: dvarSettings
         )
     }
 

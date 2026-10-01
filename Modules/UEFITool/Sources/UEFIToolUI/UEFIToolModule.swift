@@ -495,7 +495,7 @@ private struct ChecksumPass: Sendable {
             }
             verifyNewChecksums()
             show(publish: true, rowsChanged: true)
-        case .expanded, .addressesResolved, .protectedRangesRead:
+        case .expanded, .addressesResolved, .protectedRangesRead, .dvarSettingsRead:
             // A branch appearing does not move the rows on screen: the panel
             // opens the row it was asked to open, itself, when the branch is
             // there. What changes here is what the rows *say*.
@@ -505,8 +505,9 @@ private struct ChecksumPass: Sendable {
     }
 
     /// The protected ranges the rows are marked with
-    /// (`BOOT_GUARD_PROTECTED_RANGES.md` §9.3), read by the tree off the main
-    /// actor. When it lands the tree says so, and the rows are drawn again.
+    /// (`BOOT_GUARD_PROTECTED_RANGES.md` §9.3), and what Dell's Setup forms
+    /// call the DVAR variables — both read by the tree off the main actor.
+    /// When each lands the tree says so, and the rows are drawn again.
     private func requestProtectedRanges(after delay: TimeInterval) {
         rangesRequest?.cancel()
         guard let tree else { return }
@@ -514,6 +515,7 @@ private struct ChecksumPass: Sendable {
             if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
             guard !Task.isCancelled, let self, let tree, self.tree === tree else { return }
             tree.resolveProtectedRanges {}
+            tree.resolveDvarSettings()
         }
     }
 

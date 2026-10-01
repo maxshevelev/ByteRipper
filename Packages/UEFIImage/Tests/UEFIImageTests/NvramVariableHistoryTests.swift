@@ -81,6 +81,23 @@ final class NvramVariableHistoryTests: XCTestCase {
         XCTAssertEqual(lang.versions.map { reader.bytes($0.value) }, [[0x65, 0x6E], [0x64, 0x65]])
     }
 
+    /// What a tree can leave out: each replaced copy, standing behind the
+    /// current one; a deleted variable keeps its last copy; a variable with
+    /// one copy, and every current one, stays.
+    func testSupersededCopiesStandBehindTheCopyThatReplacedThem() throws {
+        let (store, reader) = vssStore([
+            TestNVRAM.vssVariable(name: "BootOrder", state: Self.marked),
+            TestNVRAM.vssVariable(name: "Gone", state: Self.marked),
+            TestNVRAM.vssVariable(name: "BootOrder", state: Self.marked),
+            TestNVRAM.vssVariable(name: "Gone", state: Self.marked),
+            TestNVRAM.vssVariable(name: "Lang"),
+            TestNVRAM.vssVariable(name: "BootOrder"),
+        ])
+        let e = store.children.filter { $0.kind == .vssEntry }.map(\.id)
+        XCTAssertEqual(NvramVariableHistory.supersededCopies(in: store, reader: reader),
+                       [e[0]: e[5], e[2]: e[5], e[1]: e[3]])
+    }
+
     /// The bytes that differ, as runs over the length both copies have, and
     /// the sizes.
     func testAChangeIsItsSizesAndTheRunsThatDiffer() throws {

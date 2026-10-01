@@ -66,11 +66,16 @@ public struct UEFIDetailTable: Equatable, Sendable {
     public var columns: [String]
     public var rows: [[Cell]]
 
-    public init(title: String, symbol: String, columns: [String], rows: [[Cell]]) {
+    /// The node each row stands for, where a row stands for one: a click on
+    /// the row puts it in focus. Empty, or nil for a row, when it is text only.
+    public var rowTargets: [NodeID?]
+
+    public init(title: String, symbol: String, columns: [String], rows: [[Cell]], rowTargets: [NodeID?] = []) {
         self.title = title
         self.symbol = symbol
         self.columns = columns
         self.rows = rows
+        self.rowTargets = rowTargets
     }
 }
 
@@ -156,6 +161,10 @@ public enum UEFIDetail {
                     : variable.0
                 fields.append(.init(L("Variable"), text))
             }
+            if node.kind == .dvarEntry, let namespace = variable?.1, let nameId = variable?.0,
+               let setting = image.dvarSettings?.setting(namespace: namespace, nameId: nameId) {
+                fields += settingFields(setting, value: reader.bytes(node.body) ?? [])
+            }
             if let history {
                 tables.append(historyTable(history, focus: node.id, reader: reader))
             }
@@ -203,6 +212,23 @@ public enum UEFIDetail {
     }
 
     // MARK: - A Dell DVAR entry
+
+    /// What Setup says the variable is (`DellSetup`): the option as its page
+    /// words it, its keyword, the page, what this copy's value means there,
+    /// and the page's help for it. All the firmware's own English.
+    private static func settingFields(_ setting: DellSetup.Setting, value: [UInt8]) -> [UEFIDetailField] {
+        var fields: [UEFIDetailField] = [.init(L("Setup option"), setting.prompt)]
+        if let keyword = setting.keyword { fields.append(.init(L("Keyword"), keyword)) }
+        if let form = setting.form, form != setting.prompt { fields.append(.init(L("Setup page"), form)) }
+        if !value.isEmpty, value.count <= 8 {
+            let number = value.reversed().reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
+            if let meaning = UEFITreeDisplay.dvarMeaning(number, setting: setting) {
+                fields.append(.init(L("Value in Setup"), "\(meaning) (\(hex(number)))"))
+            }
+        }
+        if let help = setting.help { fields.append(.init(L("Setup help"), help)) }
+        return fields
+    }
 
     /// The header the reference prints for a DVAR entry: the state by its
     /// name, the flags and type, the namespace id it is filed under, the name
@@ -298,22 +324,29 @@ public enum UEFIDetail {
         let versions = history.versions
         let firstShown = max(0, versions.count - historyRows)
         var rows: [[UEFIDetailTable.Cell]] = []
+        var targets: [NodeID?] = []
         if firstShown > 0 {
             if let focused = versions.firstIndex(where: { $0.entry == focus }), focused < firstShown {
                 rows.append(historyRow(versions, focused, focus: focus, reader: reader))
+                targets.append(versions[focused].entry)
             }
             rows.append([.init("…"), .init(L("%1$@ earlier copies not shown", firstShown)),
                          .init(""), .init(""), .init("")])
+            targets.append(nil)
         }
         for index in firstShown..<versions.count {
             rows.append(historyRow(versions, index, focus: focus, reader: reader))
+            targets.append(versions[index].entry)
         }
+        // A click on a copy puts it in focus: its detail, and its bytes in the
+        // dump — the way to a copy the tree leaves out.
         return UEFIDetailTable(
             title: L("Variable history"),
             symbol: "clock.arrow.circlepath",
             columns: [L("Copy", context: "variable"), L("Address", context: "variable"), L("State"),
                       L("Size"), L("Change")],
-            rows: rows
+            rows: rows,
+            rowTargets: targets
         )
     }
 

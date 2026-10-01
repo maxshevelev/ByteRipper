@@ -82,9 +82,12 @@ public enum UEFITreeDisplay {
         node.kind == .padding && node.isErased
     }
 
-    /// `nodes` as the tree lists them: every one, or all but the empty padding.
-    public static func listed(_ nodes: [UEFINode], showsEmptyPadding: Bool) -> [UEFINode] {
-        showsEmptyPadding ? nodes : nodes.filter { !isEmptyPadding($0) }
+    /// `nodes` as the tree lists them: every one, or all but the empty
+    /// padding — and all but the copies of variables `hiding` names, which a
+    /// store's later entries replaced (`NvramVariableHistory.supersededCopies`).
+    public static func listed(_ nodes: [UEFINode], showsEmptyPadding: Bool, hiding: Set<NodeID> = []) -> [UEFINode] {
+        guard !showsEmptyPadding || !hiding.isEmpty else { return nodes }
+        return nodes.filter { (showsEmptyPadding || !isEmptyPadding($0)) && !hiding.contains($0.id) }
     }
 
     public static func present(_ image: UEFIImage) -> PresentedImage {
@@ -165,9 +168,11 @@ public enum UEFITreeDisplay {
     /// keeps the parser's name; the GUID still shows in the details panel.
     ///
     /// With `image`, the outermost nodes of a Top Swap copy say they are one
-    /// (`UEFITopSwap`).
-    public static func name(for node: UEFINode, catalogue: GuidsCatalogue, in image: UEFIImage? = nil) -> String {
-        let base = baseName(for: node, catalogue: catalogue)
+    /// (`UEFITopSwap`). With `reader` — the bytes of the node's space — a
+    /// DVAR row says its value as well.
+    public static func name(for node: UEFINode, catalogue: GuidsCatalogue, in image: UEFIImage? = nil,
+                            reader: ImageReader? = nil) -> String {
+        let base = baseName(for: node, catalogue: catalogue, settings: image?.dvarSettings, reader: reader)
         guard let image else { return base }
         return UEFITopSwap.name(base, for: node, in: image)
     }
@@ -176,7 +181,8 @@ public enum UEFITreeDisplay {
         (length + 0x3FF) / 0x400
     }
 
-    private static func baseName(for node: UEFINode, catalogue: GuidsCatalogue) -> String {
+    private static func baseName(for node: UEFINode, catalogue: GuidsCatalogue,
+                                 settings: DellSetup.Catalogue?, reader: ImageReader?) -> String {
         // An EC image is named by what it carries and how large it is, in
         // KiB — the bench sizes EC firmware by it (128, 192, 256) — and a copy
         // of an earlier one in the same block says so.
@@ -201,11 +207,20 @@ public enum UEFITreeDisplay {
             }
             return L("Padding file")
         }
-        // A Dell variable is a number in a namespace, and the row says both:
-        // the namespace by its name where the catalogue knows it.
-        if node.kind == .dvarEntry, let guid = node.guid {
-            let namespace = catalogue.name(of: guid) ?? NvramGuids.name(of: guid) ?? guid.description
-            return "\(namespace) · \(node.name)"
+        // A Dell variable is a number in a namespace. The row says what Setup
+        // calls it, where a Setup page asks about it, and its Name ID where
+        // none does — the namespace is in the detail, and on a Dell dump it is
+        // one GUID on almost every row. Then the value, as Setup words it
+        // where it can: "SecureBoot = Not ticked (0x0)"; a value too long to
+        // read as a number, by its size: "0x2 (16 bytes)".
+        if node.kind == .dvarEntry, node.guid != nil {
+            let setting = settings?.setting(for: node)
+            let name = setting?.name ?? "0x" + node.name
+            guard let value = reader?.bytes(node.body) else { return name }
+            guard let text = dvarValue(value, setting: setting) else {
+                return value.count > 8 ? L("%1$@ (%2$@ bytes)", name, "\(value.count)") : name
+            }
+            return "\(name) = \(text)"
         }
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind) : node.name
@@ -227,6 +242,31 @@ public enum UEFITreeDisplay {
         // it knows while the catalogue has no name for them; the GUID itself
         // is the last resort.
         return catalogue.name(of: guid) ?? NvramGuids.name(of: guid) ?? guid.description
+    }
+
+    /// A DVAR value up to eight bytes long, little-endian, as a number — with
+    /// what Setup calls it in front, where it says.
+    static func dvarValue(_ value: [UInt8], setting: DellSetup.Setting?) -> String? {
+        guard !value.isEmpty, value.count <= 8 else { return nil }
+        let number = value.reversed().reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
+        let hex = "0x" + String(number, radix: 16, uppercase: true)
+        guard let setting, let meaning = dvarMeaning(number, setting: setting) else { return hex }
+        return "\(meaning) (\(hex))"
+    }
+
+    /// What `number` means to the Setup question: ticked or not, the option
+    /// of a list, a number as a number. Nil where Setup does not say.
+    static func dvarMeaning(_ number: UInt64, setting: DellSetup.Setting) -> String? {
+        switch setting.kind {
+        case .checkbox:
+            return number == 0 ? L("Not ticked") : number == 1 ? L("Ticked") : nil
+        case .oneOf:
+            return setting.option(for: number).flatMap { $0.isEmpty ? nil : $0 }
+        case .numeric:
+            return "\(number)"
+        case .string, .other:
+            return nil
+        }
     }
 
     private static func kindLabel(_ kind: UEFINodeKind) -> String {

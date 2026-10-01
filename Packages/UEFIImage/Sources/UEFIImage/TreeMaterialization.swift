@@ -312,6 +312,29 @@ enum TreeMaterialization {
         return read()
     }
 
+    /// What Dell's Setup forms say each DVAR variable is, read over a copy of
+    /// the tree (`DellSetup`). Every volume's files first, which is where a
+    /// DVAR store turns up; only when there is one, everything else — the
+    /// forms' driver sits in a compressed section.
+    static func dvarSettings(
+        roots: [UEFINode],
+        size: UInt64,
+        reader: ImageReader,
+        limits: UEFIParser.Limits,
+        buffers: DecompressedBuffers
+    ) -> DellSetup.Catalogue {
+        var nodes = roots
+        var discarded: [UEFIDiagnostic] = []
+        materializeAll(&nodes, reader: reader, limits: limits, buffers: buffers,
+                       diagnostics: &discarded, opensCompressed: false)
+        guard nodes.contains(where: { $0.flattened.contains { $0.kind == .dvarStore } }) else {
+            return DellSetup.Catalogue()
+        }
+        materializeAll(&nodes, reader: reader, limits: limits, buffers: buffers, diagnostics: &discarded)
+        let readers = SpaceReaders(file: reader, buffers: buffers, limit: limits.maxDecompressedSize)
+        return DellSetup.read(UEFIImage(size: size, roots: nodes), readers: readers)
+    }
+
     /// Ids are stamped relative to `parent` the same way `UEFIImage` stamps a
     /// freshly-built tree — the parser itself never carries a counter, a
     /// node's place is only known once its parent has decided to keep it.

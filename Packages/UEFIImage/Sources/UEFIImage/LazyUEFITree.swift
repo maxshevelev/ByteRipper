@@ -78,6 +78,13 @@ public final class LazyUEFITree {
     private var isReadingProtectedRanges = false
     private var protectedRangeCallbacks: [@MainActor () -> Void] = []
 
+    /// What Dell's Setup forms say each DVAR variable is, once
+    /// `resolveDvarSettings` has read them. Nil until then, and again after
+    /// an edit.
+    public private(set) var dvarSettings: DellSetup.Catalogue?
+    private var isReadingDvarSettings = false
+    private var dvarSettingsCallbacks: [@MainActor () -> Void] = []
+
     /// Whether the top level is there yet. False only between `init` and the
     /// end of the background build — which on a plain chip dump is a scan of
     /// the whole file, and on an Intel image is instant.
@@ -136,6 +143,9 @@ public final class LazyUEFITree {
         /// The protected ranges have been read. The tree itself did not grow:
         /// the reading opened a copy of it.
         case protectedRangesRead
+        /// Dell's Setup forms have been read, over a copy of the tree like the
+        /// protected ranges.
+        case dvarSettingsRead
         /// An edit dropped memoized subtrees; everything below is suspect.
         case invalidated
     }
@@ -217,7 +227,8 @@ public final class LazyUEFITree {
             diagnostics: diagnostics + (protectedRanges?.diagnostics ?? []),
             addressDiff: addressDiff,
             resetVector: resetVector,
-            protectedRanges: protectedRanges
+            protectedRanges: protectedRanges,
+            dvarSettings: dvarSettings
         )
         // Kept until the tree next changes: building one copies every node
         // materialized so far, and a panel asks for it on every selection.
@@ -548,6 +559,46 @@ public final class LazyUEFITree {
         for callback in waiting { callback() }
     }
 
+    /// Reads what Dell's Setup forms say each DVAR variable is, off the main
+    /// actor, and announces `.dvarSettingsRead` when it lands; `done` runs
+    /// then, or at once when they are already read. An image with no DVAR
+    /// store costs a look at its volumes' files and no decoding.
+    public func resolveDvarSettings(_ done: @escaping @MainActor () -> Void = {}) {
+        if dvarSettings != nil {
+            done()
+            return
+        }
+        dvarSettingsCallbacks.append(done)
+        guard !isReadingDvarSettings else { return }
+        isReadingDvarSettings = true
+        let requested = generation
+        whenReady { [weak self] in
+            guard let self, self.isReadingDvarSettings, self.generation == requested else { return }
+            let roots = self.roots
+            let size = self.reader.count
+            let reader = self.reader
+            let limits = self.limits
+            let buffers = self.buffers
+            Task.detached(priority: .utility) { [weak self] in
+                let settings = TreeMaterialization.dvarSettings(
+                    roots: roots, size: size, reader: reader, limits: limits, buffers: buffers
+                )
+                await self?.landDvarSettings(settings, expectedGeneration: requested)
+            }
+        }
+    }
+
+    private func landDvarSettings(_ settings: DellSetup.Catalogue, expectedGeneration: Int) {
+        guard generation == expectedGeneration, isReadingDvarSettings else { return }
+        isReadingDvarSettings = false
+        dvarSettings = settings
+        cachedImage = nil
+        let waiting = dvarSettingsCallbacks
+        dvarSettingsCallbacks.removeAll()
+        announce(.dvarSettingsRead)
+        for callback in waiting { callback() }
+    }
+
     private func findNode(
         in nodes: [UEFINode], where matches: (UEFINode) -> Bool
     ) -> UEFINode? {
@@ -603,6 +654,11 @@ public final class LazyUEFITree {
         protectedRanges = nil
         isReadingProtectedRanges = false
         protectedRangeCallbacks.removeAll()
+        // The forms too: an edit may have landed in the driver.
+        let abandonedSettings = dvarSettingsCallbacks
+        dvarSettings = nil
+        isReadingDvarSettings = false
+        dvarSettingsCallbacks.removeAll()
         // The diagnostics of the subtrees being dropped go with them; what is
         // left is re-collected as those subtrees are expanded again.
         diagnostics.removeAll()
@@ -627,6 +683,7 @@ public final class LazyUEFITree {
         }
         for callback in abandonedAddresses { callback() }
         for callback in abandonedRanges { callback() }
+        for callback in abandonedSettings { callback() }
     }
 
     // MARK: - Observers

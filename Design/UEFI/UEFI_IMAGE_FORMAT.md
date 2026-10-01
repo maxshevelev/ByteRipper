@@ -1073,10 +1073,37 @@ whatever its state, as the reference does, though the value it carries is
 superseded like any other — `NvramStoreFill` and `NvramVariableHistory` go by
 the state alone. An entry of an unknown state, flags or type ends the walk: the
 rest is padding and `unknownDvarEntry`; a namespace no entry declares is
-`dvarNamespaceMissing`. The rows are named `<namespace> · <name id>`. On the two
+`dvarNamespaceMissing`. A row is named by its name id, `0x40`, or by what Setup
+calls it (below), then ` = ` and its value up to eight bytes, little-endian, or a longer one's
+size in parentheses. On the two
 Dell dumps with stores — one store of `0x1F000` in the BIOS region's raw area,
 two of `0x7000` in a volume's non-UEFI data — every store and entry matches
 UEFIExtract by offset, size and subtype: 3 304 and 1 916 rows.
+
+**What Setup calls a DVAR variable** (`DellSetupForms.swift`) is read from the
+firmware's own HII, which UEFIExtract does not do. Dell's Setup driver
+(`DellSetupFormSets`) carries its pages as EDK2 compiles them: each form
+package, and the run of string packages, behind a 32-bit length. A string
+package is found by its header — type `0x04`, `HdrSize == StringInfoOffset`, a
+printable language tag — and kept only when its blocks read to an end block; a
+form package by type `0x02` opening on `EFI_IFR_FORM_SET_OP`, kept only when
+its opcodes run exactly to its end with every scope closed. Each question kept
+in DVAR is followed, at its own level and right after its scope closes, by
+`EFI_IFR_GUID_OP` with Dell's GUID `A5D58BCF-EB5C-44FC-9122-CA4369B9ABE6`,
+subtype `0x1D`, then the namespace's GUID and a 32-bit name id; any other
+opcode in between unties it (the other subtypes, `0x19`–`0x20`, are not read).
+The prompt, help, page title and option texts come from `en-US`; the
+`x-UEFI` strings, at the same ids, are the keywords — the attribute names of
+Dell's configuration tools — and name the row, less a `[SuppressIf:…]`
+condition some carry. `LazyUEFITree.resolveDvarSettings` reads them over a
+copy of the tree like the protected ranges: every volume's files first, and the
+compressed sections only when a DVAR store turned up, since the driver sits in
+the LZMA DXE volume. On the dump with the `0x1F000` store: 17 form packages,
+263 questions tied, 110 of the 225 current variables named — the rest are in
+namespaces no page asks about (time stamps, counters, an event log). Every
+checkbox's value is 0 or 1 and every list's value is one of its options. The
+other dump's DXE volume does not decode, for UEFIExtract either, so it has no
+names.
 
 **Phoenix EVSA.** The store's signature is the bytes `EVSA`,
 `NVRAM_EVSA_STORE_SIGNATURE = 0x41535645` read little-endian. Besides the
@@ -1325,7 +1352,11 @@ not do, as the reference does not. A variable with no current copy was deleted
 as its last copy. On every dump at hand every entry is told whose copy it is;
 `all.orig.bin` keeps seven `BootOrder`s and three `Setup`s,
 `MemoryOverwriteRequestControl` up to 317 copies (one per boot). EVSA and
-SysF entries are not read for this yet.
+SysF entries are not read for this yet. `supersededCopies` maps every copy a later
+one replaced to the copy that stands — the current one, or a deleted
+variable's last — and the panel's tree lists only the standing copies unless
+asked for the rest: 425 rows instead of 4 460 on the Dell dump with a DVAR
+store, 252 instead of 1 080 on `all.orig.bin`.
 
 ## 10. The second pass
 

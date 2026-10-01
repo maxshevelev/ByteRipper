@@ -156,6 +156,12 @@ final class UEFIToolFlowTests: XCTestCase {
         return try XCTUnwrap(descendants(of: panel, NSOutlineView.self).first)
     }
 
+    /// The title row's filter icon, whose menu says what the tree lists.
+    private func filterButton(in panel: NSView) throws -> NSButton {
+        try XCTUnwrap(descendants(of: panel, NSButton.self).first { $0.toolTip == "Choose what the tree lists" },
+                      "the filter icon in the title row")
+    }
+
     /// The panel's title: the summary line leading with `prefix` — the clickable
     /// handle to the root the tree folded into it.
     private func summary(_ panel: NSView, prefix: String) throws -> NSTextField {
@@ -218,9 +224,9 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertLessThanOrEqual(tree.frame.width, clip + 0.5, "tree \(tree.frame.width), clip \(clip)")
     }
 
-    /// Empty padding is left out of the tree until the reader asks for it,
-    /// with the checkbox in the panel's title row — left of the reveal button
-    /// — and the choice is remembered.
+    /// Empty padding is left out of the tree until the reader asks for it, in
+    /// the filter menu under the icon in the panel's title row — left of the
+    /// reveal button — and the choice is remembered.
     func testEmptyPaddingIsListedOnlyWhenAskedFor() throws {
         ToolPanelFont.defaults.removeObject(forKey: Self.showsEmptyPaddingKey)
         _ = try open(UEFITestImage.withTrailingPadding())
@@ -228,20 +234,26 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(kinds(of: tree), [.volume], "the trailing erased padding is not listed")
 
         let panel = try XCTUnwrap(controller?.tools.panel)
-        let toggle = try XCTUnwrap(descendants(of: panel, NSButton.self).first { $0.title == "Show Empty Padding" },
-                                   "the checkbox in the title row")
+        let filter = try filterButton(in: panel)
         let reveal = try XCTUnwrap(descendants(of: panel, NSButton.self).first {
             $0.toolTip == "Show the node under the caret in the tree"
         })
         let inPanel = { (view: NSView) in view.convert(view.bounds, to: panel) }
-        XCTAssertLessThan(inPanel(toggle).maxX, inPanel(reveal).minX, "left of the reveal button")
-        XCTAssertEqual(inPanel(toggle).midY, inPanel(reveal).midY, accuracy: 3, "on the title row")
-        XCTAssertEqual(toggle.state, .off)
+        XCTAssertLessThan(inPanel(filter).maxX, inPanel(reveal).minX, "left of the reveal button")
+        XCTAssertEqual(inPanel(filter).midY, inPanel(reveal).midY, accuracy: 3, "on the title row")
+        XCTAssertFalse(descendants(of: panel, NSButton.self).contains { $0.title == "Show Empty Padding" },
+                       "a menu item, not a checkbox taking the title row's width")
+        let menu = try XCTUnwrap(filter.menu)
+        let item = try XCTUnwrap(menu.items.firstIndex { $0.title == "Show Empty Padding" })
+        XCTAssertEqual(menu.items[item].state, .off)
+        XCTAssertEqual(filter.contentTintColor, .secondaryLabelColor, "the tree lists what it lists by default")
 
-        toggle.performClick(nil)
+        menu.performActionForItem(at: item)
         window?.layoutIfNeeded()
 
         XCTAssertEqual(kinds(of: tree), [.volume, .padding])
+        XCTAssertEqual(menu.items[item].state, .on)
+        XCTAssertEqual(filter.contentTintColor, .controlAccentColor, "the icon says the tree lists more")
         XCTAssertEqual(ToolPanelFont.defaults.bool(forKey: Self.showsEmptyPaddingKey), true, "remembered")
     }
 
@@ -899,6 +911,43 @@ final class UEFIToolFlowTests: XCTestCase {
             "the chip symbol before the heading")
     }
 
+    /// A store lists one row per variable: the copy that stands. The others
+    /// are in its history, a click there shows one, and the tree keeps the
+    /// standing copy's row selected; the toggle lists them all.
+    func testSupersededCopiesAreInTheHistoryNotTheTree() throws {
+        let controller = try open(UEFITestImage.dvarImage())
+        let outline = try outline()
+        let panel = try XCTUnwrap(controller.tools.panel)
+        let storeRow = try XCTUnwrap((0..<outline.numberOfRows).first { (try? node(atRow: $0).kind) == .dvarStore })
+        _ = try expandRow(storeRow)
+        func entryRows() -> [UEFINode] {
+            (0..<outline.numberOfRows).compactMap { try? node(atRow: $0) }.filter { $0.kind == .dvarEntry }
+        }
+        // The standing copy of 0x40, and 0x50 as the copy it was deleted as.
+        XCTAssertEqual(entryRows().map(\.header.lowerBound), [0x129, 0x131])
+
+        let standing = try XCTUnwrap((0..<outline.numberOfRows).first { (try? node(atRow: $0).header.lowerBound) == 0x131 })
+        outline.selectRowIndexes(IndexSet(integer: standing), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+        let links = descendants(of: panel, NSTextField.self).filter { $0.textColor == .linkColor }
+        XCTAssertEqual(links.map(\.stringValue), ["0x109", "0x121", "0x131"], "the history's copies, oldest first")
+
+        // A click on the first copy: its detail, and the standing row stays.
+        let click = try XCTUnwrap(links.first?.gestureRecognizers.first as? NSClickGestureRecognizer)
+        _ = click.target?.perform(click.action, with: click)
+        window?.layoutIfNeeded()
+        let shown = descendants(of: panel, NSTextField.self).map(\.stringValue)
+        XCTAssertTrue(shown.contains("▸ 1"), "the clicked copy is the one in focus: \(shown)")
+        XCTAssertEqual(outline.selectedRow, standing)
+
+        let menu = try XCTUnwrap(filterButton(in: panel).menu)
+        let item = try XCTUnwrap(menu.items.firstIndex { $0.title == "Show Superseded Entries" })
+        menu.performActionForItem(at: item)
+        window?.layoutIfNeeded()
+        XCTAssertEqual(entryRows().count, 4, "every copy, asked for")
+        menu.performActionForItem(at: item)
+    }
+
     func testTheDetailSaysWhatTheNodeIs() throws {
         let controller = try open(UEFITestImage.make())
         let outline = try outline()
@@ -942,9 +991,14 @@ final class UEFIToolFlowTests: XCTestCase {
         bytes.replaceSubrange(0x1000..<(0x1000 + picture.count), with: picture)
         let controller = try open(bytes)
         let outline = try outline()
-        let row = try XCTUnwrap(
-            (0..<outline.numberOfRows).first { (try? node(atRow: $0).kind) == .picture },
-            "the scan names the picture: \(kinds(of: outline))")
+        // The first display can land before the scan's rows do: the outline
+        // is given them by a later one. Wait for the row, not for a display.
+        let deadline = Date().addingTimeInterval(5)
+        func pictureRow() -> Int? { (0..<outline.numberOfRows).first { (try? node(atRow: $0).kind) == .picture } }
+        while pictureRow() == nil, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+        let row = try XCTUnwrap(pictureRow(), "the scan names the picture: \(kinds(of: outline))")
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         window?.layoutIfNeeded()
         let panel = try XCTUnwrap(controller.tools.panel)
@@ -1626,6 +1680,27 @@ enum UEFITestImage {
     /// A whole SPI dump: a flash descriptor with a master section and a VSCC
     /// table, a BIOS region holding the volume above, and nothing else. What
     /// the descriptor's own detail is read from.
+    /// An image with no volume, only a Dell DVAR store in erased bytes: the
+    /// declaration of a namespace, three copies of variable 0x40 — the last
+    /// one stored — and one of 0x50, deleted. Every field after the
+    /// signature is stored as its complement.
+    static func dvarImage() -> [UInt8] {
+        let namespace: [UInt8] = [0xE0, 0xCE, 0x7A, 0x41, 0xA9, 0x6F, 0x82, 0x4A,
+                                  0x99, 0xD7, 0xF9, 0xB1, 0xDD, 0x27, 0x1E, 0x48]
+        func entry(_ state: UInt8, declares: Bool = false, _ nameId: UInt8, _ value: UInt8) -> [UInt8] {
+            var bytes: [UInt8] = [0xFF - state, declares ? 0xF9 : 0xFD, 0xFF, 0xF8, 0xFE]
+            if declares { bytes += namespace }
+            return bytes + [0xFF - nameId, 0xFE, value]
+        }
+        var store = Array("DVAR".utf8) + [0xFF, 0xFE, 0xFF, 0xFF, 0x7C]   // 0x100 bytes
+        store += entry(0x55, declares: true, 0x40, 1)
+        store += entry(0x55, 0x40, 2)
+        store += entry(0x55, 0x50, 9)
+        store += entry(0x05, 0x40, 3)
+        store += [UInt8](repeating: 0xFF, count: 0x100 - store.count)
+        return [UInt8](repeating: 0xFF, count: 0x100) + store + [UInt8](repeating: 0xFF, count: 0x100)
+    }
+
     static func intelImage() -> [UInt8] {
         let biosAt = 0x1000
         var image = [UInt8](repeating: 0xFF, count: 0x2000)

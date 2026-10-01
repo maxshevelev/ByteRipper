@@ -90,6 +90,28 @@ public struct NvramVariableHistory: Equatable, Sendable {
             .map { ($0.key.name, $0.key.guid) }
     }
 
+    /// The copies a tree can leave out of a store's rows, each with the copy
+    /// that stands for its variable instead: every copy a later one replaced,
+    /// mapped to the variable's current copy — or, for a variable the store no
+    /// longer holds, to the copy it was deleted as, which stays, so a deleted
+    /// variable does not vanish. A current copy is never left out, nor an
+    /// entry whose variable cannot be told. Empty for a node that is not a
+    /// store of VSS, NVAR or DVAR entries.
+    public static func supersededCopies(in store: UEFINode, reader: ImageReader) -> [NodeID: NodeID] {
+        guard store.children.contains(where: { $0.kind == .vssEntry || $0.kind == .nvarEntry || $0.kind == .dvarEntry })
+        else { return [:] }
+        var byVariable: [Key: [Copy]] = [:]
+        for copy in copies(in: store, reader: reader) { byVariable[copy.key, default: []].append(copy) }
+        var hidden: [NodeID: NodeID] = [:]
+        for versions in byVariable.values where versions.count > 1 {
+            let standing = versions.last(where: \.isCurrent) ?? versions[versions.count - 1]
+            for copy in versions where !copy.isCurrent && copy.entry != standing.entry {
+                hidden[copy.entry] = standing.entry
+            }
+        }
+        return hidden
+    }
+
     /// `to` against `from`: their sizes, and the runs of bytes that differ.
     public static func change(from: Version, to: Version, reader: ImageReader) -> Change? {
         guard let old = reader.bytes(from.value), let new = reader.bytes(to.value) else { return nil }

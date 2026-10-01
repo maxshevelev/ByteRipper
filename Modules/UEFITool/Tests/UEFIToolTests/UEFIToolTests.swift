@@ -594,6 +594,7 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Variable"), "Setup", "the tree calls it Invalid")
         XCTAssertEqual(table.columns, ["Copy", "Address", "State", "Size", "Change"])
         XCTAssertEqual(table.rows.map { $0[0].text }, ["1", "▸ 2", "3", "4"])
+        XCTAssertEqual(table.rowTargets, image.roots[0].children.dropFirst().map(\.id), "a click on a row shows that copy")
         XCTAssertEqual(table.rows.map { $0[1].text }, image.roots[0].children.dropFirst().map { "0x" + String($0.range.lowerBound, radix: 16, uppercase: true) })
         XCTAssertEqual(table.rows.map { $0[2].text }, ["Superseded", "Superseded", "Superseded", "Current"])
         XCTAssertEqual(table.rows.map { $0[3].text }, ["4", "4", "4", "5"])
@@ -635,7 +636,13 @@ final class UEFIDetailTests: XCTestCase {
         let image = UEFIImage(size: 25, roots: [entry])
         let detail = UEFIDetail.build(for: image.roots[0], image: image, reader: ImageReader(bytes))
 
-        XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: .empty), "417ACEE0-6FA9-4A82-99D7-F9B1DD271E48 · 40")
+        XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: .empty), "0x40", "no Setup page names it")
+        XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: .empty, reader: ImageReader(bytes)), "0x40 = 0x201",
+                       "and its value, little-endian")
+        let long = UEFINode(kind: .dvarEntry, subtype: UEFITypes.Sub.namespaceGuidDvarEntry, name: "2",
+                            guid: namespace, header: 0..<23, body: 0..<16, isFixed: true)
+        XCTAssertEqual(UEFITreeDisplay.name(for: long, catalogue: .empty, reader: ImageReader(bytes)), "0x2 (16 bytes)",
+                       "too long for a number: its size")
         XCTAssertEqual(UEFITreeDisplay.typeText(for: entry), "DVAR entry")
         XCTAssertEqual(UEFITreeDisplay.subtypeText(for: entry), "NamespaceGuid")
         XCTAssertEqual(field(detail, "State"), "0x5 (Stored)")
@@ -644,6 +651,39 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Name ID"), "0x40")
         XCTAssertEqual(field(detail, "Data size"), "0x2 (2)")
         XCTAssertEqual(UEFIHelpTerms.term(for: entry)?.rawValue, "dvar")
+    }
+
+    /// Where Dell's Setup asks about a DVAR variable, the row is called by
+    /// the question's keyword, and the detail says what Setup says: the
+    /// option, its page, what this value means there, its help.
+    func testADvarEntryIsNamedByTheSetupQuestionAboutIt() throws {
+        let namespace = EFIGUID("417ACEE0-6FA9-4A82-99D7-F9B1DD271E48")!
+        // A store's header, then a stored entry declaring the namespace, name
+        // id 0x40, one byte of data: 1.
+        let entryBytes: [UInt8] = [0xFA, 0xF9, 0xFF, 0xF8, 0xFE] + namespace.bytes + [0xBF, 0xFE, 0x01]
+        let bytes = Array("DVAR".utf8) + [0xDE, 0xFF, 0xFF, 0xFF, 0x7C] + entryBytes
+        let entry = UEFINode(kind: .dvarEntry, subtype: UEFITypes.Sub.namespaceGuidDvarEntry, name: "40",
+                             guid: namespace, header: 9..<32, body: 32..<33, isFixed: true)
+        let store = UEFINode(kind: .dvarStore, name: "", header: 0..<9, body: 9..<33, children: [entry])
+        let settings = DellSetup.Catalogue(settings: [
+            DellSetup.Key(namespace: namespace, nameId: 0x40): DellSetup.Setting(
+                prompt: "Allow BIOS Downgrade", keyword: "AllowBiosDowngrade",
+                help: "Lets an older BIOS be flashed.", form: "Security", kind: .checkbox
+            ),
+        ])
+        let image = UEFIImage(size: 33, roots: [store], dvarSettings: settings)
+        let shown = try XCTUnwrap(image.roots.first?.children.first)
+        let detail = UEFIDetail.build(for: shown, image: image, reader: ImageReader(bytes))
+
+        XCTAssertEqual(UEFITreeDisplay.name(for: shown, catalogue: .empty, in: image), "AllowBiosDowngrade")
+        XCTAssertEqual(UEFITreeDisplay.name(for: shown, catalogue: .empty, in: image, reader: ImageReader(bytes)),
+                       "AllowBiosDowngrade = Ticked (0x1)", "the value, as Setup words it")
+        XCTAssertEqual(UEFITreeDisplay.name(for: shown, catalogue: .empty), "0x40", "before the forms are read")
+        XCTAssertEqual(field(detail, "Setup option"), "Allow BIOS Downgrade")
+        XCTAssertEqual(field(detail, "Keyword"), "AllowBiosDowngrade")
+        XCTAssertEqual(field(detail, "Setup page"), "Security")
+        XCTAssertEqual(field(detail, "Value in Setup"), "Ticked (0x1)")
+        XCTAssertEqual(field(detail, "Setup help"), "Lets an older BIOS be flashed.")
     }
 
     /// The version table's region shows what the table states.

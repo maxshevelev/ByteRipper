@@ -25,4 +25,15 @@ final class EmptyPaddingTests: XCTestCase {
         XCTAssertEqual(UEFITreeDisplay.listed(nodes, showsEmptyPadding: true).map(\.name),
                        ["FFSv2", "Empty padding", "Padding", "Free space"])
     }
+
+    /// The copies a store's later entries replaced are left out by id, with
+    /// the empty padding or without it.
+    func testTheTreeLeavesOutTheCopiesItIsToldTo() {
+        let image = UEFIImage(size: 0x3000, roots: [volume, erased, data, free])
+        let ids = image.roots.map(\.id)
+        XCTAssertEqual(UEFITreeDisplay.listed(image.roots, showsEmptyPadding: true, hiding: [ids[2]]).map(\.name),
+                       ["FFSv2", "Empty padding", "Free space"])
+        XCTAssertEqual(UEFITreeDisplay.listed(image.roots, showsEmptyPadding: false, hiding: [ids[0]]).map(\.name),
+                       ["Padding", "Free space"])
+    }
 }

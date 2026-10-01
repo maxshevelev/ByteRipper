@@ -69,7 +69,12 @@ import UEFITool
     private var tree: LazyUEFITree?
     /// The rows of the branch `childrenList` last listed, and what they were
     /// listed from.
-    private var listedChildren: (id: NodeID, children: [UEFINode], showsEmptyPadding: Bool, rows: [Any])?
+    private var listedChildren: (id: NodeID, children: [UEFINode], showsEmptyPadding: Bool,
+                                 showsSuperseded: Bool, rows: [Any])?
+    /// Per store, the copies of its variables the tree leaves out and the
+    /// copy each stands behind (`NvramVariableHistory.supersededCopies`), with
+    /// the children they were read from — the same storage test as above.
+    private var supersededByStore: [NodeID: (children: [UEFINode], copies: [NodeID: NodeID])] = [:]
     /// True while the tree's top level is still being worked out — a signature
     /// scan of a chip dump with no descriptor, which is the one thing about
     /// opening an image that is never instant. The outline shows one
@@ -84,6 +89,12 @@ import UEFITool
     /// from the tree's menu, and remembered like the panel's other settings.
     private(set) var showsEmptyPadding = ToolPanelFont.defaults.bool(forKey: showsEmptyPaddingKey)
     static let showsEmptyPaddingKey = "UEFIStructure.ShowsEmptyPadding"
+    /// Whether the tree lists the copies of variables later entries replaced.
+    /// Off unless asked for: on a board that writes a variable every boot
+    /// they are nine rows in ten, and each one's history is in the detail of
+    /// the copy that stands.
+    private(set) var showsSupersededEntries = ToolPanelFont.defaults.bool(forKey: showsSupersededEntriesKey)
+    static let showsSupersededEntriesKey = "UEFIStructure.ShowsSupersededEntries"
     private var focus: NodeID?
     /// The detail on screen, kept so the rows can be rebuilt at a new type
     /// size without waiting for the next parse — a zoom is not a re-read.
@@ -173,9 +184,15 @@ import UEFITool
     /// the same act — go where the caret points — pointed at the tree instead
     /// of the dump.
     private let revealButton = NSButton()
-    /// Whether the tree lists empty padding, in the title row beside the
-    /// panel's other control.
-    private let paddingToggle = NSButton(checkboxWithTitle: L("Show Empty Padding"), target: nil, action: nil)
+    /// What the tree leaves out — empty padding, the copies later entries
+    /// replaced — as a menu under one icon left of the reveal button. Ticked
+    /// out in the title row, the choices took the width the image's name
+    /// needs; they are set once and seldom changed, so a click away is near
+    /// enough. The icon is tinted while the tree lists anything it leaves out
+    /// by default, so a longer tree than usual says why.
+    private let filterButton = NSButton()
+    private let paddingItem = NSMenuItem(title: L("Show Empty Padding"), action: nil, keyEquivalent: "")
+    private let supersededItem = NSMenuItem(title: L("Show Superseded Entries"), action: nil, keyEquivalent: "")
     private let outline = UEFIOutlineView()
     private let outlineScroll = NSScrollView()
     /// The tree and its legend, as one pane of the splitter: the legend
@@ -230,7 +247,6 @@ import UEFITool
         view.translatesAutoresizingMaskIntoConstraints = false
 
         summaryLabel.font = ToolPanelFont.body(weight: .medium)
-        paddingToggle.font = ToolPanelFont.body()
         summaryLabel.lineBreakMode = .byTruncatingTail
         summaryLabel.translatesAutoresizingMaskIntoConstraints = false
         // The title names the image, not a row: the one root the tree folded
@@ -257,16 +273,35 @@ import UEFITool
         revealButton.action = #selector(revealClicked)
         revealButton.translatesAutoresizingMaskIntoConstraints = false
 
-        paddingToggle.controlSize = .small
-        paddingToggle.font = ToolPanelFont.body()
-        paddingToggle.state = showsEmptyPadding ? .on : .off
-        paddingToggle.target = self
-        paddingToggle.action = #selector(paddingToggleClicked)
-        ControlHelp.describe(paddingToggle, L("List the padding nobody wrote to — erased bytes between structures"))
-        paddingToggle.setContentCompressionResistancePriority(.defaultHigh + 1, for: .horizontal)
-        paddingToggle.translatesAutoresizingMaskIntoConstraints = false
-        // The title gives way first: a long image name truncates before the
-        // checkbox does.
+        // help: panel.uefi.filter
+        filterButton.image = NSImage(
+            systemSymbolName: "line.3.horizontal.decrease.circle",
+            accessibilityDescription: L("Filter")
+        )
+        filterButton.symbolConfiguration = revealButton.symbolConfiguration
+        filterButton.isBordered = false
+        filterButton.imagePosition = .imageOnly
+        ControlHelp.describe(filterButton, name: L("Filter"), tooltip: L("Choose what the tree lists"))
+        filterButton.target = self
+        filterButton.action = #selector(filterClicked)
+        filterButton.translatesAutoresizingMaskIntoConstraints = false
+
+        paddingItem.target = self
+        paddingItem.action = #selector(paddingItemClicked)
+        ControlHelp.describe(paddingItem, L("List the padding nobody wrote to — erased bytes between structures"))
+        // help: panel.uefi.superseded-entries
+        supersededItem.target = self
+        supersededItem.action = #selector(supersededItemClicked)
+        ControlHelp.describe(supersededItem, L("List the copies of variables that later entries replaced — their history is in the detail of the copy that stands"))
+        let filterMenu = NSMenu()
+        filterMenu.autoenablesItems = false
+        filterMenu.addItem(paddingItem)
+        filterMenu.addItem(supersededItem)
+        // A right click opens it too, as a button with a menu does.
+        filterButton.menu = filterMenu
+        updateFilter()
+        // The title gives way: a long image name truncates before it runs
+        // under the buttons.
         summaryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         configureOutline()
@@ -314,7 +349,7 @@ import UEFITool
         bottomRow.addArrangedSubview(noticeLabel)
 
         view.addSubview(summaryLabel)
-        view.addSubview(paddingToggle)
+        view.addSubview(filterButton)
         view.addSubview(revealButton)
         view.addSubview(splitter)
         view.addSubview(bottomRow)
@@ -327,10 +362,12 @@ import UEFITool
             // The button owns the title row's right end; a long image name
             // truncates before it rather than running under it.
             summaryLabel.trailingAnchor.constraint(
-                lessThanOrEqualTo: paddingToggle.leadingAnchor, constant: -8
+                lessThanOrEqualTo: filterButton.leadingAnchor, constant: -8
             ),
-            paddingToggle.trailingAnchor.constraint(equalTo: revealButton.leadingAnchor, constant: -6),
-            paddingToggle.centerYAnchor.constraint(equalTo: summaryLabel.centerYAnchor),
+            filterButton.widthAnchor.constraint(equalToConstant: 18),
+            filterButton.heightAnchor.constraint(equalToConstant: 18),
+            filterButton.trailingAnchor.constraint(equalTo: revealButton.leadingAnchor, constant: -4),
+            filterButton.centerYAnchor.constraint(equalTo: summaryLabel.centerYAnchor),
 
             // A small square: the glyph is 12 point, and a button the size of
             // its image alone would be a needlessly thin thing to hit.
@@ -367,7 +404,6 @@ import UEFITool
     /// rebuilt rather than restyled.
     private func applyPanelFont() {
         summaryLabel.font = ToolPanelFont.body(weight: .medium)
-        paddingToggle.font = ToolPanelFont.body()
         noticeLabel.font = ToolPanelFont.body()
         ToolPanelTable.apply(to: outline)
         applyColumnWidths()
@@ -501,6 +537,8 @@ import UEFITool
             // "Loading…" row. Both go with the rows they stood for.
             showingPlaceholder.removeAll()
             meOpening = nil
+            supersededByStore.removeAll()
+            listedChildren = nil
         }
         self.image = image
         self.tree = tree
@@ -704,7 +742,14 @@ import UEFITool
     }
 
     private func selectAndScroll(to nodeID: NodeID) {
-        let row = outline.row(forItem: row(nodeID))
+        var row = outline.row(forItem: row(nodeID))
+        // A copy the tree leaves out is shown by the row of the copy it stands
+        // behind; its own detail stays up.
+        if row < 0, !showsSupersededEntries, !nodeID.path.isEmpty,
+           let store = tree?.node(NodeID(Array(nodeID.path.dropLast()))),
+           let standing = supersededCopies(in: store)[nodeID] {
+            row = outline.row(forItem: self.row(standing))
+        }
         guard row >= 0 else { return }
         // A show that finds the focus where it already was — a branch opening,
         // the checksum pass that follows it, an edit — is not a reason to move
@@ -972,9 +1017,20 @@ import UEFITool
             cell.textColor = .secondaryLabelColor
             return fitted(cell, column: index)
         })
-        for row in table.rows {
+        for (rowIndex, row) in table.rows.enumerated() {
+            let target = rowIndex < table.rowTargets.count ? table.rowTargets[rowIndex] : nil
             grid.addRow(with: row.enumerated().map { index, cell in
                 let field = fitted(NSTextField(labelWithString: cell.text), column: index)
+                // A row that stands for a node is a way to it: a click on any
+                // of its cells puts that node in focus. Its address reads as
+                // a link, the one cue a grid of text can give.
+                if let target {
+                    let click = NodeClick(target: self, action: #selector(tableRowClicked(_:)))
+                    click.node = target
+                    field.addGestureRecognizer(click)
+                    if index == 1 { field.textColor = .linkColor }
+                    field.toolTip = field.toolTip ?? L("Show this copy")
+                }
                 // A permission is read by its colour as much as by its word,
                 // which is the whole point of drawing this as a table: a column
                 // of green with one red in it answers at a glance.
@@ -987,7 +1043,7 @@ import UEFITool
                     field.font = ToolPanelFont.body(weight: .semibold)
                     field.textColor = SemanticColors.bad
                 }
-                field.isSelectable = true
+                field.isSelectable = target == nil
                 return field
             })
         }
@@ -1090,18 +1146,32 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             // the same array storage, which the kept copy holds on to, so the
             // storage cannot be freed and reused for another array.
             if let listed = listedChildren, listed.id == id, listed.showsEmptyPadding == showsEmptyPadding,
+               listed.showsSuperseded == showsSupersededEntries,
                Self.sameStorage(listed.children, node.children) {
                 return listed.rows
             }
-            let rows: [Any] = UEFITreeDisplay.listed(node.children, showsEmptyPadding: showsEmptyPadding)
+            let hiding = showsSupersededEntries ? [] : Set(supersededCopies(in: node).keys)
+            let rows: [Any] = UEFITreeDisplay.listed(node.children, showsEmptyPadding: showsEmptyPadding, hiding: hiding)
                 .map { row($0.id) }
-            listedChildren = (id, node.children, showsEmptyPadding, rows)
+            listedChildren = (id, node.children, showsEmptyPadding, showsSupersededEntries, rows)
             return rows
         }
         guard node.isExpandable else { return [] }
         if showingPlaceholder.contains(id) { return [placeholder(under: id)] }
         beginOpening(id)
         return showingPlaceholder.contains(id) ? [placeholder(under: id)] : []
+    }
+
+    /// The copies `store`'s rows leave out, read once per store and kept
+    /// while it has the same children.
+    private func supersededCopies(in store: UEFINode) -> [NodeID: NodeID] {
+        if let known = supersededByStore[store.id], Self.sameStorage(known.children, store.children) {
+            return known.copies
+        }
+        guard let reader = tree?.spaceReaders.reader(for: store.space) else { return [:] }
+        let copies = NvramVariableHistory.supersededCopies(in: store, reader: reader)
+        supersededByStore[store.id] = (store.children, copies)
+        return copies
     }
 
     private static func sameStorage(_ a: [UEFINode], _ b: [UEFINode]) -> Bool {
@@ -1482,7 +1552,9 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         case Column.subtype:
             return UEFITreeDisplay.subtypeText(for: node)
         default:
-            return UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image)
+            // A DVAR row says its value, which is bytes in the node's space.
+            let reader = node.kind == .dvarEntry ? tree?.spaceReaders.reader(for: node.space) : nil
+            return UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image, reader: reader)
         }
     }
 
@@ -1508,16 +1580,52 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
 
     /// Turns the empty padding rows on or off, and remembers the choice.
     func setShowsEmptyPadding(_ shows: Bool) {
-        paddingToggle.state = shows ? .on : .off
         guard shows != showsEmptyPadding else { return }
         showsEmptyPadding = shows
         ToolPanelFont.defaults.set(shows, forKey: Self.showsEmptyPaddingKey)
+        updateFilter()
         outline.reloadData()
         updateRowMarks()
     }
 
-    @objc private func paddingToggleClicked() {
-        setShowsEmptyPadding(paddingToggle.state == .on)
+    @objc private func paddingItemClicked() {
+        setShowsEmptyPadding(!showsEmptyPadding)
+    }
+
+    /// The filter's menu, under its icon.
+    @objc private func filterClicked() {
+        filterButton.menu?.popUp(
+            positioning: nil, at: NSPoint(x: 0, y: filterButton.bounds.maxY + 4), in: filterButton
+        )
+    }
+
+    /// The menu's ticks, and the icon tinted while the tree lists more than
+    /// it does by default.
+    private func updateFilter() {
+        paddingItem.state = showsEmptyPadding ? .on : .off
+        supersededItem.state = showsSupersededEntries ? .on : .off
+        filterButton.contentTintColor = showsEmptyPadding || showsSupersededEntries
+            ? .controlAccentColor : .secondaryLabelColor
+    }
+
+    // help: panel.uefi.variable-history
+    @objc private func tableRowClicked(_ click: NodeClick) {
+        guard let node = click.node else { return }
+        onSelect?(node)
+    }
+
+    /// Turns the superseded copies' rows on or off, and remembers the choice.
+    func setShowsSupersededEntries(_ shows: Bool) {
+        guard shows != showsSupersededEntries else { return }
+        showsSupersededEntries = shows
+        ToolPanelFont.defaults.set(shows, forKey: Self.showsSupersededEntriesKey)
+        updateFilter()
+        outline.reloadData()
+        updateRowMarks()
+    }
+
+    @objc private func supersededItemClicked() {
+        setShowsSupersededEntries(!showsSupersededEntries)
     }
 
     /// What the tree's menu offers for one node.
@@ -1711,4 +1819,9 @@ private final class UEFIOutlineView: NSOutlineView {
         else { return }
         onRowReclick?(clickedRow)
     }
+}
+
+/// A click on a detail table's row, carrying the node the row stands for.
+private final class NodeClick: NSClickGestureRecognizer {
+    var node: NodeID?
 }

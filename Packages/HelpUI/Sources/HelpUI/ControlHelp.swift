@@ -74,4 +74,11 @@ import AppKit
         item.toolTip = tooltip
         if let view = item.view { describe(view, name: name, tooltip: tooltip) }
     }
+
+    /// The same for a menu item, which is not a view either: its title is its
+    /// name, on screen and to a screen reader alike, and the phrase is the
+    /// tooltip a pause over it shows.
+    public static func describe(_ item: NSMenuItem, _ phrase: String?) {
+        item.toolTip = phrase
+    }
 }
