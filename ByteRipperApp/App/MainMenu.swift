@@ -156,13 +156,14 @@ enum MainMenu {
         // help: menu.tools.none
         toolsMenu.addItem(withTitle: L("None"),
                           action: #selector(MainViewController.activateTool(_:)),
-                          keyEquivalent: "")
+                          keyEquivalent: "0")
         guard !ToolRegistry.modules.isEmpty else { return toolsMenu }
         toolsMenu.addItem(.separator())
-        for module in ToolRegistry.modules {
+        // ⌘1, ⌘2, … in the menu's order; ⌘0 is None. Digits run out at nine.
+        for (index, module) in ToolRegistry.modules.enumerated() {
             let item = toolsMenu.addItem(withTitle: module.title,
                                          action: #selector(MainViewController.activateTool(_:)),
-                                         keyEquivalent: "")
+                                         keyEquivalent: index < 9 ? String(index + 1) : "")
             item.representedObject = module.identifier
         }
         return toolsMenu

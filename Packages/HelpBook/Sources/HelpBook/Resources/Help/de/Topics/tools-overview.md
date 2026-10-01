@@ -1,4 +1,4 @@
-@source-sha 96ac7a7bfaedc57730e7a4f1f44b5105972083c55e0bd3ee13a9cec6cd6f94b3
+@source-sha a2b4850d68fb305994945dedf836b49d18432bf30a03347a65f89934d5b651d6
 # Die Werkzeugbereiche
 
 > Werkzeuge, die den geöffneten Dump decodieren und melden, welche Strukturen er enthält.
@@ -8,6 +8,8 @@ Das Menü **Werkzeuge** schaltet jeweils einen Bereich neben dem Dump ein. Jedes
 - **[[topic:tool-uefi|UEFI-Struktur]]** — die Aufteilung eines Firmware-Images: die Flash-Regionen, die Volumes, die Dateien und Sektionen darin, die NVRAM-Speicher.
 - **[[topic:tool-me|ME Analyzer]]** — was für eine Intel-Management-Engine-Firmware im Image steckt: ihre Version, ihre Partitionen, ihre Konfiguration.
 - **[[topic:tool-fit|FIT-Tabelle]]** — die Firmware Interface Table und ob ihre Einträge noch auf das zeigen, was sie behaupten.
+
+Die Werkzeuge haben die Tasten **⌘1**, **⌘2**, **⌘3** in der Reihenfolge des Menüs; **⌘0** schließt den Bereich. Die Taste des gerade gezeigten Werkzeugs bewirkt nichts.
 
 ## Was sie gemeinsam haben
 
