@@ -1,4 +1,4 @@
-@source-sha 89ea37a7aeecddc6007a72f46b49a96c853c7c528420f8616c1ac0a576a74dfd
+@source-sha 93fa2e7e17fa17146c83165550d0415d1348c049d9ac3403c7130943ac4df731
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -30,5 +30,7 @@ Rechtsklick auf einen Knoten:
 ## Padding
 
 Zwischen den Strukturen eines Dumps liegt gelöschter Raum. Der Baum lässt ihn weg, solange **Leeres Padding anzeigen** nicht angekreuzt ist. Padding mit Daten wird in jedem Fall aufgeführt, ebenso der freie Speicher eines Volumes, der angibt, wie viel Platz darin noch frei ist.
+
+Ein im Padding erkanntes Bild — ein JPEG, meist das Boot-Logo — erscheint als eigene Zeile; wird sie ausgewählt, zeichnet das Werkzeug das Bild unter den Details: höchstens so breit wie die Liste und nie größer als seine eigene Pixelgröße. Die Vorschau entsteht aus den Bytes des Dumps, wie sie vorliegen, und zwar mit dem Decoder von macOS, nicht mit dem der Firmware; sie zeigt daher den gespeicherten Inhalt, nicht zwingend genau das, was die Platine daraus macht. Siehe [[term:padding|Padding]].
 
 Siehe auch: [[topic:tool-fit|FIT-Tabelle]], [[term:vss|NVRAM-Speicher]], [[topic:recipe-checksums|Prüfsummen]].

@@ -864,6 +864,47 @@ import UEFITool
         }
 
         for table in node.tables { addTable(table) }
+        if let picture = node.picture { addPicture(picture) }
+    }
+
+    /// The picture a node is, drawn under its rows: as wide as the list at
+    /// most, never larger than its own pixels, in its own proportions. Bytes
+    /// AppKit cannot decode leave the rows as they are — the fields have
+    /// already said what the parser read.
+    // help: panel.uefi.picture-preview
+    private func addPicture(_ bytes: [UInt8]) {
+        guard let image = NSImage(data: Data(bytes)),
+              let pixels = image.representations.first,
+              pixels.pixelsWide > 0, pixels.pixelsHigh > 0
+        else { return }
+        let view = NSImageView()
+        view.image = image
+        view.imageScaling = .scaleProportionallyUpOrDown
+        view.imageFrameStyle = .none
+        view.setAccessibilityLabel(L("Picture preview"))
+        view.translatesAutoresizingMaskIntoConstraints = false
+        // Its own size is the image's in points, which is not what decides
+        // here: the list's width and the pixels do.
+        view.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        view.setContentHuggingPriority(.defaultLow, for: .vertical)
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        view.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+
+        if let above = detail.content.arrangedSubviews.last {
+            detail.content.setCustomSpacing(12, after: above)
+        }
+        detail.content.addArrangedSubview(view)
+        let natural = view.widthAnchor.constraint(equalToConstant: CGFloat(pixels.pixelsWide))
+        natural.priority = .defaultLow
+        NSLayoutConstraint.activate([
+            view.widthAnchor.constraint(lessThanOrEqualTo: detail.content.widthAnchor),
+            view.widthAnchor.constraint(lessThanOrEqualToConstant: CGFloat(pixels.pixelsWide)),
+            natural,
+            view.heightAnchor.constraint(
+                equalTo: view.widthAnchor,
+                multiplier: CGFloat(pixels.pixelsHigh) / CGFloat(pixels.pixelsWide)
+            ),
+        ])
     }
 
     /// A table block under the rows: an icon and a heading, a header line, and

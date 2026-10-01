@@ -30,6 +30,14 @@ final class PictureDisplayTests: XCTestCase {
         XCTAssertEqual(fields["Picture size"], "2 × 1")
     }
 
+    /// The panel is handed the picture's bytes to draw, and only a picture's.
+    func testThePictureIsHandedToThePanel() {
+        let (image, reader) = built()
+        let picture = image.roots[0].children[0]
+        XCTAssertEqual(UEFIDetail.build(for: picture, image: image, reader: reader).picture, Self.jpeg)
+        XCTAssertNil(UEFIDetail.build(for: image.roots[0], image: image, reader: reader).picture)
+    }
+
     func testItOpensThePaddingEntryAndSavesAsAJPEG() {
         let (image, _) = built()
         let node = image.roots[0].children[0]

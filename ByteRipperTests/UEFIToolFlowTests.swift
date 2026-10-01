@@ -916,6 +916,57 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertTrue(text.contains("Driver"), "\(text)")
     }
 
+    // MARK: - A picture's preview
+
+    /// A real JPEG, `width`×`height`, as ImageIO writes one: what the scan
+    /// takes for a picture and AppKit decodes.
+    private func jpeg(width: Int, height: Int) throws -> [UInt8] {
+        let rep = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8,
+            samplesPerPixel: 3, hasAlpha: false, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0))
+        for x in 0..<width { for y in 0..<height {
+            rep.setColor(NSColor(deviceRed: CGFloat(x % 255) / 255, green: 0.4, blue: 0.6, alpha: 1), atX: x, y: y)
+        } }
+        let data = try XCTUnwrap(rep.representation(using: .jpeg, properties: [:]))
+        return [UInt8](data)
+    }
+
+    /// Selects the picture row of a 64 KiB raw image holding `picture` at
+    /// `0x1000`, and returns the preview the detail draws.
+    private func preview(of picture: [UInt8]) throws -> NSImageView {
+        var bytes = [UInt8](repeating: 0xFF, count: 0x1_0000)
+        bytes.replaceSubrange(0x1000..<(0x1000 + picture.count), with: picture)
+        let controller = try open(bytes)
+        let outline = try outline()
+        let row = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { (try? node(atRow: $0).kind) == .picture },
+            "the scan names the picture: \(kinds(of: outline))")
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+        let panel = try XCTUnwrap(controller.tools.panel)
+        return try XCTUnwrap(
+            descendants(of: panel, NSImageView.self).first { $0.accessibilityLabel() == "Picture preview" },
+            "the detail draws the picture")
+    }
+
+    /// A picture smaller than the list is drawn at its own size.
+    func testASmallPictureIsPreviewedAtItsOwnSize() throws {
+        let view = try preview(of: try jpeg(width: 40, height: 20))
+        XCTAssertNotNil(view.image)
+        XCTAssertEqual(view.frame.width, 40, accuracy: 0.5)
+        XCTAssertEqual(view.frame.height, 20, accuracy: 0.5)
+    }
+
+    /// One wider than the list fits it, in its own proportions.
+    func testAWidePictureFitsTheListInItsProportions() throws {
+        let view = try preview(of: try jpeg(width: 3000, height: 150))
+        let list = try XCTUnwrap(view.enclosingScrollView)
+        XCTAssertGreaterThan(view.frame.width, 50, "the picture is drawn, not squeezed to nothing")
+        XCTAssertLessThanOrEqual(view.frame.width, list.contentView.bounds.width)
+        XCTAssertEqual(view.frame.height, view.frame.width / 20, accuracy: 1)
+    }
+
     // MARK: - A node opened as a panel (Design/FRAGMENT_PANELS_PLAN.md)
 
     /// Any node of the tree can be taken out into a panel over the dump: its

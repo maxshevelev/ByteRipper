@@ -85,12 +85,17 @@ public struct UEFINodeDetail: Equatable, Sendable {
     public var fields: [UEFIDetailField]
     /// The blocks that follow the rows. Empty for every node but a descriptor.
     public var tables: [UEFIDetailTable]
+    /// The bytes of the picture the node is, for the panel to draw under the
+    /// rows — nil for every node that is not one. Decoding them is the
+    /// panel's: this target has no AppKit.
+    public var picture: [UInt8]?
 
     public init(title: String, fields: [UEFIDetailField],
-                tables: [UEFIDetailTable] = []) {
+                tables: [UEFIDetailTable] = [], picture: [UInt8]? = nil) {
         self.title = title
         self.fields = fields
         self.tables = tables
+        self.picture = picture
     }
 
     public static let empty = UEFINodeDetail(title: "", fields: [])
@@ -163,7 +168,10 @@ public enum UEFIDetail {
                 tables.append(protectedByTable(touching))
             }
         }
-        return UEFINodeDetail(title: title, fields: fields, tables: tables)
+        // A picture is shown as well as described. Only one the parser
+        // recognised and measured: its bytes are exactly the picture's.
+        let picture = node.kind == .picture ? reader.bytes(node.body) : nil
+        return UEFINodeDetail(title: title, fields: fields, tables: tables, picture: picture)
     }
 
     // MARK: - How full a variable store is
