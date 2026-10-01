@@ -9,14 +9,15 @@ enum Descriptor {
     static let mapOffset: UInt64 = 0x14
     /// Its second word, which carries the master section's base.
     static let map1Offset: UInt64 = 0x18
-    static let versionOffset: UInt64 = 0x20
+    /// Its third, which carries the processor straps' base — and from Tiger
+    /// Point on, where the CPU straps sit.
+    static let map2Offset: UInt64 = 0x1C
     /// Every `*Base` field holds bits [11:4] of a real offset, so the real one
     /// is `base << 4` and anything above this is a broken descriptor.
     static let maxBase: UInt32 = 0xE0
-    /// `0xFFFFFFFF` in the version field means the field is reserved, which
-    /// means a version 1 descriptor — and those have five regions, not sixteen.
-    static let reservedVersion: UInt32 = 0xFFFF_FFFF
-    static let version1RegionCount = 5
+    /// A region entry of all ones is no region, the way UEFITool reads it:
+    /// erased bytes, not an area at the top of a 128 MiB space.
+    static let erasedRegionEntry: UInt16 = 0xFFFF
 }
 
 /// The regions a descriptor can describe, in the order their base/limit pairs
@@ -133,15 +134,16 @@ extension Parser {
     /// rather than into nothing.
     private func readRegions(at base: UInt64, limit: UInt64) -> [Region] {
         guard let map = reader.uint32(at: base + Descriptor.mapOffset),
-              let version = reader.uint32(at: base + Descriptor.versionOffset)
+              let generation = DescriptorGeneration.read(at: base, in: reader)?.generation
         else { return [] }
 
         let regionBase = (map >> 16) & 0xFF
         guard regionBase > 0, regionBase <= Descriptor.maxBase else { return [] }
         let section = base + UInt64(regionBase) << 4
-        let count = version == Descriptor.reservedVersion
-            ? Descriptor.version1RegionCount
-            : FlashRegionType.allCases.count
+        // How many pairs the section holds is the generation's: an older one
+        // keeps its masters right behind five, which read as regions would
+        // be areas that are not there.
+        let count = generation.regionCount
 
         // The descriptor's own region is not read from the table: its base and
         // limit are both zero, which is the table's way of saying "absent". It
@@ -155,7 +157,7 @@ extension Parser {
             else { break }
             // A region is absent when its limit is zero, and the base and limit
             // hold only the top sixteen bits of a 32-bit address (§2.2).
-            guard last != 0, first <= last else { continue }
+            guard last != 0, first <= last, first != Descriptor.erasedRegionEntry else { continue }
             let start = base + UInt64(first) << 12
             let end = base + (UInt64(last) << 12 | 0xFFF) + 1
             guard start < limit else {

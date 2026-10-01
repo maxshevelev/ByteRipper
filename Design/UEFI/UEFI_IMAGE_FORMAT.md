@@ -181,8 +181,11 @@ typedef struct {
 } FLASH_DESCRIPTOR_VERSION;
 ```
 
-The only known valid version is Major=1, Minor=0. The value `0xFFFFFFFF` means
-"this field is reserved", that is, a v1 descriptor.
+The only known valid version is Major=1, Minor=0. The field does **not** tell
+a v1 descriptor from a v2 one: a Skylake board (`CSME 11`) leaves it
+`0xFFFFFFFF`, a Cougar Point one (`ME 7`) writes `0x25` there, and Tiger Point
+and later write zero. What decides how the rest reads is the chipset
+generation, told from the layout (§2.5).
 
 ### 2.2. The region section
 
@@ -218,8 +221,13 @@ typedef struct {
 } FLASH_DESCRIPTOR_REGION_SECTION;
 ```
 
-How many pairs are valid depends on the descriptor's version: in v1 the first 5
-are read (Descriptor, BIOS, ME, GbE, PDR), in newer ones all of them.
+How many pairs are valid depends on the generation (§2.5): 5 up to Cougar
+Point and Bay Trail (Descriptor, BIOS, ME, GbE, PDR), 7 on Lynx and Wildcat
+Point, 6 on Apollo and Gemini Lake, 10 on Sunrise Point, all 16 from Cannon
+Point on. On an older descriptor the bytes after the fifth pair are the master
+section: read as regions they are areas that are not there, which is what
+`ME 7` once got thirteen false diagnostics from. A pair of `0xFFFF` / `0xFFFF`
+is erased bytes and no region, as UEFITool reads it.
 
 The correct algorithm for parsing an Intel image:
 
@@ -263,6 +271,48 @@ EC=0x20`.
 - The VSCC table: an array of `{UINT8 VendorId; UINT8 DeviceId0;
   UINT8 DeviceId1; UINT8 ReservedZero; UINT32 VsccRegisterValue;}`.
 - The OEM section: fixed at `0x0F00`, size `0x100`.
+- The component section, at `ComponentBase << 4`:
+  `{UINT32 FLCOMP; UINT32 FLILL; UINT32 FLPB;}`. `FLCOMP` holds each chip's
+  density — three bits a chip up to Cougar Point, four from Lynx Point on;
+  `512 KiB << code`, `0xF` for an unused second chip — and the SPI clocks:
+  bits 27–29 read ID and status, 24–26 write and erase, 21–23 fast read,
+  bit 20 whether fast reads are on. A clock code's meaning is the
+  generation's (§2.5). `FLILL` is four opcodes the chipset refuses to send;
+  from Sunrise Point on `FLPB` is four more (`FLILL1`), before it the
+  partition boundary. How many chips there are is `NumberOfFlashChips + 1`
+  from the map. Bits 17–19 are the read clock on older generations and were
+  repurposed later (an eSPI clock to ifdtool, a read clock to flashrom), and
+  bit 30 is dual output on some generations only: neither is shown.
+
+### 2.5. The chipset generation
+
+Nothing in a descriptor names the generation it was written for, and the
+version field does not either (§2.1). It is told from where the descriptor
+places its sections and how long it makes them — flashrom's rules for a dump
+(`guess_ich_chipset_from_content` in `ich_descriptors.c`), the only
+generation-by-generation description at hand:
+
+- `ICCRIBA` (`FLMAP2` bits 16–23) zero: ICH8, ICH9, ICH10 or Ibex Peak by the
+  PCH strap length; Apollo or Gemini Lake when `FLMAP2` is zero; Emmitsburg by
+  a strap length of `0x50`.
+- Otherwise, no MIP table (`FLUMAP1` bits 24–31 zero): with `ICCRIBA < 0x31`
+  and `FMSBA < 0x30`, Bay Trail, Cougar Point or Lynx Point by the strap
+  lengths; then Lewisburg by six masters, else Sunrise Point.
+- Otherwise: Cannon Point by `ICCRIBA == 0x34`; from Tiger Point on, the CPU
+  strap length and offset in `FLMAP2` (`CSSL`, `CSSO`) name Tiger Point,
+  Alder Point, Elkhart, Jasper, Meteor, Panther, Wildcat and Nova Lake.
+  flashrom names Tiger Point by an offset of `0x68`; the Tiger Point H dumps
+  at hand (`1.bin`, `2.rom`) write `0x6C`, so ByteRipper takes a length of
+  `0x11` for Tiger Point unless the offset is Alder Point's `0x5C`.
+- What no rule names is read as Tiger Point and marked assumed, as flashrom
+  assumes the 500 series.
+
+Generations sharing a layout are one case: 6 and 7 series, 8 and 9, 100 and
+200, 300 and 400, 600 and 700. On the thirteen dumps with a descriptor the
+generation agrees with the chipset MEAnalyzer reads from the ME region, the
+regions with flashrom's `ich_descriptors_tool` and coreboot's `ifdtool -d`,
+and the chip densities with the dump's length — `SPI_ALL_192Mbit` is
+8 MB + 16 MB.
 
 ---
 

@@ -845,9 +845,10 @@ final class UEFIToolFlowTests: XCTestCase {
     }
 
     /// A descriptor says more about itself than a header's worth of rows, and
-    /// two of the things it says are grids: what the BIOS master may do to each
-    /// region, and the flash chips this firmware was built to drive. Both are
-    /// drawn as tables under the rows, with a permission read by its colour.
+    /// four of the things it says are grids: where each region lies, each
+    /// master's masks, what the BIOS master may do to each region, and the
+    /// flash chips this firmware was built to drive. All are drawn as tables
+    /// under the rows, with a permission read by its colour.
     func testTheDescriptorsDetailDrawsItsTwoTables() throws {
         let controller = try open(UEFITestImage.intelImage())
         let outline = try outline()
@@ -864,22 +865,24 @@ final class UEFIToolFlowTests: XCTestCase {
         let text = descendants(of: panel, NSTextField.self).map(\.stringValue)
         XCTAssertTrue(text.contains("11 00 00 9C 90 02 00 D6 00 00 00 05 FF FF FF FF"),
                       "the reserved vector, as a dump prints it: \(text)")
+        XCTAssertTrue(text.contains("Region table"), "\(text)")
         XCTAssertTrue(text.contains("Region access settings"), "\(text)")
         XCTAssertTrue(text.contains("BIOS access table"), "\(text)")
         XCTAssertTrue(text.contains("Flash chips in VSCC table"), "\(text)")
         XCTAssertTrue(text.contains("Winbond W25Q256"), "a chip the catalogue names: \(text)")
         XCTAssertTrue(text.contains("Unknown"), "and one it does not: \(text)")
 
-        // Two grids, and the permissions in the first are coloured: the BIOS
-        // master reads its own region and the ME one, and writes neither.
+        // A grid per table, and the permissions in the BIOS access one are
+        // coloured: the BIOS master reads its own region and the ME one, and
+        // writes neither.
         let grids = descendants(of: panel, NSGridView.self)
-        XCTAssertEqual(grids.count, 3, "one grid per table")
+        XCTAssertEqual(grids.count, 4, "one grid per table")
         // A table is as wide as what is in it, not as wide as the panel: the
         // chips' two columns belong side by side, not one at either edge.
         let chips = try XCTUnwrap(grids.last)
         XCTAssertLessThan(chips.frame.width, panel.bounds.width - 60,
                           "the chips table is not stretched across the list")
-        let cells = descendants(of: try XCTUnwrap(grids.dropFirst().first), NSTextField.self)
+        let cells = descendants(of: try XCTUnwrap(grids.dropFirst(2).first), NSTextField.self)
         let yes = cells.filter { $0.stringValue == "Yes" }
         let no = cells.filter { $0.stringValue == "No" }
         XCTAssertEqual(yes.count, 3, "Desc: no, BIOS: read+write, ME: read")
@@ -1639,8 +1642,11 @@ enum UEFITestImage {
                                              0x00, 0x00, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF])
         put(0x0FF0_A55A, at: 0x10)
         put(0x0004_0000, at: 0x14)          // RegionBase 0x04
-        put(0x0000_000A, at: 0x18)          // MasterBase 0x0A
-        put(0xFFFF_FFFF, at: 0x20)          // a version 1 descriptor
+        // A version 1 descriptor, laid out as a Cougar Point board's: its
+        // strap lengths and bases are what tell the generation.
+        put(0x1200_000A, at: 0x18)          // PCH straps 0x12, MasterBase 0x0A
+        put(0x0021_0120, at: 0x1C)
+        image[0x0EFF] = 0x00                // no MIP table
 
         for index in 0..<16 {               // every region absent…
             put16(0, at: 0x40 + index * 4)
@@ -1686,7 +1692,10 @@ enum UEFITestImage {
                                              0x00, 0x00, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF])
         put(0x0FF0_A55A, at: 0x10)
         put(0x0004_0000, at: 0x14)          // RegionBase 0x04
-        put(0xFFFF_FFFF, at: 0x20)          // a version 1 descriptor
+        // A version 1 descriptor, laid out as a Cougar Point board's.
+        put(0x1200_00FF, at: 0x18)          // PCH straps 0x12, no masters
+        put(0x0021_0120, at: 0x1C)
+        image[0x0EFF] = 0x00                // no MIP table
 
         for index in 0..<16 {               // every region absent…
             put16(0, at: 0x40 + index * 4)

@@ -137,7 +137,7 @@ public enum UEFIDetail {
         // and two of the things it says are grids.
         if node.kind == .flashDescriptor,
            let descriptor = DescriptorInfo.read(at: node.header.lowerBound, in: reader) {
-            fields += descriptorFields(descriptor)
+            fields += descriptorFields(descriptor, imageSize: image.size)
             tables += descriptorTables(descriptor)
         }
 
@@ -682,28 +682,78 @@ public enum UEFIDetail {
 
     // MARK: - What a flash descriptor adds
 
-    /// The rows a descriptor has beyond its header: the vector it opens with
-    /// and where each region it declares begins. What the masters may touch is
-    /// a grid, and is in `descriptorTables`.
-    ///
-    /// The regions are in the tree as well, as this node's siblings — but the
-    /// tree shows where a region *is*, and this shows what the descriptor
-    /// *says*, which is the thing being checked when the two disagree.
-    private static func descriptorFields(_ descriptor: DescriptorInfo) -> [UEFIDetailField] {
+    /// The rows a descriptor has beyond its header: the vector it opens with,
+    /// the chipset its layout is, and what its component section says about
+    /// the chips — how large, how fast, and which opcodes the chipset will not
+    /// send them. Where the regions lie, and what the masters may touch, are
+    /// grids, and are in `descriptorTables`.
+    private static func descriptorFields(_ descriptor: DescriptorInfo, imageSize: UInt64) -> [UEFIDetailField] {
         var fields: [UEFIDetailField] = []
         if !descriptor.reservedVector.isEmpty {
             fields.append(.init("Reserved vector", hexBytes(descriptor.reservedVector)))
         }
-        for region in descriptor.regionOffsets where region.type != .descriptor {
-            fields.append(.init(region.type.label + " offset", hex(region.offset)))
+        // Told from the layout, not stated; a layout the rules do not know is
+        // read as the nearest one, and says so.
+        let generation = descriptor.generation
+        var chipset = generation.series.map { L("%1$@ (%2$@ series)", generation.codeName, $0) }
+            ?? generation.codeName
+        if !descriptor.isGenerationCertain { chipset = L("%1$@, assumed", chipset) }
+        fields.append(.init(L("Chipset"), chipset))
+
+        guard let component = descriptor.component else { return fields }
+        // The chips the image was laid out across, end to end. A dump of
+        // another length is one chip of two, or a read of the wrong size.
+        let sizes = component.chipSizes.map { $0.map(capacityText) ?? L("Reserved") }
+            .joined(separator: " + ")
+        let total = component.chipSizes.reduce(UInt64(0)) { $0 + ($1 ?? 0) }
+        let mismatch = !component.chipSizes.contains(nil) && total != imageSize
+        fields.append(.init(L("Flash chip sizes"),
+                            mismatch ? L("%1$@ — the dump is %2$@", sizes, capacityText(imageSize)) : sizes,
+                            isProblem: mismatch))
+        if component.chipSizes.count == 2, let first = component.chipSizes[0] {
+            fields.append(.init(L("Second chip starts at"), hex(first)))
         }
+        fields.append(.init(L("Read ID and status clock"), clockText(component.readIDClock)))
+        fields.append(.init(L("Write and erase clock"), clockText(component.writeEraseClock)))
+        fields.append(.init(L("Fast read clock"), component.fastReadClock.map(clockText) ?? L("Off")))
+        fields.append(.init(L("Forbidden opcodes"), component.invalidInstructions.isEmpty
+                            ? L("None") : hexBytes(component.invalidInstructions)))
         return fields
     }
 
-    /// The three grids: the masks each master carries, what the BIOS master may
-    /// do to each region, and the flash chips this firmware was built to drive.
+    /// A clock as the bench says it, or the code when the generation reserves
+    /// it.
+    private static func clockText(_ clock: DescriptorInfo.Clock) -> String {
+        guard let megahertz = clock.megahertz else { return L("Reserved (code %1$@)", clock.code) }
+        return L("%1$@ MHz", megahertz.map(String.init).joined(separator: "/"))
+    }
+
+    /// A chip's size in the unit it is sold by.
+    private static func capacityText(_ bytes: UInt64) -> String {
+        if bytes > 0, bytes % 0x10_0000 == 0 { return L("%1$@ MB", bytes >> 20) }
+        if bytes > 0, bytes % 0x400 == 0 { return L("%1$@ KB", bytes >> 10) }
+        return sizeText(bytes)
+    }
+
+    /// The four grids: where each region lies, the masks each master carries,
+    /// what the BIOS master may do to each region, and the flash chips this
+    /// firmware was built to drive.
+    ///
+    /// The regions are in the tree as well, as this node's siblings — but the
+    /// tree shows where a region *is*, and this shows what the descriptor
+    /// *says*, which is the thing being checked when the two disagree.
     private static func descriptorTables(_ descriptor: DescriptorInfo) -> [UEFIDetailTable] {
         var tables: [UEFIDetailTable] = []
+        // Its own region is this node.
+        let regions = descriptor.regions.filter { $0.type != .descriptor }
+        if !regions.isEmpty {
+            tables.append(UEFIDetailTable(
+                title: L("Region table"),
+                symbol: "square.split.2x2",
+                columns: [L("Region"), L("Base"), L("Limit")],
+                rows: regions.map { [.init($0.type.label), .init(hex($0.base)), .init(hex($0.limit))] }
+            ))
+        }
         if !descriptor.masters.isEmpty {
             tables.append(UEFIDetailTable(
                 title: L("Region access settings"),

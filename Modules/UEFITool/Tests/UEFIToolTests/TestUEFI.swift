@@ -222,10 +222,11 @@ enum TestUEFI {
     }
 
     /// A flash descriptor with everything a descriptor's detail reads: the
-    /// reserved vector, a region table, a master section and a VSCC table. The
-    /// defaults are the board in `Design/UEFI_STRUCTURE_TOOL.md`'s example — a
-    /// version 1 descriptor whose BIOS master may read the ME region and write
-    /// nothing but its own.
+    /// reserved vector, a region table, a component section, a master section
+    /// and a VSCC table. The defaults are the board in
+    /// `Design/UEFI_STRUCTURE_TOOL.md`'s example — a version 1 descriptor,
+    /// laid out as Cougar Point's, on one 16 MB chip, whose BIOS master may
+    /// read the ME region and write nothing but its own.
     static func flashDescriptor(
         reservedVector: [UInt8] = [0x11, 0x00, 0x00, 0x9C, 0x90, 0x02, 0x00, 0xD6,
                                    0x00, 0x00, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF],
@@ -236,6 +237,8 @@ enum TestUEFI {
         version1: Bool = true,
         masters: [(read: UInt32, write: UInt32)] = [(0xA0, 0x00), (0x40, 0x00), (0x80, 0x00)],
         chips: [UInt32] = [0x1F4700, 0x1C7018, 0xC22019, 0xEF4019],
+        chipSizes: [UInt64] = [0x100_0000],
+        invalidInstructions: UInt32 = 0xAD60_4221,
         totalSize: UInt64 = 0x1000
     ) -> Built {
         var bytes = [UInt8](repeating: 0xFF, count: Int(totalSize))
@@ -250,9 +253,26 @@ enum TestUEFI {
         bytes.replaceSubrange(0..<reservedVector.count, with: reservedVector)
         put(0x0FF0_A55A, at: 0x10)
         let regionBase: UInt32 = 0x04, masterBase: UInt32 = 0x0A, vsccBase: UInt32 = 0x10
-        put(regionBase << 16, at: 0x14)                 // FLMAP0: RegionBase
-        put(masterBase, at: 0x18)                       // FLMAP1: MasterBase
-        put(version1 ? 0xFFFF_FFFF : 0x0020_0000, at: 0x20)
+        let componentBase: UInt32 = 0x03
+        // FLMAP0: RegionBase, one chip less one, ComponentBase.
+        put(regionBase << 16 | UInt32(chipSizes.count - 1) << 8 | componentBase, at: 0x14)
+        // FLMAP1 and FLMAP2 laid out as a Cougar Point board's or an Alder
+        // Point one's, which is what tells the generation (§2.5).
+        put((version1 ? 0x12 : 0x73) << 24 | masterBase, at: 0x18)
+        put(version1 ? 0x0021_0120 : 0x0014_01B0, at: 0x1C)
+        bytes[0x0EFF] = version1 ? 0x00 : 0xC0          // FLUMAP1: MDTBA
+
+        // FLCOMP: each chip's density, then the clocks — read ID 50 MHz,
+        // write 50 MHz, fast reads on at 50 MHz on Alder Point; 50, 50 and 50
+        // on Cougar Point as well, whose codes differ.
+        let bits = version1 ? 3 : 4
+        var flcomp: UInt32 = version1 ? 0x2490_0000 : 0x0930_0000
+        for (index, size) in chipSizes.enumerated() {
+            flcomp |= UInt32(size.trailingZeroBitCount - 19) << (index * bits)
+        }
+        put(flcomp, at: Int(componentBase) << 4)
+        put(invalidInstructions, at: Int(componentBase) << 4 + 4)
+        put(0xC7C4_B9B7, at: Int(componentBase) << 4 + 8)
 
         for index in 0..<16 {                           // every region absent…
             put16(0, at: Int(regionBase) << 4 | index * 4)

@@ -26,15 +26,62 @@ final class DescriptorDetailTests: XCTestCase {
                        "11 00 00 9C 90 02 00 D6 00 00 00 05 FF FF FF FF")
     }
 
-    /// Where each region the descriptor declares begins — its own excluded,
-    /// which is this node.
-    func testEachRegionsOffsetIsARow() {
+    /// Where each region the descriptor declares lies, base and limit as the
+    /// table writes them — its own excluded, which is this node.
+    func testTheRegionsAreAGridOfBaseAndLimit() throws {
         let shown = detail(TestUEFI.flashDescriptor())
+        let table = try XCTUnwrap(table(shown, "Region table"))
 
-        XCTAssertEqual(field(shown, "ME region offset"), "0x1000")
-        XCTAssertEqual(field(shown, "BIOS region offset"), "0x600000")
-        XCTAssertNil(field(shown, "Descriptor region offset"), "this node is that region")
-        XCTAssertNil(field(shown, "GbE region offset"), "a region with no limit is not there")
+        XCTAssertEqual(table.columns, ["Region", "Base", "Limit"])
+        XCTAssertEqual(table.rows.map { $0.map(\.text) }, [
+            ["BIOS region", "0x600000", "0xFFFFFF"],
+            ["ME region", "0x1000", "0x5FFFFF"],
+        ], "no descriptor row, and no GbE: a region with no limit is not there")
+        XCTAssertNil(field(shown, "BIOS region offset"), "and not a row as well")
+    }
+
+    /// The chipset the layout is, with its series where it is sold as one.
+    func testTheChipsetIsNamed() {
+        XCTAssertEqual(field(detail(TestUEFI.flashDescriptor()), "Chipset"),
+                       "Cougar Point / Panther Point (6/7 series)")
+        XCTAssertEqual(field(detail(TestUEFI.flashDescriptor(version1: false)), "Chipset"),
+                       "Alder Point / Raptor Point (600/700 series)")
+    }
+
+    /// What the component section says: the chip's size, the three clocks,
+    /// and the opcodes the chipset will not send — four on Cougar Point.
+    func testTheComponentSectionIsRows() {
+        let shown = detail(TestUEFI.flashDescriptor(totalSize: 0x100_0000))
+
+        XCTAssertEqual(field(shown, "Flash chip sizes"), "16 MB")
+        XCTAssertNil(field(shown, "Second chip starts at"))
+        XCTAssertEqual(field(shown, "Read ID and status clock"), "50 MHz")
+        XCTAssertEqual(field(shown, "Write and erase clock"), "50 MHz")
+        XCTAssertEqual(field(shown, "Fast read clock"), "50 MHz")
+        XCTAssertEqual(field(shown, "Forbidden opcodes"), "21 42 60 AD")
+        XCTAssertFalse(shown.fields.contains { $0.isProblem })
+    }
+
+    /// Two chips: their sizes end to end, where the second one's addresses
+    /// begin, and eight opcodes from Sunrise Point on.
+    func testTwoChipsSayWhereTheSecondBegins() {
+        let shown = detail(TestUEFI.flashDescriptor(
+            version1: false, chipSizes: [0x80_0000, 0x100_0000], totalSize: 0x180_0000))
+
+        XCTAssertEqual(field(shown, "Flash chip sizes"), "8 MB + 16 MB")
+        XCTAssertEqual(field(shown, "Second chip starts at"), "0x800000")
+        XCTAssertEqual(field(shown, "Forbidden opcodes"), "21 42 60 AD B7 B9 C4 C7")
+    }
+
+    /// A dump that is not as long as the chips is one chip of two, or a read
+    /// of the wrong size, and the row says it.
+    func testADumpShorterThanItsChipsIsAProblem() throws {
+        let shown = detail(TestUEFI.flashDescriptor(
+            version1: false, chipSizes: [0x80_0000, 0x100_0000], totalSize: 0x80_0000))
+        let row = try XCTUnwrap(shown.fields.first { $0.label == "Flash chip sizes" })
+
+        XCTAssertEqual(row.value, "8 MB + 16 MB — the dump is 8 MB")
+        XCTAssertTrue(row.isProblem)
     }
 
     /// Each master's masks, as a grid of its own — three numbers a row, which

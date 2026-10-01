@@ -76,7 +76,7 @@ header:
 | section | type (code + name), size |
 | microcode | header type, update revision, date (BCD), processor signature, checksum, loader revision, platform ids, data and total size |
 | capsule | capsule GUID (+ name), header size, flags, image size |
-| flash descriptor | signature, FLMAP, version |
+| flash descriptor | signature, FLMAP, version; then the reserved vector, the chipset generation, the chips' sizes, the SPI clocks and the forbidden opcodes, and grids of the regions (base and limit), the masters' masks, the BIOS master's access and the VSCC chips |
 | region | the region's base and limit, from the descriptor's table |
 | padding / free space / non-UEFI data | nothing but the size the common fields already carry |
 

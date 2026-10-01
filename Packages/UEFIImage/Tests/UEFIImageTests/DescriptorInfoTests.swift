@@ -21,16 +21,19 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertEqual(read.reservedVector, vector)
     }
 
-    /// Every region the table declares, by where it begins — the descriptor's
-    /// own first, which the format states rather than stores.
-    func testEachDeclaredRegionsOffsetIsRead() throws {
+    /// Every region the table declares, where it begins and where it ends —
+    /// the descriptor's own first, which the format states rather than stores.
+    func testEachDeclaredRegionIsReadWithItsLimit() throws {
         let read = try info(TestImage.descriptor(regions: [
             (.me, 0x1000..<0x60_0000),
             (.bios, 0x60_0000..<0x100_0000),
         ]))
 
-        XCTAssertEqual(read.regionOffsets.map(\.type), [.descriptor, .bios, .me])
-        XCTAssertEqual(read.regionOffsets.map(\.offset), [0, 0x60_0000, 0x1000])
+        XCTAssertEqual(read.regions, [
+            DescriptorInfo.Region(type: .descriptor, base: 0, limit: 0xFFF),
+            DescriptorInfo.Region(type: .bios, base: 0x60_0000, limit: 0xFF_FFFF),
+            DescriptorInfo.Region(type: .me, base: 0x1000, limit: 0x5F_FFFF),
+        ])
     }
 
     /// A region with a zero limit is not there at all, and is left out rather
@@ -38,7 +41,65 @@ final class DescriptorInfoTests: XCTestCase {
     func testAnAbsentRegionIsNotListed() throws {
         let read = try info(TestImage.descriptor(regions: [(.bios, 0x1000..<0x40_0000)]))
 
-        XCTAssertEqual(read.regionOffsets.map(\.type), [.descriptor, .bios])
+        XCTAssertEqual(read.regions.map(\.type), [.descriptor, .bios])
+    }
+
+    /// The generation the layout is goes with the rest.
+    func testTheGenerationIsRead() throws {
+        let alder = try info(TestImage.descriptor(regions: [(.bios, 0x1000..<0x40_0000)]))
+        XCTAssertEqual(alder.generation, .alderPoint)
+        XCTAssertTrue(alder.isGenerationCertain)
+        let cougar = try info(TestImage.descriptor(regions: [(.bios, 0x1000..<0x40_0000)], version1: true))
+        XCTAssertEqual(cougar.generation, .cougarPoint)
+    }
+
+    /// Two chips of four-bit density, the clocks in Alder Point's codes, and
+    /// eight forbidden opcodes — `CSME 16`'s component section.
+    func testTheComponentSectionOfAnAlderPointBoard() throws {
+        let read = try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)],
+            component: (chips: 2, flcomp: 0x0930_F054, flill: 0xAD60_4221, flill1: 0xC7C4_B9B7)))
+        let component = try XCTUnwrap(read.component)
+
+        XCTAssertEqual(component.chipSizes, [0x80_0000, 0x100_0000], "8 MB, then 16 MB")
+        XCTAssertEqual(component.readIDClock, DescriptorInfo.Clock(code: 1, megahertz: [50]))
+        XCTAssertEqual(component.writeEraseClock.megahertz, [50])
+        XCTAssertEqual(component.fastReadClock?.megahertz, [50])
+        XCTAssertEqual(component.invalidInstructions, [0x21, 0x42, 0x60, 0xAD, 0xB7, 0xB9, 0xC4, 0xC7])
+    }
+
+    /// One chip whose density is three bits, Cougar Point's clock codes, and
+    /// a single word of opcodes — the next being the partition boundary.
+    func testTheComponentSectionOfACougarPointBoard() throws {
+        let read = try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)],
+            version1: true,
+            component: (chips: 1, flcomp: 0x6490_0024, flill: 0, flill1: 0x1234_5678)))
+        let component = try XCTUnwrap(read.component)
+
+        XCTAssertEqual(component.chipSizes, [0x80_0000], "code 4 in the low three bits; the second chip is not counted")
+        XCTAssertEqual(component.readIDClock.megahertz, [50])
+        XCTAssertEqual(component.fastReadClock?.megahertz, [50])
+        XCTAssertEqual(component.invalidInstructions, [], "no opcode is forbidden, and the boundary is not one")
+    }
+
+    /// Fast reads switched off have no clock; a code the generation reserves
+    /// is kept as the code; a density past the largest is no size.
+    func testWhatAComponentSectionDoesNotSay() throws {
+        // Density 0xE, read-ID code 2 (reserved on Alder Point), fast read off.
+        let read = try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)],
+            component: (chips: 1, flcomp: 0x1100_000E, flill: 0, flill1: 0)))
+        let component = try XCTUnwrap(read.component)
+
+        XCTAssertEqual(component.chipSizes, [nil])
+        XCTAssertEqual(component.readIDClock, DescriptorInfo.Clock(code: 2, megahertz: nil))
+        XCTAssertNil(component.fastReadClock)
+    }
+
+    /// No component base, no section — not one read from offset zero.
+    func testNoComponentBaseMeansNoComponentSection() throws {
+        XCTAssertNil(try info(TestImage.descriptor(regions: [(.bios, 0x1000..<0x40_0000)])).component)
     }
 
     /// A version 1 descriptor keeps a byte of read and a byte of write per

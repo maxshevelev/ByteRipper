@@ -1,9 +1,10 @@
 import Foundation
 
 /// What a flash descriptor says about itself, beyond the regions it maps: the
-/// reserved vector it opens with, where each region it declares begins, which
-/// master may read and write which region, and the flash chips the board's
-/// firmware was built to drive (§2).
+/// reserved vector it opens with, the chipset generation its layout is, where
+/// each region it declares begins and ends, how many flash chips the image
+/// spans and how fast the chipset clocks them, which master may read and
+/// write which region, and the chips its VSCC table knows how to drive (§2).
 ///
 /// The regions are already the tree — a descriptor's children are its regions —
 /// but the rest of this is not anywhere else in the app, and it is what a bench
@@ -17,9 +18,49 @@ public struct DescriptorInfo: Equatable, Sendable {
     /// on many boards they are the first instruction the chip ever executes.
     public var reservedVector: [UInt8]
 
-    /// Where each region the descriptor declares begins, in the file's own
-    /// offsets, in the format's region order.
-    public var regionOffsets: [(type: FlashRegionType, offset: UInt64)]
+    /// The chipset generation the layout is (`DescriptorGeneration`), and
+    /// whether the layout is one the rules know rather than the nearest they
+    /// assume.
+    public var generation: DescriptorGeneration
+    public var isGenerationCertain: Bool
+
+    /// A region the descriptor declares, where it begins and where it ends —
+    /// inclusive, as the table writes it — in the file's own offsets.
+    public struct Region: Equatable, Sendable {
+        public var type: FlashRegionType
+        public var base: UInt64
+        public var limit: UInt64
+    }
+
+    /// In the format's region order, the descriptor's own first.
+    public var regions: [Region]
+
+    /// The component section (§2.4): the flash chips the image was laid out
+    /// for and how the chipset drives them. Nil when its base is not one.
+    public var component: Component?
+
+    public struct Component: Equatable, Sendable {
+        /// Each chip's size in bytes, one entry per chip the map counts. Nil
+        /// for a density code the generation reserves.
+        public var chipSizes: [UInt64?]
+        /// The clock for reading the chip's id and status.
+        public var readIDClock: Clock
+        /// The clock for writing and erasing.
+        public var writeEraseClock: Clock
+        /// The clock for fast reads, nil when fast reads are off.
+        public var fastReadClock: Clock?
+        /// The opcodes the chipset refuses to send to the chip — four, or
+        /// eight from Sunrise Point on — with the unused zero ones left out.
+        public var invalidInstructions: [UInt8]
+    }
+
+    /// A three-bit clock code and what the generation makes of it.
+    public struct Clock: Equatable, Sendable {
+        public var code: UInt8
+        /// In MHz; two when the generation gives the code two, nil when it
+        /// reserves it.
+        public var megahertz: [Int]?
+    }
 
     /// One master's read and write masks. Each bit stands for a region — the
     /// `RegionAccess` bits — so a master's word says which regions it may
@@ -85,13 +126,13 @@ public extension DescriptorInfo {
     static func read(at base: UInt64, in reader: ImageReader) -> DescriptorInfo? {
         guard let map = reader.uint32(at: base + Descriptor.mapOffset),
               let map1 = reader.uint32(at: base + Descriptor.map1Offset),
-              let version = reader.uint32(at: base + Descriptor.versionOffset),
+              let (generation, isCertain) = DescriptorGeneration.read(at: base, in: reader),
               let vector = reader.bytes(at: base, count: 16)
         else { return nil }
 
-        // Version 1 keeps a byte per mask and has no EC master; version 2 —
-        // everything from Skylake on — packs twelve bits per mask and adds one.
-        let isVersion1 = version == Descriptor.reservedVersion
+        // Up to Wildcat Point a master keeps a byte per mask and there is no
+        // EC master; from Sunrise Point on twelve bits per mask, and one more.
+        let isVersion1 = !generation.hasWideMasks
         // The master section's base is the second map word's low byte, in the
         // 0x10 units every base in this header is written in. Out of range —
         // an erased word says `0xFF` — there is no section to read, and the
@@ -103,8 +144,10 @@ public extension DescriptorInfo {
 
         return DescriptorInfo(
             reservedVector: vector,
-            regionOffsets: regionOffsets(at: base, map: map, isVersion1: isVersion1,
-                                         reader: reader),
+            generation: generation,
+            isGenerationCertain: isCertain,
+            regions: regions(at: base, map: map, generation: generation, reader: reader),
+            component: component(at: base, map: map, generation: generation, reader: reader),
             masters: masters(at: masterBase, isVersion1: isVersion1, reader: reader),
             maskDigits: isVersion1 ? 2 : 3,
             biosAccess: biosAccess(at: masterBase, isVersion1: isVersion1, reader: reader),
@@ -112,19 +155,18 @@ public extension DescriptorInfo {
         )
     }
 
-    /// Every region the table declares, by where it starts. A region with a
-    /// zero limit is not there at all, which is the table's way of saying so,
-    /// and is left out rather than shown as an area at zero.
-    private static func regionOffsets(
-        at base: UInt64, map: UInt32, isVersion1: Bool, reader: ImageReader
-    ) -> [(type: FlashRegionType, offset: UInt64)] {
+    /// Every region the table declares. A region with a zero limit is not
+    /// there at all, which is the table's way of saying so, and is left out
+    /// rather than shown as an area at zero.
+    private static func regions(
+        at base: UInt64, map: UInt32, generation: DescriptorGeneration, reader: ImageReader
+    ) -> [Region] {
         let regionBase = (map >> 16) & 0xFF
         guard regionBase > 0, regionBase <= Descriptor.maxBase else { return [] }
         let section = base + UInt64(regionBase) << 4
-        let count = isVersion1 ? Descriptor.version1RegionCount : FlashRegionType.allCases.count
 
-        var offsets: [(type: FlashRegionType, offset: UInt64)] = []
-        for index in 0..<count {
+        var regions: [Region] = []
+        for index in 0..<generation.regionCount {
             guard let type = FlashRegionType(rawValue: index),
                   let first = reader.uint16(at: section + UInt64(index) * 4),
                   let last = reader.uint16(at: section + UInt64(index) * 4 + 2)
@@ -133,13 +175,54 @@ public extension DescriptorInfo {
             // the first 0x1000 bytes by definition — so it is stated rather
             // than read, and every other region needs a limit to exist.
             if type == .descriptor {
-                offsets.append((type, base))
+                regions.append(Region(type: type, base: base, limit: base + Descriptor.size - 1))
                 continue
             }
-            guard last != 0, first <= last else { continue }
-            offsets.append((type, base + UInt64(first) << 12))
+            guard last != 0, first <= last, first != Descriptor.erasedRegionEntry else { continue }
+            regions.append(Region(type: type, base: base + UInt64(first) << 12,
+                                  limit: base + (UInt64(last) << 12 | 0xFFF)))
         }
-        return offsets
+        return regions
+    }
+
+    /// The component section, at `ComponentBase << 4`: `FLCOMP`, then the
+    /// forbidden opcodes in one dword — two from Sunrise Point on, where the
+    /// partition boundary register became the second.
+    private static func component(
+        at base: UInt64, map: UInt32, generation: DescriptorGeneration, reader: ImageReader
+    ) -> Component? {
+        let componentBase = map & 0xFF
+        guard componentBase > 0, componentBase <= Descriptor.maxBase else { return nil }
+        let section = base + UInt64(componentBase) << 4
+        guard let flcomp = reader.uint32(at: section),
+              let invalid = reader.uint32(at: section + 4),
+              let invalid1 = reader.uint32(at: section + 8)
+        else { return nil }
+
+        // The map counts the chips less one, in two bits.
+        let chipCount = Int(map >> 8 & 0x3) + 1
+        let bits = generation.densityBits
+        let mask: UInt32 = (1 << bits) - 1
+        let chipSizes: [UInt64?] = (0..<min(chipCount, 2)).map { index in
+            let code = flcomp >> (UInt32(index * bits)) & mask
+            // 512 KiB doubled per step: up to 16 MB in three bits, 64 MB in four.
+            let largest: UInt32 = bits == 3 ? 5 : 7
+            return code <= largest ? UInt64(0x8_0000) << code : nil
+        }
+        func clock(_ shift: UInt32) -> Clock {
+            let code = UInt8(flcomp >> shift & 0x7)
+            return Clock(code: code, megahertz: generation.clock(code))
+        }
+        let words = generation.hasEightInvalidInstructions ? [invalid, invalid1] : [invalid]
+        let opcodes = words.flatMap { word in (0..<4).map { UInt8(truncatingIfNeeded: word >> ($0 * 8)) } }
+
+        return Component(
+            chipSizes: chipSizes,
+            readIDClock: clock(27),
+            writeEraseClock: clock(24),
+            fastReadClock: flcomp & 1 << 20 != 0 ? clock(21) : nil,
+            invalidInstructions: opcodes.filter { $0 != 0 }
+        )
     }
 
     /// The master section's read and write masks, one master per row.
@@ -229,17 +312,5 @@ public extension DescriptorInfo {
             chips.append(Chip(jedecID: id, name: JedecIDs.name(of: id)))
         }
         return chips
-    }
-}
-
-extension DescriptorInfo {
-    public static func == (lhs: DescriptorInfo, rhs: DescriptorInfo) -> Bool {
-        lhs.reservedVector == rhs.reservedVector
-            && lhs.regionOffsets.map(\.offset) == rhs.regionOffsets.map(\.offset)
-            && lhs.regionOffsets.map(\.type) == rhs.regionOffsets.map(\.type)
-            && lhs.masters == rhs.masters
-            && lhs.maskDigits == rhs.maskDigits
-            && lhs.biosAccess == rhs.biosAccess
-            && lhs.chips == rhs.chips
     }
 }

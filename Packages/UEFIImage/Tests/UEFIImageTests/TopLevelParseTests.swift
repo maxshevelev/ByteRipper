@@ -83,6 +83,22 @@ final class TopLevelParseTests: XCTestCase {
         XCTAssertNil(children.first { $0.name == "Microcode region" })
     }
 
+    /// A pair of all-ones is erased bytes, not a region at the top of the
+    /// address space, and is passed over without a word.
+    func testAnErasedRegionEntryIsNoRegion() {
+        var image = TestImage.intelImage(size: 0x8000, regions: [
+            (.descriptor, 0..<0x1000),
+            (.bios, 0x1000..<0x8000)
+        ])
+        // The EC pair, at RegionBase << 4 + 8 * 4.
+        image.replaceSubrange(0x60..<0x64, with: [0xFF, 0xFF, 0xFF, 0xFF])
+
+        let parsed = UEFIParser.parse(image)
+
+        XCTAssertEqual(parsed.roots[0].children.map(\.kind), [.flashDescriptor, .region])
+        XCTAssertTrue(parsed.diagnostics.isEmpty)
+    }
+
     func testOverlappingRegionsAreReported() {
         let image = TestImage.intelImage(
             size: 0x8000,
