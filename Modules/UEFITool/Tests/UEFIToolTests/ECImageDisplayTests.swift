@@ -21,7 +21,7 @@ final class ECImageDisplayTests: XCTestCase {
             UEFINode(kind: .padding, name: "Empty padding", range: 0x3000..<0x4000, isErased: true),
         ]
         let region = UEFINode(kind: .region, subtype: UInt8(FlashRegionType.ec.rawValue),
-                              name: "EC region (Microchip MEC image)", header: 0..<0, body: 0..<0x4000,
+                              name: "EC region", header: 0..<0, body: 0..<0x4000,
                               isFixed: true, children: rows)
         return (UEFIImage(size: 0x4000, roots: [region]), ImageReader(bytes))
     }

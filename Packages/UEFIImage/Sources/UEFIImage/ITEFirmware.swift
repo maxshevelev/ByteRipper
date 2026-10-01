@@ -20,10 +20,6 @@ public struct ITEFirmware: Equatable, Sendable {
     /// Where the signature block starts, relative to the image.
     public var signatureOffset: UInt64
 
-    /// The start of the name a padding row gets when it opens on an ITE
-    /// image, which the help lookup keys on as well.
-    public static let paddingNamePrefix = "EC firmware ("
-
     static let candidates: [UInt64] = [0x40, 0x80]
     static let blockSize: UInt64 = 0x10
     static let identificationSize: UInt64 = 0x10

@@ -40,7 +40,7 @@ public enum UEFIHelpTerms {
         case .startupApData: return HelpTermID("pad-file")
         // Padding the parser named for the EC image it opens on is read as
         // what it looks like.
-        case .padding where node.name.hasPrefix(ITEFirmware.paddingNamePrefix):
+        case .padding where ECImage.isECFirmwarePadding(node):
             return HelpTermID("ec-firmware")
         case .ecImage:
             return HelpTermID("ec-firmware")

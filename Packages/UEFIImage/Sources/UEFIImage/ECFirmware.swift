@@ -103,6 +103,16 @@ public struct ECImage: Equatable, Sendable {
 }
 
 extension ECImage {
+    /// The name padding gets when it holds EC firmware — with the image's
+    /// name after it when it holds one, alone when its rows name the images.
+    public static let paddingName = "EC firmware"
+
+    /// Whether `node` is padding the parser named for the EC firmware in it,
+    /// which the panel's help and details key on.
+    public static func isECFirmwarePadding(_ node: UEFINode) -> Bool {
+        node.kind == .padding && (node.name == paddingName || node.name.hasPrefix(paddingName + " ("))
+    }
+
     /// The node subtype an EC image row carries when it is a copy of an
     /// earlier image in the same block. Not UEFITool's — it classifies these
     /// bytes as padding — so it is free to say this.
@@ -112,23 +122,25 @@ extension ECImage {
 extension Parser {
     /// `node` — padding, an EC Firmware region of the flash device map, or the
     /// descriptor's EC region — read as the EC firmware it holds
-    /// (`UEFI_IMAGE_FORMAT.md` §9): named by its first image, and, when it
-    /// holds more than that one image at its start, given a row per image and
-    /// padding for what lies between them. Nil when no image is there.
+    /// (`UEFI_IMAGE_FORMAT.md` §9). One image at its start names it; more than
+    /// that gives it a row per image, each named by its own, and padding for
+    /// what lies between them, and the block keeps a name of its own. Nil when
+    /// no image is there.
     func readingECFirmware(_ node: UEFINode, emptyByte: UInt8) -> UEFINode? {
         let images = ECImage.all(in: node.body, reader: reader, emptyByte: emptyByte)
         guard let first = images.first else { return nil }
+        // Padding names only what opens it: an image further in is a guess
+        // about the bytes before it.
+        if node.kind == .padding, first.start != node.body.lowerBound { return nil }
         var read = node
-        switch node.kind {
-        case .padding:
-            // Padding names only what opens it: an image further in is a guess
-            // about the bytes before it.
-            guard first.start == node.body.lowerBound else { return nil }
-            read.name = "\(ITEFirmware.paddingNamePrefix)\(first.name))"
-        default:
-            read.name = "\(node.name) (\(first.name))"
+        let base = node.kind == .padding ? ECImage.paddingName : node.name
+        // One image at the start: the block is that image, and says which.
+        guard images.count > 1 || first.start != node.body.lowerBound else {
+            read.name = "\(base) (\(first.name))"
+            return read
         }
-        guard images.count > 1 || first.start != node.body.lowerBound else { return read }
+        // Several: each row names its own, and the block names none of them.
+        read.name = base
 
         var children: [UEFINode] = []
         var at = node.body.lowerBound

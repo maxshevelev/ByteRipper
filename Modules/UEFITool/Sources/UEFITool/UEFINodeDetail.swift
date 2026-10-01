@@ -579,7 +579,7 @@ public enum UEFIDetail {
                 fields += iteFields(node, reader: reader)
             }
 
-        case .padding where node.name.hasPrefix(ITEFirmware.paddingNamePrefix):
+        case .padding where ECImage.isECFirmwarePadding(node):
             // With a row per image, the rows say it.
             if !node.children.contains(where: { $0.kind == .ecImage }) {
                 fields += iteFields(node, reader: reader)

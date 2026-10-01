@@ -31,7 +31,8 @@ final class ECImageTests: XCTestCase {
             (0x0000, ITEFirmwareTests.image("ITE5507-SB-V0.67", length: 0x1800)),
             (0x3000, ITEFirmwareTests.image("ITE8380-EC-V1.43", length: 0x2100)),
         ]))
-        XCTAssertEqual(region.name, "EC region (ITE5507-SB-V0.67)")
+        // Each row names its chip; the block names none of them.
+        XCTAssertEqual(region.name, "EC region")
         XCTAssertEqual(region.children.map(\.kind), [.ecImage, .padding, .ecImage, .padding])
         // An image runs to its last written byte, rounded up to 4 KiB.
         XCTAssertEqual(region.children.map(\.range), [
@@ -50,6 +51,7 @@ final class ECImageTests: XCTestCase {
         let region = ecRegion(Self.block(0x8000, [(0x0000, image), (0x2000, image), (0x6000, log)]))
         let rows = region.children
 
+        XCTAssertEqual(region.name, "EC region")
         XCTAssertEqual(rows.map(\.kind), [.ecImage, .ecImage, .padding])
         XCTAssertEqual(rows.map(\.range), [0x1000..<0x3000, 0x3000..<0x5000, 0x5000..<0x9000])
         XCTAssertEqual(rows[0].name, "Microchip MEC image")
@@ -72,6 +74,19 @@ final class ECImageTests: XCTestCase {
             (0x2000, Self.microchip(length: 0x800, fill: 0x5B)),
         ]))
         XCTAssertEqual(region.children.filter { $0.kind == .ecImage }.map(\.subtype), [nil, nil])
+    }
+
+    /// Padding holding two images is "EC firmware", and its rows say which.
+    func testPaddingWithSeveralImagesNamesNoneOfThem() {
+        var bytes = [UInt8](repeating: 0xFF, count: 0x10000)
+        bytes.replaceSubrange(0..<0x1000, with: ITEFirmwareTests.image("ITE5507-SB-V0.67"))
+        bytes.replaceSubrange(0x2000..<0x3000, with: ITEFirmwareTests.image("ITE8380-EC-V0.00"))
+        bytes.replaceSubrange(0xF000..<0x10000, with: TestImage.volume(length: 0x1000, lastFile: TestImage.volumeTopFile()))
+        let padding = UEFIParser.parse(bytes).roots[0].children[0]
+        XCTAssertEqual(padding.name, "EC firmware")
+        XCTAssertTrue(ECImage.isECFirmwarePadding(padding))
+        XCTAssertEqual(padding.children.filter { $0.kind == .ecImage }.map(\.name),
+                       ["ITE5507-SB-V0.67", "ITE8380-EC-V0.00"])
     }
 
     /// One image at the block's start is the common case: the block is

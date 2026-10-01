@@ -1071,12 +1071,13 @@ Two vendors' images are recognised, each on a 4 KiB boundary:
 
 Three places are looked at: a stretch of non-empty padding the raw-area scan
 left, an EC Firmware region of the Insyde map, and the descriptor's EC region,
-read when the descriptor is (a look at each 4 KiB boundary, not a scan). The
-block is named after its first image — `EC firmware (…)`, `EC Firmware (…)`,
-`EC region (…)`; padding only when the image opens it. When the block holds more
-than that one image at its start, each image becomes an `ecImage` node,
-classified as UEFITool's padding like the map regions, and what lies between
-them stays padding. No known header gives an image's length: an image whose
+read when the descriptor is (a look at each 4 KiB boundary, not a scan). A
+block holding one image, at its start, is named after it — `EC firmware (…)`,
+`EC Firmware (…)`, `EC region (…)`; padding only when the image opens it. When
+the block holds more than that one image at its start, each image becomes an
+`ecImage` node named after itself, classified as UEFITool's padding like the
+map regions, and what lies between them stays padding; the block then names
+none of them — `EC firmware`, `EC Firmware`, `EC region` — since its rows do. No known header gives an image's length: an image whose
 bytes begin with the whole of an earlier image of the same vendor is a copy of
 it, as long as it, and carries `ECImage.copySubtype`; any other image runs to
 its last written byte before the next image, rounded up to 4 KiB. The copy rule

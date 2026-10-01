@@ -78,6 +78,8 @@ final class UEFIHelpTermsTests: XCTestCase {
     /// padding, the padding page.
     func testECFirmwareInPaddingOpensTheECPage() {
         let ec = UEFINode(kind: .padding, name: "EC firmware (ITE8226-EC-V0.00)", range: 0..<0x1000)
+        let several = UEFINode(kind: .padding, name: "EC firmware", range: 0..<0x1000)
+        XCTAssertEqual(UEFIHelpTerms.term(for: several), HelpTermID("ec-firmware"))
         let plain = UEFINode(kind: .padding, name: "Padding", range: 0..<0x1000)
         XCTAssertEqual(UEFIHelpTerms.term(for: ec), HelpTermID("ec-firmware"))
         XCTAssertEqual(UEFIHelpTerms.term(for: plain), HelpTermID("padding"))
