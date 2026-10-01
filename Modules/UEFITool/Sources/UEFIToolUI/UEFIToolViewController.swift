@@ -28,6 +28,8 @@ import UEFITool
     /// A node's Open item was chosen: the node itself, or its body alone
     /// (`Design/FRAGMENT_PANELS_PLAN.md`).
     var onOpenNode: ((NodeID, Bool) -> Void)?
+    /// A node's Save As item was chosen: the node itself, or its body alone.
+    var onSaveNode: ((NodeID, Bool) -> Void)?
 
     /// A flagged node's Fix Checksum menu item was chosen.
     var onFixChecksum: ((NodeID) -> Void)?
@@ -1470,6 +1472,16 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = NodeOpenTarget(id: node.id, body: body)
             items.append(item)
         }
+        // The same bytes, saved to a file rather than opened.
+        for body in [false, true] {
+            guard let title = UEFIPresenter.nodeSaveTitle(for: node, body: body),
+                  !body || !node.header.isEmpty
+            else { continue }
+            let item = NSMenuItem(title: title, action: #selector(saveNodeClicked(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = NodeOpenTarget(id: node.id, body: body)
+            items.append(item)
+        }
         // A node of either Top Swap block steps to its twin in the other, so
         // the reader sees which copy of a volume or file stands for which.
         if let image, let counterpart = UEFITopSwap.counterpart(of: node, in: image) {
@@ -1514,6 +1526,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     @objc private func openNodeClicked(_ sender: NSMenuItem) {
         guard let target = sender.representedObject as? NodeOpenTarget else { return }
         onOpenNode?(target.id, target.body)
+    }
+
+    @objc private func saveNodeClicked(_ sender: NSMenuItem) {
+        guard let target = sender.representedObject as? NodeOpenTarget else { return }
+        onSaveNode?(target.id, target.body)
     }
 
     @objc private func goToTopSwapCounterpartClicked(_ sender: NSMenuItem) {

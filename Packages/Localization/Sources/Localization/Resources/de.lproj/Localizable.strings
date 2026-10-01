@@ -144,6 +144,12 @@
 "EC firmware image" = "EC-Firmware-Abbild";
 "Go to Original" = "Zum Original";
 "Go to Top Swap Copy" = "Zur Top-Swap-Kopie";
+"Save Body of “%1$@” as…" = "Rumpf von „%1$@“ sichern unter…";
+"Save Node Body as…" = "Knotenrumpf sichern unter…";
+"Save Node as…" = "Knoten sichern unter…";
+"Save “%1$@” as…" = "„%1$@“ sichern unter…";
+"Saved %1$@ bytes." = "%1$@ Bytes gesichert.";
+"There is nothing to save here." = "Hier gibt es nichts zu sichern.";
 "Top Swap" = "Top Swap";
 "Vendor" = "Hersteller";
 "Written" = "Beschrieben";

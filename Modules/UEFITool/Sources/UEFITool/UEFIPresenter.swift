@@ -152,6 +152,16 @@ public enum UEFIPresenter {
         return body ? L("Open Body of “%1$@”", node.name) : L("Open “%1$@”", node.name)
     }
 
+    /// What the tree's menu calls saving `node` — or its body alone — to a
+    /// file: offered wherever opening it is, since it is the same bytes.
+    public static func nodeSaveTitle(for node: UEFINode, body: Bool) -> String? {
+        guard nodeOpenTitle(for: node, body: body) != nil else { return nil }
+        guard !node.name.isEmpty else {
+            return body ? L("Save Node Body as…") : L("Save Node as…")
+        }
+        return body ? L("Save Body of “%1$@” as…", node.name) : L("Save “%1$@” as…", node.name)
+    }
+
     public static func nodeOpen(for node: UEFINode, in image: UEFIImage, body: Bool) -> NodeOpen? {
         guard let title = nodeOpenTitle(for: node, body: body) else { return nil }
         let range = body ? node.body : node.range

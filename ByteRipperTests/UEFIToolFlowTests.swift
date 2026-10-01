@@ -957,6 +957,36 @@ final class UEFIToolFlowTests: XCTestCase {
         controller.fragments.close(id, animated: false)
     }
 
+    /// The same bytes can be saved to a file instead: the node, and its body
+    /// alone, offered under the name its panel would have.
+    func testANodeAndItsBodySaveToAFile() throws {
+        let controller = try open(UEFITestImage.make())
+        let node = try node(atRow: 0)
+        try XCTSkipIf(node.header.isEmpty, "this node has no header to leave behind")
+        let bytes = UEFITestImage.make()
+
+        for body in [false, true] {
+            let destination = FileManager.default.temporaryDirectory
+                .appendingPathComponent("node-save-\(UUID().uuidString).bin")
+            defer { try? FileManager.default.removeItem(at: destination) }
+            var suggested: String?
+            controller.toolSavePanel = { panel in
+                suggested = panel.nameFieldStringValue
+                return destination
+            }
+
+            try session().saveNode(for: node.id, body: body)
+            XCTAssertTrue(pumpUntil(2) { FileManager.default.fileExists(atPath: destination.path) },
+                          "the file is written")
+
+            let range = body ? node.body : node.range
+            XCTAssertEqual([UInt8](try Data(contentsOf: destination)),
+                           Array(bytes[Int(range.lowerBound)..<Int(range.upperBound)]))
+            XCTAssertEqual(suggested?.hasSuffix(body ? " body.bin" : ".bin"), true, suggested ?? "")
+        }
+        controller.toolSavePanel = nil
+    }
+
     /// The tree's own menu is where a reader reaches them.
     func testTheTreeMenuOffersBothOnANodeWithAHeader() throws {
         _ = try open(UEFITestImage.make())

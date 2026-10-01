@@ -144,6 +144,12 @@
 "EC firmware image" = "Образ прошивки EC";
 "Go to Original" = "Перейти к оригиналу";
 "Go to Top Swap Copy" = "Перейти к копии Top Swap";
+"Save Body of “%1$@” as…" = "Сохранить тело «%1$@» как…";
+"Save Node Body as…" = "Сохранить тело узла как…";
+"Save Node as…" = "Сохранить узел как…";
+"Save “%1$@” as…" = "Сохранить «%1$@» как…";
+"Saved %1$@ bytes." = "Сохранено байт: %1$@.";
+"There is nothing to save here." = "Здесь нечего сохранять.";
 "Top Swap" = "Top Swap";
 "Vendor" = "Производитель";
 "Written" = "Записано";

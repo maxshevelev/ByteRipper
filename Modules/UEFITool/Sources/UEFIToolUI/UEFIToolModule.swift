@@ -246,6 +246,9 @@ private struct ChecksumPass: Sendable {
         controller.onOpenNode = { [weak self] nodeID, body in
             self?.openNodeInPanel(for: nodeID, body: body)
         }
+        controller.onSaveNode = { [weak self] nodeID, body in
+            self?.saveNode(for: nodeID, body: body)
+        }
         controller.onGoToTopSwapCounterpart = { [weak self] nodeID in
             self?.goToTopSwapCounterpart(of: nodeID)
         }
@@ -1377,6 +1380,37 @@ private struct ChecksumPass: Sendable {
                                   part: open.rebuild ?? UEFIRebuild.Target(space: open.space,
                                                                            range: open.range))
             }
+        }
+    }
+
+    /// Saves a node of the tree — or its body alone — to a file: the bytes
+    /// opening it would show, wherever the node lives, under the name its
+    /// panel would have.
+    ///
+    /// Public because a right-click cannot be simulated — the level the app's
+    /// tests drive, like `openNodeInPanel(for:body:)`.
+    // help: panel.uefi.save-node
+    public func saveNode(for nodeID: NodeID, body: Bool) {
+        guard let tree, tree.isReady, let node = tree.image().node(nodeID),
+              let open = UEFIPresenter.nodeOpen(for: node, in: tree.image(), body: body)
+        else {
+            fail(L("There is nothing to save here."))
+            return
+        }
+        let readers = tree.spaceReaders
+        let name = open.partName(fileName: host.fileName)
+        controller.showBusy()
+        Task { [weak self] in
+            let bytes = await UEFIToolSession.bytes(of: open, readers: readers)
+            guard let self else { return }
+            self.controller.endBusy()
+            guard let bytes, !bytes.isEmpty else {
+                self.fail(L("Those bytes could not be read."))
+                return
+            }
+            guard await self.host.exportFile(bytes, suggestedName: name) else { return }
+            self.noticeAnswersTheUser = true
+            self.controller.say(L("Saved %1$@ bytes.", bytes.count))
         }
     }
 
