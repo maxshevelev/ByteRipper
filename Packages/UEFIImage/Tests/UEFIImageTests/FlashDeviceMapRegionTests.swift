@@ -138,6 +138,15 @@ final class FlashDeviceMapRegionTests: XCTestCase {
         XCTAssertEqual(found.first?.name, "Flash device map region")
     }
 
+    /// An EC Firmware region that opens on an ITE image adds its
+    /// identification to the type's name.
+    func testAnECRegionIsNamedByTheImageItHolds() {
+        var bytes = Self.image(maps: [[(FlashDeviceMap.ecFirmware, 0x2000, 0x1000)]])
+        bytes.replaceSubrange(0x2000..<0x3000, with: ITEFirmwareTests.image())
+        let found = regions(top(UEFIParser.parse(bytes)))
+        XCTAssertEqual(found.map(\.name), ["EC Firmware (ITE8380-EC-V1.43)"])
+    }
+
     /// The map's rows are named by region type, the way UEFITool names them.
     func testAnEntryIsNamedByItsRegionType() {
         let map = top(UEFIParser.parse(Self.image())).first { $0.kind == .flashDeviceMapStore }!

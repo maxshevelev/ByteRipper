@@ -238,7 +238,7 @@ final class Parser {
         // the range whether or not a signature announced itself.
         progressed(to: range.upperBound)
         nodes += padding(from: claimed, to: range.upperBound, emptyByte: emptyByte)
-        return readingMapRegions(nodes, emptyByte: emptyByte, depth: depth)
+        return namingECFirmware(readingMapRegions(nodes, emptyByte: emptyByte, depth: depth))
     }
 
     /// A signature is a candidate, not a find: the four bytes turn up inside

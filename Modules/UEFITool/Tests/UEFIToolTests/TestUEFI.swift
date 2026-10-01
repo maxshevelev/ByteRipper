@@ -428,6 +428,22 @@ enum TestUEFI {
         return Built(bytes: bytes, node: node, image: image(node, totalSize: 0x1000))
     }
 
+    /// Padding the parser named for the ITE EC image it opens on: two images,
+    /// at `0x0` and `0x1000`, each with its signature block at `0x80`.
+    static func itePadding() -> Built {
+        let block: [UInt8] = [0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA4, 0x14,
+                              0x85, 0x12, 0x5A, 0x5A, 0xAA, 0xAF, 0x55, 0x55]
+        func ite(_ identification: String) -> [UInt8] {
+            var bytes = [UInt8](repeating: 0, count: 0x1000)
+            let text = Array(identification.utf8) + [UInt8](repeating: 0, count: 16 - identification.utf8.count)
+            bytes.replaceSubrange(0x80..<0xA0, with: block + text)
+            return bytes
+        }
+        let bytes = ite("ITE5507-SB-V0.67") + ite("ITE8380-EC-V0.00")
+        let node = UEFINode(kind: .padding, name: "EC firmware (ITE5507-SB-V0.67)", range: 0..<0x2000)
+        return Built(bytes: bytes, node: node, image: image(node, totalSize: 0x2000))
+    }
+
     /// An FTW working block's 28-byte header: the signature GUID, the header
     /// CRC32, the state, and the 32-bit write-queue size (§9).
     static func nvramFtwStore(crc: UInt32 = 0x1234_5678, state: UInt8 = 0x01) -> Built {

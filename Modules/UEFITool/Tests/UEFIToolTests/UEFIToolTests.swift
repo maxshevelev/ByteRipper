@@ -508,6 +508,16 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Checksum"), Checksums.text(stored, valid: true))
     }
 
+    /// Each ITE image in the block is a row: what it says it is, and where.
+    func testECFirmwareListsEveryITEImageItHolds() {
+        let built = TestUEFI.itePadding()
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        XCTAssertEqual(
+            detail.fields.filter { $0.label == "ITE identification" }.map(\.value),
+            ["ITE5507-SB-V0.67 · 0x0", "ITE8380-EC-V0.00 · 0x1000"]
+        )
+    }
+
     /// The version table's region shows what the table states.
     func testABVDTRegionShowsTheVersionsTheTableStates() {
         let built = TestUEFI.bvdtRegion()

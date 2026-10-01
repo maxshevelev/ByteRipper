@@ -30,6 +30,10 @@ public enum UEFIHelpTerms {
         // The Startup AP data lives in a pad file and is why that pad file
         // must stay where it is; the page about pad files says so.
         case .startupApData: return HelpTermID("pad-file")
+        // Padding the parser named for the EC image it opens on is read as
+        // what it looks like.
+        case .padding where node.name.hasPrefix(ITEFirmware.paddingNamePrefix):
+            return HelpTermID("ec-firmware")
         case .padding: return HelpTermID("padding")
         case .freeSpace: return HelpTermID("free-space")
         case .nonUEFIData: return HelpTermID("non-uefi-data")

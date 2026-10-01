@@ -552,6 +552,12 @@ public enum UEFIDetail {
                 if let kernel = table.kernelVersion { fields.append(.init("Kernel version", kernel)) }
                 if let date = table.releaseDate { fields.append(.init("Release date", date)) }
             }
+            if node.guid == FlashDeviceMap.ecFirmware {
+                fields += iteFields(node, reader: reader)
+            }
+
+        case .padding where node.name.hasPrefix(ITEFirmware.paddingNamePrefix):
+            fields += iteFields(node, reader: reader)
 
         case .padding, .freeSpace, .nonUEFIData, .startupApData:
             // No header of their own: the size the common "Total" carries is
@@ -559,6 +565,14 @@ public enum UEFIDetail {
             break
         }
         return fields
+    }
+
+    /// One row per ITE image in the node: what it says it is, and where it
+    /// starts. The firmware's own words, so they read as written.
+    private static func iteFields(_ node: UEFINode, reader: ImageReader) -> [UEFIDetailField] {
+        ITEFirmware.all(in: node.range, reader: reader).map {
+            .init("ITE identification", "\($0.identification) · \(hex($0.start))")
+        }
     }
 
     // MARK: - What a flash descriptor adds

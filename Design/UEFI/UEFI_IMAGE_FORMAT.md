@@ -1057,6 +1057,22 @@ month, day. That it is the release date is an inference — on every dump it fit
 the BIOS version — and the help says so. A string whose `$` is missing, or that
 holds no printable text, is not shown.
 
+**ITE EC firmware** is named by the identification it carries
+(`ITEFirmware.swift`). At `+0x40` (the 8051 parts) or `+0x80` from the image's
+start sits a signature block — six `A5` bytes, two bytes that vary,
+`85 12 5A 5A AA`, one byte that varies, `55 55` — and after it up to sixteen
+bytes of text: `ITE8380-EC-V1.43`, `ITE EC-V13.6`, `IT891x-Dock-v2.1`,
+`ITE5507-SB-V0.67`, `ITE8226-EC-V0.00` on the dumps at hand. When the raw-area
+scan is done, a stretch of non-empty padding, or an EC Firmware map region,
+that opens on such an image is renamed `EC firmware (…)` or
+`EC Firmware (…)`; nothing else about the node changes. Only the start is
+looked at: an image further into a block does not rename it, but the details
+panel lists every image in the block, one per 4 KiB boundary — one Lenovo EC
+region holds an `ITE5507-SB` image and two `ITE8380-EC` ones. The string is
+the firmware author's, not the chip's marking, and the help says so. ENE and
+Microchip images, and an EC region the descriptor declares, are not looked at
+yet (#5).
+
 The Insyde Flash Device Map deserves a mention of its own, since it lays out the
 whole image:
 

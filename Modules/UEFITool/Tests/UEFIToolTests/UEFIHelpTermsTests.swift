@@ -74,6 +74,15 @@ final class UEFIHelpTermsTests: XCTestCase {
         XCTAssertEqual(UEFIHelpTerms.term(for: region(FlashDeviceMap.biosVersionDataTable)), HelpTermID("bvdt"))
     }
 
+    /// Padding the parser named for an EC image opens the EC page; other
+    /// padding, the padding page.
+    func testECFirmwareInPaddingOpensTheECPage() {
+        let ec = UEFINode(kind: .padding, name: "EC firmware (ITE8226-EC-V0.00)", range: 0..<0x1000)
+        let plain = UEFINode(kind: .padding, name: "Padding", range: 0..<0x1000)
+        XCTAssertEqual(UEFIHelpTerms.term(for: ec), HelpTermID("ec-firmware"))
+        XCTAssertEqual(UEFIHelpTerms.term(for: plain), HelpTermID("padding"))
+    }
+
     /// An NVAR entry has a page of its own: what a reader asks of it is which
     /// of a variable's entries holds the value now.
     func testAnNvarEntryHasItsOwnEntry() {

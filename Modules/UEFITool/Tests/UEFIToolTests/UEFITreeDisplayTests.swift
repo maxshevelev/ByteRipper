@@ -147,6 +147,11 @@ final class UEFITreeDisplayTests: XCTestCase {
         let named = GuidsCatalogue(names: [FlashDeviceMap.ecFirmware: "Something else"])
         XCTAssertEqual(UEFITreeDisplay.name(for: region, catalogue: named), "EC Firmware")
         XCTAssertEqual(UEFITreeDisplay.typeText(for: region), "Padding")
+
+        // What the parser read inside goes into the name it gave.
+        var ec = region
+        ec.name = "EC Firmware (ITE8380-EC-V1.43)"
+        XCTAssertEqual(UEFITreeDisplay.name(for: ec, catalogue: named), "EC Firmware (ITE8380-EC-V1.43)")
     }
 
     /// A pad file is named by what its body turned out to hold, the way
