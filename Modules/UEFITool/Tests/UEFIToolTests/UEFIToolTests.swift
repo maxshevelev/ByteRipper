@@ -518,6 +518,23 @@ final class UEFIDetailTests: XCTestCase {
         )
     }
 
+    /// A store says how full it is and what its entries still count for.
+    func testAStoreShowsHowFullItIs() {
+        let entry = UEFINode(kind: .vssEntry, subtype: UEFITypes.Sub.standardVssEntry, name: "Setup",
+                             header: 0x10..<0x30, body: 0x30..<0xC0)
+        let free = UEFINode(kind: .freeSpace, name: "", range: 0xC0..<0x110, isErased: true)
+        let store = UEFINode(kind: .vssStore, name: "VSS store", header: 0..<0x10, body: 0x10..<0x110,
+                             children: [entry, free])
+        let bytes = [UInt8](repeating: 0, count: 0x110)
+        let detail = UEFIDetail.build(for: store, image: UEFIImage(size: 0x110, roots: [store]), reader: ImageReader(bytes))
+
+        XCTAssertEqual(field(detail, "In use"), "0xB0 (176) · 68\u{00A0}%")
+        XCTAssertEqual(field(detail, "Free space"), "0x50 (80)")
+        XCTAssertEqual(field(detail, "Current entries"), "1")
+        XCTAssertEqual(field(detail, "Superseded entries"), "0")
+        XCTAssertEqual(field(detail, "Deleted entries"), "0")
+    }
+
     /// The version table's region shows what the table states.
     func testABVDTRegionShowsTheVersionsTheTableStates() {
         let built = TestUEFI.bvdtRegion()

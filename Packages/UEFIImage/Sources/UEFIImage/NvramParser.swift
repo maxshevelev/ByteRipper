@@ -541,6 +541,16 @@ extension Parser {
     /// timestamp, and a key index) or the plain standard form. There is no
     /// Intel legacy or Apple form in VSS2, and the name sits in the header,
     /// with the data as the body.
+    /// VSS2 has no Intel legacy: a variable is authenticated when an auth
+    /// bit is set, or when either size field is zero (the marker of an auth
+    /// variable whose real sizes come after the timestamp and key index).
+    static func isAuthenticatedVss2Variable(attributes: UInt32, lenName: UInt32, lenData: UInt32) -> Bool {
+        attributes & (NVRAM.vssAttributeAuthWrite
+            | NVRAM.vssAttributeTimeBasedAuth
+            | NVRAM.vssAttributeAppendWrite) != 0
+            || lenName == 0 || lenData == 0
+    }
+
     private func vss2Variable(at offset: UInt64, storeEnd: UInt64) -> UEFINode? {
         guard reader.uint8(at: offset + 1) == NVRAM.variableMarkerLast,
               let state = reader.uint8(at: offset + 2),
@@ -549,14 +559,7 @@ extension Parser {
               let lenData = reader.uint32(at: offset + 12)
         else { return nil }
 
-        // VSS2 has no Intel legacy: a variable is authenticated when an auth
-        // bit is set, or when either size field is zero (the marker of an auth
-        // variable whose real sizes come after the timestamp and key index).
-        let isAuth = (
-            attributes & (NVRAM.vssAttributeAuthWrite
-                | NVRAM.vssAttributeTimeBasedAuth
-                | NVRAM.vssAttributeAppendWrite) != 0
-        ) || lenName == 0 || lenData == 0
+        let isAuth = Self.isAuthenticatedVss2Variable(attributes: attributes, lenName: lenName, lenData: lenData)
 
         var headerSize: UInt64
         var nameSize: UInt32

@@ -116,6 +116,9 @@ public enum UEFIDetail {
     ) -> UEFINodeDetail {
         var fields = commonFields(for: node, image: image)
         fields += headerFields(for: node, reader: reader, repairs: repairs)
+        if let fill = NvramStoreFill.of(node, reader: reader) {
+            fields += fillFields(fill)
+        }
         let title = node.name.isEmpty ? kindLabel(node.kind) : node.name
         var tables: [UEFIDetailTable] = []
 
@@ -155,6 +158,20 @@ public enum UEFIDetail {
             }
         }
         return UEFINodeDetail(title: title, fields: fields, tables: tables)
+    }
+
+    // MARK: - How full a variable store is
+
+    /// The panel's own reading of a store, so it translates: how much of it
+    /// is written, how much is left, and what its entries still count for.
+    static func fillFields(_ fill: NvramStoreFill) -> [UEFIDetailField] {
+        [
+            .init(L("In use"), "\(sizeText(fill.used)) · \(fill.percentUsed)\u{00A0}%"),
+            .init(L("Free space"), sizeText(fill.free)),
+            .init(L("Current entries"), "\(fill.current)"),
+            .init(L("Superseded entries"), "\(fill.superseded)"),
+            .init(L("Deleted entries"), "\(fill.deleted)"),
+        ]
     }
 
     // MARK: - Protected ranges

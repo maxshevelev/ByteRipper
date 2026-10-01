@@ -1073,6 +1073,21 @@ the firmware author's, not the chip's marking, and the help says so. ENE and
 Microchip images, and an EC region the descriptor declares, are not looked at
 yet (#5).
 
+**How full a store is** is counted off the nodes the parser already made
+(`NvramStoreFill.swift`), for any node with variable entries among its
+children — a VSS, VSS2, SysF or EVSA store, and the file, raw section or entry
+an NVAR store is the body of. The store's size is its body; free is what its
+free-space children cover; in use is the rest. An entry is current unless its
+subtype marks it: an NVAR `Link` is superseded, and any other marked entry —
+VSS, SysF or EVSA `Invalid`, NVAR `Invalid` or `Invalid link` — is superseded
+when a current entry with the same name and vendor GUID is in the store, and
+deleted otherwise. VSS marks a replaced and a deleted variable alike, and the
+tree calls a marked VSS entry `Invalid` as UEFITool does, so for this the name
+is read from the bytes: from the start of a `$VSS` variable's body, and from
+the end of a VSS2 variable's header, after the standard or the authenticated
+fields (the parser's own rule decides which). On `all.orig.bin` the live store
+is 95 % in use with 102 current entries, 828 superseded and 3 deleted.
+
 The Insyde Flash Device Map deserves a mention of its own, since it lays out the
 whole image:
 
