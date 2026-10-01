@@ -589,6 +589,33 @@ public enum UEFIDetail {
         case .ecImage:
             break
 
+        // What UEFITool's FIT tab says of the structure, in the header's own
+        // words: the fields are Intel's names, and stay in them.
+        case .fitComponent:
+            guard let kind = node.subtype.flatMap(FITComponent.Kind.init(rawValue:)),
+                  let header = FITComponentHeader.read(kind, at: node.body.lowerBound, in: reader)
+            else { break }
+            switch header {
+            case .table(let rows):
+                fields.append(.init("Entries", "\(rows)"))
+            case .acm(let subtype, let headerVersion, let chipsetID, let date, let svn):
+                fields.append(.init("Module subtype", FITComponentHeader.acmSubtypeName(subtype) ?? hex(subtype)))
+                fields.append(.init("Header version", hex(headerVersion)))
+                fields.append(.init("Chipset ID", hex(chipsetID)))
+                fields.append(.init(L("Date"), date))
+                fields.append(.init("ACM SVN", "\(svn)"))
+            case .keyManifest(let version, let kmVersion, let svn, let id):
+                fields.append(.init("Version", hex(version)))
+                fields.append(.init("KM version", hex(kmVersion)))
+                fields.append(.init("KM SVN", "\(svn)"))
+                fields.append(.init("KM ID", hex(id)))
+            case .bootPolicy(let version, let revision, let svn, let acmSVN):
+                fields.append(.init("Version", hex(version)))
+                fields.append(.init("BPM revision", "\(revision)"))
+                fields.append(.init("BP SVN", "\(svn)"))
+                fields.append(.init("ACM SVN", "\(acmSVN)"))
+            }
+
         case .padding, .freeSpace, .nonUEFIData, .startupApData:
             // No header of their own: the size the common "Total" carries is
             // the whole of what there is to say.
@@ -907,6 +934,7 @@ public enum UEFIDetail {
         case .nonUEFIData: return L("Non-UEFI data")
         case .flashDeviceMapRegion: return L("Flash device map region")
         case .ecImage: return L("EC firmware image")
+        case .fitComponent: return L("FIT component")
         }
     }
 

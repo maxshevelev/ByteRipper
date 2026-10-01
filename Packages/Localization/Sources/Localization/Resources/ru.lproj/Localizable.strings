@@ -143,6 +143,7 @@
 "Copy of" = "Копия образа по адресу";
 "Copy of %1$@–%2$@; %3$@" = "Копия блока %1$@–%2$@; %3$@";
 "EC firmware image" = "Образ прошивки EC";
+"FIT component" = "Компонент FIT";
 "Go to Original" = "Перейти к оригиналу";
 "Go to Top Swap Copy" = "Перейти к копии Top Swap";
 "Save Body of “%1$@” as…" = "Сохранить тело «%1$@» как…";

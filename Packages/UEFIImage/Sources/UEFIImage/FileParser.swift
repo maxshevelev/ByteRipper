@@ -227,7 +227,18 @@ extension Parser {
             ))
         } else {
             note(.nonUEFIDataInPadFile, at: dataStart)
-            nodes.append(UEFINode(kind: .padding, name: L("Non-UEFI data"), range: data))
+            // A vendor that keeps a Boot Guard manifest or the FIT itself in
+            // a pad file gets it named, under the row the reference shows.
+            let pieces = readingFITComponents(
+                padding(from: data.lowerBound, to: data.upperBound, emptyByte: emptyByte), emptyByte: emptyByte
+            )
+            nodes.append(UEFINode(
+                kind: .padding,
+                name: L("Non-UEFI data"),
+                header: dataStart..<dataStart,
+                body: data,
+                children: pieces.contains { $0.kind == .fitComponent } ? pieces : []
+            ))
         }
         return nodes
     }

@@ -227,6 +227,11 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     /// its start to its last written byte (`UEFI_IMAGE_FORMAT.md` §9). Like a
     /// map region, it classifies as UEFITool's padding.
     case ecImage
+    /// A structure the FIT names — the table, the Startup ACM, a Boot Guard
+    /// manifest — read out of padding (`UEFI_IMAGE_FORMAT.md` §9). The subtype
+    /// is the FIT type that names it (`FITComponent.Kind`). Padding to
+    /// UEFITool, as a map region is.
+    case fitComponent
     /// The x86 Startup AP data EDK2's GenFv writes into the pad file before
     /// the Volume Top File: a far jump the application processors start at.
     /// It is code at a fixed address, so it does not move.

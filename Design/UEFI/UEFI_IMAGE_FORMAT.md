@@ -1088,6 +1088,34 @@ dumps at hand: `CSME 16`'s EC region is `ITE5507-SB`, `ITE8380-EC` and a copy;
 the Dell's EC region is a 4 KiB block of data, a MEC image, another MEC image
 and its copy, then the log. ENE images are not recognised yet (#5).
 
+**What the FIT names** is read out of padding (`FITComponents.swift`): the
+table itself, the Startup ACM (type 2), the Boot Guard Key Manifest (`0x0B`)
+and Boot Policy (`0x0C`). The CPU finds them by address, and a vendor is free to
+keep them outside every volume — the HP ZBook Fury 16 G9 dump keeps all four in
+1.3 MB of padding, `CSME 11` all four in padding between two volumes, `CSME 16`
+the manifests and the table in a pad file's body. UEFITool shows those bytes as
+padding. Each structure the FIT names that lies wholly inside a stretch of
+non-empty padding becomes a `fitComponent` node, its subtype the FIT type,
+fixed, and the padding around it stays — the raw-area scan's padding, a raw
+file's body read as a raw area, and the non-UEFI data of a pad file, whose row
+and warning stay as the reference has them, with the structures as its
+children. The length is the structure's own: the table's row count; the ACM's
+`ModuleSize` in dwords, once its type (`2`) and vendor (`0x8086`) check; a
+manifest's `KEY_AND_SIGNATURE` at the end — after the one hash of a v1 Key
+Manifest, at the offset the header gives in a v2 one or a v2 Boot Policy, and
+after the elements of a v1 Boot Policy, stepped over by what `__IBBS__` and
+`__PMDA__` are known to hold, up to `__PMSG__`. On the seven dumps that carry
+manifests the FIT's own size field gives the same length in bytes, but the spec
+does not promise it, so it is not used. Like the map's regions this runs before
+the second pass, with `addressDiff` from a Volume Top File at the image's tail;
+`orig_30072026.BIN`, which has `0x110` bytes appended after its image, keeps
+its padding. When the image carries a Top Swap copy (§11) the copy's FIT names
+the top block's addresses, so the same structures are looked for in the copy,
+moved down by the block's size. The details show what UEFITool's FIT tab shows
+of each header: the table's rows; the ACM's module subtype, header version,
+chipset ID, BCD date and SVN; a manifest's structure version, revision or KM
+version, SVN, and the Key Manifest's ID.
+
 **How full a store is** is counted off the nodes the parser already made
 (`NvramStoreFill.swift`), for any node with variable entries among its
 children — a VSS, VSS2, SysF or EVSA store, and the file, raw section or entry

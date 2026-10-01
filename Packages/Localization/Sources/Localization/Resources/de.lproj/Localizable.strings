@@ -143,6 +143,7 @@
 "Copy of" = "Kopie des Abbilds bei";
 "Copy of %1$@–%2$@; %3$@" = "Kopie des Blocks %1$@–%2$@; %3$@";
 "EC firmware image" = "EC-Firmware-Abbild";
+"FIT component" = "FIT-Komponente";
 "Go to Original" = "Zum Original";
 "Go to Top Swap Copy" = "Zur Top-Swap-Kopie";
 "Save Body of “%1$@” as…" = "Rumpf von „%1$@“ sichern unter…";

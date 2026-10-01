@@ -44,6 +44,13 @@ public enum UEFIHelpTerms {
             return HelpTermID("ec-firmware")
         case .ecImage:
             return HelpTermID("ec-firmware")
+        case .fitComponent:
+            switch node.subtype.flatMap(FITComponent.Kind.init(rawValue:)) {
+            case .startupACM: return HelpTermID("acm")
+            case .keyManifest: return HelpTermID("key-manifest")
+            case .bootPolicy: return HelpTermID("boot-policy")
+            case .table, nil: return HelpTermID("fit")
+            }
         case .padding: return HelpTermID("padding")
         case .freeSpace: return HelpTermID("free-space")
         case .nonUEFIData: return HelpTermID("non-uefi-data")

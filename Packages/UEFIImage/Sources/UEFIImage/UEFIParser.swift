@@ -105,6 +105,8 @@ final class Parser {
     /// with every other `Parser` of the same materialization, so the fractions
     /// move forward across the whole job rather than restarting per node.
     private let onProgress: ProgressSink?
+    /// What the image's FIT names (`fitComponents`), once it has been asked.
+    var fitComponentsCache: [FITComponent]?
 
     /// What an unwritten byte looks like outside any volume. Inside one it is
     /// the volume's erase polarity that decides (§3.5); out here `0xFF` is what
@@ -240,7 +242,10 @@ final class Parser {
         // the range whether or not a signature announced itself.
         progressed(to: range.upperBound)
         nodes += padding(from: claimed, to: range.upperBound, emptyByte: emptyByte)
-        return readingECFirmware(readingMapRegions(nodes, emptyByte: emptyByte, depth: depth), emptyByte: emptyByte)
+        return readingECFirmware(
+            readingFITComponents(readingMapRegions(nodes, emptyByte: emptyByte, depth: depth), emptyByte: emptyByte),
+            emptyByte: emptyByte
+        )
     }
 
     /// A signature is a candidate, not a find: the four bytes turn up inside

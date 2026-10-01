@@ -39,7 +39,7 @@ extension UEFINode {
         case .startupApData: return UEFITypes.Item.startupApDataEntry.rawValue
         // UEFITool's word for these bytes; the row's name says what the map
         // makes of them.
-        case .padding, .flashDeviceMapRegion, .ecImage: return UEFITypes.Item.padding.rawValue
+        case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent: return UEFITypes.Item.padding.rawValue
         case .freeSpace: return UEFITypes.Item.freeSpace.rawValue
         // Data nobody claimed is a run of bytes with a type, not a structure, so
         // it reads as a file the way a raw region does.
@@ -85,7 +85,7 @@ extension UEFINode {
         case .startupApData:
             // The one form UEFITool recognises.
             return UEFITypes.Sub.x86128kStartupApDataEntry
-        case .padding, .flashDeviceMapRegion, .ecImage:
+        case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent:
             return Self.paddingSubtype(of: self)
         case .freeSpace:
             return nil
