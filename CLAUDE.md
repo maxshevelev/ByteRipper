@@ -94,6 +94,10 @@ Help:
   row in focus (`ToolDetailScroll.setTerm`).
 - Write for a repair bench, in plain language, and say what is uncertain. A
   field nobody has documented is called unknown in the panel and in the help.
+- **Strictly technical tone, in every language**: no colloquialisms, no
+  Americanisms. A Russian or German page is not a calque of the English — it is
+  its own text, in good Russian or German, with the same meaning and facts
+  (`Design/LOCALIZATION.md`, "The tone, and why a translation is not a copy").
 
 Skills:
 - Skills live in the repo, committed under `Skills/<name>/` — that is the durable

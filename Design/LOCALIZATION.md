@@ -26,6 +26,33 @@ rule in both languages:
   a defined unit — «сегменты». Each of those was a correction from the bench,
   and each is the kind this rule exists to catch.
 
+## The tone, and why a translation is not a copy
+
+The help is technical documentation, and it reads like it in every language.
+
+- **A strictly technical register.** No colloquialisms, no slang, no jokes, no
+  conversational asides. The bench's *word* is wanted; the bench's *banter* is
+  not. «Лежит», «дописывает», "tidies", "adds up", "goes back to" are speech;
+  «хранится», «записывает», "compacts", "matches", "restores" are
+  documentation.
+- **No Americanisms, in any language.** In English, no idioms a reader whose
+  first language is not English has to decode: "contiguous", not "back to
+  back"; "internally", not "under the hood". In Russian and German, no English loans
+  where the language has a settled word of its own: «тело FFS-файла» and
+  "Datenteil", not «боди» and "Body". The terms of the previous section are
+  the only English that stays.
+- **A translation is its own text.** The Russian and German pages describe the
+  same functionality, with the same meaning and the same facts, as the English
+  — and are written as a Russian or a German technical author would write
+  them: their own sentence order, their own paragraphing where that reads
+  better, their own way of addressing the reader (formal «вы», "Sie"). A
+  sentence that is recognisably the English one with the words swapped is a
+  calque, and a calque is a defect, however correct each word in it is.
+- **What does not change.** The facts, the warnings and what is said to be
+  uncertain; every `` `code` ``, `[[topic:…]]`, `[[term:…]]` and anchor; the
+  names the interface shows, in bold, exactly as that language's strings
+  have them.
+
 ## The key is the English text
 
 ```swift

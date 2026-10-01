@@ -142,7 +142,12 @@ Two habits came out of this, and both are worth keeping:
   `Topics/<id>.md`. The tests then require it in every shipped language.
 - **A term**: add a `@term` block to the right `Terms/<group>.md`. Point at it
   from a node (`MEANode.helpTerm`, `UEFIHelpTerms.term(for:)`) or from prose.
-- **A language**: copy `Help/en` to `Help/<code>` and translate. Nothing else.
+- **A language**: copy `Help/en` to `Help/<code>` and write each page anew in
+  that language. Nothing else in the code changes.
+- **The words**, in every language: a strictly technical register, no
+  colloquialisms or Americanisms, and a translation that is a text of its own
+  rather than a calque of the English (`LOCALIZATION.md`, "The tone, and why a
+  translation is not a copy").
 - **A `?`**: `HelpButton.standard(for:)` in a form or a dialog,
   `HelpButton.inline(for:)` in a panel's chrome.
 
