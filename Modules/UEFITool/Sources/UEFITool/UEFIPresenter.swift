@@ -191,7 +191,8 @@ public enum UEFIPresenter {
             rebuild: node.space == .file && !body
                 ? UEFIRebuild.target(forFileRange: range, in: image)
                 : UEFIRebuild.Target(space: node.space, range: range),
-            suggestedName: base + suffix + ".bin",
+            // A picture saves as what it is, so the file opens in a viewer.
+            suggestedName: base + suffix + (node.kind == .picture ? ".jpg" : ".bin"),
             menuTitle: title
         )
     }

@@ -144,8 +144,11 @@
 "Copy of %1$@–%2$@; %3$@" = "Kopie des Blocks %1$@–%2$@; %3$@";
 "EC firmware image" = "EC-Firmware-Abbild";
 "FIT component" = "FIT-Komponente";
+"Format" = "Format";
 "Go to Original" = "Zum Original";
 "Go to Top Swap Copy" = "Zur Top-Swap-Kopie";
+"Picture" = "Bild";
+"Picture size" = "Bildgröße";
 "Save Body of “%1$@” as…" = "Rumpf von „%1$@“ sichern unter…";
 "Save Node Body as…" = "Knotenrumpf sichern unter…";
 "Save Node as…" = "Knoten sichern unter…";

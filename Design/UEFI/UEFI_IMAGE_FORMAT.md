@@ -439,6 +439,9 @@ rebuilt later.
 Raw areas are also searched for NVRAM stores, AMD microcode and BPDT/CPD (see
 §7, §8).
 
+Beyond the reference, the scan also takes `FF D8 FF E0` and `FF D8 FF E1` as
+the start of a JPEG picture (§9).
+
 ---
 
 ## 5. FFS files
@@ -1115,6 +1118,21 @@ moved down by the block's size. The details show what UEFITool's FIT tab shows
 of each header: the table's rows; the ACM's module subtype, header version,
 chipset ID, BCD date and SVN; a manifest's structure version, revision or KM
 version, SVN, and the Key Manifest's ID.
+
+**A JPEG picture** outside every volume is an element of the raw-area scan
+(`JPEGPicture.swift`): `FF D8 FF`, then an `APP0` segment opening with `JFIF\0`
+or an `APP1` with `Exif\0`. Nothing in a JPEG states its length, so the
+segments are walked — a marker after any fill bytes, standalone markers (`TEM`,
+`RSTn`) stepped over, every other segment by its big-endian length, the coded
+data after a start of scan up to the next marker that is neither `FF 00` nor a
+restart — to the end marker, and the picture ends there; a walk that leaves the
+area, passes 16 MiB or finds no start-of-frame is no picture, and the scan goes
+on. The node is a `picture`, named by format and size in pixels (`JPEG
+800×480`), classified as UEFITool's padding. Of the thirteen dumps at hand only
+the HP ZBook Fury 16 G9 has one: 800×480, `0x194E000`–`0x1976FB0`, in the
+padding after its FFSv3 volume, zeros after it. The other pictures in those
+dumps — BMPs in raw sections, a GIF in a Phoenix variable — are inside
+structures the parser already reads, and are not looked for.
 
 **How full a store is** is counted off the nodes the parser already made
 (`NvramStoreFill.swift`), for any node with variable entries among its

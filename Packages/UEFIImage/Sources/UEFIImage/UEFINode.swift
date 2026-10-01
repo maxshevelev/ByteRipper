@@ -232,6 +232,10 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     /// is the FIT type that names it (`FITComponent.Kind`). Padding to
     /// UEFITool, as a map region is.
     case fitComponent
+    /// A picture the raw-area scan found outside every volume — a JPEG, the
+    /// boot logo as a rule (`UEFI_IMAGE_FORMAT.md` §9). Named by its format
+    /// and size in pixels; padding to UEFITool.
+    case picture
     /// The x86 Startup AP data EDK2's GenFv writes into the pad file before
     /// the Volume Top File: a far jump the application processors start at.
     /// It is code at a fixed address, so it does not move.

@@ -1,4 +1,4 @@
-@source-sha deea8ff511921c58be7cae03c9d20d0183c008e2718ee6ac0c72d56a0307854e
+@source-sha 330d44a48f6eccc20a9f9a0c4abb902cdaae89ce6f699f6a9128d803c4e54fbb
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -176,6 +176,8 @@ Das Werkzeug führt ihn mit Absicht auf: daran sieht man, ob noch ein Modul in e
 Gelöschtes Padding ist die Füllmasse eines Dumps — meist `FF`. Der Baum blendet es aus, bis Sie danach fragen: ein großer Dump ist voll davon, und eine Zeile, hinter der nichts steht, ist eine Zeile zum Vorbeiscrollen.
 
 Padding, das **Daten enthält**, wird immer aufgeführt: da liegt etwas, ob der Parser es versteht oder nicht.
+
+Erweisen sich diese Daten als JPEG-Bild — in der Regel das Boot-Logo —, erhält es eine eigene Zeile, benannt nach Format und Größe in Pixeln, etwa `JPEG 800×480`. Erkannt wird das Bild an seinen Anfangsbytes und seinem JFIF- oder Exif-Segment; seine Länge ergibt sich aus dem Durchlaufen der Segmente bis zur Endmarke. Die Details nennen Format und Größe in Pixeln, und **… sichern unter…** im Kontextmenü der Zeile schlägt eine `.jpg`-Datei vor, die sich in jedem Bildbetrachter öffnen lässt. Für UEFITool bleibt eine solche Zeile Padding.
 
 @see term:free-space
 

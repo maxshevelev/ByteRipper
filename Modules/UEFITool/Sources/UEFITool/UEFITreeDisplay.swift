@@ -255,6 +255,7 @@ public enum UEFITreeDisplay {
         case .flashDeviceMapRegion: return L("Flash device map region")
         case .ecImage: return L("EC firmware image")
         case .fitComponent: return L("FIT component")
+        case .picture: return L("Picture")
         }
     }
 }

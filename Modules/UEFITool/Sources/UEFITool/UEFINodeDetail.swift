@@ -616,6 +616,13 @@ public enum UEFIDetail {
                 fields.append(.init("ACM SVN", "\(acmSVN)"))
             }
 
+        // Read again: the node keeps only its name.
+        case .picture:
+            if let picture = JPEGPicture.read(at: node.body.lowerBound, limit: node.body.upperBound, in: reader) {
+                fields.append(.init(L("Format"), "JPEG (\(picture.format))"))
+                fields.append(.init(L("Picture size"), "\(picture.width) × \(picture.height)"))
+            }
+
         case .padding, .freeSpace, .nonUEFIData, .startupApData:
             // No header of their own: the size the common "Total" carries is
             // the whole of what there is to say.
@@ -935,6 +942,7 @@ public enum UEFIDetail {
         case .flashDeviceMapRegion: return L("Flash device map region")
         case .ecImage: return L("EC firmware image")
         case .fitComponent: return L("FIT component")
+        case .picture: return L("Picture")
         }
     }
 

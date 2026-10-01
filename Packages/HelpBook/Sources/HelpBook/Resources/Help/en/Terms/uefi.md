@@ -176,6 +176,8 @@ Erased padding is a dump's filler — usually `FF`. The tree hides it unless you
 
 Padding that **holds data** is always listed: something is there, whether or not the parser knows what.
 
+Where the data turns out to be a JPEG picture — the boot logo, as a rule — it gets a row of its own, named by its format and size in pixels, for example `JPEG 800×480`. The picture is recognised by its opening bytes and its JFIF or Exif segment, and its length is found by reading its segments up to the end marker. The details show the format and the size in pixels, and **Save … as…** in the row's context menu offers a `.jpg` file that opens in any image viewer. To UEFITool such a row is still padding.
+
 @see term:free-space
 
 @term flash-device-map

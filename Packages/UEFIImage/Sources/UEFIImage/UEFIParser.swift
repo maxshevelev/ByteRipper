@@ -266,6 +266,8 @@ final class Parser {
             return parseMicrocode(at: offset, limit: range.upperBound)
         case FlashDeviceMap.signature:
             return parseFlashDeviceMap(at: offset, limit: range.upperBound)
+        case JPEGPicture.jfifSignature, JPEGPicture.exifSignature:
+            return parsePicture(at: offset, limit: range.upperBound)
         default:
             return nil
         }
