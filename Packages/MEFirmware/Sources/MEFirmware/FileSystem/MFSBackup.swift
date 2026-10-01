@@ -2,10 +2,11 @@ import Foundation
 
 /// CSE MFS *backup* area decode — a faithful structural port of the two MFSB
 /// branches of upstream `mfs_anl` (MEA.py 7528–7554). A backup area opens with
-/// the "MFSB" signature (`0x4D465342`) where a *normal* MFS region opens with
-/// the page tag; it is found in an FPT partition literally named "MFSB"
-/// (upstream `mfsb_found`, MEA.py 11764) or when a main "MFS" region's first
-/// bytes carry the signature (a hot/corrupt volume). Two header revisions:
+/// the "MFSB" signature (bytes `4D 46 53 42`, `0x4253464D` read little-endian)
+/// where a *normal* MFS region opens with the page tag; it is found in an FPT
+/// partition literally named "MFSB" (upstream `mfsb_found`, MEA.py 11764) or
+/// when a main "MFS" region's first bytes carry the signature (a hot/corrupt
+/// volume). Two header revisions:
 ///
 /// - `.r0` (`MFS_Backup_Header_R0`, MEA.py 1713): a 0x20 header whose Reserved
 ///   bytes [0x8:0x20] are all 0xFF — that check *is* the R0 dispatch. The whole
@@ -30,7 +31,10 @@ import Foundation
 /// decoder is exercised by fixtures — `swift test` is its oracle.
 enum MFSBackupDecoder {
 
-    static let signature: UInt32 = 0x4D46_5342    // "MFSB"
+    /// The bytes "MFSB" read little-endian. Upstream compares the raw bytes
+    /// `b'\x4D\x46\x53\x42'` and its comment spells them `0x4D465342` in
+    /// order — as an integer that would be the bytes "BSFM".
+    static let signature: UInt32 = 0x4253_464D    // "MFSB"
     static let r0HeaderSize = 0x20
     static let r1HeaderSize = 0x24
     static let pageSize = 0x2000                   // MFS page size (alignment)

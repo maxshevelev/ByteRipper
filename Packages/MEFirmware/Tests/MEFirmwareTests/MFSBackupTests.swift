@@ -13,7 +13,10 @@ final class MFSBackupTests: XCTestCase {
 
     // MARK: Fixtures
 
-    private static let signature: UInt32 = 0x4D46_5342      // "MFSB"
+    /// Spelled out, not taken from the decoder's constant: a fixture built from
+    /// the constant under test agrees with it whatever it says, which is how a
+    /// signature reading "BSFM" passed every test here.
+    private static let signature = Data("MFSB".utf8)
     private static let r1HeaderSize = 0x24
     private static let entryHeaderSize = 0x10
 
@@ -76,12 +79,13 @@ final class MFSBackupTests: XCTestCase {
     /// [0:8]+zeroed[8:0xC]+[0xC:0x24], then the 6/9/7 entry offsets/sizes) followed
     /// by the three entry blobs in header order.
     private static func makeR1(data6: Data, data9: Data, data7: Data,
-                               revision: UInt32 = 1) -> Data {
+                               revision: UInt32 = 1,
+                               signature: Data = MFSBackupTests.signature) -> Data {
         let b6 = makeEntry(data6)
         let b9 = makeEntry(data9)
         let b7 = makeEntry(data7)
         var header = Data(repeating: 0, count: r1HeaderSize)
-        header.replaceSubrange(0..<4, with: le32(signature))
+        header.replaceSubrange(0..<4, with: signature)
         header.replaceSubrange(4..<8, with: le32(revision))
         header.replaceSubrange(0x0C..<0x10, with: le32(UInt32(r1HeaderSize)))       // Entry6Offset
         header.replaceSubrange(0x10..<0x14, with: le32(UInt32(b6.count)))          // Entry6Size
@@ -169,9 +173,9 @@ final class MFSBackupTests: XCTestCase {
 
     /// An `.r0` backup area: 0x20 header (signature, CRC-32 IV-0 raw over the
     /// body, Reserved all 0xFF) + the body.
-    private static func makeR0(_ body: Data) -> Data {
+    private static func makeR0(_ body: Data, signature: Data = MFSBackupTests.signature) -> Data {
         var area = Data(repeating: 0xFF, count: 0x20)
-        area.replaceSubrange(0..<4, with: le32(signature))
+        area.replaceSubrange(0..<4, with: signature)
         area.replaceSubrange(4..<8, with: le32(crcIV0Raw(body)))
         area.append(body)
         return area
@@ -318,7 +322,7 @@ final class MFSBackupTests: XCTestCase {
         let e9 = Self.makeEntry(Self.fill(0x20))
         let e7Offset: UInt32 = 0xFFFF_FF00
         var header = Data(repeating: 0, count: Self.r1HeaderSize)
-        header.replaceSubrange(0..<4, with: Self.le32(Self.signature))
+        header.replaceSubrange(0..<4, with: Self.signature)
         header.replaceSubrange(4..<8, with: Self.le32(1))
         header.replaceSubrange(0x0C..<0x10, with: Self.le32(UInt32(Self.r1HeaderSize)))
         header.replaceSubrange(0x10..<0x14, with: Self.le32(UInt32(e6.count)))
@@ -345,6 +349,28 @@ final class MFSBackupTests: XCTestCase {
 
     // MARK: Detection
 
+    /// The signature is the four bytes "MFSB" as the area spells them — not
+    /// whatever the decoder's constant says: an area written byte for byte is
+    /// read, one with the bytes swapped is not.
+    func testTheSignatureIsTheBytesMFSB() {
+        let body = Self.compact(Self.makeMFSVolume(Self.makeVolumeChunk()))
+        let r0 = Self.makeR0(body)
+        let r1 = Self.makeR1(data6: Self.fill(0x10), data9: Self.fill(0x20), data7: Self.fill(0x30))
+        XCTAssertEqual(MFSBackupDecoder.parse(in: r0, offset: 0, size: r0.count,
+                                              absoluteOffset: 0)?.format, .r0)
+        XCTAssertEqual(MFSBackupDecoder.parse(in: r1, offset: 0, size: r1.count,
+                                              absoluteOffset: 0)?.format, .r1)
+
+        let swapped = Data("BSFM".utf8)
+        let r0Swapped = Self.makeR0(body, signature: swapped)
+        let r1Swapped = Self.makeR1(data6: Self.fill(0x10), data9: Self.fill(0x20),
+                                    data7: Self.fill(0x30), signature: swapped)
+        XCTAssertNil(MFSBackupDecoder.parse(in: r0Swapped, offset: 0, size: r0Swapped.count,
+                                            absoluteOffset: 0))
+        XCTAssertNil(MFSBackupDecoder.parse(in: r1Swapped, offset: 0, size: r1Swapped.count,
+                                            absoluteOffset: 0))
+    }
+
     func testNonMFSBAreaReturnsNil() {
         // A normal MFS region (page tag) is not a backup.
         let normal = Data([0x87, 0x78, 0x55, 0xAA]) + Data(repeating: 0xFF, count: 0x20)
@@ -367,7 +393,7 @@ final class MFSBackupTests: XCTestCase {
         // R1 signature but only 0x20 bytes — shorter than the 0x24 R1 header:
         // header fields read nil → zeros, no crash.
         var area = Data(repeating: 0x00, count: 0x20)
-        area.replaceSubrange(0..<4, with: Self.le32(Self.signature))
+        area.replaceSubrange(0..<4, with: Self.signature)
         let backup = try XCTUnwrap(MFSBackupDecoder.parse(in: area, offset: 0,
                                                           size: area.count, absoluteOffset: 0))
         XCTAssertEqual(backup.format, .r1)
