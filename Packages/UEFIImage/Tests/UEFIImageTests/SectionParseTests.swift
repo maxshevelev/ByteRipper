@@ -209,7 +209,7 @@ final class SectionParseTests: XCTestCase {
         XCTAssertEqual(node.children[0].body, 0x68..<0x6C)
     }
 
-    /// Volume, file, section, volume again: a real image nests eight or ten
+    /// Volume, file, section, volume again: a real image nests a dozen rows
     /// deep and a corrupt one nests for ever, so every level that can recurse
     /// counts the depth (§11).
     private var nestedImage: [UInt8] {
@@ -230,6 +230,39 @@ final class SectionParseTests: XCTestCase {
         XCTAssertTrue(file.children.isEmpty)
         XCTAssertTrue(parsed.diagnostics.contains { $0.kind == .recursionLimit })
         XCTAssertEqual(parsed.diagnostics.first { $0.kind == .recursionLimit }?.severity, .error)
+    }
+
+    /// `levels` volumes, each the body of a volume-image section in a file of
+    /// the one around it, with a plain file in the innermost.
+    private func volumes(nested levels: Int) -> [UInt8] {
+        var image = TestImage.volume(length: 0x200, files: [TestImage.file(body: [1, 2, 3, 4])])
+        for _ in 1..<levels {
+            image = TestImage.volume(
+                length: UInt64(image.count + 0x200),
+                files: [TestImage.sectionedFile(sections: [
+                    TestImage.section(type: Section.firmwareVolumeImage, body: image)
+                ])]
+            )
+        }
+        return image
+    }
+
+    /// A Dell XPS image nests its DXE drivers twelve rows deep — volumes in
+    /// compressed sections in volumes — and a volume costs the parser about
+    /// three levels. Seven volumes deep is past what a limit of 16 allowed;
+    /// the default reads them whole.
+    func testTheDefaultLimitReadsSevenNestedVolumes() {
+        let parsed = UEFIParser.parse(volumes(nested: 7))
+        XCTAssertFalse(parsed.diagnostics.contains { $0.kind == .recursionLimit })
+
+        var node = parsed.roots[0]
+        var depth = 1
+        while let inner = node.children.first?.children.first?.children.first, inner.kind == .volume {
+            node = inner
+            depth += 1
+        }
+        XCTAssertEqual(depth, 7)
+        XCTAssertEqual(node.children.first?.kind, .file)
     }
 
     func testANestedVolumeStopsAtTheDepthLimit() {

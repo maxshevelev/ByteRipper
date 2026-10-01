@@ -12,8 +12,10 @@ import Foundation
 /// the ones with something already wrong in them (§11).
 public enum UEFIParser {
     public struct Limits: Sendable {
-        /// Volume, file, section, volume again — real images nest eight or ten
-        /// deep, and a corrupt one nests forever (§11).
+        /// Volume, file, section, volume again — real images nest a dozen rows
+        /// deep, and a corrupt one nests forever (§11). The count is the
+        /// parser's own recursion, which a nested volume costs about three
+        /// of: a Dell XPS image needs more than 16, and 32 leaves room.
         public var maxDepth: Int
         /// The most a compressed section may decompress to. The size comes
         /// from an untrusted header (`COMPRESSED_SECTIONS.md` §3.1): a DXE
@@ -21,7 +23,7 @@ public enum UEFIParser {
         /// is reported and kept whole rather than allocated.
         public var maxDecompressedSize: UInt64
 
-        public init(maxDepth: Int = 16, maxDecompressedSize: UInt64 = 128 * 1024 * 1024) {
+        public init(maxDepth: Int = 32, maxDecompressedSize: UInt64 = 128 * 1024 * 1024) {
             self.maxDepth = maxDepth
             self.maxDecompressedSize = maxDecompressedSize
         }

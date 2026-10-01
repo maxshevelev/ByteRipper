@@ -1163,7 +1163,13 @@ of the tree — is in `BOOT_GUARD_PROTECTED_RANGES.md`.
 ## 11. Practical notes
 
 **Limit the recursion depth.** Volume → file → section → volume → … Real images
-nest 8 to 10 deep, but a corrupt one can recurse for ever. Set a hard limit.
+nest about a dozen rows deep, but a corrupt one can recurse for ever. Set a hard
+limit. The limit here (`UEFIParser.Limits.maxDepth`) counts the parser's own
+recursion, which a nested volume costs about three of — the volume, its files,
+the section holding the next one. A Dell XPS 13 9315 image keeps DXE drivers
+inside a volume inside a compressed section inside a volume inside a GUID-defined
+section: twelve rows, past the 16 the limit once was, which cut eight branches
+off with a false "nesting is too deep". It is 32.
 
 **Bounds-check at every step.** Every size field is read from untrusted data.
 Before any `mid(offset, size)`, check `offset + size <= buffer.size()` allowing
