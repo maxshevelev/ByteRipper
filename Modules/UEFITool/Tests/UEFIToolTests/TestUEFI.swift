@@ -404,6 +404,30 @@ enum TestUEFI {
         return Built(bytes: bytes, node: node, image: image(node, totalSize: UInt64(size)))
     }
 
+    /// A flash device map region of the BIOS Version Data Table type, holding
+    /// a `$BVDT$` table: the three strings at their places and a `$RDATE`.
+    static func bvdtRegion() -> Built {
+        func field(_ text: String, length: Int) -> [UInt8] {
+            let bytes = [UInt8(ascii: "$")] + Array(text.utf8)
+            return bytes + [UInt8](repeating: 0, count: length - bytes.count)
+        }
+        var bytes = Array("$BVDT$".utf8) + [0x00, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00]
+        bytes += field("JKCN31WW", length: 0x19)
+        bytes += field("S370-IAU", length: 0x1A)
+        bytes += field("05.44.02", length: 0x26)
+        bytes += Array("$RDATE".utf8) + [0x22, 0x07, 0x21] + Array("$ENDOFBVDT".utf8)
+        bytes += [UInt8](repeating: 0xFF, count: 0x1000 - bytes.count)
+        let node = UEFINode(
+            kind: .flashDeviceMapRegion,
+            name: "BIOS Version Data Table",
+            guid: FlashDeviceMap.biosVersionDataTable,
+            header: 0..<0,
+            body: 0..<0x1000,
+            isFixed: true
+        )
+        return Built(bytes: bytes, node: node, image: image(node, totalSize: 0x1000))
+    }
+
     /// An FTW working block's 28-byte header: the signature GUID, the header
     /// CRC32, the state, and the 32-bit write-queue size (§9).
     static func nvramFtwStore(crc: UInt32 = 0x1234_5678, state: UInt8 = 0x01) -> Built {

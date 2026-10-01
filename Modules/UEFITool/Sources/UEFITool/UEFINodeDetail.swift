@@ -541,9 +541,19 @@ public enum UEFIDetail {
         case .fdcStore, .cmdbStore, .sysFEntry:
             break
 
-        // A map region has no header either: the map says where it is and
-        // what type it is, and the type is the common "GUID" field.
-        case .padding, .freeSpace, .nonUEFIData, .startupApData, .flashDeviceMapRegion:
+        // A map region has no header: the map says where it is and what type
+        // it is, and the type is the common "GUID" field. What the region
+        // holds is read where its type is understood.
+        case .flashDeviceMapRegion:
+            if node.guid == FlashDeviceMap.biosVersionDataTable,
+               let table = InsydeBVDT.read(node.body, in: reader) {
+                if let version = table.biosVersion { fields.append(.init("BIOS version", version)) }
+                if let product = table.productName { fields.append(.init("Product name", product)) }
+                if let kernel = table.kernelVersion { fields.append(.init("Kernel version", kernel)) }
+                if let date = table.releaseDate { fields.append(.init("Release date", date)) }
+            }
+
+        case .padding, .freeSpace, .nonUEFIData, .startupApData:
             // No header of their own: the size the common "Total" carries is
             // the whole of what there is to say.
             break

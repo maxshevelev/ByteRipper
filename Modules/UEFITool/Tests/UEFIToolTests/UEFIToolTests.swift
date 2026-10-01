@@ -508,6 +508,18 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Checksum"), Checksums.text(stored, valid: true))
     }
 
+    /// The version table's region shows what the table states.
+    func testABVDTRegionShowsTheVersionsTheTableStates() {
+        let built = TestUEFI.bvdtRegion()
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+
+        XCTAssertEqual(field(detail, "Kind"), "Flash device map region")
+        XCTAssertEqual(field(detail, "BIOS version"), "JKCN31WW")
+        XCTAssertEqual(field(detail, "Product name"), "S370-IAU")
+        XCTAssertEqual(field(detail, "Kernel version"), "05.44.02")
+        XCTAssertEqual(field(detail, "Release date"), "2022-07-21")
+    }
+
     /// A checksum that does not match says what it should be.
     func testAnNvarEntryWithAWrongChecksumSaysWhatItShouldBe() {
         let built = TestUEFI.nvarEntry(next: 0xFF_FFFF, wrongBy: 1)

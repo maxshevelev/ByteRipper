@@ -26,6 +26,8 @@ public enum FlashDeviceMap {
     /// `INSYDE_FLASH_MAP_REGION_VAR_DEFAULT_GUID`: a range of `$VSS` stores
     /// holding the firmware's default variables, outside every volume.
     public static let variableDefaults = KnownGUIDs.guid("D9DDACA2-0816-48F3-ADED-6B71656B248A")
+    /// `INSYDE_FLASH_MAP_REGION_BVDT_GUID`: the `$BVDT$` table (`InsydeBVDT`).
+    public static let biosVersionDataTable = KnownGUIDs.guid("32415DFC-D106-48C7-9EB5-806C114DD107")
     /// `INSYDE_FLASH_MAP_REGION_EC_GUID`: the embedded controller's firmware.
     public static let ecFirmware = KnownGUIDs.guid("A73EF3BF-33CC-43A9-B39C-A912C7489A57")
 

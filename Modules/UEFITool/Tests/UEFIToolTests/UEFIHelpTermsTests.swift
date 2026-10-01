@@ -71,6 +71,7 @@ final class UEFIHelpTermsTests: XCTestCase {
         }
         XCTAssertEqual(UEFIHelpTerms.term(for: region(FlashDeviceMap.ecFirmware)), HelpTermID("ec-firmware"))
         XCTAssertEqual(UEFIHelpTerms.term(for: region(FlashDeviceMap.variableDefaults)), HelpTermID("vss"))
+        XCTAssertEqual(UEFIHelpTerms.term(for: region(FlashDeviceMap.biosVersionDataTable)), HelpTermID("bvdt"))
     }
 
     /// An NVAR entry has a page of its own: what a reader asks of it is which

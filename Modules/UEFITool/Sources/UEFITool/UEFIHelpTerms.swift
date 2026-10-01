@@ -56,11 +56,12 @@ public enum UEFIHelpTerms {
     }
 
     /// A map region whose type has a page of its own goes there — the EC
-    /// firmware, the default variables — and the rest to the page about the
-    /// map, which says what its regions are.
+    /// firmware, the version table, the default variables — and the rest to
+    /// the page about the map, which says what its regions are.
     private static func mapRegion(_ type: EFIGUID?) -> HelpTermID {
         switch type {
         case FlashDeviceMap.ecFirmware: return HelpTermID("ec-firmware")
+        case FlashDeviceMap.biosVersionDataTable: return HelpTermID("bvdt")
         case FlashDeviceMap.variableDefaults: return HelpTermID("vss")
         default: return HelpTermID("flash-device-map")
         }

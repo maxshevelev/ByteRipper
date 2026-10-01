@@ -1038,6 +1038,25 @@ names the FDC store, already read inside the NVRAM volume, and has nothing to
 add. The word at offset 10 of these stores' headers is `0` or `1`, store by
 store, and what it means is not known. Every other region is a leaf.
 
+A region of type `BVDT` (`32415DFC-…`) holds Insyde's **BIOS Version Data
+Table**, which the details panel reads (`InsydeBVDT.swift`). No specification
+is published; the layout is what the five Insyde dumps at hand agree on:
+
+| Offset | Content |
+|---|---|
+| `0x00` | `$BVDT$` |
+| `0x06` | `00 00 00 24 00 00 00` on every dump; not known |
+| `0x0D` | `$`, then the BIOS version, NUL-padded to `0x26` (`J2CN57WW`) |
+| `0x26` | `$`, then the product name, NUL-padded to `0x40` (`Legion 570 Series Intel`) |
+| `0x40` | `$`, then the InsydeH2O kernel version, NUL-padded to `0x66` (`05.43.44`) |
+| `0x66` | erased up to `0x12F` |
+| `0x12F` | `$`-tagged records — `$BME$`, `$_MSC_VER=`, `$RDATE`, `$ESRT`, `$QUIRK` — ending with `$ENDOFBVDT` |
+
+Only `$RDATE` among the records is read: three BCD bytes, year (`20YY`),
+month, day. That it is the release date is an inference — on every dump it fits
+the BIOS version — and the help says so. A string whose `$` is missing, or that
+holds no printable text, is not shown.
+
 The Insyde Flash Device Map deserves a mention of its own, since it lays out the
 whole image:
 
