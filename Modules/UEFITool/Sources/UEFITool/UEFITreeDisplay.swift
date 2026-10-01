@@ -172,14 +172,22 @@ public enum UEFITreeDisplay {
         return UEFITopSwap.name(base, for: node, in: image)
     }
 
+    private static func kibibytes(_ length: UInt64) -> UInt64 {
+        (length + 0x3FF) / 0x400
+    }
+
     private static func baseName(for node: UEFINode, catalogue: GuidsCatalogue) -> String {
         // An EC image is named by what it carries and how large it is, in
         // KiB — the bench sizes EC firmware by it (128, 192, 256) — and a copy
         // of an earlier one in the same block says so.
         if node.kind == .ecImage {
-            let kib = (UInt64(node.range.count) + 0x3FF) / 0x400
-            let sized = L("%1$@, %2$@ KB", node.name, kib)
+            let sized = L("%1$@, %2$@ KB", node.name, kibibytes(UInt64(node.range.count)))
             return node.subtype == ECImage.copySubtype ? L("%1$@ (copy)", sized) : sized
+        }
+        // A block named after the one image it holds gives that image's size
+        // inside the parentheses: "EC Firmware (ITE EC-V13.6, 128 KB)".
+        if let length = node.namedImageLength, node.name.hasSuffix(")") {
+            return L("%1$@, %2$@ KB", String(node.name.dropLast()), kibibytes(length)) + ")"
         }
         // A pad file (`EFI_FV_FILETYPE_FFS_PAD`) has a GUID only because every
         // file header does — all ones, as a rule — and it names nothing.

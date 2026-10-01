@@ -152,6 +152,10 @@ final class UEFITreeDisplayTests: XCTestCase {
         var ec = region
         ec.name = "EC Firmware (ITE8380-EC-V1.43)"
         XCTAssertEqual(UEFITreeDisplay.name(for: ec, catalogue: named), "EC Firmware (ITE8380-EC-V1.43)")
+
+        // With the image's length, its size in KiB goes beside it.
+        ec.namedImageLength = 0x30000
+        XCTAssertEqual(UEFITreeDisplay.name(for: ec, catalogue: named), "EC Firmware (ITE8380-EC-V1.43, 192 KB)")
     }
 
     /// A pad file is named by what its body turned out to hold, the way

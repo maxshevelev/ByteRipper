@@ -76,6 +76,10 @@ public struct UEFINode: Identifiable, Hashable, Sendable {
     /// each and no recursion at all). Meaningless on a node that is not
     /// `isExpandable`.
     public var childDepth: Int = 0
+    /// For a block named after the one EC image at its start (`ECImage`):
+    /// how long that image is, which the panel puts in the name beside it.
+    /// Nil everywhere else.
+    public var namedImageLength: UInt64?
 
     public var children: [UEFINode]
 

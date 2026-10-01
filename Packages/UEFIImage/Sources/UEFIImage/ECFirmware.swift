@@ -134,9 +134,11 @@ extension Parser {
         if node.kind == .padding, first.start != node.body.lowerBound { return nil }
         var read = node
         let base = node.kind == .padding ? ECImage.paddingName : node.name
-        // One image at the start: the block is that image, and says which.
+        // One image at the start: the block is that image, and says which
+        // and how long it is, measured as a row's would be.
         guard images.count > 1 || first.start != node.body.lowerBound else {
             read.name = "\(base) (\(first.name))"
+            read.namedImageLength = min(roundedUp(max(first.written, 1)), UInt64(node.body.count))
             return read
         }
         // Several: each row names its own, and the block names none of them.

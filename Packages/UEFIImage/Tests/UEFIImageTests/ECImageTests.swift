@@ -90,11 +90,20 @@ final class ECImageTests: XCTestCase {
     }
 
     /// One image at the block's start is the common case: the block is
-    /// named by it and gets no rows.
+    /// named by it, keeps its length as a row would, and gets no rows.
     func testASingleImageAtTheStartAddsNoRows() {
-        let region = ecRegion(Self.block(0x4000, [(0x0000, Self.microchip(length: 0x800))]))
+        let region = ecRegion(Self.block(0x4000, [(0x0000, Self.microchip(length: 0x1800))]))
         XCTAssertEqual(region.name, "EC region (Microchip MEC image)")
+        XCTAssertEqual(region.namedImageLength, 0x2000)
         XCTAssertTrue(region.children.isEmpty)
+    }
+
+    /// Blocks that name no single image carry no length for one.
+    func testOnlyABlockNamedAfterOneImageKeepsItsLength() {
+        let several = ecRegion(Self.block(0x4000, [(0x0000, Self.microchip(length: 0x800)),
+                                                   (0x2000, Self.microchip(length: 0x800))]))
+        XCTAssertNil(several.namedImageLength)
+        XCTAssertTrue(several.children.allSatisfy { $0.namedImageLength == nil })
     }
 
     /// One image further in gets a row, so the bytes before it are seen.

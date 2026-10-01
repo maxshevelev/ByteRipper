@@ -1077,7 +1077,10 @@ Three places are looked at: a stretch of non-empty padding the raw-area scan
 left, an EC Firmware region of the Insyde map, and the descriptor's EC region,
 read when the descriptor is (a look at each 4 KiB boundary, not a scan). A
 block holding one image, at its start, is named after it — `EC firmware (…)`,
-`EC Firmware (…)`, `EC region (…)`; padding only when the image opens it. When
+`EC Firmware (…)`, `EC region (…)`; padding only when the image opens it. The
+node keeps that image's length, measured as a row's would be, in
+`namedImageLength`, and the panel puts its size in KiB beside the image's name:
+`EC Firmware (ITE EC-V13.6, 96 KB)` in `CSME 12`. When
 the block holds more than that one image at its start, each image becomes an
 `ecImage` node named after itself, classified as UEFITool's padding like the
 map regions, and what lies between them stays padding; the block then names
