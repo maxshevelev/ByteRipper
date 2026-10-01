@@ -80,7 +80,8 @@ final class OpenRecentMenuTests: XCTestCase {
         RecentFilesStore.record(b)
         populator.populate(menu)
 
-        XCTAssertEqual(menu.items.map(\.title), [b.lastPathComponent, a.lastPathComponent, "Clear Menu"])
+        XCTAssertEqual(menu.items.map(\.title), [b.lastPathComponent, "Compare with “\(b.lastPathComponent)”",
+                        a.lastPathComponent, "Compare with “\(a.lastPathComponent)”", "Clear Menu"])
 
         let rowA = try row(a.lastPathComponent)
         let rowB = try row(b.lastPathComponent)

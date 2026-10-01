@@ -1,4 +1,4 @@
-@source-sha 330d44a48f6eccc20a9f9a0c4abb902cdaae89ce6f699f6a9128d803c4e54fbb
+@source-sha c054981d0d04936bb143e8e62fdcf827ee09f97584988b250f293fa0a307b5df
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -177,9 +177,26 @@ Gelöschtes Padding ist die Füllmasse eines Dumps — meist `FF`. Der Baum blen
 
 Padding, das **Daten enthält**, wird immer aufgeführt: da liegt etwas, ob der Parser es versteht oder nicht.
 
-Erweisen sich diese Daten als JPEG-Bild — in der Regel das Boot-Logo —, erhält es eine eigene Zeile, benannt nach Format und Größe in Pixeln, etwa `JPEG 800×480`. Erkannt wird das Bild an seinen Anfangsbytes und seinem JFIF- oder Exif-Segment; seine Länge ergibt sich aus dem Durchlaufen der Segmente bis zur Endmarke. Die Details nennen Format und Größe in Pixeln, und **… sichern unter…** im Kontextmenü der Zeile schlägt eine `.jpg`-Datei vor, die sich in jedem Bildbetrachter öffnen lässt. Für UEFITool bleibt eine solche Zeile Padding.
+Erweisen sich diese Daten als Bild — etwa als JPEG-Boot-Logo —, erhält es eine eigene Zeile; siehe [[term:picture|Bild]]. Für UEFITool bleibt eine solche Zeile Padding.
 
 @see term:free-space
+
+@term picture
+@name Bild
+@short Ein Logo, ein Symbol oder ein Startbildschirm, den die Firmware als gewöhnliche Bilddatei ablegt: JPEG, PNG, GIF oder BMP.
+
+Die meisten Bilder einer Firmware bilden den Datenteil einer Raw-[[term:section|Section]]: das Boot-Logo, der Startbildschirm des Herstellers, die Symbole des Setup-Bildschirms, häufig innerhalb eines komprimierten Volumes. Manche Hersteller legen das Boot-Logo außerhalb aller Volumes im [[term:padding|Padding]] ab. Das [[topic:tool-uefi|UEFI-Werkzeug]] erkennt alle vier Formate an beiden Stellen und zeigt jedes Bild als eigene Zeile, benannt nach Format und Größe in Pixeln, etwa `BMP 300×300` oder `JPEG 800×480`.
+
+Ein Bild wird an seinen Anfangsbytes erkannt und nur dann übernommen, wenn sich seine Struktur bis zum Ende lesen lässt: bei JPEG die Segmente bis zur Endmarke, bei PNG die Chunks bis `IEND`, bei GIF die Blöcke bis zum Abschlussbyte, bei BMP der Kopf samt der darin angegebenen Größe. Daraus ergibt sich zugleich die Länge, denn keines der vier Formate gibt sie an einer einzigen Stelle an.
+
+Die Details nennen das Format — mit `JFIF` oder `Exif`, der GIF-Version oder der Farbtiefe eines BMP — sowie die Größe in Pixeln und zeigen darunter das Bild selbst. **… sichern unter…** schlägt eine Datei mit der Endung des Formats vor, die jeder Bildbetrachter öffnet.
+
+! Gibt der Kopf eines BMP mehr Bytes an, als seine Section enthält, wird das Bild bis zum Ende der Section gezeigt, und die Details melden die angegebene Größe als Fehler: Die Zeilen jenseits des Endes fehlen im Abbild. Ein solches Logo fand sich in einem Dell-Dump.
+
+Für UEFITool ist eine Bildzeile Padding, und die Spalte „Typ“ weist sie so aus.
+
+@see term:section
+@see term:padding
 
 @term flash-device-map
 @name Insyde Flash Device Map

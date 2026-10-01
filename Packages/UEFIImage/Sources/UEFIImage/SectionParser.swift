@@ -282,7 +282,11 @@ extension Parser {
                 let isDefaults = fileGuid == NvramGuids.nvramNvarExternalDefaultsFileGuid
                 children = parseNvarStore(
                     body, emptyByte: emptyByte, probe: !isDefaults, depth: depth + 1
-                ) ?? []
+                )
+                    // Most of a firmware's pictures — the logo, the setup
+                    // screen's icons — are a raw section's whole body.
+                    ?? pictureBody(body, emptyByte: emptyByte)
+                    ?? []
             } else if type == Section.firmwareVolumeImage {
                 // A volume inside a section, and files inside that: the point at
                 // which this format starts over one level down (§6.4).

@@ -266,7 +266,11 @@ final class Parser {
             return parseMicrocode(at: offset, limit: range.upperBound)
         case FlashDeviceMap.signature:
             return parseFlashDeviceMap(at: offset, limit: range.upperBound)
-        case JPEGPicture.jfifSignature, JPEGPicture.exifSignature:
+        case Picture.jfifSignature, Picture.exifSignature, Picture.pngSignature, Picture.gifSignature:
+            return parsePicture(at: offset, limit: range.upperBound)
+        // A BMP announces itself in two bytes, and its header has to check
+        // out field by field before it is one.
+        case _ where UInt16(truncatingIfNeeded: dword) == Picture.bmpSignature:
             return parsePicture(at: offset, limit: range.upperBound)
         default:
             return nil

@@ -626,9 +626,17 @@ public enum UEFIDetail {
 
         // Read again: the node keeps only its name.
         case .picture:
-            if let picture = JPEGPicture.read(at: node.body.lowerBound, limit: node.body.upperBound, in: reader) {
-                fields.append(.init(L("Format"), "JPEG (\(picture.format))"))
+            if let picture = Picture.read(at: node.body.lowerBound, limit: node.body.upperBound, in: reader,
+                                          allowingTruncation: true) {
+                fields.append(.init(L("Format"), picture.variant.map { "\(picture.format.name) (\($0))" }
+                                    ?? picture.format.name))
                 fields.append(.init(L("Picture size"), "\(picture.width) × \(picture.height)"))
+                // A BMP whose header asks for more than its section holds:
+                // the rows past the end are missing from the image.
+                if let declared = picture.declaredLength {
+                    fields.append(.init(L("Declared size"), L("%1$@ — the section ends earlier", sizeText(declared)),
+                                        isProblem: true))
+                }
             }
 
         case .padding, .freeSpace, .nonUEFIData, .startupApData:

@@ -41,10 +41,10 @@ public enum HelpText {
     /// The text sizes the help is drawn at. Not the dump's font and not the
     /// panel's: help is prose, and prose is read at the system's reading size.
     public enum Size {
-        public static let title: CGFloat = 20
-        public static let heading: CGFloat = 14
-        public static let body: CGFloat = 13
-        public static let caption: CGFloat = 11
+        public static let title: CGFloat = 28
+        public static let heading: CGFloat = 16
+        public static let body: CGFloat = 16
+        public static let caption: CGFloat = 13
     }
 
     // MARK: - Rendering
@@ -123,7 +123,7 @@ public enum HelpText {
     private static func summary(_ words: String) -> NSAttributedString {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = 12
-        style.lineSpacing = 2
+        style.lineSpacing = 4
         return NSAttributedString(string: words + "\n", attributes: [
             .font: NSFont.systemFont(ofSize: Size.heading),
             .foregroundColor: NSColor.secondaryLabelColor,
@@ -145,7 +145,7 @@ public enum HelpText {
     private static func paragraph(_ spans: [HelpSpan]) -> NSAttributedString {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = 8
-        style.lineSpacing = 2
+        style.lineSpacing = 4
         return line(spans, style: style)
     }
 
@@ -155,7 +155,7 @@ public enum HelpText {
         let indent: CGFloat = 20
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = 4
-        style.lineSpacing = 2
+        style.lineSpacing = 4
         style.headIndent = indent
         style.firstLineHeadIndent = 6
         style.tabStops = [NSTextTab(textAlignment: .left, location: indent)]
@@ -174,7 +174,7 @@ public enum HelpText {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacingBefore = 6
         style.paragraphSpacing = 10
-        style.lineSpacing = 2
+        style.lineSpacing = 4
         style.headIndent = 18
         style.firstLineHeadIndent = 0
         style.tabStops = [NSTextTab(textAlignment: .left, location: 18)]

@@ -2962,6 +2962,10 @@ final class MainViewController: NSViewController {
     // MARK: - File > Open (§4.1)
 
     @objc func presentOpenPanel() {
+        presentOpenPanel(placement: .activePane)
+    }
+
+    private func presentOpenPanel(placement: OpenPanePlacement) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = true
         panel.canChooseFiles = true
@@ -2969,8 +2973,15 @@ final class MainViewController: NSViewController {
         panel.treatsFilePackagesAsDirectories = false
         panel.begin { [weak self] response in
             guard response == .OK, let self else { return }
-            self.openFiles(panel.urls)
+            self.openFiles(panel.urls, placement: placement)
         }
+    }
+
+    /// File ▸ Compare with… (⌥⌘O): the same panel, but the file goes into the
+    /// other pane — the one the active pane is compared with.
+    // help: menu.file.compare-with
+    @objc func presentCompareWithPanel() {
+        presentOpenPanel(placement: .otherPane)
     }
 
     /// File ▸ Open Recent ▸ «file»: re-opens the row's file through the normal
@@ -2984,6 +2995,10 @@ final class MainViewController: NSViewController {
     /// `openIntoPane`), so this only matters for a list that predates the
     /// pairing, and a failure there is the ordinary open error.
     @objc func openRecentFile(_ sender: NSMenuItem) {
+        openRecentFile(sender, placement: .activePane)
+    }
+
+    private func openRecentFile(_ sender: NSMenuItem, placement: OpenPanePlacement) {
         guard let path = sender.representedObject as? String else { return }
         // Validation already greys a row whose file is gone; this is the
         // second gate for the file that vanished between the menu drawing and
@@ -2995,7 +3010,13 @@ final class MainViewController: NSViewController {
         }
         let url = SandboxBookmarkStore.shared.resolveAndStartAccess(path: path)
             ?? URL(fileURLWithPath: path)
-        openFiles([url])
+        openFiles([url], placement: placement)
+    }
+
+    /// File ▸ Open Recent ▸ «file» with ⌥ held (the row's alternate): the
+    /// file goes into the other pane, as Compare with… does.
+    @objc func openRecentFileToCompare(_ sender: NSMenuItem) {
+        openRecentFile(sender, placement: .otherPane)
     }
 
     /// File ▸ Open Recent ▸ **Clear Menu**: wipes the list. No confirmation —
@@ -3011,19 +3032,20 @@ final class MainViewController: NSViewController {
     /// Opens the given URLs into panes. Internal so the app's open entry points
     /// share one pipeline: the Open panel, drops, and Launch Services
     /// "Open with" (AppDelegate.application(_:open:)) all land here.
-    func openFiles(_ urls: [URL]) {
+    func openFiles(_ urls: [URL], placement: OpenPanePlacement = .fillFree) {
         let files = openableFiles(from: urls)
         guard let first = files.first else { return }
 
         // §4.1 rules 1–3, decided against the pre-open occupancy.
         let pane1WasOpen = windowModel.pane1.isOpen
         let pane2WasOpen = windowModel.pane2.isOpen
-        let plan = OpenPlacement.plan(
-            activePaneIndex: windowModel.activePaneIndex,
-            pane1Open: pane1WasOpen,
-            pane2Open: pane2WasOpen,
-            fileCount: files.count
-        )
+        let decide: (Int, Bool, Bool, Int) -> OpenPlacement.Result
+        switch placement {
+        case .fillFree: decide = OpenPlacement.plan
+        case .activePane: decide = OpenPlacement.planOpen
+        case .otherPane: decide = OpenPlacement.planCompare
+        }
+        let plan = decide(windowModel.activePaneIndex, pane1WasOpen, pane2WasOpen, files.count)
 
         if let target = plan.firstFilePane {
             guard openIntoPane(index: target, url: first) else { return }
@@ -3033,7 +3055,9 @@ final class MainViewController: NSViewController {
         }
 
         // Active pane follows the rule that decided placement.
-        if !pane1WasOpen {
+        if placement != .fillFree, let target = plan.firstFilePane {
+            windowModel.setActivePane(target)
+        } else if !pane1WasOpen {
             windowModel.setActivePane(0)
         } else if !pane2WasOpen {
             windowModel.setActivePane(1)
@@ -7399,6 +7423,12 @@ extension MainViewController: NSMenuItemValidation {
             // greyed rather than clicked-into-an-alert.
             return (menuItem.representedObject as? String)
                 .map(FileManager.default.fileExists(atPath:)) ?? false
+        case #selector(openRecentFileToCompare(_:)):
+            // Comparing needs a file to compare with.
+            return activePane.isOpen && ((menuItem.representedObject as? String)
+                .map(FileManager.default.fileExists(atPath:)) ?? false)
+        case #selector(presentCompareWithPanel):
+            return activePane.isOpen
         case #selector(clearRecentFiles(_:)):
             // The delegate builds the item only while the list is non-empty, so
             // validation just agrees with it — and if the list emptied between

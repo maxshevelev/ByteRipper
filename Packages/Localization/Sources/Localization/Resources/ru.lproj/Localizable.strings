@@ -71,6 +71,7 @@
 "%1$@ — no results." = "%1$@ — совпадений не найдено.";
 "%1$@ — the library is read-only until it is answered" = "%1$@ — библиотека только для чтения, пока нет ответа";
 "%1$@ — the library is read-only until they are answered" = "%1$@ — библиотека только для чтения, пока нет ответов";
+"%1$@ — the section ends earlier" = "%1$@ — секция заканчивается раньше";
 "%1$@%2$@ could not be checked: %3$@ is not computed here" = "%1$@%2$@ проверить не удалось: %3$@ здесь не вычисляется";
 "%1$@%2$@ does not match its hash" = "%1$@%2$@ не совпадает со своим хешем";
 "%1$@, %2$@ KB" = "%1$@, %2$@ КБ";
@@ -142,6 +143,7 @@
 "Copied at %1$@–%2$@; %3$@" = "Копия расположена по адресу %1$@–%2$@; %3$@";
 "Copy of" = "Копия образа по адресу";
 "Copy of %1$@–%2$@; %3$@" = "Копия блока %1$@–%2$@; %3$@";
+"Declared size" = "Размер по заголовку";
 "EC firmware image" = "Образ прошивки EC";
 "FIT component" = "Компонент FIT";
 "Format" = "Формат";
@@ -587,6 +589,8 @@
 "Open File" = "Открыть файл";
 "Open Node" = "Открыть узел";
 "Open Node Body" = "Открыть тело узла";
+"Compare with “%1$@”" = "Сравнить с «%1$@»";
+"Compare with…" = "Сравнить с…";
 "Open Recent" = "Недавние документы";
 "Open With ByteRipper" = "Открывать в ByteRipper";
 "Open Zone" = "Открыть зону";

@@ -439,8 +439,9 @@ rebuilt later.
 Raw areas are also searched for NVRAM stores, AMD microcode and BPDT/CPD (see
 §7, §8).
 
-Beyond the reference, the scan also takes `FF D8 FF E0` and `FF D8 FF E1` as
-the start of a JPEG picture (§9).
+Beyond the reference, the scan also takes the start of a picture — `FF D8 FF
+E0` or `E1` (JPEG), `89 50 4E 47` (PNG), `GIF8` (GIF), and `BM` (BMP) in the
+dword's low half — as a candidate (§9).
 
 ---
 
@@ -1119,20 +1120,45 @@ of each header: the table's rows; the ACM's module subtype, header version,
 chipset ID, BCD date and SVN; a manifest's structure version, revision or KM
 version, SVN, and the Key Manifest's ID.
 
-**A JPEG picture** outside every volume is an element of the raw-area scan
-(`JPEGPicture.swift`): `FF D8 FF`, then an `APP0` segment opening with `JFIF\0`
-or an `APP1` with `Exif\0`. Nothing in a JPEG states its length, so the
-segments are walked — a marker after any fill bytes, standalone markers (`TEM`,
-`RSTn`) stepped over, every other segment by its big-endian length, the coded
-data after a start of scan up to the next marker that is neither `FF 00` nor a
-restart — to the end marker, and the picture ends there; a walk that leaves the
-area, passes 16 MiB or finds no start-of-frame is no picture, and the scan goes
-on. The node is a `picture`, named by format and size in pixels (`JPEG
-800×480`), classified as UEFITool's padding. Of the thirteen dumps at hand only
-the HP ZBook Fury 16 G9 has one: 800×480, `0x194E000`–`0x1976FB0`, in the
-padding after its FFSv3 volume, zeros after it. The other pictures in those
-dumps — BMPs in raw sections, a GIF in a Phoenix variable — are inside
-structures the parser already reads, and are not looked for.
+**Pictures** — JPEG, PNG, GIF and BMP — are read in two places
+(`Picture.swift`): as an element of the raw-area scan, and as the body of a raw
+section the NVAR probe turned down. None of the four states its length in one
+place, so each is read through to its end, and a read that cannot get there is
+no picture:
+
+- **JPEG**: `FF D8 FF`, then an `APP0` opening with `JFIF\0` or an `APP1` with
+  `Exif\0`; the segments walked — a marker after any fill bytes, `TEM` and
+  `RSTn` alone, every other segment by its big-endian length, the coded data
+  after a start of scan up to the next marker that is neither `FF 00` nor a
+  restart — to the end marker. The size is the start-of-frame's.
+- **PNG**: the eight-byte signature and `IHDR` (length 13) first, which gives the
+  size; chunks — big-endian length, type, data, CRC — to `IEND`.
+- **GIF**: `GIF87a` or `GIF89a`, the screen descriptor (the size) and its colour
+  table; extensions and images — an image's descriptor, local table and LZW
+  code size — each followed by sub-blocks ending in a zero, to the trailer `3B`.
+- **BMP**: `BM`, the declared size, both reserved words zero, a DIB header of 12,
+  40, 52, 56, 64, 108 or 124 bytes, one plane, 1–32 bits per pixel, compression
+  0–6, the pixel offset past the headers and inside the size, and — uncompressed
+  — room in the size for every row, padded to four bytes. The declared size is
+  the length.
+
+A side over `0x4000` pixels or a walk past 16 MiB is not a picture. The node is
+a `picture`, its subtype the `Picture.Format`, named by format and size in
+pixels (`BMP 300×300`), classified as UEFITool's padding; in a raw section it
+is the section's child, with padding after it for any bytes the picture does
+not cover. Only in a raw section's body is a BMP taken that declares more than
+the body holds: it is the picture whether or not it is whole, so the node ends
+with the body and the details report the declared size. One Dell logo is such a
+BMP, `0x34` bytes short.
+
+On the thirteen dumps every picture found in a raw section is the section's
+whole body, and the raw-area scan finds one outside a section on one dump only:
+the HP ZBook Fury 16 G9's 800×480 JPEG, `0x194E000`–`0x1976FB0`, in the padding
+after its FFSv3 volume. Counts run from one BMP (`CSME 11`) to 138 pictures
+(`ME 7.bin`, mostly PNG icons in compressed volumes); every one of them decodes
+in AppKit to the size read here. A GIF in a Phoenix variable (`CSME 11`) is
+not looked for: it sits after the variable's name, not at the start of
+anything the parser reads.
 
 **How full a store is** is counted off the nodes the parser already made
 (`NvramStoreFill.swift`), for any node with variable entries among its

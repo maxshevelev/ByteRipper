@@ -1,4 +1,4 @@
-@source-sha 0b538264e756993224883e36748aaacd874a710d96b5dba3cc3ab176f9121ce0
+@source-sha ad462ea419b965b93eedbfdeb1b82fd5d6c49f565688379845f79ceed77c5dfb
 # Dateien öffnen: ein Bereich oder zwei
 
 > Ein Tab hält zwei Dateibereiche. Eine Datei ist schlicht ein Editor; eine zweite Datei fügt den Vergleich hinzu. Bearbeiten geht in beiden Bereichen, so oder so.
@@ -12,7 +12,8 @@ Der zweite Bereich ist optional. Außer dem Vergleich selbst braucht nichts eine
 
 ## Wege, einen Dump zu öffnen
 
-- **Ablage ▸ Öffnen…** (⌘O). Sind beide Bereiche leer, füllen die ersten beiden gewählten Dateien sie; ist einer frei, geht die Datei dorthin; sind beide belegt, ersetzt sie den **aktiven** Bereich. Was darüber hinaus gewählt ist, wird nicht geöffnet.
+- **Ablage ▸ Öffnen…** (⌘O). Die Datei ersetzt den **aktiven** Bereich; einen zweiten Bereich legt der Befehl nicht von selbst an. Nur wenn beide Bereiche leer sind, füllen die ersten beiden gewählten Dateien sie. Was darüber hinaus gewählt ist, wird nicht geöffnet.
+- **Ablage ▸ Vergleichen mit…** (⌥⌘O) öffnet die Datei im anderen Bereich: im freien, sonst im nicht aktiven. So kommt die zweite Datei für den Vergleich hinzu. Bei **Ablage ▸ Benutzte Dokumente** wird die Zeile mit gedrückter ⌥-Taste zum selben Befehl.
 - **Ziehen und Ablegen.** Ziehen Sie eine Datei aufs Fenster; die Ablagebänder zeigen, wo sie landet — diesen Bereich ersetzen, daneben öffnen, in einem neuen Tab öffnen. Zwei Dateien auf einmal: die zweite öffnet im anderen Bereich, sofern dieser frei ist.
 - **Ablage ▸ Benutzte Dokumente** — die Dumps, die Sie zuletzt offen hatten.
 - **Aus dem Finder**, wenn ByteRipper als Programm für die Endung eingetragen ist (siehe [[topic:settings|Einstellungen]]).

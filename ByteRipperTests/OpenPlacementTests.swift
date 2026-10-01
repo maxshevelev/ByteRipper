@@ -74,3 +74,33 @@ final class OpenPlacementTests: XCTestCase {
         ], pane1: true, pane2: true)
     }
 }
+
+/// ⌘O and Open Recent replace the active pane; Compare with… and ⌥-Recent go
+/// to the pane the active one is compared with.
+final class OpenIntoActivePaneTests: XCTestCase {
+    func testOpenReplacesTheActivePaneEvenWhenTheOtherIsFree() {
+        let r = OpenPlacement.planOpen(activePaneIndex: 0, pane1Open: true, pane2Open: false, fileCount: 3)
+        XCTAssertEqual(r.firstFilePane, 0)
+        XCTAssertFalse(r.openSecond)
+        XCTAssertEqual(r.ignoredCount, 2)
+        XCTAssertEqual(OpenPlacement.planOpen(activePaneIndex: 1, pane1Open: true, pane2Open: true,
+                                              fileCount: 1).firstFilePane, 1)
+    }
+
+    func testOpenWithNothingOpenStillFillsBothPanes() {
+        let r = OpenPlacement.planOpen(activePaneIndex: 0, pane1Open: false, pane2Open: false, fileCount: 2)
+        XCTAssertEqual(r.firstFilePane, 0)
+        XCTAssertTrue(r.openSecond)
+    }
+
+    func testCompareGoesToTheOtherPane() {
+        func pane(_ active: Int, _ p1: Bool, _ p2: Bool) -> Int? {
+            OpenPlacement.planCompare(activePaneIndex: active, pane1Open: p1, pane2Open: p2,
+                                      fileCount: 1).firstFilePane
+        }
+        XCTAssertEqual(pane(0, true, false), 1, "the free pane")
+        XCTAssertEqual(pane(1, false, true), 0, "the free pane")
+        XCTAssertEqual(pane(0, true, true), 1, "the one that is not active")
+        XCTAssertEqual(pane(1, true, true), 0, "the one that is not active")
+    }
+}

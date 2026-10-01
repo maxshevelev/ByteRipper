@@ -52,8 +52,7 @@ public enum UEFIHelpTerms {
             case .table, nil: return HelpTermID("fit")
             }
         case .padding: return HelpTermID("padding")
-        // The page about padding says what a picture there is.
-        case .picture: return HelpTermID("padding")
+        case .picture: return HelpTermID("picture")
         case .freeSpace: return HelpTermID("free-space")
         case .nonUEFIData: return HelpTermID("non-uefi-data")
         case .slicData: return HelpTermID("slic")

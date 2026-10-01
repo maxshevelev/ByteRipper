@@ -35,6 +35,17 @@ final class OpenRecentMenuController: NSObject, NSMenuDelegate {
             // exception a label makes.
             item.toolTip = path
             menu.addItem(item)
+            // Held ⌥, the row turns into its Compare with… twin: the file
+            // goes into the other pane.
+            let twin = NSMenuItem(
+                title: L("Compare with “%1$@”", (path as NSString).lastPathComponent),
+                action: #selector(MainViewController.openRecentFileToCompare(_:)),
+                keyEquivalent: "")
+            twin.representedObject = path
+            twin.isAlternate = true
+            twin.keyEquivalentModifierMask = .option
+            twin.toolTip = path
+            menu.addItem(twin)
         }
         if !RecentFilesStore.recent.isEmpty {
             menu.addItem(

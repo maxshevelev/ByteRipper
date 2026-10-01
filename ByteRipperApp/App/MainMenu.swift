@@ -285,6 +285,11 @@ enum MainMenu {
         let openRecent = NSMenuItem(title: L("Open Recent"), action: nil, keyEquivalent: "")
         openRecent.submenu = NSMenu(title: L("Open Recent"))
         fileMenu.addItem(openRecent)
+        // help: menu.file.compare-with
+        let compareWith = fileMenu.addItem(withTitle: L("Compare with…"),
+                                           action: #selector(MainViewController.presentCompareWithPanel),
+                                           keyEquivalent: "o")
+        compareWith.keyEquivalentModifierMask = [.command, .option]
         fileMenu.addItem(.separator())
         // help: menu.file.save
         add(L("Save"), #selector(MainViewController.saveDocument), "s")

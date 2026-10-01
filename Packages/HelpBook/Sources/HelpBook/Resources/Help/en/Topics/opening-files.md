@@ -6,6 +6,7 @@
 @covers menu.file.new-window
 @covers menu.file.new-tab
 @covers menu.file.open
+@covers menu.file.compare-with
 @covers menu.file.close
 @covers menu.file.close-window
 
@@ -18,7 +19,8 @@ The second pane is optional. Nothing needs a second file except the comparison i
 
 ## Ways to open a dump
 
-- **File ▸ Open…** (⌘O). With both panes empty the first two files you pick fill them; with one pane free the file goes there; with both full it replaces the **active** pane. Anything selected beyond that is not opened.
+- **File ▸ Open…** (⌘O). The file replaces the **active** pane; it never adds a second pane by itself. Only with both panes empty do the first two files you pick fill them. Anything selected beyond that is not opened.
+- **File ▸ Compare with…** (⌥⌘O) opens the file in the other pane: the free one, or otherwise the one that is not active. This is how a second file is added for comparison. In **File ▸ Open Recent**, hold ⌥ and the row becomes the same command.
 - **Drag and drop.** Drag a file onto the window and the drop bands show where it will land — replace this pane, open beside it, or open in a new tab. Drop two files at once and the second opens in the other pane, if that pane is free.
 - **File ▸ Open Recent** — the dumps you had open lately.
 - **From Finder**, if ByteRipper is set as the handler for the extension (see [[topic:settings|Settings]]).

@@ -36,6 +36,6 @@ Right-click a node:
 
 A dump holds erased space between its structures. The tree omits it unless **Show Empty Padding** is ticked. Padding that holds data is listed in either case, as is a volume's free space, which reports how much room remains in that volume.
 
-A picture the tool recognises in padding — a JPEG, usually the boot logo — is a row of its own, and selecting it draws the picture under its details: as wide as the list at most and never larger than its own size in pixels. The preview is drawn from the bytes in the dump as they are, by the decoder of macOS rather than the firmware's own, so it shows what is stored, not exactly how the board will draw it. See [[term:padding|Padding]].
+A [[term:picture|picture]] the tool recognises — a JPEG, PNG, GIF or BMP, in padding or as the body of a raw section — is a row of its own, and selecting it draws the picture under its details: as wide as the list at most and never larger than its own size in pixels. The preview is drawn from the bytes in the dump as they are, by the decoder of macOS rather than the firmware's own, so it shows what is stored, not exactly how the board will draw it.
 
 See also: [[topic:tool-fit|FIT Table]], [[term:vss|NVRAM stores]], [[topic:recipe-checksums|Checksums]].
