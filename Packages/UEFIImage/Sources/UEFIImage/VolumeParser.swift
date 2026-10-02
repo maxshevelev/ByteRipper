@@ -209,6 +209,10 @@ extension Parser {
         if header.fileSystem == FV.appleMicrocodeFileSystem {
             return walkMicrocodeVolumeBody(body, emptyByte: header.emptyByte)
         }
+        if header.fileSystem == KnownGUIDs.appleReservedVolume,
+           reader.isFilled(body, with: header.emptyByte) {
+            return [UEFINode(kind: .freeSpace, name: L("Free space"), range: body, isErased: true)]
+        }
         guard let ffsVersion = KnownGUIDs.ffsVersion(ofFileSystem: header.fileSystem) else {
             // A volume we cannot read the inside of still keeps its bytes (§3.4).
             note(.unknownFileSystem(header.fileSystem), at: header.offset + 0x10)

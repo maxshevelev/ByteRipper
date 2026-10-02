@@ -22,6 +22,11 @@ public enum KnownGUIDs {
     public static let ffsV2 = guid("8C8CE578-8A3D-4F1C-9935-896185C32DD3")
     public static let ffsV3 = guid("5473C07A-3DCB-4DCA-BD6F-1E9689E7349A")
 
+    /// A volume Apple's firmware keeps in MacBook images of 2010 and 2011 — 64 KiB
+    /// whose header is the whole of what is written in it. Nothing documents what
+    /// it is for, so it is read as free space while it is erased.
+    public static let appleReservedVolume = guid("E3B980A9-5FE3-48E5-9B92-2798385A9027")
+
     /// Every GUID vendors use for what is, byte for byte, an FFSv2 volume.
     public static let ffsV2FileSystems: Set<EFIGUID> = [
         ffsV2,
@@ -63,6 +68,7 @@ public enum KnownGUIDs {
         guid("04ADEEAD-61FF-4D31-B6BA-64F8BF901F5A"): "Apple immutable FV",
         guid("BD001B8C-6A71-487B-A14F-0C2A2DCF7A5D"): "Apple authentication FV",
         guid("153D2197-29BD-44DC-AC59-887F70E41A6B"): "Apple microcode FV",
+        appleReservedVolume: "Apple reserved FV",
         guid("AD3FFFFF-D28B-44C4-9F13-9EA98A97F9F0"): "Intel FS",
         guid("D6A1CD70-4B33-4994-A6EA-375F2CCC5437"): "Intel FS 2",
         guid("4F494156-AED6-4D64-A537-B8A5557BCEEC"): "Sony FS",

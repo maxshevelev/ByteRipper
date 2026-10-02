@@ -405,6 +405,7 @@ From `FileSystemGuid`:
 | `04ADEEAD-61FF-4D31-B6BA-64F8BF901F5A` | Apple immutable FV (FFSv2) |
 | `BD001B8C-6A71-487B-A14F-0C2A2DCF7A5D` | Apple authentication FV (FFSv2) |
 | `153D2197-29BD-44DC-AC59-887F70E41A6B` | Apple microcode volume, header fixed at `0x100` |
+| `E3B980A9-5FE3-48E5-9B92-2798385A9027` | Apple reserved volume (MacBook 2010/2011): a header, then erased bytes; read as free space while erased, otherwise unknown |
 | `AD3FFFFF-D28B-44C4-9F13-9EA98A97F9F0` | Intel FS (FFSv2) |
 | `D6A1CD70-4B33-4994-A6EA-375F2CCC5437` | Intel FS 2 (FFSv2) |
 | `4F494156-AED6-4D64-A537-B8A5557BCEEC` | Sony FS (FFSv2) |

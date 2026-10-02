@@ -128,6 +128,16 @@ final class VolumeParseTests: XCTestCase {
         XCTAssertEqual(parsed.diagnostics.map(\.kind), [.unknownFileSystem(unknown)])
     }
 
+    /// Apple's reserved volume in a 2010 or 2011 MacBook is a header and erased
+    /// bytes: it is free space, not an unknown file system.
+    func testAnErasedAppleReservedVolumeReadsAsFreeSpace() {
+        let parsed = parse(TestImage.volume(fileSystem: KnownGUIDs.appleReservedVolume, length: 0x400))
+
+        XCTAssertEqual(parsed.roots.map(\.name), ["Apple reserved FV"])
+        XCTAssertEqual(parsed.roots[0].children.map(\.kind), [.freeSpace])
+        XCTAssertTrue(parsed.diagnostics.isEmpty)
+    }
+
     func testARevisionOutsideOneAndTwoIsNotAVolume() {
         let parsed = parse(TestImage.volume(revision: 3, length: 0x400))
 
