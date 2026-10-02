@@ -7585,21 +7585,21 @@ private final class OffsetContextTarget: NSObject {
 enum AlertOutcome {
     case success, problem
 
+    /// The system symbol, tinted: drawn as a mask and filled, so it keeps the
+    /// shape the system draws (the octagon's mark is a hole in it) and the
+    /// colour follows the theme when the alert is drawn.
     var icon: NSImage? {
-        let (symbol, color): (String, NSColor) = self == .success
+        let (name, color): (String, NSColor) = self == .success
             ? ("checkmark.circle", SemanticColors.good)
             : ("exclamationmark.octagon.fill", SemanticColors.bad)
-        // The filled octagon is two layers — the mark, then the shape behind it
-        // — and a palette of one colour paints both alike, which loses the mark.
-        // The mark follows the fill: white on the light theme's deep red, and
-        // near-black on the dark theme's lighter one, where white would wash out.
-        let mark = NSColor(name: nil) { appearance in
-            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 0.12, alpha: 1) : .white
+        guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 48, weight: .regular))
+        else { return nil }
+        return NSImage(size: symbol.size, flipped: false) { rect in
+            symbol.draw(in: rect)
+            color.set()
+            rect.fill(using: .sourceAtop)
+            return true
         }
-        let palette = self == .success ? [color] : [mark, color]
-        let configuration = NSImage.SymbolConfiguration(pointSize: 48, weight: .regular)
-            .applying(.init(paletteColors: palette))
-        return NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
-            .withSymbolConfiguration(configuration)
     }
 }
