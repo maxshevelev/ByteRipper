@@ -11,7 +11,7 @@ Beside the dump there is a **tool panel**: the same image read as the structure 
 
 ## Download
 
-[**ByteRipper 0.8.5**](https://github.com/maxshevelev/ByteRipper/releases/latest) — a universal `.dmg` (Apple silicon and Intel), macOS 14 or later.
+[**ByteRipper 0.9**](https://github.com/maxshevelev/ByteRipper/releases/latest) — a universal `.dmg` (Apple silicon and Intel), macOS 14 or later.
 
 The build is ad-hoc signed and not notarized, so Gatekeeper stops the first launch: right-click the app and choose **Open**, or clear the quarantine flag once.
 
@@ -36,7 +36,7 @@ The workflows the app is shaped around:
 
 Half of what a bench needs to know about a dump is not in the bytes but in the *structure* over them. Which region is this offset in. Whether this volume's checksum still holds after a patch. What microcode the board carries, and whether it is the one the CPU on it wants. Whether the ME region is the firmware that shipped with the board, an update, or something a bad flash left behind. Answered by hand, each of those is counting offsets against a specification with a dump open in one window and a document in another.
 
-The **tool panel** answers them next to the dump. It opens on the left from the **Tools** menu or the toolbar's wrench, one tool at a time, bound to the pane it was opened for — so in a comparison the panel reads *one* of the two files. Its header says which, as a dropdown that also **takes the tool to the other pane**; dragging a pane's header onto the panel does the same thing. The name it shows is the file the panel works on and nothing else, so clicking into the other pane to read it does not make the panel claim the tool has moved. A row picked in a tool takes the dump to the bytes behind it and draws that node's extent in the minimap's margin, so the region under investigation stays visible while you work in it. Everything a tool writes goes through the editor's own undo stack: a fix is an edit like any other, and ⌘Z takes it back.
+The **tool panel** answers them next to the dump. It opens on the left from the **Tools** menu (⌘1 ME Analyzer, ⌘2 FIT Table, ⌘3 UEFI Structure, ⌘0 to close it) or the toolbar's wrench, one tool at a time, bound to the pane it was opened for — so in a comparison the panel reads *one* of the two files. Its header says which, as a dropdown that also **takes the tool to the other pane**; dragging a pane's header onto the panel does the same thing. The name it shows is the file the panel works on and nothing else, so clicking into the other pane to read it does not make the panel claim the tool has moved. A row picked in a tool takes the dump to the bytes behind it and draws that node's extent in the minimap's margin, so the region under investigation stays visible while you work in it. Everything a tool writes goes through the editor's own undo stack: a fix is an edit like any other, and ⌘Z takes it back.
 
 Three tools ship.
 
@@ -50,7 +50,11 @@ The flash image as the tree it actually is: the Intel descriptor and each region
 - **Checksums are checked as the tree is built**, and a wrong one is flagged on the node that carries it — a volume header, an FFS file, an NVRAM record. **Fix Checksum** writes the value the format asks for, as one undoable edit.
 - **Addresses are the ones the CPU sees.** The image's own reset vector anchors the mapping, so a node's `Address` is where that byte is in the processor's address space, not merely its offset in the file.
 - **The ME region is part of the tree.** Opening its node runs the same analysis the ME Analyzer runs and grafts that reading in place — the partitions, their directories, the volumes and the files in them — rather than parsing the region a second way. It is read when the node is opened, with a Loading row while it runs, and a region that cannot be analysed is still the region: the node stays, holding what the descriptor says about it.
-- **Any node opens on its own.** *Open “PEI Core”* takes the whole node, *Open Body of…* its payload, and a compressed section offers **Open Decompressed Body** — decoded when the command is chosen, whether or not the node has been expanded. What opens is a panel over the dump; **Update in Parent** writes it back.
+- **Any node opens on its own.** *Open “PEI Core”* takes the whole node, *Open Body of…* its payload, and a compressed section offers **Open Decompressed Body** — decoded when the command is chosen, whether or not the node has been expanded. What opens is a panel over the dump; **Update in Parent** writes it back. **Save “…” as…** and **Save Body of “…” as…** write the same bytes to a file instead.
+- **Every variable store reads as its variables.** VSS and VSS2, AMI's NVAR, Phoenix EVSA, Dell's DVAR, and Insyde's default variables where its flash map puts them; a store's details say how full it is. The tree lists one row per variable — the copy in force — and its details carry the **history** the store still keeps: every earlier copy, when it was replaced, and which bytes changed. A Dell variable is named by the BIOS Setup option it holds, read out of the firmware's own Setup pages, with its value as Setup words it: `SecureBoot = Not ticked (0x0)`.
+- **What a vendor keeps outside the volumes is named.** The regions Insyde's flash map lays out — the EC firmware, the BIOS version table with the version, product, build date and compiler it records, SMBIOS, MSDM, Lenovo's EEPROM and passwords; the FIT, the Startup ACM and the Boot Guard manifests where they sit in padding; and the boot logos and icons, previewed under their details. EC firmware is named by the chip and version it carries and its size in KB, one row per image in a block.
+- **Top Swap is shown for what it is.** The copy of the boot block one block down is named as the copy, and any node in either block steps to its twin — **Go to Top Swap Copy**, **Go to Original** — so which part of the copy stands for which part of the top block can be seen.
+- **The descriptor says what it lays out.** The chipset generation, the size of each flash chip and where a second one begins, the SPI clocks, the opcodes the chipset will not send, and each region's base and limit — with a dump whose length is not the chips' total marked as such.
 
 ### FIT Table
 
@@ -64,7 +68,7 @@ Editing the dump makes the table read again, and it comes back **where you left 
 
 ### ME Analyzer
 
-What the Intel ME/CSME region in this dump actually is, in the words the field uses: family and version, SKU, chipset and stepping, release and revision, the date it was built, and whether it is a stock image, an update, or one extracted from a board. Firmware stitched inside an image is analysed in its own right and gets its own table.
+What the Intel ME/CSME region in this dump actually is, in the words the field uses — shown as soon as the region is read, with the few values that wait for a database still downloading saying *Loading…* until they are in: family and version, SKU, chipset and stepping, release and revision, the date it was built, and whether it is a stock image, an update, or one extracted from a board. Firmware stitched inside an image is analysed in its own right and gets its own table.
 
 <img width="1238" height="957" alt="Screenshot 2026-09-11 at 06 59 48" src="https://github.com/user-attachments/assets/ab877f72-5520-4392-81b0-138793893835" />
 
@@ -103,7 +107,7 @@ These projects are why a repair shop can work on modern firmware at all. Between
 
 ### Parts of a dump, opened over it
 
-- **A part of a file is not a comparison, so it does not get a tab.** A zone, a node of the structure tree, a decompressed section — everything that used to open beside the dump now opens *over* it: a panel that rises from the bottom of the window and leaves enough of the parent showing to say which file it came out of. It is a surface of its own, with its own header, its own minimap and its own tool panel, so the part can be searched, patched and analysed exactly like a dump.
+- **A part of a file is not a comparison, so it does not get a tab.** A zone, a node of the structure tree, a decompressed section — everything that used to open beside the dump now opens *over* it: a panel that rises from the bottom of the window and leaves enough of the parent showing to say which file it came out of. It is a surface of its own, with one header across it, its own minimap and its own tool panel, so the part can be searched, patched and analysed exactly like a dump.
 - **The dock along the bottom is what you have taken out of this image.** Each folded panel is a pill named after its part; one panel is up at a time, and clicking another pill folds the open one down and raises that one in a single movement. The panel flies out of its own pill and lands back on it, so which pill a panel belongs to is never in doubt.
 - A **⌄ beside the panel's ✕** does the same thing as a button, for the times a gesture is not what you want. **Pull the panel down by its header** to fold it away. Near the top the pull is a *look* at the dump underneath — let go and the panel goes back where it was, unless you flicked it, which is still a way to put it down without carrying it there. Past the halfway line the last movement of the hand is the instruction: nudged up it springs back, nudged down it carries on down, however long you rested before letting go.
 - **The way back is in the header.** The link names the parent and jumps to it, and **Update in Parent** writes the part's bytes back where they came from as one undo step. A link that no longer leads anywhere is drawn as a dead one — a red row, not a button — rather than failing when pressed.
