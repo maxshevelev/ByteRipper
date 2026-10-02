@@ -80,7 +80,7 @@ struct MEAParkedState: ToolSessionState {
     private var readingStatus: MEAReadingStatus?
     /// What the analysis on screen was read without, while the reading with
     /// it is on the way (`MEAPending`).
-    private var pending: MEAPending = .none
+    private var pending: MEAPending = .nothing
     /// The in-flight `FileTable.dat` request, so a re-present does not start a
     /// second one.
     private var fileTableTask: Task<Void, Never>?
@@ -273,7 +273,7 @@ struct MEAParkedState: ToolSessionState {
         efsNames = .none
         configPaths = .none
         analysis = nil
-        pending = .none
+        pending = .nothing
         if forgettingShown {
             roots = []
             focusPath = nil
@@ -348,7 +348,7 @@ struct MEAParkedState: ToolSessionState {
     ///
     /// `pending` is what it was read without; a first reading is shown with it,
     /// and the reading that follows with `.none`.
-    private func present(_ analysis: FirmwareAnalysis, pending: MEAPending = .none) {
+    private func present(_ analysis: FirmwareAnalysis, pending: MEAPending = .nothing) {
         self.analysis = analysis
         self.pending = pending
         roots = MEACurator.present(analysis, mfsNames: mfsNames, efsNames: efsNames,

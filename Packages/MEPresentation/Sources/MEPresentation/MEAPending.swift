@@ -20,6 +20,9 @@ public struct MEAPending: Sendable, Equatable {
     }
 
     /// Everything known: the analysis read every database it wanted, or the
-    /// ones it could not get are not coming.
-    public static let none = MEAPending()
+    /// ones it could not get are not coming. Not called `none`: where the
+    /// value is optional that reads as `Optional.none` — nil, "nothing to
+    /// say" — and a final reading handed `.none` kept the first one's
+    /// "Loading…".
+    public static let nothing = MEAPending()
 }

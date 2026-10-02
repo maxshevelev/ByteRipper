@@ -157,7 +157,7 @@ private struct ChecksumPass: Sendable {
     private var meAnalysis: FirmwareAnalysis?
     /// What the presented analysis was read without, while the full reading
     /// is on the way (`MEAPending`).
-    private var mePending: MEAPending = .none
+    private var mePending: MEAPending = .nothing
     /// The presented ME sub-tree of the last analysis — the rows the ME region
     /// node opens onto. Empty until the analysis has run (or was cached), which
     /// is why the region's row is shut on first paint.
@@ -331,7 +331,7 @@ private struct ChecksumPass: Sendable {
         meRoots = []
         meFocus = nil
         meAnalysis = nil
-        mePending = .none
+        mePending = .nothing
         meMfsNames = .none
         meEfsNames = .none
         meConfigPaths = .none
@@ -428,7 +428,7 @@ private struct ChecksumPass: Sendable {
         // parked selection this bind is restoring.
         meRoots = []
         meAnalysis = nil
-        mePending = .none
+        mePending = .nothing
         meMfsNames = .none
         meEfsNames = .none
         meConfigPaths = .none
@@ -862,7 +862,7 @@ private struct ChecksumPass: Sendable {
         // would fire a moment later and put a row up for an analysis that is
         // already in hand.
         if !ignoringCache, let cached = provider?.cachedMEAnalysis() {
-            presentME(cached, pending: .none)
+            presentME(cached, pending: .nothing)
             controller.onMERegionLoading?(id, false)
             completion()
             return
@@ -918,7 +918,7 @@ private struct ChecksumPass: Sendable {
             case .success(let analysis):
                 self.controller.say("")
                 provider?.setCachedMEAnalysis(analysis, meRegion: meRegion)
-                self.presentME(analysis, pending: .none)
+                self.presentME(analysis, pending: .nothing)
                 // Opened already on the first reading: this only says more.
                 if !opened { completion() }
             case .failure(let error):

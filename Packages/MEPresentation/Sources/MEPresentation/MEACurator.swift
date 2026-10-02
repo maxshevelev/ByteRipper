@@ -37,7 +37,7 @@ public enum MEACurator {
                                mfsNames: MFSFileNames = .none,
                                efsNames: EFSFileNames = .none,
                                configPaths: ConfigRecordPaths = .none,
-                               pending: MEAPending = .none) -> [MEANode] {
+                               pending: MEAPending = .nothing) -> [MEANode] {
         var roots: [MEANode] = []
         let add: (MEANode?) -> Void = { if let n = $0 { roots.append(n) } }
 

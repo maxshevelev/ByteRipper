@@ -97,7 +97,7 @@ public enum MEASummary {
     /// that depends on it says so instead of giving a value the reading with
     /// it may change.
     public static func build(_ analysis: FirmwareAnalysis,
-                             pending: MEAPending = .none) -> [MEASummaryBlock] {
+                             pending: MEAPending = .nothing) -> [MEASummaryBlock] {
         var rows: [MEASummaryRow] = []
         let add = { (label: String, value: MEASummaryValue) in
             rows.append(MEASummaryRow(label, value))
