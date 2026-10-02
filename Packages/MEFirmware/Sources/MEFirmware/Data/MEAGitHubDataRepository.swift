@@ -79,6 +79,12 @@ public actor MEAGitHubDataRepository: MEADataSource {
         }
     }
 
+    public nonisolated var fetchesOverTheNetwork: Bool { true }
+
+    public func heldDatabase() async -> MEADatabase? {
+        await databaseData.heldValue
+    }
+
     public func heldFileTable() async -> FileTable? {
         await fileTableData.heldValue
     }

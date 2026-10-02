@@ -27,12 +27,14 @@ let package = Package(
         .library(name: "MEReads", targets: ["MEReads"])
     ],
     dependencies: [
+        .package(path: "../Localization"),
         .package(path: "../MEFirmware"),
         .package(path: "../MEPresentation"),
         .package(path: "../ToolModuleKit")
     ],
     targets: [
         .target(name: "MEReads", dependencies: [
+            .product(name: "Localization", package: "Localization"),
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "MEPresentation", package: "MEPresentation"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit")

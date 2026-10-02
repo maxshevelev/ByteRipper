@@ -1,4 +1,4 @@
-@source-sha d47c9fef6ec661bea8f54118f592e742997295bb4d751cffa59b5b5f688d123b
+@source-sha f347d66b3f1179e271cbe840af68825db138b6ac9dcbe8e6e80503022dade24b
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -11,7 +11,7 @@ Die oberste Ebene ist die Aufteilung des Chips selbst. Auf einer Intel-Plattform
 
 Die Spalten **Typ** und **Subtyp** benennen jeden Knoten so, wie der Referenz-Parser ihn benennt. Die Spalte **Name** zeigt den Gemeinschaftsnamen für die [[term:guid|GUID]] eines Knotens, sofern es einen gibt, und sonst die GUID selbst.
 
-Die Zeile der **ME-Region** öffnet sich in dieselbe Analyse, die der [[topic:tool-me|ME Analyzer]] liefert — so lässt sich ein Image in einem Baum von vorn bis hinten lesen.
+Die Zeile der **ME-Region** öffnet sich in dieselbe Analyse, die der [[topic:tool-me|ME Analyzer]] liefert — so lässt sich ein Image in einem Baum von vorn bis hinten lesen. Beim ersten Öffnen muss die Analyse unter Umständen zuerst Datenbanken laden; solange der Download läuft, nennt die Zeile am unteren Rand des Bereichs ihre Namen.
 
 ## Was das Werkzeug prüft
 

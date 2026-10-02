@@ -23,6 +23,12 @@ public protocol MEADataSource: Sendable {
     /// without fetching either: what a first reading of a dump is done with,
     /// so the panel can show it before the databases arrive. A source that
     /// answers at once anyway — a stub, a local file — need not implement them.
+    /// `heldDatabase` is the same for `MEA.dat`, for a caller that wants to
+    /// know whether asking for it means a download.
+    func heldDatabase() async -> MEADatabase?
+    /// Whether asking for a file can mean a download — worth starting early
+    /// and worth saying. False for a stub or a local file, which answer at once.
+    var fetchesOverTheNetwork: Bool { get }
     func heldFileTable() async -> FileTable?
     func heldHuffmanDictionaries() async -> HuffmanDictionaries?
 
@@ -83,6 +89,12 @@ extension MEADataSource {
 
     /// Default: whatever the source answers, which for one that never waits
     /// is what it holds.
+    public func heldDatabase() async -> MEADatabase? {
+        try? await database()
+    }
+
+    public var fetchesOverTheNetwork: Bool { false }
+
     public func heldFileTable() async -> FileTable? {
         try? await fileTable()
     }

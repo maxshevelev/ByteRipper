@@ -96,12 +96,15 @@ public enum MEReads {
         }.value
     }
 
-    /// Off the main actor: a first reading, with `FileTable.dat` and
-    /// `Huffman.dat` only as far as `source` already holds them — nothing is
-    /// fetched for it, so it is as quick as the parse. It says which of the two
-    /// the analysis asked for and did without; a reading that did without
-    /// neither is the analysis, and one that did is shown while `analyze`
-    /// reads again with them.
+    /// Off the main actor: a first reading, quick enough to show at once. It
+    /// takes `FileTable.dat` only as far as `source` already holds it, and
+    /// `Huffman.dat` never: with the dictionaries the engine decompresses every
+    /// Huffman module to check it, which is most of a CSE analysis's time — so
+    /// a first reading with them in hand was the whole analysis, and the panel
+    /// waited for it on every dump but the first of a run. It says which of the
+    /// two the analysis asked for and did without; a reading that did without
+    /// neither is the analysis, and one that did is shown while `analyze` reads
+    /// again with them.
     public static func firstReading(
         _ snapshot: any ToolContentReader,
         source: any MEADataSource,
@@ -109,7 +112,7 @@ public enum MEReads {
     ) async -> Result<MEAFirstReading, Error> {
         let held = HeldDatabases(base: source,
                                  table: await source.heldFileTable(),
-                                 dictionaries: await source.heldHuffmanDictionaries())
+                                 dictionaries: nil)
         let result = await analyze(snapshot, analyzer: MEFirmwareAnalyzer(data: held), meRegion: meRegion)
         let missed = await held.missed
         return result.map {

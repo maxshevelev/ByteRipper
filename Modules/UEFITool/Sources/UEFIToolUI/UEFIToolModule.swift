@@ -177,6 +177,9 @@ private struct ChecksumPass: Sendable {
     /// one place that takes the row down knows which row it is ending. Nil when
     /// no row is up.
     private var meLoadingID: NodeID?
+    /// The status line while the ME region is read: the databases still
+    /// downloading, then the analysis itself.
+    private var meReadingStatus: MEAReadingStatus?
     /// The file names the ME sub-tree's rows are named with — the MFS volume's,
     /// the EFS volume's, and the ID-keyed Configuration records' — fetched from
     /// the firmware database the same way the ME Analyzer fetches them. The
@@ -333,6 +336,7 @@ private struct ChecksumPass: Sendable {
         // the panel's, so it comes down here rather than waiting on a landing
         // that the generation guard below will drop.
         endMERegionLoading()
+        endMEReadingStatus()
         meTask?.cancel()
         meTask = nil
         meFileTableTask?.cancel()
@@ -350,6 +354,7 @@ private struct ChecksumPass: Sendable {
     }
 
     public func stop() {
+        endMEReadingStatus()
         if let tree, let observation { tree.removeObserver(observation) }
         observation = nil
         guidsWatch?.cancel()
@@ -862,7 +867,12 @@ private struct ChecksumPass: Sendable {
         let run = meRun
         let generation = self.generation
         let analyzer = self.analyzer
-        controller.say(L("Reading ME…"))
+        // Every database the analysis may ask for, downloading side by side
+        // from now rather than one after another as the engine reaches each;
+        // the line says which are still coming, then that the region is read.
+        MEADownloads.shared.prefetch(from: Self.dataSource)
+        endMEReadingStatus()
+        meReadingStatus = MEAReadingStatus { [weak self] in self?.controller.say($0) }
         controller.showBusy()
         // The analysis is about to run: the region's row earns a "Loading…" row
         // if it is slow enough, the way a UEFI branch does.
@@ -895,6 +905,7 @@ private struct ChecksumPass: Sendable {
             guard self.generation == generation, self.meRun == run else { return }
             self.meTask = nil
             self.endMERegionLoading()
+            self.endMEReadingStatus()
             self.controller.endBusy()
             switch result {
             case .success(let analysis):
@@ -938,6 +949,13 @@ private struct ChecksumPass: Sendable {
     /// reading the row stood for is gone. The row is the panel's, so the panel
     /// is what is told — and telling it twice is what the id being cleared first
     /// rules out.
+    /// The ME reading is over, or another has taken its place: the status line
+    /// is no longer its to keep.
+    private func endMEReadingStatus() {
+        meReadingStatus?.stop()
+        meReadingStatus = nil
+    }
+
     private func endMERegionLoading() {
         guard let id = meLoadingID else { return }
         meLoadingID = nil

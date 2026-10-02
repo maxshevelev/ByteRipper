@@ -1,4 +1,4 @@
-@source-sha 6e4e81cd81ec176a6a9b92cc1acb9e6e9d4c2f25f2dffcbe6d036e4979f78888
+@source-sha 0d04e7cfb39634b9d931dbb7989bea79db1fc72b5b364b921481500c885a0809
 # ME Analyzer
 
 > Welche Intel-Management-Engine-Firmware das Image enthält und aus welchen Strukturen sie besteht.
@@ -11,7 +11,7 @@ Ein Bericht darüber, was die Firmware ist: Familie und Version, die [[term:sku|
 
 Die Zeilenbezeichnungen stehen in jeder Sprache der Oberfläche auf Englisch: Es sind die Bezeichnungen des Projekts, auf dem die Analyse beruht. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
 
-Die Registerkarte erscheint, sobald eine erste Analyse der Region abgeschlossen ist. Zwei weitere Datenbanken des Projekts, auf dem die Analyse beruht, `FileTable.dat` und `Huffman.dat`, werden geladen, wenn die Firmware sie benötigt; anschließend wird die Region mit ihnen erneut analysiert. Bis diese zweite Analyse abgeschlossen ist, steht bei Werten, die von ihnen abhängen, **Wird geladen…**. Das betrifft den **File System State** einer Firmware mit EFS-Volume, deren Dateien nur in `FileTable.dat` verzeichnet sind, sowie die Zeile **Modulprüfung** am Ende der **Meldungen**, für die `Huffman.dat` erforderlich ist; dieselbe Zeile enthält die Gruppe **Probleme** auf der Registerkarte **Vollständige Angaben**. Die Meldungen darüber sind endgültig. Lässt sich eine Datenbank nicht laden, bleiben die Werte der ersten Analyse bestehen.
+Die Analyse stützt sich auf drei Dateien des Projekts, auf dem sie beruht: `MEA.dat`, `FileTable.dat` und `Huffman.dat`. Diejenigen, die seit dem Start der Anwendung noch nicht geladen wurden, werden gleichzeitig geladen, sobald die Region gelesen wird; die Zeile am unteren Rand des Bereichs nennt die Dateien, deren Download noch läuft. Die Registerkarte erscheint, sobald eine erste Analyse der Region abgeschlossen ist, für die `MEA.dat` genügt; sind `FileTable.dat` und `Huffman.dat` geladen, wird die Region mit ihnen erneut analysiert. Bis diese zweite Analyse abgeschlossen ist, steht bei Werten, die von ihnen abhängen, **Wird geladen…**. Das betrifft den **File System State** einer Firmware mit EFS-Volume, deren Dateien nur in `FileTable.dat` verzeichnet sind, sowie die Zeile **Modulprüfung** am Ende der **Meldungen**, für die `Huffman.dat` erforderlich ist; dieselbe Zeile enthält die Gruppe **Probleme** auf der Registerkarte **Vollständige Angaben**. Die Meldungen darüber sind endgültig. Lässt sich eine Datenbank nicht laden, bleiben die Werte der ersten Analyse bestehen.
 
 Die beiden Tasten in der Registerkartenzeile kopieren die Registerkarte als Text oder als Bild des Bereichs.
 

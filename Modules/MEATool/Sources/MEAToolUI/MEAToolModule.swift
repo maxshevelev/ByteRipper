@@ -75,6 +75,9 @@ struct MEAParkedState: ToolSessionState {
     /// FITC partition's records, and a newer volume's own 6/7 streams. `.none`
     /// until the table has arrived (`ConfigRecordPaths`).
     private var configPaths: ConfigRecordPaths = .none
+    /// The status line while a reading runs: the databases still downloading,
+    /// then the analysis itself.
+    private var readingStatus: MEAReadingStatus?
     /// What the analysis on screen was read without, while the reading with
     /// it is on the way (`MEAPending`).
     private var pending: MEAPending = .none
@@ -177,6 +180,7 @@ struct MEAParkedState: ToolSessionState {
     }
 
     public func stop() {
+        endReadingStatus()
         databaseWatch?.cancel()
         databaseWatch = nil
         fileTableTask?.cancel()
@@ -245,6 +249,7 @@ struct MEAParkedState: ToolSessionState {
         // tool-module after using another one is instant rather than a
         // second full analysis of data nothing changed.
         if !ignoringCache, let cached = analysisProvider?.cachedMEAnalysis() {
+            endReadingStatus()
             present(cached)
             // Announced on the next turn rather than from inside this call: a
             // caller that has only just asked for this session — `start()` runs
@@ -275,9 +280,15 @@ struct MEAParkedState: ToolSessionState {
             controller.showSummary([])
             controller.showRetry(false)
         }
+        // Every database the reading may ask for, downloading side by side from
+        // now: the engine asks for each only when it reaches the step that
+        // reads it, and would otherwise wait for them one after another.
+        MEADownloads.shared.prefetch(from: Self.dataSource)
         // Named, not just "Reading…": three panels can be the one on screen and
-        // each reads something different, so the line says which this is.
-        controller.say(L("Reading ME…"))
+        // each reads something different, so the line says which this is —
+        // and, while a database is downloading, which.
+        endReadingStatus()
+        readingStatus = MEAReadingStatus { [weak self] in self?.controller.say($0) }
         // The empty tab is the whole panel until the analysis lands, so it says
         // what is being waited for rather than promising a summary.
         controller.setPlaceholder(.waiting)
@@ -312,6 +323,7 @@ struct MEAParkedState: ToolSessionState {
             }
             guard let self, self.generation == generation else { return }
             self.controller.endBusy()
+            self.endReadingStatus()
             switch result {
             case .success(let analysis):
                 // The reading is over — the line returns to empty, as the other
@@ -334,6 +346,13 @@ struct MEAParkedState: ToolSessionState {
         }
     }
 
+    /// The reading is over, or another has taken its place: the status line is
+    /// no longer this reading's to keep.
+    private func endReadingStatus() {
+        readingStatus?.stop()
+        readingStatus = nil
+    }
+
     /// A first reading lands here. True when nothing more is to come — it was
     /// the analysis, or the parse it belonged to has been overtaken — and
     /// false when the reading with the databases is to follow. A first reading
@@ -344,6 +363,7 @@ struct MEAParkedState: ToolSessionState {
         guard case .success(let reading) = first else { return false }
         guard !reading.isComplete else {
             controller.endBusy()
+            endReadingStatus()
             controller.say("")
             analysisProvider?.setCachedMEAnalysis(reading.analysis, meRegion: meRegion)
             present(reading.analysis)
