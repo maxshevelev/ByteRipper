@@ -1023,7 +1023,7 @@ public enum UEFIDetail {
                 // The square chip the ME panel waits under, so the two panels
                 // draw the same thing for the same idea.
                 symbol: "cpu",
-                columns: [L("JEDEC ID"), L("Chip"), L("Size")],
+                columns: [L("JEDEC ID"), L("Chip"), L("Size"), L("Source")],
                 rows: descriptor.chips.map { chip in
                     // With one chip the dump is that chip's, so a smaller chip
                     // cannot be the one it came from. With several the split is
@@ -1037,7 +1037,16 @@ public enum UEFIDetail {
                     if let bytes, let smallest { invalid = bytes < smallest }
                     return [.init(String(format: "%06X", chip.jedecID)),
                      .init(chip.name ?? chip.vendor.map { L("Unknown (%1$@)", $0) } ?? L("Unknown")),
-                     .init(bytes.map(capacityText) ?? "", tone: invalid ? .no : .plain)]
+                     .init(bytes.map(capacityText) ?? "", tone: invalid ? .no : .plain),
+                     // Names of the projects the table was read from, as they
+                     // call themselves, in every language.
+                     .init(chip.source.map { source in
+                         switch source {
+                         case .uefiTool: return "UEFITool"
+                         case .linux: return "Linux"
+                         case .flashrom: return "flashrom"
+                         }
+                     } ?? "")]
                 }
             ))
         }

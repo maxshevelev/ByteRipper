@@ -776,6 +776,7 @@
 "Smart search." = "Умный поиск.";
 "Some files could not be opened" = "Некоторые файлы открыть не удалось";
 "Something is wrong: the pointer says what" = "Обнаружена ошибка: подробности — во всплывающей подсказке";
+"Source" = "Источник";
 "Split Here at %1$@" = "Разрезать здесь, по %1$@";
 "Stack Panes" = "Панели друг над другом";
 "Stack the panes" = "Расположить панели друг над другом";

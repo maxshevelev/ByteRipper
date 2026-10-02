@@ -100,12 +100,18 @@ public struct DescriptorInfo: Equatable, Sendable {
         public var vendor: String?
         /// The chip's capacity in kilobytes, when the catalogue lists one.
         public var sizeKB: Int?
+        /// Where the catalogue took the name from; nil when it has none.
+        public var source: Source?
 
-        public init(jedecID: UInt32, name: String?, vendor: String? = nil, sizeKB: Int? = nil) {
+        public enum Source: Equatable, Sendable { case uefiTool, linux, flashrom }
+
+        public init(jedecID: UInt32, name: String?, vendor: String? = nil,
+                    sizeKB: Int? = nil, source: Source? = nil) {
             self.jedecID = jedecID
             self.name = name
             self.vendor = vendor
             self.sizeKB = sizeKB
+            self.source = source
         }
     }
 
@@ -324,7 +330,14 @@ public extension DescriptorInfo {
             let known = JedecIDs.chip(of: id)
             chips.append(Chip(jedecID: id, name: known?.name,
                               vendor: known == nil ? FlashVendors.name(ofJedecID: id) : nil,
-                              sizeKB: known?.sizeKB))
+                              sizeKB: known?.sizeKB,
+                              source: known.map { chip in
+                                  switch chip.source {
+                                  case .uefiTool: return .uefiTool
+                                  case .linux: return .linux
+                                  case .flashrom: return .flashrom
+                                  }
+                              }))
         }
         return chips
     }

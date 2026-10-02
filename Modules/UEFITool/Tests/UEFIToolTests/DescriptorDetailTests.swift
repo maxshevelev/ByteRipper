@@ -150,7 +150,7 @@ final class DescriptorDetailTests: XCTestCase {
         let table = try XCTUnwrap(table(shown, "Flash chips in VSCC table"))
 
         XCTAssertEqual(table.symbol, "cpu", "the square chip the ME panel waits under")
-        XCTAssertEqual(table.columns, ["JEDEC ID", "Chip", "Size"])
+        XCTAssertEqual(table.columns, ["JEDEC ID", "Chip", "Size", "Source"])
         XCTAssertEqual(table.rows.map { $0[0].text }, ["1F4700", "1C7018", "C22019", "EF4019"])
         XCTAssertEqual(table.rows.map { $0[1].text },
                        ["Atmel AT25DF321", "EON EN25QH128",
@@ -158,6 +158,7 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(table.rows.map { $0[2].text }, ["4 MB", "16 MB", "32 MB", "32 MB"])
         XCTAssertEqual(table.rows.map { $0[2].tone }, [.no, .plain, .plain, .plain],
                        "red where the chip (4 MB) is smaller than the 16 MB dump")
+        XCTAssertEqual(table.rows.map { $0[3].text }, Array(repeating: "UEFITool", count: 4))
     }
 
     /// A chip that holds the whole dump is not marked, however much bigger it is;
