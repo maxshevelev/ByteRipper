@@ -5,6 +5,7 @@ import FITToolUI
 import ToolModuleKit
 import UEFIImage
 import UEFITool
+import QuickLookUI
 @testable import UEFIToolUI
 import MEFirmware
 @testable import ByteRipper
@@ -1052,6 +1053,61 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertGreaterThan(view.frame.width, 50, "the picture is drawn, not squeezed to nothing")
         XCTAssertLessThanOrEqual(view.frame.width, list.contentView.bounds.width)
         XCTAssertEqual(view.frame.height, view.frame.width / 20, accuracy: 1)
+    }
+
+    /// A PNG with an alpha channel: what a transparent logo is.
+    private func png(width: Int, height: Int) throws -> [UInt8] {
+        let rep = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height, bitsPerSample: 8,
+            samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0))
+        for x in 0..<width { for y in 0..<height {
+            rep.setColor(NSColor(deviceWhite: 1, alpha: CGFloat(x % 2)), atX: x, y: y)
+        } }
+        return [UInt8](try XCTUnwrap(rep.representation(using: .png, properties: [:])))
+    }
+
+    /// A picture with no transparency starts on the panel's own background,
+    /// and a click goes round the three.
+    func testAClickChangesThePicturesBackground() throws {
+        let view = try XCTUnwrap(try preview(of: try jpeg(width: 40, height: 20)) as? PicturePreviewView)
+        XCTAssertEqual(view.background, .panel)
+        XCTAssertEqual(view.toolTip, "Click to change the background")
+
+        view.cycleBackground()
+        XCTAssertEqual(view.background, .checkerboard)
+        view.cycleBackground()
+        XCTAssertEqual(view.background, .contrast)
+        view.cycleBackground()
+        XCTAssertEqual(view.background, .panel)
+    }
+
+    /// One with transparency starts on the checkerboard, which is what shows it.
+    func testATransparentPictureStartsOnTheCheckerboard() throws {
+        let view = try XCTUnwrap(try preview(of: try png(width: 40, height: 20)) as? PicturePreviewView)
+        XCTAssertEqual(view.background, .checkerboard)
+    }
+
+    /// Space on a picture's row opens Quick Look on a file holding the
+    /// picture's bytes, named for its format; Space again closes it, and the
+    /// file goes with it.
+    func testSpaceShowsThePictureInQuickLook() throws {
+        let picture = try jpeg(width: 40, height: 20)
+        _ = try preview(of: picture)
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let controller = try XCTUnwrap(sequence(first: panel as NSResponder, next: { $0.nextResponder })
+            .compactMap { $0 as? UEFIToolViewController }.first ?? descendants(of: panel, NSView.self)
+            .lazy.compactMap { $0.nextResponder as? UEFIToolViewController }.first)
+
+        XCTAssertTrue(controller.toggleQuickLook(), "the key is taken")
+        let file = try XCTUnwrap(controller.quickLookFile)
+        XCTAssertEqual(file.pathExtension, "jpg")
+        XCTAssertEqual(try Data(contentsOf: file), Data(picture))
+
+        XCTAssertTrue(pumpUntil(2) { QLPreviewPanel.shared()?.isVisible == true }, "Quick Look is up")
+        XCTAssertTrue(controller.toggleQuickLook())
+        XCTAssertTrue(pumpUntil(2) { QLPreviewPanel.shared()?.isVisible == false }, "and closes")
+        XCTAssertTrue(pumpUntil(2) { !FileManager.default.fileExists(atPath: file.path) }, "the file is gone")
     }
 
     // MARK: - A node opened as a panel (Design/FRAGMENT_PANELS_PLAN.md)

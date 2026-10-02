@@ -5,6 +5,7 @@ import AppPalette
 import HelpUI
 import Localization
 import MEPresentation
+import QuickLookUI
 import ToolModuleKit
 import UEFIImage
 import UEFITool
@@ -101,6 +102,8 @@ import UEFITool
     /// The detail on screen, kept so the rows can be rebuilt at a new type
     /// size without waiting for the next parse — a zoom is not a re-read.
     private var detailShown: UEFINodeDetail = .empty
+    /// The file Quick Look is showing the selected picture from, while it is.
+    private(set) var quickLookFile: URL?
     private var detailSubject = ""
     /// The glossary entry the detail list's `?` opens, kept beside the detail
     /// itself so a re-render at a new type size keeps the button.
@@ -444,6 +447,7 @@ import UEFITool
         // exactly as a click that moved the selection would — the outline only
         // reports that second kind itself (see `UEFIOutlineView`).
         outline.onRowReclick = { [weak self] row in self?.chooseNode(atRow: row) }
+        outline.onSpace = { [weak self] in self?.toggleQuickLook() ?? false }
 
         let name = NSTableColumn(identifier: Column.name)
         name.title = L("Name")
@@ -861,8 +865,10 @@ import UEFITool
 
     /// Rebuilds the detail list from the fields the pure target decided.
     private func renderDetail(_ node: UEFINodeDetail, subject: String) {
+        let pictureChanged = node.picture != detailShown.picture
         detailShown = node
         detailSubject = subject
+        if pictureChanged { quickLookFollowSelection() }
         // What the `?` in the list's corner explains. Set before the early
         // return too: a node with no fields to list is still a node whose kind
         // the glossary can name.
@@ -918,7 +924,8 @@ import UEFITool
     }
 
     /// The picture a node is, drawn under its rows: as wide as the list at
-    /// most, never larger than its own pixels, in its own proportions. Bytes
+    /// most, never larger than its own pixels, in its own proportions, on a
+    /// background a click changes (`PicturePreviewView`). Bytes
     /// AppKit cannot decode leave the rows as they are — the fields have
     /// already said what the parser read.
     // help: panel.uefi.picture-preview
@@ -927,11 +934,7 @@ import UEFITool
               let pixels = image.representations.first,
               pixels.pixelsWide > 0, pixels.pixelsHigh > 0
         else { return }
-        let view = NSImageView()
-        view.image = image
-        view.imageScaling = .scaleProportionallyUpOrDown
-        view.imageFrameStyle = .none
-        view.setAccessibilityLabel(L("Picture preview"))
+        let view = PicturePreviewView(image: image, hasAlpha: pixels.hasAlpha)
         view.translatesAutoresizingMaskIntoConstraints = false
         // Its own size is the image's in points, which is not what decides
         // here: the list's width and the pixels do.
@@ -1788,6 +1791,95 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     }
 }
 
+// MARK: - Quick Look
+
+/// The space bar on a picture's row shows it in Quick Look, as Finder does: at
+/// its own size, zoomable, on the system's own background. Quick Look reads a
+/// file, so the picture's bytes are written to one in the temporary directory
+/// first, named so that its extension says its format. The file goes when the
+/// panel is closed from here, when the next picture replaces it, and when the
+/// panel lets go of this controller.
+extension UEFIToolViewController: QLPreviewPanelDataSource {
+    /// Opens Quick Look on the selected picture, or closes it. False — the key
+    /// is not taken — when there is no picture to show and nothing to close.
+    // help: panel.uefi.quick-look
+    func toggleQuickLook() -> Bool {
+        if QLPreviewPanel.sharedPreviewPanelExists(), let panel = QLPreviewPanel.shared(), panel.isVisible {
+            // Ordering the panel out does not end this controller's hold on
+            // it, so the file is not let go of by `endPreviewPanelControl`.
+            panel.orderOut(nil)
+            removeQuickLookFile()
+            return true
+        }
+        guard writeQuickLookFile() else { return false }
+        QLPreviewPanel.shared()?.makeKeyAndOrderFront(nil)
+        return true
+    }
+
+    /// The panel follows the selection while it is open: another picture is
+    /// shown in it, and a row that is not one closes it.
+    fileprivate func quickLookFollowSelection() {
+        guard QLPreviewPanel.sharedPreviewPanelExists(), let panel = QLPreviewPanel.shared(),
+              panel.isVisible, panel.dataSource === self
+        else { return }
+        if writeQuickLookFile() {
+            panel.reloadData()
+        } else {
+            panel.orderOut(nil)
+            removeQuickLookFile()
+        }
+    }
+
+    /// Writes the selected picture where Quick Look can read it. False when the
+    /// selection is not a picture, or the file cannot be written.
+    private func writeQuickLookFile() -> Bool {
+        removeQuickLookFile()
+        guard let bytes = detailShown.picture, !bytes.isEmpty else { return false }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("QuickLook-\(UUID().uuidString)", isDirectory: true)
+        let stem = String((detailShown.title.isEmpty ? "Picture" : detailShown.title)
+            .map { "/:".contains($0) ? "_" : $0 })
+        let url = directory.appendingPathComponent(stem)
+            .appendingPathExtension(detailShown.pictureFileExtension ?? "bin")
+        do {
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data(bytes).write(to: url)
+        } catch {
+            return false
+        }
+        quickLookFile = url
+        return true
+    }
+
+    fileprivate func removeQuickLookFile() {
+        guard let file = quickLookFile else { return }
+        try? FileManager.default.removeItem(at: file.deletingLastPathComponent())
+        quickLookFile = nil
+    }
+
+    override func acceptsPreviewPanelControl(_ panel: QLPreviewPanel!) -> Bool {
+        quickLookFile != nil
+    }
+
+    override func beginPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        panel.dataSource = self
+    }
+
+    override func endPreviewPanelControl(_ panel: QLPreviewPanel!) {
+        panel.dataSource = nil
+        removeQuickLookFile()
+    }
+
+    nonisolated func numberOfPreviewItems(in panel: QLPreviewPanel!) -> Int {
+        MainActor.assumeIsolated { quickLookFile == nil ? 0 : 1 }
+    }
+
+    nonisolated func previewPanel(_ panel: QLPreviewPanel!, previewItemAt index: Int) -> (any QLPreviewItem)! {
+        MainActor.assumeIsolated { quickLookFile as NSURL? }
+    }
+}
+
+
 /// The tree, with two behaviours past NSOutlineView's.
 ///
 /// It answers a right-click itself: a plain outline given a `menu` pops it
@@ -1809,6 +1901,17 @@ private final class UEFIOutlineView: NSOutlineView {
     var onContextMenu: ((NSEvent) -> NSMenu?)?
     /// A plain click landed on the row that was already selected.
     var onRowReclick: ((Int) -> Void)?
+    /// The space bar was pressed; true when it was taken.
+    var onSpace: (() -> Bool)?
+
+    override func keyDown(with event: NSEvent) {
+        if event.charactersIgnoringModifiers == " ",
+           event.modifierFlags.intersection([.shift, .command, .option, .control]).isEmpty,
+           onSpace?() == true {
+            return
+        }
+        super.keyDown(with: event)
+    }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         onContextMenu?(event)

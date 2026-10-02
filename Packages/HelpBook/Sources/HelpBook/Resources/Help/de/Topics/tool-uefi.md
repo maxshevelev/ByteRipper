@@ -1,4 +1,4 @@
-@source-sha 5192bf9ce84a5996b6bc25863d1a10d7c502cfdf03c30e5ee06fa10d2bbabde9
+@source-sha 8d7bce8d90aa14a4d22092b08d764d077965d628301348653d4c3940eb7900ce
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -35,5 +35,7 @@ Zwischen den Strukturen eines Dumps liegt gelöschter Raum. Der Baum lässt ihn 
 Ein Variablenspeicher behält die früheren Kopien seiner Variablen, bis die Firmware ihn bereinigt; auf einem Board, das eine Variable bei jedem Start schreibt, machen sie den größten Teil seiner Zeilen aus. Der Baum zeigt eine Zeile je Variable — ihre aktuelle Kopie oder, für eine Variable, die der Speicher nicht mehr enthält, die Kopie, als die sie gelöscht wurde —, solange im selben Menü **Ersetzte Einträge anzeigen** nicht abgehakt ist. Die übrigen Kopien stehen unter **Verlauf der Variable** in den Details dieser Zeile; ein Klick auf eine Kopie zeigt ihre eigenen Details und ihre Bytes im Dump, und im Baum bleibt die Zeile der geltenden Kopie ausgewählt. Dasselbe geschieht, wenn der Cursor im Dump in einer Kopie steht, die der Baum weglässt, und sie im Baum angezeigt wird.
 
 Ein vom Werkzeug erkanntes [[term:picture|Bild]] — JPEG, PNG, GIF oder BMP, im Padding oder als Datenteil einer Raw-Section — erscheint als eigene Zeile; wird sie ausgewählt, zeichnet das Werkzeug das Bild unter den Details: höchstens so breit wie die Liste und nie größer als seine eigene Pixelgröße. Die Vorschau entsteht aus den Bytes des Dumps, wie sie vorliegen, und zwar mit dem Decoder von macOS, nicht mit dem der Firmware; sie zeigt daher den gespeicherten Inhalt, nicht zwingend genau das, was die Platine daraus macht.
+
+Ein feiner Rahmen zeigt, wo das Bild endet, damit ein weißes oder transparentes Logo nicht im Hintergrund des Panels verschwindet. Ein Klick auf das Bild wechselt den Hintergrund dahinter: der des Panels, ein Schachbrettmuster oder Schwarz (im dunklen Erscheinungsbild Weiß). Ein Bild mit Transparenz erscheint zunächst auf dem Schachbrett, eines ohne auf dem Hintergrund des Panels. Die **Leertaste** in der Zeile des Bildes zeigt es in der Übersicht (Quick Look) wie im Finder, ein zweites Drücken schließt sie; solange sie offen ist, folgt sie der Auswahl.
 
 Siehe auch: [[topic:tool-fit|FIT-Tabelle]], [[term:vss|NVRAM-Speicher]], [[topic:recipe-checksums|Prüfsummen]].

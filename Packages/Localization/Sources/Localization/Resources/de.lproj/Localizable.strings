@@ -147,6 +147,7 @@
 "BIOS ID" = "BIOS-ID";
 "Board" = "Platine";
 "Build date" = "Build-Datum";
+"Click to change the background" = "Klicken, um den Hintergrund zu wechseln";
 "Copied at %1$@–%2$@; %3$@" = "Kopie bei %1$@–%2$@; %3$@";
 "Copy of" = "Kopie des Abbilds bei";
 "Copy of %1$@–%2$@; %3$@" = "Kopie des Blocks %1$@–%2$@; %3$@";

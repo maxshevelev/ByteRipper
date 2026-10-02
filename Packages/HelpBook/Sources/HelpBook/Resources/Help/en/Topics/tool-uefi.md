@@ -8,6 +8,7 @@
 @covers panel.uefi.save-node
 @covers panel.uefi.open-unpacked
 @covers panel.uefi.picture-preview
+@covers panel.uefi.quick-look
 @covers panel.uefi.superseded-entries
 @covers panel.uefi.filter
 @covers panel.uefi.variable-history
@@ -44,5 +45,7 @@ A dump holds erased space between its structures. The tree omits it unless **Sho
 A variable store keeps the earlier copies of its variables until the firmware reclaims it; on a board that writes a variable at every boot they are most of its rows. The tree lists one row per variable — its current copy, or for a variable the store no longer holds, the copy it was deleted as — unless **Show Superseded Entries** is ticked in the same menu. The other copies are listed under **Variable history** in the detail of that row; a click on a copy there shows its own detail and its bytes in the dump, and the tree keeps the row of the copy that stands selected. When the caret in the dump is in a copy the tree leaves out, revealing it does the same.
 
 A [[term:picture|picture]] the tool recognises — a JPEG, PNG, GIF or BMP, in padding or as the body of a raw section — is a row of its own, and selecting it draws the picture under its details: as wide as the list at most and never larger than its own size in pixels. The preview is drawn from the bytes in the dump as they are, by the decoder of macOS rather than the firmware's own, so it shows what is stored, not exactly how the board will draw it.
+
+A thin frame marks where the picture ends, so a white or transparent logo does not disappear into the panel. A click on the picture changes what is behind it: the panel's own background, a checkerboard, or black (white with the dark appearance). A picture with transparency starts on the checkerboard, one without on the panel's background. **Space** on the picture's row shows it in Quick Look, as in Finder, and **Space** again closes it; while it is open, it follows the selection.
 
 See also: [[topic:tool-fit|FIT Table]], [[term:vss|NVRAM stores]], [[topic:recipe-checksums|Checksums]].
