@@ -256,6 +256,31 @@ final class ZoomToFitTests: XCTestCase {
                        accuracy: 1, "and with room for the panel's map")
     }
 
+    /// The height follows the panel too: its own title bar, rows and status bar,
+    /// the peek of the tab's header above it, and the dock below.
+    func testZoomHeightFitsTheFragmentPanelWithItsHeaderAndDock() throws {
+        let url = try tempFile([UInt8](repeating: 0x41, count: 256))
+        let controller = makeController()
+        let window = controller.window!
+        let mainVC = controller.mainViewController
+        defer {
+            for id in mainVC.fragments.dock.panels { mainVC.fragments.close(id, animated: false) }
+            cleanup(mainVC, url)
+        }
+        try mainVC.windowModel.pane1.open(url: url)
+        mainVC.apply(mode: .singleFile)
+        window.layoutIfNeeded()
+        let id = try XCTUnwrap(mainVC.openFragment([UInt8](repeating: 0x42, count: 64),
+                                                   named: "part", animated: false))
+        let part = try XCTUnwrap(mainVC.fragments.surface(id)?.paneViewsInMapOrder().first)
+        window.layoutIfNeeded()
+
+        let frame = mainVC.windowWillUseStandardFrame(
+            window, defaultFrame: NSRect(x: 0, y: 0, width: 3000, height: 2000))
+        let content = part.contentFitHeight + FragmentPanelLayout.parentPeek + FragmentDockStrip.height
+        XCTAssertEqual(frame.height, expectedFrameHeight(for: content, window: window), accuracy: 1)
+    }
+
     /// The tool panel makes the same claim on the leading edge that the minimap
     /// makes on the trailing one, so zoom-to-fit adds it too: fitting the hex
     /// grids alone zooms the window to a width the dump does not actually get

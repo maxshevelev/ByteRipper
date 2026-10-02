@@ -6945,6 +6945,20 @@ final class MainViewController: NSViewController {
     /// file without scrolling. The empty state has no content, so the default
     /// zoom frame is kept.
     private func standardContentHeight() -> CGFloat {
+        // The dock takes its strip off the bottom of the window whenever a
+        // panel is open, folded or not.
+        let dock: CGFloat = fragments.isEmpty ? 0 : FragmentDockStrip.height
+        return standardPanesHeight() + dock
+    }
+
+    private func standardPanesHeight() -> CGFloat {
+        // A panel that is up is as tall as the part needs — its title bar, the
+        // column header, the rows and the status bar — and leaves the peek of
+        // the tab's own header showing above it.
+        if let front = fragments.frontSurface {
+            guard let fit = front.paneViewsInMapOrder().first?.contentFitHeight else { return 0 }
+            return fit + FragmentPanelLayout.parentPeek
+        }
         switch mode {
         case .singleFile:
             return activeFilePane?.contentFitHeight ?? 0
