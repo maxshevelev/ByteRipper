@@ -898,6 +898,7 @@
 "Undo" = "Widerrufen";
 "Undo %1$@" = "%1$@ widerrufen";
 "Unknown" = "Unbekannt";
+"Unknown (%1$@)" = "Unbekannt (%1$@)";
 "Unmatched Hashes" = "Nicht zugeordnete Hashes";
 "Untitled" = "Ohne Titel";
 "Up to %1$@ bytes can be used as a find pattern." = "Als Suchmuster lassen sich höchstens %1$@ Byte verwenden.";

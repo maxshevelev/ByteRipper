@@ -176,6 +176,21 @@ final class DescriptorInfoTests: XCTestCase {
         ])
     }
 
+    /// An id the catalogue does not know still names its maker, from the first
+    /// byte; a code nobody here knows names nothing, and a named chip carries no
+    /// vendor of its own.
+    func testAnUnlistedChipIsNamedByItsVendor() throws {
+        let read = try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)],
+            chips: [0xEF0000, 0xEF4019, 0x0A0B0C]))
+
+        XCTAssertEqual(read.chips, [
+            DescriptorInfo.Chip(jedecID: 0xEF0000, name: nil, vendor: "Winbond"),
+            DescriptorInfo.Chip(jedecID: 0xEF4019, name: "Winbond W25Q256"),
+            DescriptorInfo.Chip(jedecID: 0x0A0B0C, name: nil),
+        ])
+    }
+
     /// An erased tail in the table is not a chip.
     func testAnErasedVsccEntryIsNotAChip() throws {
         let read = try info(TestImage.descriptor(

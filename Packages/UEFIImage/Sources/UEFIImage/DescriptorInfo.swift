@@ -91,10 +91,19 @@ public struct DescriptorInfo: Equatable, Sendable {
     public var biosAccess: [Access]
 
     /// A chip in the VSCC table: the JEDEC id the table lists, and the chip
-    /// that id names when it is one the catalogue knows.
+    /// that id names when it is one the catalogue knows. For an id it does not
+    /// know, `vendor` is still the maker the first byte names, when that code
+    /// is one `FlashVendors` has.
     public struct Chip: Equatable, Sendable {
         public var jedecID: UInt32
         public var name: String?
+        public var vendor: String?
+
+        public init(jedecID: UInt32, name: String?, vendor: String? = nil) {
+            self.jedecID = jedecID
+            self.name = name
+            self.vendor = vendor
+        }
     }
 
     public var chips: [Chip]
@@ -309,7 +318,9 @@ public extension DescriptorInfo {
             let id = UInt32(vendor) << 16 | UInt32(device0) << 8 | UInt32(device1)
             // An erased or empty tail is not a chip.
             guard id != 0, id != 0xFF_FFFF else { continue }
-            chips.append(Chip(jedecID: id, name: JedecIDs.name(of: id)))
+            let name = JedecIDs.name(of: id)
+            chips.append(Chip(jedecID: id, name: name,
+                              vendor: name == nil ? FlashVendors.name(ofJedecID: id) : nil))
         }
         return chips
     }

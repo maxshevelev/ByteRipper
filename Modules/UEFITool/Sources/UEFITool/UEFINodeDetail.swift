@@ -1026,7 +1026,7 @@ public enum UEFIDetail {
                 columns: [L("JEDEC ID"), L("Chip")],
                 rows: descriptor.chips.map { chip in
                     [.init(String(format: "%06X", chip.jedecID)),
-                     .init(chip.name ?? L("Unknown"))]
+                     .init(chip.name ?? chip.vendor.map { L("Unknown (%1$@)", $0) } ?? L("Unknown"))]
                 }
             ))
         }
