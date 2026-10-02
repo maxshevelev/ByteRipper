@@ -40,6 +40,7 @@ let package = Package(
         .testTarget(name: "MEReadsTests", dependencies: [
             "MEReads",
             .product(name: "MEFirmware", package: "MEFirmware"),
+            .product(name: "MEPresentation", package: "MEPresentation"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit")
         ])
     ]

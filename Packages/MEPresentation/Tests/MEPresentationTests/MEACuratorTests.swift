@@ -38,6 +38,44 @@ final class MEACuratorTests: XCTestCase {
         roots.first(where: { $0.title == title })
     }
 
+    // MARK: - What is not known yet
+
+    /// While `FileTable.dat` is on the way, an EFS image's File System State
+    /// reads as the Checksums do before they are computed; an image without
+    /// an EFS volume keeps its state, which the table does not change.
+    func testFileSystemStateWaitsForTheFileTableOnlyWithAnEFSVolume() throws {
+        let efs: [String: Any] = [
+            "offset": 0x463000, "pageSize": 0x1000, "systemPageCount": 1,
+            "dataPageCount": 14, "scratchPageCount": 1, "scratchPagesEmpty": true,
+            "dataPageCountMatchesSystem": true, "dictionary": 0x0B,
+            "revision": 1, "unknown1": 2, "dictionaryRevision": 1,
+            "dataPagesCommitted": 10, "dataPagesReserved": 4,
+            "systemHeaderCRCValid": true, "indexesCRCValid": true,
+            "firstIndexPaddingEmpty": true, "dataPageOrder": [],
+            "dataPageHeaderCRCsValid": true, "dataPageFooterCRCsValid": true,
+        ]
+        let withEFS = try analysis(["mfsState": "configured", "efsVolume": efs])
+        let waiting = try XCTUnwrap(MEACurator.present(withEFS, pending: MEAPending(fileTable: true)).first)
+        XCTAssertEqual(field("File System State", in: waiting), MEACurator.pendingValue)
+        XCTAssertEqual(field("File System State", in: try XCTUnwrap(MEACurator.present(withEFS).first)),
+                       "Configured")
+
+        let without = try analysis(["mfsState": "configured"])
+        let kept = try XCTUnwrap(MEACurator.present(without, pending: MEAPending(fileTable: true)).first)
+        XCTAssertEqual(field("File System State", in: kept), "Configured")
+    }
+
+    /// While `Huffman.dat` is on the way, the Issues group ends with a row
+    /// that says the module checks are still to come — a group of its own
+    /// when nothing else was raised, and none at all once they are done.
+    func testIssuesSayTheModuleChecksAreToCome() throws {
+        let quiet = try analysis([:])
+        let issues = try XCTUnwrap(find("Issues", in: MEACurator.present(quiet, pending: MEAPending(huffman: true))))
+        XCTAssertEqual(issues.children.map(\.title), ["Module checks"])
+        XCTAssertEqual(issues.children.first?.subtitle, MEACurator.pendingValue)
+        XCTAssertNil(find("Issues", in: MEACurator.present(quiet)))
+    }
+
     private func child(_ title: String, of node: MEANode) -> MEANode? {
         node.children.first(where: { $0.title == title })
     }

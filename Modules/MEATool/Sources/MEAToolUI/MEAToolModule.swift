@@ -75,6 +75,9 @@ struct MEAParkedState: ToolSessionState {
     /// FITC partition's records, and a newer volume's own 6/7 streams. `.none`
     /// until the table has arrived (`ConfigRecordPaths`).
     private var configPaths: ConfigRecordPaths = .none
+    /// What the analysis on screen was read without, while the reading with
+    /// it is on the way (`MEAPending`).
+    private var pending: MEAPending = .none
     /// The in-flight `FileTable.dat` request, so a re-present does not start a
     /// second one.
     private var fileTableTask: Task<Void, Never>?
@@ -164,8 +167,13 @@ struct MEAParkedState: ToolSessionState {
     /// and expensive to keep in sync, so a re-parse is the honest answer to
     /// every edit — and the selection is kept by path, so it survives a
     /// re-parse of the same file and is dropped when the row is gone.
+    ///
+    /// A reload is another file, or this one replaced: nothing on screen
+    /// describes it, so the panel goes back to how it opens — empty, waiting
+    /// for the reading — rather than showing the old file's analysis until
+    /// the new one lands.
     public func contentChanged(_ change: ToolContentChange) {
-        reparse()
+        reparse(forgettingShown: change == .reloaded)
     }
 
     public func stop() {
@@ -205,7 +213,11 @@ struct MEAParkedState: ToolSessionState {
     /// panel's answer has to come from the new one. The pane's own holder drops
     /// that analysis on the same event — this is not a consequence of that, it
     /// is this panel not depending on which of the two arrives first.
-    private func reparse(ignoringCache: Bool = false) {
+    ///
+    /// `forgettingShown` clears what the panel shows — the summary, the tree,
+    /// the selection — before the reading starts, for content the analysis
+    /// on screen no longer describes.
+    private func reparse(ignoringCache: Bool = false, forgettingShown: Bool = false) {
         let snapshot: any ToolContentReader
         do {
             snapshot = try host.snapshot()
@@ -256,6 +268,13 @@ struct MEAParkedState: ToolSessionState {
         efsNames = .none
         configPaths = .none
         analysis = nil
+        pending = .none
+        if forgettingShown {
+            roots = []
+            focusPath = nil
+            controller.showSummary([])
+            controller.showRetry(false)
+        }
         // Named, not just "Reading…": three panels can be the one on screen and
         // each reads something different, so the line says which this is.
         controller.say(L("Reading ME…"))
@@ -263,8 +282,19 @@ struct MEAParkedState: ToolSessionState {
         // what is being waited for rather than promising a summary.
         controller.setPlaceholder(.waiting)
         controller.showBusy()
+        if forgettingShown { show() }
         let analyzer = self.analyzer
+        let source = Self.dataSource
         Task { [weak self] in
+            // First what the dump says with the databases already in hand: the
+            // engine waits for `FileTable.dat` and `Huffman.dat` when it needs
+            // them, and a first fetch of either is seconds the summary need not
+            // wait for. A reading that did without neither is the analysis; one
+            // that did is shown, with what depends on them saying "Loading…",
+            // while the reading below fetches them and reads again.
+            let first = await MEReads.firstReading(snapshot, source: source, meRegion: meRegion)
+            guard self?.show(first, generation: generation, meRegion: meRegion) == false else { return }
+
             // The UEFI Structure opening the same region in the same moment
             // makes the same ask, so it goes through the pane's cache: one
             // reading, and whichever panel asked second is handed its answer.
@@ -304,13 +334,40 @@ struct MEAParkedState: ToolSessionState {
         }
     }
 
+    /// A first reading lands here. True when nothing more is to come — it was
+    /// the analysis, or the parse it belonged to has been overtaken — and
+    /// false when the reading with the databases is to follow. A first reading
+    /// that failed is shown by that one: it fails the same way.
+    private func show(_ first: Result<MEAFirstReading, Error>, generation: Int,
+                      meRegion: Range<UInt64>?) -> Bool {
+        guard self.generation == generation else { return true }
+        guard case .success(let reading) = first else { return false }
+        guard !reading.isComplete else {
+            controller.endBusy()
+            controller.say("")
+            analysisProvider?.setCachedMEAnalysis(reading.analysis, meRegion: meRegion)
+            present(reading.analysis)
+            onDisplay?(reading.analysis)
+            return true
+        }
+        // The bar and the line stay: the panel is still reading. `onDisplay`
+        // waits for the reading that follows — it means the panel shows the
+        // analysis, and this is not it yet.
+        present(reading.analysis, pending: reading.pending)
+        return false
+    }
+
     /// A successful analysis lands here: present the summary and the curated
     /// tree and show them, keeping whatever selection still resolves after the
     /// re-parse.
-    private func present(_ analysis: FirmwareAnalysis) {
+    ///
+    /// `pending` is what it was read without; a first reading is shown with it,
+    /// and the reading that follows with `.none`.
+    private func present(_ analysis: FirmwareAnalysis, pending: MEAPending = .none) {
         self.analysis = analysis
+        self.pending = pending
         roots = MEACurator.present(analysis, mfsNames: mfsNames, efsNames: efsNames,
-                                   configPaths: configPaths)
+                                   configPaths: configPaths, pending: pending)
         if let path = focusPath, MEATree.node(at: path, in: roots) == nil {
             focusPath = nil
         }
@@ -319,7 +376,7 @@ struct MEAParkedState: ToolSessionState {
         // being waited for. If the summary is still empty it is because this
         // file has no ME firmware, which is what the empty tab now says.
         controller.setPlaceholder(.empty)
-        controller.showSummary(MEASummary.build(analysis))
+        controller.showSummary(MEASummary.build(analysis, pending: pending))
         show()
         loadFileNames()
     }
@@ -348,11 +405,7 @@ struct MEAParkedState: ToolSessionState {
         let wantsMFS = volume?.usesFTBL == true && volume?.files.isEmpty == false
             && mfsNames.resolution == nil
         let wantsEFS = analysis.efsVolume != nil && efsNames.resolution == nil
-        // Every ID-keyed Configuration record in the analysis, wherever it came
-        // from: the FITC partition's payload and a newer volume's own 6/7
-        // streams are keyed into the same table.
-        let configIDs = (analysis.oemConfiguration?.recordsByID ?? []).map(\.fileID)
-            + (volume?.configurationsByID ?? []).flatMap { $0.records.map(\.fileID) }
+        let configIDs = MEReads.configurationIDs(analysis)
         let wantsConfig = !configIDs.isEmpty && configPaths.resolution == nil
         guard wantsMFS || wantsEFS || wantsConfig else { return }
         let generation = self.generation
@@ -372,7 +425,7 @@ struct MEAParkedState: ToolSessionState {
             // Re-presenting rebuilds the rows with the names in them; the
             // selection is kept by path, so the row the reader is looking at
             // stays where it is and simply gains its name.
-            self.present(analysis)
+            self.present(analysis, pending: self.pending)
             // The panel is showing this analysis — named now — which is what
             // `onDisplay` means, and the seam a test waits on.
             self.onDisplay?(analysis)

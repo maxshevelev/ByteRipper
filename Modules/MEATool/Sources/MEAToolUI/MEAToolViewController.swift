@@ -568,17 +568,9 @@ import ToolModuleKit
                     .foregroundColor: NSColor.secondaryLabelColor,
                     .paragraphStyle: rowStyle,
                 ]))
-                let value: String
-                let emphasized: Bool
-                switch row.value {
-                case .value(let shown):
-                    value = shown
-                    // The same weight the panel gives a status-toned value.
-                    emphasized = row.tone.isStatus
-                case .comingSoon:
-                    value = L("Coming soon")
-                    emphasized = false
-                }
+                // The words and the weight the panel gives the row.
+                let value = row.value.text
+                let emphasized = row.isEmphasized
                 text.append(NSAttributedString(string: value + "\n", attributes: [
                     .font: value.hasPrefix("0x")
                         ? NSFont.monospacedDigitSystemFont(ofSize: size, weight: .regular)
@@ -721,7 +713,8 @@ import ToolModuleKit
     /// value that wraps inside what is left of the width. The column's width is
     /// the caller's to constrain, since only it knows the list the row is in. A
     /// `.comingSoon` value is drawn grey and unselectable, the shape of a row
-    /// the engine will answer once the bridge reaches it.
+    /// the engine will answer once the bridge reaches it; so is a `.pending`
+    /// one, which the reading under way will answer.
     private static func summaryRowView(
         _ row: MEASummaryRow
     ) -> (line: NSStackView, label: NSTextField) {
@@ -732,17 +725,15 @@ import ToolModuleKit
         label.translatesAutoresizingMaskIntoConstraints = false
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        let value: ToolWrappingLabel
-        switch row.value {
-        case .value(let text):
-            value = ToolWrappingLabel(string: text)
+        let value = ToolWrappingLabel(string: row.value.text)
+        if row.value.isValue {
             // A status-toned value is bold as well as coloured, and a passed
             // check carries its tick — all of it from the tone, which is the
             // same rendering the tree's detail and the UEFI Structure's use.
-            row.tone.draw(value, value: text)
+            row.tone.draw(value, value: row.value.text)
             value.isSelectable = true
-        case .comingSoon:
-            value = ToolWrappingLabel(string: L("Coming soon"))
+        } else {
+            // "Coming soon" and "Loading…" alike: grey, and nothing to select.
             value.font = ToolPanelFont.body()
             value.textColor = .secondaryLabelColor
         }

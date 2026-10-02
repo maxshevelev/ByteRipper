@@ -250,6 +250,68 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertNil(value("Flash Image Tool", in: tableRows(a)))
     }
 
+    // MARK: - What is not known yet
+
+    /// An EFS volume with no files read out of it: what a first reading, made
+    /// without `FileTable.dat`, hands over.
+    private let efsVolumeJSON: [String: Any] = [
+        "offset": 0x463000, "pageSize": 0x1000, "systemPageCount": 1,
+        "dataPageCount": 14, "scratchPageCount": 1, "scratchPagesEmpty": true,
+        "dataPageCountMatchesSystem": true, "dictionary": 0x0B,
+        "revision": 1, "unknown1": 2, "dictionaryRevision": 1,
+        "dataPagesCommitted": 10, "dataPagesReserved": 4,
+        "systemHeaderCRCValid": true, "indexesCRCValid": true,
+        "firstIndexPaddingEmpty": true, "dataPageOrder": [],
+        "dataPageHeaderCRCsValid": true, "dataPageFooterCRCsValid": true,
+    ]
+
+    /// Whether an EFS volume holds files raises the state, and which files
+    /// it holds is in `FileTable.dat`: until the reading with it lands, the row
+    /// says so rather than giving the state.
+    func testFileSystemStateOfAnEFSVolumeWaitsForTheFileTable() throws {
+        let a = try analysis(["manifest": manifestJSON(), "mfsState": "configured",
+                              "efsVolume": efsVolumeJSON])
+        let waiting = MEASummary.build(a, pending: MEAPending(fileTable: true))[0].rows
+        XCTAssertEqual(value("File System State", in: waiting), .pending)
+        XCTAssertEqual(tone("File System State", in: waiting), .standard)
+        XCTAssertEqual(value("File System State", in: tableRows(a)), .value("Configured"))
+    }
+
+    /// Without an EFS volume the table does not change the state: nothing to
+    /// wait for.
+    func testFileSystemStateWithoutAnEFSVolumeDoesNotWait() throws {
+        let a = try analysis(["manifest": manifestJSON(), "mfsState": "configured"])
+        let rows = MEASummary.build(a, pending: MEAPending(fileTable: true))[0].rows
+        XCTAssertEqual(value("File System State", in: rows), .value("Configured"))
+    }
+
+    /// The module checks need `Huffman.dat`: while it is on the way the
+    /// messages end with a row that says so, after the ones already known —
+    /// and without it there is no such row, nor a block for nothing.
+    func testMessagesSayTheModuleChecksAreToCome() throws {
+        let a = try analysis(["manifest": manifestJSON()])
+        let waiting = MEASummary.build(a, pending: MEAPending(huffman: true))
+        let messages = try XCTUnwrap(waiting.last)
+        XCTAssertEqual(messages.title, "Messages")
+        XCTAssertEqual(messages.rows.last, MEASummaryRow("Module checks", .pending))
+        XCTAssertFalse(MEASummary.build(a).contains { $0.title == "Messages" })
+
+        let raised = try analysis(["manifest": manifestJSON(), "issues": [
+            ["id": 1, "severity": "warning", "message": "Something."],
+        ]])
+        XCTAssertEqual(MEASummary.build(raised, pending: MEAPending(huffman: true)).last?.rows.map(\.value),
+                       [.value("Something."), .pending])
+    }
+
+    /// A placeholder is never bold, whatever the row's tone; its words are
+    /// the panel's and a copy's alike.
+    func testAPendingValueIsNotEmphasized() {
+        XCTAssertFalse(MEASummaryRow("File System State", .pending, tone: .good).isEmphasized)
+        XCTAssertTrue(MEASummaryRow("File System State", .value("Configured"), tone: .good).isEmphasized)
+        XCTAssertEqual(MEASummaryValue.pending.text, "Loading…")
+        XCTAssertEqual(MEASummaryValue.comingSoon.text, "Coming soon")
+    }
+
     /// The File System State row's tone is its status: both settled states read
     /// green, an in-progress volume brown, a failed decode red — every other row
     /// stays standard.

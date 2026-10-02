@@ -14,6 +14,25 @@ public enum MEASummaryValue: Sendable, Equatable {
     case value(String)
     /// The engine has nothing for this row yet.
     case comingSoon
+    /// The analysis on screen was read without a database this row depends
+    /// on, and the reading with it is on the way (`MEAPending`). Not the
+    /// same thing as `comingSoon`: this row will have its value in seconds.
+    case pending
+
+    /// What the row says — the one wording the panel and a copy of it share.
+    public var text: String {
+        switch self {
+        case .value(let shown): return shown
+        case .comingSoon: return L("Coming soon")
+        case .pending: return L("Loading…")
+        }
+    }
+
+    /// Whether the value is a real one, which can be selected and copied.
+    public var isValue: Bool {
+        if case .value = self { return true }
+        return false
+    }
 }
 
 /// One Field/Value row of the summary — the same shape as `MEAField`, with the
@@ -30,6 +49,12 @@ public struct MEASummaryRow: Sendable, Equatable {
         self.label = label
         self.value = value
         self.tone = tone
+    }
+
+    /// Drawn bold: a real value whose tone is a verdict. A placeholder never
+    /// is, whatever tone the row would have.
+    public var isEmphasized: Bool {
+        value.isValue && tone.isStatus
     }
 }
 
@@ -66,8 +91,13 @@ public struct MEASummaryBlock: Sendable, Equatable {
 public enum MEASummary {
     /// The summary blocks in reading order. The firmware table is always first
     /// and always non-empty; the messages block follows only when `issues`
-    /// raised something.
-    public static func build(_ analysis: FirmwareAnalysis) -> [MEASummaryBlock] {
+    /// raised something, or when the module checks are still to come.
+    ///
+    /// `pending` is what the analysis was read without (`MEAPending`): a row
+    /// that depends on it says so instead of giving a value the reading with
+    /// it may change.
+    public static func build(_ analysis: FirmwareAnalysis,
+                             pending: MEAPending = .none) -> [MEASummaryBlock] {
         var rows: [MEASummaryRow] = []
         let add = { (label: String, value: MEASummaryValue) in
             rows.append(MEASummaryRow(label, value))
@@ -219,9 +249,13 @@ public enum MEASummary {
         } else if identified {
             add("Date", .comingSoon)
         }
-        // 17 · File System State.
+        // 17 · File System State. An EFS volume that holds files raises the
+        // state, and which files it holds is in `FileTable.dat`: without the
+        // table it reads as holding none.
         if isMFSFamily(analysis.family) {
-            if let state = analysis.mfsState {
+            if pending.fileTable, analysis.efsVolume != nil, analysis.mfsState != nil {
+                add("File System State", .pending)
+            } else if let state = analysis.mfsState {
                 rows.append(MEASummaryRow("File System State",
                                           .value(MEAText.title(state.rawValue)),
                                           tone: MEATones.fileSystemState(state)))
@@ -300,11 +334,16 @@ public enum MEASummary {
                 blocks.append(block)
             }
         }
-        if !analysis.issues.isEmpty {
-            let messages = analysis.issues.map { issue in
-                MEASummaryRow(MEAText.title(issue.severity.rawValue),
-                              .value(issue.message))
-            }
+        // The module checks need `Huffman.dat`; until the reading with it
+        // lands, the list says it is not finished rather than looking it.
+        var messages = analysis.issues.map { issue in
+            MEASummaryRow(MEAText.title(issue.severity.rawValue),
+                          .value(issue.message))
+        }
+        if pending.huffman {
+            messages.append(MEASummaryRow(L("Module checks"), .pending))
+        }
+        if !messages.isEmpty {
             blocks.append(MEASummaryBlock(title: L("Messages"), rows: messages))
         }
         return blocks

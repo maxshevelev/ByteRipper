@@ -19,6 +19,13 @@ public protocol MEADataSource: Sendable {
     /// files, which carry no name in their own bytes (`FileTable`).
     func fileTable() async throws -> FileTable
 
+    /// `FileTable.dat` and `Huffman.dat` as far as they are already in hand,
+    /// without fetching either: what a first reading of a dump is done with,
+    /// so the panel can show it before the databases arrive. A source that
+    /// answers at once anyway — a stub, a local file — need not implement them.
+    func heldFileTable() async -> FileTable?
+    func heldHuffmanDictionaries() async -> HuffmanDictionaries?
+
     /// Emits when a background check has replaced `MEA.dat` with a newer one.
     ///
     /// A source holds its database for the life of the process and re-checks it
@@ -72,5 +79,15 @@ extension MEADataSource {
     /// of `FileTable.dat`.
     public func fileTable() async throws -> FileTable {
         throw MEADataError.malformed(file: "FileTable.dat (no data source configured)")
+    }
+
+    /// Default: whatever the source answers, which for one that never waits
+    /// is what it holds.
+    public func heldFileTable() async -> FileTable? {
+        try? await fileTable()
+    }
+
+    public func heldHuffmanDictionaries() async -> HuffmanDictionaries? {
+        try? await huffmanDictionaries()
     }
 }

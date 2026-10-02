@@ -806,6 +806,35 @@ final class MEAToolFlowTests: XCTestCase {
         XCTAssertNotNil(refreshed, "a content change re-runs the analysis")
     }
 
+    /// Another file opened into the pane is another analysis to wait for, and
+    /// until it lands the panel is as it opens — the wait, no summary, no tree
+    /// — rather than the last file's analysis under the new file's name.
+    func testAnotherFileShowsTheWaitNotTheLastFilesAnalysis() throws {
+        let controller = try open(METestImage.fptFile())
+        let panel = try panel()
+        XCTAssertTrue(descendants(of: panel, NSTextField.self).map(\.stringValue).contains("Family"),
+                      "the premise: the first file's summary is up")
+
+        let other = try tempFile(METestImage.fptFile())
+        files.append(other)
+        let session = try session()
+        let landed = expectation(description: "the other file's analysis lands")
+        session.onDisplay = { _ in landed.fulfill() }
+        try controller.windowModel.pane1.open(url: other)
+        window?.layoutIfNeeded()
+
+        let waiting = descendants(of: panel, NSTextField.self).map(\.stringValue)
+        XCTAssertFalse(waiting.contains("Family"), "no summary of the last file: \(waiting)")
+        XCTAssertTrue(waiting.contains("Analyzing the ME firmware…"), "the wait, as on a first open: \(waiting)")
+        XCTAssertEqual(try outline().numberOfRows, 0, "and no tree")
+
+        wait(for: [landed], timeout: 5)
+        session.onDisplay = nil
+        window?.layoutIfNeeded()
+        XCTAssertTrue(descendants(of: panel, NSTextField.self).map(\.stringValue).contains("Family"),
+                      "the new file's summary takes its place")
+    }
+
     // MARK: - Parking
 
     /// Coming back to the ME Analyzer hands it the tab and the row it was on:

@@ -1,5 +1,6 @@
 import XCTest
 import MEFirmware
+import MEPresentation
 import ToolModuleKit
 @testable import MEReads
 
@@ -58,5 +59,71 @@ final class MEReadsTests: XCTestCase {
         let data = try MEReads.readRange(big, 0..<UInt64(big.bytes.count))
         XCTAssertEqual(data.count, big.bytes.count)
         XCTAssertEqual(data.last, big.bytes.last, "the tail came with it")
+    }
+
+    // MARK: - What an analysis wants of the databases
+
+    private func analysis(_ overrides: [String: Any] = [:]) throws -> FirmwareAnalysis {
+        var base: [String: Any] = [
+            "family": "csme", "variant": "CSME",
+            "version": ["major": 15, "minor": 40, "hotfix": 37, "build": 3121],
+            "release": "production", "type": "region", "sku": "", "platform": "",
+            "sizeBytes": 0x200000, "regions": [], "issues": [],
+        ]
+        for (key, value) in overrides { base[key] = value }
+        return try JSONDecoder().decode(FirmwareAnalysis.self,
+                                        from: JSONSerialization.data(withJSONObject: base))
+    }
+
+    private func partition(_ modules: [CPDModule]) -> CodePartition {
+        CodePartition(name: "FTPR", offset: 0x1000, headerVersion: 2, headerLength: 0x14,
+                      entryCount: modules.count, checksumValid: true, modules: modules)
+    }
+
+    /// `Huffman.dat` is wanted for a Huffman-packed `pm` or `rbe` module
+    /// whatever the image, and for any other Huffman module only on an
+    /// identified one; an image of LZMA modules never wants it.
+    func testTheDictionariesAreWantedForWhatTheyDecompress() throws {
+        var a = try analysis()
+        a.codePartition = partition([CPDModule(id: 0, name: "kernel", offset: 0x100, isHuffman: false, size: 0x100)])
+        XCTAssertFalse(MEReads.huffmanDictionariesWanted(a))
+
+        a.codePartition = partition([CPDModule(id: 0, name: "kernel", offset: 0x100, isHuffman: true, size: 0x100)])
+        XCTAssertTrue(MEReads.huffmanDictionariesWanted(a))
+        a.variant = ""
+        XCTAssertFalse(MEReads.huffmanDictionariesWanted(a), "an image nobody named has no dictionary to pick")
+
+        a.codePartition = partition([CPDModule(id: 0, name: "pm", offset: 0x100, isHuffman: true, size: 0x100)])
+        XCTAssertTrue(MEReads.huffmanDictionariesWanted(a), "the metadata table is behind it")
+        a.codePartition = nil
+        XCTAssertFalse(MEReads.huffmanDictionariesWanted(a))
+    }
+
+    /// `FileTable.dat` is wanted for what cannot be read without it: here, an
+    /// EFS volume, whose pages carry no directory.
+    func testTheFileTableIsWantedForAnEFSVolume() throws {
+        XCTAssertFalse(MEReads.fileTableWanted(try analysis()))
+        let efs: [String: Any] = [
+            "offset": 0x463000, "pageSize": 0x1000, "systemPageCount": 1,
+            "dataPageCount": 14, "scratchPageCount": 1, "scratchPagesEmpty": true,
+            "dataPageCountMatchesSystem": true, "dictionary": 0x0B,
+            "revision": 1, "unknown1": 2, "dictionaryRevision": 1,
+            "dataPagesCommitted": 10, "dataPagesReserved": 4,
+            "systemHeaderCRCValid": true, "indexesCRCValid": true,
+            "firstIndexPaddingEmpty": true, "dataPageOrder": [],
+            "dataPageHeaderCRCsValid": true, "dataPageFooterCRCsValid": true,
+        ]
+        XCTAssertTrue(MEReads.fileTableWanted(try analysis(["efsVolume": efs])))
+    }
+
+    /// A first reading that did without a database it wanted says so; one
+    /// that did without one the analysis does not want leaves nothing pending.
+    func testAFirstReadingIsPendingOnlyOnWhatItWanted() throws {
+        var a = try analysis()
+        a.codePartition = partition([CPDModule(id: 0, name: "pm", offset: 0x100, isHuffman: true, size: 0x100)])
+        let reading = MEAFirstReading(analysis: a, missedFileTable: true, missedHuffman: true)
+        XCTAssertFalse(reading.isComplete)
+        XCTAssertEqual(reading.pending, MEAPending(fileTable: false, huffman: true))
+        XCTAssertTrue(MEAFirstReading(analysis: a, missedFileTable: false, missedHuffman: false).isComplete)
     }
 }

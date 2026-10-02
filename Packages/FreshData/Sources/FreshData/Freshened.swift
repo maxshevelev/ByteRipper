@@ -138,6 +138,13 @@ public actor Freshened<Value: Sendable> {
         observers[id] = nil
     }
 
+    /// What is held, without fetching or checking anything — for a caller
+    /// that would rather go on without it than wait. Nil until a fetch has
+    /// landed.
+    public var heldValue: Value? {
+        held?.value
+    }
+
     /// What is held and how old it is, or `nil` if nothing has been fetched.
     public var status: Status? {
         held.map { Status(changedAt: $0.changedAt, checkedAt: $0.checkedAt) }

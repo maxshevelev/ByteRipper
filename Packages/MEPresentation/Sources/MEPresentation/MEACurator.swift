@@ -29,14 +29,19 @@ public enum MEACurator {
     /// hands the answer in (`MFSFileNames`, `EFSFileNames`,
     /// `ConfigRecordPaths`). `.none` — the default — is the tree as it reads
     /// before the table arrives, and on every volume that names its own files.
+    ///
+    /// `pending` is what the analysis was read without (`MEAPending`): the
+    /// rows that depend on it read `pendingValue` until the reading with it
+    /// lands.
     public static func present(_ analysis: FirmwareAnalysis,
                                mfsNames: MFSFileNames = .none,
                                efsNames: EFSFileNames = .none,
-                               configPaths: ConfigRecordPaths = .none) -> [MEANode] {
+                               configPaths: ConfigRecordPaths = .none,
+                               pending: MEAPending = .none) -> [MEANode] {
         var roots: [MEANode] = []
         let add: (MEANode?) -> Void = { if let n = $0 { roots.append(n) } }
 
-        add(firmware(analysis))
+        add(firmware(analysis, pending))
         add(regions(analysis))
         add(cseLayout(analysis))
         add(bootPartitions(analysis))
@@ -55,7 +60,7 @@ public enum MEACurator {
         add(oromGroup(analysis))
         add(rbeGroup(analysis))
         add(checksumsGroup(analysis))
-        add(issuesGroup(analysis))
+        add(issuesGroup(analysis, pending))
 
         for (index, var node) in roots.enumerated() {
             node.path = [index]
@@ -67,7 +72,7 @@ public enum MEACurator {
 
     // MARK: - Identity
 
-    private static func firmware(_ a: FirmwareAnalysis) -> MEANode {
+    private static func firmware(_ a: FirmwareAnalysis, _ pending: MEAPending) -> MEANode {
         var fields: [MEAField] = []
         append(&fields, "Family", MEAText.family(a.family))
         append(&fields, "Variant", a.variant, dropEmpty: true)
@@ -85,7 +90,11 @@ public enum MEACurator {
         append(&fields, "RSA Signature Valid", a.rsaSignatureValid.map(MEAText.yesNo))
         append(&fields, "ARB SVN", a.arbSvn)
         append(&fields, "VCN", a.vcn)
-        if let state = a.mfsState {
+        // A written EFS volume raises the state, and its files are known only
+        // from `FileTable.dat`.
+        if a.mfsState != nil, pending.fileTable, a.efsVolume != nil {
+            fields.append(MEAField("File System State", pendingValue))
+        } else if let state = a.mfsState {
             fields.append(MEAField("File System State", MEAText.title(state.rawValue),
                                    tone: MEATones.fileSystemState(state)))
         }
@@ -861,17 +870,23 @@ public enum MEACurator {
         return MEANode(path: [], title: checksumsTitle, fields: fields)
     }
 
-    private static func issuesGroup(_ a: FirmwareAnalysis) -> MEANode? {
-        guard !a.issues.isEmpty else { return nil }
-        let rows = a.issues.map { issue -> MEANode in
+    /// What the analysis raised, and — while `Huffman.dat` is on the way — a
+    /// row that says the module checks are still to come.
+    private static func issuesGroup(_ a: FirmwareAnalysis, _ pending: MEAPending) -> MEANode? {
+        var rows = a.issues.map { issue -> MEANode in
             let name = MEAText.title(issue.severity.rawValue)
             return MEANode(path: [], title: name,
                            subtitle: issue.message,
                            fields: [MEAField(L("Severity"), name),
                                     MEAField(L("Message"), issue.message)])
         }
+        if pending.huffman {
+            rows.append(MEANode(path: [], title: L("Module checks"), subtitle: pendingValue,
+                                fields: [MEAField(L("Module checks"), pendingValue)]))
+        }
+        guard !rows.isEmpty else { return nil }
         return MEANode(path: [], title: L("Issues"),
-                       subtitle: MEAText.count(rows.count, .issue),
+                       subtitle: MEAText.count(a.issues.count, .issue),
                        children: rows)
     }
 

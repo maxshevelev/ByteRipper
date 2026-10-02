@@ -96,6 +96,70 @@ public enum MEReads {
         }.value
     }
 
+    /// Off the main actor: a first reading, with `FileTable.dat` and
+    /// `Huffman.dat` only as far as `source` already holds them — nothing is
+    /// fetched for it, so it is as quick as the parse. It says which of the two
+    /// the analysis asked for and did without; a reading that did without
+    /// neither is the analysis, and one that did is shown while `analyze`
+    /// reads again with them.
+    public static func firstReading(
+        _ snapshot: any ToolContentReader,
+        source: any MEADataSource,
+        meRegion: Range<UInt64>?
+    ) async -> Result<MEAFirstReading, Error> {
+        let held = HeldDatabases(base: source,
+                                 table: await source.heldFileTable(),
+                                 dictionaries: await source.heldHuffmanDictionaries())
+        let result = await analyze(snapshot, analyzer: MEFirmwareAnalyzer(data: held), meRegion: meRegion)
+        let missed = await held.missed
+        return result.map {
+            MEAFirstReading(analysis: $0, missedFileTable: missed.fileTable, missedHuffman: missed.huffman)
+        }
+    }
+
+    /// Whether this analysis has anything that needs `FileTable.dat`: an
+    /// FTBL-mode MFS volume, which cannot name its files; an EFS volume, whose
+    /// pages carry no directory, so that without the table it lists no files
+    /// at all; an ID-keyed Configuration record, which has no path without it.
+    /// A legacy volume names its files through its home directory.
+    public static func fileTableWanted(_ analysis: FirmwareAnalysis) -> Bool {
+        let volume = analysis.mfsVolume
+        return (volume?.usesFTBL == true && volume?.files.isEmpty == false)
+            || analysis.efsVolume != nil
+            || !configurationIDs(analysis).isEmpty
+    }
+
+    /// Every ID-keyed Configuration record in the analysis, wherever it came
+    /// from: the FITC partition's payload and a newer volume's own 6/7 streams
+    /// are keyed into the same table.
+    public static func configurationIDs(_ analysis: FirmwareAnalysis) -> [Int] {
+        (analysis.oemConfiguration?.recordsByID ?? []).map(\.fileID)
+            + (analysis.mfsVolume?.configurationsByID ?? []).flatMap { $0.records.map(\.fileID) }
+    }
+
+    /// Whether reading this image again with `Huffman.dat` would read more of
+    /// it: a Huffman-packed `pm` or `rbe` module, whose metadata table is
+    /// behind the dictionary, or — on an identified firmware — a Huffman module
+    /// the check can decompress. Asked of the analysis alone, without the
+    /// region's bytes; the analyzer's own test (`huffmanSlices`) also leaves
+    /// out an erased module, so this may say yes where the check finds nothing.
+    public static func huffmanDictionariesWanted(_ analysis: FirmwareAnalysis) -> Bool {
+        guard let partition = analysis.codePartition else { return false }
+        let packedMetadata = partition.modules.contains {
+            ($0.name == "pm" || $0.name == "rbe") && $0.isHuffman
+        }
+        let checkable = partition.modules.contains { module in
+            guard module.isHuffman, module.size > 0 else { return false }
+            guard let met = partition.modules.first(where: { $0.name == module.name + ".met" }) else {
+                return true
+            }
+            return (met.extensions ?? []).contains {
+                $0.moduleAttributes?.compression == 1 && $0.moduleAttributes?.encryption == 0
+            }
+        }
+        return packedMetadata || (!analysis.variant.isEmpty && checkable)
+    }
+
     /// Off the main actor: the same region `analyze` was given, digested. An
     /// unreadable file leaves every field nil, and the group then goes rather
     /// than standing there promising numbers it cannot get.
@@ -144,4 +208,60 @@ public enum MEReads {
         (error as? MEADataError)?.errorDescription
             ?? "The analysis failed: \(error.localizedDescription)"
     }
+}
+
+/// A first reading of a dump (`MEReads.firstReading`), and which databases it
+/// asked for and did without.
+public struct MEAFirstReading: Sendable {
+    public var analysis: FirmwareAnalysis
+    public var missedFileTable: Bool
+    public var missedHuffman: Bool
+
+    /// Read with everything it asked for: this is the analysis.
+    public var isComplete: Bool { !missedFileTable && !missedHuffman }
+
+    /// What the values it shows cannot be trusted for yet.
+    public var pending: MEAPending {
+        MEAPending(fileTable: missedFileTable && MEReads.fileTableWanted(analysis),
+                   huffman: missedHuffman && MEReads.huffmanDictionariesWanted(analysis))
+    }
+}
+
+/// A source that answers `FileTable.dat` and `Huffman.dat` with what was in
+/// hand when the reading began and nothing else, and remembers which of them
+/// the analysis asked for and did not get.
+private actor HeldDatabases: MEADataSource {
+    let base: any MEADataSource
+    let table: FileTable?
+    let dictionaries: HuffmanDictionaries?
+    private(set) var missed = (fileTable: false, huffman: false)
+
+    init(base: any MEADataSource, table: FileTable?, dictionaries: HuffmanDictionaries?) {
+        self.base = base
+        self.table = table
+        self.dictionaries = dictionaries
+    }
+
+    func database() async throws -> MEADatabase {
+        try await base.database()
+    }
+
+    func fileTable() throws -> FileTable {
+        guard let table else {
+            missed.fileTable = true
+            throw MEADataError.malformed(file: "FileTable.dat (not in hand yet)")
+        }
+        return table
+    }
+
+    func huffmanDictionaries() throws -> HuffmanDictionaries {
+        guard let dictionaries else {
+            missed.huffman = true
+            throw MEADataError.malformed(file: "Huffman.dat (not in hand yet)")
+        }
+        return dictionaries
+    }
+
+    func heldFileTable() -> FileTable? { table }
+    func heldHuffmanDictionaries() -> HuffmanDictionaries? { dictionaries }
 }

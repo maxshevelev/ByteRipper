@@ -79,6 +79,14 @@ public actor MEAGitHubDataRepository: MEADataSource {
         }
     }
 
+    public func heldFileTable() async -> FileTable? {
+        await fileTableData.heldValue
+    }
+
+    public func heldHuffmanDictionaries() async -> HuffmanDictionaries? {
+        await huffmanData.heldValue
+    }
+
     /// Emits when a check behind someone's back found a newer `MEA.dat`.
     public func databaseChanges() async -> AsyncStream<Void> {
         let replacements = await databaseData.changes()

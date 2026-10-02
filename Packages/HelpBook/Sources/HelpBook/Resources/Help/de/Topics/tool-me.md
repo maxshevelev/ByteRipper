@@ -1,4 +1,4 @@
-@source-sha 04e4fb075407a53044708787d11071467fefbba8eff3215b4c9afa80eaf0b1b5
+@source-sha 6e4e81cd81ec176a6a9b92cc1acb9e6e9d4c2f25f2dffcbe6d036e4979f78888
 # ME Analyzer
 
 > Welche Intel-Management-Engine-Firmware das Image enthält und aus welchen Strukturen sie besteht.
@@ -10,6 +10,8 @@
 Ein Bericht darüber, was die Firmware ist: Familie und Version, die [[term:sku|SKU]], Freigabestand und Typ, die [[term:svn|Sicherheitsnummern]], ob es eine vollständige Firmware oder ein Update ist, sowie die Meldungen, die die Analyse ausgelöst hat. Die einzelnen Zeilen sind unter [[topic:recipe-me-check|Den ME-Bericht lesen]] erläutert.
 
 Die Zeilenbezeichnungen stehen in jeder Sprache der Oberfläche auf Englisch: Es sind die Bezeichnungen des Projekts, auf dem die Analyse beruht. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
+
+Die Registerkarte erscheint, sobald eine erste Analyse der Region abgeschlossen ist. Zwei weitere Datenbanken des Projekts, auf dem die Analyse beruht, `FileTable.dat` und `Huffman.dat`, werden geladen, wenn die Firmware sie benötigt; anschließend wird die Region mit ihnen erneut analysiert. Bis diese zweite Analyse abgeschlossen ist, steht bei Werten, die von ihnen abhängen, **Wird geladen…**. Das betrifft den **File System State** einer Firmware mit EFS-Volume, deren Dateien nur in `FileTable.dat` verzeichnet sind, sowie die Zeile **Modulprüfung** am Ende der **Meldungen**, für die `Huffman.dat` erforderlich ist; dieselbe Zeile enthält die Gruppe **Probleme** auf der Registerkarte **Vollständige Angaben**. Die Meldungen darüber sind endgültig. Lässt sich eine Datenbank nicht laden, bleiben die Werte der ersten Analyse bestehen.
 
 Die beiden Tasten in der Registerkartenzeile kopieren die Registerkarte als Text oder als Bild des Bereichs.
 
