@@ -1,4 +1,5 @@
 import Cocoa
+import AppPalette
 import HelpUI
 import Localization
 import UniformTypeIdentifiers
@@ -2160,7 +2161,7 @@ final class MainViewController: NSViewController {
         let stepName = L("Update from %1$@", pane.status.fileName)
         switch origin.planUpdate(from: pane) {
         case .refused(let title, let message):
-            presentAlert(title: title, message: message)
+            presentAlert(title: title, message: message, outcome: .problem)
             return nil
 
         case .overwrite(let offset, let bytes, let confirm):
@@ -2173,7 +2174,8 @@ final class MainViewController: NSViewController {
                     title: L("Updated “%1$@”", origin.parentName),
                     message: Self.undoLine(for: origin),
                     on: (Self.controller(holding: parent, among: openDocuments?.controllers ?? [])
-                         ?? self).view.window)
+                         ?? self).view.window,
+                    outcome: .success)
             }
             return nil
 
@@ -2209,14 +2211,16 @@ final class MainViewController: NSViewController {
                 switch result {
                 case .failure(let refusal):
                     self.presentSheetAlert(title: L("“%1$@” cannot be put back", origin.partName),
-                                           message: refusal.message, on: sheetWindow)
+                                           message: refusal.message, on: sheetWindow,
+                                           outcome: .problem)
                 case .success(let plan):
                     // Worked out over the bytes as they were when asked.
                     guard parent.contentGeneration == generation, parent.document === document else {
                         self.presentSheetAlert(
                             title: L("“%1$@” changed", origin.parentName),
                             message: L("It changed while the update was being worked out. Nothing was written."),
-                            on: sheetWindow
+                            on: sheetWindow,
+                            outcome: .problem
                         )
                         return
                     }
@@ -2235,7 +2239,8 @@ final class MainViewController: NSViewController {
                             ? L("Nothing was written inside a Boot Guard or vendor protected range.")
                             : plan.warnings.joined(separator: "\n\n"))
                             + "\n\n" + Self.undoLine(for: origin),
-                        on: sheetWindow
+                        on: sheetWindow,
+                        outcome: .success
                     )
                 }
             }
@@ -6824,13 +6829,18 @@ final class MainViewController: NSViewController {
     /// cannot see.
     private(set) var lastAlertMessage: String?
 
-    private func presentAlert(title: String, message: String, asProblem: Bool = false) {
+    /// How the last alert ended its sentence: nil for one that only informs.
+    private(set) var lastAlertOutcome: AlertOutcome?
+
+    private func presentAlert(title: String, message: String, outcome: AlertOutcome? = nil) {
         lastAlertTitle = title
         lastAlertMessage = message
+        lastAlertOutcome = outcome
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
-        alert.alertStyle = asProblem ? .warning : .informational
+        alert.alertStyle = outcome == .problem ? .warning : .informational
+        if let outcome { alert.icon = outcome.icon }
         Self.presentModal(alert, defaultInTest: .alertFirstButtonReturn)  // OK in tests, result ignored
     }
 
@@ -6840,17 +6850,19 @@ final class MainViewController: NSViewController {
     /// invalidated by the write, sat half rebuilt — rows with no names — until
     /// the alert was dismissed. A sheet lets the panels finish while it is up.
     func presentSheetAlert(title: String, message: String, on window: NSWindow?,
-                           asProblem: Bool = false) {
+                           outcome: AlertOutcome? = nil) {
         guard !Self.isRunningTests, let window else {
-            presentAlert(title: title, message: message, asProblem: asProblem)
+            presentAlert(title: title, message: message, outcome: outcome)
             return
         }
         lastAlertTitle = title
         lastAlertMessage = message
+        lastAlertOutcome = outcome
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
-        alert.alertStyle = asProblem ? .warning : .informational
+        alert.alertStyle = outcome == .problem ? .warning : .informational
+        if let outcome { alert.icon = outcome.icon }
         alert.beginSheetModal(for: window)
     }
 
@@ -7565,3 +7577,21 @@ private final class OffsetContextTarget: NSObject {
     }
 }
 
+
+
+/// How an operation ended, for the icon its alert wears: a green check for what
+/// was done, a red octagon for what was refused or failed. An alert that only
+/// informs has neither.
+enum AlertOutcome {
+    case success, problem
+
+    var icon: NSImage? {
+        let (symbol, color): (String, NSColor) = self == .success
+            ? ("checkmark.circle", SemanticColors.good)
+            : ("exclamationmark.octagon", SemanticColors.bad)
+        let configuration = NSImage.SymbolConfiguration(pointSize: 48, weight: .regular)
+            .applying(.init(paletteColors: [color]))
+        return NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration)
+    }
+}

@@ -198,7 +198,7 @@ public enum UEFIRebuild {
             switch range.kind {
             case .ibb:
                 throw Refusal(
-                    "The change writes at 0x\(hex(max(hit.lowerBound, range.range.lowerBound))) inside “\(range.name)”, part of the Boot Guard IBB: the processor checks it before the firmware runs, and an edit there stops the platform starting (§6.4 of UPDATE_IN_PARENT.md). Nothing was changed."
+                    "The change writes at 0x\(hex(max(hit.lowerBound, range.range.lowerBound))) inside “\(range.name)”, part of the Boot Guard IBB: the processor checks it before the firmware runs, and an edit there stops the platform starting. Nothing was changed."
                 )
             case .vendorHash:
                 // A list names several ranges one way — every entry of an
@@ -521,7 +521,7 @@ public enum UEFIRebuild {
             let newLength = UInt64(new.count)
             if child.flattened.contains(where: isVolumeTop) {
                 throw Refusal(
-                    "“\(child.name)” holds the Volume Top File, which has to end at the top of the address space, so it keeps its size of 0x\(hex(oldLength)) bytes and this one is 0x\(hex(newLength)) (§7 of UPDATE_IN_PARENT.md)."
+                    "“\(child.name)” holds the Volume Top File, which has to end at the top of the address space, so it keeps its size of 0x\(hex(oldLength)) bytes and this one is 0x\(hex(newLength))."
                 )
             }
             let next = siblings.first {
@@ -538,7 +538,7 @@ public enum UEFIRebuild {
                 guard room >= needed else {
                     let before = next.map { "“\($0.name)”" } ?? endName
                     throw Refusal(
-                        "“\(child.name)” is 0x\(hex(needed)) bytes longer than before, and only 0x\(hex(room)) empty bytes follow it before \(before), which stays where it is (§7 of UPDATE_IN_PARENT.md)."
+                        "“\(child.name)” is 0x\(hex(needed)) bytes longer than before, and only 0x\(hex(room)) empty bytes follow it before \(before), which stays where it is."
                     )
                 }
                 result.replaceSubrange(Int(old.lowerBound)..<Int(old.upperBound + needed), with: new)
@@ -680,12 +680,12 @@ public enum UEFIRebuild {
                 for node in moving {
                     if node.flattened.contains(where: \.isFixed) {
                         throw Refusal(
-                            "“\(node.name)” would move, and it is fixed at its address — the Volume Top File, a FIT target or a file marked fixed (§6.4 of UPDATE_IN_PARENT.md)."
+                            "“\(node.name)” would move, and it is fixed at its address — the Volume Top File, a FIT target or a file marked fixed."
                         )
                     }
                     if let type = node.subtype, [0x03, 0x04, 0x06, 0x08].contains(type) {
                         throw Refusal(
-                            "“\(node.name)” would move, and it is code that runs in place from flash: moving it needs a rebase this editor does not do (§6.4 of UPDATE_IN_PARENT.md)."
+                            "“\(node.name)” would move, and it is code that runs in place from flash: moving it needs a rebase this editor does not do."
                         )
                     }
                 }
@@ -721,7 +721,7 @@ public enum UEFIRebuild {
                                            saysSo: growth == .inSection)
                 }
                 throw Refusal(
-                    "“\(volume.name)” has 0x\(hex(absorbEnd - absorbStart)) bytes free where it can take room, and the change needs 0x\(hex(UInt64(newAbsorbStart - Int64(absorbStart)))) (§6.3 of UPDATE_IN_PARENT.md)."
+                    "“\(volume.name)” has 0x\(hex(absorbEnd - absorbStart)) bytes free where it can take room, and the change needs 0x\(hex(UInt64(newAbsorbStart - Int64(absorbStart))))."
                 )
             }
             if let pad = padBeforeTop {
@@ -770,13 +770,13 @@ public enum UEFIRebuild {
             let end = Int(volume.range.upperBound)
             guard let blockLength = Bytes.oneBlockLength(bytes, at: start, end: end) else {
                 throw Refusal(
-                    "“\(volume.name)” has no room for 0x\(hex(needed)) more bytes, and its block map is not one a new size can be written into (§6.5 of UPDATE_IN_PARENT.md)."
+                    "“\(volume.name)” has no room for 0x\(hex(needed)) more bytes, and its block map is not one a new size can be written into."
                 )
             }
             let length = UInt64(volume.range.count)
             guard length % blockLength == 0 else {
                 throw Refusal(
-                    "“\(volume.name)” has no room for 0x\(hex(needed)) more bytes, and its size is not a whole number of its blocks (§6.5 of UPDATE_IN_PARENT.md)."
+                    "“\(volume.name)” has no room for 0x\(hex(needed)) more bytes, and its size is not a whole number of its blocks."
                 )
             }
             let extra = (needed + blockLength - 1) / blockLength * blockLength
@@ -966,7 +966,7 @@ public enum UEFIRebuild {
             } else {
                 headerSize = Int(FFS.headerSize)
                 guard bytes.count <= 0xFF_FFFF else {
-                    throw Refusal("“\(name)” would grow past 16 MiB in a file with no large-file header (§6.4 of UPDATE_IN_PARENT.md).")
+                    throw Refusal("“\(name)” would grow past 16 MiB in a file with no large-file header.")
                 }
                 put(UInt64(bytes.count), count: 3, at: 0x14, in: &bytes)
             }

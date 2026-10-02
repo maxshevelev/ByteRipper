@@ -140,7 +140,7 @@ import MEFirmware
     func report(title: String, message: String, isProblem: Bool) {
         guard let owner else { return }
         owner.presentSheetAlert(title: title, message: message, on: owner.view.window,
-                                asProblem: isProblem)
+                                outcome: isProblem ? .problem : .success)
     }
 
     /// The source's own bytes, copied out: they go back as they are.

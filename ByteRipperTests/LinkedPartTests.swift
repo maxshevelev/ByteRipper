@@ -278,6 +278,7 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertEqual(controller.lastAlertTitle,
                        "Updated “\(controller.windowModel.pane1.status.fileName)”")
         XCTAssertTrue(try XCTUnwrap(controller.lastAlertMessage).contains("takes it back"))
+        XCTAssertEqual(controller.lastAlertOutcome, .success)
         XCTAssertTrue(view.updateButton.isHiddenOrHasHiddenAncestor, "and gone once it is back")
     }
 

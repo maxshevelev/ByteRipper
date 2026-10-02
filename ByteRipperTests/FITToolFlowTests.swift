@@ -691,6 +691,7 @@ final class FITToolFlowTests: XCTestCase {
                       "\(String(describing: controller.lastAlertTitle))")
 
         XCTAssertEqual(beeps, 1)
+        XCTAssertEqual(controller.lastAlertOutcome, .problem, "wearing the red octagon")
         XCTAssertTrue(try XCTUnwrap(controller.lastAlertMessage)
             .contains("does not start with an Intel microcode header"))
         let panel = try XCTUnwrap(controller.tools.panel)
@@ -711,6 +712,7 @@ final class FITToolFlowTests: XCTestCase {
                       "\(String(describing: controller.lastAlertTitle))")
 
         XCTAssertEqual(beeps, 0)
+        XCTAssertEqual(controller.lastAlertOutcome, .success, "wearing the green check")
         let message = try XCTUnwrap(controller.lastAlertMessage)
         XCTAssertTrue(message.contains("Added CPUID 906EA at 0x2100"), message)
         XCTAssertTrue(message.hasSuffix("⌘Z takes it back."), message)
