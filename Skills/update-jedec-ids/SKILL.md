@@ -1,6 +1,6 @@
 ---
 name: update-jedec-ids
-description: Regenerate Packages/UEFIImage/Sources/UEFIImage/JedecIDs.swift from the UEFITool repository's common/descriptor.cpp. Use when the SPI flash chip names the descriptor's detail panel shows next to a VSCC table's JEDEC ids need refreshing from upstream, when the user asks to "update the JEDEC ids" / "sync the flash chip names", or after LongSoft/UEFITool changes that file.
+description: Regenerate Packages/UEFIImage/Sources/UEFIImage/JedecIDs.swift from the UEFITool repository's common/descriptor.cpp and flashrom's chip files. Use when the SPI flash chip names the descriptor's detail panel shows next to a VSCC table's JEDEC ids need refreshing from upstream, when the user asks to "update the JEDEC ids" / "sync the flash chip names", or after LongSoft/UEFITool changes that file.
 ---
 
 # Update JEDEC ids
@@ -38,6 +38,24 @@ python3 Skills/update-jedec-ids/scripts/gen_jedec.py --source ../UEFITool/common
 python3 Skills/update-jedec-ids/scripts/gen_jedec.py --repo /path/to/ByteRipper
 ```
 
+## Sources and precedence
+
+1. **UEFITool** — the `jedecIdToUString` switch. Its name wins when both know an id.
+2. **flashrom** — `flashchips/*.c` on `main`, ids resolved through
+   `include/flashchips.h`. Only SPI chips probed by plain RDID; the first entry
+   for an id wins. It adds the ids UEFITool lacks, and the size of every chip
+   it lists, also those UEFITool names.
+
+Each entry keeps the source its *name* came from. flashrom is GPL-2.0-or-later;
+the decision, written in the generated file's header, is that only facts are
+taken — id, vendor and part name, capacity — and none of its code or comments.
+Take nothing else from it. Not yet read: the Linux kernel's `spi-nor` tables
+(`drivers/mtd/spi-nor/<vendor>.c`, also GPL-2.0), planned between the two.
+
+```sh
+python3 Skills/update-jedec-ids/scripts/gen_jedec.py --flashrom ../flashrom   # a local checkout
+```
+
 ## After a run
 
 1. **Read the diff.** It is data, and the whole point of generating it is that
@@ -50,9 +68,9 @@ python3 Skills/update-jedec-ids/scripts/gen_jedec.py --repo /path/to/ByteRipper
    cd Packages/UEFIImage && swift test --filter DescriptorInfoTests
    ```
 
-   `testTheChipCatalogueIsComplete` pins the count and three names. A
-   regeneration that adds chips *should* change the count — update that number
-   in the same commit, so the next person can tell a real addition from a
+   `testTheChipCatalogueIsComplete` pins UEFITool's count and three names, and
+   a floor for flashrom's. A regeneration that adds UEFITool chips *should*
+   change the count — update that number in the same commit, so the next person can tell a real addition from a
    truncated read.
 3. **Do not edit the generated file by hand.** The header says so, and the next
    run overwrites it.

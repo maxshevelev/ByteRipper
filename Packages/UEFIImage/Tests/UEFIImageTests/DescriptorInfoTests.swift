@@ -213,9 +213,22 @@ final class DescriptorInfoTests: XCTestCase {
     /// it: the generator refuses under a hundred, and this is the count it
     /// produced.
     func testTheChipCatalogueIsComplete() {
-        XCTAssertEqual(JedecIDs.count, 185)
+        XCTAssertEqual(JedecIDs.count(from: .uefiTool), 185)
+        XCTAssertGreaterThan(JedecIDs.count(from: .flashrom), 150)
         XCTAssertEqual(JedecIDs.name(of: 0x1C7018), "EON EN25QH128")
         XCTAssertEqual(JedecIDs.name(of: 0xC22019), "Macronix MX25L256")
         XCTAssertNil(JedecIDs.name(of: 0x000000))
+    }
+
+    /// Where both sources know an id, UEFITool names it; flashrom still gives the
+    /// size, and an id only flashrom lists carries flashrom as its source.
+    func testTheCatalogueKeepsEachEntrysSourceAndSize() throws {
+        let both = try XCTUnwrap(JedecIDs.chip(of: 0xEF4019))
+        XCTAssertEqual(both.name, "Winbond W25Q256")
+        XCTAssertEqual(both.source, .uefiTool)
+        XCTAssertEqual(both.sizeKB, 32768)
+
+        let extra = try XCTUnwrap(JedecIDs.chip(of: 0xC84017))
+        XCTAssertEqual(extra.sizeKB, 8192)
     }
 }
