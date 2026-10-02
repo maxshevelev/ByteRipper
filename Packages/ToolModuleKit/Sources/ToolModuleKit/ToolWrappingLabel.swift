@@ -40,6 +40,22 @@ import AppKit
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// The height its cell draws the text in at the width it is laid out at.
+    ///
+    /// `NSTextField` works its own out as if the whole width were the
+    /// text's, but it draws inside the cell's insets — so a text that only
+    /// just fits a line in the first reckoning wraps in the second, and the
+    /// extra line runs out of the frame. It came back on a click, when the
+    /// field editor drew it. Measured with the cell that draws it, the two
+    /// cannot disagree.
+    override public var intrinsicContentSize: NSSize {
+        let size = super.intrinsicContentSize
+        guard preferredMaxLayoutWidth > 0, let cell else { return size }
+        let drawn = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: preferredMaxLayoutWidth,
+                                                   height: .greatestFiniteMagnitude))
+        return NSSize(width: size.width, height: ceil(drawn.height))
+    }
+
     override public func layout() {
         super.layout()
         guard preferredMaxLayoutWidth != bounds.width else { return }

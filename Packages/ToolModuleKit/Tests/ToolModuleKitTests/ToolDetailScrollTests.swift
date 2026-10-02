@@ -157,6 +157,28 @@ final class ToolDetailScrollTests: XCTestCase {
                           "and needs fewer lines in it")
     }
 
+    /// A value is as tall as the lines its text is drawn in, at every width:
+    /// the field draws inside its cell's insets, and a height worked out for
+    /// the whole width put a text that just fits on one line fewer than it
+    /// takes — the last line ran out of the frame, and came back only on a
+    /// click, when the field editor drew it.
+    func testAWrappedValueIsAsTallAsTheLinesItIsDrawnIn() {
+        let scroll = self.scroll()
+        scroll.prepareForRows(subject: "row")
+        let text = "0x27 (NonVolatile, BootService, Runtime, TimeBasedAuthWrite)"
+        let value = fieldRow(in: scroll, value: text)
+        ToolValueTone.standard.draw(value, value: text)
+        var short: [String] = []
+        for width in stride(from: CGFloat(140), through: 520, by: 1) {
+            scroll.frame.size.width = width
+            scroll.layoutSubtreeIfNeeded()
+            let drawn = value.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: value.bounds.width,
+                                                               height: .greatestFiniteMagnitude)).height ?? 0
+            if value.frame.height + 0.5 < drawn { short.append("\(width): \(value.frame.height) < \(drawn)") }
+        }
+        XCTAssertEqual(short, [], "widths at which the last line is cut off")
+    }
+
     func testThePlaceholderAndTheRowsAreNeverBothOnScreen() {
         let scroll = self.scroll()
         scroll.prepareForRows(subject: "row")
