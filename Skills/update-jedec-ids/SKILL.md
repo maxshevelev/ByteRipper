@@ -1,6 +1,6 @@
 ---
 name: update-jedec-ids
-description: Regenerate Packages/UEFIImage/Sources/UEFIImage/JedecIDs.swift from the UEFITool repository's common/descriptor.cpp and flashrom's chip files. Use when the SPI flash chip names the descriptor's detail panel shows next to a VSCC table's JEDEC ids need refreshing from upstream, when the user asks to "update the JEDEC ids" / "sync the flash chip names", or after LongSoft/UEFITool changes that file.
+description: Regenerate Packages/UEFIImage/Sources/UEFIImage/JedecIDs.swift from the UEFITool repository's common/descriptor.cpp and the Linux kernel's and flashrom's chip tables. Use when the SPI flash chip names the descriptor's detail panel shows next to a VSCC table's JEDEC ids need refreshing from upstream, when the user asks to "update the JEDEC ids" / "sync the flash chip names", or after LongSoft/UEFITool changes that file.
 ---
 
 # Update JEDEC ids
@@ -40,20 +40,26 @@ python3 Skills/update-jedec-ids/scripts/gen_jedec.py --repo /path/to/ByteRipper
 
 ## Sources and precedence
 
-1. **UEFITool** — the `jedecIdToUString` switch. Its name wins when both know an id.
-2. **flashrom** — `flashchips/*.c` on `main`, ids resolved through
+1. **UEFITool** — the `jedecIdToUString` switch. Its name wins when several know an id.
+2. **Linux kernel** — `drivers/mtd/spi-nor/<vendor>.c` on `master`, for the
+   vendors its `Makefile` builds. Entries with a three-byte `SNOR_ID` and a
+   `.name`; the name is shown as vendor plus the part in capitals (`XMC
+   XM25QH64A`). Entries without a name or id, or with a longer id, are skipped.
+3. **flashrom** — `flashchips/*.c` on `main`, ids resolved through
    `include/flashchips.h`. Only SPI chips probed by plain RDID; the first entry
-   for an id wins. It adds the ids UEFITool lacks, and the size of every chip
-   it lists, also those UEFITool names.
+   for an id wins.
 
-Each entry keeps the source its *name* came from. flashrom is GPL-2.0-or-later;
-the decision, written in the generated file's header, is that only facts are
-taken — id, vendor and part name, capacity — and none of its code or comments.
-Take nothing else from it. Not yet read: the Linux kernel's `spi-nor` tables
-(`drivers/mtd/spi-nor/<vendor>.c`, also GPL-2.0), planned between the two.
+The name is the first source's that knows the id; the size is the first any
+lists, in the same order, also for an entry UEFITool named. Each entry keeps
+the source its *name* came from.
+
+The kernel's tables and flashrom are GPL-2.0. The decision, written in the
+generated file's header, is that only facts are taken — id, vendor and part
+name, capacity — and none of their code or comments. Take nothing else.
 
 ```sh
-python3 Skills/update-jedec-ids/scripts/gen_jedec.py --flashrom ../flashrom   # a local checkout
+python3 Skills/update-jedec-ids/scripts/gen_jedec.py \
+    --linux ../linux/drivers/mtd/spi-nor --flashrom ../flashrom   # local checkouts
 ```
 
 ## After a run

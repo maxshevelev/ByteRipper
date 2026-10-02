@@ -214,14 +214,16 @@ final class DescriptorInfoTests: XCTestCase {
     /// produced.
     func testTheChipCatalogueIsComplete() {
         XCTAssertEqual(JedecIDs.count(from: .uefiTool), 185)
-        XCTAssertGreaterThan(JedecIDs.count(from: .flashrom), 150)
+        XCTAssertGreaterThan(JedecIDs.count(from: .linux), 50)
+        XCTAssertGreaterThan(JedecIDs.count(from: .flashrom), 100)
         XCTAssertEqual(JedecIDs.name(of: 0x1C7018), "EON EN25QH128")
         XCTAssertEqual(JedecIDs.name(of: 0xC22019), "Macronix MX25L256")
         XCTAssertNil(JedecIDs.name(of: 0x000000))
     }
 
-    /// Where both sources know an id, UEFITool names it; flashrom still gives the
-    /// size, and an id only flashrom lists carries flashrom as its source.
+    /// Where several sources know an id, the first names it (UEFITool, Linux,
+    /// flashrom) and the size is the first any lists; an id only one source
+    /// lists carries that source.
     func testTheCatalogueKeepsEachEntrysSourceAndSize() throws {
         let both = try XCTUnwrap(JedecIDs.chip(of: 0xEF4019))
         XCTAssertEqual(both.name, "Winbond W25Q256")
@@ -230,5 +232,10 @@ final class DescriptorInfoTests: XCTestCase {
 
         let extra = try XCTUnwrap(JedecIDs.chip(of: 0xC84017))
         XCTAssertEqual(extra.sizeKB, 8192)
+
+        let kernel = try XCTUnwrap(JedecIDs.chip(of: 0x207017))
+        XCTAssertEqual(kernel.name, "XMC XM25QH64A")
+        XCTAssertEqual(kernel.source, .linux)
+        XCTAssertEqual(kernel.sizeKB, 8192)
     }
 }

@@ -16,12 +16,16 @@ Run it from anywhere; the repository root is resolved relative to this file
 (the skill lives at <repo>/Skills/update-jedec-ids/scripts/), or pass --repo to
 point it elsewhere. --source reads a local descriptor.cpp instead of fetching.
 
-A second source widens it: flashrom's per-vendor chip files
-(flashchips/*.c on branch main, the ids resolved through include/flashchips.h).
-Only the SPI chips probed by the plain three-byte RDID are read, and only the
-facts from them — the id, the vendor and part name, the size. UEFITool's name
-wins when both know an id; flashrom adds the ids UEFITool lacks and the size of
-every chip it lists. --flashrom reads a local flashrom checkout instead.
+Two more sources widen it, in this order of precedence after UEFITool:
+
+  the Linux kernel's SPI-NOR tables (drivers/mtd/spi-nor/<vendor>.c, the files
+  its Makefile lists, entries with a three-byte SNOR_ID and a name), then
+  flashrom's per-vendor chip files (flashchips/*.c on branch main, the ids
+  resolved through include/flashchips.h, SPI chips probed by plain RDID).
+
+Only facts are read from them — the id, the part name, the size. The first
+source that knows an id names it; the size is the first one any source lists.
+--linux and --flashrom read a local checkout instead.
 
 Stdlib only, and the run is a diff to review rather than a blind rewrite: it
 prints how many chips it read and which vendors they came from, and writes the
@@ -38,6 +42,13 @@ SOURCE_URL = (
     "https://raw.githubusercontent.com/LongSoft/UEFITool/new_engine/"
     "common/descriptor.cpp"
 )
+LINUX_RAW = "https://raw.githubusercontent.com/torvalds/linux/master/drivers/mtd/spi-nor/"
+LINUX_VENDORS = {
+    "atmel": "Atmel", "eon": "EON", "esmt": "ESMT", "everspin": "Everspin",
+    "gigadevice": "GigaDevice", "intel": "Intel", "issi": "ISSI",
+    "macronix": "Macronix", "micron-st": "Micron", "spansion": "Spansion",
+    "sst": "SST", "winbond": "Winbond", "xmc": "XMC",
+}
 FLASHROM_RAW = "https://raw.githubusercontent.com/flashrom/flashrom/main/"
 OUTPUT = "Packages/UEFIImage/Sources/UEFIImage/JedecIDs.swift"
 
@@ -127,20 +138,70 @@ def parse_flashrom(header, sources):
     return found
 
 
-def merge(uefitool, flashrom):
-    """[(id, name, size_kb, source, vendor_heading)] — UEFITool first, then flashrom's extras."""
+def linux_files(read):
+    """{vendor file stem: source} for the manufacturers the kernel's Makefile builds."""
+    makefile = read("Makefile")
+    stems = re.findall(r"spi-nor-objs\s*\+=\s*([A-Za-z0-9_-]+)\.o", makefile)
+    return {stem: read(stem + ".c") for stem in stems}
+
+
+def linux_size_kb(expression):
+    """A kernel `.size`: SZ_8M, SZ_512K, or integers joined by `*`."""
+    expression = expression.strip()
+    unit = re.fullmatch(r"SZ_(\d+)([KM])", expression)
+    if unit:
+        return int(unit.group(1)) * (1 if unit.group(2) == "K" else 1024)
+    bytes_ = size_kb(expression)  # product of the factors, here in bytes
+    return bytes_ // 1024 if bytes_ and bytes_ % 1024 == 0 else None
+
+
+def parse_linux(files):
+    """{jedec_id: (name, size_kb)} for entries with a 3-byte id and a name."""
+    found = {}
+    for stem, text in files.items():
+        vendor = LINUX_VENDORS.get(stem, stem.replace("-", " ").title())
+        for entry in re.split(r"\n\t\}(?:, \{)?", text):
+            ident = re.search(r"\.id\s*=\s*SNOR_ID\(([^)]*)\)", entry)
+            name = re.search(r'\.name\s*=\s*"([^"]+)"', entry)
+            if not ident or not name:
+                continue
+            octets = [part.strip() for part in ident.group(1).split(",")]
+            if len(octets) != 3 or not all(re.fullmatch(r"0x[0-9A-Fa-f]{1,2}", o) for o in octets):
+                continue
+            size = re.search(r"\.size\s*=\s*([^,]+),", entry)
+            id_value = int(octets[0], 16) << 16 | int(octets[1], 16) << 8 | int(octets[2], 16)
+            found.setdefault(id_value, (vendor + " " + name.group(1).upper(),
+                                        linux_size_kb(size.group(1)) if size else None))
+    return found
+
+
+def merge(uefitool, linux, flashrom):
+    """[(id, name, size_kb, source, vendor_heading)].
+
+    The name is the first source's that knows the id (UEFITool, Linux, flashrom);
+    the size is the first any of them lists, in the same order.
+    """
+    sized = [linux, flashrom]
+
+    def size_of(id_value):
+        for table in sized:
+            size = table.get(id_value, (None, None))[1]
+            if size is not None:
+                return size
+        return None
+
     merged = []
     seen = set()
     for id_value, name, heading in uefitool:
         if id_value in seen:
             continue
         seen.add(id_value)
-        size = flashrom.get(id_value, (None, None))[1]
-        merged.append((id_value, name, size, "uefiTool", heading))
-    for id_value in sorted(flashrom):
-        if id_value not in seen:
-            name, size = flashrom[id_value]
-            merged.append((id_value, name, size, "flashrom", "flashrom"))
+        merged.append((id_value, name, size_of(id_value), "uefiTool", heading))
+    for source, table in (("linux", linux), ("flashrom", flashrom)):
+        for id_value in sorted(table):
+            if id_value not in seen:
+                seen.add(id_value)
+                merged.append((id_value, table[id_value][0], size_of(id_value), source, source))
     return merged
 
 
@@ -154,15 +215,17 @@ def swift(entries):
         "// Sources, in order of precedence when both know an id:",
         "//   1. `common/descriptor.cpp` of github.com/LongSoft/UEFITool, branch",
         "//      `new_engine` — the `jedecIdToUString` table.",
-        "//   2. `flashchips/*.c` of github.com/flashrom/flashrom, branch `main` — the",
+        "//   2. `drivers/mtd/spi-nor/<vendor>.c` of the Linux kernel, master (GPL-2.0)",
+        "//      — the SPI-NOR tables, entries with a three-byte id and a name.",
+        "//   3. `flashchips/*.c` of github.com/flashrom/flashrom, branch `main` — the",
         "//      SPI chips probed by RDID.",
-        "// Each entry keeps the source its name came from. A size comes from flashrom",
-        "// wherever it lists the id, also for an entry named by UEFITool.",
+        "// Each entry keeps the source its name came from. A size is the first that",
+        "// any source lists, in the same order, also for an entry named by UEFITool.",
         "//",
-        "// Licence: flashrom is GPL-2.0-or-later. What is taken from it is facts —",
-        "// a JEDEC id, a vendor and part name, a capacity — which are not a",
-        "// copyrightable expression; no code, comment or structure of flashrom's",
-        "// is copied, only those values, restated in this table's own form.",
+        "// Licence: the kernel's tables and flashrom are GPL-2.0. What is taken from",
+        "// them is facts — a JEDEC id, a vendor and part name, a capacity — which",
+        "// are not a copyrightable expression; no code, comment or structure of",
+        "// theirs is copied, only those values, restated in this table's own form.",
         "// The names are the vendors' own part numbers.",
         "//",
         "// What this holds: the name of the SPI flash chip a JEDEC id stands for.",
@@ -172,7 +235,7 @@ def swift(entries):
         "enum JedecIDs {",
         "    /// Where an entry's name was read from.",
         "    enum Source: Sendable {",
-        "        case uefiTool, flashrom",
+        "        case uefiTool, linux, flashrom",
         "    }",
         "",
         "    struct Chip: Equatable, Sendable {",
@@ -222,6 +285,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repo", default=default_repo, help="the ByteRipper tree")
     parser.add_argument("--source", help="a local descriptor.cpp instead of fetching")
+    parser.add_argument("--linux", help="a local drivers/mtd/spi-nor directory instead of fetching")
     parser.add_argument("--flashrom", help="a local flashrom checkout instead of fetching")
     args = parser.parse_args()
 
@@ -236,13 +300,24 @@ def main():
     else:
         def read(name):
             return fetch(FLASHROM_RAW + name)
+    if args.linux:
+        def read_linux(name):
+            with open(os.path.join(args.linux, name), encoding="utf-8") as handle:
+                return handle.read()
+    else:
+        def read_linux(name):
+            return fetch(LINUX_RAW + name)
+    linux = parse_linux(linux_files(read_linux))
+    if len(linux) < 100:
+        print("read only %d Linux chips — the layout changed" % len(linux), file=sys.stderr)
+        return 1
     header, files = flashrom_files(read)
     flashrom = parse_flashrom(header, files)
     if len(flashrom) < 200:
         print("read only %d flashrom chips — the layout changed" % len(flashrom),
               file=sys.stderr)
         return 1
-    entries = merge(uefitool, flashrom)
+    entries = merge(uefitool, linux, flashrom)
     if len(uefitool) < 100:
         print("read only %d chips — the switch was not found as expected" % len(uefitool),
               file=sys.stderr)
@@ -252,8 +327,10 @@ def main():
     for _, _, _, _, heading in entries:
         if heading not in vendors:
             vendors.append(heading)
-    print("%d chips (%d UEFITool, %d flashrom) from %d vendors: %s" % (
-        len(entries), len(uefitool), len(entries) - len(uefitool), len(vendors),
+    named = {source: sum(1 for e in entries if e[3] == source)
+             for source in ("uefiTool", "linux", "flashrom")}
+    print("%d chips (%d UEFITool, %d Linux, %d flashrom) from %d vendors: %s" % (
+        len(entries), named["uefiTool"], named["linux"], named["flashrom"], len(vendors),
         ", ".join(vendors)))
 
     path = os.path.join(args.repo, OUTPUT)
