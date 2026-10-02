@@ -50,6 +50,12 @@ final class SeamTests: XCTestCase {
         func showNotice(symbol: String, lines: [String]) {
             notices.append((symbol, lines))
         }
+        private final class StubWork: ToolWork {
+            func rename(_ phase: String) {}
+            func finish() {}
+        }
+        func beginBlockingWork(title: String, onCancel: @escaping () -> Void) -> any ToolWork { StubWork() }
+        func report(title: String, message: String, isProblem: Bool) {}
         func requestFile(kinds: [String]) async -> ToolFile? { nil }
         func exportFile(_ bytes: [UInt8], suggestedName: String) async -> Bool { false }
         func openPart(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>) {}

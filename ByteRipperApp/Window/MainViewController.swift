@@ -6795,13 +6795,17 @@ final class MainViewController: NSViewController {
     /// trace it leaves — and some of it is behaviour worth pinning, like the
     /// past-EOF warning a Go To leaves behind (§10.1).
     private(set) var lastAlertTitle: String?
+    /// The text under it, for the same reason: what a test reads of an alert it
+    /// cannot see.
+    private(set) var lastAlertMessage: String?
 
-    private func presentAlert(title: String, message: String) {
+    private func presentAlert(title: String, message: String, asProblem: Bool = false) {
         lastAlertTitle = title
+        lastAlertMessage = message
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
-        alert.alertStyle = .informational
+        alert.alertStyle = asProblem ? .warning : .informational
         Self.presentModal(alert, defaultInTest: .alertFirstButtonReturn)  // OK in tests, result ignored
     }
 
@@ -6810,16 +6814,18 @@ final class MainViewController: NSViewController {
     /// change set in motion on the main actor waits behind it: the UEFI tree,
     /// invalidated by the write, sat half rebuilt — rows with no names — until
     /// the alert was dismissed. A sheet lets the panels finish while it is up.
-    private func presentSheetAlert(title: String, message: String, on window: NSWindow?) {
+    func presentSheetAlert(title: String, message: String, on window: NSWindow?,
+                           asProblem: Bool = false) {
         guard !Self.isRunningTests, let window else {
-            presentAlert(title: title, message: message)
+            presentAlert(title: title, message: message, asProblem: asProblem)
             return
         }
         lastAlertTitle = title
+        lastAlertMessage = message
         let alert = NSAlert()
         alert.messageText = title
         alert.informativeText = message
-        alert.alertStyle = .informational
+        alert.alertStyle = asProblem ? .warning : .informational
         alert.beginSheetModal(for: window)
     }
 

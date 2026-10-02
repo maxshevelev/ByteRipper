@@ -704,26 +704,14 @@ struct FITParkedState: ToolSessionState {
     /// it is a list and a search field, and the network behind that has no
     /// place in a test suite.
     public func addMicrocode(_ component: [UInt8], describedAs description: String) {
-        guard !host.isReadOnly else {
-            fail(L("This file is open read-only."))
-            return
-        }
-        controller.showBusy()
-        Task { [weak self] in
-            guard let self else { return }
-            guard let tree = await self.readyTree() else {
-                self.controller.endBusy()
-                self.fail(L("Could not read the file."))
-                return
-            }
-            let prepared = await self.prepareAdd(component, in: tree)
-            self.controller.endBusy()
-            switch prepared {
-            case .failure(let problem):
-                self.fail(problem.message)
+        modify(sheetTitle: L("Adding a microcode"),
+               couldNot: L("Could not add the microcode")) { [self] tree in
+            switch await prepareAdd(component, in: tree) {
+            case .failure(let problem): return .failure(problem)
             case .success(let (transaction, outcome)):
-                self.apply(transaction,
-                           saying: FITToolSession.note(for: outcome, describedAs: description))
+                return .success((transaction,
+                                 outcome.kind == .added ? L("Microcode added") : L("Microcode replaced"),
+                                 FITToolSession.note(for: outcome, describedAs: description)))
             }
         }
     }
@@ -735,26 +723,13 @@ struct FITParkedState: ToolSessionState {
     /// it is a list and a search field, and the network behind that has no
     /// place in a test suite.
     public func replaceMicrocode(_ component: [UInt8], at index: Int, describedAs description: String) {
-        guard !host.isReadOnly else {
-            fail(L("This file is open read-only."))
-            return
-        }
-        controller.showBusy()
-        Task { [weak self] in
-            guard let self else { return }
-            guard let tree = await self.readyTree() else {
-                self.controller.endBusy()
-                self.fail(L("Could not read the file."))
-                return
-            }
-            let prepared = await self.prepareReplace(index, component, in: tree)
-            self.controller.endBusy()
-            switch prepared {
-            case .failure(let problem):
-                self.fail(problem.message)
+        modify(sheetTitle: L("Replacing a microcode"),
+               couldNot: L("Could not replace the microcode")) { [self] tree in
+            switch await prepareReplace(index, component, in: tree) {
+            case .failure(let problem): return .failure(problem)
             case .success(let (transaction, outcome)):
-                self.apply(transaction,
-                           saying: FITToolSession.note(for: outcome, describedAs: description))
+                return .success((transaction, L("Microcode replaced"),
+                                 FITToolSession.note(for: outcome, describedAs: description)))
             }
         }
     }
@@ -764,36 +739,77 @@ struct FITParkedState: ToolSessionState {
     /// space — the run is one block, and a hole in the middle of it is not what
     /// a bench wants back.
     public func removeMicrocode(at index: Int) {
-        guard !host.isReadOnly else {
-            fail(L("This file is open read-only."))
-            return
-        }
-        controller.showBusy()
-        Task { [weak self] in
-            guard let self else { return }
-            guard let tree = await self.readyTree() else {
-                self.controller.endBusy()
-                self.fail(L("Could not read the file."))
-                return
-            }
-            let prepared = await self.prepareRemove(index, in: tree)
-            self.controller.endBusy()
-            switch prepared {
-            case .failure(let problem):
-                self.fail(problem.message)
+        modify(sheetTitle: L("Removing a microcode"),
+               couldNot: L("Could not remove the microcode")) { [self] tree in
+            switch await prepareRemove(index, in: tree) {
+            case .failure(let problem): return .failure(problem)
             case .success(let (transaction, outcome)):
-                self.apply(transaction, saying: FITToolSession.note(for: outcome))
+                return .success((transaction, L("Microcode removed"),
+                                 FITToolSession.note(for: outcome)))
             }
         }
     }
 
-    private func apply(_ transaction: ToolTransaction, saying note: String) {
+    /// Where Cancel on the sheet reaches the work.
+    private final class WorkTask { var task: Task<Void, Never>? }
+
+    /// A change to the microcodes, start to finish: a sheet over the window
+    /// for as long as the file is read and the change worked out, and another
+    /// for how it ended — what was done, or why it was not. The panel's own
+    /// line says nothing about it: a strip beside the dump is where a result
+    /// goes unread, and the window is held still for the work anyway, so the
+    /// sheet is where the user is looking.
+    ///
+    /// Cancelling drops the plan; nothing is written until it is complete.
+    private func modify(
+        sheetTitle: String,
+        couldNot: String,
+        prepare: @escaping (LazyUEFITree) async
+            -> Result<(ToolTransaction, title: String, note: String), FITEditProblem>
+    ) {
+        guard !host.isReadOnly else {
+            refuse(couldNot, L("This file is open read-only."))
+            return
+        }
+        let running = WorkTask()
+        let work = host.beginBlockingWork(title: sheetTitle) { running.task?.cancel() }
+        controller.showBusy()
+        running.task = Task { [weak self] in
+            guard let self else { work.finish(); return }
+            work.rename(L("Reading the file…"))
+            guard let tree = await self.readyTree() else {
+                self.controller.endBusy()
+                work.finish()
+                self.refuse(couldNot, L("Could not read the file."))
+                return
+            }
+            work.rename(L("Working out where it goes…"))
+            let prepared = await prepare(tree)
+            self.controller.endBusy()
+            work.finish()
+            guard !Task.isCancelled else { return }
+            switch prepared {
+            case .failure(let problem):
+                self.refuse(couldNot, problem.message)
+            case .success(let (transaction, title, note)):
+                self.apply(transaction, title: title, note: note, couldNot: couldNot)
+            }
+        }
+    }
+
+    /// Something the user asked for did not happen: said in a sheet, as a
+    /// problem, and audible.
+    private func refuse(_ title: String, _ message: String) {
+        FITToolSession.alert()
+        host.report(title: title, message: message, isProblem: true)
+    }
+
+    private func apply(_ transaction: ToolTransaction, title: String, note: String, couldNot: String) {
         do {
             try host.apply(transaction)
-            noticeAnswersTheUser = true
-            controller.say(note + " " + L("⌘Z takes it back."))
+            host.report(title: title, message: note + " " + L("⌘Z takes it back."), isProblem: false)
         } catch {
-            fail(L("Could not write: %1$@", error))
+            refuse(couldNot, L("Could not write: %1$@", error))
         }
     }
 

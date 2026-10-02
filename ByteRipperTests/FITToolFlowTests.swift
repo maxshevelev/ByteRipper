@@ -680,21 +680,47 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(add.title, "Add")
     }
 
-    /// A refusal is the one line in this panel the user has to read — they
-    /// pressed something and it did not happen — so it is red, and it is
-    /// audible. The panel is a narrow strip beside a dump they are reading.
-    func testARefusalIsRedAndAudible() throws {
+    /// A refusal is the one thing the user has to read — they pressed something
+    /// and it did not happen — so it is a sheet over the window, worded as a
+    /// problem, and audible. The panel's own line says nothing of it.
+    func testARefusalIsASheetAndAudible() throws {
         let controller = try open(FITTestImage.make())
 
         try session().addMicrocode([UInt8](repeating: 0x5A, count: 0x100), describedAs: "junk")
-        try waitUntilTheNoticeSettles()
+        XCTAssertTrue(pumpUntil(5) { controller.lastAlertTitle == "Could not add the microcode" },
+                      "\(String(describing: controller.lastAlertTitle))")
 
         XCTAssertEqual(beeps, 1)
+        XCTAssertTrue(try XCTUnwrap(controller.lastAlertMessage)
+            .contains("does not start with an Intel microcode header"))
         let panel = try XCTUnwrap(controller.tools.panel)
-        let notice = try XCTUnwrap(descendants(of: panel, NSTextField.self).first {
+        XCTAssertNil(descendants(of: panel, NSTextField.self).first {
             $0.stringValue.contains("does not start with an Intel microcode header")
-        })
-        XCTAssertEqual(notice.textColor, SemanticColors.bad)
+        }, "nothing about it in the line under the buttons")
+    }
+
+    /// What went right is a sheet too — what was done, and that ⌘Z takes it
+    /// back — and the progress sheet that stood over the window while it ran
+    /// is gone by then.
+    func testASuccessIsASheetAndTheProgressSheetIsGone() throws {
+        let controller = try open(FITTestImage.make())
+
+        try session().addMicrocode(FITTestImage.microcode(signature: 0x000906EA, revision: 0xB4),
+                                   describedAs: "CPUID 906EA")
+        XCTAssertTrue(pumpUntil(5) { controller.lastAlertTitle == "Microcode added" },
+                      "\(String(describing: controller.lastAlertTitle))")
+
+        XCTAssertEqual(beeps, 0)
+        let message = try XCTUnwrap(controller.lastAlertMessage)
+        XCTAssertTrue(message.contains("Added CPUID 906EA at 0x2100"), message)
+        XCTAssertTrue(message.hasSuffix("⌘Z takes it back."), message)
+        XCTAssertTrue(pumpUntil(5) {
+            !(controller.presentedViewControllers ?? []).contains { $0 is BlockingOperationSheet }
+        }, "the progress sheet closes when the operation ends")
+        let panel = try XCTUnwrap(controller.tools.panel)
+        XCTAssertNil(descendants(of: panel, NSTextField.self).first {
+            $0.stringValue.contains("takes it back")
+        }, "nothing about it in the line under the buttons")
     }
 
     /// And a note about what did happen is neither.
@@ -752,7 +778,7 @@ final class FITToolFlowTests: XCTestCase {
     }
 
     /// The extent of anything else a row can point at is not something this
-    /// tool knows, so it is not removed at all: the refusal is red, and the
+    /// tool knows, so it is not removed at all: the refusal is a sheet, and the
     /// row and its bytes stay where they were.
     func testRemovingARowThatIsNotMicrocodeIsRefused() throws {
         let controller = try open(FITTestImage.make(extraACM: true))
@@ -760,13 +786,11 @@ final class FITToolFlowTests: XCTestCase {
         let before = try pane.byteStorage?.read(at: 0x2000, length: 4)
 
         try session().removeMicrocode(at: 2)
-        try waitUntilTheNoticeSettles()
+        XCTAssertTrue(pumpUntil(5) { controller.lastAlertTitle == "Could not remove the microcode" },
+                      "\(String(describing: controller.lastAlertTitle))")
 
-        let panel = try XCTUnwrap(controller.tools.panel)
-        let notice = try XCTUnwrap(descendants(of: panel, NSTextField.self).first {
-            $0.stringValue.contains("Only a microcode entry can be removed")
-        })
-        XCTAssertEqual(notice.textColor, SemanticColors.bad)
+        XCTAssertTrue(try XCTUnwrap(controller.lastAlertMessage)
+            .contains("Only a microcode entry can be removed"))
         XCTAssertEqual(try session().display.rows.count, 3, "the row is still there")
         XCTAssertEqual(try pane.byteStorage?.read(at: 0x2000, length: 4), before,
                        "the microcode is untouched")

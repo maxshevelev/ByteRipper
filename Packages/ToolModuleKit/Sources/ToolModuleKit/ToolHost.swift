@@ -81,6 +81,24 @@ import Foundation
     /// Nil when the user cancels or the file cannot be read.
     func requestFile(kinds: [String]) async -> ToolFile?
 
+    /// Puts a modal sheet over the pane's window for an operation that changes
+    /// the file, and returns the handle to move it along with: the title says
+    /// what is being done, `rename` what it is doing now, `finish` closes it.
+    ///
+    /// For work that has to run to its end with the window left alone — it
+    /// reads the file, takes seconds, and writes back into it — so that nothing
+    /// can be typed into the dump meanwhile and no second change lands under
+    /// the first. `onCancel` is called when the user presses Cancel; the
+    /// tool-module stops its work and calls `finish`.
+    func beginBlockingWork(title: String, onCancel: @escaping () -> Void) -> any ToolWork
+
+    /// Tells the user how an operation ended, in a modal sheet over the pane's
+    /// window — the same place its progress was. A problem is worded as one.
+    /// What an operation says about itself belongs here, not in a line of the
+    /// panel: the panel is a strip beside the dump, and a result nobody was
+    /// waiting at goes unread.
+    func report(title: String, message: String, isProblem: Bool)
+
     /// Offers bytes to the user as a file to save. False when they cancel or
     /// the write fails.
     func exportFile(_ bytes: [UInt8], suggestedName: String) async -> Bool
@@ -95,6 +113,14 @@ import Foundation
     /// Where it opens is the app's business, not the tool-module's — which is
     /// why this is named after what it opens rather than after where.
     func openPart(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>)
+}
+
+/// The handle on a sheet `ToolHost.beginBlockingWork` put up.
+@MainActor public protocol ToolWork: AnyObject {
+    /// What the operation is doing now, under the title.
+    func rename(_ phase: String)
+    /// The operation is over, however it ended: the sheet goes.
+    func finish()
 }
 
 /// Bytes that do not change under the reader, from any thread.

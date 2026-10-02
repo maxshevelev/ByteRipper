@@ -126,6 +126,23 @@ import MEFirmware
         return owner.exportFileForTool(bytes, suggestedName: suggestedName)
     }
 
+    func beginBlockingWork(title: String, onCancel: @escaping () -> Void) -> any ToolWork {
+        guard let owner else { return PaneToolWork(operation: nil) }
+        owner.view.window?.makeKeyAndOrderFront(nil)
+        let work = PaneToolWork(operation: nil)
+        // Cancel is the tool-module's to act on; it ends the sheet by finishing.
+        let operation = BackgroundOperation(name: title, indeterminate: true, onCancel: onCancel)
+        work.operation = operation
+        BlockingOperationSheet.present(operation, title: title, from: owner)
+        return work
+    }
+
+    func report(title: String, message: String, isProblem: Bool) {
+        guard let owner else { return }
+        owner.presentSheetAlert(title: title, message: message, on: owner.view.window,
+                                asProblem: isProblem)
+    }
+
     /// The source's own bytes, copied out: they go back as they are.
     func openPart(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>) {
         guard let pane, let owner else { return }
@@ -238,4 +255,16 @@ enum ToolHostError: Error, Equatable {
     case outsideTheFile
     /// The file is open read-only.
     case readOnly
+}
+
+/// The handle a tool-module moves a blocking sheet with: the sheet is driven by
+/// a `BackgroundOperation`, and closes when it finishes.
+@MainActor final class PaneToolWork: ToolWork {
+    var operation: BackgroundOperation?
+
+    init(operation: BackgroundOperation?) { self.operation = operation }
+
+    func rename(_ phase: String) { operation?.rename(phase) }
+
+    func finish() { operation?.finish() }
 }
