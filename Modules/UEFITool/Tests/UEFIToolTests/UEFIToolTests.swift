@@ -480,6 +480,33 @@ final class UEFIDetailTests: XCTestCase {
         ])
     }
 
+    private func textBuilt(_ kind: UEFINodeKind, _ bytes: [UInt8]) -> TestUEFI.Built {
+        let node = UEFINode(kind: kind, subtype: kind == .section ? 0x19 : nil, name: "x", header: 0..<0, body: 0..<UInt64(bytes.count), isFixed: true)
+        return TestUEFI.Built(bytes: bytes, node: node, image: TestUEFI.image(node, totalSize: UInt64(bytes.count)))
+    }
+
+    func testABIOSIDSectionIsATableOfItsParts() throws {
+        let string: [UInt8] = "  MBP141.88Z.0167.B00.1708080034".utf16.flatMap { [UInt8($0), UInt8(0)] } + [0, 0]
+        let built = textBuilt(.section, Array("$IBIOSI$".utf8) + string)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+
+        let table = try XCTUnwrap(detail.tables.first { $0.title == "BIOS ID" })
+        let rows: [[String]] = [
+            ["BIOS ID", "MBP141.88Z.0167.B00.1708080034"], ["Board", "MBP141"], ["OEM", "88Z"],
+            ["Major version", "0167"], ["Minor version", "B00"], ["Build date", "2017-08-08 00:34"],
+        ]
+        XCTAssertEqual(table.rows.map { $0.map { $0.text } }, rows)
+    }
+
+    func testTheROMInformationInPaddingIsATable() throws {
+        let text = Array("Apple ROM Version\n  Model:        MBA71\n  Date:         Fri\n".utf8)
+        let built = textBuilt(.padding, [0xFF, 0xFF] + text + [0xFF])
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+
+        let table = try XCTUnwrap(detail.tables.first { $0.title == "Apple ROM information" })
+        XCTAssertEqual(table.rows.map { $0.map(\.text) }, [["Model", "MBA71"], ["Date", "Fri"]])
+    }
+
     func testASysfStoreFlagsABadCrc() {
         let built = TestUEFI.nvramSysfStore(crc: 0xDEAD_BEEF)
         let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)

@@ -36,7 +36,7 @@ enum TestUEFI {
         return bytes + [UInt8](repeating: 0, count: Int(count) - bytes.count)
     }
 
-    private static func image(
+    static func image(
         _ node: UEFINode,
         totalSize: UInt64,
         addressDiff: UInt64? = 0xFFFF_0000

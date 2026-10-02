@@ -113,6 +113,12 @@ public struct UEFINodeDetail: Equatable, Sendable {
 /// used: a field the header does not hold is absent, not guessed, and the name
 /// tables are `UEFIImage`'s, not re-derived here.
 public enum UEFIDetail {
+    /// A raw section (type `0x19`): the only kind whose bytes are a text block
+    /// rather than code that happens to contain the words.
+    private static func isRawSection(_ node: UEFINode) -> Bool {
+        node.kind == .section && node.subtype == 0x19
+    }
+
     /// - Parameter repairs: the writes that would put this node's checksums
     ///   right (from the parse-time `UEFIChecksumCheck.repairs`), or [] when
     ///   they all check out. Each repair is the row's word on a wrong field: its
@@ -182,6 +188,31 @@ public enum UEFIDetail {
                 rows: overrides.rules.map {
                     [.init($0.action), .init($0.appliesTo.isEmpty ? L("Every device") : $0.appliesTo), .init($0.detail)]
                 }
+            ))
+        }
+
+        // The BIOS ID string, taken apart where it follows Intel's layout.
+        if isRawSection(node), node.body.count <= AppleROMInformation.searchLimit,
+           let id = BIOSIdentifier.read(reader.bytes(node.body) ?? []) {
+            var rows: [[UEFIDetailTable.Cell]] = [[.init(L("BIOS ID")), .init(id.text)]]
+            for (label, value) in [(L("Board"), id.board), (L("OEM"), id.oem), (L("Major version"), id.majorVersion),
+                                   (L("Minor version"), id.minorVersion), (L("Build date"), id.buildDate)] {
+                if let value { rows.append([.init(label), .init(value)]) }
+            }
+            tables.append(UEFIDetailTable(
+                title: L("BIOS ID"), symbol: "number", columns: [L("Field"), L("Value")], rows: rows))
+        }
+
+        // The text block Apple's firmware carries about its own build, whether
+        // it is a file of its own or left in the padding the BIOS region opens
+        // with.
+        if isRawSection(node) || node.kind == .padding, node.body.count <= AppleROMInformation.searchLimit,
+           let info = AppleROMInformation.read(reader.bytes(node.body) ?? []) {
+            tables.append(UEFIDetailTable(
+                title: L("Apple ROM information"),
+                symbol: "info.circle",
+                columns: [L("Field"), L("Value")],
+                rows: info.entries.map { [.init($0.key), .init($0.value)] }
             ))
         }
 
