@@ -175,7 +175,7 @@ public enum UEFIDetail {
         if node.kind == .flashDescriptor,
            let descriptor = DescriptorInfo.read(at: node.header.lowerBound, in: reader) {
             fields += descriptorFields(descriptor, imageSize: image.size)
-            tables += descriptorTables(descriptor)
+            tables += descriptorTables(descriptor, imageSize: image.size)
         }
 
         // An update for more than one processor lists the others in a table
@@ -981,7 +981,7 @@ public enum UEFIDetail {
     /// The regions are in the tree as well, as this node's siblings — but the
     /// tree shows where a region *is*, and this shows what the descriptor
     /// *says*, which is the thing being checked when the two disagree.
-    private static func descriptorTables(_ descriptor: DescriptorInfo) -> [UEFIDetailTable] {
+    private static func descriptorTables(_ descriptor: DescriptorInfo, imageSize: UInt64) -> [UEFIDetailTable] {
         var tables: [UEFIDetailTable] = []
         // Its own region is this node.
         let regions = descriptor.regions.filter { $0.type != .descriptor }
@@ -1025,11 +1025,13 @@ public enum UEFIDetail {
                 symbol: "cpu",
                 columns: [L("JEDEC ID"), L("Chip"), L("Size")],
                 rows: descriptor.chips.map { chip in
-                    // A size the descriptor's own chips do not have is red: the
-                    // firmware was laid out for chips of the sizes it declares.
-                    let declared = (descriptor.component?.chipSizes ?? []).compactMap { $0 }
+                    // The descriptor lays the image out across one chip, so a chip
+                    // smaller than the dump cannot be the one it came from. With
+                    // two chips the split is the descriptor's, and no one chip is
+                    // measured against the whole.
                     let bytes = chip.sizeKB.map { UInt64($0) << 10 }
-                    let invalid = bytes.map { !declared.isEmpty && !declared.contains($0) } ?? false
+                    let invalid = descriptor.component?.chipSizes.count == 1
+                        && (bytes.map { $0 < imageSize } ?? false)
                     return [.init(String(format: "%06X", chip.jedecID)),
                      .init(chip.name ?? chip.vendor.map { L("Unknown (%1$@)", $0) } ?? L("Unknown")),
                      .init(bytes.map(capacityText) ?? "", tone: invalid ? .no : .plain)]

@@ -146,7 +146,7 @@ final class DescriptorDetailTests: XCTestCase {
     /// The chips the firmware was built to drive, named where the catalogue
     /// knows the id.
     func testTheVsccTableIsAGridOfChips() throws {
-        let shown = detail(TestUEFI.flashDescriptor())
+        let shown = detail(TestUEFI.flashDescriptor(totalSize: 0x100_0000))
         let table = try XCTUnwrap(table(shown, "Flash chips in VSCC table"))
 
         XCTAssertEqual(table.symbol, "cpu", "the square chip the ME panel waits under")
@@ -156,8 +156,17 @@ final class DescriptorDetailTests: XCTestCase {
                        ["Atmel AT25DF321", "EON EN25QH128",
                         "Macronix MX25L256", "Winbond W25Q256"])
         XCTAssertEqual(table.rows.map { $0[2].text }, ["4 MB", "16 MB", "32 MB", "32 MB"])
-        XCTAssertEqual(table.rows.map { $0[2].tone }, [.no, .plain, .no, .no],
-                       "red where the descriptor's own chip (16 MB) is another size")
+        XCTAssertEqual(table.rows.map { $0[2].tone }, [.no, .plain, .plain, .plain],
+                       "red where the chip (4 MB) is smaller than the 16 MB dump")
+    }
+
+    /// A chip that holds the whole dump is not marked, however much bigger it is;
+    /// the red is only for one the dump does not fit into.
+    func testNoChipIsRedWhenTheDumpFitsAll() throws {
+        let shown = detail(TestUEFI.flashDescriptor(totalSize: 0x40_0000))
+        let table = try XCTUnwrap(table(shown, "Flash chips in VSCC table"))
+
+        XCTAssertEqual(table.rows.map { $0[2].tone }, [.plain, .plain, .plain, .plain])
     }
 
     /// A node that is not a descriptor gets none of this — no tables, and no
