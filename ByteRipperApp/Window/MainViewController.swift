@@ -7589,8 +7589,11 @@ enum AlertOutcome {
         let (symbol, color): (String, NSColor) = self == .success
             ? ("checkmark.circle", SemanticColors.good)
             : ("exclamationmark.octagon.fill", SemanticColors.bad)
+        // The filled octagon is two layers — the mark, then the shape behind it
+        // — and a palette of one colour paints both alike, which loses the mark.
+        let palette = self == .success ? [color] : [NSColor.white, color]
         let configuration = NSImage.SymbolConfiguration(pointSize: 48, weight: .regular)
-            .applying(.init(paletteColors: [color]))
+            .applying(.init(paletteColors: palette))
         return NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
             .withSymbolConfiguration(configuration)
     }
