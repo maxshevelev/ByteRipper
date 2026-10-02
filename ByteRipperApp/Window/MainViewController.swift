@@ -7588,7 +7588,7 @@ enum AlertOutcome {
     var icon: NSImage? {
         let (symbol, color): (String, NSColor) = self == .success
             ? ("checkmark.circle", SemanticColors.good)
-            : ("exclamationmark.octagon", SemanticColors.bad)
+            : ("exclamationmark.octagon.fill", SemanticColors.bad)
         let configuration = NSImage.SymbolConfiguration(pointSize: 48, weight: .regular)
             .applying(.init(paletteColors: [color]))
         return NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
