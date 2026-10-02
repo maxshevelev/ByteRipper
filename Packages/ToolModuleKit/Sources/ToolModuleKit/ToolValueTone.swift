@@ -65,12 +65,10 @@ public enum ToolValueTone: Sendable, Equatable, Hashable {
     public func attributedValue(_ value: String) -> NSAttributedString {
         let font = font(for: value)
         let result = NSMutableAttributedString()
-        if self == .good, let tick = NSImage(systemSymbolName: "checkmark",
-                                             accessibilityDescription: L("Done"))?
-            .withSymbolConfiguration(
-                NSImage.SymbolConfiguration(pointSize: font.pointSize, weight: .regular)
-                    .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
-            ) {
+        if self == .good, let tick = NSImage.tintedSymbol(
+            "checkmark",
+            configuration: .init(pointSize: font.pointSize, weight: .regular),
+            color: color, accessibilityDescription: L("Done")) {
             let attachment = NSTextAttachment()
             attachment.image = tick
             // Sat on the text's baseline, not above it.

@@ -7585,21 +7585,11 @@ private final class OffsetContextTarget: NSObject {
 enum AlertOutcome {
     case success, problem
 
-    /// The system symbol, tinted: drawn as a mask and filled, so it keeps the
-    /// shape the system draws (the octagon's mark is a hole in it) and the
-    /// colour follows the theme when the alert is drawn.
     var icon: NSImage? {
         let (name, color): (String, NSColor) = self == .success
             ? ("checkmark.circle", SemanticColors.good)
             : ("exclamationmark.octagon.fill", SemanticColors.bad)
-        guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
-            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 48, weight: .regular))
-        else { return nil }
-        return NSImage(size: symbol.size, flipped: false) { rect in
-            symbol.draw(in: rect)
-            color.set()
-            rect.fill(using: .sourceAtop)
-            return true
-        }
+        return NSImage.tintedSymbol(
+            name, configuration: .init(pointSize: 48, weight: .regular), color: color)
     }
 }

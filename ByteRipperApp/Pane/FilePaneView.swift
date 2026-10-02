@@ -1507,16 +1507,8 @@ final class FilePaneView: NSView {
     /// The header's document glyph, tinted for the pill. A template image draws
     /// as a mask, so it is filled rather than simply drawn.
     private func paneDragGlyph() -> NSImage? {
-        let configuration = NSImage.SymbolConfiguration(pointSize: 12, weight: .semibold)
-        guard let symbol = NSImage(systemSymbolName: documentSymbolName,
-                                   accessibilityDescription: nil)?
-            .withSymbolConfiguration(configuration) else { return nil }
-        return NSImage(size: symbol.size, flipped: false) { rect in
-            symbol.draw(in: rect)
-            NSColor.labelColor.set()
-            rect.fill(using: .sourceAtop)
-            return true
-        }
+        NSImage.tintedSymbol(documentSymbolName, configuration: .init(pointSize: 12, weight: .semibold),
+                             color: .labelColor)
     }
 
     private func updateHeader() {
