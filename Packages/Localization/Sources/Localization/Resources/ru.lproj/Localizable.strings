@@ -112,6 +112,7 @@
 "About ByteRipper" = "О программе ByteRipper";
 "Access denied" = "Доступ запрещён";
 "Access width" = "Ширина доступа";
+"Action" = "Действие";
 "Add" = "Добавить";
 "Add Cut" = "Разрезать";
 "Add Cut…" = "Разрезать…";
@@ -139,6 +140,7 @@
 "Append File…" = "Дописать файл в конец…";
 "Append at End" = "Дописать в конец";
 "Appended %1$@ after %2$@. Total: %3$@." = "%1$@ добавлен в конец, после %2$@. Итоговый размер: %3$@.";
+"Applies to" = "Применяется к";
 "Apply" = "Применить";
 "Ask before edits that shift the file" = "Спрашивать перед правками, сдвигающими файл";
 "Copied at %1$@–%2$@; %3$@" = "Копия расположена по адресу %1$@–%2$@; %3$@";
@@ -148,7 +150,10 @@
 "Could not remove the microcode" = "Не удалось удалить микрокод";
 "Could not replace the microcode" = "Не удалось заменить микрокод";
 "Declared size" = "Размер по заголовку";
+"Device or properties" = "Устройство или свойства";
+"Device overrides" = "Переопределения устройств";
 "EC firmware image" = "Образ прошивки EC";
+"Every device" = "Любое устройство";
 "FIT component" = "Компонент FIT";
 "Format" = "Формат";
 "Go to Original" = "Перейти к оригиналу";
@@ -163,6 +168,7 @@
 "Reading the file…" = "Чтение файла…";
 "Removing a microcode" = "Удаление микрокода";
 "Replacing a microcode" = "Замена микрокода";
+"Rules" = "Правила";
 "Save Body of “%1$@” as…" = "Сохранить тело «%1$@» как…";
 "Save Node Body as…" = "Сохранить тело узла как…";
 "Save Node as…" = "Сохранить узел как…";

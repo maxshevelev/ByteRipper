@@ -174,3 +174,33 @@ private final class Reported<Element>: @unchecked Sendable {
         return items
     }
 }
+
+final class BZip2Tests: XCTestCase {
+    /// Three lines of `ADD_DEVICE\t()\t[class="USBPort"]`, through `bzip2`.
+    private let stream: [UInt8] = {
+        let hex = "425a68393141592653597e93e73100000d5f800030106000023e204b0aa8049c002000419ffaaa0d001a68190a00000c9919a0e5828831518a2e1abb45156e9cba4926eb17be78f9ea6926a3f1772453850907e93e7310"
+        return stride(from: 0, to: hex.count, by: 2).map {
+            UInt8(hex.dropFirst($0).prefix(2), radix: 16)!
+        }
+    }()
+    private let text = Array(String(repeating: "ADD_DEVICE\t()\t[class=\"USBPort\"]\n", count: 3).utf8)
+
+    func testAStreamDecodesToItsText() throws {
+        XCTAssertEqual(try FirmwareDecompression.bzip2(stream, limit: 1 << 20), text)
+    }
+
+    func testTheLimitIsKept() {
+        XCTAssertThrowsError(try FirmwareDecompression.bzip2(stream, limit: 16)) {
+            guard case FirmwareDecompression.Failure.tooLarge = $0 else { return XCTFail("\($0)") }
+        }
+    }
+
+    func testACutStreamIsTruncatedAndNoiseIsCorrupt() {
+        XCTAssertThrowsError(try FirmwareDecompression.bzip2(Array(stream.dropLast(8)), limit: 1 << 20)) {
+            XCTAssertEqual($0 as? FirmwareDecompression.Failure, .truncated)
+        }
+        XCTAssertThrowsError(try FirmwareDecompression.bzip2([1, 2, 3, 4, 5, 6, 7, 8], limit: 1 << 20)) {
+            XCTAssertEqual($0 as? FirmwareDecompression.Failure, .corrupt)
+        }
+    }
+}

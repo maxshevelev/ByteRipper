@@ -514,6 +514,23 @@ enum TestUEFI {
         return Built(bytes: bytes, node: node, image: image(node, totalSize: totalSize))
     }
 
+    /// The `overrides` variable of an Apple SysF store: two rules, as the
+    /// bzip2 stream a Mac keeps them in.
+    static func sysfOverrides() -> Built {
+        let hex = "425a683931415926535908fd786100000fdf804030116600023e26db0aaae59c002000750d48f5007a81a00036a3d20d12311a1a00d1a0069a21ab331a405d168066c611d26150891d52bf217f01ce1aa06e4b560f7bb9cab67128c48c9cac40f1a84d9a1ea5d0998e4a0183138ec7d1856a924bc0926c503f17724538509008fd7861"
+        let bytes: [UInt8] = stride(from: 0, to: hex.count, by: 2).map {
+            UInt8(hex.dropFirst($0).prefix(2), radix: 16)!
+        }
+        let node = UEFINode(
+            kind: .sysFEntry,
+            name: "overrides",
+            header: 0..<0,
+            body: 0..<UInt64(bytes.count),
+            isFixed: true
+        )
+        return Built(bytes: bytes, node: node, image: image(node, totalSize: UInt64(bytes.count)))
+    }
+
     /// A Phoenix EVSA store's 20-byte header: a store entry whose signature is
     /// `EVSA`, then attributes, the store size and a reserved word. The checksum
     /// makes the header add up to zero past the type byte (§9).

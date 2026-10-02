@@ -24,6 +24,9 @@
 //    (BSD), behind a two-function header. See `Sources/CTiano/README.md`.
 //  - `CTianoEncoder` — the matching compressor, from the same place. See
 //    `Sources/CTianoEncoder/README.md`.
+//  - `CBZip2` — not vendored: the `libbz2` macOS itself ships, for the one
+//    bzip2 stream a Mac's firmware keeps (Apple's `overrides`). A system
+//    library target, so there is no source here and nothing to keep in step.
 //  - `FirmwareCompression` — the API: `FirmwareDecompression`, whole buffers in
 //    and whole buffers or a reason out under a size limit the caller sets, and
 //    `FirmwareCompression`, which decodes every stream it writes back before
@@ -45,13 +48,14 @@ let package = Package(
         .library(name: "FirmwareCompressionTestSupport", targets: ["FirmwareCompressionTestSupport"])
     ],
     targets: [
+        .systemLibrary(name: "CBZip2", path: "Sources/CBZip2"),
         .target(name: "CLZMA", exclude: ["SDK/README.md"]),
         .target(name: "CLZMAEncoder", exclude: ["SDK/README.md"]),
         .target(name: "CTiano", exclude: ["README.md"]),
         .target(name: "CTianoEncoder", exclude: ["README.md"]),
         .target(
             name: "FirmwareCompression",
-            dependencies: ["CLZMA", "CLZMAEncoder", "CTiano", "CTianoEncoder"]
+            dependencies: ["CBZip2", "CLZMA", "CLZMAEncoder", "CTiano", "CTianoEncoder"]
         ),
         .target(
             name: "FirmwareCompressionTestSupport",

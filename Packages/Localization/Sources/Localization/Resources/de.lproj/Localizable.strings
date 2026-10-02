@@ -112,6 +112,7 @@
 "About ByteRipper" = "Über ByteRipper";
 "Access denied" = "Zugriff verweigert";
 "Access width" = "Zugriffsbreite";
+"Action" = "Aktion";
 "Add" = "Hinzufügen";
 "Add Cut" = "Schnitt hinzufügen";
 "Add Cut…" = "Schnitt hinzufügen…";
@@ -139,6 +140,7 @@
 "Append File…" = "Datei anhängen…";
 "Append at End" = "Am Ende anhängen";
 "Appended %1$@ after %2$@. Total: %3$@." = "%1$@ nach %2$@ angehängt. Gesamt: %3$@.";
+"Applies to" = "Gilt für";
 "Apply" = "Anwenden";
 "Ask before edits that shift the file" = "Vor Änderungen fragen, die die Datei verschieben";
 "Copied at %1$@–%2$@; %3$@" = "Kopie bei %1$@–%2$@; %3$@";
@@ -148,7 +150,10 @@
 "Could not remove the microcode" = "Microcode konnte nicht entfernt werden";
 "Could not replace the microcode" = "Microcode konnte nicht ersetzt werden";
 "Declared size" = "Größe laut Kopf";
+"Device or properties" = "Gerät oder Eigenschaften";
+"Device overrides" = "Geräteüberschreibungen";
 "EC firmware image" = "EC-Firmware-Abbild";
+"Every device" = "Jedes Gerät";
 "FIT component" = "FIT-Komponente";
 "Format" = "Format";
 "Go to Original" = "Zum Original";
@@ -163,6 +168,7 @@
 "Reading the file…" = "Datei wird gelesen …";
 "Removing a microcode" = "Microcode wird entfernt";
 "Replacing a microcode" = "Microcode wird ersetzt";
+"Rules" = "Regeln";
 "Save Body of “%1$@” as…" = "Rumpf von „%1$@“ sichern unter…";
 "Save Node Body as…" = "Knotenrumpf sichern unter…";
 "Save Node as…" = "Knoten sichern unter…";

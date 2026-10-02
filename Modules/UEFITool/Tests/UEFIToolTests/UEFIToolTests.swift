@@ -466,6 +466,20 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "CRC32"), Checksums.text(stored, valid: true, digits: 8))
     }
 
+    /// Apple's device overrides are text inside a bzip2 stream; the detail
+    /// unpacks them into a row a rule.
+    func testAnOverridesVariableIsReadAsRules() throws {
+        let built = TestUEFI.sysfOverrides()
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+
+        XCTAssertEqual(field(detail, "Rules"), "2")
+        let table = try XCTUnwrap(detail.tables.first { $0.title == "Device overrides" })
+        XCTAssertEqual(table.rows.map { $0.map(\.text) }, [
+            ["ADD_DEVICE", "Every device", #"[class="USBPort",location="rear-right"]"#],
+            ["REMOVE_DEVICE", #"class="Sensor""#, #"(class="Sensor"&location="ALSL")"#],
+        ])
+    }
+
     func testASysfStoreFlagsABadCrc() {
         let built = TestUEFI.nvramSysfStore(crc: 0xDEAD_BEEF)
         let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)

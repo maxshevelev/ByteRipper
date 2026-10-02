@@ -170,6 +170,21 @@ public enum UEFIDetail {
             }
         }
 
+        // Apple's device overrides are a bzip2 stream of text: the panel reads
+        // it, so that a bench sees what the board is told it has.
+        if node.kind == .sysFEntry, node.name == AppleOverrides.variableName,
+           let overrides = AppleOverrides.read(reader.bytes(node.body) ?? []) {
+            fields.append(.init(L("Rules"), "\(overrides.rules.count)"))
+            tables.append(UEFIDetailTable(
+                title: L("Device overrides"),
+                symbol: "list.bullet.rectangle",
+                columns: [L("Action"), L("Applies to"), L("Device or properties")],
+                rows: overrides.rules.map {
+                    [.init($0.action), .init($0.appliesTo.isEmpty ? L("Every device") : $0.appliesTo), .init($0.detail)]
+                }
+            ))
+        }
+
         // A descriptor says more about itself than a header's worth of fields,
         // and two of the things it says are grids.
         if node.kind == .flashDescriptor,
