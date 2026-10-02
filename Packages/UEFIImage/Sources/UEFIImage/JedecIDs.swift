@@ -201,7 +201,6 @@ enum JedecIDs {
         0x1C7015: c("EON EN25QH16", 2048, .uefiTool),
         0x1C7016: c("EON EN25QH32", 4096, .uefiTool),
         0x1C7017: c("EON EN25QH64", 8192, .uefiTool),
-        0x1C7018: c("EON EN25QH128", 16384, .uefiTool),
         0x1C7019: c("EON EN25QH256", nil, .uefiTool),
         // GigaDevice
         0xC84014: c("GigaDevice GD25x80", 1024, .uefiTool),
