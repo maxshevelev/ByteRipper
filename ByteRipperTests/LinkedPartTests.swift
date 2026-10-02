@@ -267,6 +267,10 @@ final class LinkedPartTests: XCTestCase {
 
         XCTAssertFalse(view.updateButton.isHiddenOrHasHiddenAncestor, "modified: the button is there")
         XCTAssertEqual(view.updateButton.accessibilityLabel(), "Update in Parent")
+        XCTAssertEqual(view.updateButton.title, "Modified")
+        XCTAssertTrue(view.updateButton.isBordered, "a button with a border, not a bare glyph")
+        XCTAssertEqual(view.updateButton.frame.minX - view.linkButton.frame.maxX, 6, accuracy: 0.5,
+                       "right after the parent's name")
 
         view.updateButton.performClick(nil)
 
