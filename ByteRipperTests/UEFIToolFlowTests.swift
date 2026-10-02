@@ -1077,6 +1077,27 @@ final class UEFIToolFlowTests: XCTestCase {
         controller.fragments.close(id, animated: false)
     }
 
+    /// A bzip2 variable of an Apple system-flags store opens its text in a
+    /// panel, linked to the variable's bytes in the file.
+    func testABZip2VariableOpensItsUnpackedText() throws {
+        let bytes = UEFITestImage.sysfOverridesImage()
+        let controller = try open(bytes)
+        // The volume, then its store, then the variable is the third row.
+        try expandRow(0)
+        try expandRow(1)
+        let node = try node(atRow: 2)
+        XCTAssertTrue(UEFIPresenter.isBZip2Variable(node), "row 2 is the overrides variable")
+
+        try session().openUnpackedInNewTab(for: node.id)
+        XCTAssertTrue(pumpUntil(2) { controller.fragments.expanded != nil }, "the panel is raised")
+
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        XCTAssertEqual(part.fileSize, 119, "the text the stream unpacks to")
+        XCTAssertEqual(try XCTUnwrap(part.origin).sourceRange, node.range)
+        controller.fragments.close(id, animated: false)
+    }
+
     /// And its body alone, without the header, linked to the body's own bytes.
     func testANodesBodyOpensAsAPanelOfItsOwn() throws {
         let controller = try open(UEFITestImage.make())
@@ -1729,6 +1750,38 @@ enum UEFITestImage {
         store += entry(0x05, 0x40, 3)
         store += [UInt8](repeating: 0xFF, count: 0x100 - store.count)
         return [UInt8](repeating: 0xFF, count: 0x100) + store + [UInt8](repeating: 0xFF, count: 0x100)
+    }
+
+    /// An NVRAM volume whose only store is an Apple SysF store holding the
+    /// `overrides` variable — two rules in a bzip2 stream — and the EOF chunk.
+    static func sysfOverridesImage() -> [UInt8] {
+        var image = make()
+        image.replaceSubrange(0x10..<0x20, with: EFIGUID("FFF12B8D-7696-4C8B-A985-2747075B4F50")!.bytes)
+        image.replaceSubrange(0x48..<0x1000, with: [UInt8](repeating: 0xFF, count: 0x1000 - 0x48))
+        image[0x32] = 0
+        image[0x33] = 0
+        let checksum = Checksums.checksum16(Array(image[0..<0x48])) ?? 0
+        image[0x32] = UInt8(truncatingIfNeeded: checksum)
+        image[0x33] = UInt8(truncatingIfNeeded: checksum >> 8)
+
+        let hex = "425a683931415926535908fd786100000fdf804030116600023e26db0aaae59c002000750d48f5007a81a00036a3d20d12311a1a00d1a0069a21ab331a405d168066c611d26150891d52bf217f01ce1aa06e4b560f7bb9cab67128c48c9cac40f1a84d9a1ea5d0998e4a0183138ec7d1856a924bc0926c503f17724538509008fd7861"
+        let stream: [UInt8] = stride(from: 0, to: hex.count, by: 2).map {
+            UInt8(hex.dropFirst($0).prefix(2), radix: 16)!
+        }
+        var variables: [UInt8] = [9]
+        variables += Array("overrides".utf8)
+        variables += u16(UInt16(stream.count))
+        variables += stream
+        variables += [3]
+        variables += Array("EOF".utf8)
+        let size = 11 + variables.count + 4
+        var store: [UInt8] = Array("Fsys".utf8)
+        store += [0, 0, 0, 0, 0]
+        store += u16(UInt16(size))
+        store += variables
+        store += [0, 0, 0, 0]
+        image.replaceSubrange(0x48..<(0x48 + store.count), with: store)
+        return image
     }
 
     static func intelImage() -> [UInt8] {

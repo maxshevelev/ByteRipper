@@ -169,6 +169,7 @@
 "Microcode replaced" = "Microcode ersetzt";
 "Minor version" = "Nebenversion";
 "OEM" = "OEM";
+"Open Decompressed Variable" = "Entpackte Variable öffnen";
 "Picture" = "Bild";
 "Picture preview" = "Bildvorschau";
 "Picture size" = "Bildgröße";
@@ -182,6 +183,7 @@
 "Save Node as…" = "Knoten sichern unter…";
 "Save “%1$@” as…" = "„%1$@“ sichern unter…";
 "Saved %1$@ bytes." = "%1$@ Bytes gesichert.";
+"The variable does not decompress." = "Die Variable lässt sich nicht entpacken.";
 "There is nothing to save here." = "Hier gibt es nichts zu sichern.";
 "Top Swap" = "Top Swap";
 "Value" = "Wert";

@@ -6,6 +6,7 @@
 @covers panel.uefi.fix-checksum
 @covers panel.uefi.top-swap
 @covers panel.uefi.save-node
+@covers panel.uefi.open-unpacked
 @covers panel.uefi.picture-preview
 @covers panel.uefi.superseded-entries
 @covers panel.uefi.filter
@@ -33,6 +34,7 @@ Right-click a node:
 - **Open** the node, or just its body, as a [[topic:fragments|fragment panel]].
 - **Save … as…** the node, or just its body, to a file: the same bytes **Open** shows, offered to the same name — the dump's, followed by the node's.
 - **Open Decompressed Body** / **Export Decompressed Body…** for a compressed section — what those bytes actually expand to. A node inside one offers the same for its own **Bytes**.
+- **Open Decompressed Variable** for the `overrides` variable of an Apple system-flags store — its device overrides, which are kept as a bzip2 stream, unpacked into a tab as text. The tab is a copy: nothing here compresses the text again, so editing it does not change the dump.
 - **Go to Top Swap Copy** / **Go to Original** for a node in either block of an image with a [[term:top-swap|Top Swap]] copy — selects the same node in the other block and shows its bytes in the dump, so that each part of the copy can be matched with the part of the top block it duplicates.
 
 ## Padding

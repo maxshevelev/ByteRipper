@@ -237,6 +237,21 @@ public enum UEFIPresenter {
         return nil
     }
 
+    /// The variable in an Apple system-flags store whose data is a bzip2 stream
+    /// (`AppleOverrides`): it has no section to open, but its data unpacks to
+    /// text the reader wants as a file.
+    public static func isBZip2Variable(_ node: UEFINode) -> Bool {
+        node.kind == .sysFEntry && node.name == AppleOverrides.variableName
+    }
+
+    /// The name of the tab the unpacked text opens in, as a decompressed
+    /// body's is: the dump it came out of, then what it is.
+    public static func unpackedTabName(of node: UEFINode, fileName: String) -> String {
+        let stem = (fileName as NSString).deletingPathExtension
+        let what = "\(node.name) decompressed.txt"
+        return stem.isEmpty ? what : "\(stem)_\(what)"
+    }
+
     /// Where a node's bytes are held in the file: its own range, or — for a
     /// node inside a compressed section — the outermost section's. What a tab
     /// opened from the node is linked to (`UPDATE_IN_PARENT.md` §2.1).

@@ -169,6 +169,7 @@
 "Microcode replaced" = "Микрокод заменён";
 "Minor version" = "Младшая версия";
 "OEM" = "OEM";
+"Open Decompressed Variable" = "Открыть распакованную переменную";
 "Picture" = "Изображение";
 "Picture preview" = "Предпросмотр изображения";
 "Picture size" = "Размер изображения";
@@ -182,6 +183,7 @@
 "Save Node as…" = "Сохранить узел как…";
 "Save “%1$@” as…" = "Сохранить «%1$@» как…";
 "Saved %1$@ bytes." = "Сохранено байт: %1$@.";
+"The variable does not decompress." = "Переменная не распаковывается.";
 "There is nothing to save here." = "Здесь нечего сохранять.";
 "Top Swap" = "Top Swap";
 "Value" = "Значение";

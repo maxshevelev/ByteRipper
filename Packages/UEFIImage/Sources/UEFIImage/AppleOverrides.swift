@@ -29,10 +29,16 @@ public struct AppleOverrides: Equatable, Sendable {
     /// How much text a store of at most 64 KiB may unpack to.
     private static let limit: UInt64 = 1 << 22
 
+    /// The text a variable's data unpacks to, or nil when it is not a bzip2
+    /// stream — a store of another vendor's, or a damaged one.
+    public static func unpacked(_ data: [UInt8]) -> [UInt8]? {
+        try? FirmwareDecompression.bzip2(data, limit: limit)
+    }
+
     /// The rules in a variable's data, or nil when it is not a bzip2 stream of
-    /// text — a store of another vendor's, or a damaged one.
+    /// text.
     public static func read(_ data: [UInt8]) -> AppleOverrides? {
-        guard let text = try? FirmwareDecompression.bzip2(data, limit: limit) else { return nil }
+        guard let text = unpacked(data) else { return nil }
         let lines = String(decoding: text, as: UTF8.self)
             .split(whereSeparator: { $0 == "\n" || $0 == "\0" })
         let rules = lines.map { line -> Rule in

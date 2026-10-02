@@ -40,6 +40,8 @@ import UEFITool
     var onExportDecompressed: ((NodeID) -> Void)?
     /// The same node's Open Decompressed … item was chosen.
     var onOpenDecompressed: ((NodeID) -> Void)?
+    /// The Open Decompressed item of a bzip2 variable was chosen.
+    var onOpenUnpacked: ((NodeID) -> Void)?
     /// A row was opened or shut. What is open belongs to the file rather than
     /// to this panel, so the session writes it through to where the tree
     /// lives (`UEFITreeProviding.setOpenUEFIRows`).
@@ -1697,6 +1699,16 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = node.id
             items.append(item)
         }
+        if UEFIPresenter.isBZip2Variable(node) {
+            let open = NSMenuItem(
+                title: L("Open Decompressed Variable"),
+                action: #selector(openUnpackedClicked(_:)),
+                keyEquivalent: ""
+            )
+            open.target = self
+            open.representedObject = node.id
+            items.append(open)
+        }
         return items
     }
 
@@ -1731,6 +1743,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     @objc private func exportClicked(_ sender: NSMenuItem) {
         guard let nodeID = sender.representedObject as? NodeID else { return }
         onExportDecompressed?(nodeID)
+    }
+
+    @objc private func openUnpackedClicked(_ sender: NSMenuItem) {
+        guard let nodeID = sender.representedObject as? NodeID else { return }
+        onOpenUnpacked?(nodeID)
     }
 
     @objc private func openDecompressedClicked(_ sender: NSMenuItem) {

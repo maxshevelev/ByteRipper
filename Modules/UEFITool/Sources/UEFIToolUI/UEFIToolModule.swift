@@ -249,6 +249,9 @@ private struct ChecksumPass: Sendable {
         controller.onOpenDecompressed = { [weak self] nodeID in
             self?.openDecompressedInNewTab(for: nodeID)
         }
+        controller.onOpenUnpacked = { [weak self] nodeID in
+            self?.openUnpackedInNewTab(for: nodeID)
+        }
         controller.onOpenNode = { [weak self] nodeID, body in
             self?.openNodeInPanel(for: nodeID, body: body)
         }
@@ -1380,6 +1383,40 @@ private struct ChecksumPass: Sendable {
             } else {
                 self.host.openPart(bytes, named: name, linkedTo: source)
             }
+        }
+    }
+
+    /// Opens what a bzip2 variable of an Apple system-flags store unpacks to —
+    /// the text of its device overrides — in a tab of its own, as a copy linked
+    /// to the variable's bytes: it is read, not written back, because nothing
+    /// here compresses it again.
+    ///
+    /// Public for the same reason as `exportDecompressed(for:)`.
+    // help: panel.uefi.open-unpacked
+    public func openUnpackedInNewTab(for nodeID: NodeID) {
+        guard let tree, tree.isReady, let node = tree.image().node(nodeID),
+              UEFIPresenter.isBZip2Variable(node),
+              let source = UEFIPresenter.fileSource(of: node, in: tree.image())
+        else {
+            fail(L("There is nothing decompressed to open here."))
+            return
+        }
+        let readers = tree.spaceReaders
+        let body = node.body
+        let space = node.space
+        let name = UEFIPresenter.unpackedTabName(of: node, fileName: host.fileName)
+        controller.showBusy()
+        Task { [weak self] in
+            let text = await Task.detached(priority: .userInitiated) {
+                readers.reader(for: space).flatMap { $0.bytes(body) }.flatMap { AppleOverrides.unpacked($0) }
+            }.value
+            guard let self else { return }
+            self.controller.endBusy()
+            guard let text, !text.isEmpty else {
+                self.fail(L("The variable does not decompress."))
+                return
+            }
+            self.host.openPart(text, named: name, linkedTo: source)
         }
     }
 
