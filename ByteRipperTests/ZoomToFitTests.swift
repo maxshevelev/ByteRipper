@@ -222,6 +222,40 @@ final class ZoomToFitTests: XCTestCase {
                        accuracy: 1, "the fit makes room for the visible panel")
     }
 
+    /// With a fragment panel up the window is fitted around the panel: its dump's
+    /// grid and its own map, not the tab's.
+    func testZoomAccountsForTheFragmentPanelsMinimap() throws {
+        let url = try tempFile([UInt8](repeating: 0x41, count: 256))
+        let controller = makeController()
+        let window = controller.window!
+        let mainVC = controller.mainViewController
+        defer {
+            for id in mainVC.fragments.dock.panels { mainVC.fragments.close(id, animated: false) }
+            cleanup(mainVC, url)
+        }
+        try mainVC.windowModel.pane1.open(url: url)
+        mainVC.apply(mode: .singleFile)
+        window.layoutIfNeeded()
+        let id = try XCTUnwrap(mainVC.openFragment([UInt8](repeating: 0x42, count: 64),
+                                                   named: "part", animated: false))
+        let surface = try XCTUnwrap(mainVC.fragments.surface(id))
+        let part = try XCTUnwrap(surface.paneViewsInMapOrder().first)
+        window.layoutIfNeeded()
+        let defaultFrame = NSRect(x: 0, y: 0, width: 3000, height: 2000)
+
+        let hidden = mainVC.windowWillUseStandardFrame(window, defaultFrame: defaultFrame)
+        XCTAssertEqual(hidden.width, expectedFrameWidth(for: part.contentFitWidth, window: window),
+                       accuracy: 1, "fitted around the part, with no map")
+
+        surface.minimap.setPanelVisible(true, animated: false)
+        window.layoutIfNeeded()
+        let shown = mainVC.windowWillUseStandardFrame(window, defaultFrame: defaultFrame)
+        let expected = part.contentFitWidth + surface.minimapPreferredPanelWidth
+            + surface.panelSplit.dividerThickness
+        XCTAssertEqual(shown.width, expectedFrameWidth(for: expected, window: window),
+                       accuracy: 1, "and with room for the panel's map")
+    }
+
     /// The tool panel makes the same claim on the leading edge that the minimap
     /// makes on the trailing one, so zoom-to-fit adds it too: fitting the hex
     /// grids alone zooms the window to a width the dump does not actually get

@@ -6899,6 +6899,11 @@ final class MainViewController: NSViewController {
     /// both grids plus the splitter divider for a left/right comparison. A
     /// stacked comparison keeps the wider of the two panes' grids.
     private func standardContentWidth() -> CGFloat {
+        // A panel that is up covers the whole content area, so the window is
+        // fitted around it: its one dump's grid.
+        if let front = fragments.frontSurface {
+            return front.paneViewsInMapOrder().first?.contentFitWidth ?? 0
+        }
         switch mode {
         case .singleFile:
             return activeFilePane?.contentFitWidth ?? 0
@@ -6923,14 +6928,15 @@ final class MainViewController: NSViewController {
     /// wider than the tool-module asked for. Before the first layout the
     /// divider has no position to read, so the width the panel will open at
     /// stands in — which is what it is about to become.
-    private func toolPanelFitWidth() -> CGFloat {
+    private func toolPanelFitWidth(of surface: DocumentSurface) -> CGFloat {
+        let tools = surface.tools
         guard tools.isPanelVisible else { return 0 }
-        let live = toolPanelWidth()
+        let live = surface.toolPanelWidth()
         let width = live > 0
             ? live
             : (tools.activeModule.map { tools.preferredWidth(for: $0) } ?? 0)
         guard width > 0 else { return 0 }
-        return width + panelSplit.dividerThickness
+        return width + surface.panelSplit.dividerThickness
     }
 
     /// Ideal content height the window should be when zoomed (double-click on
@@ -6971,14 +6977,17 @@ extension MainViewController: NSWindowDelegate {
         // must make room for it on top of the hex grids: the hex panes keep
         // their fitted width and the panel takes its preferred width (plus the
         // divider) beside them. A hidden panel adds nothing.
-        let minimapWidth = surface.minimapPanelVisible
-            ? minimapPreferredPanelWidth + panelSplit.dividerThickness
+        // The side panels counted are the front surface's: with a fragment panel
+        // up they are its map and its tool, and the tab's own are under it.
+        let front = frontSurface
+        let minimapWidth = front.minimapPanelVisible
+            ? front.minimapPreferredPanelWidth + front.panelSplit.dividerThickness
             : 0
         // The tool panel is the same claim on the leading edge
         // (`Design/TOOL_MODULES_PLAN.md`), so it is added the same way — the
         // fit is about the whole content area, and a panel left out of it is a
         // window that zooms to a width the dump does not actually get.
-        let fitWidth = contentWidth + minimapWidth + toolPanelFitWidth()
+        let fitWidth = contentWidth + minimapWidth + toolPanelFitWidth(of: front)
 
         var frame = window.frame
         let oldTop = frame.origin.y + frame.height
