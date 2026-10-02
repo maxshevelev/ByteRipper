@@ -142,7 +142,9 @@ import Cocoa
         host.addChild(surface)
         let paneView = host.paneView(for: pane)
         surface.setContent(paneView)
-        let view = FragmentPanelView(content: surface.view)
+        // The pane's title bar goes across the whole panel, over the tool and
+        // the map as well as the dump.
+        let view = FragmentPanelView(header: paneView.hoistHeader(), content: surface.view)
         let opened = dock.open()
         entries[opened.id] = Entry(id: opened.id, pane: pane, surface: surface,
                                    paneView: paneView, view: view)

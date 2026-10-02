@@ -41,6 +41,23 @@ final class ToolPanelView: NSView {
     /// it into the tab underneath.
     var takesDrops = true
 
+    /// Whether the header names the file the tool is reading, with the selector
+    /// that moves it to another. False on a fragment panel: a part is the only
+    /// file its panel ever holds, and the panel's own header — across the whole
+    /// panel, above this one — already names it
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`).
+    var showsFileSelector = true {
+        didSet {
+            fileSelector.isHidden = !showsFileSelector
+            // Hidden is not gone to the layout: the popup would go on asking
+            // for its share of the bar and the module's name would be cut short
+            // for a control nobody can see.
+            fileSelectorCollapsed?.isActive = !showsFileSelector
+            needsLayout = true
+        }
+    }
+    private var fileSelectorCollapsed: NSLayoutConstraint?
+
     /// A pane was chosen in the header's selector: the tool moves to it. Index
     /// 0 or 1, the same numbering `MainViewController` uses for panes.
     ///
@@ -181,6 +198,7 @@ final class ToolPanelView: NSView {
         // — which is what AppKit logged as a pile of conflicts on every open.
         fileSelector.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
         fileSelector.setContentHuggingPriority(.defaultLow - 1, for: .horizontal)
+        fileSelectorCollapsed = fileSelector.widthAnchor.constraint(equalToConstant: 0)
 
 
         for separator in [bottomSeparator, trailingSeparator] {

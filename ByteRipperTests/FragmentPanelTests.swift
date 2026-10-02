@@ -401,14 +401,59 @@ final class FragmentPanelTests: XCTestCase {
         let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part",
                                                        animated: false))
         window.layoutIfNeeded()
-        let panelPane = try XCTUnwrap(controller.fragments.pane(id))
-        let fold = try button("Collapse panel", in: controller.paneView(for: panelPane))
+        // The title bar is the panel's now, not the dump's.
+        let panel = try XCTUnwrap(controller.fragments.panelView(id))
+        let fold = try button("Collapse panel", in: panel)
         XCTAssertFalse(fold.isHidden, "and a panel does")
 
         fold.performClick(nil)
 
         XCTAssertNil(controller.fragments.expanded, "folded")
         XCTAssertEqual(controller.fragments.count, 1, "and still open, in its pill")
+    }
+
+    // MARK: - One header over the whole panel
+
+    /// The pane's title bar runs across the panel, above the tool, the dump and
+    /// the map, rather than sitting over the dump alone.
+    func testOneHeaderSpansTheWholePanel() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part",
+                                                       animated: false))
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        surface.tools.activate(StubToolA.identifier, animated: false)
+        window.layoutIfNeeded()
+        let panel = try XCTUnwrap(controller.fragments.panelView(id))
+        panel.layoutSubtreeIfNeeded()
+
+        let close = try button("Close pane", in: panel)
+        let paneView = controller.paneView(for: try XCTUnwrap(controller.fragments.pane(id)))
+        XCTAssertTrue(paneView.isHeaderHoisted)
+        XCTAssertFalse(close.isDescendant(of: paneView), "the bar left the pane")
+        XCTAssertFalse(close.isHidden)
+        // The ✕ is at the panel's trailing edge, past the minimap and the tool.
+        let closeFrame = panel.convert(close.bounds, from: close)
+        XCTAssertGreaterThan(closeFrame.maxX, panel.bounds.maxX - 20, "edge to edge")
+        // And above everything the surface holds.
+        let surfaceFrame = panel.convert(surface.view.bounds, from: surface.view)
+        XCTAssertGreaterThanOrEqual(closeFrame.minY, surfaceFrame.maxY - 0.5, "above the surface")
+    }
+
+    /// A part is the only file its panel holds, so the tool's header does not
+    /// name it and offers no way to move to another.
+    func testTheToolHeaderOnAPanelNamesNoFile() throws {
+        let (controller, window) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01, 0x02], named: "part",
+                                                       animated: false))
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        surface.tools.activate(StubToolA.identifier, animated: false)
+        window.layoutIfNeeded()
+        XCTAssertTrue(surface.tools.panel.paneSelector.isHidden)
+
+        controller.tools.activate(StubToolA.identifier, animated: false)
+        XCTAssertFalse(controller.tools.panel.paneSelector.isHidden, "the tab's own still does")
     }
 
     // MARK: - Where a fold lands

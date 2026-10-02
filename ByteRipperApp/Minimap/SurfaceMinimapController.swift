@@ -37,9 +37,9 @@ import UEFIImage
                             pieceIndex: Int, point: NSPoint) -> NSMenu?
     func minimapZoneMenu(on surface: DocumentSurface, mapIndex: Int, zoneID: Zone.ID) -> NSMenu?
 
-    /// The window move that goes with showing or hiding this surface's panel,
-    /// or nil for a surface that opens its panels inside the room it was given.
-    func minimapWindowResize(visible: Bool) -> ((CGFloat) -> Void)?
+    /// The window move that goes with showing or hiding `surface`'s panel, or
+    /// nil when the room that surface has to spare holds the panel.
+    func minimapWindowResize(on surface: DocumentSurface, visible: Bool) -> ((CGFloat) -> Void)?
 }
 
 /// One surface's minimap: the map, its chrome, everything that map is in the
@@ -639,11 +639,9 @@ import UEFIImage
         // rather than run beside it: one clock and one curve, so the window
         // edge and the panel edge move as a single thing. Evaluated here,
         // before the width changes, because it captures the window's start.
-        // Only the tab's own panel moves the window's edge: a fragment panel
-        // opens its map inside the area it was given, and a window that grew
-        // because a panel over it showed a map would be the window moving for
-        // something that is not the window's.
-        let resize = changed ? host?.minimapWindowResize(visible: visible) : nil
+        // A fragment panel's map opens into the panel's own spare room, and the
+        // window moves only by what that cannot hold — as for the tab's own.
+        let resize = changed ? host?.minimapWindowResize(on: surface, visible: visible) : nil
         surface.setMinimapPanelWidth(visible ? surface.minimapPreferredPanelWidth : 0,
                                      animated: animated, windowResize: resize)
         if changed { panelVisibilityChanged(visible) }

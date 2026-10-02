@@ -1679,7 +1679,6 @@ final class MainViewController: NSViewController {
     /// Kept so the way out mirrors the way in — a panel gives back what it
     /// borrowed before the window gives up anything.
     private var borrowedByToolPanel: CGFloat = 0
-    private var borrowedByMinimap: CGFloat = 0
 
     /// The dump area's spare width: how much wider it is than the hex grid it
     /// is showing. A window the user has dragged wider than its content has
@@ -1699,6 +1698,18 @@ final class MainViewController: NSViewController {
         return max(0, contentHost.frame.width - needed)
     }
 
+    /// The same for the dump of `surface`: the tab's own as above, and for a
+    /// fragment panel the room its single dump has beyond its own grid — the
+    /// panel is as wide as the window, so what the panel has to spare is what
+    /// its map may open into without the window being asked for anything.
+    func dumpAreaSlack(of surface: DocumentSurface) -> CGFloat {
+        guard surface.pinnedPane != nil else { return dumpAreaSlack() }
+        guard let paneView = surface.paneViewsInMapOrder().first else { return 0 }
+        let needed = paneView.contentFitWidth
+        guard needed > 0 else { return 0 }
+        return max(0, surface.contentHost.frame.width - needed)
+    }
+
     /// What the window's width must change by for a side panel gaining or
     /// giving up `delta` points, and the borrow that goes with it.
     ///
@@ -1707,9 +1718,10 @@ final class MainViewController: NSViewController {
     /// back before the window gives up anything: a panel that cost the window
     /// nothing to open must cost it nothing to close, or the window would end
     /// up narrower than it was before the panel was ever shown.
-    private func windowDelta(forPanel delta: CGFloat, borrowed: inout CGFloat) -> CGFloat {
+    private func windowDelta(forPanel delta: CGFloat, slack: CGFloat,
+                             borrowed: inout CGFloat) -> CGFloat {
         if delta > 0 {
-            let borrow = min(delta, dumpAreaSlack())
+            let borrow = min(delta, slack)
             borrowed += borrow
             return delta - borrow
         }
@@ -1729,7 +1741,8 @@ final class MainViewController: NSViewController {
         // The split keeps its dividers whether a pane is 400 points wide or
         // none at all, so no seam appears or goes with the panel and the
         // panel's change is the width alone.
-        let move = windowDelta(forPanel: delta, borrowed: &borrowedByToolPanel)
+        let move = windowDelta(forPanel: delta, slack: dumpAreaSlack(),
+                               borrowed: &borrowedByToolPanel)
         guard move != 0 else { return nil }
         let start = window.frame
         let targetWidth = max(0, start.width + move)
@@ -2437,11 +2450,15 @@ final class MainViewController: NSViewController {
     /// Every step is computed from the frame captured here rather than from the
     /// window's current one, so the on-screen clamp cannot accumulate across
     /// the steps.
-    func minimapWindowResize(visible: Bool) -> ((CGFloat) -> Void)? {
+    func minimapWindowResize(on surface: DocumentSurface, visible: Bool) -> ((CGFloat) -> Void)? {
         guard let window = view.window else { return nil }
-        let width = minimapPreferredPanelWidth + panelSplit.dividerThickness
+        let width = surface.minimapPreferredPanelWidth + surface.panelSplit.dividerThickness
+        // A fragment panel's map opens into the panel's own spare room first,
+        // exactly as the tab's does into the dump's; the window is asked only
+        // for what that cannot hold.
         let move = windowDelta(forPanel: visible ? width : -width,
-                               borrowed: &borrowedByMinimap)
+                               slack: dumpAreaSlack(of: surface),
+                               borrowed: &surface.borrowedByMinimap)
         guard move != 0 else { return nil }
         let start = window.frame
         let targetWidth = max(0, start.width + move)
@@ -6882,6 +6899,11 @@ final class MainViewController: NSViewController {
     /// both grids plus the splitter divider for a left/right comparison. A
     /// stacked comparison keeps the wider of the two panes' grids.
     private func standardContentWidth() -> CGFloat {
+        // A panel that is up covers the whole content area, so the window is
+        // fitted around it: its one dump's grid.
+        if let front = fragments.frontSurface {
+            return front.paneViewsInMapOrder().first?.contentFitWidth ?? 0
+        }
         switch mode {
         case .singleFile:
             return activeFilePane?.contentFitWidth ?? 0
@@ -6906,14 +6928,15 @@ final class MainViewController: NSViewController {
     /// wider than the tool-module asked for. Before the first layout the
     /// divider has no position to read, so the width the panel will open at
     /// stands in — which is what it is about to become.
-    private func toolPanelFitWidth() -> CGFloat {
+    private func toolPanelFitWidth(of surface: DocumentSurface) -> CGFloat {
+        let tools = surface.tools
         guard tools.isPanelVisible else { return 0 }
-        let live = toolPanelWidth()
+        let live = surface.toolPanelWidth()
         let width = live > 0
             ? live
             : (tools.activeModule.map { tools.preferredWidth(for: $0) } ?? 0)
         guard width > 0 else { return 0 }
-        return width + panelSplit.dividerThickness
+        return width + surface.panelSplit.dividerThickness
     }
 
     /// Ideal content height the window should be when zoomed (double-click on
@@ -6954,14 +6977,17 @@ extension MainViewController: NSWindowDelegate {
         // must make room for it on top of the hex grids: the hex panes keep
         // their fitted width and the panel takes its preferred width (plus the
         // divider) beside them. A hidden panel adds nothing.
-        let minimapWidth = surface.minimapPanelVisible
-            ? minimapPreferredPanelWidth + panelSplit.dividerThickness
+        // The side panels counted are the front surface's: with a fragment panel
+        // up they are its map and its tool, and the tab's own are under it.
+        let front = frontSurface
+        let minimapWidth = front.minimapPanelVisible
+            ? front.minimapPreferredPanelWidth + front.panelSplit.dividerThickness
             : 0
         // The tool panel is the same claim on the leading edge
         // (`Design/TOOL_MODULES_PLAN.md`), so it is added the same way — the
         // fit is about the whole content area, and a panel left out of it is a
         // window that zooms to a width the dump does not actually get.
-        let fitWidth = contentWidth + minimapWidth + toolPanelFitWidth()
+        let fitWidth = contentWidth + minimapWidth + toolPanelFitWidth(of: front)
 
         var frame = window.frame
         let oldTop = frame.origin.y + frame.height
