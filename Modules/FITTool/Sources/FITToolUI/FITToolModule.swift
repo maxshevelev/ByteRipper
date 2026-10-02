@@ -173,6 +173,16 @@ struct FITParkedState: ToolSessionState {
         // A tree of our own is over a frozen snapshot and cannot be told about
         // an edit; the shared one can, and was.
         ownTree = nil
+        // A reload is another file, or this one replaced: the table on screen
+        // and the row picked in it describe what is gone, so the panel goes
+        // back to how it opens until the new reading lands. An edit keeps
+        // both — it is the same file, and the row is held by its zone.
+        if change == .reloaded {
+            focus = nil
+            focusZone = nil
+            readRanges = nil
+            show(.empty)
+        }
         reparse()
     }
 

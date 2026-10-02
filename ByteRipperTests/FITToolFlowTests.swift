@@ -152,6 +152,26 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(try entriesTable().numberOfRows, 2)
     }
 
+    /// Another file opened into the pane is another table to read, and until
+    /// it is read the panel shows none — not the last file's rows.
+    func testAnotherFileShowsNoTableUntilItsOwnIsRead() throws {
+        let controller = try open(FITTestImage.make())
+        XCTAssertEqual(try entriesTable().numberOfRows, 2, "the premise: the first file's table is up")
+
+        let other = try tempFile(FITTestImage.make())
+        files.append(other)
+        let parsed = expectation(description: "the other file's table lands")
+        try session().onDisplay = { _ in parsed.fulfill() }
+        try controller.windowModel.pane1.open(url: other)
+        window?.layoutIfNeeded()
+        XCTAssertEqual(try entriesTable().numberOfRows, 0, "no rows of the last file")
+
+        wait(for: [parsed], timeout: 5)
+        try session().onDisplay = nil
+        window?.layoutIfNeeded()
+        XCTAssertEqual(try entriesTable().numberOfRows, 2, "the new file's table takes its place")
+    }
+
     /// What the panel says about an image it understands.
     func testThePanelSaysWhereTheTableIsAndWhatIsInIt() throws {
         _ = try open(FITTestImage.make())

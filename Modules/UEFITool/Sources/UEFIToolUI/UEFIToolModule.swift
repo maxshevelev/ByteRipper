@@ -339,6 +339,13 @@ private struct ChecksumPass: Sendable {
         meFileTableTask = nil
         meChecksumsTask?.cancel()
         meChecksumsTask = nil
+        // A reload is another file, or this one replaced: the row picked in the
+        // old tree names nothing in the new one — the same path is another
+        // node — so the selection goes, as on a first open. An edit keeps it.
+        if change == .reloaded {
+            focus = nil
+            meFocus = nil
+        }
         bind()
     }
 

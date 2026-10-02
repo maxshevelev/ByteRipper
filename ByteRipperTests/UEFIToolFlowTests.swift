@@ -257,6 +257,36 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(ToolPanelFont.defaults.bool(forKey: Self.showsEmptyPaddingKey), true, "remembered")
     }
 
+    /// Another file opened into the pane is another tree to read: until it is
+    /// there the panel shows none — not the last file's rows, nor the detail
+    /// of the row that was selected in it — and the selection does not carry
+    /// over to whatever node the new file has at the same place.
+    func testAnotherFileShowsNothingOfTheLastOne() throws {
+        let controller = try open(UEFITestImage.make())
+        let tree = try outline()
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+        let panel = try XCTUnwrap(controller.tools.panel)
+        let texts = { self.descendants(of: panel, NSTextField.self).map(\.stringValue) }
+        XCTAssertTrue(texts().contains("Volume"), "the premise: the first file's volume is selected")
+
+        // No volume in it: whatever the panel shows of a volume is the last file's.
+        let other = try tempFile([UInt8](repeating: 0xAA, count: 0x2000))
+        files.append(other)
+        let parsed = expectation(description: "the other file's tree lands")
+        try session().onDisplay = { _ in parsed.fulfill() }
+        try controller.windowModel.pane1.open(url: other)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        window?.layoutIfNeeded()
+        XCTAssertFalse(texts().contains("Volume"), "no row or detail of the last file: \(texts())")
+
+        wait(for: [parsed], timeout: 5)
+        try session().onDisplay = nil
+        window?.layoutIfNeeded()
+        XCTAssertFalse(texts().contains("Volume"), "\(texts())")
+        XCTAssertEqual(tree.selectedRow, -1, "nothing selected, as on a first open")
+    }
+
     /// It is in the shipping app, not only in the tests.
     func testTheAppShipsIt() {
         XCTAssertTrue(
