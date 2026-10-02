@@ -169,6 +169,18 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(table.rows.map { $0[2].tone }, [.plain, .plain, .plain, .plain])
     }
 
+    /// Two chips: no one chip has to hold the dump, but one smaller than the
+    /// smallest the descriptor declares cannot be either of them.
+    func testWithTwoChipsRedIsASizeBelowTheSmallest() throws {
+        let shown = detail(TestUEFI.flashDescriptor(
+            chipSizes: [0x80_0000, 0x100_0000], totalSize: 0x180_0000))
+        let table = try XCTUnwrap(table(shown, "Flash chips in VSCC table"))
+
+        XCTAssertEqual(table.rows.map { $0[2].text }, ["4 MB", "16 MB", "32 MB", "32 MB"])
+        XCTAssertEqual(table.rows.map { $0[2].tone }, [.no, .plain, .plain, .plain],
+                       "red where the chip (4 MB) is below the smallest declared (8 MB)")
+    }
+
     /// A node that is not a descriptor gets none of this — no tables, and no
     /// rows read from bytes that are not a descriptor's.
     func testOnlyADescriptorCarriesTheDescriptorBlock() {

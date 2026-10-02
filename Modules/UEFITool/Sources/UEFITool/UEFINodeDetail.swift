@@ -1025,13 +1025,16 @@ public enum UEFIDetail {
                 symbol: "cpu",
                 columns: [L("JEDEC ID"), L("Chip"), L("Size")],
                 rows: descriptor.chips.map { chip in
-                    // The descriptor lays the image out across one chip, so a chip
-                    // smaller than the dump cannot be the one it came from. With
-                    // two chips the split is the descriptor's, and no one chip is
-                    // measured against the whole.
+                    // With one chip the dump is that chip's, so a smaller chip
+                    // cannot be the one it came from. With several the split is
+                    // the descriptor's, and a chip smaller than the smallest of
+                    // them cannot stand in for any of them.
                     let bytes = chip.sizeKB.map { UInt64($0) << 10 }
-                    let invalid = descriptor.component?.chipSizes.count == 1
-                        && (bytes.map { $0 < imageSize } ?? false)
+                    let declared = descriptor.component?.chipSizes ?? []
+                    let smallest: UInt64? = declared.count == 1
+                        ? imageSize : declared.compactMap { $0 }.min()
+                    var invalid = false
+                    if let bytes, let smallest { invalid = bytes < smallest }
                     return [.init(String(format: "%06X", chip.jedecID)),
                      .init(chip.name ?? chip.vendor.map { L("Unknown (%1$@)", $0) } ?? L("Unknown")),
                      .init(bytes.map(capacityText) ?? "", tone: invalid ? .no : .plain)]
