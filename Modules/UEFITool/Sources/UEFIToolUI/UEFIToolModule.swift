@@ -155,6 +155,9 @@ private struct ChecksumPass: Sendable {
     /// the sub-tree from a fuller analysis once they land. Nil until the first
     /// analysis.
     private var meAnalysis: FirmwareAnalysis?
+    /// What the presented analysis was read without, while the full reading
+    /// is on the way (`MEAPending`).
+    private var mePending: MEAPending = .none
     /// The presented ME sub-tree of the last analysis — the rows the ME region
     /// node opens onto. Empty until the analysis has run (or was cached), which
     /// is why the region's row is shut on first paint.
@@ -328,6 +331,7 @@ private struct ChecksumPass: Sendable {
         meRoots = []
         meFocus = nil
         meAnalysis = nil
+        mePending = .none
         meMfsNames = .none
         meEfsNames = .none
         meConfigPaths = .none
@@ -424,6 +428,7 @@ private struct ChecksumPass: Sendable {
         // parked selection this bind is restoring.
         meRoots = []
         meAnalysis = nil
+        mePending = .none
         meMfsNames = .none
         meEfsNames = .none
         meConfigPaths = .none
@@ -857,7 +862,7 @@ private struct ChecksumPass: Sendable {
         // would fire a moment later and put a row up for an analysis that is
         // already in hand.
         if !ignoringCache, let cached = provider?.cachedMEAnalysis() {
-            presentME(cached)
+            presentME(cached, pending: .none)
             controller.onMERegionLoading?(id, false)
             completion()
             return
@@ -867,10 +872,8 @@ private struct ChecksumPass: Sendable {
         let run = meRun
         let generation = self.generation
         let analyzer = self.analyzer
-        // Every database the analysis may ask for, downloading side by side
-        // from now rather than one after another as the engine reaches each;
-        // the line says which are still coming, then that the region is read.
-        MEADownloads.shared.prefetch(from: Self.dataSource)
+        // The line says which databases are still downloading, then that the
+        // region is read.
         endMEReadingStatus()
         meReadingStatus = MEAReadingStatus { [weak self] in self?.controller.say($0) }
         controller.showBusy()
@@ -878,23 +881,27 @@ private struct ChecksumPass: Sendable {
         // if it is slow enough, the way a UEFI branch does.
         controller.onMERegionLoading?(id, true)
         meLoadingID = id
+        let source = Self.dataSource
         meTask = Task { [weak self] in
-            // Two panels on one file ask for this region in the same moment —
-            // this open, and the ME Analyzer re-parsing on a switch to it — so
-            // the ask goes through the pane's cache, which runs it once and
-            // hands the second caller the same answer rather than reading the
-            // region a second time.
-            let result: Result<FirmwareAnalysis, Error>
-            // A caller that knows the cache is wrong asks the engine directly.
-            // The pane's `meAnalysis` is a cache first, and would hand back the
-            // very analysis this re-reading exists to replace — whether or not
-            // the pane's own watch has got round to dropping it yet.
-            if let provider, !ignoringCache {
-                result = await provider.meAnalysis(for: meRegion) {
-                    await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
-                }
-            } else {
-                result = await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
+            // Read the way every panel reads the region (`MEReads.read`): a
+            // first reading opens the row at once, its database-dependent rows
+            // saying "Loading…", and the full one replaces it — through the
+            // pane's cache, so the ME Analyzer re-parsing on a switch to it in
+            // the same moment reads the region once with this. A caller that
+            // knows the cache is wrong reads past it: it would hand back the
+            // very analysis this re-reading exists to replace.
+            var opened = false
+            let result = await MEReads.read(
+                snapshot, meRegion: meRegion, analyzer: analyzer, source: source,
+                provider: ignoringCache ? nil : provider
+            ) { [weak self] analysis, pending in
+                guard let self, self.generation == generation, self.meRun == run else { return }
+                // The row opens onto what is known; the bar and the line stay,
+                // since the reading goes on.
+                self.endMERegionLoading()
+                self.presentME(analysis, pending: pending)
+                opened = true
+                completion()
             }
             guard let self else { return }
             // Two ways a landing is not the current one, and neither may touch
@@ -911,18 +918,24 @@ private struct ChecksumPass: Sendable {
             case .success(let analysis):
                 self.controller.say("")
                 provider?.setCachedMEAnalysis(analysis, meRegion: meRegion)
-                self.presentME(analysis)
-                completion()
+                self.presentME(analysis, pending: .none)
+                // Opened already on the first reading: this only says more.
+                if !opened { completion() }
             case .failure(let error):
                 self.controller.say(MEReads.describe(error), asProblem: true)
-                failed?()
+                if !opened { failed?() }
             }
         }
     }
 
     /// A successful analysis lands here: present the curated sub-tree and show
     /// it, keeping whatever ME selection still resolves after the re-parse.
-    private func presentME(_ analysis: FirmwareAnalysis) {
+    ///
+    /// `pending` is what it was read without (`MEAPending`): a first reading
+    /// is presented with it, the reading that follows with `.none`, and every
+    /// other re-presentation — names landing, digests — keeps what it was.
+    private func presentME(_ analysis: FirmwareAnalysis, pending: MEAPending? = nil) {
+        if let pending { mePending = pending }
         meAnalysis = analysis
         // What the sub-tree held before this presentation, by path. A
         // re-presentation that follows a fetch changes what the rows *say* —
@@ -933,7 +946,7 @@ private struct ChecksumPass: Sendable {
         // come back with nothing in them, and it used to keep its row anyway.
         let rowsBefore = Self.meRowPaths(meRoots)
         meRoots = MEACurator.present(analysis, mfsNames: meMfsNames, efsNames: meEfsNames,
-                                     configPaths: meConfigPaths)
+                                     configPaths: meConfigPaths, pending: mePending)
         if let path = meFocus, MEATree.node(at: path, in: meRoots) == nil {
             meFocus = nil
         }

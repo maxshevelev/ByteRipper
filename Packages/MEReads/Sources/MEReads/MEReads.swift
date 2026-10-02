@@ -120,6 +120,56 @@ public enum MEReads {
         }
     }
 
+    /// The ME region read the way every panel reads it: shown at once, and
+    /// read again with what was missing.
+    ///
+    /// From a source that fetches over the network, every database the
+    /// analysis may ask for starts downloading at once, side by side
+    /// (`MEADownloads`), and a first reading follows, quick enough to show
+    /// (`firstReading`): when it did without nothing, it is the analysis
+    /// and is returned. Otherwise it goes to `shown` with what it is pending
+    /// on — the panel puts it up, its database-dependent rows saying so — and
+    /// the region is read again in full, through `provider` when there is one,
+    /// so two panels asking in the same moment read it once. A source that
+    /// answers at once is read in full straight away.
+    ///
+    /// What is returned is the analysis to keep. The caller writes it to the
+    /// cache, after its own guard, as `MEAAnalysisProviding` asks; and it
+    /// answers a cached analysis itself before calling this, since that needs
+    /// no reading at all. `provider` nil reads past the cache — for a caller
+    /// that knows what the cache holds is out of date.
+    @MainActor
+    public static func read(
+        _ snapshot: any ToolContentReader,
+        meRegion: Range<UInt64>?,
+        analyzer: MEFirmwareAnalyzer,
+        source: any MEADataSource,
+        provider: (any MEAAnalysisProviding)?,
+        firstReading shown: @MainActor (FirmwareAnalysis, MEAPending) -> Void
+    ) async -> Result<FirmwareAnalysis, Error> {
+        // A source that answers at once — a stub, a local file — holds all it
+        // will ever hold: a first reading would only be the reading twice.
+        if source.fetchesOverTheNetwork {
+            MEADownloads.shared.prefetch(from: source)
+            switch await firstReading(snapshot, source: source, meRegion: meRegion) {
+            case .success(let reading) where reading.isComplete:
+                return .success(reading.analysis)
+            case .success(let reading):
+                shown(reading.analysis, reading.pending)
+            case .failure(let error):
+                // The bytes or `MEA.dat` failed it, and the full reading needs
+                // both: it would fail the same way, after a second wait.
+                return .failure(error)
+            }
+        }
+        if let provider {
+            return await provider.meAnalysis(for: meRegion) {
+                await analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
+            }
+        }
+        return await analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
+    }
+
     /// Whether this analysis has anything that needs `FileTable.dat`: an
     /// FTBL-mode MFS volume, which cannot name its files; an EFS volume, whose
     /// pages carry no directory, so that without the table it lists no files

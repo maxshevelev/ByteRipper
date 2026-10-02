@@ -280,10 +280,6 @@ struct MEAParkedState: ToolSessionState {
             controller.showSummary([])
             controller.showRetry(false)
         }
-        // Every database the reading may ask for, downloading side by side from
-        // now: the engine asks for each only when it reaches the step that
-        // reads it, and would otherwise wait for them one after another.
-        MEADownloads.shared.prefetch(from: Self.dataSource)
         // Named, not just "Reading…": three panels can be the one on screen and
         // each reads something different, so the line says which this is —
         // and, while a database is downloading, which.
@@ -297,29 +293,22 @@ struct MEAParkedState: ToolSessionState {
         let analyzer = self.analyzer
         let source = Self.dataSource
         Task { [weak self] in
-            // First what the dump says with the databases already in hand: the
-            // engine waits for `FileTable.dat` and `Huffman.dat` when it needs
-            // them, and a first fetch of either is seconds the summary need not
-            // wait for. A reading that did without neither is the analysis; one
-            // that did is shown, with what depends on them saying "Loading…",
-            // while the reading below fetches them and reads again.
-            let first = await MEReads.firstReading(snapshot, source: source, meRegion: meRegion)
-            guard self?.show(first, generation: generation, meRegion: meRegion) == false else { return }
-
-            // The UEFI Structure opening the same region in the same moment
-            // makes the same ask, so it goes through the pane's cache: one
-            // reading, and whichever panel asked second is handed its answer.
-            let result: Result<FirmwareAnalysis, Error>
-            // A caller that knows the cache is wrong asks the engine directly.
-            // The pane's `meAnalysis` is a cache first, and would hand back the
-            // very analysis this re-reading exists to replace — whether or not
-            // the pane's own watch has got round to dropping it yet.
-            if let analysisProvider, !ignoringCache {
-                result = await analysisProvider.meAnalysis(for: meRegion) {
-                    await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
-                }
-            } else {
-                result = await MEReads.analyze(snapshot, analyzer: analyzer, meRegion: meRegion)
+            // Read the way every panel reads the region (`MEReads.read`): a
+            // first reading shown at once, its database-dependent rows saying
+            // "Loading…", then the full one — through the pane's cache, so the
+            // UEFI Structure opening the same region in the same moment reads
+            // it once with this. A caller that knows the cache is wrong reads
+            // past it: it would hand back the very analysis this re-reading
+            // exists to replace.
+            let result = await MEReads.read(
+                snapshot, meRegion: meRegion, analyzer: analyzer, source: source,
+                provider: ignoringCache ? nil : analysisProvider
+            ) { [weak self] analysis, pending in
+                // The bar and the line stay: the panel is still reading.
+                // `onDisplay` waits for the reading that follows — it means the
+                // panel shows the analysis, and this is not it yet.
+                guard let self, self.generation == generation else { return }
+                self.present(analysis, pending: pending)
             }
             guard let self, self.generation == generation else { return }
             self.controller.endBusy()
@@ -351,30 +340,6 @@ struct MEAParkedState: ToolSessionState {
     private func endReadingStatus() {
         readingStatus?.stop()
         readingStatus = nil
-    }
-
-    /// A first reading lands here. True when nothing more is to come — it was
-    /// the analysis, or the parse it belonged to has been overtaken — and
-    /// false when the reading with the databases is to follow. A first reading
-    /// that failed is shown by that one: it fails the same way.
-    private func show(_ first: Result<MEAFirstReading, Error>, generation: Int,
-                      meRegion: Range<UInt64>?) -> Bool {
-        guard self.generation == generation else { return true }
-        guard case .success(let reading) = first else { return false }
-        guard !reading.isComplete else {
-            controller.endBusy()
-            endReadingStatus()
-            controller.say("")
-            analysisProvider?.setCachedMEAnalysis(reading.analysis, meRegion: meRegion)
-            present(reading.analysis)
-            onDisplay?(reading.analysis)
-            return true
-        }
-        // The bar and the line stay: the panel is still reading. `onDisplay`
-        // waits for the reading that follows — it means the panel shows the
-        // analysis, and this is not it yet.
-        present(reading.analysis, pending: reading.pending)
-        return false
     }
 
     /// A successful analysis lands here: present the summary and the curated
