@@ -159,6 +159,7 @@
 "Picture" = "Bild";
 "Picture preview" = "Bildvorschau";
 "Picture size" = "Bildgröße";
+"Put this tab's changes back into the document it was opened from, as one undo step there. Nothing is written to disk." = "Die Änderungen dieses Tabs zurück in das Dokument schreiben, aus dem er geöffnet wurde, als ein Widerrufsschritt dort. Auf den Datenträger wird nichts geschrieben.";
 "Reading the file…" = "Datei wird gelesen …";
 "Removing a microcode" = "Microcode wird entfernt";
 "Replacing a microcode" = "Microcode wird ersetzt";
@@ -1015,6 +1016,7 @@
 "“%1$@” is not hex — use pairs like DE AD BE EF." = "„%1$@“ ist kein Hex — verwenden Sie Paare wie DE AD BE EF.";
 "“%1$@” is open read-only, so nothing can be written into it." = "„%1$@“ ist schreibgeschützt geöffnet; es lässt sich nichts hineinschreiben.";
 "“%1$@” is read-only" = "„%1$@“ ist schreibgeschützt";
+"⌘Z in “%1$@” takes it back." = "⌘Z in „%1$@“ nimmt es zurück.";
 "⌘Z takes it back." = "⌘Z macht es rückgängig.";
 "%1$@ (%2$@ series)" = "%1$@ (Serie %2$@)";
 "%1$@, assumed" = "%1$@, vermutet";

@@ -3,6 +3,7 @@
 > Extracting one part of an image, working on it as a separate file, and writing it back.
 
 @covers window.fragments
+@covers pane.header.update-in-parent
 
 A part of an image supplied by a [[topic:tools-overview|tool panel]] — a region, a volume, a module, the decompressed body of a section — opens as a **fragment panel**: a panel that rises from the bottom of the window, over the dump it was taken from.
 
@@ -12,7 +13,7 @@ The parent remains visible above it. Folded down, the fragment becomes a pill in
 
 - Reading and searching as an ordinary file, with its own addresses beginning at zero rather than at the address it occupies in the parent.
 - Editing.
-- **File ▸ Update in Parent**, which writes the edited bytes back into the range they came from as a single undo step in the parent document.
+- **File ▸ Update in Parent**, which writes the edited bytes back into the range they came from as a single undo step in the parent document. Once the fragment differs from what it was opened with, its header shows **Modified** and an update button (an arrow rising out of a document) that does the same; a dialog then says what was written and that ⌘Z in the parent takes it back.
 - Saving to disk as a file of its own, where the extracted part is what is required rather than an edited parent.
 
 ## The panel's own minimap and tool panel

@@ -187,6 +187,7 @@ final class MainViewController: NSViewController {
             self?.fragments.beginPullDown(panel, from: event)
         }
         view.onRevealOrigin = { [weak self] in self?.revealOrigin(of: pane) }
+        view.onUpdateInParent = { [weak self] in self?.performUpdateInParent(of: pane) }
         view.onSearchResultsClose = { [weak self] _ in self?.syncFindBarToActivePane() }
         // The surface weakly: a panel whose surface has already gone leaves the
         // question to the tab's own map, which by then is the only one there is.
@@ -1180,6 +1181,10 @@ final class MainViewController: NSViewController {
                 guard let paneModel else { return }
                 self?.revealOrigin(of: paneModel)
             }
+            pane.onUpdateInParent = { [weak self, weak paneModel] in
+                guard let paneModel else { return }
+                self?.performUpdateInParent(of: paneModel)
+            }
             // The panel closed itself; the bar's toggle follows (§11).
             pane.onSearchResultsClose = { [weak self] _ in
                 self?.syncFindBarToActivePane()
@@ -1329,6 +1334,14 @@ final class MainViewController: NSViewController {
             pane2View.onRevealOrigin = { [weak self] in
                 guard let self else { return }
                 self.revealOrigin(of: self.windowModel.pane2)
+            }
+            pane1View.onUpdateInParent = { [weak self] in
+                guard let self else { return }
+                self.performUpdateInParent(of: self.windowModel.pane1)
+            }
+            pane2View.onUpdateInParent = { [weak self] in
+                guard let self else { return }
+                self.performUpdateInParent(of: self.windowModel.pane2)
             }
             // Closing a pane's Search All panel stops that search (§11). The
             // bar's toggle is re-read rather than turned off: in comparison
@@ -2156,6 +2169,11 @@ final class MainViewController: NSViewController {
             if writeUpdate(bytes, at: offset, into: parent, for: origin, tabBytes: bytes,
                            sourceBytes: bytes, sourceRange: origin.sourceRange, named: stepName) {
                 revealUpdateDestination(from: pane, to: parent)
+                presentSheetAlert(
+                    title: L("Updated “%1$@”", origin.parentName),
+                    message: Self.undoLine(for: origin),
+                    on: (Self.controller(holding: parent, among: openDocuments?.controllers ?? [])
+                         ?? self).view.window)
             }
             return nil
 
@@ -2213,9 +2231,10 @@ final class MainViewController: NSViewController {
                     self.revealUpdateDestination(from: pane, to: parent)
                     self.presentSheetAlert(
                         title: L("Updated “%1$@”", origin.parentName),
-                        message: plan.warnings.isEmpty
+                        message: (plan.warnings.isEmpty
                             ? L("Nothing was written inside a Boot Guard or vendor protected range.")
-                            : plan.warnings.joined(separator: "\n\n"),
+                            : plan.warnings.joined(separator: "\n\n"))
+                            + "\n\n" + Self.undoLine(for: origin),
                         on: sheetWindow
                     )
                 }
@@ -2223,6 +2242,12 @@ final class MainViewController: NSViewController {
             handle.task = task
             return task
         }
+    }
+
+    /// What an update says last: where it can be taken back. The update is one
+    /// undo step in the parent, not in the tab it was made in.
+    private static func undoLine(for origin: DocumentOrigin) -> String {
+        L("⌘Z in “%1$@” takes it back.", origin.parentName)
     }
 
     /// The protected ranges of a pane's file, read by its shared tree — which

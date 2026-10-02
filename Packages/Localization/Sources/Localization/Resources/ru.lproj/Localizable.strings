@@ -159,6 +159,7 @@
 "Picture" = "Изображение";
 "Picture preview" = "Предпросмотр изображения";
 "Picture size" = "Размер изображения";
+"Put this tab's changes back into the document it was opened from, as one undo step there. Nothing is written to disk." = "Записать изменения этой вкладки обратно в документ, из которого она открыта, одним шагом отмены в нём. На диск ничего не пишется.";
 "Reading the file…" = "Чтение файла…";
 "Removing a microcode" = "Удаление микрокода";
 "Replacing a microcode" = "Замена микрокода";
@@ -1015,6 +1016,7 @@
 "“%1$@” is not hex — use pairs like DE AD BE EF." = "«%1$@» не является шестнадцатеричной записью — используйте пары вида DE AD BE EF.";
 "“%1$@” is open read-only, so nothing can be written into it." = "«%1$@» открыт только для чтения, записать в него ничего нельзя.";
 "“%1$@” is read-only" = "«%1$@» доступен только для чтения";
+"⌘Z in “%1$@” takes it back." = "⌘Z в «%1$@» отменяет запись.";
 "⌘Z takes it back." = "⌘Z отменяет.";
 "%1$@ (%2$@ series)" = "%1$@ (серия %2$@)";
 "%1$@, assumed" = "%1$@, предположительно";

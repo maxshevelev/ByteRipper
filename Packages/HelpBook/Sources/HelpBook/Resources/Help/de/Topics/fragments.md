@@ -1,4 +1,4 @@
-@source-sha fa446488fae5611d2a7dec8396b9f518a9c1f8a0e0d1a2a60b8488abf8a56309
+@source-sha 6849676f55854746e11634ab79fa139a9d2995271dc3dc86f5ef79a4e8f45779
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
@@ -11,7 +11,7 @@ Die Quelle bleibt darüber sichtbar. Eingeklappt wird das Fragment zu einer Pill
 
 - Lesen und Suchen wie in einer gewöhnlichen Datei, mit eigenen Adressen ab null statt mit den Adressen, die der Teil in der Quelle einnimmt.
 - Bearbeiten.
-- **Ablage ▸ In der Quelle aktualisieren** schreibt die geänderten Bytes zurück in den Bereich, aus dem sie stammen, als einen einzigen Widerrufsschritt im Quelldokument.
+- **Ablage ▸ In der Quelle aktualisieren** schreibt die geänderten Bytes zurück in den Bereich, aus dem sie stammen, als einen einzigen Widerrufsschritt im Quelldokument. Sobald sich das Fragment von dem unterscheidet, mit dem es geöffnet wurde, zeigt seine Kopfzeile **Geändert** und eine Schaltfläche mit einem aus einem Dokument aufsteigenden Pfeil, die dasselbe tut; ein Dialog meldet dann, was geschrieben wurde und dass ⌘Z im Quelldokument es zurücknimmt.
 - Sichern als eigene Datei auf dem Volume, wenn der entnommene Teil gebraucht wird und nicht die geänderte Quelle.
 
 ## Eigene Minimap, eigener Werkzeugbereich

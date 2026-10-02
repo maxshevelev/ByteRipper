@@ -144,6 +144,15 @@ final class FilePaneView: NSView {
     private var parentChangeObserver: NSObjectProtocol?
     /// A click on the link: show the source in the parent.
     var onRevealOrigin: (() -> Void)?
+    /// A click on the header's update button: Update in Parent, for this pane.
+    var onUpdateInParent: (() -> Void)?
+    /// "Modified" and the button that puts the changes back, shown while a pane
+    /// opened from a part of another document holds bytes its parent has not
+    /// got. One stack, so both go together and take no room when neither shows.
+    private let modifiedLabel = NSTextField(labelWithString: "")
+    let updateButton = NSButton()
+    private let updateStack = NSStackView()
+    private var updateOffered = false
     /// The status bar's main readout, and the size in it as the part the
     /// pointer can act on — the pointer turns the size into the exact count,
     /// and a right-click copies the half of it that was clicked, in that half's
@@ -435,6 +444,7 @@ final class FilePaneView: NSView {
         header.addSubview(documentIcon)
         header.addSubview(titleLabel)
         header.addSubview(linkButton)
+        header.addSubview(updateStack)
         header.addSubview(lockLabel)
         header.addSubview(collapseButton)
         header.addSubview(closeButton)
@@ -442,6 +452,32 @@ final class FilePaneView: NSView {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         linkButton.translatesAutoresizingMaskIntoConstraints = false
         lockLabel.translatesAutoresizingMaskIntoConstraints = false
+        updateStack.translatesAutoresizingMaskIntoConstraints = false
+        // The word and the button beside it. Not the red of a modified byte —
+        // that means "not saved yet", and this means "not in the parent yet" —
+        // but the accent, which is what the button is: the one thing in the
+        // header to press.
+        modifiedLabel.stringValue = L("Modified")
+        modifiedLabel.font = .systemFont(ofSize: 11)
+        modifiedLabel.textColor = .secondaryLabelColor
+        // help: pane.header.update-in-parent
+        updateButton.isBordered = false
+        updateButton.image = NSImage(systemSymbolName: "arrow.up.doc",
+                                     accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 12, weight: .medium))
+        updateButton.imagePosition = .imageOnly
+        updateButton.contentTintColor = .controlAccentColor
+        updateButton.target = self
+        updateButton.action = #selector(updateTapped)
+        ControlHelp.describe(updateButton, name: L("Update in Parent"),
+                             tooltip: L("Put this tab's changes back into the document it was opened from, as one undo step there. Nothing is written to disk."))
+        updateStack.orientation = .horizontal
+        updateStack.spacing = 4
+        updateStack.alignment = .centerY
+        updateStack.setViews([modifiedLabel, updateButton], in: .leading)
+        updateStack.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        updateStack.setContentCompressionResistancePriority(.defaultLow - 1, for: .horizontal)
+        updateStack.isHidden = true
         // The link to a parent document (§2.2 of UPDATE_IN_PARENT.md): a
         // borderless button, so a click on it is its own — the header routes
         // every other click to itself. It gives way before the pane's own
@@ -482,7 +518,8 @@ final class FilePaneView: NSView {
             documentIcon.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 10),
             titleLabel.leadingAnchor.constraint(equalTo: documentIcon.trailingAnchor, constant: 6),
             linkButton.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 6),
-            linkButton.trailingAnchor.constraint(lessThanOrEqualTo: lockLabel.leadingAnchor, constant: -6),
+            updateStack.leadingAnchor.constraint(greaterThanOrEqualTo: linkButton.trailingAnchor, constant: 6),
+            updateStack.trailingAnchor.constraint(equalTo: lockLabel.leadingAnchor, constant: -6),
             lockLabel.trailingAnchor.constraint(equalTo: collapseButton.leadingAnchor, constant: -6),
             collapseTrailing,
             closeButton.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -6),
@@ -492,6 +529,7 @@ final class FilePaneView: NSView {
             documentIcon.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             linkButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            updateStack.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             lockLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             collapseButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             closeButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
@@ -1127,6 +1165,7 @@ final class FilePaneView: NSView {
         collapseButton.isHidden = !headerFits || onCollapse == nil
         lockLabel.isHidden = !headerFits
         linkButton.isHidden = !headerFits || viewModel.origin == nil
+        updateStack.isHidden = !headerFits || !updateOffered
         // Both halves of the bar's own chrome go together: the indicator is
         // pinned to the bar rather than arranged in the stack, so hiding the
         // stack no longer takes it with it.
@@ -1507,6 +1546,7 @@ final class FilePaneView: NSView {
         }
         lockLabel.stringValue = status.isReadOnly ? "🔒 " + L("Read-Only") : ""
         updateLink()
+        updateUpdateOffer()
         // VoiceOver names the grid after its file (§15).
         hexView.accessibilityTitle = L("Hex dump — %1$@", status.fileName)
         onHeaderChanged?()
@@ -1542,6 +1582,7 @@ final class FilePaneView: NSView {
             linkButton.title = ""
             ControlHelp.describe(linkButton, nil)
             observeParent(nil)
+            updateUpdateOffer()
             return
         }
         let broken = origin.state == .parentClosed
@@ -1563,6 +1604,8 @@ final class FilePaneView: NSView {
         linkCollapsed?.isActive = false
         linkButton.isHidden = bounds.width < Self.trailingChromeMinWidth
         observeParent(origin.parent)
+        // The parent changing is also how a pane learns its changes went back.
+        updateUpdateOffer()
     }
 
     /// Listens to the parent — its bytes changing, its closing — so the link
@@ -1583,6 +1626,22 @@ final class FilePaneView: NSView {
         }
     }
 
+    /// Whether the header offers to put this pane's bytes back: it was opened
+    /// from a part of another document, that document is still open, and the
+    /// bytes here are no longer the ones it came with. Asked on every status
+    /// refresh, which is cheap — the answer is cached per content generation.
+    private func updateUpdateOffer() {
+        let offered = viewModel.origin.map { $0.state != .parentClosed && $0.hasChanges(in: viewModel) } ?? false
+        guard offered != updateOffered else { return }
+        updateOffered = offered
+        updateStack.isHidden = !offered || bounds.width < Self.trailingChromeMinWidth && !isHeaderHoisted
+        needsLayout = true
+    }
+
+    @objc private func updateTapped() {
+        onUpdateInParent?()
+    }
+
     @objc private func linkTapped() {
         // A link that leads nowhere is still drawn — at full strength, because
         // it is saying something — but following it does nothing. Refused here
@@ -1593,6 +1652,7 @@ final class FilePaneView: NSView {
     }
 
     private func updateStatus() {
+        updateUpdateOffer()
         let status = viewModel.status
         // Every address in the bar takes the same width: the hex digits of the
         // file's largest address — the last piece's exclusive end, which can be

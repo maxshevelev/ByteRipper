@@ -253,6 +253,30 @@ final class LinkedPartTests: XCTestCase {
                        "and what landed is selected where it landed")
     }
 
+    /// The header says **Modified** and offers the update while the part holds
+    /// bytes its parent does not have, and takes both away once they are back.
+    /// The update says last where it can be undone: in the parent.
+    func testTheHeaderOffersTheUpdateWhileThePartIsModified() throws {
+        let (controller, part) = try openZonePanel()
+        let view = controller.paneView(for: part)
+        XCTAssertTrue(view.updateButton.isHiddenOrHasHiddenAncestor, "nothing to put back yet")
+
+        try patch(part, at: 0x10, with: 0x55)
+        controller.fragments.panelView(try XCTUnwrap(controller.fragments.expanded))?
+            .layoutSubtreeIfNeeded()
+
+        XCTAssertFalse(view.updateButton.isHiddenOrHasHiddenAncestor, "modified: the button is there")
+        XCTAssertEqual(view.updateButton.accessibilityLabel(), "Update in Parent")
+
+        view.updateButton.performClick(nil)
+
+        XCTAssertEqual(try controller.windowModel.pane1.byteStorage?.read(at: 0x110, length: 1), [0x55])
+        XCTAssertEqual(controller.lastAlertTitle,
+                       "Updated “\(controller.windowModel.pane1.status.fileName)”")
+        XCTAssertTrue(try XCTUnwrap(controller.lastAlertMessage).contains("takes it back"))
+        XCTAssertTrue(view.updateButton.isHiddenOrHasHiddenAncestor, "and gone once it is back")
+    }
+
     func testAToolTabsPartIsNamedWithoutTheDumpAroundIt() {
         XCTAssertEqual(MainViewController.partName(ofTab: "bios_LZMA section.bin", parent: "bios.rom"),
                        "LZMA section")
