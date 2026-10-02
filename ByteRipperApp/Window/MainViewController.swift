@@ -7591,7 +7591,12 @@ enum AlertOutcome {
             : ("exclamationmark.octagon.fill", SemanticColors.bad)
         // The filled octagon is two layers — the mark, then the shape behind it
         // — and a palette of one colour paints both alike, which loses the mark.
-        let palette = self == .success ? [color] : [NSColor.white, color]
+        // The mark follows the fill: white on the light theme's deep red, and
+        // near-black on the dark theme's lighter one, where white would wash out.
+        let mark = NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? NSColor(white: 0.12, alpha: 1) : .white
+        }
+        let palette = self == .success ? [color] : [mark, color]
         let configuration = NSImage.SymbolConfiguration(pointSize: 48, weight: .regular)
             .applying(.init(paletteColors: palette))
         return NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
