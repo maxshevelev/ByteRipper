@@ -1023,10 +1023,16 @@ public enum UEFIDetail {
                 // The square chip the ME panel waits under, so the two panels
                 // draw the same thing for the same idea.
                 symbol: "cpu",
-                columns: [L("JEDEC ID"), L("Chip")],
+                columns: [L("JEDEC ID"), L("Chip"), L("Size")],
                 rows: descriptor.chips.map { chip in
-                    [.init(String(format: "%06X", chip.jedecID)),
-                     .init(chip.name ?? chip.vendor.map { L("Unknown (%1$@)", $0) } ?? L("Unknown"))]
+                    // A size the descriptor's own chips do not have is red: the
+                    // firmware was laid out for chips of the sizes it declares.
+                    let declared = (descriptor.component?.chipSizes ?? []).compactMap { $0 }
+                    let bytes = chip.sizeKB.map { UInt64($0) << 10 }
+                    let invalid = bytes.map { !declared.isEmpty && !declared.contains($0) } ?? false
+                    return [.init(String(format: "%06X", chip.jedecID)),
+                     .init(chip.name ?? chip.vendor.map { L("Unknown (%1$@)", $0) } ?? L("Unknown")),
+                     .init(bytes.map(capacityText) ?? "", tone: invalid ? .no : .plain)]
                 }
             ))
         }

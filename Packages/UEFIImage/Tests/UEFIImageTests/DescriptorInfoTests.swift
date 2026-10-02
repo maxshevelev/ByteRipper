@@ -170,8 +170,8 @@ final class DescriptorInfoTests: XCTestCase {
             chips: [0x1F4700, 0xEF4019, 0x0A0B0C]))
 
         XCTAssertEqual(read.chips, [
-            DescriptorInfo.Chip(jedecID: 0x1F4700, name: "Atmel AT25DF321"),
-            DescriptorInfo.Chip(jedecID: 0xEF4019, name: "Winbond W25Q256"),
+            DescriptorInfo.Chip(jedecID: 0x1F4700, name: "Atmel AT25DF321", sizeKB: 4096),
+            DescriptorInfo.Chip(jedecID: 0xEF4019, name: "Winbond W25Q256", sizeKB: 32768),
             DescriptorInfo.Chip(jedecID: 0x0A0B0C, name: nil),
         ])
     }
@@ -186,7 +186,7 @@ final class DescriptorInfoTests: XCTestCase {
 
         XCTAssertEqual(read.chips, [
             DescriptorInfo.Chip(jedecID: 0xEF0000, name: nil, vendor: "Winbond"),
-            DescriptorInfo.Chip(jedecID: 0xEF4019, name: "Winbond W25Q256"),
+            DescriptorInfo.Chip(jedecID: 0xEF4019, name: "Winbond W25Q256", sizeKB: 32768),
             DescriptorInfo.Chip(jedecID: 0x0A0B0C, name: nil),
         ])
     }

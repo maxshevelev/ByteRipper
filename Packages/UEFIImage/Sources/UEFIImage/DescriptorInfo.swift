@@ -98,11 +98,14 @@ public struct DescriptorInfo: Equatable, Sendable {
         public var jedecID: UInt32
         public var name: String?
         public var vendor: String?
+        /// The chip's capacity in kilobytes, when the catalogue lists one.
+        public var sizeKB: Int?
 
-        public init(jedecID: UInt32, name: String?, vendor: String? = nil) {
+        public init(jedecID: UInt32, name: String?, vendor: String? = nil, sizeKB: Int? = nil) {
             self.jedecID = jedecID
             self.name = name
             self.vendor = vendor
+            self.sizeKB = sizeKB
         }
     }
 
@@ -318,9 +321,10 @@ public extension DescriptorInfo {
             let id = UInt32(vendor) << 16 | UInt32(device0) << 8 | UInt32(device1)
             // An erased or empty tail is not a chip.
             guard id != 0, id != 0xFF_FFFF else { continue }
-            let name = JedecIDs.name(of: id)
-            chips.append(Chip(jedecID: id, name: name,
-                              vendor: name == nil ? FlashVendors.name(ofJedecID: id) : nil))
+            let known = JedecIDs.chip(of: id)
+            chips.append(Chip(jedecID: id, name: known?.name,
+                              vendor: known == nil ? FlashVendors.name(ofJedecID: id) : nil,
+                              sizeKB: known?.sizeKB))
         }
         return chips
     }
