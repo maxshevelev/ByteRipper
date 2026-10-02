@@ -10,7 +10,10 @@ public final class FileBackedStorage: ByteStorage, @unchecked Sendable {
     public let cache: ChunkCache
     public private(set) var size: UInt64
 
-    private let fileDescriptor: Int32
+    /// -1 until opened: a storage made with `init(lazilyOpening:size:cache:)`
+    /// opens on its first read.
+    private var fileDescriptor: Int32
+    private let openLock = NSLock()
 
     /// Opens `url` for reading, validating that it is a regular file.
     /// Throws `.fileNotFound`, `.isDirectory`, `.permissionDenied`, or
@@ -41,6 +44,20 @@ public final class FileBackedStorage: ByteStorage, @unchecked Sendable {
         self.cache = cache
         self.size = UInt64(st.st_size)
         self.fileDescriptor = fd
+    }
+
+    /// A storage over a file this process has just made and knows the size of
+    /// — a snapshot's clone — opened on its first read rather than here.
+    ///
+    /// Opening is the one step that can wait on something outside the app: a
+    /// new file is the moment a security scanner or a file provider looks at
+    /// it, and that has been measured at over a second. A snapshot is taken on
+    /// the main actor and read off it, so the wait goes where the reading is.
+    init(lazilyOpening url: URL, size: UInt64, cache: ChunkCache) {
+        self.url = url
+        self.cache = cache
+        self.size = size
+        self.fileDescriptor = -1
     }
 
     deinit {
@@ -93,10 +110,22 @@ public final class FileBackedStorage: ByteStorage, @unchecked Sendable {
         return bytes
     }
 
+    /// The descriptor, opening the file first for a storage that has not yet.
+    private func openedDescriptor() throws -> Int32 {
+        openLock.lock()
+        defer { openLock.unlock() }
+        if fileDescriptor >= 0 { return fileDescriptor }
+        let fd = Darwin.open(url.path, O_RDONLY)
+        guard fd >= 0 else { throw StorageError.fromOpenError(errno) }
+        fileDescriptor = fd
+        return fd
+    }
+
     /// Loops `pread(2)` until `count` bytes are read or EOF, retrying on EINTR.
     private func preadAll(_ destination: UnsafeMutableRawPointer, count: Int, at offset: off_t) throws -> Int {
         var total = 0
         var cursor = destination
+        let fileDescriptor = try openedDescriptor()
         while total < count {
             let n = Darwin.pread(fileDescriptor, cursor, count - total, offset + off_t(total))
             if n < 0 {

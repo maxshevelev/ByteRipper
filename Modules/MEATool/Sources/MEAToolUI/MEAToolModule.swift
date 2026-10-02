@@ -222,19 +222,6 @@ struct MEAParkedState: ToolSessionState {
     /// the selection — before the reading starts, for content the analysis
     /// on screen no longer describes.
     private func reparse(ignoringCache: Bool = false, forgettingShown: Bool = false) {
-        let snapshot: any ToolContentReader
-        do {
-            snapshot = try host.snapshot()
-        } catch {
-            roots = []
-            focusPath = nil
-            controller.showSummary([])
-            controller.setPlaceholder(.failed)
-            controller.say(L("Could not read the file: %1$@", error), asProblem: true)
-            show()
-            return
-        }
-
         // The shared tree already knows the ME region's bounds from the
         // descriptor — a cheap lookup, not a scan — whether or not the UEFI
         // tool-module has ever been opened on this file. Handing it to the
@@ -247,7 +234,8 @@ struct MEAParkedState: ToolSessionState {
         // holder only drops it when an edit actually lands inside the ME
         // region (`PaneUEFIState.invalidate`), so reactivating this
         // tool-module after using another one is instant rather than a
-        // second full analysis of data nothing changed.
+        // second full analysis of data nothing changed. Asked before the file
+        // is touched at all: what another panel read is the point of the cache.
         if !ignoringCache, let cached = analysisProvider?.cachedMEAnalysis() {
             endReadingStatus()
             present(cached)
@@ -256,6 +244,19 @@ struct MEAParkedState: ToolSessionState {
             // during activation — has had no chance to listen yet, and a cached
             // analysis would otherwise be the one reading it never hears about.
             Task { @MainActor [weak self] in self?.onDisplay?(cached) }
+            return
+        }
+
+        let snapshot: any ToolContentReader
+        do {
+            snapshot = try host.snapshot()
+        } catch {
+            roots = []
+            focusPath = nil
+            controller.showSummary([])
+            controller.setPlaceholder(.failed)
+            controller.say(L("Could not read the file: %1$@", error), asProblem: true)
+            show()
             return
         }
 

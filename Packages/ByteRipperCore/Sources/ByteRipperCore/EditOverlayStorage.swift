@@ -270,7 +270,10 @@ public final class EditOverlayStorage: EditableByteStorage, @unchecked Sendable 
         guard clonefile(file.url.path, url.path, 0) == 0 else {
             throw StorageError.writeFailed
         }
-        return try FileBackedStorage(url: url, cache: ChunkCache(config: cache.config))
+        // Opened on its first read, which is off the main actor: the clone is
+        // a new file, and opening one can wait on a scanner for a second.
+        return FileBackedStorage(lazilyOpening: url, size: file.size,
+                                 cache: ChunkCache(config: cache.config))
     }
 
     // MARK: - Internals

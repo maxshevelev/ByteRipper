@@ -296,6 +296,28 @@ final class BinaryDocumentDuplicateTests: XCTestCase {
         }
     }
 
+    /// The snapshot's clone is opened on its first read, not when the snapshot
+    /// is taken: the snapshot is taken on the main actor, and opening a new file
+    /// can wait on a scanner. Its size is known up front, and its bytes are the
+    /// file's when read.
+    func testTheSnapshotOpensItsCloneOnItsFirstRead() throws {
+        let bytes = [UInt8](0x00..<0x40)
+        let (doc, url) = try makeFileDocument(bytes)
+        try XCTSkipUnless(canClone(url), "this filesystem cannot clone files")
+        let store = TemporaryFileStore()
+        let overlay = try XCTUnwrap(doc.storage as? EditOverlayStorage)
+
+        let snapshot = try overlay.contentSnapshot(scratch: store)
+        let clone = try XCTUnwrap(filesIn(store.directory).first)
+        XCTAssertEqual(snapshot.size, 0x40, "the size is there before anything is opened")
+        // Gone before the first read: a clone opened at once would still read.
+        try FileManager.default.removeItem(atPath: clone)
+        XCTAssertThrowsError(try snapshot.read(at: 0, length: 4), "opened on the read, not before")
+
+        let again = try overlay.contentSnapshot(scratch: store)
+        XCTAssertEqual(try again.read(at: 0, length: 0x40), bytes)
+    }
+
     // MARK: - Filesystem helpers
 
     /// Whether the temp directory's filesystem can clone at all — the guard for

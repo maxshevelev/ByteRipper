@@ -844,6 +844,21 @@ private struct ChecksumPass: Sendable {
         then completion: @escaping @MainActor () -> Void,
         onFailure failed: (@MainActor () -> Void)? = nil
     ) {
+        let meRegion = treeProvider?.uefiTree()?.region(.me)
+        let provider = analysisProvider
+        // A cached analysis is instant: the pane's holder only drops it when an
+        // edit lands inside the region, so a re-open is a re-present, not a
+        // second full analysis of data nothing changed — and it is asked for
+        // before the file is touched at all, since what another panel read is
+        // the whole point of the cache. The "Loading…" clock the panel started
+        // on the open is stopped here, or its placeholder task would fire a
+        // moment later and put a row up for an analysis that is already in hand.
+        if !ignoringCache, let cached = provider?.cachedMEAnalysis() {
+            presentME(cached, pending: .nothing)
+            controller.onMERegionLoading?(id, false)
+            completion()
+            return
+        }
         guard let snapshot = try? host.snapshot() else {
             controller.say(L("Could not read the file."), asProblem: true)
             // The panel holds the region's row shut on the open that brought us
@@ -851,20 +866,6 @@ private struct ChecksumPass: Sendable {
             // to land, so the open is over and the row is released.
             controller.onMERegionLoading?(id, false)
             failed?()
-            return
-        }
-        let meRegion = treeProvider?.uefiTree()?.region(.me)
-        let provider = analysisProvider
-        // A cached analysis is instant: the pane's holder only drops it when an
-        // edit lands inside the region, so a re-open is a re-present, not a
-        // second full analysis of data nothing changed. The "Loading…" clock the
-        // panel started on the open is stopped here, or its placeholder task
-        // would fire a moment later and put a row up for an analysis that is
-        // already in hand.
-        if !ignoringCache, let cached = provider?.cachedMEAnalysis() {
-            presentME(cached, pending: .nothing)
-            controller.onMERegionLoading?(id, false)
-            completion()
             return
         }
         meTask?.cancel()
