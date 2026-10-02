@@ -95,6 +95,10 @@ import ALSplitView
     }
 
 
+    /// How much of the minimap panel's width was taken from this surface's
+    /// spare room rather than from the window, to be handed back on hiding it.
+    var borrowedByMinimap: CGFloat = 0
+
     // MARK: - The minimap
 
     /// This surface's map, and everything that map is in the middle of. One per

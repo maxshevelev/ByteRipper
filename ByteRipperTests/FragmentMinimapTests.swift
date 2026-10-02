@@ -44,6 +44,30 @@ final class FragmentMinimapTests: XCTestCase {
         try? FileManager.default.removeItem(at: url)
     }
 
+    /// A panel with room to spare opens its map into that room: the window keeps
+    /// its width, and gives nothing back on hiding it.
+    func testOpeningThePanelsMapDoesNotWidenAWindowThatHasRoom() throws {
+        let (controller, window, url) = try makeController()
+        defer { cleanup(controller, url) }
+        let id = try XCTUnwrap(controller.openFragment([UInt8](repeating: 0, count: 0x80),
+                                                       named: "part", animated: false))
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        window.layoutIfNeeded()
+        let paneView = controller.paneView(for: try XCTUnwrap(controller.fragments.pane(id)))
+        XCTAssertGreaterThan(controller.dumpAreaSlack(of: surface), surface.minimapPreferredPanelWidth + 1,
+                             "the window is set up with room")
+        let before = window.frame.width
+
+        surface.minimap.setPanelVisible(true, animated: false)
+        window.layoutIfNeeded()
+        XCTAssertEqual(window.frame.width, before, accuracy: 0.5, "shown")
+        XCTAssertGreaterThanOrEqual(surface.contentHost.frame.width, paneView.contentFitWidth,
+                                    "and the dump still fits its grid")
+
+        surface.minimap.setPanelVisible(false, animated: false)
+        XCTAssertEqual(window.frame.width, before, accuracy: 0.5, "hidden")
+    }
+
     /// The panel's map maps the part, not the dump it came out of.
     func testThePanelsMapShowsThePart() throws {
         let (controller, _, url) = try makeController()
