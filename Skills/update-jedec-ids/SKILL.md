@@ -62,6 +62,15 @@ python3 Skills/update-jedec-ids/scripts/gen_jedec.py \
     --linux ../linux/drivers/mtd/spi-nor --flashrom ../flashrom   # local checkouts
 ```
 
+## Scheduled run
+
+`.github/workflows/refresh-jedec-ids.yml` runs the generator every Monday (and
+on demand) and, only when the table changed and the `UEFIImage` tests pass,
+opens or updates one PR from `automation/refresh-jedec-ids`. It never commits
+to `main`. It needs *Allow GitHub Actions to create and approve pull requests*
+enabled in the repository's Actions settings. The PR is still read by a person,
+as in the steps below.
+
 ## After a run
 
 1. **Read the diff.** It is data, and the whole point of generating it is that
