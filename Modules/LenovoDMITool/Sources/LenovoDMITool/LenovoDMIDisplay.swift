@@ -384,12 +384,35 @@ public enum LenovoDMIPresenter {
             LenovoDMIField(L("Offset"), hex(entry.offset, 8)),
             LenovoDMIField(L("Value at"), hex(entry.dataRange.lowerBound, 8))
         ]
-        if entry.knownType == .windowsKey, let key = LenovoDMIValue.WindowsKey(entry.data) {
-            fields.insert(LenovoDMIField(
-                L("Key header"),
-                L("MSDM licensing data: version %1$@, data type %2$@, %3$@ bytes",
-                  key.version, key.dataType, entry.data.count - LenovoDMIValue.WindowsKey.headerSize)
-            ), at: 1)
+        var keyHeaderWrong = false
+        if entry.knownType == .windowsKey {
+            let size = LenovoDMIValue.WindowsKey.headerSize
+            switch LenovoDMIValue.WindowsKey.problem(entry.data) {
+            case nil:
+                fields.insert(LenovoDMIField(
+                    L("Key header"),
+                    L("MSDM licensing data, %1$@ bytes of key", entry.data.count - size)
+                ), at: 1)
+            case .tooShort(let count)?:
+                keyHeaderWrong = true
+                fields.insert(LenovoDMIField(L("Key header"),
+                    L("%1$@ bytes: shorter than the %2$@-byte header.", count, size), isProblem: true), at: 1)
+            case .signature(let head)?:
+                keyHeaderWrong = true
+                fields.insert(LenovoDMIField(L("Key header"),
+                    L("The first 16 bytes are %1$@, not the MSDM signature %2$@.",
+                      LenovoDMIValue.hex(head), LenovoDMIValue.hex(LenovoDMIValue.WindowsKey.signature)),
+                    isProblem: true), at: 1)
+            case .length(let declared, let actual)?:
+                keyHeaderWrong = true
+                fields.insert(LenovoDMIField(L("Key header"),
+                    L("The header gives the key as %1$@ bytes, and %2$@ follow it.", declared, actual),
+                    isProblem: true), at: 1)
+            case .notText?:
+                keyHeaderWrong = true
+                fields.insert(LenovoDMIField(L("Key header"),
+                    L("The key holds bytes that are not printable."), isProblem: true), at: 1)
+            }
         }
         if let other {
             let text: String
@@ -402,7 +425,7 @@ public enum LenovoDMIPresenter {
         }
         return LenovoDMIRow(
             id: id, name: LenovoDMIValue.name(of: entry.key), value: value,
-            range: entry.range, isProblem: false, fields: fields,
+            range: entry.range, isProblem: keyHeaderWrong, fields: fields,
             term: HelpTermID("lenv"), decodableBlock: decodableBlock, children: []
         )
     }

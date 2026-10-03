@@ -423,15 +423,21 @@ final class WindowsKeyTests: XCTestCase {
     /// The value is the key alone, without the MSDM header in front of it.
     func testTheValueIsTheKeyWithoutItsHeader() {
         XCTAssertEqual(LenovoDMIValue.text(of: entry(header + Array(key.utf8))), key)
-        let read = LenovoDMIValue.WindowsKey(header + Array(key.utf8))
-        XCTAssertEqual(read?.version, 1)
-        XCTAssertEqual(read?.dataType, 1)
     }
 
     /// A header whose length does not match what follows is not guessed at.
     func testALengthThatDoesNotMatchIsShownAsBytes() {
         let short = header + Array(key.utf8.dropLast())
         XCTAssertNil(LenovoDMIValue.WindowsKey(short))
+        XCTAssertEqual(LenovoDMIValue.WindowsKey.problem(short), .length(declared: 29, actual: 28))
         XCTAssertEqual(LenovoDMIValue.text(of: entry(short)), LenovoDMIValue.hex(short))
+    }
+
+    /// Nor is a header that does not start with the MSDM signature.
+    func testAnotherSignatureIsShownAsBytes() {
+        var other = header + Array(key.utf8)
+        other[8] = 2
+        XCTAssertNil(LenovoDMIValue.WindowsKey(other))
+        XCTAssertEqual(LenovoDMIValue.WindowsKey.problem(other), .signature(Array(other[..<16])))
     }
 }

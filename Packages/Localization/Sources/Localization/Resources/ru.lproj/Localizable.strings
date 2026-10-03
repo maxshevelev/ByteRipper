@@ -1369,4 +1369,8 @@
 "LENV block at %1$@" = "Блок LENV по адресу %1$@";
 "The checksum is %1$@, the body adds up to %2$@." = "Записанная контрольная сумма %1$@, а содержимое блока даёт %2$@.";
 "Key header" = "Заголовок ключа";
-"MSDM licensing data: version %1$@, data type %2$@, %3$@ bytes" = "Лицензионные данные MSDM: версия %1$@, тип данных %2$@, %3$@ байт";
+"The header gives the key as %1$@ bytes, and %2$@ follow it." = "Заголовок указывает длину ключа %1$@ байт, а за ним следует %2$@.";
+"%1$@ bytes: shorter than the %2$@-byte header." = "%1$@ байт: короче заголовка длиной %2$@ байт.";
+"MSDM licensing data, %1$@ bytes of key" = "Лицензионные данные MSDM, ключ — %1$@ байт";
+"The first 16 bytes are %1$@, not the MSDM signature %2$@." = "Первые 16 байт — %1$@, а не сигнатура MSDM %2$@.";
+"The key holds bytes that are not printable." = "В ключе есть непечатные байты.";

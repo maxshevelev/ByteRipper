@@ -13,28 +13,53 @@ public enum LenovoDMIValue {
     }
 
     /// The Windows key entry, read: the 20-byte header of the licensing data
-    /// in the ACPI `MSDM` table — version, a reserved field, data type, a
-    /// reserved field, data length — and the key after it.
+    /// in the ACPI `MSDM` table and the key after it.
     ///
-    /// Every dump examined holds `01 … 01 … 1D 00 00 00` and a 29-character
-    /// key, `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`. Read only when the length in the
-    /// header is the length of what follows it; anything else is shown as
-    /// bytes rather than guessed at.
+    /// The header is a signature and a length. The fields are the MSDM
+    /// table's Software Licensing Structure — `version`, `reserved`,
+    /// `data_type`, `data_reserved`, `data_length`, each a `UINT32`, then the
+    /// data — as Microsoft's "Microsoft Software Licensing Tables (SLIC and
+    /// MSDM)" defines it and fwts (`fwts_acpi_table_msdm`, 2015) checks it:
+    /// both reserved fields zero, data type 1 for a product key, data length
+    /// `0x1D`. The version is 1 on every dump examined; fwts does not check
+    /// it. Together that is the 16-byte signature
+    /// `01000000 00000000 01000000 00000000`. The length, the last 4
+    /// bytes, is the key's: `1D000000` for `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`.
+    /// The key is split off only when both hold; otherwise the entry is shown
+    /// as bytes and the panel says which of them did not.
     public struct WindowsKey: Equatable, Sendable {
-        public var version: UInt32
-        public var dataType: UInt32
         public var key: String
         public static let headerSize = 20
+        public static let signature: [UInt8] = [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0]
+
+        /// What is wrong with an entry that is not a header and a key.
+        public enum Problem: Equatable, Sendable {
+            /// Shorter than the header.
+            case tooShort(Int)
+            /// The first 16 bytes are not the signature.
+            case signature([UInt8])
+            /// The length the header gives against the bytes that follow it.
+            case length(declared: UInt32, actual: Int)
+            /// The key holds bytes that are not printable.
+            case notText
+        }
 
         public init?(_ data: [UInt8]) {
-            guard data.count > Self.headerSize,
-                  LE.u32(data, 16) == UInt32(data.count - Self.headerSize)
-            else { return nil }
-            let key = Array(data[Self.headerSize...])
-            guard key.allSatisfy({ (0x20...0x7E).contains($0) }) else { return nil }
-            version = LE.u32(data, 0)
-            dataType = LE.u32(data, 8)
-            self.key = String(decoding: key, as: UTF8.self)
+            guard Self.problem(data) == nil else { return nil }
+            key = String(decoding: data[Self.headerSize...], as: UTF8.self)
+        }
+
+        public static func problem(_ data: [UInt8]) -> Problem? {
+            guard data.count >= headerSize else { return .tooShort(data.count) }
+            let head = Array(data[..<signature.count])
+            guard head == signature else { return .signature(head) }
+            let declared = LE.u32(data, 16)
+            let actual = data.count - headerSize
+            guard declared == UInt32(actual) else { return .length(declared: declared, actual: actual) }
+            guard actual > 0, data[headerSize...].allSatisfy({ (0x20...0x7E).contains($0) }) else {
+                return .notText
+            }
+            return nil
         }
     }
 

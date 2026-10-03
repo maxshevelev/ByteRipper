@@ -1,4 +1,4 @@
-@source-sha 11597fa3337f1f99d79463083b802776b6b15aedaba04990fc1c1a5b9368783b
+@source-sha 5480d62b3e1dcdffb400b171b2c65ebbb02673a126e7effa18411a6dec731a9e
 # Lenovo DMI
 
 > Der Speicher, in dem die Firmware Lenovo InsydeH2O die Identität eines Geräts ablegt – Seriennummer, UUID, Maschinentyp und Modell, Windows-Schlüssel –, dekodiert und ausgewertet.
@@ -48,7 +48,7 @@ Der Befehl steht für einen Block zur Verfügung, der Einträge enthält und des
 
 ## Die Einträge
 
-Ein Eintrag ist durch einen Namensraum und einen Typ bestimmt. Für den Namensraum SMBIOS sind folgende Typen bekannt: der Windows-Schlüssel, die OA3-Schlüssel-ID, die Bezeichnung der Hauptplatine, Maschinentyp und Modell (MTM), die Seriennummer der Hauptplatine, die System-UUID, die Plattform-ID der Hauptplatine und das Suffix des vorinstallierten Betriebssystems. Diese Einträge benennt das Panel und zeigt ihre Werte als Text, die UUID in der Bytereihenfolge von SMBIOS. Im Eintrag des Windows-Schlüssels steht vor dem Schlüssel ein Kopf von 20 Bytes – die Lizenzdaten der ACPI-Tabelle [[term:slic|MSDM]]: Version, Datentyp und Länge des Schlüssels. Als Wert erscheint nur der Schlüssel; der Kopf steht in der Detailliste unter **Schlüsselkopf**.
+Ein Eintrag ist durch einen Namensraum und einen Typ bestimmt. Für den Namensraum SMBIOS sind folgende Typen bekannt: der Windows-Schlüssel, die OA3-Schlüssel-ID, die Bezeichnung der Hauptplatine, Maschinentyp und Modell (MTM), die Seriennummer der Hauptplatine, die System-UUID, die Plattform-ID der Hauptplatine und das Suffix des vorinstallierten Betriebssystems. Diese Einträge benennt das Panel und zeigt ihre Werte als Text, die UUID in der Bytereihenfolge von SMBIOS. Im Eintrag des Windows-Schlüssels steht vor dem Schlüssel ein Kopf von 20 Bytes – die Lizenzdaten der ACPI-Tabelle [[term:slic|MSDM]]: eine Signatur von 16 Bytes, `01000000 00000000 01000000 00000000`, und die Länge des Schlüssels. Als Wert erscheint nur der Schlüssel; der Kopf wird in der Detailliste unter **Schlüsselkopf** beschrieben. Der Schlüssel wird nur dann vom Kopf getrennt, wenn die Signatur vorhanden ist und die angegebene Länge der Zahl der folgenden Bytes entspricht; andernfalls wird der Eintrag als Bytes gezeigt und als fehlerhaft markiert, und **Schlüsselkopf** nennt die Bedingung, die nicht erfüllt ist.
 
 In realen Images kommen weitere Typen vor, deren Bedeutung nicht dokumentiert ist. Das Panel bezeichnet sie als unbekannt, nennt die Typnummer und zeigt den Wert als Text, sofern alle Bytes druckbar sind, andernfalls hexadezimal. Die Merkmale eines Eintrags und zwei seiner Felder, die in allen untersuchten Images null sind, werden unverändert wiedergegeben.
 

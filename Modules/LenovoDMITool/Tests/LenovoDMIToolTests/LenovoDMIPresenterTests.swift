@@ -166,4 +166,27 @@ final class LenovoDMIPresenterTests: XCTestCase {
                      "a lone block is not one of two to choose from")
         XCTAssertEqual(display.zones(focus: "b0.1").zones.map(\.range), [0..<0x1000, 0x30..<0x52])
     }
+
+    /// The key's length in its header has to be the length that follows; one
+    /// that is not is a problem on the row, with both numbers.
+    func testAKeyWhoseHeaderGivesAnotherLengthIsAProblem() throws {
+        let header: [UInt8] = [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0x1D, 0, 0, 0]
+        let good = header + Array("ABCDE-FGHIJ-KLMNO-PQRST-UVWXY".utf8)
+        let bad = header + Array("ABCDE-FGHIJ-KLMNO-PQRST-UVWX".utf8)
+        let display = display([
+            Store.block(generation: 2, key: 0x77, entries: [(0x0001, good)]),
+            Store.block(generation: 1, key: 0x77, entries: [(0x0001, bad)])
+        ])
+        let fine = try XCTUnwrap(display.rows[1].children.first)
+        XCTAssertEqual(fine.value, "ABCDE-FGHIJ-KLMNO-PQRST-UVWXY")
+        XCTAssertFalse(fine.isProblem)
+
+        let wrong = try XCTUnwrap(display.rows[2].children.first)
+        XCTAssertTrue(wrong.isProblem)
+        let field = try XCTUnwrap(wrong.fields.first { $0.label == "Key header" })
+        XCTAssertTrue(field.isProblem)
+        XCTAssertEqual(field.value, "The header gives the key as 29 bytes, and 28 follow it.")
+        XCTAssertEqual(fine.fields.first { $0.label == "Key header" }?.value,
+                       "MSDM licensing data, 29 bytes of key")
+    }
 }

@@ -1369,4 +1369,8 @@
 "LENV block at %1$@" = "LENV-Block bei %1$@";
 "The checksum is %1$@, the body adds up to %2$@." = "Die gespeicherte Prüfsumme ist %1$@, der Blockinhalt ergibt %2$@.";
 "Key header" = "Schlüsselkopf";
-"MSDM licensing data: version %1$@, data type %2$@, %3$@ bytes" = "MSDM-Lizenzdaten: Version %1$@, Datentyp %2$@, %3$@ Bytes";
+"The header gives the key as %1$@ bytes, and %2$@ follow it." = "Der Kopf gibt den Schlüssel mit %1$@ Bytes an, es folgen aber %2$@.";
+"%1$@ bytes: shorter than the %2$@-byte header." = "%1$@ Bytes: kürzer als der %2$@ Bytes lange Kopf.";
+"MSDM licensing data, %1$@ bytes of key" = "MSDM-Lizenzdaten, Schlüssel %1$@ Bytes";
+"The first 16 bytes are %1$@, not the MSDM signature %2$@." = "Die ersten 16 Bytes sind %1$@, nicht die MSDM-Signatur %2$@.";
+"The key holds bytes that are not printable." = "Der Schlüssel enthält nicht druckbare Bytes.";
