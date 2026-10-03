@@ -56,21 +56,28 @@ struct LenovoDMIParkedState: ToolSessionState {
         controller.onSelect = { [weak self] id in self?.select(id) }
         controller.onGoTo = { [weak self] id in self?.goTo(id) }
         controller.onCopyValue = { [weak self] id in self?.copyValue(of: id) }
+        controller.onOpenDecrypted = { [weak self] id in self?.openDecryptedBlock(from: id) }
     }
 
     public var viewController: NSViewController { controller }
 
     public func start() {
-        controller.say(L("Reading…"))
         reparse()
     }
 
     /// Any change is a reason to read again: the area is 16 KiB, found by one
     /// scan of the image, and what the panel shows has to be what the file
     /// holds — after an edit in the dump as much as after a reload.
+    ///
+    /// A reload is another file, or this one replaced: the tree, the row
+    /// picked in it and the outline in the dump describe what is gone, so the
+    /// panel lets go of them at once — as the ME Analyzer does — rather than
+    /// showing the old file's serial number over the new file's bytes until
+    /// the reading lands. An edit keeps them: it is the same file.
     public func contentChanged(_ change: ToolContentChange) {
         if change == .reloaded {
             focus = nil
+            show(.empty)
         }
         reparse()
     }
@@ -94,9 +101,12 @@ struct LenovoDMIParkedState: ToolSessionState {
         let generation = self.generation
         guard let snapshot = try? host.snapshot() else {
             show(.empty)
+            controller.endBusy()
             controller.say(L("Could not read the file."), asProblem: true)
             return
         }
+        controller.say(L("Reading…"))
+        controller.showBusy()
         Task { [weak self] in
             let display = await Task.detached(priority: .userInitiated) {
                 let bytes = (try? snapshot.read(at: 0, length: Int(snapshot.size))) ?? []
@@ -108,6 +118,7 @@ struct LenovoDMIParkedState: ToolSessionState {
                 self.focus = nil
             }
             self.show(display)
+            self.controller.endBusy()
             self.controller.say("")
             self.onDisplay?(display)
         }
@@ -134,6 +145,16 @@ struct LenovoDMIParkedState: ToolSessionState {
         guard let row = display.row(id) else { return }
         select(id)
         host.reveal(row.range, select: true)
+    }
+
+    /// The block a row belongs to, decrypted, in a fragment panel over the
+    /// dump: the serial number reads as text there and can be typed over.
+    /// Update in Parent puts it back through the same codec — encrypted again
+    /// with the key in its header, its checksum recomputed — and the codec
+    /// travels with the panel, so that works after this session has ended.
+    public func openDecryptedBlock(from id: String) {
+        guard let part = display.decryptedPart(from: id) else { return }
+        host.openPart(named: part.name, linkedTo: part.source, codec: part.codec)
     }
 
     /// The value as the panel reads it — what a bench writes on a work order

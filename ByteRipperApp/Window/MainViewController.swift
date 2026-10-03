@@ -2,9 +2,11 @@ import Cocoa
 import AppPalette
 import HelpUI
 import Localization
+import PartCodec
 import UniformTypeIdentifiers
 import ByteRipperCore
 import ToolModuleKit
+import UEFIContentSource
 import UEFIImage
 import ALSplitView
 
@@ -1919,24 +1921,58 @@ final class MainViewController: NSViewController {
         }
     }
 
-    /// Opens bytes a tool-module hands over as a panel over the file they came
-    /// out of, for `ToolHost.openPart` — the untitled copy Open Zone makes, of
-    /// bytes that are not a range of this file. The window's bookmarks stay
-    /// behind: their offsets are the dump's, not these bytes'.
-    func openPartForTool(
-        _ bytes: [UInt8], named name: String, from pane: PaneViewModel,
-        source: Range<UInt64>, layout: UEFIRootLayout, kind: DocumentOrigin.Kind,
-        part: UEFIRebuild.Target?
-    ) {
-        openFragment(
-            bytes,
-            named: name,
-            origin: DocumentOrigin(
-                parent: pane, source: source,
-                partName: Self.partName(ofTab: name, parent: pane.status.fileName),
-                layout: layout, kind: kind, rebuildTarget: part, content: bytes
+    /// Opens a part of `pane`'s file as a panel over it — the one way a part
+    /// opens, whoever asks: a zone, a selection, a tool-module
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`, `Design/UEFI/UPDATE_IN_PARENT.md`).
+    ///
+    /// `codec` is the whole of what the part is: the panel shows what it
+    /// decodes from `source`, and Update in Parent writes back what it
+    /// encodes. A codec that decodes on the spot opens the panel now; one that
+    /// decompresses opens it when the bytes are ready. The window's bookmarks
+    /// reach the panel only when the codec keeps the source's offsets.
+    ///
+    /// Returns the task decoding off the main actor, for whoever has to wait
+    /// on it; nil when the panel opened on the spot or could not open.
+    @discardableResult
+    func openPart(
+        named name: String, from pane: PaneViewModel, source: Range<UInt64>,
+        partName: String? = nil, layout: UEFIRootLayout = .image, codec: any PartCodec
+    ) -> Task<Void, Never>? {
+        guard let document = pane.document,
+              let content = try? DocumentPartReader(document: document)
+        else { return nil }
+        let parent = PartParent(content: content, source: source, name: pane.status.fileName,
+                                partName: partName ?? name)
+        let open: @MainActor ([UInt8]) -> Void = { [weak self, weak pane] bytes in
+            guard let self, let pane else { return }
+            self.openFragment(
+                bytes,
+                named: name,
+                origin: DocumentOrigin(
+                    parent: pane, source: source,
+                    partName: partName ?? Self.partName(ofTab: name, parent: pane.status.fileName),
+                    layout: layout, codec: codec, content: bytes
+                )
             )
-        )
+        }
+        let fail: @MainActor (Error) -> Void = { [weak self] error in
+            let refusal = error as? PartRefusal
+            self?.presentAlert(title: refusal?.title ?? L("Those bytes could not be read."),
+                               message: refusal?.message ?? "\(error)", outcome: .problem)
+        }
+        guard !codec.decodesImmediately else {
+            do { open(try codec.decode(parent)) } catch { fail(error) }
+            return nil
+        }
+        return Task { @MainActor in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try codec.decode(parent) }
+            }.value
+            switch result {
+            case .success(let bytes): open(bytes)
+            case .failure(let error): fail(error)
+            }
+        }
     }
 
     // MARK: - Fragment panels (Design/FRAGMENT_PANELS_PLAN.md)
@@ -2221,9 +2257,10 @@ final class MainViewController: NSViewController {
     /// undo step there named after the tab. The parent becomes dirty; nothing
     /// is written to disk. What cannot be put back is said, and nothing moves.
     ///
-    /// A part the image's structure is laid out again around — a decompressed
-    /// body, a zone that is a volume, a file or a section — goes through the
-    /// rebuild planner off the main actor (§6); the task is handed back for
+    /// The tab's codec says what goes back (`PartCodec.encode`): the same
+    /// bytes, the bytes encrypted again, a body compressed again and the image
+    /// laid out around it. A quick codec is written on the spot; a slow one
+    /// works off the main actor behind a sheet, and the task is handed back for
     /// whoever has to wait on it.
     @discardableResult
     func performUpdateInParent(of pane: PaneViewModel) -> Task<Void, Never>? {
@@ -2234,40 +2271,36 @@ final class MainViewController: NSViewController {
             presentAlert(title: title, message: message, outcome: .problem)
             return nil
 
-        case .overwrite(let offset, let bytes, let confirm):
-            guard let parent = origin.parent else { return nil }
-            if confirm, !confirmOverwritingChangedSource(of: origin) { return nil }
-            if writeUpdate(bytes, at: offset, into: parent, for: origin, tabBytes: bytes,
-                           sourceBytes: bytes, sourceRange: origin.sourceRange, named: stepName) {
-                revealUpdateDestination(from: pane, to: parent)
-                presentSheetAlert(
-                    title: L("Updated “%1$@”", origin.parentName),
-                    message: Self.undoLine(for: origin),
-                    on: (Self.controller(holding: parent, among: openDocuments?.controllers ?? [])
-                         ?? self).view.window,
-                    outcome: .success)
-            }
-            return nil
-
-        case .rebuild(let target, let bytes, let confirm):
+        case .encode(let codec, let bytes, let confirm):
             guard let parent = origin.parent, let document = parent.document,
-                  let file = try? document.read(at: 0, length: Int(document.size))
+                  let content = try? DocumentPartReader(document: document)
             else { return nil }
             if confirm, !confirmOverwritingChangedSource(of: origin) { return nil }
+            let partParent = PartParent(content: content, source: origin.sourceRange,
+                                        name: origin.parentName, partName: origin.partName)
+
+            guard !codec.isImmediate else {
+                do {
+                    let update = try codec.encode(bytes, into: partParent)
+                    finishUpdate(update, from: pane, into: parent, for: origin, content: content,
+                                 tabBytes: bytes, named: stepName, on: nil)
+                } catch {
+                    presentRefusal(error, of: origin, on: nil)
+                }
+                return nil
+            }
+
             let generation = parent.contentGeneration
             let handle = UpdateHandle()
             let operation = beginUpdateOperation(in: parent, for: origin, handle: handle)
+            let progressing = PartParent(content: content, source: origin.sourceRange,
+                                         name: origin.parentName, partName: origin.partName) { phase, fraction in
+                if let phase { operation.rename(phase) }
+                if let fraction { operation.report(fraction) }
+            }
             let task = Task { [weak self] in
-                // The parent's protected ranges, read by its tree: a change
-                // inside the IBB is refused and one inside a range the
-                // firmware checks is said (`UPDATE_IN_PARENT.md` §6.4).
-                operation.rename(L("Reading the protected ranges of “%1$@”", origin.parentName))
-                let protected = await self?.protectedRanges(of: parent)?.rebuildRanges
                 let result = await Task.detached(priority: .userInitiated) {
-                    UEFIRebuild.plan(bytes, at: target, in: file, protected: protected) { progress in
-                        operation.rename(progress.phase)
-                        operation.report(progress.fraction)
-                    }
+                    Result { try codec.encode(bytes, into: progressing) }
                 }.value
                 operation.finish()
                 // Abandoned from the sheet: nothing was written, and nothing
@@ -2279,11 +2312,9 @@ final class MainViewController: NSViewController {
                 let sheetWindow = (Self.controller(holding: parent, among: self.openDocuments?.controllers ?? [])
                     ?? self).view.window
                 switch result {
-                case .failure(let refusal):
-                    self.presentSheetAlert(title: L("“%1$@” cannot be put back", origin.partName),
-                                           message: refusal.message, on: sheetWindow,
-                                           outcome: .problem)
-                case .success(let plan):
+                case .failure(let error):
+                    self.presentRefusal(error, of: origin, on: sheetWindow)
+                case .success(let update):
                     // Worked out over the bytes as they were when asked.
                     guard parent.contentGeneration == generation, parent.document === document else {
                         self.presentSheetAlert(
@@ -2294,24 +2325,8 @@ final class MainViewController: NSViewController {
                         )
                         return
                     }
-                    var rebuilt = file
-                    rebuilt.replaceSubrange(Int(plan.offset)..<(Int(plan.offset) + plan.bytes.count),
-                                            with: plan.bytes)
-                    let source = Array(rebuilt[Int(plan.source.lowerBound)..<Int(plan.source.upperBound)])
-                    guard self.writeUpdate(plan.bytes, at: plan.offset, into: parent, for: origin,
-                                           tabBytes: bytes, sourceBytes: source,
-                                           sourceRange: plan.source, named: stepName)
-                    else { return }
-                    self.revealUpdateDestination(from: pane, to: parent)
-                    self.presentSheetAlert(
-                        title: L("Updated “%1$@”", origin.parentName),
-                        message: (plan.warnings.isEmpty
-                            ? L("Nothing was written inside a Boot Guard or vendor protected range.")
-                            : plan.warnings.joined(separator: "\n\n"))
-                            + "\n\n" + Self.undoLine(for: origin),
-                        on: sheetWindow,
-                        outcome: .success
-                    )
+                    self.finishUpdate(update, from: pane, into: parent, for: origin, content: content,
+                                      tabBytes: bytes, named: stepName, on: sheetWindow)
                 }
             }
             handle.task = task
@@ -2319,26 +2334,48 @@ final class MainViewController: NSViewController {
         }
     }
 
+    /// Writes an update the codec worked out, shows where it landed and says
+    /// so — with what the codec had to say about it, and how to take it back.
+    private func finishUpdate(
+        _ update: PartUpdate, from pane: PaneViewModel, into parent: PaneViewModel,
+        for origin: DocumentOrigin, content: any PartReader, tabBytes: [UInt8],
+        named stepName: String, on window: NSWindow?
+    ) {
+        // What the source will be once the run is written: the parent as it is,
+        // with the run laid over it. The file never changes length.
+        guard var source = try? content.read(update.source) else { return }
+        let run = update.offset..<(update.offset + UInt64(update.bytes.count))
+        let overlap = max(run.lowerBound, update.source.lowerBound)..<min(run.upperBound, update.source.upperBound)
+        if !overlap.isEmpty {
+            source.replaceSubrange(
+                Int(overlap.lowerBound - update.source.lowerBound)..<Int(overlap.upperBound - update.source.lowerBound),
+                with: update.bytes[Int(overlap.lowerBound - run.lowerBound)..<Int(overlap.upperBound - run.lowerBound)])
+        }
+        guard writeUpdate(update.bytes, at: update.offset, into: parent, for: origin,
+                          tabBytes: tabBytes, sourceBytes: source,
+                          sourceRange: update.source, named: stepName)
+        else { return }
+        revealUpdateDestination(from: pane, to: parent)
+        presentSheetAlert(
+            title: L("Updated “%1$@”", origin.parentName),
+            message: (update.notes + [Self.undoLine(for: origin)]).joined(separator: "\n\n"),
+            on: window ?? (Self.controller(holding: parent, among: openDocuments?.controllers ?? [])
+                           ?? self).view.window,
+            outcome: .success)
+    }
+
+    /// Why a part did not go back, in the codec's words.
+    private func presentRefusal(_ error: Error, of origin: DocumentOrigin, on window: NSWindow?) {
+        let refusal = error as? PartRefusal
+        presentSheetAlert(title: refusal?.title ?? L("“%1$@” cannot be put back", origin.partName),
+                          message: refusal?.message ?? "\(error)", on: window ?? view.window,
+                          outcome: .problem)
+    }
+
     /// What an update says last: where it can be taken back. The update is one
     /// undo step in the parent, not in the tab it was made in.
     private static func undoLine(for origin: DocumentOrigin) -> String {
         L("⌘Z in “%1$@” takes it back.", origin.parentName)
-    }
-
-    /// The protected ranges of a pane's file, read by its shared tree — which
-    /// is built for it when no panel has asked for one yet
-    /// (`BOOT_GUARD_PROTECTED_RANGES.md` §9.2). Nil when there is no file.
-    private func protectedRanges(of pane: PaneViewModel) async -> ProtectedRanges? {
-        guard let storage = pane.document?.storage,
-              let tree = pane.uefiState.tree(
-                  makeSource: { LiveDocumentByteSource(storage: storage) },
-                  layout: pane.origin?.layout ?? .image
-              )
-        else { return nil }
-        await withCheckedContinuation { continuation in
-            tree.resolveProtectedRanges { continuation.resume() }
-        }
-        return tree.protectedRanges
     }
 
     /// What the (×) of an update reaches the update through.
@@ -4853,32 +4890,20 @@ final class MainViewController: NSViewController {
     /// One reading of the bytes, one panel, one set of rules about what the
     /// copy is, wherever the reader asked from.
     private func openZone(_ zone: Zone, of pane: PaneViewModel) {
-        guard pane.isOpen, let doc = pane.document else { return }
-        let bytes: [UInt8]
-        do {
-            bytes = try doc.read(at: zone.range.lowerBound, length: Int(zone.range.count))
-        } catch {
-            presentFileError(L("Could not read the zone."), error, url: doc.url)
-            return
-        }
+        guard pane.isOpen, pane.document != nil else { return }
         // Linked back to the zone, and told what the bytes are when the file's
-        // UEFI tree knows (`Design/UEFI/UPDATE_IN_PARENT.md` §2.1).
-        let layout = pane.uefiState.tree.map {
-            UEFIRootLayout.forFileRange(zone.range, in: $0.image())
-        } ?? .image
-        openFragment(
-            bytes,
-            named: zoneExportName(fileName: pane.status.fileName,
-                                  zoneName: zone.name, range: zone.range),
-            origin: DocumentOrigin(parent: pane, source: zone.range,
-                                   partName: zone.name, layout: layout, kind: .copy,
-                                   // A zone that is a volume, a file or a section
-                                   // goes back through the rebuild planner (§6).
-                                   rebuildTarget: pane.uefiState.tree.flatMap {
-                                       UEFIRebuild.target(forFileRange: zone.range, in: $0.image())
-                                   },
-                                   content: bytes)
-        )
+        // UEFI tree knows (`Design/UEFI/UPDATE_IN_PARENT.md` §2.1). A zone that
+        // is a volume, a file or a section goes back through the rebuild
+        // planner (§6); any other, as it is.
+        let image = pane.uefiState.tree?.image()
+        let layout = image.map { UEFIRootLayout.forFileRange(zone.range, in: $0) } ?? .image
+        let codec: any PartCodec = image
+            .flatMap { UEFIRebuild.target(forFileRange: zone.range, in: $0) }
+            .map { UEFIPartCodec(target: $0) }
+            ?? CopyPartCodec()
+        openPart(named: zoneExportName(fileName: pane.status.fileName,
+                                       zoneName: zone.name, range: zone.range),
+                 from: pane, source: zone.range, partName: zone.name, layout: layout, codec: codec)
     }
 
     /// The tail shared by Save Selection as… and Save Zone as…: reads `range`

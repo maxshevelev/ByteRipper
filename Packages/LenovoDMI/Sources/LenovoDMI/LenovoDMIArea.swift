@@ -157,7 +157,7 @@ public enum LenovoDMIFinding: Equatable, Sendable {
         case .storedInTheClear(let block):
             return L("LENV block %1$@ is stored decrypted. Whether the firmware accepts that is not known.", block + 1)
         case .blocksDiffer(let keys):
-            return L("The two LENV blocks hold different values for: %1$@. The firmware reads the live one.",
+            return L("The two LENV blocks hold different values for: %1$@. The firmware reads the block in use.",
                      keys.map(LenovoDMIValue.name(of:)).joined(separator: ", "))
         case .logWriteOffsetOutOfRange(let value):
             return L("The change log's write offset %1$@ is outside the log.", LE.hex(UInt64(value), digits: 8))

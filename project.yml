@@ -66,7 +66,8 @@ packages:
   FreshData:
     path: Packages/FreshData
   # The introduction between the seam's reader and the parser's `ByteSource`,
-  # which both firmware tool-modules link and no target here depends on.
+  # and the codec a UEFI part goes back into its image through — which the app
+  # uses for a zone that is a structure of the image.
   UEFIContentSource:
     path: Packages/UEFIContentSource
   # Every word the app says, in the language it is saying it in. Everything
@@ -89,6 +90,10 @@ packages:
     path: Modules/UEFITool
   MEATool:
     path: Modules/MEATool
+  # What a part panel's bytes are to its file's, both ways: the app opens and
+  # puts back every part through one, whoever asked for it.
+  PartCodec:
+    path: Packages/PartCodec
   # The Lenovo identity store's format and parse. Only LenovoDMITool links it;
   # listed so Xcode can see it.
   LenovoDMI:
@@ -151,6 +156,10 @@ targets:
         product: MEAToolUI
       - package: LenovoDMITool
         product: LenovoDMIToolUI
+      # The one way a part panel opens and goes back (`openPart`), and the
+      # codec a zone that is a UEFI structure goes back through.
+      - package: PartCodec
+      - package: UEFIContentSource
     # No entitlements, and so no entitlements file: the app is not sandboxed
     # (issue #30). It is not going to the App Store, and the sandbox took away
     # what a workshop tool needs — reading a dump by path that nobody picked in
@@ -305,6 +314,8 @@ targets:
         product: LenovoDMITool
       - package: LenovoDMITool
         product: LenovoDMIToolUI
+      - package: PartCodec
+      - package: UEFIContentSource
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.maxik.ByteRipperTests

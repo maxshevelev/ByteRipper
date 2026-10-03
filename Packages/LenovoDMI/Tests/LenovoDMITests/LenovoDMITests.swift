@@ -1,4 +1,5 @@
 import XCTest
+import PartCodec
 @testable import LenovoDMI
 
 final class LocateTests: XCTestCase {
@@ -279,5 +280,88 @@ final class EditTests: XCTestCase {
         let after = try XCTUnwrap(LenovoDMI.locate(in: apply(result.writes, to: image)).first)
         XCTAssertEqual(after.blocks.map(\.encoding), [.plain, .encrypted])
         XCTAssertTrue(after.blocks.allSatisfy(\.checksumIsValid))
+    }
+}
+
+final class DecryptedBlockTests: XCTestCase {
+    func testTheBodyReadsInTheClearAndTheHeaderAsStored() throws {
+        let area = try XCTUnwrap(LenovoDMI.locate(in: TestStore.standardImage()).first)
+        let block = area.blocks[0]
+        let clear = LenovoDMIDecryptedBlock.decrypt(block)
+        XCTAssertEqual(Array(clear[..<16]), Array(block.stored[..<16]))
+        let serial = try XCTUnwrap(block.entry(.smbios(0x0400)))
+        let start = Int(serial.dataRange.lowerBound - block.offset)
+        XCTAssertEqual(Array(clear[start..<(start + 8)]), Array("PF0TEST1".utf8))
+    }
+
+    /// Unchanged, it goes back as the very bytes it came out of.
+    func testAnUntouchedBlockGoesBackAsItWas() throws {
+        let area = try XCTUnwrap(LenovoDMI.locate(in: TestStore.standardImage()).first)
+        let block = area.blocks[0]
+        let back = try LenovoDMIDecryptedBlock.encrypt(LenovoDMIDecryptedBlock.decrypt(block), encrypts: true)
+        XCTAssertEqual(back, block.stored)
+    }
+
+    /// An edit in the clear lands encrypted, with a checksum that adds up.
+    func testAnEditGoesBackEncryptedWithItsChecksum() throws {
+        let area = try XCTUnwrap(LenovoDMI.locate(in: TestStore.standardImage()).first)
+        let block = area.blocks[0]
+        var clear = LenovoDMIDecryptedBlock.decrypt(block)
+        let start = Int(try XCTUnwrap(block.entry(.smbios(0x0400))).dataRange.lowerBound - block.offset)
+        clear.replaceSubrange(start..<(start + 8), with: Array("PF9NEW99".utf8))
+
+        let back = LENVBlock(offset: block.offset,
+                             stored: try LenovoDMIDecryptedBlock.encrypt(clear, encrypts: true))
+        XCTAssertEqual(back.encoding, .encrypted)
+        XCTAssertTrue(back.checksumIsValid)
+        XCTAssertEqual(back.entry(.smbios(0x0400))?.data, Array("PF9NEW99".utf8))
+    }
+
+    func testABlockStoredInTheClearStaysInTheClear() throws {
+        let stored = TestStore.block(generation: 5, key: 0x77, entries: TestStore.standardEntries, encrypt: false)
+        let block = LENVBlock(offset: 0, stored: stored)
+        let back = try LenovoDMIDecryptedBlock.encrypt(LenovoDMIDecryptedBlock.decrypt(block), encrypts: false)
+        XCTAssertEqual(back, stored)
+    }
+
+    func testAWipedBlockIsNotOffered() throws {
+        let area = try XCTUnwrap(LenovoDMI.locate(in: TestStore.wipedImage()).first)
+        XCTAssertFalse(LenovoDMIDecryptedBlock.canOpen(area.blocks[0]))
+    }
+
+    func testAnotherLengthIsRefused() {
+        XCTAssertThrowsError(try LenovoDMIDecryptedBlock.encrypt([0, 1, 2], encrypts: true))
+    }
+}
+
+private struct Image: PartReader {
+    var bytes: [UInt8]
+    var size: UInt64 { UInt64(bytes.count) }
+    func read(at offset: UInt64, length: Int) throws -> [UInt8] {
+        Array(bytes[Int(offset)..<(Int(offset) + length)])
+    }
+}
+
+final class BlockCodecTests: XCTestCase {
+    /// Opened from the file and put back unchanged, the block is the bytes it
+    /// was; edited, it lands encrypted with a checksum that adds up.
+    func testTheBlockOpensInTheClearAndGoesBackEncrypted() throws {
+        let image = TestStore.standardImage()
+        let area = try XCTUnwrap(LenovoDMI.locate(in: image).first)
+        let block = area.blocks[0]
+        let parent = PartParent(content: Image(bytes: image), source: block.range, name: "dump.bin")
+        let codec = LenovoDMIBlockCodec(block: block)
+
+        var clear = try codec.decode(parent)
+        XCTAssertEqual(clear, LenovoDMIDecryptedBlock.decrypt(block))
+        XCTAssertEqual(try codec.encode(clear, into: parent), .overwriting(block.range, with: block.stored))
+
+        let start = Int(try XCTUnwrap(block.entry(.smbios(0x0400))).dataRange.lowerBound - block.offset)
+        clear.replaceSubrange(start..<(start + 8), with: Array("PF9NEW99".utf8))
+        let update = try codec.encode(clear, into: parent)
+        let back = LENVBlock(offset: block.offset, stored: update.bytes)
+        XCTAssertTrue(back.checksumIsValid)
+        XCTAssertEqual(back.entry(.smbios(0x0400))?.data, Array("PF9NEW99".utf8))
+        XCTAssertEqual(codec.badge?.text, "XOR 7F")
     }
 }

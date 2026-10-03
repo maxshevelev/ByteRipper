@@ -112,16 +112,18 @@ final class LenovoDMIToolFlowTests: XCTestCase {
     func testThePanelListsTheLogAndBothBlocks() throws {
         _ = try open(LenovoTestImage.make())
         let display = try session().display
-        XCTAssertEqual(display.summary, "LENV block 2 is live: generation 5.")
+        XCTAssertEqual(display.summary, "LENV block 2 is in use: generation 5.")
         XCTAssertEqual(try outline().numberOfRows, 3)
         XCTAssertEqual(display.rows[2].children.first?.value, "PF0TEST1")
     }
 
-    func testTheThreePartsAreMarkedInTheDump() throws {
+    /// Nothing is outlined until a row is picked, and then only that row.
+    func testOnlyThePickedRowIsMarkedInTheDump() throws {
         let controller = try open(LenovoTestImage.make())
-        let zones = controller.windowModel.pane1.zones.zones
-        XCTAssertEqual(zones.map(\.id), ["a0.log", "a0.lenv1", "a0.lenv2"])
-        XCTAssertEqual(zones.map(\.range), [0x1000..<0x3000, 0x3000..<0x4000, 0x4000..<0x5000])
+        let pane = controller.windowModel.pane1
+        XCTAssertTrue(pane.zones.zones.isEmpty)
+        try session().select("a0.lenv1")
+        XCTAssertEqual(pane.zones.zones.map(\.range), [0x3000..<0x4000])
     }
 
     /// Picking an entry opens its block in the dump and puts the entry in
@@ -133,7 +135,7 @@ final class LenovoDMIToolFlowTests: XCTestCase {
 
         let pane = controller.windowModel.pane1
         XCTAssertEqual(pane.zones.focus, "a0.lenv2.0")
-        XCTAssertEqual(pane.zones.zones.first { $0.id == "a0.lenv2.0" }?.range, 0x4010..<0x4030)
+        XCTAssertEqual(pane.zones.zones.map(\.range), [0x4010..<0x4030])
         let outline = try outline()
         XCTAssertEqual(outline.numberOfRows, 4, "block 2 is opened")
         XCTAssertEqual(outline.selectedRow, 3)
@@ -155,6 +157,56 @@ final class LenovoDMIToolFlowTests: XCTestCase {
         XCTAssertEqual(display.rows[2].children.first?.value, "QF0TEST1")
         XCTAssertTrue(display.rows[2].isProblem, "the checksum no longer adds up")
         XCTAssertEqual(pane.zones.focus, "a0.lenv2.0", "the row in focus survives the re-read")
+    }
+
+    /// The block opens in the clear in a fragment panel; a value typed there
+    /// goes back into the dump encrypted, with a checksum that adds up.
+    func testADecryptedBlockGoesBackEncrypted() throws {
+        let controller = try open(LenovoTestImage.make())
+        try session().openDecryptedBlock(from: "a0.lenv2.0")
+        let id = try XCTUnwrap(controller.fragments.expanded, "the block opens in a panel")
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        let value = 0x10 + 0x18
+        XCTAssertEqual(try part.document?.read(at: UInt64(value), length: 8), Array("PF0TEST1".utf8),
+                       "the panel holds the block in the clear")
+
+        // `P` → `Q`, typed in the clear.
+        part.moveCaret(to: UInt64(value))
+        part.typeHexNibble(0x5)
+        part.typeHexNibble(0x1)
+        controller.performUpdateInParent(of: part)
+        try waitForParse()
+
+        let display = try session().display
+        XCTAssertEqual(display.rows[2].children.first?.value, "QF0TEST1")
+        XCTAssertFalse(display.rows[2].isProblem, "encrypted again, with its checksum recomputed")
+        let stored = try XCTUnwrap(controller.windowModel.pane1.document?
+            .read(at: UInt64(LenovoTestImage.serialInBlock2), length: 1))
+        XCTAssertEqual(stored, [UInt8(ascii: "Q") ^ LenovoTestImage.key], "the dump holds it encrypted")
+    }
+
+    /// Another file opened into the pane is another store to read, and until
+    /// it is read the panel shows nothing of the last file's — not its serial
+    /// number, not the row that was picked, not an outline in the dump.
+    func testAnotherFileShowsNothingOfTheLastUntilItsOwnIsRead() throws {
+        let controller = try open(LenovoTestImage.make())
+        try session().select("a0.lenv2.0")
+        XCTAssertEqual(try outline().numberOfRows, 4, "the premise: the first file's store is up")
+
+        let other = try tempFile(LenovoTestImage.make())
+        files.append(other)
+        let parsed = expectation(description: "the other file's store lands")
+        try session().onDisplay = { _ in parsed.fulfill() }
+        try controller.windowModel.pane1.open(url: other)
+        window?.layoutIfNeeded()
+        XCTAssertEqual(try outline().numberOfRows, 0, "no rows of the last file")
+        XCTAssertEqual(try session().display, .empty)
+        XCTAssertTrue(controller.windowModel.pane1.zones.zones.isEmpty, "no outline of the last file")
+
+        wait(for: [parsed], timeout: 5)
+        try session().onDisplay = nil
+        window?.layoutIfNeeded()
+        XCTAssertEqual(try outline().numberOfRows, 3, "the new file's store, nothing opened in it")
     }
 
     func testAnImageWithoutAStoreSaysSo() throws {

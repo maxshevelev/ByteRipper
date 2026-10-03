@@ -4,6 +4,7 @@
 
 @covers window.fragments
 @covers pane.header.update-in-parent
+@covers pane.header.codec-badge
 
 A part of an image supplied by a [[topic:tools-overview|tool panel]] — a region, a volume, a module, the decompressed body of a section — opens as a **fragment panel**: a panel that rises from the bottom of the window, over the dump it was taken from.
 
@@ -35,6 +36,18 @@ Update in Parent verifies the following before writing, and states which conditi
 ## Decompressed parts
 
 A compressed UEFI section can be opened *decompressed*. What is then displayed is not the bytes held in the file but what those bytes expand to. Once edited and written back it is compressed again and the image is laid out around the resulting size. The result is not byte-identical to the manufacturer's original even when nothing has been changed, a different compressor producing different output from the same input.
+
+## What the badge in the header says
+
+A fragment does not always hold the bytes of the file as they lie. A decompressed section holds what the section expands to; a Lenovo [[term:lenv|LENV]] block opened decrypted holds its entries in plain text. Such a fragment carries a badge beside its name that states how its bytes relate to the file, and the pointer over the badge gives the full sentence:
+
+- **LZMA**, **Tiano**, **EFI 1.1** and the other compression names: the bytes were decompressed, and Update in Parent compresses them again with the same algorithm.
+- **Structure**: a volume, a file or a section of the image. Update in Parent lays the image out again around it, so the part may change length.
+- **XOR** followed by a key: the bytes were decrypted, and Update in Parent encrypts them again and recomputes the checksum.
+- **Unencrypted**: a LENV block stored unencrypted. Update in Parent recomputes its checksum only.
+- **Read-only**: the bytes were derived from the file by a transformation the program cannot reverse, and Update in Parent refuses them.
+
+A fragment without a badge is a plain copy: its bytes are those of the file and go back unchanged.
 
 ## A fragment as a UEFI subtree
 

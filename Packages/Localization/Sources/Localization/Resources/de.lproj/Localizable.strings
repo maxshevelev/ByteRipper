@@ -234,7 +234,6 @@
 "Could not join the pane." = "Der Bereich konnte nicht zusammengefügt werden.";
 "Could not open file." = "Die Datei konnte nicht geöffnet werden.";
 "Could not read %1$@." = "%1$@ konnte nicht gelesen werden.";
-"Could not read the zone." = "Die Zone konnte nicht gelesen werden.";
 "Could not reload file." = "Die Datei konnte nicht neu geladen werden.";
 "Could not save %1$@." = "%1$@ konnte nicht gesichert werden.";
 "Could not save “%1$@”." = "„%1$@“ konnte nicht gesichert werden.";
@@ -672,7 +671,6 @@
 "Read out of the %1$@ module, stored %2$@ compressed" = "Aus dem Modul %1$@ gelesen, gespeichert mit %2$@-Kompression";
 "Read-Only" = "Schreibgeschützt";
 "Reading ME…" = "ME wird gelesen…";
-"Reading the protected ranges of “%1$@”" = "Geschützte Bereiche von „%1$@“ werden gelesen";
 "Reading UEFI…" = "UEFI wird gelesen…";
 "Reading the region and its partitions." = "Die Region und ihre Partitionen werden gelesen.";
 "Reading…" = "Wird gelesen…";
@@ -884,7 +882,6 @@
 "There is nothing decompressed to open here." = "Hier ist nichts Entpacktes zum Öffnen.";
 "There is nothing to open here." = "Hier gibt es nichts zu öffnen.";
 "These are the defaults a new comparison opens with. Word Size also applies to the hex views already open." = "Mit diesen Vorgaben öffnet ein neuer Vergleich. Die Wortbreite gilt auch für bereits geöffnete Hex-Ansichten.";
-"These bytes were decompressed from “%1$@” in %2$@, and where they belong in it was not recorded when the tab was opened." = "Diese Bytes wurden aus „%1$@“ in %2$@ entpackt, und wohin sie dort gehören, wurde beim Öffnen des Tabs nicht festgehalten.";
 "These files will be replaced:" = "Diese Dateien werden ersetzt:";
 "This Mac" = "Dieser Mac";
 "This Mac and the shared library were both changed before either saw the other. Choose which to keep." = "Dieser Mac und die gemeinsame Bibliothek wurden unabhängig voneinander geändert. Wählen Sie, was bleiben soll.";
@@ -1293,11 +1290,9 @@
 "Firmware reads it" = "Von der Firmware gelesen";
 "Generation" = "Generation";
 "Generation %1$@" = "Generation %1$@";
-"Generation %1$@ · live" = "Generation %1$@ · aktiv";
 "Key is zero" = "Schlüssel ist null";
 "LENV block %1$@" = "LENV-Block %1$@";
 "LENV block %1$@ has no signature where it should start." = "LENV-Block %1$@ trägt an seinem Anfang keine Signatur.";
-"LENV block %1$@ is live: generation %2$@." = "Aktiv ist LENV-Block %1$@, Generation %2$@.";
 "LENV block %1$@ is stored decrypted. Whether the firmware accepts that is not known." = "LENV-Block %1$@ ist entschlüsselt gespeichert. Ob die Firmware ihn so annimmt, ist nicht bekannt.";
 "LENV block %1$@: the checksum is %2$@, the body adds up to %3$@." = "LENV-Block %1$@: Die gespeicherte Prüfsumme ist %2$@, der Blockinhalt ergibt %3$@.";
 "LENV block %1$@: the entries its header counts do not fit in the block." = "LENV-Block %1$@: Die im Kopf angegebenen Einträge passen nicht in den Block.";
@@ -1330,7 +1325,6 @@
 "The same in LENV block %1$@" = "In LENV-Block %1$@ identisch";
 "The store is empty." = "Der Speicher ist leer.";
 "The tool looks for the LDBG change log followed by two LENV blocks. A Lenovo InsydeH2O image without them is either another platform or has had the area cut out." = "Das Werkzeug sucht das LDBG-Änderungsprotokoll, auf das zwei LENV-Blöcke folgen. Fehlen sie in einem Lenovo-InsydeH2O-Image, handelt es sich um eine andere Plattform, oder der Bereich wurde aus dem Image entfernt.";
-"The two LENV blocks hold different values for: %1$@. The firmware reads the live one." = "Die beiden LENV-Blöcke enthalten abweichende Werte für: %1$@. Die Firmware liest den aktiven Block.";
 "This image holds %1$@ stores. Which of them the firmware reads is not known." = "Speicher in diesem Image: %1$@. Welchen davon die Firmware liest, ist nicht bekannt.";
 "Time" = "Zeit";
 "Undetermined: the entries do not fit either way" = "Unbestimmt: Die Einträge lassen sich in keiner Lesart zerlegen";
@@ -1349,3 +1343,20 @@
 "log operation|Set" = "Schreiben";
 "log operation|Protect" = "Schützen";
 "log operation|Unprotect" = "Schutz aufheben";
+"%1$@ (decrypted)" = "%1$@ (entschlüsselt)";
+"A LENV block is %1$@ bytes, and goes back only at that length." = "Ein LENV-Block ist %1$@ Bytes groß und wird nur in dieser Länge zurückgeschrieben.";
+"A LENV block stored in the clear. Update in Parent recomputes its checksum." = "Ein unverschlüsselt gespeicherter LENV-Block. Beim Aktualisieren in der Quelle wird seine Prüfsumme neu berechnet.";
+"A compressed section on the way to the part no longer decompresses." = "Eine komprimierte Sektion auf dem Weg zu diesem Teil lässt sich nicht mehr entpacken.";
+"A structure of the image. Update in Parent lays the image out again around it, so its length may change." = "Eine Struktur des Images. Beim Aktualisieren in der Quelle wird das Image um sie herum neu angeordnet; ihre Länge kann sich daher ändern.";
+"Decompressed from the file. Update in Parent compresses it again the way the section was compressed." = "Aus der Datei entpackt. Beim Aktualisieren in der Quelle wird es so wieder gepackt, wie die Sektion gepackt war.";
+"Decrypted from the file. Update in Parent encrypts it again with the key in its header and recomputes the checksum." = "Aus der Datei entschlüsselt. Beim Aktualisieren in der Quelle wird der Block mit dem Schlüssel aus seinem Kopf wieder verschlüsselt und die Prüfsumme neu berechnet.";
+"Generation %1$@ · in use" = "Generation %1$@ · aktiv";
+"LENV block %1$@ is in use: generation %2$@." = "Aktiv ist LENV-Block %1$@, Generation %2$@.";
+"Open Decrypted Block" = "Entschlüsselten Block öffnen";
+"The two LENV blocks hold different values for: %1$@. The firmware reads the block in use." = "Die beiden LENV-Blöcke enthalten abweichende Werte für: %1$@. Die Firmware liest den aktiven Block.";
+"These bytes were worked out of the file and cannot be put back into it." = "Diese Bytes wurden aus der Datei umgeformt und lassen sich nicht zurückschreiben.";
+"This is the text the variable unpacks to, and nothing here packs it again." = "Dies ist der Text, zu dem sich die Variable entpackt; das Programm kann ihn nicht wieder packen.";
+"part badge|Decompressed" = "Entpackt";
+"part badge|Read-only" = "Nur lesbar";
+"part badge|Structure" = "Struktur";
+"part badge|Unencrypted" = "Unverschlüsselt";

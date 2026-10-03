@@ -62,8 +62,8 @@ final class LenovoDMIPresenterTests: XCTestCase {
     }
 
     func testTheSummaryNamesTheLiveBlock() {
-        XCTAssertEqual(standard.summary, "LENV block 2 is live: generation 84.")
-        XCTAssertEqual(standard.rows[2].value, "Generation 84 · live")
+        XCTAssertEqual(standard.summary, "LENV block 2 is in use: generation 84.")
+        XCTAssertEqual(standard.rows[2].value, "Generation 84 · in use")
         XCTAssertEqual(standard.rows[1].value, "Generation 83")
     }
 
@@ -108,16 +108,31 @@ final class LenovoDMIPresenterTests: XCTestCase {
         XCTAssertEqual(display.rows, [])
     }
 
-    /// Every part of the area is drawn; the entries of only the part in focus.
-    func testZonesOpenThePartInFocus() {
+    /// Only the row in focus is drawn — nothing when nothing is.
+    func testOnlyTheRowInFocusIsAZone() {
         let display = standard
-        XCTAssertEqual(display.zones(focus: nil).zones.map(\.id), ["a0.log", "a0.lenv1", "a0.lenv2"])
-        let focused = display.zones(focus: "a0.lenv1.0")
-        XCTAssertEqual(focused.focus, "a0.lenv1.0")
-        XCTAssertEqual(focused.zones.map(\.id),
-                       ["a0.log", "a0.lenv1", "a0.lenv1.0", "a0.lenv1.1", "a0.lenv1.2", "a0.lenv2"])
-        XCTAssertEqual(focused.zones[2].name, "LENV block 1 · Baseboard serial number")
-        XCTAssertEqual(focused.zones[2].range, 0x3010..<0x3030)
+        XCTAssertEqual(display.zones(focus: nil), .empty)
+        let entry = display.zones(focus: "a0.lenv1.0")
+        XCTAssertEqual(entry.focus, "a0.lenv1.0")
+        XCTAssertEqual(entry.zones.map(\.id), ["a0.lenv1.0"])
+        XCTAssertEqual(entry.zones[0].name, "LENV block 1 · Baseboard serial number")
+        XCTAssertEqual(entry.zones[0].range, 0x3010..<0x3030)
+        let block = display.zones(focus: "a0.lenv2")
+        XCTAssertEqual(block.zones.map(\.name), ["LENV block 2"])
+        XCTAssertEqual(block.zones[0].range, 0x4000..<0x5000)
+    }
+
+    /// From a block or any of its entries, the whole block in the clear; from
+    /// the log, nothing.
+    func testADecryptedBlockOpensFromTheBlockAndItsEntries() throws {
+        let display = standard
+        let part = try XCTUnwrap(display.decryptedPart(from: "a0.lenv1.0"))
+        XCTAssertEqual(part.name, "LENV block 1 (decrypted)")
+        XCTAssertEqual(part.source, 0x3000..<0x4000)
+        XCTAssertTrue(part.codec.encrypts)
+        XCTAssertEqual(display.decryptedPart(from: "a0.lenv1")?.source, part.source)
+        XCTAssertNil(display.decryptedPart(from: "a0.log"))
+        XCTAssertNil(display.decryptedPart(from: "a0.log.0"))
     }
 
     func testTheRowsCarryTheirGlossaryEntries() {

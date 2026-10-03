@@ -11,6 +11,10 @@
 //  says what happens then: shared code between tool-modules moves to a shared
 //  package.
 //
+//  It also holds the codec a UEFI part goes back into its image through
+//  (`UEFIPartCodec`): `ToolModuleKit`'s side of a part panel, the rebuild
+//  planner's side of the image — the same introduction, one level up.
+//
 
 import PackageDescription
 
@@ -23,11 +27,15 @@ let package = Package(
         .library(name: "UEFIContentSource", targets: ["UEFIContentSource"])
     ],
     dependencies: [
+        .package(path: "../Localization"),
+        .package(path: "../PartCodec"),
         .package(path: "../ToolModuleKit"),
         .package(path: "../UEFIImage")
     ],
     targets: [
         .target(name: "UEFIContentSource", dependencies: [
+            .product(name: "Localization", package: "Localization"),
+            .product(name: "PartCodec", package: "PartCodec"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage")
         ]),

@@ -37,7 +37,8 @@ let package = Package(
 
         .package(path: "../../Packages/ToolModuleKit"),
         .package(path: "../../Packages/AppPalette"),
-        .package(path: "../../Packages/LenovoDMI")
+        .package(path: "../../Packages/LenovoDMI"),
+        .package(path: "../../Packages/PartCodec")
     ],
     targets: [
         .target(name: "LenovoDMITool", dependencies: [
@@ -54,7 +55,8 @@ let package = Package(
             "LenovoDMITool",
             .product(name: "ALSplitView", package: "ALSplitView"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
-            .product(name: "LenovoDMI", package: "LenovoDMI")
+            .product(name: "LenovoDMI", package: "LenovoDMI"),
+            .product(name: "PartCodec", package: "PartCodec")
         ]),
         .testTarget(name: "LenovoDMIToolTests", dependencies: [
             "LenovoDMITool",

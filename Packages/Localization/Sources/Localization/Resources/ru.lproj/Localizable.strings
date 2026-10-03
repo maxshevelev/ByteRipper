@@ -234,7 +234,6 @@
 "Could not join the pane." = "Не удалось присоединить файловую панель.";
 "Could not open file." = "Не удалось открыть файл.";
 "Could not read %1$@." = "Не удалось прочитать %1$@.";
-"Could not read the zone." = "Не удалось прочитать зону.";
 "Could not reload file." = "Не удалось перечитать файл.";
 "Could not save %1$@." = "Не удалось сохранить %1$@.";
 "Could not save “%1$@”." = "Не удалось сохранить «%1$@».";
@@ -672,7 +671,6 @@
 "Read out of the %1$@ module, stored %2$@ compressed" = "Прочитано из модуля %1$@, хранится в сжатии %2$@";
 "Read-Only" = "Только для чтения";
 "Reading ME…" = "Чтение ME…";
-"Reading the protected ranges of “%1$@”" = "Чтение защищённых диапазонов «%1$@»";
 "Reading UEFI…" = "Чтение UEFI…";
 "Reading the region and its partitions." = "Чтение региона и его разделов.";
 "Reading…" = "Чтение…";
@@ -884,7 +882,6 @@
 "There is nothing decompressed to open here." = "Здесь нечего открывать — ничего не распаковано.";
 "There is nothing to open here." = "Здесь нечего открывать.";
 "These are the defaults a new comparison opens with. Word Size also applies to the hex views already open." = "С этими настройками открывается новое сравнение. Размер слова применяется и к уже открытым панелям hex-дампа.";
-"These bytes were decompressed from “%1$@” in %2$@, and where they belong in it was not recorded when the tab was opened." = "Эти байты распакованы из «%1$@» в %2$@, и при открытии вкладки не было записано, куда именно они там относятся.";
 "These files will be replaced:" = "Эти файлы будут заменены:";
 "This Mac" = "Этот Mac";
 "This Mac and the shared library were both changed before either saw the other. Choose which to keep." = "И на этом Mac, и в общей библиотеке были независимые изменения. Выберите, что оставить.";
@@ -1293,11 +1290,9 @@
 "Firmware reads it" = "Читается прошивкой";
 "Generation" = "Поколение";
 "Generation %1$@" = "Поколение %1$@";
-"Generation %1$@ · live" = "Поколение %1$@ · действующий";
 "Key is zero" = "Ключ равен нулю";
 "LENV block %1$@" = "Блок LENV %1$@";
 "LENV block %1$@ has no signature where it should start." = "У блока LENV %1$@ нет сигнатуры в начале.";
-"LENV block %1$@ is live: generation %2$@." = "Действующий блок — LENV %1$@, поколение %2$@.";
 "LENV block %1$@ is stored decrypted. Whether the firmware accepts that is not known." = "Блок LENV %1$@ хранится расшифрованным. Примет ли его прошивка в таком виде, неизвестно.";
 "LENV block %1$@: the checksum is %2$@, the body adds up to %3$@." = "Блок LENV %1$@: записанная контрольная сумма %2$@, а содержимое блока даёт %3$@.";
 "LENV block %1$@: the entries its header counts do not fit in the block." = "Блок LENV %1$@: записи, заявленные в заголовке, в блок не помещаются.";
@@ -1330,7 +1325,6 @@
 "The same in LENV block %1$@" = "В блоке LENV %1$@ то же значение";
 "The store is empty." = "Хранилище пусто.";
 "The tool looks for the LDBG change log followed by two LENV blocks. A Lenovo InsydeH2O image without them is either another platform or has had the area cut out." = "Инструмент ищет журнал изменений LDBG, за которым следуют два блока LENV. Если в образе Lenovo InsydeH2O их нет, это другая платформа либо эта область из образа вырезана.";
-"The two LENV blocks hold different values for: %1$@. The firmware reads the live one." = "Значения в двух блоках LENV различаются у записей: %1$@. Прошивка читает действующий блок.";
 "This image holds %1$@ stores. Which of them the firmware reads is not known." = "Хранилищ в образе: %1$@. Какое из них читает прошивка, неизвестно.";
 "Time" = "Время";
 "Undetermined: the entries do not fit either way" = "Не определено: записи не разбираются ни в одном из вариантов";
@@ -1349,3 +1343,20 @@
 "log operation|Set" = "Запись";
 "log operation|Protect" = "Защита";
 "log operation|Unprotect" = "Снятие защиты";
+"%1$@ (decrypted)" = "%1$@ (расшифрован)";
+"A LENV block is %1$@ bytes, and goes back only at that length." = "Блок LENV занимает %1$@ байт и записывается обратно только с этой длиной.";
+"A LENV block stored in the clear. Update in Parent recomputes its checksum." = "Блок LENV, который хранится незашифрованным. При записи в исходный файл пересчитывается его контрольная сумма.";
+"A compressed section on the way to the part no longer decompresses." = "Одна из сжатых секций на пути к этой части больше не распаковывается.";
+"A structure of the image. Update in Parent lays the image out again around it, so its length may change." = "Структура образа. При записи в исходный файл образ перестраивается вокруг неё, поэтому её длина может измениться.";
+"Decompressed from the file. Update in Parent compresses it again the way the section was compressed." = "Распаковано из файла. При записи в исходный файл данные снова сжимаются так же, как была сжата секция.";
+"Decrypted from the file. Update in Parent encrypts it again with the key in its header and recomputes the checksum." = "Расшифровано из файла. При записи в исходный файл блок снова шифруется ключом из его заголовка, а контрольная сумма пересчитывается.";
+"Generation %1$@ · in use" = "Поколение %1$@ · действующий";
+"LENV block %1$@ is in use: generation %2$@." = "Действующий блок — LENV %1$@, поколение %2$@.";
+"Open Decrypted Block" = "Открыть расшифрованный блок";
+"The two LENV blocks hold different values for: %1$@. The firmware reads the block in use." = "Значения в двух блоках LENV различаются у записей: %1$@. Прошивка читает действующий блок.";
+"These bytes were worked out of the file and cannot be put back into it." = "Эти байты получены из файла преобразованием и записать их обратно нельзя.";
+"This is the text the variable unpacks to, and nothing here packs it again." = "Это текст, в который распаковывается переменная; обратно упаковать его программа не умеет.";
+"part badge|Decompressed" = "Распакован";
+"part badge|Read-only" = "Только чтение";
+"part badge|Structure" = "Структура";
+"part badge|Unencrypted" = "Без шифрования";

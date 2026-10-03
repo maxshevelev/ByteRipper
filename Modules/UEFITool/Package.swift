@@ -40,6 +40,8 @@ let package = Package(
         .package(path: "../../Packages/AppPalette"),
         .package(path: "../../Packages/UEFIImage"),
         .package(path: "../../Packages/UEFIContentSource"),
+        // The codec a part the panel opens goes back into the image through.
+        .package(path: "../../Packages/PartCodec"),
         .package(path: "../../Packages/FreshData"),
         // The ME branch of the structure tree: the engine's model and the
         // shared presentation over it (Design/ME_REGION_IN_UEFI_TREE_PLAN.md).
@@ -69,6 +71,7 @@ let package = Package(
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "UEFIContentSource", package: "UEFIContentSource"),
+            .product(name: "PartCodec", package: "PartCodec"),
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "MEPresentation", package: "MEPresentation"),
             .product(name: "MEReads", package: "MEReads")

@@ -94,6 +94,8 @@ public enum UEFIRebuild {
     /// - Parameter protected: the file's protected ranges, when they have been
     ///   read. A change to a byte inside the IBB is refused and one inside a
     ///   vendor hash range is warned about; nil says they were not checked.
+    ///   - readsProtectedRanges: with no `protected` given, read them in the
+    ///     parse this plan makes anyway.
     ///   - maximumCompressionFallback: a part inside compressed sections is
     ///     compressed again at the normal level; when the rebuild then does not
     ///     fit, it is done again at the maximum level before it is refused.
@@ -107,16 +109,21 @@ public enum UEFIRebuild {
         at target: Target,
         in file: [UInt8],
         limits: UEFIParser.Limits = .init(),
-        protected: [ProtectedRange]? = nil,
+        protected given: [ProtectedRange]? = nil,
+        readsProtectedRanges: Bool = false,
         maximumCompressionFallback: Bool = true,
         progress: (@Sendable (Progress) -> Void)? = nil
     ) -> Result<Plan, Refusal> {
         let report = Reporter(progress)
         report.phase("Reading the structure of the image")
-        // The ranges are the caller's to give (`protected`), not this parse's.
-        let image = UEFIParser.parse(file, limits: limits, readsProtectedRanges: false) {
+        // The ranges are the caller's to give (`protected`), or — asked for
+        // with `readsProtectedRanges` — this parse's own, so a caller with no
+        // tree of its own does not parse the image twice.
+        let image = UEFIParser.parse(file, limits: limits,
+                                     readsProtectedRanges: given == nil && readsProtectedRanges) {
             report.fraction(Reporter.reading * $0)
         }
+        let protected = given ?? (readsProtectedRanges ? image.protectedRanges?.rebuildRanges : nil)
         var compressions = 0
         if case .decompressed(let chain) = target.space { compressions = chain.count }
         var context = Context(file: file, image: image, limits: limits,

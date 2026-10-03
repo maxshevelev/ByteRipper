@@ -28,12 +28,18 @@ let package = Package(
     dependencies: [
         // Every word this shows the user comes from the one catalogue the
         // whole app is translated in.
-        .package(path: "../Localization")
+        .package(path: "../Localization"),
+        // The codec a block opened decrypted goes back into the file through.
+        .package(path: "../PartCodec")
     ],
     targets: [
         .target(name: "LenovoDMI", dependencies: [
-            .product(name: "Localization", package: "Localization")
+            .product(name: "Localization", package: "Localization"),
+            .product(name: "PartCodec", package: "PartCodec")
         ]),
-        .testTarget(name: "LenovoDMITests", dependencies: ["LenovoDMI"])
+        .testTarget(name: "LenovoDMITests", dependencies: [
+            "LenovoDMI",
+            .product(name: "PartCodec", package: "PartCodec")
+        ])
     ]
 )

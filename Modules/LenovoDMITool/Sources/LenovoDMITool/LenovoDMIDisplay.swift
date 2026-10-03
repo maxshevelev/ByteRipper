@@ -31,7 +31,19 @@ public struct LenovoDMIRow: Equatable, Sendable {
     public var fields: [LenovoDMIField]
     /// The glossary entry the detail's `?` opens for this row.
     public var term: HelpTermID?
+    /// The block Open Decrypted Block opens from this row — the block itself,
+    /// or the one an entry is in. Nil for the log, and for a block that cannot
+    /// be decrypted with confidence.
+    public var decryptableBlock: String?
     public var children: [LenovoDMIRow]
+}
+
+/// What Open Decrypted Block hands the host: what to call the panel, the
+/// block it comes from, and the codec that decrypts it and puts it back.
+public struct LenovoDMIDecryptedPart: Sendable {
+    public var name: String
+    public var source: Range<UInt64>
+    public var codec: LenovoDMIBlockCodec
 }
 
 /// A finding, worded, as the panel lists it under the tree.
@@ -47,8 +59,18 @@ public struct LenovoDMIDisplay: Equatable, Sendable {
     public var summary: String
     public var rows: [LenovoDMIRow]
     public var notes: [LenovoDMINote]
+    /// The blocks that can be opened decrypted, by their row's id.
+    public var blocks: [String: LENVBlock] = [:]
 
     public static let empty = LenovoDMIDisplay(summary: "", rows: [], notes: [])
+
+    /// The block Open Decrypted Block opens from row `id`.
+    public func decryptedPart(from id: String) -> LenovoDMIDecryptedPart? {
+        guard let blockID = row(id)?.decryptableBlock, let block = blocks[blockID],
+              let name = row(blockID)?.name else { return nil }
+        return LenovoDMIDecryptedPart(name: L("%1$@ (decrypted)", name), source: block.range,
+                                      codec: LenovoDMIBlockCodec(block: block))
+    }
 
     /// The row with `id`, anywhere in the tree.
     public func row(_ id: String) -> LenovoDMIRow? {
@@ -67,21 +89,16 @@ public struct LenovoDMIDisplay: Equatable, Sendable {
         rows.first { $0.id == id || $0.children.contains { $0.id == id } }
     }
 
-    /// What the dump draws with `focus` selected: the three parts of every
-    /// area, and the rows inside the part in focus — a whole block's entries
-    /// at once would be forty outlines over a few hundred bytes, and the one
-    /// the reader picked would be lost among them.
+    /// What the dump draws with `focus` selected: the row in focus and
+    /// nothing else. Outlines around every part and every entry at once are a
+    /// lattice over a few kilobytes that says nothing the tree does not, and
+    /// the one the reader picked is lost in it. Nothing in focus, nothing
+    /// drawn.
     public func zones(focus: String?) -> ZoneMap {
-        let open = focus.flatMap { parent(of: $0)?.id }
-        var zones: [Zone] = []
-        for row in rows {
-            zones.append(Zone(id: row.id, name: row.name, range: row.range))
-            guard row.id == open else { continue }
-            for child in row.children {
-                zones.append(Zone(id: child.id, name: row.name + " · " + child.name, range: child.range))
-            }
-        }
-        return ZoneMap(zones: zones, focus: focus)
+        guard let focus, let row = row(focus) else { return .empty }
+        let parent = parent(of: focus)
+        let name = parent.map { $0.id == focus ? row.name : $0.name + " · " + row.name } ?? row.name
+        return ZoneMap(zones: [Zone(id: row.id, name: name, range: row.range)], focus: focus)
     }
 }
 
@@ -99,12 +116,17 @@ public enum LenovoDMIPresenter {
         }
         var rows: [LenovoDMIRow] = []
         var notes: [LenovoDMINote] = []
+        var blocks: [String: LENVBlock] = [:]
         for (number, area) in areas.enumerated() {
             let prefix = areas.count == 1 ? "" : L("Store %1$@", number + 1) + " · "
             let id = "a\(number)"
             rows.append(logRow(area.log, id: id + ".log", prefix: prefix))
             for index in area.blocks.indices {
-                rows.append(blockRow(index, in: area, id: id + ".lenv\(index + 1)", prefix: prefix))
+                let blockID = id + ".lenv\(index + 1)"
+                rows.append(blockRow(index, in: area, id: blockID, prefix: prefix))
+                if LenovoDMIDecryptedBlock.canOpen(area.blocks[index]) {
+                    blocks[blockID] = area.blocks[index]
+                }
             }
             notes += area.findings.map { LenovoDMINote(text: prefix + $0.text, isProblem: $0.isProblem) }
         }
@@ -114,7 +136,7 @@ public enum LenovoDMIPresenter {
                 isProblem: true
             ), at: 0)
         }
-        return LenovoDMIDisplay(summary: summary(areas[0]), rows: rows, notes: notes)
+        return LenovoDMIDisplay(summary: summary(areas[0]), rows: rows, notes: notes, blocks: blocks)
     }
 
     private static func summary(_ area: LenovoDMIArea) -> String {
@@ -124,7 +146,7 @@ public enum LenovoDMIPresenter {
                 : L("No LENV block the firmware would read.")
         }
         let block = area.blocks[live]
-        return L("LENV block %1$@ is live: generation %2$@.", live + 1, block.generation)
+        return L("LENV block %1$@ is in use: generation %2$@.", live + 1, block.generation)
     }
 
     // MARK: - The log
@@ -152,7 +174,7 @@ public enum LenovoDMIPresenter {
         return LenovoDMIRow(
             id: id, name: prefix + L("Change log (LDBG)"), value: value, range: log.range,
             isProblem: log.writeOffsetProblem == .outOfRange || log.writeOffsetProblem == .misaligned,
-            fields: fields, term: HelpTermID("ldbg"),
+            fields: fields, term: HelpTermID("ldbg"), decryptableBlock: nil,
             children: log.entries.map { logEntryRow($0, id: id + ".\($0.index)") }
         )
     }
@@ -178,7 +200,7 @@ public enum LenovoDMIPresenter {
                 LenovoDMIField(L("Unknown"), LenovoDMIValue.hex(entry.unknown)),
                 LenovoDMIField(L("Offset"), hex(entry.offset, 8))
             ],
-            term: HelpTermID("ldbg"),
+            term: HelpTermID("ldbg"), decryptableBlock: nil,
             children: []
         )
     }
@@ -211,7 +233,7 @@ public enum LenovoDMIPresenter {
             value = L("Empty")
         } else {
             value = isLive
-                ? L("Generation %1$@ · live", block.generation)
+                ? L("Generation %1$@ · in use", block.generation)
                 : L("Generation %1$@", block.generation)
         }
 
@@ -234,13 +256,15 @@ public enum LenovoDMIPresenter {
         }
 
         let other = area.blocks.indices.first { $0 != index }.map { area.blocks[$0] }
+        let decryptable = LenovoDMIDecryptedBlock.canOpen(block) ? id : nil
         return LenovoDMIRow(
             id: id, name: name, value: value, range: block.range,
             isProblem: !block.hasSignature || !block.entriesFit
                 || (!block.isBlank && !block.checksumIsValid),
-            fields: fields, term: HelpTermID("lenv"),
+            fields: fields, term: HelpTermID("lenv"), decryptableBlock: decryptable,
             children: block.entries.map {
-                entryRow($0, id: id + ".\($0.index)", other: other, otherNumber: index == 0 ? 2 : 1)
+                entryRow($0, id: id + ".\($0.index)", other: other, otherNumber: index == 0 ? 2 : 1,
+                         decryptableBlock: decryptable)
             }
         )
     }
@@ -276,7 +300,8 @@ public enum LenovoDMIPresenter {
     // MARK: - An entry
 
     private static func entryRow(
-        _ entry: LENVEntry, id: String, other: LENVBlock?, otherNumber: Int
+        _ entry: LENVEntry, id: String, other: LENVBlock?, otherNumber: Int,
+        decryptableBlock: String?
     ) -> LenovoDMIRow {
         let value = LenovoDMIValue.text(of: entry)
         var fields = [
@@ -303,7 +328,7 @@ public enum LenovoDMIPresenter {
         return LenovoDMIRow(
             id: id, name: LenovoDMIValue.name(of: entry.key), value: value,
             range: entry.range, isProblem: false, fields: fields,
-            term: HelpTermID("lenv"), children: []
+            term: HelpTermID("lenv"), decryptableBlock: decryptableBlock, children: []
         )
     }
 

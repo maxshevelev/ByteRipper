@@ -15,6 +15,7 @@ import ToolModuleKit
     var onSelect: ((String?) -> Void)?
     var onGoTo: ((String) -> Void)?
     var onCopyValue: ((String) -> Void)?
+    var onOpenDecrypted: ((String) -> Void)?
 
     private(set) var display = LenovoDMIDisplay.empty
     private var focus: String?
@@ -33,6 +34,10 @@ import ToolModuleKit
     /// up, blocks that disagree.
     private let notesLabel = NSTextField(wrappingLabelWithString: "")
     private let noticeLabel = NSTextField(labelWithString: "")
+    /// The notice and, while a reading runs, its bar on the same line — the
+    /// row the other firmware panels carry their progress in.
+    private let bottomRow = NSStackView()
+    private let progressBar = NSProgressIndicator()
     private var zoomObserver: NSObjectProtocol?
     private var columnWidthSize = ToolPanelFont.designSize
 
@@ -88,15 +93,27 @@ import ToolModuleKit
         noticeLabel.translatesAutoresizingMaskIntoConstraints = false
         noticeLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
+        progressBar.style = .bar
+        progressBar.isIndeterminate = true
+        progressBar.controlSize = .small
+        progressBar.translatesAutoresizingMaskIntoConstraints = false
+        bottomRow.orientation = .horizontal
+        bottomRow.alignment = .centerY
+        bottomRow.spacing = 8
+        bottomRow.translatesAutoresizingMaskIntoConstraints = false
+        bottomRow.addArrangedSubview(noticeLabel)
+
         view.addSubview(summaryLabel)
         view.addSubview(splitter)
         view.addSubview(notesLabel)
-        view.addSubview(noticeLabel)
+        view.addSubview(bottomRow)
 
         // Breakable, for the reason every panel's insets are: a panel squeezed
         // to nothing is a legal state.
-        let bottom = noticeLabel.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8)
+        let bottom = bottomRow.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -8)
         bottom.priority = .defaultHigh
+        let barWidth = progressBar.widthAnchor.constraint(equalToConstant: 150)
+        barWidth.priority = .defaultHigh
 
         NSLayoutConstraint.activate([
             summaryLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 8),
@@ -110,11 +127,12 @@ import ToolModuleKit
 
             notesLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
             notesLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
-            notesLabel.bottomAnchor.constraint(equalTo: noticeLabel.topAnchor, constant: -4),
+            notesLabel.bottomAnchor.constraint(equalTo: bottomRow.topAnchor, constant: -4),
 
-            noticeLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
-            noticeLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
-            bottom
+            bottomRow.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            bottomRow.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
+            bottom,
+            barWidth
         ])
 
         zoomObserver = ToolPanelFont.observeZoom { [weak self] in
@@ -182,6 +200,10 @@ import ToolModuleKit
         // help: panel.lenovo-dmi.select-in-dump
         menu.addItem(withTitle: L("Select in Dump"), action: #selector(goToClicked), keyEquivalent: "")
             .target = self
+        menu.addItem(.separator())
+        // help: panel.lenovo-dmi.open-decrypted
+        menu.addItem(withTitle: L("Open Decrypted Block"), action: #selector(openDecryptedClicked),
+                     keyEquivalent: "").target = self
         return menu
     }
 
@@ -221,6 +243,23 @@ import ToolModuleKit
         selectFocus()
         renderDetail()
     }
+
+    /// A reading has started: the bar comes into the notice's row.
+    func showBusy() {
+        guard progressBar.superview == nil else { return }
+        progressBar.startAnimation(nil)
+        bottomRow.addArrangedSubview(progressBar)
+    }
+
+    func endBusy() {
+        guard progressBar.superview != nil else { return }
+        progressBar.stopAnimation(nil)
+        bottomRow.removeArrangedSubview(progressBar)
+        progressBar.removeFromSuperview()
+    }
+
+    /// What the bar is for, for the app's tests.
+    var isBusy: Bool { progressBar.superview != nil }
 
     func say(_ text: String, asProblem: Bool = false) {
         noticeLabel.stringValue = text
@@ -264,7 +303,9 @@ import ToolModuleKit
     private func renderDetail() {
         guard let focus, let row = display.row(focus) else {
             detail.setTerm(nil)
-            detail.showPlaceholder(display.rows.isEmpty ? "" : L("Select a row to see what it is."))
+            detail.showPlaceholder(display.rows.isEmpty
+                ? (display == .empty ? L("Reading…") : "")
+                : L("Select a row to see what it is."))
             return
         }
         detail.prepareForRows(subject: row.id)
@@ -322,6 +363,24 @@ import ToolModuleKit
     @objc private func goToClicked() {
         guard let id = clickedID else { return }
         onGoTo?(id)
+    }
+
+    @objc private func openDecryptedClicked() {
+        guard let id = clickedID else { return }
+        onOpenDecrypted?(id)
+    }
+}
+
+extension LenovoDMIToolViewController: NSMenuItemValidation {
+    /// Open Decrypted Block is offered on a block and on its entries, and only
+    /// for a block that decrypts with confidence — not the log, not an empty
+    /// or unreadable block.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        guard let id = clickedID else { return false }
+        if menuItem.action == #selector(openDecryptedClicked) {
+            return display.row(id)?.decryptableBlock != nil
+        }
+        return true
     }
 }
 

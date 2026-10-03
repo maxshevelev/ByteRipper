@@ -41,7 +41,10 @@ let package = Package(
         // The splitter a panel's detail pane folds in while the detail is
         // shown in its large view (`ToolDetailPane`), on the splitter's own
         // animation clock.
-        .package(path: "../ALSplitView")
+        .package(path: "../ALSplitView"),
+        // What a part panel's bytes are to the file's: the seam hands a
+        // codec over when a tool-module opens a part.
+        .package(path: "../PartCodec")
     ],
     targets: [
         .target(name: "ToolModuleKit",
@@ -50,7 +53,8 @@ let package = Package(
                     .product(name: "AppPalette", package: "AppPalette"),
                     .product(name: "HelpBook", package: "HelpBook"),
                     .product(name: "HelpUI", package: "HelpUI"),
-                    .product(name: "ALSplitView", package: "ALSplitView")
+                    .product(name: "ALSplitView", package: "ALSplitView"),
+                    .product(name: "PartCodec", package: "PartCodec")
                 ]),
         .testTarget(
             name: "ToolModuleKitTests",
@@ -63,7 +67,8 @@ let package = Package(
                 .product(name: "HelpBook", package: "HelpBook"),
                 .product(name: "HelpUI", package: "HelpUI"),
                 .product(name: "Localization", package: "Localization"),
-                .product(name: "ALSplitView", package: "ALSplitView")
+                .product(name: "ALSplitView", package: "ALSplitView"),
+                .product(name: "PartCodec", package: "PartCodec")
             ]
         )
     ]

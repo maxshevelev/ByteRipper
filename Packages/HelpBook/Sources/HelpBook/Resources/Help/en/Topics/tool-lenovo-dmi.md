@@ -5,6 +5,7 @@
 @covers panel.lenovo-dmi
 @covers panel.lenovo-dmi.copy-value
 @covers panel.lenovo-dmi.select-in-dump
+@covers panel.lenovo-dmi.open-decrypted
 
 **Tools ▸ Lenovo DMI** finds the identity store in a Lenovo InsydeH2O image and lists what it holds.
 
@@ -23,13 +24,29 @@ If the tool finds no store, the panel says so. Either the image belongs to anoth
 - **The detail list** under the tree describes the row in focus. The `?` beside its name explains the term.
 - **The findings** under the detail list: an empty store, a checksum that does not match, blocks that disagree.
 
+Only the selected row is outlined in the dump: the whole log, a whole block, or one entry. Nothing is outlined while no row is selected.
+
 Double-clicking a row, or **Select in Dump** on its context menu, selects its bytes in the dump. **Copy Value** puts the value as the panel reads it on the clipboard.
 
 ## Which block the firmware reads
 
-The firmware keeps two copies and reads the one with the higher **Generation**; a block with generation 0 is not used. When both generations are equal the tool takes block 1, as LenovoDMIDecryptor does. Whether the firmware passes over a block whose checksum does not match and reads the other one instead is not known; the panel states this where it applies.
+The store is kept twice, in **LENV block 1** and **LENV block 2**, so that a write interrupted by a power loss leaves one intact copy. Each block header carries a **generation**: a counter that grows as the firmware rewrites the store. On every working dump examined the two generations differ by one — 127 and 126, say — and the block with the higher number holds the more recent state. That fits a firmware that writes each new copy over the older block and numbers it one higher; the code doing so has not been read here.
 
-The two blocks may hold different values. This is normal shortly after the firmware has written: it rewrites one copy at a time. A value to be carried to another dump is therefore taken from the live block, and the detail list of every entry states whether the other block holds the same value.
+The block with the higher generation is the one the firmware reads; the panel calls it the block **in use**. This rule comes from the reverse-engineering of `LenovoVariableDxe` by LenovoDMIDecryptor, and the dumps examined agree with it: the entry that the last record of the change log removes is absent from the block with the higher generation and still present in the other. When both generations are equal, the tool takes block 1, as LenovoDMIDecryptor does.
+
+A generation of **0** does not occur on a working board. It is what a block shows when its header has been cleared, as on a store that was wiped: the firmware does not read such a block. If both blocks show 0, there is no copy to read.
+
+Whether the firmware passes over a block whose checksum does not match and reads the other one instead is not known; the panel states this where it applies.
+
+The two blocks may hold different values. This is normal after a write: the older copy keeps the previous values. A value to be carried to another dump is therefore taken from the block in use, and the detail list of every entry states whether the other block holds the same value.
+
+## Open Decrypted Block
+
+**Open Decrypted Block**, on the context menu of a block or of any entry in it, opens the whole block as a [[topic:fragments|fragment panel]] with its entries decrypted: the serial number and the machine type read as text in the hex view and can be edited there. The header stays as stored, so the key and the checksum are visible at their own addresses.
+
+**Update in Parent** writes the block back encrypted with the key in its header and with its checksum recomputed, as one undo step in the dump. The block keeps its length and its generation, and nothing is added to the change log. Only the block that was opened is written; to change both copies, open and update each. The fragment's header carries an **XOR** badge with the key, which says that its bytes are not the file's own.
+
+The command is offered for a block that holds entries and whose encryption was recognised; it is not offered for an empty block or for the change log.
 
 ## The entries
 
@@ -47,6 +64,6 @@ The format was reverse-engineered from `LenovoVariableDxe` by the LenovoDMIDecry
 
 Not confirmed: what the write-protect bits of a block and of an entry cause the firmware to do, which of the two block keys the log is encrypted with when they differ, and what the unknown types and fields hold.
 
-! The tool reads the store and does not change it. A store that is empty on both blocks has been wiped or was never written: the board's serial number and UUID are not in this image, and they have to be taken from an earlier dump of this board, if one was kept, or from the sticker.
+! The tool itself changes nothing in the store: an edit is made in a fragment opened with Open Decrypted Block and written back with Update in Parent, and whether the board then boots with the new values has not been confirmed. A store that is empty on both blocks has been wiped or was never written: the board's serial number and UUID are not in this image, and they have to be taken from an earlier dump of this board, if one was kept, or from the sticker.
 
 See also: [[topic:recipe-board-data|Data Unique to a Board]], [[term:dmi|DMI]].

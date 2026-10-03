@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import ByteRipperCore
 import Localization
+import PartCodec
 import UEFIImage
 
 /// Where an untitled tab's bytes came from: a part of another open document — a
@@ -22,24 +23,13 @@ import UEFIImage
         case sourceChanged
     }
 
-    /// How the tab's bytes stand to the source.
-    enum Kind: Equatable {
-        /// The source's own bytes, copied out: a zone, a part a tool-module
-        /// took. They go back as they are.
-        case copy
-        /// What the source decompresses to: it goes back compressed again.
-        case decompressed
-    }
-
     /// What putting the tab back would do, or why it cannot — decided before a
     /// byte is written.
-    enum Update: Equatable {
-        /// `bytes` over the parent at `offset`; `confirm` when the source has
-        /// changed there since, and the overwrite has to be asked for.
-        case overwrite(offset: UInt64, bytes: [UInt8], confirm: Bool)
-        /// `bytes` through the rebuild planner (§6) — a decompressed body, or a
-        /// zone that is a structure of the image, of whatever length.
-        case rebuild(target: UEFIRebuild.Target, bytes: [UInt8], confirm: Bool)
+    enum Update {
+        /// `bytes` — the tab's content — through the codec (§3); `confirm`
+        /// when the source has changed in the parent since, and overwriting it
+        /// has to be asked for.
+        case encode(codec: any PartCodec, bytes: [UInt8], confirm: Bool)
         case refused(title: String, message: String)
     }
 
@@ -54,10 +44,10 @@ import UEFIImage
     /// What the bytes are, for a tool-module opened on the tab (§2.1): a
     /// decompressed body is a run of sections, not an image to scan.
     let layout: UEFIRootLayout
-    let kind: Kind
-    /// Where the bytes go back to through the rebuild planner, when the part is
-    /// something the image's structure can be laid out again around.
-    let rebuildTarget: UEFIRebuild.Target?
+    /// What the tab's bytes are to the source's, both ways: a copy, a body
+    /// decompressed, a block decrypted. The whole of what Update in Parent
+    /// does is its `encode`.
+    let codec: any PartCodec
 
     /// The tab's bytes as they were taken out: what its bytes read as modified
     /// against, and what Revert to Original goes back to. It does not move on
@@ -81,8 +71,7 @@ import UEFIImage
         source: Range<UInt64>,
         partName: String,
         layout: UEFIRootLayout,
-        kind: Kind = .copy,
-        rebuildTarget: UEFIRebuild.Target? = nil,
+        codec: (any PartCodec)? = nil,
         content: [UInt8]
     ) {
         guard let document = parent.document else { return nil }
@@ -91,8 +80,7 @@ import UEFIImage
         sourceRange = source
         self.partName = partName
         self.layout = layout
-        self.kind = kind
-        self.rebuildTarget = rebuildTarget
+        self.codec = codec ?? CopyPartCodec()
         fingerprint = Self.digest(of: source, in: document)
         // Shares the array the tab's own storage was built from: nothing is
         // copied until one of them is written, and neither ever is.
@@ -147,9 +135,9 @@ import UEFIImage
         return changed
     }
 
-    /// What Update in Parent would do with `child`'s bytes (§3, §4): through
-    /// the rebuild planner when the part is a structure of the image, the same
-    /// length back over the source otherwise, or a refusal that says why.
+    /// What Update in Parent would do with `child`'s bytes (§3, §4): hand them
+    /// to the codec, or a refusal that says why there is nothing to hand them
+    /// to.
     func planUpdate(from child: PaneViewModel) -> Update {
         guard let parent, state != .parentClosed else {
             return .refused(
@@ -168,23 +156,7 @@ import UEFIImage
         else {
             return .refused(title: L("The tab could not be read"), message: L("Nothing was changed in %1$@.", parentName))
         }
-        if let rebuildTarget {
-            return .rebuild(target: rebuildTarget, bytes: bytes, confirm: state == .sourceChanged)
-        }
-        guard kind == .copy else {
-            return .refused(
-                title: L("This cannot be put back"),
-                message: L("These bytes were decompressed from “%1$@” in %2$@, and where they belong in it was not recorded when the tab was opened.", partName, parentName)
-            )
-        }
-        guard UInt64(bytes.count) == UInt64(sourceRange.count) else {
-            return .refused(
-                title: L("The length changed"),
-                message: L("“%1$@” is %2$@ bytes in %3$@, and this tab is %4$@. A part goes back only at its own length: another length would shift every byte after it, and the file structure may be affected.",
-                           partName, Self.hex(sourceRange.count), parentName, Self.hex(bytes.count))
-            )
-        }
-        return .overwrite(offset: sourceRange.lowerBound, bytes: bytes, confirm: state == .sourceChanged)
+        return .encode(codec: codec, bytes: bytes, confirm: state == .sourceChanged)
     }
 
     /// The link's verdicts before an update, to put back if the write fails.
@@ -223,7 +195,4 @@ import UEFIImage
         return SHA256.hash(data: bytes)
     }
 
-    private static func hex<T: BinaryInteger>(_ value: T) -> String {
-        "0x" + String(value, radix: 16, uppercase: true)
-    }
 }

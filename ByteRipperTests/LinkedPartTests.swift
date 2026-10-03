@@ -1,4 +1,5 @@
 import XCTest
+import UEFIContentSource
 import ToolModuleKit
 import UEFIImage
 @testable import ByteRipper
@@ -604,7 +605,8 @@ final class LinkedPartTests: XCTestCase {
         _ = item.target?.perform(item.action, with: item)
         let part = try openedPart(in: controller)
         let pane = part
-        XCTAssertEqual(pane.origin?.rebuildTarget, .init(space: .file, range: 0x48..<0x8C))
+        XCTAssertEqual((pane.origin?.codec as? UEFIPartCodec)?.target,
+                       UEFIRebuild.Target(space: .file, range: 0x48..<0x8C))
 
         // The raw section's first payload byte.
         try patch(part, at: 0x34, with: 0x00)

@@ -1,4 +1,5 @@
 import Foundation
+import PartCodec
 
 /// The open file, as the tool-module bound to it is allowed to see it: read it,
 /// write it, say what the dump should draw and what just happened, and send the
@@ -105,16 +106,21 @@ import Foundation
     /// the write fails.
     func exportFile(_ bytes: [UInt8], suggestedName: String) async -> Bool
 
-    /// Opens bytes taken out of this file — a part of it, or what a compressed
-    /// section decompressed to — as a panel over the file they came out of: an
-    /// untitled copy the user can study as a file, which editing cannot reach
-    /// back into the dump, linked to `source`, the bytes of this file they came
-    /// out of (`Design/UEFI/UPDATE_IN_PARENT.md` §2,
-    /// `Design/FRAGMENT_PANELS_PLAN.md`).
+    /// Opens a part of this file as a panel over it, linked to `source`
+    /// (`Design/FRAGMENT_PANELS_PLAN.md`, `Design/UEFI/UPDATE_IN_PARENT.md`).
+    ///
+    /// `codec` is the whole of what the part is: what the panel shows is what
+    /// it decodes from `source`, and what Update in Parent writes back is what
+    /// it encodes from the panel. A copy, a body decompressed, a block
+    /// decrypted — each is a codec, and the host opens and puts back all of
+    /// them the same way.
+    ///
+    /// The app opens parts of its own accord too — a zone, a selection — and
+    /// this is the same opening: the tool-module only supplies the codec.
     ///
     /// Where it opens is the app's business, not the tool-module's — which is
     /// why this is named after what it opens rather than after where.
-    func openPart(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>)
+    func openPart(named name: String, linkedTo source: Range<UInt64>, codec: any PartCodec)
 
     /// The reader is about to choose something else in the panel on purpose —
     /// a click on a row, a search match, a Go To from a row — and the place

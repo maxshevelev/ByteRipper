@@ -1,5 +1,6 @@
 import Foundation
 import Localization
+import PartCodec
 
 /// What an entry's bytes say, read the way its type is known to be read.
 public enum LenovoDMIValue {
@@ -121,5 +122,90 @@ public enum LenovoDMIEdit {
         }
         guard !written.isEmpty else { throw Refusal.noSuchEntry }
         return (writes, written)
+    }
+}
+
+/// A whole block in the clear, and the way back.
+///
+/// The decrypted block is the header as stored and the body decoded: what a
+/// technician reads in the hex view — the serial number as text — and can
+/// edit in place. Putting it back encrypts the body again with the key in the
+/// header and writes the checksum the encrypted body adds up to, so the block
+/// that lands in the file is one the firmware reads.
+public enum LenovoDMIDecryptedBlock {
+    /// Whether the block can be opened decrypted: signed, holding something,
+    /// and stored in a way that was recognised. A block whose entries parse
+    /// under neither reading is not decrypted on a guess.
+    public static func canOpen(_ block: LENVBlock) -> Bool {
+        block.hasSignature && !block.isBlank && block.encoding != .undetermined
+    }
+
+    /// The block with its body decoded.
+    public static func decrypt(_ block: LENVBlock) -> [UInt8] {
+        let header = Array(block.stored[..<LenovoDMIFormat.lenvHeaderSize])
+        return header + block.storedBody.xored(with: block.effectiveKey)
+    }
+
+    /// What the file gets back for `bytes`, a block in the clear: the body
+    /// XORed with the key byte of `bytes`' own header — so a key changed in
+    /// the panel is the key the block is written under — unless `encrypts` is
+    /// false, for a block that was stored in the clear and stays so, and the
+    /// checksum of the body as it will be stored.
+    public static func encrypt(_ bytes: [UInt8], encrypts: Bool) throws -> [UInt8] {
+        guard bytes.count == Int(LenovoDMIFormat.lenvSize) else {
+            throw LenovoDMIEdit.Refusal.lengthChanges(expected: Int(LenovoDMIFormat.lenvSize), got: bytes.count)
+        }
+        let size = LenovoDMIFormat.lenvHeaderSize
+        let key = encrypts ? bytes[0x0D] : 0
+        let body = Array(bytes[size...]).xored(with: key)
+        var header = Array(bytes[..<size])
+        header.replaceSubrange(0x0E..<0x10, with: LE.bytes16(body.sum16))
+        return header + body
+    }
+}
+
+/// A `LENV` block opened in the clear and put back encrypted: the codec Open
+/// Decrypted Block hands the app.
+///
+/// Decoding takes the block as the file holds it now and decrypts the body;
+/// encoding encrypts it again with the key in the panel's own header and
+/// writes the checksum. Byte `n` of the panel is byte `n` of the block, so the
+/// parent's bookmarks reach it.
+public struct LenovoDMIBlockCodec: PartCodec {
+    /// False for a block that was stored in the clear: it goes back the same
+    /// way, with only its checksum recomputed.
+    public var encrypts: Bool
+    public var key: UInt8
+
+    public init(block: LENVBlock) {
+        encrypts = block.encoding != .plain
+        key = block.xorKey
+    }
+
+    public func decode(_ parent: PartParent) throws -> [UInt8] {
+        let stored = try parent.sourceBytes()
+        guard stored.count == Int(LenovoDMIFormat.lenvSize) else {
+            throw PartRefusal(title: L("Those bytes could not be read."),
+                              message: L("A LENV block is %1$@ bytes, and goes back only at that length.", "0x1000"))
+        }
+        let block = LENVBlock(offset: parent.source.lowerBound, stored: stored)
+        return LenovoDMIDecryptedBlock.decrypt(block)
+    }
+
+    public func encode(_ part: [UInt8], into parent: PartParent) throws -> PartUpdate {
+        guard part.count == Int(LenovoDMIFormat.lenvSize), parent.source.count == part.count else {
+            throw PartRefusal.lengthChanged(part: parent.partName, parent: parent.name,
+                                            source: parent.source.count, now: part.count)
+        }
+        return .overwriting(parent.source, with: try LenovoDMIDecryptedBlock.encrypt(part, encrypts: encrypts))
+    }
+
+    public var badge: PartBadge? {
+        guard encrypts else {
+            return PartBadge(L("Unencrypted", context: "part badge"),
+                             explanation: L("A LENV block stored in the clear. Update in Parent recomputes its checksum."))
+        }
+        return PartBadge("XOR " + String(format: "%02X", key),
+                         explanation: L("Decrypted from the file. Update in Parent encrypts it again with the key in its header and recomputes the checksum."))
     }
 }

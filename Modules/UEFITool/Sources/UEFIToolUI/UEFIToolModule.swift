@@ -1,6 +1,7 @@
 import AppKit
 import HelpBook
 import Localization
+import PartCodec
 import MEFirmware
 import MEPresentation
 import MEReads
@@ -1526,19 +1527,31 @@ private struct ChecksumPass: Sendable {
                 source = UEFIPresenter.fileSource(of: node, in: image)
             }
         }
-        let chosenSource = source
-        withDecompressedBytes(of: nodeID, nothing: L("There is nothing decompressed to open here.")) {
-            [weak self] decompressed, bytes in
-            guard let self, let source = chosenSource else { return }
-            let name = decompressed.tabName(fileName: self.host.fileName)
-            if let provider = self.treeProvider {
-                // Where the bytes go back to: the whole buffer, a run of
-                // sections (`UPDATE_IN_PARENT.md` §6).
-                provider.openPart(bytes, named: name, linkedTo: source, layout: decompressed.layout,
-                                  part: UEFIRebuild.Target(space: decompressed.space))
-            } else {
-                self.host.openPart(bytes, named: name, linkedTo: source)
-            }
+        guard let tree, tree.isReady, let node = tree.image().node(nodeID),
+              let decompressed = UEFIPresenter.decompressedBody(for: node), let source
+        else {
+            fail(L("There is nothing decompressed to open here."))
+            return
+        }
+        // Where the bytes go back to: the whole buffer, a run of sections
+        // (`UPDATE_IN_PARENT.md` §6). The codec decompresses them for the
+        // panel and compresses them again on the way back.
+        let codec = UEFIPartCodec(
+            target: UEFIRebuild.Target(space: decompressed.space),
+            compression: UEFIPresenter.compressionName(of: decompressed.space, in: tree.image()),
+            readers: tree.spaceReaders
+        )
+        openPart(named: decompressed.tabName(fileName: host.fileName), linkedTo: source,
+                 layout: decompressed.layout, codec: codec)
+    }
+
+    /// A part through the host: told its layout when the host can take it.
+    private func openPart(named name: String, linkedTo source: Range<UInt64>,
+                          layout: UEFIRootLayout, codec: any PartCodec) {
+        if let opener = host as? any UEFIPartOpening {
+            opener.openPart(named: name, linkedTo: source, layout: layout, codec: codec)
+        } else {
+            host.openPart(named: name, linkedTo: source, codec: codec)
         }
     }
 
@@ -1572,7 +1585,11 @@ private struct ChecksumPass: Sendable {
                 self.fail(L("The variable does not decompress."))
                 return
             }
-            self.host.openPart(text, named: name, linkedTo: source)
+            self.host.openPart(named: name, linkedTo: source, codec: ReadOnlyPartCodec(
+                text,
+                title: L("This cannot be put back"),
+                reason: L("This is the text the variable unpacks to, and nothing here packs it again.")
+            ))
         }
     }
 
@@ -1612,31 +1629,21 @@ private struct ChecksumPass: Sendable {
             fail(L("There is nothing to open here."))
             return
         }
-        let readers = tree.spaceReaders
-        let name = open.partName(fileName: host.fileName)
-        controller.showBusy()
-        Task { [weak self] in
-            let bytes = await UEFIToolSession.bytes(of: open, readers: readers)
-            guard let self else { return }
-            self.controller.endBusy()
-            guard let bytes, !bytes.isEmpty else {
-                self.fail(L("Those bytes could not be read."))
-                return
-            }
-            guard let provider = self.treeProvider else {
-                self.host.openPart(bytes, named: name, linkedTo: open.source)
-                return
-            }
-            if open.space == .file {
-                provider.openFilePart(bytes, named: name, linkedTo: open.source,
-                                      layout: open.layout, part: open.rebuild)
-            } else {
-                provider.openPart(bytes, named: name, linkedTo: open.source,
-                                  layout: open.layout,
-                                  part: open.rebuild ?? UEFIRebuild.Target(space: open.space,
-                                                                           range: open.range))
-            }
+        // The file's own bytes go back as they are, or through the planner
+        // when the node is a structure it lays out again; bytes of a buffer a
+        // compressed section opened to go back through that section.
+        let codec: any PartCodec
+        if open.space == .file, open.rebuild == nil {
+            codec = CopyPartCodec()
+        } else {
+            codec = UEFIPartCodec(
+                target: open.rebuild ?? UEFIRebuild.Target(space: open.space, range: open.range),
+                compression: UEFIPresenter.compressionName(of: open.space, in: tree.image()),
+                readers: tree.spaceReaders
+            )
         }
+        openPart(named: open.partName(fileName: host.fileName), linkedTo: open.source,
+                 layout: open.layout, codec: codec)
     }
 
     /// Saves a node of the tree — or its body alone — to a file: the bytes

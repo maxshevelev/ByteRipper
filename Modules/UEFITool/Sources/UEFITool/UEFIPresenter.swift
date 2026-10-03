@@ -255,6 +255,22 @@ public enum UEFIPresenter {
         }
     }
 
+    /// What the buffer `space` was compressed with — `LZMA`, `Tiano`, `Zlib` —
+    /// read off the node it is the body of: the innermost one, which is what
+    /// the panel's bytes came straight out of. `BIOS Guard` for a region a
+    /// BIOS Guard update assembles. Nil for the file.
+    public static func compressionName(of space: ByteSpace, in image: UEFIImage) -> String? {
+        guard case .decompressed(let chain) = space, let last = chain.last else { return nil }
+        let parent: ByteSpace = chain.count == 1 ? .file : .decompressed(chain: Array(chain.dropLast()))
+        guard let holder = image.allNodes.first(where: {
+            $0.space == parent && $0.header.lowerBound == last
+        }) else { return nil }
+        // A BIOS Guard update's region is assembled from its blocks, not
+        // decompressed, and its badge says what it is.
+        if holder.kind == .biosGuardUpdate { return "BIOS Guard" }
+        return holder.compression?.algorithm
+    }
+
     /// A compressed section offers everything it decompresses to — one that
     /// opened, and one still closed that would: the row already says it is
     /// compressed, and the buffer is decoded when it is read. A node inside a
