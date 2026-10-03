@@ -1,4 +1,4 @@
-@source-sha 8929fbf2d491e916afec4f28e4c2331c84c798fc520a5cd9b96d8c95e61a730d
+@source-sha 933d96bebf32059342b0cf18e373c5c78ba9d70b43ffdd32fe8ba0cc86889573
 # Lenovo DMI
 
 > Der Speicher, in dem die Firmware Lenovo InsydeH2O die Identität eines Geräts ablegt – Seriennummer, UUID, Maschinentyp und Modell, Windows-Schlüssel –, dekodiert und ausgewertet.
@@ -20,7 +20,7 @@ Findet das Werkzeug keinen Speicher, sagt das Panel dies. Das Image stammt dann 
 - **Die Detailliste** unter dem Baum beschreibt die ausgewählte Zeile. Das `?` neben ihrem Namen erklärt den Begriff.
 - **Die Hinweise** unter der Detailliste melden einen leeren Speicher, eine nicht stimmende Prüfsumme oder voneinander abweichende Blöcke.
 
-Im Dump wird nur die ausgewählte Zeile umrahmt: das ganze Protokoll, ein ganzer Block oder ein einzelner Eintrag. Solange nichts ausgewählt ist, erscheint kein Rahmen.
+Im Dump wird nur die ausgewählte Zeile als aktive Zone umrahmt. Bei einem Eintrag eines Blocks oder einem Ereignis des Protokolls wird zusätzlich der umgebende Block bzw. das Protokoll als inaktive Zone umrahmt, sodass der Dump sowohl die Bytes zeigt als auch, wozu sie gehören. Solange nichts ausgewählt ist, erscheint kein Rahmen.
 
 Ein Doppelklick auf eine Zeile oder **Im Dump auswählen** in ihrem Kontextmenü wählt ihre Bytes im Dump aus. **Wert kopieren** legt den Wert so, wie das Panel ihn anzeigt, in die Zwischenablage.
 

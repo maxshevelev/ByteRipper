@@ -135,7 +135,8 @@ final class LenovoDMIToolFlowTests: XCTestCase {
 
         let pane = controller.windowModel.pane1
         XCTAssertEqual(pane.zones.focus, "a0.lenv2.0")
-        XCTAssertEqual(pane.zones.zones.map(\.range), [0x4010..<0x4030])
+        XCTAssertEqual(pane.zones.zones.map(\.range), [0x4000..<0x5000, 0x4010..<0x4030],
+                       "the entry, inside its block")
         let outline = try outline()
         XCTAssertEqual(outline.numberOfRows, 4, "block 2 is opened")
         XCTAssertEqual(outline.selectedRow, 3)

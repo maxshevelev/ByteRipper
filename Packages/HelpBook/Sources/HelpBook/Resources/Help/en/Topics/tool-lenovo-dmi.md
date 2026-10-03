@@ -24,7 +24,7 @@ If the tool finds no store, the panel says so. Either the image belongs to anoth
 - **The detail list** under the tree describes the row in focus. The `?` beside its name explains the term.
 - **The findings** under the detail list: an empty store, a checksum that does not match, blocks that disagree.
 
-Only the selected row is outlined in the dump: the whole log, a whole block, or one entry. Nothing is outlined while no row is selected.
+Only the selected row is outlined in the dump, as the active zone. For an entry of a block or a record of the log, the block or the log around it is outlined as well, as an inactive zone, so the dump shows both the bytes and what they belong to. Nothing is outlined while no row is selected.
 
 Double-clicking a row, or **Select in Dump** on its context menu, selects its bytes in the dump. **Copy Value** puts the value as the panel reads it on the clipboard.
 

@@ -89,16 +89,22 @@ public struct LenovoDMIDisplay: Equatable, Sendable {
         rows.first { $0.id == id || $0.children.contains { $0.id == id } }
     }
 
-    /// What the dump draws with `focus` selected: the row in focus and
-    /// nothing else. Outlines around every part and every entry at once are a
-    /// lattice over a few kilobytes that says nothing the tree does not, and
-    /// the one the reader picked is lost in it. Nothing in focus, nothing
+    /// What the dump draws with `focus` selected: the row in focus as the
+    /// active zone, and — for an entry or a log record — the block or the log
+    /// it is in as an inactive one around it, so the reader sees both where
+    /// the bytes are and what they belong to. Outlines around every part and
+    /// every entry at once are a lattice over a few kilobytes that says nothing
+    /// the tree does not, so nothing else is drawn. Nothing in focus, nothing
     /// drawn.
     public func zones(focus: String?) -> ZoneMap {
         guard let focus, let row = row(focus) else { return .empty }
-        let parent = parent(of: focus)
-        let name = parent.map { $0.id == focus ? row.name : $0.name + " · " + row.name } ?? row.name
-        return ZoneMap(zones: [Zone(id: row.id, name: name, range: row.range)], focus: focus)
+        guard let parent = parent(of: focus), parent.id != focus else {
+            return ZoneMap(zones: [Zone(id: row.id, name: row.name, range: row.range)], focus: focus)
+        }
+        return ZoneMap(zones: [
+            Zone(id: parent.id, name: parent.name, range: parent.range),
+            Zone(id: row.id, name: parent.name + " · " + row.name, range: row.range)
+        ], focus: focus)
     }
 }
 

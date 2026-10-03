@@ -108,15 +108,20 @@ final class LenovoDMIPresenterTests: XCTestCase {
         XCTAssertEqual(display.rows, [])
     }
 
-    /// Only the row in focus is drawn — nothing when nothing is.
+    /// The row in focus is the active zone and its block the inactive one
+    /// around it; a block or the log on its own is drawn alone; nothing when
+    /// nothing is in focus.
     func testOnlyTheRowInFocusIsAZone() {
         let display = standard
         XCTAssertEqual(display.zones(focus: nil), .empty)
+        // An entry is the active zone, inside its block as an inactive one.
         let entry = display.zones(focus: "a0.lenv1.0")
         XCTAssertEqual(entry.focus, "a0.lenv1.0")
-        XCTAssertEqual(entry.zones.map(\.id), ["a0.lenv1.0"])
-        XCTAssertEqual(entry.zones[0].name, "LENV block 1 · Baseboard serial number")
-        XCTAssertEqual(entry.zones[0].range, 0x3010..<0x3030)
+        XCTAssertEqual(entry.zones.map(\.id), ["a0.lenv1", "a0.lenv1.0"])
+        XCTAssertEqual(entry.zones[0].range, 0x3000..<0x4000)
+        XCTAssertEqual(entry.zones[1].name, "LENV block 1 · Baseboard serial number")
+        XCTAssertEqual(entry.zones[1].range, 0x3010..<0x3030)
+        XCTAssertEqual(display.zones(focus: "a0.log.0").zones.map(\.id), ["a0.log", "a0.log.0"])
         let block = display.zones(focus: "a0.lenv2")
         XCTAssertEqual(block.zones.map(\.name), ["LENV block 2"])
         XCTAssertEqual(block.zones[0].range, 0x4000..<0x5000)
@@ -159,6 +164,6 @@ final class LenovoDMIPresenterTests: XCTestCase {
         XCTAssertTrue(checksum.value.hasSuffix("(Valid for the body encoded again)"))
         XCTAssertNil(display.rows[0].fields.first { $0.label == "Firmware reads it" },
                      "a lone block is not one of two to choose from")
-        XCTAssertEqual(display.zones(focus: "b0.1").zones.map(\.range), [0x30..<0x52])
+        XCTAssertEqual(display.zones(focus: "b0.1").zones.map(\.range), [0..<0x1000, 0x30..<0x52])
     }
 }
