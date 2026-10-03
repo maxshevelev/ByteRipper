@@ -52,9 +52,22 @@ The command is offered for a block that holds entries and whose encoding was rec
 
 ## The entries
 
-An entry is filed under a namespace and a type. For the SMBIOS namespace the following types are known: the Windows key, the OA3 key ID, the motherboard name, the machine type and model (MTM), the baseboard serial number, the system UUID, the baseboard platform ID and the OS preload suffix. The panel names these and shows their values as text, the UUID in the byte order SMBIOS uses. The Windows key entry holds the key behind a 20-byte header — the licensing data of the ACPI [[term:slic|MSDM]] table: a 16-byte signature, `01000000 00000000 01000000 00000000`, and the key's length. The value shown is the key alone, and the header is described in the detail list under **Key header**. The key is separated from the header only when the signature is there and the length it gives is the number of bytes that follow; otherwise the entry is shown as bytes and marked as a problem, and **Key header** says which of the two did not hold.
+An entry is filed under a namespace and a type. For the SMBIOS namespace the following types are known: the Windows key, the OA3 key ID, the motherboard name, the machine type and model (MTM), the baseboard serial number, the system UUID, the baseboard platform ID and the OS preload suffix. The panel names these and shows their values as text, the UUID in the byte order SMBIOS uses.
 
 Real images carry further types whose meaning has not been documented. The panel calls them unknown, gives their type number and shows the value as text where every byte is printable and as hex otherwise. The flags of an entry, and two fields of every entry that are zero on all images examined, are shown as they are.
+
+## The Windows key entry
+
+The Windows key entry holds the product key behind a 20-byte header. The header is the licensing structure of the ACPI [[term:slic|MSDM]] table, as Microsoft's specification ([[web:https://learn.microsoft.com/en-us/previous-versions/windows/hardware/design/dn653305(v=vs.85)|Microsoft Software Licensing Tables (SLIC and MSDM)]]) defines it and the Firmware Test Suite checks it ([[web:https://lists.ubuntu.com/archives/fwts-devel/2015-July/006546.html|fwts MSDM test]]). All fields are 32-bit, little-endian:
+
+- **Version** — 1 on every dump examined; the test suite does not check it.
+- **Reserved** — zero.
+- **Data type** — 1, a product key.
+- **Data reserved** — zero.
+- **Data length** — 29 (`1D000000`), the length of the key.
+- **Data** — the key itself, `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`.
+
+The first 16 bytes are therefore always `01000000 00000000 01000000 00000000`, and the panel treats them as a signature. The value shown is the key alone; the header is described in the detail list under **Key header**. The key is separated from the header only when the signature is there and the length the header gives is the number of bytes that follow; otherwise the entry is shown as bytes and marked as a problem, and **Key header** says which of the two did not hold.
 
 ## The change log
 
@@ -62,7 +75,7 @@ The log records what the firmware wrote to the store and when: the date and time
 
 ## What is known and what is not
 
-The format was reverse-engineered from `LenovoVariableDxe` by the LenovoDMIDecryptor project and has been checked against real dumps. Where its description and the dumps disagree, the tool follows the dumps: a log record is 32 bytes long, although the field offsets in that description add up to 24, and the year in a log record is a BCD century followed by a BCD year rather than 2000 plus a byte.
+The format was reverse-engineered from `LenovoVariableDxe` by the [[web:https://github.com/Shmurkio/LenovoDMIDecryptor|LenovoDMIDecryptor]] project; the same author's [[web:https://github.com/Shmurkio/LenovoVar|LenovoVar]], which reads and writes the store through the firmware's own protocol, confirms the entry types and the byte order of the UUID. The tool has been checked against real dumps. Where its description and the dumps disagree, the tool follows the dumps: a log record is 32 bytes long, although the field offsets in that description add up to 24, and the year in a log record is a BCD century followed by a BCD year rather than 2000 plus a byte.
 
 Not confirmed: what the write-protect bits of a block and of an entry cause the firmware to do, which of the two block keys the log is encoded with when they differ, and what the unknown types and fields hold.
 

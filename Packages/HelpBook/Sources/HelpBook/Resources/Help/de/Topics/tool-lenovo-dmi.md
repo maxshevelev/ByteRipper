@@ -1,4 +1,4 @@
-@source-sha 5480d62b3e1dcdffb400b171b2c65ebbb02673a126e7effa18411a6dec731a9e
+@source-sha d3aeabbbc3fbf3586a0e989b48535fa4f0bfeb8452c424f03c9197c290e8b9b7
 # Lenovo DMI
 
 > Der Speicher, in dem die Firmware Lenovo InsydeH2O die Identität eines Geräts ablegt – Seriennummer, UUID, Maschinentyp und Modell, Windows-Schlüssel –, dekodiert und ausgewertet.
@@ -48,9 +48,22 @@ Der Befehl steht für einen Block zur Verfügung, der Einträge enthält und des
 
 ## Die Einträge
 
-Ein Eintrag ist durch einen Namensraum und einen Typ bestimmt. Für den Namensraum SMBIOS sind folgende Typen bekannt: der Windows-Schlüssel, die OA3-Schlüssel-ID, die Bezeichnung der Hauptplatine, Maschinentyp und Modell (MTM), die Seriennummer der Hauptplatine, die System-UUID, die Plattform-ID der Hauptplatine und das Suffix des vorinstallierten Betriebssystems. Diese Einträge benennt das Panel und zeigt ihre Werte als Text, die UUID in der Bytereihenfolge von SMBIOS. Im Eintrag des Windows-Schlüssels steht vor dem Schlüssel ein Kopf von 20 Bytes – die Lizenzdaten der ACPI-Tabelle [[term:slic|MSDM]]: eine Signatur von 16 Bytes, `01000000 00000000 01000000 00000000`, und die Länge des Schlüssels. Als Wert erscheint nur der Schlüssel; der Kopf wird in der Detailliste unter **Schlüsselkopf** beschrieben. Der Schlüssel wird nur dann vom Kopf getrennt, wenn die Signatur vorhanden ist und die angegebene Länge der Zahl der folgenden Bytes entspricht; andernfalls wird der Eintrag als Bytes gezeigt und als fehlerhaft markiert, und **Schlüsselkopf** nennt die Bedingung, die nicht erfüllt ist.
+Ein Eintrag ist durch einen Namensraum und einen Typ bestimmt. Für den Namensraum SMBIOS sind folgende Typen bekannt: der Windows-Schlüssel, die OA3-Schlüssel-ID, die Bezeichnung der Hauptplatine, Maschinentyp und Modell (MTM), die Seriennummer der Hauptplatine, die System-UUID, die Plattform-ID der Hauptplatine und das Suffix des vorinstallierten Betriebssystems. Diese Einträge benennt das Panel und zeigt ihre Werte als Text, die UUID in der Bytereihenfolge von SMBIOS.
 
 In realen Images kommen weitere Typen vor, deren Bedeutung nicht dokumentiert ist. Das Panel bezeichnet sie als unbekannt, nennt die Typnummer und zeigt den Wert als Text, sofern alle Bytes druckbar sind, andernfalls hexadezimal. Die Merkmale eines Eintrags und zwei seiner Felder, die in allen untersuchten Images null sind, werden unverändert wiedergegeben.
+
+## Der Eintrag des Windows-Schlüssels
+
+Im Eintrag des Windows-Schlüssels steht vor dem Produktschlüssel ein Kopf von 20 Bytes. Er ist die Lizenzstruktur der ACPI-Tabelle [[term:slic|MSDM]], wie die Spezifikation von Microsoft ([[web:https://learn.microsoft.com/en-us/previous-versions/windows/hardware/design/dn653305(v=vs.85)|Microsoft Software Licensing Tables (SLIC and MSDM)]]) sie festlegt und die Firmware Test Suite sie prüft ([[web:https://lists.ubuntu.com/archives/fwts-devel/2015-July/006546.html|fwts MSDM test]]). Alle Felder sind 32 Bit breit, niederwertiges Byte zuerst:
+
+- **Version** – in allen untersuchten Dumps 1; die Firmware Test Suite prüft sie nicht.
+- **Reserviert** – null.
+- **Datentyp** – 1, ein Produktschlüssel.
+- **Daten reserviert** – null.
+- **Datenlänge** – 29 (`1D000000`), die Länge des Schlüssels.
+- **Daten** – der Schlüssel selbst, `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`.
+
+Die ersten 16 Bytes lauten daher stets `01000000 00000000 01000000 00000000`, und das Panel behandelt sie als Signatur. Als Wert erscheint nur der Schlüssel; der Kopf wird in der Detailliste unter **Schlüsselkopf** beschrieben. Der Schlüssel wird nur dann vom Kopf getrennt, wenn die Signatur vorhanden ist und die angegebene Länge der Zahl der folgenden Bytes entspricht; andernfalls wird der Eintrag als Bytes gezeigt und als fehlerhaft markiert, und **Schlüsselkopf** nennt die Bedingung, die nicht erfüllt ist.
 
 ## Das Änderungsprotokoll
 
@@ -58,7 +71,7 @@ Das Protokoll hält fest, was die Firmware wann in den Speicher geschrieben hat:
 
 ## Was bekannt ist und was nicht
 
-Das Format hat das Projekt LenovoDMIDecryptor aus dem Modul `LenovoVariableDxe` rekonstruiert; es wurde an realen Dumps überprüft. Wo die Beschreibung des Projekts und die Dumps voneinander abweichen, folgt das Werkzeug den Dumps: Ein Protokollereignis ist 32 Bytes lang, obwohl die Feldoffsets der Beschreibung zusammen 24 ergeben, und das Jahr eines Ereignisses ist als BCD-Jahrhundert und BCD-Jahr gespeichert, nicht als 2000 plus ein Byte.
+Das Format hat das Projekt [[web:https://github.com/Shmurkio/LenovoDMIDecryptor|LenovoDMIDecryptor]] aus dem Modul `LenovoVariableDxe` rekonstruiert; das Projekt [[web:https://github.com/Shmurkio/LenovoVar|LenovoVar]] desselben Autors, das den Speicher über das Protokoll der Firmware selbst liest und schreibt, bestätigt die Eintragstypen und die Bytereihenfolge der UUID. Das Werkzeug wurde an realen Dumps überprüft. Wo die Beschreibung des Projekts und die Dumps voneinander abweichen, folgt das Werkzeug den Dumps: Ein Protokollereignis ist 32 Bytes lang, obwohl die Feldoffsets der Beschreibung zusammen 24 ergeben, und das Jahr eines Ereignisses ist als BCD-Jahrhundert und BCD-Jahr gespeichert, nicht als 2000 plus ein Byte.
 
 Nicht bestätigt ist, wie die Firmware auf die Schreibschutzbits eines Blocks und eines Eintrags reagiert, mit welchem der beiden Schlüssel das Protokoll kodiert ist, wenn sich die Schlüssel der Blöcke unterscheiden, und was die unbekannten Typen und Felder enthalten.
 
