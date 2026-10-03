@@ -1368,3 +1368,5 @@
 "LENV block" = "LENV-Block";
 "LENV block at %1$@" = "LENV-Block bei %1$@";
 "The checksum is %1$@, the body adds up to %2$@." = "Die gespeicherte Prüfsumme ist %1$@, der Blockinhalt ergibt %2$@.";
+"Key header" = "Schlüsselkopf";
+"MSDM licensing data: version %1$@, data type %2$@, %3$@ bytes" = "MSDM-Lizenzdaten: Version %1$@, Datentyp %2$@, %3$@ Bytes";

@@ -1368,3 +1368,5 @@
 "LENV block" = "Блок LENV";
 "LENV block at %1$@" = "Блок LENV по адресу %1$@";
 "The checksum is %1$@, the body adds up to %2$@." = "Записанная контрольная сумма %1$@, а содержимое блока даёт %2$@.";
+"Key header" = "Заголовок ключа";
+"MSDM licensing data: version %1$@, data type %2$@, %3$@ bytes" = "Лицензионные данные MSDM: версия %1$@, тип данных %2$@, %3$@ байт";

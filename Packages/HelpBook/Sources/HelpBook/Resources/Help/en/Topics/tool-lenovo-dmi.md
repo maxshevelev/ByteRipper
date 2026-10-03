@@ -52,7 +52,7 @@ The command is offered for a block that holds entries and whose encoding was rec
 
 ## The entries
 
-An entry is filed under a namespace and a type. For the SMBIOS namespace the following types are known: the Windows key, the OA3 key ID, the motherboard name, the machine type and model (MTM), the baseboard serial number, the system UUID, the baseboard platform ID and the OS preload suffix. The panel names these and shows their values as text, the UUID in the byte order SMBIOS uses.
+An entry is filed under a namespace and a type. For the SMBIOS namespace the following types are known: the Windows key, the OA3 key ID, the motherboard name, the machine type and model (MTM), the baseboard serial number, the system UUID, the baseboard platform ID and the OS preload suffix. The panel names these and shows their values as text, the UUID in the byte order SMBIOS uses. The Windows key entry holds the key behind a 20-byte header — the licensing data of the ACPI [[term:slic|MSDM]] table: version, data type and the key's length; the value shown is the key alone, and the header is given in the detail list under **Key header**.
 
 Real images carry further types whose meaning has not been documented. The panel calls them unknown, gives their type number and shows the value as text where every byte is printable and as hex otherwise. The flags of an entry, and two fields of every entry that are zero on all images examined, are shown as they are.
 

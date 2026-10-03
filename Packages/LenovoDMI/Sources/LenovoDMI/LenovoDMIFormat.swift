@@ -116,7 +116,7 @@ public enum LenovoDMIKnownType: UInt16, CaseIterable, Sendable {
     public var reading: LenovoDMIValue.Reading {
         switch self {
         case .systemUUID: return .uuid
-        case .windowsKey: return .bytes
+        case .windowsKey: return .windowsKey
         default: return .text
         }
     }

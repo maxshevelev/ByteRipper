@@ -8,6 +8,34 @@ public enum LenovoDMIValue {
         case text
         case uuid
         case bytes
+        /// The key after the header the ACPI `MSDM` table gives it.
+        case windowsKey
+    }
+
+    /// The Windows key entry, read: the 20-byte header of the licensing data
+    /// in the ACPI `MSDM` table — version, a reserved field, data type, a
+    /// reserved field, data length — and the key after it.
+    ///
+    /// Every dump examined holds `01 … 01 … 1D 00 00 00` and a 29-character
+    /// key, `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX`. Read only when the length in the
+    /// header is the length of what follows it; anything else is shown as
+    /// bytes rather than guessed at.
+    public struct WindowsKey: Equatable, Sendable {
+        public var version: UInt32
+        public var dataType: UInt32
+        public var key: String
+        public static let headerSize = 20
+
+        public init?(_ data: [UInt8]) {
+            guard data.count > Self.headerSize,
+                  LE.u32(data, 16) == UInt32(data.count - Self.headerSize)
+            else { return nil }
+            let key = Array(data[Self.headerSize...])
+            guard key.allSatisfy({ (0x20...0x7E).contains($0) }) else { return nil }
+            version = LE.u32(data, 0)
+            dataType = LE.u32(data, 8)
+            self.key = String(decoding: key, as: UTF8.self)
+        }
     }
 
     /// The value in one line: text without its padding, a UUID, or hex.
@@ -22,6 +50,8 @@ public enum LenovoDMIValue {
             return String(decoding: trimmed(entry.data), as: UTF8.self)
         case .uuid where entry.data.count == 16:
             return uuid(entry.data)
+        case .windowsKey:
+            return WindowsKey(entry.data)?.key ?? hex(entry.data)
         default:
             return hex(entry.data)
         }

@@ -411,3 +411,27 @@ final class BlockOnItsOwnTests: XCTestCase {
         XCTAssertEqual(LenovoDMI.read(image).blocks, [])
     }
 }
+
+final class WindowsKeyTests: XCTestCase {
+    private let header: [UInt8] = [1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0x1D, 0, 0, 0]
+    private let key = "ABCDE-FGHIJ-KLMNO-PQRST-UVWXY"
+
+    private func entry(_ data: [UInt8]) -> LENVEntry {
+        LENVEntry(index: 0, offset: 0, key: .smbios(0x0001), flags: 0, unknown1: 0, unknown2: 0, data: data)
+    }
+
+    /// The value is the key alone, without the MSDM header in front of it.
+    func testTheValueIsTheKeyWithoutItsHeader() {
+        XCTAssertEqual(LenovoDMIValue.text(of: entry(header + Array(key.utf8))), key)
+        let read = LenovoDMIValue.WindowsKey(header + Array(key.utf8))
+        XCTAssertEqual(read?.version, 1)
+        XCTAssertEqual(read?.dataType, 1)
+    }
+
+    /// A header whose length does not match what follows is not guessed at.
+    func testALengthThatDoesNotMatchIsShownAsBytes() {
+        let short = header + Array(key.utf8.dropLast())
+        XCTAssertNil(LenovoDMIValue.WindowsKey(short))
+        XCTAssertEqual(LenovoDMIValue.text(of: entry(short)), LenovoDMIValue.hex(short))
+    }
+}

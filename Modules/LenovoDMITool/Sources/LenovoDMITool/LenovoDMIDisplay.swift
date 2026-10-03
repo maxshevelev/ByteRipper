@@ -384,6 +384,13 @@ public enum LenovoDMIPresenter {
             LenovoDMIField(L("Offset"), hex(entry.offset, 8)),
             LenovoDMIField(L("Value at"), hex(entry.dataRange.lowerBound, 8))
         ]
+        if entry.knownType == .windowsKey, let key = LenovoDMIValue.WindowsKey(entry.data) {
+            fields.insert(LenovoDMIField(
+                L("Key header"),
+                L("MSDM licensing data: version %1$@, data type %2$@, %3$@ bytes",
+                  key.version, key.dataType, entry.data.count - LenovoDMIValue.WindowsKey.headerSize)
+            ), at: 1)
+        }
         if let other {
             let text: String
             switch other.entry(entry.key)?.data {
