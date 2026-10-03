@@ -43,6 +43,13 @@ enum AboutCredits {
             profile: URL(string: "https://github.com/platomav")!,
             taken: L("The catalogue of CPU microcodes the FIT tool's picker offers.")
         ),
+        Project(
+            name: "LenovoDMIDecryptor",
+            author: "Shmurkio",
+            repository: URL(string: "https://github.com/Shmurkio/LenovoDMIDecryptor")!,
+            profile: URL(string: "https://github.com/Shmurkio")!,
+            taken: L("The format of the Lenovo DMI store — the LENV blocks, their encryption and checksum, and the LDBG change log — which the Lenovo DMI tool reads.")
+        ),
     ]
 
     /// The credits the About panel shows, centred, one short block per project.

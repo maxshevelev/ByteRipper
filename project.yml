@@ -89,6 +89,12 @@ packages:
     path: Modules/UEFITool
   MEATool:
     path: Modules/MEATool
+  # The Lenovo identity store's format and parse. Only LenovoDMITool links it;
+  # listed so Xcode can see it.
+  LenovoDMI:
+    path: Packages/LenovoDMI
+  LenovoDMITool:
+    path: Modules/LenovoDMITool
 
 targets:
   ByteRipper:
@@ -143,6 +149,8 @@ targets:
         product: UEFIToolUI
       - package: MEATool
         product: MEAToolUI
+      - package: LenovoDMITool
+        product: LenovoDMIToolUI
     # No entitlements, and so no entitlements file: the app is not sandboxed
     # (issue #30). It is not going to the App Store, and the sandbox took away
     # what a workshop tool needs — reading a dump by path that nobody picked in
@@ -293,6 +301,10 @@ targets:
         product: MEFirmware
       - package: MEATool
         product: MEAToolUI
+      - package: LenovoDMITool
+        product: LenovoDMITool
+      - package: LenovoDMITool
+        product: LenovoDMIToolUI
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.maxik.ByteRipperTests

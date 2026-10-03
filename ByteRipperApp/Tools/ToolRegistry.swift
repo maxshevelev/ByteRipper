@@ -1,5 +1,6 @@
 import FITToolUI
 import Foundation
+import LenovoDMIToolUI
 import MEAToolUI
 import ToolModuleKit
 import UEFIToolUI
@@ -22,7 +23,7 @@ enum ToolRegistry {
     /// them. One line per module; the package it comes from is a line in
     /// `project.yml`.
     static let shipping: [any ToolModule.Type] =
-        [MEAToolModule.self, FITToolModule.self, UEFIToolModule.self]
+        [MEAToolModule.self, FITToolModule.self, UEFIToolModule.self, LenovoDMIToolModule.self]
 
     /// What this build offers: the shipping ones, and — in a debug build only —
     /// Zone Sketch.
