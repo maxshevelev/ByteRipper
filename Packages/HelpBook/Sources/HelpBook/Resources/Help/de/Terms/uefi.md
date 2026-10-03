@@ -464,7 +464,7 @@ Verlorene Felder sind nicht immer endgültig verloren. Einige Hersteller — dar
 
 Wo diese Felder im Abbild stehen, ist nicht standardisiert. Jeder Hersteller legt sie dorthin, wo er will, und die Aufteilung wandert von Generation zu Generation; im Allgemeinen läuft das Übertragen deshalb auf den Vergleich zweier Abbilder hinaus.
 
-Eine Ausnahme, die das Programm lesen kann, ist die Firmware Lenovo InsydeH2O. Sie hält diese Felder in einem eigenen, verschlüsselten Speicher, den [[term:lenv|LENV]]-Blöcken, die **Werkzeuge ▸ Lenovo DMI** entschlüsselt und anzeigt ([[topic:tool-lenovo-dmi|Lenovo DMI]]).
+Eine Ausnahme, die das Programm lesen kann, ist die Firmware Lenovo InsydeH2O. Sie hält diese Felder in einem eigenen, kodierten Speicher, den [[term:lenv|LENV]]-Blöcken, die **Werkzeuge ▸ Lenovo DMI** dekodiert und anzeigt ([[topic:tool-lenovo-dmi|Lenovo DMI]]).
 
 @see term:serial-data
 @see term:lenv
@@ -472,13 +472,13 @@ Eine Ausnahme, die das Programm lesen kann, ist die Firmware Lenovo InsydeH2O. S
 
 @term lenv
 @name LENV-Block
-@short Eine der beiden Kopien des Lenovo-Identitätsspeichers: Seriennummer, UUID, Maschinentyp und Modell sowie Windows-Schlüssel, verschlüsselt.
+@short Eine der beiden Kopien des Lenovo-Identitätsspeichers: Seriennummer, UUID, Maschinentyp und Modell sowie Windows-Schlüssel, kodiert.
 
-Die Firmware Lenovo InsydeH2O legt die [[term:dmi|DMI]]-Daten eines Geräts in zwei Blöcken zu 4 KiB mit der Signatur `LENV` ab. Jeder Block beginnt mit einem unverschlüsselten Kopf von 16 Bytes: Signatur, **Generation**, Zahl der Einträge, Zugriffsflag, **XOR-Schlüssel** und **Prüfsumme**. Alle Bytes nach dem Kopf sind mit dem Schlüssel per XOR verknüpft; eine Suche nach der Seriennummer im Dump bleibt deshalb ergebnislos.
+Die Firmware Lenovo InsydeH2O legt die [[term:dmi|DMI]]-Daten eines Geräts in zwei Blöcken zu 4 KiB mit der Signatur `LENV` ab. Jeder Block beginnt mit einem unkodierten Kopf von 16 Bytes: Signatur, **Generation**, Zahl der Einträge, Zugriffsflag, **XOR-Schlüssel** und **Prüfsumme**. Alle Bytes nach dem Kopf sind mit dem Schlüssel per XOR verknüpft; eine Suche nach der Seriennummer im Dump bleibt deshalb ergebnislos.
 
 Auf den Kopf folgen lückenlos die Einträge. Jeder gehört zu einem Namensraum von 14 Bytes, hat einen Typ von 2 Bytes und trägt eine Größe, Merkmale und den Wert. Alle SMBIOS-Felder teilen sich einen Namensraum.
 
-Die Prüfsumme ist die Summe der Bytes nach dem Kopf in ihrer gespeicherten, also verschlüsselten Form, auf 16 Bit gekürzt. Die Firmware liest den Block mit der höheren Generation; einen Block mit Generation 0 übergeht sie. Haben beide Blöcke Generation 0 und steht nach dem Kopf nichts, ist der Speicher gelöscht.
+Die Prüfsumme ist die Summe der Bytes nach dem Kopf in ihrer gespeicherten, also kodierten Form, auf 16 Bit gekürzt. Die Firmware liest den Block mit der höheren Generation; einen Block mit Generation 0 übergeht sie. Haben beide Blöcke Generation 0 und steht nach dem Kopf nichts, ist der Speicher gelöscht.
 
 Die Länge eines Werts lässt sich an Ort und Stelle nicht ändern: Die Firmware baut die SMBIOS-Tabellen aus diesen Einträgen zum Teil über feste Offsets auf.
 

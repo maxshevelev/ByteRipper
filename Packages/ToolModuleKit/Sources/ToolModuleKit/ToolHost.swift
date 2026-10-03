@@ -112,7 +112,7 @@ import PartCodec
     /// `codec` is the whole of what the part is: what the panel shows is what
     /// it decodes from `source`, and what Update in Parent writes back is what
     /// it encodes from the panel. A copy, a body decompressed, a block
-    /// decrypted — each is a codec, and the host opens and puts back all of
+    /// decoded — each is a codec, and the host opens and puts back all of
     /// them the same way.
     ///
     /// The app opens parts of its own accord too — a zone, a selection — and

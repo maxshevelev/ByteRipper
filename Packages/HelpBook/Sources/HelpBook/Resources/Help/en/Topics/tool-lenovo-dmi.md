@@ -1,11 +1,11 @@
 # Lenovo DMI
 
-> The store in which Lenovo InsydeH2O firmware keeps a machine's identity — serial number, UUID, machine type and model, the Windows key — decrypted and read.
+> The store in which Lenovo InsydeH2O firmware keeps a machine's identity — serial number, UUID, machine type and model, the Windows key — decoded and read.
 
 @covers panel.lenovo-dmi
 @covers panel.lenovo-dmi.copy-value
 @covers panel.lenovo-dmi.select-in-dump
-@covers panel.lenovo-dmi.open-decrypted
+@covers panel.lenovo-dmi.open-decoded
 
 **Tools ▸ Lenovo DMI** finds the identity store in a Lenovo InsydeH2O image and lists what it holds.
 
@@ -40,13 +40,15 @@ Whether the firmware passes over a block whose checksum does not match and reads
 
 The two blocks may hold different values. This is normal after a write: the older copy keeps the previous values. A value to be carried to another dump is therefore taken from the block in use, and the detail list of every entry states whether the other block holds the same value.
 
-## Open Decrypted Block
+## Open Decoded Block
 
-**Open Decrypted Block**, on the context menu of a block or of any entry in it, opens the whole block as a [[topic:fragments|fragment panel]] with its entries decrypted: the serial number and the machine type read as text in the hex view and can be edited there. The header stays as stored, so the key and the checksum are visible at their own addresses.
+**Open Decoded Block**, on the context menu of a block or of any entry in it, opens the whole block as a [[topic:fragments|fragment panel]] with its entries decoded: the serial number and the machine type read as text in the hex view and can be edited there. The header stays as stored, so the key and the checksum are visible at their own addresses.
 
-**Update in Parent** writes the block back encrypted with the key in its header and with its checksum recomputed, as one undo step in the dump. The block keeps its length and its generation, and nothing is added to the change log. Only the block that was opened is written; to change both copies, open and update each. The fragment's header carries an **XOR** badge with the key, which says that its bytes are not the file's own.
+**Update in Parent** writes the block back encoded with the key in its header and with its checksum recomputed, as one undo step in the dump. The block keeps its length and its generation, and nothing is added to the change log. Only the block that was opened is written; to change both copies, open and update each. The fragment's header carries an **XOR** badge with the key, which says that its bytes are not the file's own.
 
-The command is offered for a block that holds entries and whose encryption was recognised; it is not offered for an empty block or for the change log.
+**Tools ▸ Lenovo DMI** opened on that fragment shows the block's structure: its header and its entries, read the same way as in the dump. There is no change log and no second copy in a fragment, so the panel does not say which copy the firmware reads. The checksum in the header is the one the block carries encoded, and the panel reports it valid as such. After an edit in the fragment it no longer matches and is shown in red with the value it should have; Update in Parent writes that value.
+
+The command is offered for a block that holds entries and whose encoding was recognised; it is not offered for an empty block or for the change log.
 
 ## The entries
 
@@ -62,8 +64,8 @@ The log records what the firmware wrote to the store and when: the date and time
 
 The format was reverse-engineered from `LenovoVariableDxe` by the LenovoDMIDecryptor project and has been checked against real dumps. Where its description and the dumps disagree, the tool follows the dumps: a log record is 32 bytes long, although the field offsets in that description add up to 24, and the year in a log record is a BCD century followed by a BCD year rather than 2000 plus a byte.
 
-Not confirmed: what the write-protect bits of a block and of an entry cause the firmware to do, which of the two block keys the log is encrypted with when they differ, and what the unknown types and fields hold.
+Not confirmed: what the write-protect bits of a block and of an entry cause the firmware to do, which of the two block keys the log is encoded with when they differ, and what the unknown types and fields hold.
 
-! The tool itself changes nothing in the store: an edit is made in a fragment opened with Open Decrypted Block and written back with Update in Parent, and whether the board then boots with the new values has not been confirmed. A store that is empty on both blocks has been wiped or was never written: the board's serial number and UUID are not in this image, and they have to be taken from an earlier dump of this board, if one was kept, or from the sticker.
+! The tool itself changes nothing in the store: an edit is made in a fragment opened with Open Decoded Block and written back with Update in Parent, and whether the board then boots with the new values has not been confirmed. A store that is empty on both blocks has been wiped or was never written: the board's serial number and UUID are not in this image, and they have to be taken from an earlier dump of this board, if one was kept, or from the sticker.
 
 See also: [[topic:recipe-board-data|Data Unique to a Board]], [[term:dmi|DMI]].

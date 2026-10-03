@@ -1,7 +1,7 @@
-@source-sha 6ce4443f9f0bbd0432a8ae2222ef2598d01d667823b87066c7ff45a7c80c4806
+@source-sha 8929fbf2d491e916afec4f28e4c2331c84c798fc520a5cd9b96d8c95e61a730d
 # Lenovo DMI
 
-> Der Speicher, in dem die Firmware Lenovo InsydeH2O die Identität eines Geräts ablegt – Seriennummer, UUID, Maschinentyp und Modell, Windows-Schlüssel –, entschlüsselt und ausgewertet.
+> Der Speicher, in dem die Firmware Lenovo InsydeH2O die Identität eines Geräts ablegt – Seriennummer, UUID, Maschinentyp und Modell, Windows-Schlüssel –, dekodiert und ausgewertet.
 
 **Werkzeuge ▸ Lenovo DMI** sucht in einem Image von Lenovo InsydeH2O den Identitätsspeicher und zeigt dessen Inhalt.
 
@@ -36,13 +36,15 @@ Ob die Firmware auf den anderen Block ausweicht, wenn die Prüfsumme des aktiven
 
 Die beiden Blöcke können unterschiedliche Werte enthalten. Nach einem Schreibvorgang ist das normal: Die ältere Kopie behält die vorigen Werte. Ein Wert, der in einen anderen Dump übertragen werden soll, wird daher dem aktiven Block entnommen; die Detailliste jedes Eintrags gibt an, ob der andere Block denselben Wert enthält.
 
-## Entschlüsselten Block öffnen
+## Dekodierten Block öffnen
 
-**Entschlüsselten Block öffnen** im Kontextmenü eines Blocks oder eines seiner Einträge öffnet den ganzen Block in einem [[topic:fragments|Fragment-Panel]], mit entschlüsselten Einträgen: Seriennummer und Maschinentyp stehen in der Hex-Ansicht als Text und lassen sich dort bearbeiten. Der Kopf bleibt so, wie er gespeichert ist; Schlüssel und Prüfsumme stehen an ihren eigenen Adressen.
+**Dekodierten Block öffnen** im Kontextmenü eines Blocks oder eines seiner Einträge öffnet den ganzen Block in einem [[topic:fragments|Fragment-Panel]], mit dekodierten Einträgen: Seriennummer und Maschinentyp stehen in der Hex-Ansicht als Text und lassen sich dort bearbeiten. Der Kopf bleibt so, wie er gespeichert ist; Schlüssel und Prüfsumme stehen an ihren eigenen Adressen.
 
-**In der Quelle aktualisieren** schreibt den Block als einen Widerrufsschritt in den Dump zurück, verschlüsselt mit dem Schlüssel aus seinem Kopf und mit neu berechneter Prüfsumme. Länge und Generation des Blocks bleiben unverändert, und dem Protokoll wird nichts hinzugefügt. Geschrieben wird nur der geöffnete Block; um beide Kopien zu ändern, öffnen und aktualisieren Sie jede einzeln. Die Kopfzeile des Fragments trägt ein Abzeichen **XOR** mit dem Schlüssel, das daran erinnert, dass seine Bytes nicht die der Datei sind.
+**In der Quelle aktualisieren** schreibt den Block als einen Widerrufsschritt in den Dump zurück, kodiert mit dem Schlüssel aus seinem Kopf und mit neu berechneter Prüfsumme. Länge und Generation des Blocks bleiben unverändert, und dem Protokoll wird nichts hinzugefügt. Geschrieben wird nur der geöffnete Block; um beide Kopien zu ändern, öffnen und aktualisieren Sie jede einzeln. Die Kopfzeile des Fragments trägt ein Abzeichen **XOR** mit dem Schlüssel, das daran erinnert, dass seine Bytes nicht die der Datei sind.
 
-Der Befehl steht für einen Block zur Verfügung, der Einträge enthält und dessen Verschlüsselung erkannt wurde; für einen leeren Block und für das Protokoll nicht.
+**Werkzeuge ▸ Lenovo DMI**, auf diesem Fragment geöffnet, zeigt die Struktur des Blocks: Kopf und Einträge, so gelesen wie im Dump. Ein Fragment enthält weder das Änderungsprotokoll noch die zweite Kopie; das Panel sagt daher nicht, welche Kopie die Firmware liest. Die Prüfsumme im Kopf ist die des kodierten Blocks, und das Panel wertet sie als solche als gültig. Nach einer Änderung im Fragment stimmt sie nicht mehr und erscheint rot mit dem Wert, den sie haben müsste; **In der Quelle aktualisieren** schreibt diesen Wert.
+
+Der Befehl steht für einen Block zur Verfügung, der Einträge enthält und dessen Kodierung erkannt wurde; für einen leeren Block und für das Protokoll nicht.
 
 ## Die Einträge
 
@@ -58,8 +60,8 @@ Das Protokoll hält fest, was die Firmware wann in den Speicher geschrieben hat:
 
 Das Format hat das Projekt LenovoDMIDecryptor aus dem Modul `LenovoVariableDxe` rekonstruiert; es wurde an realen Dumps überprüft. Wo die Beschreibung des Projekts und die Dumps voneinander abweichen, folgt das Werkzeug den Dumps: Ein Protokollereignis ist 32 Bytes lang, obwohl die Feldoffsets der Beschreibung zusammen 24 ergeben, und das Jahr eines Ereignisses ist als BCD-Jahrhundert und BCD-Jahr gespeichert, nicht als 2000 plus ein Byte.
 
-Nicht bestätigt ist, wie die Firmware auf die Schreibschutzbits eines Blocks und eines Eintrags reagiert, mit welchem der beiden Schlüssel das Protokoll verschlüsselt ist, wenn sich die Schlüssel der Blöcke unterscheiden, und was die unbekannten Typen und Felder enthalten.
+Nicht bestätigt ist, wie die Firmware auf die Schreibschutzbits eines Blocks und eines Eintrags reagiert, mit welchem der beiden Schlüssel das Protokoll kodiert ist, wenn sich die Schlüssel der Blöcke unterscheiden, und was die unbekannten Typen und Felder enthalten.
 
-! Das Werkzeug selbst ändert nichts am Speicher: Bearbeitet wird in einem Fragment, das mit „Entschlüsselten Block öffnen“ geöffnet und mit „In der Quelle aktualisieren“ zurückgeschrieben wird; ob die Platine danach mit den neuen Werten startet, ist nicht bestätigt. Sind beide Blöcke leer, wurde der Speicher gelöscht oder nie beschrieben: Seriennummer und UUID der Platine sind in diesem Image nicht enthalten. Sie lassen sich dann nur einem früheren Dump derselben Platine, sofern einer aufbewahrt wurde, oder dem Typenschild entnehmen.
+! Das Werkzeug selbst ändert nichts am Speicher: Bearbeitet wird in einem Fragment, das mit „Dekodierten Block öffnen“ geöffnet und mit „In der Quelle aktualisieren“ zurückgeschrieben wird; ob die Platine danach mit den neuen Werten startet, ist nicht bestätigt. Sind beide Blöcke leer, wurde der Speicher gelöscht oder nie beschrieben: Seriennummer und UUID der Platine sind in diesem Image nicht enthalten. Sie lassen sich dann nur einem früheren Dump derselben Platine, sofern einer aufbewahrt wurde, oder dem Typenschild entnehmen.
 
 Siehe auch: [[topic:recipe-board-data|Platinenspezifische Daten]], [[term:dmi|DMI]].

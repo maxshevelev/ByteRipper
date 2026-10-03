@@ -31,16 +31,16 @@ public struct LenovoDMIRow: Equatable, Sendable {
     public var fields: [LenovoDMIField]
     /// The glossary entry the detail's `?` opens for this row.
     public var term: HelpTermID?
-    /// The block Open Decrypted Block opens from this row — the block itself,
+    /// The block Open Decoded Block opens from this row — the block itself,
     /// or the one an entry is in. Nil for the log, and for a block that cannot
-    /// be decrypted with confidence.
-    public var decryptableBlock: String?
+    /// be decoded with confidence.
+    public var decodableBlock: String?
     public var children: [LenovoDMIRow]
 }
 
-/// What Open Decrypted Block hands the host: what to call the panel, the
-/// block it comes from, and the codec that decrypts it and puts it back.
-public struct LenovoDMIDecryptedPart: Sendable {
+/// What Open Decoded Block hands the host: what to call the panel, the
+/// block it comes from, and the codec that decodes it and puts it back.
+public struct LenovoDMIDecodedPart: Sendable {
     public var name: String
     public var source: Range<UInt64>
     public var codec: LenovoDMIBlockCodec
@@ -59,16 +59,16 @@ public struct LenovoDMIDisplay: Equatable, Sendable {
     public var summary: String
     public var rows: [LenovoDMIRow]
     public var notes: [LenovoDMINote]
-    /// The blocks that can be opened decrypted, by their row's id.
+    /// The blocks that can be opened decoded, by their row's id.
     public var blocks: [String: LENVBlock] = [:]
 
     public static let empty = LenovoDMIDisplay(summary: "", rows: [], notes: [])
 
-    /// The block Open Decrypted Block opens from row `id`.
-    public func decryptedPart(from id: String) -> LenovoDMIDecryptedPart? {
-        guard let blockID = row(id)?.decryptableBlock, let block = blocks[blockID],
+    /// The block Open Decoded Block opens from row `id`.
+    public func decodedPart(from id: String) -> LenovoDMIDecodedPart? {
+        guard let blockID = row(id)?.decodableBlock, let block = blocks[blockID],
               let name = row(blockID)?.name else { return nil }
-        return LenovoDMIDecryptedPart(name: L("%1$@ (decrypted)", name), source: block.range,
+        return LenovoDMIDecodedPart(name: L("%1$@ (decoded)", name), source: block.range,
                                       codec: LenovoDMIBlockCodec(block: block))
     }
 
@@ -104,16 +104,66 @@ public struct LenovoDMIDisplay: Equatable, Sendable {
 
 public enum LenovoDMIPresenter {
     public static func display(_ areas: [LenovoDMIArea]) -> LenovoDMIDisplay {
+        display(LenovoDMIReading(areas: areas, blocks: []))
+    }
+
+    public static func display(_ reading: LenovoDMIReading) -> LenovoDMIDisplay {
+        let areas = reading.areas
         guard !areas.isEmpty else {
-            return LenovoDMIDisplay(
-                summary: L("No Lenovo DMI store in this image."),
-                rows: [],
-                notes: [LenovoDMINote(
-                    text: L("The tool looks for the LDBG change log followed by two LENV blocks. A Lenovo InsydeH2O image without them is either another platform or has had the area cut out."),
-                    isProblem: false
-                )]
-            )
+            return reading.blocks.isEmpty ? noStore : blocksOnTheirOwn(reading.blocks)
         }
+        return storesDisplay(areas)
+    }
+
+    private static var noStore: LenovoDMIDisplay {
+        LenovoDMIDisplay(
+            summary: L("No Lenovo DMI store in this image."),
+            rows: [],
+            notes: [LenovoDMINote(
+                text: L("The tool looks for the LDBG change log followed by two LENV blocks. A Lenovo InsydeH2O image without them is either another platform or has had the area cut out."),
+                isProblem: false
+            )]
+        )
+    }
+
+    /// LENV blocks with no store around them — what a fragment panel holds
+    /// when a block was opened out of the dump. Each is read as a block: its
+    /// header, its entries, its checksum. Which of two copies the firmware
+    /// reads is not a question a lone block can answer, so it is not asked.
+    private static func blocksOnTheirOwn(_ found: [LENVBlock]) -> LenovoDMIDisplay {
+        var rows: [LenovoDMIRow] = []
+        var blocks: [String: LENVBlock] = [:]
+        for (number, block) in found.enumerated() {
+            let id = "b\(number)"
+            let name = found.count == 1
+                ? L("LENV block")
+                : L("LENV block at %1$@", hex(block.offset, 8))
+            rows.append(blockRow(block, id: id, name: name, live: nil, other: nil, otherNumber: 0))
+            if LenovoDMIDecodedBlock.canOpen(block) { blocks[id] = block }
+        }
+        var notes = [LenovoDMINote(
+            text: L("A LENV block on its own: the change log and the other copy are not in this file."),
+            isProblem: false
+        )]
+        for block in found where !block.isBlank && !block.checksumIsValid {
+            notes.append(LenovoDMINote(
+                text: L("The checksum is %1$@, the body adds up to %2$@.",
+                        hex(UInt64(block.checksum), 4), hex(UInt64(block.expectedChecksum), 4)),
+                isProblem: true
+            ))
+        }
+        let summary: String
+        if found.count == 1, let block = found.first {
+            summary = block.isBlank
+                ? L("A LENV block, empty.")
+                : L("A LENV block: generation %1$@, %2$@.", block.generation, encodingText(block.encoding).lowercased())
+        } else {
+            summary = L("LENV blocks found: %1$@.", found.count)
+        }
+        return LenovoDMIDisplay(summary: summary, rows: rows, notes: notes, blocks: blocks)
+    }
+
+    private static func storesDisplay(_ areas: [LenovoDMIArea]) -> LenovoDMIDisplay {
         var rows: [LenovoDMIRow] = []
         var notes: [LenovoDMINote] = []
         var blocks: [String: LENVBlock] = [:]
@@ -124,7 +174,7 @@ public enum LenovoDMIPresenter {
             for index in area.blocks.indices {
                 let blockID = id + ".lenv\(index + 1)"
                 rows.append(blockRow(index, in: area, id: blockID, prefix: prefix))
-                if LenovoDMIDecryptedBlock.canOpen(area.blocks[index]) {
+                if LenovoDMIDecodedBlock.canOpen(area.blocks[index]) {
                     blocks[blockID] = area.blocks[index]
                 }
             }
@@ -174,7 +224,7 @@ public enum LenovoDMIPresenter {
         return LenovoDMIRow(
             id: id, name: prefix + L("Change log (LDBG)"), value: value, range: log.range,
             isProblem: log.writeOffsetProblem == .outOfRange || log.writeOffsetProblem == .misaligned,
-            fields: fields, term: HelpTermID("ldbg"), decryptableBlock: nil,
+            fields: fields, term: HelpTermID("ldbg"), decodableBlock: nil,
             children: log.entries.map { logEntryRow($0, id: id + ".\($0.index)") }
         )
     }
@@ -200,7 +250,7 @@ public enum LenovoDMIPresenter {
                 LenovoDMIField(L("Unknown"), LenovoDMIValue.hex(entry.unknown)),
                 LenovoDMIField(L("Offset"), hex(entry.offset, 8))
             ],
-            term: HelpTermID("ldbg"), decryptableBlock: nil,
+            term: HelpTermID("ldbg"), decodableBlock: nil,
             children: []
         )
     }
@@ -222,17 +272,25 @@ public enum LenovoDMIPresenter {
     private static func blockRow(
         _ index: Int, in area: LenovoDMIArea, id: String, prefix: String
     ) -> LenovoDMIRow {
-        let block = area.blocks[index]
-        let isLive = area.liveIndex == index
-        let name = prefix + L("LENV block %1$@", index + 1)
+        let other = area.blocks.indices.first { $0 != index }.map { area.blocks[$0] }
+        return blockRow(area.blocks[index], id: id, name: prefix + L("LENV block %1$@", index + 1),
+                        live: (area.liveIndex == index, liveText(index, in: area)),
+                        other: other, otherNumber: index == 0 ? 2 : 1)
+    }
 
+    /// One block's row. `live` is whether the firmware reads it and why — nil
+    /// for a block on its own, where there is no other copy to choose from.
+    private static func blockRow(
+        _ block: LENVBlock, id: String, name: String, live: (isLive: Bool, text: String)?,
+        other: LENVBlock?, otherNumber: Int
+    ) -> LenovoDMIRow {
         let value: String
         if !block.hasSignature {
             value = L("No signature")
         } else if block.isBlank {
             value = L("Empty")
         } else {
-            value = isLive
+            value = live?.isLive == true
                 ? L("Generation %1$@ · in use", block.generation)
                 : L("Generation %1$@", block.generation)
         }
@@ -242,7 +300,6 @@ public enum LenovoDMIPresenter {
             LenovoDMIField(L("Signature"), block.hasSignature ? "LENV" : L("Missing"),
                            isProblem: !block.hasSignature),
             LenovoDMIField(L("Generation"), "\(block.generation)"),
-            LenovoDMIField(L("Firmware reads it"), liveText(index, in: area)),
             LenovoDMIField(L("Entries"), L("%1$@ of %2$@ declared", block.entries.count, block.declaredEntries),
                            isProblem: !block.entriesFit),
             LenovoDMIField(L("XOR key"), hex(UInt64(block.xorKey), 2)),
@@ -251,20 +308,22 @@ public enum LenovoDMIPresenter {
             LenovoDMIField(L("Access flag"), hex(UInt64(block.accessFlag), 2)),
             LenovoDMIField(L("Write-protected"), block.accessFlag & 1 != 0 ? L("Yes") : L("No"))
         ]
+        if let live {
+            fields.insert(LenovoDMIField(L("Firmware reads it"), live.text), at: 3)
+        }
         if block.isBlank {
             fields.insert(LenovoDMIField(L("State"), L("Empty: wiped or never written")), at: 0)
         }
 
-        let other = area.blocks.indices.first { $0 != index }.map { area.blocks[$0] }
-        let decryptable = LenovoDMIDecryptedBlock.canOpen(block) ? id : nil
+        let decodeable = LenovoDMIDecodedBlock.canOpen(block) ? id : nil
         return LenovoDMIRow(
             id: id, name: name, value: value, range: block.range,
             isProblem: !block.hasSignature || !block.entriesFit
                 || (!block.isBlank && !block.checksumIsValid),
-            fields: fields, term: HelpTermID("lenv"), decryptableBlock: decryptable,
+            fields: fields, term: HelpTermID("lenv"), decodableBlock: decodeable,
             children: block.entries.map {
-                entryRow($0, id: id + ".\($0.index)", other: other, otherNumber: index == 0 ? 2 : 1,
-                         decryptableBlock: decryptable)
+                entryRow($0, id: id + ".\($0.index)", other: other, otherNumber: otherNumber,
+                         decodableBlock: decodeable)
             }
         )
     }
@@ -283,8 +342,8 @@ public enum LenovoDMIPresenter {
 
     private static func encodingText(_ encoding: LENVBlock.Encoding) -> String {
         switch encoding {
-        case .encrypted: return L("Encrypted")
-        case .plain: return L("Decrypted")
+        case .encoded: return L("Encoded")
+        case .plain: return L("Decoded")
         case .keyIsZero: return L("Key is zero")
         case .undetermined: return L("Undetermined: the entries do not fit either way")
         }
@@ -292,16 +351,19 @@ public enum LenovoDMIPresenter {
 
     private static func checksumText(_ block: LENVBlock) -> String {
         let stored = hex(UInt64(block.checksum), 4)
+        if block.checksumIsOfEncodedBody {
+            return L("%1$@ (Valid for the body encoded again)", stored)
+        }
         return block.checksumIsValid
             ? L("%1$@ (Valid)", stored)
-            : L("%1$@ (Invalid), should be %2$@", stored, hex(UInt64(block.computedChecksum), 4))
+            : L("%1$@ (Invalid), should be %2$@", stored, hex(UInt64(block.expectedChecksum), 4))
     }
 
     // MARK: - An entry
 
     private static func entryRow(
         _ entry: LENVEntry, id: String, other: LENVBlock?, otherNumber: Int,
-        decryptableBlock: String?
+        decodableBlock: String?
     ) -> LenovoDMIRow {
         let value = LenovoDMIValue.text(of: entry)
         var fields = [
@@ -328,7 +390,7 @@ public enum LenovoDMIPresenter {
         return LenovoDMIRow(
             id: id, name: LenovoDMIValue.name(of: entry.key), value: value,
             range: entry.range, isProblem: false, fields: fields,
-            term: HelpTermID("lenv"), decryptableBlock: decryptableBlock, children: []
+            term: HelpTermID("lenv"), decodableBlock: decodableBlock, children: []
         )
     }
 

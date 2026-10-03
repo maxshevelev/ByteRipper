@@ -2258,7 +2258,7 @@ final class MainViewController: NSViewController {
     /// is written to disk. What cannot be put back is said, and nothing moves.
     ///
     /// The tab's codec says what goes back (`PartCodec.encode`): the same
-    /// bytes, the bytes encrypted again, a body compressed again and the image
+    /// bytes, the bytes encoded again, a body compressed again and the image
     /// laid out around it. A quick codec is written on the spot; a slow one
     /// works off the main actor behind a sheet, and the task is handed back for
     /// whoever has to wait on it.

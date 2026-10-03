@@ -4,10 +4,10 @@
 //  out of, in both directions.
 //
 //  A part of a file opens as a panel over it — a zone, a selection, a node of
-//  an image, a compressed section, an encrypted block — and goes back into it
+//  an image, a compressed section, an encoded block — and goes back into it
 //  with Update in Parent (`Design/FRAGMENT_PANELS_PLAN.md`,
 //  `Design/UEFI/UPDATE_IN_PARENT.md`). What the panel shows is not always the
-//  source's bytes as they lie: it may be what they decompress or decrypt to.
+//  source's bytes as they lie: it may be what they decompress or decode to.
 //  Each of those is a codec, and the app opens and puts back every part the
 //  same way, whoever asked for it to be opened.
 //

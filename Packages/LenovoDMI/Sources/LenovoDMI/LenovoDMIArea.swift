@@ -65,7 +65,7 @@ public struct LenovoDMIArea: Equatable, Sendable {
             if block.isBlank { continue }
             if !block.checksumIsValid {
                 found.append(.checksumMismatch(block: index, stored: block.checksum,
-                                               computed: block.computedChecksum))
+                                               computed: block.expectedChecksum))
             }
             if !block.entriesFit {
                 found.append(.entriesDoNotFit(block: index))
@@ -124,7 +124,7 @@ public enum LenovoDMIFinding: Equatable, Sendable {
     /// The header's entry count runs past the end of the block under either
     /// reading.
     case entriesDoNotFit(block: Int)
-    /// The block's body is not encrypted although its key is not zero.
+    /// The block's body is not encoded although its key is not zero.
     case storedInTheClear(block: Int)
     /// The two blocks hold different values for these keys. Normal right after
     /// the firmware writes — it rewrites one copy at a time — and the reason a
@@ -155,7 +155,7 @@ public enum LenovoDMIFinding: Equatable, Sendable {
         case .entriesDoNotFit(let block):
             return L("LENV block %1$@: the entries its header counts do not fit in the block.", block + 1)
         case .storedInTheClear(let block):
-            return L("LENV block %1$@ is stored decrypted. Whether the firmware accepts that is not known.", block + 1)
+            return L("LENV block %1$@ is stored decoded. Whether the firmware accepts that is not known.", block + 1)
         case .blocksDiffer(let keys):
             return L("The two LENV blocks hold different values for: %1$@. The firmware reads the block in use.",
                      keys.map(LenovoDMIValue.name(of:)).joined(separator: ", "))
@@ -167,7 +167,56 @@ public enum LenovoDMIFinding: Equatable, Sendable {
     }
 }
 
+/// What an image holds of the store: whole areas — the log and both blocks —
+/// and `LENV` blocks found on their own, outside any area.
+///
+/// A block on its own is what a fragment panel holds when a block was opened
+/// out of the dump, decoded or as it is: the log and the other copy stayed
+/// behind, and the block is still worth reading.
+public struct LenovoDMIReading: Equatable, Sendable {
+    public var areas: [LenovoDMIArea]
+    public var blocks: [LENVBlock]
+
+    public init(areas: [LenovoDMIArea], blocks: [LENVBlock]) {
+        self.areas = areas
+        self.blocks = blocks
+    }
+
+    public var isEmpty: Bool { areas.isEmpty && blocks.isEmpty }
+}
+
 public enum LenovoDMI {
+    /// The areas in `image`, and every `LENV` block outside them whose header
+    /// reads as one: signed, a whole page from its start, and holding entries
+    /// that fit or nothing at all.
+    public static func read(_ image: [UInt8]) -> LenovoDMIReading {
+        let areas = locate(in: image)
+        let size = Int(LenovoDMIFormat.lenvSize)
+        let signature = LenovoDMIFormat.lenvSignature
+        var blocks: [LENVBlock] = []
+        image.withUnsafeBufferPointer { buffer in
+            guard let base = buffer.baseAddress, buffer.count >= size else { return }
+            var start = 0
+            while start + size <= buffer.count {
+                guard let hit = memmem(base + start, buffer.count - start, signature, signature.count)
+                else { break }
+                let offset = base.distance(to: hit.assumingMemoryBound(to: UInt8.self))
+                start = offset + 1
+                guard offset + size <= buffer.count,
+                      !areas.contains(where: { $0.range.contains(UInt64(offset)) })
+                else { continue }
+                let block = LENVBlock(offset: UInt64(offset),
+                                      stored: Array(buffer[offset..<(offset + size)]))
+                // A stray `LENV` in a driver's code has a count that does not
+                // parse under either reading; a block emptied has none.
+                guard block.entriesFit && (block.declaredEntries > 0 || block.isBlank) else { continue }
+                blocks.append(block)
+                start = offset + size
+            }
+        }
+        return LenovoDMIReading(areas: areas, blocks: blocks)
+    }
+
     /// Every area in `image`: each `LDBG` signature followed by its write
     /// offset and eight zero bytes (upstream's pattern), with at least one of
     /// the two blocks signed where it should be.

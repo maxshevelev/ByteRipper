@@ -7,7 +7,7 @@ import ToolModuleKit
 
 /// The identity store of Lenovo's InsydeH2O firmware, read: where it is, which
 /// of its two blocks the firmware uses, and what the entries in each say —
-/// decrypted, with the known ones by name.
+/// decoded, with the known ones by name.
 ///
 /// What it is for: a serial number searched for in a Lenovo dump is not
 /// found, because the store is XORed, and a technician carrying a board's
@@ -56,7 +56,7 @@ struct LenovoDMIParkedState: ToolSessionState {
         controller.onSelect = { [weak self] id in self?.select(id) }
         controller.onGoTo = { [weak self] id in self?.goTo(id) }
         controller.onCopyValue = { [weak self] id in self?.copyValue(of: id) }
-        controller.onOpenDecrypted = { [weak self] id in self?.openDecryptedBlock(from: id) }
+        controller.onOpenDecoded = { [weak self] id in self?.openDecodedBlock(from: id) }
     }
 
     public var viewController: NSViewController { controller }
@@ -110,7 +110,7 @@ struct LenovoDMIParkedState: ToolSessionState {
         Task { [weak self] in
             let display = await Task.detached(priority: .userInitiated) {
                 let bytes = (try? snapshot.read(at: 0, length: Int(snapshot.size))) ?? []
-                return LenovoDMIPresenter.display(LenovoDMI.locate(in: bytes))
+                return LenovoDMIPresenter.display(LenovoDMI.read(bytes))
             }.value
             guard let self, self.generation == generation else { return }
             // A row the new reading does not have is not one to hold on to.
@@ -147,13 +147,13 @@ struct LenovoDMIParkedState: ToolSessionState {
         host.reveal(row.range, select: true)
     }
 
-    /// The block a row belongs to, decrypted, in a fragment panel over the
+    /// The block a row belongs to, decoded, in a fragment panel over the
     /// dump: the serial number reads as text there and can be typed over.
-    /// Update in Parent puts it back through the same codec — encrypted again
+    /// Update in Parent puts it back through the same codec — encoded again
     /// with the key in its header, its checksum recomputed — and the codec
     /// travels with the panel, so that works after this session has ended.
-    public func openDecryptedBlock(from id: String) {
-        guard let part = display.decryptedPart(from: id) else { return }
+    public func openDecodedBlock(from id: String) {
+        guard let part = display.decodedPart(from: id) else { return }
         host.openPart(named: part.name, linkedTo: part.source, codec: part.codec)
     }
 

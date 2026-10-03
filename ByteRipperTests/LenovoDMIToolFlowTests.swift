@@ -141,7 +141,7 @@ final class LenovoDMIToolFlowTests: XCTestCase {
         XCTAssertEqual(outline.selectedRow, 3)
     }
 
-    /// A byte typed into the encrypted value is read again at once: the value
+    /// A byte typed into the encoded value is read again at once: the value
     /// changes, and so does the verdict on the checksum.
     func testAnEditInTheDumpIsReadAgain() throws {
         let controller = try open(LenovoTestImage.make())
@@ -160,10 +160,10 @@ final class LenovoDMIToolFlowTests: XCTestCase {
     }
 
     /// The block opens in the clear in a fragment panel; a value typed there
-    /// goes back into the dump encrypted, with a checksum that adds up.
-    func testADecryptedBlockGoesBackEncrypted() throws {
+    /// goes back into the dump encoded, with a checksum that adds up.
+    func testADecodedBlockGoesBackEncoded() throws {
         let controller = try open(LenovoTestImage.make())
-        try session().openDecryptedBlock(from: "a0.lenv2.0")
+        try session().openDecodedBlock(from: "a0.lenv2.0")
         let id = try XCTUnwrap(controller.fragments.expanded, "the block opens in a panel")
         let part = try XCTUnwrap(controller.fragments.pane(id))
         let value = 0x10 + 0x18
@@ -179,10 +179,10 @@ final class LenovoDMIToolFlowTests: XCTestCase {
 
         let display = try session().display
         XCTAssertEqual(display.rows[2].children.first?.value, "QF0TEST1")
-        XCTAssertFalse(display.rows[2].isProblem, "encrypted again, with its checksum recomputed")
+        XCTAssertFalse(display.rows[2].isProblem, "encoded again, with its checksum recomputed")
         let stored = try XCTUnwrap(controller.windowModel.pane1.document?
             .read(at: UInt64(LenovoTestImage.serialInBlock2), length: 1))
-        XCTAssertEqual(stored, [UInt8(ascii: "Q") ^ LenovoTestImage.key], "the dump holds it encrypted")
+        XCTAssertEqual(stored, [UInt8(ascii: "Q") ^ LenovoTestImage.key], "the dump holds it encoded")
     }
 
     /// Another file opened into the pane is another store to read, and until
@@ -207,6 +207,38 @@ final class LenovoDMIToolFlowTests: XCTestCase {
         try session().onDisplay = nil
         window?.layoutIfNeeded()
         XCTAssertEqual(try outline().numberOfRows, 3, "the new file's store, nothing opened in it")
+    }
+
+    /// Lenovo DMI opened on the panel of a block opened decoded reads the
+    /// block's structure there — and follows an edit typed into it.
+    func testTheToolReadsADecodedBlockInItsPanel() throws {
+        let controller = try open(LenovoTestImage.make())
+        try session().openDecodedBlock(from: "a0.lenv2")
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        let item = NSMenuItem()
+        item.representedObject = LenovoDMIToolModule.identifier
+        controller.activateTool(item)
+        let inPanel = try XCTUnwrap(controller.fragments.surface(id)?.tools.session as? LenovoDMIToolSession,
+                                    "the tool opened on the panel in front")
+        func waitForTheReading() {
+            let read = expectation(description: "the panel's reading lands")
+            inPanel.onDisplay = { _ in read.fulfill() }
+            wait(for: [read], timeout: 5)
+            inPanel.onDisplay = nil
+        }
+        if inPanel.display.rows.isEmpty { waitForTheReading() }
+
+        XCTAssertEqual(inPanel.display.rows.map(\.name), ["LENV block"])
+        XCTAssertEqual(inPanel.display.rows[0].children.first?.value, "PF0TEST1")
+        XCTAssertFalse(inPanel.display.rows[0].isProblem, "the checksum is the one it carries encoded")
+
+        // `P` → `Q`, typed in the clear.
+        part.moveCaret(to: 0x10 + 0x18)
+        part.typeHexNibble(0x5)
+        part.typeHexNibble(0x1)
+        waitForTheReading()
+        XCTAssertEqual(inPanel.display.rows[0].children.first?.value, "QF0TEST1")
     }
 
     func testAnImageWithoutAStoreSaysSo() throws {

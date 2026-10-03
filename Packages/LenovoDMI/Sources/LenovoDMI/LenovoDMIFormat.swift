@@ -20,14 +20,14 @@ public enum LenovoDMIFormat {
     public static let areaSize: UInt64 = ldbgSize + 2 * lenvSize
 
     /// `LENV_HEADER`: signature, generation, entry count, access flag, XOR key,
-    /// checksum. Never encrypted.
+    /// checksum. Never encoded.
     public static let lenvHeaderSize = 0x10
     /// What comes before an entry's data: the key (16), the data size (4), the
     /// flags (1) and two fields nobody has explained (1 + 2).
     public static let lenvEntryHeaderSize = 0x18
 
     /// `LDBG_HEADER`: signature, write offset, 24 bytes nobody has explained.
-    /// Never encrypted — the write offset reads in the clear on every dump
+    /// Never encoded — the write offset reads in the clear on every dump
     /// looked at, while the entries after it do not.
     public static let ldbgHeaderSize = 0x20
     /// One `LDBG_ENTRY`. Upstream's comments put the size field at `+0x10`,

@@ -124,18 +124,41 @@ final class LenovoDMIPresenterTests: XCTestCase {
 
     /// From a block or any of its entries, the whole block in the clear; from
     /// the log, nothing.
-    func testADecryptedBlockOpensFromTheBlockAndItsEntries() throws {
+    func testADecodedBlockOpensFromTheBlockAndItsEntries() throws {
         let display = standard
-        let part = try XCTUnwrap(display.decryptedPart(from: "a0.lenv1.0"))
-        XCTAssertEqual(part.name, "LENV block 1 (decrypted)")
+        let part = try XCTUnwrap(display.decodedPart(from: "a0.lenv1.0"))
+        XCTAssertEqual(part.name, "LENV block 1 (decoded)")
         XCTAssertEqual(part.source, 0x3000..<0x4000)
-        XCTAssertTrue(part.codec.encrypts)
-        XCTAssertEqual(display.decryptedPart(from: "a0.lenv1")?.source, part.source)
-        XCTAssertNil(display.decryptedPart(from: "a0.log"))
-        XCTAssertNil(display.decryptedPart(from: "a0.log.0"))
+        XCTAssertTrue(part.codec.encodes)
+        XCTAssertEqual(display.decodedPart(from: "a0.lenv1")?.source, part.source)
+        XCTAssertNil(display.decodedPart(from: "a0.log"))
+        XCTAssertNil(display.decodedPart(from: "a0.log.0"))
     }
 
     func testTheRowsCarryTheirGlossaryEntries() {
         XCTAssertEqual(standard.rows.map(\.term?.rawValue), ["ldbg", "lenv", "lenv"])
+    }
+
+    /// A block on its own — what a fragment panel holds once a block was
+    /// opened decoded — reads as a block: its entries, and a checksum that is
+    /// in order because it is the one the block carries encoded.
+    func testABlockOnItsOwnShowsItsStructure() throws {
+        let image = Store.image([
+            Store.block(generation: 83, key: 0x77, entries: [Store.serial, Store.mtm]),
+            Store.block(generation: 84, key: 0x77, entries: [Store.serial])
+        ])
+        let area = try XCTUnwrap(LenovoDMI.locate(in: image).first)
+        let decoded = LenovoDMIDecodedBlock.decode(area.blocks[0])
+
+        let display = LenovoDMIPresenter.display(LenovoDMI.read(decoded))
+        XCTAssertEqual(display.summary, "A LENV block: generation 83, decoded.")
+        XCTAssertEqual(display.rows.map(\.name), ["LENV block"])
+        XCTAssertEqual(display.rows[0].children.map(\.value), ["PF0TEST1", "82XX0000GE"])
+        XCTAssertFalse(display.rows[0].isProblem)
+        let checksum = try XCTUnwrap(display.rows[0].fields.first { $0.label == "Checksum" })
+        XCTAssertTrue(checksum.value.hasSuffix("(Valid for the body encoded again)"))
+        XCTAssertNil(display.rows[0].fields.first { $0.label == "Firmware reads it" },
+                     "a lone block is not one of two to choose from")
+        XCTAssertEqual(display.zones(focus: "b0.1").zones.map(\.range), [0x30..<0x52])
     }
 }

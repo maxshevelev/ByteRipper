@@ -39,12 +39,12 @@ struct TestStore {
 
     static let standardEntries = [foreign, serial, uuid, unknown, mtm]
 
-    /// One block's 4 KiB: header, entries encrypted with `key` unless
-    /// `encrypt` is false, zeros after them (encrypted, so they read as the
+    /// One block's 4 KiB: header, entries encoded with `key` unless
+    /// `encode` is false, zeros after them (encoded, so they read as the
     /// key), and the checksum of the body as stored.
     static func block(
         generation: UInt32, key: UInt8, entries: [Entry],
-        encrypt: Bool = true, declared: UInt32? = nil, checksum: UInt16? = nil
+        encode: Bool = true, declared: UInt32? = nil, checksum: UInt16? = nil
     ) -> [UInt8] {
         var body: [UInt8] = []
         for entry in entries {
@@ -55,7 +55,7 @@ struct TestStore {
             body += entry.data
         }
         body += [UInt8](repeating: 0, count: Int(LenovoDMIFormat.lenvSize) - 16 - body.count)
-        if encrypt { body = body.map { $0 ^ key } }
+        if encode { body = body.map { $0 ^ key } }
         let sum = checksum ?? body.reduce(UInt16(0)) { $0 &+ UInt16($1) }
         var header = Array("LENV".utf8)
         header += le32(generation)
@@ -66,7 +66,7 @@ struct TestStore {
     }
 
     /// The log's 8 KiB: header with the write offset in the clear, entries
-    /// encrypted with `key`, zeros after them encrypted too.
+    /// encoded with `key`, zeros after them encoded too.
     static func log(_ entries: [LogEntry], key: UInt8, writeOffset: UInt32? = nil) -> [UInt8] {
         var body: [UInt8] = []
         for entry in entries {

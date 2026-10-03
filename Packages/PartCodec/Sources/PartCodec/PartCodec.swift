@@ -21,9 +21,9 @@ extension PartReader {
 /// `Design/UEFI/UPDATE_IN_PARENT.md`).
 ///
 /// A part is opened from a range of its parent — a zone, a node of the image,
-/// a compressed section, an encrypted block — and what the reader studies is
+/// a compressed section, an encoded block — and what the reader studies is
 /// not always those bytes as they lie. It may be them as they are (a copy),
-/// what they decompress to, or what they decrypt to. Each of those is one
+/// what they decompress to, or what they decode to. Each of those is one
 /// conformance: `decode` makes the panel's bytes out of the source, and
 /// `encode` makes the source again out of the panel's bytes when the reader
 /// puts the panel back (Update in Parent). The app opens and puts back every
@@ -53,7 +53,7 @@ public protocol PartCodec: Sendable {
     var decodesImmediately: Bool { get }
 
     /// True when byte `n` of the panel is byte `n` of the source: a copy, a
-    /// block decrypted in place. The parent's bookmarks then reach the panel
+    /// block decoded in place. The parent's bookmarks then reach the panel
     /// at their own rows; for bytes that are not the file's — a decompressed
     /// body — there is no such mapping and they do not.
     var keepsOffsets: Bool { get }

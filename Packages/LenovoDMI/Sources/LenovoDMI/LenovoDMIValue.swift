@@ -67,7 +67,7 @@ public enum LenovoDMIValue {
 }
 
 /// The writes that put a new value into an entry, the way the firmware would
-/// find it: encrypted with the block's key, with the block's checksum
+/// find it: encoded with the block's key, with the block's checksum
 /// recomputed.
 ///
 /// The value never changes length. `L05SmbiosOverride` builds the SMBIOS
@@ -127,36 +127,36 @@ public enum LenovoDMIEdit {
 
 /// A whole block in the clear, and the way back.
 ///
-/// The decrypted block is the header as stored and the body decoded: what a
+/// The decoded block is the header as stored and the body decoded: what a
 /// technician reads in the hex view — the serial number as text — and can
-/// edit in place. Putting it back encrypts the body again with the key in the
-/// header and writes the checksum the encrypted body adds up to, so the block
+/// edit in place. Putting it back encodes the body again with the key in the
+/// header and writes the checksum the encoded body adds up to, so the block
 /// that lands in the file is one the firmware reads.
-public enum LenovoDMIDecryptedBlock {
-    /// Whether the block can be opened decrypted: signed, holding something,
+public enum LenovoDMIDecodedBlock {
+    /// Whether the block can be opened decoded: signed, holding something,
     /// and stored in a way that was recognised. A block whose entries parse
-    /// under neither reading is not decrypted on a guess.
+    /// under neither reading is not decoded on a guess.
     public static func canOpen(_ block: LENVBlock) -> Bool {
         block.hasSignature && !block.isBlank && block.encoding != .undetermined
     }
 
     /// The block with its body decoded.
-    public static func decrypt(_ block: LENVBlock) -> [UInt8] {
+    public static func decode(_ block: LENVBlock) -> [UInt8] {
         let header = Array(block.stored[..<LenovoDMIFormat.lenvHeaderSize])
         return header + block.storedBody.xored(with: block.effectiveKey)
     }
 
     /// What the file gets back for `bytes`, a block in the clear: the body
     /// XORed with the key byte of `bytes`' own header — so a key changed in
-    /// the panel is the key the block is written under — unless `encrypts` is
+    /// the panel is the key the block is written under — unless `encodes` is
     /// false, for a block that was stored in the clear and stays so, and the
     /// checksum of the body as it will be stored.
-    public static func encrypt(_ bytes: [UInt8], encrypts: Bool) throws -> [UInt8] {
+    public static func encode(_ bytes: [UInt8], encodes: Bool) throws -> [UInt8] {
         guard bytes.count == Int(LenovoDMIFormat.lenvSize) else {
             throw LenovoDMIEdit.Refusal.lengthChanges(expected: Int(LenovoDMIFormat.lenvSize), got: bytes.count)
         }
         let size = LenovoDMIFormat.lenvHeaderSize
-        let key = encrypts ? bytes[0x0D] : 0
+        let key = encodes ? bytes[0x0D] : 0
         let body = Array(bytes[size...]).xored(with: key)
         var header = Array(bytes[..<size])
         header.replaceSubrange(0x0E..<0x10, with: LE.bytes16(body.sum16))
@@ -164,21 +164,21 @@ public enum LenovoDMIDecryptedBlock {
     }
 }
 
-/// A `LENV` block opened in the clear and put back encrypted: the codec Open
-/// Decrypted Block hands the app.
+/// A `LENV` block opened in the clear and put back encoded: the codec Open
+/// Decoded Block hands the app.
 ///
-/// Decoding takes the block as the file holds it now and decrypts the body;
-/// encoding encrypts it again with the key in the panel's own header and
+/// Decoding takes the block as the file holds it now and decodes the body;
+/// encoding encodes it again with the key in the panel's own header and
 /// writes the checksum. Byte `n` of the panel is byte `n` of the block, so the
 /// parent's bookmarks reach it.
 public struct LenovoDMIBlockCodec: PartCodec {
     /// False for a block that was stored in the clear: it goes back the same
     /// way, with only its checksum recomputed.
-    public var encrypts: Bool
+    public var encodes: Bool
     public var key: UInt8
 
     public init(block: LENVBlock) {
-        encrypts = block.encoding != .plain
+        encodes = block.encoding != .plain
         key = block.xorKey
     }
 
@@ -189,7 +189,7 @@ public struct LenovoDMIBlockCodec: PartCodec {
                               message: L("A LENV block is %1$@ bytes, and goes back only at that length.", "0x1000"))
         }
         let block = LENVBlock(offset: parent.source.lowerBound, stored: stored)
-        return LenovoDMIDecryptedBlock.decrypt(block)
+        return LenovoDMIDecodedBlock.decode(block)
     }
 
     public func encode(_ part: [UInt8], into parent: PartParent) throws -> PartUpdate {
@@ -197,15 +197,15 @@ public struct LenovoDMIBlockCodec: PartCodec {
             throw PartRefusal.lengthChanged(part: parent.partName, parent: parent.name,
                                             source: parent.source.count, now: part.count)
         }
-        return .overwriting(parent.source, with: try LenovoDMIDecryptedBlock.encrypt(part, encrypts: encrypts))
+        return .overwriting(parent.source, with: try LenovoDMIDecodedBlock.encode(part, encodes: encodes))
     }
 
     public var badge: PartBadge? {
-        guard encrypts else {
-            return PartBadge(L("Unencrypted", context: "part badge"),
+        guard encodes else {
+            return PartBadge(L("Plain", context: "part badge"),
                              explanation: L("A LENV block stored in the clear. Update in Parent recomputes its checksum."))
         }
         return PartBadge("XOR " + String(format: "%02X", key),
-                         explanation: L("Decrypted from the file. Update in Parent encrypts it again with the key in its header and recomputes the checksum."))
+                         explanation: L("Decoded from the file. Update in Parent encodes it again with the key in its header and recomputes the checksum."))
     }
 }

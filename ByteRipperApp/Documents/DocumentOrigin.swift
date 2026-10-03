@@ -45,7 +45,7 @@ import UEFIImage
     /// decompressed body is a run of sections, not an image to scan.
     let layout: UEFIRootLayout
     /// What the tab's bytes are to the source's, both ways: a copy, a body
-    /// decompressed, a block decrypted. The whole of what Update in Parent
+    /// decompressed, a block decoded. The whole of what Update in Parent
     /// does is its `encode`.
     let codec: any PartCodec
 

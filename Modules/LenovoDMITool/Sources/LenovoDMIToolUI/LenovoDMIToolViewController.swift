@@ -15,7 +15,7 @@ import ToolModuleKit
     var onSelect: ((String?) -> Void)?
     var onGoTo: ((String) -> Void)?
     var onCopyValue: ((String) -> Void)?
-    var onOpenDecrypted: ((String) -> Void)?
+    var onOpenDecoded: ((String) -> Void)?
 
     private(set) var display = LenovoDMIDisplay.empty
     private var focus: String?
@@ -201,8 +201,8 @@ import ToolModuleKit
         menu.addItem(withTitle: L("Select in Dump"), action: #selector(goToClicked), keyEquivalent: "")
             .target = self
         menu.addItem(.separator())
-        // help: panel.lenovo-dmi.open-decrypted
-        menu.addItem(withTitle: L("Open Decrypted Block"), action: #selector(openDecryptedClicked),
+        // help: panel.lenovo-dmi.open-decoded
+        menu.addItem(withTitle: L("Open Decoded Block"), action: #selector(openDecodedClicked),
                      keyEquivalent: "").target = self
         return menu
     }
@@ -365,20 +365,20 @@ import ToolModuleKit
         onGoTo?(id)
     }
 
-    @objc private func openDecryptedClicked() {
+    @objc private func openDecodedClicked() {
         guard let id = clickedID else { return }
-        onOpenDecrypted?(id)
+        onOpenDecoded?(id)
     }
 }
 
 extension LenovoDMIToolViewController: NSMenuItemValidation {
-    /// Open Decrypted Block is offered on a block and on its entries, and only
-    /// for a block that decrypts with confidence — not the log, not an empty
+    /// Open Decoded Block is offered on a block and on its entries, and only
+    /// for a block that decodes with confidence — not the log, not an empty
     /// or unreadable block.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         guard let id = clickedID else { return false }
-        if menuItem.action == #selector(openDecryptedClicked) {
-            return display.row(id)?.decryptableBlock != nil
+        if menuItem.action == #selector(openDecodedClicked) {
+            return display.row(id)?.decodableBlock != nil
         }
         return true
     }

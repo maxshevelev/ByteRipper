@@ -27,13 +27,13 @@ final class LocateTests: XCTestCase {
 }
 
 final class LENVBlockTests: XCTestCase {
-    func testReadsAnEncryptedBlock() throws {
+    func testReadsAnEncodedBlock() throws {
         let area = try XCTUnwrap(LenovoDMI.locate(in: TestStore.standardImage()).first)
         let block = area.blocks[0]
         XCTAssertTrue(block.hasSignature)
         XCTAssertEqual(block.generation, 127)
         XCTAssertEqual(block.xorKey, 0x7F)
-        XCTAssertEqual(block.encoding, .encrypted)
+        XCTAssertEqual(block.encoding, .encoded)
         XCTAssertTrue(block.entriesFit)
         XCTAssertTrue(block.checksumIsValid)
         XCTAssertEqual(block.entries.map(\.key), TestStore.standardEntries.map(\.key))
@@ -49,11 +49,11 @@ final class LENVBlockTests: XCTestCase {
         XCTAssertEqual(second.offset, 0x5030)
     }
 
-    /// What upstream's "decrypt" toggle leaves: the body in the clear under a
+    /// What upstream's "decode" toggle leaves: the body in the clear under a
     /// non-zero key. Told apart by which reading parses, not by the last byte.
     func testReadsABlockStoredInTheClear() {
         let stored = TestStore.block(generation: 5, key: 0x77, entries: TestStore.standardEntries,
-                                     encrypt: false)
+                                     encode: false)
         let block = LENVBlock(offset: 0, stored: stored)
         XCTAssertEqual(block.encoding, .plain)
         XCTAssertEqual(block.effectiveKey, 0)
@@ -71,11 +71,11 @@ final class LENVBlockTests: XCTestCase {
         let block = LENVBlock(offset: 0, stored: stored)
         XCTAssertEqual(block.encoding, .undetermined)
         XCTAssertFalse(block.entriesFit)
-        // What the encrypted reading got through before it ran out is kept.
+        // What the encoded reading got through before it ran out is kept.
         XCTAssertEqual(block.entries.count, TestStore.standardEntries.count)
     }
 
-    /// The sum is over the body as stored — encrypted — which is what makes it
+    /// The sum is over the body as stored — encoded — which is what makes it
     /// line up on every real block examined.
     func testTheChecksumIsOverTheStoredBody() {
         let good = LENVBlock(offset: 0, stored: TestStore.block(
@@ -210,7 +210,7 @@ final class EditTests: XCTestCase {
         return image
     }
 
-    /// The new value lands in both copies, encrypted, with both checksums
+    /// The new value lands in both copies, encoded, with both checksums
     /// right — and reads back as what was written.
     func testSetsBothCopies() throws {
         let image = TestStore.standardImage()
@@ -221,7 +221,7 @@ final class EditTests: XCTestCase {
         let after = try XCTUnwrap(LenovoDMI.locate(in: apply(result.writes, to: image)).first)
         for block in after.blocks {
             XCTAssertTrue(block.checksumIsValid)
-            XCTAssertEqual(block.encoding, .encrypted)
+            XCTAssertEqual(block.encoding, .encoded)
             XCTAssertEqual(block.entry(.smbios(0x0400))?.data, Array("PF9NEW99".utf8))
             XCTAssertEqual(block.generation, area.blocks[after.blocks.firstIndex(of: block)!].generation)
         }
@@ -265,29 +265,29 @@ final class EditTests: XCTestCase {
         }
     }
 
-    /// A block left decrypted is written decrypted: the edit does not quietly
+    /// A block left decoded is written decoded: the edit does not quietly
     /// change how the block is stored.
     func testABlockInTheClearStaysInTheClear() throws {
         let image = TestStore.image(
             log: TestStore.log([], key: 0x7F),
             blocks: [
-                TestStore.block(generation: 2, key: 0x7F, entries: TestStore.standardEntries, encrypt: false),
+                TestStore.block(generation: 2, key: 0x7F, entries: TestStore.standardEntries, encode: false),
                 TestStore.block(generation: 1, key: 0x7F, entries: TestStore.standardEntries)
             ]
         )
         let area = try XCTUnwrap(LenovoDMI.locate(in: image).first)
         let result = try LenovoDMIEdit.set(.smbios(0x0400), to: Array("PF9NEW99".utf8), in: area)
         let after = try XCTUnwrap(LenovoDMI.locate(in: apply(result.writes, to: image)).first)
-        XCTAssertEqual(after.blocks.map(\.encoding), [.plain, .encrypted])
+        XCTAssertEqual(after.blocks.map(\.encoding), [.plain, .encoded])
         XCTAssertTrue(after.blocks.allSatisfy(\.checksumIsValid))
     }
 }
 
-final class DecryptedBlockTests: XCTestCase {
+final class DecodedBlockTests: XCTestCase {
     func testTheBodyReadsInTheClearAndTheHeaderAsStored() throws {
         let area = try XCTUnwrap(LenovoDMI.locate(in: TestStore.standardImage()).first)
         let block = area.blocks[0]
-        let clear = LenovoDMIDecryptedBlock.decrypt(block)
+        let clear = LenovoDMIDecodedBlock.decode(block)
         XCTAssertEqual(Array(clear[..<16]), Array(block.stored[..<16]))
         let serial = try XCTUnwrap(block.entry(.smbios(0x0400)))
         let start = Int(serial.dataRange.lowerBound - block.offset)
@@ -298,39 +298,39 @@ final class DecryptedBlockTests: XCTestCase {
     func testAnUntouchedBlockGoesBackAsItWas() throws {
         let area = try XCTUnwrap(LenovoDMI.locate(in: TestStore.standardImage()).first)
         let block = area.blocks[0]
-        let back = try LenovoDMIDecryptedBlock.encrypt(LenovoDMIDecryptedBlock.decrypt(block), encrypts: true)
+        let back = try LenovoDMIDecodedBlock.encode(LenovoDMIDecodedBlock.decode(block), encodes: true)
         XCTAssertEqual(back, block.stored)
     }
 
-    /// An edit in the clear lands encrypted, with a checksum that adds up.
-    func testAnEditGoesBackEncryptedWithItsChecksum() throws {
+    /// An edit in the clear lands encoded, with a checksum that adds up.
+    func testAnEditGoesBackEncodedWithItsChecksum() throws {
         let area = try XCTUnwrap(LenovoDMI.locate(in: TestStore.standardImage()).first)
         let block = area.blocks[0]
-        var clear = LenovoDMIDecryptedBlock.decrypt(block)
+        var clear = LenovoDMIDecodedBlock.decode(block)
         let start = Int(try XCTUnwrap(block.entry(.smbios(0x0400))).dataRange.lowerBound - block.offset)
         clear.replaceSubrange(start..<(start + 8), with: Array("PF9NEW99".utf8))
 
         let back = LENVBlock(offset: block.offset,
-                             stored: try LenovoDMIDecryptedBlock.encrypt(clear, encrypts: true))
-        XCTAssertEqual(back.encoding, .encrypted)
+                             stored: try LenovoDMIDecodedBlock.encode(clear, encodes: true))
+        XCTAssertEqual(back.encoding, .encoded)
         XCTAssertTrue(back.checksumIsValid)
         XCTAssertEqual(back.entry(.smbios(0x0400))?.data, Array("PF9NEW99".utf8))
     }
 
     func testABlockStoredInTheClearStaysInTheClear() throws {
-        let stored = TestStore.block(generation: 5, key: 0x77, entries: TestStore.standardEntries, encrypt: false)
+        let stored = TestStore.block(generation: 5, key: 0x77, entries: TestStore.standardEntries, encode: false)
         let block = LENVBlock(offset: 0, stored: stored)
-        let back = try LenovoDMIDecryptedBlock.encrypt(LenovoDMIDecryptedBlock.decrypt(block), encrypts: false)
+        let back = try LenovoDMIDecodedBlock.encode(LenovoDMIDecodedBlock.decode(block), encodes: false)
         XCTAssertEqual(back, stored)
     }
 
     func testAWipedBlockIsNotOffered() throws {
         let area = try XCTUnwrap(LenovoDMI.locate(in: TestStore.wipedImage()).first)
-        XCTAssertFalse(LenovoDMIDecryptedBlock.canOpen(area.blocks[0]))
+        XCTAssertFalse(LenovoDMIDecodedBlock.canOpen(area.blocks[0]))
     }
 
     func testAnotherLengthIsRefused() {
-        XCTAssertThrowsError(try LenovoDMIDecryptedBlock.encrypt([0, 1, 2], encrypts: true))
+        XCTAssertThrowsError(try LenovoDMIDecodedBlock.encode([0, 1, 2], encodes: true))
     }
 }
 
@@ -344,8 +344,8 @@ private struct Image: PartReader {
 
 final class BlockCodecTests: XCTestCase {
     /// Opened from the file and put back unchanged, the block is the bytes it
-    /// was; edited, it lands encrypted with a checksum that adds up.
-    func testTheBlockOpensInTheClearAndGoesBackEncrypted() throws {
+    /// was; edited, it lands encoded with a checksum that adds up.
+    func testTheBlockOpensInTheClearAndGoesBackEncoded() throws {
         let image = TestStore.standardImage()
         let area = try XCTUnwrap(LenovoDMI.locate(in: image).first)
         let block = area.blocks[0]
@@ -353,7 +353,7 @@ final class BlockCodecTests: XCTestCase {
         let codec = LenovoDMIBlockCodec(block: block)
 
         var clear = try codec.decode(parent)
-        XCTAssertEqual(clear, LenovoDMIDecryptedBlock.decrypt(block))
+        XCTAssertEqual(clear, LenovoDMIDecodedBlock.decode(block))
         XCTAssertEqual(try codec.encode(clear, into: parent), .overwriting(block.range, with: block.stored))
 
         let start = Int(try XCTUnwrap(block.entry(.smbios(0x0400))).dataRange.lowerBound - block.offset)
@@ -363,5 +363,51 @@ final class BlockCodecTests: XCTestCase {
         XCTAssertTrue(back.checksumIsValid)
         XCTAssertEqual(back.entry(.smbios(0x0400))?.data, Array("PF9NEW99".utf8))
         XCTAssertEqual(codec.badge?.text, "XOR 7F")
+    }
+}
+
+final class BlockOnItsOwnTests: XCTestCase {
+    /// A block opened out of the dump decoded is a block on its own: the
+    /// header as the store holds it, the body in the clear.
+    func testADecodedBlockOnItsOwnReads() throws {
+        let area = try XCTUnwrap(LenovoDMI.locate(in: TestStore.standardImage()).first)
+        let clear = LenovoDMIDecodedBlock.decode(area.blocks[0])
+        let reading = LenovoDMI.read(clear)
+        XCTAssertEqual(reading.areas, [])
+        let block = try XCTUnwrap(reading.blocks.first)
+        XCTAssertEqual(block.offset, 0)
+        XCTAssertEqual(block.encoding, .plain)
+        XCTAssertEqual(block.entry(.smbios(0x0400))?.data, Array("PF0TEST1".utf8))
+        // The header's checksum is the encoded body's, and that is in order.
+        XCTAssertTrue(block.checksumIsOfEncodedBody)
+        XCTAssertTrue(block.checksumIsValid)
+    }
+
+    /// An edit in the clear leaves the header's checksum behind, and the block
+    /// says what it should be — encoded, since that is the one it carries.
+    func testAnEditInTheClearIsAChecksumToRecompute() throws {
+        let area = try XCTUnwrap(LenovoDMI.locate(in: TestStore.standardImage()).first)
+        var clear = LenovoDMIDecodedBlock.decode(area.blocks[0])
+        let start = Int(try XCTUnwrap(area.blocks[0].entry(.smbios(0x0400))).dataRange.lowerBound)
+            - Int(area.blocks[0].offset)
+        clear[start] = UInt8(ascii: "Q")
+        let block = try XCTUnwrap(LenovoDMI.read(clear).blocks.first)
+        XCTAssertFalse(block.checksumIsValid)
+        let fixed = try LenovoDMIDecodedBlock.encode(clear, encodes: true)
+        XCTAssertEqual(block.expectedChecksum, UInt16(fixed[0x0E]) | UInt16(fixed[0x0F]) << 8)
+    }
+
+    /// Blocks inside a store are the store's, not blocks on their own.
+    func testAStoresBlocksAreNotCountedTwice() {
+        let reading = LenovoDMI.read(TestStore.standardImage())
+        XCTAssertEqual(reading.areas.count, 1)
+        XCTAssertEqual(reading.blocks, [])
+    }
+
+    /// `LENV` in code, followed by nothing that parses, is not a block.
+    func testAStraySignatureIsNotABlock() {
+        var image = [UInt8](repeating: 0x41, count: 0x2000)
+        image.replaceSubrange(0x100..<0x104, with: Array("LENV".utf8))
+        XCTAssertEqual(LenovoDMI.read(image).blocks, [])
     }
 }

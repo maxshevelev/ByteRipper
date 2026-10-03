@@ -191,7 +191,7 @@ app knows what any codec does. The ones there are:
 | `CopyPartCodec` | `PartCodec` | the source | the same bytes, same length only (§4.1) | none |
 | `ReadOnlyPartCodec` | `PartCodec` | bytes given | refused, with the reason | Read-only |
 | `UEFIPartCodec` | `UEFIContentSource` | a node of the file, or a buffer along its chain | the rebuild planner (§6), protected ranges read in its own parse | the compression, or Structure |
-| `LenovoDMIBlockCodec` | `LenovoDMI` | a `LENV` block decrypted | encrypted again, checksum recomputed | XOR and the key |
+| `LenovoDMIBlockCodec` | `LenovoDMI` | a `LENV` block decoded | encoded again, checksum recomputed | XOR and the key |
 
 The `ToolRebuilder` protocol proposed here before is superseded: a codec is the rebuilder and the
 reader in one value, made by whoever opens the part, and the app never has to ask a tool-module

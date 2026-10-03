@@ -39,12 +39,12 @@ A compressed UEFI section can be opened *decompressed*. What is then displayed i
 
 ## What the badge in the header says
 
-A fragment does not always hold the bytes of the file as they lie. A decompressed section holds what the section expands to; a Lenovo [[term:lenv|LENV]] block opened decrypted holds its entries in plain text. Such a fragment carries a badge beside its name that states how its bytes relate to the file, and the pointer over the badge gives the full sentence:
+A fragment does not always hold the bytes of the file as they lie. A decompressed section holds what the section expands to; a Lenovo [[term:lenv|LENV]] block opened decoded holds its entries in plain text. Such a fragment carries a badge beside its name that states how its bytes relate to the file, and the pointer over the badge gives the full sentence:
 
 - **LZMA**, **Tiano**, **EFI 1.1** and the other compression names: the bytes were decompressed, and Update in Parent compresses them again with the same algorithm.
 - **Structure**: a volume, a file or a section of the image. Update in Parent lays the image out again around it, so the part may change length.
-- **XOR** followed by a key: the bytes were decrypted, and Update in Parent encrypts them again and recomputes the checksum.
-- **Unencrypted**: a LENV block stored unencrypted. Update in Parent recomputes its checksum only.
+- **XOR** followed by a key: the bytes were decoded, and Update in Parent encodes them again and recomputes the checksum.
+- **Plain**: a LENV block stored not encoded. Update in Parent recomputes its checksum only.
 - **Read-only**: the bytes were derived from the file by a transformation the program cannot reverse, and Update in Parent refuses them.
 
 A fragment without a badge is a plain copy: its bytes are those of the file and go back unchanged.

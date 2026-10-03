@@ -1,7 +1,7 @@
 // swift-tools-version: 5.9
 //
 //  LenovoDMITool — the identity store of Lenovo's InsydeH2O firmware, read: the
-//  change log and the two `LENV` blocks, their entries decrypted, and which
+//  change log and the two `LENV` blocks, their entries decoded, and which
 //  block the firmware uses.
 //
 //  The format and the parse are `LenovoDMI`'s; this is what the panel makes of

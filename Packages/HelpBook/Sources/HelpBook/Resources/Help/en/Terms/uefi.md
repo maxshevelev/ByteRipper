@@ -463,7 +463,7 @@ Lost fields are not always lost for good. Some vendors — HP and Acer among the
 
 Where the fields sit inside the image is not standardised. Each vendor puts them where it likes and the layout moves between generations, so carrying them over is in general a job of comparing two images.
 
-Lenovo InsydeH2O firmware is the exception the app reads: it keeps these fields in an encrypted store of its own, the [[term:lenv|LENV]] blocks, which **Tools ▸ Lenovo DMI** decrypts and lists ([[topic:tool-lenovo-dmi|Lenovo DMI]]).
+Lenovo InsydeH2O firmware is the exception the app reads: it keeps these fields in an encoded store of its own, the [[term:lenv|LENV]] blocks, which **Tools ▸ Lenovo DMI** decodes and lists ([[topic:tool-lenovo-dmi|Lenovo DMI]]).
 
 @see term:serial-data
 @see term:lenv
@@ -471,13 +471,13 @@ Lenovo InsydeH2O firmware is the exception the app reads: it keeps these fields 
 
 @term lenv
 @name LENV block
-@short One of the two copies of Lenovo's identity store: the serial number, UUID, machine type and model and the Windows key, encrypted.
+@short One of the two copies of Lenovo's identity store: the serial number, UUID, machine type and model and the Windows key, encoded.
 
-Lenovo InsydeH2O firmware keeps a machine's [[term:dmi|DMI]] data in two blocks of 4 KiB with the signature `LENV`. Each begins with a 16-byte header that is not encrypted: the signature, the **generation**, the number of entries, an access flag, an **XOR key** and a **checksum**. Every byte after the header is XORed with the key, so the serial number cannot be found in the dump by searching for it.
+Lenovo InsydeH2O firmware keeps a machine's [[term:dmi|DMI]] data in two blocks of 4 KiB with the signature `LENV`. Each begins with a 16-byte header that is not encoded: the signature, the **generation**, the number of entries, an access flag, an **XOR key** and a **checksum**. Every byte after the header is XORed with the key, so the serial number cannot be found in the dump by searching for it.
 
 The entries follow the header back to back. Each is filed under a namespace of 14 bytes and a type of 2 bytes, and carries a size, flags and the value. The SMBIOS fields share one namespace.
 
-The checksum is the sum of the bytes after the header as stored, that is encrypted, kept to 16 bits. The firmware reads the block with the higher generation and ignores a block with generation 0. Both blocks with generation 0 and nothing written after the header mean the store has been wiped.
+The checksum is the sum of the bytes after the header as stored, that is encoded, kept to 16 bits. The firmware reads the block with the higher generation and ignores a block with generation 0. Both blocks with generation 0 and nothing written after the header mean the store has been wiped.
 
 A value cannot change its length in place: the firmware builds the SMBIOS tables from these entries partly at fixed offsets.
 

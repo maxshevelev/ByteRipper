@@ -29,7 +29,7 @@ let package = Package(
         // Every word this shows the user comes from the one catalogue the
         // whole app is translated in.
         .package(path: "../Localization"),
-        // The codec a block opened decrypted goes back into the file through.
+        // The codec a block opened decoded goes back into the file through.
         .package(path: "../PartCodec")
     ],
     targets: [

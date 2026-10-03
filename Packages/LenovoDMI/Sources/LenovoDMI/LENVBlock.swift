@@ -30,14 +30,14 @@ public struct LENVBlock: Equatable, Sendable {
     public enum Encoding: Equatable, Sendable {
         /// The body is XORed with the key. What every live block examined
         /// holds.
-        case encrypted
+        case encoded
         /// The body is in the clear under a non-zero key — what upstream's
-        /// "decrypt" toggle leaves behind. Whether the firmware accepts it is
+        /// "decode" toggle leaves behind. Whether the firmware accepts it is
         /// not known.
         case plain
         /// The key is zero, so the two are the same bytes.
         case keyIsZero
-        /// Neither reading parses; the entries shown are what the encrypted
+        /// Neither reading parses; the entries shown are what the encoded
         /// reading gave before it ran out.
         case undetermined
     }
@@ -47,7 +47,32 @@ public struct LENVBlock: Equatable, Sendable {
 
     /// The checksum the body adds up to.
     public var computedChecksum: UInt16 { storedBody.sum16 }
-    public var checksumIsValid: Bool { computedChecksum == checksum }
+
+    /// What the body adds up to encoded with the header's key — the
+    /// checksum this block would carry back in the store.
+    public var encodedChecksum: UInt16 { storedBody.xored(with: xorKey).sum16 }
+
+    /// The header's checksum is the one the body has encoded, although the
+    /// body here is in the clear: a block opened decoded, whose header was
+    /// left as the store holds it.
+    public var checksumIsOfEncodedBody: Bool {
+        encoding == .plain && checksum != computedChecksum && checksum == encodedChecksum
+    }
+
+    /// The checksum adds up — over the body as it lies, or, for a block in the
+    /// clear, over the body as it would be encoded again. Upstream's
+    /// "decode" rewrites the checksum for the clear body; a block opened
+    /// decoded here keeps the store's. Either is a block in order.
+    public var checksumIsValid: Bool {
+        computedChecksum == checksum || checksumIsOfEncodedBody
+    }
+
+    /// The checksum the header should carry: the clear body's, unless the
+    /// header already speaks for the encoded one.
+    public var expectedChecksum: UInt16 {
+        encoding == .plain && checksum != computedChecksum && xorKey != 0
+            ? encodedChecksum : computedChecksum
+    }
 
     /// A block the firmware can use: signed, with a generation.
     public var isUsable: Bool { hasSignature && generation != 0 }
@@ -60,7 +85,7 @@ public struct LENVBlock: Equatable, Sendable {
             && storedBody.allSatisfy { $0 == 0xFF || $0 == 0x00 }
     }
 
-    /// The key the body is decoded with: the header's for an encrypted block,
+    /// The key the body is decoded with: the header's for an encoded block,
     /// none for one that is already in the clear.
     public var effectiveKey: UInt8 {
         encoding == .plain ? 0 : xorKey
@@ -91,26 +116,26 @@ public struct LENVBlock: Equatable, Sendable {
             entriesFit = reading.fits
             return
         }
-        let encrypted = LENVBlock.walk(body.xored(with: xorKey), count: count, base: base)
+        let encoded = LENVBlock.walk(body.xored(with: xorKey), count: count, base: base)
         let clear = LENVBlock.walk(body, count: count, base: base)
-        switch (encrypted.fits, clear.fits) {
+        switch (encoded.fits, clear.fits) {
         case (true, false):
-            encoding = .encrypted; entries = encrypted.entries
+            encoding = .encoded; entries = encoded.entries
         case (false, true):
             encoding = .plain; entries = clear.entries
         case (true, true):
             // Both parse — a short block can. What follows the entries is
             // zero in the clear on every block examined, so the reading that
             // leaves zeros behind is the one the firmware wrote.
-            if clear.tailIsZero && !encrypted.tailIsZero {
+            if clear.tailIsZero && !encoded.tailIsZero {
                 encoding = .plain; entries = clear.entries
             } else {
-                encoding = .encrypted; entries = encrypted.entries
+                encoding = .encoded; entries = encoded.entries
             }
         case (false, false):
             encoding = .undetermined
-            entries = encrypted.entries.count >= clear.entries.count
-                ? encrypted.entries : clear.entries
+            entries = encoded.entries.count >= clear.entries.count
+                ? encoded.entries : clear.entries
         }
         entriesFit = encoding != .undetermined
     }
