@@ -43,6 +43,21 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertEqual(UEFITreeDisplay.subtypeText(for: padding), "Empty (FFh)")
     }
 
+    /// Erased padding and free space are room, not content, and read grey;
+    /// padding with data, or with rows read inside it, does not.
+    func testEmptyPaddingAndFreeSpaceAreEmptySpace() {
+        let erased = UEFINode(kind: .padding, name: "", range: 0..<0x100, isErased: true)
+        let data = UEFINode(kind: .padding, name: "", range: 0..<0x100, isErased: false)
+        let free = UEFINode(kind: .freeSpace, name: "", range: 0..<0x100, isErased: true)
+        var holding = erased
+        holding.children = [data]
+        XCTAssertTrue(UEFITreeDisplay.isEmptySpace(erased))
+        XCTAssertTrue(UEFITreeDisplay.isEmptySpace(free))
+        XCTAssertFalse(UEFITreeDisplay.isEmptySpace(data))
+        XCTAssertFalse(UEFITreeDisplay.isEmptySpace(holding))
+        XCTAssertFalse(UEFITreeDisplay.isEmptySpace(TestUEFI.volume().node))
+    }
+
     /// A node with no subtype says nothing in the column — not a guess.
     func testANodeWithNoSubtypeLeavesTheColumnEmpty() {
         XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.microcode().node), "")

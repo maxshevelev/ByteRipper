@@ -84,6 +84,20 @@ public enum UEFITreeDisplay {
         node.kind == .padding && node.isErased && node.children.isEmpty
     }
 
+    /// A row that stands for room rather than for content: erased padding
+    /// ("Empty (FFh)") and free space. The tree draws it grey, the way the ME
+    /// tree draws a section that holds nothing — a place in the layout, not
+    /// something to go and look at. Erased padding with rows read inside it is
+    /// not one: what was read there is content.
+    public static func isEmptySpace(_ node: UEFINode) -> Bool {
+        guard node.children.isEmpty else { return false }
+        switch node.kind {
+        case .freeSpace: return true
+        case .padding: return node.isErased
+        default: return false
+        }
+    }
+
     /// `nodes` as the tree lists them: every one, or all but the empty
     /// padding — and all but the copies of variables `hiding` names, which a
     /// store's later entries replaced (`NvramVariableHistory.supersededCopies`).

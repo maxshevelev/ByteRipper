@@ -1497,10 +1497,12 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // Set per row, not once when the cell is made: a reused cell carries
         // the font it was made with, and the zoom moves under it.
         cell.textField?.font = ToolPanelFont.body()
-        // And back to the label colour, for the same reason: a UEFI row is
-        // never the grey an empty ME section wears, and the cell this row was
-        // handed may have been one.
-        cell.textField?.textColor = .labelColor
+        // The colour too, for the same reason. Empty padding and free space
+        // read grey, the whole row, the way an empty ME section does; every
+        // other row is back to the label colour, whatever the cell wore last.
+        cell.textField?.textColor = UEFITreeDisplay.isEmptySpace(node)
+            ? .secondaryLabelColor
+            : .labelColor
         // The Name column wears the row's icons: its problem, with what is
         // wrong under the pointer, and its badges (`Design/ROW_MARKS.md`).
         if identifier == Column.name {

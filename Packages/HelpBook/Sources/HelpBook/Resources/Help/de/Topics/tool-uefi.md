@@ -1,4 +1,4 @@
-@source-sha 138bd9e966eff6ca4f6abf761e1eb071c0ea528f6116e12335e5bac7021c8fbf
+@source-sha 2d50017704ed5339e189f28dffefb97e03373ca563af66ecf50d4e4b6515600d
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -32,7 +32,7 @@ Rechtsklick auf einen Knoten:
 
 ## Padding
 
-Zwischen den Strukturen eines Dumps liegt gelöschter Raum. Der Baum lässt ihn weg, solange im Filtermenü **Leeres Padding anzeigen** nicht abgehakt ist. Das Menü öffnet das Trichtersymbol in der Titelzeile, links neben **der Schaltfläche in Form einer Zielscheibe**. Solange der Baum etwas anzeigt, das er standardmäßig weglässt, ist das Symbol farbig hervorgehoben. Padding mit Daten wird in jedem Fall aufgeführt, ebenso der freie Speicher eines Volumes, der angibt, wie viel Platz darin noch frei ist.
+Zwischen den Strukturen eines Dumps liegt gelöschter Raum. Der Baum lässt ihn weg, solange im Filtermenü **Leeres Padding anzeigen** nicht abgehakt ist. Das Menü öffnet das Trichtersymbol in der Titelzeile, links neben **der Schaltfläche in Form einer Zielscheibe**. Solange der Baum etwas anzeigt, das er standardmäßig weglässt, ist das Symbol farbig hervorgehoben. Padding mit Daten wird in jedem Fall aufgeführt, ebenso der freie Speicher eines Volumes, der angibt, wie viel Platz darin noch frei ist. Gelöschtes Padding (**Empty (FFh)**) und freier Speicher werden grau dargestellt: ein Platz in der Aufteilung, der nichts enthält.
 
 ## Variablenwerte
 
