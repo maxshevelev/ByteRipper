@@ -90,4 +90,94 @@ final class EmptyStateViewTests: XCTestCase {
         XCTAssertEqual(line.page, page, "and clicking it opens that release")
     }
 
+    // MARK: - The release notes
+
+    private func release(_ version: String, notes: String? = nil) throws -> Release {
+        Release(
+            version: try XCTUnwrap(AppVersion(version)),
+            page: try XCTUnwrap(
+                URL(string: "https://github.com/maxshevelev/ByteRipper/releases/tag/v\(version)")
+            ),
+            body: notes,
+        )
+    }
+
+    /// Until the app tells a release to the screen, the section stays off: a
+    /// window with no news is not a window with a heading over nothing.
+    func testTheReleaseNotesStayOffUntilTold() {
+        let view = makeEmptyView()
+
+        XCTAssertNil(view.releaseNotesForTesting)
+        XCTAssertFalse(view.isShowingReleaseNotesForTesting)
+    }
+
+    /// The build running is told the notes of its own release, under the
+    /// heading that says so, and the first paragraph is all it gets. The
+    /// "available" line is not part of it: that line is the newer release's.
+    func testTheNotesOfTheRunningBuildAreToldUnderTheirOwnHeading() throws {
+        let view = makeEmptyView()
+        let release = try release(
+            "0.9.0",
+            notes: "A release about the structure tree.\n\n### Smaller things\n\n- One more thing."
+        )
+
+        view.showReleaseNotes(release, isRunningBuild: true)
+
+        let notes = try XCTUnwrap(view.releaseNotesForTesting)
+        XCTAssertEqual(notes.heading, "What's new in version 0.9.0")
+        XCTAssertEqual(notes.text, "A release about the structure tree.")
+        XCTAssertNil(view.releaseLineForTesting, "the build running gets no update line")
+    }
+
+    /// A newer release is told under the other heading — and it is the same
+    /// release the "available" line is about, the two standing together.
+    func testTheNotesOfANewerReleaseCarryTheNewerHeading() throws {
+        let view = makeEmptyView()
+        let release = try release("0.9.1", notes: "A release about the structure tree.")
+
+        view.showAvailableRelease(release)
+        view.showReleaseNotes(release, isRunningBuild: false)
+
+        let notes = try XCTUnwrap(view.releaseNotesForTesting)
+        XCTAssertEqual(notes.heading, "What's new in the new version 0.9.1")
+        XCTAssertNotNil(view.releaseLineForTesting, "the update line stands with the notes")
+    }
+
+    /// A release written without notes leaves the section off: there is
+    /// nothing to tell, and a heading over nothing is a heading over nothing.
+    func testAReleaseWithoutNotesLeavesTheSectionOff() throws {
+        let view = makeEmptyView()
+
+        view.showReleaseNotes(try release("0.9.0"), isRunningBuild: true)
+
+        XCTAssertNil(view.releaseNotesForTesting)
+    }
+
+    /// Without bookmarks the notes take the bottom row whole, wrapped at a
+    /// paragraph's measure rather than the window's width.
+    func testTheNotesWithoutBookmarksTakeTheWholeBottomRow() throws {
+        let view = makeEmptyView()  // 600 wide
+        view.showReleaseNotes(try release("0.9.0", notes: "A release about the structure tree."),
+                              isRunningBuild: true)
+
+        XCTAssertEqual(view.releaseNotesWidthForTesting, 504.0,
+                       "a paragraph's measure within the 600 the view is given")
+        XCTAssertNil(view.bookmarkScrollWidthForTesting, "there is no list")
+    }
+
+    /// With bookmarks, the bottom row splits into two equal halves: the list
+    /// is pinned to its half, and the notes wrap at the same width.
+    func testTheNotesWithBookmarksSplitTheBottomRowInHalves() throws {
+        let view = makeEmptyView()  // 600 wide
+        view.setBookmarks([Bookmark(row: 0x10, name: "one")])
+        view.showReleaseNotes(try release("0.9.0", notes: "A release about the structure tree."),
+                              isRunningBuild: true)
+
+        let half = max(200.0, min(400.0, (600 - 96 - 36) / 2.0))  // 234
+        XCTAssertEqual(view.bookmarkScrollWidthForTesting, half,
+                       "the list takes its half of the row")
+        XCTAssertEqual(view.releaseNotesWidthForTesting, half,
+                       "the notes wrap at the same width, so the halves are equal")
+    }
+
 }

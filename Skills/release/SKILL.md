@@ -79,12 +79,19 @@ anything wrong. The `.dmg` lands in `build/release/` (git-ignored).
 
 ### 6. The release notes
 
-Written to a file in the scratchpad, never committed. The shape the releases
+Written to a file in the scratchpad, never committed. The notes are for the
+end user: what this release lets them do that it could not before, and what it
+fixed — of this release only. A commit that did not make it into this release
+is not in these notes, however interesting its subject. The shape the releases
 have kept since 0.8:
 
 - **Title:** `ByteRipper <version> — <what the release is about>`, a phrase,
   lower case after the dash (*a part of a dump, opened over it*).
 - **Opening paragraph:** what the release is about, in two or three sentences.
+  The landing screen shows this paragraph in its "What's new" section
+  (`EmptyStateView.showReleaseNotes`) — the reader gets it alone, with nothing
+  below it to read — so it is the overview of the whole release: short and
+  dense, in plain prose, no markdown.
 - **`###` sections**, the larger themes first, each a short paragraph and then
   bullets with the feature in **bold** where it starts. Then `### Smaller
   things` and `### Fixes` — a fix says what the user saw go wrong, not the

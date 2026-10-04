@@ -949,6 +949,8 @@
 "Warning" = "Предупреждение";
 "What ByteRipper is for" = "Для чего нужен ByteRipper";
 "What is %1$@?" = "Что такое %1$@?";
+"What's new in version %1$@" = "Что нового в версии %1$@";
+"What's new in the new version %1$@" = "Что нового в новой версии %1$@";
 "Where This Knowledge Comes From" = "Откуда взяты эти знания";
 "Where to start reading the help book" = "С чего начать в справке";
 "Whether Boot Guard is enforced is set in the chipset's fuses, not in this image: the marks say what an edit would break if it is. Vendor hashes are checked by the firmware itself." = "Включён ли Boot Guard, задано в фьюзах чипсета, а не в этом образе: пометки говорят, что сломает правка, если он включён. Хеши вендора проверяет сама прошивка.";

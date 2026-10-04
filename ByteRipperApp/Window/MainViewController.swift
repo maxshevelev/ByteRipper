@@ -1152,7 +1152,7 @@ final class MainViewController: NSViewController {
                 self?.setPaneDragCopyingEverywhere(copying)
             }
             setContentView(emptyView)
-            announceNewerRelease(on: emptyView)
+            announceRelease(on: emptyView)
 
         case .singleFile:
             let paneModel = windowModel.pane1
@@ -1389,28 +1389,35 @@ final class MainViewController: NSViewController {
         syncFindBarToActivePane()
     }
 
-    /// Asks whether a newer release has been published, and — if one has — says
-    /// so on the landing screen that is on it now.
+    /// Asks which release the landing screen should say something about — the
+    /// build running, or a newer one published — and tells the screen that is
+    /// on it now: the notes of that release, and the "available" line too when
+    /// a newer one is what it is.
     ///
     /// In the background, and it never holds the window up: the screen is set
     /// up and drawn first, and the line arrives after it, when it arrives at
     /// all. Nothing waits for it, and no failure of it is the window's problem
     /// — offline is the normal state of a bench, and a landing screen that
     /// reported its own errand would be a landing screen that has stopped being
-    /// about the user's file (`ReleaseSource.newerRelease(than:)`).
+    /// about the user's file (`ReleaseSource.releaseToAnnounce(comparedTo:)`).
     ///
     /// The answer is held for the run (`GitHubReleases`), so a window that goes
     /// back to empty — which is what closing the last file does — asks again of
     /// a value in memory rather than of github.com.
     @discardableResult
-    private func announceNewerRelease(on emptyView: EmptyStateView) -> Task<Void, Never>? {
+    private func announceRelease(on emptyView: EmptyStateView) -> Task<Void, Never>? {
         releaseCheckTask = Task { [weak self, weak emptyView] in
-            guard let release = await Self.releases
-                .newerRelease(than: .current) else { return }
+            guard let announcement = await Self.releases
+                .releaseToAnnounce(comparedTo: .current) else { return }
             // The answer is older than the question: a file may have been
             // opened, or another window drawn, since it was asked.
             guard let self, self.emptyStateView === emptyView else { return }
-            emptyView?.showAvailableRelease(release)
+            // The line under the version is the newer case's: it is where a
+            // download is. The running build's notes stand alone.
+            if !announcement.isRunningBuild {
+                emptyView?.showAvailableRelease(announcement.release)
+            }
+            emptyView?.showReleaseNotes(announcement.release, isRunningBuild: announcement.isRunningBuild)
         }
         return releaseCheckTask
     }

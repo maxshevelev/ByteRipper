@@ -10,8 +10,65 @@ struct Release: Equatable, Sendable {
     /// landing screen opens when its line is clicked.
     let page: URL
 
+    /// The notes as published: markdown, or `nil` when the release has none.
+    /// The landing screen shows the first paragraph of them and nothing else
+    /// (`summary`); the rest is where a click on the line above goes.
+    var body: String? = nil
+
     /// Whether this release is newer than the version that is running.
     func isNewer(than running: AppVersion) -> Bool { version > running }
+
+    /// The opening paragraph of the notes as plain prose — the only part the
+    /// landing screen shows — or `nil` when there is no paragraph to show:
+    /// no notes at all, or notes whose first paragraph is empty.
+    var summary: String? {
+        body.flatMap(Self.firstParagraph(of:))
+    }
+
+    /// The first paragraph of a release body, read as the prose it is written
+    /// in.
+    ///
+    /// The body is markdown, but the opening paragraph is the summary the
+    /// release is written with — plain sentences, wrapped over source lines the
+    /// way a paragraph wraps. The reading is: the first paragraph that says
+    /// anything, its wrapped lines joined into one line, and the marks the
+    /// prose may carry reduced to the prose itself — **bold** and `code` lose
+    /// their marks, a link keeps its words and loses its destination.
+    static func firstParagraph(of body: String) -> String? {
+        let normalized = body.replacingOccurrences(of: "\r\n", with: "\n")
+        // A paragraph ends at a blank line; a single newline inside one is a
+        // wrap, not a break.
+        guard let first = normalized.components(separatedBy: "\n\n")
+            .first(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+        else { return nil }
+
+        var text = first
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        // `[words](destination)` keeps its words. Measured against the shape
+        // the bodies carry: the words have no `]` in them, and the
+        // destination has no `)` in it.
+        if let links = try? NSRegularExpression(pattern: "\\[([^\\]]*)\\]\\([^)]*\\)") {
+            text = links.stringByReplacingMatches(
+                in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "$1")
+        }
+        text = text.replacingOccurrences(of: "**", with: "")
+        text = text.replacingOccurrences(of: "`", with: "")
+        text = text.trimmingCharacters(in: .whitespaces)
+        return text.isEmpty ? nil : text
+    }
+}
+
+/// What the landing screen is told about, and which of its two cases it is:
+/// the build running, or one the build is older than.
+struct ReleaseAnnouncement: Equatable, Sendable {
+    let release: Release
+
+    /// Whether the release is the build running — as opposed to being newer
+    /// than it, the case that also gets the "available" line.
+    let isRunningBuild: Bool
 }
 
 /// Where "is there a newer version of this app?" is asked.
@@ -33,19 +90,26 @@ struct NoReleases: ReleaseSource {
 }
 
 extension ReleaseSource {
-    /// The newest published release, if it is newer than the version running —
-    /// the whole question in one place, so that no caller has to remember both
-    /// halves of it and get the second one wrong.
+    /// The release the landing screen shows its notes about — the newest
+    /// published one, when it is the build running or one newer than it — and
+    /// which of the two cases that is.
     ///
-    /// Everything that can go wrong answers `nil`: no network, a rate limit, a
-    /// repository with no releases, a bundle with no version to compare against.
-    /// The landing screen is there to open a file, not to report on github.com;
-    /// a bench whose window says nothing about a newer version has lost nothing,
-    /// and one that is told a check failed has been handed a problem it cannot
-    /// act on.
-    func newerRelease(than running: AppVersion?) async -> Release? {
+    /// Everything that can go wrong, and every case that leaves nothing to say,
+    /// answers `nil`: no network, a rate limit, a repository with no releases,
+    /// a bundle with no version to compare against, and a build made after the
+    /// newest release was published — for that one no published release is
+    /// either the build or news about it. The landing screen is there to open a
+    /// file, not to report on github.com; a bench whose window says nothing has
+    /// lost nothing, and one that is told a check failed has been handed a
+    /// problem it cannot act on.
+    func releaseToAnnounce(comparedTo running: AppVersion?) async -> ReleaseAnnouncement? {
         guard let running, let release = try? await latestRelease() else { return nil }
-        return release.isNewer(than: running) ? release : nil
+        if release.version == running {
+            return ReleaseAnnouncement(release: release, isRunningBuild: true)
+        }
+        return release.isNewer(than: running)
+            ? ReleaseAnnouncement(release: release, isRunningBuild: false)
+            : nil
     }
 }
 
@@ -137,6 +201,8 @@ struct GitHubReleases: ReleaseSource {
         struct Payload: Decodable {
             var tag_name: String
             var html_url: String
+            /// The notes markdown, or `null` when the release has none.
+            var body: String?
         }
         let payload = try JSONDecoder().decode(Payload.self, from: data)
         guard let version = AppVersion(payload.tag_name) else { return nil }
@@ -146,7 +212,7 @@ struct GitHubReleases: ReleaseSource {
         // *relative* URL out of almost anything.
         let page = openable(payload.html_url)
             ?? repository.appendingPathComponent("releases")
-        return Release(version: version, page: page)
+        return Release(version: version, page: page, body: payload.body)
     }
 
     /// A URL that can be opened in a browser: an absolute `http` or `https` one.

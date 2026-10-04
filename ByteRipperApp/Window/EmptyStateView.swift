@@ -62,6 +62,24 @@ final class EmptyStateView: NSView {
     private var releasePage: URL?
     private var releaseText = ""
 
+    /// The release the landing screen tells about, under its own heading.
+    /// Hidden while there is no release to tell about — the app is the one that
+    /// knows whether there is (`ReleaseSource.releaseToAnnounce(comparedTo:)`).
+    // help: window.empty-state.release-notes
+    private let notesHeading = NSTextField(labelWithString: "")
+    private let notesLabel = NSTextField(wrappingLabelWithString: "")
+    private var notesSection: NSStackView?
+
+    /// The row the bottom of the screen belongs to: the bookmarks on the left,
+    /// the release notes on the right. Hidden while neither is on it.
+    private var bottomRow: NSStackView?
+
+    /// The state the bottom row was last sized for: its width and which
+    /// sections are on it. A change to either is what a re-sizing is for —
+    /// sizing it again on a layout pass where nothing changed would be a pass
+    /// that asks for another pass.
+    private var bottomRowState: (width: CGFloat, bookmarks: Bool, notes: Bool)?
+
     /// The bookmark list shown under the hint, and the scroll view that bounds
     /// it. Hidden while the window has no marks.
     private let bookmarkGrid = NSGridView(views: [])
@@ -94,6 +112,26 @@ final class EmptyStateView: NSView {
     /// The gap between the hint and the bookmarks section, wider than the
     /// stack's own spacing.
     private static let bookmarkSectionGap: CGFloat = 30
+
+    /// The gap between the two halves of the bottom row: the bookmarks and the
+    /// release notes are different subjects, not two columns of one.
+    private static let bottomRowGap: CGFloat = 36
+
+    /// The air around the bottom row, on both sides together: the row never
+    /// touches the window's edges, whatever it is split into.
+    private static let bottomRowInset: CGFloat = 96
+
+    /// The widest a half of the bottom row gets. Past it, a wider window gives
+    /// the screen air, not text.
+    private static let maxBottomRowHalf: CGFloat = 400
+
+    /// The narrowest a half of the bottom row gets: the bookmarks keep their
+    /// own minimum, and a half that could not show them is no half at all.
+    private static let minBottomRowHalf: CGFloat = 200
+
+    /// The widest the notes wrap to when they take the bottom row alone — a
+    /// paragraph's measure, not the window's width.
+    private static let maxNotesWidth: CGFloat = 520
 
     /// The app's name and version, as the landing screen signs off with them:
     /// "ByteRipper 0.8.2". Read from the bundle rather than written here, so the
@@ -198,9 +236,9 @@ final class EmptyStateView: NSView {
         stackView.addArrangedSubview(titleLabel)
         stackView.addArrangedSubview(hintRow)
         stackView.addArrangedSubview(versionBlock)
-        stackView.addArrangedSubview(makeBookmarkSection())
+        stackView.addArrangedSubview(makeBottomRow())
         stackView.setCustomSpacing(Self.versionGap, after: hintRow)
-        // More air than the stack's usual rhythm: the list is a different
+        // More air than the stack's usual rhythm: the bottom row is a different
         // subject from the landing screen above it, not the next line of it.
         stackView.setCustomSpacing(Self.bookmarkSectionGap, after: versionBlock)
         addSubview(stackView)
@@ -225,6 +263,8 @@ final class EmptyStateView: NSView {
         // The window size is only known once the view is in a window; rescale
         // the icon for the real window the view lands in.
         updateIconSize()
+        // …and size the bottom row to the window it lands in.
+        updateBottomRow()
     }
 
     override func layout() {
@@ -232,6 +272,8 @@ final class EmptyStateView: NSView {
         // Resizing the window changes its shorter side, so the icon must scale
         // along with it.
         updateIconSize()
+        // …and the bottom row's halves change with its width.
+        updateBottomRow()
     }
 
     private var currentIconSize: CGFloat = 0
@@ -239,6 +281,83 @@ final class EmptyStateView: NSView {
     /// Sizes the icon to a third of the window's shorter side, capped at
     /// `maxIconSize`. Falls back to a fixed 96pt when there's no window yet
     /// (e.g. in headless tests).
+    /// The bottom of the screen: the bookmarks on the left, the release notes
+    /// on the right, each in its own section and the row hidden while neither
+    /// is on it. One section shown, it keeps the size it wants and the row
+    /// follows; both shown, the row splits into two equal halves.
+    private func makeBottomRow() -> NSView {
+        let row = NSStackView()
+        row.orientation = .horizontal
+        // The sections' headings, not their content, line up.
+        row.alignment = .top
+        row.spacing = Self.bottomRowGap
+        row.addArrangedSubview(makeBookmarkSection())
+        row.addArrangedSubview(makeNotesSection())
+        row.isHidden = true
+        bottomRow = row
+        return row
+    }
+
+    /// The release notes section: a heading and the summary under it.
+    private func makeNotesSection() -> NSView {
+        // In the landing screen's own muted grey: the headline above is it,
+        // and what the section is about is which build this window is — the
+        // same subject as the version line, not a new subject of its own.
+        notesHeading.font = .systemFont(ofSize: 13, weight: .semibold)
+        notesHeading.textColor = Self.iconColor
+        notesHeading.alignment = .left
+
+        notesLabel.font = .systemFont(ofSize: 13)
+        notesLabel.textColor = .secondaryLabelColor
+        notesLabel.lineBreakMode = .byWordWrapping
+        notesLabel.maximumNumberOfLines = 0
+
+        let section = NSStackView()
+        section.orientation = .vertical
+        section.alignment = .leading
+        section.spacing = 8
+        section.addArrangedSubview(notesHeading)
+        section.addArrangedSubview(notesLabel)
+        section.isHidden = true
+        notesSection = section
+        return section
+    }
+
+    /// Sizes the bottom row to what is on it.
+    ///
+    /// One section, it takes the size it wants and the row follows — the
+    /// bookmarks keep their own width, the notes wrap at a paragraph's
+    /// measure. Both, the row splits into two equal halves, each no wider than
+    /// the room the window leaves and no narrower than the bookmarks' own
+    /// minimum: a half that could not show the list is no half at all.
+    private func updateBottomRow() {
+        let width = bounds.width
+        let showingBookmarks = !(bookmarkSection?.isHidden ?? true)
+        let showingNotes = !(notesSection?.isHidden ?? true)
+        bottomRow?.isHidden = !showingBookmarks && !showingNotes
+        guard width != bottomRowState?.width
+            || showingBookmarks != bottomRowState?.bookmarks
+            || showingNotes != bottomRowState?.notes
+        else { return }
+        bottomRowState = (width, showingBookmarks, showingNotes)
+
+        guard showingBookmarks && showingNotes else {
+            if showingNotes {
+                notesLabel.preferredMaxLayoutWidth =
+                    max(240, min(Self.maxNotesWidth, width - Self.bottomRowInset))
+            }
+            return
+        }
+        let room = width - Self.bottomRowInset - Self.bottomRowGap
+        let half = max(Self.minBottomRowHalf,
+                       min(Self.maxBottomRowHalf, room / 2))
+        // The list keeps its one width constraint; in the split its constant
+        // is its half rather than its fitting width, and the notes wrap at
+        // the same width, which is what makes the two halves equal.
+        bookmarkScrollWidth?.constant = half
+        notesLabel.preferredMaxLayoutWidth = half
+    }
+
     /// The bookmarks section: a heading and a read-only list.
     ///
     /// It is the answer to what an empty window is *for*. The marks belong to
@@ -284,7 +403,10 @@ final class EmptyStateView: NSView {
     func setBookmarks(_ bookmarks: [Bookmark]) {
         while bookmarkGrid.numberOfRows > 0 { bookmarkGrid.removeRow(at: 0) }
         bookmarkSection?.isHidden = bookmarks.isEmpty
-        guard !bookmarks.isEmpty else { return }
+        guard !bookmarks.isEmpty else {
+            updateBottomRow()
+            return
+        }
 
         bookmarkHeading.stringValue = bookmarks.count == 1
             ? L("1 Bookmark Here:")
@@ -324,6 +446,7 @@ final class EmptyStateView: NSView {
             bookmarkScrollHeight = height
             bookmarkScrollWidth = width
         }
+        updateBottomRow()
     }
 
     /// The heights the list's scroll view is pinned to — one, however many
@@ -361,14 +484,34 @@ final class EmptyStateView: NSView {
         return address.textColor
     }
 
+    /// What the bottom row's notes section says, or `nil` while there is no
+    /// release to tell about (for tests).
+    var releaseNotesForTesting: (heading: String, text: String)? {
+        guard !(notesSection?.isHidden ?? true) else { return nil }
+        return (notesHeading.stringValue, notesLabel.stringValue)
+    }
+
+    /// Whether the release notes are on screen at all (for tests).
+    var isShowingReleaseNotesForTesting: Bool {
+        !(notesSection?.isHidden ?? true)
+    }
+
+    /// The width the list's scroll view is pinned to (for tests) — its fitting
+    /// width, or its half of the bottom row when the notes are on it too.
+    var bookmarkScrollWidthForTesting: CGFloat? { bookmarkScrollWidth?.constant }
+
+    /// The width the notes wrap at (for tests) — the half of the bottom row
+    /// when the bookmarks are on it too, a paragraph's measure when they are not.
+    var releaseNotesWidthForTesting: CGFloat { notesLabel.preferredMaxLayoutWidth }
+
     /// Announces a newer release under the version line: one line, and one click
     /// on it opens that release's page on github.com.
     ///
     /// Nothing here asks whether there *is* one. The app asks
-    /// (`ReleaseSource.newerRelease(than:)`) and calls this only when the answer
-    /// is a release this build is older than — a view that went looking for
-    /// releases would be a view that does IO, and the landing screen is drawn
-    /// again every time the last file is closed.
+    /// (`ReleaseSource.releaseToAnnounce(comparedTo:)`) and calls this only when
+    /// the answer is a release this build is older than — a view that went
+    /// looking for releases would be a view that does IO, and the landing
+    /// screen is drawn again every time the last file is closed.
     func showAvailableRelease(_ release: Release) {
         releasePage = release.page
         releaseText = L("Version %1$@ is available on GitHub", release.version.text)
@@ -380,6 +523,28 @@ final class EmptyStateView: NSView {
                              L("Version %1$@ is available — open its page on GitHub",
                                release.version.text))
         releaseButton.isHidden = false
+    }
+
+    /// Tells the screen about a release: its first paragraph under the heading
+    /// the release is in its case under — the build running, or one newer than
+    /// it.
+    ///
+    /// Nothing here asks *which* release that is, any more than
+    /// `showAvailableRelease` does. The app asks (`ReleaseSource`), and it is
+    /// the app that knows a release without notes leaves nothing to say: the
+    /// section simply stays off, and the bookmarks keep the bottom row whole.
+    func showReleaseNotes(_ release: Release, isRunningBuild: Bool) {
+        guard let summary = release.summary else {
+            notesSection?.isHidden = true
+            updateBottomRow()
+            return
+        }
+        notesHeading.stringValue = isRunningBuild
+            ? L("What's new in version %1$@", release.version.text)
+            : L("What's new in the new version %1$@", release.version.text)
+        notesLabel.stringValue = summary
+        notesSection?.isHidden = false
+        updateBottomRow()
     }
 
     /// The line, drawn as a link: underlined, in the hint's own size, and in the
