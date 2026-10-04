@@ -182,7 +182,14 @@ public enum UEFIDetail {
                 let entries = FlashDeviceMap.entries(of: store, reader: reader).filter {
                     node.kind == .flashDeviceMapStore || $0.offset == node.header.lowerBound
                 }
-                if !entries.isEmpty { tables.append(mapRegionsTable(entries, in: image)) }
+                // The image's mapping, or — on an AMD board, whose flash
+                // ends in no Volume Top File — the one the map states about
+                // itself.
+                let addressDiff = image.addressDiff
+                    ?? (store.space == .file ? FlashDeviceMap.addressDiff(of: store, reader: reader) : nil)
+                if !entries.isEmpty {
+                    tables.append(mapRegionsTable(entries, addressDiff: addressDiff, in: image))
+                }
             }
         }
 
@@ -380,14 +387,16 @@ public enum UEFIDetail {
     // MARK: - Where an Insyde map's regions are
 
     /// Each entry's region as the firmware addresses it and as the file holds
-    /// it, with the node that is exactly that range where there is one. Before
-    /// the image's mapping is known, only the address can be given.
-    private static func mapRegionsTable(_ entries: [FlashDeviceMap.Entry], in image: UEFIImage) -> UEFIDetailTable {
+    /// it, with the node that is exactly that range where there is one. With
+    /// no mapping known, only the address can be given.
+    private static func mapRegionsTable(
+        _ entries: [FlashDeviceMap.Entry], addressDiff: UInt64?, in image: UEFIImage
+    ) -> UEFIDetailTable {
         var rows: [[UEFIDetailTable.Cell]] = []
         var targets: [UEFIDetailTable.Target?] = []
         for entry in entries {
             let type = FlashDeviceMap.regionTypeName(entry.type) ?? KnownGUIDs.name(of: entry.type) ?? entry.type.description
-            let placed = image.addressDiff.flatMap { entry.range(addressDiff: $0) }
+            let placed = addressDiff.flatMap { entry.range(addressDiff: $0) }
             let holder = placed.flatMap { range in
                 image.allNodes.first { $0.space == .file && $0.range == range && $0.kind != .region }
             }

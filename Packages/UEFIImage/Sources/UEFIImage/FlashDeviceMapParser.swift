@@ -77,6 +77,28 @@ public enum FlashDeviceMap {
         }
     }
 
+    /// `INSYDE_FLASH_MAP_REGION_FLASH_MAP_GUID`: the map's own region.
+    public static let flashDeviceMap = KnownGUIDs.guid("F078C1A0-FC52-4C3F-BE1F-D688815A62C0")
+
+    /// The mapping the map states about itself: its own entry gives the
+    /// address of the region it sits at the start of, and where it sits in
+    /// the file is known. On an AMD board the flash's last bytes are no
+    /// Volume Top File — the PSP loads the BIOS — so this is the one anchor
+    /// such an image has (`SPI_EF6018_128Mbit.*`).
+    ///
+    /// Nil when the map names no region of its own, or the answer is not a
+    /// whole number of 4 KiB blocks: a copy of the map inside a file, which
+    /// keeps the original's entries at an offset of its own, or a store
+    /// read out of a decompressed buffer.
+    public static func addressDiff(of store: UEFINode, reader: ImageReader) -> UInt64? {
+        let start = store.range.lowerBound
+        guard let own = entries(of: store, reader: reader).first(where: { $0.type == flashDeviceMap }),
+              own.address >= start
+        else { return nil }
+        let diff = own.address - start
+        return diff % 0x1000 == 0 ? diff : nil
+    }
+
     /// What a region of this type is, in UEFITool's words
     /// (`insydeFlashDeviceMapEntryTypeGuidToUString`), or nil for a type it
     /// does not name. The entry's row reads as this: the GUID alone says
@@ -231,14 +253,18 @@ extension Parser {
     /// The map gives physical addresses, and this runs before the second pass
     /// has worked out the mapping — so it takes it from a Volume Top File at
     /// the image's tail, as address resolution does first: the BIOS region's
-    /// end where a descriptor names one, the file's otherwise. An image with
-    /// no VTF there keeps the ranges as padding.
+    /// end where a descriptor names one, the file's otherwise. With no VTF
+    /// there — an AMD board's flash — each map is placed by its own entry
+    /// (`FlashDeviceMap.addressDiff(of:reader:)`); a map that cannot say keeps
+    /// its ranges as padding.
     func readingMapRegions(_ nodes: [UEFINode], emptyByte: UInt8, depth: Int) -> [UEFINode] {
         let maps = nodes.filter { $0.kind == .flashDeviceMapStore }
-        guard !maps.isEmpty, let addressDiff = addressDiffFromTail() else { return nodes }
+        guard !maps.isEmpty else { return nodes }
+        let fromTail = addressDiffFromTail()
 
         var regions: [(type: EFIGUID, range: Range<UInt64>)] = []
         for map in maps {
+            guard let addressDiff = fromTail ?? FlashDeviceMap.addressDiff(of: map, reader: reader) else { continue }
             for entry in FlashDeviceMap.entries(of: map, reader: reader) {
                 guard let range = entry.range(addressDiff: addressDiff) else { continue }
                 // A board can carry the map twice, and both copies name the

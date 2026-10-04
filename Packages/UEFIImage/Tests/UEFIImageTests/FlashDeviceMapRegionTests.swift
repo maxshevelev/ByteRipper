@@ -174,6 +174,39 @@ final class FlashDeviceMapRegionTests: XCTestCase {
         XCTAssertEqual(regions(bios.children).map(\.range), [0x1000..<0x3000, 0x3000..<0x3100])
     }
 
+    /// An AMD board's flash ends in no Volume Top File; the map's entry for
+    /// its own region says where it is, and places the rest by it.
+    func testWithNoVolumeTopFileTheMapPlacesItselfByItsOwnEntry() {
+        let entries: [Entry] = [(FlashDeviceMap.variableDefaults, 0x1000, 0x2000), (Self.password, 0x3000, 0x100),
+                                (FlashDeviceMap.flashDeviceMap, 0x4000, 0x1000)]
+        let nodes = top(UEFIParser.parse(Self.image(maps: [entries], trailing: 0x100)))
+        XCTAssertEqual(regions(nodes).map(\.name), ["Variable Defaults", "Password"])
+        XCTAssertEqual(regions(nodes).map(\.range), [0x1000..<0x3000, 0x3000..<0x3100])
+    }
+
+    /// A copy of the map somewhere else — inside a file — keeps the
+    /// original's entries; an answer that is not a whole number of 4 KiB
+    /// blocks is that, and is not taken.
+    func testAMapAwayFromItsOwnRegionDoesNotPlaceItself() throws {
+        let entries: [Entry] = [(FlashDeviceMap.flashDeviceMap, 0x4000, 0x1000)]
+        var bytes = [UInt8](repeating: 0xFF, count: 0x8000)
+        let store = Self.map(entries)
+        bytes.replaceSubrange(0x4000..<(0x4000 + store.count), with: store)
+        bytes.replaceSubrange(0x5124..<(0x5124 + store.count), with: store)
+        let reader = ImageReader(bytes)
+        func node(at offset: UInt64) -> UEFINode {
+            let entry = offset + FlashDeviceMap.headerSize
+            return UEFINode(kind: .flashDeviceMapStore, name: "", header: offset..<entry,
+                            body: entry..<(entry + UInt64(FlashDeviceMap.entrySize)), children: [
+                UEFINode(kind: .flashDeviceMapEntry, name: "", guid: FlashDeviceMap.flashDeviceMap,
+                         header: entry..<(entry + UInt64(FlashDeviceMap.entrySize)),
+                         body: (entry + UInt64(FlashDeviceMap.entrySize))..<(entry + UInt64(FlashDeviceMap.entrySize))),
+            ])
+        }
+        XCTAssertEqual(FlashDeviceMap.addressDiff(of: node(at: 0x4000), reader: reader), Self.base)
+        XCTAssertNil(FlashDeviceMap.addressDiff(of: node(at: 0x5124), reader: reader))
+    }
+
     /// A Variable Defaults region nobody wrote is a region still, with no
     /// stores in it.
     func testAnErasedVariableDefaultsRegionHoldsNoStores() {

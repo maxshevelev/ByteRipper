@@ -1147,7 +1147,16 @@ stay padding. The tail is the BIOS region's end when the image opens on a
 descriptor, and the file's otherwise (`Parser.addressSpaceTop`): a
 programmer can append bytes of its own — `0xC00` erased bytes after
 `Original_Bios_25.05.2025.bin`, `0x110` of a footer after `orig_30072026.BIN`
-— and those are no part of the address space. The details of the map, and of
+— and those are no part of the address space. On an AMD board the flash ends in no
+VTF at all — the PSP loads the BIOS — and each map is then placed by its own
+entry of type `FLASH_MAP` (`F078C1A0-…`): that entry's address less the
+store's offset, taken only when it is a whole number of 4 KiB blocks, since a
+copy of the map inside a file keeps the original's entries
+(`FlashDeviceMap.addressDiff(of:reader:)`). On `SPI_EF6018_128Mbit.*` that
+places the EC Firmware regions at `0x0` (`0x200` bytes), `0x200` (a MEC image)
+and `0x21000` (an `ITE8380` in a 192 KiB slot), and the Lenovo regions. The
+board has two controllers sharing the flash, the EC and a keyboard
+controller — known from the bench, not from anything the images say. The details of the map, and of
 each entry, list every entry's region — type, address, start in the file,
 size, and the node that is exactly that range — including those inside a
 volume, which are not cut out of anything. A region classifies as UEFITool's `Padding`, with the empty or
@@ -1223,7 +1232,13 @@ Three places are looked at: a stretch of non-empty padding the raw-area scan
 left, an EC Firmware region of the Insyde map, and the descriptor's EC region,
 read when the descriptor is (a look at each 4 KiB boundary, not a scan). A
 block holding one image, at its start, is named after it — `EC firmware (…)`,
-`EC Firmware (…)`, `EC region (…)`; padding only when the image opens it. The
+`EC Firmware (…)`, `EC region (…)`; padding only when the image opens it.
+Padding that holds an ITE image further in is cut instead
+(`Parser.cuttingECFirmware`): the padding before the first image, a padding
+block from it to the end of the last, read as above, and the padding after.
+An AMD board's first padding is like this — `W25Q64JW-IQ.orig.bin` keeps the
+PSP's directories and blobs from `0x0`, then `ITE8380-EC-V0.00` at `0x2C8000`.
+Only ITE is trusted away from a start: a `PHCM` dword is four bytes. The
 node keeps that image's length, measured as a row's would be, in
 `namedImageLength`, and the panel puts its size in KiB beside the image's name:
 `EC Firmware (ITE EC-V13.6, 96 KB)` in `CSME 12`. When

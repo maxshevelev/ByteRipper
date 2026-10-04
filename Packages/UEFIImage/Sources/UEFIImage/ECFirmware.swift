@@ -38,6 +38,13 @@ public struct ECImage: Equatable, Sendable {
         }
     }
 
+    /// Whether the image is ITE's: the one vendor told by a signature long
+    /// enough to be believed away from a block's start.
+    var isITE: Bool {
+        if case .ite = vendor { return true }
+        return false
+    }
+
     /// `PHCM`, `MCHP` reversed: the header Microchip's MEC boot ROM reads.
     static let microchipSignature: UInt32 = 0x4D43_4850
     static let step: UInt64 = 0x1000
@@ -130,7 +137,8 @@ extension Parser {
         let images = ECImage.all(in: node.body, reader: reader, emptyByte: emptyByte)
         guard let first = images.first else { return nil }
         // Padding names only what opens it: an image further in is a guess
-        // about the bytes before it.
+        // about the bytes before it, and is cut out of it instead
+        // (`cuttingECFirmware`).
         if node.kind == .padding, first.start != node.body.lowerBound { return nil }
         var read = node
         let base = node.kind == .padding ? ECImage.paddingName : node.name
@@ -172,11 +180,36 @@ extension Parser {
     /// `nodes` with the padding and the EC Firmware map regions that hold EC
     /// firmware read as it.
     func readingECFirmware(_ nodes: [UEFINode], emptyByte: UInt8) -> [UEFINode] {
-        nodes.map { node in
-            let candidate = node.kind == .padding && !node.isErased
-                || node.kind == .flashDeviceMapRegion && node.guid == FlashDeviceMap.ecFirmware
-            guard candidate else { return node }
-            return readingECFirmware(node, emptyByte: emptyByte) ?? node
+        nodes.flatMap { node -> [UEFINode] in
+            if node.kind == .flashDeviceMapRegion && node.guid == FlashDeviceMap.ecFirmware {
+                return [readingECFirmware(node, emptyByte: emptyByte) ?? node]
+            }
+            guard node.kind == .padding, !node.isErased else { return [node] }
+            if let read = readingECFirmware(node, emptyByte: emptyByte) { return [read] }
+            return cuttingECFirmware(outOf: node, emptyByte: emptyByte) ?? [node]
         }
+    }
+
+    /// Padding that holds an ITE image further in than its start, split
+    /// round it: the padding before, the EC firmware, the padding after. An
+    /// AMD board's first padding is like this — the PSP's directories and
+    /// their blobs, then the EC image, with nothing to announce any of them
+    /// to the raw-area scan. The image starts the block it is cut into, so
+    /// that block is named the way padding opening on one is; it ends where
+    /// the last image's bytes do. Only ITE's signature is trusted this far
+    /// from a start: a `PHCM` dword is four bytes, which data turns up.
+    /// Nil when there is no ITE image inside.
+    func cuttingECFirmware(outOf node: UEFINode, emptyByte: UInt8) -> [UEFINode]? {
+        let images = ECImage.all(in: node.body, reader: reader, emptyByte: emptyByte).filter(\.isITE)
+        guard let first = images.first, let last = images.last,
+              first.start > node.body.lowerBound
+        else { return nil }
+        let end = min(last.start + roundedUp(max(last.written, 1)), node.body.upperBound)
+        guard let block = padding(from: first.start, to: end, emptyByte: emptyByte).first,
+              let named = readingECFirmware(block, emptyByte: emptyByte)
+        else { return nil }
+        return padding(from: node.body.lowerBound, to: first.start, emptyByte: emptyByte)
+            + [named]
+            + padding(from: end, to: node.body.upperBound, emptyByte: emptyByte)
     }
 }
