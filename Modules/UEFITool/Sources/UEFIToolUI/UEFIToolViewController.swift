@@ -1497,8 +1497,8 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // Set per row, not once when the cell is made: a reused cell carries
         // the font it was made with, and the zoom moves under it.
         cell.textField?.font = ToolPanelFont.body()
-        // The colour too, for the same reason. Empty padding and free space
-        // read grey, the whole row, the way an empty ME section does; every
+        // The colour too, for the same reason. Empty padding, free space and
+        // an erased pad file read grey, the whole row, the way an empty ME section does; every
         // other row is back to the label colour, whatever the cell wore last.
         cell.textField?.textColor = UEFITreeDisplay.isEmptySpace(node)
             ? .secondaryLabelColor

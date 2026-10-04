@@ -239,6 +239,20 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertEqual(UEFITreeDisplay.name(for: pad([free, data]), catalogue: .empty), "Non-empty padding file")
     }
 
+    /// An erased pad file is room and reads grey; one that holds data does not,
+    /// and neither does any other file with nothing under it.
+    func testAnEmptyPadFileIsEmptySpace() {
+        let empty = UEFINode(kind: .file, subtype: 0xF0, name: "Padding file", guid: .zero,
+                             header: 0..<0x18, body: 0x18..<0x100)
+        var holding = empty
+        holding.children = [UEFINode(kind: .padding, name: "Non-UEFI data", range: 0x40..<0x100)]
+        let raw = UEFINode(kind: .file, subtype: 0x01, name: "", guid: .zero,
+                           header: 0..<0x18, body: 0x18..<0x100)
+        XCTAssertTrue(UEFITreeDisplay.isEmptySpace(empty))
+        XCTAssertFalse(UEFITreeDisplay.isEmptySpace(holding))
+        XCTAssertFalse(UEFITreeDisplay.isEmptySpace(raw))
+    }
+
     /// A node without a GUID keeps the name the parser gave it.
     func testANodeWithoutAGuidKeepsItsParserName() {
         let freeSpace = UEFINode(kind: .freeSpace, name: "Tail", range: 0..<0x100)
