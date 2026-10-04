@@ -263,6 +263,7 @@ import UEFITool
 
         // Borderless and quiet, like every other icon control in a panel
         // header: the glyph carries the meaning, not a bezel.
+        // help: panel.uefi.reveal
         revealButton.image = NSImage(
             systemSymbolName: "dot.scope",
             accessibilityDescription: L("Reveal node at caret")
