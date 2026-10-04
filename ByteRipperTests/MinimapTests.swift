@@ -1484,7 +1484,8 @@ final class MinimapTests: XCTestCase {
     // MARK: - View menu (§19.1)
 
     /// The toggle is reachable from the View menu with a key equivalent, and the
-    /// item names the action it will perform rather than the current state.
+    /// item names the action it will perform rather than the current state. With
+    /// no file open there is no map to show, so the item is grey out (§19).
     func testViewMenuCarriesTheMinimapToggle() throws {
         let wc = MainWindowController()
         defer { wc.close() }
@@ -1498,8 +1499,15 @@ final class MinimapTests: XCTestCase {
         XCTAssertEqual(item.keyEquivalentModifierMask, [.command],
                        "Command+Shift+M — Command+M is Minimize in the Window menu")
 
-        // Hidden: the item offers to show it.
-        XCTAssertTrue(controller.validateMenuItem(item), "always available")
+        // No file open: nothing to toggle, so the item is grey out (§19).
+        XCTAssertFalse(controller.validateMenuItem(item), "disabled with no file open")
+
+        // A file open, panel hidden: the item offers to show it.
+        let url = try tempFile([UInt8](repeating: 0x11, count: 64))
+        defer { try? FileManager.default.removeItem(at: url) }
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        XCTAssertTrue(controller.validateMenuItem(item), "available once a file is open")
         XCTAssertEqual(item.title, "Show Minimap")
 
         // Shown: the item offers to hide it.
@@ -2189,7 +2197,8 @@ final class MinimapTests: XCTestCase {
     }
 
     /// The View menu carries the mode as a checked item — both modes are a
-    /// minimap, so the check reads as "which one".
+    /// minimap, so the check reads as "which one". With no file open there is
+    /// nothing to overview, so the item is grey out (§19.4).
     func testViewMenuChecksTheOverviewMode() throws {
         let wc = MainWindowController()
         defer { wc.close() }
@@ -2200,6 +2209,17 @@ final class MinimapTests: XCTestCase {
         }, "a View item switching the minimap's mode")
         XCTAssertEqual(item.keyEquivalent, "m")
         XCTAssertEqual(item.keyEquivalentModifierMask, [.command, .option])
+
+        // No file open: nothing to overview, so the item is grey out (§19.4).
+        XCTAssertFalse(controller.validateMenuItem(item), "disabled with no file open")
+
+        // A file large enough that the overview compresses it rather than
+        // magnify it, so the mode is offered in both directions (§19.4).
+        let url = try tempFile([UInt8](repeating: 0x41, count: 1_000_000))
+        defer { try? FileManager.default.removeItem(at: url) }
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        wc.window?.layoutIfNeeded()
 
         controller.setMinimapRenderModeForTesting(.detail)
         XCTAssertTrue(controller.validateMenuItem(item))

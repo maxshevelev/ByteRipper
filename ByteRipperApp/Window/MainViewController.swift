@@ -1087,6 +1087,7 @@ final class MainViewController: NSViewController {
     func apply(mode: WindowMode) {
         let surface = surface
         let wasComparison = self.mode == .comparison
+        let wasEmpty = self.mode == .empty
         self.mode = mode
         if mode == .comparison && !wasComparison {
             // A fresh comparison, not a rebuild of the running one: no index
@@ -1130,6 +1131,15 @@ final class MainViewController: NSViewController {
             // Returning to the launch state must also dismiss the find bar —
             // nothing is left to search (§11).
             hideFindBar()
+            // …and the minimap panel, when the window empties by closing its last
+            // file: with no file there is no map to draw, and a panel left open
+            // would have nothing behind its chrome (§19). Not on the controller's
+            // own first apply, which starts empty with the panel already hidden —
+            // forcing it there would undo a show that landed before the first
+            // layout. No animation — a mode change, not a toggle.
+            if !wasEmpty {
+                surface.minimap.setPanelVisible(false, animated: false)
+            }
             let emptyView = EmptyStateView()
             emptyStateView = emptyView
             emptyView.setBookmarks(windowModel.bookmarkStore.bookmarks)
@@ -7223,6 +7233,10 @@ extension MainViewController: NSToolbarItemValidation {
             // not something done to a file (§24.2).
             (item.view as? NSPopUpButton)?.selectItem(withTag: WordSize.current.rawValue)
             return true
+        case #selector(toggleMinimap):
+            // No file open, no map to show: the empty window's panel is hidden
+            // and the toggle has nothing to switch (§19).
+            return mode != .empty
         case #selector(togglePaneLayout):
             // The icon names the arrangement the click will produce, the way the
             // Show/Hide Minimap item's title names its act (§24.3): stacked
@@ -7292,15 +7306,18 @@ extension MainViewController: NSMenuItemValidation {
             menuItem.state = state
             return enabled
         case #selector(toggleMinimapOverview):
-            // A check, because both modes are a minimap. Disabled for a file the
-            // overview could only magnify — the same rule that greys out the
-            // header switch's Overview half (§19.4).
+            // A check, because both modes are a minimap. Disabled with no file
+            // open (nothing to overview), and for a file the overview could only
+            // magnify — the same rule that greys out the header switch's Overview
+            // half (§19.4).
+            guard mode != .empty else { return false }
             menuItem.state = surface.minimapView.renderMode == .overview ? .on : .off
             return surface.minimapView.renderMode == .overview || surface.minimapView.overviewIsInformative()
         case #selector(toggleMinimap):
             // A Show/Hide item names what it will do, so the title flips with
-            // the panel's state (§19). Always enabled: the minimap works with
-            // no file open too (it just has nothing to draw).
+            // the panel's state (§19). Disabled with no file open: the empty
+            // window's panel is hidden and the item has nothing to toggle (§19).
+            guard mode != .empty else { return false }
             menuItem.title = surface.minimapPanelVisible ? L("Hide Minimap") : L("Show Minimap")
             return true
         case #selector(toggleInsertMode):
