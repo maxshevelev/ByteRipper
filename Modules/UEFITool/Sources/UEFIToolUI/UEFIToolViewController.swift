@@ -36,6 +36,9 @@ import UEFITool
     var onFixChecksum: ((NodeID) -> Void)?
     /// A node in a Top Swap block asked for its twin in the other block.
     var onGoToTopSwapCounterpart: ((NodeID) -> Void)?
+    /// A detail table's row named bytes that are not one node: outline them
+    /// in the dump, under the name, and leave the focus where it is.
+    var onOutlineRange: ((Range<UInt64>, String) -> Void)?
     /// An opened compressed section's — or a node inside one's — export item
     /// was chosen.
     var onExportDecompressed: ((NodeID) -> Void)?
@@ -1027,15 +1030,18 @@ import UEFITool
             let target = rowIndex < table.rowTargets.count ? table.rowTargets[rowIndex] : nil
             grid.addRow(with: row.enumerated().map { index, cell in
                 let field = fitted(NSTextField(labelWithString: cell.text), column: index)
-                // A row that stands for a node is a way to it: a click on any
-                // of its cells puts that node in focus. Its address reads as
-                // a link, the one cue a grid of text can give.
+                // A row that stands for something is a way to it: a click on
+                // any of its cells goes there. Its address reads as a link,
+                // the one cue a grid of text can give.
                 if let target {
                     let click = NodeClick(target: self, action: #selector(tableRowClicked(_:)))
-                    click.node = target
+                    click.rowTarget = target
                     field.addGestureRecognizer(click)
-                    if index == 1 { field.textColor = .linkColor }
-                    field.toolTip = field.toolTip ?? L("Show this copy")
+                    if index == table.linkColumn { field.textColor = .linkColor }
+                    switch target {
+                    case .node: field.toolTip = field.toolTip ?? L("Show this copy")
+                    case .range: field.toolTip = field.toolTip ?? L("Show this region in the dump")
+                    }
                 }
                 // A permission is read by its colour as much as by its word,
                 // which is the whole point of drawing this as a table: a column
@@ -1615,9 +1621,13 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     }
 
     // help: panel.uefi.variable-history
+    // help: panel.uefi.map-regions
     @objc private func tableRowClicked(_ click: NodeClick) {
-        guard let node = click.node else { return }
-        onSelect?(node)
+        switch click.rowTarget {
+        case .node(let node): onSelect?(node)
+        case .range(let range, let name): onOutlineRange?(range, name)
+        case nil: break
+        }
     }
 
     /// Turns the superseded copies' rows on or off, and remembers the choice.
@@ -1942,7 +1952,7 @@ private final class UEFIOutlineView: NSOutlineView {
     }
 }
 
-/// A click on a detail table's row, carrying the node the row stands for.
+/// A click on a detail table's row, carrying what the row stands for.
 private final class NodeClick: NSClickGestureRecognizer {
-    var node: NodeID?
+    var rowTarget: UEFIDetailTable.Target?
 }

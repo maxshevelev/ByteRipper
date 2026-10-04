@@ -12,6 +12,7 @@
 @covers panel.uefi.superseded-entries
 @covers panel.uefi.filter
 @covers panel.uefi.variable-history
+@covers panel.uefi.map-regions
 @covers panel.uefi.reveal
 
 **Tools ▸ UEFI Structure** reads the open dump as an Intel/UEFI flash image and shows it as a tree. The title line above the tree says what the image as a whole is.
@@ -48,6 +49,10 @@ A dump holds erased space between its structures. The tree omits it unless **Sho
 ## Variable copies
 
 [[term:vss|VSS]], [[term:nvar|NVAR]] and [[term:dvar|DVAR]] — the [[term:nvram|NVRAM]] formats whose entries the tree folds to one row per variable — keep the earlier copies of a variable until the firmware reclaims the store; on a board that writes a variable at every boot the copies are most of the rows. The row is the variable's current copy, or for a variable the store no longer holds, the copy it was deleted as, unless **Show Superseded Entries** is ticked in the same menu. The other copies are listed under **Variable history** in the detail of that row; a click on a copy there shows its own detail and its bytes in the dump, and the tree keeps the row of the copy that stands selected. When the caret in the dump is in a copy the tree leaves out, revealing it does the same.
+
+## Regions of an Insyde map
+
+On Insyde firmware the detail of the [[term:flash-device-map|flash device map]], and of each of its entries, lists the regions the map names under **Regions of the flash device map**. The start of a region that lies in the dump is a link: a click on its row outlines the region in the dump under the region's type and brings it into view, including a region the tree does not show as a row of its own because it spans several nodes or lies inside one. The tree and the detail stay on the map; selecting another node replaces the outline. The table **Ranges listed in $BME$** in the detail of the [[term:bvdt|BIOS Version Data Table]] links its ranges the same way.
 
 ## Pictures
 

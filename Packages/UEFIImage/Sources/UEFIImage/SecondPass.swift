@@ -102,15 +102,21 @@ extension Parser {
     /// dump measured half a second — and every panel that wants an address
     /// waits for it.
     ///
-    /// Nil when the tail holds no VTF whose size lands it exactly at the end:
-    /// an image mapped some other way, a region cut out of one, a dump with
-    /// bytes appended. The caller then walks, and gets the same answer the
-    /// slow way.
+    /// The end it looks at is the image's — or, in an image that opens on a
+    /// flash descriptor, the BIOS region's, which is what the chipset maps
+    /// up to the top: a programmer's dump can carry bytes appended after the
+    /// chip's (`Original_Bios_25.05.2025.bin` `0xC00` of them,
+    /// `orig_30072026.BIN` `0x110`), and a descriptor can place another
+    /// region after the BIOS.
+    ///
+    /// Nil when that tail holds no VTF whose size lands it exactly at the
+    /// end: an image mapped some other way, a region cut out of one. The
+    /// caller then walks, and gets the same answer the slow way.
     func volumeTopFileInTail(window: UInt64 = 0x10000) -> UEFINode? {
-        let count = reader.count
-        guard count > FFS.headerSize else { return nil }
-        let start = count > window ? count - window : 0
-        guard let bytes = reader.bytes(start..<count) else { return nil }
+        let top = addressSpaceTop()
+        guard top > FFS.headerSize else { return nil }
+        let start = top > window ? top - window : 0
+        guard let bytes = reader.bytes(start..<top) else { return nil }
 
         let guid = KnownGUIDs.volumeTopFile.bytes
         var found: UEFINode?
@@ -120,21 +126,32 @@ extension Parser {
             guard Array(bytes[index..<(index + guid.count)]) == guid else { continue }
             let header = start + UInt64(index)
             // The size field of the FFS header this GUID would be the name of
-            // (§5.1). It has to land the file's last byte on the image's.
+            // (§5.1). It has to land the file's last byte on the top's.
             guard let size = reader.uint24(at: header + 0x14),
                   UInt64(size) > FFS.headerSize,
-                  header + UInt64(size) == count
+                  header + UInt64(size) == top
             else { continue }
             found = UEFINode(
                 kind: .file,
                 name: KnownGUIDs.name(of: KnownGUIDs.volumeTopFile) ?? "Volume Top File",
                 guid: KnownGUIDs.volumeTopFile,
                 header: header..<(header + FFS.headerSize),
-                body: (header + FFS.headerSize)..<count,
+                body: (header + FFS.headerSize)..<top,
                 isFixed: true
             )
         }
         return found
+    }
+
+    /// Where the byte mapped at `0xFFFFFFFF` ends in the file: the end of the
+    /// BIOS region a descriptor at the image's start names, or the image's
+    /// own end when there is no descriptor to say.
+    func addressSpaceTop() -> UInt64 {
+        let count = reader.count
+        guard hasDescriptorSignature(at: 0),
+              let bios = flashRegionRange(.bios, descriptorAt: 0, limit: count, reporting: false)
+        else { return count }
+        return bios.upperBound
     }
 
     /// The *last* one: an image can hold several, and only the last is at the

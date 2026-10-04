@@ -40,6 +40,15 @@ final class ITEFirmwareTests: XCTestCase {
         XCTAssertEqual(read(bytes)?.identification, "ITE5507-SB-V0.67")
     }
 
+    /// The pair after `85 12` is `5A 5A` on most images, and something else
+    /// on the `ITE EC-V14.0` ones — which are no less ITE for it.
+    func testTheSecondPairMayVary() {
+        var bytes = Self.image("ITE EC-V14.0  ", at: 0x40)
+        bytes.replaceSubrange(0x40..<0x50, with: [0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0xA5, 0x10,
+                                                  0x85, 0x12, 0xB9, 0x9D, 0xAA, 0x7F, 0x55, 0x55])
+        XCTAssertEqual(read(bytes)?.identification, "ITE EC-V14.0")
+    }
+
     func testWithoutTheBlockThereIsNoIdentification() {
         var bytes = Self.image()
         bytes[0x80 + 9] = 0x13

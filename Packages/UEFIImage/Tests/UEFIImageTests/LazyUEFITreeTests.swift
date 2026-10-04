@@ -248,6 +248,20 @@ final class LazyUEFITreeTests: XCTestCase {
                        "the node the mapping is anchored on says it cannot move")
     }
 
+    /// A programmer can append bytes of its own after the chip's. The VTF
+    /// ends the BIOS region the descriptor names, not the file, and the tail
+    /// still answers.
+    func testBytesAppendedAfterTheBiosRegionDoNotHideTheVtf() async {
+        let bytes = anchoredImage() + [UInt8](repeating: 0xFF, count: 0xC00)
+        let tree = await built(bytes)
+        await resolvedAddresses(tree)
+
+        XCTAssertEqual(tree.addressDiff, 0x1_0000_0000 - 0x8000)
+        XCTAssertNotNil(tree.resetVector)
+        let bios = tree.rootNodes[0].children.first { $0.name == "BIOS region" }
+        XCTAssertEqual(bios?.children, [], "found at the region's end, without a walk")
+    }
+
     /// No VTF is not a defect — a dump of one region has none — and the
     /// mapping staying unknown is the whole of what that means.
     func testAnImageWithNoVtfResolvesToNoMapping() async {

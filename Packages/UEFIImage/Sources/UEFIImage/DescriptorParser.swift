@@ -124,15 +124,19 @@ extension Parser {
     /// lets MEFirmware ask for the ME region's bytes without either scanning
     /// the file itself or waiting for the BIOS region's own volumes to be
     /// walked. Nil when `at` is not the start of a descriptor image, or the
-    /// descriptor's own map cannot be read.
-    func flashRegionRange(_ type: FlashRegionType, descriptorAt base: UInt64, limit: UInt64) -> Range<UInt64>? {
-        readRegions(at: base, limit: limit).first(where: { $0.type == type })?.range
+    /// descriptor's own map cannot be read. `reporting: false` leaves a
+    /// truncated map unremarked, for a caller that only looks and whose
+    /// diagnostics would say it a second time.
+    func flashRegionRange(
+        _ type: FlashRegionType, descriptorAt base: UInt64, limit: UInt64, reporting: Bool = true
+    ) -> Range<UInt64>? {
+        readRegions(at: base, limit: limit, reporting: reporting).first(where: { $0.type == type })?.range
     }
 
     /// The region section, at `RegionBase << 4`. Empty when the descriptor's
     /// own map cannot be believed — which the caller turns into a raw scan
     /// rather than into nothing.
-    private func readRegions(at base: UInt64, limit: UInt64) -> [Region] {
+    private func readRegions(at base: UInt64, limit: UInt64, reporting: Bool = true) -> [Region] {
         guard let map = reader.uint32(at: base + Descriptor.mapOffset),
               let generation = DescriptorGeneration.read(at: base, in: reader)?.generation
         else { return [] }
@@ -161,10 +165,10 @@ extension Parser {
             let start = base + UInt64(first) << 12
             let end = base + (UInt64(last) << 12 | 0xFFF) + 1
             guard start < limit else {
-                note(.truncated(.flashDescriptor), at: entry)
+                if reporting { note(.truncated(.flashDescriptor), at: entry) }
                 continue
             }
-            if end > limit {
+            if end > limit, reporting {
                 note(.truncated(.flashDescriptor), at: entry)
             }
             regions.append(Region(type: type, range: start..<min(end, limit)))

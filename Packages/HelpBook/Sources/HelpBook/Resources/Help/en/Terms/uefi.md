@@ -217,6 +217,8 @@ The type names are those of UEFITool. A type it does not know is shown as its GU
 
 The map states addresses in the processor's address space. ByteRipper converts them into dump addresses from the end of the BIOS region; where that conversion is not possible, the regions remain padding.
 
+The detail list of the map, and of each of its entries, contains the table **Regions of the flash device map**: for each entry the region type, the address at which the firmware accesses the region, where the region starts in the dump, its size, and the element of the tree that occupies exactly that range. The table also covers regions inside a firmware volume or the variable store, which the tree does not show as rows of their own. Where the dump's addresses cannot be determined, only the address in the processor's address space is given. A click on a row whose start is shown outlines that region in the dump.
+
 @see term:bvdt
 @see term:ec-firmware
 @see term:vss
@@ -236,7 +238,7 @@ Insyde firmware keeps a small table that begins with the signature `$BVDT$`. The
 - **ESRT firmware class** — the GUID by which the operating system identifies the board's system firmware in the EFI System Resource Table. Windows shows it as the hardware ID `UEFI\RES_{…}` of the "System Firmware" device and matches BIOS update packages against it, so two dumps with different GUIDs are firmware for different boards.
 - **ESRT version** — the firmware version stored beside that GUID. Its lowest byte equals the build number in the BIOS version on most of the dumps examined.
 
-The `$BME$` record lists ranges of the BIOS region; the table **Ranges listed in $BME$** places them in the dump and names what lies exactly there. On the dumps examined they are the table's own region, the microcode volume and, on one board, the EC firmware region. What the firmware or its flash utility does with these ranges is not documented.
+The `$BME$` record lists ranges of the BIOS region; the table **Ranges listed in $BME$** places them in the dump and names what lies exactly there. On the dumps examined they are the table's own region, the microcode volume and, on two boards, the EC firmware region. A click on a row whose range lies in the dump outlines that range in the dump. What the firmware or its flash utility does with these ranges is not documented.
 
 The table is the quickest way to establish which firmware a dump contains, and whether two dumps contain the same version.
 

@@ -161,6 +161,19 @@ final class FlashDeviceMapRegionTests: XCTestCase {
         XCTAssertFalse(nodes.contains { $0.kind == .vssStore })
     }
 
+    /// A full dump with bytes appended after it: the descriptor says where
+    /// the BIOS region ends, and that end is the one mapped at the top.
+    func testBytesAppendedAfterTheBiosRegionDoNotHideTheRegions() {
+        var bytes = Self.image(trailing: 0xC00)
+        let descriptor = TestImage.descriptor(regions: [(.descriptor, 0..<0x1000), (.bios, 0x1000..<Self.size)])
+        bytes.replaceSubrange(0..<descriptor.count, with: descriptor)
+        let parsed = UEFIParser.parse(bytes)
+        let bios = parsed.roots[0].children.first { $0.kind == .region }!
+
+        XCTAssertEqual(regions(bios.children).map(\.name), ["Variable Defaults", "Password"])
+        XCTAssertEqual(regions(bios.children).map(\.range), [0x1000..<0x3000, 0x3000..<0x3100])
+    }
+
     /// A Variable Defaults region nobody wrote is a region still, with no
     /// stores in it.
     func testAnErasedVariableDefaultsRegionHoldsNoStores() {

@@ -261,6 +261,9 @@ private struct ChecksumPass: Sendable {
         controller.onGoToTopSwapCounterpart = { [weak self] nodeID in
             self?.goToTopSwapCounterpart(of: nodeID)
         }
+        controller.onOutlineRange = { [weak self] range, name in
+            self?.outline(range, named: name)
+        }
         controller.onOpenRowsChanged = { [weak self] in self?.rememberOpenRows() }
         controller.onSelectME = { [weak self] path in self?.selectME(path) }
         controller.onOpenMERegion = { [weak self] id in self?.openMERegion(id) }
@@ -740,6 +743,18 @@ private struct ChecksumPass: Sendable {
         // `selectME` does the reverse.
         meFocus = nil
         show(publish: true)
+    }
+
+    /// A row of the detail named bytes that are not one node: they are
+    /// outlined in the dump beside the focused node's own zones, and the host
+    /// brings the newly focused zone on screen. The tree and the detail stay
+    /// where they are; the next selection publishes over it.
+    private func outline(_ range: Range<UInt64>, named name: String) {
+        let node = focus.flatMap { currentImage?.node($0) }
+        host.publish(UEFIPresenter.zones(
+            outlining: range, named: name,
+            over: UEFIPresenter.zones(for: node, in: currentImage)
+        ))
     }
 
     /// The user picked a row of the ME sub-tree, or cleared it. The ME focus

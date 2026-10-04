@@ -264,6 +264,15 @@ public enum UEFIPresenter {
         return section.fileRange
     }
 
+    /// The zones of the node in focus with a range added and put in focus —
+    /// a region an Insyde map names, picked in the detail: the reader sees
+    /// where it lies without the tree moving off the map. The range's id is
+    /// no node's path, so picking it in the dump leads nowhere.
+    public static func zones(outlining range: Range<UInt64>, named name: String, over focused: ZoneMap) -> ZoneMap {
+        let outline = Zone(id: "range:\(range.lowerBound)-\(range.upperBound)", name: name, range: range)
+        return ZoneMap(zones: focused.zones.filter { $0.id != outline.id } + [outline], focus: outline.id)
+    }
+
     /// A node's path as a zone id: `1.2.0`. Stable across a re-parse of the same
     /// image — which is what lets a selection survive the re-read an edit causes
     /// — and the route a diagnostic about a node three levels down needs.

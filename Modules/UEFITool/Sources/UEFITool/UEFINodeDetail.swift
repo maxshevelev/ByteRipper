@@ -66,16 +66,31 @@ public struct UEFIDetailTable: Equatable, Sendable {
     public var columns: [String]
     public var rows: [[Cell]]
 
-    /// The node each row stands for, where a row stands for one: a click on
-    /// the row puts it in focus. Empty, or nil for a row, when it is text only.
-    public var rowTargets: [NodeID?]
+    /// Where a click on a row goes.
+    public enum Target: Equatable, Sendable {
+        /// A node: the click puts it in focus, its detail and its bytes.
+        case node(NodeID)
+        /// Bytes that are not one node — a region an Insyde map names, which
+        /// can span several or lie inside one. The click outlines them in the
+        /// dump under `name` and leaves the focus where it is.
+        case range(Range<UInt64>, name: String)
+    }
 
-    public init(title: String, symbol: String, columns: [String], rows: [[Cell]], rowTargets: [NodeID?] = []) {
+    /// What each row stands for, where a row stands for something: a click on
+    /// the row goes there. Empty, or nil for a row, when it is text only.
+    public var rowTargets: [Target?]
+    /// The column a row with a target draws as a link: the one that says
+    /// where the target is.
+    public var linkColumn: Int
+
+    public init(title: String, symbol: String, columns: [String], rows: [[Cell]],
+                rowTargets: [Target?] = [], linkColumn: Int = 1) {
         self.title = title
         self.symbol = symbol
         self.columns = columns
         self.rows = rows
         self.rowTargets = rowTargets
+        self.linkColumn = linkColumn
     }
 }
 
@@ -156,6 +171,19 @@ public enum UEFIDetail {
         if node.kind == .flashDeviceMapRegion, node.guid == FlashDeviceMap.biosVersionDataTable,
            let table = InsydeBVDT.read(node.body, in: reader), !table.listedRanges.isEmpty {
             tables.append(listedRangesTable(table.listedRanges, near: node, in: image))
+        }
+
+        // Where the regions an Insyde map names lie in the file — the whole
+        // map on its own row, one region on an entry's.
+        if node.kind == .flashDeviceMapStore || node.kind == .flashDeviceMapEntry {
+            let store = node.kind == .flashDeviceMapStore ? node
+                : node.id.path.isEmpty ? nil : image.node(NodeID(Array(node.id.path.dropLast())))
+            if let store {
+                let entries = FlashDeviceMap.entries(of: store, reader: reader).filter {
+                    node.kind == .flashDeviceMapStore || $0.offset == node.header.lowerBound
+                }
+                if !entries.isEmpty { tables.append(mapRegionsTable(entries, in: image)) }
+            }
         }
 
         // A variable's entry: whose copy it is where the tree calls it
@@ -320,22 +348,70 @@ public enum UEFIDetail {
     /// `$BME$`'s ranges, which are offsets into the BIOS region, as addresses
     /// in the file, and the node each one is exactly — the BVDT's own region,
     /// a volume — where one is. What the list is for is not known, so the
-    /// table says where and not why.
+    /// table says where and not why. A click on a range in the file outlines
+    /// it in the dump, named by what is there, as the map's table does.
     private static func listedRangesTable(_ ranges: [Range<UInt64>], near node: UEFINode, in image: UEFIImage) -> UEFIDetailTable {
         // A dump of the BIOS region alone starts with it.
         let bios = image.nodes(containing: node.range.lowerBound).first {
             $0.kind == .region && $0.subtype == UInt8(FlashRegionType.bios.rawValue)
         }?.range.lowerBound ?? 0
+        var rows: [[UEFIDetailTable.Cell]] = []
+        var targets: [UEFIDetailTable.Target?] = []
+        for range in ranges {
+            let placed = (bios + range.lowerBound)..<(bios + range.upperBound)
+            let holder = image.allNodes.first { $0.space == .file && $0.range == placed && $0.kind != .region }
+            rows.append([.init(hex(placed.lowerBound)), .init(sizeText(UInt64(range.count))),
+                         .init(holder.map(holderText) ?? "—")])
+            // An empty slot — `SPI_EF6018`'s second is a size of zero — and a
+            // range past the end have nothing to outline.
+            targets.append(!placed.isEmpty && placed.upperBound <= image.size
+                ? .range(placed, name: holder.map(holderText) ?? "$BME$") : nil)
+        }
         return UEFIDetailTable(
             title: L("Ranges listed in $BME$"),
             symbol: "list.bullet.rectangle",
             columns: [L("Start"), L("Size"), L("Holds")],
-            rows: ranges.map { range in
-                let placed = (bios + range.lowerBound)..<(bios + range.upperBound)
-                let holder = image.allNodes.first { $0.space == .file && $0.range == placed && $0.kind != .region }
-                return [.init(hex(placed.lowerBound)), .init(sizeText(UInt64(range.count))),
-                        .init(holder.map(holderText) ?? "—")]
+            rows: rows,
+            rowTargets: targets,
+            linkColumn: 0
+        )
+    }
+
+    // MARK: - Where an Insyde map's regions are
+
+    /// Each entry's region as the firmware addresses it and as the file holds
+    /// it, with the node that is exactly that range where there is one. Before
+    /// the image's mapping is known, only the address can be given.
+    private static func mapRegionsTable(_ entries: [FlashDeviceMap.Entry], in image: UEFIImage) -> UEFIDetailTable {
+        var rows: [[UEFIDetailTable.Cell]] = []
+        var targets: [UEFIDetailTable.Target?] = []
+        for entry in entries {
+            let type = FlashDeviceMap.regionTypeName(entry.type) ?? KnownGUIDs.name(of: entry.type) ?? entry.type.description
+            let placed = image.addressDiff.flatMap { entry.range(addressDiff: $0) }
+            let holder = placed.flatMap { range in
+                image.allNodes.first { $0.space == .file && $0.range == range && $0.kind != .region }
             }
+            rows.append([
+                .init(type),
+                .init(hex(entry.address)),
+                .init(placed.map { hex($0.lowerBound) } ?? "—"),
+                .init(sizeText(entry.size)),
+                .init(holder.map(holderText) ?? "—"),
+            ])
+            // Only what lies in the file can be shown in it.
+            targets.append(placed.flatMap {
+                !$0.isEmpty && $0.upperBound <= image.size ? .range($0, name: type) : nil
+            })
+        }
+        // A click on a region outlines its bytes in the dump: the way to see
+        // where a region the tree does not cut out lies.
+        return UEFIDetailTable(
+            title: L("Regions of the flash device map"),
+            symbol: "list.bullet.rectangle",
+            columns: [L("Type"), L("Address"), L("Start"), L("Size"), L("Holds")],
+            rows: rows,
+            rowTargets: targets,
+            linkColumn: 2
         )
     }
 
@@ -378,11 +454,11 @@ public enum UEFIDetail {
         let versions = history.versions
         let firstShown = max(0, versions.count - historyRows)
         var rows: [[UEFIDetailTable.Cell]] = []
-        var targets: [NodeID?] = []
+        var targets: [UEFIDetailTable.Target?] = []
         if firstShown > 0 {
             if let focused = versions.firstIndex(where: { $0.entry == focus }), focused < firstShown {
                 rows.append(historyRow(versions, focused, focus: focus, reader: reader))
-                targets.append(versions[focused].entry)
+                targets.append(.node(versions[focused].entry))
             }
             rows.append([.init("…"), .init(L("%1$@ earlier copies not shown", firstShown)),
                          .init(""), .init(""), .init("")])
@@ -390,7 +466,7 @@ public enum UEFIDetail {
         }
         for index in firstShown..<versions.count {
             rows.append(historyRow(versions, index, focus: focus, reader: reader))
-            targets.append(versions[index].entry)
+            targets.append(.node(versions[index].entry))
         }
         // A click on a copy puts it in focus: its detail, and its bytes in the
         // dump — the way to a copy the tree leaves out.

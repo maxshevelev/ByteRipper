@@ -1073,9 +1073,11 @@
 "changed bytes: %1$@, at %2$@" = "geänderte Bytes: %1$@, bei %2$@";
 "Ranges listed in $BME$" = "Bereiche in $BME$";
 "Holds" = "Inhalt";
+"Regions of the flash device map" = "Regionen der Flash Device Map";
 "Show Superseded Entries" = "Ersetzte Einträge anzeigen";
 "List the copies of variables that later entries replaced — their history is in the detail of the copy that stands" = "Die Kopien von Variablen anzeigen, die spätere Einträge ersetzt haben; ihr Verlauf steht in den Details der geltenden Kopie";
 "Show this copy" = "Diese Kopie anzeigen";
+"Show this region in the dump" = "Diese Region im Dump zeigen";
 "Filter" = "Filter";
 "Choose what the tree lists" = "Festlegen, was der Baum anzeigt";
 "Setup option" = "Setup-Option";

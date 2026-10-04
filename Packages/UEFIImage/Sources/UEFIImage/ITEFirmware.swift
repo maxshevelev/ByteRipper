@@ -4,12 +4,15 @@ import Foundation
 /// start (`UEFI_IMAGE_FORMAT.md` §9): a signature block and the string after
 /// it, such as `ITE8380-EC-V1.43`.
 ///
-/// No datasheet describes it. The layout is what seven dumps agree on: at
+/// No datasheet describes it. The layout is what ten dumps agree on: at
 /// `+0x40` (the 8051 parts) or `+0x80`, six `A5` bytes, two bytes that vary,
-/// `85 12 5A 5A AA`, one byte that varies, `55 55`; then up to sixteen bytes
-/// of text. What the string names is what the firmware's author wrote into
-/// it — the chip the image was built for, which is not always the chip on the
-/// board.
+/// `85 12`, two bytes that vary, `AA`, one byte that varies, `55 55`; then up
+/// to sixteen bytes of text. The second pair is `5A 5A` on seven of them; on
+/// the other three — two `ITE EC-V14.0`, one `ITE EC-V-8586`, each with `10`
+/// ending the first pair and `7F` after `AA` — it differs from dump to dump,
+/// and what it holds is not known. What the
+/// string names is what the firmware's author wrote into it — the chip the
+/// image was built for, which is not always the chip on the board.
 ///
 /// Public because the details panel shows it beside the name.
 public struct ITEFirmware: Equatable, Sendable {
@@ -58,7 +61,8 @@ public struct ITEFirmware: Equatable, Sendable {
     static func isSignature(_ block: [UInt8]) -> Bool {
         block.count == Int(blockSize)
             && block[0..<6].allSatisfy { $0 == 0xA5 }
-            && Array(block[8..<13]) == [0x85, 0x12, 0x5A, 0x5A, 0xAA]
+            && block[8] == 0x85 && block[9] == 0x12
+            && block[12] == 0xAA
             && block[14] == 0x55 && block[15] == 0x55
     }
 }

@@ -31,6 +31,52 @@ public enum FlashDeviceMap {
     /// `INSYDE_FLASH_MAP_REGION_EC_GUID`: the embedded controller's firmware.
     public static let ecFirmware = KnownGUIDs.guid("A73EF3BF-33CC-43A9-B39C-A912C7489A57")
 
+    /// One entry of a map, as the firmware reads it: where its region is in
+    /// the address space and how long it is.
+    public struct Entry: Equatable, Sendable {
+        /// Where the entry itself is in the file.
+        public var offset: UInt64
+        /// The region's type, the entry's first GUID.
+        public var type: EFIGUID
+        /// `FdBaseAddress + RegionOffset`, in 32 bits as the reference
+        /// computes it (§5.3).
+        public var address: UInt64
+        public var size: UInt64
+        public var attributes: UInt32
+
+        /// Where the region is in the file, given the image's mapping. Nil
+        /// when the address lies below the image.
+        public func range(addressDiff: UInt64) -> Range<UInt64>? {
+            guard address >= addressDiff else { return nil }
+            return (address - addressDiff)..<(address - addressDiff + size)
+        }
+    }
+
+    /// Every entry of the map `store` heads, in the order it lists them.
+    /// Empty for a store whose entry layout is not the known one: its node
+    /// has no entry rows then.
+    public static func entries(of store: UEFINode, reader: ImageReader) -> [Entry] {
+        guard store.kind == .flashDeviceMapStore,
+              let base = reader.uint64(at: store.header.lowerBound + baseAddressOffset)
+        else { return [] }
+        return store.children.compactMap { entry in
+            let at = entry.header.lowerBound
+            guard entry.kind == .flashDeviceMapEntry,
+                  let type = entry.guid,
+                  let offset = reader.uint64(at: at + regionOffsetOffset),
+                  let size = reader.uint64(at: at + regionSizeOffset),
+                  let attributes = reader.uint32(at: at + attributesOffset)
+            else { return nil }
+            return Entry(
+                offset: at,
+                type: type,
+                address: UInt64(UInt32(truncatingIfNeeded: base) &+ UInt32(truncatingIfNeeded: offset)),
+                size: UInt64(UInt32(truncatingIfNeeded: size)),
+                attributes: attributes
+            )
+        }
+    }
+
     /// What a region of this type is, in UEFITool's words
     /// (`insydeFlashDeviceMapEntryTypeGuidToUString`), or nil for a type it
     /// does not name. The entry's row reads as this: the GUID alone says
@@ -184,34 +230,21 @@ extension Parser {
     ///
     /// The map gives physical addresses, and this runs before the second pass
     /// has worked out the mapping — so it takes it from a Volume Top File at
-    /// the image's tail, as address resolution does first. An image with no
-    /// VTF at its tail — a BIOS region followed by another region — keeps the
-    /// ranges as padding.
+    /// the image's tail, as address resolution does first: the BIOS region's
+    /// end where a descriptor names one, the file's otherwise. An image with
+    /// no VTF there keeps the ranges as padding.
     func readingMapRegions(_ nodes: [UEFINode], emptyByte: UInt8, depth: Int) -> [UEFINode] {
         let maps = nodes.filter { $0.kind == .flashDeviceMapStore }
         guard !maps.isEmpty, let addressDiff = addressDiffFromTail() else { return nodes }
 
         var regions: [(type: EFIGUID, range: Range<UInt64>)] = []
         for map in maps {
-            guard let base = reader.uint64(at: map.header.lowerBound + FlashDeviceMap.baseAddressOffset) else {
-                continue
-            }
-            for entry in map.children where entry.kind == .flashDeviceMapEntry {
-                let at = entry.header.lowerBound
-                guard let type = entry.guid,
-                      let offset = reader.uint64(at: at + FlashDeviceMap.regionOffsetOffset),
-                      let size = reader.uint64(at: at + FlashDeviceMap.regionSizeOffset)
-                else { continue }
-                // The same arithmetic the protected ranges use (§5.3): 32 bits,
-                // as the reference does.
-                let address = UInt64(UInt32(truncatingIfNeeded: base) &+ UInt32(truncatingIfNeeded: offset))
-                guard address >= addressDiff else { continue }
-                let start = address - addressDiff
-                let range = start..<(start + UInt64(UInt32(truncatingIfNeeded: size)))
+            for entry in FlashDeviceMap.entries(of: map, reader: reader) {
+                guard let range = entry.range(addressDiff: addressDiff) else { continue }
                 // A board can carry the map twice, and both copies name the
                 // same ranges.
-                if !range.isEmpty, !regions.contains(where: { $0.type == type && $0.range == range }) {
-                    regions.append((type, range))
+                if !range.isEmpty, !regions.contains(where: { $0.type == entry.type && $0.range == range }) {
+                    regions.append((entry.type, range))
                 }
             }
         }

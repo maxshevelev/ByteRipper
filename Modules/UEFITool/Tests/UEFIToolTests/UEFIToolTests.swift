@@ -635,7 +635,8 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Variable"), "Setup", "the tree calls it Invalid")
         XCTAssertEqual(table.columns, ["Copy", "Address", "State", "Size", "Change"])
         XCTAssertEqual(table.rows.map { $0[0].text }, ["1", "▸ 2", "3", "4"])
-        XCTAssertEqual(table.rowTargets, image.roots[0].children.dropFirst().map(\.id), "a click on a row shows that copy")
+        XCTAssertEqual(table.rowTargets, image.roots[0].children.dropFirst().map { .node($0.id) }, "a click on a row shows that copy")
+        XCTAssertEqual(table.linkColumn, 1, "the address is the link")
         XCTAssertEqual(table.rows.map { $0[1].text }, image.roots[0].children.dropFirst().map { "0x" + String($0.range.lowerBound, radix: 16, uppercase: true) })
         XCTAssertEqual(table.rows.map { $0[2].text }, ["Superseded", "Superseded", "Superseded", "Current"])
         XCTAssertEqual(table.rows.map { $0[3].text }, ["4", "4", "4", "5"])
@@ -754,6 +755,86 @@ final class UEFIDetailTests: XCTestCase {
             ["0x0", "0x1000 (4096)", "BIOS Version Data Table"],
             ["0x100000", "0x100000 (1048576)", "—"],
         ])
+        // The start is the link; a range past the end of the image has
+        // nowhere to be outlined.
+        XCTAssertEqual(table.linkColumn, 0)
+        XCTAssertEqual(table.rowTargets, [.range(0..<0x1000, name: "BIOS Version Data Table"), nil])
+    }
+
+    /// An Insyde map lists its regions placed in the file, each with what is
+    /// exactly there; an entry lists its own. A region whose address falls
+    /// outside the image, or an image whose mapping is not known yet, gets a
+    /// dash where the start would be.
+    func testAFlashDeviceMapListsWhereItsRegionsAre() throws {
+        let base: UInt64 = 0xFFFF_E000
+        var bytes = [UInt8](repeating: 0xFF, count: 0x2000)
+        func put(_ value: UInt64, size: Int, at offset: Int) {
+            for index in 0..<size { bytes[offset + index] = UInt8(truncatingIfNeeded: value >> (8 * index)) }
+        }
+        bytes.replaceSubrange(0..<4, with: Array("HFDM".utf8))
+        put(0x1C + 2 * 0x54, size: 4, at: 4)
+        put(0x1C, size: 4, at: 8)
+        put(0x54, size: 4, at: 0x0C)
+        put(base, size: 8, at: 0x14)
+        let types = [FlashDeviceMap.ecFirmware, FlashDeviceMap.biosVersionDataTable]
+        for (index, (type, offset)) in zip(types, [UInt64(0x1000), 0x40000]).enumerated() {
+            let entry = 0x1C + index * 0x54
+            bytes.replaceSubrange(entry..<(entry + 16), with: type.bytes)
+            put(offset, size: 8, at: entry + 0x20)
+            put(0x1000, size: 8, at: entry + 0x28)
+            put(1, size: 4, at: entry + 0x30)
+        }
+        let entries = types.enumerated().map { index, type in
+            let at = UInt64(0x1C + index * 0x54)
+            return UEFINode(kind: .flashDeviceMapEntry, name: "", guid: type,
+                            header: at..<(at + 0x54), body: (at + 0x54)..<(at + 0x54))
+        }
+        let store = UEFINode(kind: .flashDeviceMapStore, name: "Insyde flash device map",
+                             header: 0..<0x1C, body: 0x1C..<0xC4, isFixed: true, children: entries)
+        let region = UEFINode(kind: .flashDeviceMapRegion, name: "EC Firmware", guid: FlashDeviceMap.ecFirmware,
+                              header: 0x1000..<0x1000, body: 0x1000..<0x2000, isFixed: true)
+        let reader = ImageReader(bytes)
+        func rows(_ node: UEFINode, in image: UEFIImage) throws -> [[String]] {
+            let detail = UEFIDetail.build(for: node, image: image, reader: reader)
+            let table = try XCTUnwrap(detail.tables.first { $0.title == "Regions of the flash device map" })
+            XCTAssertEqual(table.columns, ["Type", "Address", "Start", "Size", "Holds"])
+            return table.rows.map { $0.map(\.text) }
+        }
+
+        let image = UEFIImage(size: 0x2000, roots: [store, region], addressDiff: base)
+        let table = try XCTUnwrap(UEFIDetail.build(for: image.roots[0], image: image, reader: reader).tables.first {
+            $0.title == "Regions of the flash device map"
+        })
+        XCTAssertEqual(table.linkColumn, 2, "the start in the dump is the link")
+        XCTAssertEqual(table.rowTargets, [.range(0x1000..<0x2000, name: "EC Firmware"), nil],
+                       "a click outlines a region in the file; one outside it has nowhere to go")
+        XCTAssertEqual(try rows(image.roots[0], in: image), [
+            ["EC Firmware", "0xFFFFF000", "0x1000", "0x1000 (4096)", "EC Firmware"],
+            ["BIOS Version Data Table", "0x3E000", "—", "0x1000 (4096)", "—"],
+        ])
+        XCTAssertEqual(try rows(image.roots[0].children[0], in: image), [
+            ["EC Firmware", "0xFFFFF000", "0x1000", "0x1000 (4096)", "EC Firmware"],
+        ])
+
+        let unmapped = UEFIImage(size: 0x2000, roots: [store, region])
+        XCTAssertEqual(try rows(unmapped.roots[0], in: unmapped).map { $0[2] }, ["—", "—"])
+    }
+
+    /// A region picked in the detail is outlined beside the focused node's
+    /// zones and takes the focus; picking it again does not draw it twice.
+    func testOutliningARangeAddsItOverTheFocusedNode() {
+        let node = UEFINode(kind: .flashDeviceMapStore, name: "Insyde flash device map",
+                            header: 0..<0x1C, body: 0x1C..<0xC4, isFixed: true)
+        let image = UEFIImage(size: 0x2000, roots: [node])
+        let focused = UEFIPresenter.zones(for: image.roots[0], in: image)
+        let outlined = UEFIPresenter.zones(outlining: 0x1000..<0x2000, named: "EC Firmware", over: focused)
+
+        XCTAssertEqual(outlined.zones.dropLast(), focused.zones[...])
+        XCTAssertEqual(outlined.zones.last?.range, 0x1000..<0x2000)
+        XCTAssertEqual(outlined.zones.last?.name, "EC Firmware")
+        XCTAssertEqual(outlined.focus, outlined.zones.last?.id)
+        XCTAssertNil(UEFIPresenter.nodeID(ofZone: outlined.focus!), "picking it in the dump leads to no node")
+        XCTAssertEqual(UEFIPresenter.zones(outlining: 0x1000..<0x2000, named: "EC Firmware", over: outlined), outlined)
     }
 
     /// A checksum that does not match says what it should be.

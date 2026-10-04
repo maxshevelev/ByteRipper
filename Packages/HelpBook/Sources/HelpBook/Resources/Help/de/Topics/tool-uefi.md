@@ -1,4 +1,4 @@
-@source-sha 36db2ed46681f97f979c2ac61e37c475ecbbcedac01f7a4e263b39b51e5e2ee2
+@source-sha 78b1d82912b2469f86599125961a5457082747be9146706f8899d26eefacdddb
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -37,6 +37,10 @@ Zwischen den Strukturen eines Dumps liegt gelöschter Raum. Der Baum lässt ihn 
 ## Variablenkopien
 
 [[term:vss|VSS]], [[term:nvar|NVAR]] und [[term:dvar|DVAR]] — die [[term:nvram|NVRAM]]-Formate, deren Einträge der Baum zu je einer Zeile pro Variable zusammenfasst — behalten die früheren Kopien einer Variable, bis die Firmware den Speicher bereinigt; auf einem Board, das eine Variable bei jedem Start schreibt, machen sie den größten Teil der Zeilen aus. Die Zeile ist die aktuelle Kopie der Variable oder, für eine Variable, die der Speicher nicht mehr enthält, die Kopie, als die sie gelöscht wurde —, solange im selben Menü **Ersetzte Einträge anzeigen** nicht abgehakt ist. Die übrigen Kopien stehen unter **Verlauf der Variable** in den Details dieser Zeile; ein Klick auf eine Kopie zeigt ihre eigenen Details und ihre Bytes im Dump, und im Baum bleibt die Zeile der geltenden Kopie ausgewählt. Dasselbe geschieht, wenn der Cursor im Dump in einer Kopie steht, die der Baum weglässt, und sie im Baum angezeigt wird.
+
+## Regionen einer Insyde-Map
+
+Bei Insyde-Firmware enthalten die Details der [[term:flash-device-map|Flash Device Map]] und jedes ihrer Einträge die Tabelle **Regionen der Flash Device Map** mit den Regionen, die die Map nennt. Der Anfang einer Region, die im Dump liegt, ist ein Link: Ein Klick auf ihre Zeile umrandet die Region im Dump, beschriftet sie mit ihrem Typ und bringt sie ins Bild. Das gilt auch für Regionen, die der Baum nicht als eigene Zeile zeigt, weil sie mehrere Knoten umfassen oder innerhalb eines Knotens liegen. Baum und Details bleiben bei der Map; die Auswahl eines anderen Knotens ersetzt die Umrandung. Ebenso verlinkt die Tabelle **Bereiche in $BME$** in den Details der [[term:bvdt|BIOS Version Data Table]] ihre Bereiche.
 
 ## Bilder
 

@@ -1143,7 +1143,14 @@ carries the map twice names each range once. The map's addresses are placed
 with `FdBaseAddress + RegionOffset − addressDiff` — the arithmetic of the
 protected ranges — and since the second pass has not run yet, `addressDiff`
 comes from a Volume Top File at the image's tail; with none there, the ranges
-stay padding. A region classifies as UEFITool's `Padding`, with the empty or
+stay padding. The tail is the BIOS region's end when the image opens on a
+descriptor, and the file's otherwise (`Parser.addressSpaceTop`): a
+programmer can append bytes of its own — `0xC00` erased bytes after
+`Original_Bios_25.05.2025.bin`, `0x110` of a footer after `orig_30072026.BIN`
+— and those are no part of the address space. The details of the map, and of
+each entry, list every entry's region — type, address, start in the file,
+size, and the node that is exactly that range — including those inside a
+volume, which are not cut out of anything. A region classifies as UEFITool's `Padding`, with the empty or
 non-empty subtype, since that is what the reference calls the bytes; only its
 name says what the map makes of them.
 
@@ -1187,9 +1194,12 @@ The records, each found by its tag before `$ENDOFBVDT`:
   32-bit size, a `$` after each but the last; a slot of size `0xFFFFFFFF` is not
   in use. On every dump the first is the BVDT region itself and the second one
   FFSv2 volume exactly, whose only file is `1FAE4D78-…`, EDK2's
-  `MicrocodeUpdates`; `CSME 12` has a third, its second EC Firmware region. What
-  the list is for is not known; the panel places the ranges in the file and
-  names what lies exactly there.
+  `MicrocodeUpdates`; `CSME 12` has a third, its second EC Firmware region;
+  `Original_Bios_25.05.2025.bin` and `GD25B127D.orig.bin` (one Lenovo board)
+  have a third that is their EC Firmware region. `SPI_EF6018`'s second slot
+  has a size of zero. What the list is for is not known; the panel places the
+  ranges in the file, names what lies exactly there, and a click on one
+  outlines it in the dump.
 - `$QUIRK`, on `CSME 16` only, is not read.
 
 A string whose `$` is missing, or that holds no printable text, is not shown.
@@ -1198,10 +1208,13 @@ A string whose `$` is missing, or that holds no printable text, is not shown.
 Two vendors' images are recognised, each on a 4 KiB boundary:
 
 - **ITE**: at `+0x40` (the 8051 parts) or `+0x80` from the image's start a
-  signature block — six `A5` bytes, two bytes that vary, `85 12 5A 5A AA`, one
-  byte that varies, `55 55` — and after it up to sixteen bytes of text:
-  `ITE8380-EC-V1.43`, `ITE EC-V13.6`, `IT891x-Dock-v2.1`, `ITE5507-SB-V0.67`,
-  `ITE8226-EC-V0.00` on the dumps at hand. The string is the firmware author's,
+  signature block — six `A5` bytes, two bytes that vary, `85 12`, two bytes
+  that vary, `AA`, one byte that varies, `55 55` — and after it up to sixteen
+  bytes of text: `ITE8380-EC-V1.43`, `ITE EC-V13.6`, `IT891x-Dock-v2.1`,
+  `ITE5507-SB-V0.67`, `ITE8226-EC-V0.00`, `ITE EC-V14.0`, `ITE EC-V-8586` on the
+  dumps at hand. The second varying pair is `5A 5A` on seven of the ten images;
+  the two `ITE EC-V14.0` and the `ITE EC-V-8586` carry other values there,
+  different on each dump, and what the pair holds is not known. The string is the firmware author's,
   not the chip's marking, and the help says so.
 - **Microchip MEC**: the `PHCM` header (`MCHP` reversed) the MEC boot ROM reads.
   Its fields are not decoded, and nothing in the image names chip or version.
@@ -1247,9 +1260,9 @@ after the elements of a v1 Boot Policy, stepped over by what `__IBBS__` and
 `__PMDA__` are known to hold, up to `__PMSG__`. On the seven dumps that carry
 manifests the FIT's own size field gives the same length in bytes, but the spec
 does not promise it, so it is not used. Like the map's regions this runs before
-the second pass, with `addressDiff` from a Volume Top File at the image's tail;
-`orig_30072026.BIN`, which has `0x110` bytes appended after its image, keeps
-its padding. When the image carries a Top Swap copy (§11) the copy's FIT names
+the second pass, with `addressDiff` from a Volume Top File at the image's tail
+— the BIOS region's end, as for the map, so `orig_30072026.BIN` with its
+`0x110` appended bytes is read too. When the image carries a Top Swap copy (§11) the copy's FIT names
 the top block's addresses, so the same structures are looked for in the copy,
 moved down by the block's size. The details show what UEFITool's FIT tab shows
 of each header: the table's rows; the ACM's module subtype, header version,
