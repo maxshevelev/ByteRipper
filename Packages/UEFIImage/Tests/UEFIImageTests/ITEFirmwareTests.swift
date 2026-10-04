@@ -77,24 +77,28 @@ final class ITEFirmwareTests: XCTestCase {
     }
 
     /// An image further into padding — an AMD board's first padding, the
-    /// PSP's data before it — is cut out of it, and the bytes either side
-    /// stay padding.
-    func testAnImageInsidePaddingIsCutOutOfIt() {
+    /// PSP's data before it — is a row inside it: the padding keeps its range
+    /// and name, and the bytes either side of the image are padding rows.
+    func testAnImageInsidePaddingIsARowOfIt() {
         var bytes = [UInt8](repeating: 0xFF, count: 0x10000)
         bytes.replaceSubrange(0..<0x10, with: [UInt8](repeating: 0x11, count: 0x10))
         bytes.replaceSubrange(0x3000..<0x4000, with: Self.image("ITE8380-EC-V0.00"))
         bytes.replaceSubrange(0xF000..<0x10000, with: TestImage.volume(length: 0x1000, lastFile: TestImage.volumeTopFile()))
         let nodes = UEFIParser.parse(bytes).roots[0].children
+        let outer = nodes[0]
 
-        XCTAssertEqual(nodes.map(\.range), [0..<0x3000, 0x3000..<0x4000, 0x4000..<0xF000, 0xF000..<0x10000])
-        XCTAssertEqual(nodes.map(\.name).prefix(3), ["Padding", "EC firmware (ITE8380-EC-V0.00)", "Empty padding"])
-        XCTAssertEqual(nodes[1].kind, .padding)
-        XCTAssertTrue(ECImage.isECFirmwarePadding(nodes[1]))
+        XCTAssertEqual(nodes.map(\.range), [0..<0xF000, 0xF000..<0x10000])
+        XCTAssertEqual(outer.kind, .padding)
+        XCTAssertEqual(outer.name, "Padding")
+        XCTAssertFalse(ECImage.isECFirmwarePadding(outer))
+        XCTAssertEqual(outer.children.map(\.range), [0..<0x3000, 0x3000..<0x4000, 0x4000..<0xF000])
+        XCTAssertEqual(outer.children.map(\.name), ["Padding", "EC firmware (ITE8380-EC-V0.00)", "Empty padding"])
+        XCTAssertTrue(ECImage.isECFirmwarePadding(outer.children[1]))
     }
 
     /// A `PHCM` dword in the middle of data is four bytes anything can hold:
     /// only an image's start is trusted with it.
-    func testAMicrochipHeaderInsidePaddingIsNotCutOut() {
+    func testAPHCMHeaderInsidePaddingIsNotCutOut() {
         var bytes = [UInt8](repeating: 0xFF, count: 0x10000)
         bytes.replaceSubrange(0..<0x10, with: [UInt8](repeating: 0x11, count: 0x10))
         bytes.replaceSubrange(0x3000..<0x3004, with: [0x50, 0x48, 0x43, 0x4D])

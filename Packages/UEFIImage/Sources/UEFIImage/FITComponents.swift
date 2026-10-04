@@ -251,26 +251,16 @@ extension Parser {
         guard nodes.contains(where: { $0.kind == .padding }) else { return nodes }
         var result = nodes
         for component in fitComponents {
-            guard let index = result.firstIndex(where: {
-                $0.kind == .padding && !$0.isErased
-                    && $0.range.lowerBound <= component.range.lowerBound
-                    && component.range.upperBound <= $0.range.upperBound
-            }) else { continue }
-            let around = result[index].range
-            result.replaceSubrange(
-                index...index,
-                with: padding(from: around.lowerBound, to: component.range.lowerBound, emptyByte: emptyByte)
-                    + [UEFINode(
-                        kind: .fitComponent,
-                        subtype: component.kind.rawValue,
-                        name: component.kind.name,
-                        header: component.range.lowerBound..<component.range.lowerBound,
-                        body: component.range,
-                        // The FIT names it by address: moved, it is not found.
-                        isFixed: true
-                    )]
-                    + padding(from: component.range.upperBound, to: around.upperBound, emptyByte: emptyByte)
+            let node = UEFINode(
+                kind: .fitComponent,
+                subtype: component.kind.rawValue,
+                name: component.kind.name,
+                header: component.range.lowerBound..<component.range.lowerBound,
+                body: component.range,
+                // The FIT names it by address: moved, it is not found.
+                isFixed: true
             )
+            result = placingInPadding(node, in: result, emptyByte: emptyByte, accepts: { !$0.isErased }) ?? result
         }
         return result
     }

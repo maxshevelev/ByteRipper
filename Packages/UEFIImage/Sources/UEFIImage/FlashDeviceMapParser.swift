@@ -240,7 +240,8 @@ extension Parser {
     /// BIOS version table, the SMBIOS update, the passwords, the default
     /// variables. The scan reads those bytes as padding, and so does UEFITool.
     /// Each such range that lies wholly inside a stretch of padding becomes a
-    /// region named by its type, and the padding around it stays padding.
+    /// region named by its type, a row inside that padding: the padding keeps
+    /// its place, and the bytes between the regions are padding rows.
     /// Nothing is searched for: a region is only where the map puts one, and a
     /// range already read as something else — a volume, the NVRAM stores — is
     /// left to what read it.
@@ -280,11 +281,6 @@ extension Parser {
 
         var result = nodes
         for region in regions {
-            guard let index = result.firstIndex(where: {
-                $0.kind == .padding
-                    && $0.range.lowerBound <= region.range.lowerBound
-                    && region.range.upperBound <= $0.range.upperBound
-            }) else { continue }
             var children: [UEFINode] = []
             if region.type == FlashDeviceMap.variableDefaults {
                 let stores = walkNvramVolumeBody(region.range, emptyByte: emptyByte, depth: depth + 1)
@@ -294,25 +290,20 @@ extension Parser {
                     children = stores
                 }
             }
-            let around = result[index].range
-            result.replaceSubrange(
-                index...index,
-                with: padding(from: around.lowerBound, to: region.range.lowerBound, emptyByte: emptyByte)
-                    + [UEFINode(
-                        kind: .flashDeviceMapRegion,
-                        name: FlashDeviceMap.regionTypeName(region.type)
-                            ?? KnownGUIDs.name(of: region.type) ?? "Flash device map region",
-                        guid: region.type,
-                        header: region.range.lowerBound..<region.range.lowerBound,
-                        body: region.range,
-                        // The map pins it: it is where the map says, or the
-                        // firmware does not find it.
-                        isFixed: true,
-                        isErased: children.isEmpty && reader.isFilled(region.range, with: emptyByte),
-                        children: children
-                    )]
-                    + padding(from: region.range.upperBound, to: around.upperBound, emptyByte: emptyByte)
+            let node = UEFINode(
+                kind: .flashDeviceMapRegion,
+                name: FlashDeviceMap.regionTypeName(region.type)
+                    ?? KnownGUIDs.name(of: region.type) ?? "Flash device map region",
+                guid: region.type,
+                header: region.range.lowerBound..<region.range.lowerBound,
+                body: region.range,
+                // The map pins it: it is where the map says, or the
+                // firmware does not find it.
+                isFixed: true,
+                isErased: children.isEmpty && reader.isFilled(region.range, with: emptyByte),
+                children: children
             )
+            result = placingInPadding(node, in: result, emptyByte: emptyByte) ?? result
         }
         return result
     }

@@ -211,7 +211,7 @@ extension Parser {
                     // the reference leaves it: one padding row the size of the
                     // body would say nothing the file's own row does not.
                     let found = scanRawArea(body, emptyByte: emptyByte, depth: depth + 1)
-                    children = found.contains { $0.kind != .padding } ? found : []
+                    children = found.contains { $0.kind != .padding || !$0.children.isEmpty } ? found : []
                 }
             }
         } else if FFS.hasSections(type), !body.isEmpty {
@@ -271,9 +271,11 @@ extension Parser {
             note(.nonUEFIDataInPadFile, at: dataStart)
             // A vendor that keeps a Boot Guard manifest or the FIT itself in
             // a pad file gets it named, under the row the reference shows.
+            // The data is one padding row, and what the FIT names in it are
+            // that row's rows — which become the Non-UEFI data's own.
             let pieces = readingFITComponents(
                 padding(from: data.lowerBound, to: data.upperBound, emptyByte: emptyByte), emptyByte: emptyByte
-            )
+            ).first?.children ?? []
             nodes.append(UEFINode(
                 kind: .padding,
                 name: L("Non-UEFI data"),

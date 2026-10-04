@@ -1039,9 +1039,10 @@ public enum UEFIDetail {
         case .ite(let identification):
             fields.append(.init(L("Vendor"), "ITE"))
             fields.append(.init("ITE identification", identification))
-        case .microchip:
-            fields.append(.init(L("Vendor"), "Microchip"))
-            fields.append(.init("Signature", "PHCM"))
+        case .phcm:
+            // Microchip's format, which says nothing of whose chip it is:
+            // the format is named, the vendor is not.
+            fields.append(.init(L("Format"), "PHCM (Microchip MEC)"))
         }
         fields.append(.init(L("Written"), sizeText(found.written)))
         if let original = found.copyOf {

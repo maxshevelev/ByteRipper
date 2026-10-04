@@ -73,8 +73,10 @@ final class FlashDeviceMapRegionTests: XCTestCase {
         parsed.roots[0].children
     }
 
+    /// The regions placed among `nodes`: rows inside the padding that holds
+    /// them.
     private func regions(_ nodes: [UEFINode]) -> [UEFINode] {
-        nodes.filter { $0.kind == .flashDeviceMapRegion }
+        nodes.flatMap { $0.kind == .padding ? $0.children : [$0] }.filter { $0.kind == .flashDeviceMapRegion }
     }
 
     func testTheVariableDefaultsRegionReadsAsItsStores() {
@@ -96,11 +98,15 @@ final class FlashDeviceMapRegionTests: XCTestCase {
         XCTAssertTrue(parsed.diagnostics.isEmpty, "\(parsed.diagnostics)")
     }
 
-    /// Every other region is a leaf named by its type, and the padding around
-    /// it stays what it was: nothing outside the range the map names is
-    /// touched.
-    func testARegionIsCutOutOfThePaddingAndNamedByItsType() {
-        let nodes = top(UEFIParser.parse(Self.image()))
+    /// Every other region is a leaf named by its type, a row inside the
+    /// padding that holds it: the padding keeps its place, range and name,
+    /// and nothing outside the range the map names is touched.
+    func testARegionIsARowOfThePaddingAndNamedByItsType() {
+        let outer = top(UEFIParser.parse(Self.image()))[0]
+        XCTAssertEqual(outer.kind, .padding)
+        XCTAssertEqual(outer.range, 0..<0x4000)
+        XCTAssertEqual(outer.name, "Padding")
+        let nodes = outer.children
         let found = regions(nodes)
 
         XCTAssertEqual(found.map(\.name), ["Variable Defaults", "Password"])
@@ -158,7 +164,7 @@ final class FlashDeviceMapRegionTests: XCTestCase {
     func testWithNoVolumeTopFileAtTheTailTheRegionsStayPadding() {
         let nodes = top(UEFIParser.parse(Self.image(trailing: 0x100)))
         XCTAssertTrue(regions(nodes).isEmpty)
-        XCTAssertFalse(nodes.contains { $0.kind == .vssStore })
+        XCTAssertFalse(nodes.flatMap(\.flattened).contains { $0.kind == .vssStore })
     }
 
     /// A full dump with bytes appended after it: the descriptor says where

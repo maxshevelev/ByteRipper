@@ -18,6 +18,17 @@ final class EmptyPaddingTests: XCTestCase {
         XCTAssertFalse(UEFITreeDisplay.isEmptyPadding(volume))
     }
 
+    /// Erased padding with rows read into it — an Insyde map's region
+    /// nobody has written — is listed, or its rows would go with it.
+    func testErasedPaddingWithRowsIsListed() {
+        let region = UEFINode(kind: .flashDeviceMapRegion, name: "Unused", header: 0x1000..<0x1000,
+                              body: 0x1000..<0x2000, isErased: true)
+        var holding = erased
+        holding.children = [region]
+        XCTAssertFalse(UEFITreeDisplay.isEmptyPadding(holding))
+        XCTAssertEqual(UEFITreeDisplay.listed([holding], showsEmptyPadding: false).count, 1)
+    }
+
     func testTheTreeListsEmptyPaddingOnlyWhenAsked() {
         let nodes = [volume, erased, data, free]
         XCTAssertEqual(UEFITreeDisplay.listed(nodes, showsEmptyPadding: false).map(\.name),

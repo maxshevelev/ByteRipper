@@ -160,9 +160,16 @@ final class FITComponentTests: XCTestCase {
 
     // MARK: - Tests
 
-    func testWhatTheFITNamesIsCutOutOfThePadding() {
+    /// Each structure is a row inside the padding that holds it: the padding
+    /// keeps its place, range and name, and the bytes in between are padding
+    /// rows.
+    func testWhatTheFITNamesIsARowOfThePadding() {
         let parsed = UEFIParser.parse(Self.block(), readsProtectedRanges: false)
-        let nodes = parsed.roots[0].children
+        let outer = parsed.roots[0].children[0]
+        XCTAssertEqual(outer.kind, .padding)
+        XCTAssertEqual(outer.range, 0..<0xF000)
+        XCTAssertEqual(outer.name, "Padding")
+        let nodes = outer.children
         let found = components(nodes)
 
         XCTAssertEqual(found.map(\.name), ["FIT", "Boot Guard Key Manifest", "Boot Guard Boot Policy", "Startup ACM"])
@@ -196,6 +203,23 @@ final class FITComponentTests: XCTestCase {
         }
     }
 
+    /// A raw file's body is a raw area too, and what the FIT names in it are
+    /// rows of the padding there — which keeps the file's rows, although the
+    /// scan found nothing but that padding.
+    func testWhatTheFITNamesInARawFileIsKept() throws {
+        var bytes = Self.block()
+        // A volume over the first 32 KiB whose one raw file's body starts at
+        // 0x60 and holds the same bytes at the same offsets.
+        let file = TestImage.file(body: Array(bytes[0x60..<0x5000]))
+        let volume = TestImage.volume(length: 0x8000, files: [file])
+        XCTAssertEqual(Array(volume[0x60..<0x5000]), Array(bytes[0x60..<0x5000]), "the body is where the block had it")
+        bytes.replaceSubrange(0..<0x8000, with: volume)
+
+        let parsed = UEFIParser.parse(bytes, readsProtectedRanges: false)
+        XCTAssertEqual(components(parsed.allNodes).map(\.name),
+                       ["FIT", "Boot Guard Key Manifest", "Boot Guard Boot Policy", "Startup ACM"])
+    }
+
     /// The FIT is a pointer, not a promise: what it names has to be there.
     func testAnAddressHoldingSomethingElseStaysPadding() {
         var acm = Self.startupACM
@@ -204,7 +228,7 @@ final class FITComponentTests: XCTestCase {
             Self.block(placed: [(0x0B, 0x2000, Self.keyManifestV2), (0x02, 0x4000, acm)]),
             readsProtectedRanges: false
         )
-        XCTAssertEqual(components(parsed.roots[0].children).map(\.name), ["FIT", "Boot Guard Key Manifest"])
+        XCTAssertEqual(components(parsed.allNodes).map(\.name), ["FIT", "Boot Guard Key Manifest"])
     }
 
     /// With bytes after the Volume Top File the parser cannot map the FIT's

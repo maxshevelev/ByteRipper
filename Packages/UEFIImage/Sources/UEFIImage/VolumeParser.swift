@@ -317,8 +317,9 @@ extension Parser {
         if !node.isErased, depth < limits.maxDepth {
             let found = scanRawArea(range, emptyByte: emptyByte, depth: depth + 1)
             // Nothing but padding means the search found nothing, and a single
-            // padding child that repeats its parent is noise.
-            if found.contains(where: { $0.kind != .padding }) {
+            // padding child that repeats its parent is noise — unless the
+            // padding has rows of its own read into it.
+            if found.contains(where: { $0.kind != .padding || !$0.children.isEmpty }) {
                 node.children = found
             }
         }

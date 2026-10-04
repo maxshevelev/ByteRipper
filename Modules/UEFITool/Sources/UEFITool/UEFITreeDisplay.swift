@@ -77,9 +77,11 @@ public enum UEFITreeDisplay {
     /// leaves these out unless the reader asks for them — a dump is full of
     /// them, and a row that stands for nothing is a row to scroll past.
     /// Padding that holds data stays, and so does free space inside a volume,
-    /// which says how much room the volume has.
+    /// which says how much room the volume has. So does erased padding with
+    /// rows read inside it — an Insyde map's region nobody has written yet —
+    /// since hiding it would hide them.
     public static func isEmptyPadding(_ node: UEFINode) -> Bool {
-        node.kind == .padding && node.isErased
+        node.kind == .padding && node.isErased && node.children.isEmpty
     }
 
     /// `nodes` as the tree lists them: every one, or all but the empty

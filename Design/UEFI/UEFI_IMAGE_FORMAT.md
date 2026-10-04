@@ -1135,7 +1135,11 @@ Lenovo's EEPROM and password regions, the default variables — so UEFITool
 shows them as padding. When a raw-area scan finds a flash device map, each range
 one of its entries names that lies wholly inside a stretch of padding the same
 scan left becomes a `flashDeviceMapRegion` node, named by its region type the
-way UEFITool names the entries, fixed, and the padding around it stays. A range
+way UEFITool names the entries, fixed, as a row inside that padding
+(`Parser.placingInPadding`): the padding keeps its place, range and name —
+it is what the structures around it make it — and the bytes between the
+regions are padding rows beside them. Erased padding with rows in it is
+listed even when empty padding is not. A range
 that is already something else — a volume, the NVRAM volume's stores, the map
 itself — is left to what read it. Entries are placed in address order, so of
 two that overlap the first is placed and the other stays out; a board that
@@ -1153,10 +1157,15 @@ entry of type `FLASH_MAP` (`F078C1A0-…`): that entry's address less the
 store's offset, taken only when it is a whole number of 4 KiB blocks, since a
 copy of the map inside a file keeps the original's entries
 (`FlashDeviceMap.addressDiff(of:reader:)`). On `SPI_EF6018_128Mbit.*` that
-places the EC Firmware regions at `0x0` (`0x200` bytes), `0x200` (a MEC image)
-and `0x21000` (an `ITE8380` in a 192 KiB slot), and the Lenovo regions. The
-board has two controllers sharing the flash, the EC and a keyboard
-controller — known from the bench, not from anything the images say. The details of the map, and of
+places the EC Firmware regions at `0x0` (`0x200` bytes, which hold
+`0x21000`, `0x31000` and `0x3D000` among other words), `0x200` (a `PHCM`
+image) and `0x21000` (an `ITE8380` in a 192 KiB slot), and the Lenovo
+regions. The board has two controllers sharing the flash, both ITE's: the EC
+and an IT8176FN-56A keyboard controller (from the bench, not from the
+images). The `PHCM` image is ARM Thumb code built from `md_i2c.c`,
+`dev_pca9557.c`, `f_smtbty.c`. Whose code it is is not known: the keyboard
+controller may keep its firmware in a flash of its own, and not in this one
+at all. The details of the map, and of
 each entry, list every entry's region — type, address, start in the file,
 size, and the node that is exactly that range — including those inside a
 volume, which are not cut out of anything. A region classifies as UEFITool's `Padding`, with the empty or
@@ -1225,7 +1234,9 @@ Two vendors' images are recognised, each on a 4 KiB boundary:
   the two `ITE EC-V14.0` and the `ITE EC-V-8586` carry other values there,
   different on each dump, and what the pair holds is not known. The string is the firmware author's,
   not the chip's marking, and the help says so.
-- **Microchip MEC**: the `PHCM` header (`MCHP` reversed) the MEC boot ROM reads.
+- **`PHCM`**: the header (`MCHP` reversed) Microchip's MEC boot ROM reads.
+  The row is called `PHCM image`, not after Microchip: `SPI_EF6018_128Mbit.*`
+  carries one on a board whose controllers are both ITE's.
   Its fields are not decoded, and nothing in the image names chip or version.
 
 Three places are looked at: a stretch of non-empty padding the raw-area scan
@@ -1233,9 +1244,12 @@ left, an EC Firmware region of the Insyde map, and the descriptor's EC region,
 read when the descriptor is (a look at each 4 KiB boundary, not a scan). A
 block holding one image, at its start, is named after it — `EC firmware (…)`,
 `EC Firmware (…)`, `EC region (…)`; padding only when the image opens it.
-Padding that holds an ITE image further in is cut instead
-(`Parser.cuttingECFirmware`): the padding before the first image, a padding
-block from it to the end of the last, read as above, and the padding after.
+Padding that holds an ITE image further in keeps its range and its name, and
+gets the image as a row inside it (`Parser.cuttingECFirmware`): padding before
+the first image, a padding block from it to the end of the last, read as
+above, and padding after. The padding is what the structures around it make
+it; the EC firmware is one part of it, and what else it holds is to be read
+into rows beside it.
 An AMD board's first padding is like this — `W25Q64JW-IQ.orig.bin` keeps the
 PSP's directories and blobs from `0x0`, then `ITE8380-EC-V0.00` at `0x2C8000`.
 Only ITE is trusted away from a start: a `PHCM` dword is four bytes. The
@@ -1264,7 +1278,8 @@ keep them outside every volume — the HP ZBook Fury 16 G9 dump keeps all four i
 the manifests and the table in a pad file's body. UEFITool shows those bytes as
 padding. Each structure the FIT names that lies wholly inside a stretch of
 non-empty padding becomes a `fitComponent` node, its subtype the FIT type,
-fixed, and the padding around it stays — the raw-area scan's padding, a raw
+fixed, a row inside that padding as the map's regions are — the raw-area
+scan's padding, a raw
 file's body read as a raw area, and the non-UEFI data of a pad file, whose row
 and warning stay as the reference has them, with the structures as its
 children. The length is the structure's own: the table's row count; the ACM's

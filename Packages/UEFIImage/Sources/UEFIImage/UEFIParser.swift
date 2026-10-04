@@ -280,6 +280,41 @@ final class Parser {
         }
     }
 
+    /// `nodes` with `found` — something read out of padding by what a table
+    /// elsewhere says is there: a map's region, a FIT structure — as a row
+    /// inside the padding that holds it. The padding is what the structures
+    /// around it made it, and keeps its place, its range and its name; what
+    /// is read out of it are its rows, with padding rows for the bytes in
+    /// between. Nil when no padding `accepts` takes, nor a padding row inside
+    /// one, holds the whole of it: it is part of something already read.
+    func placingInPadding(
+        _ found: UEFINode, in nodes: [UEFINode], emptyByte: UInt8,
+        accepts: (UEFINode) -> Bool = { _ in true }
+    ) -> [UEFINode]? {
+        func holds(_ node: UEFINode) -> Bool {
+            node.kind == .padding && accepts(node)
+                && node.range.lowerBound <= found.range.lowerBound
+                && found.range.upperBound <= node.range.upperBound
+        }
+        guard let index = nodes.firstIndex(where: holds) else { return nil }
+        var outer = nodes[index]
+        var rows = outer.children.isEmpty
+            ? padding(from: outer.range.lowerBound, to: outer.range.upperBound, emptyByte: emptyByte)
+            : outer.children
+        guard let row = rows.firstIndex(where: { holds($0) && $0.children.isEmpty }) else { return nil }
+        let around = rows[row].range
+        rows.replaceSubrange(
+            row...row,
+            with: padding(from: around.lowerBound, to: found.range.lowerBound, emptyByte: emptyByte)
+                + [found]
+                + padding(from: found.range.upperBound, to: around.upperBound, emptyByte: emptyByte)
+        )
+        outer.children = rows
+        var result = nodes
+        result[index] = outer
+        return result
+    }
+
     /// Whatever no structure claimed. Kept as a node rather than dropped: an
     /// image that cannot be put back together byte for byte is one this tool
     /// cannot honestly edit (§11).

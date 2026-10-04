@@ -5,9 +5,9 @@ import XCTest
 /// padding between them, and a copy told by its bytes (`UEFI_IMAGE_FORMAT.md`
 /// §9).
 final class ECImageTests: XCTestCase {
-    /// A Microchip image: the `PHCM` header and `length` bytes of something
+    /// An image with the `PHCM` header and `length` bytes of something
     /// that is not the erase byte.
-    private static func microchip(length: Int, fill: UInt8 = 0x5A) -> [UInt8] {
+    private static func phcm(length: Int, fill: UInt8 = 0x5A) -> [UInt8] {
         Array("PHCM".utf8) + [UInt8](repeating: fill, count: length - 4)
     }
 
@@ -46,7 +46,7 @@ final class ECImageTests: XCTestCase {
     /// A copy is as long as what it copies: what follows it — a log — stays
     /// padding with data in it.
     func testACopyIsAsLongAsItsOriginal() {
-        let image = Self.microchip(length: 0x1F00)
+        let image = Self.phcm(length: 0x1F00)
         let log = [UInt8](repeating: 0x01, count: 0x100)
         let region = ecRegion(Self.block(0x8000, [(0x0000, image), (0x2000, image), (0x6000, log)]))
         let rows = region.children
@@ -54,7 +54,7 @@ final class ECImageTests: XCTestCase {
         XCTAssertEqual(region.name, "EC region")
         XCTAssertEqual(rows.map(\.kind), [.ecImage, .ecImage, .padding])
         XCTAssertEqual(rows.map(\.range), [0x1000..<0x3000, 0x3000..<0x5000, 0x5000..<0x9000])
-        XCTAssertEqual(rows[0].name, "Microchip MEC image")
+        XCTAssertEqual(rows[0].name, "PHCM image")
         XCTAssertNil(rows[0].subtype)
         XCTAssertEqual(rows[1].subtype, ECImage.copySubtype)
         XCTAssertFalse(rows[2].isErased)
@@ -70,8 +70,8 @@ final class ECImageTests: XCTestCase {
     /// Bytes that only resemble an earlier image are not a copy of it.
     func testAnImageThatDiffersIsNoCopy() {
         let region = ecRegion(Self.block(0x4000, [
-            (0x0000, Self.microchip(length: 0x800)),
-            (0x2000, Self.microchip(length: 0x800, fill: 0x5B)),
+            (0x0000, Self.phcm(length: 0x800)),
+            (0x2000, Self.phcm(length: 0x800, fill: 0x5B)),
         ]))
         XCTAssertEqual(region.children.filter { $0.kind == .ecImage }.map(\.subtype), [nil, nil])
     }
@@ -92,23 +92,23 @@ final class ECImageTests: XCTestCase {
     /// One image at the block's start is the common case: the block is
     /// named by it, keeps its length as a row would, and gets no rows.
     func testASingleImageAtTheStartAddsNoRows() {
-        let region = ecRegion(Self.block(0x4000, [(0x0000, Self.microchip(length: 0x1800))]))
-        XCTAssertEqual(region.name, "EC region (Microchip MEC image)")
+        let region = ecRegion(Self.block(0x4000, [(0x0000, Self.phcm(length: 0x1800))]))
+        XCTAssertEqual(region.name, "EC region (PHCM image)")
         XCTAssertEqual(region.namedImageLength, 0x2000)
         XCTAssertTrue(region.children.isEmpty)
     }
 
     /// Blocks that name no single image carry no length for one.
     func testOnlyABlockNamedAfterOneImageKeepsItsLength() {
-        let several = ecRegion(Self.block(0x4000, [(0x0000, Self.microchip(length: 0x800)),
-                                                   (0x2000, Self.microchip(length: 0x800))]))
+        let several = ecRegion(Self.block(0x4000, [(0x0000, Self.phcm(length: 0x800)),
+                                                   (0x2000, Self.phcm(length: 0x800))]))
         XCTAssertNil(several.namedImageLength)
         XCTAssertTrue(several.children.allSatisfy { $0.namedImageLength == nil })
     }
 
     /// One image further in gets a row, so the bytes before it are seen.
     func testASingleImageFurtherInIsARow() {
-        let region = ecRegion(Self.block(0x4000, [(0x0000, [0x12, 0x34]), (0x1000, Self.microchip(length: 0x800))]))
+        let region = ecRegion(Self.block(0x4000, [(0x0000, [0x12, 0x34]), (0x1000, Self.phcm(length: 0x800))]))
         XCTAssertEqual(region.children.map(\.kind), [.padding, .ecImage, .padding])
         XCTAssertFalse(region.children[0].isErased)
     }
@@ -122,7 +122,7 @@ final class ECImageTests: XCTestCase {
 
     /// An image classifies as UEFITool's padding.
     func testAnImageClassifiesAsPadding() {
-        let region = ecRegion(Self.block(0x4000, [(0x1000, Self.microchip(length: 0x800))]))
+        let region = ecRegion(Self.block(0x4000, [(0x1000, Self.phcm(length: 0x800))]))
         let image = region.children.first { $0.kind == .ecImage }!
         XCTAssertEqual(image.uefiItemType, UEFITypes.Item.padding.rawValue)
         XCTAssertEqual(image.uefiItemSubtype, UEFITypes.Sub.dataPadding)

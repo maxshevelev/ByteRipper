@@ -6,7 +6,7 @@ import XCTest
 /// An EC image row: named by what it carries, a copy saying so, and the
 /// details reading the image again from the block it is in.
 final class ECImageDisplayTests: XCTestCase {
-    /// A 16 KiB EC region: a Microchip image at its start and its copy at
+    /// A 16 KiB EC region: an image with a `PHCM` header at its start and its copy at
     /// `0x2000`.
     private func built() -> (UEFIImage, ImageReader) {
         var bytes = [UInt8](repeating: 0xFF, count: 0x4000)
@@ -14,9 +14,9 @@ final class ECImageDisplayTests: XCTestCase {
         bytes.replaceSubrange(0..<0x800, with: image)
         bytes.replaceSubrange(0x2000..<0x2800, with: image)
         let rows = [
-            UEFINode(kind: .ecImage, name: "Microchip MEC image", header: 0..<0, body: 0..<0x1000, isFixed: true),
+            UEFINode(kind: .ecImage, name: "PHCM image", header: 0..<0, body: 0..<0x1000, isFixed: true),
             UEFINode(kind: .padding, name: "Empty padding", range: 0x1000..<0x2000, isErased: true),
-            UEFINode(kind: .ecImage, subtype: ECImage.copySubtype, name: "Microchip MEC image",
+            UEFINode(kind: .ecImage, subtype: ECImage.copySubtype, name: "PHCM image",
                      header: 0x2000..<0x2000, body: 0x2000..<0x3000, isFixed: true),
             UEFINode(kind: .padding, name: "Empty padding", range: 0x3000..<0x4000, isErased: true),
         ]
@@ -30,7 +30,7 @@ final class ECImageDisplayTests: XCTestCase {
         let (image, _) = built()
         let names = image.roots[0].children.filter { $0.kind == .ecImage }
             .map { UEFITreeDisplay.name(for: $0, catalogue: GuidsCatalogue(names: [:]), in: image) }
-        XCTAssertEqual(names, ["Microchip MEC image, 4 KB", "Microchip MEC image, 4 KB (copy)"])
+        XCTAssertEqual(names, ["PHCM image, 4 KB", "PHCM image, 4 KB (copy)"])
     }
 
     func testTheDetailsSayWhatTheImageIsAndWhatItCopies() {
@@ -41,8 +41,8 @@ final class ECImageDisplayTests: XCTestCase {
             return Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
         }
         XCTAssertEqual(fields(0)["Kind"], "EC firmware image")
-        XCTAssertEqual(fields(0)["Vendor"], "Microchip")
-        XCTAssertEqual(fields(0)["Signature"], "PHCM")
+        XCTAssertEqual(fields(0)["Format"], "PHCM (Microchip MEC)")
+        XCTAssertNil(fields(0)["Vendor"], "the header does not say whose chip it is")
         XCTAssertEqual(fields(0)["Written"], "0x800 (2048)")
         XCTAssertNil(fields(0)["Copy of"])
         XCTAssertEqual(fields(2)["Copy of"], "0x0")
