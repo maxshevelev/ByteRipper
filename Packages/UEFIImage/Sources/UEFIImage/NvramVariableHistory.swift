@@ -173,18 +173,10 @@ public struct NvramVariableHistory: Equatable, Sendable {
     }
 
     /// A VSS2 entry's body is its value. A `$VSS` entry's body opens with the
-    /// name, as long as the header's name size says.
+    /// name, as long as the header says.
     private static func vssValue(_ entry: UEFINode, inVss2: Bool, reader: ImageReader) -> Range<UInt64> {
         guard !inVss2 else { return entry.body }
-        let h = entry.header.lowerBound
-        let nameSize: UInt64?
-        switch UInt64(entry.header.count) {
-        case NVRAM.vssAuthHeaderSize: nameSize = reader.uint32(at: h + 36).map(UInt64.init)
-        case NVRAM.vssIntelLegacyHeaderSize: nameSize = 4
-        default: nameSize = reader.uint32(at: h + 8).map(UInt64.init)
-        }
-        let start = min(entry.body.lowerBound + (nameSize ?? 0), entry.body.upperBound)
-        return start..<entry.body.upperBound
+        return VSSVariable.read(entry, inVss2: false, reader: reader)?.data ?? entry.body
     }
 
     /// NVAR entries, read as if each were valid: a whole entry names its

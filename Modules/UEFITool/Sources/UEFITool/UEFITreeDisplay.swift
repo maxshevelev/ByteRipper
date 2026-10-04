@@ -171,12 +171,19 @@ public enum UEFITreeDisplay {
     ///
     /// With `image`, the outermost nodes of a Top Swap copy say they are one
     /// (`UEFITopSwap`). With `reader` — the bytes of the node's space — a
-    /// DVAR row says its value as well.
+    /// DVAR, VSS or NVAR row says its value as well. A VSS value lies where
+    /// its store's format puts it: `store` is the entry's store, looked up in
+    /// `image` when not given.
     public static func name(for node: UEFINode, catalogue: GuidsCatalogue, in image: UEFIImage? = nil,
-                            reader: ImageReader? = nil) -> String {
-        let base = baseName(for: node, catalogue: catalogue, settings: image?.dvarSettings, reader: reader)
+                            reader: ImageReader? = nil, store: UEFINode? = nil) -> String {
+        let base = baseName(for: node, catalogue: catalogue, image: image, reader: reader, store: store)
         guard let image else { return base }
         return UEFITopSwap.name(base, for: node, in: image)
+    }
+
+    /// Whether the row of `node` says a value, and so needs the bytes.
+    public static func showsValue(_ node: UEFINode) -> Bool {
+        node.kind == .dvarEntry || node.kind == .vssEntry || node.kind == .nvarEntry
     }
 
     private static func kibibytes(_ length: UInt64) -> UInt64 {
@@ -184,7 +191,7 @@ public enum UEFITreeDisplay {
     }
 
     private static func baseName(for node: UEFINode, catalogue: GuidsCatalogue,
-                                 settings: DellSetup.Catalogue?, reader: ImageReader?) -> String {
+                                 image: UEFIImage?, reader: ImageReader?, store: UEFINode?) -> String {
         // An EC image is named by what it carries and how large it is, in
         // KiB — the bench sizes EC firmware by it (128, 192, 256) — and a copy
         // of an earlier one in the same block says so.
@@ -216,7 +223,7 @@ public enum UEFITreeDisplay {
         // where it can: "SecureBoot = Not ticked (0x0)"; a value too long to
         // read as a number, by its size: "0x2 (16 bytes)".
         if node.kind == .dvarEntry, node.guid != nil {
-            let setting = settings?.setting(for: node)
+            let setting = image?.dvarSettings?.setting(for: node)
             let name = setting?.name ?? "0x" + node.name
             guard let value = reader?.bytes(node.body) else { return name }
             guard let text = dvarValue(value, setting: setting) else {
@@ -227,8 +234,25 @@ public enum UEFITreeDisplay {
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind) : node.name
         }
-        if node.kind == .vssEntry || node.kind == .nvarEntry, !node.name.isEmpty {
-            return node.name
+        // A live VSS variable's value follows its name, as its type reads:
+        // `BootOrder = 0003, 2001`, `Lang = "eng"`. The store says where the
+        // value is.
+        if node.kind == .vssEntry, !node.name.isEmpty {
+            guard node.subtype != UEFITypes.Sub.invalidVssEntry, let reader else { return node.name }
+            let store = store ?? (node.id.path.isEmpty ? nil : image?.node(NodeID(Array(node.id.path.dropLast()))))
+            guard let variable = VSSVariable.read(node, inVss2: store?.kind == .vss2Store, reader: reader)
+            else { return node.name }
+            return valueRow(node.name, guid: variable.vendorGuid, attributes: variable.attributes,
+                            value: variable.data, reader: reader)
+        }
+        // So does an NVAR variable's, on the entry that holds it now: a link
+        // of a chain holds a value a later entry replaced.
+        if node.kind == .nvarEntry, !node.name.isEmpty {
+            guard node.subtype == UEFITypes.Sub.fullNvarEntry || node.subtype == UEFITypes.Sub.dataNvarEntry,
+                  let reader
+            else { return node.name }
+            return valueRow(node.name, guid: node.guid, attributes: nvarAttributes(node, reader: reader),
+                            value: node.body, reader: reader)
         }
         // A flash device map entry's GUID is a region *type*, and UEFITool
         // names the row by what the type is: "Variable Defaults", "Password".
@@ -245,6 +269,29 @@ public enum UEFITreeDisplay {
         // is the last resort.
         return catalogue.name(of: guid) ?? NvramGuids.name(of: guid) ?? guid.description
     }
+
+    /// `name = value`, the value read as its type. A value too long to be
+    /// one of the types a row spells out is not read: a row is drawn on every
+    /// scroll.
+    private static func valueRow(_ name: String, guid: EFIGUID?, attributes: UInt32,
+                                 value range: Range<UInt64>, reader: ImageReader) -> String {
+        guard range.count <= valueRowReadLimit, let value = reader.bytes(range) else {
+            return L("%1$@ (%2$@ bytes)", name, "\(range.count)")
+        }
+        let read = NvramValue.read(name: name, guid: guid, attributes: attributes, value: value)
+        return NvramValueText.row(name, read, bytes: value)
+    }
+
+    /// An NVAR entry's attributes in the VSS bits `NvramValue` reads: its
+    /// own byte keeps the hardware error record flag at `0x20`.
+    static func nvarAttributes(_ node: UEFINode, reader: ImageReader) -> UInt32 {
+        guard let attributes = reader.uint8(at: node.header.lowerBound + 9) else { return 0 }
+        return attributes & 0x20 != 0 ? 0x8 : 0
+    }
+
+    /// The longest value a variable's row reads: a signature database is the longest
+    /// there is to read as a type, and a `dbx` grows to tens of KiB.
+    static let valueRowReadLimit = 0x10000
 
     /// A DVAR value up to eight bytes long, little-endian, as a number — with
     /// what Setup calls it in front, where it says.

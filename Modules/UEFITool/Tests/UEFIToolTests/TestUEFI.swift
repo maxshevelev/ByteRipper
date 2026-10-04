@@ -361,33 +361,37 @@ enum TestUEFI {
         return Built(bytes: pad(w.bytes, to: totalSize), node: node, image: image(node, totalSize: totalSize))
     }
 
-    /// A standard VSS variable's 32-byte header: the marker, state, reserved,
-    /// attributes, the two size words, and the vendor GUID (§9). A VSS and a
-    /// VSS2 store lay this out identically.
+    /// A standard `$VSS` variable (§9): the 32-byte header — the marker,
+    /// state, reserved, attributes, the two size words, and the vendor GUID —
+    /// then its UCS-2 name and its value, which make up the body.
     static func nvramVssVariable(
+        name: String = "BootOrder",
+        data: [UInt8] = [0x01, 0x00],
         state: UInt8 = 0x7F,
         attributes: UInt32 = 0x0000_0003,
         vendorGuid: EFIGUID = EFIGUID(low: 0x1111_1111, high: 0x2222_2222)
     ) -> Built {
+        let nameBytes: [UInt8] = name.utf16.flatMap { [UInt8(truncatingIfNeeded: $0), UInt8($0 >> 8)] } + [0, 0]
         var w = Writer()
         w.u8(0xAA)
         w.u8(0x55)
         w.u8(state)
         w.u8(0)                // reserved
         w.u32(attributes)
-        w.u32(0)               // name size
-        w.u32(0)               // data size
+        w.u32(UInt32(nameBytes.count))
+        w.u32(UInt32(data.count))
         w.guid(vendorGuid)
+        let size = UInt64(32 + nameBytes.count + data.count)
         let node = UEFINode(
             kind: .vssEntry,
             subtype: UEFITypes.Sub.standardVssEntry,
-            name: "BootOrder",
+            name: name,
             guid: vendorGuid,
             header: 0..<32,
-            body: 32..<32,
+            body: 32..<size,
             isFixed: true
         )
-        return Built(bytes: pad(w.bytes, to: 32), node: node, image: image(node, totalSize: 32))
+        return Built(bytes: w.bytes + nameBytes + data, node: node, image: image(node, totalSize: size))
     }
 
     /// An AMI NVAR entry (§9): `NVAR`, the size, a 24-bit `next`, the

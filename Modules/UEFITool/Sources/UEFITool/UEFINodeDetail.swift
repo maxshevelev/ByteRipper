@@ -158,6 +158,26 @@ public enum UEFIDetail {
         if node.kind == .ecImage {
             fields += ecImageFields(node, image: image, reader: reader)
         }
+        var tables: [UEFIDetailTable] = []
+        if node.kind == .vssEntry, let variable = VSSVariable.read(node, in: image, reader: reader) {
+            fields += vssFields(variable, reader: reader)
+            // The value, read as its type — by the name the entry carries,
+            // so a superseded copy reads as the variable it was.
+            if let bytes = reader.bytes(variable.data) {
+                let value = NvramValue.read(name: variable.decodedName(reader: reader) ?? "",
+                                            guid: variable.vendorGuid, attributes: variable.attributes, value: bytes)
+                fields += NvramValueText.fields(value, bytes: bytes)
+                if let signatures = NvramValueText.signaturesTable(value) { tables.append(signatures) }
+            }
+        }
+        // An NVAR entry's body is its value; a link's is one a later entry
+        // replaced, and it reads as what it was.
+        if node.kind == .nvarEntry, !node.name.isEmpty, let bytes = reader.bytes(node.body) {
+            let value = NvramValue.read(name: node.name, guid: node.guid,
+                                        attributes: UEFITreeDisplay.nvarAttributes(node, reader: reader), value: bytes)
+            fields += NvramValueText.fields(value, bytes: bytes)
+            if let signatures = NvramValueText.signaturesTable(value) { tables.append(signatures) }
+        }
         if let topSwap = UEFITopSwap.detail(for: node, in: image) {
             fields.append(.init(L("Top Swap"), topSwap))
         }
@@ -165,7 +185,6 @@ public enum UEFIDetail {
             fields += fillFields(fill)
         }
         let title = node.name.isEmpty ? kindLabel(node.kind) : node.name
-        var tables: [UEFIDetailTable] = []
 
         // What the BVDT's `$BME$` record lists, placed in the file.
         if node.kind == .flashDeviceMapRegion, node.guid == FlashDeviceMap.biosVersionDataTable,
@@ -346,6 +365,40 @@ public enum UEFIDetail {
         if let size = wideSize ? reader.uint16(at: cursor).map({ 0xFFFF - $0 })
                                : reader.uint8(at: cursor).map({ UInt16(0xFF - $0) }) {
             fields.append(.init("Data size", sizeText(size)))
+        }
+        return fields
+    }
+
+    // MARK: - A VSS variable
+
+    /// The header a VSS variable's form carries (`VSSVariable`): the state by
+    /// its name, the attributes, the sizes, and what the form adds — the
+    /// authenticated form's count, time stamp and key index, Apple's data
+    /// CRC, Intel's total size. The vendor GUID is the common "GUID" field.
+    private static func vssFields(_ variable: VSSVariable, reader: ImageReader) -> [UEFIDetailField] {
+        let states: [UInt8: String] = variable.form == .intelLegacy
+            ? [0xFC: "Valid", 0xF8: "Invalid"]
+            : [0x7F: "Header valid", 0x3F: "Added", 0x3E: "Added, in deleted transition",
+               0x3D: "Deleted", 0x3C: "Deleted"]
+        var fields: [UEFIDetailField] = [
+            .init("State", states[variable.state].map { "\(hex(variable.state)) (\($0))" } ?? hex(variable.state)),
+            .init("Reserved", hex(variable.reserved)),
+            .init("Attributes", bits(variable.attributes, nvramAttributeBits)),
+        ]
+        if let total = variable.totalSize { fields.append(.init("Total size", sizeText(total))) }
+        if let count = variable.monotonicCount { fields.append(.init("Monotonic count", "\(count)")) }
+        if let timestamp = variable.timestamp {
+            fields.append(.init("Timestamp", timestamp.isZero ? L("Not set") : timestamp.text ?? L("Not a date")))
+        }
+        if let index = variable.publicKeyIndex { fields.append(.init("Public key index", "\(index)")) }
+        if let size = variable.nameSize { fields.append(.init("Name size", sizeText(size))) }
+        if let size = variable.dataSize { fields.append(.init("Data size", sizeText(size))) }
+        if let stored = variable.dataCRC32, let data = reader.bytes(variable.data) {
+            let computed = Checksums.crc32(data)
+            fields.append(UEFIDetailField(
+                "Data CRC32",
+                Checksums.text(stored, valid: computed == stored, expected: UInt64(computed), digits: 8),
+                isProblem: computed != stored))
         }
         return fields
     }
@@ -866,16 +919,9 @@ public enum UEFIDetail {
                 ))
             }
 
+        // Read in `build`, which knows the store and so the header's form.
         case .vssEntry:
-            // The variable's vendor GUID is the common "GUID" field: the parser
-            // set it on the node, the only place that knows where the store
-            // puts it for the variable's form. State, reserved and attributes
-            // follow.
-            if let state = reader.uint8(at: h + 2) { fields.append(.init("State", hex(state))) }
-            if let reserved = reader.uint8(at: h + 3) { fields.append(.init("Reserved", hex(reserved))) }
-            if let attributes = reader.uint32(at: h + 4) {
-                fields.append(.init("Attributes", bits(attributes, nvramAttributeBits)))
-            }
+            break
 
         case .evsaEntry:
             // What the header adds depends on the entry's kind: a GUID entry

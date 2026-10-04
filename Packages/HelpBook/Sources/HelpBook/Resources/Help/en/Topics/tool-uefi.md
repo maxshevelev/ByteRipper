@@ -12,6 +12,7 @@
 @covers panel.uefi.superseded-entries
 @covers panel.uefi.filter
 @covers panel.uefi.variable-history
+@covers panel.uefi.variable-value
 @covers panel.uefi.map-regions
 @covers panel.uefi.reveal
 
@@ -45,6 +46,10 @@ Right-click a node:
 ## Padding
 
 A dump holds erased space between its structures. The tree omits it unless **Show Empty Padding** is ticked in the filter menu, which the funnel icon in the title row opens, left of **the reveal button**. The icon is tinted while the tree lists anything it omits by default. Padding that holds data is listed in either case, as is a volume's free space, which reports how much room remains in that volume.
+
+## Variable values
+
+The row of a [[term:vss|VSS]], [[term:nvar|NVAR]] or [[term:dvar|DVAR]] variable gives its value after an equals sign — `BootOrder = 0003, 2001`, `Lang = "eng"`, `Boot0001 = Windows Boot Manager` — and the detail list gives the whole value under **Value**. A VSS or NVAR value is read as its type: text as text, a number as a number, a device path in the text form of the UEFI specification. **Read as** says what type the value was read as and whether the specification defines it or the type was guessed from the bytes. How the type is decided is explained under [[term:vss|VSS]]; an NVAR value is read the same way. The row of an NVAR link gives no value, because a later entry of its chain replaced it.
 
 ## Variable copies
 

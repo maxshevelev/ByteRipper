@@ -117,6 +117,56 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertEqual(UEFITreeDisplay.name(for: built.node, catalogue: named), "BootOrder")
     }
 
+    /// With the image and its bytes, a live VSS row gives the value after
+    /// the name, as its type reads; a value it cannot read by its size.
+    func testAVssRowSaysItsValue() {
+        func row(_ built: TestUEFI.Built) -> String {
+            UEFITreeDisplay.name(for: built.image.roots[0], catalogue: .empty, in: built.image, reader: built.reader)
+        }
+        XCTAssertEqual(row(TestUEFI.nvramVssVariable(data: [0x03, 0x00, 0x01, 0x20])), "BootOrder = 0003, 2001")
+        XCTAssertEqual(row(TestUEFI.nvramVssVariable(name: "Lang", data: Array("eng".utf8) + [0])), "Lang = \"eng\"")
+        XCTAssertEqual(row(TestUEFI.nvramVssVariable(name: "Timeout", data: [0x2C, 0x01])), "Timeout = 300 (0x12C)")
+        XCTAssertEqual(row(TestUEFI.nvramVssVariable(name: "WRDD", data: [0x00, 0x50, 0x41])), "WRDD = 00 50 41")
+        XCTAssertEqual(row(TestUEFI.nvramVssVariable(name: "Setup", data: [UInt8](repeating: 0, count: 40))),
+                       "Setup (40 bytes)")
+        XCTAssertEqual(row(TestUEFI.nvramVssVariable(name: "Empty", data: [])), "Empty")
+        XCTAssertEqual(UEFITreeDisplay.name(for: TestUEFI.nvramVssVariable().node, catalogue: .empty), "BootOrder",
+                       "without the bytes, the name alone")
+    }
+
+    /// The panel hands the bytes to every row that says a value — the
+    /// variables of all three stores — and to no other.
+    func testEveryVariableRowAsksForItsBytes() {
+        XCTAssertTrue(UEFITreeDisplay.showsValue(TestUEFI.nvramVssVariable().node))
+        XCTAssertTrue(UEFITreeDisplay.showsValue(TestUEFI.nvarEntry().node))
+        XCTAssertFalse(UEFITreeDisplay.showsValue(TestUEFI.nvramVssStore().node))
+    }
+
+    /// The store the panel passes decides where a VSS value is, when the
+    /// image the row is given has not got it.
+    func testAVssRowIsReadByTheStoreItIsGiven() {
+        let built = TestUEFI.nvramVssVariable(data: [0x03, 0x00])
+        XCTAssertEqual(UEFITreeDisplay.name(for: built.image.roots[0], catalogue: .empty, reader: built.reader,
+                                            store: TestUEFI.nvramVss2Store().node),
+                       "BootOrder = 0003")
+    }
+
+    /// An NVAR variable's row says its value too.
+    func testAnNvarRowSaysItsValue() {
+        let built = TestUEFI.nvarEntry(next: 0xFF_FFFF, data: [0x2C, 0x01])
+        XCTAssertEqual(UEFITreeDisplay.name(for: built.image.roots[0], catalogue: .empty, in: built.image,
+                                            reader: built.reader),
+                       "Setup = 300 (0x12C)")
+    }
+
+    /// A row that cuts a long value off says so.
+    func testALongVssValueIsCutOffInTheRow() {
+        let text = String(repeating: "a", count: 100)
+        let built = TestUEFI.nvramVssVariable(name: "Long", data: Array(text.utf8) + [0])
+        let row = UEFITreeDisplay.name(for: built.image.roots[0], catalogue: .empty, in: built.image, reader: built.reader)
+        XCTAssertEqual(row, "Long = \"" + String(repeating: "a", count: NvramValueText.rowLimit - 1) + "…")
+    }
+
     /// An NVAR variable is named the same way, for the same reason.
     func testAnNvarVariableIsNamedByItsNameNotItsGuid() {
         let built = TestUEFI.nvarEntry()

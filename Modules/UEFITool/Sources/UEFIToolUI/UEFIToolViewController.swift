@@ -1564,9 +1564,13 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         case Column.subtype:
             return UEFITreeDisplay.subtypeText(for: node)
         default:
-            // A DVAR row says its value, which is bytes in the node's space.
-            let reader = node.kind == .dvarEntry ? tree?.spaceReaders.reader(for: node.space) : nil
-            return UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image, reader: reader)
+            // A variable's row says its value, which is bytes in the node's
+            // space; a VSS one is read by its store's format, and the store
+            // is in the tree as it has been opened, not in the image.
+            let reader = UEFITreeDisplay.showsValue(node) ? tree?.spaceReaders.reader(for: node.space) : nil
+            let store = node.kind == .vssEntry && !node.id.path.isEmpty
+                ? tree?.node(NodeID(Array(node.id.path.dropLast()))) : nil
+            return UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image, reader: reader, store: store)
         }
     }
 

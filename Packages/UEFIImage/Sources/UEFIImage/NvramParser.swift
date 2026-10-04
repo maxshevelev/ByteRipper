@@ -343,106 +343,35 @@ extension Parser {
     ///
     /// The header shape is decided by the state and attribute bits, the way the
     /// reference parser's Kaitai struct decides it: Intel legacy,
-    /// authenticated, Apple (a data CRC), or the plain standard form.
+    /// authenticated, Apple (a data CRC), or the plain standard form
+    /// (`VSSVariable`).
     private func vssVariable(at offset: UInt64, storeEnd: UInt64) -> UEFINode? {
         guard reader.uint8(at: offset + 1) == NVRAM.variableMarkerLast,
-              let state = reader.uint8(at: offset + 2),
-              let attributes = reader.uint32(at: offset + 4)
+              let variable = VSSVariable.read(at: offset, limit: storeEnd, inVss2: false, reader: reader)
         else { return nil }
-
-        let isIntelLegacy = state == NVRAM.vssVariableIntelInvalid
-            || state == NVRAM.vssVariableIntelValid
-
-        var headerSize: UInt64
-        var nameRange: Range<UInt64>
-        var dataRange: Range<UInt64>
-        var subtype: UInt8
-
-        if isIntelLegacy {
-            // Intel legacy: a total size in place of the name and data sizes,
-            // and the name and value run together after the vendor GUID.
-            headerSize = NVRAM.vssIntelLegacyHeaderSize
-            guard let totalSize = reader.uint32(at: offset + 8) else { return nil }
-            let end = min(offset + UInt64(totalSize), storeEnd)
-            let nameEnd = min(offset + headerSize + 4, end)
-            nameRange = (offset + headerSize)..<nameEnd
-            dataRange = nameEnd..<end
-            subtype = UEFITypes.Sub.intelVssEntry
-        } else {
-            // The two size fields are read up front whatever the header turns
-            // out to be: for an authenticated variable they are the monotonic
-            // counter's two halves. A standard variable always carries a name
-            // and data, so two fields that both read zero cannot be that — the
-            // variable is authenticated, with a counter that happens to be
-            // zero, and its real name and data sizes come after the timestamp
-            // and key index. Firmware that never increments the counter writes
-            // every variable this way, so the zero check matters as much as the
-            // attribute bit (the reference parser's `is_auth` is the same).
-            guard let sizeLow = reader.uint32(at: offset + 8),
-                  let sizeHigh = reader.uint32(at: offset + 12)
-            else { return nil }
-
-            let isAuth = (
-                attributes & (NVRAM.vssAttributeAuthWrite
-                    | NVRAM.vssAttributeTimeBasedAuth
-                    | NVRAM.vssAttributeAppendWrite) != 0
-            ) || sizeLow == 0 || sizeHigh == 0
-
-            if isAuth {
-                // Authenticated: the name and data sizes come after the
-                // timestamp and key index.
-                headerSize = NVRAM.vssAuthHeaderSize
-                guard let nameSize = reader.uint32(at: offset + 36),
-                      let dataSize = reader.uint32(at: offset + 40)
-                else { return nil }
-                let nameStart = offset + headerSize
-                let nameEnd = min(nameStart + UInt64(nameSize), storeEnd)
-                let dataEnd = min(nameEnd + UInt64(dataSize), storeEnd)
-                nameRange = nameStart..<nameEnd
-                dataRange = nameEnd..<dataEnd
-                subtype = UEFITypes.Sub.authVssEntry
-            } else {
-                // Standard, or Apple when the data-checksum bit is set (one
-                // extra word after the vendor GUID).
-                let apple = attributes & NVRAM.vssAttributeAppleDataChecksum != 0
-                headerSize = apple ? NVRAM.vssAppleHeaderSize : NVRAM.vssStandardHeaderSize
-                let nameSize = sizeLow
-                let dataSize = sizeHigh
-                let nameStart = offset + headerSize
-                let nameEnd = min(nameStart + UInt64(nameSize), storeEnd)
-                let dataEnd = min(nameEnd + UInt64(dataSize), storeEnd)
-                nameRange = nameStart..<nameEnd
-                dataRange = nameEnd..<dataEnd
-                subtype = apple ? UEFITypes.Sub.appleVssEntry : UEFITypes.Sub.standardVssEntry
-            }
-        }
 
         // A variable whose state is not one of the valid ones is invalid,
         // whatever it otherwise looked like.
-        let isValid = state == NVRAM.vssVariableValid
-            || state == NVRAM.vssVariableAdded
-            || isIntelLegacy
-        if !isValid {
+        let subtype: UInt8
+        if !variable.isValid {
             subtype = UEFITypes.Sub.invalidVssEntry
+        } else {
+            switch variable.form {
+            case .intelLegacy: subtype = UEFITypes.Sub.intelVssEntry
+            case .authenticated: subtype = UEFITypes.Sub.authVssEntry
+            case .apple: subtype = UEFITypes.Sub.appleVssEntry
+            case .standard: subtype = UEFITypes.Sub.standardVssEntry
+            }
         }
 
-        // The vendor GUID is the variable's owner, and the last sixteen bytes
-        // of the header before the name in every shape but Apple's — where a
-        // data-CRC word follows the GUID and pushes the name four bytes on.
-        // So an authenticated variable, whose header is 60 bytes long, keeps
-        // its GUID at offset 44, not the 16 a standard 32-byte header does.
-        // The GUID is read where this form's header keeps it and set on the
-        // node: the details panel shows the common GUID field for every form,
-        // and only the parser, which knows the store, can say where a form's
-        // GUID sits.
-        let vendorGuid = headerSize == NVRAM.vssAppleHeaderSize
-            ? reader.guid(at: offset + 16)
-            : reader.guid(at: offset + headerSize - 16)
-
-        // The name is the decoded variable name, or the vendor GUID for a
-        // variable whose name is not a readable string.
+        // The vendor GUID is the variable's owner, read where this form's
+        // header keeps it and set on the node: the details panel shows the
+        // common GUID field for every form, and only the header's form says
+        // where the GUID sits. The name is the decoded variable name, or the
+        // vendor GUID for a variable whose name is not a readable string.
+        let vendorGuid = variable.vendorGuid
         let name: String
-        if isValid, let decoded = ucs2String(in: nameRange), !decoded.isEmpty {
+        if variable.isValid, let decoded = variable.decodedName(reader: reader) {
             name = decoded
         } else if let vendorGuid {
             name = vendorGuid.description
@@ -450,14 +379,13 @@ extension Parser {
             name = "Invalid"
         }
 
-        let entryEnd = max(dataRange.upperBound, nameRange.upperBound)
         return UEFINode(
             kind: .vssEntry,
             subtype: subtype,
-            name: isValid ? name : "Invalid",
+            name: variable.isValid ? name : "Invalid",
             guid: vendorGuid,
-            header: offset..<(offset + headerSize),
-            body: (offset + headerSize)..<entryEnd,
+            header: variable.header,
+            body: variable.header.upperBound..<variable.end,
             isFixed: true
         )
     }
@@ -553,56 +481,18 @@ extension Parser {
 
     private func vss2Variable(at offset: UInt64, storeEnd: UInt64) -> UEFINode? {
         guard reader.uint8(at: offset + 1) == NVRAM.variableMarkerLast,
-              let state = reader.uint8(at: offset + 2),
-              let attributes = reader.uint32(at: offset + 4),
-              let lenName = reader.uint32(at: offset + 8),
-              let lenData = reader.uint32(at: offset + 12)
+              let variable = VSSVariable.read(at: offset, limit: storeEnd, inVss2: true, reader: reader)
         else { return nil }
 
-        let isAuth = Self.isAuthenticatedVss2Variable(attributes: attributes, lenName: lenName, lenData: lenData)
-
-        var headerSize: UInt64
-        var nameSize: UInt32
-        var dataSize: UInt32
-        var subtype: UInt8
-
-        if isAuth {
-            headerSize = NVRAM.vssAuthHeaderSize
-            guard let nameSizeAuth = reader.uint32(at: offset + 36),
-                  let dataSizeAuth = reader.uint32(at: offset + 40)
-            else { return nil }
-            nameSize = nameSizeAuth
-            dataSize = dataSizeAuth
-            subtype = UEFITypes.Sub.authVssEntry
-        } else {
-            headerSize = NVRAM.vssStandardHeaderSize
-            nameSize = lenName
-            dataSize = lenData
-            subtype = UEFITypes.Sub.standardVssEntry
-        }
-
-        // The name is in the header; the data is the body.
-        let nameStart = offset + headerSize
-        let nameEnd = min(nameStart + UInt64(nameSize), storeEnd)
-        let dataEnd = min(nameEnd + UInt64(dataSize), storeEnd)
-
         // A variable whose state is not one of the valid ones is invalid.
-        let isValid = state == NVRAM.vssVariableValid || state == NVRAM.vssVariableAdded
-        if !isValid {
-            subtype = UEFITypes.Sub.invalidVssEntry
-        }
-
-        // The vendor GUID is the sixteen bytes just before the name — the same
-        // read the fallback name makes — so it is read once and set on the
-        // node. The details panel shows the common GUID field for every form,
-        // and only the parser, which knows the store, can say where a form's
-        // GUID sits.
-        let vendorGuid = reader.guid(at: offset + headerSize - 16)
+        let subtype = !variable.isValid ? UEFITypes.Sub.invalidVssEntry
+            : variable.form == .authenticated ? UEFITypes.Sub.authVssEntry : UEFITypes.Sub.standardVssEntry
 
         // The name is the decoded variable name, or the vendor GUID for a
         // variable whose name is not a readable string.
+        let vendorGuid = variable.vendorGuid
         let name: String
-        if isValid, let decoded = ucs2String(in: nameStart..<nameEnd), !decoded.isEmpty {
+        if variable.isValid, let decoded = variable.decodedName(reader: reader) {
             name = decoded
         } else if let vendorGuid {
             name = vendorGuid.description
@@ -610,13 +500,14 @@ extension Parser {
             name = "Invalid"
         }
 
+        // The name is in the header; the data is the body.
         return UEFINode(
             kind: .vssEntry,
             subtype: subtype,
-            name: isValid ? name : "Invalid",
+            name: variable.isValid ? name : "Invalid",
             guid: vendorGuid,
-            header: offset..<nameEnd,
-            body: nameEnd..<dataEnd,
+            header: offset..<variable.name.upperBound,
+            body: variable.name.upperBound..<variable.data.upperBound,
             isFixed: true
         )
     }

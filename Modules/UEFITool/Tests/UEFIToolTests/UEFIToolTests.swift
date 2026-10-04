@@ -437,9 +437,50 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertEqual(field(detail, "Kind"), "VSS entry")
         XCTAssertEqual(field(detail, "Type"), "Standard")
         XCTAssertEqual(field(detail, "GUID"), guid.description)
-        XCTAssertEqual(field(detail, "State"), "0x7F")
+        XCTAssertEqual(field(detail, "State"), "0x7F (Header valid)")
         XCTAssertEqual(field(detail, "Reserved"), "0x0")
         XCTAssertEqual(field(detail, "Attributes"), "0x7 (NonVolatile, BootService, Runtime)")
+        XCTAssertEqual(field(detail, "Name size"), "0x14 (20)")
+        XCTAssertEqual(field(detail, "Data size"), "0x2 (2)")
+    }
+
+    /// The value, whole, as its type, and what decided the type: a variable
+    /// the spec defines by name is read the spec's way, and the detail says
+    /// whether the GUID was the spec's too.
+    func testAVssVariableShowsItsValueAndWhatItWasReadAs() {
+        let order = TestUEFI.nvramVssVariable(data: [0x01, 0x00, 0x80, 0x20], vendorGuid: NvramValue.globalVariable)
+        var detail = UEFIDetail.build(for: order.node, image: order.image, reader: order.reader)
+        XCTAssertEqual(field(detail, "Value"), "Boot0001, Boot2080")
+        XCTAssertEqual(field(detail, "Read as"), "List of boot entries — as the UEFI specification defines the variable")
+
+        let vendor = TestUEFI.nvramVssVariable(name: "Lang", data: Array("eng".utf8))
+        detail = UEFIDetail.build(for: vendor.node, image: vendor.image, reader: vendor.reader)
+        XCTAssertEqual(field(detail, "Value"), "eng")
+        XCTAssertEqual(field(detail, "Read as"),
+                       "ASCII text — by its name, which the UEFI specification defines; the GUID is a vendor's")
+
+        let blob = TestUEFI.nvramVssVariable(name: "Setup", data: [0x00, 0x01, 0x02])
+        detail = UEFIDetail.build(for: blob.node, image: blob.image, reader: blob.reader)
+        XCTAssertEqual(field(detail, "Value"), "00 01 02")
+        XCTAssertEqual(field(detail, "Read as"), "Bytes — guessed from the bytes")
+    }
+
+    /// An Apple variable's data CRC is checked against its value.
+    func testAnAppleVssVariablesDataCRCIsChecked() throws {
+        let data = Array("MacBook".utf8)
+        let name: [UInt8] = [0x6E, 0, 0, 0]   // "n"
+        var bytes: [UInt8] = [0xAA, 0x55, 0x3F, 0x00, 0x07, 0x00, 0x00, 0x80,
+                              UInt8(name.count), 0, 0, 0, UInt8(data.count), 0, 0, 0]
+        bytes += [UInt8](repeating: 0x11, count: 16)
+        let crc = Checksums.crc32(data)
+        bytes += [UInt8(crc & 0xFF), UInt8(crc >> 8 & 0xFF), UInt8(crc >> 16 & 0xFF), UInt8(crc >> 24)]
+        bytes += name + data
+        let node = UEFINode(kind: .vssEntry, subtype: UEFITypes.Sub.appleVssEntry, name: "n",
+                            header: 0..<36, body: 36..<UInt64(bytes.count), isFixed: true)
+        let image = UEFIImage(size: UInt64(bytes.count), roots: [node])
+        let detail = UEFIDetail.build(for: image.roots[0], image: image, reader: ImageReader(bytes))
+        XCTAssertEqual(field(detail, "Data CRC32"), Checksums.text(crc, valid: true, digits: 8))
+        XCTAssertEqual(field(detail, "Value"), "MacBook")
     }
 
     /// An FTW block's header CRC is not re-verified here — the parser needs the
