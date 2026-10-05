@@ -54,6 +54,7 @@ public enum UEFIHelpTerms {
         case .padding: return HelpTermID("padding")
         case .picture: return HelpTermID("picture")
         case .hpSignatureBlock: return HelpTermID("hp-signature-block")
+        case .gpnvStore, .gpnvRecord: return HelpTermID("gpnv")
         case .sound: return HelpTermID("sound")
         case .freeSpace: return HelpTermID("free-space")
         case .nonUEFIData: return HelpTermID("non-uefi-data")

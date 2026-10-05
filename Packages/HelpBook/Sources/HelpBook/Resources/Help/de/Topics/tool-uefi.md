@@ -1,4 +1,4 @@
-@source-sha 0bf7bae9bde372cf7104aa7a73c7440dcb55ca4171a0f7d126b20526e711f661
+@source-sha 3c4dc36716c01d0f92df8d1e0945d05abd005bf3623f4bbda68ee483f677e948
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -54,7 +54,7 @@ Die Zeile einer [[term:vss|VSS]]-, [[term:nvar|NVAR]]- oder [[term:dvar|DVAR]]-V
 
 ## Variablenkopien
 
-[[term:vss|VSS]], [[term:nvar|NVAR]] und [[term:dvar|DVAR]] — die [[term:nvram|NVRAM]]-Formate, deren Einträge der Baum zu je einer Zeile pro Variable zusammenfasst — behalten die früheren Kopien einer Variable, bis die Firmware den Speicher bereinigt; auf einem Board, das eine Variable bei jedem Start schreibt, machen sie den größten Teil der Zeilen aus. Die Zeile ist die aktuelle Kopie der Variable oder, für eine Variable, die der Speicher nicht mehr enthält, die Kopie, als die sie gelöscht wurde —, solange im selben Menü **Ersetzte Einträge anzeigen** nicht abgehakt ist. Die übrigen Kopien stehen unter **Verlauf der Variable** in den Details dieser Zeile; ein Klick auf die Adresse einer Kopie zeigt ihre eigenen Details und ihre Bytes im Dump, und im Baum bleibt die Zeile der geltenden Kopie ausgewählt. Dasselbe geschieht, wenn der Cursor im Dump in einer Kopie steht, die der Baum weglässt, und sie im Baum angezeigt wird.
+[[term:vss|VSS]], [[term:nvar|NVAR]] und [[term:dvar|DVAR]] — die [[term:nvram|NVRAM]]-Formate, deren Einträge der Baum zu je einer Zeile pro Variable zusammenfasst — behalten die früheren Kopien einer Variable, bis die Firmware den Speicher bereinigt; auf einem Board, das eine Variable bei jedem Start schreibt, machen sie den größten Teil der Zeilen aus. Die Zeile ist die aktuelle Kopie der Variable oder, für eine Variable, die der Speicher nicht mehr enthält, die Kopie, als die sie gelöscht wurde —, solange im selben Menü **Ersetzte Einträge anzeigen** nicht abgehakt ist. Die übrigen Kopien stehen unter **Verlauf der Variable** in den Details dieser Zeile; ein Klick auf die Adresse einer Kopie zeigt ihre eigenen Details und ihre Bytes im Dump, und im Baum bleibt die Zeile der geltenden Kopie ausgewählt. Dasselbe geschieht, wenn der Cursor im Dump in einer Kopie steht, die der Baum weglässt, und sie im Baum angezeigt wird. Ein [[term:gpnv|GPNV-Speicher]] behält die früheren Kopien seiner Einträge auf dieselbe Weise, und der Baum fasst sie ebenso zu einer Zeile je Eintragsname zusammen.
 
 ## Regionen einer Insyde-Map
 

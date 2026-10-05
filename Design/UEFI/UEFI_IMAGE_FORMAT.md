@@ -1569,6 +1569,53 @@ classified as UEFITool's padding. Its ranges are protected ranges
 | EliteBook 645 G11 | `0x1061000`, `0x1BFC000` | 3 | `W77`, 2024-03-14 |
 | ProDesk 600 G4 | `0x1387000` | 2 | `Q22`, 2023-06-15 |
 
+**GPNV stores** (`GPNVStore.swift`) are AMI's, and ASUS keeps in one what the
+factory wrote of the machine — what a repair bench calls the DMI area. Records
+are written one after another; a record that changes is written again whole
+and the one before it marked, and nothing is erased until the whole store is.
+The layout, read off two ASUS laptops and nothing published:
+
+| Offset | Field |
+|---|---|
+| `0x00` | `GPNV` |
+| `0x04` | the record's length, header included (16-bit): `0x10C`, `0x80C` |
+| `0x06` | `1` for the record in force, `0` for one a later record replaced |
+| `0x07` | the name, four characters and a NUL |
+| `0x0C` | the data, to the record's length; what is not written is `FF` |
+
+A record is one when every field checks out — the signature, a length that
+covers the header and ends in the bytes it is found in, a state of `0` or `1`,
+a name of capitals, digits and `_`, the NUL — and the store runs from the
+first record to the last that follows back to back. It is looked for in two
+places. The AMD board (`Asus/SPI_C86018_128Mbit_GD25LB128DW.bin`, ROG Strix
+G533QS) gives it an FFSv2 volume of its own at `0xC1000`, `0x8000` long, name
+GUID `3F8E4F19-8523-407F-8ACB-C562F5A36D35` in the extended header and no
+files: the volume's free space ends where the store begins, at `0xC1090`, and
+the Non-UEFI data that follows (§5.8) is the store — read as such before the
+raw-area scan. The Intel board (`orig_30072026.BIN` and `CSME 16.1.bin`,
+ROG Flow Z13 GZ301ZE) keeps it in the BIOS region's padding at `0x560000`,
+right after the NVRAM volume and with no volume around it: written padding is
+searched at its start and on the file's 4 KiB boundaries, and the store is
+read out as a row of it, as an HP signature block is. The ASUS update images
+in `Asus/` carry the volume empty.
+
+| Name | What the data holds |
+|---|---|
+| `MFG0` | the board's serial number at `+0x00`, the part number at `+0x19`, the machine's serial number at `+0x2D`, the model at `+0x80`, a date at `+0x94` |
+| `OA30` | the Windows product key, in the ACPI `MSDM` table's data: version, data type, the key's length at `+0x10`, the key at `+0x14` |
+| `_DMI` | `_AT_`, then the drive and the memory modules, as `;`-separated text |
+| `CNFG` | 16 bytes that look like a GUID, a date at `+0x20`, a locale at `+0x70` |
+| `CAL1` | binary data, on the Intel board only |
+
+What the `MFG0` fields are is inferred from their values on the two boards
+(`M8NRKD00311031C` and `N6NRKD010763237`, `90NR0551-M04320`, `G533QS`), not
+from a document; the panel does not name them. A record's details list the
+text in its data with its offset, an `OA30` record's the product key, and the
+copies of a record are a variable's (`NvramVariableHistory`): by name, the one
+with state `1` current. The nodes are a `gpnvStore` named `GPNV` and a
+`gpnvRecord` per record named by its name, both classified as UEFITool's
+padding; the Subtype column says whether a record is current or superseded.
+
 **Sounds** — a WAV file — are read where a body stops reading as sections
 (§6): at the start of that Non-UEFI data (`Sound.swift`). `RIFF`, `WAVE`, then
 chunks — id, little-endian size, data padded to even — read until both a

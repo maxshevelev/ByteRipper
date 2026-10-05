@@ -341,6 +341,12 @@ extension Parser {
             range: range,
             isErased: reader.isFilled(range, with: emptyByte)
         )
+        // A GPNV store fills a volume of its own after the volume's free
+        // space (§9): the store is what the data is.
+        if !node.isErased, let store = gpnvStore(at: range.lowerBound, to: range.upperBound, emptyByte: emptyByte) {
+            node.children = store
+            return node
+        }
         if !node.isErased, depth < limits.maxDepth {
             let found = scanRawArea(range, emptyByte: emptyByte, depth: depth + 1)
             // Nothing but padding means the search found nothing, and a single

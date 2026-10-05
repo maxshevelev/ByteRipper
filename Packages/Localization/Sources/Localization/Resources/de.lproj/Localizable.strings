@@ -1173,3 +1173,9 @@
 "Any subtype" = "Beliebiger Subtyp";
 "Look for a node by its name, its GUID or its type" = "Einen Knoten nach Name, GUID oder Typ suchen";
 "Name in the catalogue" = "Name im Katalog";
+"Contents" = "Inhalt";
+"GPNV record" = "GPNV-Eintrag";
+"GPNV store" = "GPNV-Speicher";
+"Text" = "Text";
+"Text in the record" = "Text im Eintrag";
+"Windows product key" = "Windows-Produktschlüssel";

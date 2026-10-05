@@ -1173,3 +1173,9 @@
 "Any subtype" = "Любой подтип";
 "Look for a node by its name, its GUID or its type" = "Искать узел по имени, GUID или типу";
 "Name in the catalogue" = "Имя в каталоге";
+"Contents" = "Содержимое";
+"GPNV record" = "Запись GPNV";
+"GPNV store" = "Хранилище GPNV";
+"Text" = "Текст";
+"Text in the record" = "Текст в записи";
+"Windows product key" = "Ключ продукта Windows";

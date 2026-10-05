@@ -29,6 +29,9 @@ public enum UEFITreeDisplay {
         switch node.kind {
         case .file: return UEFITypeNames.file(subtype)
         case .section: return UEFITypeNames.section(subtype)
+        // Padding to UEFITool; what the column can say of a record is
+        // whether it is the one in force.
+        case .gpnvRecord: return node.subtype == 1 ? L("Current") : L("Superseded")
         default: return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? ""
         }
     }
@@ -226,7 +229,7 @@ public enum UEFITreeDisplay {
 
     /// Whether the row of `node` says a value, and so needs the bytes.
     public static func showsValue(_ node: UEFINode) -> Bool {
-        node.kind == .dvarEntry || node.kind == .vssEntry || node.kind == .nvarEntry
+        node.kind == .dvarEntry || node.kind == .vssEntry || node.kind == .nvarEntry || node.kind == .gpnvRecord
     }
 
     private static func kibibytes(_ length: UInt64) -> UInt64 {
@@ -274,6 +277,11 @@ public enum UEFITreeDisplay {
             }
             return "\(name) = \(text)"
         }
+        // A GPNV record says what it holds: the Windows key, or the text in
+        // its data — serial numbers, the model — as far as a row has room.
+        if node.kind == .gpnvRecord, let reader {
+            return gpnvRow(node, reader: reader)
+        }
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind) : node.name
         }
@@ -319,6 +327,22 @@ public enum UEFITreeDisplay {
         // is the last resort.
         return catalogue.name(of: guid) ?? NvramGuids.name(of: guid) ?? guid.description
     }
+
+    /// `MFG0 = M8NRKD00311031C, 90NR0551-M04320, …`: a record's name and the
+    /// first texts of its data; an `OA30` record's product key.
+    static func gpnvRow(_ node: UEFINode, reader: ImageReader) -> String {
+        guard let body = reader.bytes(node.body) else { return node.name }
+        if node.name == "OA30", let key = GPNVRecord.productKey(of: body) {
+            return "\(node.name) = \(key)"
+        }
+        let texts = GPNVRecord.texts(in: body).map(\.text)
+        guard !texts.isEmpty else { return node.name }
+        let shown = texts.prefix(gpnvRowTexts).joined(separator: ", ")
+        return "\(node.name) = " + (texts.count > gpnvRowTexts ? shown + ", …" : shown)
+    }
+
+    /// How many of a record's texts its row spells out.
+    static let gpnvRowTexts = 3
 
     /// `name = value`, the value read as its type. A value too long to be
     /// one of the types a row spells out is not read: a row is drawn on every
@@ -412,6 +436,8 @@ public enum UEFITreeDisplay {
         case .ecImage: return L("EC firmware image")
         case .fitComponent: return L("FIT component")
         case .hpSignatureBlock: return L("HP signature block")
+        case .gpnvStore: return L("GPNV store")
+        case .gpnvRecord: return L("GPNV record")
         case .picture: return L("Picture")
         case .sound: return L("Sound")
         }

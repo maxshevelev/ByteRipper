@@ -255,6 +255,7 @@ final class Parser {
         read = readingFITComponents(read, emptyByte: emptyByte)
         read = readingECFirmware(read, emptyByte: emptyByte)
         read = readingHPSignatureBlocks(read, emptyByte: emptyByte)
+        read = readingGPNVStores(read, emptyByte: emptyByte)
         return readingAMDMicrocode(read, emptyByte: emptyByte)
     }
 

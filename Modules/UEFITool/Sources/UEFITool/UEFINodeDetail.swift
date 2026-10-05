@@ -225,7 +225,7 @@ public enum UEFIDetail {
 
         // A variable's entry: whose copy it is where the tree calls it
         // Invalid, and every copy the store keeps of it.
-        if node.kind == .vssEntry || node.kind == .nvarEntry || node.kind == .dvarEntry,
+        if node.kind == .vssEntry || node.kind == .nvarEntry || node.kind == .dvarEntry || node.kind == .gpnvRecord,
            !node.id.path.isEmpty, let store = image.node(NodeID(Array(node.id.path.dropLast()))) {
             let history = NvramVariableHistory.of(node, in: store, reader: reader)
             let variable = history.map { ($0.name, $0.guid) }
@@ -327,6 +327,37 @@ public enum UEFIDetail {
                 tables.append(protectedByTable(touching))
             }
         }
+        // A GPNV record's data is fields nobody has published: the text in
+        // it is what can be read, at its offset in the data.
+        if node.kind == .gpnvRecord, let body = reader.bytes(node.body) {
+            let texts = GPNVRecord.texts(in: body)
+            if !texts.isEmpty {
+                tables.append(UEFIDetailTable(
+                    title: L("Text in the record"),
+                    symbol: "text.alignleft",
+                    columns: [L("Offset"), L("Text")],
+                    rows: texts.map { [.init("+" + hex($0.offset)), .init($0.text)] }
+                ))
+            }
+        }
+        // A store lists its records in force; a click on one opens it.
+        if node.kind == .gpnvStore {
+            let current = node.children.filter { $0.kind == .gpnvRecord && $0.subtype == 1 }
+            if !current.isEmpty {
+                tables.append(UEFIDetailTable(
+                    title: L("Current entries"),
+                    symbol: "list.bullet.rectangle",
+                    columns: [L("Name"), L("Offset"), L("Contents")],
+                    rows: current.map { record in
+                        let row = UEFITreeDisplay.gpnvRow(record, reader: reader)
+                        let contents = row.hasPrefix(record.name + " = ") ? String(row.dropFirst(record.name.count + 3)) : ""
+                        return [.init(record.name), .init(hex(record.header.lowerBound)), .init(contents)]
+                    },
+                    rowTargets: current.map { .node($0.id) }
+                ))
+            }
+        }
+
         // A picture is shown as well as described. Only one the parser
         // recognised and measured: its bytes are exactly the picture's.
         let picture = node.kind == .picture ? reader.bytes(node.body) : nil
@@ -1132,6 +1163,20 @@ public enum UEFIDetail {
                 }
             }
 
+        // Records are written after one another, the one before marked
+        // replaced; how many of each is what the store says of itself.
+        case .gpnvStore:
+            let records = node.children.filter { $0.kind == .gpnvRecord }
+            let current = records.filter { $0.subtype == 1 }.count
+            fields.append(.init(L("Current entries"), "\(current)"))
+            fields.append(.init(L("Superseded entries"), "\(records.count - current)"))
+
+        case .gpnvRecord:
+            fields.append(.init(L("State"), node.subtype == 1 ? L("Current") : L("Superseded")))
+            if node.name == "OA30", let body = reader.bytes(node.body), let key = GPNVRecord.productKey(of: body) {
+                fields.append(.init(L("Windows product key"), key))
+            }
+
         case .padding, .freeSpace, .nonUEFIData, .startupApData:
             // No header of their own: the size the common "Total" carries is
             // the whole of what there is to say.
@@ -1600,6 +1645,8 @@ public enum UEFIDetail {
         case .ecImage: return L("EC firmware image")
         case .fitComponent: return L("FIT component")
         case .hpSignatureBlock: return L("HP signature block")
+        case .gpnvStore: return L("GPNV store")
+        case .gpnvRecord: return L("GPNV record")
         case .picture: return L("Picture")
         case .sound: return L("Sound")
         }

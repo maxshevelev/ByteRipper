@@ -16,7 +16,8 @@ import Foundation
 /// whole entries, each superseded one with its valid bit cleared; a
 /// superseded entry's name, GUID and value are read as if it were valid. A
 /// Dell DVAR variable is a name id in a namespace, and an entry's state says
-/// whether it is the copy in force (`DVAR.copies`).
+/// whether it is the copy in force (`DVAR.copies`). A GPNV store is written
+/// the same way, and a record is a copy by its name (`GPNVRecord`).
 ///
 /// The history is the store's, not the image's: the defaults a board keeps in
 /// another store are another variable's copies.
@@ -58,10 +59,10 @@ public struct NvramVariableHistory: Equatable, Sendable {
     }
 
     /// The history of the variable `entry` is a copy of, in the store whose
-    /// entries are `store`'s children. Nil when `entry` is not a VSS or NVAR
-    /// entry, its variable cannot be told, or the store keeps one copy of it.
+    /// entries are `store`'s children. Nil when `entry` is not a VSS, NVAR,
+    /// DVAR or GPNV entry, its variable cannot be told, or the store keeps one copy of it.
     public static func of(_ entry: UEFINode, in store: UEFINode, reader: ImageReader) -> NvramVariableHistory? {
-        guard entry.kind == .vssEntry || entry.kind == .nvarEntry || entry.kind == .dvarEntry else { return nil }
+        guard isCopy(entry) else { return nil }
         let copies = self.copies(in: store, reader: reader)
         guard let mine = copies.first(where: { $0.entry == entry.id }) else { return nil }
         let versions = copies.filter { $0.key == mine.key }
@@ -85,7 +86,7 @@ public struct NvramVariableHistory: Equatable, Sendable {
     /// The variable `entry` is a copy of — its name and GUID — read from the
     /// bytes where the tree cannot name it. Nil when it cannot be told.
     public static func variable(of entry: UEFINode, in store: UEFINode, reader: ImageReader) -> (name: String, guid: EFIGUID?)? {
-        guard entry.kind == .vssEntry || entry.kind == .nvarEntry || entry.kind == .dvarEntry else { return nil }
+        guard isCopy(entry) else { return nil }
         return copies(in: store, reader: reader).first { $0.entry == entry.id }
             .map { ($0.key.name, $0.key.guid) }
     }
@@ -96,9 +97,9 @@ public struct NvramVariableHistory: Equatable, Sendable {
     /// longer holds, to the copy it was deleted as, which stays, so a deleted
     /// variable does not vanish. A current copy is never left out, nor an
     /// entry whose variable cannot be told. Empty for a node that is not a
-    /// store of VSS, NVAR or DVAR entries.
+    /// store of VSS, NVAR, DVAR or GPNV entries.
     public static func supersededCopies(in store: UEFINode, reader: ImageReader) -> [NodeID: NodeID] {
-        guard store.children.contains(where: { $0.kind == .vssEntry || $0.kind == .nvarEntry || $0.kind == .dvarEntry })
+        guard store.children.contains(where: isCopy)
         else { return [:] }
         var byVariable: [Key: [Copy]] = [:]
         for copy in copies(in: store, reader: reader) { byVariable[copy.key, default: []].append(copy) }
@@ -144,8 +145,22 @@ public struct NvramVariableHistory: Equatable, Sendable {
         var isCurrent: Bool
     }
 
+    /// An entry a store can keep several copies of: a variable's, or a GPNV
+    /// record's.
+    private static func isCopy(_ node: UEFINode) -> Bool {
+        node.kind == .vssEntry || node.kind == .nvarEntry || node.kind == .dvarEntry || node.kind == .gpnvRecord
+    }
+
     /// Every entry of the store that can be told whose copy it is.
     private static func copies(in store: UEFINode, reader: ImageReader) -> [Copy] {
+        // A GPNV record is one by its name, and says itself whether it is
+        // the one in force (`GPNVRecord`).
+        if store.kind == .gpnvStore {
+            return store.children.filter { $0.kind == .gpnvRecord }.map {
+                Copy(entry: $0.id, offset: $0.header.lowerBound, key: Key(name: $0.name, guid: nil),
+                     value: $0.body, isCurrent: $0.subtype == 1)
+            }
+        }
         if store.kind == .dvarStore {
             return DVAR.copies(in: store, reader: reader).map {
                 Copy(entry: $0.node.id, offset: $0.node.header.lowerBound,
