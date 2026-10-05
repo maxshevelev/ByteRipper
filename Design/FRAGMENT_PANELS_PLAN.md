@@ -47,7 +47,7 @@ What changes its destination:
 | `ToolHost.openInNewTab` (`Packages/ToolModuleKit`) | the seam's name | `openPart` |
 | `UEFITreeProviding.openInNewTab` (`Packages/UEFIImage`) | the seam's name | `openPart` |
 | The zone menus' wording, dump block and minimap gutter | menu wording | `"Open Zone …"` |
-| `UEFIPresenter.openTitle` (`Modules/UEFITool`) | `"… in New Tab"` | `"Open Decompressed Body"` |
+| `UEFIPresenter.openTitle` (`Modules/UEFITool`) | `"… in New Tab"` | `"Open Decompressed Body"` (bytes inside one: `"Open Decompressed “X”"`) |
 
 **What does not change:** the pane header's own `Open in New Tab`
 (`openPaneInNewTab`) and the New Tab drop strip. Those move a whole pane — a

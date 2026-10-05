@@ -1360,6 +1360,43 @@ final class UEFIToolFlowTests: XCTestCase {
         controller.fragments.close(id, animated: false)
     }
 
+    /// A double click on a row opens what the node holds — its body, where it
+    /// has one apart from itself — as a panel linked to those bytes.
+    func testADoubleClickOnARowOpensItsBodyAsAPanel() throws {
+        let controller = try open(UEFITestImage.make())
+        let outline = try outline()
+        let window = try XCTUnwrap(self.window)
+        let node = try node(atRow: 0)
+        try XCTSkipIf(node.header.isEmpty, "this node has no header to leave behind")
+
+        // Inside the name column, past the disclosure triangle.
+        let rect = outline.rect(ofRow: 0)
+        let point = outline.convert(NSPoint(x: rect.minX + 60, y: rect.midY), to: nil)
+        outline.mouseDown(with: mouse(.leftMouseDown, at: point, window: window, clickCount: 2))
+        XCTAssertTrue(pumpUntil(2) { controller.fragments.expanded != nil }, "the panel is raised")
+
+        let id = try XCTUnwrap(controller.fragments.expanded)
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        XCTAssertEqual(part.fileSize, UInt64(node.body.count), "the body, not the node")
+        XCTAssertEqual(try XCTUnwrap(part.origin).sourceRange, node.body)
+        controller.fragments.close(id, animated: false)
+    }
+
+    /// The triangle folds and unfolds on every click, however quick: two of
+    /// them are not a request to open the node.
+    func testADoubleClickOnTheTriangleOpensNothing() throws {
+        let controller = try open(UEFITestImage.make())
+        let outline = try outline()
+        let window = try XCTUnwrap(self.window)
+        XCTAssertTrue(outline.isExpandable(try XCTUnwrap(outline.item(atRow: 0))))
+
+        let triangle = outline.frameOfOutlineCell(atRow: 0)
+        let point = outline.convert(NSPoint(x: triangle.midX, y: triangle.midY), to: nil)
+        outline.mouseDown(with: mouse(.leftMouseDown, at: point, window: window, clickCount: 2))
+
+        XCTAssertFalse(pumpUntil(0.5) { controller.fragments.expanded != nil }, "no panel was raised")
+    }
+
     /// The same bytes can be saved to a file instead: the node, and its body
     /// alone, offered under the name its panel would have.
     func testANodeAndItsBodySaveToAFile() throws {

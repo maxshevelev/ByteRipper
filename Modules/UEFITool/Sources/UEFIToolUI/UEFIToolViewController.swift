@@ -38,11 +38,13 @@ import UEFITool
     /// A detail table's row named bytes that are not one node: outline them
     /// in the dump, under the name, and leave the focus where it is.
     var onOutlineRange: ((Range<UInt64>, String) -> Void)?
-    /// An opened compressed section's — or a node inside one's — export item
-    /// was chosen.
-    var onExportDecompressed: ((NodeID) -> Void)?
-    /// The same node's Open Decompressed … item was chosen.
+    /// A compressed section's Save Decompressed Body item was chosen.
+    var onSaveDecompressed: ((NodeID) -> Void)?
+    /// The same section's Open Decompressed Body item was chosen.
     var onOpenDecompressed: ((NodeID) -> Void)?
+    /// A node's row was double-clicked: open what it holds
+    /// (`UEFIPresenter.content(of:)`).
+    var onOpenContent: ((NodeID) -> Void)?
     /// The Open Decompressed item of a bzip2 variable was chosen.
     var onOpenUnpacked: ((NodeID) -> Void)?
     /// A row was opened or shut. What is open belongs to the file rather than
@@ -543,6 +545,8 @@ import UEFITool
         // exactly as a click that moved the selection would — the outline only
         // reports that second kind itself (see `UEFIOutlineView`).
         outline.onRowReclick = { [weak self] row in self?.chooseNode(atRow: row) }
+        // A double click opens what the row holds as a panel over the dump.
+        outline.onRowDoubleClick = { [weak self] row in self?.openContent(atRow: row) }
 
         let name = NSTableColumn(identifier: Column.name)
         name.title = L("Name")
@@ -2162,9 +2166,9 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = node.id
             items.append(item)
         }
-        if let export = UEFIPresenter.decompressedExport(for: node) {
+        if let decompressed = UEFIPresenter.decompressedBody(for: node) {
             let open = NSMenuItem(
-                title: export.openTitle,
+                title: decompressed.openTitle,
                 action: #selector(openDecompressedClicked(_:)),
                 keyEquivalent: ""
             )
@@ -2172,8 +2176,8 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             open.representedObject = node.id
             items.append(open)
             let item = NSMenuItem(
-                title: export.menuTitle,
-                action: #selector(exportClicked(_:)),
+                title: decompressed.saveTitle,
+                action: #selector(saveDecompressedClicked(_:)),
                 keyEquivalent: ""
             )
             item.target = self
@@ -2221,9 +2225,9 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         onFixChecksum?(nodeID)
     }
 
-    @objc private func exportClicked(_ sender: NSMenuItem) {
+    @objc private func saveDecompressedClicked(_ sender: NSMenuItem) {
         guard let nodeID = sender.representedObject as? NodeID else { return }
-        onExportDecompressed?(nodeID)
+        onSaveDecompressed?(nodeID)
     }
 
     @objc private func openUnpackedClicked(_ sender: NSMenuItem) {
@@ -2268,6 +2272,13 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// A row was chosen — by a selection that moved, or by a click on the row
     /// that was already the selection. Both publish the row's zone; the outline
     /// only reports the second kind itself (see `UEFIOutlineView`).
+    /// A double click: the node's content opens as a panel. A row that is no
+    /// UEFI node — an ME row, a Loading row — has none to open.
+    private func openContent(atRow row: Int) {
+        guard row >= 0, let item = outline.item(atRow: row), let node = node(of: item) else { return }
+        onOpenContent?(node.id)
+    }
+
     private func chooseNode(atRow row: Int) {
         let item = row >= 0 ? outline.item(atRow: row) : nil
         // An ME row resolves against the presented ME tree, not the UEFI tree,
@@ -2301,6 +2312,8 @@ private final class UEFIOutlineView: NSOutlineView {
     var onContextMenu: ((NSEvent) -> NSMenu?)?
     /// A plain click landed on the row that was already selected.
     var onRowReclick: ((Int) -> Void)?
+    /// A plain double click landed on a row, not on its disclosure triangle.
+    var onRowDoubleClick: ((Int) -> Void)?
 
     override func menu(for event: NSEvent) -> NSMenu? {
         onContextMenu?(event)
@@ -2312,7 +2325,17 @@ private final class UEFIOutlineView: NSOutlineView {
         let clickedItem = clickedRow >= 0 ? item(atRow: clickedRow) : nil
         let wasSelected = clickedRow >= 0 && selectedRowIndexes.contains(clickedRow)
         let wasExpanded = clickedItem.map { isItemExpanded($0) }
+        // The triangle folds or unfolds on every click, however quick.
+        let onDisclosure = clickedRow >= 0
+            && frameOfOutlineCell(atRow: clickedRow).insetBy(dx: -2, dy: -2).contains(point)
+            && !frameOfOutlineCell(atRow: clickedRow).isEmpty
         super.mouseDown(with: event)
+
+        if event.clickCount == 2, clickedRow >= 0, !onDisclosure,
+           event.modifierFlags.intersection([.shift, .command, .option, .control]).isEmpty {
+            onRowDoubleClick?(clickedRow)
+            return
+        }
 
         // A click that moved the selection needs no help — the outline reports
         // it. Only the click on the row that was already selected is answered

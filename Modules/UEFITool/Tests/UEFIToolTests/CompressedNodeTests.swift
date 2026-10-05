@@ -95,57 +95,68 @@ final class CompressedNodeTests: XCTestCase {
         XCTAssertNil(UEFIChecksumCheck.repairs(in: right.image, readers: right.readers)[right.inner.id])
     }
 
-    // MARK: - Export
+    // MARK: - Open and save
 
-    func testAnOpenedSectionExportsItsWholeBufferAndANodeInsideItsOwnBytes() throws {
+    func testACompressedSectionOffersItsWholeBufferAndANodeInsideOffersItsOwnBytes() throws {
         let built = built()
 
-        let body = try XCTUnwrap(UEFIPresenter.decompressedExport(for: built.section))
+        let body = try XCTUnwrap(UEFIPresenter.decompressedBody(for: built.section))
         XCTAssertEqual(body.space, .decompressed(chain: [0]))
-        XCTAssertNil(body.range)
-        XCTAssertEqual(body.menuTitle, "Export Decompressed Body…")
+        XCTAssertEqual(body.saveTitle, "Save Decompressed Body as…")
+        XCTAssertEqual(body.openTitle, "Open Decompressed Body")
         XCTAssertEqual(body.suggestedName, "LZMA compressed section decompressed.bin")
         let sectionAsNode = try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.section, in: built.image, body: false))
         XCTAssertEqual(sectionAsNode.suggestedName, "LZMA compressed section.bin",
                        "the section itself keeps its plain name; only what it opens to is marked")
+        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: built.section, body: false), "Open “LZMA compressed section”",
+                       "a node of the file is opened as it always was")
         let buffer = try XCTUnwrap(built.readers.reader(for: body.space))
         XCTAssertEqual(buffer.bytes(buffer.all), TestUEFI.file().bytes)
 
-        let bytes = try XCTUnwrap(UEFIPresenter.decompressedExport(for: built.inner))
-        XCTAssertEqual(bytes.space, built.inner.space)
-        XCTAssertEqual(bytes.range, 0..<0x100)
-        XCTAssertEqual(bytes.menuTitle, "Export Decompressed Bytes…")
-        XCTAssertEqual(bytes.suggestedName, "Inner decompressed.bin")
-        XCTAssertEqual(body.openTitle, "Open Decompressed Body")
-        XCTAssertEqual(bytes.openTitle, "Open Decompressed Bytes")
-        XCTAssertEqual(bytes.tabName(fileName: "bios.rom"), "bios_Inner decompressed.bin",
-                       "named after the dump it came out of, then what it is")
-        XCTAssertEqual(bytes.tabName(fileName: ""), "Inner decompressed.bin")
+        // Nothing else is offered for what is inside: opening or saving it is
+        // reading those bytes, and the titles say they are decompressed.
+        XCTAssertNil(UEFIPresenter.decompressedBody(for: built.inner))
+        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: built.inner, body: false), "Open Decompressed “Inner”")
+        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: built.inner, body: true), "Open Decompressed Body of “Inner”")
+        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: built.inner, body: false), "Save Decompressed “Inner” as…")
+        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: built.inner, body: true),
+                       "Save Decompressed Body of “Inner” as…")
+        let unnamed = UEFINode(kind: .section, name: "", header: 0..<4, body: 4..<0x40,
+                               space: .decompressed(chain: [0]))
+        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: unnamed, body: false), "Open Decompressed Node")
+        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: unnamed, body: true), "Open Decompressed Node Body")
+        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: unnamed, body: false), "Save Decompressed Node as…")
+        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: unnamed, body: true), "Save Decompressed Node Body as…")
+
         let asNode = try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.inner, in: built.image, body: false))
-        XCTAssertNotEqual(bytes.suggestedName, asNode.suggestedName,
-                          "the node and what it decompresses to must not arrive under one name")
+        XCTAssertEqual(asNode.range, 0..<0x100)
+        XCTAssertEqual(asNode.suggestedName, "Inner decompressed.bin")
+        XCTAssertEqual(asNode.partName(fileName: "bios.rom"), "bios_Inner decompressed.bin",
+                       "named after the dump it came out of, then what it is")
+        XCTAssertEqual(try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.inner, in: built.image, body: true)).suggestedName,
+                       "Inner decompressed body.bin")
+        XCTAssertEqual(body.tabName(fileName: "bios.rom"), "bios_LZMA compressed section decompressed.bin")
         XCTAssertEqual(UEFIPresenter.fileSource(of: built.inner, in: built.image),
                        built.section.fileRange,
-                       "a tab from inside is linked to the compressed section holding it")
+                       "a panel from inside is linked to the compressed section holding it")
         XCTAssertEqual(UEFIPresenter.fileSource(of: built.section, in: built.image),
                        built.section.fileRange)
 
-        XCTAssertNil(UEFIPresenter.decompressedExport(for: TestUEFI.file().node),
+        XCTAssertNil(UEFIPresenter.decompressedBody(for: TestUEFI.file().node),
                      "a node of the file has nothing decompressed to save")
     }
 
-    /// The row says it is compressed before it is opened, so the export is
-    /// offered then — and reading it decodes the body.
-    func testAClosedCompressedSectionExportsItsBodyDecodedOnDemand() throws {
+    /// The row says it is compressed before it is opened, so the body is
+    /// offered then — and reading it decodes it.
+    func testAClosedCompressedSectionOffersItsBodyDecodedOnDemand() throws {
         let built = built()
         var closed = built.section
         closed.children = []
         closed.isExpandable = true
         closed.compression = SectionCompression(algorithm: "LZMA", decodes: true)
 
-        let body = try XCTUnwrap(UEFIPresenter.decompressedExport(for: closed))
+        let body = try XCTUnwrap(UEFIPresenter.decompressedBody(for: closed))
         XCTAssertEqual(body.space, .decompressed(chain: [0]))
-        XCTAssertNil(body.range)
         XCTAssertEqual(body.openTitle, "Open Decompressed Body")
         let buffer = try XCTUnwrap(built.readers.reader(for: body.space))
         XCTAssertEqual(buffer.bytes(buffer.all), TestUEFI.file().bytes)
@@ -153,12 +164,39 @@ final class CompressedNodeTests: XCTestCase {
         var undecodable = closed
         undecodable.compression = SectionCompression(algorithm: "Unknown", decodes: false)
         undecodable.isExpandable = false
-        XCTAssertNil(UEFIPresenter.decompressedExport(for: undecodable),
+        XCTAssertNil(UEFIPresenter.decompressedBody(for: undecodable),
                      "a section the decoder cannot read has nothing to save")
 
         var failed = closed
         failed.isExpandable = false
-        XCTAssertNil(UEFIPresenter.decompressedExport(for: failed),
+        XCTAssertNil(UEFIPresenter.decompressedBody(for: failed),
                      "one that was opened and did not decompress offers nothing either")
+    }
+
+    // MARK: - A double click
+
+    /// A double click opens what the node holds: the decompressed body of a
+    /// compressed section, the body of any other node, and the node itself
+    /// where it has no body apart from itself.
+    func testADoubleClickOpensTheDecompressedBodyOrTheBody() {
+        let built = built()
+        XCTAssertEqual(UEFIPresenter.content(of: built.section), .decompressedBody)
+        XCTAssertEqual(UEFIPresenter.content(of: built.inner), .body, "a node inside is read from its buffer")
+
+        var closed = built.section
+        closed.children = []
+        closed.isExpandable = true
+        closed.compression = SectionCompression(algorithm: "LZMA", decodes: true)
+        XCTAssertEqual(UEFIPresenter.content(of: closed), .decompressedBody, "decoded when it is asked for")
+
+        var undecodable = closed
+        undecodable.compression = SectionCompression(algorithm: "Unknown", decodes: false)
+        undecodable.isExpandable = false
+        XCTAssertEqual(UEFIPresenter.content(of: undecodable), .body, "what the decoder cannot read is the bytes it is")
+
+        let headerless = UEFINode(kind: .padding, name: "Padding", header: 0..<0, body: 0..<0x40)
+        XCTAssertEqual(UEFIPresenter.content(of: headerless), .node)
+        let bare = UEFINode(kind: .section, name: "Bare", header: 0..<4, body: 4..<4)
+        XCTAssertEqual(UEFIPresenter.content(of: bare), .node, "a header and nothing after it")
     }
 }

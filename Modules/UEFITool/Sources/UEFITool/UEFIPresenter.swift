@@ -77,15 +77,13 @@ public enum UEFIPresenter {
         return ZoneMap(zones: [whole, body], focus: body.id)
     }
 
-    /// What "Export Decompressed…" saves, and "Open Decompressed…"
-    /// opens, for a node (`COMPRESSED_SECTIONS.md` §8.2).
-    public struct DecompressedExport: Equatable, Sendable {
-        /// The buffer to read.
+    /// What "Save Decompressed Body as…" saves, and "Open Decompressed Body"
+    /// opens, for a compressed section (`COMPRESSED_SECTIONS.md` §8.2).
+    public struct DecompressedBody: Equatable, Sendable {
+        /// The buffer to read, all of it.
         public var space: ByteSpace
-        /// The part of it to save, or nil for all of it.
-        public var range: Range<UInt64>?
         public var suggestedName: String
-        public var menuTitle: String
+        public var saveTitle: String
         public var openTitle: String
 
         /// The new tab's name: the dump it came out of, then what it is —
@@ -141,25 +139,68 @@ public enum UEFIPresenter {
     /// What the tree's menu calls opening `node`, or nil when there is nothing
     /// there to open. The title alone, for a menu built where the image is not
     /// at hand; `nodeOpen` answers the rest.
+    ///
+    /// A node inside a compressed section is read from the buffer the section
+    /// decoded to, and its titles say so: there is no second item for "the
+    /// bytes it decompressed to" — they are what opening it opens.
     public static func nodeOpenTitle(for node: UEFINode, body: Bool) -> String? {
         let range = body ? node.body : node.range
         guard !range.isEmpty, !(body && range == node.range) else { return nil }
+        let decompressed = node.space != .file
         guard !node.name.isEmpty else {
-            return body ? L("Open Node Body") : L("Open Node")
+            switch (decompressed, body) {
+            case (false, false): return L("Open Node")
+            case (false, true): return L("Open Node Body")
+            case (true, false): return L("Open Decompressed Node")
+            case (true, true): return L("Open Decompressed Node Body")
+            }
         }
         // The name is poured in, never spelled into the key: a key built at
         // run time is a key no translator can find.
-        return body ? L("Open Body of “%1$@”", node.name) : L("Open “%1$@”", node.name)
+        switch (decompressed, body) {
+        case (false, false): return L("Open “%1$@”", node.name)
+        case (false, true): return L("Open Body of “%1$@”", node.name)
+        case (true, false): return L("Open Decompressed “%1$@”", node.name)
+        case (true, true): return L("Open Decompressed Body of “%1$@”", node.name)
+        }
     }
 
     /// What the tree's menu calls saving `node` — or its body alone — to a
     /// file: offered wherever opening it is, since it is the same bytes.
     public static func nodeSaveTitle(for node: UEFINode, body: Bool) -> String? {
         guard nodeOpenTitle(for: node, body: body) != nil else { return nil }
+        let decompressed = node.space != .file
         guard !node.name.isEmpty else {
-            return body ? L("Save Node Body as…") : L("Save Node as…")
+            switch (decompressed, body) {
+            case (false, false): return L("Save Node as…")
+            case (false, true): return L("Save Node Body as…")
+            case (true, false): return L("Save Decompressed Node as…")
+            case (true, true): return L("Save Decompressed Node Body as…")
+            }
         }
-        return body ? L("Save Body of “%1$@” as…", node.name) : L("Save “%1$@” as…", node.name)
+        switch (decompressed, body) {
+        case (false, false): return L("Save “%1$@” as…", node.name)
+        case (false, true): return L("Save Body of “%1$@” as…", node.name)
+        case (true, false): return L("Save Decompressed “%1$@” as…", node.name)
+        case (true, true): return L("Save Decompressed Body of “%1$@” as…", node.name)
+        }
+    }
+
+    /// What a double click on a node's row opens: the body a compressed section
+    /// decompresses to, otherwise the node's body, and the whole node where it
+    /// has no body apart from itself (padding, free space, a node with a header
+    /// and nothing after it). The same choices the tree's menu offers, taken
+    /// without asking.
+    public enum Content: Equatable, Sendable {
+        case decompressedBody
+        case body
+        case node
+    }
+
+    public static func content(of node: UEFINode) -> Content {
+        if decompressedBody(for: node) != nil { return .decompressedBody }
+        if !node.header.isEmpty, nodeOpenTitle(for: node, body: true) != nil { return .body }
+        return .node
     }
 
     public static func nodeOpen(for node: UEFINode, in image: UEFIImage, body: Bool) -> NodeOpen? {
@@ -179,7 +220,9 @@ public enum UEFIPresenter {
 
         let base = String((node.name.isEmpty ? "node" : node.name)
             .map { "/:".contains($0) ? "_" : $0 })
-        let suffix = body ? " body" : ""
+        // Bytes of a decoded buffer say so in the name, so that a node and the
+        // node of the same name in the file do not arrive as one file.
+        let suffix = (node.space != .file ? " decompressed" : "") + (body ? " body" : "")
         return NodeOpen(
             space: node.space,
             range: range,
@@ -208,13 +251,16 @@ public enum UEFIPresenter {
         }
     }
 
-    /// A compressed section exports everything it decompresses to — one that
+    /// A compressed section offers everything it decompresses to — one that
     /// opened, and one still closed that would: the row already says it is
-    /// compressed, and the buffer is decoded when the export reads it. A node
-    /// inside one exports its own bytes from that buffer. Nothing else has
-    /// anything decompressed to save — its bytes are the file's, and the dump
-    /// already exports those.
-    public static func decompressedExport(for node: UEFINode) -> DecompressedExport? {
+    /// compressed, and the buffer is decoded when it is read. A node inside a
+    /// decoded buffer needs no second item: opening or saving it is reading
+    /// those bytes (`nodeOpenTitle`). Nothing else has anything decompressed
+    /// to offer — its bytes are the file's, and the dump already has those.
+    public static func decompressedBody(for node: UEFINode) -> DecompressedBody? {
+        let opened = node.children.contains { $0.space != node.space }
+        let closed = node.compression?.decodes == true && node.isExpandable && node.children.isEmpty
+        guard node.kind == .section, opened || closed else { return nil }
         // What came *out* of a section says so in its name. Without it the
         // section opened as a node and the same section's decompressed body
         // arrive under one name — `bios_LZMA Section.bin` twice — and the two
@@ -223,27 +269,12 @@ public enum UEFIPresenter {
         let base = String((node.name.isEmpty ? "decompressed" : node.name)
             .map { "/:".contains($0) ? "_" : $0 })
         let marked = node.name.isEmpty ? base : base + " decompressed"
-        let opened = node.children.contains { $0.space != node.space }
-        let closed = node.compression?.decodes == true && node.isExpandable && node.children.isEmpty
-        if node.kind == .section, opened || closed {
-            return DecompressedExport(
-                space: node.space.inside(sectionAt: node.header.lowerBound),
-                range: nil,
-                suggestedName: marked + ".bin",
-                menuTitle: L("Export Decompressed Body…"),
-                openTitle: L("Open Decompressed Body")
-            )
-        }
-        if node.space != .file {
-            return DecompressedExport(
-                space: node.space,
-                range: node.range,
-                suggestedName: marked + ".bin",
-                menuTitle: L("Export Decompressed Bytes…"),
-                openTitle: L("Open Decompressed Bytes")
-            )
-        }
-        return nil
+        return DecompressedBody(
+            space: node.space.inside(sectionAt: node.header.lowerBound),
+            suggestedName: marked + ".bin",
+            saveTitle: L("Save Decompressed Body as…"),
+            openTitle: L("Open Decompressed Body")
+        )
     }
 
     /// The variable in an Apple system-flags store whose data is a bzip2 stream

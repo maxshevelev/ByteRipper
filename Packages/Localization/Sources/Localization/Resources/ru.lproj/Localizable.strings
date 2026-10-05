@@ -351,9 +351,6 @@
 "Exactly one character" = "Ровно один символ";
 "Excerpt Hex" = "Выдержка (hex)";
 "Excerpt Text" = "Выдержка (текст)";
-"Export Decompressed Body…" = "Выгрузить распакованное тело…";
-"Export Decompressed Bytes…" = "Выгрузить распакованные байты…";
-"Exported %1$@ bytes." = "Выгружено байт: %1$@.";
 "Export…" = "Экспортировать…";
 "Extended signatures" = "Расширенные сигнатуры";
 "Extension" = "Расширение";
@@ -615,7 +612,6 @@
 "Open .%1$@ with ByteRipper" = "Открывать .%1$@ в ByteRipper";
 "Open Body of “%1$@”" = "Открыть тело «%1$@»";
 "Open Decompressed Body" = "Открыть распакованное тело";
-"Open Decompressed Bytes" = "Открыть распакованные байты";
 "Open File" = "Открыть файл";
 "Open Node" = "Открыть узел";
 "Open Node Body" = "Открыть тело узла";
@@ -885,7 +881,6 @@
 "Theme:" = "Тема:";
 "There is no FIT table in this file to change." = "В этом файле нет таблицы FIT, которую можно было бы изменить.";
 "There is no microcode in this table to put a new one after." = "В этой таблице нет микрокода, после которого можно поставить новый.";
-"There is nothing decompressed to export here." = "Здесь нечего выгружать — ничего не распаковано.";
 "There is nothing decompressed to open here." = "Здесь нечего открывать — ничего не распаковано.";
 "There is nothing to open here." = "Здесь нечего открывать.";
 "These are the defaults a new comparison opens with. Word Size also applies to the hex views already open." = "С этими настройками открывается новое сравнение. Размер слова применяется и к уже открытым панелям hex-дампа.";
@@ -1179,3 +1174,13 @@
 "Text" = "Текст";
 "Text in the record" = "Текст в записи";
 "Windows product key" = "Ключ продукта Windows";
+"Open Decompressed Node" = "Открыть распакованный узел";
+"Open Decompressed Node Body" = "Открыть тело распакованного узла";
+"Open Decompressed “%1$@”" = "Открыть «%1$@» (распаковано)";
+"Open Decompressed Body of “%1$@”" = "Открыть тело «%1$@» (распаковано)";
+"Save Decompressed Node as…" = "Сохранить распакованный узел как…";
+"Save Decompressed Node Body as…" = "Сохранить тело распакованного узла как…";
+"Save Decompressed “%1$@” as…" = "Сохранить «%1$@» (распаковано) как…";
+"Save Decompressed Body of “%1$@” as…" = "Сохранить тело «%1$@» (распаковано) как…";
+"Save Decompressed Body as…" = "Сохранить распакованное тело как…";
+"There is nothing decompressed to save here." = "Здесь нечего сохранять — ничего не распаковано.";

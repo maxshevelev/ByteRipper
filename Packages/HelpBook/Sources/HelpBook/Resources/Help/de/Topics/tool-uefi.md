@@ -1,4 +1,4 @@
-@source-sha 3c4dc36716c01d0f92df8d1e0945d05abd005bf3623f4bbda68ee483f677e948
+@source-sha 523557ffc46b844c205715e27bff430f67cdab37a6c86c7225bb8bd6d2a8d0d0
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -38,11 +38,13 @@ Der Inhalt einer ME-Region wird nicht durchsucht: Der Unterbaum hat einen andere
 
 Rechtsklick auf einen Knoten:
 
-- Den Knoten **öffnen**, oder nur seinen Rumpf, als [[topic:fragments|Fragment-Bereich]].
-- **… sichern unter…** — den Knoten oder nur seinen Rumpf in eine Datei schreiben: dieselben Bytes, die das Öffnen zeigt; vorgeschlagen wird derselbe Name — der des Dumps, gefolgt von dem des Knotens.
-- **Entpackten Rumpf öffnen** / **Entpackten Rumpf exportieren…** bei einer komprimierten Sektion — das, wozu diese Bytes sich tatsächlich entfalten. Ein Knoten darin bietet dasselbe für seine eigenen **Bytes**.
+- Den Knoten **öffnen**, oder nur seinen Rumpf, als [[topic:fragments|Fragment-Bereich]]. Bei einem Knoten in einer komprimierten Sektion nennen die Einträge die Bytes entpackt: **„…“ (entpackt) öffnen** und **Rumpf von „…“ (entpackt) öffnen**.
+- **… sichern unter…** — den Knoten oder nur seinen Rumpf in eine Datei schreiben: dieselben Bytes, die das Öffnen zeigt; vorgeschlagen wird derselbe Name — der des Dumps, gefolgt von dem des Knotens. In einer komprimierten Sektion: **„…“ (entpackt) sichern unter…**.
+- **Entpackten Rumpf öffnen** / **Entpackten Rumpf sichern unter…** bei einer komprimierten Sektion — das, wozu diese Bytes sich tatsächlich entfalten.
 - **Entpackte Variable öffnen** bei der Variable `overrides` des Apple-Systemspeichers — ihre Geräteüberschreibungen liegen als bzip2-Datenstrom vor und werden als Text in einem Tab geöffnet. Der Tab ist eine Kopie: Der Text wird hier nicht wieder komprimiert, eine Änderung der Kopie lässt den Dump daher unberührt.
 - **Zur Top-Swap-Kopie** / **Zum Original** bei einem Knoten in einem der beiden Blöcke eines Images mit [[term:top-swap|Top-Swap]]-Kopie — wählt denselben Knoten im anderen Block aus und zeigt seine Bytes im Dump, sodass sich jedem Teil der Kopie der Teil des obersten Blocks zuordnen lässt, den er wiederholt.
+
+Ein Doppelklick auf eine Zeile ersetzt das Menü: Er öffnet, was der Knoten enthält, als Fragment-Bereich — bei einer komprimierten Sektion ihren entpackten Rumpf, bei jedem anderen Knoten seinen Rumpf und bei einem Knoten ohne eigenen Rumpf, etwa Padding oder freiem Platz, den Knoten selbst. Ein Doppelklick auf das Aufklapp-Dreieck klappt die Zeile nur ein oder aus.
 
 ## Padding
 

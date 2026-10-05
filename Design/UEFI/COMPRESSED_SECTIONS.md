@@ -456,15 +456,24 @@ SKU) can then read LZMA modules too.
 
 ### 8.2. Export
 
-`ToolHost.exportFile(_:suggestedName:)` already exists. A compressed section,
-or a node inside one, gets "Export Decompressed Body…" in the tree's context
-menu, and beside it "Open Decompressed Body in New Tab" ("… Bytes …" for a node
-inside). A compressed section still closed in the tree offers both too — the
-row already says it is compressed — and choosing one decodes the body then,
-without opening the row. That one goes through `ToolHost.openInNewTab(_:named:)`: the app opens
-the bytes as an untitled copy in a sibling tab, the way Open Zone in a New Tab
-does, named `<dump stem>_<node>.bin`, and without the window's bookmarks, whose
-offsets are the dump's.
+`ToolHost.exportFile(_:suggestedName:)` already exists. A compressed section
+gets "Save Decompressed Body as…" in the tree's context menu, and beside it
+"Open Decompressed Body" (`UEFIPresenter.decompressedBody(for:)`). A compressed
+section still closed in the tree offers both too — the row already says it is
+compressed — and choosing one decodes the body then, without opening the row.
+Opening goes through the fragment panels (`Design/FRAGMENT_PANELS_PLAN.md`): a
+panel over the dump, named `<dump stem>_<node> decompressed.bin` and linked to
+the section.
+
+A node inside a compressed section has no item of its own for "the bytes it
+decompressed to": they are what the ordinary items read. Its Open and Save items
+are titled for it — "Open Decompressed “X”", "Open Decompressed Body of “X”",
+"Save Decompressed “X” as…", "Save Decompressed Body of “X” as…" — and its
+names say it too (`X decompressed.bin`, `X decompressed body.bin`), so that it
+and a node of the same name in the file do not arrive as one file. A double
+click on any row opens its content: the decompressed body for a compressed
+section, otherwise the body, and the whole node where it has none apart from
+itself (`UEFIPresenter.content(of:)`).
 
 ### 8.3. Search
 

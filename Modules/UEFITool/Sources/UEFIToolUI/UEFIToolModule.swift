@@ -243,8 +243,11 @@ private struct ChecksumPass: Sendable {
         controller.onFixChecksum = { [weak self] nodeID in
             self?.fixChecksum(for: nodeID)
         }
-        controller.onExportDecompressed = { [weak self] nodeID in
-            self?.exportDecompressed(for: nodeID)
+        controller.onSaveDecompressed = { [weak self] nodeID in
+            self?.saveDecompressed(for: nodeID)
+        }
+        controller.onOpenContent = { [weak self] nodeID in
+            self?.openNodeContent(for: nodeID)
         }
         controller.onOpenDecompressed = { [weak self] nodeID in
             self?.openDecompressedInNewTab(for: nodeID)
@@ -1353,52 +1356,47 @@ private struct ChecksumPass: Sendable {
 
     // MARK: - Export
 
-    /// Saves what a compressed section decompressed to — or one node's bytes
-    /// from inside it — to a file the user picks (`COMPRESSED_SECTIONS.md`
-    /// §8.2). The buffer is read off the main actor: it may have to be decoded
-    /// again, and it is megabytes.
+    /// Saves what a compressed section decompressed to, to a file the user
+    /// picks (`COMPRESSED_SECTIONS.md` §8.2). The buffer is read off the main
+    /// actor: it may have to be decoded again, and it is megabytes.
     ///
     /// Public because a right-click cannot be simulated — the level the app's
     /// tests drive, like `fixChecksum(for:)`.
-    public func exportDecompressed(for nodeID: NodeID) {
-        withDecompressedBytes(of: nodeID, nothing: L("There is nothing decompressed to export here.")) {
-            [weak self] export, bytes in
+    public func saveDecompressed(for nodeID: NodeID) {
+        withDecompressedBytes(of: nodeID, nothing: L("There is nothing decompressed to save here.")) {
+            [weak self] decompressed, bytes in
             guard let self,
-                  await self.host.exportFile(bytes, suggestedName: export.suggestedName)
+                  await self.host.exportFile(bytes, suggestedName: decompressed.suggestedName)
             else { return }
             self.noticeAnswersTheUser = true
-            self.controller.say(L("Exported %1$@ bytes.", bytes.count))
+            self.controller.say(L("Saved %1$@ bytes.", bytes.count))
         }
     }
 
-    /// Opens the same bytes the export saves in a tab of their own, so the
-    /// reader studies a decompressed body as a file — its own offsets from
-    /// zero, the hex view's search and zones — without saving it first.
+    /// Opens the same bytes in a panel of their own, so the reader studies a
+    /// decompressed body as a file — its own offsets from zero, the hex view's
+    /// search and zones — without saving it first.
     ///
-    /// Public for the same reason as `exportDecompressed(for:)`.
+    /// Public for the same reason as `saveDecompressed(for:)`.
     public func openDecompressedInNewTab(for nodeID: NodeID) {
-        // What the tab is linked to, and what its bytes are: a whole body is a
-        // run of sections; one node's bytes are that node.
-        var layout = UEFIRootLayout.image
+        // What the panel is linked to: the compressed section it came out of.
         var source: Range<UInt64>?
         if let tree, tree.isReady {
             let image = tree.image()
-            if let node = image.node(nodeID), let export = UEFIPresenter.decompressedExport(for: node) {
-                layout = export.range == nil ? .decompressedBody : UEFIRootLayout.of(node, in: image)
+            if let node = image.node(nodeID), UEFIPresenter.decompressedBody(for: node) != nil {
                 source = UEFIPresenter.fileSource(of: node, in: image)
             }
         }
-        let chosenLayout = layout
         let chosenSource = source
         withDecompressedBytes(of: nodeID, nothing: L("There is nothing decompressed to open here.")) {
-            [weak self] export, bytes in
+            [weak self] decompressed, bytes in
             guard let self, let source = chosenSource else { return }
-            let name = export.tabName(fileName: self.host.fileName)
+            let name = decompressed.tabName(fileName: self.host.fileName)
             if let provider = self.treeProvider {
-                // Where the bytes go back to: the whole buffer, or this node's
-                // bytes in it (`UPDATE_IN_PARENT.md` §6).
-                provider.openPart(bytes, named: name, linkedTo: source, layout: chosenLayout,
-                                      part: UEFIRebuild.Target(space: export.space, range: export.range))
+                // Where the bytes go back to: the whole buffer, a run of
+                // sections (`UPDATE_IN_PARENT.md` §6).
+                provider.openPart(bytes, named: name, linkedTo: source, layout: .decompressedBody,
+                                  part: UEFIRebuild.Target(space: decompressed.space))
             } else {
                 self.host.openPart(bytes, named: name, linkedTo: source)
             }
@@ -1410,7 +1408,7 @@ private struct ChecksumPass: Sendable {
     /// to the variable's bytes: it is read, not written back, because nothing
     /// here compresses it again.
     ///
-    /// Public for the same reason as `exportDecompressed(for:)`.
+    /// Public for the same reason as `saveDecompressed(for:)`.
     // help: panel.uefi.open-unpacked
     public func openUnpackedInNewTab(for nodeID: NodeID) {
         guard let tree, tree.isReady, let node = tree.image().node(nodeID),
@@ -1436,6 +1434,25 @@ private struct ChecksumPass: Sendable {
                 return
             }
             self.host.openPart(text, named: name, linkedTo: source)
+        }
+    }
+
+    /// What a double click on a node's row does: opens what the node holds as a
+    /// panel — the body a compressed section decompresses to, otherwise the
+    /// node's body, and the whole node where it has none apart from itself
+    /// (`UEFIPresenter.content(of:)`).
+    ///
+    /// Public for the same reason as `openNodeInPanel(for:body:)`.
+    // help: panel.uefi.open-content
+    public func openNodeContent(for nodeID: NodeID) {
+        guard let tree, tree.isReady, let node = tree.image().node(nodeID) else {
+            fail(L("There is nothing to open here."))
+            return
+        }
+        switch UEFIPresenter.content(of: node) {
+        case .decompressedBody: openDecompressedInNewTab(for: nodeID)
+        case .body: openNodeInPanel(for: nodeID, body: true)
+        case .node: openNodeInPanel(for: nodeID, body: false)
         }
     }
 
@@ -1528,10 +1545,10 @@ private struct ChecksumPass: Sendable {
     private func withDecompressedBytes(
         of nodeID: NodeID,
         nothing: String,
-        then use: @escaping @MainActor (UEFIPresenter.DecompressedExport, [UInt8]) async -> Void
+        then use: @escaping @MainActor (UEFIPresenter.DecompressedBody, [UInt8]) async -> Void
     ) {
         guard let tree, tree.isReady, let node = tree.image().node(nodeID),
-              let export = UEFIPresenter.decompressedExport(for: node)
+              let decompressed = UEFIPresenter.decompressedBody(for: node)
         else {
             fail(nothing)
             return
@@ -1539,24 +1556,24 @@ private struct ChecksumPass: Sendable {
         let readers = tree.spaceReaders
         controller.showBusy()
         Task { [weak self] in
-            let bytes = await UEFIToolSession.decompressedBytes(export, readers: readers)
+            let bytes = await UEFIToolSession.decompressedBytes(decompressed, readers: readers)
             guard let self else { return }
             self.controller.endBusy()
             guard let bytes else {
                 self.fail(L("The section does not decompress."))
                 return
             }
-            await use(export, bytes)
+            await use(decompressed, bytes)
         }
     }
 
     private nonisolated static func decompressedBytes(
-        _ export: UEFIPresenter.DecompressedExport,
+        _ decompressed: UEFIPresenter.DecompressedBody,
         readers: SpaceReaders
     ) async -> [UInt8]? {
         await Task.detached(priority: .userInitiated) {
-            guard let reader = readers.reader(for: export.space) else { return nil }
-            return reader.bytes(export.range ?? reader.all)
+            guard let reader = readers.reader(for: decompressed.space) else { return nil }
+            return reader.bytes(reader.all)
         }.value
     }
 
