@@ -210,6 +210,43 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(row.tone, .caution)
     }
 
+    /// On the mobile Alder Point layout GPR0 and the eSPI clock are rows, and
+    /// their words say what they hold.
+    func testGPR0AndTheESPIClockAreRowsOnAMobileLayout() throws {
+        var words = [UInt32](repeating: 0, count: 23)
+        words[21] = 0x829B_0001
+        words[22] = 0x0058_0E20
+        let shown = detail(TestUEFI.flashDescriptor(version1: false, straps: words, strapCount: 70))
+
+        let gpr0 = try XCTUnwrap(shown.fields.first { $0.label == "GPR0" })
+        XCTAssertEqual(gpr0.value, "0x1000 – 0x29BFFF: writes refused")
+        XCTAssertEqual(gpr0.tone, .caution)
+        XCTAssertEqual(field(shown, "eSPI clock"), "60 MHz")
+
+        let table = try XCTUnwrap(table(shown, "PCH straps"))
+        XCTAssertEqual(table.rows.count, 70)
+        XCTAssertEqual(table.rows[21][3].text, "GPR0, the whole word")
+        XCTAssertEqual(table.rows[22][3].text, "eSPI clock in bits 3–5; the other bits unknown")
+    }
+
+    /// A zero GPRD is off, and a clock code nobody defines shows the code.
+    func testAnOffGPR0AndAnUnknownClock() {
+        var words = [UInt32](repeating: 0, count: 23)
+        words[22] = 6 << 3
+        let shown = detail(TestUEFI.flashDescriptor(version1: false, straps: words, strapCount: 70))
+
+        XCTAssertEqual(field(shown, "GPR0"), "Off")
+        XCTAssertEqual(field(shown, "eSPI clock"), "Unknown (code 6)")
+    }
+
+    /// The desktop layout's words are other fields, so neither row is shown.
+    func testADesktopLayoutHasNeitherRow() {
+        let shown = detail(TestUEFI.flashDescriptor(version1: false, straps: [0x2222_2222]))
+
+        XCTAssertNil(field(shown, "GPR0"))
+        XCTAssertNil(field(shown, "eSPI clock"))
+    }
+
     /// No strap section, no strap table and no bit row.
     func testNoStrapsMeansNoStrapRows() {
         let shown = detail(TestUEFI.flashDescriptor())

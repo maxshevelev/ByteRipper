@@ -328,7 +328,7 @@ enum TestImage {
     /// `DescriptorGeneration` is told from (§2.5). `component` is the chip
     /// count, `FLCOMP` and the two words of forbidden opcodes. `straps` are
     /// the first PCH strap words, at `0x200`; the rest of the section — as
-    /// long as the layout's strap length — stays erased.
+    /// long as the layout's strap length, or `strapCount` — stays erased.
     static func descriptor(
         regions: [(type: FlashRegionType, range: Range<UInt64>)],
         regionBase: UInt32 = 0x04,
@@ -339,7 +339,8 @@ enum TestImage {
         vsccBase: UInt32 = 0x10,
         chips: [UInt32] = [],
         component: (chips: Int, flcomp: UInt32, flill: UInt32, flill1: UInt32)? = nil,
-        straps: [UInt32]? = nil
+        straps: [UInt32]? = nil,
+        strapCount: UInt32? = nil
     ) -> [UInt8] {
         var bytes = [UInt8](repeating: 0xFF, count: Int(Descriptor.size))
         func put(_ value: UInt32, at offset: Int) {
@@ -356,7 +357,7 @@ enum TestImage {
         // The PCH strap length and base — none unless straps are asked for —
         // then the master base, out of range unless masters are.
         let strapBase: UInt32 = 0x20
-        put(UInt32(version1 ? 0x12 : 0x73) << 24 | (straps == nil ? 0 : strapBase << 16)
+        put((strapCount ?? (version1 ? 0x12 : 0x73)) << 24 | (straps == nil ? 0 : strapBase << 16)
                 | (masters.isEmpty ? 0xFF : masterBase),
             at: Int(Descriptor.map1Offset))
         for (index, word) in (straps ?? []).enumerated() {

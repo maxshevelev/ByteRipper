@@ -1062,6 +1062,13 @@
 "PCH straps" = "PCH-Straps";
 "Strap" = "Strap";
 "%1$@ in bit %2$@; the other bits unknown" = "%1$@ in Bit %2$@; die übrigen Bits unbekannt";
+"eSPI clock" = "eSPI-Takt";
+"%1$@: reads and writes refused" = "%1$@: Lesen und Schreiben gesperrt";
+"%1$@: writes refused" = "%1$@: Schreiben gesperrt";
+"%1$@: reads refused" = "%1$@: Lesen gesperrt";
+"eSPI clock in bits 3–5; the other bits unknown" = "eSPI-Takt in Bit 3–5; die übrigen Bits unbekannt";
+"GPR0, the whole word" = "GPR0, das ganze Wort";
+"Unknown (code %1$@)" = "Unbekannt (Code %1$@)";
 "%1$@ — header marked invalid" = "%1$@ — Header als ungültig markiert";
 "%1$@ (not checked)" = "%1$@ (nicht geprüft)";
 "Variable" = "Variable";

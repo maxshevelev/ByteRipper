@@ -88,6 +88,59 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertNil(DescriptorGeneration.emmitsburg.meDisableBit)
     }
 
+    /// The seventy-word layout of Tiger and Alder Point mobile: the eSPI clock
+    /// in bits 3–5 of word 22, and GPR0 in word 21 — here as `ifdtool -p adl
+    /// --gpr0-enable` writes it into `clean_me`: the ME region to the end of
+    /// its FITC, writes refused.
+    func testTheESPIClockAndGPR0OfAMobileAlderPointLayout() throws {
+        var words = [UInt32](repeating: 0, count: 23)
+        words[21] = 0x829B_0001
+        words[22] = 0x0058_0E20
+        let straps = try XCTUnwrap(info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], straps: words, strapCount: 70)).straps)
+
+        XCTAssertEqual(straps.espiClock,
+                       DescriptorInfo.ESPIClock(word: 22, clock: DescriptorInfo.Clock(code: 4, megahertz: [60])))
+        XCTAssertEqual(straps.gpr0, DescriptorInfo.ProtectedRange(
+            word: 21, start: 0x1000, end: 0x29_BFFF, readProtected: false, writeProtected: true))
+        XCTAssertEqual(straps.gpr0?.isOn, true)
+    }
+
+    /// A GPRD of zero is no protection, and a clock code ifdtool's table has
+    /// no entry for is a code without a clock.
+    func testAZeroGPR0IsOffAndAnUnlistedClockIsUnknown() throws {
+        var words = [UInt32](repeating: 0, count: 23)
+        words[22] = 6 << 3
+        let straps = try XCTUnwrap(info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], straps: words, strapCount: 70)).straps)
+
+        XCTAssertEqual(straps.gpr0?.isOn, false)
+        XCTAssertEqual(straps.espiClock?.clock, DescriptorInfo.Clock(code: 6, megahertz: nil))
+    }
+
+    /// The desktop layout puts other fields in the same words, so nothing is
+    /// read from them: Alder Point S's 115 words have no eSPI clock or GPR0.
+    func testTheDesktopLayoutReadsNeither() throws {
+        var words = [UInt32](repeating: 0, count: 23)
+        words[21] = 0x2222_2222
+        let straps = try XCTUnwrap(info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], straps: words)).straps)
+
+        XCTAssertEqual(straps.words.count, 0x73)
+        XCTAssertNil(straps.espiClock)
+        XCTAssertNil(straps.gpr0)
+    }
+
+    /// Which layouts the two fields are read on: generation and length both.
+    func testTheStrapFieldsAreKeyedByGenerationAndLength() {
+        XCTAssertEqual(DescriptorGeneration.tigerPoint.strapFields(count: 70)?.gpr0Word, 21)
+        XCTAssertEqual(DescriptorGeneration.alderPoint.strapFields(count: 70)?.espiClockWord, 22)
+        XCTAssertNil(DescriptorGeneration.tigerPoint.strapFields(count: 101), "Tiger Point H")
+        XCTAssertNil(DescriptorGeneration.alderPoint.strapFields(count: 115), "Alder Point S")
+        XCTAssertNil(DescriptorGeneration.cannonPoint.strapFields(count: 69),
+                     "Cannon Point keeps GPR0 in the ME region's FITC")
+    }
+
     /// No strap base, no section — the bytes at offset zero are not straps.
     func testNoStrapBaseMeansNoStraps() throws {
         XCTAssertNil(try info(TestImage.descriptor(regions: [(.bios, 0x1000..<0x40_0000)])).straps)

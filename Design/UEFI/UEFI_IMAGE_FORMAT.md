@@ -331,8 +331,9 @@ the same field in different words —
 
 — so a layout would have to be keyed by generation *and* length.
 
-ByteRipper reads the words as numbers, and one bit as what it means: the bit
-that soft-disables the ME, where ifdtool and me_cleaner agree on it.
+ByteRipper reads the words as numbers, and as what they mean only where the
+meaning is checked: the bit that soft-disables the ME, where ifdtool and
+me_cleaner agree on it, and on one layout the eSPI clock and GPR0 (below).
 
 | generations | name | word | bit |
 |---|---|---|---|
@@ -344,12 +345,34 @@ Bay Trail (TXE) and Emmitsburg have none: neither tool names one. On ICH8 –
 ICH10 ifdtool also sets two bits in the processor straps; the PCH one is the
 one shown.
 
-What ifdtool reads beyond that — the eSPI clock in `PCHSTRP22` and the GPR0
-range in `PCHSTRP21` on Tiger and Alder Point — sits in those words only on
-the mobile layout. On a Tiger Point H dump (`1.bin`, length 101) the same word
-gives an eSPI clock code nobody defines, and on an Alder Point S one
-(`SPI_EF4019`, length 115) a "GPR0" of `0x22222222`. Neither is shown until
-the desktop layouts are known. ifdtool also needs `-p` to read any descriptor
+Two more fields are read on the one layout ifdtool's offsets were checked
+against — Tiger and Alder Point mobile, 70 words:
+
+- **The eSPI clock**, bits 3–5 of `PCHSTRP22`: the clock of the eSPI bus to the
+  EC. ifdtool's 500-series table: 0 = 20, 1 = 24, 2 = 25, 3 = 48, 4 = 60 MHz;
+  any other code is shown as unknown.
+- **GPR0**, the whole of `PCHSTRP21`: the GPRD value the SPI controller loads
+  its global protected range from — `start : 15, read enable : 1, end : 15,
+  write enable : 1`, start and end in 4 KiB units of the flash's linear
+  addresses, the end inclusive. With neither enable bit the range is off. A
+  range refuses the host whatever the masters' masks allow; coreboot sets it
+  over the ME region up to the end of its FITC (`ifdtool --gpr0-enable`).
+
+ifdtool also places GPR0 in word `0x12` on Jasper Lake, `0x40` on Meteor Lake,
+`0x76` on Panther Lake and `0x3C` on Nova Lake, with the eSPI clock in words 65
+and 119 on Meteor and Panther Lake. No dump at hand checks any of them, so
+none is read. On Cannon Point GPR0 is not in the descriptor at all but in the
+ME region's FITC.
+
+On the desktop layouts the same words are other fields. On a Tiger Point H dump
+(`1.bin`, length 101) word 22 gives an eSPI clock code nobody defines, and on an
+Alder Point S one (`SPI_EF4019`, length 115) word 21 gives a "GPR0" of
+`0x22222222`. Neither field is shown there until the desktop layouts are known.
+
+On the seven mobile dumps the clock and GPR0 (off on all of them) agree with
+ifdtool, and so do the two copies `ifdtool --gpr0-enable` was run on
+(`clean_me`: `0x1000 – 0x29BFFF`; `CSME 15`: `0x103000 – 0x31CFFF`, both
+writes refused). ifdtool also needs `-p` to read any descriptor
 from Sunrise Point on as one: without it, it takes the layout for version 1
 and reports `AltMeDisable` from the wrong word.
 

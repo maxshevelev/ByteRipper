@@ -1108,7 +1108,8 @@ public enum UEFIDetail {
     // MARK: - What a flash descriptor adds
 
     /// The rows a descriptor has beyond its header: the vector it opens with,
-    /// the chipset its layout is, the strap bit that soft-disables the ME, and
+    /// the chipset its layout is, what the straps say where they are read —
+    /// the bit that soft-disables the ME, the GPR0 range, the eSPI clock — and
     /// what its component section says about
     /// the chips — how large, how fast, and which opcodes the chipset will not
     /// send them. Where the regions lie, and what the masters may touch, are
@@ -1132,8 +1133,29 @@ public enum UEFIDetail {
                                 meDisable.isSet ? L("Set — the ME is soft-disabled") : L("Not set", context: "bit"),
                                 tone: meDisable.isSet ? .caution : .standard))
         }
+        // A range the chipset keeps the host from writing — coreboot puts
+        // the ME region under it — is the other reason a region the masks
+        // open cannot be written from the OS.
+        if let range = descriptor.straps?.gpr0 {
+            fields.append(.init("GPR0", gpr0Text(range), tone: range.isOn ? .caution : .standard))
+        }
 
-        guard let component = descriptor.component else { return fields }
+        if let component = descriptor.component {
+            fields += componentFields(component, imageSize: imageSize)
+        }
+        if let espi = descriptor.straps?.espiClock {
+            fields.append(.init(L("eSPI clock"), espi.clock.megahertz.map {
+                L("%1$@ MHz", $0.map(String.init).joined(separator: "/"))
+            } ?? L("Unknown (code %1$@)", espi.clock.code)))
+        }
+        return fields
+    }
+
+    /// What the component section says about the chips.
+    private static func componentFields(
+        _ component: DescriptorInfo.Component, imageSize: UInt64
+    ) -> [UEFIDetailField] {
+        var fields: [UEFIDetailField] = []
         // The chips the image was laid out across, end to end. A dump of
         // another length is one chip of two, or a read of the wrong size.
         let sizes = component.chipSizes.map { $0.map(capacityText) ?? L("Reserved") }
@@ -1152,6 +1174,17 @@ public enum UEFIDetail {
         fields.append(.init(L("Forbidden opcodes"), component.invalidInstructions.isEmpty
                             ? L("None") : hexBytes(component.invalidInstructions)))
         return fields
+    }
+
+    /// A protected range as where it runs and what it refuses.
+    private static func gpr0Text(_ range: DescriptorInfo.ProtectedRange) -> String {
+        let span = "\(hex(range.start)) – \(hex(range.end))"
+        switch (range.readProtected, range.writeProtected) {
+        case (true, true): return L("%1$@: reads and writes refused", span)
+        case (false, true): return L("%1$@: writes refused", span)
+        case (true, false): return L("%1$@: reads refused", span)
+        case (false, false): return L("Off")
+        }
     }
 
     /// A clock as the bench says it, or the code when the generation reserves
@@ -1255,6 +1288,10 @@ public enum UEFIDetail {
                 var meaning = L("Unknown")
                 if let bit = straps.meDisable, bit.word == index {
                     meaning = L("%1$@ in bit %2$@; the other bits unknown", bit.name, bit.bit)
+                } else if straps.espiClock?.word == index {
+                    meaning = L("eSPI clock in bits 3–5; the other bits unknown")
+                } else if straps.gpr0?.word == index {
+                    meaning = L("GPR0, the whole word")
                 }
                 return ([.init(name), .init(hex(address)),
                          .init(String(format: "0x%08X", straps.words[index])), .init(meaning)],

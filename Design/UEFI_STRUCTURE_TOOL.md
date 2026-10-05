@@ -76,7 +76,7 @@ header:
 | section | type (code + name), size |
 | microcode | header type, update revision, date (BCD), processor signature, checksum, loader revision, platform ids, data and total size |
 | capsule | capsule GUID (+ name), header size, flags, image size |
-| flash descriptor | signature, FLMAP, version; then the reserved vector, the chipset generation, the chips' sizes, the SPI clocks and the forbidden opcodes, and grids of the regions (base and limit), the masters' masks, the BIOS master's access, the VSCC chips and the PCH strap words; the bit that soft-disables the ME as a row of its own (`UEFI_IMAGE_FORMAT.md` §2.6) |
+| flash descriptor | signature, FLMAP, version; then the reserved vector, the chipset generation, the chips' sizes, the SPI clocks and the forbidden opcodes, and grids of the regions (base and limit), the masters' masks, the BIOS master's access, the VSCC chips and the PCH strap words; the bit that soft-disables the ME, and on Tiger and Alder Point mobile the GPR0 range and the eSPI clock, as rows of their own (`UEFI_IMAGE_FORMAT.md` §2.6) |
 | region | the region's base and limit, from the descriptor's table |
 | padding / free space / non-UEFI data | nothing but the size the common fields already carry |
 

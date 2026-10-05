@@ -133,6 +133,33 @@ public struct DescriptorInfo: Equatable, Sendable {
         /// The one bit with a settled meaning on every generation that names
         /// it; nil on one that does not, or a section too short to hold it.
         public var meDisable: MEDisable?
+        /// The clock the chipset drives the eSPI bus to the EC at. Nil where
+        /// the layout is not one whose word for it is known.
+        public var espiClock: ESPIClock?
+        /// The flash range the chipset protects from the host, from the
+        /// strap the SPI controller loads its GPR0 register from. Nil where
+        /// the layout is not one whose word for it is known.
+        public var gpr0: ProtectedRange?
+    }
+
+    /// The eSPI clock: bits 3–5 of its word.
+    public struct ESPIClock: Equatable, Sendable {
+        public var word: Int
+        public var clock: Clock
+    }
+
+    /// A GPRD word: a start and an end in 4 KiB units, inclusive, and whether
+    /// reads and writes inside are refused. Neither refused, the range is
+    /// off whatever it says.
+    public struct ProtectedRange: Equatable, Sendable {
+        public var word: Int
+        /// In the file's own offsets, as the region table's are.
+        public var start: UInt64
+        public var end: UInt64
+        public var readProtected: Bool
+        public var writeProtected: Bool
+
+        public var isOn: Bool { readProtected || writeProtected }
     }
 
     /// The bit that soft-disables the ME, under the name the trade knows it
@@ -223,7 +250,23 @@ public extension DescriptorInfo {
             return MEDisable(name: bit.name, word: bit.word, bit: bit.bit,
                              isSet: words[bit.word] >> bit.bit & 1 != 0)
         }
-        return Straps(base: section, words: words, meDisable: meDisable)
+        var straps = Straps(base: section, words: words, meDisable: meDisable)
+        if let fields = generation.strapFields(count: words.count) {
+            let code = UInt8(words[fields.espiClockWord] >> 3 & 0x7)
+            straps.espiClock = ESPIClock(
+                word: fields.espiClockWord,
+                clock: Clock(code: code, megahertz: generation.espiClock(code)))
+            // Fifteen bits of start, a read enable, fifteen of end, a write
+            // enable — ifdtool's `union gprd`.
+            let gprd = words[fields.gpr0Word]
+            straps.gpr0 = ProtectedRange(
+                word: fields.gpr0Word,
+                start: base + UInt64(gprd & 0x7FFF) << 12,
+                end: base + (UInt64(gprd >> 16 & 0x7FFF) << 12 | 0xFFF),
+                readProtected: gprd >> 15 & 1 != 0,
+                writeProtected: gprd >> 31 & 1 != 0)
+        }
+        return straps
     }
 
     /// Every region the table declares. A region with a zero limit is not

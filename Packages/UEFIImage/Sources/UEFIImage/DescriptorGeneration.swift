@@ -117,6 +117,26 @@ public enum DescriptorGeneration: Sendable, Equatable, CaseIterable {
         }
     }
 
+    /// Which strap words hold the eSPI clock and the GPR0 range, for a strap
+    /// section of `count` words. A layout is the generation's *and* the
+    /// length's: the mobile and desktop parts of one generation make the
+    /// section different lengths and put the same field in different words.
+    /// So only the layouts ifdtool's offsets were checked against are here —
+    /// Tiger and Alder Point mobile, 70 words — and on Tiger Point H (101) or
+    /// Alder Point S (115) the same words are other fields (§2.6).
+    func strapFields(count: Int) -> (espiClockWord: Int, gpr0Word: Int)? {
+        switch (self, count) {
+        case (.tigerPoint, 70), (.alderPoint, 70): return (22, 21)
+        default: return nil
+        }
+    }
+
+    /// The eSPI clock a three-bit strap code stands for, in MHz, on the
+    /// generations `strapFields` knows: ifdtool's 500-series table.
+    func espiClock(_ code: UInt8) -> [Int]? {
+        [0: [20], 1: [24], 2: [25], 3: [48], 4: [60]][code]
+    }
+
     /// The SPI clock a three-bit code stands for, in MHz. A code the
     /// generation reserves has none; Apollo and Gemini Lake give one code two
     /// clocks.

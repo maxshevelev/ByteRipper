@@ -227,7 +227,8 @@ enum TestUEFI {
     /// `Design/UEFI_STRUCTURE_TOOL.md`'s example — a version 1 descriptor,
     /// laid out as Cougar Point's, on one 16 MB chip, whose BIOS master may
     /// read the ME region and write nothing but its own. `straps` are the
-    /// first PCH strap words, at `0x200`; without them there is no section.
+    /// first PCH strap words, at `0x200`, in a section of the layout's length
+    /// or `strapCount`; without them there is no section.
     static func flashDescriptor(
         reservedVector: [UInt8] = [0x11, 0x00, 0x00, 0x9C, 0x90, 0x02, 0x00, 0xD6,
                                    0x00, 0x00, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF],
@@ -241,6 +242,7 @@ enum TestUEFI {
         chipSizes: [UInt64] = [0x100_0000],
         invalidInstructions: UInt32 = 0xAD60_4221,
         straps: [UInt32]? = nil,
+        strapCount: UInt32? = nil,
         totalSize: UInt64 = 0x1000
     ) -> Built {
         var bytes = [UInt8](repeating: 0xFF, count: Int(totalSize))
@@ -261,7 +263,8 @@ enum TestUEFI {
         // FLMAP1 and FLMAP2 laid out as a Cougar Point board's or an Alder
         // Point one's, which is what tells the generation (§2.5).
         let strapBase: UInt32 = 0x20
-        put((version1 ? 0x12 : 0x73) << 24 | (straps == nil ? 0 : strapBase << 16) | masterBase, at: 0x18)
+        put((strapCount ?? (version1 ? 0x12 : 0x73)) << 24 | (straps == nil ? 0 : strapBase << 16) | masterBase,
+            at: 0x18)
         put(version1 ? 0x0021_0120 : 0x0014_01B0, at: 0x1C)
         bytes[0x0EFF] = version1 ? 0x00 : 0xC0          // FLUMAP1: MDTBA
 
