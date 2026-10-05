@@ -118,8 +118,8 @@ final class ZoomToFitTests: XCTestCase {
         XCTAssertEqual(sideBySide, stacked, accuracy: 0.5)
     }
 
-    /// The window actually opens at that width, and its height is untouched by
-    /// this rule — the standard 720 pt default. Goes through `showWindow`,
+    /// The window actually opens at that width, and its height is the standard
+    /// 720 pt default, or three quarters of the screen's when that is less. Goes through `showWindow`,
     /// which is where the launch frame is settled: assigning the content view
     /// controller shrinks the window to the empty state's fitting size first.
     func testLaunchWindowUsesOnePaneWidthAndDefaultHeight() {
@@ -141,7 +141,26 @@ final class ZoomToFitTests: XCTestCase {
                            screen?.visibleFrame.width ?? .greatestFiniteMagnitude)
         XCTAssertEqual(window.frame.width, expected, accuracy: 1,
                        "the launch frame must use the one-pane width")
-        XCTAssertEqual(window.frame.height, 720, accuracy: 1, "the launch height is unchanged")
+        let expectedHeight = min(720, ((screen?.visibleFrame.height ?? 720) * 0.75).rounded(.down))
+        XCTAssertEqual(window.frame.height, expectedHeight, accuracy: 1,
+                       "the launch height is the default, capped at 3/4 of the screen")
+    }
+
+    /// A saved frame taller than three quarters of the screen is cut down at
+    /// launch, and the window keeps its top edge.
+    func testRestoredFrameTallerThanThreeQuartersOfTheScreenIsCutDown() throws {
+        let controller = makeController()
+        let window = controller.window!
+        let visible = try XCTUnwrap(window.screen ?? NSScreen.main).visibleFrame
+        window.setFrame(NSRect(x: visible.minX, y: visible.minY,
+                               width: 800, height: visible.height), display: false)
+        let top = window.frame.maxY
+
+        controller.showWindow(nil)
+        defer { window.orderOut(nil) }
+
+        XCTAssertLessThanOrEqual(window.frame.height, visible.height * 0.75 + 1)
+        XCTAssertEqual(window.frame.maxY, top, accuracy: 1, "the top edge stays")
     }
 
     func testEmptyModeKeepsPreferredFrame() {

@@ -121,6 +121,20 @@ final class MainWindowController: NSWindowController {
             (window?.screen ?? NSScreen.main)?.visibleFrame.width ?? MainViewController.launchContentWidth())
     }
 
+    /// The tallest a window may open: three quarters of its screen's visible
+    /// height, so a launch never fills the screen top to bottom — whether the
+    /// height is the default or the one restored from the saved frame.
+    private var maxLaunchHeight: CGFloat {
+        let visible = (window?.screen ?? NSScreen.main)?.visibleFrame.height
+        return visible.map { ($0 * 0.75).rounded(.down) } ?? .greatestFiniteMagnitude
+    }
+
+    /// The launch height of a window with no frame worth keeping: the standard
+    /// 720 pt, or the cap when the screen is too short for it.
+    private var launchHeight: CGFloat {
+        min(720, maxLaunchHeight)
+    }
+
     /// Sizes the window once it is on screen.
     ///
     /// A window comes up with a degenerate frame — measured at 1×84 — whether or
@@ -145,12 +159,16 @@ final class MainWindowController: NSWindowController {
         if let group = window.tabGroup, group.windows.count > 1 { return }
         if window.frame.width < 200 || window.frame.height < 200
             || !NSScreen.screens.contains(where: { $0.visibleFrame.intersects(window.frame) }) {
-            window.setFrame(NSRect(x: 0, y: 0, width: launchWidth, height: 720), display: true)
+            window.setFrame(NSRect(x: 0, y: 0, width: launchWidth, height: launchHeight), display: true)
             window.center()
             return
         }
         var frame = window.frame
         frame.size.width = launchWidth
+        if frame.height > maxLaunchHeight {
+            frame.origin.y += frame.height - maxLaunchHeight
+            frame.size.height = maxLaunchHeight
+        }
         // Keep the window on the visible screen when the fitted width is wider
         // than the restored one (the left edge would stay put and the right edge
         // could run off-screen).
