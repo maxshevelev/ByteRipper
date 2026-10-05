@@ -15,6 +15,7 @@ enum Section {
     static let disposable: UInt8 = 0x03
     static let userInterface: UInt8 = 0x15
     static let firmwareVolumeImage: UInt8 = 0x17
+    static let freeformSubtypeGUID: UInt8 = 0x18
     static let raw: UInt8 = 0x19
 
     /// `EFI_COMPRESSION_SECTION`, which follows the common header.
@@ -31,7 +32,7 @@ enum Section {
         switch type {
         case compression: return compressionHeaderSize
         case guidDefined: return guidDefinedHeaderSize
-        case 0x18: return 16      // freeform subtype GUID
+        case freeformSubtypeGUID: return 16
         case 0x14: return 2       // version: the build number
         case 0x20, 0xF0: return 4 // Insyde and Phoenix postcode
         default: return 0
@@ -52,7 +53,7 @@ enum Section {
         case userInterface: return "Name"
         case 0x16: return "Compatibility16"
         case firmwareVolumeImage: return "Volume image"
-        case 0x18: return "Freeform subtype GUID"
+        case freeformSubtypeGUID: return "Freeform subtype GUID"
         case raw: return "Raw"
         case 0x1B: return "PEI dependency"
         case 0x1C: return "MM dependency"
@@ -272,6 +273,16 @@ extension Parser {
                 }
             }
 
+        case Section.freeformSubtypeGUID:
+            // The subtype GUID is the header's, as the reference draws it,
+            // and says what the body is: a vendor's data, read as a raw area
+            // the way the reference reads it — ASUS keeps its animated boot
+            // logo here, a GIF per screen size (§6.4).
+            if let subtype = reader.guid(at: offset + headerSize), offset + headerSize + 16 <= end {
+                guid = subtype
+                bodyStart = offset + headerSize + 16
+            }
+
         default:
             if !Section.isKnown(type) {
                 note(.unknownType(.sectionHeader, type), at: offset + 3)
@@ -309,6 +320,11 @@ extension Parser {
                 if let volume = parseVolume(at: bodyStart, limit: end, depth: depth + 1) {
                     children = [volume]
                 }
+            } else if type == Section.freeformSubtypeGUID, guid != nil {
+                // A raw area with nothing in it leaves the section a leaf, as
+                // a raw file's body does.
+                let found = scanRawArea(body, emptyByte: emptyByte, depth: depth + 1)
+                children = found.contains { $0.kind != .padding || !$0.children.isEmpty } ? found : []
             } else if type == Section.userInterface, let text = ucs2String(in: body) {
                 name = text
             }

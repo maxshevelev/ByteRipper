@@ -1487,6 +1487,20 @@ in AppKit to the size read here. A GIF in a Phoenix variable (`CSME 11`) is
 not looked for: it sits after the variable's name, not at the start of
 anything the parser reads.
 
+A **freeform subtype GUID section** (`0x18`) has the 16-byte subtype GUID in
+its header, as the reference draws it, and a body read as a raw area
+(`parseRawArea` there, `scanRawArea` here); a body the scan finds nothing in
+leaves the section a leaf. ASUS keeps its animated boot logo so, on
+`Asus/SPI_C86018_128Mbit_GD25LB128DW.bin`: five Freeform files
+`348171B8-0439-7845…7849-6765-D37F4D1193D1` in the LZMA DXE volume, each an
+LZMA section holding a name section (` UKeyBootGif.bmp`,
+` Bios_2021_1360x768_340x192_gif.bmp` and so on up to 3840×2160) and a freeform
+section with the subtype `7BB28B99-61BB-11D5-9A5D-0090273FC14D`, EDK's logo
+GUID, whose body is one GIF89a to the byte: 53×53 in 9 frames, then 340×192,
+480×270, 640×360 and 960×540 in 34 each. A GIF counts its images
+(`Picture.frames`); the details give the count when it is more than one, and
+the preview, an `NSImageView`, plays it.
+
 **Sounds** — a WAV file — are read where a body stops reading as sections
 (§6): at the start of that Non-UEFI data (`Sound.swift`). `RIFF`, a size that
 fits, `WAVE`, then chunks — id, little-endian size, data padded to even — read

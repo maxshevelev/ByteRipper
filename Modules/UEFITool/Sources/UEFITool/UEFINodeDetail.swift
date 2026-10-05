@@ -1077,6 +1077,10 @@ public enum UEFIDetail {
                 fields.append(.init(L("Format"), picture.variant.map { "\(picture.format.name) (\($0))" }
                                     ?? picture.format.name))
                 fields.append(.init(L("Picture size"), "\(picture.width) × \(picture.height)"))
+                // An animation says how long it is; the panel plays it.
+                if let frames = picture.frames, frames > 1 {
+                    fields.append(.init(L("Frames"), "\(frames)"))
+                }
                 // A BMP whose header asks for more than its section holds:
                 // the rows past the end are missing from the image.
                 if let declared = picture.declaredLength {

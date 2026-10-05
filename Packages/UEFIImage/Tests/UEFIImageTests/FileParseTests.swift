@@ -95,12 +95,15 @@ final class FileParseTests: XCTestCase {
         )
     }
 
-    /// A file claiming more bytes than the volume has left.
-    func testAFileRunningPastTheVolumeIsCutAndReported() {
+    /// A file header claiming more bytes than the volume has left is no file
+    /// cut short: the rest of the volume is Non-UEFI data, said once, as the
+    /// reference keeps it (§5.8).
+    func testAFileRunningPastTheVolumeLeavesTheRestAsNonUEFIData() {
         let parsed = parse([TestImage.file(body: [1, 2, 3, 4], size: 0x600)])
 
+        XCTAssertEqual(parsed.roots[0].children.map(\.kind), [.nonUEFIData])
         XCTAssertEqual(parsed.roots[0].children.map(\.range), [0x48..<0x400])
-        XCTAssertEqual(parsed.diagnostics.map(\.kind), [.truncated(.fileBody)])
+        XCTAssertEqual(parsed.diagnostics.map(\.kind), [.nonUEFIDataInVolume])
     }
 
     func testAStaleHeaderChecksumIsReported() {

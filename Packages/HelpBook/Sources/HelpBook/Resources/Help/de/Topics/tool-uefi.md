@@ -1,4 +1,4 @@
-@source-sha f03f5f1f842bfbe782858e88687c802d09bc3eb318b1d0813b751fcaf5ebb9fb
+@source-sha dda463dc01a8d9e130619e18c9087a81a14ebc6292890244df0cb2c0764e319c
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -50,7 +50,7 @@ Bei Insyde-Firmware enthalten die Details der [[term:flash-device-map|Flash Devi
 
 ## Bilder
 
-Ein vom Werkzeug erkanntes [[term:picture|Bild]] — JPEG, PNG, GIF oder BMP, im Padding oder als Datenteil einer Raw-Section — erscheint als eigene Zeile; wird sie ausgewählt, zeichnet das Werkzeug das Bild unter den Details: höchstens so breit wie die Liste und nie größer als seine eigene Pixelgröße. Die Vorschau entsteht aus den Bytes des Dumps, wie sie vorliegen, und zwar mit dem Decoder von macOS, nicht mit dem der Firmware; sie zeigt daher den gespeicherten Inhalt, nicht zwingend genau das, was die Platine daraus macht.
+Ein vom Werkzeug erkanntes [[term:picture|Bild]] — JPEG, PNG, GIF oder BMP, im Padding, als Datenteil einer Raw-Section oder in einer Freeform-Section — erscheint als eigene Zeile; wird sie ausgewählt, zeichnet das Werkzeug das Bild unter den Details, ein animiertes GIF in Bewegung: höchstens so breit wie die Liste und nie größer als seine eigene Pixelgröße. Die Vorschau entsteht aus den Bytes des Dumps, wie sie vorliegen, und zwar mit dem Decoder von macOS, nicht mit dem der Firmware; sie zeigt daher den gespeicherten Inhalt, nicht zwingend genau das, was die Platine daraus macht.
 
 Ein feiner Rahmen zeigt, wo das Bild endet, damit ein weißes oder transparentes Logo nicht im Hintergrund des Panels verschwindet. Ein Klick auf das Bild wechselt den Hintergrund dahinter: der des Panels, ein Schachbrettmuster oder Schwarz (im dunklen Erscheinungsbild Weiß). Ein Bild mit Transparenz erscheint zunächst auf dem Schachbrett, eines ohne auf dem Hintergrund des Panels. In der [[topic:tools-overview|großen Ansicht der Details]], die die **Leertaste** auf der Zeile öffnet, erscheint das Bild größer, bis zu seiner eigenen Größe in Pixeln.
 

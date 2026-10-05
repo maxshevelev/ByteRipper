@@ -46,6 +46,26 @@ final class PictureDisplayTests: XCTestCase {
         XCTAssertEqual(UEFIPresenter.nodeOpen(for: node, in: image, body: false)?.suggestedName, "JPEG 2×1.jpg")
     }
 
+    /// An animated GIF says how many images it holds; a still one does not.
+    func testAnAnimationSaysHowManyFramesItHas() {
+        var gif = Array("GIF89a".utf8) + [2, 0, 1, 0, 0x80, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF]
+        for _ in 0..<3 {
+            gif += [0x21, 0xF9, 0x04, 0, 0x04, 0, 0, 0x00]
+            gif += [0x2C, 0, 0, 0, 0, 2, 0, 1, 0, 0, 0x02, 0x02, 0x44, 0x01, 0x00]
+        }
+        gif += [0x3B]
+        let picture = UEFINode(kind: .picture, subtype: Picture.Format.gif.rawValue, name: "GIF 2×1",
+                               header: 0..<0, body: 0..<UInt64(gif.count))
+        let image = UEFIImage(size: UInt64(gif.count), roots: [picture])
+        let detail = UEFIDetail.build(for: image.roots[0], image: image, reader: ImageReader(gif))
+        let fields = Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
+        XCTAssertEqual(fields["Frames"], "3")
+
+        let (still, reader) = built()
+        XCTAssertFalse(UEFIDetail.build(for: still.roots[0].children[0], image: still, reader: reader)
+            .fields.contains { $0.label == "Frames" })
+    }
+
     /// A BMP whose header asks for more than its section holds says so, and
     /// a BMP saves as one.
     func testABMPCutShortSaysSo() {

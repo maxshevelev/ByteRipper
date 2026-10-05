@@ -266,6 +266,28 @@ final class SectionParseTests: XCTestCase {
         XCTAssertNil(Sound.read(at: 0, limit: UInt64(noData.count), in: ImageReader(noData)))
     }
 
+    /// A freeform section's subtype GUID is its header's, as the reference
+    /// draws it, and its body a raw area: ASUS keeps each size of its animated
+    /// boot logo as a GIF there, and the GIF is a row of the section.
+    func testAFreeformSectionsBodyIsReadAsARawArea() throws {
+        let logo = KnownGUIDs.guid("7BB28B99-61BB-11D5-9A5D-0090273FC14D")
+        var extra = BinaryWriter()
+        extra.guid(logo)
+        let gif = PictureTests.gif(frames: 3)
+        let node = file([TestImage.section(type: Section.freeformSubtypeGUID, body: gif, extra: extra.bytes)])
+        let section = node.children[0]
+
+        XCTAssertEqual(section.guid, logo)
+        XCTAssertEqual(section.header, 0x60..<0x74, "four bytes and the subtype GUID")
+        XCTAssertEqual(section.children.map(\.name), ["GIF 10×4"])
+        XCTAssertEqual(section.children[0].range, 0x74..<(0x74 + UInt64(gif.count)))
+
+        // A body the scan finds nothing in leaves the section a leaf.
+        let plain = file([TestImage.section(type: Section.freeformSubtypeGUID, body: [UInt8](repeating: 0x5A, count: 32),
+                                            extra: extra.bytes)])
+        XCTAssertTrue(plain.children[0].children.isEmpty)
+    }
+
     /// FFSv3 puts a large section's size in a field of its own, and the header
     /// is four bytes longer for it (§6).
     func testAnExtendedSizeSectionHasALongerHeader() {

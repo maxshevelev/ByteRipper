@@ -66,7 +66,7 @@ On Insyde firmware the detail of the [[term:flash-device-map|flash device map]],
 
 ## Pictures
 
-A [[term:picture|picture]] the tool recognises — a JPEG, PNG, GIF or BMP, in padding or as the body of a raw section — is a row of its own, and selecting it draws the picture under its details: as wide as the list at most and never larger than its own size in pixels. The preview is drawn from the bytes in the dump as they are, by the decoder of macOS rather than the firmware's own, so it shows what is stored, not exactly how the board will draw it.
+A [[term:picture|picture]] the tool recognises — a JPEG, PNG, GIF or BMP, in padding, as the body of a raw section or in a freeform section — is a row of its own, and selecting it draws the picture under its details, an animated GIF in motion: as wide as the list at most and never larger than its own size in pixels. The preview is drawn from the bytes in the dump as they are, by the decoder of macOS rather than the firmware's own, so it shows what is stored, not exactly how the board will draw it.
 
 A thin frame marks where the picture ends, so a white or transparent logo does not disappear into the panel. A click on the picture changes what is behind it: the panel's own background, a checkerboard, or black (white with the dark appearance). A picture with transparency starts on the checkerboard, one without on the panel's background. In the [[topic:tools-overview|large view of the details]], which **Space** on the row opens, the picture is drawn larger, up to its own size in pixels.
 

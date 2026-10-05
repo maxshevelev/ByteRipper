@@ -81,17 +81,30 @@ final class PictureTests: XCTestCase {
         return bytes
     }
 
-    /// A GIF89a with a two-colour table, a graphic control extension, one
-    /// image of one sub-block, and the trailer.
-    static func gif(width: UInt16 = 10, height: UInt16 = 4, end: Bool = true) -> [UInt8] {
+    /// A GIF89a with a two-colour table, then `frames` times a graphic control
+    /// extension and an image of one sub-block, and the trailer.
+    static func gif(width: UInt16 = 10, height: UInt16 = 4, frames: Int = 1, end: Bool = true) -> [UInt8] {
         var bytes = Array("GIF89a".utf8)
         bytes += [UInt8(width & 0xFF), UInt8(width >> 8), UInt8(height & 0xFF), UInt8(height >> 8)]
         bytes += [0x80, 0, 0] + [0, 0, 0, 0xFF, 0xFF, 0xFF]
-        bytes += [0x21, 0xF9, 0x04, 0, 0, 0, 0, 0x00]
-        bytes += [0x2C, 0, 0, 0, 0, UInt8(width & 0xFF), UInt8(width >> 8), UInt8(height & 0xFF), UInt8(height >> 8), 0]
-        bytes += [0x02, 0x02, 0x44, 0x01, 0x00]
+        for _ in 0..<frames {
+            bytes += [0x21, 0xF9, 0x04, 0, 0x04, 0, 0, 0x00]
+            bytes += [0x2C, 0, 0, 0, 0, UInt8(width & 0xFF), UInt8(width >> 8), UInt8(height & 0xFF), UInt8(height >> 8), 0]
+            bytes += [0x02, 0x02, 0x44, 0x01, 0x00]
+        }
         if end { bytes += [0x3B] }
         return bytes
+    }
+
+    /// An animation is the same GIF with more images in it: read through all
+    /// of them, and counted — ASUS's boot logo has 34.
+    func testAnAnimatedGIFCountsItsFrames() {
+        let animated = Self.gif(frames: 34)
+        let picture = Picture.read(at: 0, limit: UInt64(animated.count), in: ImageReader(animated))
+        XCTAssertEqual(picture?.frames, 34)
+        XCTAssertEqual(picture?.range, 0..<UInt64(animated.count))
+        XCTAssertEqual(Picture.read(at: 0, limit: 0x100, in: ImageReader(Self.gif() + [UInt8](repeating: 0, count: 0x100)))?.frames, 1)
+        XCTAssertNil(Picture.read(at: 0, limit: 0x100, in: ImageReader(Self.png() + [UInt8](repeating: 0, count: 0x100)))?.frames)
     }
 
     /// An uncompressed 24-bit BMP, `width`×`height`, its rows padded to four

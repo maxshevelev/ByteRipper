@@ -192,9 +192,11 @@ Where the data turns out to be a picture — a JPEG boot logo, for example — i
 
 Most of a firmware's pictures are the body of a raw [[term:section|section]]: the boot logo, the vendor's splash, the icons of the setup screen, often inside a compressed volume. Some vendors keep the boot logo outside every volume, in [[term:padding|padding]]. The [[topic:tool-uefi|UEFI tool]] recognises all four formats in both places and shows each picture as a row of its own, named by its format and size in pixels, for example `BMP 300×300` or `JPEG 800×480`.
 
+ASUS keeps its animated boot logo, a GIF for each screen size, in a freeform section — after the 16-byte subtype GUID the section opens with, which the tool reads as the section's header, as UEFITool does, and the rest as a raw area.
+
 A picture is recognised by its opening bytes and taken only when its structure reads through to the end: a JPEG's segments to the end marker, a PNG's chunks to `IEND`, a GIF's blocks to the trailer, a BMP's header with the size it declares. That walk is also what gives its length, since none of the four states its length in one place.
 
-The details give the format — with `JFIF` or `Exif`, the GIF version or the BMP's bits per pixel — and the size in pixels, and draw the picture underneath. **Save … as…** offers a file with the format's own extension, which any image viewer opens.
+The details give the format — with `JFIF` or `Exif`, the GIF version or the BMP's bits per pixel — and the size in pixels, and draw the picture underneath. A GIF of more than one image is an animation: the details give its number of **Frames**, and the preview plays it. **Save … as…** offers a file with the format's own extension, which any image viewer opens.
 
 ! A BMP whose header declares more bytes than its section holds is shown as far as the section goes, and the details report the declared size as a problem: the rows past the end are missing from the image. One such logo was found in a Dell dump.
 

@@ -46,10 +46,13 @@ public struct Picture: Equatable, Sendable {
     /// A BMP that declares more bytes than the space holding it has. Its range
     /// is what there is; the bytes past it are missing from the image.
     public var declaredLength: UInt64?
+    /// How many images a GIF holds — more than one is an animation. Nil for
+    /// the other formats.
+    public var frames: Int?
 
     public init(
         format: Format, range: Range<UInt64>, variant: String? = nil,
-        width: UInt32, height: UInt32, declaredLength: UInt64? = nil
+        width: UInt32, height: UInt32, declaredLength: UInt64? = nil, frames: Int? = nil
     ) {
         self.format = format
         self.range = range
@@ -57,6 +60,7 @@ public struct Picture: Equatable, Sendable {
         self.width = width
         self.height = height
         self.declaredLength = declaredLength
+        self.frames = frames
     }
 
     /// The format and the size in pixels, the same in every language.
@@ -189,6 +193,7 @@ public struct Picture: Equatable, Sendable {
         let width = UInt32(littleEndian16(bytes, 6))
         let height = UInt32(littleEndian16(bytes, 8))
         var at = 13 + colourTable(bytes[10])
+        var frames = 0
 
         /// Steps over sub-blocks up to and past their terminating zero.
         func subBlocks() -> Bool {
@@ -205,7 +210,7 @@ public struct Picture: Equatable, Sendable {
             switch bytes[at] {
             case 0x3B:
                 return Picture(format: .gif, range: 0..<UInt64(at + 1), variant: String(decoding: bytes[3..<6], as: UTF8.self),
-                               width: width, height: height)
+                               width: width, height: height, frames: frames)
             case 0x21:
                 at += 2
                 guard subBlocks() else { return nil }
@@ -213,6 +218,7 @@ public struct Picture: Equatable, Sendable {
                 guard at + 10 < bytes.count else { return nil }
                 at += 10 + colourTable(bytes[at + 9]) + 1    // the LZW code size
                 guard subBlocks() else { return nil }
+                frames += 1
             default:
                 return nil
             }
