@@ -169,18 +169,18 @@ final class ToolPanelZoomTests: XCTestCase {
         let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
         let detail = try XCTUnwrap(splitter.panes.last)
         let labelled = try XCTUnwrap(
-            fields(under: detail).first { $0.stringValue == "Kind" },
+            descendants(of: detail, ToolFieldRow.self).first { $0.label == "Kind" },
             "the detail lists the node's fields"
         )
-        XCTAssertEqual(labelled.font?.pointSize, AppearanceSettings.fontSize)
+        XCTAssertEqual(labelled.nameFont?.pointSize, AppearanceSettings.fontSize)
 
         zoom(to: 20)
 
         let after = try XCTUnwrap(
-            fields(under: detail).first { $0.stringValue == "Kind" },
+            descendants(of: detail, ToolFieldRow.self).first { $0.label == "Kind" },
             "the same field is still listed after a zoom"
         )
-        XCTAssertEqual(after.font?.pointSize, 20, "a zoom reaches the detail's rows")
+        XCTAssertEqual(after.nameFont?.pointSize, 20, "a zoom reaches the detail's rows")
     }
 
     /// Every column of the tree can be dragged. `resizingMask` is what

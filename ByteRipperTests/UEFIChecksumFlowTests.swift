@@ -162,8 +162,7 @@ final class UEFIChecksumFlowTests: XCTestCase {
 
         // The volume is the one top-level row.
         try selectRow(0)
-        let text = descendants(of: try XCTUnwrap(controller?.tools.panel), NSTextField.self)
-            .map(\.stringValue)
+        let text = shownTexts(try XCTUnwrap(controller?.tools.panel))
         let invalid = text.first { $0.contains("(Invalid") }
         XCTAssertNotNil(invalid, "the volume's checksum reads as invalid: \(text)")
         XCTAssertTrue(invalid?.contains("should be 0x") ?? false,
@@ -206,7 +205,7 @@ final class UEFIChecksumFlowTests: XCTestCase {
         // very re-read its own write caused.
         try selectRow(0)
         let panel = try XCTUnwrap(controller.tools.panel)
-        let note = descendants(of: panel, NSTextField.self).map(\.stringValue)
+        let note = shownTexts(panel)
         XCTAssertTrue(note.contains { $0.contains("Checksum written") }, "\(note)")
         XCTAssertTrue(note.contains { $0.hasSuffix("(Valid)") }, "\(note)")
         XCTAssertFalse(note.contains { $0.contains("(Invalid") }, "\(note)")

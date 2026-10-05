@@ -1,4 +1,5 @@
 import Cocoa
+import ToolModuleKit
 import XCTest
 @testable import ByteRipper
 
@@ -84,6 +85,14 @@ extension XCTestCase {
             result.append(contentsOf: descendants(of: sub, type))
         }
         return result
+    }
+
+    /// The words shown below `view`: every text field's, and every detail
+    /// row's name and value — a detail list draws its rows itself rather than
+    /// in fields (`ToolFieldList`).
+    func shownTexts(_ view: NSView) -> [String] {
+        descendants(of: view, NSTextField.self).map(\.stringValue)
+            + descendants(of: view, ToolFieldRow.self).flatMap(\.texts)
     }
 
     /// The first view of type `T` below `view`, or a failure naming what was

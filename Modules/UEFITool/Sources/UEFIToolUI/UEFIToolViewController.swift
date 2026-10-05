@@ -915,36 +915,19 @@ import UEFITool
             detail.content.addArrangedSubview(title)
         }
 
-        for field in node.fields {
-            let label = NSTextField(labelWithString: field.label)
-            label.font = ToolPanelFont.body()
-            label.textColor = .secondaryLabelColor
-            label.translatesAutoresizingMaskIntoConstraints = false
-            label.widthAnchor.constraint(
-                equalToConstant: ToolPanelFont.detailLabelWidth
-            ).isActive = true
-
-            let value = ToolWrappingLabel(string: field.value)
-            // A value that carries a status is drawn the way the ME panel draws
-            // its own — bold, and in the tone's colour — so a checksum that does
-            // not check out reads here the way a "Configured" reads there.
-            field.tone.draw(value, value: field.value)
-            // Selectable, not a dead label: a bench copies an offset or a GUID
-            // out of here, and a value it cannot select is one it has to retype.
-            value.isSelectable = true
-
-            let row = NSStackView(views: [label, value])
-            row.orientation = .horizontal
-            row.alignment = .firstBaseline
-            row.spacing = 6
-            row.translatesAutoresizingMaskIntoConstraints = false
-            detail.content.addArrangedSubview(row)
-            // As wide as the list, so a value too long for the column — a
-            // GUID, a hash — wraps inside it instead of running off the side.
-            row.widthAnchor.constraint(
-                equalTo: detail.content.widthAnchor
-            ).isActive = true
-        }
+        // A view per field, its text selectable across the rows: a bench
+        // copies an offset or a GUID out of here, and a value it cannot select
+        // is one it has to retype. A value that carries a status is drawn the
+        // way the ME panel draws its own — bold, and in the tone's colour — so
+        // a checksum that does not check out reads here the way a "Configured"
+        // reads there.
+        let fields = ToolFieldList(fields: node.fields.map {
+            .init(label: $0.label, value: $0.tone.attributedValue($0.value))
+        })
+        detail.content.addArrangedSubview(fields)
+        // As wide as the list, so a value too long for the column — a GUID, a
+        // hash — wraps inside it instead of running off the side.
+        fields.widthAnchor.constraint(equalTo: detail.content.widthAnchor).isActive = true
 
         for table in node.tables { addTable(table) }
         if let picture = node.picture { addPicture(picture) }

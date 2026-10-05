@@ -72,9 +72,11 @@ import Localization
     /// detail of a row, and has no large view to open.
     private let expandButton = NSButton()
     /// The corner buttons' size, and their inset from the list's top and
-    /// trailing edges — inside the scroller's column.
-    private static let cornerButtonSize: CGFloat = 22
-    private static let cornerInset = (top: CGFloat(4), trailing: CGFloat(16))
+    /// trailing edges — close to the edge: an overlay scroller only shows
+    /// while the list scrolls, and a button kept clear of it stood off in
+    /// the middle of nothing.
+    private static let cornerButtonSize: CGFloat = 18
+    private static let cornerInset = (top: CGFloat(5), trailing: CGFloat(6))
 
     /// The expand button was clicked. Nil leaves the list without one.
     public var onExpand: (() -> Void)? {
@@ -133,7 +135,7 @@ import Localization
 
         termButton.image = NSImage(systemSymbolName: "questionmark.circle",
                                    accessibilityDescription: nil)
-        termButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 16,
+        termButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 13,
                                                                      weight: .regular)
         termButton.isBordered = false
         termButton.imagePosition = .imageOnly
@@ -265,7 +267,7 @@ import Localization
         var trailing = clip.maxX - Self.cornerInset.trailing
         for button in [expandButton, termButton] where !button.isHidden {
             button.frame = NSRect(x: trailing - size, y: y, width: size, height: size)
-            trailing -= size + 6
+            trailing -= size + 4
         }
     }
 
@@ -331,7 +333,7 @@ import Localization
     /// large view it always is, being the way out.
     private func updateExpandButton() {
         expandButton.isHidden = onExpand == nil || (!isExpanded && !placeholder.isHidden)
-        let symbol = isExpanded ? "xmark.circle" : "arrow.up.left.and.arrow.down.right.circle"
+        let symbol = isExpanded ? "xmark.circle" : "arrow.down.left.and.arrow.up.right"
         let name = isExpanded ? L("Close") : L("Expand")
         expandButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: name)
         placeCornerButtons()
