@@ -943,6 +943,65 @@ final class UEFIToolFlowTests: XCTestCase {
             "the chip symbol before the heading")
     }
 
+    /// A table's text is selected as a text view's is: a drag runs across
+    /// cells and into the next row, ⌘A takes the table, ⌘C copies it with a
+    /// tab between cells and a line per row, and the selection goes when the
+    /// focus does.
+    func testTheTextOfADetailTableIsSelected() throws {
+        let controller = try open(UEFITestImage.intelImage())
+        let outline = try outline()
+        let panel = try XCTUnwrap(controller.tools.panel)
+        _ = try expandRow(0)
+        let row = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { (try? node(atRow: $0).kind) == .flashDescriptor })
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+
+        let table = try XCTUnwrap(descendants(of: panel, DetailTableView.self).last, "the chips table")
+        let lines = table.rows.map { $0.texts.joined(separator: "\t") }
+        XCTAssertGreaterThanOrEqual(lines.count, 3, "a header and two chips")
+        XCTAssertTrue(window?.makeFirstResponder(table) ?? false, "the table takes the focus")
+
+        // From the start of the first chip to past the end of the second: both
+        // rows whole, a tab between their cells.
+        let first = table.rows[1].frame, second = table.rows[2].frame
+        let start = table.spot(at: NSPoint(x: 0, y: first.midY))
+        table.extend(start..<start, to: NSPoint(x: table.bounds.maxX + 50, y: second.midY))
+        XCTAssertEqual(table.selectedText, lines[1] + "\n" + lines[2])
+        XCTAssertNotNil(table.rows[1].selected, "the rows draw the band")
+        XCTAssertNil(table.rows[0].selected, "the header is outside it")
+
+        // Into the middle of a cell: the characters up to the pointer.
+        let cell = table.rows[1].texts[0] as NSString
+        table.extend(start..<start, to: NSPoint(x: 1, y: first.midY))
+        XCTAssertNil(table.selectedText, "a pixel in is still before the first character")
+        let halfway = table.spot(at: NSPoint(x: table.rows[1].naturalWidth(of: 0) / 2, y: first.midY))
+        XCTAssertEqual(halfway.mark.column, 0)
+        XCTAssertTrue((1..<cell.length).contains(halfway.mark.index), "halfway is inside the word: \(halfway)")
+        table.extend(start..<start, to: NSPoint(x: table.rows[1].naturalWidth(of: 0) / 2, y: first.midY))
+        XCTAssertEqual(table.selectedText, cell.substring(to: halfway.mark.index))
+
+        // ⌘A, then ⌘C: the whole table on the clipboard, before the Edit
+        // menu's Copy can copy bytes of the dump instead.
+        func command(_ key: String) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+                                           timestamp: 0, windowNumber: window?.windowNumber ?? 0,
+                                           context: nil, characters: key, charactersIgnoringModifiers: key,
+                                           isARepeat: false, keyCode: 0))
+        }
+        XCTAssertTrue(table.performKeyEquivalent(with: try command("a")))
+        XCTAssertEqual(table.selectedText, lines.joined(separator: "\n"))
+        NSPasteboard.general.clearContents()
+        XCTAssertTrue(table.performKeyEquivalent(with: try command("c")))
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), lines.joined(separator: "\n"))
+
+        // The focus back on the tree takes the selection with it.
+        window?.makeFirstResponder(outline)
+        XCTAssertNil(table.selection)
+        XCTAssertTrue(table.rows.allSatisfy { $0.selected == nil })
+        XCTAssertFalse(table.performKeyEquivalent(with: try command("c")), "⌘C is the dump's again")
+    }
+
     /// The strap words are folded under their heading until asked for: the
     /// triangle opens them, and they stay open on the next node and back.
     func testTheStrapTableStartsFolded() throws {

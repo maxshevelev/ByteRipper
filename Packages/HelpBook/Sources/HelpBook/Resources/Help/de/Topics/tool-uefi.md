@@ -1,4 +1,4 @@
-@source-sha 898e1d0fa1755577311ecc9a2e3761f9544f901e9f1c4e3a2d7b38604ae964b7
+@source-sha f110c0b1b69907c38ab60cf9e7402df91190c74a2947d08a297f2ab3e1516213
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -15,7 +15,7 @@ Die Zeile der **ME-Region** öffnet sich in dieselbe Analyse, die der [[topic:to
 
 **Die Schaltfläche in Form einer Zielscheibe im rechten Teil der Titelzeile** zeigt im Baum den Knoten unter der Einfügemarke im Dump — den Anfang einer Auswahl, wo es eine gibt. Sie öffnet die Zweige auf dem Weg; ein Zweig, der noch nicht decodiert ist, wird für die Anzeige decodiert, und die Anzeige kann so lange dauern wie das Lesen. Ausgewählt wird der innerste Knoten, dessen Bereich das Byte enthält. Ein Byte des ME-Regions wird in einer Zeile seines Unterbaums gezeigt; die Region wird für die Anzeige geöffnet, wenn sie noch nicht gelesen ist. Der Dump bewegt sich nicht: die Anzeige führt den Baum zum Byte, nicht das Byte zum Baum.
 
-Eine lange Tabelle in den Details — **PCH-Straps** in den Details des [[term:flash-descriptor|Flash Descriptors]] — ist zunächst unter ihrer Überschrift eingeklappt, damit der Rest der Details sichtbar bleibt. Ein Klick auf das Dreieck oder die Überschrift klappt sie auf; sie bleibt danach auch bei anderen Knoten aufgeklappt, bis das Programm beendet wird. In einer Tabelle führt nur ein Link weiter, und nur ein Klick auf den Link selbst; **Kopieren** im Kontextmenü einer Tabellenzeile kopiert die Zelle unter dem Zeiger.
+Eine lange Tabelle in den Details — **PCH-Straps** in den Details des [[term:flash-descriptor|Flash Descriptors]] — ist zunächst unter ihrer Überschrift eingeklappt, damit der Rest der Details sichtbar bleibt. Ein Klick auf das Dreieck oder die Überschrift klappt sie auf; sie bleibt danach auch bei anderen Knoten aufgeklappt, bis das Programm beendet wird. In einer Tabelle führt nur ein Link weiter, und nur ein Klick auf den Link selbst. Der Text einer Tabelle wird wie jeder Text markiert: durch Ziehen über Zellen und Zeilen, ein Wort per Doppelklick, eine Zeile per Dreifachklick, die ganze Tabelle mit ⌘A. ⌘C kopiert die Markierung mit einem Tabulator zwischen den Zellen und einer Zeile je Tabellenzeile, sodass eine Tabellenkalkulation sie als Tabelle übernimmt. **Kopieren** im Kontextmenü einer Tabellenzeile kopiert die Markierung oder, wenn nichts markiert ist, die Zelle unter dem Zeiger.
 
 ## Was das Werkzeug prüft
 

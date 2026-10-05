@@ -22,6 +22,12 @@ import UEFITool
 /// short values stays two columns side by side rather than one at either edge
 /// of the list. In a list narrower than that, the last column gives way: cut
 /// short, with the whole text under the pointer.
+///
+/// The text is selected the way a text view's is — a drag across cells and
+/// rows, a double click for a word, a triple click for a row, ⌘A for the
+/// table — and ⌘C copies it with a tab between cells and a line per row, which
+/// a spreadsheet takes as the table it was. The selection is the table's, not
+/// a row's, so that it can run from one row into the next.
 @MainActor final class DetailTableView: NSView {
     let table: UEFIDetailTable
     /// The header line, then one row per table row.
@@ -97,10 +103,125 @@ import UEFITool
 
     override func layout() {
         super.layout()
+        // A row takes the spacing under it, so that a selection running
+        // through several rows is one band rather than stripes.
         var y: CGFloat = 0
-        for row in rows {
-            row.frame = NSRect(x: 0, y: y, width: bounds.width, height: rowHeight)
-            y += rowHeight + Self.rowSpacing
+        for (index, row) in rows.enumerated() {
+            let spacing = index == rows.count - 1 ? 0 : Self.rowSpacing
+            row.frame = NSRect(x: 0, y: y, width: bounds.width, height: rowHeight + spacing)
+            y += rowHeight + spacing
+        }
+    }
+
+    // MARK: - Selecting text
+
+    /// A place between two characters of the table: a row, and a place in it.
+    struct Spot: Comparable {
+        var row: Int
+        var mark: DetailTableRow.Mark
+        static func < (a: Spot, b: Spot) -> Bool { (a.row, a.mark) < (b.row, b.mark) }
+    }
+
+    /// The selected text's ends. Nil when nothing is selected.
+    private(set) var selection: Range<Spot>?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func resignFirstResponder() -> Bool {
+        select(nil)
+        return true
+    }
+
+    /// A click beside a row's link lands here, passed up from the row: it
+    /// selects from where it fell to where the drag lets go.
+    override func mouseDown(with event: NSEvent) {
+        guard let window else { return }
+        window.makeFirstResponder(self)
+        let start = spot(at: convert(event.locationInWindow, from: nil))
+        let unit: Range<Spot>
+        switch event.clickCount {
+        case 1: unit = start..<start
+        case 2: unit = word(at: start)
+        default: unit = wholeRow(start.row)
+        }
+        select(unit)
+        while let next = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp]),
+              next.type == .leftMouseDragged {
+            autoscroll(with: next)
+            extend(unit, to: convert(next.locationInWindow, from: nil))
+        }
+    }
+
+    /// The selection from `unit` — the place, word or row the click took — to
+    /// the place under `point`.
+    func extend(_ unit: Range<Spot>, to point: NSPoint) {
+        let end = spot(at: point)
+        select(min(unit.lowerBound, end)..<max(unit.upperBound, end))
+    }
+
+    func select(_ range: Range<Spot>?) {
+        selection = range?.isEmpty == false ? range : nil
+        for index in rows.indices { rows[index].selected = span(of: index) }
+    }
+
+    /// The place under `point`: above the table its start, below it its end.
+    func spot(at point: NSPoint) -> Spot {
+        guard let last = rows.indices.last else { return Spot(row: 0, mark: .init(column: 0, index: 0)) }
+        guard point.y >= 0 else { return Spot(row: 0, mark: rows[0].start) }
+        let row = Int(point.y / (rowHeight + Self.rowSpacing))
+        guard row <= last else { return Spot(row: last, mark: rows[last].end) }
+        return Spot(row: row, mark: rows[row].mark(at: point.x))
+    }
+
+    private func word(at spot: Spot) -> Range<Spot> {
+        let marks = rows[spot.row].word(at: spot.mark)
+        return Spot(row: spot.row, mark: marks.lowerBound)..<Spot(row: spot.row, mark: marks.upperBound)
+    }
+
+    private func wholeRow(_ row: Int) -> Range<Spot> {
+        Spot(row: row, mark: rows[row].start)..<Spot(row: row, mark: rows[row].end)
+    }
+
+    /// The part of the selection in one row.
+    private func span(of row: Int) -> Range<DetailTableRow.Mark>? {
+        guard let selection, (selection.lowerBound.row...selection.upperBound.row).contains(row)
+        else { return nil }
+        let start = selection.lowerBound.row == row ? selection.lowerBound.mark : rows[row].start
+        let end = selection.upperBound.row == row ? selection.upperBound.mark : rows[row].end
+        return start < end ? start..<end : nil
+    }
+
+    /// What is selected, a tab between cells and a line per row.
+    var selectedText: String? {
+        guard let selection else { return nil }
+        let lines = (selection.lowerBound.row...selection.upperBound.row).compactMap { row in
+            span(of: row).map { rows[row].text(in: $0) }
+        }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    @objc func copy(_ sender: Any?) {
+        guard let text = selectedText else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    override func selectAll(_ sender: Any?) {
+        guard let first = rows.indices.first, let last = rows.indices.last else { return }
+        select(Spot(row: first, mark: rows[first].start)..<Spot(row: last, mark: rows[last].end))
+    }
+
+    /// ⌘C and ⌘A while the table has the focus. The Edit menu's own Copy and
+    /// Select All are the dump's — they copy and select bytes — so the table
+    /// answers these keys before the menu is asked.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard window?.firstResponder === self,
+              event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
+        else { return super.performKeyEquivalent(with: event) }
+        switch event.charactersIgnoringModifiers {
+        case "c" where selection != nil: copy(nil); return true
+        case "a": selectAll(nil); return true
+        default: return super.performKeyEquivalent(with: event)
         }
     }
 }
@@ -110,13 +231,26 @@ import UEFITool
 ///
 /// The link is the row's one live zone: a click on the link cell's text
 /// follows it, under a pointing hand and with what it does under the pointer;
-/// a click anywhere else on the row is a click on text. A right click copies
-/// the cell under the pointer, which is what a selectable field used to give.
+/// a click anywhere else on the row selects text, which the table does. A
+/// right click copies the selection, or with none, the cell under the pointer.
 @MainActor final class DetailTableRow: NSView {
     struct Cell {
         var text: String
         var font: NSFont
         var color: NSColor
+    }
+
+    /// A place between two characters of the row: a column, and a UTF-16
+    /// offset into that cell's text.
+    struct Mark: Comparable {
+        var column: Int
+        var index: Int
+        static func < (a: Mark, b: Mark) -> Bool { (a.column, a.index) < (b.column, b.index) }
+    }
+
+    /// The part of the table's selection in this row.
+    var selected: Range<Mark>? {
+        didSet { if selected != oldValue { needsDisplay = true } }
     }
 
     let cells: [Cell]
@@ -148,7 +282,7 @@ import UEFITool
 
     func naturalWidth(of column: Int) -> CGFloat {
         guard column < cells.count else { return 0 }
-        return ceil(string(column).size().width)
+        return ceil(strings[column].size().width)
     }
 
     func setColumns(offsets: [CGFloat], widths: [CGFloat]) {
@@ -157,13 +291,22 @@ import UEFITool
         needsDisplay = true
     }
 
-    private func string(_ column: Int) -> NSAttributedString {
-        let cell = cells[column]
+    private lazy var strings: [NSAttributedString] = cells.map { cell in
         let style = NSMutableParagraphStyle()
         style.lineBreakMode = .byTruncatingTail
         return NSAttributedString(string: cell.text, attributes: [
             .font: cell.font, .foregroundColor: cell.color, .paragraphStyle: style,
         ])
+    }
+
+    /// The cells set as lines, which say where each character falls.
+    private lazy var lines: [CTLine] = strings.map { CTLineCreateWithAttributedString($0) }
+
+    private func length(_ column: Int) -> Int { (cells[column].text as NSString).length }
+
+    /// Where the character at `index` of a cell starts, from the cell's left.
+    private func offset(_ column: Int, _ index: Int) -> CGFloat {
+        CTLineGetOffsetForStringIndex(lines[column], index, nil)
     }
 
     /// Where a cell is drawn: its column, the last one cut at the row's edge.
@@ -189,11 +332,73 @@ import UEFITool
     }
 
     override func draw(_ dirtyRect: NSRect) {
+        drawSelection()
         for column in cells.indices {
             let cellRect = rect(of: column)
             guard cellRect.width > 0, cellRect.intersects(dirtyRect) else { continue }
-            string(column).draw(with: cellRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+            strings[column].draw(with: cellRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
         }
+    }
+
+    /// The selection's band: through the gap after a cell when it runs on
+    /// into the next one, as a text view's runs through a tab.
+    private func drawSelection() {
+        guard let selected, !cells.isEmpty else { return }
+        NSColor.selectedTextBackgroundColor.setFill()
+        let last = min(selected.upperBound.column, cells.count - 1)
+        for column in selected.lowerBound.column...last {
+            let cellRect = rect(of: column)
+            let from = column == selected.lowerBound.column ? selected.lowerBound.index : 0
+            let x0 = cellRect.minX + offset(column, from)
+            let x1: CGFloat
+            if column < last, column + 1 < offsets.count {
+                x1 = offsets[column + 1]
+            } else {
+                let to = column == selected.upperBound.column ? selected.upperBound.index : length(column)
+                x1 = min(cellRect.minX + offset(column, to), cellRect.maxX)
+            }
+            if x1 > x0 { NSRect(x: x0, y: 0, width: x1 - x0, height: bounds.height).fill() }
+        }
+    }
+
+    // MARK: - Places in the text
+
+    var start: Mark { Mark(column: 0, index: 0) }
+
+    var end: Mark {
+        cells.isEmpty ? start : Mark(column: cells.count - 1, index: length(cells.count - 1))
+    }
+
+    /// The place nearest `x`: in the cell it falls on, or at the end of the
+    /// cell whose gap it falls in.
+    func mark(at x: CGFloat) -> Mark {
+        guard !cells.isEmpty, !offsets.isEmpty else { return start }
+        let column = cells.indices.last { $0 < offsets.count && x >= offsets[$0] } ?? 0
+        let local = x - offsets[column]
+        guard local > 0 else { return Mark(column: column, index: 0) }
+        guard local < naturalWidth(of: column) else { return Mark(column: column, index: length(column)) }
+        let index = CTLineGetStringIndexForPosition(lines[column], CGPoint(x: local, y: 0))
+        return Mark(column: column, index: index == kCFNotFound ? 0 : min(max(0, index), length(column)))
+    }
+
+    /// The word around `mark`, within its cell.
+    func word(at mark: Mark) -> Range<Mark> {
+        let count = length(mark.column)
+        guard count > 0 else { return mark..<mark }
+        let word = strings[mark.column].doubleClick(at: min(mark.index, count - 1))
+        return Mark(column: mark.column, index: word.lowerBound)..<Mark(column: mark.column, index: word.upperBound)
+    }
+
+    /// The text between two places, a tab between cells.
+    func text(in range: Range<Mark>) -> String {
+        let last = min(range.upperBound.column, cells.count - 1)
+        guard range.lowerBound.column <= last else { return "" }
+        return (range.lowerBound.column...last).map { column in
+            let text = cells[column].text as NSString
+            let from = column == range.lowerBound.column ? range.lowerBound.index : 0
+            let to = column == range.upperBound.column ? range.upperBound.index : text.length
+            return text.substring(with: NSRange(location: from, length: max(0, to - from)))
+        }.joined(separator: "\t")
     }
 
     // MARK: - The link
@@ -211,8 +416,14 @@ import UEFITool
         return true
     }
 
+    /// A pointing hand over the link, a text cursor over the rest of the row.
     override func resetCursorRects() {
-        if let zone = linkZone { addCursorRect(zone, cursor: .pointingHand) }
+        guard let zone = linkZone else { return addCursorRect(bounds, cursor: .iBeam) }
+        addCursorRect(zone, cursor: .pointingHand)
+        addCursorRect(NSRect(x: bounds.minX, y: 0, width: zone.minX - bounds.minX, height: bounds.height),
+                      cursor: .iBeam)
+        addCursorRect(NSRect(x: zone.maxX, y: 0, width: bounds.maxX - zone.maxX, height: bounds.height),
+                      cursor: .iBeam)
     }
 
     override func layout() {
@@ -242,12 +453,18 @@ import UEFITool
     // help: panel.uefi.table-copy
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)
-        guard let column = cells.indices.first(where: { rect(of: $0).insetBy(dx: -7, dy: 0).contains(point) })
-        else { return nil }
+        let text: String
+        if let selection = (superview as? DetailTableView)?.selectedText {
+            text = selection
+        } else if let column = cells.indices.first(where: { rect(of: $0).insetBy(dx: -7, dy: 0).contains(point) }) {
+            text = cells[column].text
+        } else {
+            return nil
+        }
         let menu = NSMenu()
         let item = NSMenuItem(title: L("Copy"), action: #selector(copyCell(_:)), keyEquivalent: "")
         item.target = self
-        item.representedObject = cells[column].text
+        item.representedObject = text
         menu.addItem(item)
         return menu
     }
