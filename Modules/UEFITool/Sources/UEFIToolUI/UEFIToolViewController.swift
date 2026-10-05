@@ -110,9 +110,26 @@ import UEFITool
     /// stays open through a re-render, and folded again only at the next
     /// launch.
     private var unfoldedTables: Set<String> = []
-    /// The folding tables on screen: each one's disclosure button and the
-    /// grid it shows or hides, by title.
-    private var tableFolds: [String: (button: NSButton, grid: NSView)] = [:]
+    /// The folding tables on screen, by title.
+    private var tableFolds: [String: TableFold] = [:]
+
+    /// A folding table on screen: its heading and triangle, what it lists,
+    /// and its grid once built. A folded table's grid is not built until it
+    /// is first opened: a descriptor's strap words are some three hundred
+    /// cells, and building and laying them out was most of the quarter of a
+    /// second a click on the descriptor took — for a grid nobody saw.
+    private final class TableFold {
+        let button: NSButton
+        let heading: NSView
+        let table: UEFIDetailTable
+        var grid: NSView?
+
+        init(button: NSButton, heading: NSView, table: UEFIDetailTable) {
+            self.button = button
+            self.heading = heading
+            self.table = table
+        }
+    }
     /// The glossary entry the detail list's `?` opens, kept beside the detail
     /// itself so a re-render at a new type size keeps the button.
     private var detailTerm: HelpTermID?
@@ -970,9 +987,10 @@ import UEFITool
         ])
     }
 
-    /// A table block under the rows: an icon and a heading, a header line, and
-    /// the cells. Laid out as a grid so the columns line up whatever is in
-    /// them, rather than as fixed-width text pretending to be a table.
+    /// A table block under the rows: an icon and a heading, then the table —
+    /// a header line and a view per row, its columns lined up whatever is in
+    /// them rather than fixed-width text pretending to be a table
+    /// (`DetailTableView`).
     private func addTable(_ table: UEFIDetailTable) {
         let icon = NSImageView()
         icon.image = NSImage(systemSymbolName: table.symbol,
@@ -993,8 +1011,9 @@ import UEFITool
         heading.spacing = 5
         heading.translatesAutoresizingMaskIntoConstraints = false
 
-        // A table that folds wears a disclosure triangle before its icon, and
-        // its whole heading is the switch: the triangle is a small target.
+        // A table that folds wears a disclosure triangle after its heading's
+        // words, and the icon and the words are the switch too: the triangle
+        // is a small target.
         var disclosure: NSButton?
         if table.startsFolded {
             // help: panel.uefi.folding-table
@@ -1005,7 +1024,7 @@ import UEFITool
             button.identifier = NSUserInterfaceItemIdentifier(table.title)
             ControlHelp.describe(button, name: table.title, tooltip: L("Show or hide the table"))
             button.translatesAutoresizingMaskIntoConstraints = false
-            heading.insertArrangedSubview(button, at: 0)
+            heading.addArrangedSubview(button)
             heading.alignment = .centerY
             // On the icon and the words, not the whole heading: a recogniser
             // there would see the triangle's own click too, and fold the
@@ -1026,80 +1045,35 @@ import UEFITool
         detail.content.addArrangedSubview(heading)
         detail.content.setCustomSpacing(8, after: heading)
 
-        let grid = NSGridView(numberOfColumns: table.columns.count, rows: 0)
-        grid.rowSpacing = 2
-        grid.columnSpacing = 14
-        // A table is as wide as what is in it. Left to the list's width, the
-        // columns take the slack and a two-column table of short values ends up
-        // with its second column against the far edge, which reads as two
-        // unrelated columns rather than as a table.
-        grid.xPlacement = .leading
-        grid.setContentHuggingPriority(.required, for: .horizontal)
-        grid.translatesAutoresizingMaskIntoConstraints = false
+        guard let disclosure else {
+            install(makeGrid(table), after: heading)
+            return
+        }
+        let fold = TableFold(button: disclosure, heading: heading, table: table)
+        tableFolds[table.title] = fold
+        if disclosure.state == .on {
+            fold.grid = makeGrid(table)
+            install(fold.grid!, after: heading)
+        }
+    }
 
-        // In a list narrower than the table, the last column gives way — cut
-        // short, with the whole text on hover — and every other keeps its
-        // width: a column of numbers squeezed to one letter says nothing.
-        let last = table.columns.count - 1
-        func fitted(_ field: NSTextField, column: Int) -> NSTextField {
-            if column == last {
-                field.lineBreakMode = .byTruncatingTail
-                field.setContentCompressionResistancePriority(.defaultHigh - 10, for: .horizontal)
-                field.toolTip = field.stringValue
-            } else {
-                field.setContentCompressionResistancePriority(.required, for: .horizontal)
-            }
-            return field
-        }
-        grid.addRow(with: table.columns.enumerated().map { index, column in
-            let cell = NSTextField(labelWithString: column)
-            cell.font = ToolPanelFont.body()
-            cell.textColor = .secondaryLabelColor
-            return fitted(cell, column: index)
-        })
-        for (rowIndex, row) in table.rows.enumerated() {
-            let target = rowIndex < table.rowTargets.count ? table.rowTargets[rowIndex] : nil
-            grid.addRow(with: row.enumerated().map { index, cell in
-                let field = fitted(NSTextField(labelWithString: cell.text), column: index)
-                // A row that stands for something is a way to it: a click on
-                // any of its cells goes there. Its address reads as a link,
-                // the one cue a grid of text can give.
-                if let target {
-                    let click = NodeClick(target: self, action: #selector(tableRowClicked(_:)))
-                    click.rowTarget = target
-                    field.addGestureRecognizer(click)
-                    if index == table.linkColumn { field.textColor = .linkColor }
-                    switch target {
-                    case .node: field.toolTip = field.toolTip ?? L("Show this copy")
-                    case .range: field.toolTip = field.toolTip ?? L("Show this region in the dump")
-                    }
-                }
-                // A permission is read by its colour as much as by its word,
-                // which is the whole point of drawing this as a table: a column
-                // of green with one red in it answers at a glance.
-                switch cell.tone {
-                case .plain: field.font = ToolPanelFont.body()
-                case .yes:
-                    field.font = ToolPanelFont.body(weight: .semibold)
-                    field.textColor = SemanticColors.good
-                case .no:
-                    field.font = ToolPanelFont.body(weight: .semibold)
-                    field.textColor = SemanticColors.bad
-                }
-                field.isSelectable = target == nil
-                return field
-            })
-        }
-        detail.content.addArrangedSubview(grid)
+    /// `grid` in the list right under `heading`, kept inside the list's width.
+    private func install(_ grid: NSView, after heading: NSView) {
+        let list = detail.content
+        let index = (list.arrangedSubviews.firstIndex(of: heading) ?? list.arrangedSubviews.count - 1) + 1
+        list.insertArrangedSubview(grid, at: index)
+        list.setCustomSpacing(8, after: heading)
+        // A table under it is as clear of this one as of any other.
+        if index + 1 < list.arrangedSubviews.count { list.setCustomSpacing(12, after: grid) }
         // Inside the list, never past it: a table wider than the panel is
         // clipped at the edge rather than drawn over the dump.
-        grid.trailingAnchor.constraint(
-            lessThanOrEqualTo: detail.content.trailingAnchor
-        ).isActive = true
-        if let disclosure {
-            grid.isHidden = disclosure.state == .off
-            tableFolds[table.title] = (disclosure, grid)
-        }
+        grid.trailingAnchor.constraint(lessThanOrEqualTo: list.trailingAnchor).isActive = true
+    }
+
+    /// The table's header line and rows, one view per row
+    /// (`DetailTableView`); a row's link leads where its target says.
+    private func makeGrid(_ table: UEFIDetailTable) -> NSView {
+        DetailTableView(table: table) { [weak self] target in self?.follow(target) }
     }
 
     @objc private func tableFoldClicked(_ sender: NSButton) {
@@ -1112,13 +1086,25 @@ import UEFITool
         setTable(title, unfolded: !unfoldedTables.contains(title))
     }
 
-    /// Opens or folds a folding table in place: its grid shown or hidden,
-    /// nothing else rebuilt.
+    /// Opens or folds a folding table in place: its grid built the first
+    /// time it is opened, shown or hidden after that; nothing else rebuilt.
     private func setTable(_ title: String, unfolded: Bool) {
         if unfolded { unfoldedTables.insert(title) } else { unfoldedTables.remove(title) }
         guard let fold = tableFolds[title] else { return }
         fold.button.state = unfolded ? .on : .off
-        fold.grid.isHidden = !unfolded
+        if unfolded, fold.grid == nil {
+            let grid = makeGrid(fold.table)
+            fold.grid = grid
+            install(grid, after: fold.heading)
+        }
+        fold.grid?.isHidden = !unfolded
+        // Folded, the heading is the table's last line, and what follows it
+        // keeps the gap a table keeps from the next.
+        let list = detail.content
+        if let index = list.arrangedSubviews.firstIndex(of: fold.heading),
+           list.arrangedSubviews.dropFirst(index + 1).contains(where: { $0 !== fold.grid }) {
+            list.setCustomSpacing(unfolded ? 8 : 12, after: fold.heading)
+        }
     }
 
     /// The title names the image, not a row; the module decides what the fold
@@ -1682,14 +1668,14 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
 
     // help: panel.uefi.variable-history
     // help: panel.uefi.map-regions
-    @objc private func tableRowClicked(_ click: NodeClick) {
+    /// A table row's link was clicked: where it leads.
+    private func follow(_ target: UEFIDetailTable.Target) {
         // A link followed from the large view closes it first: where it goes
         // is the dump or the tree, and the card would stand in front of both.
         detailPane.closeQuickLook()
-        switch click.rowTarget {
+        switch target {
         case .node(let node): onSelect?(node)
         case .range(let range, let name): onOutlineRange?(range, name)
-        case nil: break
         }
     }
 
@@ -1913,9 +1899,4 @@ private final class UEFIOutlineView: NSOutlineView {
         else { return }
         onRowReclick?(clickedRow)
     }
-}
-
-/// A click on a detail table's row, carrying what the row stands for.
-private final class NodeClick: NSClickGestureRecognizer {
-    var rowTarget: UEFIDetailTable.Target?
 }

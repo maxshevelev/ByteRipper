@@ -1,4 +1,4 @@
-@source-sha 39efbf2653327757bec263774df76864bd25da73ce6bd2a5441d89a8fbca12a5
+@source-sha 898e1d0fa1755577311ecc9a2e3761f9544f901e9f1c4e3a2d7b38604ae964b7
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -15,7 +15,7 @@ Die Zeile der **ME-Region** öffnet sich in dieselbe Analyse, die der [[topic:to
 
 **Die Schaltfläche in Form einer Zielscheibe im rechten Teil der Titelzeile** zeigt im Baum den Knoten unter der Einfügemarke im Dump — den Anfang einer Auswahl, wo es eine gibt. Sie öffnet die Zweige auf dem Weg; ein Zweig, der noch nicht decodiert ist, wird für die Anzeige decodiert, und die Anzeige kann so lange dauern wie das Lesen. Ausgewählt wird der innerste Knoten, dessen Bereich das Byte enthält. Ein Byte des ME-Regions wird in einer Zeile seines Unterbaums gezeigt; die Region wird für die Anzeige geöffnet, wenn sie noch nicht gelesen ist. Der Dump bewegt sich nicht: die Anzeige führt den Baum zum Byte, nicht das Byte zum Baum.
 
-Eine lange Tabelle in den Details — **PCH-Straps** in den Details des [[term:flash-descriptor|Flash Descriptors]] — ist zunächst unter ihrer Überschrift eingeklappt, damit der Rest der Details sichtbar bleibt. Ein Klick auf das Dreieck oder die Überschrift klappt sie auf; sie bleibt danach auch bei anderen Knoten aufgeklappt, bis das Programm beendet wird.
+Eine lange Tabelle in den Details — **PCH-Straps** in den Details des [[term:flash-descriptor|Flash Descriptors]] — ist zunächst unter ihrer Überschrift eingeklappt, damit der Rest der Details sichtbar bleibt. Ein Klick auf das Dreieck oder die Überschrift klappt sie auf; sie bleibt danach auch bei anderen Knoten aufgeklappt, bis das Programm beendet wird. In einer Tabelle führt nur ein Link weiter, und nur ein Klick auf den Link selbst; **Kopieren** im Kontextmenü einer Tabellenzeile kopiert die Zelle unter dem Zeiger.
 
 ## Was das Werkzeug prüft
 
@@ -42,11 +42,11 @@ Die Zeile einer [[term:vss|VSS]]-, [[term:nvar|NVAR]]- oder [[term:dvar|DVAR]]-V
 
 ## Variablenkopien
 
-[[term:vss|VSS]], [[term:nvar|NVAR]] und [[term:dvar|DVAR]] — die [[term:nvram|NVRAM]]-Formate, deren Einträge der Baum zu je einer Zeile pro Variable zusammenfasst — behalten die früheren Kopien einer Variable, bis die Firmware den Speicher bereinigt; auf einem Board, das eine Variable bei jedem Start schreibt, machen sie den größten Teil der Zeilen aus. Die Zeile ist die aktuelle Kopie der Variable oder, für eine Variable, die der Speicher nicht mehr enthält, die Kopie, als die sie gelöscht wurde —, solange im selben Menü **Ersetzte Einträge anzeigen** nicht abgehakt ist. Die übrigen Kopien stehen unter **Verlauf der Variable** in den Details dieser Zeile; ein Klick auf eine Kopie zeigt ihre eigenen Details und ihre Bytes im Dump, und im Baum bleibt die Zeile der geltenden Kopie ausgewählt. Dasselbe geschieht, wenn der Cursor im Dump in einer Kopie steht, die der Baum weglässt, und sie im Baum angezeigt wird.
+[[term:vss|VSS]], [[term:nvar|NVAR]] und [[term:dvar|DVAR]] — die [[term:nvram|NVRAM]]-Formate, deren Einträge der Baum zu je einer Zeile pro Variable zusammenfasst — behalten die früheren Kopien einer Variable, bis die Firmware den Speicher bereinigt; auf einem Board, das eine Variable bei jedem Start schreibt, machen sie den größten Teil der Zeilen aus. Die Zeile ist die aktuelle Kopie der Variable oder, für eine Variable, die der Speicher nicht mehr enthält, die Kopie, als die sie gelöscht wurde —, solange im selben Menü **Ersetzte Einträge anzeigen** nicht abgehakt ist. Die übrigen Kopien stehen unter **Verlauf der Variable** in den Details dieser Zeile; ein Klick auf die Adresse einer Kopie zeigt ihre eigenen Details und ihre Bytes im Dump, und im Baum bleibt die Zeile der geltenden Kopie ausgewählt. Dasselbe geschieht, wenn der Cursor im Dump in einer Kopie steht, die der Baum weglässt, und sie im Baum angezeigt wird.
 
 ## Regionen einer Insyde-Map
 
-Bei Insyde-Firmware enthalten die Details der [[term:flash-device-map|Flash Device Map]] und jedes ihrer Einträge die Tabelle **Regionen der Flash Device Map** mit den Regionen, die die Map nennt. Der Anfang einer Region, die im Dump liegt, ist ein Link: Ein Klick auf ihre Zeile umrandet die Region im Dump, beschriftet sie mit ihrem Typ und bringt sie ins Bild. Das gilt auch für Regionen, die der Baum nicht als eigene Zeile zeigt, weil sie mehrere Knoten umfassen oder innerhalb eines Knotens liegen. Baum und Details bleiben bei der Map; die Auswahl eines anderen Knotens ersetzt die Umrandung. Ebenso verlinkt die Tabelle **Bereiche in $BME$** in den Details der [[term:bvdt|BIOS Version Data Table]] ihre Bereiche.
+Bei Insyde-Firmware enthalten die Details der [[term:flash-device-map|Flash Device Map]] und jedes ihrer Einträge die Tabelle **Regionen der Flash Device Map** mit den Regionen, die die Map nennt. Der Anfang einer Region, die im Dump liegt, ist ein Link: Ein Klick darauf umrandet die Region im Dump, beschriftet sie mit ihrem Typ und bringt sie ins Bild. Das gilt auch für Regionen, die der Baum nicht als eigene Zeile zeigt, weil sie mehrere Knoten umfassen oder innerhalb eines Knotens liegen. Baum und Details bleiben bei der Map; die Auswahl eines anderen Knotens ersetzt die Umrandung. Ebenso verlinkt die Tabelle **Bereiche in $BME$** in den Details der [[term:bvdt|BIOS Version Data Table]] ihre Bereiche.
 
 ## Bilder
 

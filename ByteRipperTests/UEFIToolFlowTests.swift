@@ -911,27 +911,29 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertTrue(text.contains("Region access settings"), "\(text)")
         XCTAssertTrue(text.contains("BIOS access table"), "\(text)")
         XCTAssertTrue(text.contains("Flash chips in VSCC table"), "\(text)")
-        XCTAssertTrue(text.contains("Winbond W25Q256"), "a chip the catalogue names: \(text)")
-        XCTAssertTrue(text.contains("Unknown"), "and one it does not: \(text)")
 
-        // A grid per table, and the permissions in the BIOS access one are
-        // coloured: the BIOS master reads its own region and the ME one, and
-        // writes neither.
-        let grids = descendants(of: panel, NSGridView.self)
-        XCTAssertEqual(grids.count, 4, "one grid per table")
+        // A table per heading, one view per row, and the permissions in the
+        // BIOS access one are coloured: the BIOS master reads its own region
+        // and the ME one, and writes neither.
+        let tables = descendants(of: panel, DetailTableView.self)
+        XCTAssertEqual(tables.count, 4, "one table per heading")
+        let chips = try XCTUnwrap(tables.last)
+        let chipTexts = chips.rows.flatMap(\.texts)
+        XCTAssertTrue(chipTexts.contains("Winbond W25Q256"), "a chip the catalogue names: \(chipTexts)")
+        XCTAssertTrue(chipTexts.contains("Unknown"), "and one it does not: \(chipTexts)")
+        XCTAssertEqual(chips.subviews.count, chips.rows.count, "nothing but a view per row")
         // A table is as wide as what is in it, not as wide as the panel: the
         // chips' two columns belong side by side, not one at either edge.
-        let chips = try XCTUnwrap(grids.last)
         XCTAssertLessThan(chips.frame.width, panel.bounds.width - 60,
                           "the chips table is not stretched across the list")
-        let cells = descendants(of: try XCTUnwrap(grids.dropFirst(2).first), NSTextField.self)
-        let yes = cells.filter { $0.stringValue == "Yes" }
-        let no = cells.filter { $0.stringValue == "No" }
+        let cells = try XCTUnwrap(tables.dropFirst(2).first).rows.dropFirst().flatMap(\.cells)
+        let yes = cells.filter { $0.text == "Yes" }
+        let no = cells.filter { $0.text == "No" }
         XCTAssertEqual(yes.count, 3, "Desc: no, BIOS: read+write, ME: read")
         XCTAssertFalse(no.isEmpty)
-        XCTAssertTrue(yes.allSatisfy { $0.textColor == SemanticColors.good },
+        XCTAssertTrue(yes.allSatisfy { $0.color == SemanticColors.good },
                       "a permission is the app's green, the one \"Configured\" is drawn in")
-        XCTAssertTrue(no.allSatisfy { $0.textColor == SemanticColors.bad }, "a refusal is red")
+        XCTAssertTrue(no.allSatisfy { $0.color == SemanticColors.bad }, "a refusal is red")
 
         // And the chips table is led by an icon, as its heading says it is.
         XCTAssertTrue(
@@ -956,8 +958,8 @@ final class UEFIToolFlowTests: XCTestCase {
         window?.layoutIfNeeded()
 
         func strapsShown() -> Bool {
-            descendants(of: panel, NSTextField.self)
-                .contains { $0.stringValue == "PCHSTRP0" && !$0.isHiddenOrHasHiddenAncestor }
+            descendants(of: panel, DetailTableRow.self)
+                .contains { $0.texts.first == "PCHSTRP0" && !$0.isHiddenOrHasHiddenAncestor }
         }
         func disclosure() throws -> NSButton {
             try XCTUnwrap(descendants(of: panel, NSButton.self)
@@ -997,14 +999,19 @@ final class UEFIToolFlowTests: XCTestCase {
         let standing = try XCTUnwrap((0..<outline.numberOfRows).first { (try? node(atRow: $0).header.lowerBound) == 0x131 })
         outline.selectRowIndexes(IndexSet(integer: standing), byExtendingSelection: false)
         window?.layoutIfNeeded()
-        let links = descendants(of: panel, NSTextField.self).filter { $0.textColor == .linkColor }
-        XCTAssertEqual(links.map(\.stringValue), ["0x109", "0x121", "0x131"], "the history's copies, oldest first")
+        let links = descendants(of: panel, DetailTableRow.self).filter { $0.target != nil }
+        XCTAssertEqual(links.compactMap { row in row.linkColumn.map { row.texts[$0] } },
+                       ["0x109", "0x121", "0x131"], "the history's copies, oldest first")
 
-        // A click on the first copy: its detail, and the standing row stays.
-        let click = try XCTUnwrap(links.first?.gestureRecognizers.first as? NSClickGestureRecognizer)
-        _ = click.target?.perform(click.action, with: click)
+        // A click beside the link is a click on text; one on the link, in the
+        // first copy's row, shows its detail, and the standing row stays.
+        let first = try XCTUnwrap(links.first)
+        let zone = try XCTUnwrap(first.linkZone)
+        XCTAssertFalse(first.follow(at: NSPoint(x: first.bounds.maxX - 1, y: zone.midY)),
+                       "only the link's own zone leads anywhere")
+        XCTAssertTrue(first.follow(at: NSPoint(x: zone.midX, y: zone.midY)))
         window?.layoutIfNeeded()
-        let shown = descendants(of: panel, NSTextField.self).map(\.stringValue)
+        let shown = descendants(of: panel, DetailTableRow.self).flatMap(\.texts)
         XCTAssertTrue(shown.contains("▸ 1"), "the clicked copy is the one in focus: \(shown)")
         XCTAssertEqual(outline.selectedRow, standing)
 
@@ -1012,14 +1019,14 @@ final class UEFIToolFlowTests: XCTestCase {
         let pane = try XCTUnwrap(descendants(of: panel, ToolDetailPane.self).first)
         XCTAssertTrue(pane.showQuickLook())
         let card = try XCTUnwrap(pane.quickLookCardForTesting)
-        let cardLink = try XCTUnwrap(descendants(of: card, NSTextField.self)
-            .first { $0.textColor == .linkColor && $0.stringValue == "0x121" })
-        let cardClick = try XCTUnwrap(cardLink.gestureRecognizers.first as? NSClickGestureRecognizer)
-        _ = cardClick.target?.perform(cardClick.action, with: cardClick)
+        let cardLink = try XCTUnwrap(descendants(of: card, DetailTableRow.self)
+            .first { row in row.target != nil && row.linkColumn.map { row.texts[$0] } == "0x121" })
+        let cardZone = try XCTUnwrap(cardLink.linkZone)
+        XCTAssertTrue(cardLink.follow(at: NSPoint(x: cardZone.midX, y: cardZone.midY)))
         XCTAssertFalse(pane.isQuickLookShown, "a followed link closes the large view")
         pane.finishTransitionForTesting()
         window?.layoutIfNeeded()
-        let followed = descendants(of: panel, NSTextField.self).map(\.stringValue)
+        let followed = descendants(of: panel, DetailTableRow.self).flatMap(\.texts)
         XCTAssertTrue(followed.contains("▸ 2"), "and the link was followed: \(followed)")
         XCTAssertEqual(outline.selectedRow, standing)
 
