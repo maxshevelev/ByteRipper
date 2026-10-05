@@ -5,7 +5,6 @@ import FITToolUI
 import ToolModuleKit
 import UEFIImage
 import UEFITool
-import QuickLookUI
 @testable import UEFIToolUI
 import MEFirmware
 @testable import ByteRipper
@@ -848,7 +847,7 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertFalse(splitter.isVertical,
                        "the panes are stacked — the tree above, the detail below")
         let outline = try XCTUnwrap(splitter.panes.first, "the upper pane is the tree")
-        let detail = try XCTUnwrap(splitter.panes.last as? NSScrollView,
+        let detail = try XCTUnwrap(splitter.panes.last as? ToolDetailPane,
                                    "the lower pane is the detail")
 
         XCTAssertGreaterThan(detail.frame.height, 60,
@@ -971,6 +970,21 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertTrue(shown.contains("▸ 1"), "the clicked copy is the one in focus: \(shown)")
         XCTAssertEqual(outline.selectedRow, standing)
 
+        // The same link in the large view closes it, and goes where it points.
+        let pane = try XCTUnwrap(descendants(of: panel, ToolDetailPane.self).first)
+        XCTAssertTrue(pane.showQuickLook())
+        let card = try XCTUnwrap(pane.quickLookCardForTesting)
+        let cardLink = try XCTUnwrap(descendants(of: card, NSTextField.self)
+            .first { $0.textColor == .linkColor && $0.stringValue == "0x121" })
+        let cardClick = try XCTUnwrap(cardLink.gestureRecognizers.first as? NSClickGestureRecognizer)
+        _ = cardClick.target?.perform(cardClick.action, with: cardClick)
+        XCTAssertFalse(pane.isQuickLookShown, "a followed link closes the large view")
+        pane.finishFadeForTesting()
+        window?.layoutIfNeeded()
+        let followed = descendants(of: panel, NSTextField.self).map(\.stringValue)
+        XCTAssertTrue(followed.contains("▸ 2"), "and the link was followed: \(followed)")
+        XCTAssertEqual(outline.selectedRow, standing)
+
         let menu = try XCTUnwrap(filterButton(in: panel).menu)
         let item = try XCTUnwrap(menu.items.firstIndex { $0.title == "Show Superseded Entries" })
         menu.performActionForItem(at: item)
@@ -1088,26 +1102,26 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(view.background, .checkerboard)
     }
 
-    /// Space on a picture's row opens Quick Look on a file holding the
-    /// picture's bytes, named for its format; Space again closes it, and the
-    /// file goes with it.
-    func testSpaceShowsThePictureInQuickLook() throws {
-        let picture = try jpeg(width: 40, height: 20)
-        _ = try preview(of: picture)
+    /// Space on a row opens its detail — the picture with it — in the large
+    /// view over the window: the panel's own list, moved into the card, not a
+    /// copy. Space again puts it back in its pane.
+    func testSpaceShowsTheDetailInTheLargeView() throws {
+        let picture = try preview(of: try jpeg(width: 40, height: 20))
         let panel = try XCTUnwrap(controller?.tools.panel)
         let controller = try XCTUnwrap(sequence(first: panel as NSResponder, next: { $0.nextResponder })
             .compactMap { $0 as? UEFIToolViewController }.first ?? descendants(of: panel, NSView.self)
             .lazy.compactMap { $0.nextResponder as? UEFIToolViewController }.first)
+        let pane = controller.detailPane
 
-        XCTAssertTrue(controller.toggleQuickLook(), "the key is taken")
-        let file = try XCTUnwrap(controller.quickLookFile)
-        XCTAssertEqual(file.pathExtension, "jpg")
-        XCTAssertEqual(try Data(contentsOf: file), Data(picture))
+        XCTAssertTrue(pane.toggleQuickLook(), "the key is taken")
+        let card = try XCTUnwrap(pane.quickLookCardForTesting)
+        XCTAssertTrue(card.window === panel.window, "over the panel's own window")
+        XCTAssertTrue(picture.isDescendant(of: card), "the picture is in the card")
 
-        XCTAssertTrue(pumpUntil(2) { QLPreviewPanel.shared()?.isVisible == true }, "Quick Look is up")
-        XCTAssertTrue(controller.toggleQuickLook())
-        XCTAssertTrue(pumpUntil(2) { QLPreviewPanel.shared()?.isVisible == false }, "and closes")
-        XCTAssertTrue(pumpUntil(2) { !FileManager.default.fileExists(atPath: file.path) }, "the file is gone")
+        XCTAssertTrue(pane.toggleQuickLook())
+        pane.finishFadeForTesting()
+        XCTAssertNil(pane.quickLookCardForTesting)
+        XCTAssertTrue(picture.isDescendant(of: pane), "and back in its pane")
     }
 
     // MARK: - A node opened as a panel (Design/FRAGMENT_PANELS_PLAN.md)

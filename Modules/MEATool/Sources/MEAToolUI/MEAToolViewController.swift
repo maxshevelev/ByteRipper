@@ -73,7 +73,9 @@ import ToolModuleKit
     private let treePane = NSView()
     let legend = ToolRowMarksLegend(panel: "MEAnalyzer", marks: MEATreeMarks.legendMarks)
     private static let rowViewIdentifier = NSUserInterfaceItemIdentifier("meaRow")
-    private let detail = ToolDetailScroll()
+    /// The detail list in its pane, and the large view Space opens it into.
+    let detailPane = ToolDetailPane()
+    private var detail: ToolDetailScroll { detailPane.detail }
     private let summaryScroll = ToolDetailScroll()
     private let splitter = ALSplitView()
     private let noticeLabel = NSTextField(labelWithString: "")
@@ -170,7 +172,8 @@ import ToolModuleKit
         legend.install(below: outlineScroll, in: treePane)
         legend.onShowMarkingsChanged = { [weak self] _ in self?.updateRowMarks() }
         splitter.addPane(treePane)
-        splitter.addPane(detail)
+        splitter.addPane(detailPane)
+        detailPane.attach(to: outline)
         splitter.setPaneLayout(.fill, at: 0)
         splitter.setPaneLayout(.proportional(1.0 / 3), at: 1)
 

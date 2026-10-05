@@ -1,4 +1,4 @@
-@source-sha ae0eee950c8ba27e7d0ef66590cdac40461717545dec7b0aba3aedeb00c5b3cc
+@source-sha d473095395f199be7eb97e75ae35924f06c1d3195410aa6ec92e314a7df7d6cc
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -50,6 +50,6 @@ Bei Insyde-Firmware enthalten die Details der [[term:flash-device-map|Flash Devi
 
 Ein vom Werkzeug erkanntes [[term:picture|Bild]] — JPEG, PNG, GIF oder BMP, im Padding oder als Datenteil einer Raw-Section — erscheint als eigene Zeile; wird sie ausgewählt, zeichnet das Werkzeug das Bild unter den Details: höchstens so breit wie die Liste und nie größer als seine eigene Pixelgröße. Die Vorschau entsteht aus den Bytes des Dumps, wie sie vorliegen, und zwar mit dem Decoder von macOS, nicht mit dem der Firmware; sie zeigt daher den gespeicherten Inhalt, nicht zwingend genau das, was die Platine daraus macht.
 
-Ein feiner Rahmen zeigt, wo das Bild endet, damit ein weißes oder transparentes Logo nicht im Hintergrund des Panels verschwindet. Ein Klick auf das Bild wechselt den Hintergrund dahinter: der des Panels, ein Schachbrettmuster oder Schwarz (im dunklen Erscheinungsbild Weiß). Ein Bild mit Transparenz erscheint zunächst auf dem Schachbrett, eines ohne auf dem Hintergrund des Panels. Die **Leertaste** in der Zeile des Bildes zeigt es in der Übersicht (Quick Look) wie im Finder, ein zweites Drücken schließt sie; solange sie offen ist, folgt sie der Auswahl.
+Ein feiner Rahmen zeigt, wo das Bild endet, damit ein weißes oder transparentes Logo nicht im Hintergrund des Panels verschwindet. Ein Klick auf das Bild wechselt den Hintergrund dahinter: der des Panels, ein Schachbrettmuster oder Schwarz (im dunklen Erscheinungsbild Weiß). Ein Bild mit Transparenz erscheint zunächst auf dem Schachbrett, eines ohne auf dem Hintergrund des Panels. In der [[topic:tools-overview|großen Ansicht der Details]], die die **Leertaste** auf der Zeile öffnet, erscheint das Bild größer, bis zu seiner eigenen Größe in Pixeln.
 
 Siehe auch: [[topic:tool-fit|FIT-Tabelle]], [[term:vss|NVRAM-Speicher]], [[topic:recipe-checksums|Prüfsummen]].

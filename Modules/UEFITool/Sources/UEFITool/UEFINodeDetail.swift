@@ -109,18 +109,13 @@ public struct UEFINodeDetail: Equatable, Sendable {
     /// rows — nil for every node that is not one. Decoding them is the
     /// panel's: this target has no AppKit.
     public var picture: [UInt8]?
-    /// What a file of the picture's format is called — `png`, `jpg` — for
-    /// Quick Look, which reads a picture from a file and goes by its name.
-    public var pictureFileExtension: String?
 
     public init(title: String, fields: [UEFIDetailField],
-                tables: [UEFIDetailTable] = [], picture: [UInt8]? = nil,
-                pictureFileExtension: String? = nil) {
+                tables: [UEFIDetailTable] = [], picture: [UInt8]? = nil) {
         self.title = title
         self.fields = fields
         self.tables = tables
         self.picture = picture
-        self.pictureFileExtension = pictureFileExtension
     }
 
     public static let empty = UEFINodeDetail(title: "", fields: [])
@@ -313,10 +308,7 @@ public enum UEFIDetail {
         // A picture is shown as well as described. Only one the parser
         // recognised and measured: its bytes are exactly the picture's.
         let picture = node.kind == .picture ? reader.bytes(node.body) : nil
-        let fileExtension = picture == nil ? nil
-            : node.subtype.flatMap(Picture.Format.init(rawValue:))?.fileExtension ?? "bin"
-        return UEFINodeDetail(title: title, fields: fields, tables: tables, picture: picture,
-                              pictureFileExtension: fileExtension)
+        return UEFINodeDetail(title: title, fields: fields, tables: tables, picture: picture)
     }
 
     // MARK: - A Dell DVAR entry

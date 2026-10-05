@@ -949,6 +949,10 @@
 "Warning" = "Предупреждение";
 "What ByteRipper is for" = "Для чего нужен ByteRipper";
 "What is %1$@?" = "Что такое %1$@?";
+"Expand" = "Развернуть";
+"Show the details in a large view (Space)" = "Открыть детали в увеличенном виде (Пробел)";
+"Close the large view (Space or Esc)" = "Закрыть увеличенный вид (Пробел или Esc)";
+"Details" = "Детали";
 "What's new in version %1$@" = "Что нового в версии %1$@";
 "What's new in the new version %1$@" = "Что нового в новой версии %1$@";
 "Where This Knowledge Comes From" = "Откуда взяты эти знания";

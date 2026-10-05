@@ -65,6 +65,27 @@ import Localization
     /// The entry the `?` opens. Nil while it is hidden.
     private var term: HelpTermID?
 
+    /// The button at the very corner, beside the `?`: open the list in the
+    /// large view (`ToolDetailPane`), or close it again from there. A list
+    /// nobody hands an `onExpand` carries none — the ME Summary is not the
+    /// detail of a row, and has no large view to open.
+    private let expandButton = NSButton()
+    /// The `?` and the expand button, side by side in the corner. A stack, so
+    /// the `?` moves into the corner when the expand button is hidden rather
+    /// than leaving a gap where it was.
+    private let cornerButtons = NSStackView()
+
+    /// The expand button was clicked. Nil leaves the list without one.
+    public var onExpand: (() -> Void)? {
+        didSet { updateExpandButton() }
+    }
+
+    /// Whether the list is the large view's rather than its panel's: the
+    /// corner button then closes it rather than opening it.
+    public var isExpanded = false {
+        didSet { updateExpandButton() }
+    }
+
     /// What the rows on screen describe, so a refill can tell a different
     /// subject from the same one re-read. Nil while the placeholder is up.
     private var shownSubject: String?
@@ -121,7 +142,25 @@ import Localization
         termButton.isHidden = true
         termButton.translatesAutoresizingMaskIntoConstraints = false
         termButton.setContentCompressionResistancePriority(.required, for: .horizontal)
-        document.addSubview(termButton)
+
+        // help: panel.detail-quick-look
+        expandButton.symbolConfiguration = termButton.symbolConfiguration
+        expandButton.isBordered = false
+        expandButton.imagePosition = .imageOnly
+        expandButton.contentTintColor = .secondaryLabelColor
+        expandButton.target = self
+        expandButton.action = #selector(expandClicked)
+        expandButton.translatesAutoresizingMaskIntoConstraints = false
+        expandButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        cornerButtons.orientation = .horizontal
+        cornerButtons.alignment = .centerY
+        cornerButtons.spacing = 4
+        cornerButtons.translatesAutoresizingMaskIntoConstraints = false
+        cornerButtons.addArrangedSubview(termButton)
+        cornerButtons.addArrangedSubview(expandButton)
+        document.addSubview(cornerButtons)
+        updateExpandButton()
 
         // The document is only ever as tall as it has to be: at least the
         // visible height, so the placeholder is centred in what the user can
@@ -149,10 +188,10 @@ import Localization
         // rows came to run edge to edge (measured: 0 points either side).
         sideInsets.forEach { $0.priority = .defaultHigh + 1 }
 
-        // The `?`'s own inset, breakable for the reason every side inset here
-        // is: a list squeezed to nothing cannot hold it, and a required one
-        // there is a constraint AppKit strikes out for good.
-        let termTrailing = termButton.trailingAnchor.constraint(
+        // The corner's own inset, breakable for the reason every side inset
+        // here is: a list squeezed to nothing cannot hold it, and a required
+        // one there is a constraint AppKit strikes out for good.
+        let termTrailing = cornerButtons.trailingAnchor.constraint(
             equalTo: document.trailingAnchor, constant: -16
         )
         termTrailing.priority = .defaultHigh
@@ -206,11 +245,13 @@ import Localization
 
             // Level with the first row — the node's name — and inside the
             // scroller's column. Only its leading edge is bounded, so a long
-            // name pushes nothing: the name truncates, the button stays.
-            termButton.topAnchor.constraint(equalTo: document.topAnchor, constant: 6),
+            // name pushes nothing: the name truncates, the buttons stay.
+            cornerButtons.topAnchor.constraint(equalTo: document.topAnchor, constant: 6),
             termButton.widthAnchor.constraint(equalToConstant: 16),
             termButton.heightAnchor.constraint(equalToConstant: 16),
-            termButton.leadingAnchor.constraint(greaterThanOrEqualTo: document.leadingAnchor),
+            expandButton.widthAnchor.constraint(equalToConstant: 16),
+            expandButton.heightAnchor.constraint(equalToConstant: 16),
+            cornerButtons.leadingAnchor.constraint(greaterThanOrEqualTo: document.leadingAnchor),
         ] + placeholderInsets + [termTrailing])
 
         zoomObserver = ToolPanelFont.observeZoom { [weak self] in
@@ -278,13 +319,38 @@ import Localization
         HelpTermPopover.show(term, from: termButton)
     }
 
+    @objc private func expandClicked() {
+        onExpand?()
+    }
+
+    /// The corner button as the state asks: an expand glyph in the panel, a
+    /// close glyph in the large view. In the panel it is there only while
+    /// there are rows — a placeholder has nothing to show larger; in the
+    /// large view it always is, being the way out.
+    private func updateExpandButton() {
+        expandButton.isHidden = onExpand == nil || (!isExpanded && !placeholder.isHidden)
+        let symbol = isExpanded ? "xmark.circle" : "arrow.up.left.and.arrow.down.right.circle"
+        let name = isExpanded ? L("Close") : L("Expand")
+        expandButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: name)
+        ControlHelp.describe(expandButton, name: name, tooltip: isExpanded
+            ? L("Close the large view (Space or Esc)")
+            : L("Show the details in a large view (Space)"))
+    }
+
+    /// The corner's expand-or-close button, for the tests. Nil while hidden.
+    public var expandButtonForTesting: NSButton? { expandButton.isHidden ? nil : expandButton }
+
     /// Empties the rows and shows `text` in their place.
     public func showPlaceholder(_ text: String) {
         content.arrangedSubviews.forEach { $0.removeFromSuperview() }
         placeholder.stringValue = text
         placeholder.isHidden = false
         shownSubject = nil
+        updateExpandButton()
     }
+
+    /// Whether rows are on screen rather than the placeholder.
+    public var hasRows: Bool { placeholder.isHidden }
 
     /// Empties the rows and hides the placeholder, ready to be refilled with
     /// the rows describing `subject` — a row's index, a node's path, whatever
@@ -300,6 +366,7 @@ import Localization
     public func prepareForRows(subject: String) {
         content.arrangedSubviews.forEach { $0.removeFromSuperview() }
         placeholder.isHidden = true
+        updateExpandButton()
         guard subject != shownSubject else { return }
         shownSubject = subject
         documentView?.scroll(.zero)

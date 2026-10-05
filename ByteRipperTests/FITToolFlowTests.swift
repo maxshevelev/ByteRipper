@@ -343,7 +343,7 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertFalse(splitter.isVertical,
                        "the panes are stacked — the table above, the detail below")
         let entries = try XCTUnwrap(splitter.panes.first, "the upper pane is the table")
-        let detail = try XCTUnwrap(splitter.panes.last as? NSScrollView,
+        let detail = try XCTUnwrap(splitter.panes.last as? ToolDetailPane,
                                    "the lower pane is the detail")
 
         XCTAssertGreaterThan(detail.frame.height, 60,

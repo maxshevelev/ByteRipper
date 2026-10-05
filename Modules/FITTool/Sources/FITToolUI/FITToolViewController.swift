@@ -53,7 +53,9 @@ import ToolModuleKit
     private let entriesPane = NSView()
     let legend = ToolRowMarksLegend(panel: "FIT", marks: FITRowMarks.legendMarks)
     private static let rowViewIdentifier = NSUserInterfaceItemIdentifier("fitRow")
-    private let detail = ToolDetailScroll()
+    /// The detail list in its pane, and the large view Space opens it into.
+    let detailPane = ToolDetailPane()
+    private var detail: ToolDetailScroll { detailPane.detail }
     private let splitter = ALSplitView()
     private let summaryLabel = NSTextField(labelWithString: "")
     private let noticeLabel = NSTextField(labelWithString: "")
@@ -204,7 +206,8 @@ import ToolModuleKit
         legend.install(below: entriesScroll, in: entriesPane)
         legend.onShowMarkingsChanged = { [weak self] _ in self?.updateRowMarks() }
         splitter.addPane(entriesPane)
-        splitter.addPane(detail)
+        splitter.addPane(detailPane)
+        detailPane.attach(to: entries)
         splitter.setPaneLayout(.fill, at: 0)
         splitter.setPaneLayout(.proportional(1.0 / 3), at: 1)
 

@@ -1,4 +1,4 @@
-@source-sha a2b4850d68fb305994945dedf836b49d18432bf30a03347a65f89934d5b651d6
+@source-sha f4981f5a7e2419aa56a9bccc61eea99e824263dde69205f5aeaff9ca6fe69001
 # Die Werkzeugbereiche
 
 > Werkzeuge, die den geöffneten Dump decodieren und melden, welche Strukturen er enthält.
@@ -18,6 +18,7 @@ Die Werkzeuge haben die Tasten **⌘1**, **⌘2**, **⌘3** in der Reihenfolge d
 - **Einen Knoten auszuwählen zeigt seine Bytes.** Ein Klick auf eine Zeile scrollt den Dump zu den Bytes, für die sie steht, und umrandet sie als **Zone**; damit ist der Name im Bereich mit einer Adresse in der Hex-Ansicht verbunden.
 - **Unsicherheit wird gemeldet.** Ein Feld, das nicht dokumentiert ist, behält seinen Rohwert und wird als unbekannt bezeichnet, statt einen sicher klingenden Namen zu bekommen. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
 - **Die Zeilenmarkierungen** — die Balken, Abzeichen und Warnzeichen — erklärt der Streifen **Legende** unter der Tabelle jedes Bereichs.
+- **Die Details lassen sich groß anzeigen.** Die **Leertaste** auf der ausgewählten Zeile oder die Schaltfläche zum Vergrößern oben rechts in den Details unter der Tabelle öffnet dieselben Details in einer großen Ansicht in der Mitte des Fensters. Dort steht an ihrer Stelle eine Schaltfläche zum Schließen; ebenso schließen die **Leertaste**, **Esc** und ein Klick außerhalb der Ansicht sie, und ein Klick auf einen Link darin schließt sie und folgt dem Link. Solange sie offen ist, bewegen die Pfeiltasten weiterhin die Auswahl in der Tabelle, und die Ansicht zeigt die Details der ausgewählten Zeile.
 
 ## Einen Teil entnehmen
 
