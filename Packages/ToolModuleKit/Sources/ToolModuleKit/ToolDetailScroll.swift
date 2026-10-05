@@ -41,23 +41,24 @@ import Localization
     /// which both panels put at the top of the list, because that name is what
     /// it explains.
     ///
-    /// A subview of the **document**, laid out by constraints like everything
-    /// else in it. Two other homes were tried, and both fail quietly rather
-    /// than loudly:
+    /// A subview of the **scroll view**, placed by frame in `tile()` — so it
+    /// stays in the corner while the rows scroll under it. Three other homes
+    /// were tried, and the first two fail quietly rather than loudly:
     ///
-    /// - A plain subview of the scroll view is **never laid out** — a scroll
-    ///   view positions its own subviews and solves no constraints for one of
-    ///   them. It sat at zero size in a corner nobody asked for.
+    /// - A subview of the scroll view laid out by **constraints** is never
+    ///   laid out — a scroll view positions its own subviews and solves no
+    ///   constraints for one of them. It sat at zero size in a corner nobody
+    ///   asked for. A frame set in `tile()`, which is where the scroll view
+    ///   places its own clip view and scrollers, is one it keeps.
     /// - `addFloatingSubview(_:for:)`, the documented way to keep a control
     ///   over scrolling content, draws it correctly and then leaves it out of
     ///   the accessibility tree and out of the view's own `subviews`
     ///   (measured: a walk of the running window found no such button while it
     ///   was on screen). A control VoiceOver cannot reach is not a control
     ///   (§15).
-    ///
-    /// So it scrolls with the rows, which costs nothing: it is pinned level
-    /// with the name it explains, and a reader scrolled past that name is no
-    /// longer looking at the thing the button is about.
+    /// - A subview of the **document** works, and scrolls away with the rows:
+    ///   a reader part-way down a descriptor's straps had to scroll back up to
+    ///   ask what they were reading or to open it larger.
     ///
     /// Hidden until a panel names a term, so a row the glossary has nothing to
     /// say about carries no button at all.
@@ -70,10 +71,10 @@ import Localization
     /// nobody hands an `onExpand` carries none — the ME Summary is not the
     /// detail of a row, and has no large view to open.
     private let expandButton = NSButton()
-    /// The `?` and the expand button, side by side in the corner. A stack, so
-    /// the `?` moves into the corner when the expand button is hidden rather
-    /// than leaving a gap where it was.
-    private let cornerButtons = NSStackView()
+    /// The corner buttons' size, and their inset from the list's top and
+    /// trailing edges — inside the scroller's column.
+    private static let cornerButtonSize: CGFloat = 22
+    private static let cornerInset = (top: CGFloat(4), trailing: CGFloat(16))
 
     /// The expand button was clicked. Nil leaves the list without one.
     public var onExpand: (() -> Void)? {
@@ -132,7 +133,7 @@ import Localization
 
         termButton.image = NSImage(systemSymbolName: "questionmark.circle",
                                    accessibilityDescription: nil)
-        termButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 12,
+        termButton.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 16,
                                                                      weight: .regular)
         termButton.isBordered = false
         termButton.imagePosition = .imageOnly
@@ -140,8 +141,6 @@ import Localization
         termButton.target = self
         termButton.action = #selector(termClicked)
         termButton.isHidden = true
-        termButton.translatesAutoresizingMaskIntoConstraints = false
-        termButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         // help: panel.detail-quick-look
         expandButton.symbolConfiguration = termButton.symbolConfiguration
@@ -150,16 +149,14 @@ import Localization
         expandButton.contentTintColor = .secondaryLabelColor
         expandButton.target = self
         expandButton.action = #selector(expandClicked)
-        expandButton.translatesAutoresizingMaskIntoConstraints = false
-        expandButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
-        cornerButtons.orientation = .horizontal
-        cornerButtons.alignment = .centerY
-        cornerButtons.spacing = 4
-        cornerButtons.translatesAutoresizingMaskIntoConstraints = false
-        cornerButtons.addArrangedSubview(termButton)
-        cornerButtons.addArrangedSubview(expandButton)
-        document.addSubview(cornerButtons)
+        // Over the clip view, not in it: added after it, placed by frame in
+        // `tile()`.
+        for button in [termButton, expandButton] {
+            button.translatesAutoresizingMaskIntoConstraints = true
+            button.autoresizingMask = []
+            addSubview(button)
+        }
         updateExpandButton()
 
         // The document is only ever as tall as it has to be: at least the
@@ -187,14 +184,6 @@ import Localization
         // free to settle against the margins — which is how the ME Summary's
         // rows came to run edge to edge (measured: 0 points either side).
         sideInsets.forEach { $0.priority = .defaultHigh + 1 }
-
-        // The corner's own inset, breakable for the reason every side inset
-        // here is: a list squeezed to nothing cannot hold it, and a required
-        // one there is a constraint AppKit strikes out for good.
-        let termTrailing = cornerButtons.trailingAnchor.constraint(
-            equalTo: document.trailingAnchor, constant: -16
-        )
-        termTrailing.priority = .defaultHigh
 
         // The placeholder's own margins, breakable for the same reason: it
         // cannot be kept 10 points clear of both edges of a list that is not
@@ -242,17 +231,7 @@ import Localization
 
             placeholder.centerXAnchor.constraint(equalTo: document.centerXAnchor),
             placeholder.centerYAnchor.constraint(equalTo: document.centerYAnchor),
-
-            // Level with the first row — the node's name — and inside the
-            // scroller's column. Only its leading edge is bounded, so a long
-            // name pushes nothing: the name truncates, the buttons stay.
-            cornerButtons.topAnchor.constraint(equalTo: document.topAnchor, constant: 6),
-            termButton.widthAnchor.constraint(equalToConstant: 16),
-            termButton.heightAnchor.constraint(equalToConstant: 16),
-            expandButton.widthAnchor.constraint(equalToConstant: 16),
-            expandButton.heightAnchor.constraint(equalToConstant: 16),
-            cornerButtons.leadingAnchor.constraint(greaterThanOrEqualTo: document.leadingAnchor),
-        ] + placeholderInsets + [termTrailing])
+        ] + placeholderInsets)
 
         zoomObserver = ToolPanelFont.observeZoom { [weak self] in
             self?.placeholder.font = ToolPanelFont.body()
@@ -265,6 +244,28 @@ import Localization
     deinit {
         if let zoomObserver {
             NotificationCenter.default.removeObserver(zoomObserver)
+        }
+    }
+
+    public override func tile() {
+        super.tile()
+        placeCornerButtons()
+    }
+
+    /// The buttons in the visible area's top trailing corner, level with the
+    /// first row — the node's name — while the list is at its top: the
+    /// expand button at the very corner, the `?` beside it, or in its place
+    /// when it is hidden. Nothing pushes them, so a long name truncates
+    /// under them rather than moving them.
+    private func placeCornerButtons() {
+        let clip = contentView.frame
+        let size = Self.cornerButtonSize
+        let y = isFlipped ? clip.minY + Self.cornerInset.top
+                          : clip.maxY - Self.cornerInset.top - size
+        var trailing = clip.maxX - Self.cornerInset.trailing
+        for button in [expandButton, termButton] where !button.isHidden {
+            button.frame = NSRect(x: trailing - size, y: y, width: size, height: size)
+            trailing -= size + 6
         }
     }
 
@@ -283,6 +284,7 @@ import Localization
         let known = id.flatMap { HelpPresenter.hasTerm($0) ? $0 : nil }
         term = known
         termButton.isHidden = known == nil
+        placeCornerButtons()
         if let known, let name = HelpPresenter.book.term(known)?.name {
             ControlHelp.describe(termButton, L("What is %1$@?", name))
         }
@@ -332,6 +334,7 @@ import Localization
         let symbol = isExpanded ? "xmark.circle" : "arrow.up.left.and.arrow.down.right.circle"
         let name = isExpanded ? L("Close") : L("Expand")
         expandButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: name)
+        placeCornerButtons()
         ControlHelp.describe(expandButton, name: name, tooltip: isExpanded
             ? L("Close the large view (Space or Esc)")
             : L("Show the details in a large view (Space)"))

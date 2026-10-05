@@ -18,9 +18,9 @@ import Localization
 /// the card is out — the table above takes the whole height, which is what a
 /// reader looking at the card and moving through the rows wants — and the
 /// card's flight runs on the splitter's own animation clock, so the two move
-/// as one rather than as two animations drifting apart. The card is three
-/// quarters of the window wide and stands to the right, clear of the
-/// window's top, bottom and right edges by a narrow margin, leaving the
+/// as one rather than as two animations drifting apart. The card is two
+/// thirds of the window wide and stands to the right, clear of the window's
+/// top, bottom and right edges by a margin, leaving the
 /// panel's table in view on its left; it is not dimmed around, so the dump
 /// and the table stay readable beside it.
 ///
@@ -64,10 +64,10 @@ import Localization
     /// How long the card takes to fly out or back.
     static let flight: TimeInterval = 0.25
     /// The card's margin to the window's top, bottom and right edges.
-    static let margin: CGFloat = 10
+    static let margin: CGFloat = 30
     /// How much of the window's width the card takes. What is left lies on
     /// its left, so the panel's table stays in view.
-    static let widthShare: CGFloat = 0.75
+    static let widthShare: CGFloat = 2.0 / 3
 
     /// Whether the large view is open.
     public private(set) var isQuickLookShown = false
@@ -75,7 +75,7 @@ import Localization
     public init() {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        place(detail, in: self)
+        Self.place(detail, in: self)
         detail.onExpand = { [weak self] in self?.toggleQuickLook() }
     }
 
@@ -183,9 +183,11 @@ import Localization
         cardIsResting = false
         guard let card else { return }
         self.card = nil
-        card.removeFromSuperview()
+        // The list home before the card goes: taken away holding it, the
+        // card would take the list out of the window with it.
         detail.borderType = .bezelBorder
-        place(detail, in: self)
+        Self.place(detail, in: self)
+        card.removeFromSuperview()
         // Now, not on the next pass: the card has just landed on the pane,
         // and a pane drawn empty for one frame is the gap a reader sees.
         layoutSubtreeIfNeeded()
@@ -200,8 +202,8 @@ import Localization
         card.frame = target
     }
 
-    /// Where the card stands once it has landed: three quarters of the
-    /// window's width, a narrow margin from its top, bottom and right edges,
+    /// Where the card stands once it has landed: two thirds of the window's
+    /// width, a margin from its top, bottom and right edges,
     /// and the rest of the width clear on its left for the table.
     private func restingFrame(in host: NSView) -> NSRect {
         let bounds = host.bounds
@@ -310,8 +312,14 @@ import Localization
     }
 
     /// Pins `view` to every edge of `container`, moving it there first.
-    private func place(_ view: NSView, in container: NSView) {
-        view.removeFromSuperview()
+    ///
+    /// Moved by `addSubview` alone, never `removeFromSuperview` first: taken
+    /// out, the list leaves the window for a moment, and the window then
+    /// re-adds and re-solves every constraint of its hundreds of views —
+    /// measured on a descriptor's straps at 0.4 to 1.2 seconds a move, which
+    /// is the card standing still before it flies. Moved directly, it stays
+    /// in the window and keeps its layout: a few milliseconds.
+    static func place(_ view: NSView, in container: NSView) {
         view.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(view)
         NSLayoutConstraint.activate([
@@ -466,7 +474,7 @@ import Localization
 
     /// Puts `content` in the card, pinned to its top left.
     func hold(_ content: NSView) {
-        content.removeFromSuperview()
+        // Not taken out first, for the reason `ToolDetailPane.place` gives.
         content.translatesAutoresizingMaskIntoConstraints = false
         body.addSubview(content)
         let width = content.widthAnchor.constraint(equalToConstant: max(1, bounds.width))

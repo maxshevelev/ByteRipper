@@ -114,11 +114,11 @@ final class ToolDetailPaneTests: XCTestCase {
         XCTAssertTrue(pane.detail.isDescendant(of: card), "the list itself, not a copy")
         XCTAssertTrue(pane.detail.isExpanded)
         let frame = card.convert(card.bounds, to: nil)
-        XCTAssertEqual(frame.width, 600, accuracy: 1, "three quarters of the window")
-        XCTAssertEqual(frame.minX, 190, accuracy: 1, "the rest clear on the left, for the table")
-        XCTAssertEqual(frame.maxX, 790, accuracy: 1, "a narrow margin on the right")
-        XCTAssertEqual(frame.minY, 10, accuracy: 1, "and at the bottom")
-        XCTAssertEqual(frame.maxY, 590, accuracy: 1, "and at the top")
+        XCTAssertEqual(frame.width, 533, accuracy: 1, "two thirds of the window")
+        XCTAssertEqual(frame.minX, 237, accuracy: 1, "the rest clear on the left, for the table")
+        XCTAssertEqual(frame.maxX, 770, accuracy: 1, "a margin on the right")
+        XCTAssertEqual(frame.minY, 30, accuracy: 1, "and at the bottom")
+        XCTAssertEqual(frame.maxY, 570, accuracy: 1, "and at the top")
         XCTAssertEqual(pane.detail.frame.size, frame.size, "the list fills the card")
         XCTAssertEqual(pane.detail.expandButtonForTesting?.accessibilityLabel(), "Close")
 
@@ -249,7 +249,7 @@ final class ToolDetailPaneTests: XCTestCase {
         if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             XCTAssertLessThan(card.frame.height, 300, "it starts near the pane: \(card.frame), pane \(paneFrame)")
         }
-        let resting = NSRect(x: 190, y: 10, width: 600, height: 580)
+        let resting = NSRect(x: 237, y: 30, width: 533, height: 540)
         let deadline = Date().addingTimeInterval(2)
         while card.frame != resting, Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.02))
@@ -262,5 +262,27 @@ final class ToolDetailPaneTests: XCTestCase {
         }
         XCTAssertTrue(pane.detail.superview === pane, "it lands back in the pane")
         XCTAssertEqual(pane.frame.height, paneFrame.height, accuracy: 0.5)
+    }
+
+    /// The corner buttons stay in the corner while the rows scroll under
+    /// them.
+    func testTheCornerButtonsDoNotScrollWithTheRows() throws {
+        let list = pane.detail
+        list.prepareForRows(subject: "row")
+        for index in 0..<60 {
+            list.content.addArrangedSubview(NSTextField(labelWithString: "Field \(index)"))
+        }
+        window.contentView?.layoutSubtreeIfNeeded()
+        let button = try XCTUnwrap(list.expandButtonForTesting)
+        let before = button.convert(button.bounds, to: nil)
+
+        list.documentView?.scroll(NSPoint(x: 0, y: 300))
+        list.reflectScrolledClipView(list.contentView)
+        window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThan(list.documentVisibleRect.minY, 100, "the premise: the rows scrolled")
+        XCTAssertEqual(button.convert(button.bounds, to: nil), before, "the button stayed where it was")
+        let box = list.convert(list.bounds, to: nil)
+        XCTAssertGreaterThan(before.maxY, box.maxY - 30, "in the list's top band")
+        XCTAssertGreaterThan(before.minX, box.midX, "and its trailing half")
     }
 }
