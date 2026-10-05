@@ -21,6 +21,10 @@ final class EmptyStateView: NSView {
     /// controller answers, and the view accepts only when there is an answer.
     var paneDropOutcome: ((_ draggedPaneID: UUID, _ copying: Bool) -> PaneDrop.Outcome)?
 
+    /// Fired with the path of a recent file the user clicked; the controller
+    /// opens it the way File ▸ Open Recent does.
+    var onOpenRecent: ((String) -> Void)?
+
     /// Fired when a dragged pane is let go on the empty window: it moves in, and
     /// the window stops being empty.
     var onPaneDropped: ((_ draggedPaneID: UUID, _ copying: Bool) -> Void)?
@@ -78,7 +82,7 @@ final class EmptyStateView: NSView {
     /// sections are on it. A change to either is what a re-sizing is for —
     /// sizing it again on a layout pass where nothing changed would be a pass
     /// that asks for another pass.
-    private var bottomRowState: (width: CGFloat, bookmarks: Bool, notes: Bool)?
+    private var bottomRowState: (width: CGFloat, bookmarks: Bool, recents: Bool, notes: Bool)?
 
     /// The bookmark list shown under the hint, and the scroll view that bounds
     /// it. Hidden while the window has no marks.
@@ -93,6 +97,23 @@ final class EmptyStateView: NSView {
     private var bookmarkScrollWidth: NSLayoutConstraint?
     private let bookmarkHeading = NSTextField(labelWithString: L("Bookmarks"))
     private var bookmarkSection: NSStackView?
+
+    /// The recent files, under their own heading, on the bottom row's left. The
+    /// bookmarks take that place when the window has any: they are this
+    /// window's own, the recents are the app's. Hidden while there is nothing to
+    /// show or the bookmarks have the place.
+    // help: window.empty-state.recent-files
+    private let recentHeading = NSTextField(labelWithString: L("Recent Files"))
+    private let recentList = NSStackView()
+    private var recentSection: NSStackView?
+    /// The list's width, held for the same reason as `bookmarkScrollWidth`:
+    /// updated, never stacked up.
+    private var recentListWidth: NSLayoutConstraint?
+    private var recentPaths: [String] = []
+    private var hasBookmarks = false
+    /// The width each left-hand list wants when it has the row to itself.
+    private var bookmarkFittingWidth: CGFloat = 220
+    private var recentFittingWidth: CGFloat = 220
 
     /// The tallest the list gets before it scrolls. A window kept open only for
     /// its marks should show them, not become a list with a landing screen
@@ -292,6 +313,7 @@ final class EmptyStateView: NSView {
         row.alignment = .top
         row.spacing = Self.bottomRowGap
         row.addArrangedSubview(makeBookmarkSection())
+        row.addArrangedSubview(makeRecentSection())
         row.addArrangedSubview(makeNotesSection())
         row.isHidden = true
         bottomRow = row
@@ -333,15 +355,21 @@ final class EmptyStateView: NSView {
     private func updateBottomRow() {
         let width = bounds.width
         let showingBookmarks = !(bookmarkSection?.isHidden ?? true)
+        let showingRecents = !(recentSection?.isHidden ?? true)
         let showingNotes = !(notesSection?.isHidden ?? true)
-        bottomRow?.isHidden = !showingBookmarks && !showingNotes
+        let showingLeft = showingBookmarks || showingRecents
+        bottomRow?.isHidden = !showingLeft && !showingNotes
         guard width != bottomRowState?.width
             || showingBookmarks != bottomRowState?.bookmarks
+            || showingRecents != bottomRowState?.recents
             || showingNotes != bottomRowState?.notes
         else { return }
-        bottomRowState = (width, showingBookmarks, showingNotes)
+        bottomRowState = (width, showingBookmarks, showingRecents, showingNotes)
 
-        guard showingBookmarks && showingNotes else {
+        guard showingLeft && showingNotes else {
+            // Alone, each section keeps the size it wants.
+            bookmarkScrollWidth?.constant = bookmarkFittingWidth
+            recentListWidth?.constant = recentFittingWidth
             if showingNotes {
                 notesLabel.preferredMaxLayoutWidth =
                     max(240, min(Self.maxNotesWidth, width - Self.bottomRowInset))
@@ -354,8 +382,101 @@ final class EmptyStateView: NSView {
         // The list keeps its one width constraint; in the split its constant
         // is its half rather than its fitting width, and the notes wrap at
         // the same width, which is what makes the two halves equal.
-        bookmarkScrollWidth?.constant = half
+        if showingBookmarks { bookmarkScrollWidth?.constant = half }
+        if showingRecents { recentListWidth?.constant = half }
         notesLabel.preferredMaxLayoutWidth = half
+    }
+
+    /// The recent files section: a heading and one clickable row per file.
+    ///
+    /// The same list as File ▸ Open Recent, put where a window with nothing in
+    /// it is looking: the usual next step is to open what was open yesterday.
+    private func makeRecentSection() -> NSView {
+        recentHeading.font = .systemFont(ofSize: 13, weight: .semibold)
+        recentHeading.textColor = Self.iconColor
+        recentHeading.alignment = .left
+
+        recentList.orientation = .vertical
+        recentList.alignment = .leading
+        recentList.spacing = 4
+        recentList.translatesAutoresizingMaskIntoConstraints = false
+        let width = recentList.widthAnchor.constraint(equalToConstant: recentFittingWidth)
+        width.isActive = true
+        recentListWidth = width
+
+        let section = NSStackView()
+        section.orientation = .vertical
+        section.alignment = .leading
+        section.spacing = 8
+        section.addArrangedSubview(recentHeading)
+        section.addArrangedSubview(recentList)
+        section.isHidden = true
+        recentSection = section
+        return section
+    }
+
+    /// Shows the recent files, or hides the section when there are none — or
+    /// when the window has bookmarks, which take the place.
+    ///
+    /// Paths, not URLs: that is what `RecentFilesStore` keeps, and what the
+    /// controller opens them from. Files that are gone are the caller's to
+    /// leave out — a row that cannot be opened is a ghost.
+    func setRecentFiles(_ paths: [String]) {
+        recentPaths = paths
+        while let row = recentList.arrangedSubviews.first {
+            recentList.removeArrangedSubview(row)
+            row.removeFromSuperview()
+        }
+        var widest: CGFloat = 0
+        for path in paths {
+            let row = LinkButton()
+            row.isBordered = false
+            row.bezelStyle = .inline
+            row.alignment = .left
+            row.target = self
+            row.action = #selector(openRecentRow(_:))
+            row.identifier = NSUserInterfaceItemIdentifier(path)
+            row.cell?.lineBreakMode = .byTruncatingMiddle
+            row.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            let title = Self.recentRowTitle(path)
+            row.attributedTitle = title
+            ControlHelp.describe(row, L("Open “%1$@”", (path as NSString).lastPathComponent))
+            row.toolTip = path
+            recentList.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: recentList.widthAnchor).isActive = true
+            widest = max(widest, title.size().width)
+        }
+        recentFittingWidth = min(Self.maxBottomRowHalf, max(220, ceil(widest) + 8))
+        refreshLeftSections()
+    }
+
+    /// A row's text: the file's name, then the folder it is in, fainter.
+    private static func recentRowTitle(_ path: String) -> NSAttributedString {
+        let name = (path as NSString).lastPathComponent
+        let folder = ((path as NSString).deletingLastPathComponent as NSString)
+            .abbreviatingWithTildeInPath
+        let title = NSMutableAttributedString(string: name, attributes: [
+            .font: NSFont.systemFont(ofSize: 12),
+            .foregroundColor: NSColor.labelColor,
+        ])
+        title.append(NSAttributedString(string: "  \(folder)", attributes: [
+            .font: NSFont.systemFont(ofSize: 11),
+            .foregroundColor: NSColor.tertiaryLabelColor,
+        ]))
+        return title
+    }
+
+    @objc private func openRecentRow(_ sender: NSButton) {
+        guard let path = sender.identifier?.rawValue else { return }
+        onOpenRecent?(path)
+    }
+
+    /// Which of the two left-hand sections the row shows: the bookmarks when
+    /// there are any, the recent files otherwise.
+    private func refreshLeftSections() {
+        bookmarkSection?.isHidden = !hasBookmarks
+        recentSection?.isHidden = hasBookmarks || recentPaths.isEmpty
+        updateBottomRow()
     }
 
     /// The bookmarks section: a heading and a read-only list.
@@ -402,9 +523,9 @@ final class EmptyStateView: NSView {
     /// that could be clicked would promise something it cannot do.
     func setBookmarks(_ bookmarks: [Bookmark]) {
         while bookmarkGrid.numberOfRows > 0 { bookmarkGrid.removeRow(at: 0) }
-        bookmarkSection?.isHidden = bookmarks.isEmpty
-        guard !bookmarks.isEmpty else {
-            updateBottomRow()
+        hasBookmarks = !bookmarks.isEmpty
+        guard hasBookmarks else {
+            refreshLeftSections()
             return
         }
 
@@ -436,6 +557,7 @@ final class EmptyStateView: NSView {
 
         let wantedHeight = min(bookmarkGrid.fittingSize.height, Self.maxBookmarkListHeight)
         let wantedWidth = max(220, bookmarkGrid.fittingSize.width)
+        bookmarkFittingWidth = wantedWidth
         if let height = bookmarkScrollHeight, let width = bookmarkScrollWidth {
             height.constant = wantedHeight
             width.constant = wantedWidth
@@ -446,7 +568,7 @@ final class EmptyStateView: NSView {
             bookmarkScrollHeight = height
             bookmarkScrollWidth = width
         }
-        updateBottomRow()
+        refreshLeftSections()
     }
 
     /// The heights the list's scroll view is pinned to — one, however many
@@ -468,6 +590,22 @@ final class EmptyStateView: NSView {
                   let name = cells.cell(at: 1).contentView as? NSTextField else { return nil }
             return (address.stringValue, name.stringValue)
         }
+    }
+
+    /// The recent files on show, row by row — file name first (for tests).
+    var recentRowsForTesting: [String] {
+        recentList.arrangedSubviews.compactMap { ($0 as? NSButton)?.identifier?.rawValue }
+    }
+
+    /// Whether the recent files section is on screen at all (for tests).
+    var isShowingRecentFilesForTesting: Bool { !(recentSection?.isHidden ?? true) }
+
+    /// The width the recent list is pinned to (for tests).
+    var recentListWidthForTesting: CGFloat? { recentListWidth?.constant }
+
+    /// Clicks the nth recent row (for tests).
+    func clickRecentRowForTesting(_ index: Int) {
+        (recentList.arrangedSubviews[index] as? NSButton)?.performClick(nil)
     }
 
     /// The list's heading (for tests).

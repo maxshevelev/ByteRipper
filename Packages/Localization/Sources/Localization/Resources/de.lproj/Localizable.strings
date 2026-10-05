@@ -680,6 +680,7 @@
 "Reading UEFI…" = "UEFI wird gelesen…";
 "Reading the region and its partitions." = "Die Region und ihre Partitionen werden gelesen.";
 "Reading…" = "Wird gelesen…";
+"Recent Files" = "Zuletzt geöffnet";
 "Recent Queries" = "Zuletzt gesucht";
 "Redo" = "Wiederholen";
 "Redo %1$@" = "%1$@ wiederholen";

@@ -680,6 +680,7 @@
 "Reading UEFI…" = "Чтение UEFI…";
 "Reading the region and its partitions." = "Чтение региона и его разделов.";
 "Reading…" = "Чтение…";
+"Recent Files" = "Недавние файлы";
 "Recent Queries" = "Недавние запросы";
 "Redo" = "Повторить";
 "Redo %1$@" = "Повторить: %1$@";

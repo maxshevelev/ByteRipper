@@ -1143,8 +1143,12 @@ final class MainViewController: NSViewController {
             let emptyView = EmptyStateView()
             emptyStateView = emptyView
             emptyView.setBookmarks(windowModel.bookmarkStore.bookmarks)
+            emptyView.setRecentFiles(Self.openableRecentFiles())
             emptyView.onOpenFiles = { [weak self] urls in
                 self?.handleEmptyDrop(urls)
+            }
+            emptyView.onOpenRecent = { [weak self] path in
+                self?.openRecentFile(atPath: path, placement: .activePane)
             }
             // An empty window is the most obvious place to put a pane, and it
             // has only the first one to put it in.
@@ -3064,6 +3068,17 @@ final class MainViewController: NSViewController {
 
     private func openRecentFile(_ sender: NSMenuItem, placement: OpenPanePlacement) {
         guard let path = sender.representedObject as? String else { return }
+        openRecentFile(atPath: path, placement: placement)
+    }
+
+    /// The recent files still on disk, most recent first — what the landing
+    /// screen lists. A row for a vanished file is a ghost, so it is left out
+    /// here rather than greyed.
+    static func openableRecentFiles() -> [String] {
+        RecentFilesStore.recent.filter { FileManager.default.fileExists(atPath: $0) }
+    }
+
+    private func openRecentFile(atPath path: String, placement: OpenPanePlacement) {
         // Validation already greys a row whose file is gone; this is the
         // second gate for the file that vanished between the menu drawing and
         // the click.
@@ -3091,6 +3106,7 @@ final class MainViewController: NSViewController {
     @objc func clearRecentFiles(_ sender: NSMenuItem) {
         RecentFilesStore.clear()
         sender.menu?.removeAllItems()
+        emptyStateView?.setRecentFiles([])
     }
 
     /// Opens the given URLs into panes. Internal so the app's open entry points
