@@ -146,6 +146,22 @@ final class ToolDetailPaneTests: XCTestCase {
         XCTAssertTrue(pane.isQuickLookShown)
     }
 
+    /// The details' own rows, clicked into to select a value, are the
+    /// details too: Space there opens them larger, and hands the focus to the
+    /// table, so the arrows move its selection.
+    func testSpaceInTheDetailsOpens() {
+        pane.detail.prepareForRows(subject: "row")
+        let fields = ToolFieldList(fields: [.init(label: "Kind", value: NSAttributedString(string: "File"))])
+        pane.detail.content.addArrangedSubview(fields)
+        window.contentView?.layoutSubtreeIfNeeded()
+        XCTAssertTrue(window.makeFirstResponder(fields))
+        XCTAssertTrue(pane.handleKeyWhileShut(key(" ", code: 49)))
+        XCTAssertTrue(pane.isQuickLookShown)
+        XCTAssertTrue(window.firstResponder === table, "the focus is the table's")
+        XCTAssertTrue(pane.handleKeyWhileShown(key("\u{F701}", code: 125)))
+        XCTAssertEqual(table.selectedRow, 1, "and the arrows move it")
+    }
+
     func testSpaceElsewhereIsNotTaken() {
         fill()
         window.makeFirstResponder(nil)

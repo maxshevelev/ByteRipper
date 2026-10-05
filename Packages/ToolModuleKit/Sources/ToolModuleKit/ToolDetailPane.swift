@@ -124,6 +124,9 @@ import Localization
             card.frame = Self.interpolate(start, target, progress)
             if progress >= 1 { self.cardIsResting = true }
         }
+        // The focus goes to the table, wherever Space came from — the table
+        // or the details — so the arrows move its selection while the card
+        // is out.
         if let table { window?.makeFirstResponder(table) }
         watchWhileShown()
         return true
@@ -360,12 +363,15 @@ import Localization
     }
 
     /// What a key pressed in the window does while the large view is shut:
-    /// Space, unmodified, on the table while it has the focus opens it. True
-    /// when it was taken.
+    /// Space, unmodified, opens it while the focus is on the table or in the
+    /// details under it — a reader who has clicked into the details to
+    /// select a value is reading them, and wants them larger just as much.
+    /// True when it was taken.
     func handleKeyWhileShut(_ event: NSEvent) -> Bool {
         guard !isQuickLookShown, let table, let window = table.window,
-              event.window === window, window.firstResponder === table,
-              Self.isPlainSpace(event)
+              event.window === window, Self.isPlainSpace(event),
+              let focus = window.firstResponder as? NSView,
+              focus === table || focus.isDescendant(of: detail)
         else { return false }
         return showQuickLook()
     }

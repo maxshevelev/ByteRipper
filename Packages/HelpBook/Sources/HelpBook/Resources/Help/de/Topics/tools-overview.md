@@ -1,4 +1,4 @@
-@source-sha 67be60cd598da912fd07f32b159be51d385d9bc1128dbe81f18edef6b395159a
+@source-sha 6a352e1a75ed7d2b291836ad57e99e00fa37826a6d51ffa888cab4922ac6a06d
 # Die Werkzeugbereiche
 
 > Werkzeuge, die den geöffneten Dump decodieren und melden, welche Strukturen er enthält.
@@ -18,7 +18,7 @@ Die Werkzeuge haben die Tasten **⌘1**, **⌘2**, **⌘3** in der Reihenfolge d
 - **Einen Knoten auszuwählen zeigt seine Bytes.** Ein Klick auf eine Zeile scrollt den Dump zu den Bytes, für die sie steht, und umrandet sie als **Zone**; damit ist der Name im Bereich mit einer Adresse in der Hex-Ansicht verbunden.
 - **Unsicherheit wird gemeldet.** Ein Feld, das nicht dokumentiert ist, behält seinen Rohwert und wird als unbekannt bezeichnet, statt einen sicher klingenden Namen zu bekommen. Siehe [[topic:provenance|Woher dieses Wissen stammt]].
 - **Die Zeilenmarkierungen** — die Balken, Abzeichen und Warnzeichen — erklärt der Streifen **Legende** unter der Tabelle jedes Bereichs.
-- **Die Details lassen sich groß anzeigen.** Die **Leertaste** auf der ausgewählten Zeile oder die Schaltfläche zum Vergrößern oben rechts in den Details unter der Tabelle öffnet dieselben Details in einer großen Ansicht rechts im Fenster: Sie nimmt zwei Drittel seiner Breite ein, links bleibt die Tabelle sichtbar. Solange die Ansicht offen ist, sind die Details unter der Tabelle ausgeblendet, und die Tabelle nimmt die ganze Höhe des Bereichs ein. In der Ansicht steht an ihrer Stelle eine Schaltfläche zum Schließen; ebenso schließen die **Leertaste**, **Esc** und ein Klick außerhalb der Ansicht sie, wobei dieser Klick zugleich seine gewohnte Wirkung hat, und ein Klick auf einen Link darin schließt sie und folgt dem Link. Solange sie offen ist, bewegen die Pfeiltasten weiterhin die Auswahl in der Tabelle, und die Ansicht zeigt die Details der ausgewählten Zeile.
+- **Die Details lassen sich groß anzeigen.** Die **Leertaste** auf der ausgewählten Zeile oder in den Details unter der Tabelle oder die Schaltfläche zum Vergrößern oben rechts in den Details unter der Tabelle öffnet dieselben Details in einer großen Ansicht rechts im Fenster: Sie nimmt zwei Drittel seiner Breite ein, links bleibt die Tabelle sichtbar. Solange die Ansicht offen ist, sind die Details unter der Tabelle ausgeblendet, und die Tabelle nimmt die ganze Höhe des Bereichs ein. In der Ansicht steht an ihrer Stelle eine Schaltfläche zum Schließen; ebenso schließen die **Leertaste**, **Esc** und ein Klick außerhalb der Ansicht sie, wobei dieser Klick zugleich seine gewohnte Wirkung hat, und ein Klick auf einen Link darin schließt sie und folgt dem Link. Solange sie offen ist, liegt der Fokus auf der Tabelle, auch wenn die **Leertaste** in den Details gedrückt wurde, und die Pfeiltasten bewegen die Auswahl darin, und die Ansicht zeigt die Details der ausgewählten Zeile.
 
 ## Einen Teil entnehmen
 
