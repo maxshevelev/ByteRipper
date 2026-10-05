@@ -84,19 +84,26 @@ public enum UEFITreeDisplay {
         node.kind == .padding && node.isErased && node.children.isEmpty
     }
 
-    /// A row that stands for room rather than for content: erased padding
-    /// ("Empty (FFh)"), free space, and a pad file with an erased body. The
-    /// tree draws it grey, the way the ME tree draws a section that holds
-    /// nothing — a place in the layout, not something to go and look at.
-    /// Erased padding with rows read inside it is not one, nor is a pad file
-    /// that holds data: what was read there is content.
+    /// A row that stands for room rather than for content: every row the
+    /// Subtype column calls "Empty (FFh)", free space, and a pad file with an
+    /// erased body. The tree draws it grey, the way the ME tree draws a
+    /// section that holds nothing — a place in the layout, not something to
+    /// go and look at. A row with rows read inside it is not one, nor is a
+    /// pad file that holds data: what was read there is content.
+    ///
+    /// "Empty (FFh)" is asked of the column's own classification rather than
+    /// of the node's kind: plain padding is not the only row it names — an
+    /// Insyde map's region nobody has written (Unused, a password slot, an
+    /// MSDM table) is one too, and a rule that listed kinds left those rows
+    /// black under a column that said they were empty.
     public static func isEmptySpace(_ node: UEFINode) -> Bool {
         guard node.children.isEmpty else { return false }
         switch node.kind {
         case .freeSpace: return true
-        case .padding: return node.isErased
         case .file: return node.subtype == 0xF0
-        default: return false
+        default:
+            return node.uefiItemType == UEFITypes.Item.padding.rawValue
+                && node.uefiItemSubtype == UEFITypes.Sub.onePadding
         }
     }
 

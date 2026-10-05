@@ -1,4 +1,4 @@
-@source-sha d473095395f199be7eb97e75ae35924f06c1d3195410aa6ec92e314a7df7d6cc
+@source-sha 39efbf2653327757bec263774df76864bd25da73ce6bd2a5441d89a8fbca12a5
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -14,6 +14,8 @@ Die Spalten **Typ** und **Subtyp** benennen jeden Knoten so, wie der Referenz-Pa
 Die Zeile der **ME-Region** öffnet sich in dieselbe Analyse, die der [[topic:tool-me|ME Analyzer]] liefert — so lässt sich ein Image in einem Baum von vorn bis hinten lesen. Sie öffnet sich, sobald die Region gelesen ist; Werte, die auf eine Datenbank warten, zeigen dort wie im ME Analyzer **Wird geladen…**.
 
 **Die Schaltfläche in Form einer Zielscheibe im rechten Teil der Titelzeile** zeigt im Baum den Knoten unter der Einfügemarke im Dump — den Anfang einer Auswahl, wo es eine gibt. Sie öffnet die Zweige auf dem Weg; ein Zweig, der noch nicht decodiert ist, wird für die Anzeige decodiert, und die Anzeige kann so lange dauern wie das Lesen. Ausgewählt wird der innerste Knoten, dessen Bereich das Byte enthält. Ein Byte des ME-Regions wird in einer Zeile seines Unterbaums gezeigt; die Region wird für die Anzeige geöffnet, wenn sie noch nicht gelesen ist. Der Dump bewegt sich nicht: die Anzeige führt den Baum zum Byte, nicht das Byte zum Baum.
+
+Eine lange Tabelle in den Details — **PCH-Straps** in den Details des [[term:flash-descriptor|Flash Descriptors]] — ist zunächst unter ihrer Überschrift eingeklappt, damit der Rest der Details sichtbar bleibt. Ein Klick auf das Dreieck oder die Überschrift klappt sie auf; sie bleibt danach auch bei anderen Knoten aufgeklappt, bis das Programm beendet wird.
 
 ## Was das Werkzeug prüft
 
@@ -32,7 +34,7 @@ Rechtsklick auf einen Knoten:
 
 ## Padding
 
-Zwischen den Strukturen eines Dumps liegt gelöschter Raum. Der Baum lässt ihn weg, solange im Filtermenü **Leeres Padding anzeigen** nicht abgehakt ist. Das Menü öffnet das Trichtersymbol in der Titelzeile, links neben **der Schaltfläche in Form einer Zielscheibe**. Solange der Baum etwas anzeigt, das er standardmäßig weglässt, ist das Symbol farbig hervorgehoben. Padding mit Daten wird in jedem Fall aufgeführt, ebenso der freie Speicher eines Volumes, der angibt, wie viel Platz darin noch frei ist. Gelöschtes Padding (**Empty (FFh)**), freier Speicher und eine Padding-Datei mit gelöschtem Inhalt (**Padding-Datei**) werden grau dargestellt: ein Platz in der Aufteilung, der nichts enthält.
+Zwischen den Strukturen eines Dumps liegt gelöschter Raum. Der Baum lässt ihn weg, solange im Filtermenü **Leeres Padding anzeigen** nicht abgehakt ist. Das Menü öffnet das Trichtersymbol in der Titelzeile, links neben **der Schaltfläche in Form einer Zielscheibe**. Solange der Baum etwas anzeigt, das er standardmäßig weglässt, ist das Symbol farbig hervorgehoben. Padding mit Daten wird in jedem Fall aufgeführt, ebenso der freie Speicher eines Volumes, der angibt, wie viel Platz darin noch frei ist. Jede gelöschte Zeile mit dem Subtyp **Empty (FFh)** — Padding, aber auch eine nie beschriebene Region einer Insyde-[[term:flash-device-map|Flash Device Map]], etwa **Unused** oder ein Passwortfeld —, freier Speicher und eine Padding-Datei mit gelöschtem Inhalt (**Padding-Datei**) werden grau dargestellt: ein Platz in der Aufteilung, der nichts enthält.
 
 ## Variablenwerte
 

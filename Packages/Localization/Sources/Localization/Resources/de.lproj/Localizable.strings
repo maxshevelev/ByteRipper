@@ -795,6 +795,7 @@
 "Show in Its Tab" = "In ihrem Tab zeigen";
 "Show markings" = "Markierungen anzeigen";
 "Show or hide the minimap" = "Minimap ein- oder ausblenden";
+"Show or hide the table" = "Tabelle ein- oder ausblenden";
 "Show the node under the caret in the tree" = "Den Knoten unter der Einfügemarke im Baum zeigen";
 "Show the whole image in the dump" = "Das ganze Image im Dump zeigen";
 "Show the whole table in the dump" = "Die ganze Tabelle im Dump zeigen";

@@ -82,15 +82,20 @@ public struct UEFIDetailTable: Equatable, Sendable {
     /// The column a row with a target draws as a link: the one that says
     /// where the target is.
     public var linkColumn: Int
+    /// Whether the table folds under its heading, and is folded until the
+    /// reader opens it: one long enough to push everything after it out of
+    /// sight, and read only now and then — a descriptor's strap words.
+    public var startsFolded: Bool
 
     public init(title: String, symbol: String, columns: [String], rows: [[Cell]],
-                rowTargets: [Target?] = [], linkColumn: Int = 1) {
+                rowTargets: [Target?] = [], linkColumn: Int = 1, startsFolded: Bool = false) {
         self.title = title
         self.symbol = symbol
         self.columns = columns
         self.rows = rows
         self.rowTargets = rowTargets
         self.linkColumn = linkColumn
+        self.startsFolded = startsFolded
     }
 }
 
@@ -1295,7 +1300,11 @@ public enum UEFIDetail {
                 columns: [L("Strap"), L("Offset"), L("Value"), L("Meaning")],
                 rows: rows.map(\.cells),
                 rowTargets: rows.map(\.target),
-                linkColumn: 1
+                linkColumn: 1,
+                // Seventy words and more, of which the fields above have
+                // already said what is known: folded, it leaves the rest of
+                // the detail in view.
+                startsFolded: true
             ))
         }
         return tables

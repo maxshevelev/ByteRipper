@@ -941,6 +941,44 @@ final class UEFIToolFlowTests: XCTestCase {
             "the chip symbol before the heading")
     }
 
+    /// The strap words are folded under their heading until asked for: the
+    /// triangle opens them, and they stay open on the next node and back.
+    func testTheStrapTableStartsFolded() throws {
+        var image = UEFITestImage.intelImage()
+        image[0x1A] = 0x20                  // FPSBA: the eighteen strap words at 0x200
+        let controller = try open(image)
+        let outline = try outline()
+        let panel = try XCTUnwrap(controller.tools.panel)
+        _ = try expandRow(0)
+        let row = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { (try? node(atRow: $0).kind) == .flashDescriptor })
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+
+        func strapsShown() -> Bool {
+            descendants(of: panel, NSTextField.self)
+                .contains { $0.stringValue == "PCHSTRP0" && !$0.isHiddenOrHasHiddenAncestor }
+        }
+        func disclosure() throws -> NSButton {
+            try XCTUnwrap(descendants(of: panel, NSButton.self)
+                .first { $0.bezelStyle == .disclosure && $0.accessibilityLabel() == "PCH straps" },
+                "the straps' heading carries a triangle")
+        }
+        XCTAssertTrue(descendants(of: panel, NSTextField.self).contains { $0.stringValue == "PCH straps" })
+        XCTAssertEqual(try disclosure().state, .off)
+        XCTAssertFalse(strapsShown(), "folded at first")
+
+        try disclosure().performClick(nil)
+        window?.layoutIfNeeded()
+        XCTAssertTrue(strapsShown(), "the triangle opens them")
+
+        outline.selectRowIndexes(IndexSet(integer: row + 1), byExtendingSelection: false)
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        window?.layoutIfNeeded()
+        XCTAssertEqual(try disclosure().state, .on)
+        XCTAssertTrue(strapsShown(), "and they stay open on the way back")
+    }
+
     /// A store lists one row per variable: the copy that stands. The others
     /// are in its history, a click there shows one, and the tree keeps the
     /// standing copy's row selected; the toggle lists them all.

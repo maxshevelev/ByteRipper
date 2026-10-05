@@ -105,6 +105,14 @@ import UEFITool
     /// size without waiting for the next parse — a zoom is not a re-read.
     private var detailShown: UEFINodeDetail = .empty
     private var detailSubject = ""
+    /// The folding tables the reader has opened, by title — kept for the
+    /// panel's life, so a table opened on one node is open on the next and
+    /// stays open through a re-render, and folded again only at the next
+    /// launch.
+    private var unfoldedTables: Set<String> = []
+    /// The folding tables on screen: each one's disclosure button and the
+    /// grid it shows or hides, by title.
+    private var tableFolds: [String: (button: NSButton, grid: NSView)] = [:]
     /// The glossary entry the detail list's `?` opens, kept beside the detail
     /// itself so a re-render at a new type size keeps the button.
     private var detailTerm: HelpTermID?
@@ -870,6 +878,7 @@ import UEFITool
     private func renderDetail(_ node: UEFINodeDetail, subject: String) {
         detailShown = node
         detailSubject = subject
+        tableFolds.removeAll()
         // What the `?` in the list's corner explains. Set before the early
         // return too: a node with no fields to list is still a node whose kind
         // the glossary can name.
@@ -983,6 +992,31 @@ import UEFITool
         heading.alignment = .firstBaseline
         heading.spacing = 5
         heading.translatesAutoresizingMaskIntoConstraints = false
+
+        // A table that folds wears a disclosure triangle before its icon, and
+        // its whole heading is the switch: the triangle is a small target.
+        var disclosure: NSButton?
+        if table.startsFolded {
+            // help: panel.uefi.folding-table
+            let button = NSButton(title: "", target: self, action: #selector(tableFoldClicked(_:)))
+            button.bezelStyle = .disclosure
+            button.setButtonType(.onOff)
+            button.state = unfoldedTables.contains(table.title) ? .on : .off
+            button.identifier = NSUserInterfaceItemIdentifier(table.title)
+            ControlHelp.describe(button, name: table.title, tooltip: L("Show or hide the table"))
+            button.translatesAutoresizingMaskIntoConstraints = false
+            heading.insertArrangedSubview(button, at: 0)
+            heading.alignment = .centerY
+            // On the icon and the words, not the whole heading: a recogniser
+            // there would see the triangle's own click too, and fold the
+            // table back the moment the button opened it.
+            for part in [icon, title] as [NSView] {
+                part.identifier = button.identifier
+                part.addGestureRecognizer(
+                    NSClickGestureRecognizer(target: self, action: #selector(tableHeadingClicked(_:))))
+            }
+            disclosure = button
+        }
         // Set on whatever comes before rather than after each table, so the
         // first one is as clear of the rows above it as the next is of the
         // table above it.
@@ -1062,6 +1096,29 @@ import UEFITool
         grid.trailingAnchor.constraint(
             lessThanOrEqualTo: detail.content.trailingAnchor
         ).isActive = true
+        if let disclosure {
+            grid.isHidden = disclosure.state == .off
+            tableFolds[table.title] = (disclosure, grid)
+        }
+    }
+
+    @objc private func tableFoldClicked(_ sender: NSButton) {
+        guard let title = sender.identifier?.rawValue else { return }
+        setTable(title, unfolded: sender.state == .on)
+    }
+
+    @objc private func tableHeadingClicked(_ click: NSClickGestureRecognizer) {
+        guard let title = click.view?.identifier?.rawValue else { return }
+        setTable(title, unfolded: !unfoldedTables.contains(title))
+    }
+
+    /// Opens or folds a folding table in place: its grid shown or hidden,
+    /// nothing else rebuilt.
+    private func setTable(_ title: String, unfolded: Bool) {
+        if unfolded { unfoldedTables.insert(title) } else { unfoldedTables.remove(title) }
+        guard let fold = tableFolds[title] else { return }
+        fold.button.state = unfolded ? .on : .off
+        fold.grid.isHidden = !unfolded
     }
 
     /// The title names the image, not a row; the module decides what the fold

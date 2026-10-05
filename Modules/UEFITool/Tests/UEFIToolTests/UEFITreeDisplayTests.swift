@@ -58,6 +58,20 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertFalse(UEFITreeDisplay.isEmptySpace(TestUEFI.volume().node))
     }
 
+    /// Every row the Subtype column calls "Empty (FFh)" is grey — an Insyde
+    /// map's region nobody has written as much as plain padding — and one
+    /// that holds data is not.
+    func testAnErasedMapRegionIsGreyLikeErasedPadding() {
+        let unused = UEFINode(kind: .flashDeviceMapRegion, name: "Unused", range: 0..<0x1000, isErased: true)
+        let written = UEFINode(kind: .flashDeviceMapRegion, name: "Unknown", range: 0..<0x1000)
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: unused), "Empty (FFh)")
+        XCTAssertTrue(UEFITreeDisplay.isEmptySpace(unused))
+        XCTAssertFalse(UEFITreeDisplay.isEmptySpace(written))
+        var holding = unused
+        holding.children = [written]
+        XCTAssertFalse(UEFITreeDisplay.isEmptySpace(holding), "rows read inside it are content")
+    }
+
     /// A node with no subtype says nothing in the column — not a guess.
     func testANodeWithNoSubtypeLeavesTheColumnEmpty() {
         XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.microcode().node), "")

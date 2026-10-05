@@ -795,6 +795,7 @@
 "Show in Its Tab" = "Показать в его вкладке";
 "Show markings" = "Показывать пометки";
 "Show or hide the minimap" = "Показать или скрыть миникарту";
+"Show or hide the table" = "Показать или скрыть таблицу";
 "Show the node under the caret in the tree" = "Показать в дереве узел под курсором";
 "Show the whole image in the dump" = "Показать весь образ в дампе";
 "Show the whole table in the dump" = "Показать всю таблицу в дампе";

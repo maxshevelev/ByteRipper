@@ -196,6 +196,9 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(table.rows[10][3].text, "AltMeDisable in bit 7; the other bits unknown")
         XCTAssertEqual(table.rowTargets[1], .range(0x204..<0x208, name: "PCHSTRP1"))
         XCTAssertEqual(table.linkColumn, 1)
+        XCTAssertTrue(table.startsFolded, "seventy words and more stay folded until asked for")
+        XCTAssertFalse(try XCTUnwrap(self.table(shown, "Region table")).startsFolded,
+                       "the short tables are open")
     }
 
     /// The bit that soft-disables the ME is a row of its own, and set it reads
