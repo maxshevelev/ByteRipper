@@ -314,6 +314,45 @@ regions with flashrom's `ich_descriptors_tool` and coreboot's `ifdtool -d`,
 and the chip densities with the dump's length — `SPI_ALL_192Mbit` is
 8 MB + 16 MB.
 
+### 2.6. The PCH straps
+
+At `PchStrapsBase << 4`, `NumberOfPchStraps` `UINT32`s (`PCHSTRP0`,
+`PCHSTRP1`, …): settings the chipset reads for itself at power-on, before any
+firmware runs. Their layout is the chipset's and is not published past the
+oldest generations. It is not even one layout per generation: the mobile and
+desktop parts of one generation make the section different lengths, and put
+the same field in different words —
+
+| generation | mobile (LP/P) | desktop (H/S) |
+|---|---|---|
+| Cannon Point | 69 | 90 |
+| Tiger Point | 70 | 101 |
+| Alder Point | 70 | 115 |
+
+— so a layout would have to be keyed by generation *and* length.
+
+ByteRipper reads the words as numbers, and one bit as what it means: the bit
+that soft-disables the ME, where ifdtool and me_cleaner agree on it.
+
+| generations | name | word | bit |
+|---|---|---|---|
+| ICH8 – ICH10 | `ICH_MeDisable` | `PCHSTRP0` | 0 |
+| Ibex Peak – Wildcat Point | `AltMeDisable` | `PCHSTRP10` | 7 |
+| Sunrise Point on, Apollo and Gemini Lake, Lewisburg | HAP | `PCHSTRP0` | 16 |
+
+Bay Trail (TXE) and Emmitsburg have none: neither tool names one. On ICH8 –
+ICH10 ifdtool also sets two bits in the processor straps; the PCH one is the
+one shown.
+
+What ifdtool reads beyond that — the eSPI clock in `PCHSTRP22` and the GPR0
+range in `PCHSTRP21` on Tiger and Alder Point — sits in those words only on
+the mobile layout. On a Tiger Point H dump (`1.bin`, length 101) the same word
+gives an eSPI clock code nobody defines, and on an Alder Point S one
+(`SPI_EF4019`, length 115) a "GPR0" of `0x22222222`. Neither is shown until
+the desktop layouts are known. ifdtool also needs `-p` to read any descriptor
+from Sunrise Point on as one: without it, it takes the layout for version 1
+and reports `AltMeDisable` from the wrong word.
+
 ---
 
 ## 3. The firmware volume (FV)

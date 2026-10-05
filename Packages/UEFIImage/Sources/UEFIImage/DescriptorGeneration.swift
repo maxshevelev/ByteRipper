@@ -103,6 +103,20 @@ public enum DescriptorGeneration: Sendable, Equatable, CaseIterable {
         }
     }
 
+    /// The PCH strap bit that soft-disables the ME, as ifdtool and me_cleaner
+    /// set it: `ICH_MeDisable` in the first word up to ICH10, `AltMeDisable`
+    /// in the eleventh from Ibex Peak to Wildcat Point, and HAP in the first
+    /// from Sunrise Point on. Nil where neither tool names one — Bay Trail's
+    /// TXE, and Emmitsburg, which ifdtool does not know.
+    var meDisableBit: (name: String, word: Int, bit: Int)? {
+        switch self {
+        case .ich8, .ich9, .ich10: return ("ICH_MeDisable", 0, 0)
+        case .ibexPeak, .cougarPoint, .lynxPoint: return ("AltMeDisable", 10, 7)
+        case .bayTrail, .emmitsburg: return nil
+        default: return ("HAP", 0, 16)
+        }
+    }
+
     /// The SPI clock a three-bit code stands for, in MHz. A code the
     /// generation reserves has none; Apollo and Gemini Lake give one code two
     /// clocks.

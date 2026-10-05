@@ -1,4 +1,4 @@
-@source-sha ba598cdb1c94d2bdb1333a8f31382637c13fb258014a343c12805b0a7f974573
+@source-sha 8cddb9df8fa818b651463387972e58b410bcfe0401a27288116e0e5dcecb5150
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -9,7 +9,7 @@ Er ist die einzige Struktur hier mit echter Hersteller-Dokumentation — beschri
 
 Die Chipsatz-Generation steht nicht im Descriptor. ByteRipper erkennt sie daran, wo der Descriptor seine Abschnitte ablegt und wie lang sie sind — nach denselben Regeln wie flashrom —, und nennt sie in den Details unter **Chipsatz**. Generationen mit gleichem Aufbau lassen sich nicht unterscheiden und werden gemeinsam genannt, etwa Alder Point / Raptor Point; ein Aufbau, den keine Regel erfasst, wird wie der nächstliegende bekannte gelesen und als vermutet gekennzeichnet. Von der Generation hängt ab, wie der Rest zu lesen ist: wie viele Regionen die Tabelle enthält, ob die Masken eines Masters ein Byte oder zwölf Bit breit sind und was ein Taktcode bedeutet.
 
-Aus dem Komponentenabschnitt nennen die Details die Größe jedes Flash-Chips, für den das Image ausgelegt ist (**Größe der Flash-Chips**), bei zwei Chips die Adresse, an der der zweite beginnt; die SPI-Takte, mit denen der Chipsatz ID und Status des Chips liest, schreibt und löscht sowie Fast Read ausführt; und die Opcodes, die der Chipsatz nicht an den Chip sendet (**Gesperrte Opcodes**). Ein Ersatzchip muss für diese Takte ausgelegt sein. Ergeben die Chips zusammen eine andere Länge als der Dump, wird die Zeile hervorgehoben: Der Dump enthält nur einen von zwei Chips oder wurde mit falscher Größe gelesen. Die **Regionstabelle** listet jede Region mit Anfang und Ende so, wie der Descriptor sie angibt.
+Aus dem Komponentenabschnitt nennen die Details die Größe jedes Flash-Chips, für den das Image ausgelegt ist (**Größe der Flash-Chips**), bei zwei Chips die Adresse, an der der zweite beginnt; die SPI-Takte, mit denen der Chipsatz ID und Status des Chips liest, schreibt und löscht sowie Fast Read ausführt; und die Opcodes, die der Chipsatz nicht an den Chip sendet (**Gesperrte Opcodes**). Ein Ersatzchip muss für diese Takte ausgelegt sein. Ergeben die Chips zusammen eine andere Länge als der Dump, wird die Zeile hervorgehoben: Der Dump enthält nur einen von zwei Chips oder wurde mit falscher Größe gelesen. Die **Regionstabelle** listet jede Region mit Anfang und Ende so, wie der Descriptor sie angibt. Die Tabelle **PCH-Straps** listet die [[term:soft-straps|Soft-Strap]]-Wörter des Descriptors, und das Bit, mit dem die ME per Software stillgelegt wird, hat eine eigene Zeile ([[term:hap|HAP-Bit]]).
 
 Ist der Descriptor beschädigt, ist jede danach gerechnete Adresse unzuverlässig.
 
@@ -53,7 +53,7 @@ Ein Strap ist ein Konfigurationsbit, das das Silizium selbst liest. Hard-Straps 
 
 Die PCH-Straps sagen, wie viele Flash-Chips es gibt, wie schnell sie getaktet werden dürfen, ob der Bus im Dual- oder Quad-Modus läuft, und tragen unter vielem anderen das [[term:hap|HAP-Bit]], mit dem die Management Engine per Software stillgelegt wird. Die CPU-Straps sind überwiegend Debug-Einstellungen: Kernzahl, Hyper-Threading.
 
-ByteRipper nennt die Anzahl der Strap-Wörter im Deskriptor und nicht, was jedes einzelne bedeutet. Ihre Belegung wechselt mit jeder Chipsatzgeneration, und kaum etwas davon ist veröffentlicht; eine Zahl, die das Programm nicht begründen kann, zeigt es nicht.
+Die Details des Deskriptors listen jedes PCH-Strap-Wort in der Tabelle **PCH-Straps**, mit seinem Offset im Dump und seinem Wert; ein Klick auf eine Zeile umrandet das Wort im Dump. Ein einziges Bit wird nach seiner Bedeutung gelesen: das, mit dem die Management Engine per Software stillgelegt wird; es hat eine eigene Zeile (siehe [[term:hap|HAP-Bit]]). Alle übrigen Bits heißen unbekannt. Ihre Belegung wechselt mit jeder Chipsatzgeneration und sogar zwischen dem Mobil- und dem Desktop-Chipsatz einer Generation, und kaum etwas davon ist veröffentlicht; eine Bedeutung, die das Programm nicht begründen kann, zeigt es nicht. Zwei Dumps desselben Boards lassen sich dennoch Wort für Wort vergleichen.
 
 @see term:flash-descriptor
 @see term:hap

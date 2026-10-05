@@ -182,6 +182,42 @@ final class DescriptorDetailTests: XCTestCase {
                        "red where the chip (4 MB) is below the smallest declared (8 MB)")
     }
 
+    /// The strap words as a grid of numbers, each row outlining its four bytes
+    /// in the dump; only the ME-disable word says anything about its bits.
+    func testTheStrapsAreAGridOfWords() throws {
+        var words = [UInt32](repeating: 0, count: 11)
+        words[1] = 0x1234_5678
+        let shown = detail(TestUEFI.flashDescriptor(straps: words))
+        let table = try XCTUnwrap(table(shown, "PCH straps"))
+
+        XCTAssertEqual(table.columns, ["Strap", "Offset", "Value", "Meaning"])
+        XCTAssertEqual(table.rows.count, 0x12, "every word the Cougar Point map counts")
+        XCTAssertEqual(table.rows[1].map(\.text), ["PCHSTRP1", "0x204", "0x12345678", "Unknown"])
+        XCTAssertEqual(table.rows[10][3].text, "AltMeDisable in bit 7; the other bits unknown")
+        XCTAssertEqual(table.rowTargets[1], .range(0x204..<0x208, name: "PCHSTRP1"))
+        XCTAssertEqual(table.linkColumn, 1)
+    }
+
+    /// The bit that soft-disables the ME is a row of its own, and set it reads
+    /// as a state — the reason an otherwise whole ME does not run.
+    func testTheMEDisableBitIsARow() throws {
+        let clear = detail(TestUEFI.flashDescriptor(version1: false, straps: [0]))
+        XCTAssertEqual(field(clear, "HAP bit"), "Not set")
+
+        let set = detail(TestUEFI.flashDescriptor(version1: false, straps: [0x0001_0000]))
+        let row = try XCTUnwrap(set.fields.first { $0.label == "HAP bit" })
+        XCTAssertEqual(row.value, "Set — the ME is soft-disabled")
+        XCTAssertEqual(row.tone, .caution)
+    }
+
+    /// No strap section, no strap table and no bit row.
+    func testNoStrapsMeansNoStrapRows() {
+        let shown = detail(TestUEFI.flashDescriptor())
+
+        XCTAssertNil(table(shown, "PCH straps"))
+        XCTAssertNil(field(shown, "AltMeDisable bit"))
+    }
+
     /// A node that is not a descriptor gets none of this — no tables, and no
     /// rows read from bytes that are not a descriptor's.
     func testOnlyADescriptorCarriesTheDescriptorBlock() {

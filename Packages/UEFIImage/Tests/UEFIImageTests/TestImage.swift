@@ -326,7 +326,9 @@ enum TestImage {
     /// `version1` lays the map out as a Cougar Point board does — byte masks,
     /// five regions — and otherwise as an Alder Point one, the two layouts
     /// `DescriptorGeneration` is told from (§2.5). `component` is the chip
-    /// count, `FLCOMP` and the two words of forbidden opcodes.
+    /// count, `FLCOMP` and the two words of forbidden opcodes. `straps` are
+    /// the first PCH strap words, at `0x200`; the rest of the section — as
+    /// long as the layout's strap length — stays erased.
     static func descriptor(
         regions: [(type: FlashRegionType, range: Range<UInt64>)],
         regionBase: UInt32 = 0x04,
@@ -336,7 +338,8 @@ enum TestImage {
         masters: [(read: UInt32, write: UInt32)] = [],
         vsccBase: UInt32 = 0x10,
         chips: [UInt32] = [],
-        component: (chips: Int, flcomp: UInt32, flill: UInt32, flill1: UInt32)? = nil
+        component: (chips: Int, flcomp: UInt32, flill: UInt32, flill1: UInt32)? = nil,
+        straps: [UInt32]? = nil
     ) -> [UInt8] {
         var bytes = [UInt8](repeating: 0xFF, count: Int(Descriptor.size))
         func put(_ value: UInt32, at offset: Int) {
@@ -350,10 +353,15 @@ enum TestImage {
         let componentBase: UInt32 = 0x03
         put(regionBase << 16 | (component.map { UInt32($0.chips - 1) << 8 | componentBase } ?? 0),
             at: Int(Descriptor.mapOffset))
-        // The PCH strap length, then the master base — out of range, so no
-        // section, unless masters are asked for.
-        put(UInt32(version1 ? 0x12 : 0x73) << 24 | (masters.isEmpty ? 0xFF : masterBase),
+        // The PCH strap length and base — none unless straps are asked for —
+        // then the master base, out of range unless masters are.
+        let strapBase: UInt32 = 0x20
+        put(UInt32(version1 ? 0x12 : 0x73) << 24 | (straps == nil ? 0 : strapBase << 16)
+                | (masters.isEmpty ? 0xFF : masterBase),
             at: Int(Descriptor.map1Offset))
+        for (index, word) in (straps ?? []).enumerated() {
+            put(word, at: Int(strapBase) << 4 + index * 4)
+        }
         put(UInt32(version1 ? 0x0021_0120 : 0x0014_01B0), at: Int(Descriptor.map2Offset))
         // The MIP table base, which a Cougar Point descriptor has none of.
         bytes[0x0EFF] = version1 ? 0x00 : 0xC0

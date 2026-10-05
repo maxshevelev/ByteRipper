@@ -4,7 +4,8 @@ import Foundation
 /// reserved vector it opens with, the chipset generation its layout is, where
 /// each region it declares begins and ends, how many flash chips the image
 /// spans and how fast the chipset clocks them, which master may read and
-/// write which region, and the chips its VSCC table knows how to drive (§2).
+/// write which region, the chips its VSCC table knows how to drive, and its
+/// PCH straps (§2).
 ///
 /// The regions are already the tree — a descriptor's children are its regions —
 /// but the rest of this is not anywhere else in the app, and it is what a bench
@@ -117,6 +118,32 @@ public struct DescriptorInfo: Equatable, Sendable {
 
     public var chips: [Chip]
 
+    /// The PCH strap section (§2.6): the words the chipset reads at power-on,
+    /// before any firmware runs. Nil when its base is not one or it is empty.
+    public var straps: Straps?
+
+    /// The strap words as they stand. Their layout is the chipset's and
+    /// changes with every generation — and between the mobile and desktop
+    /// parts of one — and next to none of it is published, so a word is
+    /// kept as a number rather than read as fields nobody can justify.
+    public struct Straps: Equatable, Sendable {
+        /// Where the first word lies, in the file's own offsets.
+        public var base: UInt64
+        public var words: [UInt32]
+        /// The one bit with a settled meaning on every generation that names
+        /// it; nil on one that does not, or a section too short to hold it.
+        public var meDisable: MEDisable?
+    }
+
+    /// The bit that soft-disables the ME, under the name the trade knows it
+    /// by on this generation (HAP, AltMeDisable, ICH_MeDisable).
+    public struct MEDisable: Equatable, Sendable {
+        public var name: String
+        public var word: Int
+        public var bit: Int
+        public var isSet: Bool
+    }
+
     /// The region bits a master's access mask carries (§2.3).
     enum RegionAccess {
         static let descriptor: UInt32 = 0x01
@@ -169,8 +196,34 @@ public extension DescriptorInfo {
             masters: masters(at: masterBase, isVersion1: isVersion1, reader: reader),
             maskDigits: isVersion1 ? 2 : 3,
             biosAccess: biosAccess(at: masterBase, isVersion1: isVersion1, reader: reader),
-            chips: chips(at: base, reader: reader)
+            chips: chips(at: base, reader: reader),
+            straps: straps(at: base, map1: map1, generation: generation, reader: reader)
         )
+    }
+
+    /// The PCH strap section, at `PchStrapBase << 4`, as many words long as
+    /// the map's strap length says — cut at the descriptor's end, past which
+    /// nothing is a strap however long an erased length claims to be.
+    private static func straps(
+        at base: UInt64, map1: UInt32, generation: DescriptorGeneration, reader: ImageReader
+    ) -> Straps? {
+        let strapAt = map1 >> 16 & 0xFF
+        guard strapAt > 0, strapAt <= Descriptor.maxBase else { return nil }
+        let offset = UInt64(strapAt) << 4
+        let count = min(UInt64(map1 >> 24), (Descriptor.size - offset) / 4)
+        let section = base + offset
+        var words: [UInt32] = []
+        for index in 0..<count {
+            guard let word = reader.uint32(at: section + index * 4) else { break }
+            words.append(word)
+        }
+        guard !words.isEmpty else { return nil }
+        let meDisable = generation.meDisableBit.flatMap { bit -> MEDisable? in
+            guard bit.word < words.count else { return nil }
+            return MEDisable(name: bit.name, word: bit.word, bit: bit.bit,
+                             isSet: words[bit.word] >> bit.bit & 1 != 0)
+        }
+        return Straps(base: section, words: words, meDisable: meDisable)
     }
 
     /// Every region the table declares. A region with a zero limit is not

@@ -226,7 +226,8 @@ enum TestUEFI {
     /// and a VSCC table. The defaults are the board in
     /// `Design/UEFI_STRUCTURE_TOOL.md`'s example — a version 1 descriptor,
     /// laid out as Cougar Point's, on one 16 MB chip, whose BIOS master may
-    /// read the ME region and write nothing but its own.
+    /// read the ME region and write nothing but its own. `straps` are the
+    /// first PCH strap words, at `0x200`; without them there is no section.
     static func flashDescriptor(
         reservedVector: [UInt8] = [0x11, 0x00, 0x00, 0x9C, 0x90, 0x02, 0x00, 0xD6,
                                    0x00, 0x00, 0x00, 0x05, 0xFF, 0xFF, 0xFF, 0xFF],
@@ -239,6 +240,7 @@ enum TestUEFI {
         chips: [UInt32] = [0x1F4700, 0x1C7018, 0xC22019, 0xEF4019],
         chipSizes: [UInt64] = [0x100_0000],
         invalidInstructions: UInt32 = 0xAD60_4221,
+        straps: [UInt32]? = nil,
         totalSize: UInt64 = 0x1000
     ) -> Built {
         var bytes = [UInt8](repeating: 0xFF, count: Int(totalSize))
@@ -258,7 +260,8 @@ enum TestUEFI {
         put(regionBase << 16 | UInt32(chipSizes.count - 1) << 8 | componentBase, at: 0x14)
         // FLMAP1 and FLMAP2 laid out as a Cougar Point board's or an Alder
         // Point one's, which is what tells the generation (§2.5).
-        put((version1 ? 0x12 : 0x73) << 24 | masterBase, at: 0x18)
+        let strapBase: UInt32 = 0x20
+        put((version1 ? 0x12 : 0x73) << 24 | (straps == nil ? 0 : strapBase << 16) | masterBase, at: 0x18)
         put(version1 ? 0x0021_0120 : 0x0014_01B0, at: 0x1C)
         bytes[0x0EFF] = version1 ? 0x00 : 0xC0          // FLUMAP1: MDTBA
 
@@ -294,6 +297,10 @@ enum TestUEFI {
                 put((master.read & 0xFFF) << 8 | (master.write & 0xFFF) << 20,
                     at: base + offsets[index])
             }
+        }
+
+        for (index, word) in (straps ?? []).enumerated() {
+            put(word, at: Int(strapBase) << 4 + index * 4)
         }
 
         put16(UInt16(truncatingIfNeeded: UInt32(chips.count) * 2 << 8 | vsccBase), at: 0x0EFC)

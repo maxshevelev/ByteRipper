@@ -1108,7 +1108,8 @@ public enum UEFIDetail {
     // MARK: - What a flash descriptor adds
 
     /// The rows a descriptor has beyond its header: the vector it opens with,
-    /// the chipset its layout is, and what its component section says about
+    /// the chipset its layout is, the strap bit that soft-disables the ME, and
+    /// what its component section says about
     /// the chips — how large, how fast, and which opcodes the chipset will not
     /// send them. Where the regions lie, and what the masters may touch, are
     /// grids, and are in `descriptorTables`.
@@ -1124,6 +1125,13 @@ public enum UEFIDetail {
             ?? generation.codeName
         if !descriptor.isGenerationCertain { chipset = L("%1$@, assumed", chipset) }
         fields.append(.init(L("Chipset"), chipset))
+        // The one strap bit with a settled meaning. Set, it is the reason an
+        // ME that is otherwise whole does not run, so it reads as a state.
+        if let meDisable = descriptor.straps?.meDisable {
+            fields.append(.init(L("%1$@ bit", meDisable.name),
+                                meDisable.isSet ? L("Set — the ME is soft-disabled") : L("Not set", context: "bit"),
+                                tone: meDisable.isSet ? .caution : .standard))
+        }
 
         guard let component = descriptor.component else { return fields }
         // The chips the image was laid out across, end to end. A dump of
@@ -1160,9 +1168,9 @@ public enum UEFIDetail {
         return sizeText(bytes)
     }
 
-    /// The four grids: where each region lies, the masks each master carries,
-    /// what the BIOS master may do to each region, and the flash chips this
-    /// firmware was built to drive.
+    /// The five grids: where each region lies, the masks each master carries,
+    /// what the BIOS master may do to each region, the flash chips this
+    /// firmware was built to drive, and the PCH strap words.
     ///
     /// The regions are in the tree as well, as this node's siblings — but the
     /// tree shows where a region *is*, and this shows what the descriptor
@@ -1234,6 +1242,31 @@ public enum UEFIDetail {
                          }
                      } ?? "")]
                 }
+            ))
+        }
+        if let straps = descriptor.straps {
+            // Numbers, not fields: the layout is the chipset's and next to
+            // none of it is published (`UEFI_IMAGE_FORMAT.md` §2.6). Each row
+            // outlines its four bytes in the dump, which is where two boards'
+            // straps are compared.
+            let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
+                let name = "PCHSTRP\(index)"
+                let address = straps.base + UInt64(index) * 4
+                var meaning = L("Unknown")
+                if let bit = straps.meDisable, bit.word == index {
+                    meaning = L("%1$@ in bit %2$@; the other bits unknown", bit.name, bit.bit)
+                }
+                return ([.init(name), .init(hex(address)),
+                         .init(String(format: "0x%08X", straps.words[index])), .init(meaning)],
+                        .range(address..<address + 4, name: name))
+            }
+            tables.append(UEFIDetailTable(
+                title: L("PCH straps"),
+                symbol: "slider.horizontal.3",
+                columns: [L("Strap"), L("Offset"), L("Value"), L("Meaning")],
+                rows: rows.map(\.cells),
+                rowTargets: rows.map(\.target),
+                linkColumn: 1
             ))
         }
         return tables

@@ -1056,6 +1056,12 @@
 "Region table" = "Regionstabelle";
 "Base" = "Anfang";
 "Limit" = "Ende";
+"%1$@ bit" = "%1$@-Bit";
+"Set — the ME is soft-disabled" = "Gesetzt — die ME ist per Software stillgelegt";
+"bit|Not set" = "Nicht gesetzt";
+"PCH straps" = "PCH-Straps";
+"Strap" = "Strap";
+"%1$@ in bit %2$@; the other bits unknown" = "%1$@ in Bit %2$@; die übrigen Bits unbekannt";
 "%1$@ — header marked invalid" = "%1$@ — Header als ungültig markiert";
 "%1$@ (not checked)" = "%1$@ (nicht geprüft)";
 "Variable" = "Variable";

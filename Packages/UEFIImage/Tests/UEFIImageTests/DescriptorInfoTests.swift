@@ -44,6 +44,67 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertEqual(read.regions.map(\.type), [.descriptor, .bios])
     }
 
+    /// The PCH straps are every word the map counts — `0x73` on this Alder
+    /// Point layout — read where the map puts them, and HAP is bit 16 of the
+    /// first.
+    func testTheStrapsOfAnAlderPointBoardAndItsHAPBit() throws {
+        let read = try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], straps: [0x0001_0000, 0x1234_5678]))
+        let straps = try XCTUnwrap(read.straps)
+
+        XCTAssertEqual(straps.base, 0x200)
+        XCTAssertEqual(straps.words.count, 0x73)
+        XCTAssertEqual(Array(straps.words.prefix(3)), [0x0001_0000, 0x1234_5678, 0xFFFF_FFFF])
+        XCTAssertEqual(straps.meDisable,
+                       DescriptorInfo.MEDisable(name: "HAP", word: 0, bit: 16, isSet: true))
+    }
+
+    /// From Ibex Peak to Wildcat Point the bit is AltMeDisable, bit 7 of the
+    /// eleventh word — and a first word with bit 16 set says nothing there.
+    func testACougarPointBoardsBitIsAltMeDisable() throws {
+        var words = [UInt32](repeating: 0, count: 11)
+        words[0] = 0x0001_0000
+        let clear = try XCTUnwrap(info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], version1: true, straps: words)).straps)
+        XCTAssertEqual(clear.words.count, 0x12)
+        XCTAssertEqual(clear.meDisable,
+                       DescriptorInfo.MEDisable(name: "AltMeDisable", word: 10, bit: 7, isSet: false))
+
+        words[10] = 0x80
+        let set = try XCTUnwrap(info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], version1: true, straps: words)).straps)
+        XCTAssertEqual(set.meDisable?.isSet, true)
+    }
+
+    /// Which bit, generation by generation: ifdtool's and me_cleaner's, and
+    /// none where neither names one.
+    func testTheMEDisableBitByGeneration() {
+        XCTAssertEqual(DescriptorGeneration.ich9.meDisableBit?.name, "ICH_MeDisable")
+        XCTAssertEqual(DescriptorGeneration.ich9.meDisableBit?.bit, 0)
+        XCTAssertEqual(DescriptorGeneration.lynxPoint.meDisableBit?.word, 10)
+        XCTAssertEqual(DescriptorGeneration.sunrisePoint.meDisableBit?.name, "HAP")
+        XCTAssertEqual(DescriptorGeneration.apolloLake.meDisableBit?.name, "HAP")
+        XCTAssertNil(DescriptorGeneration.bayTrail.meDisableBit)
+        XCTAssertNil(DescriptorGeneration.emmitsburg.meDisableBit)
+    }
+
+    /// No strap base, no section — the bytes at offset zero are not straps.
+    func testNoStrapBaseMeansNoStraps() throws {
+        XCTAssertNil(try info(TestImage.descriptor(regions: [(.bios, 0x1000..<0x40_0000)])).straps)
+    }
+
+    /// A length that runs past the descriptor is cut where the descriptor
+    /// ends: what follows is the next region, not straps.
+    func testTheStrapsStopAtTheDescriptorsEnd() throws {
+        var bytes = TestImage.descriptor(regions: [(.bios, 0x1000..<0x40_0000)])
+        bytes[0x1A] = 0xE0                                  // FPSBA: 0xE00
+        bytes[0x1B] = 0xFF                                  // 255 words claimed
+        bytes += [UInt8](repeating: 0, count: 0x1000)
+        let straps = try XCTUnwrap(info(bytes).straps)
+
+        XCTAssertEqual(straps.words.count, 0x80, "0x200 bytes to the end, four a word")
+    }
+
     /// The generation the layout is goes with the rest.
     func testTheGenerationIsRead() throws {
         let alder = try info(TestImage.descriptor(regions: [(.bios, 0x1000..<0x40_0000)]))
