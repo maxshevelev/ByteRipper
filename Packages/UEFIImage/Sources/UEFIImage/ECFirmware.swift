@@ -146,10 +146,16 @@ extension Parser {
         var read = node
         let base = node.kind == .padding ? ECImage.paddingName : node.name
         // One image at the start: the block is that image, and says which
-        // and how long it is, measured as a row's would be.
+        // and how long it is. A region of the flash device map is as long as
+        // its entry says — the firmware's own statement of its slot, erased
+        // tail and all; anything else is measured as a row would be. With
+        // several images the entry is the region's size and no one image's,
+        // so the rows below are measured by their bytes.
         guard images.count > 1 || first.start != node.body.lowerBound else {
             read.name = "\(base) (\(first.name))"
-            read.namedImageLength = min(roundedUp(max(first.written, 1)), UInt64(node.body.count))
+            read.namedImageLength = node.kind == .flashDeviceMapRegion
+                ? UInt64(node.body.count)
+                : min(roundedUp(max(first.written, 1)), UInt64(node.body.count))
             return read
         }
         // Several: each row names its own, and the block names none of them.

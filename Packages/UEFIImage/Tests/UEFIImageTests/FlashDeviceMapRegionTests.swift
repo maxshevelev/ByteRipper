@@ -153,6 +153,33 @@ final class FlashDeviceMapRegionTests: XCTestCase {
         XCTAssertEqual(found.map(\.name), ["EC Firmware (ITE8380-EC-V1.43)"])
     }
 
+    /// The image in an EC Firmware region is as long as the map's entry, not
+    /// as its last written byte: the entry is the firmware's own slot, and
+    /// the erased tail is part of it — 128 KB in `CSME 12`, not 96.
+    func testAnECRegionsImageIsAsLongAsItsEntry() throws {
+        var bytes = Self.image(maps: [[(FlashDeviceMap.ecFirmware, 0x2000, 0x2000)]])
+        bytes.replaceSubrange(0x2000..<0x3000, with: ITEFirmwareTests.image())
+        let region = try XCTUnwrap(regions(top(UEFIParser.parse(bytes))).first)
+
+        XCTAssertEqual(region.range, 0x2000..<0x4000)
+        XCTAssertEqual(region.namedImageLength, 0x2000, "the entry's size, though half of it is erased")
+    }
+
+    /// An entry gives the region's size, not each image's: with several images
+    /// in the region each runs to its last written byte, as anywhere else —
+    /// `LENV_CSME 16`'s 512 KB region holds a 16 KB and two 192 KB images.
+    func testSeveralImagesInAnECRegionAreMeasuredByTheirBytes() throws {
+        var bytes = Self.image(maps: [[(FlashDeviceMap.ecFirmware, 0x2000, 0x2000)]])
+        bytes.replaceSubrange(0x2000..<0x2800, with: ITEFirmwareTests.image("ITE5507-SB-V0.67", length: 0x800))
+        bytes.replaceSubrange(0x3000..<0x3800, with: ITEFirmwareTests.image("ITE8380-EC-V0.00", length: 0x800))
+        let region = try XCTUnwrap(regions(top(UEFIParser.parse(bytes))).first)
+
+        XCTAssertEqual(region.name, "EC Firmware")
+        XCTAssertNil(region.namedImageLength)
+        XCTAssertEqual(region.children.filter { $0.kind == .ecImage }.map(\.range),
+                       [0x2000..<0x3000, 0x3000..<0x4000])
+    }
+
     /// The map's rows are named by region type, the way UEFITool names them.
     func testAnEntryIsNamedByItsRegionType() {
         let map = top(UEFIParser.parse(Self.image())).first { $0.kind == .flashDeviceMapStore }!

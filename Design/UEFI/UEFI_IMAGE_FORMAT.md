@@ -1315,9 +1315,15 @@ into rows beside it.
 An AMD board's first padding is like this — `W25Q64JW-IQ.orig.bin` keeps the
 PSP's directories and blobs from `0x0`, then `ITE8380-EC-V0.00` at `0x2C8000`.
 Only ITE is trusted away from a start: a `PHCM` dword is four bytes. The
-node keeps that image's length, measured as a row's would be, in
-`namedImageLength`, and the panel puts its size in KiB beside the image's name:
-`EC Firmware (ITE EC-V13.6, 96 KB)` in `CSME 12`. When
+node keeps that image's length in `namedImageLength`, and the panel puts its
+size in KiB beside the image's name. An EC Firmware region of the Insyde map
+that holds that one image is as long as its entry says: the entry is the
+firmware's own statement of the slot, and the erased tail is part of the image — `EC Firmware (ITE EC-V13.6,
+128 KB)` in `CSME 12`, whose last written byte would make it 96. A block the
+map does not name — padding, the descriptor's EC region — is measured as a row
+is, below, and so are the images of a region holding several: the entry gives
+the region's size, not any one image's (`LENV_CSME 16`'s 512 KB region holds
+16, 192 and 192 KB). When
 the block holds more than that one image at its start, each image becomes an
 `ecImage` node named after itself, classified as UEFITool's padding like the
 map regions, and what lies between them stays padding; the block then names
