@@ -133,6 +133,11 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case unknownDvarEntry
         /// A DVAR variable whose namespace id no entry of the store declares.
         case dvarNamespaceMissing
+        /// A structure the FIT names by address is not there: a Boot Policy
+        /// row pointing at bytes that do not open a manifest, as on a board
+        /// whose Boot Guard was never provisioned — the GL703GE's row points
+        /// at zeroes (`BOOT_GUARD_PROTECTED_RANGES.md` §4).
+        case notWhereNamed(Structure)
 
         public var severity: Severity {
             switch self {
@@ -146,7 +151,7 @@ public struct UEFIDiagnostic: Equatable, Sendable {
                  .protectedRangeHashMismatch, .unsupportedHashAlgorithm,
                  .unknownVendorHashFileSize, .unknownRevision,
                  .unknownFlashDeviceMapEntries, .nonUEFIDataInPadFile, .nonUEFIDataInSections, .nonUEFIDataInVolume,
-                 .fileHeaderMarkedInvalid, .unknownDvarEntry, .dvarNamespaceMissing:
+                 .fileHeaderMarkedInvalid, .unknownDvarEntry, .dvarNamespaceMissing, .notWhereNamed:
                 return .warning
             }
         }
@@ -251,6 +256,8 @@ public struct UEFIDiagnostic: Equatable, Sendable {
             return "DVAR entry of an unknown state, flags or type; the store is kept as padding from here"
         case .dvarNamespaceMissing:
             return "DVAR variable names a namespace no entry of the store declares"
+        case .notWhereNamed(let structure):
+            return "the FIT names a \(structure.label) where there is none"
         }
     }
 

@@ -136,6 +136,13 @@ them tells the version:
 - `Version < 0x20` — **v1**, §4.2;
 - `Version >= 0x20` — **v2**, §4.3.
 
+Where the entry points at bytes that are not `__ACBP__`, there is no manifest
+to read: the `notWhereNamed` warning, and no ranges. A board whose Boot Guard
+was never provisioned keeps the FIT rows and nothing behind them — the
+GL703GE's Boot Policy and Key Manifest rows point at zeroes, and UEFITool says
+it is unable to parse either. A manifest that starts but runs off the image is
+`truncated`.
+
 The Key Manifest (FIT type `0x0B`, `__KEYM__`) holds no ranges. Its one link to
 this document is the cross-check in `FIT_TABLE_FORMAT.md` §7.4, which is out of
 scope here.

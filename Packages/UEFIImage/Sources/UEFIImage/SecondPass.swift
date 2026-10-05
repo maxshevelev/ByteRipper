@@ -123,7 +123,7 @@ extension Parser {
         var index = 0
         while index + guid.count <= bytes.count {
             defer { index += 1 }
-            guard Array(bytes[index..<(index + guid.count)]) == guid else { continue }
+            guard bytes[index] == guid[0], bytes[index..<(index + guid.count)].elementsEqual(guid) else { continue }
             let header = start + UInt64(index)
             // The size field of the FFS header this GUID would be the name of
             // (§5.1). It has to land the file's last byte on the top's.

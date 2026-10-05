@@ -266,6 +266,45 @@ final class SectionParseTests: XCTestCase {
         XCTAssertNil(Sound.read(at: 0, limit: UInt64(noData.count), in: ImageReader(noData)))
     }
 
+    /// A raw section is a raw area, as the reference reads it: the GL703GE
+    /// keeps a volume in one, behind 12 erased bytes.
+    func testARawSectionHoldingAVolumeFurtherInReadsIt() throws {
+        let raw = TestImage.section(type: Section.raw,
+                                    body: [UInt8](repeating: 0xFF, count: 12) + TestImage.volume(length: 0x200))
+        let image = UEFIParser.parse(TestImage.volume(length: 0x1000, files: [
+            TestImage.sectionedFile(type: 0x0B, sections: [raw])
+        ]))
+        let section = try XCTUnwrap(image.allNodes.first { $0.kind == .section && $0.subtype == Section.raw })
+
+        XCTAssertEqual(section.children.map(\.kind), [.padding, .volume])
+        XCTAssertEqual(section.children[1].range, (section.body.lowerBound + 12)..<section.body.upperBound)
+        XCTAssertEqual(image.diagnostics, [])
+    }
+
+    /// A volume header claiming more than the section has left is data that
+    /// reads as one, not a volume cut short: the reference turns it down, and
+    /// so does the scan of a section (`1.bin`'s Freeform file holds one).
+    func testAVolumeHeaderRunningPastARawSectionIsNoVolume() {
+        let header = Array(TestImage.volume(length: 0x400).prefix(0x80))
+        let raw = TestImage.section(type: Section.raw, body: [UInt8](repeating: 0x11, count: 0x20) + header)
+        let image = UEFIParser.parse(TestImage.volume(length: 0x1000, files: [
+            TestImage.sectionedFile(type: 0x02, sections: [raw])
+        ]))
+
+        XCTAssertEqual(image.allNodes.filter { $0.kind == .volume }.count, 1, "the outer volume alone")
+        XCTAssertEqual(image.diagnostics, [])
+    }
+
+    /// A RIFF size four bytes past the file, its data chunk whole, as the
+    /// G733PYV keeps its sound: the sound ends where its bytes do.
+    func testARIFFSizeClaimingMoreThanItsWholeChunksIsASound() throws {
+        var sound = wav()
+        sound.replaceSubrange(4..<8, with: [UInt8(sound.count - 8 + 4), 0, 0, 0])
+
+        let read = try XCTUnwrap(Sound.read(at: 0, limit: UInt64(sound.count), in: ImageReader(sound)))
+        XCTAssertEqual(read.range, 0..<UInt64(sound.count))
+    }
+
     /// A freeform section's subtype GUID is its header's, as the reference
     /// draws it, and its body a raw area: ASUS keeps each size of its animated
     /// boot logo as a GIF there, and the GIF is a row of the section.

@@ -374,10 +374,12 @@ final class ProtectedRangeReading {
                 note(.protectedRangeOutsideImage("Boot Policy Manifest"), at: row)
                 continue
             }
-            guard file.uint64(at: manifest) == BootPolicy.structureID,
-                  let version = file.uint8(at: manifest + 8)
-            else {
+            guard let id = file.uint64(at: manifest), let version = file.uint8(at: manifest + 8) else {
                 note(.truncated(.bootPolicy), at: manifest)
+                continue
+            }
+            guard id == BootPolicy.structureID else {
+                note(.notWhereNamed(.bootPolicy), at: manifest)
                 continue
             }
             if version < BootPolicy.v2MinVersion {

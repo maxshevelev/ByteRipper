@@ -13,7 +13,9 @@ import Foundation
 /// which keeps what follows the last copy, a Dell EC region's log, out of it;
 /// any other image runs to its last written byte before the next one. An
 /// erased run inside does not end it: an ITE image keeps data at the end of
-/// its slot, past 40 KiB of erased bytes.
+/// its slot, past 40 KiB of erased bytes. A directory of AMD's PSP opening a
+/// 4 KiB boundary does: on an AMD board the PSP's directories and the blobs
+/// they name follow the EC image in the same padding.
 public struct ECImage: Equatable, Sendable {
     public enum Vendor: Equatable, Sendable {
         /// The identification the image carries, such as `ITE8380-EC-V1.43`.
@@ -61,18 +63,29 @@ public struct ECImage: Equatable, Sendable {
         return nil
     }
 
+    /// The signatures a directory of AMD's PSP opens with: the PSP's and the
+    /// BIOS's, first and second level (`$PSP`, `$PL2`, `$BHD`, `$BL2`).
+    static let amdDirectorySignatures: Set<UInt32> = [0x5053_5024, 0x324C_5024, 0x4448_4224, 0x324C_4224]
+
     /// Every image in `range`, at each 4 KiB boundary, each running to its
-    /// last written byte before the next one starts.
+    /// last written byte before the next one starts, or before the next AMD
+    /// directory does.
     public static func all(in range: Range<UInt64>, reader: ImageReader, emptyByte: UInt8 = 0xFF) -> [ECImage] {
         var starts: [(UInt64, Vendor)] = []
+        var directories: [UInt64] = []
         var at = range.lowerBound
         while at < range.upperBound {
-            if let vendor = image(at: at, limit: range.upperBound, in: reader) { starts.append((at, vendor)) }
+            if let vendor = image(at: at, limit: range.upperBound, in: reader) {
+                starts.append((at, vendor))
+            } else if let signature = reader.uint32(at: at), amdDirectorySignatures.contains(signature) {
+                directories.append(at)
+            }
             at += step
         }
         var images: [ECImage] = []
         for (index, found) in starts.enumerated() {
-            let end = index + 1 < starts.count ? starts[index + 1].0 : range.upperBound
+            let next = index + 1 < starts.count ? starts[index + 1].0 : range.upperBound
+            let end = min(next, directories.first { $0 > found.0 } ?? next)
             let written = lastWritten(in: found.0..<end, reader: reader, emptyByte: emptyByte) - found.0
             var image = ECImage(vendor: found.1, start: found.0, written: written)
             if let original = image.copied(from: images, reader: reader) {

@@ -89,6 +89,24 @@ final class ECImageTests: XCTestCase {
                        ["ITE5507-SB-V0.67", "ITE8380-EC-V0.00"])
     }
 
+    /// An AMD board keeps the PSP's directories after its EC image in the
+    /// same padding, as the G733PYV, GA403UU and GV302XV do: the image ends
+    /// before the first, and what follows stays padding for the microcode
+    /// scan to read.
+    func testAnImageEndsBeforeAnAMDDirectory() {
+        var bytes = [UInt8](repeating: 0xFF, count: 0x10000)
+        bytes.replaceSubrange(0..<4, with: [0xAA, 0x55, 0xAA, 0x55])
+        bytes.replaceSubrange(0x1000..<0x2000, with: ITEFirmwareTests.image("ITE EC-V14.6"))
+        bytes.replaceSubrange(0x5000..<0x5010, with: Array("$PSP".utf8) + [UInt8](repeating: 0x11, count: 12))
+        bytes.replaceSubrange(0x9000..<0x9100, with: [UInt8](repeating: 0x22, count: 0x100))
+        bytes.replaceSubrange(0xF000..<0x10000, with: TestImage.volume(length: 0x1000, lastFile: TestImage.volumeTopFile()))
+        let padding = UEFIParser.parse(bytes).roots[0].children[0]
+
+        XCTAssertEqual(padding.name, "Padding")
+        XCTAssertEqual(padding.children.map(\.name), ["Padding", "EC firmware (ITE EC-V14.6)", "Padding"])
+        XCTAssertEqual(padding.children.map(\.range), [0..<0x1000, 0x1000..<0x2000, 0x2000..<0xF000])
+    }
+
     /// One image at the block's start is the common case: the block is
     /// named by it, keeps its length as a row would, and gets no rows.
     func testASingleImageAtTheStartAddsNoRows() {

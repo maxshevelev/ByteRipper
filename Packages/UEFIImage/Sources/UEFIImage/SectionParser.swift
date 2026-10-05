@@ -313,6 +313,10 @@ extension Parser {
                     // Most of a firmware's pictures — the logo, the setup
                     // screen's icons — are a raw section's whole body.
                     ?? pictureBody(body, emptyByte: emptyByte)
+                    // Anything else is a raw area, as the reference reads it:
+                    // the GL703GE keeps a volume in one, behind 12 erased
+                    // bytes. One holding nothing found stays a leaf.
+                    ?? rawAreaFindings(body, emptyByte: emptyByte, depth: depth + 1)
                     ?? []
             } else if type == Section.firmwareVolumeImage {
                 // A volume inside a section, and files inside that: the point at
@@ -323,8 +327,7 @@ extension Parser {
             } else if type == Section.freeformSubtypeGUID, guid != nil {
                 // A raw area with nothing in it leaves the section a leaf, as
                 // a raw file's body does.
-                let found = scanRawArea(body, emptyByte: emptyByte, depth: depth + 1)
-                children = found.contains { $0.kind != .padding || !$0.children.isEmpty } ? found : []
+                children = rawAreaFindings(body, emptyByte: emptyByte, depth: depth + 1) ?? []
             } else if type == Section.userInterface, let text = ucs2String(in: body) {
                 name = text
             }
@@ -360,6 +363,13 @@ extension Parser {
             note(.sizeMismatch(.amdZlibHeader, stored: UInt64(stored), computed: end - streamStart), at: offset)
         }
         return streamStart
+    }
+
+    /// What a scan of `body` as a raw area finds, or nil when it finds
+    /// nothing but padding: a section body with nothing in it stays a leaf.
+    private func rawAreaFindings(_ body: Range<UInt64>, emptyByte: UInt8, depth: Int) -> [UEFINode]? {
+        let found = scanRawArea(body, emptyByte: emptyByte, depth: depth, volumesMustFit: true)
+        return found.contains { $0.kind != .padding || !$0.children.isEmpty } ? found : nil
     }
 
     private func compressionName(_ algorithm: UInt8) -> String {

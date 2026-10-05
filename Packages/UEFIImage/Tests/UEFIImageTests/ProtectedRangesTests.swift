@@ -403,6 +403,19 @@ final class ProtectedRangesTests: XCTestCase {
         XCTAssertEqual(image.ranges.ranges, [])
     }
 
+    /// A Boot Policy row pointing at zeroes, as on a board whose Boot Guard
+    /// was never provisioned (the GL703GE): no manifest is there, which is
+    /// said as that and not as a manifest cut short (§4.1).
+    func testAPolicyRowPointingAtNoManifestSaysSo() {
+        var image = BootGuardImage()
+        image.install(policy: [UInt8](repeating: 0, count: 0x100))
+
+        let ranges = image.ranges
+        XCTAssertEqual(ranges.ranges, [])
+        XCTAssertEqual(ranges.diagnostics.map(\.kind), [.notWhereNamed(.bootPolicy)])
+        XCTAssertEqual(ranges.diagnostics.first?.message, "the FIT names a Boot Policy Manifest where there is none")
+    }
+
     /// The reference prints the IBB digests and compares them with nothing; a
     /// port compares, and says what it found as a warning (§6.1).
     func testAnIBBThatDoesNotHashToItsDigestIsAWarning() throws {

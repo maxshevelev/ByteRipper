@@ -68,15 +68,18 @@ public struct Sound: Equatable, Sendable {
     static let maxChunks = 64
 
     /// The WAV file starting at `start` and ending at or before `limit`, or nil
-    /// when what is there is not one: a RIFF header naming `WAVE`, a size that
-    /// fits, and a format chunk and a data chunk among the chunks it holds.
+    /// when what is there is not one: a RIFF header naming `WAVE`, and a
+    /// format chunk and a data chunk among the chunks it holds, each whole.
+    /// A RIFF size claiming more than is there ends the file where the bytes
+    /// do: the G733PYV's says four bytes more than its file holds, its data
+    /// chunk whole before them.
     public static func read(at start: UInt64, limit: UInt64, in reader: ImageReader) -> Sound? {
         guard reader.uint32(at: start) == riff, reader.uint32(at: start + 8) == wave,
               let riffSize = reader.uint32(at: start + 4), riffSize >= 4
         else { return nil }
         // A chunk's data is padded to an even length, and so is the file.
-        let end = start + 8 + UInt64(riffSize) + UInt64(riffSize & 1)
-        guard end <= min(limit, reader.count) else { return nil }
+        let end = min(start + 8 + UInt64(riffSize) + UInt64(riffSize & 1), limit, reader.count)
+        guard end >= start + 12 else { return nil }
 
         var formatChunk: (encoding: UInt16, channels: UInt16, rate: UInt32, byteRate: UInt32, bits: UInt16)?
         var dataLength: UInt32?

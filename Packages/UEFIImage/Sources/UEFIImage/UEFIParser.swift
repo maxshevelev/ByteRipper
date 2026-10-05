@@ -198,7 +198,13 @@ final class Parser {
     /// dword by dword — nothing here guarantees a volume starts on a multiple
     /// of four, and images where one does not are common enough that the
     /// reference parser gave up on the shortcut too.
-    func scanRawArea(_ range: Range<UInt64>, emptyByte: UInt8, depth: Int) -> [UEFINode] {
+    ///
+    /// A volume running past the area is kept, cut and reported — a dump cut
+    /// short still has its volumes. `volumesMustFit` turns such a header down
+    /// instead, as the reference does everywhere: inside a section, a volume
+    /// header with nothing behind it is data that happens to read as one.
+    func scanRawArea(_ range: Range<UInt64>, emptyByte: UInt8, depth: Int,
+                     volumesMustFit: Bool = false) -> [UEFINode] {
         guard reader.has(range), range.count >= 4 else {
             progressed(to: range.upperBound)
             return padding(from: range.lowerBound, to: range.upperBound, emptyByte: emptyByte)
@@ -224,7 +230,8 @@ final class Parser {
                     | UInt32(bytes[index + 2]) << 16
                     | UInt32(bytes[index + 3]) << 24
                 let at = offset + UInt64(index)
-                if let found = element(atSignature: dword, at: at, in: range, emptyByte: emptyByte, depth: depth) {
+                if let found = element(atSignature: dword, at: at, in: range, emptyByte: emptyByte, depth: depth,
+                                       volumesMustFit: volumesMustFit) {
                     nodes += padding(from: claimed, to: found.range.lowerBound, emptyByte: emptyByte)
                     nodes.append(found)
                     claimed = found.range.upperBound
@@ -260,12 +267,18 @@ final class Parser {
         at offset: UInt64,
         in range: Range<UInt64>,
         emptyByte: UInt8,
-        depth: Int
+        depth: Int,
+        volumesMustFit: Bool
     ) -> UEFINode? {
         switch dword {
         case FV.signature:
             guard offset >= range.lowerBound + FV.signatureOffset else { return nil }
-            return parseVolume(at: offset - FV.signatureOffset, limit: range.upperBound, depth: depth)
+            let start = offset - FV.signatureOffset
+            if volumesMustFit, let length = reader.uint64(at: start + 0x20),
+               length > range.upperBound - start {
+                return nil
+            }
+            return parseVolume(at: start, limit: range.upperBound, depth: depth)
         case Microcode.headerType:
             return parseMicrocode(at: offset, limit: range.upperBound)
         case FlashDeviceMap.signature:

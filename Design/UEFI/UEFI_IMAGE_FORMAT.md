@@ -564,6 +564,19 @@ rebuilt later.
 Raw areas are also searched for NVRAM stores, AMD microcode and BPDT/CPD (see
 §7, §8).
 
+A raw section's body that is neither an NVAR store nor a picture at its start
+is a raw area too, as the reference reads every raw section; the section keeps
+what the scan finds only when it is more than padding, and is a leaf otherwise.
+The `Asus/GL703GE-F1.318` keeps a whole volume this way — a Volume image file,
+a raw section, 12 erased bytes, then the volume at `0xE80070` with its 13 files.
+Inside a section (`scanRawArea(volumesMustFit:)`) a volume header claiming more
+than the area has left is turned down, not cut and reported: the reference
+leaves such an object padding everywhere, and in a section it is data that
+reads as a header — `1.bin`'s Freeform file `0x10A7EB0` holds one in a raw
+section of `0xA0` bytes. In a raw area of the image itself a volume running
+past the end is still kept, cut, and reported, since a dump cut short still has
+its volumes.
+
 Beyond the reference, the scan also takes the start of a picture — `FF D8 FF
 E0` or `E1` (JPEG), `89 50 4E 47` (PNG), `GIF8` (GIF), and `BM` (BMP) in the
 dword's low half — as a candidate (§9).
@@ -1103,6 +1116,9 @@ twenty-seven dumps — `0x565C00` (`00A50F00`, `0x15C0`) on the Lenovo board,
 `0xC80` each) on `W25Q64JW-IQ.orig.bin`, `0x676C00`, `0x88BC00`, `0x88C900`
 (`00A50F00`, `00860F81`, `00860F01`) on the Asus board. Each is an entry of
 type `0x66` in the PSP's BIOS level-2 directory, whose size is the table's.
+Later the ASUS images `G733PYV`, `GA403UU` and `GV302XV`: 4, 8 and 10 patches
+of `0x15C0`, two copies of each set, at UEFIExtract's offsets — found only once
+the EC image before them stopped at the PSP's first directory (§9).
 **Not implemented**: the search inside TE/PE files of the `DE3E049C-…` file —
 no dump at hand has one, the decompressed volumes included.
 
@@ -1406,6 +1422,13 @@ it; the EC firmware is one part of it, and what else it holds is to be read
 into rows beside it.
 An AMD board's first padding is like this — `W25Q64JW-IQ.orig.bin` keeps the
 PSP's directories and blobs from `0x0`, then `ITE8380-EC-V0.00` at `0x2C8000`.
+The other order is as common: on the ASUS `G733PYV`, `GA403UU` and `GV302XV`
+the EC image comes first (`0x21000`, `0x81000`, `0x30000`), after the EFS at
+`0x20000`, and the PSP's directories start at `0x121000`. An image therefore
+also ends before the first 4 KiB boundary after it that opens a PSP or BIOS
+directory (`$PSP`, `$PL2`, `$BHD`, `$BL2`): read to its last written byte
+before the next image only, the G733PYV's ran to `0x8FA000` and took the
+microcode with it.
 Only ITE is trusted away from a start: a `PHCM` dword is four bytes. The
 node keeps that image's length in `namedImageLength`, and the panel puts its
 size in KiB beside the image's name. An EC Firmware region of the Insyde map
@@ -1490,8 +1513,13 @@ the body holds: it is the picture whether or not it is whole, so the node ends
 with the body and the details report the declared size. One Dell logo is such a
 BMP, `0x34` bytes short.
 
-On the thirteen dumps every picture found in a raw section is the section's
-whole body, and the raw-area scan finds one outside a section on one dump only:
+On the thirteen dumps every picture found in a raw section was the section's
+whole body until raw sections were read as raw areas (§4). Since then the scan
+also finds pictures packed one after another in one section's body: twelve
+JPEGs and GIFs in the Phoenix Freeform file `418E3259-…` of
+`W25Q64JW-IQ.orig.bin` (six GIFs in the same file in `CSME 11`), nine PNG icons
+in HP's file `6E7E47DD-…`. The raw-area scan finds one outside a section on one
+dump only:
 the HP ZBook Fury 16 G9's 800×480 JPEG, `0x194E000`–`0x1976FB0`, in the padding
 after its FFSv3 volume. Counts run from one BMP (`CSME 11`) to 138 pictures
 (`ME 7.bin`, mostly PNG icons in compressed volumes); every one of them decodes
@@ -1542,10 +1570,12 @@ classified as UEFITool's padding. Its ranges are protected ranges
 | ProDesk 600 G4 | `0x1387000` | 2 | `Q22`, 2023-06-15 |
 
 **Sounds** — a WAV file — are read where a body stops reading as sections
-(§6): at the start of that Non-UEFI data (`Sound.swift`). `RIFF`, a size that
-fits, `WAVE`, then chunks — id, little-endian size, data padded to even — read
-until both a `fmt ` chunk of at least 16 bytes and a `data` chunk are found;
-the length is the RIFF size plus eight. The node is a `sound`, a row inside
+(§6): at the start of that Non-UEFI data (`Sound.swift`). `RIFF`, `WAVE`, then
+chunks — id, little-endian size, data padded to even — read until both a
+`fmt ` chunk of at least 16 bytes and a `data` chunk are found, each whole; the
+length is the RIFF size plus eight, or what is there when that is less. The
+G733PYV's RIFF size says four bytes more than its file holds, its `data` chunk
+whole before them. The node is a `sound`, a row inside
 the Non-UEFI data, named by sample rate and channels in the language running
 (`WAV, 44100 Hz, stereo`), classified as UEFITool's padding. The details give
 the encoding, rate, bits, channels and duration, and the panel plays it
@@ -1553,7 +1583,9 @@ the encoding, rate, bits, channels and duration, and the panel plays it
 the Freeform file `118C6187-B0D3-4FD4-8B21-A4AE732416AB` in a compressed
 volume: `Asus/SPI_C86018_128Mbit_GD25LB128DW.bin`, `CSME 16.1.bin` and
 `orig_30072026.BIN` — 44.1 kHz, 16-bit, stereo, about 4 s, by all appearances
-ASUS's POST sound.
+ASUS's POST sound. Five of the seven ASUS update images in `Asus/` carry it in
+the same file (`G615LR`, `G733PYV`, `GA403UU`, `GU605CR`, `GV302XV`), the
+G733PYV's 1.5 MiB long.
 
 **How full a store is** is counted off the nodes the parser already made
 (`NvramStoreFill.swift`), for any node with variable entries among its
