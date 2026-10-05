@@ -88,6 +88,8 @@ public enum FirmwareCompression {
             stream = try tiano(bytes, tiano: true)
         case .efi11:
             stream = try tiano(bytes, tiano: false)
+        case .zlib:
+            stream = try zlib(bytes)
         }
         progress?(encodedShare)
         guard decodes(stream, as: variant, to: bytes) else { throw Failure.roundTripFailed }
@@ -218,6 +220,8 @@ public enum FirmwareCompression {
             return (try? FirmwareDecompression.tiano(stream, limit: limit))?.tiano == bytes
         case .efi11:
             return (try? FirmwareDecompression.tiano(stream, limit: limit))?.efi11 == bytes
+        case .zlib:
+            return (try? FirmwareDecompression.zlib(stream, limit: limit))?.bytes == bytes
         }
     }
 }

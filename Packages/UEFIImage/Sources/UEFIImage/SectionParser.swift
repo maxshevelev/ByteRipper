@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// `EFI_COMMON_SECTION_HEADER` and the section types (§6).
 enum Section {
@@ -75,11 +76,10 @@ extension Parser {
     ///
     /// Encapsulating sections are where the tree stops being a list: a
     /// compression section holds sections, a volume image section holds a
-    /// volume, and the volume holds files again. What this parser will not do
-    /// is decompress — five algorithms, none of them in the system libraries,
-    /// and the rule of this project is no third-party code. A compressed
-    /// section is a leaf that says which algorithm it is, and the day one is
-    /// implemented it grows children instead.
+    /// volume, and the volume holds files again. A compressed section says
+    /// which algorithm it is, and one this package decodes grows children
+    /// when its row is opened (`COMPRESSED_SECTIONS.md` §6.1); the others stay
+    /// leaves.
     ///
     /// `fileGuid` is the file the sections belong to, when the walk knows it:
     /// a raw section means something different in some files (§9). A buffer
@@ -120,20 +120,13 @@ extension Parser {
                 headerSize = Section.extendedHeaderSize
                 size = UInt64(extended)
             }
-            guard size != 0 else {
-                note(.zeroSize(.sectionHeader), at: offset)
+            // A size of zero, one smaller than the header or one past what is
+            // left is not a section: the rest of the body is data of some
+            // other kind, said once, as the reference says it (§6).
+            let end = offset + size
+            guard size >= headerSize, size != 0, end <= body.upperBound else {
+                nodes.append(nonUEFIData(from: offset, to: body.upperBound, emptyByte: emptyByte))
                 break
-            }
-            guard size >= headerSize else {
-                note(.sizeMismatch(.sectionHeader, stored: size, computed: headerSize), at: offset)
-                break
-            }
-
-            var end = offset + size
-            if end > body.upperBound {
-                note(.truncated(.sectionBody), at: offset)
-                end = body.upperBound
-                guard end - offset > headerSize else { break }
             }
 
             nodes.append(parseSection(
@@ -148,6 +141,26 @@ extension Parser {
             offset = next
         }
         return nodes
+    }
+
+    /// What is left of a body once it stops reading as sections: one row of
+    /// Non-UEFI data, as UEFITool draws it. A sound it opens with — ASUS keeps
+    /// its POST sound as a Freeform file's whole body — is a row inside it,
+    /// beyond the reference, the way the FIT's structures are inside a pad
+    /// file's.
+    private func nonUEFIData(from start: UInt64, to end: UInt64, emptyByte: UInt8) -> UEFINode {
+        note(.nonUEFIDataInSections, at: start)
+        var children: [UEFINode] = []
+        if let sound = parseSound(at: start, limit: end) {
+            children = [sound] + padding(from: sound.body.upperBound, to: end, emptyByte: emptyByte)
+        }
+        return UEFINode(
+            kind: .padding,
+            name: L("Non-UEFI data"),
+            header: start..<start,
+            body: start..<end,
+            children: children
+        )
     }
 
     /// Whether `body` reads as a run of sections, the way the reference's
@@ -237,6 +250,9 @@ extension Parser {
             } else {
                 bodyStart = min(offset + headerSize + Section.guidDefinedHeaderSize, end)
             }
+            if guid == CompressedSection.amdZlib {
+                bodyStart = amdZlibBodyStart(section: offset, dataStart: bodyStart, end: end)
+            }
             if let guid, let known = KnownGUIDs.guidedSection(guid) {
                 name = "\(known.name) section"
                 readsBodyAsSections = !known.transformsBody
@@ -310,6 +326,24 @@ extension Parser {
             childDepth: depth + 1,
             children: children
         )
+    }
+
+    /// Where an AMD Zlib section's stream starts: after the vendor's header,
+    /// which belongs to the section's header as the reference draws it (§2.2).
+    /// The header's `CompressedSize` is meant to account for the rest of the
+    /// section exactly; when it does not, that is said and the stream is read
+    /// all the same, as the reference reads it. A section too short to hold
+    /// the header keeps its data where `DataOffset` puts it, and does not
+    /// decode.
+    private func amdZlibBodyStart(section offset: UInt64, dataStart: UInt64, end: UInt64) -> UInt64 {
+        let streamStart = dataStart + CompressedSection.amdZlibHeaderSize
+        guard streamStart <= end,
+              let stored = reader.uint32(at: dataStart + CompressedSection.amdZlibCompressedSizeOffset)
+        else { return dataStart }
+        if UInt64(stored) != end - streamStart {
+            note(.sizeMismatch(.amdZlibHeader, stored: UInt64(stored), computed: end - streamStart), at: offset)
+        }
+        return streamStart
     }
 
     private func compressionName(_ algorithm: UInt8) -> String {

@@ -251,6 +251,15 @@ extension Parser {
                 )
                 break
             }
+            // A header that declares more than the volume has left is not a
+            // file cut short but data of some other kind: the rest of the
+            // volume, said once, as the reference keeps it (§5.8).
+            if let size = declaredFileSize(at: offset, ffsVersion: ffsVersion, volumeRevision: volumeRevision),
+               size > body.upperBound - offset {
+                note(.nonUEFIDataInVolume, at: offset)
+                nodes.append(nonUEFIData(offset..<body.upperBound, emptyByte: emptyByte, depth: depth))
+                break
+            }
             guard let file = parseFile(
                 at: offset,
                 limit: body.upperBound,

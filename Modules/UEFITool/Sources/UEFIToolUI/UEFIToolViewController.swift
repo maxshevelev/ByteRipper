@@ -931,6 +931,21 @@ import UEFITool
 
         for table in node.tables { addTable(table) }
         if let picture = node.picture { addPicture(picture) }
+        if let sound = node.sound { addSound(sound) }
+    }
+
+    /// The sound a node is, with a player under its rows, as wide as the list
+    /// (`SoundPlayerView`). Bytes AVFoundation cannot play leave the rows as
+    /// they are.
+    // help: panel.uefi.sound-player
+    private func addSound(_ bytes: [UInt8]) {
+        guard let view = SoundPlayerView(wav: bytes) else { return }
+        view.translatesAutoresizingMaskIntoConstraints = false
+        if let above = detail.content.arrangedSubviews.last {
+            detail.content.setCustomSpacing(12, after: above)
+        }
+        detail.content.addArrangedSubview(view)
+        view.widthAnchor.constraint(equalTo: detail.content.widthAnchor).isActive = true
     }
 
     /// The picture a node is, drawn under its rows: as wide as the list at

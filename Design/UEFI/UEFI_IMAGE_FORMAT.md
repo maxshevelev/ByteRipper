@@ -813,6 +813,15 @@ while fileOffset < the size of the volume's body:
 
 The next file is always aligned to 8 bytes, whatever the version of FFS.
 
+A header whose size is more than the volume has left is not a file cut short
+but the start of data of some other kind: the rest of the volume is one
+`nonUEFIData` node, searched as non-UEFI data always is, with one
+`nonUEFIDataInVolume` warning (`walkVolumeBody`, through
+`declaredFileSize`). Until 2026-10-05 the parser read such a header as a file
+anyway — on `W25Q256JV.orig.bin` a "file" of type `0x46` at `0x1B01580` with a
+truncated body, two checksum mismatches and an unknown type; UEFIExtract makes
+`0x1B01580`–`0x1D10000` non-UEFI data, and so does the parser now.
+
 ---
 
 ## 6. Sections
@@ -837,6 +846,18 @@ The extended header applies only in FFSv3 volumes: `Size == EFI_SECTION2_IS_USED
 (0xFFFFFF)` → read `ExtendedSize`.
 
 Sections inside a file are aligned to 4 bytes (`ALIGN4`).
+
+A section whose size is zero, smaller than its header, or more than the body
+has left ends the walk: the rest of the body is one padding node named
+`Non-UEFI data`, with one `nonUEFIDataInSections` warning — the reference's
+"non-UEFI data found in sections area". Until 2026-10-05 the parser kept such a
+section, cut to the body, with `truncated(.sectionBody)` and whatever its type
+byte said (`zeroSize` and `sizeMismatch` stopped the walk with no node at
+all). On the thirty dumps at hand this happens five times, every one where
+UEFIExtract says it: on `Asus/SPI_C86018_128Mbit_GD25LB128DW.bin`,
+`CSME 16.1.bin` and `orig_30072026.BIN` the body is a WAV (§9) whose `RIFF`
+read as a section of type `0x46`; on `DELL Optiplex 5070 Working.bin` a section
+two bytes long.
 
 ### 6.1. Section types
 
@@ -1013,6 +1034,65 @@ state: the FIT specification explicitly allows entries that point at empty slots
 
 Parsed separately (`amd_microcode.h`); the search runs both over raw areas and
 inside TE/PE files with the GUID `DE3E049C-A218-4891-8658-5FC0FA84C788`.
+
+```c
+typedef struct {
+    UINT16 DateYear;            // BCD: 0x2023
+    UINT8  DateDay;             // BCD
+    UINT8  DateMonth;           // BCD
+    UINT32 UpdateRevision;
+    UINT16 LoaderID;            // 0x80xx
+    UINT8  DataSize;
+    UINT8  InitializationFlag;
+    UINT32 DataChecksum;
+    UINT16 NorthBridgeVEN_ID;   // 0 or 0x1022
+    UINT16 NorthBridgeDEV_ID;
+    UINT16 SouthBridgeVEN_ID;   // 0 or 0x1022
+    UINT16 SouthBridgeDEV_ID;
+    UINT16 ProcessorSignature;  // 0xA500 → CPUID 00A50F00
+    UINT8  NorthBridgeREV_ID;
+    UINT8  SouthBridgeREV_ID;
+    UINT8  BiosApiRevision;     // 0 or 1
+    UINT8  LoadControl;         // up to 0x0F, or 0xAA
+    UINT8  Reserved[2];
+} AMD_MICROCODE_HEADER;         // 0x20 bytes
+```
+
+No signature: a header is one when every field is a value AMD writes — the
+date BCD (day 01–31, month 01–12, year 2001–2029), `LoaderID >> 8 == 0x80`, both
+vendor ids `0` or `0x1022`, `BiosApiRevision` 0 or 1, `LoadControl` at most
+`0x0F` or `0xAA` — and in a raw area, as the reference wants, `0x44` more bytes
+follow with the dword at `0x40` not zero. The data size is `DataSize` for a
+loader below `0x8005` and `(InitializationFlag << 8 | DataSize) * 0x10` from
+it; `0x20` makes a patch of `0x3C0`, `0x10` one of `0x200`, any other non-zero
+size is the length. At zero only the family says it — the CPUID's high byte:
+`0x50` `0x620`, `0x58` `0x567`, `0x60`–`0x67` `0xA20`, `0x68`–`0x69` `0x980`,
+`0x70`/`0x73` `0xD60`, `0x80`–`0x83` and `0x85`–`0x8A` `0xC80`, `0xA0`–`0xA7`
+and `0xAA` `0x15C0`, `0xB4` `0x3820`; a family not in the table is no patch.
+Three patches AMD dated wrongly are read with the reference's correction
+(`00800F11`/`08001105` year 2016 → 2017, `00300F10`/`03000027` month 13 → 12,
+`00730F01`/`07030106` 09-02 → 02-09).
+
+**Implemented** (`AMDMicrocode.swift`): the raw-area half. Every stretch of
+padding the scan left, and every Insyde map region and padding row read into
+one, is searched byte by byte — the loader's high byte the first test — and
+each patch found becomes an `amdMicrocode` node inside it, the stretch keeping
+its place, range and name as for every structure read out of padding (§9). The
+node is fixed, named `AMD microcode <CPUID>, revision <rev>`, and classified as
+UEFITool's `AmdMicrocode` (`0x69`). Beyond the reference, which has no regions,
+a patch in a map region is found: on `SPI_EF6018_128Mbit.*` the one patch lies
+in the region the map calls `Unknown`, `0x53F000`–`0x5AA000`, which opens on
+the PSP's `$BL2` directory.
+
+Checked on 2026-10-05: seven patches on the three AMD boards at hand, each at
+the offset and of the size UEFIExtract gives, and none on the other
+twenty-seven dumps — `0x565C00` (`00A50F00`, `0x15C0`) on the Lenovo board,
+`0x2B6500`, `0x2B7200`, `0x2B7F00` (`00810F81`, `00810F80`, `00820F01`,
+`0xC80` each) on `W25Q64JW-IQ.orig.bin`, `0x676C00`, `0x88BC00`, `0x88C900`
+(`00A50F00`, `00860F81`, `00860F01`) on the Asus board. Each is an entry of
+type `0x66` in the PSP's BIOS level-2 directory, whose size is the table's.
+**Not implemented**: the search inside TE/PE files of the `DE3E049C-…` file —
+no dump at hand has one, the decompressed volumes included.
 
 ---
 
@@ -1406,6 +1486,20 @@ after its FFSv3 volume. Counts run from one BMP (`CSME 11`) to 138 pictures
 in AppKit to the size read here. A GIF in a Phoenix variable (`CSME 11`) is
 not looked for: it sits after the variable's name, not at the start of
 anything the parser reads.
+
+**Sounds** — a WAV file — are read where a body stops reading as sections
+(§6): at the start of that Non-UEFI data (`Sound.swift`). `RIFF`, a size that
+fits, `WAVE`, then chunks — id, little-endian size, data padded to even — read
+until both a `fmt ` chunk of at least 16 bytes and a `data` chunk are found;
+the length is the RIFF size plus eight. The node is a `sound`, a row inside
+the Non-UEFI data, named by sample rate and channels in the language running
+(`WAV, 44100 Hz, stereo`), classified as UEFITool's padding. The details give
+the encoding, rate, bits, channels and duration, and the panel plays it
+(`SoundPlayerView`, AVFoundation). Found on three dumps, each the whole body of
+the Freeform file `118C6187-B0D3-4FD4-8B21-A4AE732416AB` in a compressed
+volume: `Asus/SPI_C86018_128Mbit_GD25LB128DW.bin`, `CSME 16.1.bin` and
+`orig_30072026.BIN` — 44.1 kHz, 16-bit, stereo, about 4 s, by all appearances
+ASUS's POST sound.
 
 **How full a store is** is counted off the nodes the parser already made
 (`NvramStoreFill.swift`), for any node with variable entries among its

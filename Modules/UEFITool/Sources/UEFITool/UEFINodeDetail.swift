@@ -114,13 +114,17 @@ public struct UEFINodeDetail: Equatable, Sendable {
     /// rows — nil for every node that is not one. Decoding them is the
     /// panel's: this target has no AppKit.
     public var picture: [UInt8]?
+    /// The bytes of the sound the node is — a whole WAV file — for the panel
+    /// to play under the rows; nil for every node that is not one.
+    public var sound: [UInt8]?
 
     public init(title: String, fields: [UEFIDetailField],
-                tables: [UEFIDetailTable] = [], picture: [UInt8]? = nil) {
+                tables: [UEFIDetailTable] = [], picture: [UInt8]? = nil, sound: [UInt8]? = nil) {
         self.title = title
         self.fields = fields
         self.tables = tables
         self.picture = picture
+        self.sound = sound
     }
 
     public static let empty = UEFINodeDetail(title: "", fields: [])
@@ -313,7 +317,9 @@ public enum UEFIDetail {
         // A picture is shown as well as described. Only one the parser
         // recognised and measured: its bytes are exactly the picture's.
         let picture = node.kind == .picture ? reader.bytes(node.body) : nil
-        return UEFINodeDetail(title: title, fields: fields, tables: tables, picture: picture)
+        // A sound is played as well: its bytes are the whole WAV file.
+        let sound = node.kind == .sound ? reader.bytes(node.body) : nil
+        return UEFINodeDetail(title: title, fields: fields, tables: tables, picture: picture, sound: sound)
     }
 
     // MARK: - A Dell DVAR entry
@@ -776,6 +782,25 @@ public enum UEFIDetail {
                 ).map { UEFIDetailField($0.label, $0.value, isProblem: $0.isProblem) }
             }
 
+        // A header with nothing to check it by: what it says, and the CPUID
+        // spelled out the way AMD's patch files are named.
+        case .amdMicrocode:
+            if let patch = AMDMicrocodeHeader.read(at: h, limit: node.range.upperBound, in: reader) {
+                fields.append(.init("Date", patch.date))
+                fields.append(.init("CPUID", String(format: "%08X", patch.cpuID)))
+                fields.append(.init("Processor signature", hex(patch.processorSignature)))
+                fields.append(.init("Revision", hex(patch.updateRevision)))
+                fields.append(.init("Loader ID", hex(patch.loaderID)))
+                if patch.northBridgeVendor != 0 || patch.northBridgeDevice != 0 {
+                    fields.append(.init("North bridge", "\(hex(patch.northBridgeVendor)):\(hex(patch.northBridgeDevice))"))
+                }
+                if patch.southBridgeVendor != 0 || patch.southBridgeDevice != 0 {
+                    fields.append(.init("South bridge", "\(hex(patch.southBridgeVendor)):\(hex(patch.southBridgeDevice))"))
+                }
+                fields.append(.init("BIOS API revision", hex(patch.biosAPIRevision)))
+                fields.append(.init("Load control", hex(patch.loadControl)))
+            }
+
         case .capsule:
             // The capsule GUID is the common "GUID" field.
             if let headerSize = reader.uint32(at: h + 0x10) { fields.append(.init("Header size", sizeText(headerSize))) }
@@ -1057,6 +1082,21 @@ public enum UEFIDetail {
                 if let declared = picture.declaredLength {
                     fields.append(.init(L("Declared size"), L("%1$@ — the section ends earlier", sizeText(declared)),
                                         isProblem: true))
+                }
+            }
+
+        // Read again, as a picture is.
+        case .sound:
+            if let sound = Sound.read(at: node.body.lowerBound, limit: node.body.upperBound, in: reader) {
+                fields.append(.init(L("Format"), "WAV (\(sound.encodingName))"))
+                fields.append(.init(L("Sample rate"), L("%1$@ Hz", "\(sound.sampleRate)")))
+                fields.append(.init(L("Bits per sample"), "\(sound.bitsPerSample)"))
+                fields.append(.init(L("Channels"), "\(sound.channels)"))
+                if let duration = sound.duration {
+                    // Tenths, with the separator the language writes: the
+                    // translation, not the Mac's region, decides it.
+                    let tenths = Int((duration * 10).rounded())
+                    fields.append(.init(L("Duration"), L("%1$@.%2$@ s", tenths / 10, tenths % 10)))
                 }
             }
 
@@ -1498,6 +1538,7 @@ public enum UEFIDetail {
         case .file: return "FFS file"
         case .section: return "Section"
         case .microcode: return "Microcode"
+        case .amdMicrocode: return "AMD microcode"
         // The NVRAM stores and entries read as their item-type word, matching
         // the tree's Type column.
         case .vssStore: return UEFITypes.typeName(UEFITypes.Item.vssStore.rawValue)
@@ -1527,6 +1568,7 @@ public enum UEFIDetail {
         case .ecImage: return L("EC firmware image")
         case .fitComponent: return L("FIT component")
         case .picture: return L("Picture")
+        case .sound: return L("Sound")
         }
     }
 

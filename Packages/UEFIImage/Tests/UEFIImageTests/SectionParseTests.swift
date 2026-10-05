@@ -65,14 +65,16 @@ final class SectionParseTests: XCTestCase {
     }
 
     /// The extended-size marker means an extended size only in an FFSv3
-    /// volume. Anywhere else it is a size of `0xFFFFFF`, and reading four extra
-    /// bytes of header would eat the start of the body.
+    /// volume. Anywhere else it is a size of `0xFFFFFF` — more than the file
+    /// holds, so no section at all — and reading four extra bytes of header
+    /// would eat the start of the body.
     func testTheExtendedSizeMarkerIsOnlyExtendedInFfsV3() {
         let sections = [TestImage.section(type: 0x10, body: [1, 2, 3, 4], extendedSize: true)]
         let node = file(sections)
 
-        XCTAssertEqual(node.children[0].header, 0x60..<0x64)
-        XCTAssertEqual(diagnostics(sections), [.truncated(.sectionBody)])
+        XCTAssertEqual(node.children.map(\.name), ["Non-UEFI data"])
+        XCTAssertEqual(node.children[0].range.lowerBound, 0x60)
+        XCTAssertEqual(diagnostics(sections), [.nonUEFIDataInSections])
     }
 
     /// A volume inside a section inside a file inside a volume — the point at
@@ -180,21 +182,88 @@ final class SectionParseTests: XCTestCase {
         XCTAssertTrue(diagnostics([TestImage.section(type: 0x1B, body: [1, 2, 3, 4])]).isEmpty)
     }
 
-    /// Zero would put the walk back on the same offset for ever (§11).
+    /// Zero would put the walk back on the same offset for ever (§11). The
+    /// walk stops, and the rest of the body is one row of Non-UEFI data, as
+    /// the reference keeps it.
     func testASectionOfZeroSizeStopsTheWalk() {
         let sections = [
             TestImage.section(type: 0x10, body: [1, 2, 3, 4], size: 0),
             TestImage.section(type: 0x13, body: [8])
         ]
+        let node = file(sections)
 
-        XCTAssertTrue(file(sections).children.isEmpty)
-        XCTAssertEqual(diagnostics(sections), [.zeroSize(.sectionHeader)])
+        XCTAssertEqual(node.children.map(\.name), ["Non-UEFI data"])
+        XCTAssertEqual(node.children[0].range.upperBound, node.body.upperBound)
+        XCTAssertEqual(diagnostics(sections), [.nonUEFIDataInSections])
     }
 
-    func testASectionRunningPastTheFileIsReported() {
-        let sections = [TestImage.section(type: 0x10, body: [1, 2, 3, 4], size: 0x400)]
+    /// A size past what is left is not a section cut short but data of some
+    /// other kind: said once, kept whole, after the sections that did read.
+    func testASectionRunningPastTheFileLeavesTheRestAsNonUEFIData() {
+        let sections = [
+            TestImage.section(type: 0x10, body: [1, 2, 3, 4]),
+            TestImage.section(type: 0x10, body: [1, 2, 3, 4], size: 0x400)
+        ]
+        let node = file(sections)
 
-        XCTAssertEqual(diagnostics(sections), [.truncated(.sectionBody)])
+        XCTAssertEqual(node.children.map(\.name), ["PE32 image", "Non-UEFI data"])
+        XCTAssertEqual(node.children[1].range, 0x68..<node.body.upperBound)
+        XCTAssertTrue(node.children[1].children.isEmpty)
+        XCTAssertEqual(diagnostics(sections), [.nonUEFIDataInSections])
+    }
+
+    /// A RIFF WAV file: `frames` of 16-bit PCM silence at `rate` in `channels`.
+    private func wav(rate: UInt32 = 8000, channels: UInt16 = 2, frames: Int = 40) -> [UInt8] {
+        var writer = BinaryWriter()
+        let data = frames * Int(channels) * 2
+        writer.raw(Array("RIFF".utf8))
+        writer.u32(UInt32(4 + 8 + 16 + 8 + data))
+        writer.raw(Array("WAVEfmt ".utf8))
+        writer.u32(16)
+        writer.u16(1)
+        writer.u16(channels)
+        writer.u32(rate)
+        writer.u32(rate * UInt32(channels) * 2)
+        writer.u16(channels * 2)
+        writer.u16(16)
+        writer.raw(Array("data".utf8))
+        writer.u32(UInt32(data))
+        writer.fill(UInt64(data), with: 0)
+        return writer.bytes
+    }
+
+    /// ASUS keeps its POST sound as a Freeform file's whole body: `RIFF` reads
+    /// as a section header whose size runs past the file. The body is Non-UEFI
+    /// data, as the reference has it, and the sound a row inside it.
+    func testAWAVWhereSectionsWouldBeIsARowOfItsOwn() throws {
+        let sound = wav()
+        let image = UEFIParser.parse(TestImage.volume(files: [TestImage.file(type: 0x02, body: sound)]))
+        let file = image.roots[0].children[0]
+        let data = try XCTUnwrap(file.children.first)
+
+        XCTAssertEqual(file.children.map(\.name), ["Non-UEFI data"])
+        XCTAssertEqual(data.children.map(\.kind), [.sound])
+        XCTAssertEqual(data.children[0].name, "WAV, 8000 Hz, stereo")
+        XCTAssertEqual(data.children[0].range, data.range.lowerBound..<(data.range.lowerBound + UInt64(sound.count)))
+        XCTAssertEqual(data.children[0].uefiItemType, UEFITypes.Item.padding.rawValue, "padding to UEFITool")
+        XCTAssertEqual(image.diagnostics.map(\.kind), [.nonUEFIDataInSections])
+
+        let read = try XCTUnwrap(Sound.read(at: 0, limit: UInt64(sound.count), in: ImageReader(sound)))
+        XCTAssertEqual(read.encodingName, "PCM")
+        XCTAssertEqual(read.bitsPerSample, 16)
+        XCTAssertEqual(read.duration ?? 0, 40.0 / 8000, accuracy: 1e-9)
+    }
+
+    /// A RIFF header with no data chunk, or one claiming more than there is,
+    /// is not a sound.
+    func testARIFFThatDoesNotReadThroughIsNoSound() {
+        var cut = wav()
+        cut.removeLast(8)
+        XCTAssertNil(Sound.read(at: 0, limit: UInt64(cut.count), in: ImageReader(cut)))
+
+        var noData = wav()
+        noData.replaceSubrange(36..<40, with: Array("junk".utf8))
+        XCTAssertNil(Sound.read(at: 0, limit: UInt64(noData.count), in: ImageReader(noData)))
     }
 
     /// FFSv3 puts a large section's size in a field of its own, and the header

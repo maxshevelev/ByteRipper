@@ -352,6 +352,7 @@ public enum UEFITreeDisplay {
         case .file: return "FFS file"
         case .section: return "Section"
         case .microcode: return "Microcode"
+        case .amdMicrocode: return "AMD microcode"
         // The NVRAM stores and entries read as their item-type word, so the
         // fallback name and the Type column can never drift apart.
         case .vssStore: return UEFITypes.typeName(UEFITypes.Item.vssStore.rawValue)
@@ -384,6 +385,7 @@ public enum UEFITreeDisplay {
         case .ecImage: return L("EC firmware image")
         case .fitComponent: return L("FIT component")
         case .picture: return L("Picture")
+        case .sound: return L("Sound")
         }
     }
 }

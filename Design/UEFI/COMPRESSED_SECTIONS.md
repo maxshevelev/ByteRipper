@@ -233,7 +233,7 @@ and rewriting them is where the risk would be. `CLAUDE.md` and the comment on
 | LZMA, LZMA + x86 | LZMA SDK (Igor Pavlov), C | public domain | Apple's Compression framework does not fit: its `COMPRESSION_LZMA` reads the xz container, not the 13-byte "alone" header. |
 | Tiano / EFI 1.1 | EDK2 `EfiTianoDecompress.c`, as vendored by UEFITool | BSD | No system equivalent. |
 | Brotli | Google Brotli decoder, C | MIT | UEFITool enables the large-window mode; whether Apple's `COMPRESSION_BROTLI` decodes those streams is unverified, so the vendored decoder is the safe choice. |
-| GZip, Zlib | the system `libz` | system | Or the Compression framework's raw DEFLATE after stripping the headers. Decided when a dump needs it. |
+| GZip, Zlib | the system `libz` | system | The SDK declares the `zlib` module, so `FirmwareCompression` imports it with no target of its own. Chosen for Zlib (AMD) on 2026-10-05; GZip will go the same way. |
 
 Only the decoder half is taken. For LZMA that is `LzmaDec.c`/`.h`, `Bra86.c`,
 `Bra.h`, `7zTypes.h`, `Compiler.h`, `Precomp.h` and `CpuArch.h` (with
@@ -508,7 +508,22 @@ section's, its detail names the space, and "Fix Checksum" is not offered.
 ## 10. Order of work
 
 **Status, 2026-09-13.** Steps 1–7 are in; step 8 is not, since no dump at hand
-has needed Brotli, GZip or Zlib. Where the code differs from the text above:
+has needed Brotli, GZip or Zlib.
+
+**2026-10-05.** Zlib (AMD) is in: `FirmwareDecompression.zlib` (`inflateInit2(15)`,
+the buffer grown under the limit, a stream ending early `truncated`) and
+`FirmwareCompression.compress(_:as: .zlib)` at the best level, the `78 DA` AMD
+writes. The section's header runs to the end of AMD's 0x100 bytes, as the
+reference draws it; a `CompressedSize` that does not account for the rest of
+the section is `sizeMismatch(.amdZlibHeader, …)`, a warning, and the stream is
+read all the same; a section too short for the header decodes to `truncated`.
+Update in Parent writes the new stream's length back into the header. Only
+`CE3233F5-…` is decoded, as in the reference; `991EFAC0-…` is named. The one
+dump with such a section, `Asus/SPI_C86018_128Mbit_GD25LB128DW.bin`, opens
+node for node as UEFIExtract reads it: the PEI volume `44A2D731-…`, 110 files,
+426 sections. Brotli and GZip still wait for a dump.
+
+Where the code differs from the text above:
 
 - The decoders sit in `CLZMA` and `CTiano`, with their encoders beside them in
   `CLZMAEncoder` and `CTianoEncoder` — test support at first, behind the
@@ -539,7 +554,8 @@ has needed Brotli, GZip or Zlib. Where the code differs from the text above:
 5. Export.
 6. `MEFirmware` LZMA modules.
 7. Tiano.
-8. Brotli, GZip, Zlib — when a dump in hand needs one.
+8. Brotli, GZip, Zlib — when a dump in hand needs one. Zlib (AMD) is in
+   (2026-10-05).
 
 ---
 

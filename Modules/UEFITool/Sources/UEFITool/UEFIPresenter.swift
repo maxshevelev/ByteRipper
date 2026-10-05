@@ -191,12 +191,21 @@ public enum UEFIPresenter {
             rebuild: node.space == .file && !body
                 ? UEFIRebuild.target(forFileRange: range, in: image)
                 : UEFIRebuild.Target(space: node.space, range: range),
-            // A picture saves as what it is, so the file opens in a viewer.
-            suggestedName: base + suffix + "." + (node.kind == .picture
-                ? node.subtype.flatMap(Picture.Format.init(rawValue:))?.fileExtension ?? "bin"
-                : "bin"),
+            // A picture or a sound saves as what it is, so the file opens in
+            // a viewer or a player.
+            suggestedName: base + suffix + "." + fileExtension(of: node),
             menuTitle: title
         )
+    }
+
+    /// What a saved node's file is called after: its format, for a picture
+    /// or a sound, and `bin` for bytes that are only bytes.
+    private static func fileExtension(of node: UEFINode) -> String {
+        switch node.kind {
+        case .picture: return node.subtype.flatMap(Picture.Format.init(rawValue:))?.fileExtension ?? "bin"
+        case .sound: return "wav"
+        default: return "bin"
+        }
     }
 
     /// A compressed section exports everything it decompresses to — one that

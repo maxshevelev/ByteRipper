@@ -19,6 +19,7 @@ extension UEFINode {
         case .file: return UEFITypes.Item.file.rawValue
         case .section: return UEFITypes.Item.section.rawValue
         case .microcode: return UEFITypes.Item.intelMicrocode.rawValue
+        case .amdMicrocode: return UEFITypes.Item.amdMicrocode.rawValue
         case .vssStore: return UEFITypes.Item.vssStore.rawValue
         case .vss2Store: return UEFITypes.Item.vss2Store.rawValue
         case .ftwStore: return UEFITypes.Item.ftwStore.rawValue
@@ -41,7 +42,8 @@ extension UEFINode {
         case .startupApData: return UEFITypes.Item.startupApDataEntry.rawValue
         // UEFITool's word for these bytes; the row's name says what the map
         // makes of them.
-        case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent, .picture: return UEFITypes.Item.padding.rawValue
+        case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent, .picture, .sound:
+            return UEFITypes.Item.padding.rawValue
         case .freeSpace: return UEFITypes.Item.freeSpace.rawValue
         // Data nobody claimed is a run of bytes with a type, not a structure, so
         // it reads as a file the way a raw region does.
@@ -68,7 +70,7 @@ extension UEFINode {
             return Self.volumeSubtype(of: self)
         case .file, .section:
             return subtype
-        case .microcode:
+        case .microcode, .amdMicrocode:
             return nil
         // A store is one kind and no more: its type byte is the item type, and
         // the entry subtypes live on the children, not on the store.
@@ -87,7 +89,7 @@ extension UEFINode {
         case .startupApData:
             // The one form UEFITool recognises.
             return UEFITypes.Sub.x86128kStartupApDataEntry
-        case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent, .picture:
+        case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent, .picture, .sound:
             return Self.paddingSubtype(of: self)
         case .freeSpace:
             return nil

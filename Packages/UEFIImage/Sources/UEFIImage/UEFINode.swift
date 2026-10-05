@@ -246,6 +246,14 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     /// (`UEFI_IMAGE_FORMAT.md` §9). The subtype is its `Picture.Format`; it is
     /// named by format and size in pixels, and is padding to UEFITool.
     case picture
+    /// A sound — a WAV file — found where a file's body stops reading as
+    /// sections (`UEFI_IMAGE_FORMAT.md` §9). Named by its sample rate and
+    /// channels; padding to UEFITool, as a picture is.
+    case sound
+    /// An AMD microcode patch read out of padding (`UEFI_IMAGE_FORMAT.md`
+    /// §7.2): no signature, a header whose fields all check out. Its own
+    /// type to UEFITool, as Intel's is.
+    case amdMicrocode
     /// The x86 Startup AP data EDK2's GenFv writes into the pad file before
     /// the Volume Top File: a far jump the application processors start at.
     /// It is code at a fixed address, so it does not move.

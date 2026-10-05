@@ -45,6 +45,9 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         case vendorHashFile
         /// An Insyde H2O Flash Device Map (§5.3).
         case flashDeviceMap
+        /// The 0x100 bytes AMD puts in front of a Zlib section's stream
+        /// (`COMPRESSED_SECTIONS.md` §2.2).
+        case amdZlibHeader
     }
 
     public enum Kind: Equatable, Sendable {
@@ -107,6 +110,15 @@ public struct UEFIDiagnostic: Equatable, Sendable {
         /// and is not the Startup AP data: a pad file is meant to be empty,
         /// so data in one is either a vendor's or damage.
         case nonUEFIDataInPadFile
+        /// A file or section body that stops reading as sections part of the
+        /// way: a size of zero, too small for its header, or past what is
+        /// left. The rest is kept as one row of Non-UEFI data, as UEFITool
+        /// keeps it.
+        case nonUEFIDataInSections
+        /// A file header in a volume that declares more than the volume has
+        /// left. The rest of the volume is kept as one row of Non-UEFI data,
+        /// as UEFITool keeps it (§5.8).
+        case nonUEFIDataInVolume
         /// An NVAR entry that does not read — a broken signature, a size that
         /// is too small or runs past the store, a name with no end. The walk
         /// stops, and the store from here on is kept as padding; at the
@@ -133,7 +145,7 @@ public struct UEFIDiagnostic: Equatable, Sendable {
                  .protectedRangeOutsideImage, .protectedRangeNotPlaced,
                  .protectedRangeHashMismatch, .unsupportedHashAlgorithm,
                  .unknownVendorHashFileSize, .unknownRevision,
-                 .unknownFlashDeviceMapEntries, .nonUEFIDataInPadFile,
+                 .unknownFlashDeviceMapEntries, .nonUEFIDataInPadFile, .nonUEFIDataInSections, .nonUEFIDataInVolume,
                  .fileHeaderMarkedInvalid, .unknownDvarEntry, .dvarNamespaceMissing:
                 return .warning
             }
@@ -227,6 +239,10 @@ public struct UEFIDiagnostic: Equatable, Sendable {
                 + "\(hex(UInt64(format))) are of no known layout"
         case .nonUEFIDataInPadFile:
             return "padding file holds data that is not UEFI"
+        case .nonUEFIDataInSections:
+            return "sections area holds data that is not UEFI"
+        case .nonUEFIDataInVolume:
+            return "volume holds data that is not UEFI where a file would be"
         case .unreadableNvarEntry:
             return "NVAR entry cannot be read; the store is kept as padding from here"
         case .fileHeaderMarkedInvalid(let state):
@@ -270,6 +286,7 @@ extension UEFIDiagnostic.Structure {
         case .bootPolicy: return "Boot Policy Manifest"
         case .vendorHashFile: return "vendor hash table"
         case .flashDeviceMap: return "Insyde flash device map"
+        case .amdZlibHeader: return "AMD Zlib header's compressed"
         }
     }
 }

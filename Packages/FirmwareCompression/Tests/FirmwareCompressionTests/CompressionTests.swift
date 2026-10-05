@@ -35,6 +35,10 @@ final class CompressionTests: XCTestCase {
 
         let efi11 = try FirmwareCompression.compress(original, as: .efi11)
         XCTAssertEqual(try FirmwareDecompression.tiano(efi11, limit: limit).efi11, original)
+
+        let zlib = try FirmwareCompression.compress(original, as: .zlib)
+        XCTAssertEqual(try FirmwareDecompression.zlib(zlib, limit: limit).bytes, original)
+        XCTAssertEqual(Array(zlib.prefix(2)), [0x78, 0xDA], "at the level AMD writes")
     }
 
     /// Both levels write a stream that comes back byte for byte, and on data
@@ -201,6 +205,58 @@ final class BZip2Tests: XCTestCase {
         }
         XCTAssertThrowsError(try FirmwareDecompression.bzip2([1, 2, 3, 4, 5, 6, 7, 8], limit: 1 << 20)) {
             XCTAssertEqual($0 as? FirmwareDecompression.Failure, .corrupt)
+        }
+    }
+}
+
+final class ZlibTests: XCTestCase {
+    /// The same three lines through Python's `zlib.compress(…, 9)` — a stream
+    /// this package's encoder did not write.
+    private let stream: [UInt8] = {
+        let hex = "78da7374718977710df37476e5d4d0e48c4ece492c2eb6550a0d760ac82f2a518ae572a4501e0024761b6a"
+        return stride(from: 0, to: hex.count, by: 2).map {
+            UInt8(hex.dropFirst($0).prefix(2), radix: 16)!
+        }
+    }()
+    private let text = Array(String(repeating: "ADD_DEVICE\t()\t[class=\"USBPort\"]\n", count: 3).utf8)
+
+    func testAStreamDecodesToItsText() throws {
+        let decoded = try FirmwareDecompression.zlib(stream, limit: 1 << 20)
+        XCTAssertEqual(decoded.bytes, text)
+        XCTAssertEqual(decoded.variant, .zlib)
+    }
+
+    /// More than the decoder's working chunk, so the buffer has to grow.
+    func testALongStreamComesBackWhole() throws {
+        var state: UInt32 = 1
+        let original = (0..<300_000).map { _ -> UInt8 in
+            state = state &* 1_103_515_245 &+ 12_345
+            return UInt8(truncatingIfNeeded: state >> 24) & 0x0F
+        }
+        let stream = try FirmwareCompression.compress(original, as: .zlib)
+        XCTAssertEqual(try FirmwareDecompression.zlib(stream, limit: 1 << 20).bytes, original)
+    }
+
+    func testTheLimitIsKept() {
+        XCTAssertThrowsError(try FirmwareDecompression.zlib(stream, limit: 16)) {
+            guard case FirmwareDecompression.Failure.tooLarge = $0 else { return XCTFail("\($0)") }
+        }
+    }
+
+    /// Bytes after the end mark are not the stream's, and are not looked at.
+    func testWhatFollowsTheEndMarkIsLeftAlone() throws {
+        XCTAssertEqual(try FirmwareDecompression.zlib(stream + [0xFF, 0xFF, 0xFF], limit: 1 << 20).bytes, text)
+    }
+
+    func testACutStreamIsTruncatedAndNoiseIsCorrupt() {
+        XCTAssertThrowsError(try FirmwareDecompression.zlib(Array(stream.dropLast(8)), limit: 1 << 20)) {
+            XCTAssertEqual($0 as? FirmwareDecompression.Failure, .truncated)
+        }
+        XCTAssertThrowsError(try FirmwareDecompression.zlib([1, 2, 3, 4, 5, 6, 7, 8], limit: 1 << 20)) {
+            XCTAssertEqual($0 as? FirmwareDecompression.Failure, .corrupt)
+        }
+        XCTAssertThrowsError(try FirmwareDecompression.zlib([], limit: 1 << 20)) {
+            XCTAssertEqual($0 as? FirmwareDecompression.Failure, .truncated)
         }
     }
 }

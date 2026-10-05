@@ -14,15 +14,24 @@ enum CompressedSection {
         case lzmaX86
         /// Tiano or EFI 1.1: one header for both, told apart after decoding.
         case tiano
+        /// A zlib stream after AMD's 0x100-byte header (§2.2, §3.4).
+        case zlibAMD
 
         var name: String {
             switch self {
             case .lzma: return "LZMA"
             case .lzmaX86: return "LZMA with x86 filter"
             case .tiano: return "Tiano"
+            case .zlibAMD: return "Zlib (AMD)"
             }
         }
     }
+
+    /// AMD's header in front of a Zlib stream: zeros, but for the stream's
+    /// length at `0x14` (§2.2). It sits inside `DataOffset`, so the stream
+    /// starts this much after the place the section says its data does.
+    static let amdZlibHeaderSize: UInt64 = 0x100
+    static let amdZlibCompressedSizeOffset: UInt64 = 0x14
 
     /// `EFI_GUIDED_SECTION_PROCESSING_REQUIRED` (§6.3).
     static let processingRequired: UInt16 = 0x01
@@ -35,6 +44,9 @@ enum CompressedSection {
     private static let lzmaX86 = KnownGUIDs.guid("D42AE6BD-1352-4BFB-909A-CA72A6EAE889")
     private static let tiano = KnownGUIDs.guid("A31280AD-481E-41B6-95E8-127F4C984779")
     private static let gzip = KnownGUIDs.guid("1D301FE9-BE79-4353-91C2-D23BC959AE0C")
+    /// The first of AMD's two Zlib GUIDs, the one the reference decodes. The
+    /// second, `991EFAC0-…`, is on no dump at hand, and is named but not read.
+    static let amdZlib = KnownGUIDs.guid("CE3233F5-2CD6-4D87-9152-4A238BB6D1C4")
 
     /// A compression section's `CompressionType` (§2.1): `0x01` is EDK2's
     /// standard compression — Tiano or EFI 1.1 — `0x02` is what EDK2 calls
@@ -52,13 +64,13 @@ enum CompressedSection {
         if lzma.contains(guid) { return .lzma }
         if guid == lzmaX86 { return .lzmaX86 }
         if guid == tiano { return .tiano }
+        if guid == amdZlib { return .zlibAMD }
         return nil
     }
 
     /// Every GUID-defined section whose body is compressed, decoded here or not.
     private static let compressedGUIDs: Set<EFIGUID> = lzma.union([
-        lzmaX86, tiano, gzip,
-        KnownGUIDs.guid("CE3233F5-2CD6-4D87-9152-4A238BB6D1C4"),    // Zlib (AMD)
+        lzmaX86, tiano, gzip, amdZlib,
         KnownGUIDs.guid("991EFAC0-E260-416B-A4B8-3B153072B804"),    // Zlib (AMD, second)
         KnownGUIDs.guid("3D532050-5CDA-4FD0-879E-0F7F630D5AFB")     // Brotli
     ])
@@ -133,8 +145,14 @@ enum CompressedSection {
                   UInt64(dataOffset) >= headerSize + Section.guidDefinedHeaderSize,
                   offset + UInt64(dataOffset) < end
             else { return nil }
+            var start = offset + UInt64(dataOffset)
+            if algorithm == .zlibAMD {
+                // A section too short for AMD's header has no stream, which
+                // decodes to a truncation rather than to nothing to say.
+                start = min(start + amdZlibHeaderSize, end)
+            }
             return Located(
-                body: (offset + UInt64(dataOffset))..<end,
+                body: start..<end,
                 algorithm: algorithm,
                 declaredLength: nil
             )
@@ -155,6 +173,7 @@ enum CompressedSection {
             case .lzma: return .success(try FirmwareDecompression.lzma(bytes, limit: limit))
             case .lzmaX86: return .success(try FirmwareDecompression.lzmaX86(bytes, limit: limit))
             case .tiano: return .success(chooseTiano(try FirmwareDecompression.tiano(bytes, limit: limit)))
+            case .zlibAMD: return .success(try FirmwareDecompression.zlib(bytes, limit: limit))
             }
         } catch let failure as FirmwareDecompression.Failure {
             return .failure(failure)

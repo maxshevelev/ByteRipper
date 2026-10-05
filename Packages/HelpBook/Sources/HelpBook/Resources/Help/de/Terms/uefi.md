@@ -1,4 +1,4 @@
-@source-sha ac49fee883afa792cf9fe62d23b3164cdd13a57cee54d0d063ded135247bedfd
+@source-sha 18add30d39e015cbc960e0b91a5928c5e62095483ccb8d16891b40d3637fd05b
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -203,6 +203,19 @@ Für UEFITool ist eine Bildzeile Padding, und die Spalte „Typ“ weist sie so 
 
 @see term:section
 @see term:padding
+
+@term sound
+@name Audio
+@short Ein Klang, den die Firmware abspielt, abgelegt als gewöhnliche WAV-Datei.
+
+Manche Platinen spielen beim Start einen Klang ab, ASUS-Platinen beim POST. Die Firmware legt ihn als WAV-Datei ab — in den vorliegenden Dumps als gesamten Datenteil einer Freeform-Datei, dort, wo die Sections der Datei stünden. Für UEFITool sind diese Bytes keine Sections, sondern [[term:non-uefi-data|Nicht-UEFI-Daten]]; das [[topic:tool-uefi|UEFI-Werkzeug]] liest sie ebenso und zeigt die Audiodatei als Zeile innerhalb dieser Daten, benannt nach Abtastrate und Kanälen, etwa `WAV, 44100 Hz, Stereo`.
+
+Eine Audiodatei wird an ihrem RIFF-Kopf erkannt und nur dann übernommen, wenn sich ihre Chunks bis zur Formatangabe und zu den Daten lesen lassen. Die Details nennen Kodierung, Abtastrate, Bits pro Abtastwert, Kanäle und Dauer; darunter spielt ein Player sie ab. **… sichern unter…** schlägt eine `.wav`-Datei vor, die jeder Player öffnet.
+
+Für UEFITool ist eine Audiozeile Padding, und die Spalte „Typ“ weist sie so aus.
+
+@see term:non-uefi-data
+@see term:picture
 
 @term flash-device-map
 @name Insyde Flash Device Map
@@ -416,6 +429,8 @@ Intel legt Microcode-Updates in das Firmware-Image. Der Prozessor lädt sehr fr�
 
 Jedes Update trägt in seinem Header die CPU-Signatur, eine Revisionsnummer und ein Datum; danach benennt ByteRipper sie.
 
+Auch AMD legt Microcode im Firmware-Image ab, jedoch ohne FIT: Auf den vorliegenden AMD-Platinen liegt jedes Update in dem Bereich, dessen Aufbau nur die Verzeichnisse des PSP beschreiben und der sich als [[term:padding|Padding]] liest. Der Header eines AMD-Updates hat keine Signatur; das Werkzeug erkennt ihn daher wie UEFITool daran, dass jedes Feld einen Wert enthält, den AMD schreibt — ein Datum, eine Loader-Version, die Hersteller-ID von AMD oder keine —, und zeigt das Update als Zeile innerhalb des Paddings, benannt nach CPUID und Revision, etwa `AMD microcode A50F00, revision A50000F`. Die Länge des Updates nennt der Header nicht; sie ergibt sich aus der Prozessorfamilie, und ein Update einer Familie, die das Werkzeug nicht kennt, wird nicht erkannt.
+
 @see term:fit
 @see topic:recipe-microcode
 
@@ -621,4 +636,6 @@ Die Boot-Guard-Bereiche beziehen sich auf den obersten Block. Bei gesetztem Top 
 Kein Fehler. Hersteller legen ständig Eigenes in Firmware-Images, und ein EC-Image oder ein Option-ROM innerhalb einer BIOS-Region ist ein Format für sich.
 
 Eine Region, die aus Volumes bestehen sollte und sich als Nicht-UEFI-Daten liest, ist dagegen eine beschädigte Region.
+
+Denselben Namen trägt der Rest des Datenteils einer Datei, sobald er sich nicht mehr als [[term:section|Sections]] liest — eine Section-Größe von null oder eine größere als der Rest —, und der Rest eines Volumes, sobald ein Datei-Header mehr angibt, als das Volume noch enthält. UEFITool liest beides ebenso. Eine [[term:sound|Audiodatei]], die dort liegt, wo die Sections einer Datei stünden, erscheint als Zeile innerhalb solcher Daten.
 

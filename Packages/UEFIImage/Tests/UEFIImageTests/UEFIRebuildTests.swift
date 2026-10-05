@@ -386,6 +386,28 @@ final class UEFIRebuildTests: XCTestCase {
         }
     }
 
+    /// An AMD Zlib section stays one, and the length in AMD's header follows
+    /// the new stream: left stale, it is what the reference complains about.
+    func testAnAMDZlibSectionKeepsItsHeaderTrue() throws {
+        let stream = try FirmwareCompression.compress(driver(), as: .zlib)
+        var amdHeader = [UInt8](repeating: 0, count: 0x100)
+        for index in 0..<4 { amdHeader[0x14 + index] = UInt8(truncatingIfNeeded: stream.count >> (8 * index)) }
+        let (image, node) = compressedImage(TestImage.guidedSection(
+            guid: CompressedSection.amdZlib, body: amdHeader + stream, attributes: 0x01
+        ))
+        let edited = driver(extra: 600)
+
+        let rebuilt = try plan(edited, at: .init(space: .inside(node)), in: image)
+
+        let parsed = UEFIParser.parse(rebuilt)
+        XCTAssertEqual(parsed.diagnostics, [], "\(parsed.diagnostics.map(\.message))")
+        XCTAssertEqual(buffer(of: node, in: rebuilt), edited)
+        let located = try XCTUnwrap(CompressedSection.locate(at: node.header.lowerBound, in: ImageReader(rebuilt)))
+        guard case .success(let decoded) = CompressedSection.decode(located, in: ImageReader(rebuilt), limit: 1 << 24)
+        else { return XCTFail("the new stream does not decode") }
+        XCTAssertEqual(decoded.variant, .zlib)
+    }
+
     /// Runs copied from anywhere earlier in the data, with a few stray bytes
     /// between them: what the maximum level, searching deeper for matches,
     /// makes hundreds of bytes shorter than the normal one does (measured:

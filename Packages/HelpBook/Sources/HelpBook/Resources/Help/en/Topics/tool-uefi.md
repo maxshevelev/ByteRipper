@@ -8,6 +8,7 @@
 @covers panel.uefi.save-node
 @covers panel.uefi.open-unpacked
 @covers panel.uefi.picture-preview
+@covers panel.uefi.sound-player
 @covers panel.uefi.superseded-entries
 @covers panel.uefi.filter
 @covers panel.uefi.variable-history
@@ -68,5 +69,9 @@ On Insyde firmware the detail of the [[term:flash-device-map|flash device map]],
 A [[term:picture|picture]] the tool recognises — a JPEG, PNG, GIF or BMP, in padding or as the body of a raw section — is a row of its own, and selecting it draws the picture under its details: as wide as the list at most and never larger than its own size in pixels. The preview is drawn from the bytes in the dump as they are, by the decoder of macOS rather than the firmware's own, so it shows what is stored, not exactly how the board will draw it.
 
 A thin frame marks where the picture ends, so a white or transparent logo does not disappear into the panel. A click on the picture changes what is behind it: the panel's own background, a checkerboard, or black (white with the dark appearance). A picture with transparency starts on the checkerboard, one without on the panel's background. In the [[topic:tools-overview|large view of the details]], which **Space** on the row opens, the picture is drawn larger, up to its own size in pixels.
+
+## Sounds
+
+A [[term:sound|sound]] the tool recognises — a WAV file kept where a file's sections would be — is a row of its own, and selecting it puts a player under its details. **Play** starts the sound and becomes **Pause** while it plays; **Stop** ends it and goes back to the start. The bar under **Playback position** moves as the sound plays, and dragging it moves to another place in the sound; the time played and the length of the whole are given beside it. The sound is played from the bytes in the dump as they were when the row was selected, by macOS rather than by the board, and it stops when another row is selected or the panel is closed.
 
 See also: [[topic:tool-fit|FIT Table]], [[term:vss|NVRAM stores]], [[topic:recipe-checksums|Checksums]].

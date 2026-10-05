@@ -142,6 +142,66 @@ final class CompressedSectionTests: XCTestCase {
         XCTAssertTrue(image.diagnostics.isEmpty, "\(image.diagnostics.map(\.message))")
     }
 
+    /// AMD's Zlib section, as the Asus dump keeps its PEI volume: `DataOffset`
+    /// at the end of the structure, then 0x100 bytes of AMD's header — zeros
+    /// but for the stream's length at `0x14` — then the stream.
+    private func amdZlibSection(_ inner: [UInt8], statedLength: UInt32? = nil,
+                                guid: EFIGUID = CompressedSection.amdZlib) throws -> [UInt8] {
+        let stream = try FirmwareCompression.compress(inner, as: .zlib)
+        var header = [UInt8](repeating: 0, count: 0x100)
+        let length = statedLength ?? UInt32(stream.count)
+        for index in 0..<4 { header[0x14 + index] = UInt8(truncatingIfNeeded: length >> (8 * index)) }
+        return TestImage.guidedSection(guid: guid, body: header + stream, attributes: 0x01)
+    }
+
+    func testAnAMDZlibSectionOpensAfterItsHeader() throws {
+        let image = parsed([try amdZlibSection(driver)])
+        let section = section(in: image)
+
+        XCTAssertEqual(section.name, "Zlib (AMD) section")
+        XCTAssertEqual(section.compression, SectionCompression(algorithm: "Zlib (AMD)", decodes: true))
+        XCTAssertEqual(section.body.lowerBound - section.header.lowerBound, 0x18 + 0x100,
+                       "AMD's header is the section's, as the reference draws it")
+        XCTAssertEqual(section.children.map(\.name), ["InnerDriver", "PE32 image"])
+        XCTAssertTrue(image.diagnostics.isEmpty, "\(image.diagnostics.map(\.message))")
+    }
+
+    /// The reference checks the stated length against the section's size,
+    /// says so when they differ, and decodes all the same.
+    func testAnAMDZlibHeaderThatMisstatesItsStreamIsReportedAndReadAllTheSame() throws {
+        let stream = try FirmwareCompression.compress(driver, as: .zlib)
+        let image = parsed([try amdZlibSection(driver, statedLength: UInt32(stream.count) + 8)])
+        let section = section(in: image)
+
+        XCTAssertEqual(section.children.count, 2)
+        XCTAssertEqual(image.diagnostics, [UEFIDiagnostic(
+            .sizeMismatch(.amdZlibHeader, stored: UInt64(stream.count) + 8, computed: UInt64(stream.count)),
+            at: section.header.lowerBound
+        )])
+    }
+
+    /// Shorter than AMD's header: there is no stream, and that is what is said.
+    func testAnAMDZlibSectionTooShortForItsHeaderSaysItIsTruncated() {
+        let image = parsed([TestImage.guidedSection(
+            guid: CompressedSection.amdZlib, body: [UInt8](repeating: 0, count: 0x40), attributes: 0x01
+        )])
+
+        XCTAssertTrue(section(in: image).children.isEmpty)
+        XCTAssertEqual(image.diagnostics.map(\.kind), [
+            .decompressionFailed(algorithm: "Zlib (AMD)", truncated: true)
+        ])
+    }
+
+    /// AMD's second Zlib GUID is on no dump at hand, and the reference does
+    /// not decode it either: named, kept whole.
+    func testTheSecondAMDZlibGUIDIsNamedButNotOpened() throws {
+        let second = KnownGUIDs.guid("991EFAC0-E260-416B-A4B8-3B153072B804")
+        let section = section(in: parsed([try amdZlibSection(driver, guid: second)]))
+
+        XCTAssertEqual(section.compression, SectionCompression(algorithm: "Zlib (AMD, second)", decodes: false))
+        XCTAssertTrue(section.children.isEmpty)
+    }
+
     /// Both readings decoding is the case only the bytes settle: the one that
     /// walks as sections wins, and Tiano when both — or neither — do.
     func testWhenBothReadingsDecodeTheOneThatReadsAsSectionsIsKept() {

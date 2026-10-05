@@ -867,6 +867,13 @@ public enum UEFIRebuild {
                 let common = Bytes.u24(header, 0) == Section.extendedSizeMarker ? 8 : 4
                 Bytes.put32(UInt32(buffer.count), at: common, in: &header)
             }
+            if located.algorithm == .zlibAMD {
+                // AMD's header sits at the end of this one and says how long
+                // the stream after it is (`COMPRESSED_SECTIONS.md` §2.2).
+                let amdHeader = header.count - Int(CompressedSection.amdZlibHeaderSize)
+                Bytes.put32(UInt32(stream.count),
+                            at: amdHeader + Int(CompressedSection.amdZlibCompressedSizeOffset), in: &header)
+            }
             noteSigned(section)
             return try Bytes.sized(header + stream, name: section.name)
         }

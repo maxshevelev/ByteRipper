@@ -242,8 +242,11 @@ final class Parser {
         // the range whether or not a signature announced itself.
         progressed(to: range.upperBound)
         nodes += padding(from: claimed, to: range.upperBound, emptyByte: emptyByte)
-        return readingECFirmware(
-            readingFITComponents(readingMapRegions(nodes, emptyByte: emptyByte, depth: depth), emptyByte: emptyByte),
+        return readingAMDMicrocode(
+            readingECFirmware(
+                readingFITComponents(readingMapRegions(nodes, emptyByte: emptyByte, depth: depth), emptyByte: emptyByte),
+                emptyByte: emptyByte
+            ),
             emptyByte: emptyByte
         )
     }

@@ -27,6 +27,9 @@
 //  - `CBZip2` — not vendored: the `libbz2` macOS itself ships, for the one
 //    bzip2 stream a Mac's firmware keeps (Apple's `overrides`). A system
 //    library target, so there is no source here and nothing to keep in step.
+//  - `zlib` — not a target at all: the SDK already declares the module for
+//    the `libz` macOS ships, so `FirmwareCompression` imports it as it is,
+//    for AMD's Zlib sections.
 //  - `FirmwareCompression` — the API: `FirmwareDecompression`, whole buffers in
 //    and whole buffers or a reason out under a size limit the caller sets, and
 //    `FirmwareCompression`, which decodes every stream it writes back before

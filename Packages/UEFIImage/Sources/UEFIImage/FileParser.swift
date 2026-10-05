@@ -303,6 +303,16 @@ extension Parser {
         return nil
     }
 
+    /// The size the file header at `offset` declares, header included; nil
+    /// when the header is not all there to say it.
+    func declaredFileSize(at offset: UInt64, ffsVersion: Int, volumeRevision: UInt8) -> UInt64? {
+        guard let attributes = reader.uint8(at: offset + 0x13),
+              let shortSize = reader.uint24(at: offset + 0x14)
+        else { return nil }
+        return fileSize(at: offset, shortSize: shortSize, attributes: attributes,
+                        ffsVersion: ffsVersion, volumeRevision: volumeRevision).size
+    }
+
     /// §5.2, where the header's own size depends on a bit whose meaning depends
     /// on the volume. Nil size means the extended field is off the end of the
     /// image.

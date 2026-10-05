@@ -30,6 +30,7 @@ public enum FirmwareDecompression {
         case lzmaX86 = "LZMA with x86 filter"
         case tiano = "Tiano"
         case efi11 = "EFI 1.1"
+        case zlib = "Zlib"
     }
 
     /// What a Tiano-or-EFI-1.1 buffer decoded to, each way it decoded (§3.3).
