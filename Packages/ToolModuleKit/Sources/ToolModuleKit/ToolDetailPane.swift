@@ -1,3 +1,4 @@
+import ALSplitView
 import AppKit
 import HelpUI
 import Localization
@@ -8,16 +9,29 @@ import Localization
 /// A row's detail keeps growing — a descriptor's straps, a store's variable
 /// history, a picture — and the lower third of a panel beside the dump is a
 /// keyhole onto it. **Space** on the row in focus, or the expand button in the
-/// list's corner, opens the same list as a large card in the middle of the
-/// window, over a dimmed window; **Space** again, **Esc**, the close button in
-/// the corner or a click outside the card closes it. While it is open the
-/// arrow keys still move the table's selection, and the card follows, as
-/// Finder's Quick Look follows Finder's.
+/// list's corner, opens the same list as a large card over the window; **Space**
+/// again, **Esc**, the close button in the corner, a click outside the card or
+/// a link followed from it closes it. While it is open the arrow keys still
+/// move the table's selection, and the card follows.
+///
+/// The card flies out of the pane and back into it. The pane folds away while
+/// the card is out — the table above takes the whole height, which is what a
+/// reader looking at the card and moving through the rows wants — and the
+/// card's flight runs on the splitter's own animation clock, so the two move
+/// as one rather than as two animations drifting apart. The card is three
+/// quarters of the window wide and stands to the right, clear of the
+/// window's top, bottom and right edges by a narrow margin, leaving the
+/// panel's table in view on its left; it is not dimmed around, so the dump
+/// and the table stay readable beside it.
 ///
 /// The card holds **the list itself**, moved out of its pane and back, not a
 /// second copy of it. A copy would need every panel to render twice, and
 /// would lose what one list keeps for free: its scroll, its selection, its
-/// `?`, a picture's chosen background, a re-render at a new zoom.
+/// `?`, a picture's chosen background, a re-render at a new zoom. On the
+/// flight out the list is already at the card's final size, clipped by the
+/// growing card, so its rows do not re-wrap on every frame; on the flight
+/// back the card lands exactly on the pane and the list is put back there in
+/// the same moment, so the pane is never seen empty.
 ///
 /// The card lives in the window's content view, not in a window of its own:
 /// a borderless child window takes the key focus from the table the arrow
@@ -30,15 +44,30 @@ import Localization
     /// the large view, and the arrow keys pressed while it is open move it.
     private weak var table: NSTableView?
 
-    /// The dimmed layer over the window and the card on it, while shown.
-    private var overlay: QuickLookOverlay?
+    /// The card, from the moment it leaves the pane until it is back in it.
+    private var card: QuickLookCard?
+    /// Whether the card has landed and follows the window's size.
+    private var cardIsResting = false
+    /// The window's content view resizing, watched while the card is out.
+    private var hostObserver: NSObjectProtocol?
+    /// The splitter's policy for the pane before it folded away, put back
+    /// when the pane opens again. Nil while the pane is open.
+    private var unfoldedLayout: ALSplitView.PaneLayout?
     /// Space on the table, watched while the pane is in a window.
     private var spaceMonitor: Any?
     /// The keys and clicks the large view answers, watched while it is shown.
     private var shownMonitors: [Any] = []
-    /// Counts the shows and closes, so a fade-out that finishes after the
-    /// view was opened again does not take the reopened card down with it.
+    /// Counts the transitions, so the tick of one a later one replaced does
+    /// nothing.
     private var generation = 0
+
+    /// How long the card takes to fly out or back.
+    static let flight: TimeInterval = 0.25
+    /// The card's margin to the window's top, bottom and right edges.
+    static let margin: CGFloat = 10
+    /// How much of the window's width the card takes. What is left lies on
+    /// its left, so the panel's table stays in view.
+    static let widthShare: CGFloat = 0.75
 
     /// Whether the large view is open.
     public private(set) var isQuickLookShown = false
@@ -46,7 +75,7 @@ import Localization
     public init() {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        place(detail, in: self, inset: 0)
+        place(detail, in: self)
         detail.onExpand = { [weak self] in self?.toggleQuickLook() }
     }
 
@@ -72,93 +101,246 @@ import Localization
         return showQuickLook()
     }
 
-    /// Opens the large view over the window. False when there is nothing to
-    /// show in it.
+    /// Opens the large view: the card flies out of the pane, and the pane
+    /// folds away. False when there is nothing to show in it.
     @discardableResult
     public func showQuickLook() -> Bool {
         guard !isQuickLookShown, detail.hasRows, let host = window?.contentView else { return false }
         isQuickLookShown = true
         generation += 1
+        let flight = generation
 
-        // A fade-out still running is the same overlay, holding the list:
-        // it comes back rather than being built again.
-        let overlay = self.overlay ?? QuickLookOverlay()
-        if self.overlay == nil {
-            self.overlay = overlay
-            overlay.onOutsideClick = { [weak self] in self?.closeQuickLook() }
-            overlay.alphaValue = 0
-            place(overlay, in: host, inset: 0)
-            detail.borderType = .noBorder
-            place(detail, in: overlay.card, inset: 0)
-        }
+        // A flight back still under way is the same card, holding the list:
+        // it turns round where it is rather than starting from the pane.
+        let card = self.card ?? takeOut(into: host)
+        cardIsResting = false
         detail.isExpanded = true
-        fade(overlay, to: 1, then: nil)
+        let start = card.frame
+        let target = restingFrame(in: host)
+        card.setContentSize(target.size)
+
+        fold { [weak self] progress in
+            guard let self, self.generation == flight else { return }
+            card.frame = Self.interpolate(start, target, progress)
+            if progress >= 1 { self.cardIsResting = true }
+        }
         if let table { window?.makeFirstResponder(table) }
         watchWhileShown()
         return true
     }
 
-    /// Closes the large view, and puts the list back in its pane.
+    /// Closes the large view: the pane opens again, and the card flies back
+    /// into it, giving it the list as it lands.
     public func closeQuickLook() {
         guard isQuickLookShown else { return }
         isQuickLookShown = false
         generation += 1
+        let flight = generation
         stopWatchingWhileShown()
         detail.isExpanded = false
-        let closing = generation
-        guard let overlay else { return }
-        fade(overlay, to: 0) { [weak self] in
-            guard let self, self.generation == closing else { return }
-            self.takeBack()
-        }
         // The focus goes back to the table, which is where Space came from
         // and where a selectable value in the card would otherwise keep it.
         if let table, table.window != nil { table.window?.makeFirstResponder(table) }
-    }
-
-    /// The list back in its pane, the overlay gone — at once, with no fade.
-    private func takeBack() {
-        guard let overlay else { return }
-        self.overlay = nil
-        overlay.removeFromSuperview()
-        detail.borderType = .bezelBorder
-        place(detail, in: self, inset: 0)
-    }
-
-    private func fade(_ overlay: NSView, to alpha: CGFloat, then done: (@MainActor @Sendable () -> Void)?) {
-        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = reduceMotion ? 0 : 0.15
-            overlay.animator().alphaValue = alpha
-        }, completionHandler: {
-            guard let done else { return }
-            MainActor.assumeIsolated { done() }
+        guard let card, let host = card.superview else {
+            takeBack()
+            return
+        }
+        cardIsResting = false
+        let start = card.frame
+        unfold(landing: { [weak self] in
+            self.map { $0.convert($0.bounds, to: host) } ?? start
+        }, tick: { [weak self] progress, landing in
+            guard let self, self.generation == flight else { return }
+            card.frame = Self.interpolate(start, landing, progress)
+            if progress >= 1 { self.takeBack() }
         })
     }
 
+    // MARK: - The card
+
+    /// The list, moved out of the pane into a new card standing where the
+    /// pane is.
+    private func takeOut(into host: NSView) -> QuickLookCard {
+        let card = QuickLookCard()
+        card.frame = convert(bounds, to: host)
+        host.addSubview(card)
+        self.card = card
+        detail.borderType = .noBorder
+        card.hold(detail)
+        host.postsFrameChangedNotifications = true
+        hostObserver = NotificationCenter.default.addObserver(
+            forName: NSView.frameDidChangeNotification, object: host, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.followTheWindow() }
+        }
+        return card
+    }
+
+    /// The list back in its pane, laid out there at once, and the card gone.
+    private func takeBack() {
+        if let hostObserver { NotificationCenter.default.removeObserver(hostObserver) }
+        hostObserver = nil
+        cardIsResting = false
+        guard let card else { return }
+        self.card = nil
+        card.removeFromSuperview()
+        detail.borderType = .bezelBorder
+        place(detail, in: self)
+        // Now, not on the next pass: the card has just landed on the pane,
+        // and a pane drawn empty for one frame is the gap a reader sees.
+        layoutSubtreeIfNeeded()
+        detail.display()
+    }
+
+    /// A landed card keeps its place as the window is resized.
+    private func followTheWindow() {
+        guard cardIsResting, let card, let host = card.superview else { return }
+        let target = restingFrame(in: host)
+        card.setContentSize(target.size)
+        card.frame = target
+    }
+
+    /// Where the card stands once it has landed: three quarters of the
+    /// window's width, a narrow margin from its top, bottom and right edges,
+    /// and the rest of the width clear on its left for the table.
+    private func restingFrame(in host: NSView) -> NSRect {
+        let bounds = host.bounds
+        let width = max(200, (bounds.width * Self.widthShare).rounded())
+        return NSRect(x: bounds.maxX - Self.margin - width,
+                      y: bounds.minY + Self.margin,
+                      width: width,
+                      height: max(120, bounds.height - 2 * Self.margin))
+    }
+
+    private static func interpolate(_ from: NSRect, _ to: NSRect, _ progress: CGFloat) -> NSRect {
+        func mix(_ a: CGFloat, _ b: CGFloat) -> CGFloat { a + (b - a) * progress }
+        return NSRect(x: mix(from.minX, to.minX), y: mix(from.minY, to.minY),
+                      width: mix(from.width, to.width), height: mix(from.height, to.height)).integral
+    }
+
+    // MARK: - The pane folding
+
+    /// The splitter the pane is the last pane of — the one it folds in — or
+    /// nil when it is anywhere else.
+    private var splitter: ALSplitView? {
+        guard let split = superview as? ALSplitView, split.panes.last === self else { return nil }
+        return split
+    }
+
+    /// Folds the pane away, handing `tick` the eased progress of each frame.
+    /// At once, with one tick of 1, when there is no splitter to fold in.
+    private func fold(tick: @escaping (CGFloat) -> Void) {
+        guard let splitter else {
+            tick(1)
+            return
+        }
+        let index = splitter.panes.count - 1
+        if unfoldedLayout == nil { unfoldedLayout = splitter.paneLayouts[index] }
+        let flight = generation
+        splitter.animateTrailingPaneSize(to: 0, duration: Self.flight) { [weak self] progress in
+            tick(progress)
+            guard progress >= 1 else { return }
+            // Folded by a fixed zero rather than whatever share the last
+            // frame left, so the splitter drops the divider at its edge.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.generation == flight else { return }
+                    splitter.setPaneLayout(.fixed(0), at: index)
+                }
+            }
+        }
+    }
+
+    /// Opens the pane again to the size it had, handing `tick` the eased
+    /// progress of each frame and where the pane will be once open, in the
+    /// card's coordinates (`landing`).
+    private func unfold(landing: () -> NSRect, tick: @escaping (CGFloat, NSRect) -> Void) {
+        guard let splitter, let unfolded = unfoldedLayout else {
+            tick(1, landing())
+            return
+        }
+        let index = splitter.panes.count - 1
+        // Where the pane lands is where its policy puts it: laid out once
+        // under that policy to read it, and put back as it was before
+        // anything is drawn.
+        let folded = splitter.paneLayouts[index]
+        splitter.setPaneLayout(unfolded, at: index)
+        let size = frame.height
+        let target = landing()
+        splitter.setPaneLayout(folded, at: index)
+
+        let flight = generation
+        splitter.animateTrailingPaneSize(to: size, duration: Self.flight) { [weak self] progress in
+            tick(progress, target)
+            guard progress >= 1 else { return }
+            // The policy itself back, not only the size it came to: a share
+            // keeps its share as the window is resized.
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.generation == flight else { return }
+                    splitter.setPaneLayout(unfolded, at: index)
+                    self.unfoldedLayout = nil
+                }
+            }
+        }
+    }
+
+    /// Ends whatever the pane and the card are doing, at once: the card
+    /// landed or gone, the pane folded or open.
+    private func settle() {
+        generation += 1
+        if let splitter {
+            let index = splitter.panes.count - 1
+            // A size it already has stops the running animation and moves
+            // nothing.
+            splitter.animateTrailingPaneSize(to: frame.height, duration: 0)
+            if isQuickLookShown {
+                splitter.setPaneLayout(.fixed(0), at: index)
+            } else if let unfolded = unfoldedLayout {
+                splitter.setPaneLayout(unfolded, at: index)
+                unfoldedLayout = nil
+            }
+        }
+        if isQuickLookShown {
+            cardIsResting = true
+            followTheWindow()
+        } else {
+            takeBack()
+        }
+    }
+
     /// Pins `view` to every edge of `container`, moving it there first.
-    private func place(_ view: NSView, in container: NSView, inset: CGFloat) {
+    private func place(_ view: NSView, in container: NSView) {
         view.removeFromSuperview()
         view.translatesAutoresizingMaskIntoConstraints = false
         container.addSubview(view)
         NSLayoutConstraint.activate([
-            view.topAnchor.constraint(equalTo: container.topAnchor, constant: inset),
-            view.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: inset),
-            view.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -inset),
-            view.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -inset),
+            view.topAnchor.constraint(equalTo: container.topAnchor),
+            view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
         ])
     }
 
     // MARK: - The keys and clicks
 
+    public override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        guard newWindow == nil, window != nil else { return }
+        // A panel closed or swapped with the view open: nothing is left for
+        // the card to be about, and the list and the pane must be as they
+        // were before the panel is shown again.
+        if isQuickLookShown {
+            isQuickLookShown = false
+            stopWatchingWhileShown()
+            detail.isExpanded = false
+        }
+        settle()
+    }
+
     public override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil {
-            // A panel closed or swapped with the view open: nothing is left
-            // for the card to be about, and the list must be home before the
-            // pane is shown again.
-            if isQuickLookShown { closeQuickLook() }
-            takeBack()
             if let spaceMonitor { NSEvent.removeMonitor(spaceMonitor) }
             spaceMonitor = nil
         } else if spaceMonitor == nil {
@@ -209,7 +391,7 @@ import Localization
         shownMonitors.removeAll()
     }
 
-    /// Key codes of the arrows, which still move the table under the card.
+    /// Key codes of the arrows, which still move the table beside the card.
     private static let arrowKeys: Set<UInt16> = [123, 124, 125, 126]
     private static let escapeKey: UInt16 = 53
 
@@ -229,86 +411,51 @@ import Localization
         return false
     }
 
-    /// A click in the window outside the card closes the large view. One on
-    /// the dimmed layer is the overlay's own, and stops there; one on the
-    /// window's toolbar is closed for here and still does what it was for.
+    /// A click in the window outside the card closes the large view, and
+    /// still does what it was for: nothing is dimmed or covered, so a click
+    /// on a row, the dump or the toolbar lands there.
     func handleClickWhileShown(_ event: NSEvent) {
-        guard isQuickLookShown, let overlay, event.window === window,
+        guard isQuickLookShown, let card, event.window === window,
               let frame = window?.contentView?.superview
         else { return }
         let hit = frame.hitTest(frame.convert(event.locationInWindow, from: nil))
-        guard hit?.isDescendant(of: overlay) != true else { return }
+        guard hit?.isDescendant(of: card) != true else { return }
         closeQuickLook()
     }
 
     // MARK: - For the tests
 
     /// The card the list sits in while the large view is open.
-    public var quickLookCardForTesting: NSView? { overlay?.card }
+    public var quickLookCardForTesting: NSView? { card }
 
-    /// Ends a fade at once, so a test sees the state it waits for.
-    public func finishFadeForTesting() {
-        if !isQuickLookShown { takeBack() } else { overlay?.alphaValue = 1 }
+    /// Ends a flight at once, so a test sees the state it waits for.
+    public func finishTransitionForTesting() {
+        settle()
     }
 }
 
-/// The large view's two layers: a dimmed sheet over the whole window, which a
-/// click closes, and the card in its middle, which holds the list.
-@MainActor private final class QuickLookOverlay: NSView {
-    let card = QuickLookCard()
-    var onOutsideClick: (() -> Void)?
-
-    init() {
-        super.init(frame: .zero)
-        wantsLayer = true
-        setAccessibilityElement(false)
-        card.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(card)
-
-        // Large, but never to the window's edge: a margin of the dimmed
-        // window around it says this is over the dump, not instead of it.
-        // The share of the window is what gives way when it is small.
-        let wide = card.widthAnchor.constraint(equalTo: widthAnchor, multiplier: 0.75)
-        let tall = card.heightAnchor.constraint(equalTo: heightAnchor, multiplier: 0.8)
-        wide.priority = .defaultHigh
-        tall.priority = .defaultHigh
-        NSLayoutConstraint.activate([
-            card.centerXAnchor.constraint(equalTo: centerXAnchor),
-            card.centerYAnchor.constraint(equalTo: centerYAnchor),
-            card.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -40),
-            card.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, constant: -40),
-            card.widthAnchor.constraint(lessThanOrEqualToConstant: 1100),
-            wide, tall,
-        ])
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
-
-    override var wantsUpdateLayer: Bool { true }
-
-    override func updateLayer() {
-        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
-        layer?.backgroundColor = NSColor.black.withAlphaComponent(dark ? 0.45 : 0.25).cgColor
-    }
-
-    // The dump under the sheet is out of reach while the card is up: a click
-    // closes the card, and the wheel scrolls nothing behind it.
-    override func mouseDown(with event: NSEvent) { onOutsideClick?() }
-    override func rightMouseDown(with event: NSEvent) { onOutsideClick?() }
-    override func otherMouseDown(with event: NSEvent) { onOutsideClick?() }
-    override func scrollWheel(with event: NSEvent) {}
-    override func resetCursorRects() { addCursorRect(bounds, cursor: .arrow) }
-}
-
-/// The card: rounded, framed, the window's background behind the list.
+/// The card: rounded, framed and shadowed, the window's background behind
+/// the list. Frame-based — the pane places it, frame by frame in flight —
+/// with the list inside at the size the card will have once it has landed,
+/// pinned to the top left, so a card smaller than that clips it rather than
+/// re-wrapping it.
 @MainActor private final class QuickLookCard: NSView {
+    /// The rounded body: what clips the list and carries the frame line. The
+    /// shadow is the card's own, outside it — a layer that clips cannot cast
+    /// one.
+    private let body = QuickLookCardBody()
+    private var contentWidth: NSLayoutConstraint?
+    private var contentHeight: NSLayoutConstraint?
+
     init() {
         super.init(frame: .zero)
+        translatesAutoresizingMaskIntoConstraints = true
+        autoresizingMask = []
         wantsLayer = true
-        layer?.cornerRadius = 10
-        layer?.masksToBounds = true
-        layer?.borderWidth = 1
+        layer?.masksToBounds = false
+        body.frame = bounds
+        body.autoresizingMask = [.width, .height]
+        addSubview(body)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
         setAccessibilityLabel(L("Details"))
@@ -317,16 +464,76 @@ import Localization
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// Puts `content` in the card, pinned to its top left.
+    func hold(_ content: NSView) {
+        content.removeFromSuperview()
+        content.translatesAutoresizingMaskIntoConstraints = false
+        body.addSubview(content)
+        let width = content.widthAnchor.constraint(equalToConstant: max(1, bounds.width))
+        let height = content.heightAnchor.constraint(equalToConstant: max(1, bounds.height))
+        contentWidth = width
+        contentHeight = height
+        NSLayoutConstraint.activate([
+            content.topAnchor.constraint(equalTo: body.topAnchor),
+            content.leadingAnchor.constraint(equalTo: body.leadingAnchor),
+            width, height,
+        ])
+    }
+
+    /// The size the content is laid out at: the card's once it has landed.
+    func setContentSize(_ size: NSSize) {
+        contentWidth?.constant = size.width
+        contentHeight?.constant = size.height
+        body.layoutSubtreeIfNeeded()
+    }
+
+    override var isFlipped: Bool { true }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        // A corner no larger than half a side: a card still leaving a pane
+        // a few points tall is a rectangle a full radius does not fit.
+        let radius = max(0, min(QuickLookCardBody.radius, newSize.width / 2, newSize.height / 2))
+        layer?.shadowPath = CGPath(roundedRect: NSRect(origin: .zero, size: newSize),
+                                   cornerWidth: radius, cornerHeight: radius, transform: nil)
+    }
+
+    override var wantsUpdateLayer: Bool { true }
+
+    override func updateLayer() {
+        let dark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = dark ? 0.6 : 0.3
+        layer?.shadowRadius = 18
+        layer?.shadowOffset = CGSize(width: 0, height: -6)
+    }
+
+    // A click on the card is the card's: passed up the responder chain it
+    // would reach views that are not about it.
+    override func mouseDown(with event: NSEvent) {}
+    override func rightMouseDown(with event: NSEvent) {}
+    override func otherMouseDown(with event: NSEvent) {}
+}
+
+@MainActor private final class QuickLookCardBody: NSView {
+    static let radius: CGFloat = 10
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.cornerRadius = Self.radius
+        layer?.masksToBounds = true
+        layer?.borderWidth = 1
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    override var isFlipped: Bool { true }
     override var wantsUpdateLayer: Bool { true }
 
     override func updateLayer() {
         layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         layer?.borderColor = NSColor.separatorColor.cgColor
     }
-
-    // A click on the card is the card's: passed up, it would reach the
-    // dimmed sheet behind and close the view it landed in.
-    override func mouseDown(with event: NSEvent) {}
-    override func rightMouseDown(with event: NSEvent) {}
-    override func otherMouseDown(with event: NSEvent) {}
 }

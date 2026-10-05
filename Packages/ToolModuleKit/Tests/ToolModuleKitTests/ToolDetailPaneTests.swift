@@ -1,4 +1,5 @@
 import AppKit
+import ALSplitView
 import XCTest
 @testable import ToolModuleKit
 
@@ -51,7 +52,7 @@ final class ToolDetailPaneTests: XCTestCase {
 
     override func tearDown() async throws {
         pane.closeQuickLook()
-        pane.finishFadeForTesting()
+        pane.finishTransitionForTesting()
         window.close()
         window = nil
         pane = nil
@@ -113,14 +114,16 @@ final class ToolDetailPaneTests: XCTestCase {
         XCTAssertTrue(pane.detail.isDescendant(of: card), "the list itself, not a copy")
         XCTAssertTrue(pane.detail.isExpanded)
         let frame = card.convert(card.bounds, to: nil)
-        XCTAssertEqual(frame.midX, 400, accuracy: 1)
-        XCTAssertEqual(frame.midY, 300, accuracy: 1)
-        XCTAssertGreaterThan(frame.width, 500, "large: most of the window")
-        XCTAssertLessThan(frame.width, 800, "but not to its edge")
+        XCTAssertEqual(frame.width, 600, accuracy: 1, "three quarters of the window")
+        XCTAssertEqual(frame.minX, 190, accuracy: 1, "the rest clear on the left, for the table")
+        XCTAssertEqual(frame.maxX, 790, accuracy: 1, "a narrow margin on the right")
+        XCTAssertEqual(frame.minY, 10, accuracy: 1, "and at the bottom")
+        XCTAssertEqual(frame.maxY, 590, accuracy: 1, "and at the top")
+        XCTAssertEqual(pane.detail.frame.size, frame.size, "the list fills the card")
         XCTAssertEqual(pane.detail.expandButtonForTesting?.accessibilityLabel(), "Close")
 
         XCTAssertTrue(pane.toggleQuickLook())
-        pane.finishFadeForTesting()
+        pane.finishTransitionForTesting()
         XCTAssertNil(pane.quickLookCardForTesting)
         XCTAssertTrue(pane.detail.superview === pane, "back in its pane")
         XCTAssertFalse(pane.detail.isExpanded)
@@ -183,7 +186,7 @@ final class ToolDetailPaneTests: XCTestCase {
         XCTAssertTrue(pane.isQuickLookShown, "a click on the card is the card's")
 
         deliver(click(at: NSPoint(x: 5, y: 5)))
-        XCTAssertFalse(pane.isQuickLookShown, "one on the dimmed window closes it")
+        XCTAssertFalse(pane.isQuickLookShown, "one beside it closes it")
     }
 
     func testLeavingTheWindowPutsTheListBack() {
@@ -193,5 +196,71 @@ final class ToolDetailPaneTests: XCTestCase {
         XCTAssertFalse(pane.isQuickLookShown)
         XCTAssertNil(pane.quickLookCardForTesting)
         XCTAssertTrue(pane.detail.superview === pane)
+    }
+
+    /// In a splitter, the pane folds away while the card is out — the table
+    /// above takes the whole height — and opens to the size it had when the
+    /// card is back.
+    func testThePaneFoldsAwayWhileTheCardIsOut() throws {
+        let root = try XCTUnwrap(window.contentView)
+        pane.removeFromSuperview()
+        let split = ALSplitView(frame: root.bounds)
+        split.isVertical = false
+        let above = NSView()
+        split.addPane(above)
+        split.addPane(pane)
+        split.setPaneLayout(.fill, at: 0)
+        split.setPaneLayout(.proportional(1.0 / 3), at: 1)
+        root.addSubview(split)
+        split.layoutSubtreeIfNeeded()
+        let open = pane.frame.height
+        XCTAssertGreaterThan(open, 150)
+
+        fill()
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+        XCTAssertEqual(pane.frame.height, 0, accuracy: 0.5, "the pane is folded")
+        XCTAssertEqual(above.frame.height, split.bounds.height, accuracy: 0.5, "the table has the whole height")
+
+        pane.closeQuickLook()
+        pane.finishTransitionForTesting()
+        XCTAssertEqual(pane.frame.height, open, accuracy: 0.5, "the pane is back at its size")
+        XCTAssertEqual(split.paneLayouts[1], .proportional(1.0 / 3), "and its share")
+        XCTAssertTrue(pane.detail.superview === pane, "with the list in it")
+    }
+
+    /// The flight runs: the card leaves from where the pane is and lands
+    /// where it rests, on the splitter's clock.
+    func testTheCardFliesOutOfThePane() throws {
+        let root = try XCTUnwrap(window.contentView)
+        pane.removeFromSuperview()
+        let split = ALSplitView(frame: root.bounds)
+        split.isVertical = false
+        split.addPane(NSView())
+        split.addPane(pane)
+        split.setPaneLayout(.proportional(1.0 / 3), at: 1)
+        root.addSubview(split)
+        split.layoutSubtreeIfNeeded()
+        let paneFrame = pane.convert(pane.bounds, to: nil)
+
+        fill()
+        pane.showQuickLook()
+        let card = try XCTUnwrap(pane.quickLookCardForTesting)
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            XCTAssertLessThan(card.frame.height, 300, "it starts near the pane: \(card.frame), pane \(paneFrame)")
+        }
+        let resting = NSRect(x: 190, y: 10, width: 600, height: 580)
+        let deadline = Date().addingTimeInterval(2)
+        while card.frame != resting, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        XCTAssertEqual(card.frame, resting)
+        XCTAssertEqual(pane.frame.height, 0, accuracy: 0.5, "the pane folded on the same clock")
+        pane.closeQuickLook()
+        while pane.quickLookCardForTesting != nil, Date() < deadline.addingTimeInterval(2) {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        XCTAssertTrue(pane.detail.superview === pane, "it lands back in the pane")
+        XCTAssertEqual(pane.frame.height, paneFrame.height, accuracy: 0.5)
     }
 }

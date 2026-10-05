@@ -37,7 +37,11 @@ let package = Package(
         // popover it opens. Here rather than in each panel so that "what is
         // this row" is the same button in the same corner in both of them —
         // the argument that put the row-marks legend here too.
-        .package(path: "../HelpUI")
+        .package(path: "../HelpUI"),
+        // The splitter a panel's detail pane folds in while the detail is
+        // shown in its large view (`ToolDetailPane`), on the splitter's own
+        // animation clock.
+        .package(path: "../ALSplitView")
     ],
     targets: [
         .target(name: "ToolModuleKit",
@@ -45,7 +49,8 @@ let package = Package(
                     .product(name: "Localization", package: "Localization"),
                     .product(name: "AppPalette", package: "AppPalette"),
                     .product(name: "HelpBook", package: "HelpBook"),
-                    .product(name: "HelpUI", package: "HelpUI")
+                    .product(name: "HelpUI", package: "HelpUI"),
+                    .product(name: "ALSplitView", package: "ALSplitView")
                 ]),
         .testTarget(
             name: "ToolModuleKitTests",
@@ -57,7 +62,8 @@ let package = Package(
                 "ToolModuleKit",
                 .product(name: "HelpBook", package: "HelpBook"),
                 .product(name: "HelpUI", package: "HelpUI"),
-                .product(name: "Localization", package: "Localization")
+                .product(name: "Localization", package: "Localization"),
+                .product(name: "ALSplitView", package: "ALSplitView")
             ]
         )
     ]

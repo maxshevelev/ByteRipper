@@ -979,7 +979,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let cardClick = try XCTUnwrap(cardLink.gestureRecognizers.first as? NSClickGestureRecognizer)
         _ = cardClick.target?.perform(cardClick.action, with: cardClick)
         XCTAssertFalse(pane.isQuickLookShown, "a followed link closes the large view")
-        pane.finishFadeForTesting()
+        pane.finishTransitionForTesting()
         window?.layoutIfNeeded()
         let followed = descendants(of: panel, NSTextField.self).map(\.stringValue)
         XCTAssertTrue(followed.contains("▸ 2"), "and the link was followed: \(followed)")
@@ -1119,7 +1119,7 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertTrue(picture.isDescendant(of: card), "the picture is in the card")
 
         XCTAssertTrue(pane.toggleQuickLook())
-        pane.finishFadeForTesting()
+        pane.finishTransitionForTesting()
         XCTAssertNil(pane.quickLookCardForTesting)
         XCTAssertTrue(picture.isDescendant(of: pane), "and back in its pane")
     }
