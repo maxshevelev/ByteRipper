@@ -155,8 +155,19 @@ import Localization
         }, tick: { [weak self] progress, landing in
             guard let self, self.generation == flight else { return }
             card.frame = Self.interpolate(start, landing, progress)
+            // The table gives back the room the pane takes: the row the
+            // arrows moved to while the card was out stays on screen.
+            self.keepSelectionInView()
             if progress >= 1 { self.takeBack() }
         })
+    }
+
+    /// Scrolls the table to its selected row, if it has one.
+    private func keepSelectionInView() {
+        guard let table, table.selectedRow >= 0 else { return }
+        // At the size the table has now, not the one the last layout left it.
+        splitter?.layoutSubtreeIfNeeded()
+        table.scrollRowToVisible(table.selectedRow)
     }
 
     // MARK: - The card
@@ -195,6 +206,7 @@ import Localization
         // and a pane drawn empty for one frame is the gap a reader sees.
         layoutSubtreeIfNeeded()
         detail.display()
+        keepSelectionInView()
     }
 
     /// A landed card keeps its place as the window is resized.

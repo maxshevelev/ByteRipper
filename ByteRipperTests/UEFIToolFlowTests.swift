@@ -208,9 +208,80 @@ final class UEFIToolFlowTests: XCTestCase {
         session.onChecksums = nil
 
         clip.layoutSubtreeIfNeeded()
-        XCTAssertEqual(clip.contentView.bounds.origin.y, away, accuracy: 0.5,
-                       "opening a row leaves the table where the reader put it")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        // Opening a row shows it and what it holds
+        // (`testOpeningARowBringsItsRowsIntoView`): the table moves to the
+        // row, not back to the selection at the top.
+        // The row opened is whole and below the column header, which lies
+        // over the clip's top — so the selected row above it is not what the
+        // table came back to.
+        let header = try XCTUnwrap(tree.headerView)
+        let opened = tree.convert(tree.rect(ofRow: 1), to: nil)
+        let headerBottom = header.convert(header.bounds, to: nil).minY
+        XCTAssertLessThanOrEqual(opened.maxY, headerBottom + 0.5, "the row opened is below the header")
+        XCTAssertGreaterThan(tree.convert(tree.rect(ofRow: 0), to: nil).minY, headerBottom - 0.5,
+                             "the selection above it is not brought back into view")
         XCTAssertEqual(tree.selectedRow, 0, "and the selection is where it was")
+    }
+
+    /// A row the reader opens brings its rows into view — as many as fit, and
+    /// never the row itself off the top — including a branch read only now.
+    func testOpeningARowBringsItsRowsIntoView() throws {
+        _ = try open(UEFITestImage.withTwoVolumes())
+        let tree = try outline()
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
+        // Room under the column header — which lies over the clip's top —
+        // for three rows: the two volumes fit, the second one's three rows do
+        // not.
+        let rowHeight = tree.rect(ofRow: 0).height
+        let header = try XCTUnwrap(tree.headerView).frame.height
+        let clip = try XCTUnwrap(tree.enclosingScrollView)
+        splitter.setDividerPosition(splitter.dividerPosition(at: 0)
+                                    - clip.contentView.bounds.height + header + 3 * rowHeight + 2, at: 0)
+        window?.layoutIfNeeded()
+        func seen() -> NSRange {
+            var rect = clip.documentVisibleRect
+            rect.origin.y += header
+            rect.size.height -= header
+            return tree.rows(in: rect)
+        }
+        XCTAssertEqual(seen().location, 0, "the premise: the top is in view")
+
+        // The second volume, not read yet: opened as a click opens it.
+        tree.expandItem(tree.item(atRow: 1))
+        XCTAssertTrue(pumpUntil(5) { tree.numberOfRows == 5 }, "\(tree.numberOfRows) rows")
+        XCTAssertTrue(pumpUntil(2) { seen().location == 1 && seen().length >= 3 },
+                      "the volume at the top, its rows below it: \(seen())")
+    }
+
+    /// The row the arrows moved to while the large view was out is on screen
+    /// when it closes and the table gives the pane its room back.
+    func testClosingTheLargeViewKeepsTheSelectedRowInView() throws {
+        _ = try open(UEFITestImage.make())
+        let tree = try expandRow(0)
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
+        let rowHeight = tree.rect(ofRow: 0).height
+        let clip = try XCTUnwrap(tree.enclosingScrollView)
+        // Room for two of the four rows.
+        splitter.setDividerPosition(splitter.dividerPosition(at: 0)
+                                    - clip.contentView.bounds.height + 2 * rowHeight + 2, at: 0)
+        window?.layoutIfNeeded()
+        let pane = try XCTUnwrap(descendants(of: panel, ToolDetailPane.self).first)
+        XCTAssertTrue(pumpUntil(2) { pane.detail.hasRows })
+
+        XCTAssertTrue(pane.toggleQuickLook())
+        pane.finishTransitionForTesting()
+        window?.layoutIfNeeded()
+        tree.selectRowIndexes(IndexSet(integer: 3), byExtendingSelection: false)
+        pane.closeQuickLook()
+        pane.finishTransitionForTesting()
+        window?.layoutIfNeeded()
+
+        XCTAssertTrue(tree.rows(in: clip.documentVisibleRect).contains(3),
+                      "the selected row is on screen: \(tree.rows(in: clip.documentVisibleRect))")
     }
 
     /// Opening a row does not widen the tree past its scroll view: the

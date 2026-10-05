@@ -420,4 +420,30 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertEqual(UEFITreeDisplay.subtypeText(for: node), "UEFI")
         XCTAssertEqual(UEFITreeDisplay.name(for: node, catalogue: .empty), "UEFI image")
     }
+
+    /// A file that names itself is called that in the tree and in its detail,
+    /// even where the catalogue has another name for its GUID — a vendor can
+    /// have given the GUID to another module. The catalogue's name is a field.
+    func testAFilesOwnNameBeatsTheCataloguesAndTheCataloguesIsAField() throws {
+        let guid = try XCTUnwrap(EFIGUID("90BF2BFB-F998-4CBC-AD72-008D4D047A4B"))
+        let name = UEFINode(kind: .section, subtype: 0x15, name: "PeiPciePhyFwLoadingInit",
+                            header: 0x18..<0x1C, body: 0x1C..<0x40)
+        let file = UEFINode(id: NodeID([0]), kind: .file, subtype: 0x06, name: "PeiPciePhyFwLoadingInit", guid: guid,
+                            header: 0..<0x18, body: 0x18..<0x40, children: [name])
+        let catalogue = GuidsCatalogue(names: [guid: "PeiTbtInit"])
+
+        XCTAssertEqual(UEFITreeDisplay.name(for: file, catalogue: catalogue), "PeiPciePhyFwLoadingInit")
+        let image = UEFIImage(size: 0x40, roots: [file])
+        let detail = UEFIDetail.build(for: file, image: image, reader: ImageReader([UInt8](repeating: 0, count: 0x40)),
+                                      catalogue: catalogue)
+        XCTAssertEqual(detail.title, "PeiPciePhyFwLoadingInit")
+        let labels = detail.fields.map(\.label)
+        let at = try XCTUnwrap(labels.firstIndex(of: "Name in the catalogue"))
+        XCTAssertEqual(labels[at - 1], "GUID", "beside the GUID it names")
+        XCTAssertEqual(detail.fields[at].value, "PeiTbtInit")
+
+        let unnamed = UEFINode(kind: .file, subtype: 0x06, name: "x", guid: guid, header: 0..<0x18, body: 0x18..<0x40)
+        XCTAssertEqual(UEFITreeDisplay.name(for: unnamed, catalogue: catalogue), "PeiTbtInit",
+                       "without a Name section the catalogue names it")
+    }
 }

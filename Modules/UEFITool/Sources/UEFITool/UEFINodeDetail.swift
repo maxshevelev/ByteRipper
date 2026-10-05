@@ -152,7 +152,8 @@ public enum UEFIDetail {
         for node: UEFINode,
         image: UEFIImage,
         reader: ImageReader,
-        repairs: [ChecksumRepair] = []
+        repairs: [ChecksumRepair] = [],
+        catalogue: GuidsCatalogue = .empty
     ) -> UEFINodeDetail {
         var fields = commonFields(for: node, image: image)
         fields += headerFields(
@@ -188,7 +189,13 @@ public enum UEFIDetail {
         if let fill = NvramStoreFill.of(node, reader: reader) {
             fields += fillFields(fill)
         }
-        let title = node.name.isEmpty ? kindLabel(node.kind) : node.name
+        let title = UEFITreeDisplay.ownName(of: node) ?? (node.name.isEmpty ? kindLabel(node.kind) : node.name)
+        // The catalogue's name for the GUID, where the file calls itself
+        // something else: the tree shows the file's own.
+        if node.kind == .file, let guid = node.guid, let listed = catalogue.name(of: guid), listed != title {
+            let at = (fields.firstIndex { $0.label == "GUID" }).map { $0 + 1 } ?? fields.endIndex
+            fields.insert(.init(L("Name in the catalogue"), listed), at: at)
+        }
 
         // What the BVDT's `$BME$` record lists, placed in the file.
         if node.kind == .flashDeviceMapRegion, node.guid == FlashDeviceMap.biosVersionDataTable,

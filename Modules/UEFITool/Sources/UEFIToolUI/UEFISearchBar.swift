@@ -41,6 +41,11 @@ import UEFITool
         didSet { updateStatus() }
     }
 
+    /// Where in the file the row the search is looking at lies, from 0 to 1.
+    var progress: Double = 0 {
+        didSet { progressBar.doubleValue = min(max(progress, 0), 1) }
+    }
+
     /// Whether the image has an ME region, which the search does not go into.
     var showsMENote = false {
         didSet { meNote.isHidden = !showsMENote }
@@ -108,9 +113,13 @@ import UEFITool
         }
 
         // Where "Not found" is said: the line that reports how the search went.
+        // It shows where in the file the search is looking — not how much is
+        // left, which nobody knows before the branches are read.
         progressBar.style = .bar
         progressBar.controlSize = .regular
-        progressBar.isIndeterminate = true
+        progressBar.isIndeterminate = false
+        progressBar.minValue = 0
+        progressBar.maxValue = 1
         progressBar.isHidden = true
         progressBar.translatesAutoresizingMaskIntoConstraints = false
         configure(stopButton, symbol: "xmark.circle.fill", name: L("Stop searching"),
@@ -222,13 +231,11 @@ import UEFITool
         case .none, .notFound:
             statusLabel.stringValue = status == .notFound ? L("Not found") : ""
             statusLabel.isHidden = false
-            progressBar.stopAnimation(nil)
             progressBar.isHidden = true
             stopButton.isHidden = true
         case .searching:
             statusLabel.isHidden = true
             progressBar.isHidden = false
-            progressBar.startAnimation(nil)
             stopButton.isHidden = false
         }
     }

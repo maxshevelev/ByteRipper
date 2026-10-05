@@ -104,8 +104,13 @@ panes, kept through a reparse, a change of file and a restart, and stored as
 text and codes so a change of language leaves it alone.
 
 **What matches.** The text is a case-insensitive substring of the name the row
-shows, of the node's own name (a file's is its name section's) or of its GUID,
-with the dashes or without when the text is hex. The type is the Type column's
+shows, of the node's own name or of its GUID, with the dashes or without when
+the text is hex. A file's row shows the name its Name section carries
+(`UEFITreeDisplay.ownName`), ahead of the catalogue's for its GUID, and the
+detail adds the catalogue's as **Name in the catalogue** where they differ: on
+the dumps at hand a vendor gave `PeiTbtInit`'s GUID to `PeiPciePhyFwLoadingInit`.
+The Name section itself is not a match unless the type asked for is Section:
+its text is its file's name, and that is one occurrence. The type is the Type column's
 code (`UEFITypes.Item`) and the subtype a file's or a section's type byte; all
 three must hold. The menus are fixed lists (`UEFITreeSearchChoices`) rather
 than what the image holds, so a choice survives the next file. The match is
@@ -127,7 +132,7 @@ found).
 `UEFITreeSearch` is the walk, a value over a `UEFITreeSearchSource` — the listed
 rows, and `nil` for a branch not read yet. It hands back a row to test, or
 the branch to read first and waits; the panel reads it with `LazyUEFITree.expand`
-off the main actor, and asks again. A search that has run over 0.2 s says so: a progress bar and a stop button in the bar's second line, where **Not found** is said. What is read stays in the tree, so the second search
+off the main actor, and asks again. A search that has run over 0.2 s says so: a progress bar and a stop button in the bar's second line, where **Not found** is said. The bar is the offset in the file of the row the walk is at — inside a compressed section, the section's — over the file's size: where the search is, since how much is left is not known before the branches are read. What is read stays in the tree, so the second search
 over it is instant. A long stretch of rows already read lets go of the main
 thread every 8 ms.
 

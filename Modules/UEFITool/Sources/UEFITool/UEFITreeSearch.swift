@@ -43,6 +43,9 @@ public struct UEFITreeQuery: Equatable, Sendable {
         if let subtype, Self.hasSubtypes(type), node.uefiItemSubtype != subtype { return false }
         let needle = needle
         guard !needle.isEmpty else { return true }
+        // A Name section's text is its file's name, and the file is the match
+        // — one occurrence, not two. Asked for by type, it is found.
+        if UEFITreeDisplay.isNameSection(node), type != UEFITypes.Item.section.rawValue { return false }
         if Self.contains(name, needle) || Self.contains(node.name, needle) { return true }
         guard let guid = node.guid else { return false }
         let text = guid.description

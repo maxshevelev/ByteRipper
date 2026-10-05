@@ -711,7 +711,8 @@ private struct ChecksumPass: Sendable {
                 UEFIDetail.build(
                     for: $0, image: image,
                     reader: readers.reader(for: $0.space) ?? ImageReader([UInt8]()),
-                    repairs: nodeRepairs[$0.id] ?? []
+                    repairs: nodeRepairs[$0.id] ?? [],
+                    catalogue: guids
                 )
             } ?? .empty
         }

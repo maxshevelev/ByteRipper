@@ -204,6 +204,26 @@ public enum UEFITreeDisplay {
         return UEFITopSwap.name(base, for: node, in: image)
     }
 
+    /// The name a file gives itself in its Name section (`EFI_SECTION_USER_INTERFACE`),
+    /// looked for through the sections opened so far; nil for anything else,
+    /// and for a file with none.
+    public static func ownName(of node: UEFINode) -> String? {
+        guard node.kind == .file else { return nil }
+        func search(_ sections: [UEFINode]) -> String? {
+            for section in sections where section.kind == .section {
+                if isNameSection(section), !section.name.isEmpty { return section.name }
+                if let nested = search(section.children) { return nested }
+            }
+            return nil
+        }
+        return search(node.children)
+    }
+
+    /// A Name section: its text is its file's name.
+    public static func isNameSection(_ node: UEFINode) -> Bool {
+        node.kind == .section && node.subtype == 0x15
+    }
+
     /// Whether the row of `node` says a value, and so needs the bytes.
     public static func showsValue(_ node: UEFINode) -> Bool {
         node.kind == .dvarEntry || node.kind == .vssEntry || node.kind == .nvarEntry
@@ -256,6 +276,13 @@ public enum UEFITreeDisplay {
         }
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind) : node.name
+        }
+        // A file that names itself is called what it says: the firmware's own
+        // word for this image beats the catalogue's for the GUID, which a
+        // vendor can have given to another module (the catalogue's name, when
+        // it differs, is in the detail).
+        if let own = ownName(of: node) {
+            return own
         }
         // A live VSS variable's value follows its name, as its type reads:
         // `BootOrder = 0003, 2001`, `Lang = "eng"`. The store says where the

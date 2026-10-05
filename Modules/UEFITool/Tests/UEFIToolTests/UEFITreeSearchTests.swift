@@ -148,6 +148,15 @@ final class UEFITreeSearchTests: XCTestCase {
         XCTAssertTrue(UEFITreeQuery.hasSubtypes(UEFITypes.Item.section.rawValue))
     }
 
+    /// A Name section's text is its file's name: the file is the one match,
+    /// unless sections are what is asked for.
+    func testANameSectionIsNotASecondMatchForItsFile() {
+        let section = UEFINode(kind: .section, subtype: 0x15, name: "PeiPcie", header: 0..<4, body: 4..<20)
+        XCTAssertFalse(UEFITreeQuery(text: "peipcie").matches(section, name: "PeiPcie"))
+        XCTAssertTrue(UEFITreeQuery(text: "peipcie", type: UEFITypes.Item.section.rawValue)
+            .matches(section, name: "PeiPcie"))
+    }
+
     func testAQueryThatAsksForNothingIsEmpty() {
         XCTAssertTrue(UEFITreeQuery().isEmpty)
         XCTAssertTrue(UEFITreeQuery(text: "  ").isEmpty)

@@ -233,6 +233,13 @@ import UEFITool
     /// reader selects another row. Shutting the branch it is in takes the
     /// selection away, but not the place.
     private var searchCursor: NodeID?
+    /// True while the panel itself opens a row — a reveal, a restore, a
+    /// search, a branch arriving — so the outline's notice is told apart from
+    /// a row the reader opened.
+    private var isPanelExpanding = false
+    /// Rows the reader opened whose branch was still being read: once it is
+    /// there, the tree scrolls to show it.
+    private var openedByReader: Set<NodeID> = []
     /// Which search is the current one: a new ask, a changed query or a new
     /// tree makes the number move on, and a search still reading branches
     /// finds itself out of date and stops.
@@ -743,7 +750,7 @@ import UEFITool
             guard index >= 0 else { return }
             let item = outline.item(atRow: index)
             if !outline.isItemExpanded(item) {
-                outline.expandItem(item)
+                panelExpands { outline.expandItem(item) }
             }
         }
         let row = outline.row(forItem: meRow(path))
@@ -913,7 +920,7 @@ import UEFITool
         enqueue(animated: true) { [weak self] in
             guard let self else { return }
             if wanted?() ?? true, let item = self.outlineItem(for: id) {
-                self.outline.animator().expandItem(item)
+                self.panelExpands { self.outline.animator().expandItem(item) }
             }
             // Inside the same step, so whatever follows an opening sees the
             // rows it opened. A caller that runs when the opening is merely
@@ -1195,6 +1202,8 @@ import UEFITool
         var walk: UEFITreeSearch
         let query: UEFITreeQuery
         let token: Int
+        /// The row the walk looked at last: what the progress bar places.
+        var looking: NodeID?
 
         init(walk: UEFITreeSearch, query: UEFITreeQuery, token: Int) {
             self.walk = walk
@@ -1277,6 +1286,7 @@ import UEFITool
             try? await Task.sleep(nanoseconds: UInt64(Self.searchStatusDelay * 1_000_000_000))
             guard let self, self.searchRun == run.token else { return }
             self.searchBar.status = .searching
+            self.showSearchProgress(run)
         }
         drive(run, in: tree)
     }
@@ -1338,20 +1348,39 @@ import UEFITool
         while true {
             switch run.walk.advance(in: source) {
             case .candidate(let id):
+                run.looking = id
                 if matches(id, run.query) {
                     land(on: id, run: run)
                     return
                 }
                 if Date().timeIntervalSince(began) > Self.searchSlice {
+                    showSearchProgress(run)
                     DispatchQueue.main.async { [weak self] in self?.drive(run, in: tree) }
                     return
                 }
             case .expand(let id):
+                run.looking = id
+                showSearchProgress(run)
                 tree.expand(id) { [weak self] _ in self?.drive(run, in: tree) }
                 return
             case .exhausted:
                 searchRun += 1      // over: the late status timer finds itself stale
                         searchBar.status = .notFound
+                return
+            }
+        }
+    }
+
+    /// Puts the progress bar at the place in the file of the row the walk is
+    /// at: its own offset, or — inside a compressed section, whose bytes are
+    /// no bytes of the file — the offset of the section it was unpacked from.
+    private func showSearchProgress(_ run: SearchRun) {
+        guard searchBar.status == .searching, let tree, let id = run.looking else { return }
+        let size = tree.imageReader.count
+        guard size > 0 else { return }
+        for depth in stride(from: id.path.count, through: 1, by: -1) {
+            if let offset = tree.node(NodeID(Array(id.path.prefix(depth))))?.fileRange?.lowerBound {
+                searchBar.progress = Double(offset) / Double(size)
                 return
             }
         }
@@ -1397,7 +1426,7 @@ import UEFITool
         enqueue(animated: false) { [weak self] in
             guard let self else { return }
             let row = self.outline.row(forItem: self.row(match))
-            if row >= 0 { self.outline.scrollRowToVisible(row) }
+            if row >= 0 { self.scrollToShowChildren(of: self.outline.item(atRow: row)) }
         }
     }
 
@@ -1415,7 +1444,7 @@ import UEFITool
                 if let item = self.outlineItem(for: id), !self.outline.isItemExpanded(item),
                    self.outline.isExpandable(item) {
                     self.searchOpenings.record(id)
-                    self.outline.expandItem(item)
+                    self.panelExpands { self.outline.expandItem(item) }
                 }
                 self.openForSearch(way, from: index + 1, then: done)
             }
@@ -1435,7 +1464,7 @@ import UEFITool
         let wasShowingState = isShowingState
         isShowingState = true
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        outline.scrollRowToVisible(row)
+        scrollToShowChildren(of: outline.item(atRow: row))
         isShowingState = wasShowingState
         chooseNode(atRow: row)
     }
@@ -1606,6 +1635,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         guard node.children.isEmpty, node.isExpandable,
               !showingPlaceholder.contains(row.id)
         else { return true }
+        if !isPanelExpanding { openedByReader.insert(row.id) }
         beginOpening(row.id)
         return false
     }
@@ -1635,13 +1665,69 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     private func branchArrived(_ id: NodeID) {
         guard opening.removeValue(forKey: id) != nil else { return }
         guard showingPlaceholder.remove(id) != nil else {
-            expandRow(id)
+            expandRow(id) { [weak self] in self?.showBranchIfAsked(id) }
             return
         }
         enqueue(animated: true) { [weak self] in
             guard let self, let item = self.outlineItem(for: id) else { return }
             self.outline.reloadItem(item, reloadChildren: true)
+            self.showBranchIfAsked(id)
         }
+    }
+
+    /// Runs `open` as the panel's own opening of a row, not the reader's.
+    private func panelExpands(_ open: () -> Void) {
+        let was = isPanelExpanding
+        isPanelExpanding = true
+        open()
+        isPanelExpanding = was
+    }
+
+    /// A branch the reader asked for is there: show it.
+    private func showBranchIfAsked(_ id: NodeID) {
+        guard openedByReader.remove(id) != nil else { return }
+        // Behind the opening's animation, which a scroll inside it is lost to.
+        enqueue(animated: false) { [weak self] in
+            guard let self, let item = self.outlineItem(for: id) else { return }
+            self.scrollToShowChildren(of: item)
+        }
+    }
+
+    /// Scrolls so that `item`'s rows are on screen — as many as fit — without
+    /// taking `item` itself off the top: one scroll to the stretch from the row
+    /// to its last child, or, when that is taller than the view, to the row at
+    /// the top.
+    private func scrollToShowChildren(of item: Any?) {
+        guard let item else { return }
+        let row = outline.row(forItem: item)
+        guard row >= 0 else { return }
+        // The table as tall as its rows now: right after an opening it still
+        // has the height it had, and a scroll past that stops at its end.
+        outline.tile()
+        let rowRect = outline.rect(ofRow: row)
+        var target = rowRect
+        let count = outline.isItemExpanded(item) ? outline.numberOfChildren(ofItem: item) : 0
+        if count > 0 {
+            let last = outline.row(forItem: outline.child(count - 1, ofItem: item))
+            if last >= 0 { target = rowRect.union(outline.rect(ofRow: last)) }
+        }
+        // Moved through the clip view itself: asked of the table, a scroll
+        // made inside one of the panel's changes is not carried out.
+        guard let scrollView = outline.enclosingScrollView else { return }
+        let clip = scrollView.contentView
+        // The column header lies over the top of the clip: what is seen
+        // starts under it. Placed at the clip's own top, the row would sit
+        // under the header — one row off the screen.
+        let header = outline.headerView?.frame.height ?? 0
+        let visible = clip.documentVisibleRect
+        let seenTop = visible.minY + header
+        let seenHeight = visible.height - header
+        var top = seenTop
+        if target.maxY > seenTop + seenHeight { top = target.maxY - seenHeight }
+        if rowRect.minY < top { top = rowRect.minY }
+        guard top != seenTop else { return }
+        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: clip.bounds.minY + (top - seenTop)))
+        scrollView.reflectScrolledClipView(clip)
     }
 
     /// The ME region's analysis is about to run: hold the row shut and — only
@@ -2153,6 +2239,10 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     func outlineViewItemDidExpand(_ notification: Notification) {
         // Before the guard: a row the panel opens itself changes its rail too.
         updateMarks(ofItem: notification.userInfo?["NSObject"])
+        // A row the reader opened brings what it holds into view.
+        if !isPanelExpanding, let item = notification.userInfo?["NSObject"] {
+            DispatchQueue.main.async { [weak self] in self?.scrollToShowChildren(of: item) }
+        }
         guard !isShowingState else { return }
         onOpenRowsChanged?()
     }
