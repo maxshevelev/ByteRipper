@@ -265,6 +265,9 @@ private struct ChecksumPass: Sendable {
             self?.outline(range, named: name)
         }
         controller.onOpenRowsChanged = { [weak self] in self?.rememberOpenRows() }
+        controller.onSearchWrapped = { [weak self] forward in
+            self?.host.showNotice(symbol: SearchWrapSigns.sign(forward: forward), lines: [])
+        }
         controller.onSelectME = { [weak self] path in self?.selectME(path) }
         controller.onOpenMERegion = { [weak self] id in self?.openMERegion(id) }
         controller.onMERegionLoading = { [weak self] id, loading in

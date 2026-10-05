@@ -62,6 +62,9 @@ import UEFITool
     /// row shows a "Loading…" row while it runs, the way a slow UEFI branch
     /// does. `loading` is true when the analysis starts, false when it lands.
     var onMERegionLoading: ((NodeID, Bool) -> Void)?
+    /// A search came round to the other end — going forward, when true. The
+    /// session shows the same sign the hex view's find shows.
+    var onSearchWrapped: ((Bool) -> Void)?
 
     /// The tree as one value, for everything that reads it rather than walks
     /// it: the summary line, the title fold, the detail panel. It is the
@@ -221,6 +224,24 @@ import UEFITool
     /// enough. The icon is tinted while the tree lists anything it leaves out
     /// by default, so a longer tree than usual says why.
     private let filterButton = NSButton()
+    /// Opens and shuts the search bar: left of the filter, the same quiet icon.
+    private let searchButton = NSButton()
+    private let searchBar = UEFISearchBar()
+    /// What the search has opened in the tree and owes a closing.
+    private var searchOpenings = UEFISearchOpenings()
+    /// The match the search last stood on: where it goes on from, until the
+    /// reader selects another row. Shutting the branch it is in takes the
+    /// selection away, but not the place.
+    private var searchCursor: NodeID?
+    /// Which search is the current one: a new ask, a changed query or a new
+    /// tree makes the number move on, and a search still reading branches
+    /// finds itself out of date and stops.
+    private var searchRun = 0
+    /// The query the panel last saw, so a change is told from a repeat.
+    private var shownQuery = UEFISearchSettings.query
+    private var searchObserver: NSObjectProtocol?
+    private var splitterBelowSummary: NSLayoutConstraint?
+    private var splitterBelowBar: NSLayoutConstraint?
     private let paddingItem = NSMenuItem(title: L("Show Empty Padding"), action: nil, keyEquivalent: "")
     private let supersededItem = NSMenuItem(title: L("Show Superseded Entries"), action: nil, keyEquivalent: "")
     private let outline = UEFIOutlineView()
@@ -319,6 +340,22 @@ import UEFITool
         filterButton.action = #selector(filterClicked)
         filterButton.translatesAutoresizingMaskIntoConstraints = false
 
+        // help: panel.uefi.search
+        searchButton.image = NSImage(
+            systemSymbolName: "magnifyingglass",
+            accessibilityDescription: L("Search the tree")
+        )
+        searchButton.symbolConfiguration = revealButton.symbolConfiguration
+        searchButton.isBordered = false
+        searchButton.imagePosition = .imageOnly
+        ControlHelp.describe(searchButton, name: L("Search the tree"),
+                             tooltip: L("Look for a node by its name, its GUID or its type"))
+        searchButton.target = self
+        searchButton.action = #selector(searchClicked)
+        searchButton.translatesAutoresizingMaskIntoConstraints = false
+        searchBar.onSearch = { [weak self] direction in self?.search(direction) }
+        searchBar.onStop = { [weak self] in self?.stopSearching() }
+
         paddingItem.target = self
         paddingItem.action = #selector(paddingItemClicked)
         ControlHelp.describe(paddingItem, L("List the padding nobody wrote to — erased bytes between structures"))
@@ -383,8 +420,10 @@ import UEFITool
         bottomRow.addArrangedSubview(noticeLabel)
 
         view.addSubview(summaryLabel)
+        view.addSubview(searchButton)
         view.addSubview(filterButton)
         view.addSubview(revealButton)
+        view.addSubview(searchBar)
         view.addSubview(splitter)
         view.addSubview(bottomRow)
 
@@ -396,8 +435,12 @@ import UEFITool
             // The button owns the title row's right end; a long image name
             // truncates before it rather than running under it.
             summaryLabel.trailingAnchor.constraint(
-                lessThanOrEqualTo: filterButton.leadingAnchor, constant: -8
+                lessThanOrEqualTo: searchButton.leadingAnchor, constant: -8
             ),
+            searchButton.widthAnchor.constraint(equalToConstant: 18),
+            searchButton.heightAnchor.constraint(equalToConstant: 18),
+            searchButton.trailingAnchor.constraint(equalTo: filterButton.leadingAnchor, constant: -4),
+            searchButton.centerYAnchor.constraint(equalTo: summaryLabel.centerYAnchor),
             filterButton.widthAnchor.constraint(equalToConstant: 18),
             filterButton.heightAnchor.constraint(equalToConstant: 18),
             filterButton.trailingAnchor.constraint(equalTo: revealButton.leadingAnchor, constant: -4),
@@ -410,7 +453,9 @@ import UEFITool
             revealButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
             revealButton.centerYAnchor.constraint(equalTo: summaryLabel.centerYAnchor),
 
-            splitter.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 6),
+            searchBar.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 8),
+            searchBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
+            searchBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
             splitter.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 8),
             splitter.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
             splitter.bottomAnchor.constraint(equalTo: bottomRow.topAnchor, constant: -6),
@@ -421,6 +466,17 @@ import UEFITool
             barWidth
         ])
 
+        // The tree starts under the title, or under the search bar while it is
+        // open; one of the two is always in force.
+        splitterBelowSummary = splitter.topAnchor.constraint(equalTo: summaryLabel.bottomAnchor, constant: 6)
+        splitterBelowBar = splitter.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 10)
+        applySearchVisibility()
+        searchObserver = NotificationCenter.default.addObserver(
+            forName: UEFISearchSettings.didChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.searchSettingsChanged() }
+        }
+
         zoomObserver = ToolPanelFont.observeZoom { [weak self] in
             self?.applyPanelFont()
         }
@@ -429,6 +485,9 @@ import UEFITool
     deinit {
         if let zoomObserver {
             NotificationCenter.default.removeObserver(zoomObserver)
+        }
+        if let searchObserver {
+            NotificationCenter.default.removeObserver(searchObserver)
         }
     }
 
@@ -439,6 +498,7 @@ import UEFITool
     private func applyPanelFont() {
         summaryLabel.font = ToolPanelFont.body(weight: .medium)
         noticeLabel.font = ToolPanelFont.body()
+        searchBar.applyFont()
         ToolPanelTable.apply(to: outline)
         applyColumnWidths()
         outline.reloadData()
@@ -573,6 +633,10 @@ import UEFITool
             meOpening = nil
             supersededByStore.removeAll()
             listedChildren = nil
+            // What the search opened was in the last file's tree.
+            cancelSearch()
+            searchOpenings.release()
+            searchCursor = nil
         }
         self.image = image
         self.tree = tree
@@ -591,6 +655,7 @@ import UEFITool
         presented = image.map(UEFITreeDisplay.present)
             ?? UEFITreeDisplay.PresentedImage(title: nil, rows: [])
         summaryLabel.stringValue = UEFITreeDisplay.summary(of: image)
+        searchBar.showsMENote = presented.rows.contains(where: isMERegion)
         updateSummaryEmphasis()
         // What the protected ranges in the summary cannot say (§8).
         if let ranges = image?.protectedRanges, !ranges.ranges.isEmpty {
@@ -764,7 +829,11 @@ import UEFITool
     /// call; either way, the selection lands once the whole path is as
     /// expanded as it can be.
     private func reveal(_ nodeID: NodeID, in tree: LazyUEFITree) {
-        expandAncestors(of: nodeID, in: tree) { [weak self] in
+        // Only while the node is still the focus: a reveal queued behind a
+        // branch that was being read must not open the rows above a node the
+        // reader — or the tree's search — has since moved away from, after
+        // they were shut.
+        expandAncestors(of: nodeID, in: tree, while: { [weak self] in self?.focus == nodeID }) { [weak self] in
             guard let self, tree.node(nodeID) != nil else { return }
             // The selection is the panel's own doing, not the reader's, so it
             // must not read back as a click — that would publish a zone and
@@ -839,10 +908,11 @@ import UEFITool
     /// Through the outline's own item, resolved when the change runs rather
     /// than when it is queued: an outline recognises only the object it is
     /// itself holding, and by the time this runs the rows may have moved.
-    private func expandRow(_ id: NodeID, then done: (@MainActor () -> Void)? = nil) {
+    private func expandRow(_ id: NodeID, while wanted: (@MainActor () -> Bool)? = nil,
+                           then done: (@MainActor () -> Void)? = nil) {
         enqueue(animated: true) { [weak self] in
             guard let self else { return }
-            if let item = self.outlineItem(for: id) {
+            if wanted?() ?? true, let item = self.outlineItem(for: id) {
                 self.outline.animator().expandItem(item)
             }
             // Inside the same step, so whatever follows an opening sees the
@@ -860,19 +930,20 @@ import UEFITool
     /// `completion` again, if a step's node cannot be found (the path no
     /// longer resolves — an edit moved or removed it).
     private func expandAncestors(
-        of nodeID: NodeID, in tree: LazyUEFITree, completion: @escaping () -> Void
+        of nodeID: NodeID, in tree: LazyUEFITree, while wanted: (@MainActor () -> Bool)? = nil,
+        completion: @escaping () -> Void
     ) {
         func step(_ index: Int) {
             guard index < nodeID.path.count - 1 else { completion(); return }
             let partialID = NodeID(Array(nodeID.path.prefix(index + 1)))
             guard let ancestor = tree.node(partialID) else { completion(); return }
             guard ancestor.isExpandable, ancestor.children.isEmpty else {
-                expandRow(partialID) { step(index + 1) }
+                expandRow(partialID, while: wanted) { step(index + 1) }
                 return
             }
             tree.expand(partialID) { [weak self] _ in
                 guard let self else { return }
-                self.expandRow(partialID) { step(index + 1) }
+                self.expandRow(partialID, while: wanted) { step(index + 1) }
             }
         }
         step(0)
@@ -1115,6 +1186,269 @@ import UEFITool
     /// module reads the caret and decides; this is only the click.
     @objc private func revealClicked() {
         onRevealAtCaret?()
+    }
+
+    // MARK: - Searching the tree
+
+    /// What one search is: the walk, what it looks for, and which search it is.
+    private final class SearchRun {
+        var walk: UEFITreeSearch
+        let query: UEFITreeQuery
+        let token: Int
+
+        init(walk: UEFITreeSearch, query: UEFITreeQuery, token: Int) {
+            self.walk = walk
+            self.query = query
+            self.token = token
+        }
+    }
+
+    /// How long a search may hold the main thread before it lets go for a
+    /// moment, so a long walk over rows already read still draws.
+    private static let searchSlice: TimeInterval = 0.008
+    /// How long a search runs before its bar shows a progress bar.
+    private static let searchStatusDelay: TimeInterval = 0.2
+
+    /// Edit ▸ Find with the keyboard in the tree or its details: the tree's
+    /// search, not the dump's. The panel sits in the responder chain ahead of
+    /// the window, so it answers the menu's action first; with the keyboard
+    /// anywhere else the window's own Find bar opens as before.
+    @objc func findPattern() {
+        UEFISearchSettings.isOpen = true
+        searchBar.focusField()
+    }
+
+    @objc private func searchClicked() {
+        UEFISearchSettings.isOpen.toggle()
+        guard UEFISearchSettings.isOpen else { return }
+        DispatchQueue.main.async { [weak self] in self?.searchBar.focusField() }
+    }
+
+    /// The bar open or shut, and the button saying so. Shutting it ends the
+    /// search: what it opened is the reader's from here.
+    private func applySearchVisibility() {
+        let open = UEFISearchSettings.isOpen
+        searchBar.isHidden = !open
+        splitterBelowSummary?.isActive = !open
+        splitterBelowBar?.isActive = open
+        searchButton.contentTintColor = open ? .controlAccentColor : .secondaryLabelColor
+        if !open {
+            cancelSearch()
+            searchOpenings.release()
+        }
+    }
+
+    /// The stored query or the bar's state moved, in this panel or the other:
+    /// a search for the old query is over, and what it opened is left as it is.
+    private func searchSettingsChanged() {
+        applySearchVisibility()
+        let query = UEFISearchSettings.query
+        guard query != shownQuery else { return }
+        shownQuery = query
+        cancelSearch()
+        searchOpenings.release()
+    }
+
+    /// The row the search goes on from: the last match, unless the reader has
+    /// chosen another row since; then the one selected — or, in the ME
+    /// sub-tree, the ME region it hangs from. None when nothing is selected, or
+    /// the title is.
+    private func searchOrigin() -> NodeID? {
+        if let searchCursor, tree?.node(searchCursor) != nil { return searchCursor }
+        var item = outline.selectedRow >= 0 ? outline.item(atRow: outline.selectedRow) : nil
+        while let current = item {
+            if let row = current as? UEFITreeRow, !row.isLoading { return row.id }
+            item = outline.parent(forItem: current)
+        }
+        return nil
+    }
+
+    private func search(_ direction: UEFITreeSearch.Direction) {
+        let query = UEFISearchSettings.query
+        guard let tree, !isBuilding, !query.isEmpty else { return }
+        cancelSearch()
+        searchBar.status = .none
+        searchRun += 1
+        let run = SearchRun(
+            walk: UEFITreeSearch(origin: searchOrigin(), direction: direction),
+            query: query, token: searchRun
+        )
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.searchStatusDelay * 1_000_000_000))
+            guard let self, self.searchRun == run.token else { return }
+            self.searchBar.status = .searching
+        }
+        drive(run, in: tree)
+    }
+
+    /// The reader stopped a search that was reading branches.
+    private func stopSearching() {
+        cancelSearch()
+    }
+
+    /// Ends the search in hand, if there is one.
+    private func cancelSearch() {
+        searchRun += 1
+        if searchBar.status == .searching { searchBar.status = .none }
+    }
+
+    private var searchSource: UEFITreeSearchSource {
+        UEFITreeSearchSource(
+            topRows: { [weak self] in
+                guard let self else { return [] }
+                return UEFITreeDisplay.listed(self.presented.rows, showsEmptyPadding: self.showsEmptyPadding)
+                    .map(\.id)
+            },
+            // Nil is "read this branch first", and means something else than
+            // none: a view that has gone leaves nothing to look through.
+            listedChildren: { [weak self] id in
+                guard let self else { return [] }
+                return self.listedChildIDs(of: id)
+            }
+        )
+    }
+
+    /// The rows listed under `id` as the outline would list them; nil for a
+    /// branch not read yet. The ME region lists none: its sub-tree is another
+    /// structure, which a name, a GUID and a type do not describe.
+    private func listedChildIDs(of id: NodeID) -> [NodeID]? {
+        guard let tree, let node = tree.node(id) else { return [] }
+        if isMERegion(node) { return [] }
+        guard node.children.isEmpty else {
+            let hiding = showsSupersededEntries ? [] : Set(supersededCopies(in: node).keys)
+            return UEFITreeDisplay.listed(node.children, showsEmptyPadding: showsEmptyPadding, hiding: hiding)
+                .map(\.id)
+        }
+        return node.isExpandable ? nil : []
+    }
+
+    private func matches(_ id: NodeID, _ query: UEFITreeQuery) -> Bool {
+        guard let node = tree?.node(id) else { return false }
+        return query.matches(node, name: UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image))
+    }
+
+    /// Walks on until a row matches, a branch has to be read, or every row has
+    /// been seen. A branch is read in the background and the walk goes on when
+    /// it is there; a long stretch of rows already read lets go of the main
+    /// thread now and then.
+    private func drive(_ run: SearchRun, in tree: LazyUEFITree) {
+        guard run.token == searchRun, tree === self.tree else { return }
+        let source = searchSource
+        let began = Date()
+        while true {
+            switch run.walk.advance(in: source) {
+            case .candidate(let id):
+                if matches(id, run.query) {
+                    land(on: id, run: run)
+                    return
+                }
+                if Date().timeIntervalSince(began) > Self.searchSlice {
+                    DispatchQueue.main.async { [weak self] in self?.drive(run, in: tree) }
+                    return
+                }
+            case .expand(let id):
+                tree.expand(id) { [weak self] _ in self?.drive(run, in: tree) }
+                return
+            case .exhausted:
+                searchRun += 1      // over: the late status timer finds itself stale
+                        searchBar.status = .notFound
+                return
+            }
+        }
+    }
+
+    /// The search found `id`: open the way to the match and one level under
+    /// it, select it as a click on it would, and only then shut what the search
+    /// opened for the last match and this one does not need.
+    ///
+    /// In that order because a branch read in the meantime makes the session
+    /// show the node it still has in focus again — and showing it opens the
+    /// rows above it. Shut first, the old match's volume would be opened again
+    /// behind the search; shut after the new match is the focus, the rows that
+    /// are shown are the new match's own.
+    private func land(on id: NodeID, run: SearchRun) {
+        searchCursor = id
+        searchRun += 1
+        searchBar.status = .none
+        var way = (0..<id.path.count).map { NodeID(Array(id.path.prefix($0 + 1))) }
+        // The ME region opens by running an analysis, which is not a search's
+        // to start.
+        if let node = tree?.node(id), isMERegion(node) { way.removeLast() }
+        openForSearch(way, from: 0) { [weak self] in
+            guard let self, self.tree?.node(id) != nil else { return }
+            self.selectSearchMatch(id)
+            self.closeForSearch(self.searchOpenings.closings(whenLandingOn: id), keepingInView: id)
+            if run.walk.wrapped { self.onSearchWrapped?(run.walk.direction == .forward) }
+        }
+    }
+
+    /// Shuts `ids`, deepest first, and brings `match` back into view: the rows
+    /// above it have gone, and it has moved with them.
+    private func closeForSearch(_ ids: [NodeID], keepingInView match: NodeID) {
+        guard !ids.isEmpty else { return }
+        for id in ids {
+            searchOpenings.forget(id)
+            enqueue(animated: false) { [weak self] in
+                guard let self, let item = self.outlineItem(for: id),
+                      self.outline.isItemExpanded(item) else { return }
+                self.outline.collapseItem(item)
+            }
+        }
+        enqueue(animated: false) { [weak self] in
+            guard let self else { return }
+            let row = self.outline.row(forItem: self.row(match))
+            if row >= 0 { self.outline.scrollRowToVisible(row) }
+        }
+    }
+
+    /// Opens, in turn, each row of `way` that is shut, the search noting what it
+    /// opened — a row the reader had open is theirs and is left alone.
+    private func openForSearch(_ way: [NodeID], from index: Int, then done: @escaping () -> Void) {
+        guard index < way.count, let tree, let node = tree.node(way[index]) else {
+            done()
+            return
+        }
+        let id = way[index]
+        let open = { [weak self] in
+            self?.enqueue(animated: false) { [weak self] in
+                guard let self else { return }
+                if let item = self.outlineItem(for: id), !self.outline.isItemExpanded(item),
+                   self.outline.isExpandable(item) {
+                    self.searchOpenings.record(id)
+                    self.outline.expandItem(item)
+                }
+                self.openForSearch(way, from: index + 1, then: done)
+            }
+        }
+        if node.children.isEmpty, node.isExpandable {
+            tree.expand(id) { _ in open() }
+        } else {
+            open()
+        }
+    }
+
+    /// Selects `id` as a click on it would — the detail and the dump follow —
+    /// without taking the keyboard from the search field.
+    private func selectSearchMatch(_ id: NodeID) {
+        let row = outline.row(forItem: self.row(id))
+        guard row >= 0 else { return }
+        let wasShowingState = isShowingState
+        isShowingState = true
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        outline.scrollRowToVisible(row)
+        isShowingState = wasShowingState
+        chooseNode(atRow: row)
+    }
+
+    /// A row was shut. A row the search opened that the reader shuts is
+    /// theirs from now on — shut, or opened again — and the search will not
+    /// shut it. Only a shutting tells: the search shuts nothing it still
+    /// owns, and a row it opened can be opened again only once shut — while
+    /// the outline's notice of the search's own opening can come after the
+    /// opening has returned, and tell nothing about who did it.
+    private func noteCollapse(_ notification: Notification) {
+        guard let row = notification.userInfo?["NSObject"] as? UEFITreeRow, !row.isLoading else { return }
+        searchOpenings.forget(row.id)
     }
 }
 
@@ -1825,12 +2159,19 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
 
     func outlineViewItemDidCollapse(_ notification: Notification) {
         updateMarks(ofItem: notification.userInfo?["NSObject"])
+        noteCollapse(notification)
         guard !isShowingState else { return }
         onOpenRowsChanged?()
     }
 
     func outlineViewSelectionDidChange(_ notification: Notification) {
         guard !isShowingState else { return }
+        // The reader went somewhere else: what the search opened stays as it is.
+        searchOpenings.release()
+        // A row chosen is where the next search starts. A selection that went
+        // because its branch was shut is not a choice: the search goes on from
+        // where it was.
+        if outline.selectedRow >= 0 { searchCursor = nil }
         chooseNode(atRow: outline.selectedRow)
     }
 

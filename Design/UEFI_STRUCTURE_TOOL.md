@@ -92,6 +92,57 @@ Boot Guard protection, a rail for decompressed bytes, a problem icon, role
 badges — as `Design/ROW_MARKS.md` sets out. What each channel means in this
 tree is §5.1 there.
 
+## Searching the tree
+
+A magnifier left of the filter in the title row opens a bar above the tree;
+so does Edit ▸ Find (⌘F) while the tree or its details have the keyboard —
+the panel answers the menu's `findPattern` ahead of the window — and the
+cursor goes to the field. With the keyboard elsewhere ⌘F is the dump's Find. Its first line is the text and two arrows, its second a
+type and — for a file or a section — a subtype. What it shows is one query
+for the app (`UEFISearchSettings`, in the panel defaults), the same in both
+panes, kept through a reparse, a change of file and a restart, and stored as
+text and codes so a change of language leaves it alone.
+
+**What matches.** The text is a case-insensitive substring of the name the row
+shows, of the node's own name (a file's is its name section's) or of its GUID,
+with the dashes or without when the text is hex. The type is the Type column's
+code (`UEFITypes.Item`) and the subtype a file's or a section's type byte; all
+three must hold. The menus are fixed lists (`UEFITreeSearchChoices`) rather
+than what the image holds, so a choice survives the next file. The match is
+`UEFITreeQuery.matches` in the pure target.
+
+**The walk.** Not a filter: the next match, or the previous, in the order the
+outline lists its rows with everything open — down before across — from the
+last match (`searchCursor`), or from the selected row once the reader has
+chosen one since; that row is not offered until the walk has come round to
+it. Shutting the branch a match is in takes the selection away but not the
+place: only a row chosen moves it. At
+the end it goes on from the other end and shows the wrap sign the hex view's
+find shows (`SearchWrapSigns` in `ToolModuleKit`, shared). Rows the filter
+menu hides are not matches, and the ME region's sub-tree is not searched:
+its structure is another one, which a name, a GUID and a type do not describe
+(the bar says so on an image that has an ME region; the region's own row is
+found).
+
+`UEFITreeSearch` is the walk, a value over a `UEFITreeSearchSource` — the listed
+rows, and `nil` for a branch not read yet. It hands back a row to test, or
+the branch to read first and waits; the panel reads it with `LazyUEFITree.expand`
+off the main actor, and asks again. A search that has run over 0.2 s says so: a progress bar and a stop button in the bar's second line, where **Not found** is said. What is read stays in the tree, so the second search
+over it is instant. A long stretch of rows already read lets go of the main
+thread every 8 ms.
+
+**What it opens and shuts.** A match is selected as a click would select it,
+without taking the keyboard from the field. The rows above it are opened and
+the match itself one level down; the search notes each row it opened
+(`UEFISearchOpenings`) and not a row the reader had open. On the next match
+it opens the way to that one, selects it, and only then shuts what it opened
+and the new match does not need, deepest first, so the tree comes back to what it
+was before the search. The order matters: a branch read on the way makes the
+session show the node it still has in focus again, and showing it opens the
+rows above it — shut first, the old match's volume would be opened again
+behind the search. A row the reader opens or shuts, a click on another row, a
+changed query or a closed bar ends the search's claim on what it opened.
+
 ## Where the decisions live
 
 As with the FIT tool-module, the panel is thin and the pure target is where the

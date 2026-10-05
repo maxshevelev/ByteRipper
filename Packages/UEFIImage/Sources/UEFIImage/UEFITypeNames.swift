@@ -12,4 +12,12 @@ public enum UEFITypeNames {
 
     /// The name of a section type byte (§6.1).
     public static func section(_ type: UInt8) -> String { Section.typeName(type) }
+
+    /// The file types a search can name, in the order of the type byte: the
+    /// ones with a name of their own. A vendor's `OEM file` and `Debug file`
+    /// ranges are many codes under one name, and are left out.
+    public static let fileTypes: [UInt8] = Array(0x01...0x0F) + [FFS.padType]
+
+    /// The section types the parser knows (§6.1), in the order of the type byte.
+    public static let sectionTypes: [UInt8] = (0...UInt8.max).filter(Section.isKnown)
 }
