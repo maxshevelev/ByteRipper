@@ -1151,3 +1151,8 @@
 "Playback position" = "Wiedergabeposition";
 "Drag to move through the sound" = "Ziehen, um an eine andere Stelle der Aufnahme zu springen";
 "Frames" = "Einzelbilder";
+"Signature" = "Signatur";
+"BIOS version" = "BIOS-Version";
+"Digest" = "Hashwert";
+"Signed ranges" = "Signierte Bereiche";
+"HP signature block" = "HP-Signaturblock";

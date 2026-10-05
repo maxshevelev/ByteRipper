@@ -307,6 +307,12 @@ public enum UEFIDetail {
             ))
         }
 
+        // An HP signature block lists what it signs, and what hashing found.
+        if node.kind == .hpSignatureBlock, let ranges = image.protectedRanges {
+            let listed = ranges.ranges.filter { $0.kind == .hp && $0.source == node.range }
+            if !listed.isEmpty { tables.append(protectedByTable(listed, title: L("Signed ranges"))) }
+        }
+
         if let ranges = image.protectedRanges {
             let touching = ranges.ranges(touching: node, in: image)
             if !touching.isEmpty {
@@ -605,9 +611,9 @@ public enum UEFIDetail {
 
     /// Every range that shares a byte with the node: what it is, where it is,
     /// where the list naming it is, and what hashing it found (§9.3).
-    static func protectedByTable(_ ranges: [ProtectedRange]) -> UEFIDetailTable {
+    static func protectedByTable(_ ranges: [ProtectedRange], title: String = L("Protected by")) -> UEFIDetailTable {
         UEFIDetailTable(
-            title: L("Protected by"),
+            title: title,
             symbol: "lock.shield",
             columns: [L("Range"), L("Kind"), L("Listed at"), L("Hash")],
             rows: ranges.map { range in
@@ -1042,6 +1048,21 @@ public enum UEFIDetail {
         // Read in `build`, which has the block the image sits in.
         case .ecImage:
             break
+
+        // A layout read off HP's dumps, not a published one: the digest is
+        // shown, and checked in the table of signed ranges only where its span
+        // is known.
+        case .hpSignatureBlock:
+            guard let block = HPSignatureBlock.read(at: node.range.lowerBound, limit: reader.count, in: reader)
+            else { break }
+            fields.append(.init("Version", "\(block.version)"))
+            fields.append(.init(L("Signature"), "\(block.signatureName) (\(hex(block.signatureLength)))"))
+            fields.append(.init(L("BIOS version"), block.biosVersion))
+            fields.append(.init(L("Date"), block.date))
+            if let identifier = block.identifier { fields.append(.init("ID", identifier)) }
+            if let digest = block.digest {
+                fields.append(.init(L("Digest"), digest.map { String(format: "%02X", $0) }.joined()))
+            }
 
         // What UEFITool's FIT tab says of the structure, in the header's own
         // words: the fields are Intel's names, and stay in them.
@@ -1571,6 +1592,7 @@ public enum UEFIDetail {
         case .flashDeviceMapRegion: return L("Flash device map region")
         case .ecImage: return L("EC firmware image")
         case .fitComponent: return L("FIT component")
+        case .hpSignatureBlock: return L("HP signature block")
         case .picture: return L("Picture")
         case .sound: return L("Sound")
         }

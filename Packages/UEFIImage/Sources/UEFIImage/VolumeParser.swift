@@ -132,6 +132,17 @@ extension Parser {
         guard let header = readVolumeHeader(at: offset) else { return nil }
 
         var size = header.fvLength
+        // A header that claims more than its block map does is believed — the
+        // reference believes it — unless the block map's end is where
+        // something else plainly starts: another volume, or the HP signature
+        // block that signs one. The HP FS volume of the ProDesk 600 G4 says
+        // `0x110000`, its block map `0x11000`, and at `0x11000` the block and
+        // then the BIOS volume it signs begin (§3.1).
+        if let blockMapSize = header.blockMapSize, blockMapSize < size,
+           blockMapSize >= header.headerSize, offset + blockMapSize < limit,
+           startsAnotherStructure(at: offset + blockMapSize, limit: limit) {
+            size = blockMapSize
+        }
         if offset + size > limit {
             note(.truncated(.volumeBody), at: offset)
             size = limit - offset
@@ -166,6 +177,13 @@ extension Parser {
             isExpandable: !body.isEmpty,
             childDepth: depth
         )
+    }
+
+    /// Whether a structure no volume holds starts at `offset`: a volume header
+    /// of its own, or an HP signature block.
+    private func startsAnotherStructure(at offset: UInt64, limit: UInt64) -> Bool {
+        readVolumeHeader(at: offset) != nil
+            || HPSignatureBlock.read(at: offset, limit: limit, in: reader) != nil
     }
 
     /// Over `HeaderLength` bytes and not over the whole header: the extended

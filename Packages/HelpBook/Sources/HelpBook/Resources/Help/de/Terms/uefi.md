@@ -1,4 +1,4 @@
-@source-sha 02b4d081f3ce630fee16eccb44d2c0cb80791f5d9b6efe6d4f90a2d14d6d8c28
+@source-sha c9b2e830a05fca109a61037fe954a3e9157a56e4f4aec475e84666863cf50e18
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -218,6 +218,19 @@ Für UEFITool ist eine Audiozeile Padding, und die Spalte „Typ“ weist sie so
 
 @see term:non-uefi-data
 @see term:picture
+
+@term hp-signature-block
+@name HP-Signaturblock
+@short Ein Block, in dem HP festhält, welche Teile des Images signiert sind, samt Signatur und BIOS-Version.
+
+HP-Platinen legen einen solchen Block an einer 4-KiB-Grenze im [[term:padding|Padding]] ab, unmittelbar vor dem, was er signiert: einen vor dem Haupt-Volume und auf den neueren Platinen einen zweiten vor dem Bootblock. Er nennt zwei Bereiche des Flash-Speichers über ihre Adressen, trägt eine RSA-Signatur — RSA-3072 auf den neueren Platinen, RSA-2048 auf den älteren — sowie einen kurzen Eintrag mit der BIOS-Version, etwa `V77`, und deren Datum. Das [[topic:tool-uefi|UEFI-Werkzeug]] zeigt den Block als eigene Zeile, benannt nach dieser Version, und markiert beide Bereiche als geschützt, so wie die Bereiche von [[term:boot-guard|Boot Guard]] und der Hash-Tabellen der Hersteller: Eine Änderung darin verletzt, was die Firmware prüft.
+
+HP hat den Aufbau nicht veröffentlicht; er wurde aus vier Dumps von HP-Platinen mit Intel und AMD erschlossen und ist nur teilweise gesichert. Der Block vor dem Haupt-Volume enthält einen SHA-384 seines zweiten Bereichs: Das Werkzeug berechnet ihn und meldet das Ergebnis in der Tabelle **Signierte Bereiche** in den Details des Blocks. Was der Hashwert im anderen Block abdeckt, ist nicht bekannt; ein Block der älteren Version enthält keinen Hashwert seiner Bereiche, und die Signatur lässt sich überhaupt nicht prüfen, weil der öffentliche Schlüssel von HP nicht im Block liegt. Diese Bereiche werden markiert und als ungeprüft gemeldet, was nichts gegen das Image besagt.
+
+Für UEFITool ist der Block Padding, und die Spalte „Typ“ weist ihn so aus.
+
+@see term:boot-guard
+@see term:padding
 
 @term flash-device-map
 @name Insyde Flash Device Map

@@ -1151,3 +1151,8 @@
 "Playback position" = "Позиция воспроизведения";
 "Drag to move through the sound" = "Перетащите, чтобы перейти к другому месту записи";
 "Frames" = "Кадры";
+"Signature" = "Подпись";
+"BIOS version" = "Версия BIOS";
+"Digest" = "Хеш";
+"Signed ranges" = "Подписанные диапазоны";
+"HP signature block" = "Блок подписи HP";

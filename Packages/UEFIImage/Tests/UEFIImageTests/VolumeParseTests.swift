@@ -95,6 +95,19 @@ final class VolumeParseTests: XCTestCase {
         )
     }
 
+    /// Where the shorter block map ends another volume begins: the header's
+    /// length is the one that is wrong, as on the ProDesk 600 G4, and the
+    /// volume after it is read instead of being swallowed (§3.1).
+    func testABlockMapEndingWhereAnotherVolumeStartsIsTheLength() {
+        let outer = TestImage.volume(length: 0x800, blockMapLength: 0x200)
+        let bytes = Array(outer.prefix(0x200)) + TestImage.volume(length: 0x600)
+        let parsed = parse(bytes)
+
+        XCTAssertEqual(parsed.allNodes.filter { $0.kind == .volume }.map(\.range), [0..<0x200, 0x200..<0x800])
+        XCTAssertEqual(parsed.diagnostics.map(\.kind), [.sizeMismatch(.volumeHeader, stored: 0x800, computed: 0x200)],
+                       "the header still disagrees with its block map")
+    }
+
     /// A volume claiming more bytes than the image has: keep what is there,
     /// and say so.
     func testAVolumeRunningPastTheEndIsCutAndReported() {

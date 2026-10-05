@@ -419,6 +419,18 @@ positives):
   compared with `FvLength`; a discrepancy is a sign of damage, but not a reason
   to throw the volume away — the reference parser tries both sizes in that case.
 
+`FvLength` is believed, and the discrepancy reported (`sizeMismatch`), with
+one exception beyond the reference: when the block map's sum is the smaller
+and another volume header or an HP signature block (§9) starts exactly where
+it ends, the block map is the volume's length. The ProDesk 600 G4
+(`HP/HP ProDesk 600 G4 Desktop Mini PC Q22_022400.bin`) has an HP FS volume at
+`0x1376000` whose header says `0x110000` and whose block map says `0x11000`;
+at `0x1387000` the HP signature block begins, and at `0x1388000` the BIOS
+volume it signs (`0x5DA000`, to the NVRAM store). Believing the header, the
+reference loses that volume ("one of objects inside overlaps the end of
+data") and so did this parser; with the block map it opens, 668 files more.
+On the other thirty-four dumps no volume meets the condition.
+
 ### 3.2. The extended header
 
 If `Revision > 1` and `ExtHeaderOffset != 0`:
@@ -1500,6 +1512,34 @@ GUID, whose body is one GIF89a to the byte: 53×53 in 9 frames, then 340×192,
 480×270, 640×360 and 960×540 in 34 each. A GIF counts its images
 (`Picture.frames`); the details give the count when it is more than one, and
 the preview, an `NSImageView`, plays it.
+
+**HP signature blocks** (`HPSignatureBlock.swift`) are read out of written
+padding on the file's 4 KiB boundaries, as rows of the padding that holds
+them. The layout, read off four HP boards and nothing published:
+
+| Offset | Field |
+|---|---|
+| `0x00` | `0`, the version (`2` or `3`), `0`, S — the signature's length (`0x100` RSA-2048, `0x180` RSA-3072) |
+| `0x10`, `0x20` | two ranges: address, length, `0xFFFFFFFF`, `0` |
+| `0x30` | the signature, S bytes, then S bytes of `FF` |
+| `0x30 + 2S` | the payload's length L, a second dword, L bytes: the BIOS version at `+0x10` (16 bytes, NUL-padded), the date at `+0x20` (32-bit year, 16-bit month and day) |
+| after it | 3 × S bytes nobody has read |
+
+Every field is checked — the zeros, the version, S, both range records, the
+`FF` after the signature, a date and a printable version — and the length the
+fields give is the node's: `0xAEE` for version 3, `0x678` for version 2, the
+block's last written byte on all seven blocks at hand. A version-3 payload also
+holds a 40-character hex id at `0x368` and a 48-byte digest at `0x43A`. The
+node is an `hpSignatureBlock`, fixed, named `HP signature block <version>`,
+classified as UEFITool's padding. Its ranges are protected ranges
+(`BOOT_GUARD_PROTECTED_RANGES.md` §5.4).
+
+| Board | Blocks | Version | BIOS version, date |
+|---|---|---|---|
+| ZBook Fury 16 G9 (`SPI_EF4019_256Mbit.orig.bin`) | `0xC00000`, `0x1A11000` | 3 | `U96`, 2024-05-09 |
+| EliteBook 455 G10 | `0x10D1000`, `0x1CEC000` | 3 | `V77`, 2022-12-26 |
+| EliteBook 645 G11 | `0x1061000`, `0x1BFC000` | 3 | `W77`, 2024-03-14 |
+| ProDesk 600 G4 | `0x1387000` | 2 | `Q22`, 2023-06-15 |
 
 **Sounds** — a WAV file — are read where a body stops reading as sections
 (§6): at the start of that Non-UEFI data (`Sound.swift`). `RIFF`, a size that

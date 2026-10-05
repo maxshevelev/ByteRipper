@@ -19,6 +19,8 @@ public struct ProtectedRange: Equatable, Sendable {
         case amiV2
         case amiV3
         case insyde
+        /// A range an HP signature block names (`HPSignatureBlock`).
+        case hp
 
         /// The one kind the ACM checks before the first instruction of the
         /// BIOS; every other kind is checked by the firmware itself (§1).
@@ -34,6 +36,7 @@ public struct ProtectedRange: Equatable, Sendable {
             case .amiV2: return "AMI vendor hash range (v2)"
             case .amiV3: return "AMI vendor hash range (v3)"
             case .insyde: return "Insyde flash device map range"
+            case .hp: return "HP signed range"
             }
         }
     }
@@ -210,6 +213,7 @@ public struct ProtectedRanges: Equatable, Sendable {
         reading.readBootPolicies()
         reading.readVendorHashFiles()
         reading.readFlashDeviceMaps()
+        reading.readHPSignatureBlocks()
         var ranges = reading.finish()
         if let copy = TopSwapCopy.find(in: image, reader: readers.file) {
             ranges.topSwap = copy
@@ -751,6 +755,28 @@ final class ProtectedRangeReading {
                 let address = UInt32(truncatingIfNeeded: base) &+ UInt32(truncatingIfNeeded: offset)
                 addSingle(.insyde, physical(address, UInt32(truncatingIfNeeded: size)),
                           digest: .init(algorithm: TCGHash.sha256, bytes: hash), source: entry.header)
+            }
+        }
+    }
+
+    // MARK: - HP signature blocks (§5.4)
+
+    /// Both ranges of every block, the second with its digest where the
+    /// layout is known to hold it (`HPSignatureBlock.digestCoversSecondRange`);
+    /// every other range is marked and left unchecked — a digest whose span is
+    /// not known is no evidence against the image.
+    func readHPSignatureBlocks() {
+        for node in nodes where node.kind == .hpSignatureBlock && node.space == .file {
+            guard let block = HPSignatureBlock.read(at: node.range.lowerBound, limit: file.count, in: file) else {
+                continue
+            }
+            for (index, signed) in block.ranges.enumerated() {
+                let digests = index == 1 && block.digestCoversSecondRange
+                    ? block.digest.map { [ProtectedRange.Digest(algorithm: TCGHash.sha384, bytes: $0)] } ?? []
+                    : []
+                var group = Group(kind: .hp, digests: digests, source: block.range)
+                add(physical(signed.address, signed.length), to: &group)
+                if !group.members.isEmpty || group.incomplete { groups.append(group) }
             }
         }
     }

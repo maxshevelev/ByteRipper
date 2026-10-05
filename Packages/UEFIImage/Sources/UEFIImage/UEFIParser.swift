@@ -242,13 +242,13 @@ final class Parser {
         // the range whether or not a signature announced itself.
         progressed(to: range.upperBound)
         nodes += padding(from: claimed, to: range.upperBound, emptyByte: emptyByte)
-        return readingAMDMicrocode(
-            readingECFirmware(
-                readingFITComponents(readingMapRegions(nodes, emptyByte: emptyByte, depth: depth), emptyByte: emptyByte),
-                emptyByte: emptyByte
-            ),
-            emptyByte: emptyByte
-        )
+        // What tables elsewhere name, then what announces itself only in
+        // padding — each read into the padding as rows of its own.
+        var read = readingMapRegions(nodes, emptyByte: emptyByte, depth: depth)
+        read = readingFITComponents(read, emptyByte: emptyByte)
+        read = readingECFirmware(read, emptyByte: emptyByte)
+        read = readingHPSignatureBlocks(read, emptyByte: emptyByte)
+        return readingAMDMicrocode(read, emptyByte: emptyByte)
     }
 
     /// A signature is a candidate, not a find: the four bytes turn up inside

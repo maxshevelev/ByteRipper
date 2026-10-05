@@ -459,6 +459,22 @@ image says otherwise, and say so in a comment.
 The whole store is fixed when the image is rebuilt
 (`UEFI_IMAGE_FORMAT.md` §11), whatever its entries say.
 
+### 5.4. HP signature blocks
+
+Not in the reference: HP's block (`UEFI_IMAGE_FORMAT.md` §9) names two ranges
+by physical address and carries an RSA signature, with no public key in it.
+Both ranges are `hp` ranges, placed through the Volume Top File like every
+physical address (§3). One digest is understood: in a version-3 block whose two
+ranges start at one address — the block before the main volume, on all three
+version-3 boards at hand — the 48 bytes at `0x43A` are SHA-384 of the second
+range, and that range is checked against them; verified byte for byte on the
+ZBook Fury 16 G9, the EliteBook 455 G10 and the EliteBook 645 G11. Every other
+range is marked and left `unchecked`: the other block's digest matches neither
+range, their concatenation, their union nor any 4 KiB-aligned stretch to the
+top of the chip, and a version-2 block holds no digest of its ranges. A digest
+whose span is not known is no evidence against an image, so no mismatch is
+reported for it. The signature is not checked (no key).
+
 ---
 
 ## 6. Checking the hashes
