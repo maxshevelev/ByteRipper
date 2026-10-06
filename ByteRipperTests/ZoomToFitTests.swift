@@ -120,7 +120,7 @@ final class ZoomToFitTests: XCTestCase {
 
     /// The window actually opens at that width, and at the height the landing
     /// screen fits in with the same air above the visible icon as below the
-    /// last line — or three quarters of the screen's when that is less. Goes
+    /// last line — or the screen's visible height when that is less. Goes
     /// through `showWindow`, which is where the launch frame is settled:
     /// assigning the content view controller shrinks the window to the empty
     /// state's fitting size first.
@@ -143,8 +143,8 @@ final class ZoomToFitTests: XCTestCase {
                            screen?.visibleFrame.width ?? .greatestFiniteMagnitude)
         XCTAssertEqual(window.frame.width, expected, accuracy: 1,
                        "the launch frame must use the one-pane width")
-        let cap = ((screen?.visibleFrame.height ?? 720) * 0.75).rounded(.down)
-        XCTAssertLessThanOrEqual(window.frame.height, cap + 1, "capped at 3/4 of the screen")
+        let cap = (screen?.visibleFrame.height ?? 720).rounded(.down)
+        XCTAssertLessThanOrEqual(window.frame.height, cap + 1, "capped at the screen's visible height")
         let empty = try XCTUnwrap(findEmptyView(in: window.contentView!))
         window.layoutIfNeeded()
         let content = empty.visibleContentFrameForTesting
@@ -175,7 +175,7 @@ final class ZoomToFitTests: XCTestCase {
                               page: try XCTUnwrap(URL(string: "https://example.com")), body: notes)
 
         empty.showReleaseNotes(release, isRunningBuild: true)
-        let cap = ((window.screen ?? NSScreen.main)?.visibleFrame.height ?? 720) * 0.75
+        let cap = (window.screen ?? NSScreen.main)?.visibleFrame.height ?? 720
         if fitted.height < cap - 1 {
             XCTAssertGreaterThan(window.frame.height, fitted.height, "the notes are fitted in")
         }
@@ -195,9 +195,10 @@ final class ZoomToFitTests: XCTestCase {
         return nil
     }
 
-    /// A saved frame taller than three quarters of the screen is cut down at
-    /// launch, and the window keeps its top edge.
-    func testRestoredFrameTallerThanThreeQuartersOfTheScreenIsCutDown() throws {
+    /// A restored frame's height gives way to the landing screen's: a window
+    /// saved as tall as the screen opens at the fitted height, keeping its top
+    /// edge.
+    func testRestoredFrameHeightGivesWayToTheLandingScreen() throws {
         let controller = makeController()
         let window = controller.window!
         let visible = try XCTUnwrap(window.screen ?? NSScreen.main).visibleFrame
@@ -208,7 +209,8 @@ final class ZoomToFitTests: XCTestCase {
         controller.showWindow(nil)
         defer { window.orderOut(nil) }
 
-        XCTAssertLessThanOrEqual(window.frame.height, visible.height * 0.75 + 1)
+        let fitted = try XCTUnwrap(controller.mainViewController.emptyStateFittingWindowHeight())
+        XCTAssertEqual(window.frame.height, min(fitted, visible.height.rounded(.down)), accuracy: 1)
         XCTAssertEqual(window.frame.maxY, top, accuracy: 1, "the top edge stays")
     }
 

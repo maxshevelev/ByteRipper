@@ -123,12 +123,11 @@ final class MainWindowController: NSWindowController {
             (window?.screen ?? NSScreen.main)?.visibleFrame.width ?? MainViewController.launchContentWidth())
     }
 
-    /// The tallest a window may open: three quarters of its screen's visible
-    /// height, so a launch never fills the screen top to bottom — whether the
-    /// height is the default or the one restored from the saved frame.
+    /// The tallest a window may open: its screen's visible height. The
+    /// landing screen decides the height, and a screen too short for it gets
+    /// all the height there is rather than a fraction of it.
     private var maxLaunchHeight: CGFloat {
-        let visible = (window?.screen ?? NSScreen.main)?.visibleFrame.height
-        return visible.map { ($0 * 0.75).rounded(.down) } ?? .greatestFiniteMagnitude
+        (window?.screen ?? NSScreen.main)?.visibleFrame.height.rounded(.down) ?? .greatestFiniteMagnitude
     }
 
     /// The launch height: the one at which the landing screen fits at the
