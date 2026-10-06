@@ -239,6 +239,10 @@ import UEFITool
     /// search, a branch arriving — so the outline's notice is told apart from
     /// a row the reader opened.
     private var isPanelExpanding = false
+    /// True while the panel itself is folding a row (`panelCollapses`): a
+    /// fold of the panel's own is not the reader's, and is not held back to
+    /// keep the scroll still (`foldsBeforeScrolling`).
+    private var isPanelCollapsing = false
     /// Rows the reader opened whose branch was still being read: once it is
     /// there, the tree scrolls to show it.
     private var openedByReader: Set<NodeID> = []
@@ -1424,7 +1428,7 @@ import UEFITool
             enqueue(animated: false) { [weak self] in
                 guard let self, let item = self.outlineItem(for: id),
                       self.outline.isItemExpanded(item) else { return }
-                self.outline.collapseItem(item)
+                self.panelCollapses { self.outline.collapseItem(item) }
             }
         }
         enqueue(animated: false) { [weak self] in
@@ -1696,6 +1700,75 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         isPanelExpanding = was
     }
 
+    /// Runs `fold` as the panel's own folding of a row, not the reader's.
+    private func panelCollapses(_ fold: () -> Void) {
+        let was = isPanelCollapsing
+        isPanelCollapsing = true
+        fold()
+        isPanelCollapsing = was
+    }
+
+    /// The row's own item, found again when a later change runs: the rows may
+    /// have moved by then, and an outline knows only the object it holds.
+    private func resolver(for item: Any) -> @MainActor () -> Any? {
+        if let meRow = item as? MEOutlineRow {
+            let path = meRow.path
+            return { [weak self] in self?.meRow(path) }
+        }
+        if let row = item as? UEFITreeRow, !row.isLoading {
+            let id = row.id
+            return { [weak self] in self?.outlineItem(for: id) }
+        }
+        return { item }
+    }
+
+    /// Whether a row the reader folds is folded by the panel instead — first
+    /// the fold, then the scroll — and if so, does both, in that order.
+    ///
+    /// Folded near the end of the table, a row takes away rows the view was
+    /// showing, the table comes up short of the view, and the scroll had to
+    /// move with the rows still sliding away: the fold drew torn. So the
+    /// table keeps its height while the row folds, then scrolls up to its new
+    /// end, then lets the height go. A fold that leaves the scroll where it
+    /// is, an Option-click and a fold of the panel's own fold at once, as
+    /// before.
+    private func foldsBeforeScrolling(_ item: Any) -> Bool {
+        guard !isPanelCollapsing, NSApp.currentEvent?.modifierFlags.contains(.option) != true,
+              let clip = outline.enclosingScrollView?.contentView else { return false }
+        let row = outline.row(forItem: item)
+        guard row >= 0 else { return false }
+        let level = outline.level(forRow: row)
+        var end = row + 1
+        while end < outline.numberOfRows, outline.level(forRow: end) > level { end += 1 }
+        guard end > row + 1 else { return false }
+        let removed = outline.rect(ofRow: end - 1).maxY - outline.rect(ofRow: row).maxY
+        let rowsAfter = outline.rect(ofRow: outline.numberOfRows - 1).maxY - removed
+        // Only a fold that would move the scroll: one that leaves the clip
+        // past the table's new end.
+        let insets = clip.contentInsets
+        let lowestAfter = max(rowsAfter + insets.bottom - clip.bounds.height, -insets.top)
+        guard clip.bounds.minY > lowestAfter + 0.5 else { return false }
+
+        let resolve = resolver(for: item)
+        outline.heldHeight = outline.frame.height
+        enqueue(animated: true) { [weak self] in
+            guard let self, let item = resolve() else { return }
+            self.panelCollapses { self.outline.animator().collapseItem(item) }
+        }
+        enqueue(animated: true) { [weak self] in
+            guard let self else { return }
+            let rows = self.outline.numberOfRows > 0
+                ? self.outline.rect(ofRow: self.outline.numberOfRows - 1).maxY : 0
+            let lowest = rows + insets.bottom - clip.bounds.height
+            let top = max(min(clip.bounds.minY, lowest), -insets.top)
+            guard top != clip.bounds.minY else { return }
+            clip.animator().setBoundsOrigin(NSPoint(x: clip.bounds.minX, y: top))
+            clip.enclosingScrollView?.reflectScrolledClipView(clip)
+        }
+        enqueue(animated: false) { [weak self] in self?.outline.heldHeight = 0 }
+        return true
+    }
+
     /// A branch the reader asked for is there: show it.
     private func showBranchIfAsked(_ id: NodeID) {
         guard openedByReader.remove(id) != nil else { return }
@@ -1822,7 +1895,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         enqueue(animated: true) { [weak self] in
             guard let self, let item = self.outlineItem(for: id) else { return }
             if self.meRoots.isEmpty {
-                self.outline.collapseItem(item)
+                self.panelCollapses { self.outline.collapseItem(item) }
             } else {
                 self.outline.reloadItem(item, reloadChildren: true)
             }
@@ -2311,6 +2384,10 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         onOpenRowsChanged?()
     }
 
+    func outlineView(_ outlineView: NSOutlineView, shouldCollapseItem item: Any) -> Bool {
+        !foldsBeforeScrolling(item)
+    }
+
     func outlineViewItemDidCollapse(_ notification: Notification) {
         updateMarks(ofItem: notification.userInfo?["NSObject"])
         noteCollapse(notification)
@@ -2338,6 +2415,9 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         guard row >= 0, let item = outline.item(atRow: row), let node = node(of: item) else { return }
         onOpenContent?(node.id)
     }
+
+    /// Whether the selection being reported was moved by a key press.
+    var selectionMovedByKeys: Bool { outline.isMovingByKeys }
 
     private func chooseNode(atRow row: Int) {
         let item = row >= 0 ? outline.item(atRow: row) : nil
@@ -2374,6 +2454,26 @@ private final class UEFIOutlineView: NSOutlineView {
     var onRowReclick: ((Int) -> Void)?
     /// A plain double click landed on a row, not on its disclosure triangle.
     var onRowDoubleClick: ((Int) -> Void)?
+    /// The least height the table keeps, whatever its rows: held while a row
+    /// folds, so the rows going away do not pull the table's end up past the
+    /// view mid-fold. Let go, the table is sized to its rows again.
+    var heldHeight: CGFloat = 0 {
+        didSet { if heldHeight < oldValue { tile() } }
+    }
+
+    /// True while a key press is moving the selection: the dump follows such
+    /// a selection once it stops rather than on every step.
+    private(set) var isMovingByKeys = false
+
+    override func keyDown(with event: NSEvent) {
+        isMovingByKeys = true
+        defer { isMovingByKeys = false }
+        super.keyDown(with: event)
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(NSSize(width: newSize.width, height: max(newSize.height, heldHeight)))
+    }
 
     override func menu(for event: NSEvent) -> NSMenu? {
         onContextMenu?(event)

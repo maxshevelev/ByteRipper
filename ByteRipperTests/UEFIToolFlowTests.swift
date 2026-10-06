@@ -260,6 +260,8 @@ final class UEFIToolFlowTests: XCTestCase {
         // opens only once it stands where the rows will be in view — a scroll
         // during the opening's animation tore the rows sliding in.
         tree.collapseItem(tree.item(atRow: 1))
+        XCTAssertTrue(pumpUntil(2) { !tree.isItemExpanded(tree.item(atRow: 1)) }, "folded")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
         clip.contentView.scroll(to: NSPoint(x: 0, y: -header))
         clip.reflectScrolledClipView(clip.contentView)
         XCTAssertEqual(seen().location, 0, "the premise: back at the top")
@@ -267,6 +269,17 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertFalse(tree.isItemExpanded(tree.item(atRow: 1)), "held shut while the table moves")
         XCTAssertTrue(pumpUntil(2) { tree.isItemExpanded(tree.item(atRow: 1)) }, "then opened")
         XCTAssertEqual(seen().location, 1, "the table had moved before the row opened")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+
+        // Folded again with its rows filling the view: the table would come
+        // up short of it. The row folds first, with the table still where it
+        // was, and only then does the table scroll up to its new end.
+        let before = clip.contentView.bounds.minY
+        tree.collapseItem(tree.item(atRow: 1))
+        XCTAssertFalse(tree.isItemExpanded(tree.item(atRow: 1)), "folded")
+        XCTAssertEqual(clip.contentView.bounds.minY, before, accuracy: 0.5, "the table stays put while it folds")
+        XCTAssertTrue(pumpUntil(2) { clip.contentView.bounds.minY < before - 0.5 },
+                      "then it scrolls to its new end")
     }
 
     /// The row the arrows moved to while the large view was out is on screen
@@ -476,6 +489,26 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(zones.focus, "0.0#body",
                        "the body is what the node holds — that is the one drawn "
                        + "as the focus")
+    }
+
+    /// A selection the arrows move is drawn in the table at once and in the
+    /// dump once it stops: a key held down must not wait on the dump.
+    func testTheDumpFollowsArrowKeysOnceTheSelectionStops() throws {
+        let controller = try open(UEFITestImage.make())
+        let outline = try expandRow(0)
+        outline.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        XCTAssertEqual(controller.windowModel.pane1.zones.focus, "0.0#body", "a click is drawn at once")
+        let window = try XCTUnwrap(self.window)
+        let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
+        let key = try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, characters: down,
+            charactersIgnoringModifiers: down, isARepeat: false, keyCode: 125))
+        outline.keyDown(with: key)
+        XCTAssertEqual(outline.selectedRow, 2, "the table moves at once")
+        XCTAssertEqual(controller.windowModel.pane1.zones.focus, "0.0#body", "the dump not yet")
+        XCTAssertTrue(pumpUntil(2) { controller.windowModel.pane1.zones.focus != "0.0#body" },
+                      "then the dump follows")
     }
 
     /// The trip back: picking a zone in the dump brings its row to the front
