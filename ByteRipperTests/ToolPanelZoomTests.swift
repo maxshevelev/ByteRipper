@@ -164,6 +164,7 @@ final class ToolPanelZoomTests: XCTestCase {
         // without opening anything: a branch is materialized on demand, and
         // what this test is about is the type size, not the tree.
         outline.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
 
         let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)

@@ -128,6 +128,7 @@ final class UEFIChecksumFlowTests: XCTestCase {
     /// Selects a row the way a click would.
     private func selectRow(_ row: Int) throws {
         try outline().selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        followUEFISelection(controller)
     }
 
     /// The detail's checksum rows read `(Valid)`/`(Invalid)` after the value.

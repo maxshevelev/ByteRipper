@@ -208,6 +208,9 @@ import UEFITool
     /// starts when that group is done.
     private var queued: [(animated: Bool, body: @MainActor () -> Void)] = []
     private var isAnimating = false
+    /// True while a key held back by `holdsKeyWhileChanging` is pressed: it
+    /// has waited its turn, and is not held again.
+    private var isPressingHeldKey = false
     /// Whether a refresh is already queued, and whether any of the shows it
     /// stands for moved rows. One refresh serves however many shows land while
     /// an animation runs.
@@ -239,6 +242,10 @@ import UEFITool
     /// search, a branch arriving — so the outline's notice is told apart from
     /// a row the reader opened.
     private var isPanelExpanding = false
+    /// True while the selection being reported is the reader's own — a click
+    /// or a key moved it — rather than one the panel made (a search match, a
+    /// reveal), which reports itself in the middle of its own work.
+    private(set) var isReportingReadersSelection = false
     /// True while the panel itself is folding a row (`panelCollapses`): a
     /// fold of the panel's own is not the reader's, and is not held back to
     /// keep the scroll still (`foldsBeforeScrolling`).
@@ -551,6 +558,7 @@ import UEFITool
         outline.onRowReclick = { [weak self] row in self?.chooseNode(atRow: row) }
         // A double click opens what the row holds as a panel over the dump.
         outline.onRowDoubleClick = { [weak self] row in self?.openContent(atRow: row) }
+        outline.holdsKey = { [weak self] event in self?.holdsKeyWhileChanging(event) ?? false }
 
         let name = NSTableColumn(identifier: Column.name)
         name.title = L("Name")
@@ -816,6 +824,30 @@ import UEFITool
     }
 
     // MARK: - One change to the table at a time
+
+    /// A key that moves through the tree, pressed while the table is still
+    /// changing — a row opening or folding, the scroll that goes with it —
+    /// waits its turn behind the change and is pressed then, in order.
+    ///
+    /// Pressed at once, it moved from the table as it was: the row opening
+    /// had not got its rows yet, so Down went past them to the next row, which
+    /// by the time the change landed could be off the screen. A key is not
+    /// dropped either — the reader pressed it — only put where it means what
+    /// the reader meant.
+    private func holdsKeyWhileChanging(_ event: NSEvent) -> Bool {
+        guard !isPressingHeldKey, isAnimating || !queued.isEmpty,
+              Self.navigationKeys.contains(event.keyCode) else { return false }
+        enqueue(animated: false) { [weak self] in
+            guard let self else { return }
+            self.isPressingHeldKey = true
+            defer { self.isPressingHeldKey = false }
+            self.outline.keyDown(with: event)
+        }
+        return true
+    }
+
+    /// The arrows, Page Up and Down, Home and End.
+    private static let navigationKeys: Set<UInt16> = [123, 124, 125, 126, 116, 121, 115, 119]
 
     private func enqueue(animated: Bool, _ body: @escaping @MainActor () -> Void) {
         queued.append((animated, body))
@@ -2403,6 +2435,8 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // because its branch was shut is not a choice: the search goes on from
         // where it was.
         if outline.selectedRow >= 0 { searchCursor = nil }
+        isReportingReadersSelection = true
+        defer { isReportingReadersSelection = false }
         chooseNode(atRow: outline.selectedRow)
     }
 
@@ -2421,12 +2455,20 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
 
     private func chooseNode(atRow row: Int) {
         let item = row >= 0 ? outline.item(atRow: row) : nil
+        // The panel's own focus moves with the row at once. The session
+        // follows a reader's choice a moment later, and a refresh of the table
+        // in between — a checksum pass landing — would otherwise reveal the
+        // focus the panel still held, and take the row back to it.
         // An ME row resolves against the presented ME tree, not the UEFI tree,
         // so it is published on its own callback with its ME path.
         if let meRow = item as? MEOutlineRow {
+            meFocus = meRow.path
+            focus = nil
             onSelectME?(meRow.path)
             return
         }
+        focus = (item as? UEFITreeRow)?.id
+        meFocus = nil
         onSelect?((item as? UEFITreeRow)?.id)
     }
 }
@@ -2465,7 +2507,13 @@ private final class UEFIOutlineView: NSOutlineView {
     /// a selection once it stops rather than on every step.
     private(set) var isMovingByKeys = false
 
+    /// Asked first of every key press: true when the panel has taken it to
+    /// press again later — the table is still changing, and the row it would
+    /// move from is not where it will be.
+    var holdsKey: ((NSEvent) -> Bool)?
+
     override func keyDown(with event: NSEvent) {
+        if holdsKey?(event) == true { return }
         isMovingByKeys = true
         defer { isMovingByKeys = false }
         super.keyDown(with: event)

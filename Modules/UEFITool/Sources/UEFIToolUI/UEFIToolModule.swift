@@ -116,9 +116,11 @@ private struct ChecksumPass: Sendable {
     /// The node the user is looking at. Nil before a choice, and after an edit
     /// that lost it.
     private var focus: NodeID?
-    /// The dump's update for the selection, waiting for it to stop moving
-    /// (`publishSoon`).
-    private var pendingPublish: Task<Void, Never>?
+    /// What the selection drives, waiting for the table to have moved
+    /// (`followSelection`).
+    private var pendingFollow: Task<Void, Never>?
+    /// What that waiting follow-up does when it runs.
+    private var followWork: (@MainActor () -> Void)?
     /// Which reading of the file is the current one. A file edited twice in
     /// quick succession has checksum passes in flight against both, and the
     /// one that finishes second is not necessarily the one that read the newer
@@ -752,58 +754,64 @@ private struct ChecksumPass: Sendable {
         // node in the UEFI tree drops whatever ME row was in focus, and
         // `selectME` does the reverse.
         meFocus = nil
-        show()
-        publishFollowingTheSelection()
+        followSelection()
     }
 
-    /// The dump's half of a selection: at once for a click, and for a
-    /// selection the keys move, once it stops moving (`publishSoon`).
-    private func publishFollowingTheSelection() {
-        if controller.selectionMovedByKeys {
-            publishSoon()
-        } else {
-            pendingPublish?.cancel()
-            pendingPublish = nil
-            publishFocus()
-        }
-    }
-
-    /// The dump's half of a selection: outlined once the selection stops
-    /// moving, not on every step of it.
+    /// Everything the reader's selection drives — the detail, the dump's
+    /// zones, the minimap's gutter, the dump's scroll — runs after the table
+    /// has moved, never inside its move.
     ///
-    /// A row moved to is drawn in the table at once, and the table scrolls to
-    /// keep it in view at once. The dump is the expensive half — its zones,
-    /// the minimap's gutter, a scroll to the zone — and paid on every step of
-    /// an arrow key held down it held the table back with it: the selection
-    /// ran ahead of what was on screen and the table caught up late. So the
-    /// table goes first, and the dump follows the row the arrows stop on.
-    private func publishSoon() {
-        pendingPublish?.cancel()
-        pendingPublish = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(Self.publishDelay * 1_000_000_000))
-            guard let self, !Task.isCancelled else { return }
-            self.pendingPublish = nil
-            self.publishFocus()
+    /// The table's own work is the selection and the scroll that keeps it in
+    /// view; done inside the selection's notification, the rest held them
+    /// back, and a held arrow key ran ahead of what was on screen. So the
+    /// selection is only noted here. A click is followed on the next turn of
+    /// the run loop, once the table has drawn; a selection the keys move, once
+    /// it stops moving, so a held key pays for the row it stops on and not
+    /// for every row on the way.
+    private func followSelection(then done: (@MainActor () -> Void)? = nil) {
+        pendingFollow?.cancel()
+        followWork = { [weak self] in
+            self?.show(publish: true)
+            done?()
         }
-    }
-
-    /// How long a selection stays put before the dump follows it: longer than
-    /// an arrow key's repeat, so a held key moves only the table.
-    static let publishDelay: TimeInterval = 0.1
-
-    /// The focus's zones, published.
-    private func publishFocus() {
-        guard let tree, tree.isReady else {
-            host.publish(.empty)
+        // A selection the panel made — a search match, a reveal — is followed
+        // at once: it reports itself in the middle of its own work, and what
+        // comes after it there counts on the detail and the dump being in
+        // step.
+        guard controller.isReportingReadersSelection else {
+            runFollowWork()
             return
         }
-        let image = tree.image()
-        if let meNode = meFocus.flatMap({ MEATree.node(at: $0, in: meRoots) }) {
-            host.publish(MEAZones.build(focus: meNode))
-        } else {
-            host.publish(UEFIPresenter.zones(for: focus.flatMap { image.node($0) }, in: image))
+        let byKeys = controller.selectionMovedByKeys
+        pendingFollow = Task { @MainActor [weak self] in
+            if byKeys {
+                try? await Task.sleep(nanoseconds: UInt64(Self.followDelay * 1_000_000_000))
+            } else {
+                await Task.yield()
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.runFollowWork()
         }
     }
+
+    private func runFollowWork() {
+        pendingFollow?.cancel()
+        pendingFollow = nil
+        let work = followWork
+        followWork = nil
+        work?()
+    }
+
+    /// Runs what the last selection drives now rather than on its turn — a
+    /// test reading the detail or the dump right after selecting a row.
+    func followSelectionNowForTesting() {
+        runFollowWork()
+    }
+
+    /// How long a selection the keys move stays put before what it drives
+    /// follows: longer than an arrow key's repeat, so a held key moves only
+    /// the table.
+    static let followDelay: TimeInterval = 0.1
 
     /// A row of the detail named bytes that are not one node: they are
     /// outlined in the dump beside the focused node's own zones, and the host
@@ -825,13 +833,13 @@ private struct ChecksumPass: Sendable {
     private func selectME(_ path: [Int]?) {
         meFocus = path
         focus = nil
-        show()
-        publishFollowingTheSelection()
-        // Looking at the checksums row is what asks for the checksums: the
-        // engine leaves them out of a parse because they are three passes over
-        // the whole region, and until now nothing was going to read them.
-        if let path, path == MEACurator.checksumsPath(in: meRoots) {
-            loadChecksums()
+        followSelection { [weak self] in
+            // Looking at the checksums row is what asks for the checksums: the
+            // engine leaves them out of a parse because they are three passes
+            // over the whole region, and until now nothing was going to read
+            // them.
+            guard let self, let path, path == MEACurator.checksumsPath(in: self.meRoots) else { return }
+            self.loadChecksums()
         }
     }
 

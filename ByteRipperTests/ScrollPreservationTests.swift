@@ -209,6 +209,7 @@ final class ScrollPreservationTests: XCTestCase {
             descendants(of: try XCTUnwrap(controller.tools.panel), NSOutlineView.self).first
         )
         outline.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
         window.layoutIfNeeded()
         XCTAssertFalse(controller.windowModel.pane1.zones.zones.isEmpty,
                        "precondition: the panel published a zone")

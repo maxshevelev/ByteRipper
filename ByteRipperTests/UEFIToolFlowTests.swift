@@ -190,6 +190,7 @@ final class UEFIToolFlowTests: XCTestCase {
         window?.layoutIfNeeded()
 
         tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
         let clip = try XCTUnwrap(tree.enclosingScrollView)
         clip.contentView.scroll(to: NSPoint(x: 0, y: 40))
@@ -271,6 +272,26 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(seen().location, 1, "the table had moved before the row opened")
         RunLoop.main.run(until: Date().addingTimeInterval(0.4))
 
+        // Down pressed while a row is still opening waits for the row's rows:
+        // it lands on the first of them, not on the row past them.
+        tree.collapseItem(tree.item(atRow: 1))
+        XCTAssertTrue(pumpUntil(2) { !tree.isItemExpanded(tree.item(atRow: 1)) }, "folded")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+        clip.contentView.scroll(to: NSPoint(x: 0, y: -header))
+        clip.reflectScrolledClipView(clip.contentView)
+        tree.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        tree.expandItem(tree.item(atRow: 1))
+        XCTAssertFalse(tree.isItemExpanded(tree.item(atRow: 1)), "the premise: still opening")
+        let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
+        tree.keyDown(with: try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: window?.windowNumber ?? 0, context: nil, characters: down,
+            charactersIgnoringModifiers: down, isARepeat: false, keyCode: 125)))
+        XCTAssertEqual(tree.selectedRow, 1, "held while the row opens")
+        XCTAssertTrue(pumpUntil(2) { tree.selectedRow == 2 }, "then the first of its rows: \(tree.selectedRow)")
+        XCTAssertTrue(tree.isItemExpanded(tree.item(atRow: 1)))
+        RunLoop.main.run(until: Date().addingTimeInterval(0.4))
+
         // Folded again with its rows filling the view: the table would come
         // up short of it. The row folds first, with the table still where it
         // was, and only then does the table scroll up to its new end.
@@ -288,6 +309,7 @@ final class UEFIToolFlowTests: XCTestCase {
         _ = try open(UEFITestImage.make())
         let tree = try expandRow(0)
         tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
         let panel = try XCTUnwrap(controller?.tools.panel)
         let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
         let rowHeight = tree.rect(ofRow: 0).height
@@ -303,6 +325,7 @@ final class UEFIToolFlowTests: XCTestCase {
         pane.finishTransitionForTesting()
         window?.layoutIfNeeded()
         tree.selectRowIndexes(IndexSet(integer: 3), byExtendingSelection: false)
+        followUEFISelection(controller)
         pane.closeQuickLook()
         pane.finishTransitionForTesting()
         window?.layoutIfNeeded()
@@ -318,6 +341,7 @@ final class UEFIToolFlowTests: XCTestCase {
         _ = try open(UEFITestImage.make())
         let tree = try expandRow(0)
         tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
         let panel = try XCTUnwrap(controller?.tools.panel)
         let pane = try XCTUnwrap(descendants(of: panel, ToolDetailPane.self).first)
         let window = try XCTUnwrap(self.window)
@@ -360,6 +384,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let controller = try open(UEFITestImage.make())
         let tree = try outline()
         tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
         let panel = try XCTUnwrap(controller.tools.panel)
         let pane = try XCTUnwrap(descendants(of: panel, ToolDetailPane.self).first)
         XCTAssertTrue(pumpUntil(2) { pane.detail.hasRows })
@@ -425,6 +450,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let controller = try open(UEFITestImage.make())
         let tree = try outline()
         tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
         let panel = try XCTUnwrap(controller.tools.panel)
         let texts = { self.shownTexts(panel) }
@@ -481,6 +507,7 @@ final class UEFIToolFlowTests: XCTestCase {
         try expandRow(0)
         XCTAssertEqual(outline.numberOfRows, 4, "the volume and its three children")
         outline.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        followUEFISelection(controller)
 
         // The file is 0x48..<0x8C: a 0x18-byte FFS header, then its sections.
         let zones = controller.windowModel.pane1.zones
@@ -491,13 +518,20 @@ final class UEFIToolFlowTests: XCTestCase {
                        + "as the focus")
     }
 
-    /// A selection the arrows move is drawn in the table at once and in the
-    /// dump once it stops: a key held down must not wait on the dump.
-    func testTheDumpFollowsArrowKeysOnceTheSelectionStops() throws {
+    /// A selection is the table's alone: what it drives — the detail, the
+    /// dump — follows after the table has moved. A click, on the next turn; the
+    /// arrows, once the selection stops, so a key held down never waits on them.
+    func testWhatASelectionDrivesFollowsAfterTheTableMoves() throws {
         let controller = try open(UEFITestImage.make())
         let outline = try expandRow(0)
+        let before = controller.windowModel.pane1.zones.focus
         outline.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
-        XCTAssertEqual(controller.windowModel.pane1.zones.focus, "0.0#body", "a click is drawn at once")
+        XCTAssertEqual(controller.windowModel.pane1.zones.focus, before, "not inside the selection")
+        XCTAssertTrue(pumpUntil(1) { controller.windowModel.pane1.zones.focus == "0.0#body" },
+                      "a click is followed on the next turn")
+        // The table settled after the follow-up's refresh: a key pressed
+        // while it is still changing waits for it.
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
         let window = try XCTUnwrap(self.window)
         let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
         let key = try XCTUnwrap(NSEvent.keyEvent(
@@ -507,6 +541,8 @@ final class UEFIToolFlowTests: XCTestCase {
         outline.keyDown(with: key)
         XCTAssertEqual(outline.selectedRow, 2, "the table moves at once")
         XCTAssertEqual(controller.windowModel.pane1.zones.focus, "0.0#body", "the dump not yet")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.02))
+        XCTAssertEqual(controller.windowModel.pane1.zones.focus, "0.0#body", "nor on the next turn")
         XCTAssertTrue(pumpUntil(2) { controller.windowModel.pane1.zones.focus != "0.0#body" },
                       "then the dump follows")
     }
@@ -528,6 +564,7 @@ final class UEFIToolFlowTests: XCTestCase {
         // the dump the way the right-click menu does.
         try expandRow(0)
         outline.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        followUEFISelection(controller)
 
         // 0x60 is the first byte of the file's body (the file is 0x48..<0x8C).
         let menu = controller.makeOffsetMenu(for: pane, offset: 0x60)
@@ -911,6 +948,7 @@ final class UEFIToolFlowTests: XCTestCase {
 
         // Select the one padding row, so there is a focus to keep.
         outline.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
         XCTAssertEqual(pane.zones.focus, "0")
 
         try session().showTopNode()
@@ -993,6 +1031,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let outline = try outline()
         // The top row is the FFS file, whose detail names it by its GUID.
         outline.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
 
         let panel = try XCTUnwrap(controller?.tools.panel)
@@ -1080,6 +1119,7 @@ final class UEFIToolFlowTests: XCTestCase {
             (0..<outline.numberOfRows).first { (try? node(atRow: $0).kind) == .flashDescriptor },
             "the dump opens with a descriptor region")
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
 
         let text = shownTexts(panel)
@@ -1134,6 +1174,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let row = try XCTUnwrap(
             (0..<outline.numberOfRows).first { (try? node(atRow: $0).kind) == .flashDescriptor })
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
 
         let table = try XCTUnwrap(descendants(of: panel, DetailTableView.self).last, "the chips table")
@@ -1193,6 +1234,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let row = try XCTUnwrap(
             (0..<outline.numberOfRows).first { (try? node(atRow: $0).kind) == .flashDescriptor })
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
 
         func strapsShown() -> Bool {
@@ -1213,7 +1255,9 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertTrue(strapsShown(), "the triangle opens them")
 
         outline.selectRowIndexes(IndexSet(integer: row + 1), byExtendingSelection: false)
+        followUEFISelection(controller)
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
         XCTAssertEqual(try disclosure().state, .on)
         XCTAssertTrue(strapsShown(), "and they stay open on the way back")
@@ -1236,6 +1280,7 @@ final class UEFIToolFlowTests: XCTestCase {
 
         let standing = try XCTUnwrap((0..<outline.numberOfRows).first { (try? node(atRow: $0).header.lowerBound) == 0x131 })
         outline.selectRowIndexes(IndexSet(integer: standing), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
         let links = descendants(of: panel, DetailTableRow.self).filter { $0.target != nil }
         XCTAssertEqual(links.compactMap { row in row.linkColumn.map { row.texts[$0] } },
@@ -1283,6 +1328,7 @@ final class UEFIToolFlowTests: XCTestCase {
 
         // The volume is the one top-level row.
         outline.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
         var text = shownTexts(panel)
         XCTAssertTrue(text.contains("0x0 · 0x1000 (4096) bytes"), "\(text)")
         XCTAssertTrue(text.contains("Revision"), "\(text)")
@@ -1291,6 +1337,7 @@ final class UEFIToolFlowTests: XCTestCase {
         // user-interface section, typed by the code in its header.
         try expandRow(0)
         outline.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        followUEFISelection(controller)
         text = shownTexts(panel)
         XCTAssertTrue(text.contains("MyDriver"), "\(text)")
         XCTAssertTrue(text.contains("Driver"), "\(text)")
@@ -1328,6 +1375,7 @@ final class UEFIToolFlowTests: XCTestCase {
         }
         let row = try XCTUnwrap(pictureRow(), "the scan names the picture: \(kinds(of: outline))")
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
         let panel = try XCTUnwrap(controller.tools.panel)
         return try XCTUnwrap(
@@ -1671,6 +1719,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let ftpRow = try XCTUnwrap(
             (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "FTPR" })
         outline.selectRowIndexes(IndexSet(integer: ftpRow), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
 
         XCTAssertEqual(pane.zones.zones.map(\.id), ["1/0"], "one zone, the node's own")
@@ -1693,6 +1742,7 @@ final class UEFIToolFlowTests: XCTestCase {
             (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Firmware" })
         outline.deselectAll(nil)
         outline.selectRowIndexes(IndexSet(integer: firmwareRow), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
 
         XCTAssertTrue(pane.zones.zones.isEmpty, "an info leaf has no range to publish")
@@ -1785,6 +1835,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let ftpRow = try XCTUnwrap(
             (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "FTPR" })
         outline.selectRowIndexes(IndexSet(integer: ftpRow), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
         XCTAssertEqual(pane.zones.zones.map(\.id), ["1/0"], "the ME row's zone is up")
 
@@ -1841,6 +1892,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let regionsRow = try XCTUnwrap(
             (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Regions (FPT)" })
         outline.selectRowIndexes(IndexSet(integer: regionsRow), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
         XCTAssertTrue(detailText().contains("Regions (FPT) · 1 region"),
                       "a group's count has nowhere else to be: \(detailText())")
@@ -1852,6 +1904,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let ftpRow = try XCTUnwrap(
             (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "FTPR" })
         outline.selectRowIndexes(IndexSet(integer: ftpRow), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
         let text = detailText()
         XCTAssertTrue(text.contains("FTPR"), "the row is named: \(text)")
@@ -1878,6 +1931,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let checksumsRow = try XCTUnwrap(
             (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Checksums" })
         outline.selectRowIndexes(IndexSet(integer: checksumsRow), byExtendingSelection: false)
+        followUEFISelection(controller)
 
         let panel = try XCTUnwrap(controller?.tools.panel)
         XCTAssertTrue(pumpUntil(5) {
@@ -1976,6 +2030,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let firmwareRow = try XCTUnwrap(
             (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Firmware" })
         outline.selectRowIndexes(IndexSet(integer: firmwareRow), byExtendingSelection: false)
+        followUEFISelection(controller)
         window?.layoutIfNeeded()
 
         let value = try XCTUnwrap(
@@ -2316,4 +2371,11 @@ enum UEFITestImage {
         return bytes
     }
 
+}
+
+/// Runs what a row selected in the UEFI tree drives — the detail, the dump's
+/// zones — now: the session follows a selection on a later turn, after the
+/// table has moved (`UEFIToolSession.followSelection`).
+@MainActor func followUEFISelection(_ controller: MainViewController?) {
+    (controller?.tools.session as? UEFIToolSession)?.followSelectionNowForTesting()
 }
