@@ -667,7 +667,10 @@ private struct ChecksumPass: Sendable {
     /// and republishing on one of those would move the dump under a reader who
     /// did nothing. Only a show that follows a change of focus, or a fresh
     /// reading of the file, says what the dump should be drawing.
-    private func show(publish: Bool = false, rowsChanged: Bool = false) {
+    /// `selectionOnly`: only the focus moved, and the tree is as the panel
+    /// already shows it — the detail and the dump follow, the tree is not
+    /// presented again (`UEFIToolViewController.showSelection`).
+    private func show(publish: Bool = false, rowsChanged: Bool = false, selectionOnly: Bool = false) {
         guard let tree, tree.isReady else {
             controller.show(
                 image: nil, tree: tree, focus: nil, detail: .empty, catalogue: guids,
@@ -723,16 +726,21 @@ private struct ChecksumPass: Sendable {
                 )
             } ?? .empty
         }
-        controller.show(
-            image: image, tree: tree, focus: focus, detail: detail,
-            // An ME row carries its own term (the curator named it); a UEFI
-            // node's comes from its kind. Whichever of the two is in focus.
-            helpTerm: meNode?.helpTerm ?? node.flatMap { UEFIHelpTerms.term(for: $0, in: image) },
-            catalogue: guids,
-            badChecksums: checksumProblems, canWrite: !host.isReadOnly, isBuilding: false,
-            rowsChanged: rowsChanged,
-            meRoots: meRoots, meFocus: meFocus
-        )
+        // An ME row carries its own term (the curator named it); a UEFI
+        // node's comes from its kind. Whichever of the two is in focus.
+        let helpTerm = meNode?.helpTerm ?? node.flatMap { UEFIHelpTerms.term(for: $0, in: image) }
+        if !selectionOnly || !controller.showSelection(
+            of: tree, focus: focus, detail: detail, helpTerm: helpTerm, meFocus: meFocus
+        ) {
+            controller.show(
+                image: image, tree: tree, focus: focus, detail: detail,
+                helpTerm: helpTerm,
+                catalogue: guids,
+                badChecksums: checksumProblems, canWrite: !host.isReadOnly, isBuilding: false,
+                rowsChanged: rowsChanged,
+                meRoots: meRoots, meFocus: meFocus
+            )
+        }
         if publish {
             // An ME focus zones the node's own byte range, the way the ME
             // Analyzer does; a UEFI focus zones the node as before. The two are
@@ -770,7 +778,7 @@ private struct ChecksumPass: Sendable {
     /// table has already left.
     private func followSelection(then done: (@MainActor () -> Void)? = nil) {
         followWork = { [weak self] in
-            self?.show(publish: true)
+            self?.show(publish: true, selectionOnly: true)
             done?()
         }
         // A selection the panel made — a search match, a reveal — is followed

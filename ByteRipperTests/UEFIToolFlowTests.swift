@@ -525,10 +525,13 @@ final class UEFIToolFlowTests: XCTestCase {
         let controller = try open(UEFITestImage.make())
         let outline = try expandRow(0)
         let before = controller.windowModel.pane1.zones.focus
+        let cell = outline.view(atColumn: 0, row: 0, makeIfNecessary: false)
         outline.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
         XCTAssertEqual(controller.windowModel.pane1.zones.focus, before, "not inside the selection")
         XCTAssertTrue(pumpUntil(1) { controller.windowModel.pane1.zones.focus == "0.0#body" },
                       "a click is followed on the next turn")
+        XCTAssertTrue(outline.view(atColumn: 0, row: 0, makeIfNecessary: false) === cell,
+                      "a new focus alone reloads no row of the table")
         // The table settled after the follow-up's refresh: a key pressed
         // while it is still changing waits for it.
         RunLoop.main.run(until: Date().addingTimeInterval(0.1))

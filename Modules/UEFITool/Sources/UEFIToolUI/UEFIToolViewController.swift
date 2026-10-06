@@ -690,6 +690,26 @@ import UEFITool
         queueRefresh(rowsChanged: rowsChanged)
     }
 
+    /// A new focus, and nothing else: the detail is drawn for it and the
+    /// title's emphasis follows it. The tree is not presented again and no
+    /// row of the table is reloaded — a row draws nothing that depends on the
+    /// focus, and the selection is already where the reader put it. Doing the
+    /// whole of `show` on every step of an arrow key held down walked the
+    /// whole image and rebuilt every row on screen, and the table stuttered.
+    ///
+    /// False, and nothing done, when the panel is not showing `tree` as it
+    /// is: the caller shows it whole instead.
+    func showSelection(of tree: LazyUEFITree, focus: NodeID?, detail: UEFINodeDetail,
+                       helpTerm: HelpTermID?, meFocus: [Int]?) -> Bool {
+        guard tree === self.tree, !isBuilding else { return false }
+        self.focus = focus
+        self.meFocus = meFocus
+        detailTerm = helpTerm
+        renderDetail(detail, subject: focus?.description ?? "")
+        updateSummaryEmphasis()
+        return true
+    }
+
     /// The table half of a show, queued behind whatever the outline is
     /// animating. Everything it reads is already stored above, so a refresh
     /// that runs a moment later draws the latest state rather than the state
