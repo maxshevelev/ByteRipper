@@ -164,6 +164,8 @@ public enum UEFIDetail {
             fields += ecImageFields(node, image: image, reader: reader)
         }
         var tables: [UEFIDetailTable] = []
+        // The variable history of a GPNV record, kept for the end of the card.
+        var gpnvHistory: UEFIDetailTable?
         if node.kind == .vssEntry, let variable = VSSVariable.read(node, in: image, reader: reader) {
             fields += vssFields(variable, reader: reader)
             // The value, read as its type — by the name the entry carries,
@@ -242,7 +244,14 @@ public enum UEFIDetail {
                 fields += settingFields(setting, value: reader.bytes(node.body) ?? [])
             }
             if let history {
-                tables.append(historyTable(history, focus: node.id, reader: reader))
+                let table = historyTable(history, focus: node.id, reader: reader)
+                // A GPNV record's text is what the reader came for, so the
+                // history comes after it, at the very end of the card.
+                if node.kind == .gpnvRecord {
+                    gpnvHistory = table
+                } else {
+                    tables.append(table)
+                }
             }
         }
 
@@ -347,6 +356,7 @@ public enum UEFIDetail {
                 ))
             }
         }
+        if let gpnvHistory { tables.append(gpnvHistory) }
         // A store lists its records in force; a click on one opens it.
         if node.kind == .gpnvStore {
             let current = node.children.filter { $0.kind == .gpnvRecord && $0.subtype == 1 }

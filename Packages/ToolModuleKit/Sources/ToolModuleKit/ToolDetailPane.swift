@@ -152,12 +152,16 @@ extension Notification.Name {
         detail.isExpanded = true
         let start = card.frame
         let target = restingFrame(in: host)
+        card.contentFollowsFrame = false
         card.setContentSize(target.size)
 
         fold { [weak self] progress in
             guard let self, self.generation == flight else { return }
             card.frame = Self.interpolate(start, target, progress)
-            if progress >= 1 { self.cardIsResting = true }
+            if progress >= 1 {
+                self.cardIsResting = true
+                card.contentFollowsFrame = true
+            }
         }
         // The focus goes to the table, wherever Space came from — the table
         // or the details — so the arrows move its selection while the card
@@ -184,6 +188,9 @@ extension Notification.Name {
             return
         }
         cardIsResting = false
+        // Flying back, the card shrinks round a list that stays the size it
+        // is, as it flew out.
+        card.contentFollowsFrame = false
         let start = card.frame
         unfold(landing: { [weak self] in
             self.map { $0.convert($0.bounds, to: host) } ?? start
@@ -245,6 +252,7 @@ extension Notification.Name {
         // The list home before the card goes: taken away holding it, the
         // card would take the list out of the window with it.
         detail.borderType = .bezelBorder
+        card.releaseContentSize()
         Self.place(detail, in: self)
         card.removeFromSuperview()
         // Now, not on the next pass: the card has just landed on the pane,
@@ -391,6 +399,7 @@ extension Notification.Name {
         }
         if isQuickLookShown {
             cardIsResting = true
+            card?.contentFollowsFrame = true
             followTheWindow()
         } else {
             takeBack()
@@ -531,13 +540,34 @@ extension Notification.Name {
     /// legend — is the panel's, and the card stays.
     func handleClickWhileShown(_ event: NSEvent) {
         guard isQuickLookShown, let card, event.window === window,
-              let frame = window?.contentView?.superview
+              let content = window?.contentView, let frame = content.superview
         else { return }
-        let hit = frame.hitTest(frame.convert(event.locationInWindow, from: nil))
+        let point = frame.convert(event.locationInWindow, from: nil)
+        let hit = frame.hitTest(point)
         guard hit?.isDescendant(of: card) != true else { return }
         if let panel = toolPanel, hit?.isDescendant(of: panel) == true { return }
+        // Moving or resizing the window is not a click on anything: the
+        // title bar and the toolbar's bare ground drag it, the window's
+        // buttons act on it, and a few points at its edges take hold of it
+        // to resize. The card follows the window; folding it there made the
+        // reader open it again after every move.
+        if !content.frame.insetBy(dx: Self.edgeGrab, dy: Self.edgeGrab).contains(point) {
+            let buttons: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
+            let isWindowButton = buttons.contains { window?.standardWindowButton($0) === hit }
+            var isControl = false
+            var view = hit
+            while let current = view, !isControl {
+                isControl = current is NSControl
+                view = current.superview
+            }
+            if isWindowButton || !isControl { return }
+        }
         closeQuickLook()
     }
+
+    /// How far inside the window's edge a press still takes hold of the edge
+    /// to resize the window.
+    private static let edgeGrab: CGFloat = 6
 
     // MARK: - For the tests
 
@@ -569,8 +599,12 @@ extension Notification.Name {
         autoresizingMask = []
         wantsLayer = true
         layer?.masksToBounds = false
+        // Sized by `setFrameSize`, not by an autoresizing mask: the mask
+        // scales the body by the ratio of the old size to the new, and a
+        // card resized in fractional steps drifted from its body by a
+        // fraction of a point at each one.
         body.frame = bounds
-        body.autoresizingMask = [.width, .height]
+        body.autoresizingMask = []
         addSubview(body)
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
@@ -596,6 +630,19 @@ extension Notification.Name {
         ])
     }
 
+    /// Lets go of the content's size: the card's own width and height
+    /// constraints are on the content itself, and stay active when it is moved
+    /// back to the pane. The next card added its own beside them, the two
+    /// disagreed once the window had changed size, and the old size won — a
+    /// big card round a list as big as the window used to be.
+    func releaseContentSize() {
+        let sizes = [contentWidth, contentHeight].compactMap { $0 }
+        NSLayoutConstraint.deactivate(sizes)
+        contentWidth = nil
+        contentHeight = nil
+        contentFollowsFrame = false
+    }
+
     /// The size the content is laid out at: the card's once it has landed.
     func setContentSize(_ size: NSSize) {
         contentWidth?.constant = size.width
@@ -603,10 +650,24 @@ extension Notification.Name {
         body.layoutSubtreeIfNeeded()
     }
 
+    /// Whether the content is the card's own size, whatever sets the card's
+    /// frame: true once the card has landed. Out on its flight the content is
+    /// already at its final size and the card still smaller, clipping it.
+    ///
+    /// A resting card whose frame was set by anything but the pane's own
+    /// following of the window — the window animating, a split moving —
+    /// left the list at the size it had landed at, with the card's bigger
+    /// body showing grey round it.
+    var contentFollowsFrame = false {
+        didSet { if contentFollowsFrame { setContentSize(bounds.size) } }
+    }
+
     override var isFlipped: Bool { true }
 
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
+        body.frame = NSRect(origin: .zero, size: newSize)
+        if contentFollowsFrame { setContentSize(newSize) }
         // A corner no larger than half a side: a card still leaving a pane
         // a few points tall is a rectangle a full radius does not fit.
         let radius = max(0, min(QuickLookCardBody.radius, newSize.width / 2, newSize.height / 2))

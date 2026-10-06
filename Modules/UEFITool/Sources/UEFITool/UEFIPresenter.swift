@@ -291,6 +291,12 @@ public enum UEFIPresenter {
         node.kind == .sysFEntry && node.name == AppleOverrides.variableName
     }
 
+    /// The descriptor's BIOS region — what a vendor's update file carries, and
+    /// so the row it is compared from (`UEFIUpdateComparison`).
+    public static func isBIOSRegion(_ node: UEFINode) -> Bool {
+        node.kind == .region && node.subtype == 0x01 && node.space == .file
+    }
+
     /// The name of the tab the unpacked text opens in, as a decompressed
     /// body's is: the dump it came out of, then what it is.
     public static func unpackedTabName(of node: UEFINode, fileName: String) -> String {

@@ -58,6 +58,7 @@ final class GPNVDisplayTests: XCTestCase {
         let text = try XCTUnwrap(detail.tables.first { $0.title == "Text in the record" })
         XCTAssertEqual(text.rows.map { $0[0].text }, ["+0x0", "+0x19", "+0x2A", "+0x35"])
         XCTAssertEqual(text.rows.map { $0[1].text }.last, "G533QS")
+        XCTAssertEqual(detail.tables.last?.title, "Variable history", "the history is the card's last table, after the text")
         let history = try XCTUnwrap(detail.tables.first { $0.title == "Variable history" })
         XCTAssertEqual(history.rows.count, 2, "the record it replaced, and itself")
 

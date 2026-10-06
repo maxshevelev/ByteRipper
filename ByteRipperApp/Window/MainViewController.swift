@@ -4639,9 +4639,26 @@ final class MainViewController: NSViewController {
         focusActiveHexView()
     }
 
-    /// Edit > Copy (⌘C): copies the ACTIVE pane's selection.
+    /// Edit > Copy (⌘C): copies the text selected in a tool panel's details,
+    /// else the ACTIVE pane's selection.
+    ///
+    /// The details rows answer ⌘C themselves while they have the focus, but
+    /// the menu is the other way to the same command — the item, or a key
+    /// that reaches the menu first — and it used to copy the dump's bytes, or
+    /// sit dimmed, with text selected beside it.
     @objc func copySelection() {
+        if let rows = detailTextSelection {
+            rows.copy(nil)
+            return
+        }
         copySelectionBytes(of: activePane)
+    }
+
+    /// The tool panel's rows holding the focus with text selected in them.
+    private var detailTextSelection: ToolSelectableRows? {
+        guard let rows = viewIfLoaded?.window?.firstResponder as? ToolSelectableRows,
+              rows.selectedText != nil else { return nil }
+        return rows
     }
 
     /// Context menu > Copy: copies the RIGHT-CLICKED pane's selection (§10.2).
@@ -7516,6 +7533,8 @@ extension MainViewController: NSMenuItemValidation {
         case #selector(copyPaneSelectionToOtherPane(_:)):
             guard let target = menuItem.representedObject as? OffsetContextTarget else { return false }
             return canCopyToOtherPane(from: target.pane)
+        case #selector(copySelection) where detailTextSelection != nil:
+            return true
         case #selector(copySelection),
              #selector(useSelectionForFind):
             // Both act on the selection, so both are dimmed without one: ⌘E

@@ -201,7 +201,7 @@ final class ToolDetailPaneTests: XCTestCase {
         deliver(click(at: NSPoint(x: inside.midX, y: inside.midY)))
         XCTAssertTrue(pane.isQuickLookShown, "a click on the card is the card's")
 
-        deliver(click(at: NSPoint(x: 5, y: 5)))
+        deliver(click(at: NSPoint(x: 30, y: 30)))
         XCTAssertFalse(pane.isQuickLookShown, "one beside it closes it")
     }
 
@@ -243,6 +243,45 @@ final class ToolDetailPaneTests: XCTestCase {
         XCTAssertEqual(frame.width, 476, accuracy: 1, "what the panel leaves of two thirds of the window")
         XCTAssertEqual(frame.minY, 12, accuracy: 1)
         XCTAssertEqual(frame.maxY, 570, accuracy: 1)
+    }
+
+    /// The window resized while the card is out: the card's body — its
+    /// background and frame line — grows and shrinks with it, not only the
+    /// list inside.
+    func testTheCardsBodyFollowsTheWindowsSize() throws {
+        fill()
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+        let card = try XCTUnwrap(pane.quickLookCardForTesting)
+        let body = try XCTUnwrap(card.subviews.first)
+
+        for size in [NSSize(width: 1000, height: 700), NSSize(width: 600, height: 450)] {
+            window.setContentSize(size)
+            window.contentView?.layoutSubtreeIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+            XCTAssertEqual(card.frame.height, size.height - 42, accuracy: 1, "the card follows the window \(size)")
+            XCTAssertEqual(body.frame.size, card.bounds.size, "and its body is as big as the card at \(size)")
+            XCTAssertEqual(pane.detail.frame.size, card.bounds.size, "and so is the list at \(size)")
+        }
+    }
+
+    /// Open, the window made bigger (which folds the card), open again: the
+    /// card and the list in it are the size of the bigger window.
+    func testTheCardOpenedAfterTheWindowGrewIsAsBigAsTheWindow() throws {
+        fill()
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+        pane.closeQuickLook()
+        pane.finishTransitionForTesting()
+        window.setContentSize(NSSize(width: 1200, height: 850))
+        window.contentView?.layoutSubtreeIfNeeded()
+
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+        window.contentView?.layoutSubtreeIfNeeded()
+        let card = try XCTUnwrap(pane.quickLookCardForTesting)
+        XCTAssertGreaterThan(card.bounds.width, 700, "the card is the bigger window's: \(card.bounds)")
+        XCTAssertEqual(pane.detail.frame.size, card.bounds.size, "and the list fills it: \(pane.detail.frame) vs \(card.bounds)")
     }
 
     /// A panel narrower than a third of the window takes nothing from the card.

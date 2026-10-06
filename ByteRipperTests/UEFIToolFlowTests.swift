@@ -378,6 +378,143 @@ final class UEFIToolFlowTests: XCTestCase {
         pane.finishTransitionForTesting()
     }
 
+    private func commandC(in window: NSWindow) throws -> NSEvent {
+        try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, characters: "c",
+            charactersIgnoringModifiers: "c", isARepeat: false, keyCode: 8))
+    }
+
+    /// ⌘C on text selected in the details copies that text — in the pane and
+    /// in the large view — not the dump's bytes.
+    func testCommandCCopiesTheTextSelectedInTheDetails() throws {
+        _ = try open(UEFITestImage.make())
+        let tree = try expandRow(0)
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let pane = try XCTUnwrap(descendants(of: panel, ToolDetailPane.self).first)
+        let window = try XCTUnwrap(self.window)
+        XCTAssertTrue(pumpUntil(2) { pane.detail.hasRows })
+        let saved = NSPasteboard.general.string(forType: .string)
+        defer {
+            NSPasteboard.general.clearContents()
+            if let saved { NSPasteboard.general.setString(saved, forType: .string) }
+        }
+
+        for large in [false, true] {
+            if large {
+                XCTAssertTrue(pane.showQuickLook())
+                pane.finishTransitionForTesting()
+                window.layoutIfNeeded()
+            }
+            let rows = try XCTUnwrap(descendants(of: pane.detail, ToolSelectableRows.self).first, "rows, large \(large)")
+            window.makeFirstResponder(rows)
+            rows.selectAll(nil)
+            let expected = try XCTUnwrap(rows.selectedText)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString("untouched", forType: .string)
+
+            XCTAssertTrue(window.performKeyEquivalent(with: try commandC(in: window)), "⌘C is answered, large \(large)")
+            XCTAssertEqual(NSPasteboard.general.string(forType: .string), expected, "the selected text is copied, large \(large)")
+
+            // The same through the Edit menu's Copy: enabled with text
+            // selected whatever the dump holds, and it copies that text.
+            let item = NSMenuItem(title: "Copy", action: #selector(MainViewController.copySelection), keyEquivalent: "c")
+            let target = try XCTUnwrap(controller)
+            XCTAssertTrue(target.validateMenuItem(item), "Copy is enabled with details text selected, large \(large)")
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString("untouched", forType: .string)
+            target.copySelection()
+            XCTAssertEqual(NSPasteboard.general.string(forType: .string), expected, "the menu copies the text, large \(large)")
+        }
+        pane.closeQuickLook()
+        pane.finishTransitionForTesting()
+    }
+
+    /// Moving or resizing the window does not fold the large view: a press on
+    /// the title bar or on the window's edge is no click on anything.
+    func testMovingOrResizingTheWindowLeavesTheLargeViewOpen() throws {
+        _ = try open(UEFITestImage.make())
+        let tree = try expandRow(0)
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let pane = try XCTUnwrap(descendants(of: panel, ToolDetailPane.self).first)
+        let window = try XCTUnwrap(self.window)
+        followUEFISelection(controller)
+        XCTAssertTrue(pumpUntil(2) { pane.detail.hasRows })
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+        window.layoutIfNeeded()
+        let content = try XCTUnwrap(window.contentView)
+        let top = content.convert(content.bounds, to: nil).maxY
+
+        pane.handleClickWhileShown(mouse(.leftMouseDown, at: NSPoint(x: 400, y: top + 10), window: window))
+        XCTAssertTrue(pane.isQuickLookShown, "a press on the title bar drags the window")
+        pane.handleClickWhileShown(mouse(.leftMouseDown, at: NSPoint(x: 2, y: top / 2), window: window))
+        XCTAssertTrue(pane.isQuickLookShown, "a press on the left edge resizes it")
+        pane.handleClickWhileShown(mouse(.leftMouseDown, at: NSPoint(x: window.frame.width - 2, y: 2), window: window))
+        XCTAssertTrue(pane.isQuickLookShown, "and on the corner")
+        if let zoom = window.standardWindowButton(.zoomButton) {
+            let spot = zoom.convert(NSPoint(x: zoom.bounds.midX, y: zoom.bounds.midY), to: nil)
+            pane.handleClickWhileShown(mouse(.leftMouseDown, at: spot, window: window))
+            XCTAssertTrue(pane.isQuickLookShown, "the window's own buttons act on the window")
+        }
+
+        let outside = NSPoint(x: panel.convert(panel.bounds, to: nil).maxX + 2, y: top / 2)
+        pane.handleClickWhileShown(mouse(.leftMouseDown, at: outside, window: window))
+        XCTAssertFalse(pane.isQuickLookShown, "a click in the dump still folds it")
+        pane.finishTransitionForTesting()
+    }
+
+    /// The window resized with the large view out: the card's background and
+    /// frame line follow, not only the list inside it — and the card opened
+    /// again after the window grew is as big as the window.
+    func testTheLargeViewsBackgroundFollowsTheWindow() throws {
+        _ = try open(UEFITestImage.make())
+        let tree = try expandRow(0)
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let pane = try XCTUnwrap(descendants(of: panel, ToolDetailPane.self).first)
+        let window = try XCTUnwrap(self.window)
+        followUEFISelection(controller)
+        XCTAssertTrue(pumpUntil(2) { pane.detail.hasRows })
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+        let card = try XCTUnwrap(pane.quickLookCardForTesting)
+        let body = try XCTUnwrap(card.subviews.first)
+
+        for size in [NSSize(width: 1500, height: 900), NSSize(width: 900, height: 550)] {
+            window.setContentSize(size)
+            window.layoutIfNeeded()
+            RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+            XCTAssertEqual(body.frame.size, card.bounds.size, "the body is as big as the card at \(size)")
+            XCTAssertEqual(body.layer?.bounds.size, card.bounds.size, "and so is its layer at \(size)")
+            XCTAssertEqual(pane.detail.frame.size, card.bounds.size, "and the list at \(size)")
+        }
+        // Resized the way the user does it: animated.
+        for frame in [NSRect(x: 40, y: 40, width: 1300, height: 800), NSRect(x: 40, y: 40, width: 800, height: 520)] {
+            window.setFrame(frame, display: true, animate: true)
+            RunLoop.main.run(until: Date().addingTimeInterval(0.6))
+            XCTAssertEqual(pane.detail.frame.size, card.bounds.size, "the list at the animated size \(frame.size)")
+            XCTAssertEqual(body.frame.size, card.bounds.size, "the body at the animated size \(frame.size)")
+        }
+        // The way the user meets it: open, the window grows and the card
+        // folds, open again — the list fills the bigger card.
+        pane.closeQuickLook()
+        pane.finishTransitionForTesting()
+        window.setFrame(NSRect(x: 40, y: 40, width: 1500, height: 900), display: true)
+        window.layoutIfNeeded()
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+        window.layoutIfNeeded()
+        let again = try XCTUnwrap(pane.quickLookCardForTesting)
+        XCTAssertEqual(pane.detail.frame.size, again.bounds.size,
+                       "the list after the window grew between two openings: \(pane.detail.frame) vs \(again.bounds)")
+        pane.closeQuickLook()
+        pane.finishTransitionForTesting()
+    }
+
     /// A fragment panel opening folds the large view: the card would stand
     /// over it.
     func testOpeningAFragmentPanelFoldsTheLargeView() throws {
