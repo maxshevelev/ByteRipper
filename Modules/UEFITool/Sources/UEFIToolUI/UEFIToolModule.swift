@@ -771,8 +771,9 @@ private struct ChecksumPass: Sendable {
     /// The table's own work is the selection and the scroll that keeps it in
     /// view; done inside the selection's notification, the rest held them
     /// back, and a held arrow key ran ahead of what was on screen. So a
-    /// selection is handed on at once and followed when the run loop comes
-    /// round — on every step of a held key, as fast as the follow-up keeps up.
+    /// selection is handed on at once and followed once the table's frame is
+    /// on screen — on every step of a held key, as fast as the follow-up
+    /// keeps up.
     /// Selections that arrive while one is still waiting replace it: the
     /// follow-up draws the row the table is on when it runs, never a row the
     /// table has already left.
@@ -791,9 +792,16 @@ private struct ChecksumPass: Sendable {
         }
         guard !isFollowPending else { return }
         isFollowPending = true
-        DispatchQueue.main.async { [weak self] in
+        // A timer, not the main queue. The run loop serves the main queue
+        // before it commits the frame, so a follow-up queued there landed in
+        // the table's own frame: the table's move reached the screen only
+        // together with the dump redrawn for the new zone, and the scroll
+        // trailed the selection. A timer fires after that commit — the table
+        // is on screen first, and the dump follows in the next frame.
+        let timer = Timer(timeInterval: 0, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated { self?.runFollowWork() }
         }
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     private func runFollowWork() {
