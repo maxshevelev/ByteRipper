@@ -285,6 +285,17 @@ final class UEFITreeSearchFlowTests: XCTestCase {
                       "the volume the search opened is the reader's now")
     }
 
+    /// The stop button stands beside the progress bar while a search runs,
+    /// and with it is out of sight before the first search and after one.
+    func testTheStopButtonShowsOnlyWithTheProgressBar() throws {
+        try open(UEFITestImage.withTwoVolumes())
+        try openTheBar()
+        let stop = try button("Stop reading branches to look for a match")
+        let bar = try XCTUnwrap(descendants(of: try panel, NSProgressIndicator.self).first)
+        XCTAssertTrue(stop.isHidden, "no stop button before a search")
+        XCTAssertTrue(bar.isHidden)
+    }
+
     func testNothingFoundSaysSo() throws {
         try open(UEFITestImage.withTwoVolumes())
         UEFISearchSettings.query = UEFITreeQuery(text: "no such node")

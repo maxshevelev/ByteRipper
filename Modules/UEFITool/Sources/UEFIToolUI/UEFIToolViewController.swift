@@ -901,7 +901,13 @@ import UEFITool
         // reader — or the tree's search — has since moved away from, after
         // they were shut.
         expandAncestors(of: nodeID, in: tree, while: { [weak self] in self?.focus == nodeID }) { [weak self] in
-            guard let self, tree.node(nodeID) != nil else { return }
+            // Still the focus at the end of the way, too: the branches on the
+            // way are read off the main actor, and by the time they land the
+            // search or the reader may have chosen another node. The reveal
+            // that selected the old one then took the selection back from the
+            // new one — what the full show after every selection used to
+            // paper over, by revealing the focus again.
+            guard let self, self.focus == nodeID, tree.node(nodeID) != nil else { return }
             // The selection is the panel's own doing, not the reader's, so it
             // must not read back as a click — that would publish a zone and
             // scroll the dump away from the byte a reveal was asked about.

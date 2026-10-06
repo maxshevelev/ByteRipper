@@ -162,6 +162,10 @@ import UEFITool
             previousButton.widthAnchor.constraint(equalToConstant: 18),
             nextButton.widthAnchor.constraint(equalToConstant: 18)
         ])
+        // The status line as the status says, from the start: `status` sets
+        // it only when it changes, and until the first search the stop
+        // button stood at the bar's end with no progress bar beside it.
+        updateStatus()
     }
 
     private func configure(_ button: NSButton, symbol: String, name: String, tooltip: String,
