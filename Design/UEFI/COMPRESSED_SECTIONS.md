@@ -475,6 +475,16 @@ click on any row opens its content: the decompressed body for a compressed
 section, otherwise the body, and the whole node where it has none apart from
 itself (`UEFIPresenter.content(of:)`).
 
+### 8.2a. The PSP's BIOS image
+
+One compressed buffer is not a section: the BIOS image an AMD PSP inflates
+itself, AMD's 0x100-byte Zlib header and a stream with no FFS structure
+around it, which only the BIOS directory's entry `0x62` says is there
+(`UEFI_IMAGE_FORMAT.md` §9). It decodes through the same chain — `locate`
+takes the bare header where a chain offset has no section — and its buffer is
+read as a raw area, not as sections. It is read-only: the rebuild refuses a
+change inside it by name.
+
 ### 8.3. Search
 
 Finding bytes inside decompressed data (a Setup string, a version) is a

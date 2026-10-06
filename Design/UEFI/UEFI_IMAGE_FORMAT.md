@@ -1616,6 +1616,74 @@ with state `1` current. The nodes are a `gpnvStore` named `GPNV` and a
 `gpnvRecord` per record named by its name, both classified as UEFITool's
 padding; the Subtype column says whether a record is current or superseded.
 
+**The AMD PSP's map** (`AMDFirmware.swift`) is read from the Embedded
+Firmware Structure: `0x55AA55AA` at one of `0x20000`, `0xFA0000`, `0xF20000`,
+`0xE20000`, `0xC20000`, `0x820000`, `0x120000`, tried in that order, with at
+least one word that leads to a directory. Every word of the EFS after the
+signature is a candidate pointer — `0`, `0xFFFFFFFF` and `0xFFFFFFFE` are
+not — and the walk follows pointers only; a scan for the signatures would
+find the directory headers some blobs carry copies of.
+
+| Structure | Header | Entries |
+|---|---|---|
+| `$PSP`, `$PL2` | signature, Fletcher-32 of what follows, count, info | 16 bytes: type, subprogram, flags (ROM id, writable, instance at bits 3–6), size, location |
+| `$BHD`, `$BL2` | the same | 24 bytes: type, region type, flags (reset, copy, read-only, compressed, instance at bits 4–7; subprogram, ROM id, writable), size, location, destination |
+| `2PSP`, `2BHD` | the same, then 16 zero bytes | 16 bytes: selector (PSP id or chip family), id, location |
+| image slot header | — | 32 bytes: checksum, priority, retries, …, `+0x10` the second level, `+0x14` the PSP id |
+
+A first-level PSP directory's entry `0x40` leads to `$PL2`, `0x48` and `0x4A`
+to slot A and B — a slot header, or on the HP 455 G10 the `$PL2` itself — and
+`0x49` (in `$PL2`) or `0x70` (in `$BHD`) to the BIOS's second level. A
+location reads by the directory's address mode, bits 29–30 of the info word
+(bits 24–25 when bit 31 is set): a physical address `0xFFxxxxxx`, masked to
+the flash (8, 16 or 32 MiB, the largest the file holds; past 16 MiB only the
+first 16 are mapped), an offset in the flash, or — modes 2 and 3 — whatever
+the entry's own top two bits say, an offset from the directory among them.
+These are PSPTool's rules, and PSPTool 3.x is the reference: on the nine AMD
+images at hand (the three Lenovo dumps of one firmware counted once) every
+directory and every entry is found where it finds them, with three kinds of
+difference, all deliberate or its own. A blob's length is the directory's
+size, not the length its own header gives (`ABL0`, `FW_XHCI`,
+`REGISTER_INIT_BIN`, `AMF_FW2`, `MFD_MPM_WLAN_FW`); a compressed BIOS image is
+AMD's 0x100-byte header and its zlib stream, the header's `+0x14` giving the
+stream's length — PSPTool reads the second copy on GA403UU and GV302XV at the
+inflated size; and two entries that name one address are told apart by their
+own types (PSPTool calls `S0I3_DRIVER` by the `KVM_IMAGE` of size zero in
+front of it). Beyond those, PSPTool leaves out one entry this walk lists, the
+`MFD_MPM_FACTORY` on the EliteBook 6 G1a and 645 G11. Every directory's
+checksum matches.
+
+The rows: an `amdEFS` (`0x50` bytes), an `amdDirectory` per directory — its
+subtype the kind, its body the entries — and an `amdFirmwareEntry` per blob,
+its subtype the type, named by AMD's type name as PSPTool and coreboot's
+`amdfwtool` spell them, with the instance where it is not zero. Each is laid
+in the deepest stretch of padding or Insyde map region that holds it, and a
+blob around rows already read takes them in — the 0x100-byte header Zen 4 and
+later put in front of a microcode patch the header heuristics of §7.2 already
+found, the EFS inside HP's BIOS entry. Two entries naming one start are one
+blob at the smaller size: a `$PSP` gives the boot loader `0x20000` of room
+that runs over the `$PL2`'s trusted OS. A blob inside an FFS structure — the
+compressed BIOS image in a Zlib (AMD) section on the ASUS boards — or across a
+volume's edge is not a row; the directory's line leads to the structure that
+holds it. On the eleven AMD dumps every structure is a row, or a row already
+read — a microcode patch, a volume, an NVRAM store — but for those: the
+compressed BIOS images in Zlib sections on the four ASUS boards, a ROM Armor
+store across a volume's edge on G733PYV, GA403UU and two HP boards, and the
+BIOS entry that spans a whole volume on the EliteBook 6 G1a and 645 G11.
+Classified as UEFITool's padding, fixed.
+
+A directory's checksum is a Fletcher-32 over the bytes after it, folded every
+360 words as the PSP folds it; a wrong one is a checksum repair like a
+volume's (`UEFIChecksums.repairs(forAMDDirectory:in:)`). A BIOS entry `0x62`
+with its compressed flag, whose location holds AMD's header and a zlib
+stream, is left closed as a compressed section is and opens to what it
+inflates to, read as a raw area (§4): on the Lenovo board the 4 MiB PEI
+volume at `0xF20000` that no FFS structure holds — 2 volumes, 192 files, 502
+sections, node for node as UEFIExtract reads the inflated buffer. Its space
+is `ByteSpace.decompressed` like a section's (`CompressedSection.locate` takes
+the bare header at a chain offset), and Update in Parent refuses a change
+inside it: what the PSP accepts in place of the stream is not known.
+
 **Sounds** — a WAV file — are read where a body stops reading as sections
 (§6): at the start of that Non-UEFI data (`Sound.swift`). `RIFF`, `WAVE`, then
 chunks — id, little-endian size, data padded to even — read until both a

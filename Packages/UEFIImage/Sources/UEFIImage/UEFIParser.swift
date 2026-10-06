@@ -107,6 +107,9 @@ final class Parser {
     private let onProgress: ProgressSink?
     /// What the image's FIT names (`fitComponents`), once it has been asked.
     var fitComponentsCache: [FITComponent]?
+    /// What the AMD PSP's directories map (`amdFirmware`), once it has been
+    /// asked: nil inside when there is no EFS.
+    var amdFirmwareCache: AMDFirmware??
 
     /// What an unwritten byte looks like outside any volume. Inside one it is
     /// the volume's erase polarity that decides (§3.5); out here `0xFF` is what
@@ -256,7 +259,10 @@ final class Parser {
         read = readingECFirmware(read, emptyByte: emptyByte)
         read = readingHPSignatureBlocks(read, emptyByte: emptyByte)
         read = readingGPNVStores(read, emptyByte: emptyByte)
-        return readingAMDMicrocode(read, emptyByte: emptyByte)
+        read = readingAMDMicrocode(read, emptyByte: emptyByte)
+        // After the microcode: a patch the directories list is already its
+        // row, and keeps it.
+        return readingAMDFirmware(read, emptyByte: emptyByte, depth: depth)
     }
 
     /// A signature is a candidate, not a find: the four bytes turn up inside

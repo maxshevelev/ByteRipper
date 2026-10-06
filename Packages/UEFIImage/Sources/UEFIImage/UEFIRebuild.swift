@@ -356,7 +356,16 @@ public enum UEFIRebuild {
                 if isTarget { targetBytes = replacement }
             }
             isTarget = false
-            guard let section = compressedSection(holding: space) else { return newSpace }
+            guard let section = compressedSection(holding: space) else {
+                // Nothing but the file itself is written as it comes.
+                guard space == .file else {
+                    throw Refusal("The compressed section the part came out of is not in the image any more.")
+                }
+                return newSpace
+            }
+            if section.kind == .amdFirmwareEntry {
+                throw Refusal("“\(section.name)” is the BIOS image the PSP inflates. It is read here, and not compressed again: what the PSP accepts in its place is not known.")
+            }
             let parentBytes = try bytes(of: section.space)
             let rebuilt = try recompressed(section, holding: newSpace, parentBytes: parentBytes)
             return try put(rebuilt, at: Target(space: section.space, range: section.range))
@@ -377,7 +386,8 @@ public enum UEFIRebuild {
             guard case .decompressed(let chain) = space, let last = chain.last else { return nil }
             let parent: ByteSpace = chain.count == 1 ? .file : .decompressed(chain: Array(chain.dropLast()))
             return image.allNodes.first {
-                $0.space == parent && $0.kind == .section && $0.header.lowerBound == last
+                $0.space == parent && ($0.kind == .section || $0.kind == .amdFirmwareEntry)
+                    && $0.header.lowerBound == last && $0.compression != nil
             }
         }
 

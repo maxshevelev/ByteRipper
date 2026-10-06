@@ -14,6 +14,8 @@ public enum UEFIChecksumField: String, Hashable, Sendable {
     case fileBody
     /// A microcode image's checksum dword (§7.1).
     case microcode
+    /// An AMD PSP or BIOS directory's Fletcher-32 (`AMDFirmware`).
+    case pspDirectory
 
     /// What to call the field where the panel has to name it — the pointer's
     /// reading of a flagged row's warning, which says which checksum is wrong
@@ -24,6 +26,7 @@ public enum UEFIChecksumField: String, Hashable, Sendable {
         case .fileHeader: return L("file header")
         case .fileBody: return L("file body")
         case .microcode: return L("microcode")
+        case .pspDirectory: return L("PSP directory", context: "checksum")
         }
     }
 }
@@ -83,6 +86,8 @@ public enum UEFIChecksumCheck {
             return UEFIChecksums.repairs(forVolume: node, in: reader)
         case .microcode:
             return UEFIChecksums.repairs(forMicrocode: node, in: reader)
+        case .amdDirectory:
+            return UEFIChecksums.repairs(forAMDDirectory: node, in: reader)
         case .file:
             guard let volumeRevision else {
                 return fileHeaderRepairs(for: node, in: reader)
@@ -127,6 +132,7 @@ public enum UEFIChecksumCheck {
         var result: [NodeID: [ChecksumRepair]] = [:]
         for node in image.allNodes {
             guard node.kind == .volume || node.kind == .file || node.kind == .microcode
+                    || node.kind == .amdDirectory
             else { continue }
             if let only, !only.contains(node.id) { continue }
             // A section on the way in that no longer decodes has nothing to read.
@@ -184,6 +190,8 @@ public enum UEFIChecksumCheck {
                 fields.insert(.volume)
             case .microcode:
                 fields.insert(.microcode)
+            case .amdDirectory:
+                fields.insert(.pspDirectory)
             case .file:
                 if repair.offset == headerOffset + 0x11 {
                     fields.insert(.fileBody)

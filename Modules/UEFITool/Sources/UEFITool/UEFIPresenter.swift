@@ -82,6 +82,10 @@ public enum UEFIPresenter {
     public struct DecompressedBody: Equatable, Sendable {
         /// The buffer to read, all of it.
         public var space: ByteSpace
+        /// What a panel opened on it reads the bytes as: a run of sections
+        /// out of a compressed section, a stretch of flash out of the BIOS
+        /// image the AMD PSP inflates.
+        public var layout: UEFIRootLayout
         public var suggestedName: String
         public var saveTitle: String
         public var openTitle: String
@@ -260,7 +264,9 @@ public enum UEFIPresenter {
     public static func decompressedBody(for node: UEFINode) -> DecompressedBody? {
         let opened = node.children.contains { $0.space != node.space }
         let closed = node.compression?.decodes == true && node.isExpandable && node.children.isEmpty
-        guard node.kind == .section, opened || closed else { return nil }
+        guard node.kind == .section || (node.kind == .amdFirmwareEntry && node.compression != nil),
+              opened || closed
+        else { return nil }
         // What came *out* of a section says so in its name. Without it the
         // section opened as a node and the same section's decompressed body
         // arrive under one name — `bios_LZMA Section.bin` twice — and the two
@@ -271,6 +277,7 @@ public enum UEFIPresenter {
         let marked = node.name.isEmpty ? base : base + " decompressed"
         return DecompressedBody(
             space: node.space.inside(sectionAt: node.header.lowerBound),
+            layout: node.kind == .section ? .decompressedBody : .image,
             suggestedName: marked + ".bin",
             saveTitle: L("Save Decompressed Body as…"),
             openTitle: L("Open Decompressed Body")

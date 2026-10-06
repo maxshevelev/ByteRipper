@@ -117,4 +117,26 @@ public enum UEFIChecksums {
             bytes: (0..<4).map { UInt8(truncatingIfNeeded: computed >> (8 * $0)) }
         )]
     }
+
+    /// What to write after a PSP or BIOS directory changed (`AMDFirmware`):
+    /// the Fletcher-32 of everything after the checksum word, in the second
+    /// word. A slot header carries none of that kind.
+    public static func repairs(
+        forAMDDirectory directory: UEFINode,
+        in reader: ImageReader
+    ) -> [ChecksumRepair] {
+        let offset = directory.header.lowerBound
+        guard directory.kind == .amdDirectory,
+              directory.subtype != AMDFirmware.DirectoryKind.slotHeader.rawValue,
+              let stored = reader.uint32(at: offset + 4),
+              offset + 8 < directory.range.upperBound,
+              let bytes = reader.bytes((offset + 8)..<directory.range.upperBound)
+        else { return [] }
+        let computed = AMDFirmware.fletcher32(bytes)
+        guard computed != stored else { return [] }
+        return [ChecksumRepair(
+            offset: offset + 4,
+            bytes: (0..<4).map { UInt8(truncatingIfNeeded: computed >> (8 * $0)) }
+        )]
+    }
 }

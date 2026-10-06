@@ -114,6 +114,13 @@ enum CompressedSection {
     /// size could say — in an FFSv2 volume `0xFFFFFF` is a size, not a marker,
     /// and no FFSv3 section uses the long form for less.
     static func locate(at offset: UInt64, in reader: ImageReader) -> Located? {
+        // No section at all: the PSP's compressed BIOS image, AMD's header
+        // and a zlib stream with nothing around them (`AMDFirmware`). A
+        // section's size is never zero.
+        if reader.uint24(at: offset) == 0, let length = AMDFirmware.compressedLength(at: offset, in: reader) {
+            return Located(body: (offset + amdZlibHeaderSize)..<(offset + length), algorithm: .zlibAMD,
+                           declaredLength: nil)
+        }
         guard let shortSize = reader.uint24(at: offset),
               let type = reader.uint8(at: offset + 3)
         else { return nil }

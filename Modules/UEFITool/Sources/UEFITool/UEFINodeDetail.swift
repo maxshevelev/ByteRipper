@@ -327,6 +327,13 @@ public enum UEFIDetail {
                 tables.append(protectedByTable(touching))
             }
         }
+        // The PSP's map: what the EFS points at, what a directory lists, and
+        // which entries list a blob — each a way to the row it names.
+        if node.kind == .amdEFS || node.kind == .amdDirectory || node.kind == .amdFirmwareEntry {
+            let amd = UEFIAMDFirmwareDetail.build(for: node, image: image, reader: reader, repairs: repairs)
+            fields += amd.fields
+            tables += amd.tables
+        }
         // A GPNV record's data is fields nobody has published: the text in
         // it is what can be read, at its offset in the data.
         if node.kind == .gpnvRecord, let body = reader.bytes(node.body) {
@@ -692,7 +699,8 @@ public enum UEFIDetail {
         // keeps the spec's own name: a bench reads those beside the PI spec or
         // beside UEFITool, and a translated `Signature` cannot be looked up.
         fields.append(.init(L("Kind"), kindLabel(node.kind)))
-        if node.subtype != nil {
+        // A PSP blob's type is said with the directory's name for it, below.
+        if node.subtype != nil, node.kind != .amdFirmwareEntry {
             fields.append(.init(L("Type"), typeText(node)))
         }
         if let guid = node.guid {
@@ -1177,6 +1185,10 @@ public enum UEFIDetail {
                 fields.append(.init(L("Windows product key"), key))
             }
 
+        // Read in `build`, which has the whole map (`UEFIAMDFirmwareDetail`).
+        case .amdEFS, .amdDirectory, .amdFirmwareEntry:
+            break
+
         case .padding, .freeSpace, .nonUEFIData, .startupApData:
             // No header of their own: the size the common "Total" carries is
             // the whole of what there is to say.
@@ -1647,6 +1659,9 @@ public enum UEFIDetail {
         case .hpSignatureBlock: return L("HP signature block")
         case .gpnvStore: return L("GPNV store")
         case .gpnvRecord: return L("GPNV record")
+        case .amdEFS: return L("Embedded Firmware Structure")
+        case .amdDirectory: return L("AMD firmware directory")
+        case .amdFirmwareEntry: return L("AMD firmware entry")
         case .picture: return L("Picture")
         case .sound: return L("Sound")
         }
@@ -1662,6 +1677,8 @@ public enum UEFIDetail {
         case .file: return UEFITypeNames.file(subtype)
         case .section: return UEFITypeNames.section(subtype)
         case .volume: return "Revision \(subtype)"
+        case .amdDirectory:
+            return AMDFirmware.DirectoryKind(rawValue: subtype).map(AMDFirmware.kindName) ?? hex(subtype)
         case .region:
             // The region label has no number in it, so the code goes with it.
             return FlashRegionType(rawValue: Int(subtype)).map { "\($0.label) · \(hex(subtype))" } ?? hex(subtype)

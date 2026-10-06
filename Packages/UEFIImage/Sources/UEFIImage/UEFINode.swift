@@ -263,6 +263,13 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     /// it. Padding to UEFITool, as an HP signature block is.
     case gpnvStore
     case gpnvRecord
+    /// The AMD PSP's map read out of padding (`AMDFirmware`): the Embedded
+    /// Firmware Structure, a directory — the subtype is its
+    /// `AMDFirmware.DirectoryKind` — and a blob a directory lists, whose
+    /// subtype is its type. Padding to UEFITool, as an HP signature block is.
+    case amdEFS
+    case amdDirectory
+    case amdFirmwareEntry
     /// The x86 Startup AP data EDK2's GenFv writes into the pad file before
     /// the Volume Top File: a far jump the application processors start at.
     /// It is code at a fixed address, so it does not move.

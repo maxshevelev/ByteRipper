@@ -438,6 +438,9 @@ public enum UEFITreeDisplay {
         case .hpSignatureBlock: return L("HP signature block")
         case .gpnvStore: return L("GPNV store")
         case .gpnvRecord: return L("GPNV record")
+        case .amdEFS: return L("Embedded Firmware Structure")
+        case .amdDirectory: return L("AMD firmware directory")
+        case .amdFirmwareEntry: return L("AMD firmware entry")
         case .picture: return L("Picture")
         case .sound: return L("Sound")
         }

@@ -43,7 +43,7 @@ extension UEFINode {
         // UEFITool's word for these bytes; the row's name says what the map
         // makes of them.
         case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent, .picture, .sound, .hpSignatureBlock,
-             .gpnvStore, .gpnvRecord:
+             .gpnvStore, .gpnvRecord, .amdEFS, .amdDirectory, .amdFirmwareEntry:
             return UEFITypes.Item.padding.rawValue
         case .freeSpace: return UEFITypes.Item.freeSpace.rawValue
         // Data nobody claimed is a run of bytes with a type, not a structure, so
@@ -91,7 +91,7 @@ extension UEFINode {
             // The one form UEFITool recognises.
             return UEFITypes.Sub.x86128kStartupApDataEntry
         case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent, .picture, .sound, .hpSignatureBlock,
-             .gpnvStore, .gpnvRecord:
+             .gpnvStore, .gpnvRecord, .amdEFS, .amdDirectory, .amdFirmwareEntry:
             return Self.paddingSubtype(of: self)
         case .freeSpace:
             return nil

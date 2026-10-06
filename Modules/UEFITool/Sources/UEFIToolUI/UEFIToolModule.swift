@@ -1395,7 +1395,7 @@ private struct ChecksumPass: Sendable {
             if let provider = self.treeProvider {
                 // Where the bytes go back to: the whole buffer, a run of
                 // sections (`UPDATE_IN_PARENT.md` §6).
-                provider.openPart(bytes, named: name, linkedTo: source, layout: .decompressedBody,
+                provider.openPart(bytes, named: name, linkedTo: source, layout: decompressed.layout,
                                   part: UEFIRebuild.Target(space: decompressed.space))
             } else {
                 self.host.openPart(bytes, named: name, linkedTo: source)
