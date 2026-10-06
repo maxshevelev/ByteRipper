@@ -118,11 +118,13 @@ final class ZoomToFitTests: XCTestCase {
         XCTAssertEqual(sideBySide, stacked, accuracy: 0.5)
     }
 
-    /// The window actually opens at that width, and its height is the standard
-    /// 720 pt default, or three quarters of the screen's when that is less. Goes through `showWindow`,
-    /// which is where the launch frame is settled: assigning the content view
-    /// controller shrinks the window to the empty state's fitting size first.
-    func testLaunchWindowUsesOnePaneWidthAndDefaultHeight() {
+    /// The window actually opens at that width, and at the height the landing
+    /// screen fits in with the same air above the visible icon as below the
+    /// last line — or three quarters of the screen's when that is less. Goes
+    /// through `showWindow`, which is where the launch frame is settled:
+    /// assigning the content view controller shrinks the window to the empty
+    /// state's fitting size first.
+    func testLaunchWindowUsesOnePaneWidthAndFitsTheLandingScreen() throws {
         let saved = LayoutSettings.isVertical
         defer { LayoutSettings.set(isVertical: saved) }
         LayoutSettings.set(isVertical: true)
@@ -141,9 +143,56 @@ final class ZoomToFitTests: XCTestCase {
                            screen?.visibleFrame.width ?? .greatestFiniteMagnitude)
         XCTAssertEqual(window.frame.width, expected, accuracy: 1,
                        "the launch frame must use the one-pane width")
-        let expectedHeight = min(720, ((screen?.visibleFrame.height ?? 720) * 0.75).rounded(.down))
-        XCTAssertEqual(window.frame.height, expectedHeight, accuracy: 1,
-                       "the launch height is the default, capped at 3/4 of the screen")
+        let cap = ((screen?.visibleFrame.height ?? 720) * 0.75).rounded(.down)
+        XCTAssertLessThanOrEqual(window.frame.height, cap + 1, "capped at 3/4 of the screen")
+        let empty = try XCTUnwrap(findEmptyView(in: window.contentView!))
+        window.layoutIfNeeded()
+        let content = empty.visibleContentFrameForTesting
+        let above = empty.bounds.maxY - content.maxY
+        let below = content.minY - empty.bounds.minY
+        if window.frame.height < cap - 1 {
+            XCTAssertEqual(above, EmptyStateView.launchMargin, accuracy: 2, "the air above the icon")
+            XCTAssertEqual(below, EmptyStateView.launchMargin, accuracy: 2, "the air below the last line")
+        } else {
+            XCTAssertEqual(above, below, accuracy: 2, "a capped window still centres what is seen")
+        }
+    }
+
+    /// When the release notes arrive after the window was sized, a window
+    /// still at its fitted height fits them too; one the user has resized
+    /// keeps their size.
+    func testTheWindowFitsTheReleaseNotesThatArriveLaterUnlessResized() throws {
+        UserDefaults.standard.removeObject(forKey: "NSWindow Frame MainWindow")
+        let controller = makeController()
+        let window = controller.window!
+        controller.showWindow(nil)
+        defer { window.orderOut(nil) }
+        let empty = try XCTUnwrap(findEmptyView(in: window.contentView!))
+        let fitted = window.frame
+        let notes = Array(repeating: "A long sentence about what this release reads that wraps.", count: 12)
+            .joined(separator: " ")
+        let release = Release(version: try XCTUnwrap(AppVersion("0.9.0")),
+                              page: try XCTUnwrap(URL(string: "https://example.com")), body: notes)
+
+        empty.showReleaseNotes(release, isRunningBuild: true)
+        let cap = ((window.screen ?? NSScreen.main)?.visibleFrame.height ?? 720) * 0.75
+        if fitted.height < cap - 1 {
+            XCTAssertGreaterThan(window.frame.height, fitted.height, "the notes are fitted in")
+        }
+        XCTAssertEqual(window.frame.maxY, fitted.maxY, accuracy: 1, "the top edge stays")
+
+        let resized = NSRect(x: window.frame.minX, y: window.frame.minY, width: window.frame.width, height: 500)
+        window.setFrame(resized, display: false)
+        empty.showReleaseNotes(release, isRunningBuild: false)
+        XCTAssertEqual(window.frame.height, 500, accuracy: 0.5, "a resized window keeps its size")
+    }
+
+    private func findEmptyView(in view: NSView) -> EmptyStateView? {
+        if let empty = view as? EmptyStateView { return empty }
+        for sub in view.subviews {
+            if let found = findEmptyView(in: sub) { return found }
+        }
+        return nil
     }
 
     /// A saved frame taller than three quarters of the screen is cut down at

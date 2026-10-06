@@ -759,6 +759,22 @@ final class MainViewController: NSViewController {
     /// kept current. Nil in the other modes.
     private weak var emptyStateView: EmptyStateView?
 
+    /// Fired when the landing screen that is up changes its height — the
+    /// release notes arriving after the window was sized for it — so the
+    /// window controller can fit the window to it again.
+    var onEmptyStateHeightChange: (() -> Void)?
+
+    /// The window height at which the landing screen fits at the window's
+    /// present width, with balanced air above and below it; nil outside the
+    /// empty mode. What the window spends besides this view — the toolbar —
+    /// is measured, not assumed.
+    func emptyStateFittingWindowHeight() -> CGFloat? {
+        guard mode == .empty, let emptyStateView, let window = view.window else { return nil }
+        window.layoutIfNeeded()
+        let chrome = window.frame.height - emptyStateView.bounds.height
+        return emptyStateView.fittingWindowHeight(width: window.frame.width, chrome: chrome)
+    }
+
     /// The newer-release check started for the landing screen that is up, if one
     /// is still running. Held only so that a test can wait for the answer rather
     /// than race it: nothing in the app waits on it, which is the point of it
@@ -1164,6 +1180,9 @@ final class MainViewController: NSViewController {
             }
             emptyView.onCopyModifierChanged = { [weak self] copying in
                 self?.setPaneDragCopyingEverywhere(copying)
+            }
+            emptyView.onContentHeightChange = { [weak self] in
+                self?.onEmptyStateHeightChange?()
             }
             setContentView(emptyView)
             announceRelease(on: emptyView)

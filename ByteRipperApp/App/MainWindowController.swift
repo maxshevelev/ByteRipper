@@ -97,6 +97,8 @@ final class MainWindowController: NSWindowController {
         // applied once here: the difference block is in the default items and
         // the window opens with no file (§10.3).
         controller.syncDiffNavigationToolbarItem()
+        // The release notes come from github.com after the window is up.
+        controller.onEmptyStateHeightChange = { [weak self] in self?.refitToEmptyState() }
     }
 
     @available(*, unavailable)
@@ -129,27 +131,34 @@ final class MainWindowController: NSWindowController {
         return visible.map { ($0 * 0.75).rounded(.down) } ?? .greatestFiniteMagnitude
     }
 
-    /// The launch height of a window with no frame worth keeping: the standard
-    /// 720 pt, or the cap when the screen is too short for it.
+    /// The launch height: the one at which the landing screen fits at the
+    /// window's present width, with the same air above and below it
+    /// (`EmptyStateView.fittingWindowHeight`), capped at `maxLaunchHeight`.
+    /// The window opens empty, so the landing screen is what it is sized for.
     private var launchHeight: CGFloat {
-        min(720, maxLaunchHeight)
+        min(mainViewController.emptyStateFittingWindowHeight() ?? 720, maxLaunchHeight)
     }
+
+    /// The height the window was last fitted to the landing screen. While the
+    /// window still has it, nobody has resized the window since, and a change
+    /// in what the screen shows may fit it again.
+    private var fittedHeight: CGFloat?
 
     /// Sizes the window once it is on screen.
     ///
     /// A window comes up with a degenerate frame — measured at 1×84 — whether or
     /// not it has an autosaved one, so the repair below is not about the saved
     /// frame at all: it is the branch that has been giving every window its
-    /// height all along. An autosaved frame adds two more ways to arrive
+    /// size all along. An autosaved frame adds two more ways to arrive
     /// unusable (saved during a headless launch, or on a monitor disconnected
     /// since), and the same repair covers them. The corrected frame is then
     /// saved on close, replacing the bad one.
     ///
-    /// A frame that *is* usable keeps its size and position, except that the
-    /// width always re-fits one pane's hex grid at the saved word size, so a new
-    /// word size shows up on the next launch even when the restored frame kept
-    /// an older width (§3.1). The pane arrangement does not enter into it — the
-    /// window opens empty.
+    /// A frame that *is* usable keeps its position and its top edge. The size
+    /// is the launch size either way: the width re-fits one pane's hex grid at
+    /// the saved word size, so a new word size shows up on the next launch
+    /// (§3.1), and the height fits the landing screen at that width. The pane
+    /// arrangement does not enter into it — the window opens empty.
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
         guard let window else { return }
@@ -159,23 +168,46 @@ final class MainWindowController: NSWindowController {
         if let group = window.tabGroup, group.windows.count > 1 { return }
         if window.frame.width < 200 || window.frame.height < 200
             || !NSScreen.screens.contains(where: { $0.visibleFrame.intersects(window.frame) }) {
-            window.setFrame(NSRect(x: 0, y: 0, width: launchWidth, height: launchHeight), display: true)
+            // The width first: the landing screen's bottom row is laid out by
+            // it, and the height is measured from that layout.
+            window.setFrame(NSRect(x: 0, y: 0, width: launchWidth, height: maxLaunchHeight), display: false)
+            let height = launchHeight
+            window.setFrame(NSRect(x: 0, y: 0, width: launchWidth, height: height), display: true)
             window.center()
+            fittedHeight = window.frame.height
             return
         }
         var frame = window.frame
         frame.size.width = launchWidth
-        if frame.height > maxLaunchHeight {
-            frame.origin.y += frame.height - maxLaunchHeight
-            frame.size.height = maxLaunchHeight
-        }
-        // Keep the window on the visible screen when the fitted width is wider
-        // than the restored one (the left edge would stay put and the right edge
-        // could run off-screen).
+        window.setFrame(frame, display: false)
+        setHeight(launchHeight, keepingTopOf: frame)
+    }
+
+    /// Fits the window to the landing screen again when what the screen shows
+    /// has changed and the window is still at the height it was fitted to.
+    /// A window someone has resized keeps their size.
+    private func refitToEmptyState() {
+        guard let window, let fittedHeight, abs(window.frame.height - fittedHeight) < 1 else { return }
+        if let group = window.tabGroup, group.windows.count > 1 { return }
+        let height = launchHeight
+        guard abs(height - window.frame.height) >= 1 else { return }
+        setHeight(height, keepingTopOf: window.frame)
+    }
+
+    /// Gives `frame` the height, its top edge staying put, and keeps it on the
+    /// visible screen — the fitted width may be wider than the restored one,
+    /// and the height taller.
+    private func setHeight(_ height: CGFloat, keepingTopOf frame: NSRect) {
+        guard let window else { return }
+        var frame = frame
+        frame.origin.y += frame.height - height
+        frame.size.height = height
         if let visible = window.screen?.visibleFrame {
             frame.origin.x = min(max(frame.origin.x, visible.minX), visible.maxX - frame.width)
+            frame.origin.y = max(min(frame.origin.y, visible.maxY - frame.height), visible.minY)
         }
         window.setFrame(frame, display: true)
+        fittedHeight = window.frame.height
     }
 
     // MARK: - Toolbar

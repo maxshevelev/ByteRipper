@@ -167,9 +167,28 @@ final class EmptyStateView: NSView {
         return "\(name) \(version)"
     }
 
+    /// The air a launch window leaves above the icon's visible top edge and
+    /// below the last line of the screen — the same both ways, and wider than
+    /// any gap inside the screen, so the content reads as one block with the
+    /// window around it.
+    static let launchMargin: CGFloat = 64
+
     /// The vertical stack holding the icon, headline and hint — kept so
     /// `updateIconSize()` can adjust the icon–headline gap per size.
     private var contentStack: NSStackView?
+
+    /// The stack's vertical centring, shifted down by half the icon's
+    /// overhang: centred by its frame, the stack left less air above the
+    /// visible icon than below the last line.
+    private var contentCentre: NSLayoutConstraint?
+
+    /// How far the visible icon reaches above the stack's top edge, at the
+    /// current size (`setIconSize`).
+    private var iconTopOverhang: CGFloat = 0
+
+    /// Fired when what the screen shows changes its height — the release
+    /// notes arriving after the window is up — so the window can fit it again.
+    var onContentHeightChange: (() -> Void)?
 
     init() {
         super.init(frame: .zero)
@@ -265,9 +284,11 @@ final class EmptyStateView: NSView {
         addSubview(stackView)
         contentStack = stackView
 
+        let centre = stackView.centerYAnchor.constraint(equalTo: centerYAnchor)
+        contentCentre = centre
         NSLayoutConstraint.activate([
             stackView.centerXAnchor.constraint(equalTo: centerXAnchor),
-            stackView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            centre,
         ])
 
         // Sets the icon image and the icon–headline gap (which depends on the
@@ -675,6 +696,8 @@ final class EmptyStateView: NSView {
         guard let summary = release.summary else {
             notesSection?.isHidden = true
             updateBottomRow()
+            // The newer-release line may have come up on its own.
+            onContentHeightChange?()
             return
         }
         notesHeading.stringValue = isRunningBuild
@@ -683,6 +706,7 @@ final class EmptyStateView: NSView {
         notesLabel.stringValue = summary
         notesSection?.isHidden = false
         updateBottomRow()
+        onContentHeightChange?()
     }
 
     /// The line, drawn as a link: underlined, in the hint's own size, and in the
@@ -707,6 +731,14 @@ final class EmptyStateView: NSView {
         NSWorkspace.shared.open(releasePage)
     }
 
+    /// The frame of what is seen, in this view: the stack, and the icon where
+    /// it reaches above it (for tests).
+    var visibleContentFrameForTesting: NSRect {
+        guard var frame = contentStack?.frame else { return .zero }
+        frame.size.height += iconTopOverhang
+        return frame
+    }
+
     /// What the newer-release line says and where it points, or `nil` while
     /// there is no release to announce (for tests).
     var releaseLineForTesting: (text: String, page: URL?)? {
@@ -714,9 +746,17 @@ final class EmptyStateView: NSView {
     }
 
     private func updateIconSize() {
-        let windowSize = window?.frame.size
+        setIconSize(Self.iconSize(forWindow: window?.frame.size))
+    }
+
+    /// The icon's point size in a window of `windowSize`: a third of its
+    /// shorter side, capped at `maxIconSize`, and 96 pt with no window.
+    private static func iconSize(forWindow windowSize: NSSize?) -> CGFloat {
         let shortSide = windowSize.map { min($0.width, $0.height) } ?? 0
-        let size = shortSide > 0 ? min(shortSide / 3, Self.maxIconSize) : 96
+        return shortSide > 0 ? min(shortSide / 3, maxIconSize) : 96
+    }
+
+    private func setIconSize(_ size: CGFloat) {
         guard size != currentIconSize else { return }
         currentIconSize = size
         let config = NSImage.SymbolConfiguration(pointSize: size, weight: .light)
@@ -727,38 +767,70 @@ final class EmptyStateView: NSView {
         // scales with the size, so a fixed stack spacing would drift the gap
         // between the *visible* icon and the headline. Add the glyph's bottom
         // inset back so the visible gap stays `headlineGap` exactly.
-        contentStack?.setCustomSpacing(Self.headlineGap + Self.visibleBottomInset(of: image), after: openButton)
+        let insets = Self.visibleInsets(of: image)
+        contentStack?.setCustomSpacing(Self.headlineGap + insets.bottom, after: openButton)
+        // …and centre what is seen. The stack lays the button out by the
+        // symbol's alignment rect, which is shorter than the image, so the
+        // glyph is drawn above the stack's top edge — by the image's padding
+        // over that rect, less the glyph's own padding inside the image.
+        // Measured: 28 pt at a 239 pt icon, all of it taken from the air
+        // above the screen.
+        iconTopOverhang = max(0, image.size.height - image.alignmentRect.maxY - insets.top)
+        contentCentre?.constant = (iconTopOverhang / 2).rounded()
     }
 
-    /// The glyph's bottom inset (in points) inside its image. SF Symbols draw
-    /// the viewfinder frame with built-in padding, so the image's bottom edge
-    /// isn't the icon's visible bottom. Measured by rendering the image and
-    /// scanning upward from the bottom for the first opaque pixel.
-    private static func visibleBottomInset(of image: NSImage) -> CGFloat {
+    /// The height of a window `width` wide in which the screen fits with
+    /// `launchMargin` above the visible icon and below the last line, given
+    /// the `chrome` the window spends above and below this view.
+    ///
+    /// The icon grows with the window's height, so the height is found rather
+    /// than added up: each pass sizes the icon for the last pass's height and
+    /// measures again. The icon gains a third of a point per point of height,
+    /// so the passes close in on one height within a handful of tries.
+    ///
+    /// Leaves the icon at the size for that height, which is the size the
+    /// window's next layout would give it anyway.
+    func fittingWindowHeight(width: CGFloat, chrome: CGFloat) -> CGFloat {
+        guard let contentStack else { return chrome }
+        var height = chrome + 2 * Self.launchMargin
+        for _ in 0..<12 {
+            setIconSize(Self.iconSize(forWindow: NSSize(width: width, height: height)))
+            let content = contentStack.fittingSize.height + iconTopOverhang
+            let fitted = (chrome + content + 2 * Self.launchMargin).rounded(.up)
+            if abs(fitted - height) < 1 { return max(fitted, height) }
+            height = fitted
+        }
+        return height
+    }
+
+    /// The glyph's padding above and below its visible edges (in points)
+    /// inside its image. SF Symbols draw the viewfinder frame with built-in
+    /// padding, so the image's edges aren't the icon's visible ones. Measured
+    /// by rendering the image and scanning in from each edge for the first
+    /// opaque row.
+    private static func visibleInsets(of image: NSImage) -> (top: CGFloat, bottom: CGFloat) {
         let width = Int(image.size.width.rounded())
         let height = Int(image.size.height.rounded())
         guard width > 0, height > 0,
               let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
                                          bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
                                          isPlanar: false, colorSpaceName: .deviceRGB,
-                                         bytesPerRow: width * 4, bitsPerPixel: 32) else { return 0 }
+                                         bytesPerRow: width * 4, bitsPerPixel: 32) else { return (0, 0) }
         rep.size = image.size
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
         image.draw(in: NSRect(origin: .zero, size: image.size))
         NSGraphicsContext.restoreGraphicsState()
 
-        guard let data = rep.bitmapData else { return 0 }
+        guard let data = rep.bitmapData else { return (0, 0) }
         let bytesPerRow = rep.bytesPerRow
-        // Row 0 is the top; the distance from the lowest opaque row to the
-        // image's bottom edge is the glyph's bottom padding.
-        for row in stride(from: height - 1, through: 0, by: -1) {
-            let base = row * bytesPerRow
-            for col in 0..<width where data[base + col * 4 + 3] > 0 {
-                return CGFloat(height - 1 - row)
-            }
+        // Row 0 is the top.
+        let isOpaque = { (row: Int) in
+            (0..<width).contains { col in data[row * bytesPerRow + col * 4 + 3] > 0 }
         }
-        return 0
+        guard let first = (0..<height).first(where: isOpaque),
+              let last = (0..<height).last(where: isOpaque) else { return (0, 0) }
+        return (CGFloat(first), CGFloat(height - 1 - last))
     }
 
     private func setDropHighlighted(_ highlighted: Bool) {

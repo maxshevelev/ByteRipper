@@ -41,7 +41,8 @@ extension Notification.Name {
 /// card's flight runs on the splitter's own animation clock, so the two move
 /// as one rather than as two animations drifting apart. The card is two
 /// thirds of the window wide and stands to the right, clear of the window's
-/// top, bottom and right edges by a margin, leaving the
+/// top edge by a margin and of its bottom and right edges by a tighter one,
+/// leaving the
 /// panel's table in view on its left; it is not dimmed around, so the dump
 /// and the table stay readable beside it.
 ///
@@ -89,8 +90,12 @@ extension Notification.Name {
 
     /// How long the card takes to fly out or back.
     static let flight: TimeInterval = 0.25
-    /// The card's margin to the window's top, bottom and right edges.
+    /// The card's margin to the window's top and left edges: the toolbar
+    /// above it wants the air.
     static let margin: CGFloat = 30
+    /// The card's margin to the window's right and bottom edges, tighter —
+    /// the card has nothing there to keep apart from but the window's frame.
+    static let edgeMargin: CGFloat = 12
     /// What is left clear between the card and the tool panel beside it.
     static let gap: CGFloat = 12
     /// The narrowest the card is drawn, however little room the panel leaves.
@@ -269,14 +274,15 @@ extension Notification.Name {
     }
 
     /// Where the card stands once it has landed: two thirds of the window's
-    /// width, a margin from its top, bottom and right edges, and clear of the
+    /// width, a margin from its top edge and a tighter one from its bottom and
+    /// right edges, and clear of the
     /// tool panel — on the far side of it from the window's middle, a gap from
     /// its edge — so the width is what the panel leaves when it is wider than
     /// a third of the window.
     private func restingFrame(in host: NSView) -> NSRect {
         let bounds = host.bounds
         var left = bounds.minX + Self.margin
-        var right = bounds.maxX - Self.margin
+        var right = bounds.maxX - Self.edgeMargin
         var anchoredRight = true
         if let panel = toolPanel {
             let frame = panel.convert(panel.bounds, to: host)
@@ -289,9 +295,9 @@ extension Notification.Name {
         }
         let width = max(Self.minimumWidth, min((bounds.width * Self.widthShare).rounded(), right - left))
         return NSRect(x: anchoredRight ? right - width : left,
-                      y: bounds.minY + Self.margin,
+                      y: bounds.minY + Self.edgeMargin,
                       width: width,
-                      height: max(120, bounds.height - 2 * Self.margin))
+                      height: max(120, bounds.height - Self.margin - Self.edgeMargin))
     }
 
     private static func interpolate(_ from: NSRect, _ to: NSRect, _ progress: CGFloat) -> NSRect {

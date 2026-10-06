@@ -115,9 +115,9 @@ final class ToolDetailPaneTests: XCTestCase {
         XCTAssertTrue(pane.detail.isExpanded)
         let frame = card.convert(card.bounds, to: nil)
         XCTAssertEqual(frame.width, 533, accuracy: 1, "two thirds of the window")
-        XCTAssertEqual(frame.minX, 237, accuracy: 1, "the rest clear on the left, for the table")
-        XCTAssertEqual(frame.maxX, 770, accuracy: 1, "a margin on the right")
-        XCTAssertEqual(frame.minY, 30, accuracy: 1, "and at the bottom")
+        XCTAssertEqual(frame.minX, 255, accuracy: 1, "the rest clear on the left, for the table")
+        XCTAssertEqual(frame.maxX, 788, accuracy: 1, "a tighter margin on the right")
+        XCTAssertEqual(frame.minY, 12, accuracy: 1, "and at the bottom")
         XCTAssertEqual(frame.maxY, 570, accuracy: 1, "and at the top")
         XCTAssertEqual(pane.detail.frame.size, frame.size, "the list fills the card")
         XCTAssertEqual(pane.detail.expandButtonForTesting?.accessibilityLabel(), "Close")
@@ -239,9 +239,9 @@ final class ToolDetailPaneTests: XCTestCase {
             try XCTUnwrap(pane.quickLookCardForTesting).bounds, to: nil)
 
         XCTAssertEqual(frame.minX, 312, accuracy: 1, "a gap after the panel's edge")
-        XCTAssertEqual(frame.maxX, 770, accuracy: 1, "a margin on the right")
-        XCTAssertEqual(frame.width, 458, accuracy: 1, "what the panel leaves of two thirds of the window")
-        XCTAssertEqual(frame.minY, 30, accuracy: 1)
+        XCTAssertEqual(frame.maxX, 788, accuracy: 1, "a tighter margin on the right")
+        XCTAssertEqual(frame.width, 476, accuracy: 1, "what the panel leaves of two thirds of the window")
+        XCTAssertEqual(frame.minY, 12, accuracy: 1)
         XCTAssertEqual(frame.maxY, 570, accuracy: 1)
     }
 
@@ -254,7 +254,7 @@ final class ToolDetailPaneTests: XCTestCase {
         let card = try XCTUnwrap(pane.quickLookCardForTesting)
         let frame = card.convert(card.bounds, to: nil)
         XCTAssertEqual(frame.width, 533, accuracy: 1)
-        XCTAssertEqual(frame.maxX, 770, accuracy: 1)
+        XCTAssertEqual(frame.maxX, 788, accuracy: 1)
     }
 
     /// The panel's divider dragged while the card is out: the card gives way
@@ -272,7 +272,7 @@ final class ToolDetailPaneTests: XCTestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.02))
         }
         XCTAssertEqual(card.frame.minX, 412, accuracy: 1)
-        XCTAssertEqual(card.frame.maxX, 770, accuracy: 1)
+        XCTAssertEqual(card.frame.maxX, 788, accuracy: 1)
     }
 
     /// Everything in the panel is the panel's: a click on a row, on a triangle,
@@ -394,7 +394,7 @@ final class ToolDetailPaneTests: XCTestCase {
         if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             XCTAssertLessThan(card.frame.height, 300, "it starts near the pane: \(card.frame), pane \(paneFrame)")
         }
-        let resting = NSRect(x: 237, y: 30, width: 533, height: 540)
+        let resting = NSRect(x: 255, y: 12, width: 533, height: 558)
         let deadline = Date().addingTimeInterval(2)
         while card.frame != resting, Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.02))
