@@ -2,7 +2,7 @@ import XCTest
 import ALSplitView
 import AppPalette
 import FITToolUI
-import ToolModuleKit
+@testable import ToolModuleKit
 import UEFIImage
 import UEFITool
 @testable import UEFIToolUI
@@ -282,6 +282,68 @@ final class UEFIToolFlowTests: XCTestCase {
 
         XCTAssertTrue(tree.rows(in: clip.documentVisibleRect).contains(3),
                       "the selected row is on screen: \(tree.rows(in: clip.documentVisibleRect))")
+    }
+
+    /// The large view stands clear of the tool panel — header, table, search
+    /// and legend — and what is done in the panel leaves it open: a click on a
+    /// row, on a row's triangle, on the filter button.
+    func testTheLargeViewStaysClearOfTheToolPanelAndSurvivesWorkInIt() throws {
+        _ = try open(UEFITestImage.make())
+        let tree = try expandRow(0)
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        let pane = try XCTUnwrap(descendants(of: panel, ToolDetailPane.self).first)
+        let window = try XCTUnwrap(self.window)
+        XCTAssertTrue(pumpUntil(2) { pane.detail.hasRows })
+
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+        window.layoutIfNeeded()
+        let card = try XCTUnwrap(pane.quickLookCardForTesting)
+        let panelFrame = panel.convert(panel.bounds, to: nil)
+        XCTAssertGreaterThanOrEqual(card.convert(card.bounds, to: nil).minX, panelFrame.maxX,
+                                    "the card does not cover the panel")
+
+        // A click on a row, on its triangle, and on the filter button.
+        let row = tree.rect(ofRow: 1)
+        let rowPoint = tree.convert(NSPoint(x: row.minX + 60, y: row.midY), to: nil)
+        pane.handleClickWhileShown(mouse(.leftMouseDown, at: rowPoint, window: window))
+        XCTAssertTrue(pane.isQuickLookShown, "a click on a row")
+
+        let triangle = tree.frameOfOutlineCell(atRow: 0)
+        let trianglePoint = tree.convert(NSPoint(x: triangle.midX, y: triangle.midY), to: nil)
+        pane.handleClickWhileShown(mouse(.leftMouseDown, at: trianglePoint, window: window))
+        XCTAssertTrue(pane.isQuickLookShown, "a click on a triangle")
+
+        let filter = try filterButton(in: panel)
+        let filterPoint = filter.convert(NSPoint(x: filter.bounds.midX, y: filter.bounds.midY), to: nil)
+        pane.handleClickWhileShown(mouse(.leftMouseDown, at: filterPoint, window: window))
+        XCTAssertTrue(pane.isQuickLookShown, "a click on the filter button")
+
+        // Beside the panel and the card, in the dump, it still closes.
+        let outside = NSPoint(x: panelFrame.maxX + 2, y: panelFrame.midY)
+        pane.handleClickWhileShown(mouse(.leftMouseDown, at: outside, window: window))
+        XCTAssertFalse(pane.isQuickLookShown, "a click beside both closes it")
+        pane.finishTransitionForTesting()
+    }
+
+    /// A fragment panel opening folds the large view: the card would stand
+    /// over it.
+    func testOpeningAFragmentPanelFoldsTheLargeView() throws {
+        let controller = try open(UEFITestImage.make())
+        let tree = try outline()
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        let panel = try XCTUnwrap(controller.tools.panel)
+        let pane = try XCTUnwrap(descendants(of: panel, ToolDetailPane.self).first)
+        XCTAssertTrue(pumpUntil(2) { pane.detail.hasRows })
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+
+        try session().openNodeInPanel(for: try node(atRow: 0).id, body: true)
+        XCTAssertTrue(pumpUntil(2) { controller.fragments.expanded != nil }, "the panel is raised")
+        XCTAssertFalse(pane.isQuickLookShown, "and the large view is folded")
+        pane.finishTransitionForTesting()
+        if let id = controller.fragments.expanded { controller.fragments.close(id, animated: false) }
     }
 
     /// Opening a row does not widen the tree past its scroll view: the

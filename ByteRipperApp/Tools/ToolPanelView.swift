@@ -2,6 +2,7 @@ import Cocoa
 import HelpBook
 import HelpUI
 import Localization
+import ToolModuleKit
 
 /// The tool-module panel's chrome: a header naming the tool-module and the file
 /// it is working on, a close button, and the tool-module's own view below
@@ -15,7 +16,10 @@ import Localization
 ///
 /// The panel hosts a view controller it does not own: the tool-module builds
 /// it, this holds it, and swapping tool-modules swaps the view.
-final class ToolPanelView: NSView {
+///
+/// It is what the large view of a row's details keeps clear of, and where a
+/// click leaves it open (`ToolPanelFrame`).
+final class ToolPanelView: NSView, ToolPanelFrame {
     /// The header has been pulled down — a fragment panel's gesture, set only
     /// there. Nil in the tab's own panel, where there is nothing to pull.
     var onHeaderPulledDown: ((NSEvent) -> Void)? {

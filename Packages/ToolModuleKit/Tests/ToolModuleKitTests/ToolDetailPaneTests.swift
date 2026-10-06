@@ -205,6 +205,135 @@ final class ToolDetailPaneTests: XCTestCase {
         XCTAssertFalse(pane.isQuickLookShown, "one beside it closes it")
     }
 
+    // MARK: - Clear of the tool panel
+
+    /// A stand-in for the app's panel chrome: the pane sits in it, on the left.
+    private final class PanelStandIn: NSView, ToolPanelFrame {}
+
+    /// The pane moved into a panel `width` wide at the window's left edge,
+    /// which is where the app puts the tool panel.
+    private func placeInPanel(width: CGFloat) -> PanelStandIn {
+        let root = window.contentView!
+        pane.removeFromSuperview()
+        let panel = PanelStandIn(frame: NSRect(x: 0, y: 0, width: width, height: 600))
+        root.addSubview(panel)
+        panel.addSubview(pane)
+        NSLayoutConstraint.activate([
+            pane.leadingAnchor.constraint(equalTo: panel.leadingAnchor),
+            pane.trailingAnchor.constraint(equalTo: panel.trailingAnchor),
+            pane.bottomAnchor.constraint(equalTo: panel.bottomAnchor),
+            pane.heightAnchor.constraint(equalToConstant: 200),
+        ])
+        root.layoutSubtreeIfNeeded()
+        return panel
+    }
+
+    /// The card stands to the right of the panel, a gap from it, however wide
+    /// the panel is: the whole of the panel stays in reach.
+    func testTheCardKeepsClearOfTheToolPanel() throws {
+        _ = placeInPanel(width: 300)
+        fill()
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+        let frame = try XCTUnwrap(pane.quickLookCardForTesting).convert(
+            try XCTUnwrap(pane.quickLookCardForTesting).bounds, to: nil)
+
+        XCTAssertEqual(frame.minX, 312, accuracy: 1, "a gap after the panel's edge")
+        XCTAssertEqual(frame.maxX, 770, accuracy: 1, "a margin on the right")
+        XCTAssertEqual(frame.width, 458, accuracy: 1, "what the panel leaves of two thirds of the window")
+        XCTAssertEqual(frame.minY, 30, accuracy: 1)
+        XCTAssertEqual(frame.maxY, 570, accuracy: 1)
+    }
+
+    /// A panel narrower than a third of the window takes nothing from the card.
+    func testANarrowPanelLeavesTheCardItsTwoThirds() throws {
+        _ = placeInPanel(width: 100)
+        fill()
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+        let card = try XCTUnwrap(pane.quickLookCardForTesting)
+        let frame = card.convert(card.bounds, to: nil)
+        XCTAssertEqual(frame.width, 533, accuracy: 1)
+        XCTAssertEqual(frame.maxX, 770, accuracy: 1)
+    }
+
+    /// The panel's divider dragged while the card is out: the card gives way
+    /// to it rather than standing over what was just made room for.
+    func testTheCardFollowsThePanelsWidth() throws {
+        let panel = placeInPanel(width: 300)
+        fill()
+        XCTAssertTrue(pane.showQuickLook())
+        pane.finishTransitionForTesting()
+        let card = try XCTUnwrap(pane.quickLookCardForTesting)
+
+        panel.setFrameSize(NSSize(width: 400, height: 600))
+        let deadline = Date().addingTimeInterval(2)
+        while abs(card.frame.minX - 412) > 1, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.02))
+        }
+        XCTAssertEqual(card.frame.minX, 412, accuracy: 1)
+        XCTAssertEqual(card.frame.maxX, 770, accuracy: 1)
+    }
+
+    /// Everything in the panel is the panel's: a click on a row, on a triangle,
+    /// a menu, the search, the legend. One beside both the card and the panel
+    /// still closes the large view.
+    func testAClickInTheToolPanelLeavesTheCardOpen() throws {
+        _ = placeInPanel(width: 300)
+        fill()
+        pane.showQuickLook()
+        pane.finishTransitionForTesting()
+
+        deliver(click(at: NSPoint(x: 100, y: 450)))
+        XCTAssertTrue(pane.isQuickLookShown, "a click on the table")
+        deliver(click(at: NSPoint(x: 290, y: 580)))
+        XCTAssertTrue(pane.isQuickLookShown, "and at the panel's header")
+        deliver(click(at: NSPoint(x: 100, y: 100)))
+        XCTAssertTrue(pane.isQuickLookShown, "and under the table, where the legend is")
+
+        deliver(click(at: NSPoint(x: 306, y: 300)))
+        XCTAssertFalse(pane.isQuickLookShown, "one in the gap between them closes it")
+    }
+
+    /// Typing into the search field is the field's: Space is a space, Esc is
+    /// the field's, and the arrows move its caret.
+    func testTypingInAFieldDoesNotCloseTheCard() throws {
+        _ = placeInPanel(width: 300)
+        let field = NSTextField(frame: NSRect(x: 10, y: 560, width: 200, height: 22))
+        field.isEditable = true
+        window.contentView?.addSubview(field)
+        fill()
+        pane.showQuickLook()
+
+        XCTAssertTrue(window.makeFirstResponder(field), "the premise: the field is being edited")
+        XCTAssertFalse(pane.handleKeyWhileShown(key(" ", code: 49)))
+        XCTAssertFalse(pane.handleKeyWhileShown(key("\u{1B}", code: 53)))
+        XCTAssertFalse(pane.handleKeyWhileShown(key(String(Character(UnicodeScalar(NSDownArrowFunctionKey)!)),
+                                                    code: 125, modifiers: [.numericPad, .function])))
+        XCTAssertEqual(table.selectedRow, 0, "the arrows did not move the table")
+        XCTAssertTrue(pane.isQuickLookShown)
+
+        window.makeFirstResponder(table)
+        XCTAssertTrue(pane.handleKeyWhileShown(key(" ", code: 49)), "from the table it closes, as before")
+        XCTAssertFalse(pane.isQuickLookShown)
+    }
+
+    /// A fragment panel opening is a new thing to look at, and the card would
+    /// stand over it. One in another window is not this window's business.
+    func testAFragmentPanelRisingFoldsTheCard() {
+        fill()
+        pane.showQuickLook()
+        NotificationCenter.default.post(name: .fragmentPanelRaised, object: NSWindow())
+        let deadline = Date().addingTimeInterval(0.2)
+        while Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
+        XCTAssertTrue(pane.isQuickLookShown, "another window's panel")
+
+        NotificationCenter.default.post(name: .fragmentPanelRaised, object: window)
+        let folded = Date().addingTimeInterval(2)
+        while pane.isQuickLookShown, Date() < folded { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
+        XCTAssertFalse(pane.isQuickLookShown)
+    }
+
     func testLeavingTheWindowPutsTheListBack() {
         fill()
         pane.showQuickLook()

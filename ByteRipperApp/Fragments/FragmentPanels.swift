@@ -1,4 +1,5 @@
 import Cocoa
+import ToolModuleKit
 
 /// The tab's fragment panels: the dock's model, the surfaces behind the pills,
 /// and the slide that raises one and folds another
@@ -365,7 +366,12 @@ import Cocoa
         // to grow out of — at its full height and laid out, so the stage the
         // panel is measured against is the one it will stand on.
         refreshDock()
-        if transition.raising != nil { host?.settleFragmentDock() }
+        if transition.raising != nil {
+            host?.settleFragmentDock()
+            // A panel coming up is what the reader is to look at: the large
+            // view of a row's details, standing over the window, folds.
+            NotificationCenter.default.post(name: .fragmentPanelRaised, object: host?.view.window)
+        }
         let span = duration ?? Self.slideDuration
 
         let raise: () -> Void = { [weak self] in

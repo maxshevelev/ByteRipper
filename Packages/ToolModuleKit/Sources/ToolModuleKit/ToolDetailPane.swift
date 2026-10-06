@@ -3,6 +3,18 @@ import AppKit
 import HelpUI
 import Localization
 
+/// The view that frames a tool-module's panel, header and body together. The
+/// large view of the details keeps clear of it, and a click inside it leaves
+/// the large view open.
+@MainActor public protocol ToolPanelFrame: NSView {}
+
+extension Notification.Name {
+    /// A fragment panel opened or rose over the window, posted with the
+    /// window as its object. The large view of the details folds: it would
+    /// stand over the panel.
+    public static let fragmentPanelRaised = Notification.Name("ToolModuleKit.fragmentPanelRaised")
+}
+
 /// A panel's detail list in its splitter, and the large view it opens into —
 /// the Quick Look of a row's detail.
 ///
@@ -10,9 +22,18 @@ import Localization
 /// history, a picture — and the lower third of a panel beside the dump is a
 /// keyhole onto it. **Space** on the row in focus, or the expand button in the
 /// list's corner, opens the same list as a large card over the window; **Space**
-/// again, **Esc**, the close button in the corner, a click outside the card or
-/// a link followed from it closes it. While it is open the arrow keys still
-/// move the table's selection, and the card follows.
+/// again, **Esc**, the close button in the corner, a click outside the card and
+/// the tool panel, a link followed from it or a fragment panel opening closes
+/// it. While it is open the arrow keys still move the table's selection, and
+/// the card follows.
+///
+/// The card keeps clear of the tool panel it belongs to — the header, the
+/// table, the search and the legend — so everything in the panel stays in
+/// reach while the card is out: a click on a row, the triangle that opens one,
+/// a menu, the search or the legend does what it was for and leaves the card
+/// where it is, and the card shows the row selected. The panel is the view
+/// that adopts `ToolPanelFrame`; where there is none, the card has the window
+/// to itself.
 ///
 /// The card flies out of the pane and back into it. The pane folds away while
 /// the card is out — the table above takes the whole height, which is what a
@@ -50,6 +71,11 @@ import Localization
     private var cardIsResting = false
     /// The window's content view resizing, watched while the card is out.
     private var hostObserver: NSObjectProtocol?
+    /// The tool panel's frame changing — its divider dragged — watched while
+    /// the card is out, so the card keeps clear of it.
+    private var panelObserver: NSObjectProtocol?
+    /// A fragment panel rising, watched while the card is out.
+    private var raisedObserver: NSObjectProtocol?
     /// The splitter's policy for the pane before it folded away, put back
     /// when the pane opens again. Nil while the pane is open.
     private var unfoldedLayout: ALSplitView.PaneLayout?
@@ -65,6 +91,10 @@ import Localization
     static let flight: TimeInterval = 0.25
     /// The card's margin to the window's top, bottom and right edges.
     static let margin: CGFloat = 30
+    /// What is left clear between the card and the tool panel beside it.
+    static let gap: CGFloat = 12
+    /// The narrowest the card is drawn, however little room the panel leaves.
+    static let minimumWidth: CGFloat = 200
     /// How much of the window's width the card takes. What is left lies on
     /// its left, so the panel's table stays in view.
     static let widthShare: CGFloat = 2.0 / 3
@@ -187,6 +217,14 @@ import Localization
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.followTheWindow() }
         }
+        if let panel = toolPanel {
+            panel.postsFrameChangedNotifications = true
+            panelObserver = NotificationCenter.default.addObserver(
+                forName: NSView.frameDidChangeNotification, object: panel, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.followTheWindow() }
+            }
+        }
         return card
     }
 
@@ -194,6 +232,8 @@ import Localization
     private func takeBack() {
         if let hostObserver { NotificationCenter.default.removeObserver(hostObserver) }
         hostObserver = nil
+        if let panelObserver { NotificationCenter.default.removeObserver(panelObserver) }
+        panelObserver = nil
         cardIsResting = false
         guard let card else { return }
         self.card = nil
@@ -217,13 +257,38 @@ import Localization
         card.frame = target
     }
 
+    /// The tool panel the pane is in, if it is in one: the nearest view above
+    /// it that frames a panel.
+    private var toolPanel: NSView? {
+        var view = superview
+        while let candidate = view {
+            if candidate is ToolPanelFrame { return candidate }
+            view = candidate.superview
+        }
+        return nil
+    }
+
     /// Where the card stands once it has landed: two thirds of the window's
-    /// width, a margin from its top, bottom and right edges,
-    /// and the rest of the width clear on its left for the table.
+    /// width, a margin from its top, bottom and right edges, and clear of the
+    /// tool panel — on the far side of it from the window's middle, a gap from
+    /// its edge — so the width is what the panel leaves when it is wider than
+    /// a third of the window.
     private func restingFrame(in host: NSView) -> NSRect {
         let bounds = host.bounds
-        let width = max(200, (bounds.width * Self.widthShare).rounded())
-        return NSRect(x: bounds.maxX - Self.margin - width,
+        var left = bounds.minX + Self.margin
+        var right = bounds.maxX - Self.margin
+        var anchoredRight = true
+        if let panel = toolPanel {
+            let frame = panel.convert(panel.bounds, to: host)
+            if frame.midX <= bounds.midX {
+                left = max(left, frame.maxX + Self.gap)
+            } else {
+                right = min(right, frame.minX - Self.gap)
+                anchoredRight = false
+            }
+        }
+        let width = max(Self.minimumWidth, min((bounds.width * Self.widthShare).rounded(), right - left))
+        return NSRect(x: anchoredRight ? right - width : left,
                       y: bounds.minY + Self.margin,
                       width: width,
                       height: max(120, bounds.height - 2 * Self.margin))
@@ -410,22 +475,38 @@ import Localization
         ) {
             shownMonitors.append(clicks)
         }
+        // A fragment panel opening or rising is a new thing to look at, and
+        // the card would stand over it.
+        raisedObserver = NotificationCenter.default.addObserver(
+            forName: .fragmentPanelRaised, object: window, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.closeQuickLook() }
+        }
     }
 
     private func stopWatchingWhileShown() {
         shownMonitors.forEach(NSEvent.removeMonitor)
         shownMonitors.removeAll()
+        if let raisedObserver { NotificationCenter.default.removeObserver(raisedObserver) }
+        raisedObserver = nil
     }
 
     /// Key codes of the arrows, which still move the table beside the card.
     private static let arrowKeys: Set<UInt16> = [123, 124, 125, 126]
     private static let escapeKey: UInt16 = 53
 
+    /// Whether the focus is in text being edited — the search field — where
+    /// Space, Esc and the arrows are the field's. A selectable value in the
+    /// details is not: its field editor does not edit.
+    private var isEditingText: Bool {
+        (window?.firstResponder as? NSTextView)?.isEditable == true
+    }
+
     /// What a key pressed in the window does while the large view is open.
     /// True when it was taken. A key in another window — the `?`'s popover,
-    /// the help — is that window's.
+    /// the help — is that window's, and a key typed into a field is the field's.
     func handleKeyWhileShown(_ event: NSEvent) -> Bool {
-        guard isQuickLookShown, event.window === window else { return false }
+        guard isQuickLookShown, event.window === window, !isEditingText else { return false }
         if event.keyCode == Self.escapeKey || Self.isPlainSpace(event) {
             closeQuickLook()
             return true
@@ -437,15 +518,18 @@ import Localization
         return false
     }
 
-    /// A click in the window outside the card closes the large view, and
-    /// still does what it was for: nothing is dimmed or covered, so a click
-    /// on a row, the dump or the toolbar lands there.
+    /// A click in the window outside the card and the tool panel closes the
+    /// large view, and still does what it was for: nothing is dimmed or
+    /// covered, so a click on the dump or the toolbar lands there. A click in
+    /// the tool panel — a row, the triangle of one, a menu, the search, the
+    /// legend — is the panel's, and the card stays.
     func handleClickWhileShown(_ event: NSEvent) {
         guard isQuickLookShown, let card, event.window === window,
               let frame = window?.contentView?.superview
         else { return }
         let hit = frame.hitTest(frame.convert(event.locationInWindow, from: nil))
         guard hit?.isDescendant(of: card) != true else { return }
+        if let panel = toolPanel, hit?.isDescendant(of: panel) == true { return }
         closeQuickLook()
     }
 
