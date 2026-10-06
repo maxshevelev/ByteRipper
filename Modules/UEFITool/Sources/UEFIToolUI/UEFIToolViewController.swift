@@ -1606,9 +1606,15 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// would refuse the panel's own attempt to put that row up, and the branch
     /// would never open at all.
     func outlineView(_ outlineView: NSOutlineView, shouldExpandItem item: Any) -> Bool {
+        if let meRow = item as? MEOutlineRow {
+            let path = meRow.path
+            return !opensAfterMakingRoom(item) { [weak self] in self?.meRow(path) }
+        }
         guard let row = item as? UEFITreeRow, !row.isLoading, let tree,
               let node = tree.node(row.id)
         else { return true }
+        let id = row.id
+        let resolve = { @MainActor [weak self] () -> Any? in self?.outlineItem(for: id) }
         // The ME region node is not expandable in the UEFI tree, but opening it
         // runs the ME analysis and opens the row on the sub-tree it presents —
         // so it is answered here rather than left to the tree, which would scan
@@ -1625,7 +1631,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // is put up by the panel's own `expandItem`, and refusing that ask would
         // refuse the panel's attempt to show it.
         if isMERegion(node) {
-            guard meRoots.isEmpty else { return true }
+            guard meRoots.isEmpty else { return !opensAfterMakingRoom(item, resolve) }
             guard !showingPlaceholder.contains(row.id) else { return true }
             // An open already in flight is not asked for a second time. The
             // analysis is reading, the panel has its clock on the row but no
@@ -1638,7 +1644,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         }
         guard node.children.isEmpty, node.isExpandable,
               !showingPlaceholder.contains(row.id)
-        else { return true }
+        else { return !opensAfterMakingRoom(item, resolve) }
         if !isPanelExpanding { openedByReader.insert(row.id) }
         beginOpening(row.id)
         return false
@@ -1668,10 +1674,13 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// placeholder in.
     private func branchArrived(_ id: NodeID) {
         guard opening.removeValue(forKey: id) != nil else { return }
+        let resolve = { @MainActor [weak self] () -> Any? in self?.outlineItem(for: id) }
         guard showingPlaceholder.remove(id) != nil else {
+            if openedByReader.contains(id) { makeRoom(for: resolve) }
             expandRow(id) { [weak self] in self?.showBranchIfAsked(id) }
             return
         }
+        if openedByReader.contains(id) { makeRoom(for: resolve) }
         enqueue(animated: true) { [weak self] in
             guard let self, let item = self.outlineItem(for: id) else { return }
             self.outline.reloadItem(item, reloadChildren: true)
@@ -1702,23 +1711,75 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// to its last child, or, when that is taller than the view, to the row at
     /// the top.
     private func scrollToShowChildren(of item: Any?) {
-        guard let item else { return }
+        guard let item, let move = roomMove(for: item, beforeOpening: false) else { return }
+        move.clip.scroll(to: move.origin)
+        move.clip.enclosingScrollView?.reflectScrolledClipView(move.clip)
+    }
+
+    /// Whether a row the reader opens is held shut while the table first
+    /// makes room for what it holds — and if so, does both, in that order.
+    ///
+    /// Scrolled while the rows open, the table moved under an animation that
+    /// was sliding the new rows in, and they came in torn. So the table moves
+    /// first, to where the row and its rows will be in view, and the row opens
+    /// once it stands still. A row whose rows are in view already, an opening
+    /// of the panel's own, and an Option-click — which opens everything under
+    /// the row, too many rows to make room for — open at once, as before.
+    private func opensAfterMakingRoom(_ item: Any, _ resolve: @escaping @MainActor () -> Any?) -> Bool {
+        guard !isPanelExpanding, NSApp.currentEvent?.modifierFlags.contains(.option) != true,
+              roomMove(for: item, beforeOpening: true) != nil else { return false }
+        makeRoom(for: resolve)
+        enqueue(animated: true) { [weak self] in
+            guard let self, let item = resolve() else { return }
+            self.panelExpands { self.outline.animator().expandItem(item) }
+        }
+        return true
+    }
+
+    /// Scrolls, animated and as one of the panel's changes to the table, to
+    /// where the row `resolve` finds and the rows it is about to show will be
+    /// in view. Resolved when the change runs: the rows may have moved.
+    private func makeRoom(for resolve: @escaping @MainActor () -> Any?) {
+        enqueue(animated: true) { [weak self] in
+            guard let self, let item = resolve(),
+                  let move = self.roomMove(for: item, beforeOpening: true) else { return }
+            // The rows are not there yet, so neither is the table's height
+            // for them, and a scroll past its end stops at the end. The
+            // opening that follows sizes the table to its rows again.
+            let needed = move.origin.y + move.clip.bounds.height
+            if needed > self.outline.frame.height {
+                self.outline.setFrameSize(NSSize(width: self.outline.frame.width, height: needed))
+            }
+            move.clip.animator().setBoundsOrigin(move.origin)
+            move.clip.enclosingScrollView?.reflectScrolledClipView(move.clip)
+        }
+    }
+
+    /// Where the clip has to stand for `item`'s row and its rows to be in
+    /// view, or nil when they are. `beforeOpening`, the rows are the ones the
+    /// row will show once open — its children, a row each, below it; after,
+    /// the ones it shows.
+    private func roomMove(for item: Any, beforeOpening: Bool) -> (clip: NSClipView, origin: NSPoint)? {
         let row = outline.row(forItem: item)
-        guard row >= 0 else { return }
+        guard row >= 0 else { return nil }
         // The table as tall as its rows now: right after an opening it still
         // has the height it had, and a scroll past that stops at its end.
         outline.tile()
         let rowRect = outline.rect(ofRow: row)
         var target = rowRect
-        let count = outline.isItemExpanded(item) ? outline.numberOfChildren(ofItem: item) : 0
-        if count > 0 {
-            let last = outline.row(forItem: outline.child(count - 1, ofItem: item))
-            if last >= 0 { target = rowRect.union(outline.rect(ofRow: last)) }
+        if beforeOpening {
+            let count = outline.dataSource?.outlineView?(outline, numberOfChildrenOfItem: item) ?? 0
+            target.size.height += CGFloat(count) * rowRect.height
+        } else {
+            let count = outline.isItemExpanded(item) ? outline.numberOfChildren(ofItem: item) : 0
+            if count > 0 {
+                let last = outline.row(forItem: outline.child(count - 1, ofItem: item))
+                if last >= 0 { target = rowRect.union(outline.rect(ofRow: last)) }
+            }
         }
         // Moved through the clip view itself: asked of the table, a scroll
         // made inside one of the panel's changes is not carried out.
-        guard let scrollView = outline.enclosingScrollView else { return }
-        let clip = scrollView.contentView
+        guard let clip = outline.enclosingScrollView?.contentView else { return nil }
         // The column header lies over the top of the clip: what is seen
         // starts under it. Placed at the clip's own top, the row would sit
         // under the header — one row off the screen.
@@ -1729,9 +1790,8 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         var top = seenTop
         if target.maxY > seenTop + seenHeight { top = target.maxY - seenHeight }
         if rowRect.minY < top { top = rowRect.minY }
-        guard top != seenTop else { return }
-        clip.scroll(to: NSPoint(x: clip.bounds.minX, y: clip.bounds.minY + (top - seenTop)))
-        scrollView.reflectScrolledClipView(clip)
+        guard top != seenTop else { return nil }
+        return (clip, NSPoint(x: clip.bounds.minX, y: clip.bounds.minY + (top - seenTop)))
     }
 
     /// The ME region's analysis is about to run: hold the row shut and — only

@@ -208,16 +208,18 @@ final class UEFIToolFlowTests: XCTestCase {
         session.onChecksums = nil
 
         clip.layoutSubtreeIfNeeded()
-        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
         // Opening a row shows it and what it holds
         // (`testOpeningARowBringsItsRowsIntoView`): the table moves to the
         // row, not back to the selection at the top.
         // The row opened is whole and below the column header, which lies
         // over the clip's top — so the selected row above it is not what the
-        // table came back to.
+        // table came back to. The table moves first and the row opens after,
+        // both animated, so the test waits for the row to be open.
         let header = try XCTUnwrap(tree.headerView)
-        let opened = tree.convert(tree.rect(ofRow: 1), to: nil)
         let headerBottom = header.convert(header.bounds, to: nil).minY
+        XCTAssertTrue(pumpUntil(2) { tree.isItemExpanded(tree.item(atRow: 1)) }, "the row opens")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.35))
+        let opened = tree.convert(tree.rect(ofRow: 1), to: nil)
         XCTAssertLessThanOrEqual(opened.maxY, headerBottom + 0.5, "the row opened is below the header")
         XCTAssertGreaterThan(tree.convert(tree.rect(ofRow: 0), to: nil).minY, headerBottom - 0.5,
                              "the selection above it is not brought back into view")
@@ -253,6 +255,18 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertTrue(pumpUntil(5) { tree.numberOfRows == 5 }, "\(tree.numberOfRows) rows")
         XCTAssertTrue(pumpUntil(2) { seen().location == 1 && seen().length >= 3 },
                       "the volume at the top, its rows below it: \(seen())")
+
+        // Opened again, read already: the table moves first, and the row
+        // opens only once it stands where the rows will be in view — a scroll
+        // during the opening's animation tore the rows sliding in.
+        tree.collapseItem(tree.item(atRow: 1))
+        clip.contentView.scroll(to: NSPoint(x: 0, y: -header))
+        clip.reflectScrolledClipView(clip.contentView)
+        XCTAssertEqual(seen().location, 0, "the premise: back at the top")
+        tree.expandItem(tree.item(atRow: 1))
+        XCTAssertFalse(tree.isItemExpanded(tree.item(atRow: 1)), "held shut while the table moves")
+        XCTAssertTrue(pumpUntil(2) { tree.isItemExpanded(tree.item(atRow: 1)) }, "then opened")
+        XCTAssertEqual(seen().location, 1, "the table had moved before the row opened")
     }
 
     /// The row the arrows moved to while the large view was out is on screen
