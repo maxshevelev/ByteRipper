@@ -2450,8 +2450,6 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         onOpenContent?(node.id)
     }
 
-    /// Whether the selection being reported was moved by a key press.
-    var selectionMovedByKeys: Bool { outline.isMovingByKeys }
 
     private func chooseNode(atRow row: Int) {
         let item = row >= 0 ? outline.item(atRow: row) : nil
@@ -2503,10 +2501,6 @@ private final class UEFIOutlineView: NSOutlineView {
         didSet { if heldHeight < oldValue { tile() } }
     }
 
-    /// True while a key press is moving the selection: the dump follows such
-    /// a selection once it stops rather than on every step.
-    private(set) var isMovingByKeys = false
-
     /// Asked first of every key press: true when the panel has taken it to
     /// press again later — the table is still changing, and the row it would
     /// move from is not where it will be.
@@ -2514,8 +2508,6 @@ private final class UEFIOutlineView: NSOutlineView {
 
     override func keyDown(with event: NSEvent) {
         if holdsKey?(event) == true { return }
-        isMovingByKeys = true
-        defer { isMovingByKeys = false }
         super.keyDown(with: event)
     }
 

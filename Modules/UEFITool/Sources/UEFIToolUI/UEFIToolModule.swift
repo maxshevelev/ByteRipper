@@ -116,11 +116,10 @@ private struct ChecksumPass: Sendable {
     /// The node the user is looking at. Nil before a choice, and after an edit
     /// that lost it.
     private var focus: NodeID?
-    /// What the selection drives, waiting for the table to have moved
-    /// (`followSelection`).
-    private var pendingFollow: Task<Void, Never>?
-    /// What that waiting follow-up does when it runs.
+    /// What the latest selection drives, waiting for the run loop to come
+    /// round (`followSelection`), and whether it is already on its way.
     private var followWork: (@MainActor () -> Void)?
+    private var isFollowPending = false
     /// Which reading of the file is the current one. A file edited twice in
     /// quick succession has checksum passes in flight against both, and the
     /// one that finishes second is not necessarily the one that read the newer
@@ -763,13 +762,13 @@ private struct ChecksumPass: Sendable {
     ///
     /// The table's own work is the selection and the scroll that keeps it in
     /// view; done inside the selection's notification, the rest held them
-    /// back, and a held arrow key ran ahead of what was on screen. So the
-    /// selection is only noted here. A click is followed on the next turn of
-    /// the run loop, once the table has drawn; a selection the keys move, once
-    /// it stops moving, so a held key pays for the row it stops on and not
-    /// for every row on the way.
+    /// back, and a held arrow key ran ahead of what was on screen. So a
+    /// selection is handed on at once and followed when the run loop comes
+    /// round — on every step of a held key, as fast as the follow-up keeps up.
+    /// Selections that arrive while one is still waiting replace it: the
+    /// follow-up draws the row the table is on when it runs, never a row the
+    /// table has already left.
     private func followSelection(then done: (@MainActor () -> Void)? = nil) {
-        pendingFollow?.cancel()
         followWork = { [weak self] in
             self?.show(publish: true)
             done?()
@@ -782,21 +781,15 @@ private struct ChecksumPass: Sendable {
             runFollowWork()
             return
         }
-        let byKeys = controller.selectionMovedByKeys
-        pendingFollow = Task { @MainActor [weak self] in
-            if byKeys {
-                try? await Task.sleep(nanoseconds: UInt64(Self.followDelay * 1_000_000_000))
-            } else {
-                await Task.yield()
-            }
-            guard let self, !Task.isCancelled else { return }
-            self.runFollowWork()
+        guard !isFollowPending else { return }
+        isFollowPending = true
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.runFollowWork() }
         }
     }
 
     private func runFollowWork() {
-        pendingFollow?.cancel()
-        pendingFollow = nil
+        isFollowPending = false
         let work = followWork
         followWork = nil
         work?()
@@ -807,11 +800,6 @@ private struct ChecksumPass: Sendable {
     func followSelectionNowForTesting() {
         runFollowWork()
     }
-
-    /// How long a selection the keys move stays put before what it drives
-    /// follows: longer than an arrow key's repeat, so a held key moves only
-    /// the table.
-    static let followDelay: TimeInterval = 0.1
 
     /// A row of the detail named bytes that are not one node: they are
     /// outlined in the dump beside the focused node's own zones, and the host

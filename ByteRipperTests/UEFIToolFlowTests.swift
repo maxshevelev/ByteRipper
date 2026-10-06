@@ -519,8 +519,8 @@ final class UEFIToolFlowTests: XCTestCase {
     }
 
     /// A selection is the table's alone: what it drives — the detail, the
-    /// dump — follows after the table has moved. A click, on the next turn; the
-    /// arrows, once the selection stops, so a key held down never waits on them.
+    /// dump — follows when the run loop comes round, to the row the table is
+    /// on then, so a key held down never waits on them.
     func testWhatASelectionDrivesFollowsAfterTheTableMoves() throws {
         let controller = try open(UEFITestImage.make())
         let outline = try expandRow(0)
@@ -540,11 +540,15 @@ final class UEFIToolFlowTests: XCTestCase {
             charactersIgnoringModifiers: down, isARepeat: false, keyCode: 125))
         outline.keyDown(with: key)
         XCTAssertEqual(outline.selectedRow, 2, "the table moves at once")
-        XCTAssertEqual(controller.windowModel.pane1.zones.focus, "0.0#body", "the dump not yet")
-        RunLoop.main.run(until: Date().addingTimeInterval(0.02))
-        XCTAssertEqual(controller.windowModel.pane1.zones.focus, "0.0#body", "nor on the next turn")
-        XCTAssertTrue(pumpUntil(2) { controller.windowModel.pane1.zones.focus != "0.0#body" },
-                      "then the dump follows")
+        XCTAssertEqual(controller.windowModel.pane1.zones.focus, "0.0#body", "the dump not inside the key")
+        // A second step before the run loop came round: the follow-up that
+        // runs draws the row the table is on, not the one it passed.
+        outline.keyDown(with: key)
+        XCTAssertEqual(outline.selectedRow, 3)
+        let last = try node(atRow: 3).id.description
+        XCTAssertTrue(pumpUntil(1) { controller.windowModel.pane1.zones.focus?.hasPrefix(last) == true },
+                      "the dump follows on the next turn, to the latest row: "
+                      + "\(String(describing: controller.windowModel.pane1.zones.focus))")
     }
 
     /// The trip back: picking a zone in the dump brings its row to the front
