@@ -110,7 +110,7 @@ import ToolModuleKit
         column(Column.cpuid, L("CPUID"), 70)
         // The narrowest column in the form; the word has to be an abbreviation
         // in every language, so it is one the translator chooses.
-        column(Column.platform, L("column|Plat"), 46)
+        column(Column.platform, L("Plat", context: "column"), 46)
         column(Column.revision, L("Revision"), 74)
         column(Column.date, L("Date"), 90)
         column(Column.release, L("Release"), 74)
