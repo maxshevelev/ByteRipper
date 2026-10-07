@@ -1269,3 +1269,5 @@
 "Save Assembled BIOS Region as…" = "Сохранить собранный BIOS-регион как…";
 "Switch" = "Ключ";
 "Update table" = "Таблица обновления";
+"The node under the caret is empty padding" = "Узел под курсором — пустой padding";
+"Empty padding is hidden in the tree. Show it?" = "Пустой padding скрыт в дереве. Показать его?";

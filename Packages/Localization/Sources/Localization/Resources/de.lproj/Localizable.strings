@@ -1269,3 +1269,5 @@
 "Save Assembled BIOS Region as…" = "Zusammengesetzte BIOS-Region sichern unter…";
 "Switch" = "Schalter";
 "Update table" = "Update-Tabelle";
+"The node under the caret is empty padding" = "Der Knoten unter der Einfügemarke ist leeres Padding";
+"Empty padding is hidden in the tree. Show it?" = "Leeres Padding ist im Baum ausgeblendet. Anzeigen?";

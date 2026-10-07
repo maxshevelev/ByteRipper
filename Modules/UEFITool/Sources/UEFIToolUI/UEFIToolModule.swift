@@ -1219,6 +1219,13 @@ private struct ChecksumPass: Sendable {
     /// Public because a click on the title-row button is driven the same way
     /// the panel's other clicks are — through the session, not a simulated
     /// mouse.
+    /// Answers the question the reveal asks when the caret is in hidden empty
+    /// padding, in place of the alert.
+    public var emptyPaddingQuestionForTesting: ((@escaping (Bool) -> Void) -> Void)? {
+        get { controller.emptyPaddingQuestion }
+        set { controller.emptyPaddingQuestion = newValue }
+    }
+
     public func revealNodeAtCaret() {
         let offset = host.selection?.lowerBound ?? host.caret
         guard let tree, tree.isReady else { return }
@@ -1251,6 +1258,15 @@ private struct ChecksumPass: Sendable {
             guard let self else { return }
             self.controller.endBusy()
             guard let node = chain.last else { return }
+            // Empty padding is left out of the rows unless asked for, so a
+            // caret inside it has no row to land on. Say so, and offer the
+            // rows, rather than answer with nothing.
+            if UEFITreeDisplay.isEmptyPadding(node), !self.controller.showsEmptyPadding {
+                self.controller.askToShowEmptyPadding { [weak self] in
+                    self?.showUEFIFocus(node.id)
+                }
+                return
+            }
             self.showUEFIFocus(node.id)
         }
     }

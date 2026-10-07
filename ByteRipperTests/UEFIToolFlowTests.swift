@@ -579,6 +579,33 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(ToolPanelFont.defaults.bool(forKey: Self.showsEmptyPaddingKey), true, "remembered")
     }
 
+    /// A caret in padding the tree hides used to reveal nothing, without a
+    /// word. It asks whether to show the padding; yes shows it and selects it,
+    /// no leaves the tree as it was.
+    func testRevealingHiddenEmptyPaddingOffersToShowIt() throws {
+        ToolPanelFont.defaults.removeObject(forKey: Self.showsEmptyPaddingKey)
+        let controller = try open(UEFITestImage.withTrailingPadding())
+        let tree = try outline()
+        let pane = controller.windowModel.pane1
+        let end = UEFITestImage.make().count
+        var asked = 0
+        var reply: ((Bool) -> Void)?
+        try session().emptyPaddingQuestionForTesting = { answer in asked += 1; reply = answer }
+
+        pane.moveCaret(to: UInt64(end + 0x10))
+        try session().revealNodeAtCaret()
+        XCTAssertTrue(pumpUntil(5) { asked == 1 }, "the reader is asked")
+        reply?(false)
+        XCTAssertEqual(kinds(of: tree), [.volume], "declined: nothing changes")
+
+        try session().revealNodeAtCaret()
+        XCTAssertTrue(pumpUntil(5) { asked == 2 })
+        reply?(true)
+        XCTAssertTrue(pumpUntil(5) { tree.selectedRow >= 0 }, "the padding row is selected")
+        XCTAssertEqual(kinds(of: tree), [.volume, .padding])
+        XCTAssertEqual(try node(atRow: tree.selectedRow).kind, .padding)
+    }
+
     /// Another file opened into the pane is another tree to read: until it is
     /// there the panel shows none — not the last file's rows, nor the detail
     /// of the row that was selected in it — and the selection does not carry

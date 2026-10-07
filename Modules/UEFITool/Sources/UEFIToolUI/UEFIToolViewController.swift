@@ -223,6 +223,10 @@ import UEFITool
     /// the caret in the dump. Same glyph as the toolbar's Go To, because it is
     /// the same act — go where the caret points — pointed at the tree instead
     /// of the dump.
+    /// Replaces the question `askToShowEmptyPadding` puts to the reader; the
+    /// answer is whether to show the rows. Tests set it.
+    var emptyPaddingQuestion: ((@escaping (Bool) -> Void) -> Void)?
+
     private let revealButton = NSButton()
     /// What the tree leaves out — empty padding, the copies later entries
     /// replaced — as a menu under one icon left of the reveal button. Ticked
@@ -2259,6 +2263,27 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         updateFilter()
         outline.reloadData()
         updateRowMarks()
+    }
+
+    /// The reveal reached empty padding, which the tree hides: asks whether to
+    /// show it, and runs `then` once it is shown.
+    func askToShowEmptyPadding(then: @escaping () -> Void) {
+        let answer: (Bool) -> Void = { [weak self] yes in
+            guard yes, let self else { return }
+            self.setShowsEmptyPadding(true)
+            then()
+        }
+        if let question = emptyPaddingQuestion { question(answer); return }
+        let alert = NSAlert()
+        alert.messageText = L("The node under the caret is empty padding")
+        alert.informativeText = L("Empty padding is hidden in the tree. Show it?")
+        alert.addButton(withTitle: L("Show Empty Padding"))
+        alert.addButton(withTitle: L("Cancel"))
+        if let window = view.window {
+            alert.beginSheetModal(for: window) { answer($0 == .alertFirstButtonReturn) }
+        } else {
+            answer(alert.runModal() == .alertFirstButtonReturn)
+        }
     }
 
     @objc private func paddingItemClicked() {
