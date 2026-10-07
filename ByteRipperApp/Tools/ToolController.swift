@@ -255,6 +255,28 @@ import ToolModuleKit
         session.zoneSelected(id)
     }
 
+    /// What the running tool-module offers in the dump's context menu for the
+    /// byte at `offset`, under its own name (`ToolDumpAction`). Nil when there
+    /// is nothing to offer — no tool-module, another pane, an empty list.
+    ///
+    /// Only for the bound pane, by the same rule as `zoneSelected`: the
+    /// session reads one file, and a byte of the other is not one it knows.
+    func dumpActions(at offset: UInt64, in pane: PaneViewModel) -> (title: String, actions: [ToolDumpAction])? {
+        guard let session, let module = activeModule, pane === boundPane else { return nil }
+        let actions = session.dumpActions(at: offset)
+        return actions.isEmpty ? nil : (module.title, actions)
+    }
+
+    /// Runs a command the dump's menu offered, with the panel on screen first:
+    /// what such a command does is shown in the panel, and a panel the user
+    /// collapsed would answer where nobody can see.
+    func perform(_ action: ToolDumpAction) {
+        if !isPanelVisible, let module = activeModule {
+            setPanelVisible(true, width: preferredWidth(for: module))
+        }
+        action.perform()
+    }
+
     // MARK: - What happens to the session
 
     /// An edit landed in some pane. The session hears about it only for its own

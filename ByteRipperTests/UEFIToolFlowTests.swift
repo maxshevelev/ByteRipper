@@ -791,6 +791,39 @@ final class UEFIToolFlowTests: XCTestCase {
     /// afterwards — which makes this the case that says whether the reveal
     /// selects the row *itself*. It opens the row and then selects it, and a
     /// selection made before the opening has had its turn selects nothing.
+    /// The item the open tool-module adds to the dump's menu: one item named
+    /// after it, with its commands in a submenu.
+    private func toolItem(in menu: NSMenu) throws -> NSMenuItem {
+        try XCTUnwrap(menu.items.first { $0.title == "UEFI Structure" }, "the panel's item in the dump's menu")
+    }
+
+    /// Right-click a byte, UEFI Structure ▸ Show in Tree: the row shown is the
+    /// node holding the byte that was clicked, wherever the caret is.
+    func testTheDumpsMenuShowsTheClickedBytesNodeInTheTree() throws {
+        let controller = try open(UEFITestImage.make())
+        let outline = try outline()
+        let pane = controller.windowModel.pane1
+        pane.moveCaret(to: 0x800)
+
+        let menu = controller.makeOffsetMenu(for: pane, offset: 0x4A)
+        let show = try XCTUnwrap(try toolItem(in: menu).submenu?.items.first)
+        XCTAssertEqual(show.title, "Show in Tree")
+        XCTAssertTrue(controller.validateMenuItem(show))
+        controller.performToolDumpAction(show)
+
+        XCTAssertTrue(pumpUntil(5) { outline.selectedRow >= 0 }, "the command selected a row")
+        XCTAssertEqual(try node(atRow: outline.selectedRow).id.description, "0.0",
+                       "the file holding the clicked byte, not the caret's")
+    }
+
+    /// With no tool-module open the dump's menu has nothing of one in it.
+    func testWithoutAToolTheDumpsMenuOffersNoToolItem() throws {
+        let controller = try open(UEFITestImage.make())
+        controller.tools.activate(nil, animated: false)
+        let menu = controller.makeOffsetMenu(for: controller.windowModel.pane1, offset: 0x4A)
+        XCTAssertFalse(menu.items.contains { $0.title == "UEFI Structure" })
+    }
+
     func testRevealingIntoAnAlreadyReadBranchStillSelectsItsRow() throws {
         let controller = try open(UEFITestImage.make())
         let outline = try outline()

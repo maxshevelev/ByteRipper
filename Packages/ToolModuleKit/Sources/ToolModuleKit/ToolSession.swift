@@ -42,6 +42,13 @@ import AppKit
     /// goes from the tool-module outwards.
     func zoneSelected(_ id: Zone.ID)
 
+    /// The commands this session offers in the dump's context menu for the
+    /// byte at `offset` — what the user right-clicked, in the pane the session
+    /// is bound to (`ToolDumpAction`). Asked each time the menu opens, so a
+    /// command can depend on what is there; an empty list adds nothing to the
+    /// menu.
+    func dumpActions(at offset: UInt64) -> [ToolDumpAction]
+
     /// What this session wants handed back if the user returns to this
     /// tool-module on this file, or nil to start afresh every time.
     ///
@@ -79,6 +86,9 @@ public extension ToolSession {
     /// The default is to ignore it: the bytes are selected either way, and a
     /// panel with nothing to point at should not have to say so.
     func zoneSelected(_ id: Zone.ID) {}
+    /// The default is to offer nothing: most panels have nothing to say about
+    /// a single byte.
+    func dumpActions(at offset: UInt64) -> [ToolDumpAction] { [] }
 }
 
 /// A tool-module's own state, kept by the host while that tool-module is not

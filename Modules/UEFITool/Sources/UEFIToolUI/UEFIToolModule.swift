@@ -1227,7 +1227,23 @@ private struct ChecksumPass: Sendable {
     }
 
     public func revealNodeAtCaret() {
-        let offset = host.selection?.lowerBound ?? host.caret
+        revealNode(at: host.selection?.lowerBound ?? host.caret)
+    }
+
+    /// The dump's own way to the same reveal: right-click a byte, **UEFI
+    /// Structure ▸ Show in Tree**. It answers for the byte that was clicked
+    /// rather than for the caret, which is what a reader pointing at a byte
+    /// means — and what the button in the title row cannot know.
+    // help: menu.offset.uefi-show-in-tree
+    public func dumpActions(at offset: UInt64) -> [ToolDumpAction] {
+        [ToolDumpAction(title: L("Show in Tree"), isEnabled: tree?.isReady ?? false) { [weak self] in
+            self?.revealNode(at: offset)
+        }]
+    }
+
+    /// Shows in the tree the innermost node holding the byte at `offset`,
+    /// opening the branches on the way (`revealNodeAtCaret`).
+    public func revealNode(at offset: UInt64) {
         guard let tree, tree.isReady else { return }
         // The ME half first, because the walk below has never heard of it. The
         // two halves route by the same rule `zoneSelected` uses.

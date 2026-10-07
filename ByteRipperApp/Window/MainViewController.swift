@@ -4212,6 +4212,7 @@ final class MainViewController: NSViewController {
         select.target = self
         select.representedObject = OffsetContextTarget(pane: pane, offset: offset)
         addZoneMenuItems(to: menu, for: pane, offset: offset)
+        addToolMenuItems(to: menu, for: pane, offset: offset)
         // The segment block (§21.3): the commands that shape the file's
         // partition, set off from the address-scoped commands above and the
         // bookmark commands below by their own separators.
@@ -4337,6 +4338,34 @@ final class MainViewController: NSViewController {
         } else {
             menu.addItem(item(L("Save Zone “%1$@” as…", zones[0].name), #selector(saveZone(_:)), zones[0]))
         }
+    }
+
+    /// The tool block: what the open tool-module offers for the right-clicked
+    /// byte (`ToolDumpAction`), as one item named after the tool-module with
+    /// its commands in a submenu — **UEFI Structure ▸ Show in Tree** — so it is
+    /// clear whose they are. Nothing at all without a tool-module, in a pane
+    /// it is not reading, or when it offers nothing here.
+    // help: menu.offset.tool
+    private func addToolMenuItems(to menu: NSMenu, for pane: PaneViewModel, offset: UInt64) {
+        let tools = tools(reading: pane)
+        guard let offered = tools.dumpActions(at: offset, in: pane) else { return }
+        menu.addItem(.separator())
+        let parent = menu.addItem(withTitle: offered.title, action: nil, keyEquivalent: "")
+        let submenu = NSMenu(title: offered.title)
+        for action in offered.actions {
+            let item = NSMenuItem(title: action.title, action: #selector(performToolDumpAction(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = ToolDumpActionTarget(tools: tools, action: action)
+            submenu.addItem(item)
+        }
+        parent.submenu = submenu
+    }
+
+    /// Offset context menu ▸ «tool-module» ▸ «command».
+    @objc func performToolDumpAction(_ sender: NSMenuItem) {
+        guard let target = sender.representedObject as? ToolDumpActionTarget else { return }
+        target.tools?.perform(target.action)
     }
 
     /// Selects a zone's bytes, and tells the tool-module that published it —
@@ -7584,6 +7613,8 @@ extension MainViewController: NSMenuItemValidation {
             // validation just agrees with it — and if the list emptied between
             // the menu drawing and now, the item goes grey too.
             return !RecentFilesStore.recent.isEmpty
+        case #selector(performToolDumpAction(_:)):
+            return (menuItem.representedObject as? ToolDumpActionTarget)?.action.isEnabled ?? false
         default:
             return true
         }
@@ -7641,6 +7672,18 @@ private final class OffsetContextTarget: NSObject {
     init(pane: PaneViewModel, offset: UInt64) {
         self.pane = pane
         self.offset = offset
+    }
+}
+
+/// What a tool-module's command in the offset menu carries: the command, and
+/// the panel that offered it — weakly, since a menu can outlive the session.
+private final class ToolDumpActionTarget: NSObject {
+    weak var tools: ToolController?
+    let action: ToolDumpAction
+
+    init(tools: ToolController, action: ToolDumpAction) {
+        self.tools = tools
+        self.action = action
     }
 }
 
