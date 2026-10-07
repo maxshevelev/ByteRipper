@@ -259,6 +259,9 @@ private struct ChecksumPass: Sendable {
         controller.onOpenUnpacked = { [weak self] nodeID in
             self?.openUnpackedInNewTab(for: nodeID)
         }
+        controller.onCompareWithUpdate = { [weak self] nodeID in
+            self?.compareWithUpdate(for: nodeID)
+        }
         controller.onOpenNode = { [weak self] nodeID, body in
             self?.openNodeInPanel(for: nodeID, body: body)
         }
@@ -1594,6 +1597,125 @@ private struct ChecksumPass: Sendable {
             guard await self.host.exportFile(bytes, suggestedName: name) else { return }
             self.noticeAnswersTheUser = true
             self.controller.say(L("Saved %1$@ bytes.", bytes.count))
+        }
+    }
+
+    // MARK: - Comparing with an update file
+
+    /// The BIOS region's Compare with PFAT Update File: asks for a vendor's update
+    /// file, then compares (`compareWithUpdate(_:inRegion:)`).
+    ///
+    /// Public because a right-click cannot be simulated — the level the app's
+    /// tests drive, like `fixChecksum(for:)`.
+    public func compareWithUpdate(for nodeID: NodeID) {
+        guard let tree, tree.isReady, let node = tree.image().node(nodeID),
+              UEFIPresenter.isBIOSRegion(node)
+        else {
+            fail(L("Could not read the file."))
+            return
+        }
+        let region = node.range
+        Task { [weak self] in
+            // Any file: vendors name these after the BIOS version, not the kind.
+            guard let file = await self?.host.requestFile(kinds: []) else { return }
+            self?.compareWithUpdate(file, inRegion: region)
+        }
+    }
+
+    /// The sheet the comparison is shown in, while it is up. Readable so the
+    /// app's tests can tick its rows and press its buttons.
+    public private(set) var updateSheet: NSViewController?
+
+    /// Compares the BIOS region at `region` with `file`, a vendor's update, and
+    /// puts the answer up as a sheet — or says, as a problem, why there is
+    /// none. Reads the dump as it is now, not the parse the panel shows: the
+    /// user may have typed in it since.
+    // help: panel.uefi.compare-update
+    public func compareWithUpdate(_ file: ToolFile, inRegion region: Range<UInt64>) {
+        let snapshot: any ToolContentReader
+        do {
+            snapshot = try host.snapshot()
+        } catch {
+            refuseComparison(L("Could not read the file."))
+            return
+        }
+        controller.showBusy()
+        Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                () -> Result<(UEFIUpdateComparison, BIOSGuardUpdate), UEFIUpdateComparison.Problem>? in
+                guard let dump = try? snapshot.read(region) else { return nil }
+                return UEFIUpdateComparison.compare(file: file.bytes, with: dump, at: region.lowerBound)
+            }.value
+            guard let self else { return }
+            self.controller.endBusy()
+            switch result {
+            case .none:
+                self.refuseComparison(L("Could not read the file."))
+            case .failure(let problem):
+                self.refuseComparison(problem.message)
+            case .success(let (comparison, update)):
+                self.presentUpdateSheet(comparison, update, fileName: file.name)
+            }
+        }
+    }
+
+    private func refuseComparison(_ message: String) {
+        host.report(title: L("Could not compare with the update file"), message: message, isProblem: true)
+    }
+
+    private func presentUpdateSheet(_ comparison: UEFIUpdateComparison, _ update: BIOSGuardUpdate,
+                                    fileName: String) {
+        let sheet = UEFIUpdateViewController(comparison: comparison, fileName: fileName,
+                                             blockCount: update.blockCount, canWrite: !host.isReadOnly)
+        sheet.onCancel = { [weak self] in self?.closeUpdateSheet() }
+        sheet.onSelectRow = { [weak self] row in self?.showUpdatePart(row, of: comparison) }
+        sheet.onWrite = { [weak self] chosen in
+            self?.closeUpdateSheet()
+            self?.writeFromUpdate(chosen, comparison, update)
+        }
+        updateSheet = sheet
+        controller.presentAsSheet(sheet)
+        showUpdatePart(nil, of: comparison)
+    }
+
+    /// The dump draws the parts as zones while the sheet is up, the selected
+    /// one in focus and brought into view.
+    private func showUpdatePart(_ row: Int?, of comparison: UEFIUpdateComparison) {
+        let zones = comparison.rows.enumerated().map { index, part in
+            Zone(id: "update.\(index)", name: part.nameText, range: part.range)
+        }
+        let focus = row.map { "update.\($0)" }
+        host.publish(ZoneMap(zones: zones, focus: focus))
+        if let row, comparison.rows.indices.contains(row) {
+            let part = comparison.rows[row]
+            host.reveal(part.differences.first ?? part.range, select: false)
+        }
+    }
+
+    private func closeUpdateSheet() {
+        guard let sheet = updateSheet else { return }
+        controller.dismiss(sheet)
+        updateSheet = nil
+        // The panel's own zone, the node in focus, as it was before the sheet.
+        show(publish: true)
+    }
+
+    private func writeFromUpdate(_ chosen: Set<Int>, _ comparison: UEFIUpdateComparison,
+                                 _ update: BIOSGuardUpdate) {
+        guard let transaction = comparison.transaction(writing: chosen, from: update) else { return }
+        // The bytes that differed, as the sheet counted them — not the length
+        // of the writes, which take a short gap between two differences along.
+        let bytes = chosen.reduce(UInt64(0)) { $0 + comparison.rows[$1].differingBytes }
+        do {
+            try host.apply(transaction)
+            host.report(
+                title: L("Written from the update file"),
+                message: L("%1$@ bytes written in %2$@ parts.", bytes, chosen.count) + " " + L("⌘Z takes it back."),
+                isProblem: false
+            )
+        } catch {
+            host.report(title: L("Could not write from the update file"),
+                        message: L("Could not write: %1$@", error), isProblem: true)
         }
     }
 

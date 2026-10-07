@@ -1,4 +1,4 @@
-@source-sha 85a92e57230de1ac625913d792c8ede89442bceca34320be23de2f1006bfe219
+@source-sha f34b7f2acecc458af7a647353346252dd3041773b6b4989b8a11c635a5851b5b
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -45,6 +45,26 @@ Rechtsklick auf einen Knoten:
 - **Zur Top-Swap-Kopie** / **Zum Original** bei einem Knoten in einem der beiden Blöcke eines Images mit [[term:top-swap|Top-Swap]]-Kopie — wählt denselben Knoten im anderen Block aus und zeigt seine Bytes im Dump, sodass sich jedem Teil der Kopie der Teil des obersten Blocks zuordnen lässt, den er wiederholt.
 
 Ein Doppelklick auf eine Zeile ersetzt das Menü: Er öffnet, was der Knoten enthält, als Fragment-Bereich — bei einer komprimierten Sektion ihren entpackten Rumpf, bei jedem anderen Knoten seinen Rumpf und bei einem Knoten ohne eigenen Rumpf, etwa Padding oder freiem Platz, den Knoten selbst. Ein Doppelklick auf das Aufklapp-Dreieck klappt die Zeile nur ein oder aus.
+
+## Vergleich mit einer Update-Datei
+
+**Mit PFAT-Update-Datei vergleichen…** im Kontextmenü der Zeile der [[term:bios-region|BIOS-Region]] vergleicht diese Region mit einer Update-Datei des Herstellers und schreibt dort, wo beide voneinander abweichen, die Bytes des Herstellers in den Dump. Geeignet ist nur ein Update für AMI BIOS Guard (AMI selbst nennt das Format PFAT); bei ASUS-Notebooks ist das die Datei, die nach Modell und BIOS-Version benannt ist, etwa `X1704VAPF.306`.
+
+Eine solche Datei enthält die BIOS-Region als signierte Blöcke. Ihnen geht eine Tabelle voraus, die die Region in benannte Bereiche gliedert: `FV_MAIN_WRAPPER`, `NVRAM`, `OA_TABLE` und weitere. Das Blatt führt diese Bereiche mit ihrer Adresse im Dump, ihrer Größe und ihrem Zustand auf:
+
+- **Identisch** — der Dump enthält den Bereich genau so wie das Update.
+- **… Bytes abweichend** — der Dump enthält den Bereich anders: eine andere BIOS-Version, eine Änderung oder eine Beschädigung.
+- **Platinendaten** — ein Bereich, den der Schalter des Flash-Programms (`/N`, `/NB`, `/OA`) oder der vom Hersteller vergebene Name (`AsusNVRAM`, `PEGA_GPNV`) als NVRAM, als Bereich des OA-Schlüssels oder als Speicher der einzelnen Platine ausweist. Das Update enthält den Werkszustand dieser Bereiche, nicht den dieser Platine: Seriennummern, UUID und Setup-Variablen dieser Platine stehen nur im Dump; siehe [[topic:recipe-board-data|Platinenspezifische Daten]]. **Platinendaten; im Update leer** bedeutet, dass das Update in diesem Bereich überhaupt nichts enthält.
+
+Ein abweichender Bereich hat in der Spalte **Schreiben** ein Kästchen. Beim Öffnen des Blatts sind die abweichenden Bereiche markiert, Platinendaten jedoch nicht. **Schreiben** schreibt die markierten Bereiche als einen Widerrufsschritt, und zwar nur die abweichenden Bytes; als geändert markiert der Dump deshalb genau das, was sich geändert hat. Die Auswahl einer Zeile umrandet den Bereich im Dump und bringt seine erste Abweichung in den sichtbaren Ausschnitt. Bei einer schreibgeschützt geöffneten Datei wird der Vergleich angezeigt, **Schreiben** steht jedoch nicht zur Verfügung.
+
+Der Vergleich wird mit Angabe des Grundes abgelehnt, wenn die Datei kein solches Update ist oder wenn die BIOS-Region im Update eine andere Größe hat als die BIOS-Region des Dumps: Eine solche Datei ist kein Update für diese Platine.
+
+Verglichen wird nur die BIOS-Region. Einen [[term:flash-descriptor|Flash-Deskriptor]] enthält eine Update-Datei nicht, und ein [[term:me-region|ME]]-Image darin ist ein Update-Image, dessen Aufbau sich von dem der Region unterscheidet; beides wird nicht geschrieben.
+
+! Setup-Variablen, die eine BIOS-Version geschrieben hat, passen unter Umständen nicht zu einer anderen. Startet die Platine nicht mehr, nachdem ihre BIOS-Region bei beibehaltenem NVRAM auf eine andere Version gebracht wurde, stellt das Schreiben von **NVRAM** aus dem Update die Werkseinstellungen wieder her.
+
+Der Aufbau dieser Dateien ist nicht veröffentlicht. Er wurde durch den Vergleich einer ASUS-Update-Datei mit einem Dump derselben Platine ermittelt: Die Blöcke liegen vom Anfang der Region an lückenlos hintereinander, in der Reihenfolge der Datei. Die Signaturen in der Datei werden nicht geprüft.
 
 ## Padding
 

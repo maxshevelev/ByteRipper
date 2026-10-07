@@ -126,6 +126,58 @@ skipped for the purposes of parsing the image. If `CapsuleImageSize` is smaller
 than the actual size of the buffer, the tail is rubbish behind the capsule, and
 it is worth making a node of its own rather than dropping it silently.
 
+### 1.2. AMI BIOS Guard update files (PFAT)
+
+Not an image and not a capsule: the file a vendor ships for AMI's flasher on
+a board with Intel BIOS Guard — ASUS's `<model>.3xx` among them. It carries
+the BIOS region cut into signed blocks, each with the script the chipset runs
+to write it. Nothing here is a published layout; it is read off ASUS's
+`X1704VAPF.306` against a dump of the same board.
+
+```
+0x00  UINT32 HeaderSize        the blocks start here
+0x04  UINT32 Checksum
+0x08  "_AMIPFAT"
+0x10  UINT8  Flags
+0x11  text, CR LF lines, to HeaderSize:
+        a title line ("AMI_BIOS_GUARD_FLASH_CONFIGURATIONS…")
+        then one line per entry:  <n> /<KEY> <blocks> ;<NAME>
+```
+
+`<KEY>` is the flasher's switch for the entry (`/P` main, `/B` boot block,
+`/N` NVRAM, `/OA` the OA key, vendor ones besides); `<blocks>` is how many of
+the blocks below make it up. The digits after the title appear to be the order
+the flasher writes the entries in; nothing here needs it.
+
+Each block, from `HeaderSize` on, back to back:
+
+```
+0x00  UINT16 BGVerMajor, BGVerMinor
+0x04  CHAR8  PlatformID[16]    "RAPTORLAKE", NUL-padded
+0x14  UINT32 Attributes        bit 0: a signature follows the data
+0x18  UINT16 ScriptVerMajor, ScriptVerMinor
+0x1C  UINT32 ScriptSize
+0x20  UINT32 DataSize
+0x24  UINT32 BiosSvn, EcSvn, VendorInfo
+0x30  the script, ScriptSize bytes (8-byte BIOS Guard opcodes)
+      the data, DataSize bytes
+      the signature: 8 bytes, then RSA modulus, exponent (4) and signature —
+      0x20C in all for RSA-2048, 0x30C for RSA-3072
+```
+
+The data of all blocks, in file order, is the BIOS region from its first byte
+to its last, the blocks following one another without gaps — on that file 33
+of 36 blocks match the dump byte for byte at those places, and the three that
+do not are NVRAM and the vendor's per-board stores. The scripts' immediates
+agree (the first names the block's last 4 KiB page as an offset into the
+region: `0x4F000` for a first block of `0x50000`). The scripts are not
+interpreted — the order and the sizes place the blocks, and a file whose total
+is not the region's size is refused rather than guessed at.
+
+What may follow the blocks is the vendor's: on `X1704VAPF.306` an Aptio
+capsule holding an ME *update* image, which is not the ME region's layout and
+cannot be written over it.
+
 ---
 
 ## 2. The Intel flash descriptor

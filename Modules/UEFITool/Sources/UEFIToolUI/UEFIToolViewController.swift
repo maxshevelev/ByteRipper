@@ -47,6 +47,8 @@ import UEFITool
     var onOpenContent: ((NodeID) -> Void)?
     /// The Open Decompressed item of a bzip2 variable was chosen.
     var onOpenUnpacked: ((NodeID) -> Void)?
+    /// The BIOS region's Compare with PFAT Update File item was chosen.
+    var onCompareWithUpdate: ((NodeID) -> Void)?
     /// A row was opened or shut. What is open belongs to the file rather than
     /// to this panel, so the session writes it through to where the tree
     /// lives (`UEFITreeProviding.setOpenUEFIRows`).
@@ -2385,7 +2387,24 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             open.representedObject = node.id
             items.append(open)
         }
+        // Offered on a read-only file too: comparing writes nothing, and the
+        // sheet says that writing is what it cannot do.
+        if UEFIPresenter.isBIOSRegion(node) {
+            let item = NSMenuItem(
+                title: L("Compare with PFAT Update File…"),
+                action: #selector(compareWithUpdateClicked(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = node.id
+            items.append(item)
+        }
         return items
+    }
+
+    @objc private func compareWithUpdateClicked(_ sender: NSMenuItem) {
+        guard let nodeID = sender.representedObject as? NodeID else { return }
+        onCompareWithUpdate?(nodeID)
     }
 
     /// Which node an Open item means, and whether it means its body. Carried by

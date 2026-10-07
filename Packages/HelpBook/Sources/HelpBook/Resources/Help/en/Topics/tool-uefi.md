@@ -20,6 +20,7 @@
 @covers panel.uefi.variable-value
 @covers panel.uefi.map-regions
 @covers panel.uefi.reveal
+@covers panel.uefi.compare-update
 
 **Tools ▸ UEFI Structure** reads the open dump as an Intel/UEFI flash image and shows it as a tree. The title line above the tree says what the image as a whole is.
 
@@ -63,6 +64,26 @@ Right-click a node:
 - **Go to Top Swap Copy** / **Go to Original** for a node in either block of an image with a [[term:top-swap|Top Swap]] copy — selects the same node in the other block and shows its bytes in the dump, so that each part of the copy can be matched with the part of the top block it duplicates.
 
 A double click on a row does without the menu: it opens what the node holds as a fragment panel — for a compressed section its decompressed body, for any other node its body, and for a node with no body of its own, such as padding or free space, the node itself. A double click on the disclosure triangle only folds or unfolds the row.
+
+## Comparing with an update file
+
+**Compare with PFAT Update File…** in the context menu of the [[term:bios-region|BIOS region]] row compares that region with a manufacturer's update file and, where the two differ, writes the manufacturer's bytes into the dump. The file has to be an AMI BIOS Guard update (AMI's own name for the format is PFAT): on ASUS notebooks, the file named after the model and the BIOS version, such as `X1704VAPF.306`.
+
+Such a file holds the BIOS region as signed blocks, preceded by a table that divides the region into named parts — `FV_MAIN_WRAPPER`, `NVRAM`, `OA_TABLE` and others. The sheet lists these parts with their address in the dump, their size and their state:
+
+- **Identical** — the dump holds the part exactly as the update does.
+- **… bytes differ** — the dump holds the part differently: a different BIOS version, a modification, or damage.
+- **Board data** — a part that the flasher's switch (`/N`, `/NB`, `/OA`) or the manufacturer's name (`AsusNVRAM`, `PEGA_GPNV`) identifies as NVRAM, the OA key area or the manufacturer's per-board store. The update holds the factory state of these parts, not this board's: the serial numbers, the UUID and the setup variables of this board are in the dump only; see [[topic:recipe-board-data|Data Unique to a Board]]. **Board data; empty in the update** means the update holds nothing in that part at all.
+
+A part that differs has a box in the **Write** column. When the sheet opens, the parts that differ are ticked and board data is not. **Write** writes the ticked parts as one undo step, and only the bytes that differ, so the dump marks as modified exactly what changed. Selecting a row outlines the part in the dump and brings its first difference into view. On a file opened read-only the comparison is shown and **Write** is not available.
+
+The comparison is refused, with the reason, when the file is not such an update, and when the BIOS region the update carries differs in size from the BIOS region of the dump: such a file is not an update for this board.
+
+Only the BIOS region is compared. An update file carries no [[term:flash-descriptor|flash descriptor]], and an [[term:me-region|ME]] image it may carry is an update image whose layout differs from that of the region; neither is written.
+
+! Setup variables written by one BIOS version may not suit another. If the board does not start after its BIOS region was brought to another version with NVRAM kept, writing **NVRAM** from the update restores the factory settings.
+
+The layout of these files is not published. It was established from an ASUS update file compared with a dump of the same board: the blocks are placed one after another from the start of the region, in the order of the file. The signatures in the file are not verified.
 
 ## Padding
 
