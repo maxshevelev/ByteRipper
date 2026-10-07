@@ -2,6 +2,7 @@ import Foundation
 import UEFIImage
 import MEFirmware
 import MEReads
+import FITTool
 import ByteRipperCore
 
 /// The one shared, lazily-materialized UEFI parse for this pane's open file,
@@ -28,6 +29,10 @@ import ByteRipperCore
     /// again on every activation, and this outlives it exactly as the tree
     /// does.
     var openUEFIRows: Set<NodeID> = []
+    /// The table the FIT panel last read. Any edit drops it: a table is 128
+    /// bytes and the pointers behind it, and which edit could move one is
+    /// not worth working out against how cheap the read is.
+    var cachedFITTable: CachedFITTable?
     private var cachedAnalysis: FirmwareAnalysis?
     /// The byte range `cachedAnalysis` was computed for — an edit landing
     /// inside it is what drops the cache; one outside it leaves the analysis
@@ -141,6 +146,7 @@ import ByteRipperCore
         }
 
         tree?.invalidate(editedRange: range, sizeDelta: sizeDelta)
+        cachedFITTable = nil
 
         // Whether a whole-region read of `subject` is still a read of what the
         // file holds. A size-changing edit moves everything at or after it, so
@@ -171,6 +177,7 @@ import ByteRipperCore
     func reset() {
         tree = nil
         openUEFIRows = []
+        cachedFITTable = nil
         cachedAnalysis = nil
         cachedAnalysisRegion = nil
         analysisInFlight = nil

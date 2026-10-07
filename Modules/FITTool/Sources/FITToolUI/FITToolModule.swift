@@ -140,13 +140,41 @@ struct FITParkedState: ToolSessionState {
     public var viewController: NSViewController { controller }
 
     public func start() {
-        controller.say(L("Reading…"))
         // The catalogue starts loading now — a row's "latest" verdict and the
         // add form's list are answered from this one fetch, cached for the
         // session, not fetched again for every sheet.
         loadCatalogue()
         watchTheCatalogue()
+        // The pane kept the table this panel last read, and no edit has
+        // dropped it: it is what a reading would find, so it is shown as it
+        // stands, with no "Reading…" and no busy bar in between.
+        if let cached = tableProvider?.cachedFITTable() {
+            lastReport = cached.report
+            readRanges = cached.ranges
+            show(FITPresenter.display(cached.report, focus: focus)
+                .ratingLatest(against: catalogue))
+            controller.say(FITToolSession.advice(for: cached.report))
+            // On the next turn, as a reading's end is: whoever started the
+            // panel has not got its callback in place yet.
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.onDisplay?(self.display)
+            }
+            return
+        }
+        controller.say(L("Reading…"))
         reparse()
+    }
+
+    private var tableProvider: (any FITTableProviding)? { host as? any FITTableProviding }
+
+    /// The newest reading this session has, and the ranges — what the pane
+    /// is handed to keep.
+    private var lastReport: FITReport?
+
+    private func keepTable() {
+        guard let lastReport else { return }
+        tableProvider?.setCachedFITTable(CachedFITTable(report: lastReport, ranges: readRanges))
     }
 
     /// The listing is re-checked once a day, behind whatever is being read at
@@ -187,6 +215,9 @@ struct FITParkedState: ToolSessionState {
     }
 
     public func stop() {
+        // A reading still under way must not hand the pane a table after the
+        // panel is gone: an edit may have dropped the pane's copy since.
+        generation += 1
         catalogueWatch?.cancel()
         catalogueWatch = nil
     }
@@ -257,6 +288,8 @@ struct FITParkedState: ToolSessionState {
                 self.controller.say(FITToolSession.advice(for: report))
             }
             self.onDisplay?(self.display)
+            self.lastReport = report
+            self.keepTable()
 
             self.nameTargets(of: report, in: tree, generation: generation)
             self.readProtection(in: tree, generation: generation)
@@ -283,6 +316,8 @@ struct FITParkedState: ToolSessionState {
             // moment the names land.
             self.show(FITPresenter.display(named, focus: self.focus)
                 .ratingLatest(against: self.catalogue))
+            self.lastReport = named
+            self.keepTable()
             self.onTargetsNamed?()
         }
     }
@@ -303,6 +338,7 @@ struct FITParkedState: ToolSessionState {
             let ranges = await self.protectedRanges(of: tree)
             guard self.generation == generation else { return }
             self.readRanges = ranges
+            self.keepTable()
             self.show(self.display)
             self.onProtectionRead?()
         }
@@ -310,7 +346,7 @@ struct FITParkedState: ToolSessionState {
 
     /// Called when a read's protected ranges have been applied — the seam a
     /// test waits on.
-    var onProtectionRead: (() -> Void)?
+    public var onProtectionRead: (() -> Void)?
 
     /// The pane's shared tree with its top level built and its address mapping
     /// worked out — the two things a FIT read cannot start without. Nil when

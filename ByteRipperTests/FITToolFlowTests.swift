@@ -4,6 +4,7 @@ import ALSplitView
 import FITTool
 import FITToolUI
 import ToolModuleKit
+import UEFIToolUI
 @testable import ByteRipper
 
 /// The FIT tool-module end to end in the app: a real image with a real table in
@@ -228,6 +229,42 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(verdicts, [.latest],
                        "the row the catalogue calls newest keeps saying so "
                         + "after the names land")
+    }
+
+    /// The pane keeps the table the panel read. Going to another tool and back
+    /// shows it at once — no "Reading…" and no second read in between — and an
+    /// edit drops it, so the panel reads the file as it now is.
+    func testComingBackToThePanelShowsTheTableItKept() throws {
+        let controller = try open(FITTestImage.make(acmInsideAVolume: true))
+        let first = try session()
+        let named = expectation(description: "the names and the ranges are in")
+        first.onProtectionRead = { named.fulfill() }
+        wait(for: [named], timeout: 5)
+        first.onProtectionRead = nil
+        let rows = first.display.rows.map(\.typeText)
+        XCTAssertFalse(rows.isEmpty)
+
+        controller.tools.activate(UEFIToolModule.identifier, animated: false)
+        window?.layoutIfNeeded()
+        controller.tools.activate(FITToolModule.identifier, animated: false)
+
+        // Synchronously: a reading lands on a later turn.
+        let back = try session()
+        XCTAssertFalse(back === first, "the session is built again")
+        XCTAssertEqual(back.display.rows.map(\.typeText), rows, "the kept table is up at once")
+
+        // Dropped by an edit.
+        let pane = controller.windowModel.pane1
+        pane.moveCaret(to: 0)
+        pane.typeHexNibble(1)
+        pane.typeHexNibble(2)
+        XCTAssertNil(pane.uefiState.cachedFITTable, "an edit drops the kept table")
+        controller.tools.activate(UEFIToolModule.identifier, animated: false)
+        controller.tools.activate(FITToolModule.identifier, animated: false)
+        let reread = try session()
+        XCTAssertTrue(reread.display.rows.isEmpty, "nothing kept: it reads again")
+        try waitForParse()
+        XCTAssertEqual(reread.display.rows.map(\.typeText), rows)
     }
 
     /// A row's target name comes *after* the table, never before it.

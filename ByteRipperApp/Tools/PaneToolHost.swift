@@ -2,6 +2,7 @@ import Cocoa
 import ByteRipperCore
 import ToolModuleKit
 import UEFIImage
+import FITTool
 import MEFirmware
 
 /// One open pane, as the tool-module bound to it is allowed to see it — the
@@ -193,6 +194,18 @@ extension PaneToolHost: UEFITreeProviding {
 
     func setOpenUEFIRows(_ rows: Set<NodeID>) {
         pane?.uefiState.openUEFIRows = rows
+    }
+}
+
+/// The FIT panel's last table, kept with the file in the pane's persistent
+/// `PaneUEFIState` like the tree is.
+extension PaneToolHost: FITTableProviding {
+    func cachedFITTable() -> CachedFITTable? {
+        pane?.uefiState.cachedFITTable
+    }
+
+    func setCachedFITTable(_ table: CachedFITTable?) {
+        pane?.uefiState.cachedFITTable = table
     }
 }
 
