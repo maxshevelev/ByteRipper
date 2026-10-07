@@ -153,7 +153,15 @@ final class Parser {
             return []
         }
         let top: [UEFINode]
-        if let capsule = parseCapsule(at: range.lowerBound, limit: range.upperBound, depth: depth) {
+        if let update = parseBIOSGuardUpdate(at: range.lowerBound, limit: range.upperBound, depth: depth) {
+            // What a vendor puts after the blocks — on ASUS's files an Aptio
+            // capsule with an ME update in it — is read as any other bytes are.
+            top = [update] + scanRawArea(
+                update.range.upperBound..<range.upperBound,
+                emptyByte: Parser.defaultEmptyByte,
+                depth: depth
+            )
+        } else if let capsule = parseCapsule(at: range.lowerBound, limit: range.upperBound, depth: depth) {
             // A capsule claiming less than the file holds has something after
             // it; the trailing bytes stay as padding beside it (§1.1).
             top = [capsule] + padding(

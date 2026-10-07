@@ -124,10 +124,77 @@ final class BIOSGuardUpdateTests: XCTestCase {
 
     func testABlockOfAnotherPlatformIsNotABlockOfThisFile() {
         var bytes = file(lines)
-        let headerSize = Int(BIOSGuardUpdate.word(bytes, 0))
+        let headerSize = Int(bytes[0]) | Int(bytes[1]) << 8
         // The second block's PlatformID.
         let second = headerSize + 0x30 + 0x20 + 0x100 + 0x20C
         bytes.replaceSubrange((second + 4)..<(second + 14), with: Array("ALDERLAKE\u{0}".utf8))
         XCTAssertEqual(BIOSGuardUpdate.parse(bytes), .failure(.notABlock(block: 1)))
+    }
+
+    // MARK: - In the tree
+
+    /// A boot block that is a volume and an NVRAM entry left erased — and,
+    /// where asked, something of the vendor's after the blocks.
+    private func treeFile(tail: [UInt8] = []) -> [UInt8] {
+        file([Line(key: "/B", name: "FV_BB", blocks: [TestImage.volume(length: 0x400)]),
+              Line(key: "/N", name: "NVRAM", blocks: [block(0xFF, 0x200)])],
+             tail: tail)
+    }
+
+    private func update(in image: UEFIImage) throws -> UEFINode {
+        try XCTUnwrap(image.roots.flatMap(\.flattened).first { $0.kind == .biosGuardUpdate })
+    }
+
+    func testAnUpdateAtTheTopOfTheFileIsARowOverItsHeaderAndBlocks() throws {
+        let bytes = treeFile()
+        let image = UEFIParser.parse(ImageReader(bytes).source)
+        let update = try update(in: image)
+        XCTAssertEqual(image.roots.map(\.kind), [.biosGuardUpdate], "the whole file, so the one root")
+        let layout = try BIOSGuardUpdate.layout(in: ImageReader(bytes)).get()
+        XCTAssertEqual(update.header, 0..<layout.headerSize)
+        XCTAssertEqual(update.body, layout.headerSize..<UInt64(bytes.count))
+        XCTAssertEqual(update.space, .file)
+        XCTAssertEqual(update.compression, SectionCompression(algorithm: "BIOS Guard", decodes: true))
+    }
+
+    func testWhatFollowsTheBlocksIsReadBesideTheUpdate() throws {
+        let tail = block(0xFF, 0x100) + TestImage.volume(length: 0x400)
+        let image = UEFIParser.parse(ImageReader(treeFile(tail: tail)).source)
+        let root = try XCTUnwrap(image.roots.first)
+        XCTAssertEqual(root.kind, .uefiImage)
+        XCTAssertEqual(root.children.map(\.kind), [.biosGuardUpdate, .padding, .volume])
+    }
+
+    func testTheEntriesAreStretchesOfTheAssembledRegionAndOpenAsRawAreas() throws {
+        let image = UEFIParser.parse(ImageReader(treeFile()).source)
+        let entries = try update(in: image).children
+        let region = ByteSpace.decompressed(chain: [0])
+        XCTAssertEqual(entries.map(\.kind), [.biosGuardEntry, .biosGuardEntry])
+        XCTAssertEqual(entries.map(\.name), ["FV_BB", "NVRAM"])
+        XCTAssertEqual(entries.map(\.range), [0..<0x400, 0x400..<0x600])
+        XCTAssertEqual(entries.map(\.space), [region, region])
+        XCTAssertEqual(entries[0].children.map(\.kind), [.volume])
+        XCTAssertEqual(entries[0].children.first?.space, region)
+        XCTAssertEqual(entries[1].children.map(\.isErased), [true])
+        XCTAssertTrue(image.diagnostics.isEmpty, "\(image.diagnostics)")
+    }
+
+    func testTheRegionSpaceReadsAsTheBlocksDataLaidEndToEnd() throws {
+        let bytes = treeFile()
+        let readers = SpaceReaders(file: ImageReader(bytes))
+        let region = try XCTUnwrap(readers.reader(for: .decompressed(chain: [0])))
+        XCTAssertEqual(region.bytes(region.all), TestImage.volume(length: 0x400) + block(0xFF, 0x200))
+    }
+
+    func testAnUpdateCutShortIsNotReadAsOne() {
+        let bytes = Array(treeFile().dropLast(0x300))
+        let image = UEFIParser.parse(ImageReader(bytes).source)
+        XCTAssertFalse(image.roots.flatMap(\.flattened).contains { $0.kind == .biosGuardUpdate })
+    }
+
+    func testTheItemClassificationIsUEFIToolsPadding() throws {
+        let update = try update(in: UEFIParser.parse(ImageReader(treeFile()).source))
+        XCTAssertEqual(update.uefiItemType, UEFITypes.Item.padding.rawValue)
+        XCTAssertEqual(update.children.first?.uefiItemType, UEFITypes.Item.padding.rawValue)
     }
 }

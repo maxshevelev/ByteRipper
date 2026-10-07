@@ -1259,3 +1259,13 @@
 "Write this part from the update file" = "Записать эту область из файла обновления";
 "Written from the update file" = "Записано из файла обновления";
 "action|Write" = "Записать";
+"BIOS Guard entry" = "Область BIOS Guard";
+"BIOS Guard update" = "Обновление BIOS Guard";
+"BIOS region" = "BIOS-регион";
+"Blocks" = "Блоки";
+"Offset in the region" = "Адрес в регионе";
+"Open Assembled BIOS Region" = "Открыть собранный BIOS-регион";
+"Platform" = "Платформа";
+"Save Assembled BIOS Region as…" = "Сохранить собранный BIOS-регион как…";
+"Switch" = "Ключ";
+"Update table" = "Таблица обновления";

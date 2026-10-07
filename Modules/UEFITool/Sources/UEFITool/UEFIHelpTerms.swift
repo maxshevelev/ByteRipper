@@ -56,6 +56,7 @@ public enum UEFIHelpTerms {
         case .hpSignatureBlock: return HelpTermID("hp-signature-block")
         case .gpnvStore, .gpnvRecord: return HelpTermID("gpnv")
         case .amdEFS, .amdDirectory, .amdFirmwareEntry: return HelpTermID("amd-psp")
+        case .biosGuardUpdate, .biosGuardEntry: return HelpTermID("bios-guard-update")
         case .sound: return HelpTermID("sound")
         case .freeSpace: return HelpTermID("free-space")
         case .nonUEFIData: return HelpTermID("non-uefi-data")

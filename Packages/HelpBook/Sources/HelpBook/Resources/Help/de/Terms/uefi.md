@@ -1,4 +1,4 @@
-@source-sha 2dc1a4e3f7a9f9cff38f56aca4015658ca3e60585bf4e5767f6dae08ff7982cc
+@source-sha 2de2d7e5aac82a21a27cfc99271ffd8aca40c37b8ef9194dbc42e1f24ae3771b
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -265,6 +265,19 @@ Nicht geprüft werden die Signaturen der PSP-Firmware — die Schlüssel gehöre
 
 @see term:microcode
 @see term:padding
+
+@term bios-guard-update
+@name Update-Datei für AMI BIOS Guard
+@short Ein BIOS-Update des Herstellers für eine Platine mit Intel BIOS Guard: die BIOS-Region in signierten Blöcken, davor eine Tabelle, die ihre Bereiche benennt.
+
+Auf einer Platine mit Intel BIOS Guard schreibt nicht das BIOS selbst die BIOS-Region, sondern der Chipsatz, und zwar nur in Blöcken, die der Hersteller signiert hat. Das Flash-Programm von AMI nimmt das Update als Datei aus solchen Blöcken entgegen. AMI selbst nennt das Format PFAT; ASUS liefert die Datei unter Modell und BIOS-Version aus, etwa `X1704VAPF.306`. Am Anfang der Datei steht eine Tabelle, die die Region in benannte Bereiche gliedert — `FV_MAIN_WRAPPER`, `NVRAM`, `OA_TABLE` — und zu jedem den Schalter des Flash-Programms (`/P`, `/N`, `/OA`) und die Zahl der Blöcke angibt, aus denen er besteht. Jeder Block enthält seine Daten, das Skript, mit dem der Chipsatz sie schreibt, und die Signatur des Herstellers.
+
+Das [[topic:tool-uefi|UEFI-Werkzeug]] zeigt eine solche Datei als eine Zeile `AMI BIOS Guard update`, die Tabelle und Blöcke umfasst. Ihre Details nennen die Plattform, für die die Blöcke bestimmt sind, deren Anzahl, die Größe der Region und die Tabelle selbst. Aufgeklappt zeigt die Zeile die BIOS-Region, die sich aus den hintereinandergelegten Daten der Blöcke ergibt, gegliedert nach den Bereichen der Tabelle; jeder Bereich lässt sich wie eine BIOS-Region zu seinen Volumes aufklappen. Die Region wird aus der Datei zusammengesetzt und ist darin nicht am Stück enthalten: **Zusammengesetzte BIOS-Region öffnen** und **Zusammengesetzte BIOS-Region sichern unter…** im Kontextmenü der Zeile liefern sie als Datei, und die Einträge der Zeilen darin nennen die Bytes entpackt, wie bei einer komprimierten Sektion. Was der Hersteller hinter die Blöcke legt — in den Dateien von ASUS ein Volume mit einem [[term:me|ME]]-Update-Image —, erscheint als Zeilen neben dem Update.
+
+Der Inhalt der Datei wird gelesen, aber nicht zurückgeschrieben: Die Blöcke sind signiert, und **In der Quelle aktualisieren** lehnt eine Änderung innerhalb der Region ab. Die BIOS-Region eines Dumps wird mit einer solchen Datei über **Mit PFAT-Update-Datei vergleichen…** im Kontextmenü der Zeile der Region verglichen. Der Aufbau der Datei ist nicht veröffentlicht; er wurde durch den Vergleich einer ASUS-Update-Datei mit einem Dump derselben Platine ermittelt. Skripte und Signaturen werden nicht geprüft.
+
+@see term:bios-region
+@see term:volume
 
 @term flash-device-map
 @name Insyde Flash Device Map

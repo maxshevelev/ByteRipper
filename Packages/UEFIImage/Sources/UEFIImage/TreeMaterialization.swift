@@ -119,11 +119,11 @@ enum TreeMaterialization {
                 )
             }
             nodes = parser.volumeChildren(header, body: node.body, depth: node.childDepth)
-        case .region:
+        case .region, .biosGuardEntry:
             nodes = parser.scanRawArea(
                 node.body, emptyByte: Parser.defaultEmptyByte, depth: node.childDepth
             )
-        case .section, .amdFirmwareEntry:
+        case .section, .amdFirmwareEntry, .biosGuardUpdate:
             return decompressedChildren(
                 of: node, in: spaceReader, file: reader, limits: limits, buffers: buffers
             )
@@ -188,13 +188,23 @@ enum TreeMaterialization {
 
         let parser = Parser(reader: buffer, limits: limits)
         // A section's body is a run of sections; the BIOS image the PSP
-        // inflates is a stretch of flash, its volumes and all.
-        let nodes = section.kind == .section
-            ? parser.walkSections(
+        // inflates is a stretch of flash, its volumes and all; a BIOS Guard
+        // update's region is the stretches its table names, each opened on
+        // its own — the table is read from the file, the stretches are in
+        // the region.
+        let nodes: [UEFINode]
+        switch section.kind {
+        case .section:
+            nodes = parser.walkSections(
                 buffer.all, ffsVersion: 3, emptyByte: Parser.defaultEmptyByte,
                 depth: section.childDepth
             )
-            : parser.scanRawArea(buffer.all, emptyByte: Parser.defaultEmptyByte, depth: section.childDepth)
+        case .biosGuardUpdate:
+            nodes = Parser(reader: parentReader, limits: limits)
+                .biosGuardEntries(at: section.header.lowerBound, depth: section.childDepth)
+        default:
+            nodes = parser.scanRawArea(buffer.all, emptyByte: Parser.defaultEmptyByte, depth: section.childDepth)
+        }
         diagnostics += parser.diagnostics.map { $0.located(in: childSpace) }
         return Result(nodes: stamping(nodes, space: childSpace), diagnostics: diagnostics)
     }

@@ -1,4 +1,4 @@
-@source-sha f34b7f2acecc458af7a647353346252dd3041773b6b4989b8a11c635a5851b5b
+@source-sha 41610b6ff6bbdd75697dfdc89bb794cdffef8037846639bfd9e8d93358f2364f
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -7,7 +7,7 @@
 
 ## Der Baum
 
-Die oberste Ebene ist die Aufteilung des Chips selbst. Auf einer Intel-Plattform sind das der [[term:flash-descriptor|Flash Descriptor]] und die von ihm definierten [[term:region|Regionen]] — [[term:bios-region|BIOS]], [[term:me-region|ME]], [[term:gbe-region|GbE]], [[term:pdr-region|PDR]], EC. In der BIOS-Region liegen [[term:volume|Firmware-Volumes]], darin [[term:ffs-file|FFS-Dateien]] und darin [[term:section|Sektionen]]. Eine AMD-Platine hat keinen Descriptor: Die oberste Ebene sind ihre Volumes und das Padding dazwischen, und in diesem Padding zeigt der Baum die [[term:amd-psp|Verzeichnisse des PSP]] und jedes Stück Firmware, das sie aufführen. Ein Zweig wird decodiert, wenn er geöffnet wird, und nicht im Voraus.
+Die oberste Ebene ist die Aufteilung des Chips selbst. Auf einer Intel-Plattform sind das der [[term:flash-descriptor|Flash Descriptor]] und die von ihm definierten [[term:region|Regionen]] — [[term:bios-region|BIOS]], [[term:me-region|ME]], [[term:gbe-region|GbE]], [[term:pdr-region|PDR]], EC. In der BIOS-Region liegen [[term:volume|Firmware-Volumes]], darin [[term:ffs-file|FFS-Dateien]] und darin [[term:section|Sektionen]]. Eine AMD-Platine hat keinen Descriptor: Die oberste Ebene sind ihre Volumes und das Padding dazwischen, und in diesem Padding zeigt der Baum die [[term:amd-psp|Verzeichnisse des PSP]] und jedes Stück Firmware, das sie aufführen. Ein Zweig wird decodiert, wenn er geöffnet wird, und nicht im Voraus. Bei einer [[term:bios-guard-update|Update-Datei für AMI BIOS Guard]] steht oben das Update selbst mit seiner Tabelle und seinen signierten Blöcken; aufgeklappt zeigt es die BIOS-Region, die sich aus den Blöcken ergibt, gegliedert nach den Bereichen der Tabelle, und jeder Bereich seine Volumes.
 
 Die Spalten **Typ** und **Subtyp** benennen jeden Knoten so, wie der Referenz-Parser ihn benennt. Die Spalte **Name** zeigt bei einer Datei den Namen, den ihre eigene Name-Section enthält. Ein Knoten ohne eine solche Section wird nach dem Gemeinschaftskatalog für seine [[term:guid|GUID]] benannt, sofern der Katalog einen Namen kennt, und sonst nach der GUID selbst. Der Name aus dem Katalog und der eigene Name einer Datei können voneinander abweichen — ein Hersteller kann eine dem Katalog bekannte GUID einem anderen Modul geben —; die Details zeigen den Namen aus dem Katalog dann unter **Name im Katalog**.
 

@@ -357,6 +357,20 @@ public enum UEFIDetail {
             }
         }
         if let gpnvHistory { tables.append(gpnvHistory) }
+        // A BIOS Guard update's table: what each entry is called, the
+        // flasher's switch for it, and where in the region it lies.
+        if node.kind == .biosGuardUpdate,
+           case .success(let layout) = BIOSGuardUpdate.layout(in: reader, at: node.header.lowerBound) {
+            tables.append(UEFIDetailTable(
+                title: L("Update table"),
+                symbol: "list.bullet.rectangle",
+                columns: [L("Name"), L("Switch"), L("Blocks"), L("Offset in the region"), L("Size")],
+                rows: layout.entries.map { entry in
+                    [.init(entry.name), .init(entry.key), .init("\(entry.blockCount)"),
+                     .init(hex(entry.range.lowerBound)), .init(hex(UInt64(entry.range.count)))]
+                }
+            ))
+        }
         // A store lists its records in force; a click on one opens it.
         if node.kind == .gpnvStore {
             let current = node.children.filter { $0.kind == .gpnvRecord && $0.subtype == 1 }
@@ -1199,6 +1213,19 @@ public enum UEFIDetail {
         case .amdEFS, .amdDirectory, .amdFirmwareEntry:
             break
 
+        // Its header is the table; the platform and the count are what the
+        // blocks say of themselves. The table itself is read in `build`.
+        case .biosGuardUpdate:
+            if case .success(let layout) = BIOSGuardUpdate.layout(in: reader, at: h) {
+                fields.append(.init(L("Platform"), layout.platform))
+                fields.append(.init(L("Blocks"), "\(layout.blocks.count)"))
+                fields.append(.init(L("BIOS region"), sizeText(layout.regionSize)))
+            }
+
+        // A stretch of the assembled region, with no header of its own.
+        case .biosGuardEntry:
+            break
+
         case .padding, .freeSpace, .nonUEFIData, .startupApData:
             // No header of their own: the size the common "Total" carries is
             // the whole of what there is to say.
@@ -1672,6 +1699,8 @@ public enum UEFIDetail {
         case .amdEFS: return L("Embedded Firmware Structure")
         case .amdDirectory: return L("AMD firmware directory")
         case .amdFirmwareEntry: return L("AMD firmware entry")
+        case .biosGuardUpdate: return L("BIOS Guard update")
+        case .biosGuardEntry: return L("BIOS Guard entry")
         case .picture: return L("Picture")
         case .sound: return L("Sound")
         }

@@ -217,4 +217,35 @@ final class UEFIUpdateFlowTests: XCTestCase {
         XCTAssertEqual(controller.lastAlertTitle, "Could not compare with the update file")
         XCTAssertEqual(controller.lastAlertOutcome, .problem)
     }
+
+    // MARK: - The update file itself
+
+    /// Opening the update file shows the update at the top; opening its row
+    /// shows the entries of its table, and an entry its volume.
+    func testAnUpdateFileOpensOntoItsEntriesAndTheirVolumes() throws {
+        let image = UEFITestImage.intelImage()
+        let controller = try open(updateFile(Array(image[0x1000..<0x2000])))
+        let tree = try XCTUnwrap(controller.windowModel.pane1.uefiState.tree)
+        let outline = try XCTUnwrap(descendants(of: try XCTUnwrap(controller.tools.panel), NSOutlineView.self).first)
+        func node(_ row: Int) -> UEFINode? {
+            (outline.item(atRow: row) as? UEFITreeRow).flatMap { tree.node($0.id) }
+        }
+        func expand(_ row: Int) throws {
+            let id = try XCTUnwrap((outline.item(atRow: row) as? UEFITreeRow)?.id)
+            let opened = expectation(description: "the branch is read")
+            tree.expand(id) { _ in opened.fulfill() }
+            wait(for: [opened], timeout: 5)
+            outline.expandItem(outline.item(atRow: row))
+            window?.layoutIfNeeded()
+        }
+
+        XCTAssertEqual(node(0)?.kind, .biosGuardUpdate)
+        XCTAssertEqual(node(0)?.name, "AMI BIOS Guard update")
+        try expand(0)
+        XCTAssertEqual((1..<outline.numberOfRows).compactMap { node($0)?.name }.prefix(3),
+                       ["FV_MAIN", "NVRAM", "FV_BB"])
+        try expand(1)
+        XCTAssertEqual(node(2)?.kind, .volume, "FV_MAIN holds the test image's volume")
+        XCTAssertEqual(node(2)?.space, .decompressed(chain: [0]))
+    }
 }

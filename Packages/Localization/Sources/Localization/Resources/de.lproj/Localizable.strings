@@ -1259,3 +1259,13 @@
 "Write this part from the update file" = "Diesen Bereich aus der Update-Datei schreiben";
 "Written from the update file" = "Aus der Update-Datei geschrieben";
 "action|Write" = "Schreiben";
+"BIOS Guard entry" = "BIOS-Guard-Bereich";
+"BIOS Guard update" = "BIOS-Guard-Update";
+"BIOS region" = "BIOS-Region";
+"Blocks" = "Blöcke";
+"Offset in the region" = "Offset in der Region";
+"Open Assembled BIOS Region" = "Zusammengesetzte BIOS-Region öffnen";
+"Platform" = "Plattform";
+"Save Assembled BIOS Region as…" = "Zusammengesetzte BIOS-Region sichern unter…";
+"Switch" = "Schalter";
+"Update table" = "Update-Tabelle";

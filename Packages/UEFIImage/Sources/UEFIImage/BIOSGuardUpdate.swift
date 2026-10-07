@@ -63,46 +63,78 @@ public struct BIOSGuardUpdate: Equatable, Sendable {
 
     static let tag = Array("_AMIPFAT".utf8)
     /// Size, checksum, tag and flags: where the table's text begins.
-    static let textStart = 0x11
-    static let blockHeaderSize = 0x30
+    static let textStart: UInt64 = 0x11
+    static let blockHeaderSize: UInt64 = 0x30
     /// The signature's own header, then an RSA-2048 or an RSA-3072 key and
     /// signature: modulus, a 4-byte exponent, signature.
-    static let signatureSizes = [8 + 256 + 4 + 256, 8 + 384 + 4 + 384]
+    static let signatureSizes: [UInt64] = [8 + 256 + 4 + 256, 8 + 384 + 4 + 384]
 
     /// Whether the bytes start as an update file — what lets a caller say "this
     /// is not one" before anything else is read.
     public static func isUpdate(_ bytes: [UInt8]) -> Bool {
-        bytes.count >= textStart && Array(bytes[8..<16]) == tag
+        isUpdate(in: ImageReader(bytes), at: 0)
     }
 
-    public static func parse(_ bytes: [UInt8]) -> Result<BIOSGuardUpdate, Problem> {
-        guard isUpdate(bytes) else { return .failure(.notAnUpdate) }
-        let headerSize = Int(word(bytes, 0))
-        guard headerSize >= textStart, headerSize <= bytes.count else { return .failure(.notAnUpdate) }
+    /// Whether an update file starts at `offset`.
+    public static func isUpdate(in reader: ImageReader, at offset: UInt64) -> Bool {
+        reader.bytes(at: offset + 8, count: 8) == tag
+    }
 
-        let lines = table(in: bytes[textStart..<headerSize])
+    /// Where everything in an update file is, read from its headers alone: the
+    /// table, and where each block's data lies. Nothing of the data is copied
+    /// — a tree that only wants to list the entries reads a few kilobytes of a
+    /// file of tens of megabytes.
+    public struct Layout: Equatable, Sendable {
+        public var headerSize: UInt64
+        public var platform: String
+        /// The entries, placed in the region the blocks make up.
+        public var entries: [Entry]
+        /// Each block's data, in the reader's offsets, in the order the region
+        /// holds them.
+        public var blocks: [Range<UInt64>]
+        /// Where the last block — its signature included — ends. What follows
+        /// is the vendor's own and not part of the update.
+        public var end: UInt64
+
+        /// The size of the BIOS region the blocks make up.
+        public var regionSize: UInt64 {
+            blocks.reduce(0) { $0 + UInt64($1.count) }
+        }
+    }
+
+    public static func layout(in reader: ImageReader, at offset: UInt64 = 0) -> Result<Layout, Problem> {
+        guard isUpdate(in: reader, at: offset), let size = reader.uint32(at: offset) else {
+            return .failure(.notAnUpdate)
+        }
+        let headerSize = UInt64(size)
+        guard headerSize >= textStart, offset + headerSize <= reader.count,
+              let text = reader.bytes(at: offset + textStart, count: headerSize - textStart)
+        else { return .failure(.notAnUpdate) }
+
+        let lines = table(in: text[...])
         let total = lines.reduce(0) { $0 + $1.blockCount }
         guard total > 0 else { return .failure(.noEntries) }
 
-        var region: [UInt8] = []
-        var sizes: [Int] = []
+        var blocks: [Range<UInt64>] = []
         var platform = ""
-        var at = headerSize
+        var at = offset + headerSize
         for index in 0..<total {
-            guard at + blockHeaderSize <= bytes.count else { return .failure(.truncated(block: index)) }
-            let id = platformID(bytes, at + 4)
-            guard let id, index == 0 || id == platform else { return .failure(.notABlock(block: index)) }
+            guard at + blockHeaderSize <= reader.count else { return .failure(.truncated(block: index)) }
+            guard let id = platformID(reader, at + 4), index == 0 || id == platform else {
+                return .failure(.notABlock(block: index))
+            }
             platform = id
-            let attributes = word(bytes, at + 0x14)
-            let scriptSize = Int(word(bytes, at + 0x1C))
-            let dataSize = Int(word(bytes, at + 0x20))
-            let dataStart = at + blockHeaderSize + scriptSize
-            guard dataStart + dataSize <= bytes.count else { return .failure(.truncated(block: index)) }
-            region.append(contentsOf: bytes[dataStart..<(dataStart + dataSize)])
-            sizes.append(dataSize)
-            at = dataStart + dataSize
+            guard let attributes = reader.uint32(at: at + 0x14),
+                  let scriptSize = reader.uint32(at: at + 0x1C),
+                  let dataSize = reader.uint32(at: at + 0x20)
+            else { return .failure(.truncated(block: index)) }
+            let dataStart = at + blockHeaderSize + UInt64(scriptSize)
+            let dataEnd = dataStart + UInt64(dataSize)
+            guard dataEnd <= reader.count else { return .failure(.truncated(block: index)) }
+            blocks.append(dataStart..<dataEnd)
+            at = dataEnd
             if attributes & 1 != 0 {
-                guard let signature = signatureSize(bytes, after: at, platform: platform,
+                guard let signature = signatureSize(reader, after: at, platform: platform,
                                                     isLast: index == total - 1)
                 else { return .failure(.truncated(block: index)) }
                 at += signature
@@ -111,15 +143,36 @@ public struct BIOSGuardUpdate: Equatable, Sendable {
 
         var entries: [Entry] = []
         var block = 0
-        var offset: UInt64 = 0
+        var start: UInt64 = 0
         for line in lines {
-            let length = sizes[block..<(block + line.blockCount)].reduce(0) { $0 + UInt64($1) }
+            let length = blocks[block..<(block + line.blockCount)].reduce(0) { $0 + UInt64($1.count) }
             entries.append(Entry(name: line.name, key: line.key, blockCount: line.blockCount,
-                                 range: offset..<(offset + length)))
+                                 range: start..<(start + length)))
             block += line.blockCount
-            offset += length
+            start += length
         }
-        return .success(BIOSGuardUpdate(platform: platform, entries: entries, region: region))
+        return .success(Layout(headerSize: headerSize, platform: platform, entries: entries,
+                               blocks: blocks, end: at))
+    }
+
+    /// The BIOS region the blocks make up, read out of `reader`; nil when the
+    /// reader no longer holds them.
+    public static func region(of layout: Layout, in reader: ImageReader) -> [UInt8]? {
+        var region: [UInt8] = []
+        region.reserveCapacity(Int(layout.regionSize))
+        for block in layout.blocks {
+            guard let bytes = reader.bytes(block) else { return nil }
+            region += bytes
+        }
+        return region
+    }
+
+    public static func parse(_ bytes: [UInt8]) -> Result<BIOSGuardUpdate, Problem> {
+        let reader = ImageReader(bytes)
+        return layout(in: reader).flatMap { layout in
+            guard let region = region(of: layout, in: reader) else { return .failure(.truncated(block: 0)) }
+            return .success(BIOSGuardUpdate(platform: layout.platform, entries: layout.entries, region: region))
+        }
     }
 
     /// The table's lines, `<n> /<KEY> <blocks> ;<NAME>`, after the title line.
@@ -140,8 +193,8 @@ public struct BIOSGuardUpdate: Equatable, Sendable {
     /// A block's `PlatformID`: printable ASCII, NUL-padded to 16 bytes, at
     /// least one character. Nil when the 16 bytes are anything else — which is
     /// how a block that is not where it should be is told.
-    static func platformID(_ bytes: [UInt8], _ at: Int) -> String? {
-        let field = bytes[at..<(at + 16)]
+    static func platformID(_ reader: ImageReader, _ at: UInt64) -> String? {
+        guard let field = reader.bytes(at: at, count: 16) else { return nil }
         let text = field.prefix { $0 != 0 }
         guard !text.isEmpty, text.allSatisfy({ (0x20...0x7E).contains($0) }),
               field.dropFirst(text.count).allSatisfy({ $0 == 0 })
@@ -154,15 +207,52 @@ public struct BIOSGuardUpdate: Equatable, Sendable {
     /// block starts with the same platform. After the last block, or where no
     /// size leads to one, it is the first that fits in the file — and a next
     /// block that is not there is then said to be missing, not this signature.
-    static func signatureSize(_ bytes: [UInt8], after at: Int, platform: String, isLast: Bool) -> Int? {
-        let fitting = signatureSizes.filter { at + $0 <= bytes.count }
+    static func signatureSize(_ reader: ImageReader, after at: UInt64, platform: String, isLast: Bool) -> UInt64? {
+        let fitting = signatureSizes.filter { at + $0 <= reader.count }
         guard !isLast else { return fitting.first }
         return fitting.first { size in
-            at + size + blockHeaderSize <= bytes.count && platformID(bytes, at + size + 4) == platform
+            at + size + blockHeaderSize <= reader.count && platformID(reader, at + size + 4) == platform
         } ?? fitting.first
     }
+}
 
-    static func word(_ bytes: [UInt8], _ at: Int) -> UInt32 {
-        UInt32(bytes[at]) | UInt32(bytes[at + 1]) << 8 | UInt32(bytes[at + 2]) << 16 | UInt32(bytes[at + 3]) << 24
+extension Parser {
+    /// The update file starting at `offset`, as the node over its header and
+    /// blocks; nil when there is none, which is the usual answer.
+    ///
+    /// Its children are not read here: they are in the region the blocks
+    /// assemble to, which is a copy of megabytes, and the tree makes it when
+    /// the row is opened (`TreeMaterialization`), as it decodes a compressed
+    /// section then.
+    func parseBIOSGuardUpdate(at offset: UInt64, limit: UInt64, depth: Int) -> UEFINode? {
+        guard BIOSGuardUpdate.isUpdate(in: reader, at: offset),
+              case .success(let layout) = BIOSGuardUpdate.layout(in: reader, at: offset),
+              layout.end <= limit
+        else { return nil }
+        return UEFINode(
+            kind: .biosGuardUpdate,
+            name: "AMI BIOS Guard update",
+            header: offset..<(offset + layout.headerSize),
+            body: (offset + layout.headerSize)..<layout.end,
+            compression: SectionCompression(algorithm: "BIOS Guard", decodes: true),
+            isExpandable: true,
+            childDepth: depth + 1
+        )
+    }
+
+    /// The entries of the update whose header is at `offset`, as rows over the
+    /// assembled region: each a stretch of it, left closed until it is opened.
+    func biosGuardEntries(at offset: UInt64, depth: Int) -> [UEFINode] {
+        guard case .success(let layout) = BIOSGuardUpdate.layout(in: reader, at: offset) else { return [] }
+        return layout.entries.map { entry in
+            UEFINode(
+                kind: .biosGuardEntry,
+                name: entry.name,
+                header: entry.range.lowerBound..<entry.range.lowerBound,
+                body: entry.range,
+                isExpandable: !entry.range.isEmpty,
+                childDepth: depth + 1
+            )
+        }
     }
 }

@@ -270,6 +270,16 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     case amdEFS
     case amdDirectory
     case amdFirmwareEntry
+    /// An AMI BIOS Guard update file at the top of the file
+    /// (`BIOSGuardUpdate`, `UEFI_IMAGE_FORMAT.md` §1.2): its header with the
+    /// table, and the blocks. Like a compressed section, what it holds is not
+    /// its bytes but what they make — the BIOS region its blocks' data
+    /// assembles to — so its children are in that space, one per entry of the
+    /// table.
+    case biosGuardUpdate
+    /// One entry of that table — `FV_MAIN_WRAPPER`, `NVRAM` — as the stretch
+    /// of the assembled region it covers, read as a raw area.
+    case biosGuardEntry
     /// The x86 Startup AP data EDK2's GenFv writes into the pad file before
     /// the Volume Top File: a far jump the application processors start at.
     /// It is code at a fixed address, so it does not move.

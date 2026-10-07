@@ -441,6 +441,8 @@ public enum UEFITreeDisplay {
         case .amdEFS: return L("Embedded Firmware Structure")
         case .amdDirectory: return L("AMD firmware directory")
         case .amdFirmwareEntry: return L("AMD firmware entry")
+        case .biosGuardUpdate: return L("BIOS Guard update")
+        case .biosGuardEntry: return L("BIOS Guard entry")
         case .picture: return L("Picture")
         case .sound: return L("Sound")
         }

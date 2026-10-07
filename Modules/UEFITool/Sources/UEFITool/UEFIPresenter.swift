@@ -264,9 +264,21 @@ public enum UEFIPresenter {
     public static func decompressedBody(for node: UEFINode) -> DecompressedBody? {
         let opened = node.children.contains { $0.space != node.space }
         let closed = node.compression?.decodes == true && node.isExpandable && node.children.isEmpty
-        guard node.kind == .section || (node.kind == .amdFirmwareEntry && node.compression != nil),
+        guard node.kind == .section || node.kind == .biosGuardUpdate
+                || (node.kind == .amdFirmwareEntry && node.compression != nil),
               opened || closed
         else { return nil }
+        // A BIOS Guard update holds a BIOS region, assembled from its blocks
+        // rather than decompressed, and the items say which.
+        if node.kind == .biosGuardUpdate {
+            return DecompressedBody(
+                space: node.space.inside(sectionAt: node.header.lowerBound),
+                layout: .image,
+                suggestedName: "BIOS region.bin",
+                saveTitle: L("Save Assembled BIOS Region as…"),
+                openTitle: L("Open Assembled BIOS Region")
+            )
+        }
         // What came *out* of a section says so in its name. Without it the
         // section opened as a node and the same section's decompressed body
         // arrive under one name — `bios_LZMA Section.bin` twice — and the two

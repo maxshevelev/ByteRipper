@@ -363,6 +363,9 @@ public enum UEFIRebuild {
                 }
                 return newSpace
             }
+            if section.kind == .biosGuardUpdate {
+                throw Refusal("“\(section.name)” is a BIOS region assembled from signed blocks. It is read here, and not written back: the blocks are the vendor's, and their signatures cannot be made again.")
+            }
             if section.kind == .amdFirmwareEntry {
                 throw Refusal("“\(section.name)” is the BIOS image the PSP inflates. It is read here, and not compressed again: what the PSP accepts in its place is not known.")
             }
@@ -386,7 +389,7 @@ public enum UEFIRebuild {
             guard case .decompressed(let chain) = space, let last = chain.last else { return nil }
             let parent: ByteSpace = chain.count == 1 ? .file : .decompressed(chain: Array(chain.dropLast()))
             return image.allNodes.first {
-                $0.space == parent && ($0.kind == .section || $0.kind == .amdFirmwareEntry)
+                $0.space == parent && [.section, .amdFirmwareEntry, .biosGuardUpdate].contains($0.kind)
                     && $0.header.lowerBound == last && $0.compression != nil
             }
         }

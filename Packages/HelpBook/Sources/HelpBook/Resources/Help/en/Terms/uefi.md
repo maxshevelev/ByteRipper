@@ -265,6 +265,19 @@ What is not checked: the signatures on the PSP's firmware — the keys are AMD's
 @see term:microcode
 @see term:padding
 
+@term bios-guard-update
+@name AMI BIOS Guard update file
+@short A manufacturer's BIOS update for a board with Intel BIOS Guard: the BIOS region in signed blocks, preceded by a table that names its parts.
+
+On a board with Intel BIOS Guard the BIOS region is written by the chipset rather than by the BIOS itself, and only in blocks the manufacturer has signed. AMI's flasher takes the update as a file of such blocks. AMI's own name for the format is PFAT; ASUS ships the file under the model and the BIOS version, for example `X1704VAPF.306`. The file starts with a table that divides the region into named entries — `FV_MAIN_WRAPPER`, `NVRAM`, `OA_TABLE` — and gives for each the flasher's switch (`/P`, `/N`, `/OA`) and the number of blocks it consists of. Each block holds its data, the script the chipset runs to write it, and the manufacturer's signature.
+
+The [[topic:tool-uefi|UEFI tool]] shows such a file as one row, `AMI BIOS Guard update`, over the table and the blocks. Its details give the platform the blocks are for, their number, the size of the region and the table itself. Opened, the row shows the BIOS region formed by the blocks' data placed one after another, entry by entry; each entry opens onto the volumes it holds, as a BIOS region does. The region is assembled from the file and is not stored in it as one piece: **Open Assembled BIOS Region** and **Save Assembled BIOS Region as…** in the row's context menu provide it as a file, and the items of the rows inside it call the bytes decompressed, as for a compressed section. What the manufacturer places after the blocks — on ASUS files a volume holding an [[term:me|ME]] update image — is shown as rows beside the update.
+
+The content of the file is read and not written back: the blocks are signed, and **Update in Parent** refuses a change inside the region. The BIOS region of a dump is compared with such a file by **Compare with PFAT Update File…** in the context menu of the region's row. The layout of the file is not published; it was established from an ASUS update file compared with a dump of the same board. The scripts and the signatures are not verified.
+
+@see term:bios-region
+@see term:volume
+
 @term flash-device-map
 @name Insyde flash device map
 @short The table in an Insyde firmware that states where each part of the BIOS image lies.

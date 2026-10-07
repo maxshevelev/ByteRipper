@@ -73,6 +73,20 @@ final class DecompressedBuffers: @unchecked Sendable {
                 outerRange = entry.fileRange
                 continue
             }
+            // Not a compressed section but the same kind of space: the BIOS
+            // region a BIOS Guard update's blocks make up, assembled rather
+            // than decoded (`BIOSGuardUpdate`).
+            if case .success(let layout) = BIOSGuardUpdate.layout(in: parent, at: offset) {
+                guard let region = BIOSGuardUpdate.region(of: layout, in: parent) else {
+                    return .failure(Problem(section: offset, space: parentSpace, algorithm: nil, failure: .truncated))
+                }
+                let fileRange = outerRange ?? (outermost..<layout.end)
+                store(key, bytes: region, fileRange: fileRange)
+                parent = ImageReader(region)
+                parentSpace = .decompressed(chain: key)
+                outerRange = fileRange
+                continue
+            }
             guard let located = CompressedSection.locate(at: offset, in: parent) else {
                 return .failure(Problem(
                     section: offset, space: parentSpace, algorithm: nil, failure: .corrupt
