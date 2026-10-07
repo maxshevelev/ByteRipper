@@ -83,7 +83,7 @@ final class ToolbarValidationTests: XCTestCase {
         // And in its place: the plaque's slot, right after the flexible space
         // (§24).
         XCTAssertEqual(window.toolbar?.items.map(\.itemIdentifier),
-                       [.tools, .space,
+                       [.tools, .space, .historyNavigation, .space,
                         .goTo, .find, .segments, .space, .wordSize,
                         .flexibleSpace, .diffNavigation, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
 
@@ -176,7 +176,7 @@ final class ToolbarValidationTests: XCTestCase {
                       "identical files: the badge replaces the arrows")
         // And it takes the block's slot.
         XCTAssertEqual(window.toolbar?.items.map(\.itemIdentifier),
-                       [.tools, .space,
+                       [.tools, .space, .historyNavigation, .space,
                         .goTo, .find, .segments, .space, .wordSize,
                         .flexibleSpace, .filesIdentical, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
 

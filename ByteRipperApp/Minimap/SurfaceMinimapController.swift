@@ -30,6 +30,9 @@ import UEFIImage
     /// Makes the pane behind map `index` the active one — what clicking the
     /// second map of a comparison means, as clicking its dump does.
     func activatePane(showingMapAt index: Int)
+    /// A click on a map is about to take `pane`'s view elsewhere: the place it
+    /// leaves goes into the navigation history (§10.6).
+    func minimapWillJump(in pane: PaneViewModel)
 
     /// The gutter's and the strip's own menus, which are the tab's commands,
     /// for the map of `surface` — the tab's own, or a fragment panel's.
@@ -1187,6 +1190,7 @@ import UEFIImage
     /// commands act on the pane the user just pointed at.
     private func selectOffset(mapIndex: Int, offset: UInt64) {
         guard let pane = pane(at: mapIndex), pane.isOpen else { return }
+        host?.minimapWillJump(in: pane)
         // Clicking the second map of a comparison also makes that pane active,
         // the way clicking its dump does. A surface with one pane has nothing
         // to point at.

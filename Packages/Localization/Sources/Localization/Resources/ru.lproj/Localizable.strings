@@ -1272,3 +1272,6 @@
 "The node under the caret is empty padding" = "Узел под курсором — пустой padding";
 "Empty padding is hidden in the tree. Show it?" = "Пустой padding скрыт в дереве. Показать его?";
 "Show in Tree" = "Показать в дереве";
+"Back/Forward" = "Назад / Вперёд";
+"Go back to where the last jump left" = "Вернуться туда, откуда ушёл последний переход";
+"Go forward to where Back left" = "Пройти вперёд, туда, откуда ушла команда «Назад»";

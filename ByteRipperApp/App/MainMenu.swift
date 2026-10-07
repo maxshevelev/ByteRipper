@@ -203,6 +203,13 @@ enum MainMenu {
             let item = viewMenu.addItem(withTitle: title, action: action, keyEquivalent: key)
             item.keyEquivalentModifierMask = modifiers
         }
+        // Back and Forward walk the places the tab's jumps left (§10.6), on
+        // the keys a browser and Finder use for them.
+        // help: menu.view.back
+        addNavigationItem(L("Back"), #selector(MainViewController.navigateBack), "[", [.command])
+        // help: menu.view.forward
+        addNavigationItem(L("Forward"), #selector(MainViewController.navigateForward), "]", [.command])
+        viewMenu.addItem(.separator())
         // help: menu.view.next-difference
         addNavigationItem(L("Next Difference"), #selector(MainViewController.nextDifference), "\u{F703}", [.command, .option])
         // help: menu.view.previous-difference

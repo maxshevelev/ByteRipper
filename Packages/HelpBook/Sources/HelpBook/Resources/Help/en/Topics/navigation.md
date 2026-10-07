@@ -10,6 +10,9 @@
 @covers menu.view.next-same
 @covers menu.view.previous-same
 @covers window.go-to-form
+@covers menu.view.back
+@covers menu.view.forward
+@covers toolbar.history
 
 ## Between differences
 
@@ -28,6 +31,14 @@ For the purpose of this movement a difference is a whole run of differing bytes 
 The field retains the last ten addresses entered. Below it is the [[topic:bookmarks|bookmark list]]: Tab moves the keyboard there, and Return jumps to the selected bookmark.
 
 In comparison mode the jump moves **both** panes, which are locked to the same address.
+
+## Back to where you were
+
+Every jump records the place it leaves: Go To, a bookmark, the next or previous difference, a search result, a click on the minimap, a row picked in a tool panel that takes the dump to bytes off screen. **View ▸ Back** (**⌘[**) returns there — the same selection, the same rows on screen — and **View ▸ Forward** (**⌘]**) goes the other way. The same two commands are the **‹ ›** buttons in the toolbar, to the right of the Tools menu.
+
+Moving the caret with the arrow keys, the mouse or the scroll bar is not a jump and is not recorded. Moving through a tool panel's rows counts as one jump, however many rows are passed.
+
+The history belongs to the tab and holds the last fifty places. In comparison mode a place covers both panes. A place in a file that has since been closed, or replaced by another file, is skipped.
 
 ## Selecting a block
 

@@ -891,6 +891,7 @@ Suggested shortcuts:
 - Next same block: Cmd+Option+Shift+Right Arrow.
 - Previous same block: Cmd+Option+Shift+Left Arrow.
 - Go To Position (the form's offset field): Cmd+L.
+- Back / Forward through the navigation history (§10.6): Cmd+[ / Cmd+].
 - Toggle Bookmark: Cmd+D; Edit Bookmark: Shift+Cmd+D (§20.3).
 
 Shortcuts may be adjusted, but must be discoverable in menus.
@@ -1037,6 +1038,36 @@ already in hand, rather than as menu key equivalents. The Cmd+arrow branch is
 scoped to Cmd without Option or Control: the View menu owns
 Cmd+Option(+Shift)+arrow for difference navigation (§10.3), and any other
 Cmd+/Ctrl+ combination defers to the menu.
+
+10.6 Navigation history
+
+Back and Forward walk the places the tab's jumps have left, the way a
+browser's history does.
+
+- A jump records the place it leaves: Go To (an address or a bookmark), the
+  next or previous difference or same block, a search result (a step, a find,
+  a row of the results list), a click on the minimap, Select Block, a
+  segment or a zone selected from a menu, a tool-module's reveal, and the
+  scroll to a zone a tool-module has put in focus (a tree row picked whose
+  bytes were off screen).
+- Arrow keys, the mouse, scrolling and the minimap's viewport drag do not
+  record. A run of tool-module reveals — a tree walked with the arrow keys —
+  records once: the place the run left. The run ends when the caret or the
+  view moves off where the last reveal put it. A focused zone already on
+  screen moves nothing and records nothing.
+- Back or Forward with nowhere to go does nothing, silently: the commands
+  are greyed out, and a beep on a held key would only be noise.
+- A place is the selection in each pane the jump moved (both panes in a
+  comparison) and the first byte on screen. Going back restores both, and
+  brings forward the fragment panel the place is in, or puts the panels away
+  for a place in the tab's own panes.
+- Walking the history records nothing; a new jump clears the forward stack.
+  Fifty places are kept. A place in a file since closed, or replaced in its
+  pane, is skipped.
+- The history is the tab's (WindowViewModel), not a pane's.
+- View ▸ Back (Cmd+[) and View ▸ Forward (Cmd+]), and a ‹ › pair in the
+  toolbar between the Tools pull-down and Go To, set apart by spaces. Each is
+  disabled when there is nowhere to go.
 
 =====================================================================
 11. SEARCH

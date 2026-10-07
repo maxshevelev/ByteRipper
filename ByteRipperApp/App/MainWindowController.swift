@@ -15,6 +15,10 @@ final class MainWindowController: NSWindowController {
     /// delegate can hand it out.
     private(set) var diffNavigationGroup: NSToolbarItemGroup?
 
+    /// The toolbar's Back / Forward pair (§10.6), Finder's chevrons, between
+    /// the Tools pull-down and Go To.
+    private(set) var historyNavigationGroup: NSToolbarItemGroup?
+
     /// The toolbar's minimap toggle button (the "sidebar.right" item at the
     /// far right, past a standard space). Held so the delegate can hand it out.
     private(set) var minimapToggleItem: NSToolbarItem?
@@ -269,6 +273,35 @@ final class MainWindowController: NSWindowController {
         return group
     }
 
+    /// Back and Forward through the tab's navigation history (§10.6): the
+    /// chevrons Finder has for the same two commands, joined in one block.
+    // help: toolbar.history
+    private func makeHistoryNavigationGroup() -> NSToolbarItemGroup {
+        func navItem(_ identifier: NSToolbarItem.Identifier, _ symbol: String,
+                     _ label: String, _ phrase: String, _ action: Selector) -> NSToolbarItem {
+            let item = NSToolbarItem(itemIdentifier: identifier)
+            item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
+            item.label = label
+            item.target = mainViewController
+            item.action = action
+            ControlHelp.describe(item, name: label, tooltip: phrase)
+            return item
+        }
+        let group = NSToolbarItemGroup(itemIdentifier: .historyNavigation)
+        group.subitems = [
+            navItem(.navigateBack, "chevron.left", L("Back"),
+                    L("Go back to where the last jump left"),
+                    #selector(MainViewController.navigateBack)),
+            navItem(.navigateForward, "chevron.right", L("Forward"),
+                    L("Go forward to where Back left"),
+                    #selector(MainViewController.navigateForward)),
+        ]
+        group.label = L("Back/Forward")
+        group.paletteLabel = L("Back/Forward")
+        group.controlRepresentation = .expanded
+        return group
+    }
+
     /// The "Files are identical" badge item: a green checkmark and a label in a
     /// view that sizes to its content. The toolbar is icon-only, so the text
     /// must live in a custom view — a standard item's label would not render.
@@ -465,6 +498,10 @@ extension NSToolbarItem.Identifier {
     static let previousDifference = NSToolbarItem.Identifier("PreviousDifference")
     /// Next Difference — the right subitem of the diff group.
     static let nextDifference = NSToolbarItem.Identifier("NextDifference")
+    /// The Back / Forward pair (§10.6).
+    static let historyNavigation = NSToolbarItem.Identifier("HistoryNavigation")
+    static let navigateBack = NSToolbarItem.Identifier("NavigateBack")
+    static let navigateForward = NSToolbarItem.Identifier("NavigateForward")
     /// The "Files are identical" badge, shown in place of the diff group when
     /// the comparison index has no differences.
     static let filesIdentical = NSToolbarItem.Identifier("FilesIdentical")
@@ -504,7 +541,7 @@ extension MainWindowController: NSToolbarDelegate {
         // The flexible space must be listed as allowed too, or AppKit drops it
         // from the default items and the diff block ends up on the LEFT edge.
         [.flexibleSpace, .space,
-         .tools, .goTo, .find, .segments, .wordSize,
+         .tools, .historyNavigation, .goTo, .find, .segments, .wordSize,
          .diffNavigation, .filesIdentical, .help, .paneLayout, .toggleMinimap]
     }
 
@@ -522,7 +559,9 @@ extension MainWindowController: NSToolbarDelegate {
         // space separates it from the commands: it is the one control here
         // that changes what the window CONTAINS rather than what it does to
         // the dump.
-        [.tools, .space,
+        // Back and Forward come next, on their own between two spaces: they
+        // move through where the user has been, not through the dump.
+        [.tools, .space, .historyNavigation, .space,
          .goTo, .find, .segments, .space, .wordSize,
          .flexibleSpace, .diffNavigation, .space, .help, .space, .paneLayout, .space, .toggleMinimap]
     }
@@ -538,6 +577,11 @@ extension MainWindowController: NSToolbarDelegate {
                 diffNavigationGroup = makeDiffNavigationGroup()
             }
             return diffNavigationGroup
+        case .historyNavigation:
+            if historyNavigationGroup == nil {
+                historyNavigationGroup = makeHistoryNavigationGroup()
+            }
+            return historyNavigationGroup
         case .filesIdentical:
             // Built on first request and cached, like the diff group: the swap
             // logic re-inserts the same instance each time it is wanted.

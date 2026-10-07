@@ -392,7 +392,7 @@ final class MinimapTests: XCTestCase {
         // The configuration, not the live items: the difference block is only
         // carried in comparison mode (§10.3), and this window has no files.
         XCTAssertEqual(wc.toolbarDefaultItemIdentifiers(toolbar),
-                       [.tools, .space,
+                       [.tools, .space, .historyNavigation, .space,
                         .goTo, .find, .segments, .space, .wordSize,
                         .flexibleSpace, .diffNavigation, .space, .help, .space, .paneLayout, .space, .toggleMinimap],
                        "flexible space pins the right-hand group to the edge; a system space keeps "

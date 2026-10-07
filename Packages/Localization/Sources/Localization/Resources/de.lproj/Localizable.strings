@@ -1272,3 +1272,6 @@
 "The node under the caret is empty padding" = "Der Knoten unter der Einfügemarke ist leeres Padding";
 "Empty padding is hidden in the tree. Show it?" = "Leeres Padding ist im Baum ausgeblendet. Anzeigen?";
 "Show in Tree" = "Im Baum zeigen";
+"Back/Forward" = "Zurück/Vorwärts";
+"Go back to where the last jump left" = "Zurück zu der Stelle, die der letzte Sprung verlassen hat";
+"Go forward to where Back left" = "Vorwärts zu der Stelle, die „Zurück“ verlassen hat";

@@ -15,6 +15,11 @@ final class WindowViewModel {
     /// session-only — they outlive a file being closed and reopened.
     let bookmarkStore = BookmarkStore()
 
+    /// Where the tab's jumps have been, for Back and Forward (§10.6). The
+    /// tab's, not a pane's: a jump in a comparison moves both panes, and Back
+    /// puts both back.
+    var navigationHistory = NavigationHistory<NavigationPlace>()
+
     /// The window's own view of a bookmark change, after the panes have been
     /// told: what the controller watches, for the things that are neither pane's
     /// business — a naming popover that must not outlive the mark it is naming

@@ -190,6 +190,7 @@ final class MainViewController: NSViewController {
         view.onRevealOrigin = { [weak self] in self?.revealOrigin(of: pane) }
         view.onUpdateInParent = { [weak self] in self?.performUpdateInParent(of: pane) }
         view.onSearchResultsClose = { [weak self] _ in self?.syncFindBarToActivePane() }
+        view.onWillJump = { [weak self] in self?.recordJump(in: pane) }
         // The surface weakly: a panel whose surface has already gone leaves the
         // question to the tab's own map, which by then is the only one there is.
         view.onMatchesChanged = { [weak self, weak surface] in
@@ -721,6 +722,11 @@ final class MainViewController: NSViewController {
     private var fragmentDockHeight: NSLayoutConstraint?
 
     /// The fragment panels this tab has open, and the dock they fold into.
+    /// Where the last of a run of tool reveals left the dump, so the run is
+    /// one jump in the navigation history (§10.6). Nil when the last jump was
+    /// not a tool's.
+    private var toolRevealLanding: NavigationPlace?
+
     private(set) lazy var fragments = FragmentPanels(host: self,
                                                      container: fragmentHost,
                                                      strip: fragmentDockStrip)
@@ -1223,6 +1229,10 @@ final class MainViewController: NSViewController {
             pane.onSearchResultsClose = { [weak self] _ in
                 self?.syncFindBarToActivePane()
             }
+            pane.onWillJump = { [weak self, weak paneModel] in
+                guard let paneModel else { return }
+                self?.recordJump(in: paneModel)
+            }
             pane.onMatchesChanged = { [weak self] in
                 self?.searchAppearanceChanged()
             }
@@ -1386,6 +1396,14 @@ final class MainViewController: NSViewController {
             }
             pane2View.onSearchResultsClose = { [weak self] _ in
                 self?.syncFindBarToActivePane()
+            }
+            pane1View.onWillJump = { [weak self] in
+                guard let self else { return }
+                self.recordJump(in: self.windowModel.pane1)
+            }
+            pane2View.onWillJump = { [weak self] in
+                guard let self else { return }
+                self.recordJump(in: self.windowModel.pane2)
             }
             pane1View.onMatchesChanged = { [weak self] in
                 self?.searchAppearanceChanged()
@@ -2444,14 +2462,34 @@ final class MainViewController: NSViewController {
     /// Takes the dump to `range` for a tool-module — the same reveal a bookmark
     /// or a search result gets, in the pane the session is bound to rather than
     /// in the active one.
+    ///
+    /// A run of these is one jump for the history (§10.6): a tool reveals on
+    /// every row its tree's arrow keys pass, and only the place the run left
+    /// is worth going back to. The run ends when the user moves off the place
+    /// the last reveal landed on.
     func revealForTool(_ range: Range<UInt64>, in pane: PaneViewModel, select: Bool) {
         guard pane.isOpen else { return }
-        if select, !range.isEmpty {
-            pane.select(range: range)
-        } else {
-            pane.moveCaret(to: range.lowerBound)
+        moveForTool(in: pane) {
+            if select, !range.isEmpty {
+                pane.select(range: range)
+            } else {
+                pane.moveCaret(to: range.lowerBound)
+            }
+            filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
         }
-        filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
+    }
+
+    /// A tool moving the dump — the caret, or only the view — as one step of a
+    /// run the history records once (§10.6): the place before the run's first
+    /// move is recorded, and every later move that starts from where the last
+    /// one landed continues the run.
+    private func moveForTool(in pane: PaneViewModel, _ move: () -> Void) {
+        let toolRun = toolRevealLanding
+        if toolRun == nil || navigationPlace(of: pane) != toolRun {
+            recordJump(in: pane)
+        }
+        move()
+        toolRevealLanding = navigationPlace(of: pane)
     }
 
     /// Brings the start of the zone a tool-module has just focused into view:
@@ -2462,8 +2500,12 @@ final class MainViewController: NSViewController {
     /// user may well be part-way through something in the dump. Going is the
     /// tool-module's own `reveal`, which centres and can select.
     func showZoneStartForTool(_ offset: UInt64, in pane: PaneViewModel) {
-        guard pane.isOpen else { return }
-        filePaneView(for: pane)?.revealOffsetIfOffScreen(offset)
+        guard pane.isOpen, let view = filePaneView(for: pane),
+              !view.isOffsetOnScreen(offset) else { return }
+        // The view going to a zone is a place left, as a click on the minimap
+        // is: a row picked to look at the dump is one the reader may want to
+        // come back from (§10.6).
+        moveForTool(in: pane) { view.revealOffsetIfOffScreen(offset) }
     }
 
     /// The published zone map changed — a publish, a focus moving, or a session
@@ -2584,6 +2626,10 @@ final class MainViewController: NSViewController {
     /// Makes pane `index` the active one, from the tests that need to drive a
     /// pane switch without a mouse — which is the only thing a click does that
     /// this does not.
+    func goToForTesting(offset: UInt64) {
+        goTo(offset: offset)
+    }
+
     func activatePaneForTesting(_ index: Int) {
         activatePane(at: index)
     }
@@ -2892,6 +2938,7 @@ final class MainViewController: NSViewController {
         guard let target = sender.representedObject as? ZoneMenuTarget,
               let pane = target.pane, pane.isOpen,
               let zone = pane.zones.zones.first(where: { $0.id == target.zoneID }) else { return }
+        recordJump(in: pane)
         pane.select(range: zone.range)
         filePaneView(for: pane)?.revealOffsetCentered(zone.range.lowerBound)
         tools(reading: pane).zoneSelected(zone.id, in: pane)
@@ -2939,6 +2986,7 @@ final class MainViewController: NSViewController {
               target.pieceIndex < target.pane.segmentStore.segments.count else { return }
         let pane = target.pane
         let piece = pane.segmentStore.segments[target.pieceIndex]
+        recordJump(in: pane)
         pane.select(range: piece.range)
         filePaneView(for: pane)?.revealOffsetCentered(piece.range.lowerBound)
     }
@@ -4561,6 +4609,7 @@ final class MainViewController: NSViewController {
               target.pane.isOpen else { return }
         let pane = target.pane
         let sheet = SelectBlockSheetController(fileSize: pane.fileSize, presetStart: target.offset) { [weak self] selection in
+            self?.recordJump(in: pane)
             pane.setSelection(selection)
             // §10.2: show the block's START mid-pane — in the pane that was
             // right-clicked, not the active one.
@@ -5176,6 +5225,7 @@ final class MainViewController: NSViewController {
             // repeated previous press skips the current block and finds the one
             // before it — landing past the block would re-find it (§10.3).
             let target = direction == .backward ? block.range.upperBound - 1 : block.range.lowerBound
+            recordJump(in: windowModel.activePane)
             windowModel.pane1.moveCaret(to: target)
             windowModel.pane2.moveCaret(to: target)
             comparisonView?.refreshComparisonInfo()
@@ -6036,6 +6086,7 @@ final class MainViewController: NSViewController {
     /// The jump itself (§10.1) — the same act whether the offset was typed or
     /// picked from the bookmark list.
     private func goTo(offset: UInt64) {
+        recordJump(in: activePane)
         // A panel is one pane over one part, and the part's offsets are its
         // own: a jump asked for there is that pane's to make, and the tab's
         // dump behind it was not what was asked to move (§20.7).
@@ -6081,6 +6132,7 @@ final class MainViewController: NSViewController {
         let pane = activePane
         guard pane.isOpen else { return }
         let sheet = SelectBlockSheetController(fileSize: pane.fileSize) { [weak self] selection in
+            self?.recordJump(in: pane)
             pane.setSelection(selection)
             // §10.2: show the block's START mid-pane, the way the Find bar
             // centres a match — the block begins where the user looks.
@@ -6560,6 +6612,7 @@ final class MainViewController: NSViewController {
     /// Puts the user on a step the index answered.
     private func land(_ step: MatchSet.Step, direction: SearchDirection,
                       in pane: PaneViewModel) {
+        recordJump(in: pane)
         pane.select(range: step.range)
         // A step is a search being shown again, which it may not have been: the
         // set outlives its highlighting, so `Done` then Enter steps through the
@@ -6634,6 +6687,7 @@ final class MainViewController: NSViewController {
     /// plate — the answer looks the same whether or not the index behind it
     /// exists yet (§11).
     private func show(match range: Range<UInt64>, in pane: PaneViewModel) {
+        recordJump(in: pane)
         pane.select(range: range)
         pane.highlightMatches(onMatch: range)
         filePaneView(for: pane)?.revealSelectionCenteredIfNeeded()
@@ -7017,12 +7071,13 @@ final class MainViewController: NSViewController {
     /// large word size makes the hex grid narrow enough for that to happen.
     ///
     /// Measured, not computed: the items' widths are AppKit's, and they differ
-    /// between releases. 730 pt clears the measured threshold with a margin —
-    /// 695 pt on macOS 26 with the Help pull-down in place, 620 pt without it,
-    /// and less on 14, where the toolbar metrics are tighter. The probe is
+    /// between releases. 810 pt clears the measured threshold with a margin —
+    /// 775 pt on macOS 15 with Back and Forward in place (§10.6), 695 pt on
+    /// macOS 26 before them, and less on 14, where the toolbar metrics are
+    /// tighter. The probe is
     /// `testTheWholeToolbarFitsTheLaunchWidth`: it opens the window at exactly
     /// this width and fails if AppKit hid anything.
-    static let toolbarFitWidth: CGFloat = 730
+    static let toolbarFitWidth: CGFloat = 810
 
     /// Ideal content width the window should be when zoomed (double-click on the
     /// title bar / Window > Zoom): the hex grid width for a single pane, or
@@ -7272,6 +7327,10 @@ extension MainViewController: NSToolbarItemValidation {
     /// displays as well, the way `validateMenuItem` sets the checkmarks.
     func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
         switch item.action {
+        case #selector(navigateBack):
+            return canNavigateBack
+        case #selector(navigateForward):
+            return canNavigateForward
         case #selector(nextDifference):
             return windowPanesAreReachable && diffNavigationState.nextDifference
         case #selector(previousDifference):
@@ -7578,6 +7637,10 @@ extension MainViewController: NSMenuItemValidation {
             if viewIfLoaded?.window?.firstResponder is NSTextView { return true }
             if viewIfLoaded?.window?.firstResponder is HexView { return activePane.isOpen }
             return false
+        case #selector(navigateBack):
+            return canNavigateBack
+        case #selector(navigateForward):
+            return canNavigateForward
         case #selector(nextDifference):
             return windowPanesAreReachable && diffNavigationState.nextDifference
         case #selector(previousDifference):
@@ -7701,5 +7764,104 @@ enum AlertOutcome {
             : ("exclamationmark.octagon.fill", SemanticColors.bad)
         return NSImage.tintedSymbol(
             name, configuration: .init(pointSize: 48, weight: .regular), color: color)
+    }
+}
+
+// MARK: - Navigation history (§10.6)
+
+extension MainViewController {
+    /// View ▸ Back (⌘[): the place the last jump left.
+    @objc func navigateBack() {
+        let current = navigationPlace(of: activePane)
+        guard let place = windowModel.navigationHistory.goBack(
+            from: current, isReachable: isReachable) else { return }
+        go(to: place)
+    }
+
+    /// View ▸ Forward (⌘]): the place Back left.
+    @objc func navigateForward() {
+        let current = navigationPlace(of: activePane)
+        guard let place = windowModel.navigationHistory.goForward(
+            from: current, isReachable: isReachable) else { return }
+        go(to: place)
+    }
+
+    var canNavigateBack: Bool {
+        activePane.isOpen && windowModel.navigationHistory.canGoBack(
+            from: navigationPlace(of: activePane), isReachable: isReachable)
+    }
+
+    var canNavigateForward: Bool {
+        activePane.isOpen && windowModel.navigationHistory.canGoForward(
+            from: navigationPlace(of: activePane), isReachable: isReachable)
+    }
+
+    /// A jump is about to move `pane`: the place it leaves goes into the
+    /// history. Called by every jump the app makes on the user's behalf — and
+    /// by nothing the caret does a row at a time.
+    func recordJump(in pane: PaneViewModel) {
+        guard pane.isOpen else { return }
+        toolRevealLanding = nil
+        windowModel.navigationHistory.record(leaving: navigationPlace(of: pane))
+        revalidateToolbar()
+    }
+
+    /// Where `pane` stands: its selection and the first byte on screen — and,
+    /// in a comparison, the other pane's selection too, since a jump moves
+    /// both.
+    func navigationPlace(of pane: PaneViewModel) -> NavigationPlace {
+        var panes = [pane]
+        if mode == .comparison, pane === windowModel.pane1 || pane === windowModel.pane2 {
+            panes.append(pane === windowModel.pane1 ? windowModel.pane2 : windowModel.pane1)
+        }
+        let spots = panes.compactMap { pane -> NavigationPlace.Spot? in
+            guard let document = pane.document else { return nil }
+            return NavigationPlace.Spot(pane: pane, document: document,
+                                        selection: document.selection)
+        }
+        let top = filePaneView(for: pane)?.firstVisibleOffset ?? pane.caretOffset
+        return NavigationPlace(spots: spots, top: top)
+    }
+
+    /// A place can be gone back to while every pane it names is still in this
+    /// tab and still holds the document it was in.
+    private func isReachable(_ place: NavigationPlace) -> Bool {
+        !place.spots.isEmpty && place.spots.allSatisfy { spot in
+            guard let pane = spot.pane, pane.isOpen,
+                  pane.document.map(ObjectIdentifier.init) == spot.documentID else { return false }
+            if pane === windowModel.pane1 || pane === windowModel.pane2 { return true }
+            return fragments.panel(holding: pane) != nil
+        }
+    }
+
+    /// Puts the tab back on `place`: the panel it was in brought to the front
+    /// — or put away, for a place in the tab's own panes — the selections as
+    /// they were and the view scrolled where it was.
+    private func go(to place: NavigationPlace) {
+        guard let first = place.spots.first?.pane else { return }
+        toolRevealLanding = nil
+        if let panel = fragments.panel(holding: first) {
+            if fragments.expanded != panel { fragments.expand(panel, animated: false) }
+        } else {
+            if fragments.expanded != nil { fragments.collapse(animated: false) }
+            if mode == .comparison {
+                let index = first === windowModel.pane1 ? 0 : 1
+                if index != windowModel.activePaneIndex { activatePane(at: index) }
+            }
+        }
+        for spot in place.spots {
+            spot.pane?.select(range: spot.start..<spot.end)
+        }
+        let view = filePaneView(for: first)
+        view?.scrollRowToTop(containing: place.top)
+        view?.focusHexView()
+        refreshDiffNavigation()
+        revalidateToolbar()
+    }
+}
+
+extension MainViewController {
+    func minimapWillJump(in pane: PaneViewModel) {
+        recordJump(in: pane)
     }
 }

@@ -61,7 +61,7 @@ final class ToolbarItemsTests: XCTestCase {
     // MARK: - Composition
 
     /// The order is the layout: the Tools pull-down on the edge its panel opens
-    /// from, a space, the document commands, a space, the one stateful control
+    /// from, a space, Back and Forward (§10.6), a space, the document commands, a space, the one stateful control
     /// — the word size — the flexible space that pins the right-hand group to
     /// the window's edge, then the difference plaque, the help book, the pane
     /// arrangement and the minimap — each set apart by a system space (§24).
@@ -71,13 +71,13 @@ final class ToolbarItemsTests: XCTestCase {
         let toolbar = try XCTUnwrap(window.toolbar)
 
         XCTAssertEqual(wc.toolbarDefaultItemIdentifiers(toolbar),
-                       [.tools, .space,
+                       [.tools, .space, .historyNavigation, .space,
                         .goTo, .find, .segments, .space, .wordSize,
                         .flexibleSpace, .diffNavigation, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
         // The live items, with no file open: the difference block is carried
         // only in comparison mode (§10.3), everything else is always there.
         XCTAssertEqual(toolbar.items.map(\.itemIdentifier),
-                       [.tools, .space,
+                       [.tools, .space, .historyNavigation, .space,
                         .goTo, .find, .segments, .space, .wordSize,
                         .flexibleSpace, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
     }

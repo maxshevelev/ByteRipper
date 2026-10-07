@@ -351,6 +351,9 @@ final class FilePaneView: NSView {
     /// this pane. The panel is hidden and cleared by `hideSearchResults()`
     /// regardless; the owner uses the hook to stop the in-flight search (§11).
     var onSearchResultsClose: ((FilePaneView) -> Void)?
+    /// A row picked in the search results is about to take the caret away:
+    /// the owner records the place it leaves (§10.6).
+    var onWillJump: (() -> Void)?
 
     /// Pops the find indicator, the way the platform's own does when it moves
     /// to another match (§11). Called by the owner after a step, not by the
@@ -696,6 +699,7 @@ final class FilePaneView: NSView {
             // still open: a row picked out of a list is the user pointing at
             // one occurrence among many, and the greys are what say where the
             // others are (§11).
+            self.onWillJump?()
             self.viewModel.select(range: range)
             if let index = self.viewModel.matchSet?.index(startingAt: range.lowerBound) {
                 self.viewModel.highlightMatches(current: index)
@@ -935,9 +939,17 @@ final class FilePaneView: NSView {
     /// The same rule the bookmark popover uses to make sure it has something to
     /// point at (§20.3).
     func revealOffsetIfOffScreen(_ offset: UInt64) {
-        guard !hexView.visibleByteRange().contains(offset) else { return }
+        guard !isOffsetOnScreen(offset) else { return }
         hexView.revealOffsetCentered(offset)
     }
+
+    func isOffsetOnScreen(_ offset: UInt64) -> Bool {
+        hexView.visibleByteRange().contains(offset)
+    }
+
+    /// The first byte on screen: where a place in the navigation history keeps
+    /// the view (§10.6).
+    var firstVisibleOffset: UInt64 { hexView.visibleByteRange().lowerBound }
 
     /// Scrolls the hex view so the row containing `offset` sits at the top of the
     /// visible area. Driven by the minimap's viewport drag and wheel (§19).
