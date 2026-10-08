@@ -4,27 +4,21 @@ import ByteRipperCore
 /// The folder a synced collection is published to, remembered across launches
 /// (`Design/FAVORITES_SYNC_PLAN.md`).
 ///
-/// **A folder, not a file.** A sandboxed app is granted what the user pointed
-/// at, and a grant on a file dies with that file — every atomic write replaces
-/// it, this Mac's, every other Mac's and iCloud's. A folder grant survives all
-/// of that, which is the difference between the system asking once and asking
-/// at every launch. It also covers what the app has to reach *beside* the
-/// library: the copies a sync client leaves when it cannot decide.
+/// **A folder, not a file.** Every machine writes a file of its own and reads
+/// everyone else's (`fileName(for:)`), so what the app has to reach is the
+/// folder they all sit in, along with the copies a sync client leaves beside
+/// them when it cannot decide. A single file would also be the wrong thing to
+/// hold on to: every atomic write replaces it, this Mac's, every other Mac's
+/// and iCloud's.
 ///
 /// So the user chooses a folder their Mac syncs, and the files inside it are
 /// the app's to name.
 ///
 /// Generic in the *kind* of collection, because none of this is about patterns:
-/// a folder, a name for each machine's file in it, and a bookmark that outlives
-/// a launch are what anything the app syncs will need (`SyncedCollectionKind`).
+/// a folder, a name for each machine's file in it, and a path that outlives a
+/// launch are what anything the app syncs will need (`SyncedCollectionKind`).
 enum SyncFolder<Kind: SyncedCollectionKind> {
-    static var folderBookmarkKey: String { Kind.folderBookmarkKey }
     static var folderPathKey: String { Kind.folderPathKey }
-
-    /// The keys the location was kept under when it was a file. Read once, to
-    /// carry an install that predates the folder over to it.
-    static var legacyBookmarkKey: String { Kind.legacyBookmarkKey }
-    static var legacyPathKey: String { Kind.legacyPathKey }
 
     /// The domain the location lives in — the owning store's, so a test that
     /// isolates one isolates both.
@@ -92,116 +86,61 @@ enum SyncFolder<Kind: SyncedCollectionKind> {
     /// How long a machine's stamp is, in characters (`DeviceIdentity.digest`).
     static var stampLength: Int { SyncFolderAccess.stampLength }
 
-    /// The folder the library is published to, with access already taken.
-    /// Nil when the library is kept to this Mac.
+    /// The folder the library is published to, or nil when the library is
+    /// kept to this Mac.
+    ///
+    /// Kept as a plain path. The app is not sandboxed, so a path is all it
+    /// takes to reach a folder again: nothing has to be re-earned at launch,
+    /// and nothing goes stale when a sync client replaces a file inside it.
+    /// What macOS still guards is a handful of places — Documents, Desktop,
+    /// iCloud Drive — and there it asks the user once, the first time the app
+    /// reaches in, and remembers the answer for this app.
     static func restore() -> URL? {
-        if let folder = resolveFolder() { return folder }
-        return migrateFromFile()
+        guard let path = defaults.string(forKey: folderPathKey) else {
+            hasAccess = false
+            return nil
+        }
+        let folder = URL(fileURLWithPath: path, isDirectory: true)
+        hasAccess = isReachable(folder)
+        return folder
     }
 
-    /// Whether the folder was reached through its bookmark, with access taken.
+    /// Whether the folder was there to be written to the last time the app
+    /// looked: when it was restored at launch, or when it was chosen.
     ///
-    /// False means the app is about to try the *path*, which a sandboxed app
-    /// may not use for somebody else's folder — so writing will fail. The
-    /// commonest reason is not exotic: a security-scoped bookmark is bound to
-    /// the app's code identity, and an **ad-hoc signed** build has a new
-    /// identity every time it is built (`CODE_SIGN_IDENTITY: "-"`, so the
-    /// identity is the cdhash). Every rebuild therefore throws away every
-    /// grant the user has given, and the only way back is to point at the
-    /// folder again. A stable signing identity is what ends that, and it is
-    /// the same thing iCloud proper needs (`Design/FAVORITES_SYNC_IDEA.md`).
+    /// False means the remembered path leads nowhere the app can write — a
+    /// drive that is not mounted, a folder moved or deleted in the Finder, or
+    /// one the user refused the app when macOS asked. Writing will fail until
+    /// the folder is back or the user points at another.
     static var hasAccess: Bool {
         get { SyncFolderAccess.granted[Kind.fileStem] ?? false }
         set { SyncFolderAccess.granted[Kind.fileStem] = newValue }
     }
 
-    private static func resolveFolder() -> URL? {
-        if let data = defaults.data(forKey: folderBookmarkKey) {
-            var stale = false
-            if let url = try? URL(resolvingBookmarkData: data, options: .withSecurityScope,
-                                  relativeTo: nil, bookmarkDataIsStale: &stale) {
-                hasAccess = url.startAccessingSecurityScopedResource()
-                if stale { remember(url) }
-                return url
-            }
-        }
-        hasAccess = false
-        // The path is the last resort, and the only road on which a protected
-        // folder makes the system ask again.
-        //
-        // A test run does not take it. The app is ad-hoc signed, so a bookmark
-        // does not survive the rebuild each run starts with; the run would fall
-        // to the path every time, and a path in ~/Documents is the system's
-        // consent panel in front of the suite, over and over. A run that has a
-        // folder of its own has a live bookmark to it and never reaches here.
-        guard !AppDefaults.isUnderTest else { return nil }
-        return defaults.string(forKey: folderPathKey).map { URL(fileURLWithPath: $0, isDirectory: true) }
-    }
-
-    /// Carries over an install that published to a *file*: the folder it was in
-    /// is the folder the library lives in, and its grant is taken afresh the
-    /// next time anything is published.
-    private static func migrateFromFile() -> URL? {
-        guard let path = defaults.string(forKey: legacyPathKey) else { return nil }
-        defer {
-            defaults.removeObject(forKey: legacyPathKey)
-            defaults.removeObject(forKey: legacyBookmarkKey)
-        }
-        if let data = defaults.data(forKey: legacyBookmarkKey) {
-            var stale = false
-            if let url = try? URL(resolvingBookmarkData: data, options: .withSecurityScope,
-                                  relativeTo: nil, bookmarkDataIsStale: &stale) {
-                _ = url.startAccessingSecurityScopedResource()
-                let folder = url.deletingLastPathComponent()
-                remember(folder)
-                return folder
-            }
-        }
-        // Same reasoning as in `resolveFolder`: a bare path is a road only a
-        // real run takes.
-        guard !AppDefaults.isUnderTest else { return nil }
-        let folder = URL(fileURLWithPath: path).deletingLastPathComponent()
-        remember(folder)
-        return folder
+    /// Whether `folder` is a directory this app may write into.
+    private static func isReachable(_ folder: URL) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory)
+            && isDirectory.boolValue
+            && FileManager.default.isWritableFile(atPath: folder.path)
     }
 
     /// Remembers `folder` as the place the library is published to.
     ///
-    /// Called again after every publish: a bookmark can go stale, and a stale
-    /// bookmark sends the next launch down the path. A failure leaves whatever
-    /// is already there — throwing away a working permission is the worse of
-    /// the two mistakes available.
+    /// Called again after every publish, which is a write into the folder that
+    /// just succeeded — so it is also what says the folder is reachable now.
     static func remember(_ folder: URL) {
         defaults.set(folder.standardizedFileURL.path, forKey: folderPathKey)
-        if let data = try? folder.bookmarkData(options: .withSecurityScope,
-                                               includingResourceValuesForKeys: nil,
-                                               relativeTo: nil) {
-            defaults.set(data, forKey: folderBookmarkKey)
-        }
-        // Chosen just now, through a panel: that grant is live whatever the
-        // bookmark does later.
         hasAccess = true
     }
 
     static func forget() {
         hasAccess = false
-        defaults.removeObject(forKey: folderBookmarkKey)
         defaults.removeObject(forKey: folderPathKey)
-        defaults.removeObject(forKey: legacyBookmarkKey)
-        defaults.removeObject(forKey: legacyPathKey)
     }
-
-    /// Whether a bookmark is on file — what says the next launch reaches the
-    /// library without the system asking the user again.
-    static var hasBookmark: Bool { defaults.data(forKey: folderBookmarkKey) != nil }
 
     /// Where the panel opens when the library has never been published: iCloud
     /// Drive if the user has it, and their Documents folder otherwise.
-    ///
-    /// The panel runs out of process, so it may be pointed at a folder this app
-    /// cannot read itself — which is exactly the case here, and as close to a
-    /// sensible default as a sandboxed app can get without an iCloud
-    /// entitlement.
     static func suggestedFolder() -> URL {
         let home = URL(fileURLWithPath: NSHomeDirectory())
         let iCloud = home.appendingPathComponent("Library/Mobile Documents/com~apple~CloudDocs")

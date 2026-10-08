@@ -1865,9 +1865,10 @@ final class MainViewController: NSViewController {
     /// Asks the user for a file and hands back its bytes, for
     /// `ToolHost.requestFile`.
     ///
-    /// The panel is the app's, deliberately: what the user picks is reachable
-    /// because *this process* was granted it, and a tool-module never has to be
-    /// given a URL or a security scope of its own. It gets bytes.
+    /// The panel is the app's, deliberately: choosing a file is the app's
+    /// chrome, and a tool-module never has to be given a URL — or decide for
+    /// itself how big a file is worth reading — to get what it asked for. It
+    /// gets bytes.
     func requestFileForTool(kinds: [String], message: String?) -> ToolFile? {
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
@@ -3112,14 +3113,8 @@ final class MainViewController: NSViewController {
 
     /// File ▸ Open Recent ▸ «file»: re-opens the row's file through the normal
     /// pipeline, so placement, the "already open in the other pane or window"
-    /// refusal, and the dirty-replace confirmation all apply unchanged.
-    ///
-    /// The sandbox grant is re-earned from the recorded security-scoped
-    /// bookmark first — that is the whole reason the bookmark store keeps the
-    /// file accessible across launches. The plain-URL fallback is defensive:
-    /// every recorded file has a bookmark (the record is paired in
-    /// `openIntoPane`), so this only matters for a list that predates the
-    /// pairing, and a failure there is the ordinary open error.
+    /// refusal, and the dirty-replace confirmation all apply unchanged. The
+    /// row carries a plain path, and a path is all the app needs to open it.
     @objc func openRecentFile(_ sender: NSMenuItem) {
         openRecentFile(sender, placement: .activePane)
     }
@@ -3145,9 +3140,7 @@ final class MainViewController: NSViewController {
                          message: L("“%1$@” is no longer there.", (path as NSString).lastPathComponent))
             return
         }
-        let url = SandboxBookmarkStore.shared.resolveAndStartAccess(path: path)
-            ?? URL(fileURLWithPath: path)
-        openFiles([url], placement: placement)
+        openFiles([URL(fileURLWithPath: path)], placement: placement)
     }
 
     /// File ▸ Open Recent ▸ «file» with ⌥ held (the row's alternate): the
@@ -3390,9 +3383,8 @@ final class MainViewController: NSViewController {
 
         do {
             try pane.open(url: url)
-            SandboxBookmarkStore.shared.record(url)
-            // A successful open is what the recent list is: record it beside
-            // the bookmark, and a re-open through this same pipeline bumps it.
+            // A successful open is what the recent list is: record it here,
+            // and a re-open through this same pipeline bumps it.
             _ = RecentFilesStore.record(url)
             return true
         } catch {
@@ -3838,7 +3830,6 @@ final class MainViewController: NSViewController {
             }
             do {
                 try pane.saveAs(to: url)
-                SandboxBookmarkStore.shared.record(url)
                 onSaved?()
             } catch {
                 self.presentFileError(L("Save As failed."), error, url: url)
@@ -5706,8 +5697,8 @@ final class MainViewController: NSViewController {
     // MARK: - Writing pieces out (§21.5)
 
     /// Save All as Separate Files…: writes the whole partition out as its pieces.
-    /// The directory is chosen in directory mode (a save panel grants access to
-    /// one file and this writes N — the sandbox would refuse the rest), the base
+    /// The directory is chosen in directory mode (a save panel names one file
+    /// and this writes N), the base
     /// name comes from the document, and one confirmation previews what will be
     /// written and names every file that would be replaced, before anything is
     /// written. Returns whether the write actually started — the form closes on
@@ -7006,19 +6997,24 @@ final class MainViewController: NSViewController {
         Self.presentModal(alert, defaultInTest: .alertFirstButtonReturn)  // OK in tests, result ignored
     }
 
-    /// Shows a file-operation error, upgrading sandbox/permission denials to a
-    /// clear "grant access" prompt (§16 sandbox access denied).
+    /// Shows a file-operation error, upgrading a permission denial to an
+    /// alert that says where permission comes from (§16 access denied).
+    ///
+    /// The app is not sandboxed, so a denial is one of two things: the file's
+    /// own permissions, or macOS's privacy protection of a folder such as
+    /// Documents or Desktop that the user refused the app when asked. Choosing
+    /// the file again cures neither, so the alert names both places to look.
     func presentFileError(_ title: String, _ error: Error, url: URL?) {
-        if isSandboxAccessDenied(error) {
+        if isAccessDenied(error) {
             let name = url?.lastPathComponent ?? L("the file")
             presentAlert(title: L("Access denied"),
-                         message: L("ByteRipper cannot access “%1$@”. Choose it again with File > Open to grant access.", name))
+                         message: L("ByteRipper has no permission to access “%1$@”. Check the file’s permissions (Finder ▸ Get Info), and whether ByteRipper is allowed its folder under System Settings ▸ Privacy & Security ▸ Files and Folders.", name))
         } else {
             presentError(title, error)
         }
     }
 
-    private func isSandboxAccessDenied(_ error: Error) -> Bool {
+    private func isAccessDenied(_ error: Error) -> Bool {
         let ns = error as NSError
         if ns.domain == NSCocoaErrorDomain, ns.code == NSFileReadNoPermissionError {
             return true

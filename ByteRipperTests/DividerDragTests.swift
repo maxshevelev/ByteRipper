@@ -17,9 +17,9 @@ final class DividerDragTests: XCTestCase {
         super.tearDown()
     }
 
-    /// Every file this class writes, deleted in `tearDown`: the test host is
-    /// sandboxed, so these land in the app's own container and stay there — a
-    /// few thousand of them had piled up before this was added.
+    /// Every file this class writes, deleted in `tearDown`: left behind, they
+    /// stay in the temporary directory — a few thousand of them had piled up
+    /// before this was added.
     private var tempFiles: [URL] = []
 
     private func removeTempFiles() {

@@ -120,8 +120,8 @@ import MEFirmware
     }
 
     /// Asks the user for a file and hands back its bytes. The panel is the
-    /// app's, so the sandbox's grant on what the user picked stays on this side
-    /// of the line: a tool-module is never given a URL or a scope to hold.
+    /// app's, because choosing a file is the app's chrome: a tool-module is
+    /// never given a URL to hold, only the bytes it asked for.
     func requestFile(kinds: [String]) async -> ToolFile? {
         guard let owner else { return nil }
         return owner.requestFileForTool(kinds: kinds, message: String?.none)

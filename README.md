@@ -197,7 +197,7 @@ These projects are why a repair shop can work on modern firmware at all. Between
 
 ### File types
 
-- **Settings ▸ File Types** registers ByteRipper as the app that opens a dump on a double-click. `.bin` and `.rom` are listed to start with — ticked by you, not by the app — and any extension you keep dumps under can be added: macOS confirms the change once and remembers it. Each row names the app that opens that type *now*, read from the system rather than from anything the app stored, so a default changed in Finder shows here too. `.rom`, `.dump` and `.bin` files get a ByteRipper document icon; the app stays sandboxed throughout.
+- **Settings ▸ File Types** registers ByteRipper as the app that opens a dump on a double-click. `.bin` and `.rom` are listed to start with — ticked by you, not by the app — and any extension you keep dumps under can be added: macOS confirms the change once and remembers it. Each row names the app that opens that type *now*, read from the system rather than from anything the app stored, so a default changed in Finder shows here too. `.rom`, `.dump` and `.bin` files get a ByteRipper document icon.
 
 ### Help, in three languages
 
@@ -210,7 +210,7 @@ These projects are why a repair shop can work on modern firmware at all. Between
 - Files are read through a bounded chunk cache and never loaded whole; edits are a piece list over the file as opened, so an inserted byte costs nothing measurable on a 32 MB dump. Diff and search index incrementally in the background, with progress and a cancel button in the status bar.
 - **⌘,** opens a standard settings window: the monospaced font, its size and the row density, the theme (follow the system, or force light or dark), the grouping distance for diff navigation, the text decoding table (Windows-1252 by default) with a live grid of all 256 byte values, the file types the app opens, the pattern library, and the language.
 - **File ▸ Open Recent** lists the last ten files opened, most recent first; a file that is gone is greyed, and **Clear Menu** empties the list. It is kept on this Mac only. The empty screen shows the same list beside the release notes.
-- External changes on disk are detected and offer a reload, keeping local edits; closing a dirty file prompts the standard Save / Don't Save / Cancel. Security-scoped bookmarks keep file access across launches.
+- External changes on disk are detected and offer a reload, keeping local edits; closing a dirty file prompts the standard Save / Don't Save / Cancel.
 - Light and dark themes, all colours dynamic; state is carried by colour *and* form (EOF hatching, outline contours), so it survives a theme switch and colour blindness. Accessibility labels on the grid and document state, frame autosave, **Window > Zoom** to fit the content exactly.
 - **An empty window signs itself** with the app's name and the build it is, and says when a newer one has been published — one question to this repository's latest release, offered as a link under the line. Asked in the background and silent on every failure: a window waiting for a file has no business reporting on an errand of its own.
 

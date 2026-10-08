@@ -60,23 +60,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // Apply the stored theme before any window appears, so the first frame
         // is already in the right appearance (§3.2).
         applyTheme()
-        // Drop bookmarks for files that are no longer there (§D9). They can
-        // only fail to resolve, and the store used to keep every one of them
-        // for ever: one machine had 9 434 of them, 14 MB of preferences, nearly
-        // all pointing at temporary files the test suite had deleted.
-        SandboxBookmarkStore.shared.pruneNow()
         // The recent-files list keeps its own copy of "what is on disk" and
-        // would otherwise keep a deleted file's row for ever — prune it here,
-        // the same way, at the same moment.
+        // would otherwise keep a deleted file's row for ever — prune it once,
+        // at launch, before the menu is first built from it.
         RecentFilesStore.pruneMissing()
         // The pattern library reads itself and, when it is published to a
         // shared file, merges what is there and starts watching it (§11). At
         // launch rather than on first use: a Mac that has not opened the Find
         // bar is still a Mac whose library should be current.
         //
-        // Never under XCTest. The test host *is* this app, with this app's
-        // container and this app's preferences, so starting the library there
-        // merges and republishes the developer's own — into their own synced
+        // Never under XCTest. The test host *is* this app, reaching the same
+        // folders the user's copy does, so starting the library there merges
+        // and republishes the developer's own — into their own synced
         // folder, from a process that is about to swap the store's defaults
         // out from under it. A suite must not touch the library it is not
         // testing.

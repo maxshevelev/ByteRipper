@@ -1617,10 +1617,11 @@ Where the library lives, and carrying it between machines
   their own for exactly this reason: a claim about generality that nothing
   exercises is a claim.
 - The favourites are a **file**, not a preference:
-  `Application Support/ByteRipper/Favorites.json` inside the app's container,
-  which a sandboxed app may write without asking anyone. The key they were
-  first kept under migrates on the first launch that finds it and is then
-  gone — two stores on one machine is the syncing problem indoors. The file
+  `~/Library/Application Support/ByteRipper/Favorites.json`, which the app
+  may write without asking anyone. (A test run never defaults to it: the app is
+  not sandboxed, so the test host's Application Support is the user's own.)
+  The key they were first kept under migrates on the first launch that finds
+  it and is then gone — two stores on one machine is the syncing problem indoors. The file
   holds the favourites and nothing else, which is why it is not called
   `Library.json`: a name must not promise more than a file holds. The recents,
   the appearance and the file types stay in `UserDefaults`.
@@ -1629,8 +1630,7 @@ Where the library lives, and carrying it between machines
   (`DumpCompare Patterns (A93F1C0D22B7).json`). It opens on iCloud Drive when
   they have it.
   Any folder a sync client watches works the same way — iCloud Drive, Google
-  Drive, Dropbox — because the sandbox lets the app in on the strength of the
-  user having pointed at it, not on where it is. **Keep on This Mac** brings
+  Drive, Dropbox — because to the app it is just a folder. **Keep on This Mac** brings
   the library back into the app's own storage and leaves the folder's copy
   where it is. Its title is the state it produces, in the same words the line
   above it uses for that state.
@@ -1835,24 +1835,19 @@ Where the library lives, and carrying it between machines
   and whenever the app comes forward. A Mac that has not opened the Find bar is
   still a Mac whose library should be current, and one that was asleep heard
   nothing while it slept: a file watcher cannot report what it did not see.
-- Asking for a folder is the whole of the permission story: a sandboxed app is
-  granted what the user pointed at, and a grant on a *file* dies with that file
-  — every atomic write replaces it, this Mac's and every other's. A folder grant
-  survives all of it, and covers the other machines' files *beside* this one's,
-  which the app has to read. So the system asks once, at the moment the folder
-  is chosen, and not at every launch.
-- A security-scoped bookmark is bound to the app's **code identity**, and an
-  ad-hoc signed build has a new one every time it is built. So every rebuild
-  throws away every grant the user has given, and the app must say so rather
-  than fail quietly: "macOS is no longer letting the app write there; choose
-  the folder again with Move…". A stable signing identity is what ends that —
-  the same thing iCloud proper needs (`Design/FAVORITES_SYNC_IDEA.md`).
-- The folder is kept as a **security-scoped bookmark**, refreshed after each
-  publish; a refresh that fails leaves the bookmark that is there, since
-  throwing away a working permission is the worse of the two mistakes. The path
-  is the last resort, and reaching a protected folder by path is what makes the
-  system ask again. A library published to a *file* by an earlier build carries
-  over to the folder it was in.
+- A **folder**, not a file: every atomic write replaces a file — this Mac's
+  and every other's — and the app has to read the other machines' files
+  *beside* this one's. The folder is what stays put.
+- The folder is kept as a plain **path** (the app is not sandboxed, issue #30).
+  What macOS still guards for an unsandboxed app — Documents, Desktop, iCloud
+  Drive — it asks the user about itself, once, the first time the app reaches
+  in. That answer is bound to the app's **code identity**, and an ad-hoc signed
+  build has a new one every time it is built, so a rebuild is asked again. A
+  stable signing identity is what ends that.
+- A remembered folder that is not there at launch — a drive not mounted, a
+  folder moved in the Finder, one the user refused the app — is said, not
+  forgotten: "no access to the library folder". The next publish that succeeds
+  clears it.
 - A file that is there and **cannot be read** — most often one iCloud has not
   finished downloading — is never taken for an empty one. Nothing is published
   into it, the download is asked for, and the tab says to try again: writing
@@ -2128,8 +2123,8 @@ Show clear, non-destructive errors for:
 
 - unable to open file;
 - file is directory/package;
-- permission denied;
-- sandbox access denied;
+- permission denied — the file's own permissions, or a folder macOS protects
+  that the user refused the app; the alert names both places to look;
 - same file already open in other pane;
 - invalid hex/decimal input;
 - invalid selection range;
@@ -3416,8 +3411,8 @@ and every operation that writes is explicit about it.
   already made cannot be taken back, so stopping between them would publish a
   *prefix* of the set while reporting a cancelled write.
 - **Save All as Separate Files…** writes the whole partition. The folder is
-  chosen with an open panel in directory mode — a save panel grants access to
-  one file and this writes N, so the sandbox would refuse the rest. Each piece
+  chosen with an open panel in directory mode — a save panel names one file
+  and this writes N. Each piece
   becomes `<name>_S<i>.bin`, named for the document (`bios_S0.bin`,
   `bios_S1.bin`, …) — the name the header shows, which for a document with no
   file behind it is the label it wears (§22.2, §23). Before anything is written, one confirmation previews
@@ -3427,13 +3422,13 @@ and every operation that writes is explicit about it.
   pre-filled with `<name>_S<i>.bin`. It acts on a single piece, so it lives in
   the row's context menu (and the strip's, §21.3), never in the button row,
   which is for the whole partition. The panel's own replace confirmation covers
-  the overwrite. The save panel grants the one file it names, not the folder
-  around it (§5.2), so the sibling temp the all-or-nothing path needs cannot be
-  created; with a single part there is nothing to keep atomic against, so the
-  write falls back to writing that part straight into the file the user chose —
-  the same fallback the single-file Save As takes. Not atomic, but the only
-  option the sandbox permits. A multi-part write has no such fallback: it needs
-  the directory the open panel in directory mode grants.
+  the overwrite. When the chosen file is writable but its folder is not (§5.2)
+  — every save panel's file while the app was sandboxed — the sibling temp the
+  all-or-nothing path needs cannot be created; with a single part there is
+  nothing to keep atomic against, so the write falls back to writing that part
+  straight into the file the user chose — the same fallback the single-file
+  Save As takes. Not atomic, but the only option left. A multi-part write has
+  no such fallback: it needs a folder it can create files in.
 - **The write runs as a background operation** with its name, progress and (×)
   in the active pane's status bar, the way a search does (§14.4); a new write
   cancels the one in flight. A cancel stops the write and leaves the directory
@@ -3876,9 +3871,10 @@ later edits land in its own overlay.
   (another filesystem, the file has gone) the content is folded into a temporary
   file the same way an over-budget edit already folds it (§13), and that is
   shared.
-  - Measured, in the sandboxed app, on a 16 MB dump outside the container: the
-    clone shares the dump's physical blocks at every offset checked, and the app
-    writes exactly one file — the clone — into its container's temp directory. A
+  - Measured, in the then-sandboxed app, on a 16 MB dump outside its
+    container: the clone shares the dump's physical blocks at every offset
+    checked, and the app writes exactly one file — the clone — into its
+    temporary directory. A
     dump on a *mounted second volume* fails the clone with `EXDEV` and takes the
     fallback, which produces one 16 MB temp file with blocks of its own. Both
     read the right bytes.
@@ -4006,13 +4002,14 @@ tool that produced them chose.
 The binding lives in the per-user Launch Services database, and only two things
 about writing it are settled by measurement rather than by documentation:
 
-- `LSSetDefaultRoleHandlerForContentType` — deprecated since macOS 12 — is
-  refused inside the app sandbox with `permErr` (-54).
-- `NSWorkspace.setDefaultApplication(at:toOpen:)` performs the same change from
-  the same sandbox, with no entitlement, no helper process and no relaxation of
-  the sandbox.
+- `LSSetDefaultRoleHandlerForContentType` — deprecated since macOS 12 — was
+  refused inside the app sandbox with `permErr` (-54), measured while the app
+  was still sandboxed.
+- `NSWorkspace.setDefaultApplication(at:toOpen:)` performed the same change from
+  the same sandbox, with no entitlement and no helper process.
 
-So the app stays sandboxed and asks through `NSWorkspace`. Two asymmetries of the
+So the app asks through `NSWorkspace`, the supported API — and still does now
+that it has left the sandbox (issue #30). Two asymmetries of the
 system's own follow, and both shape the tab:
 
 - Claiming a type for **this** app is granted silently. Pointing one at

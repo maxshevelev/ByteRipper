@@ -42,8 +42,8 @@ final class FindFlowTests: XCTestCase {
         super.tearDown()
     }
 
-    /// Every file this class writes, deleted in `tearDown`: the test host is
-    /// sandboxed, so these land in the app's own container and stay there.
+    /// Every file this class writes, deleted in `tearDown`: left behind, they
+    /// stay in the temporary directory.
     private var tempFiles: [URL] = []
 
     private func removeTempFiles() {

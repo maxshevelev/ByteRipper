@@ -212,7 +212,7 @@
 "Building" = "Wird aufgebaut";
 "ByteRipper Help" = "ByteRipper-Hilfe";
 "ByteRipper Settings" = "ByteRipper-Einstellungen";
-"ByteRipper cannot access “%1$@”. Choose it again with File > Open to grant access." = "ByteRipper hat keinen Zugriff auf „%1$@“. Wählen Sie die Datei über „Ablage > Öffnen“ erneut, um Zugriff zu geben.";
+"ByteRipper has no permission to access “%1$@”. Check the file’s permissions (Finder ▸ Get Info), and whether ByteRipper is allowed its folder under System Settings ▸ Privacy & Security ▸ Files and Folders." = "ByteRipper hat keine Berechtigung für „%1$@“. Prüfen Sie die Zugriffsrechte der Datei (Finder ▸ Informationen) und ob ByteRipper der Zugriff auf ihren Ordner unter Systemeinstellungen ▸ Datenschutz & Sicherheit ▸ Dateien und Ordner erlaubt ist.";
 "Bytes from offset %1$@ will be removed. Subsequent offsets will shift — the file structure may be affected." = "Die Bytes ab Offset %1$@ werden entfernt. Die folgenden Offsets verschieben sich — die Dateistruktur kann darunter leiden.";
 "Bytes per word in the hex grid" = "Bytes pro Wort im Hex-Raster";
 "Bytes:" = "Bytes:";

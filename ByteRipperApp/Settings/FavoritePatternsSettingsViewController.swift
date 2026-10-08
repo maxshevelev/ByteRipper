@@ -413,13 +413,12 @@ final class FavoritePatternsSettingsViewController: NSViewController,
 
     /// Puts the library in a place of the user's choosing.
     ///
-    /// A **folder** is what is asked for, not a file name, and that is the
-    /// whole of the permission story: a sandboxed app is granted what the user
-    /// pointed at, and a grant on a file dies with that file — which every
-    /// atomic write replaces, ours and every other machine's. A folder grant
-    /// survives all of it, covers the conflicted copies a sync client leaves
-    /// *beside* the library, and means the system asks once rather than at
-    /// every launch. The file inside it is ours to name (§11).
+    /// A **folder** is what is asked for, not a file name: every machine writes
+    /// a file of its own into it and reads the others', a sync client leaves
+    /// its conflicted copies *beside* the library, and every atomic write
+    /// replaces a file — ours and every other machine's. The folder is the one
+    /// thing in that picture that stays put. The file inside it is ours to
+    /// name (§11).
     @objc private func movePressed() {
         guard let folder = (chooseSharedFolder ?? { self.runFolderPanel() })() else { return }
         publish(to: folder)
@@ -527,9 +526,7 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         guard ask(previous) else { return }
         // The Trash, not `unlink`: it is the user's file, in the user's folder,
         // and a library that turns out to have been wanted is then a drag away.
-        // It is also the operation the sandbox is likeliest to allow — deleting
-        // outright needs write access to the folder the file is in, which is
-        // the folder the library has just stopped living in.
+        // Deleting outright is the fallback, for a volume that has no Trash.
         do {
             var trashed: NSURL?
             try FileManager.default.trashItem(at: previous, resultingItemURL: &trashed)

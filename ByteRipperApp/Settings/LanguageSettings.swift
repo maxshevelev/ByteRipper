@@ -182,8 +182,8 @@ final class LanguageSettingsViewController: NSViewController {
     /// Quits and comes back, which is the whole of what the change needs.
     ///
     /// `open -n` on the app's own bundle after asking the app to terminate:
-    /// relaunching from inside a sandboxed app is not something AppKit offers,
-    /// and a detached `open` is what every app that does this uses. Under test
+    /// relaunching itself is not something AppKit offers, and a detached
+    /// `open` is what every app that does this uses. Under test
     /// it does nothing — a suite that relaunches its host is a suite that does
     /// not finish.
     @objc private func relaunch() {

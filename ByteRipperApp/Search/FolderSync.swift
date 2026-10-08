@@ -67,12 +67,11 @@ final class FolderSync<Kind: SyncedCollectionKind> {
 
     /// Fired after each successful publish, with the file written.
     ///
-    /// What it is for: an atomic write replaces the file, and a security-scoped
-    /// bookmark taken against the one before it goes stale. A stale bookmark
-    /// means the next launch reaches the file by path instead — which, for a
-    /// folder macOS protects, is the system asking the user for permission all
-    /// over again. Taking a fresh bookmark on the way past is what keeps the
-    /// second launch quiet.
+    /// What it is for: a write into the folder that succeeded is the best
+    /// evidence there is that the folder can be reached. The store remembers
+    /// the folder again on the way past, which clears a "no access" that a
+    /// launch reported while the folder was away — a drive not yet mounted,
+    /// a sync client that had not made it yet.
     var didPublish: ((URL) -> Void)?
 
     /// What the merge could not decide. While this is non-empty the library is

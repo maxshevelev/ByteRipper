@@ -5,9 +5,9 @@ import ToolModuleKit
 /// A tool-module asking the user for a file, and offering one back
 /// (`Design/TOOL_MODULES_PLAN.md`).
 ///
-/// Both go through the app's own panels, which is the point: what the user
-/// picks is reachable because this process was granted it, and a tool-module
-/// gets bytes rather than a URL it would have to hold a security scope for.
+/// Both go through the app's own panels, which is the point: choosing a file
+/// is the app's chrome, and a tool-module gets bytes rather than a URL it
+/// would have to open, hold and write back to itself.
 @MainActor
 final class ToolFileTests: XCTestCase {
     private var files: [URL] = []

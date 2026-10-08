@@ -76,8 +76,10 @@ import Foundation
     func showNotice(symbol: String, lines: [String])
 
     /// Asks the user for a file and hands back its bytes. The panel is the
-    /// app's, so the sandbox's access to what the user picked stays on the
-    /// app's side of the line and never has to be granted to a tool-module.
+    /// app's because choosing a file is the app's chrome, like the notice
+    /// above: one panel, one size cap, one wording of a file that cannot be
+    /// read, rather than one per tool-module. A tool-module gets bytes and is
+    /// never handed a URL to open, hold or write back to.
     /// Nil when the user cancels or the file cannot be read.
     func requestFile(kinds: [String]) async -> ToolFile?
 

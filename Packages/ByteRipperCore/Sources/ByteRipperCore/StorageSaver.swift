@@ -8,9 +8,10 @@ import Foundation
 ///   preserving every untouched byte and the file identity.
 /// - **Full rewrite** otherwise: the full current content is streamed to a
 ///   temporary file next to the target and atomically swapped over it, so a
-///   failed save never corrupts the original. The sandboxed app has no access
-///   to the target's directory, so when the sibling temp file cannot be created
-///   the content is written straight into the user-selected file instead.
+///   failed save never corrupts the original. When the target's directory is
+///   not writable — a writable file in a folder that is not, which is where
+///   the sandboxed app always stood — the sibling temp file cannot be created,
+///   and the content is written straight into the file instead.
 public enum StorageSaver {
     public static func save(_ storage: EditOverlayStorage, to url: URL) throws {
         // The base file must still hold what the table's offsets were written
@@ -60,16 +61,15 @@ public enum StorageSaver {
     /// Writes the full current content to `url`, atomically when the environment
     /// allows. The primary path materializes the content in a temp file next to
     /// the target and swaps it over, so a failed save never corrupts the
-    /// original. The sandboxed app has access only to the user-selected file,
-    /// not to its directory, so it cannot create the sibling temp file — in that
-    /// case the content is written straight into the file the user chose, which
-    /// the sandbox does cover.
+    /// original. When the file is writable but its directory is not, the
+    /// sibling temp file cannot be created — in that case the content is
+    /// written straight into the file itself.
     private static func rewriteAtomically(_ storage: EditOverlayStorage, to url: URL) throws {
         do {
             try rewriteViaSiblingTemp(storage, to: url)
         } catch let error as StorageError where error == .writeFailed {
-            // The sibling temp file could not be created (sandboxed app, or the
-            // directory is otherwise not writable). Fall back to a direct write.
+            // The sibling temp file could not be created (the directory is not
+            // writable). Fall back to a direct write.
             try rewriteDirectly(storage, to: url)
         }
     }
@@ -114,15 +114,15 @@ public enum StorageSaver {
     }
 
     /// Writes the full content into `url` itself, for when the atomic swap is
-    /// impossible because the target's directory is not writable (the sandbox:
-    /// the app owns the user-selected file but not the folder around it, so
-    /// `open(2)` succeeds where creating a sibling does not). Not atomic — a
-    /// failed save can leave a partial file — but it is the only option the
-    /// sandbox permits.
+    /// impossible because the target's directory is not writable (the file is
+    /// the app's to write but the folder around it is not, so `open(2)`
+    /// succeeds where creating a sibling does not — which was every save, while
+    /// the app was sandboxed). Not atomic — a failed save can leave a partial
+    /// file — but it is the only option left.
     ///
     /// The content is materialized into the app's OWN temporary directory first,
     /// and only then does the target get opened for writing. That staging copy
-    /// costs the document's size in free space inside the container while the
+    /// costs the document's size in free space on the startup volume while the
     /// save runs — a 1 GB image needs 1 GB there. That order is the
     /// whole point: on a plain Save the target *is* the file the overlay still
     /// reads its base from, and opening it for writing empties it — so reading
@@ -178,7 +178,7 @@ public enum StorageSaver {
             // shrank under the read (a base file truncated by another process,
             // §5.5). Stopping here would fsync and publish a SHORT file and
             // report the save as done — silent data loss, the same class as the
-            // sandbox-temp bug (5bbef2a). A save that cannot read what it is
+            // staging-order bug in `rewriteDirectly` (5bbef2a). A save that cannot read what it is
             // saving must fail.
             guard bytes.count == Int(step) else { throw StorageError.readFailed }
             try handle.write(contentsOf: Data(bytes))

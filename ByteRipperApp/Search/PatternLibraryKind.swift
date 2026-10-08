@@ -5,7 +5,7 @@ import ByteRipperCore
 /// user shares (`Design/FAVORITES_SYNC_PLAN.md`).
 ///
 /// One of these per thing the app syncs. Everything else — the merge, the
-/// questions, the publishing loop, the bookmark — is written once and takes
+/// questions, the publishing loop, the remembered folder — is written once and takes
 /// this as its parameter, so bookmarks or segments become a conformance rather
 /// than a second copy of all of it.
 protocol SyncedCollectionKind {
@@ -18,12 +18,8 @@ protocol SyncedCollectionKind {
     /// sees, in a folder among other people's files.
     static var fileStem: String { get }
 
-    /// Where the folder is remembered, and where it *was* remembered when the
-    /// app was pointed at a file rather than a folder.
-    static var folderBookmarkKey: String { get }
+    /// Where the folder's path is remembered.
     static var folderPathKey: String { get }
-    static var legacyBookmarkKey: String { get }
-    static var legacyPathKey: String { get }
 
     /// The defaults domain those keys live in — the owning store's, so a test
     /// that isolates one isolates all of it.
@@ -47,10 +43,7 @@ enum PatternLibraryKind: SyncedCollectionKind {
     /// `DumpCompare Patterns (…).json` is simply left where it is. Past this
     /// point the argument above holds and the stem does not move again.
     static let fileStem = "ByteRipper Patterns"
-    static let folderBookmarkKey = "LibraryFolderBookmark"
     static let folderPathKey = "LibraryFolderPath"
-    static let legacyBookmarkKey = "LibraryPublishedBookmark"
-    static let legacyPathKey = "LibraryPublishedPath"
     static var defaults: UserDefaults { FavoritePatternStore.defaults }
 }
 

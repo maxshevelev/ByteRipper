@@ -40,14 +40,30 @@ final class FavoritesFileTests: XCTestCase {
 
     // MARK: - Where it lives
 
-    /// Inside the container, where a sandboxed app may write without asking
-    /// anyone, under a folder of its own because the system puts its folders in
-    /// Application Support too.
-    func testTheDefaultPlaceIsTheContainersApplicationSupport() {
-        let url = FavoritesFile.defaultURL()
+    /// In Application Support, where the app may write without asking anyone,
+    /// under a folder of its own because the system and other apps keep their
+    /// folders there too. Asked of a scratch base: the real one is the user's.
+    func testTheShippedPlaceIsAFolderOfItsOwnInApplicationSupport() throws {
+        XCTAssertTrue(FavoritesFile.applicationSupport.path.hasSuffix("Library/Application Support"),
+                      FavoritesFile.applicationSupport.path)
+        let base = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("FavoritesFileTests-\(UUID().uuidString)", isDirectory: true)
+        addTeardownBlock { try? FileManager.default.removeItem(at: base) }
+
+        let url = FavoritesFile.shippedURL(in: base)
+
         XCTAssertEqual(url.lastPathComponent, "Favorites.json")
         XCTAssertEqual(url.deletingLastPathComponent().lastPathComponent, "ByteRipper")
-        XCTAssertTrue(url.path.contains("Application Support"), url.path)
+        XCTAssertEqual(url.deletingLastPathComponent().deletingLastPathComponent().path, base.path)
+    }
+
+    /// A test run never defaults to that place: the app is not sandboxed, so
+    /// the test host's Application Support is the user's own, and a suite that
+    /// forgot to isolate the library would write the user's patterns.
+    func testATestRunNeverDefaultsToTheUsersLibrary() {
+        let url = FavoritesFile.defaultURL()
+        XCTAssertFalse(url.path.hasPrefix(FavoritesFile.applicationSupport.path), url.path)
+        XCTAssertTrue(url.path.hasPrefix(URL(fileURLWithPath: NSTemporaryDirectory()).path), url.path)
     }
 
     /// Writing creates the folder: on a fresh install nothing has made it.

@@ -21,16 +21,18 @@ import Localization
 /// go to `UserDefaults.standard` inside AppKit, keyed by the app's bundle
 /// identifier, and take no seam. So the test host runs under its own identifier
 /// (the `dev.maxik.ByteRipper.TestsHost` that `Scripts/run-tests.sh` sets via the
-/// `BYTERIPPER_APP_BUNDLE_ID` build setting), which is a different sandbox
-/// container and a different preferences domain: every write of a test run,
-/// AppKit's included, lands in a throwaway domain, and nothing reaches the
-/// user's own settings. The guard in `store` below is the backstop for a run
+/// `BYTERIPPER_APP_BUNDLE_ID` build setting), which is a different preferences
+/// domain: every write of a test run, AppKit's included, lands in a throwaway
+/// domain, and nothing reaches the user's own settings. The identifier keeps
+/// apart the preferences and nothing else — the app is not sandboxed, so files
+/// a test host writes land in the user's own folders, and the few that have a
+/// default place there move it under test (`FavoritesFile.defaultURL()`). The guard in `store` below is the backstop for a run
 /// that forgets that override: a test host still wearing the real identifier
 /// would write the user's settings the moment it ran, so it refuses to start at
 /// all instead.
 enum AppDefaults {
-    /// The identifier the real, shipped app wears — what macOS keys its sandbox
-    /// container and preferences domain by. Kept here (not only in `project.yml`)
+    /// The identifier the real, shipped app wears — what macOS keys its
+    /// preferences domain by. Kept here (not only in `project.yml`)
     /// so the test-host guard below can name it without re-spelling the string.
     static let realHostIdentifier = "dev.maxik.DumpCompare"
 

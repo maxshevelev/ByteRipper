@@ -28,12 +28,12 @@ public enum SegmentWriteError: Error, Equatable, Sendable {
 /// (the single-file atomic write, and the lesson behind `5bbef2a`): stage each
 /// part fully before any of them is published.
 ///
-/// The sandboxed app is granted the file a panel chose, not the folder around it
-/// (§5.2). A save panel therefore grants one file and its directory is not
-/// writable, so the sibling temp cannot be created. When that happens and there
-/// is a single part, the write falls back to writing that part straight into the
-/// file the user chose — the same fallback `StorageSaver` takes for a Save As —
-/// which is not atomic but is the only option the sandbox permits.
+/// A file can be writable in a folder that is not (§5.2) — which, while the app
+/// was sandboxed, was every file a save panel chose — and then the sibling temp
+/// cannot be created. When that happens and there is a single part, the write
+/// falls back to writing that part straight into the file — the same fallback
+/// `StorageSaver` takes for a Save As — which is not atomic but is the only
+/// option left.
 public enum SegmentWriter {
     /// One part to write: the source byte range and the file name it becomes.
     /// The range is half-open `[lowerBound, upperBound)`, the app's internal
@@ -73,12 +73,11 @@ public enum SegmentWriter {
             try writeViaSiblingTemps(parts, from: source, to: directory, total: total,
                                      shouldCancel: shouldCancel, progress: progress)
         } catch let error as SegmentWriteError where error == .writeFailed && parts.count == 1 {
-            // The sibling temp could not be created: the sandbox grants the file
-            // a save panel chose but not its folder, so a temp next to it is
-            // impossible. With a single part there is nothing to keep atomic
-            // against — write it straight into the file the user chose, which the
-            // sandbox does cover. A multi-part write has no such fallback: it
-            // needs the directory the open panel in directory mode grants.
+            // The sibling temp could not be created: the folder is not
+            // writable, so a temp next to the file is impossible. With a single
+            // part there is nothing to keep atomic against — write it straight
+            // into the file. A multi-part write has no such fallback: it needs
+            // a folder it can create files in.
             try writeDirectly(parts[0], from: source,
                               to: directory.appendingPathComponent(parts[0].name),
                               shouldCancel: shouldCancel, progress: progress)
@@ -144,10 +143,10 @@ public enum SegmentWriter {
         }
     }
 
-    /// The sandbox fallback for a single part: the app owns the file the user
-    /// chose but not the folder around it, so the atomic swap is impossible and
-    /// the part is written straight into the file. Not atomic — a failed write can
-    /// leave a partial file — but it is the only option the sandbox permits.
+    /// The fallback for a single part: the file is writable but the folder
+    /// around it is not, so the atomic swap is impossible and the part is
+    /// written straight into the file. Not atomic — a failed write can leave a
+    /// partial file — but it is the only option left.
     ///
     /// The part's bytes are materialized into the app's OWN temporary directory
     /// first (which costs the part's size in free space there while the write

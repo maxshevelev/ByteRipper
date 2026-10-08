@@ -5,10 +5,11 @@ import UniformTypeIdentifiers
 /// extension by double-click, and asking the system to make that app this one.
 ///
 /// Built on `NSWorkspace`, not on `LSSetDefaultRoleHandlerForContentType`. The
-/// classic call is deprecated since macOS 12 and — measured — refuses the write
-/// from inside the app sandbox with `permErr` (-54); `setDefaultApplication`
-/// performs the same change from the same sandbox with no entitlement and no
-/// helper process (§25.1).
+/// classic call is deprecated since macOS 12 and — measured, when the app was
+/// still sandboxed — refused the write with `permErr` (-54), while
+/// `setDefaultApplication` performed the same change with no entitlement and no
+/// helper process (§25.1). The app has since left the sandbox; the supported
+/// API stays the one to use.
 ///
 /// Two asymmetries of the system's own, both load-bearing here:
 ///
@@ -38,8 +39,8 @@ enum DefaultHandlerService {
     }
 
     /// The app that currently opens `ext` on a double-click, or nil when nothing
-    /// claims it. Reading is permitted inside the sandbox, which is what lets
-    /// the tab show the truth rather than what it last asked for.
+    /// claims it. Read from the system each time, which is what lets the tab
+    /// show the truth rather than what it last asked for.
     static func currentHandler(for ext: String) -> URL? {
         guard let type = type(for: ext) else { return nil }
         return NSWorkspace.shared.urlForApplication(toOpen: type)

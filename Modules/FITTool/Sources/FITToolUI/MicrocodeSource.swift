@@ -81,10 +81,30 @@ public struct CPUMicrocodesRepository: MicrocodeSource {
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.session = session
-        self.cache = FileManager.default
-            .urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("CPUMicrocodes-tree.json")
+        self.cache = Self.cacheFile()
         self.held = Freshened(ttl: ttl, now: now)
+    }
+
+    /// Where the listing is kept between runs: a folder of the app's own under
+    /// `~/Library/Caches`, named by the bundle identifier.
+    ///
+    /// A folder of its own because the app is not sandboxed: `Caches` is the
+    /// user's, shared with every other app, and a bare `CPUMicrocodes-tree.json`
+    /// there says nothing about whose it is. Named by the identifier, so the
+    /// test host — which wears one of its own — keeps a listing apart from the
+    /// user's copy of the app. Nil when the folder cannot be made; the cache is
+    /// a convenience, and the network is still asked.
+    static func cacheFile() -> URL? {
+        guard let caches = FileManager.default
+            .urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+        let folder = caches.appendingPathComponent(
+            Bundle.main.bundleIdentifier ?? "ByteRipper", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        } catch {
+            return nil
+        }
+        return folder.appendingPathComponent("CPUMicrocodes-tree.json")
     }
 
     public func catalogue() async throws -> [MicrocodeCatalogueEntry] {

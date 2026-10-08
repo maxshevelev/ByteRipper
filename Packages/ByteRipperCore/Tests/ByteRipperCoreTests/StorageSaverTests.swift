@@ -91,10 +91,10 @@ final class StorageSaverTests: XCTestCase {
         }
     }
 
-    /// A file the sandboxed app has been granted but whose directory it cannot
-    /// write: the shape that forces the direct-write fallback, because
-    /// `rewriteViaSiblingTemp` decides on exactly one thing — whether it can
-    /// create a file next to the target. Returns the target and asserts both
+    /// A file the app may write in a directory it cannot — every save panel's
+    /// file while the app was sandboxed: the shape that forces the direct-write
+    /// fallback, because `rewriteViaSiblingTemp` decides on exactly one thing —
+    /// whether it can create a file next to the target. Returns the target and asserts both
     /// halves of the premise.
     private func makeTargetInAnUnwritableDirectory(_ initial: Data) throws -> URL {
         let target = try TestSupport.makeTempFile(contents: initial)
@@ -113,8 +113,8 @@ final class StorageSaverTests: XCTestCase {
         return target
     }
 
-    /// The sandbox fallback for Save As: the app owns the file the user chose but
-    /// not its directory, so the atomic swap is impossible. The content must
+    /// The fallback for Save As: the file the user chose is writable but its
+    /// directory is not, so the atomic swap is impossible. The content must
     /// still land, written straight into the target.
     func testASaveAsFallsBackToWritingTheChosenFileDirectly() throws {
         let (s, _) = try makeEditable(Data([0x01, 0x02, 0x03]))
@@ -126,7 +126,7 @@ final class StorageSaverTests: XCTestCase {
     }
 
     /// The case the fallback exists for and the one it got wrong: a plain
-    /// **Save** of a length-changing edit, in the sandbox, where the file being
+    /// **Save** of a length-changing edit, in an unwritable folder, where the file being
     /// written IS the file the overlay still reads its base from.
     ///
     /// Writing straight into it opened the target with `O_TRUNC`, which emptied

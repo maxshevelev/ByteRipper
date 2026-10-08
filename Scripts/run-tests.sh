@@ -63,10 +63,10 @@ report() {   # keeps the counts, the failures, and any death of the test host
     ' | tail -21
 }
 
-# The app suite runs sandboxed under its own bundle id, so its `UserDefaults`
-# never reach the developer's real preferences. The *package* tests run via
-# `swift test`, which is not sandboxed: `cfprefsd` persists their `UserDefaults`
-# suites into the developer's own `~/Library/Preferences/`. No environment
+# Neither the app suite nor the package tests are sandboxed, so `cfprefsd`
+# persists every `UserDefaults` suite they open into the developer's own
+# `~/Library/Preferences/` (the app suite's host runs under its own bundle id,
+# which keeps the *app's* domain apart, not the suites a test names). No environment
 # override steers that (measured: `NSHomeDirectory()` and `cfprefsd` both ignore
 # `$HOME`), and a cleanup inside the test is undone the moment the test process
 # exits — `cfprefsd` re-flushes a domain on client death, after every `tearDown`
@@ -81,6 +81,28 @@ sweep_package_test_prefs() {
     # UUID suite each. `ToolRowMarksTests.plist`: its fixed suite. Nothing else a
     # package test writes lands here.
     rm -f "$dir"/TextDecodingTests-*.plist "$dir"/ToolRowMarksTests.plist 2>/dev/null
+    return 0
+}
+
+# The same sweep for the app suite, after each group. Until the app left the
+# sandbox (issue #30) these suites landed in the test host's container, out of
+# the developer's sight; now they land beside the developer's own preferences.
+# Named exactly: `<Class>.isolated` per class (`isolatedDefaults(for:)` in
+# `ByteRipperTests/TestSupport.swift`), the run's own `AppDefaults` suite, and
+# the three fixed suites a test opens by hand. The host's own domain
+# (`dev.maxik.ByteRipper.TestsHost`) is left: it is one file, holding AppKit's
+# autosaves for a host nobody else wears, as it did inside the container.
+sweep_app_test_prefs() {
+    local dir="$HOME/Library/Preferences"
+    [ -d "$dir" ] || return 0
+    local class
+    for class in $1; do
+        rm -f "$dir/$class.isolated.plist" 2>/dev/null
+    done
+    rm -f "$dir/dev.maxik.DumpCompare.tests.plist" \
+          "$dir/FileTypesSettingsTests.plist" \
+          "$dir/DefaultHandlerSettingsTests.plist" \
+          "$dir/FindFlowTests.caseToggle.plist" 2>/dev/null
     return 0
 }
 
@@ -110,6 +132,7 @@ group=1
 ran=0
 index=0
 args=""
+group_classes=""
 first=""
 last=""
 
@@ -130,7 +153,7 @@ wedge_grace=30
 run_group() {
     [ -z "$args" ] && return
     if [ -n "$only_group" ] && [ "$group" -ne "$only_group" ]; then
-        group=$((group + 1)) args="" first=""
+        group=$((group + 1)) args="" first="" group_classes=""
         return
     fi
     ran=$((ran + 1))
@@ -138,10 +161,10 @@ run_group() {
     local before pidfile statusfile runner xcpid wedged since=0
     before=$(wedged_hosts)
     pidfile=$(mktemp) statusfile=$(mktemp)
-    # The test host under its own bundle identifier: its sandbox container and
-    # preferences domain are its own, so a run leaves nothing in the user's
-    # real settings — including the autosaves AppKit writes on the host's
-    # behalf (a window frame, a panel's size), which take no app-level seam.
+    # The test host under its own bundle identifier: its preferences domain is
+    # its own, so a run leaves nothing in the user's real settings — including
+    # the autosaves AppKit writes on the host's behalf (a window frame, a
+    # panel's size), which take no app-level seam.
     # The scheme cannot carry this (XcodeGen drops test-action build settings),
     # so the runner is the one place that must say it; a hand-run xcodebuild
     # that forgets is refused by the AppDefaults guard rather than left to
@@ -176,14 +199,17 @@ run_group() {
     wait "$runner" 2>/dev/null
     status=$(cat "$statusfile" 2>/dev/null)
     rm -f "$pidfile" "$statusfile"
+    sweep_app_test_prefs "$group_classes"
     [ "${status:-1}" -ne 0 ] && failed=1
     group=$((group + 1))
     args=""
     first=""
+    group_classes=""
 }
 
 for class in $classes; do
     args="$args -only-testing:ByteRipperTests/$class"
+    group_classes="$group_classes $class"
     [ -z "$first" ] && first="$class"
     last="$class"
     index=$((index + 1))

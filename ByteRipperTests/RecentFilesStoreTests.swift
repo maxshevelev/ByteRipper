@@ -77,7 +77,7 @@ final class RecentFilesStoreTests: XCTestCase {
     }
 
     /// A row whose file is gone is a greyed ghost, so the launch-time prune
-    /// drops it — the same reading the bookmark store's pruneNow gets (§D9).
+    /// drops it.
     func testPruneMissingDropsDeadPathsAndKeepsTheLiveOnes() throws {
         let live = try tempFile([0x41])
         let dead = FileManager.default.temporaryDirectory

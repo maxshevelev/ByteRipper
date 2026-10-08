@@ -32,9 +32,9 @@ final class SegmentWriterTests: XCTestCase {
         try FileManager.default.contentsOfDirectory(atPath: directory.path).sorted()
     }
 
-    /// A file the sandboxed app has been granted but whose directory it cannot
-    /// write: the shape that forces the direct-write fallback, because the
-    /// sibling temp cannot be created. Returns the target and asserts both halves
+    /// A file the app may write in a directory it cannot — every save panel's
+    /// file while the app was sandboxed: the shape that forces the direct-write
+    /// fallback, because the sibling temp cannot be created. Returns the target and asserts both halves
     /// of the premise — the temp really cannot be created, the file really is
     /// still writable.
     private func makeTargetInAnUnwritableDirectory(_ initial: Data) throws -> URL {
@@ -204,10 +204,10 @@ final class SegmentWriterTests: XCTestCase {
         XCTAssertEqual(written, Data(bytes), "every byte lands at its own offset")
     }
 
-    // MARK: - The sandbox fallback: one part into a file whose directory is not writable
+    // MARK: - The fallback: one part into a file whose directory is not writable
 
-    /// The sandbox fallback for Save Segment (§21.5): the app owns the file the
-    /// user chose but not the folder around it, so the atomic swap is impossible.
+    /// The fallback for Save Segment (§21.5): the file the user chose is
+    /// writable but the folder around it is not, so the atomic swap is impossible.
     /// The part must still land, written straight into the target.
     func testASinglePartFallsBackToWritingTheChosenFileDirectly() throws {
         let source = ArrayStorage([UInt8](0..<16))

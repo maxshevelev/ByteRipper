@@ -3,8 +3,9 @@ import Foundation
 /// Errors thrown by the storage layer.
 ///
 /// The presentation layer maps these to user-facing alerts (§16 of
-/// REQUIREMENTS.md). The sandboxed app surfaces `.permissionDenied` when the
-/// security-scoped access to a file is missing or has been revoked.
+/// REQUIREMENTS.md). `.permissionDenied` is a file the user may not read or
+/// write: its own permissions, or a folder macOS protects and the user refused
+/// the app.
 public enum StorageError: Error, Equatable, Sendable {
     case fileNotFound
     case isDirectory

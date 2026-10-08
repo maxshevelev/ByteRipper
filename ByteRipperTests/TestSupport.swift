@@ -21,11 +21,13 @@ extension XCTestCase {
     /// Two things this exists for, both learned the hard way:
     ///
     /// - `removePersistentDomain(forName:)` empties a suite and leaves its
-    ///   plist on disk. The test host is sandboxed into the *app's* container,
-    ///   so that file lands beside the user's own preferences — and a suite
-    ///   named per test left one behind per test. They reached 53 720 files and
+    ///   plist on disk, beside the user's own preferences — and a suite named
+    ///   per test left one behind per test. They reached 53 720 files and
     ///   220 MB, at which point listing the directory took minutes and the
-    ///   suite's own runs were reading through all of it.
+    ///   suite's own runs were reading through all of it. (That was inside the
+    ///   sandbox container the host had then; the app is no longer sandboxed,
+    ///   so it is `~/Library/Preferences` itself, and `Scripts/run-tests.sh`
+    ///   sweeps what `cfprefsd` writes back after the host exits.)
     /// - One name per class rather than per test keeps it to a single file even
     ///   if the removal ever fails again, and emptying it here gives each test
     ///   the clean slate a fresh name did.
@@ -47,23 +49,20 @@ extension XCTestCase {
         // Flush the daemon's copy first: deleting the file under a domain it is
         // still holding invites it to be written out again.
         CFPreferencesAppSynchronize(name as CFString)
-        // The host is sandboxed, so `NSHomeDirectory()` is the app container's
-        // Data directory; an unsandboxed run would put it in the real home.
-        // Try both rather than guess which one ran.
-        let homes = [NSHomeDirectory(), NSString("~").expandingTildeInPath]
-        for home in homes {
-            let url = URL(fileURLWithPath: home)
-                .appendingPathComponent("Library/Preferences/\(name).plist")
-            try? FileManager.default.removeItem(at: url)
-        }
+        // The host is not sandboxed, so the plist is in the real home's
+        // preferences. `cfprefsd` may write it back when the host exits; the
+        // test runner sweeps that copy (`Scripts/run-tests.sh`).
+        let url = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Preferences/\(name).plist")
+        try? FileManager.default.removeItem(at: url)
     }
 
     /// Writes `bytes` to a fresh file in the test host's temporary directory and
     /// deletes it when the test ends.
     ///
-    /// The host is sandboxed, so this lands in the app's own container rather
-    /// than `/tmp`, and a file left behind stays there for good — hence the
-    /// teardown block, registered here so no caller has to remember it. Callers
+    /// A file left behind stays there until macOS gets round to clearing the
+    /// temporary directory, which can be days — hence the teardown block,
+    /// registered here so no caller has to remember it. Callers
     /// that must delete earlier (closing a pane before its file disappears, so
     /// the change watcher does not raise a modal) still do that themselves; a
     /// second removal of a gone file is a no-op.

@@ -2,11 +2,10 @@ import Foundation
 
 /// The files opened most recently, most recent first, for File ▸ Open Recent.
 ///
-/// A separate list from `SandboxBookmarkStore`'s ordering: that store is a
-/// write-access cache (capped at 300, it also records Save As destinations, and
-/// it prunes for liveness) and a recent-files menu wants a short list of what
-/// the user actually *opened*. Recorded on a successful open, right beside the
-/// bookmark's own record, so the two stay in step.
+/// Plain paths: the app is not sandboxed, so a path is all it takes to open a
+/// file again, and there is nothing to re-earn at launch. Recorded on a
+/// successful open — what the user actually *opened*, not every Save As
+/// destination.
 ///
 /// Local by design: the list lives in `UserDefaults` like the find bar's
 /// history, and is not published to a shared file (`FavoritePatternStore`
@@ -37,9 +36,7 @@ enum RecentFilesStore {
     /// opened is a greyed ghost in the menu, and the ghost outlives the file
     /// by exactly as long as the list is not touched — which can be forever.
     ///
-    /// Called at launch, the way `SandboxBookmarkStore.pruneNow` is for the
-    /// bookmarks: the two lists are independent, so one's pruning does not
-    /// reach the other's dead weight.
+    /// Called at launch.
     static func pruneMissing() {
         let kept = recent.filter { FileManager.default.fileExists(atPath: $0) }
         guard kept.count != recent.count else { return }
@@ -55,9 +52,8 @@ enum RecentFilesStore {
     /// rewrite the list for nothing.
     @discardableResult
     static func record(_ url: URL) -> Bool {
-        // Standardized to match `SandboxBookmarkStore`'s keying, so the path a
-        // recent row carries and the path its bookmark is filed under are the
-        // same string.
+        // Standardized, so one file reached by two spellings (`/a/./b`,
+        // `/a/x/../b`) is one row rather than two.
         let path = url.standardizedFileURL.path
         let before = recent
         var entries = before.filter { $0 != path }

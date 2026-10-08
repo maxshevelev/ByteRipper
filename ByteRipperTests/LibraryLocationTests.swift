@@ -116,9 +116,9 @@ final class LibraryLocationTests: XCTestCase {
                        "/Volumes/Stick/ByteRipper Patterns.json")
     }
 
-    /// Choosing a folder is what makes the permission last: a grant on a file
-    /// dies with that file, and every atomic write replaces it. The folder is
-    /// remembered as its own bookmark, and the name inside it is the app's.
+    /// The user chooses a folder, not a file: every machine's file sits in it,
+    /// and every atomic write replaces a file. The folder is remembered by its
+    /// path, and the name inside it is the app's.
     func testMovingRemembersTheFolderAndNamesTheFileItself() throws {
         FavoritePatternStore.add(entry("ME FPT", "$FPT"))
         openTab()
@@ -536,14 +536,9 @@ final class LibraryLocationTests: XCTestCase {
 
     // MARK: - Permission
 
-    /// The place is remembered as a bookmark, not just a path: a path into a
-    /// folder macOS protects makes the system ask the user for permission on
-    /// every launch. The bookmark is refreshed after each publish, because an
-    /// atomic write replaces the file the old one was taken against.
-    ///
-    /// A temporary directory carries no scope to bookmark, so what this can
-    /// assert is that the place is remembered and that publishing does not
-    /// throw away what is there.
+    /// The place is remembered as a path — the app is not sandboxed, so a path
+    /// is all a later launch needs to reach it — and a publish keeps it
+    /// remembered and says the folder is reachable.
     func testThePlaceIsRememberedForTheNextLaunch() {
         FavoritePatternStore.add(entry("ME FPT", "$FPT"))
         openTab(choosing: sharedURL)
@@ -552,13 +547,36 @@ final class LibraryLocationTests: XCTestCase {
 
         XCTAssertEqual(store.string(forKey: LibraryLocation.folderPathKey),
                        folder.standardizedFileURL.path)
-        let bookmark = store.data(forKey: LibraryLocation.folderBookmarkKey)
 
         FavoritePatternStore.add(entry("another", "22"))   // publishes again
 
-        XCTAssertEqual(store.data(forKey: LibraryLocation.folderBookmarkKey)?.count,
-                       bookmark?.count,
-                       "a publish never leaves the place less reachable than it found it")
+        XCTAssertEqual(store.string(forKey: LibraryLocation.folderPathKey),
+                       folder.standardizedFileURL.path)
+        XCTAssertTrue(LibraryLocation.hasAccess,
+                      "a publish that wrote into the folder has reached it")
+    }
+
+    /// A launch that finds the remembered folder gone says so, rather than
+    /// claiming a library it cannot write. Nothing is forgotten: the folder may
+    /// be on a drive that is simply not mounted yet.
+    func testAFolderThatIsGoneAtLaunchIsNoAccess() {
+        let gone = folder.appendingPathComponent("not-there", isDirectory: true)
+        store.set(gone.path, forKey: LibraryLocation.folderPathKey)
+
+        XCTAssertEqual(LibraryLocation.restore()?.path, gone.path)
+        XCTAssertFalse(LibraryLocation.hasAccess)
+        XCTAssertEqual(store.string(forKey: LibraryLocation.folderPathKey), gone.path,
+                       "an unreachable folder is reported, not forgotten")
+    }
+
+    /// And one that is there at launch is reachable, with nothing re-earned:
+    /// a path is the whole of what the app keeps.
+    func testAFolderThatIsThereAtLaunchIsReached() throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        store.set(folder.path, forKey: LibraryLocation.folderPathKey)
+
+        XCTAssertEqual(LibraryLocation.restore()?.path, folder.path)
+        XCTAssertTrue(LibraryLocation.hasAccess)
     }
 
     // MARK: - Across a launch
@@ -572,10 +590,9 @@ final class LibraryLocationTests: XCTestCase {
 
         FavoritePatternStore.forgetLastGood()   // as a launch would
 
-        // The same *file*, not the same spelling of it: a place remembered
-        // through a security-scoped bookmark comes back resolved
-        // (`/private/var/…` for a `/var/…` that was handed in), and that is the
-        // bookmark working rather than a difference worth asserting.
+        // The same *file*, not the same spelling of it: `/var/…` and
+        // `/private/var/…` are one folder, and which spelling comes back
+        // depends on how the path was standardised on the way in.
         XCTAssertEqual(FavoritePatternStore.sharedURL?.resolvingSymlinksInPath(),
                        sharedURL.resolvingSymlinksInPath())
         XCTAssertEqual(FavoritePatternStore.favorites.map(\.name), ["ME FPT"])

@@ -60,8 +60,8 @@ enum FavoritePatternStore {
             NotificationCenter.default.post(name: didChangeNotification, object: nil)
         }
         made.didPublish = { url in
-            // Fresh bookmark for the folder it went into: a bookmark can go
-            // stale, and a stale one sends the next launch down the path.
+            // A write into the folder just succeeded: remember it, and that
+            // it is reachable — which clears a "no access" a launch reported.
             LibraryLocation.remember(url.deletingLastPathComponent())
         }
         // Held *before* it does anything. Its first merge announces what it
@@ -74,8 +74,7 @@ enum FavoritePatternStore {
     }
 
     /// Where the library is published, or nil while it is kept to this Mac.
-    /// Set by the Favorites tab (stage 5 of the plan); remembered as a
-    /// security-scoped bookmark, not as a path.
+    /// Set by the Favorites tab (stage 5 of the plan); remembered as a path.
     ///
     /// Held here rather than read back off the sync: building a sync needs to
     /// know where it publishes, so asking the sync for it would be asking it to
@@ -83,8 +82,8 @@ enum FavoritePatternStore {
     /// The folder the library is published to, or nil while it is kept to this
     /// Mac. Set by the Favorites tab (§11).
     ///
-    /// A folder rather than a file, because that is what the sandbox grants
-    /// durably (`LibraryLocation`); the file inside it is the app's to name.
+    /// A folder rather than a file, because every machine's file sits in it
+    /// (`LibraryLocation`); the file inside it is the app's to name.
     static var sharedFolder: URL? {
         get {
             if !restoredLocation {

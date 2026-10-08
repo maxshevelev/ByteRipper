@@ -62,10 +62,7 @@ final class GenericSyncTests: XCTestCase {
         typealias Item = Note
 
         static let fileStem = "ByteRipper Notes"
-        static let folderBookmarkKey = "NotesFolderBookmark"
         static let folderPathKey = "NotesFolderPath"
-        static let legacyBookmarkKey = "NotesPublishedBookmark"
-        static let legacyPathKey = "NotesPublishedPath"
         static var defaults: UserDefaults { FavoritePatternStore.defaults }
     }
 
