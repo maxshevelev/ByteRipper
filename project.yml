@@ -148,6 +148,18 @@ targets:
         product: UEFIToolUI
       - package: MEATool
         product: MEAToolUI
+      # The agent service: the protocol, the tools' shape, the socket
+      # (`Design/AGENT_PLAN.md`).
+      - package: AgentKit
+      # The relay an agent's client launches, shipped inside the app so it is
+      # always the relay of the app beside it. `Contents/Helpers` is where a
+      # bundle keeps executables that are not the app itself.
+      - target: byteripper-mcp
+        embed: true
+        codeSign: true
+        copy:
+          destination: wrapper
+          subpath: Contents/Helpers
     # No entitlements, and so no entitlements file: the app is not sandboxed
     # (issue #30). It is not going to the App Store, and the sandbox took away
     # what a workshop tool needs — reading a dump by path that nobody picked in
@@ -265,6 +277,27 @@ targets:
         # but macOS asks again after every rebuild before letting it into a
         # folder it protects, such as Documents or iCloud Drive.
 
+  # What an agent's client launches: stdin and stdout on one side, the app's
+  # agent socket on the other (`ByteRipperRelay/main.swift`). A target of the
+  # app's project rather than a package of its own, because it exists only to
+  # be copied into the app's bundle.
+  byteripper-mcp:
+    type: tool
+    platform: macOS
+    configFiles:
+      Debug: Signing.xcconfig
+      Release: Signing.xcconfig
+    sources:
+      - path: ByteRipperRelay
+    dependencies:
+      - package: AgentKit
+    settings:
+      base:
+        PRODUCT_NAME: byteripper-mcp
+        PRODUCT_BUNDLE_IDENTIFIER: dev.maxik.ByteRipper.mcp
+        SWIFT_VERSION: "5.9"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+
   ByteRipperTests:
     type: bundle.unit-test
     platform: macOS
@@ -298,6 +331,7 @@ targets:
         product: MEFirmware
       - package: MEATool
         product: MEAToolUI
+      - package: AgentKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.maxik.ByteRipperTests

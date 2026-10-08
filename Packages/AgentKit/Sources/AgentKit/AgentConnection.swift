@@ -161,12 +161,12 @@ public actor AgentConnection {
 
         switch method {
         case "server/discover":
-            write(RPCMessage.result(id: id, wrap(discovery(), era: era)))
+            write(RPCMessage.result(id: id, wrap(discovery(), era: era, cacheable: true)))
         case "ping":
             write(RPCMessage.result(id: id, wrap(.object([:]), era: era)))
         case "tools/list":
             let tools = JSONValue.array(server.tools.map(\.listing))
-            write(RPCMessage.result(id: id, wrap(["tools": tools], era: era)))
+            write(RPCMessage.result(id: id, wrap(["tools": tools], era: era, cacheable: true)))
         case "tools/call":
             try startCall(id: id, key: key, params: params, era: era)
         default:
@@ -226,10 +226,20 @@ public actor AgentConnection {
     /// it is and who sent it, because the client holds nothing from earlier
     /// to know either by; a legacy one is left as the handshake versions
     /// define it.
-    private func wrap(_ result: JSONValue, era: MCPEra) -> JSONValue {
+    ///
+    /// A modern `server/discover` and `tools/list` must also say how long the
+    /// answer may be kept and by whom — the specification requires it, and a
+    /// client that validates the result refuses one without (Claude Code
+    /// 2.1.292 does, and then has no tools). The list does not change while
+    /// the app runs, and is the same for whoever asks.
+    private func wrap(_ result: JSONValue, era: MCPEra, cacheable: Bool = false) -> JSONValue {
         guard case .modern = era, case .object(var members) = result else { return result }
         members["resultType"] = "complete"
         members["_meta"] = [MCPProtocol.Meta.serverInfo: server.info.json]
+        if cacheable {
+            members["ttlMs"] = .int(MCPProtocol.listTTLMilliseconds)
+            members["cacheScope"] = "public"
+        }
         return .object(members)
     }
 

@@ -991,6 +991,10 @@ final class FilePaneView: NSView {
     /// the view (§10.6).
     var firstVisibleOffset: UInt64 { hexView.visibleByteRange().lowerBound }
 
+    /// The bytes on screen, first to last: what the agent service reports as
+    /// what the reader is looking at (`Design/AGENT_PLAN.md`, `focus`).
+    var visibleOffsets: Range<UInt64> { hexView.visibleByteRange() }
+
     /// Scrolls the hex view so the row containing `offset` sits at the top of the
     /// visible area. Driven by the minimap's viewport drag and wheel (§19).
     func scrollRowToTop(containing offset: UInt64) {

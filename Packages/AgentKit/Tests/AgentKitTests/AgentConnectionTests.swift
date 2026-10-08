@@ -107,6 +107,7 @@ final class AgentConnectionTests: XCTestCase {
         XCTAssertEqual(tools[0]["annotations"]?["readOnlyHint"], true)
         XCTAssertEqual(tools[0]["inputSchema"]?["required"], ["text"])
         XCTAssertNil(messages[1]["result"]?["resultType"], "a legacy result carries no resultType")
+        XCTAssertNil(messages[1]["result"]?["ttlMs"], "nor a cache hint")
         XCTAssertEqual(messages[2], ["jsonrpc": "2.0", "id": 2, "result": [
             "content": [["type": "text", "text": #"{"said":"hi"}"#]], "isError": false
         ]])
@@ -143,6 +144,12 @@ final class AgentConnectionTests: XCTestCase {
 
         XCTAssertEqual(messages[1]["result"]?["resultType"], "complete")
         XCTAssertEqual(messages[1]["result"]?["tools"]?.arrayValue?.count, 1)
+        // Required on both: a client that validates refuses the list without
+        // them, and is then left with no tools.
+        for result in [discover, try XCTUnwrap(messages[1]["result"])] {
+            XCTAssertEqual(result["ttlMs"], 300_000)
+            XCTAssertEqual(result["cacheScope"], "public")
+        }
 
         XCTAssertEqual(messages[2]["id"], "c")
         XCTAssertEqual(messages[2]["result"]?["resultType"], "complete")

@@ -20,6 +20,12 @@ public enum MCPProtocol {
     public static let legacyVersions = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"]
     public static var supportedVersions: [String] { modernVersions + legacyVersions }
 
+    /// How long a client may keep the answer to `server/discover` and
+    /// `tools/list` before asking again. The list is fixed while the app runs;
+    /// five minutes is so that a newer build of the app, started under a client
+    /// that stayed open, is listed without the client having to be restarted.
+    public static let listTTLMilliseconds: Int64 = 300_000
+
     /// The `_meta` keys of a modern request.
     enum Meta {
         static let protocolVersion = "io.modelcontextprotocol/protocolVersion"

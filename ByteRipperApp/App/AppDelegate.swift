@@ -42,6 +42,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// nothing and this keeps it next to the windows it serves.
     private lazy var openRecentMenuController = OpenRecentMenuController()
 
+    /// The agent service (`Design/AGENT_PLAN.md`): the socket an agent's
+    /// client reaches the app on. The application's, like the windows it reads:
+    /// an agent works across every tab, and goes on working whichever one is
+    /// in front.
+    private(set) lazy var agentService = AgentService(
+        desk: AgentDesk(
+            controllers: { [weak self] in self?.tabsFrontmostFirst() ?? [] },
+            keyController: { [weak self] in self?.tabsFrontmostFirst().first }),
+        defaults: AppDefaults.store)
+
+    /// Every tab's controller, the one in front first — the order an agent is
+    /// told about them in. A tab that is not the selected one of its window is
+    /// not on screen and so not in `orderedWindows`; it follows the rest.
+    private func tabsFrontmostFirst() -> [MainViewController] {
+        let onScreen = NSApp.orderedWindows.compactMap { window in
+            windowControllers.first { $0.window === window }?.mainViewController
+        }
+        let rest = windowControllers.map(\.mainViewController).filter { controller in
+            !onScreen.contains { $0 === controller }
+        }
+        return onScreen + rest
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The panels read their zoom from a package, which cannot see the app
         // and so cannot know that a test run reads a suite of its own
@@ -77,6 +100,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // testing.
         if !MainViewController.isRunningTests {
             FavoritePatternStore.start()
+            // The agent socket opens only if the person switched it on, and
+            // never in the test host: a suite has no business taking the
+            // socket a running copy of the app is serving its agent on.
+            AgentService.shared = agentService
+            agentService.apply()
         }
         // The menu bar belongs to the application, not to a window: it is built
         // once, here, and its commands travel the responder chain to whichever
@@ -292,6 +320,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Removes the socket file, so a relay started later finds nothing
+        // there rather than a file nobody answers on.
+        agentService.stop()
         if let themeObserver {
             NotificationCenter.default.removeObserver(themeObserver)
         }
