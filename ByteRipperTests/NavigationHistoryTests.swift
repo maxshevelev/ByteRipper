@@ -147,14 +147,74 @@ final class NavigationHistoryFlowTests: XCTestCase {
         XCTAssertEqual(pane.caretOffset, 0x4000 + 5 * 16)
     }
 
-    /// A tool moving the dump is not a step by itself: a tree reveals on
-    /// every row its arrow keys pass. The tool says which moves are steps.
-    func testAToolsRevealAndZoneScrollRecordNothing() throws {
+    /// A tool moving the caret is not a step by itself: a tree reveals on
+    /// every row its arrow keys pass, and the tool says which moves are
+    /// steps. A zone shown that takes the view off the caret is one, as any
+    /// view leaving the caret is — once, however many zones follow.
+    func testAToolsRevealIsNoStepAndItsZoneScrollIsOne() throws {
         let (controller, _) = try openSingle([UInt8](repeating: 0x11, count: 0x10000))
         let pane = controller.windowModel.pane1
         controller.revealForTool(0x1000..<0x1010, in: pane, select: false)
-        controller.showZoneStartForTool(0x8000, in: pane)
         XCTAssertTrue(controller.windowModel.navigationHistory.backStack.isEmpty)
+        controller.showZoneStartForTool(0x8000, in: pane)
+        controller.showZoneStartForTool(0xC000, in: pane)
+        XCTAssertEqual(controller.windowModel.navigationHistory.backStack.count, 1)
+        controller.navigateBack()
+        XCTAssertEqual(pane.caretOffset, 0x1000)
+    }
+
+    private func hexView(_ controller: MainViewController, _ pane: PaneViewModel) throws -> HexView {
+        try XCTUnwrap(controller.filePaneView(for: pane)?.scrollView.documentView as? HexView)
+    }
+
+    /// Page Down until the caret is off screen is a step, and the pages after
+    /// it are the same step: Back returns to the caret and the rows that were
+    /// on screen with it.
+    func testPagingTheCaretOffScreenIsOneStep() throws {
+        let (controller, _) = try openSingle([UInt8](repeating: 0x11, count: 0x40000))
+        let pane = controller.windowModel.pane1
+        controller.goToForTesting(offset: 0x1000)
+        controller.windowModel.navigationHistory.removeAll()
+        let topBefore = try top(controller, pane)
+        let hex = try hexView(controller, pane)
+
+        for _ in 0..<6 { hex.scrollViewportByPage(down: true) }
+        XCTAssertFalse(hex.visibleByteRange().contains(0x1000), "the premise: the caret is off screen")
+        XCTAssertEqual(controller.windowModel.navigationHistory.backStack.count, 1)
+        XCTAssertEqual(pane.caretOffset, 0x1000, "paging leaves the caret where it is")
+
+        controller.navigateBack()
+        XCTAssertEqual(pane.caretOffset, 0x1000)
+        XCTAssertTrue(hex.visibleByteRange().contains(0x1000), "the caret is on screen again")
+        XCTAssertLessThanOrEqual(try top(controller, pane), 0x1000)
+        _ = topBefore
+    }
+
+    /// A scroll that keeps the caret on screen is no step; one that takes it
+    /// off is, and scrolling on is the same step. The caret seen again ends it.
+    func testScrollingIsAStepOnlyWhenTheCaretGoesOffScreen() throws {
+        let (controller, _) = try openSingle([UInt8](repeating: 0x11, count: 0x40000))
+        let pane = controller.windowModel.pane1
+        let hex = try hexView(controller, pane)
+        let clip = try XCTUnwrap(hex.enclosingScrollView?.contentView)
+        func scroll(by points: CGFloat) {
+            clip.setBoundsOrigin(NSPoint(x: 0, y: max(0, clip.bounds.origin.y + points)))
+            hex.enclosingScrollView?.reflectScrolledClipView(clip)
+        }
+        let history = { controller.windowModel.navigationHistory.backStack.count }
+
+        pane.moveCaret(to: 0x100, center: false)
+        scroll(by: 5)
+        XCTAssertEqual(history(), 0, "the caret is still on screen")
+        scroll(by: 5000)
+        XCTAssertEqual(history(), 1, "off screen: a step")
+        scroll(by: 5000)
+        XCTAssertEqual(history(), 1, "still off screen: the same step")
+        scroll(by: -20000)
+        XCTAssertEqual(history(), 1, "back on screen")
+        pane.moveCaret(to: 0x200, center: false)
+        scroll(by: 5000)
+        XCTAssertEqual(history(), 2, "off again: a new step")
     }
 
     /// A place in a file that is no longer in its pane is not one to go to.

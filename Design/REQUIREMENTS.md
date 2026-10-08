@@ -1051,10 +1051,18 @@ browser's history does.
   a click on a row of its table or tree, a search match in its tree, its
   reveal of the node under the caret, its Go To from a row
   (`ToolHost.noteNavigationStep`, called before the choice changes).
-- Arrow keys, the mouse in the dump, scrolling and the minimap's viewport
-  drag do not record, nor does a tool's table walked with the arrow keys:
-  the host never records a tool's reveal or zone scroll by itself — only
-  the tool can tell a click from a key.
+- The view leaving the caret is a step: a scroll, Page Up/Down, Home/End,
+  the minimap's viewport drag, a tool's zone shown — whatever moves the view
+  so that the caret is no longer on screen records the place with the rows
+  that were on screen while it was (`FilePaneView.onCaretLeftView`). While
+  the caret stays off screen the view moving on is the same step; it is
+  watched again once the caret is on screen. A step recorded for the action
+  that moves the view (a tool's row clicked, a minimap click) is that step,
+  not a second one. Only the active pane is watched.
+- Arrow keys and the mouse in the dump do not record — they move the caret,
+  which the view follows — nor does a tool's table walked with the arrow
+  keys: the host never records a tool's reveal by itself, only the tool can
+  tell a click from a key.
 - Back or Forward with nowhere to go does nothing, silently: the commands
   are greyed out, and a beep on a held key would only be noise.
 - A place is the selection in each pane the jump moved (both panes in a

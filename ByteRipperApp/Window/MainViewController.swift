@@ -191,6 +191,7 @@ final class MainViewController: NSViewController {
         view.onUpdateInParent = { [weak self] in self?.performUpdateInParent(of: pane) }
         view.onSearchResultsClose = { [weak self] _ in self?.syncFindBarToActivePane() }
         view.onWillJump = { [weak self] in self?.recordJump(in: pane) }
+        view.onCaretLeftView = { [weak self] top in self?.caretLeftView(of: pane, top: top) }
         // The surface weakly: a panel whose surface has already gone leaves the
         // question to the tab's own map, which by then is the only one there is.
         view.onMatchesChanged = { [weak self, weak surface] in
@@ -1228,6 +1229,10 @@ final class MainViewController: NSViewController {
                 guard let paneModel else { return }
                 self?.recordJump(in: paneModel)
             }
+            pane.onCaretLeftView = { [weak self, weak paneModel] top in
+                guard let paneModel else { return }
+                self?.caretLeftView(of: paneModel, top: top)
+            }
             pane.onMatchesChanged = { [weak self] in
                 self?.searchAppearanceChanged()
             }
@@ -1399,6 +1404,14 @@ final class MainViewController: NSViewController {
             pane2View.onWillJump = { [weak self] in
                 guard let self else { return }
                 self.recordJump(in: self.windowModel.pane2)
+            }
+            pane1View.onCaretLeftView = { [weak self] top in
+                guard let self else { return }
+                self.caretLeftView(of: self.windowModel.pane1, top: top)
+            }
+            pane2View.onCaretLeftView = { [weak self] top in
+                guard let self else { return }
+                self.caretLeftView(of: self.windowModel.pane2, top: top)
             }
             pane1View.onMatchesChanged = { [weak self] in
                 self?.searchAppearanceChanged()
@@ -7779,13 +7792,25 @@ extension MainViewController {
     /// tool's table made (`ToolHost.noteNavigationStep`): the place it leaves
     /// and the place it comes to are both the table's steps, so Back and
     /// Forward give the keyboard to the table there.
-    func recordJump(in pane: PaneViewModel, byTool: Bool = false) {
-        guard pane.isOpen else { return }
+    func recordJump(in pane: PaneViewModel, byTool: Bool = false, top: UInt64? = nil) {
+        guard pane.isOpen, !windowModel.isWalkingHistory else { return }
         var place = navigationPlace(of: pane)
+        if let top { place.top = top }
         place.isToolStep = byTool || windowModel.arrivedByToolStep
         windowModel.navigationHistory.record(leaving: place)
         windowModel.arrivedByToolStep = byTool
+        filePaneView(for: pane)?.forgetCaretOnScreen()
         revalidateToolbar()
+    }
+
+    /// The view of `pane` has moved so that its caret is off screen — a
+    /// scroll, Page Up/Down, Home/End, a tool's zone shown — and the place it
+    /// left, with the rows that were on screen while the caret was, is a step.
+    /// Only the pane the reader is in: the other pane of a comparison scrolls
+    /// with it and would record the same place twice.
+    func caretLeftView(of pane: PaneViewModel, top: UInt64) {
+        guard pane === activePane else { return }
+        recordJump(in: pane, top: top)
     }
 
     /// Where `pane` stands: its selection and the first byte on screen — and,
@@ -7829,6 +7854,9 @@ extension MainViewController {
     /// they were and the view scrolled where it was.
     private func go(to place: NavigationPlace) {
         guard let first = place.spots.first?.pane else { return }
+        // What putting the place back moves is not a step of its own.
+        windowModel.isWalkingHistory = true
+        defer { windowModel.isWalkingHistory = false }
         if let panel = fragments.panel(holding: first) {
             if fragments.expanded != panel { fragments.expand(panel, animated: false) }
         } else {

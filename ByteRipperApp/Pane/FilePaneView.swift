@@ -354,6 +354,48 @@ final class FilePaneView: NSView {
     /// A row picked in the search results is about to take the caret away:
     /// the owner records the place it leaves (§10.6).
     var onWillJump: (() -> Void)?
+    /// The view has moved so that the caret is no longer on screen — a
+    /// scroll, Page Up/Down, Home/End — carrying the first byte that was on
+    /// screen while the caret last was. A step for the navigation history
+    /// (§10.6); the view moving on while the caret stays off screen is the
+    /// same step, so this is said once until the caret is seen again.
+    var onCaretLeftView: ((UInt64) -> Void)?
+
+    /// The first byte on screen while the caret last was, or nil while the
+    /// caret is off screen.
+    private var topWithCaretOnScreen: UInt64?
+
+    private func caretIsOnScreen(in range: Range<UInt64>) -> Bool {
+        let caret = viewModel.caretOffset
+        // The caret past the last byte sits at the end of the visible range.
+        return range.contains(caret) || (caret == range.upperBound && caret == viewModel.fileSize)
+    }
+
+    private func followCaretVisibility(in range: Range<UInt64>) {
+        guard viewModel.isOpen else { return }
+        if caretIsOnScreen(in: range) {
+            topWithCaretOnScreen = range.lowerBound
+        } else if let top = topWithCaretOnScreen {
+            topWithCaretOnScreen = nil
+            onCaretLeftView?(top)
+        }
+    }
+
+    /// A step was just recorded for what is moving the view now — a click on
+    /// a tool's row whose zone is being shown, a minimap click: the caret
+    /// leaving the screen on its way is that step, not another one. The
+    /// caret is watched again once it is seen on screen.
+    func forgetCaretOnScreen() {
+        topWithCaretOnScreen = nil
+    }
+
+    /// A caret moved onto the screen without the view moving — a click, an
+    /// arrow key within the rows shown — is seen from here on.
+    private func noteCaretIfOnScreen() {
+        guard viewModel.isOpen else { return }
+        let range = hexView.visibleByteRange()
+        if caretIsOnScreen(in: range) { topWithCaretOnScreen = range.lowerBound }
+    }
 
     /// Pops the find indicator, the way the platform's own does when it moves
     /// to another match (§11). Called by the owner after a step, not by the
@@ -817,6 +859,7 @@ final class FilePaneView: NSView {
         }
         hexView.onVisibleRangeChanged = { [weak self] range in
             self?.onHexViewportChanged?(range)
+            self?.followCaretVisibility(in: range)
         }
         viewModel.onChange = { [weak self] reveal in
             self?.refresh(reveal: reveal)
@@ -826,6 +869,7 @@ final class FilePaneView: NSView {
         // differently instead of the whole pane (§3.3).
         viewModel.onSelectionChanged = { [weak self] reveal in
             self?.refreshSelection(reveal: reveal)
+            self?.noteCaretIfOnScreen()
         }
         // A typing-mode flip recolors/reshapes the caret in place (its position
         // did not move): redraw the caret's row without scrolling, and swap the

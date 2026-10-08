@@ -1,4 +1,4 @@
-@source-sha 9af1316427c8d64b6576afa1fb7f9729a32ae3efad1ea57db745d96fff391d95
+@source-sha 523ee5ff296a08d8286c0f50a3f973ea83149837c2c832b9ddd8b6ac3c7c69ef
 # Sich bewegen
 
 > Zwischen Unterschieden springen, zu einer Adresse springen oder auf einem Byte stehen und ablesen, wo man ist.
@@ -25,7 +25,7 @@ Im Vergleichsmodus bewegt der Sprung **beide** Bereiche, die an dieselbe Adresse
 
 Jeder Sprung merkt sich die Stelle, die er verlässt: „Gehe zu“, ein Lesezeichen, der nächste oder vorherige Unterschied, ein Suchtreffer, ein Klick in die Minimap, ein Klick auf eine Zeile eines Werkzeugbereichs. **Darstellung ▸ Zurück** (**⌘[**) kehrt dorthin zurück — mit derselben Auswahl, denselben Zeilen auf dem Bildschirm und derselben im Werkzeugbereich gewählten Zeile samt ihren Zonen —, **Darstellung ▸ Vorwärts** (**⌘]**) geht in die andere Richtung. Dieselben Befehle sind die Tasten **‹ ›** in der Symbolleiste, rechts vom Werkzeugmenü.
 
-Bewegungen der Einfügemarke mit den Pfeiltasten, der Maus oder dem Rollbalken sind keine Sprünge und werden nicht gemerkt. Auch das Durchlaufen der Zeilen eines Werkzeugbereichs mit den Pfeiltasten wird nicht gemerkt — nur ein Klick auf eine Zeile. Führen „Zurück“ oder „Vorwärts“ zu einem Schritt, der mit einem Klick in der Tabelle eines Werkzeugbereichs gemacht wurde, geht die Tastatur in diese Tabelle, und die Pfeiltasten setzen bei der zurückgeholten Zeile an.
+Scrollen, Bild auf/ab sowie Pos1/Ende werden gemerkt, sobald die Einfügemarke dadurch vom Bildschirm verschwindet: „Zurück“ kehrt zur Einfügemarke und zu den Zeilen zurück, die mit ihr sichtbar waren. Weiteres Scrollen, solange die Einfügemarke nicht sichtbar ist, ist derselbe Schritt. Bewegungen der Einfügemarke mit den Pfeiltasten oder der Maus sind keine Sprünge und werden nicht gemerkt. Auch das Durchlaufen der Zeilen eines Werkzeugbereichs mit den Pfeiltasten wird nicht gemerkt — nur ein Klick auf eine Zeile. Führen „Zurück“ oder „Vorwärts“ zu einem Schritt, der mit einem Klick in der Tabelle eines Werkzeugbereichs gemacht wurde, geht die Tastatur in diese Tabelle, und die Pfeiltasten setzen bei der zurückgeholten Zeile an.
 
 Der Verlauf gehört zum Tab und hält die letzten fünfzig Stellen. Im Vergleichsmodus umfasst eine Stelle beide Bereiche. Ist der Werkzeugbereich geschlossen, bringen „Zurück“ und „Vorwärts“ nur den Dump zurück; ist dasselbe Werkzeug wieder offen, werden auch seine Zeilen wieder gewählt. Eine Stelle in einer Datei, die inzwischen geschlossen oder durch eine andere ersetzt wurde, wird übersprungen.
 

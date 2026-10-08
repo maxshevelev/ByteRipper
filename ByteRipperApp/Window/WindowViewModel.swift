@@ -23,6 +23,9 @@ final class WindowViewModel {
     /// table — a click on a row — or by Back or Forward to such a place. What
     /// the place is marked with when it is left (`NavigationPlace.isToolStep`).
     var arrivedByToolStep = false
+    /// True while Back or Forward puts a place back: the scrolls and
+    /// selections that does record nothing.
+    var isWalkingHistory = false
 
     /// The window's own view of a bookmark change, after the panes have been
     /// told: what the controller watches, for the things that are neither pane's
