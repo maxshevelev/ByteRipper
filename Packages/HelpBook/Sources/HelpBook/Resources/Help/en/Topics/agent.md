@@ -39,9 +39,11 @@ At present an agent can:
 - list the open files, with their names, sizes and whether they have unsaved edits;
 - read the position of the caret, the selection and the rows on screen;
 - read bytes — as hex rows, as text, or as 16-, 32- and 64-bit numbers — including unsaved edits;
-- show a place: bring its tab forward, scroll to it and select it.
+- show a place: bring its tab forward, scroll to it and select it;
+- read the structure of a firmware image as **UEFI Structure** shows it — the tree, the fields of a node, the nodes holding an address — and search it by name, GUID or type. This works whether or not the panel is open;
+- open a tool panel on a document, as the **Tools** menu does, and choose a node in the open **UEFI Structure** panel. The tree opens down to the node and the dump scrolls to its bytes.
 
-Each place an agent shows is a step of the navigation history: **View ▸ Back** (**⌘[**) returns to the place the view was at before ([[topic:navigation|Moving Around]]).
+Each place an agent shows, each panel it opens and each node it chooses is a step of the navigation history: **View ▸ Back** (**⌘[**) returns to the place the view was at before ([[topic:navigation|Moving Around]]).
 
 An agent cannot save a file and cannot change one. Addresses in its answers are given in hex, as in the dump.
 

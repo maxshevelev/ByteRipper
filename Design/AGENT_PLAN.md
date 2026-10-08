@@ -77,8 +77,8 @@ moving the view, selecting, and marking. That needs the app.
         │                                show, survey
         ├─ module queries             — ToolModule.agentQueries, against a
         │                                read host (open or background document)
-        └─ panel actions              — ToolSession.agentActions, on the live
-                                         session, if there is one
+        └─ panel actions              — ToolModule.agentActions, run on the
+                                         live session, if there is one
 ```
 
 ### `Packages/AgentKit`
@@ -163,8 +163,9 @@ on the module's **type**:
 ```swift
 public protocol ToolModule {
     // …
-    static var agentQueries: [AgentTool] { get }   // default: []
+    static var agentQueries: [ToolAgentQuery] { get }   // default: []
 }
+// ToolAgentQuery.run: (any ToolReadHost, AgentArguments) async throws -> AgentAnswer
 ```
 
 and it runs against a **read host** — the part of `ToolHost` that reading
@@ -195,13 +196,15 @@ the module's tests already use.
 
 Select a node in the tree and unfold the path to it; say which node the person
 has chosen; set the tree's search. These need the panel on screen, so they
-belong to the **session**:
+run on the **session** — but they are declared on the type like queries, and
+handed the live session when called, so the list never changes:
 
 ```swift
-public protocol ToolSession {
+public protocol ToolModule {
     // …
-    var agentActions: [AgentTool] { get }   // default: []
+    static var agentActions: [ToolAgentAction] { get }   // default: []
 }
+// ToolAgentAction.run: (any ToolSession, AgentArguments) async throws -> AgentAnswer
 ```
 
 The list the agent sees does not change with what is open. Each module's
@@ -344,10 +347,14 @@ Each ends in something that works and is committed.
    protocol document waits for stage 3, when module tools give it something
    beyond four host tools to fix.)*
 3. **UEFI queries and actions.** `ToolReadHost`; `agentQueries` and
-   `agentActions` on the seam; the language override; `tree`, `node`, `find`,
-   `at`; `select_node`, `panel_selection`; `open_panel`. Done when, with the
-   FIT panel open, "find the Setup variable store and show it to me" ends with
-   the UEFI tree open on it.
+   `agentActions` on the seam; the language override; `uefi_tree`,
+   `uefi_node`, `uefi_find`, `uefi_at`; `uefi_select`, `uefi_selection`;
+   `open_panel`. Done when, with the FIT panel open, "find the Setup variable
+   store and show it to me" ends with the UEFI tree open on it. *(Done, checked
+   on `CSME 12.BIN` through the relay: `uefi_find` with `exact` finds the four
+   copies of `Setup`, `open_panel` switches the panel, `uefi_select` opens the
+   tree to the node and the dump scrolls to it. `Design/AGENT_PROTOCOL.md`
+   starts here.)*
 4. **Marks.** The layer, its drawing, the window's list, relations as pairs.
 5. **Background documents.** `open_dump`, `close_dump`, `show`, `survey`,
    findings. Done on the AMD and Intel dumps in `~/Desktop/ME`: one survey

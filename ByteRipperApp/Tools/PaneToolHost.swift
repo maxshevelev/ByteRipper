@@ -24,7 +24,10 @@ import MEFirmware
     /// through a file nothing else will remove.
     private let scratch = TemporaryFileStore()
 
-    init(pane: PaneViewModel, owner: MainViewController, tools: ToolController) {
+    /// `tools` is nil for a host that only reads — what an agent's query runs
+    /// against with no session open (`AgentModuleTools`): it publishes no
+    /// zones, because no panel is there to have drawn them.
+    init(pane: PaneViewModel, owner: MainViewController, tools: ToolController?) {
         self.pane = pane
         self.owner = owner
         self.tools = tools

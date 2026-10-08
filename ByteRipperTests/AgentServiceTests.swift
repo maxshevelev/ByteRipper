@@ -12,9 +12,7 @@ final class AgentServiceTests: XCTestCase {
     private var controller: MainViewController?
     private var window: NSWindow?
     private var service: AgentService!
-    private var wire = AgentWire()
-    private var connection: AgentConnection!
-    private var nextID = 1
+    private var client: AgentTestClient!
     private var defaultsName = ""
     private var defaults: UserDefaults!
 
@@ -25,9 +23,7 @@ final class AgentServiceTests: XCTestCase {
                              keyController: { [weak self] in self?.controller })
         service = AgentService(desk: desk, defaults: defaults,
                                socketPath: "/tmp/br-\(UUID().uuidString.prefix(8)).sock")
-        wire = AgentWire()
-        let wire = self.wire
-        connection = service.connect(send: { wire.send($0) })
+        client = AgentTestClient(service)
     }
 
     override func tearDown() {
@@ -77,34 +73,23 @@ final class AgentServiceTests: XCTestCase {
 
     // MARK: - Talking to the service
 
-    /// Calls `tool` and returns its answer: the JSON a tool answered with, or
-    /// the sentence it refused with as `.string`, marked by `isError`.
-    private func call(_ tool: String, _ arguments: JSONValue = .object([:])) async throws
+    private func call(_ tool: String, _ arguments: JSONValue = .object([:]),
+                      file: StaticString = #filePath, line: UInt = #line) async throws
     -> (answer: JSONValue, isError: Bool) {
-        let id = nextID
-        nextID += 1
-        let request: JSONValue = ["jsonrpc": "2.0", "id": .count(id), "method": "tools/call",
-                                  "params": ["name": .string(tool), "arguments": arguments]]
-        await connection.receive(request.encoded() + Data("\n".utf8))
-        await connection.waitUntilIdle()
-        let response = try XCTUnwrap(wire.messages.first { $0["id"] == .count(id) })
-        let result = try XCTUnwrap(response["result"], "\(response)")
-        let text = try XCTUnwrap(result["content"]?.arrayValue?.first?["text"]?.stringValue)
-        let isError = result["isError"] == true
-        return (isError ? .string(text) : try JSONValue.parse(Data(text.utf8)), isError)
+        try await client.call(tool, arguments, file: file, line: line)
     }
 
-    private func answer(_ tool: String, _ arguments: JSONValue = .object([:])) async throws -> JSONValue {
-        let (answer, isError) = try await call(tool, arguments)
-        XCTAssertFalse(isError, "\(tool) refused: \(answer)")
-        return answer
+    private func answer(_ tool: String, _ arguments: JSONValue = .object([:]),
+                        file: StaticString = #filePath, line: UInt = #line) async throws -> JSONValue {
+        try await client.answer(tool, arguments, file: file, line: line)
     }
 
     // MARK: - The tools
 
     func testTheToolsAreListedInAFixedOrder() {
-        XCTAssertEqual(service.server.tools.map(\.name), ["documents", "focus", "read", "reveal"])
-        XCTAssertEqual(service.server.tools.map(\.annotations.readOnly), [true, true, true, false])
+        let host = Array(service.server.tools.prefix(4))
+        XCTAssertEqual(host.map(\.name), ["documents", "focus", "read", "reveal"])
+        XCTAssertEqual(host.map(\.annotations.readOnly), [true, true, true, false])
     }
 
     func testDocumentsNamesBothFilesOfAComparisonTheFocusedOneFirst() async throws {
@@ -290,19 +275,6 @@ final class AgentServiceTests: XCTestCase {
         service.isEnabled = false
         XCTAssertFalse(FileManager.default.fileExists(atPath: service.socketPath))
     }
-}
-
-/// What the service wrote to a connection in memory.
-private final class AgentWire: @unchecked Sendable {
-    private let lock = NSLock()
-    private var written: [JSONValue] = []
-
-    func send(_ data: Data) {
-        guard let value = try? JSONValue.parse(data.dropLast()) else { return }
-        lock.withLock { written.append(value) }
-    }
-
-    var messages: [JSONValue] { lock.withLock { written } }
 }
 
 /// Lines read off a socket on another thread.

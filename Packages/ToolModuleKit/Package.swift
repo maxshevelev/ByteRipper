@@ -41,7 +41,11 @@ let package = Package(
         // The splitter a panel's detail pane folds in while the detail is
         // shown in its large view (`ToolDetailPane`), on the splitter's own
         // animation clock.
-        .package(path: "../ALSplitView")
+        .package(path: "../ALSplitView"),
+        // The shape of an agent's tool (`ToolAgent.swift`): what a
+        // tool-module answers an agent with, declared on the seam so the app
+        // can list it without knowing the module (`Design/AGENT_PLAN.md`).
+        .package(path: "../AgentKit")
     ],
     targets: [
         .target(name: "ToolModuleKit",
@@ -50,7 +54,8 @@ let package = Package(
                     .product(name: "AppPalette", package: "AppPalette"),
                     .product(name: "HelpBook", package: "HelpBook"),
                     .product(name: "HelpUI", package: "HelpUI"),
-                    .product(name: "ALSplitView", package: "ALSplitView")
+                    .product(name: "ALSplitView", package: "ALSplitView"),
+                    .product(name: "AgentKit", package: "AgentKit")
                 ]),
         .testTarget(
             name: "ToolModuleKitTests",
@@ -63,7 +68,8 @@ let package = Package(
                 .product(name: "HelpBook", package: "HelpBook"),
                 .product(name: "HelpUI", package: "HelpUI"),
                 .product(name: "Localization", package: "Localization"),
-                .product(name: "ALSplitView", package: "ALSplitView")
+                .product(name: "ALSplitView", package: "ALSplitView"),
+                .product(name: "AgentKit", package: "AgentKit")
             ]
         )
     ]

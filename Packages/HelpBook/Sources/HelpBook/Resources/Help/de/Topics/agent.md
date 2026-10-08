@@ -1,4 +1,4 @@
-@source-sha ffa1772e5d4adbdbb5500e9c78343f14d2948d438727c99a55d8193663bdb6d9
+@source-sha 594adcaeba013a30bfb4071125e3f281c750a5c7ee1b4ad1818f4c5752720b43
 # Mit einem Agenten arbeiten
 
 > ByteRipper lässt sich mit einem Agenten verbinden — Claude Code, Claude Desktop oder einem anderen Programm, das MCP spricht. Der Agent sieht dann die im Programm geöffneten Dateien, liest ihre Bytes und zeigt Stellen darin; das Gespräch mit ihm findet in seinem eigenen Fenster statt.
@@ -35,9 +35,11 @@ Derzeit kann ein Agent:
 - die geöffneten Dateien auflisten, mit Namen, Größe und der Angabe, ob ungesicherte Änderungen vorliegen;
 - die Position des Cursors, die Auswahl und die sichtbaren Zeilen abfragen;
 - Bytes lesen — als Hex-Zeilen, als Text oder als 16-, 32- und 64-Bit-Zahlen —, ungesicherte Änderungen eingeschlossen;
-- eine Stelle zeigen: ihren Tab nach vorn holen, dorthin scrollen und sie auswählen.
+- eine Stelle zeigen: ihren Tab nach vorn holen, dorthin scrollen und sie auswählen;
+- die Struktur eines Firmware-Images so lesen, wie **UEFI-Struktur** sie zeigt — den Baum, die Felder eines Knotens, die Knoten, die eine Adresse enthalten — und darin nach Name, GUID oder Typ suchen. Das geht unabhängig davon, ob der Bereich geöffnet ist;
+- einen Werkzeugbereich für ein Dokument öffnen, wie es das Menü **Werkzeuge** tut, und im geöffneten Bereich **UEFI-Struktur** einen Knoten wählen. Der Baum öffnet sich bis zum Knoten, und der Dump scrollt zu seinen Bytes.
 
-Jede Stelle, die ein Agent zeigt, ist ein Schritt des Verlaufs: **Darstellung ▸ Zurück** (**⌘[**) kehrt dorthin zurück, wo die Ansicht vorher war ([[topic:navigation|Sich bewegen]]).
+Jede Stelle, die ein Agent zeigt, jeder Bereich, den er öffnet, und jeder Knoten, den er wählt, ist ein Schritt des Verlaufs: **Darstellung ▸ Zurück** (**⌘[**) kehrt dorthin zurück, wo die Ansicht vorher war ([[topic:navigation|Sich bewegen]]).
 
 Eine Datei sichern oder ändern kann ein Agent nicht. Adressen in seinen Antworten sind hexadezimal, wie im Dump.
 

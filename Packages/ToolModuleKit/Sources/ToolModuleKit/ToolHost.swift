@@ -15,11 +15,7 @@ import Foundation
 /// no, and `Design/UEFI/FIT_TABLE_FORMAT.md` §9.2 says why), and the app's
 /// standing rule — overwrite by default, warn on a shift — covers what reaches
 /// the document.
-@MainActor public protocol ToolHost: AnyObject {
-    /// What the panel's header calls the file it is working on.
-    var fileName: String { get }
-    /// The content's size *now*, unsaved edits included.
-    var contentSize: UInt64 { get }
+@MainActor public protocol ToolHost: ToolReadHost {
     /// A read-only file refuses `apply`; a tool-module can ask beforehand and
     /// show its own controls as disabled rather than let them fail.
     var isReadOnly: Bool { get }
@@ -31,21 +27,6 @@ import Foundation
     /// zone of this", "what is this?" — rather than asking them to type an
     /// offset they can already see.
     var selection: Range<UInt64>? { get }
-
-    /// A small read on the main actor: a header, a table, the 48 bytes that
-    /// answer "is there really a microcode at this address".
-    func read(_ range: Range<UInt64>) throws -> [UInt8]
-
-    /// An immutable view of the whole content, readable from any thread — what
-    /// a parse of a 16 MiB image runs over.
-    ///
-    /// It costs nothing to take (the app already does this for Duplicate) and
-    /// it cannot drift: the bytes it answers with are the bytes at the moment
-    /// it was taken, whatever the document does afterwards. So a parse never
-    /// has to hold the main actor, and never has to worry that an edit landed
-    /// halfway through it — the edit arrives as `ToolContentChange` and the
-    /// tool-module decides what to do about it.
-    func snapshot() throws -> any ToolContentReader
 
     /// Writes the transaction as one undo step named by it. Throws if the file
     /// is read-only, if the transaction does not validate, or if it reaches
@@ -128,6 +109,36 @@ import Foundation
 public extension ToolHost {
     /// A host with no history to keep — a test double — keeps nothing.
     func noteNavigationStep() {}
+}
+
+/// The part of a host that reading needs: the file's name and size, its bytes,
+/// and a snapshot to parse off the main actor.
+///
+/// What an agent's query runs against (`ToolAgentQuery`,
+/// `Design/AGENT_PLAN.md`). A query asks about a dump, not about a panel, so it
+/// is answered with the panel closed — or about a file that is not on screen
+/// at all — and a host that could also write, publish zones and put up sheets
+/// would be offering it things it must not do.
+@MainActor public protocol ToolReadHost: AnyObject {
+    /// What the panel's header calls the file it is working on.
+    var fileName: String { get }
+    /// The content's size *now*, unsaved edits included.
+    var contentSize: UInt64 { get }
+
+    /// A small read on the main actor: a header, a table, the 48 bytes that
+    /// answer "is there really a microcode at this address".
+    func read(_ range: Range<UInt64>) throws -> [UInt8]
+
+    /// An immutable view of the whole content, readable from any thread — what
+    /// a parse of a 16 MiB image runs over.
+    ///
+    /// It costs nothing to take (the app already does this for Duplicate) and
+    /// it cannot drift: the bytes it answers with are the bytes at the moment
+    /// it was taken, whatever the document does afterwards. So a parse never
+    /// has to hold the main actor, and never has to worry that an edit landed
+    /// halfway through it — the edit arrives as `ToolContentChange` and the
+    /// tool-module decides what to do about it.
+    func snapshot() throws -> any ToolContentReader
 }
 
 /// The handle on a sheet `ToolHost.beginBlockingWork` put up.

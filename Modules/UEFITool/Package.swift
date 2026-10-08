@@ -48,6 +48,9 @@ let package = Package(
         // The region's bytes and the reads over them — the same reading the ME
         // Analyzer makes, shared rather than written out twice.
         .package(path: "../../Packages/MEReads"),
+        // What the module answers an agent with (`UEFIAgentQueries`,
+        // Design/AGENT_PLAN.md).
+        .package(path: "../../Packages/AgentKit"),
         // Only for the tests, to build a compressed section byte by byte.
         .package(path: "../../Packages/FirmwareCompression")
     ],
@@ -56,7 +59,8 @@ let package = Package(
             .product(name: "Localization", package: "Localization"),
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
-            .product(name: "UEFIImage", package: "UEFIImage")
+            .product(name: "UEFIImage", package: "UEFIImage"),
+            .product(name: "AgentKit", package: "AgentKit")
         ]),
         .target(name: "UEFIToolUI", dependencies: [
             .product(name: "HelpUI", package: "HelpUI"),
@@ -71,14 +75,16 @@ let package = Package(
             .product(name: "UEFIContentSource", package: "UEFIContentSource"),
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "MEPresentation", package: "MEPresentation"),
-            .product(name: "MEReads", package: "MEReads")
+            .product(name: "MEReads", package: "MEReads"),
+            .product(name: "AgentKit", package: "AgentKit")
         ]),
         .testTarget(name: "UEFIToolTests", dependencies: [
             "UEFITool",
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
-            .product(name: "FirmwareCompressionTestSupport", package: "FirmwareCompression")
+            .product(name: "FirmwareCompressionTestSupport", package: "FirmwareCompression"),
+            .product(name: "AgentKit", package: "AgentKit")
         ])
     ]
 )

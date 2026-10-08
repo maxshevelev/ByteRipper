@@ -1,3 +1,4 @@
+import AgentKit
 import AppKit
 import HelpBook
 import Localization
@@ -37,6 +38,40 @@ public enum UEFIToolModule: ToolModule {
 
     @MainActor public static func makeSession(host: any ToolHost) -> any ToolSession {
         UEFIToolSession(host: host)
+    }
+
+    /// The tree, a node, a search, an address — answered with the panel
+    /// open or not (`UEFIAgentQueries`, `Design/AGENT_PLAN.md`).
+    public static var agentQueries: [ToolAgentQuery] { UEFIAgentQueries.all }
+
+    /// Choosing a node in the open panel, and saying which one the reader
+    /// chose.
+    public static var agentActions: [ToolAgentAction] { [selectAction, selectionAction] }
+
+    static let selectAction = ToolAgentAction(
+        name: "uefi_select",
+        title: "Choose a UEFI node in the panel",
+        description: """
+            Chooses a node in the open UEFI Structure panel, as a click would: the tree opens down to it             and selects it, the detail shows its fields, and the dump scrolls to its bytes with them             outlined. A step of the navigation history, so the person's Back returns. Needs the panel open             in the document's tab — `open_panel` opens it.
+            """,
+        properties: ["node": AgentSchema.string("The node's id, e.g. \"0.2.5\".")],
+        required: ["node"],
+        changesView: true
+    ) { session, arguments in
+        guard let session = session as? UEFIToolSession else { throw AgentToolError("Not a UEFI Structure panel.") }
+        return .json(try await session.agentSelect(UEFIAgentQueries.nodeID(arguments.string("node"))))
+    }
+
+    static let selectionAction = ToolAgentAction(
+        name: "uefi_selection",
+        title: "The UEFI node the reader chose",
+        description: """
+            The node chosen in the open UEFI Structure panel — what the person means by "this node" —             or null when nothing is chosen. Needs the panel open in the document's tab.
+            """,
+        changesView: false
+    ) { session, _ in
+        guard let session = session as? UEFIToolSession else { throw AgentToolError("Not a UEFI Structure panel.") }
+        return .json(session.agentSelection())
     }
 }
 
@@ -1840,5 +1875,35 @@ private struct ChecksumPass: Sendable {
     private func fail(_ text: String) {
         noticeAnswersTheUser = true
         controller.say(text, asProblem: true)
+    }
+}
+
+// MARK: - What an agent does in the panel
+
+extension UEFIToolSession {
+    /// Chooses `id` the way a click on its row does — after opening the
+    /// branches down to it, which a click never has to — and records the
+    /// place the reader was at, so Back undoes it.
+    func agentSelect(_ id: NodeID) async throws -> JSONValue {
+        guard let tree else { throw AgentToolError("The UEFI Structure panel has not read the image yet.") }
+        await withCheckedContinuation { continuation in tree.whenReady { continuation.resume() } }
+        _ = await UEFIAgentQueries.reachable(id, in: tree)
+        guard let node = tree.node(id) else { throw UEFIAgentQueries.unknownNode(id) }
+        host.noteNavigationStep()
+        showUEFIFocus(id)
+        // What a click on the row does next: the zone is published, and the
+        // host brings it on screen. `showUEFIFocus` alone is the dump's own
+        // reveal, which starts from bytes already on screen and so publishes
+        // nothing.
+        show(publish: true, selectionOnly: true)
+        return ["selected": UEFIAgentQueries.summary(of: node, in: tree)]
+    }
+
+    /// The node in focus, or null. An ME row in focus is not a UEFI node, and
+    /// says so rather than passing for none.
+    func agentSelection() -> JSONValue {
+        if meFocus != nil { return ["selected": nil, "note": "A row of the ME region's sub-tree is chosen, not a UEFI node."] }
+        guard let tree, let focus, let node = tree.node(focus) else { return ["selected": nil] }
+        return ["selected": UEFIAgentQueries.summary(of: node, in: tree)]
     }
 }

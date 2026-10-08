@@ -39,6 +39,14 @@ public protocol ToolModule {
     /// Builds the session that runs this tool-module against one open file.
     /// Called on activation; the host lives at least as long as the session.
     @MainActor static func makeSession(host: any ToolHost) -> any ToolSession
+
+    /// What this tool-module answers an agent from the bytes alone, with its
+    /// panel open or not (`ToolAgentQuery`). Default: nothing.
+    static var agentQueries: [ToolAgentQuery] { get }
+
+    /// What it does in its open panel at an agent's asking
+    /// (`ToolAgentAction`). Default: nothing.
+    static var agentActions: [ToolAgentAction] { get }
 }
 
 extension ToolModule {
