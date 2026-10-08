@@ -45,6 +45,14 @@ public enum FITEditProblem: Equatable, Sendable, Error {
     /// A write reaches into a Top Swap block without lying wholly inside the top
     /// one, so it has no place in the other copy.
     case topSwapWriteCrossesTheBlocks(at: UInt64)
+    /// The very same microcode, byte for byte, is already in the table — the
+    /// catalogue files one update under each processor it serves, so picking
+    /// it again under another CPUID is the usual way here. Carries the row.
+    case alreadyInTheTable(entry: Int)
+    /// The replacement serves a processor, on a platform, that another row's
+    /// microcode already serves. Carries that row and the CPUIDs in question:
+    /// the one to replace is that row.
+    case servedByAnotherRow(entry: Int, cpuids: [UInt32])
 
     public var message: String {
         switch self {
@@ -80,6 +88,11 @@ public enum FITEditProblem: Equatable, Sendable, Error {
         case .topSwapWriteCrossesTheBlocks(let at):
             return L("The change writes at 0x%1$@ across a Top Swap block boundary, where it cannot be made in both copies. Nothing was changed.",
                      String(at, radix: 16, uppercase: true))
+        case .alreadyInTheTable(let entry):
+            return L("This microcode is already in the table, in row #%1$@. Nothing was changed.", entry + 1)
+        case .servedByAnotherRow(let entry, let cpuids):
+            return L("Row #%1$@ already holds a microcode for CPUID %2$@ on the same platforms. To update it, replace that row. Nothing was changed.",
+                     entry + 1, cpuids.map(MicrocodeHeader.cpuid).joined(separator: ", "))
         }
     }
 }
@@ -312,6 +325,9 @@ public enum FITEditor {
         // Exactly what the header claims, so a file with something after it
         // does not drag the extra bytes into the image.
         let bytes = Array(component.prefix(Int(header.totalSize)))
+        if let same = rowHolding(bytes, in: table, reader: reader) {
+            return .failure(.alreadyInTheTable(entry: same.entry.index))
+        }
 
         guard let row = rowNaming(header.processorSignature, matching: header, in: table),
               case .microcode = row.target
@@ -359,6 +375,19 @@ public enum FITEditor {
         guard index > 0, index < table.rows.count else { return .failure(.noSuchEntry) }
         let row = table.rows[index]
         guard case .microcode = row.target else { return .failure(.noSuchEntry) }
+        if let same = rowHolding(bytes, in: table, reader: reader) {
+            return .failure(.alreadyInTheTable(entry: same.entry.index))
+        }
+        // The row is the target, but not a way round the rest of the table: a
+        // replacement that serves what another row already serves would leave
+        // two microcodes for one processor, and the row to update is that one.
+        for other in table.rows where other.entry.index != index {
+            guard case .microcode(let found) = other.target else { continue }
+            let shared = header.sharedProcessors(with: found)
+            if !shared.isEmpty {
+                return .failure(.servedByAnotherRow(entry: other.entry.index, cpuids: shared))
+            }
+        }
         return checkingProtection(
             replacing(row, with: bytes, header: header, in: table, image: image,
                       reader: reader, addressDiff: addressDiff),
@@ -571,6 +600,16 @@ public enum FITEditor {
     private enum RoomAfterTheTable {
         case free
         case taken(String)
+    }
+
+    /// The microcode row whose component is these very bytes.
+    private static func rowHolding(_ bytes: [UInt8], in table: FITTable, reader: ImageReader) -> FITRow? {
+        table.rows.first { row in
+            guard case .microcode(let found) = row.target,
+                  found.totalSize == bytes.count
+            else { return false }
+            return reader.bytes(found.range) == bytes
+        }
     }
 
     /// The row whose component is for this processor.

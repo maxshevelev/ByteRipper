@@ -1,4 +1,4 @@
-@source-sha 239983ab70d561a682b788854512a1200cf00330279af5e1812071da73a8d22c
+@source-sha 68c22abd93bc022c3bdfce8d9192b58b426145ba65f0321b77adce24e5cf5452
 # Microcode und die FIT-Tabelle
 
 > Was das Werkzeug „FIT-Tabelle“ über den Microcode eines Images meldet und was seine Befehle an der Tabelle ändern.
@@ -13,7 +13,7 @@ Der Prozessor lädt ein [[term:microcode|Microcode-Update]], bevor er irgendeine
 - **Zeigt auf** wird nicht aus dem Eintrag gelesen. Das Werkzeug folgt der Adresse und meldet, was tatsächlich dort liegt: ein Microcode-Update mit gültigem Header, ein Manifest, ein gelöschter Bereich oder nichts Erkennbares. Ein Eintrag, der auf einen gelöschten Bereich zeigt, ist ein Eintrag, dessen Bauteil im Image fehlt.
 - Ein Microcode-Eintrag wird zusätzlich über einen Online-Katalog benannt: Prozessorsignatur (CPUID), Revision und Datum. Der Katalog ist unter [[topic:databases|Die Online-Kataloge]] beschrieben; ohne Netzzugang meldet das Werkzeug die Kennungen und lässt die Namen weg.
 
-Unter der Tabelle stehen die Verstöße gegen die Regeln der Spezifikation: der Header-Eintrag, die Anzahl der Einträge, die Prüfsumme der Tabelle, die Reihenfolge der Einträge nach Typ, die Ausrichtung der Adressen, das reservierte Byte sowie die Übereinstimmung der Tabelle mit ihrer [[term:top-swap|Top-Swap]]-Sicherungskopie, sofern das Image eine führt. Ein Doppelklick auf einen Verstoß bringt den Dump zu den betroffenen Bytes.
+Unter der Tabelle stehen die Verstöße gegen die Regeln der Spezifikation: der Header-Eintrag, die Anzahl der Einträge, die Prüfsumme der Tabelle, die Reihenfolge der Einträge nach Typ, die Ausrichtung der Adressen, das reservierte Byte sowie die Übereinstimmung der Tabelle mit ihrer [[term:top-swap|Top-Swap]]-Sicherungskopie, sofern das Image eine führt. Über die Regeln hinaus warnt die Liste, wenn zwei Microcode-Einträge denselben Prozessor auf denselben Plattformen bedienen — meist eine ältere Revision, die neben einer neueren stehen geblieben ist; die Signaturen aus einer erweiterten Signaturtabelle zählen dabei mit. Ein Doppelklick auf einen Verstoß bringt den Dump zu den betroffenen Bytes.
 
 ## Die Microcode-Einträge lesen
 
@@ -44,7 +44,7 @@ Der Befehl leistet dann Folgendes:
 
 Das Kontextmenü einer Microcode-Zeile enthält **Microcode ersetzen**, **Microcode entfernen**, **CPUID kopieren** und **Zum Offset springen**; die Header-Zeile enthält **Prüfsumme korrigieren**.
 
-- **Microcode ersetzen** tauscht das von der Zeile benannte Bauteil gegen ein anderes beliebiger Signatur. Die Zeile bleibt; ist das neue Bauteil anders groß, rücken die Bauteile dahinter nach, und die Einträge, die sie benennen, werden berichtigt.
+- **Microcode ersetzen** tauscht das von der Zeile benannte Bauteil gegen ein anderes beliebiger Signatur. Die Zeile bleibt; ist das neue Bauteil anders groß, rücken die Bauteile dahinter nach, und die Einträge, die sie benennen, werden berichtigt. Ein Ersatz, der einen Prozessor bedient, den eine andere Zeile auf denselben Plattformen bereits bedient, wird abgelehnt: Zu aktualisieren ist dann diese Zeile.
 - **Microcode entfernen** nimmt den Eintrag aus der Tabelle, rückt die Bauteile dahinter in den frei gewordenen Platz nach und löscht die Bytes am Ende der Reihe. Mindestens ein Microcode-Eintrag muss in der Tabelle verbleiben.
 
 Hinzufügen, Ersetzen und Entfernen werden nur für Microcode-Einträge unterstützt. Einträge anderer Typen — ein ACM, ein Boot-Guard-Manifest, ein Policy-Eintrag — zeigt und prüft das Werkzeug, ändert sie aber nicht.
@@ -55,6 +55,8 @@ Hinzufügen, Ersetzen und Entfernen werden nur für Microcode-Einträge unterst�
 Das Werkzeug nimmt keine Änderung vor, die es nicht korrekt ausführen kann, und nennt die Regel, an der es sie ablehnt:
 
 - die angebotene Datei ist kein Microcode-Image, oder ihre Prüfsumme geht nicht auf;
+- der angebotene Microcode steht bereits Byte für Byte in der Tabelle; das Werkzeug nennt die Zeile, in der er steht. Der Katalog legt ein Update unter jedem Prozessor ab, den es bedient, sodass dieselbe Datei dort unter mehreren CPUIDs erscheint;
+- ein Ersatz würde einen Prozessor bedienen, den der Microcode einer anderen Zeile auf denselben Plattformen bereits bedient; das Werkzeug nennt diese Zeile, und sie ist es, die zu ersetzen ist;
 - die Tabelle enthält keinen Microcode-Eintrag, hinter den ein neuer gelegt werden könnte, sodass nicht feststeht, wo dieses Image seinen Microcode hält;
 - die Tabelle hat keinen freien Platz, und die Bytes dahinter sind belegt, sodass sie nicht wachsen kann; das Werkzeug nennt, wodurch sie belegt sind;
 - die Reihe müsste weiter wachsen, als Platz vorhanden ist; das Werkzeug nennt, wie viele Bytes fehlen und wodurch die Reihe wachsen müsste;

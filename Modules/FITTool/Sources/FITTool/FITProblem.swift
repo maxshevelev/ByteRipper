@@ -1,5 +1,6 @@
 import Foundation
 import Localization
+import UEFIImage
 
 /// Something wrong with the table, or with the image around it.
 ///
@@ -46,6 +47,10 @@ public struct FITProblem: Equatable, Sendable {
         /// The backup holds the same FIT, but other bytes of the block differ —
         /// which is what refuses a microcode change until the copies agree.
         case topSwapBlockDiffers(backup: Range<UInt64>)
+        /// This row's microcode serves a processor, on a platform, that an
+        /// earlier row's already serves: the table names two microcodes for one
+        /// processor. Carries the earlier row and the CPUIDs they share.
+        case sameProcessorsAsRow(entry: Int, cpuids: [UInt32])
     }
 
     public var kind: Kind
@@ -67,7 +72,7 @@ public struct FITProblem: Equatable, Sendable {
     public var severity: Severity {
         switch kind {
         case .reservedIsNotZero, .topSwapBackupHasNoTable, .topSwapTableDiffers,
-             .topSwapEntryDiffers, .topSwapBlockDiffers:
+             .topSwapEntryDiffers, .topSwapBlockDiffers, .sameProcessorsAsRow:
             return .warning
         default:
             return .error
@@ -119,6 +124,9 @@ public struct FITProblem: Equatable, Sendable {
         case .topSwapBlockDiffers(let backup):
             return L("The Top Swap backup at %1$@ holds the same FIT, but other bytes of the block differ, so microcode changes are refused until the copies agree",
                      hex(backup.lowerBound))
+        case .sameProcessorsAsRow(let entry, let cpuids):
+            return L("Row #%1$@ already holds a microcode for CPUID %2$@ on the same platforms",
+                     entry + 1, cpuids.map(MicrocodeHeader.cpuid).joined(separator: ", "))
         }
     }
 

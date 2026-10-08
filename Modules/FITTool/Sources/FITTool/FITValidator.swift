@@ -63,6 +63,24 @@ public enum FITValidator {
             problems += addressProblems(of: row)
         }
 
+        // Two rows for one processor: an update for several processors names
+        // them in its extended table, so the overlap is not in the CPUID the
+        // rows show first. Said once per row, against the first earlier row.
+        var microcodes: [(index: Int, header: MicrocodeHeader)] = []
+        for row in table.rows {
+            guard case .microcode(let header) = row.target else { continue }
+            if let earlier = microcodes.lazy
+                .map({ ($0.index, header.sharedProcessors(with: $0.header)) })
+                .first(where: { !$0.1.isEmpty }) {
+                problems.append(FITProblem(
+                    .sameProcessorsAsRow(entry: earlier.0, cpuids: earlier.1),
+                    entry: row.entry.index,
+                    at: row.entry.offset
+                ))
+            }
+            microcodes.append((row.entry.index, header))
+        }
+
         // §8.7 — at least one microcode entry.
         if !table.rows.contains(where: { $0.entry.type == FIT.microcodeType }) {
             problems.append(FITProblem(.noMicrocodeEntry, at: table.range.lowerBound))

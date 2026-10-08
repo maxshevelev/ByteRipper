@@ -77,6 +77,17 @@ final class MicrocodeFieldsTests: XCTestCase {
         XCTAssertEqual(value(header, "Extended signatures"), "906EA, A0671")
         XCTAssertEqual(header.processorSignatures, [0x0008_06EA, 0x0009_06EA, 0x000A_0671])
         XCTAssertEqual(header.processorPlatforms.map(\.platformIDs), [0x01, 0x02, 0x08])
+
+        // Shared only where the CPUID and a platform both meet; zero is every
+        // platform.
+        func plain(_ signature: UInt32, platforms: UInt32) throws -> MicrocodeHeader {
+            var other = TestImage.microcode(signature: signature)
+            for index in 0..<4 { other[0x18 + index] = UInt8(truncatingIfNeeded: platforms >> (8 * index)) }
+            return try XCTUnwrap(MicrocodeHeader.read(at: 0, in: ImageReader(other)))
+        }
+        XCTAssertEqual(header.sharedProcessors(with: try plain(0x0009_06EA, platforms: 0x02)), [0x0009_06EA])
+        XCTAssertEqual(header.sharedProcessors(with: try plain(0x0009_06EA, platforms: 0x01)), [])
+        XCTAssertEqual(header.sharedProcessors(with: try plain(0x000A_0671, platforms: 0)), [0x000A_0671])
         XCTAssertTrue(value(header, "Extended checksum")?.hasSuffix("(Valid)") ?? false)
         XCTAssertNil(value(header, "Extended table"), "the count and the room agree")
 
