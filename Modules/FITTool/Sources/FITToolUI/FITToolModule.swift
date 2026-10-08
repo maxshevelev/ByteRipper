@@ -494,9 +494,9 @@ struct FITParkedState: ToolSessionState {
     private func show(_ display: FITDisplay) {
         let display = outline(of: display).protecting(by: readRanges)
         self.display = display
-        cpuidsInTheImage = Set(display.rows.compactMap {
-            $0.cpuidText.flatMap { UInt32($0, radix: 16) }
-        })
+        // Every processor a microcode serves, the ones its extended table adds
+        // included: the catalogue files the same update under each of them.
+        cpuidsInTheImage = Set(display.rows.flatMap(\.cpuids))
         controller.show(display, focus: focus, canWrite: !host.isReadOnly)
         host.publish(display.zones)
     }
@@ -702,11 +702,12 @@ struct FITParkedState: ToolSessionState {
         form.isReplacing = true
         self.form = form
         let target = display.rows.first { $0.index == index }
-        form.targetCpuidText = target?.cpuidText
-        form.targetCpuid = target?.cpuidText.flatMap { UInt32($0, radix: 16) }
-        // The narrowing is to the one CPUID the row names — "replace it with a
-        // newer one" — not to everything the image has.
-        form.cpuidsInTheImage = form.targetCpuid.map { [$0] } ?? []
+        form.targetCpuidText = target.flatMap { $0.cpuids.isEmpty ? nil : FITPresenter.cpuidsText($0.cpuids) }
+        form.targetCpuids = Set(target?.cpuids ?? [])
+        // The narrowing is to the CPUIDs the row names — "replace it with a
+        // newer one" — not to everything the image has. An update with an
+        // extended table names several, and the catalogue files it under each.
+        form.cpuidsInTheImage = form.targetCpuids
         form.onCancel = { [weak self] in self?.closeForm() }
         form.onReplace = { [weak self] entry in self?.replaceMicrocode(entry, at: index) }
         form.onChooseFile = { [weak self] in self?.chooseMicrocodeFile(at: index) }

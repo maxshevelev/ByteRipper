@@ -16,7 +16,8 @@ final class FITDisplayTests: XCTestCase {
         pointerAddress: UInt64? = nil,
         microcodeSignature: UInt32 = 0x0008_06EA,
         microcodeRevision: UInt32 = 0xF0,
-        microcodePlatform: UInt32 = 1
+        microcodePlatform: UInt32 = 1,
+        microcodeExtended: [(signature: UInt32, platformIDs: UInt32)] = []
     ) -> FITDisplay {
         let bytes = TestFIT.image(
             rows: rows,
@@ -27,7 +28,8 @@ final class FITDisplayTests: XCTestCase {
                 signature: microcodeSignature,
                 revision: microcodeRevision,
                 totalSize: 0x180,
-                platformIDs: microcodePlatform
+                platformIDs: microcodePlatform,
+                extended: microcodeExtended
             )]
         )
         let parsed = UEFIImage(size: 0x1_0000, roots: [], addressDiff: 0xFFFF_0000)
@@ -121,6 +123,24 @@ final class FITDisplayTests: XCTestCase {
         XCTAssertEqual(row.sizeText, "0x180")
         XCTAssertEqual(row.targetRange, microcode..<(microcode + 0x180))
         XCTAssertFalse(row.hasProblem)
+    }
+
+    /// An update with an extended signature table is for every processor it
+    /// lists, and the row names them all: the header's own first, the ones the
+    /// table adds after it. The table repeats the header's signature, as
+    /// Intel's do, and it is not named twice.
+    func testAMicrocodeRowNamesTheCpuidsItsExtendedTableAdds() {
+        let shown = display([microcodeRow], microcodeSignature: 0x000B_06A2, microcodeExtended: [
+            (0x000B_06A2, 0xE0), (0x000B_06A3, 0xE0), (0x000B_06A8, 0xE0)
+        ])
+        let row = shown.rows[1]
+
+        XCTAssertEqual(row.cpuidText, "B06A2", "Copy CPUID copies the header's own")
+        XCTAssertEqual(row.cpuids, [0x000B_06A2, 0x000B_06A3, 0x000B_06A8])
+        XCTAssertEqual(row.targetText, "CPUID B06A2 + B06A3, B06A8 · r.F0 · 2019-07-15")
+        XCTAssertEqual(shown.zones.zones.first { $0.id == "fit.target.1" }?.name,
+                       "CPUID B06A2 + B06A3, B06A8")
+        XCTAssertEqual(display([microcodeRow]).rows[1].cpuids, [0x0008_06EA])
     }
 
     /// A row's own size field is required to be zero for most types, so where
@@ -373,6 +393,20 @@ final class FITDisplayTests: XCTestCase {
         XCTAssertEqual(shown.rows[1].latestState, .latest)
         XCTAssertEqual(shown.rows[0].latestState, .notRated,
                        "the header row is not a microcode and has no verdict")
+    }
+
+    /// The catalogue files an update for several processors under each of
+    /// them, so a newer revision listed for a CPUID the extended table adds is
+    /// a newer revision of this row's update.
+    func testANewerRevisionForAnExtendedCpuidOutdatesTheRow() throws {
+        var shown = display([microcodeRow], microcodeSignature: 0x000B_06A2, microcodeRevision: 0x7C,
+                            microcodePlatform: 0xE0,
+                            microcodeExtended: [(0x000B_06A2, 0xE0), (0x000B_06A3, 0xC0)])
+        shown = shown.ratingLatest(against: [
+            try catalogueEntry(cpuid: 0x000B_06A3, platform: 0xC0, revision: 0xF0)
+        ])
+
+        XCTAssertEqual(shown.rows[1].latestState, .outdated(newestRevision: 0xF0))
     }
 
     /// An installed revision behind the catalogue's newest for the same CPUID

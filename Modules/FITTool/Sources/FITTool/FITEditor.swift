@@ -580,14 +580,26 @@ public enum FITEditor {
     /// that names platform 22's. So an exact mask wins, an overlapping one is
     /// next, and only if neither is there does the first row for the CPUID
     /// answer.
+    ///
+    /// An update with an extended signature table serves more processors than
+    /// its header names, so where no row's header names this CPUID, a row whose
+    /// update serves any processor the new one serves is the one it replaces —
+    /// the same update for the same board, filed under another of its CPUIDs.
     private static func rowNaming(
         _ cpuid: UInt32,
         matching header: MicrocodeHeader,
         in table: FITTable
     ) -> FITRow? {
-        let candidates = table.rows.filter { row in
-            guard case .microcode(let found) = row.target else { return false }
-            return found.processorSignature == cpuid
+        func rows(where serves: (MicrocodeHeader) -> Bool) -> [FITRow] {
+            table.rows.filter { row in
+                guard case .microcode(let found) = row.target else { return false }
+                return serves(found)
+            }
+        }
+        let served = Set(header.processorSignatures)
+        var candidates = rows { $0.processorSignature == cpuid }
+        if candidates.isEmpty {
+            candidates = rows { !served.isDisjoint(with: $0.processorSignatures) }
         }
         func component(_ row: FITRow) -> MicrocodeHeader? {
             guard case .microcode(let found) = row.target else { return nil }

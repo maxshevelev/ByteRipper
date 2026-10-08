@@ -285,6 +285,21 @@ final class MicrocodeCatalogueTests: XCTestCase {
         )
     }
 
+    /// Each processor of an extended table is weighed on its own platforms:
+    /// the 906EB entry serves platform 1, which the fixture's `plat22` r.F0
+    /// covers, so the update is behind it — though its header names 906EA,
+    /// which the catalogue does not list at all.
+    func testAnExtendedSignatureIsRatedOnItsOwnPlatforms() throws {
+        let bytes = TestFIT.microcode(signature: 0x906EA, revision: 0x7C, platformIDs: 0x80,
+                                      extended: [(0x906EA, 0x80), (0x906EB, 0x02)])
+        let installed = try XCTUnwrap(MicrocodeHeader.read(at: 0, in: ImageReader(bytes)))
+
+        XCTAssertEqual(
+            MicrocodeCatalogue.latest(of: installed, in: try entries()),
+            .outdated(newestRevision: 0xF0)
+        )
+    }
+
     /// A header for a CPUID the catalogue does not list has no verdict: the
     /// collection cannot speak to a processor it does not name.
     func testACpuidTheCatalogueDoesNotListIsNotRated() throws {

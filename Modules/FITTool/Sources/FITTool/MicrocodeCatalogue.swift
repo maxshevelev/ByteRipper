@@ -243,24 +243,30 @@ public enum MicrocodeCatalogue {
     /// A revision newer than anything the catalogue lists is not "latest": the
     /// collection is behind the board, and a behind catalogue cannot confirm
     /// what it does not know.
+    ///
+    /// An update with an extended signature table serves several processors,
+    /// each on its own platforms, and the catalogue files the same update once
+    /// under each of them. Every pair counts: a newer revision listed for any
+    /// processor the update serves is a newer revision of this update.
     public static func latest(
         of header: MicrocodeHeader,
         in entries: [MicrocodeCatalogueEntry]
     ) -> MicrocodeLatest {
-        // Which platform bits the board can be. An installed update that
-        // serves every platform narrows nothing, so the board is any of the
-        // eight a three-bit id can name.
-        let candidates: UInt32 = header.platformIDs == 0 ? 0xFF : header.platformIDs
-
         var newestCertain: UInt32?
         var newestPossible: UInt32?
-        for entry in entries where entry.cpuid == header.processorSignature {
-            guard let revision = entry.revision else { continue }
-            let mask = entry.platformID ?? 0
-            if mask == 0 || candidates & ~mask == 0 {
-                newestCertain = max(newestCertain ?? revision, revision)
-            } else if candidates & mask != 0 {
-                newestPossible = max(newestPossible ?? revision, revision)
+        for (signature, platformIDs) in header.processorPlatforms {
+            // Which platform bits the board can be. An installed update that
+            // serves every platform narrows nothing, so the board is any of
+            // the eight a three-bit id can name.
+            let candidates: UInt32 = platformIDs == 0 ? 0xFF : platformIDs
+            for entry in entries where entry.cpuid == signature {
+                guard let revision = entry.revision else { continue }
+                let mask = entry.platformID ?? 0
+                if mask == 0 || candidates & ~mask == 0 {
+                    newestCertain = max(newestCertain ?? revision, revision)
+                } else if candidates & mask != 0 {
+                    newestPossible = max(newestPossible ?? revision, revision)
+                }
             }
         }
 

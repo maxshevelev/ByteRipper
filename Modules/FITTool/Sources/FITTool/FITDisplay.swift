@@ -25,6 +25,10 @@ public struct FITDisplayRow: Equatable, Sendable {
     /// leading zero — what a bench writes down and looks up. Nil for a row that
     /// does not lead to microcode.
     public var cpuidText: String?
+    /// Every processor the microcode is for, the header's own first and then
+    /// those its extended signature table adds. Empty for a row that does not
+    /// lead to microcode.
+    public var cpuids: [UInt32] = []
     /// Something is wrong with this row, and the panel says so by colour as
     /// well as in the list below.
     public var hasProblem: Bool
@@ -351,6 +355,7 @@ public enum FITPresenter {
                 versionText: row.entry.versionText,
                 targetText: targetText(of: row),
                 cpuidText: cpuidText(of: row),
+                cpuids: cpuids(of: row),
                 hasProblem: problemRows.contains(row.entry.index),
                 // No catalogue yet: the "latest" verdict for the microcode rows
                 // starts `.notRated`, and the session's `ratingLatest(against:)`
@@ -465,9 +470,23 @@ public enum FITPresenter {
         MicrocodeHeader.cpuid(signature)
     }
 
+    /// Several CPUIDs as one: the header's own, then after a `+` the ones its
+    /// extended table adds — `B06A2 + B06A3, B06A8`. The update is filed under
+    /// the first, and it serves every one of them.
+    public static func cpuidsText(_ signatures: [UInt32]) -> String {
+        guard let first = signatures.first else { return "" }
+        let more = signatures.dropFirst().map(cpuid)
+        return more.isEmpty ? cpuid(first) : "\(cpuid(first)) + \(more.joined(separator: ", "))"
+    }
+
     private static func cpuidText(of row: FITRow) -> String? {
         guard case .microcode(let header) = row.target else { return nil }
         return cpuid(header.processorSignature)
+    }
+
+    private static func cpuids(of row: FITRow) -> [UInt32] {
+        guard case .microcode(let header) = row.target else { return [] }
+        return header.processorSignatures
     }
 
     /// Everything known about where the row leads, in one line, separated the
@@ -492,8 +511,10 @@ public enum FITPresenter {
         case .microcode(let header):
             // The CPUID is what a bench hunts for, so it leads; the offset and
             // the size have their own columns, and the date closes the line.
+            // An update for several processors names them all: the ones its
+            // extended table adds are as much its own as the header's.
             parts = [
-                L("CPUID %1$@", cpuid(header.processorSignature)),
+                L("CPUID %1$@", cpuidsText(header.processorSignatures)),
                 L("r.%1$@", String(header.updateRevision, radix: 16, uppercase: true))
             ]
             parts.append(header.date)
@@ -569,8 +590,8 @@ public enum FITPresenter {
             if let target = row.targetRange {
                 // Named by CPUID where there is one: that is what a bench is
                 // looking for when it goes hunting for a microcode in a dump.
-                let named = row.cpuidText.map { L("CPUID %1$@", $0) }
-                    ?? (row.targetText.isEmpty ? L("#%1$@", row.displayNumber) : row.targetText)
+                let named = !row.cpuids.isEmpty ? L("CPUID %1$@", cpuidsText(row.cpuids))
+                    : row.targetText.isEmpty ? L("#%1$@", row.displayNumber) : row.targetText
                 zones.append(Zone(
                     id: targetZoneID(row.key),
                     name: row.isBackup ? L("Backup %1$@", named) : named,

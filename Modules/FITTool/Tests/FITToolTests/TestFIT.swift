@@ -151,13 +151,23 @@ enum TestFIT {
         return bytes
     }
 
-    /// An Intel microcode image, its dword checksum correct.
+    /// An Intel microcode image, its dword checksum correct. With `extended`
+    /// signatures it carries an extended signature table right behind its
+    /// data, and its total size is what the table leaves it.
     static func microcode(
         signature: UInt32 = 0x0008_06EA,
         revision: UInt32 = 0xF0,
         totalSize: UInt32 = 0x100,
-        platformIDs: UInt32 = 1
+        platformIDs: UInt32 = 1,
+        extended: [(signature: UInt32, platformIDs: UInt32)] = []
     ) -> [UInt8] {
+        var table: [UInt32] = []
+        if !extended.isEmpty {
+            table = [UInt32(extended.count), 0, 0, 0, 0]
+            for entry in extended { table += [entry.signature, entry.platformIDs, 0] }
+            table[1] = 0 &- table.reduce(0, &+)
+        }
+        let totalSize = table.isEmpty ? totalSize : 0x70 + UInt32(4 * table.count)
         var bytes: [UInt8] = []
         func u32(_ value: UInt32) {
             bytes += (0..<4).map { UInt8(truncatingIfNeeded: value >> (8 * $0)) }
@@ -175,7 +185,8 @@ enum TestFIT {
         u32(0)                     // MetadataSize
         u32(0)                     // UpdateRevisionMin
         u32(0)                     // Reserved
-        bytes += [UInt8](repeating: 0x5A, count: Int(totalSize) - bytes.count)
+        bytes += [UInt8](repeating: 0x5A, count: Int(totalSize) - bytes.count - 4 * table.count)
+        table.forEach(u32)
 
         let sum = Checksums.sum32(of: 0..<UInt64(bytes.count), in: ImageReader(bytes)) ?? 0
         let stored = 0 &- sum

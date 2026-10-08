@@ -448,6 +448,24 @@ final class FITEditorTests: XCTestCase {
         XCTAssertEqual(outcome.range.lowerBound, 0x2100)
     }
 
+    /// An update with an extended table serves the processors it lists. One
+    /// filed under another of them — a header naming B06A3 where the row's
+    /// names B06A2 — is the same update for the same board, and replaces the
+    /// row rather than adding a second.
+    func testAnUpdateForACpuidTheExtendedTableListsReplacesTheRow() throws {
+        let bytes = image(contents: [microcode: TestFIT.microcode(
+            signature: 0x000B_06A2, revision: 0x7C,
+            extended: [(0x000B_06A2, 1), (0x000B_06A3, 1)]
+        )])
+        let newer = TestFIT.microcode(signature: 0x000B_06A3, revision: 0xF0,
+                                      extended: [(0x000B_06A2, 1), (0x000B_06A3, 1)])
+
+        let (_, outcome) = try addOrReplace(newer, in: bytes).get()
+
+        XCTAssertEqual(outcome.kind, .replaced)
+        XCTAssertEqual(outcome.entryIndex, 1)
+    }
+
     func testAFileThatIsNotMicrocodeIsRefusedBeforeAnythingIsPlanned() throws {
         guard case .failure(let problem) =
             try addOrReplace([UInt8](repeating: 0x5A, count: 0x100), in: image())

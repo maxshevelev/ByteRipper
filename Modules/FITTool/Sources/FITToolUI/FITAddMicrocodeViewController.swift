@@ -23,17 +23,18 @@ import ToolModuleKit
     /// adding. The replacement need not be the same CPUID — the row, not the
     /// processor, is what is being changed.
     var isReplacing = false
-    /// The CPUID of the row being replaced, where the form knows it: the
-    /// "Only CPUID NNNNN" narrowing, and the "Update" the button says when the
-    /// pick is for the same processor.
-    var targetCpuid: UInt32?
-    /// The same, as the row writes it — five hex digits, no leading zero.
+    /// The CPUIDs of the row being replaced, where the form knows them — the
+    /// header's own and those its extended table adds: the "Only CPUID NNNNN"
+    /// narrowing, and the "Update" the button says when the pick is for one
+    /// of the same processors.
+    var targetCpuids: Set<UInt32> = []
+    /// The same, as the row writes them — `B06A2 + B06A3, B06A8`.
     var targetCpuidText: String?
 
     /// The CPUIDs the open image already names. A dump is for one board, and
     /// what is worth adding to it is almost always a newer revision of one of
     /// these — so that is the list it opens on. In replace mode this is just
-    /// the one CPUID the row names, and the checkbox narrows to it.
+    /// the CPUIDs the row names, and the checkbox narrows to them.
     var cpuidsInTheImage: Set<UInt32> = []
 
     private var entries: [MicrocodeCatalogueEntry] = []
@@ -209,7 +210,7 @@ import ToolModuleKit
     }
 
     @objc private func narrow() {
-        // In replace mode the narrowing is to the one CPUID the row names, and
+        // In replace mode the narrowing is to the CPUIDs the row names, and
         // with it on there is nothing left to search — so the field goes away
         // rather than sitting there doing nothing. Its text is cleared too, so
         // it does not keep filtering from behind the scenes while hidden.
@@ -279,7 +280,8 @@ extension FITAddMicrocodeViewController: NSTableViewDataSource, NSTableViewDeleg
         // a CPUID the table already names is replaced rather than added a second
         // time, and the button says which it will be before it is pressed.
         if isReplacing {
-            addButton.title = (selectedEntry?.cpuid == targetCpuid) ? L("Update") : L("Replace")
+            let same = selectedEntry?.cpuid.map(targetCpuids.contains) ?? false
+            addButton.title = same ? L("Update") : L("Replace")
         } else {
             let replaces = selectedEntry?.cpuid.map(cpuidsInTheImage.contains) ?? false
             addButton.title = replaces ? L("Replace") : L("Add")

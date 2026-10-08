@@ -75,6 +75,8 @@ final class MicrocodeFieldsTests: XCTestCase {
         XCTAssertTrue(extended.checksumIsCorrect)
         XCTAssertTrue(header.checksumIsCorrect)
         XCTAssertEqual(value(header, "Extended signatures"), "906EA, A0671")
+        XCTAssertEqual(header.processorSignatures, [0x0008_06EA, 0x0009_06EA, 0x000A_0671])
+        XCTAssertEqual(header.processorPlatforms.map(\.platformIDs), [0x01, 0x02, 0x08])
         XCTAssertTrue(value(header, "Extended checksum")?.hasSuffix("(Valid)") ?? false)
         XCTAssertNil(value(header, "Extended table"), "the count and the room agree")
 
@@ -82,5 +84,7 @@ final class MicrocodeFieldsTests: XCTestCase {
         let broken = try XCTUnwrap(MicrocodeHeader.read(at: 0, in: ImageReader(bytes))?.extendedTable)
         XCTAssertEqual(broken.signatures.count, 2, "only what the image has room for")
         XCTAssertFalse(broken.checksumIsCorrect)
+        XCTAssertEqual(MicrocodeHeader.read(at: 0, in: ImageReader(bytes))?.processorSignatures, [0x0008_06EA],
+                       "a table that does not hold together names no processor")
     }
 }

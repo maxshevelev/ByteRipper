@@ -154,6 +154,33 @@ public struct MicrocodeHeader: Equatable, Sendable {
     /// Header and data together, as `TotalSize` gives it.
     public var range: Range<UInt64> { offset..<(offset + UInt64(totalSize)) }
 
+    /// Every processor the update is for: the header's own signature first,
+    /// then each one the extended table adds. Intel's tables list the header's
+    /// signature again as their first entry, and it is not named twice.
+    public var processorSignatures: [UInt32] {
+        var signatures = [processorSignature]
+        for entry in trustedExtendedSignatures where !signatures.contains(entry.processorSignature) {
+            signatures.append(entry.processorSignature)
+        }
+        return signatures
+    }
+
+    /// Each processor with the platforms the update serves it on: the header's
+    /// pair, then the extended table's, each with its own platform IDs.
+    public var processorPlatforms: [(signature: UInt32, platformIDs: UInt32)] {
+        [(processorSignature, platformIDs)]
+            + trustedExtendedSignatures.map { ($0.processorSignature, $0.platformIDs) }
+    }
+
+    /// The extended table's signatures, where the table holds together. Bytes
+    /// behind the data are read as a table whatever they are, and padding
+    /// makes a count of thousands; only one that fits the image and sums to
+    /// zero names processors the update is for.
+    private var trustedExtendedSignatures: [MicrocodeExtendedTable.Signature] {
+        guard let table = extendedTable, table.isConsistent else { return [] }
+        return table.signatures
+    }
+
     /// `2019-07-15`, unpacked from the BCD. The fields are already known to be
     /// valid BCD, or this header would not exist.
     public var date: String {
@@ -291,6 +318,10 @@ public struct MicrocodeExtendedTable: Equatable, Sendable {
 
     static let headerSize: UInt64 = 20
     static let entrySize: UInt64 = 12
+
+    /// Whether the table the count declares fits the image and its checksum
+    /// counts — the difference between a table and the bytes after the data.
+    public var isConsistent: Bool { declaredSize <= availableSize && checksumIsCorrect }
 
     /// The table between the end of the data and the end of the image; nil
     /// when there is no room for one, or its count is zero — bytes behind the

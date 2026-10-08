@@ -1,4 +1,4 @@
-@source-sha ee1db93c7c3b50f3582125695b1ad44f4b66ceb879c921b92c8d91e65e42efb3
+@source-sha 88d66595c49793ac19c37131c7b49a05bcf972616386766ef8e7843afd8f0d96
 # FIT-Tabelle
 
 > Die Firmware Interface Table: was der Prozessor laden soll, bevor er Firmware-Code ausführt, und ob diese Bauteile vorhanden sind.
@@ -19,6 +19,7 @@ Jeder Eintrag trägt eine Adresse, eine Größe und einen Typ: ein [[term:microc
 
 - **Die Einträge** mit Typ, Adresse und Größe, in der Reihenfolge der Tabelle.
 - **Was an jeder Adresse tatsächlich liegt.** Die Spalte **Zeigt auf** wird nicht aus dem Eintrag gelesen: Das Werkzeug folgt der Adresse und meldet, was dort steht — ein Microcode-Update mit gültigem Header, ein Manifest, ein gelöschter Bereich oder nichts Erkennbares.
+- **Alle Prozessoren, für die ein Microcode bestimmt ist.** Ein Update für mehrere Prozessoren führt die übrigen in einer erweiterten Signaturtabelle hinter seinen Daten auf, und ein Prozessor aus einer solchen Gruppe hat unter Umständen kein eigenes Update: Er wird von einem Update bedient, dessen Header einen anderen Prozessor nennt. Die Spalte **Zeigt auf** nennt sie alle — zuerst den Prozessor aus dem Header, dann nach einem `+` die von der Tabelle hinzugefügten: `CPUID B06A2 + B06A3, B06A8`. Der Abgleich mit dem Katalog und **Nur CPUIDs aus diesem Image** berücksichtigen jeden von ihnen. Eine Tabelle, die nicht in das Update passt oder deren Prüfsumme nicht stimmt, erscheint in der Detailliste und bleibt unberücksichtigt.
 - **Die Regeln der Tabelle**: den Header-Eintrag, die Anzahl der Einträge, die Prüfsumme, die Reihenfolge der Einträge nach Typ, die Ausrichtung der Adressen, das reservierte Byte sowie die Übereinstimmung mit der [[term:top-swap|Top-Swap]]-Sicherungskopie, sofern das Image eine führt. Die gefundenen Verstöße stehen unter der Tabelle; ein Doppelklick auf einen bringt den Dump zu den betroffenen Bytes.
 - **Den Namen jedes Microcodes**, aus einem Online-Katalog nach Prozessorsignatur, Revision und Datum. Siehe [[topic:databases|Die Online-Kataloge]]; ohne Netzzugang werden die Kennungen gemeldet und die Namen weggelassen.
 
