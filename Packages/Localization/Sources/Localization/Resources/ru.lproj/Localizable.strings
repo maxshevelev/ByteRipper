@@ -1275,3 +1275,35 @@
 "Back/Forward" = "Назад / Вперёд";
 "Go back to where the last jump left" = "Вернуться туда, откуда ушёл последний переход";
 "Go forward to where Back left" = "Пройти вперёд, туда, откуда ушла команда «Назад»";
+
+/* The agent service (Design/AGENT_PLAN.md) */
+"Agent" = "Агент";
+"Let agents connect to ByteRipper" = "Разрешить агентам подключаться к ByteRipper";
+"An agent — Claude Code, Claude Desktop or another MCP client on this Mac — can then list the files open here, read their bytes and show places in them. It cannot save a file. The connection is local, but what the agent reads, its program passes to the model behind it." = "Тогда агент — Claude Code, Claude Desktop или другой клиент MCP на этом Mac — сможет получить список открытых здесь файлов, читать их байты и показывать в них нужные места. Сохранить файл он не может. Соединение локальное, но прочитанное агентом его программа передаёт модели, на которой он работает.";
+"Copy Command for Claude Code" = "Скопировать команду для Claude Code";
+"Copy the Terminal command that connects Claude Code to this copy of ByteRipper" = "Скопировать команду Терминала, которая подключает Claude Code к этой копии ByteRipper";
+"Copy Configuration for Claude Desktop" = "Скопировать настройку для Claude Desktop";
+"Copy the block that goes into Claude Desktop's configuration file" = "Скопировать блок для файла настроек Claude Desktop";
+"The agent service is not available in this copy of the app." = "В этой копии программы служба агента недоступна.";
+"Could not start: %1$@" = "Не удалось запустить: %1$@";
+"Switched off." = "Выключена.";
+"Waiting for an agent." = "Ожидание агента.";
+"One agent connected." = "Подключён один агент.";
+"Agents connected: %1$@." = "Подключено агентов: %1$@.";
+"Copied." = "Скопировано.";
+"Time" = "Время";
+"Tool" = "Инструмент";
+"Arguments" = "Аргументы";
+"Took" = "Длительность";
+"Answer" = "Ответ";
+"Result" = "Результат";
+"Clear Log" = "Очистить журнал";
+"Agent Settings…" = "Настройки агента…";
+"%1$@ ms" = "%1$@ мс";
+"%1$@ s" = "%1$@ с";
+"Answered" = "Отвечено";
+"Too long, not sent" = "Слишком длинный, не отправлен";
+"Cancelled" = "Отменено";
+"ByteRipper agent service" = "Служба агента ByteRipper";
+"Show Agent Window" = "Показать окно агента";
+"Switch Off Agent Service" = "Выключить службу агента";

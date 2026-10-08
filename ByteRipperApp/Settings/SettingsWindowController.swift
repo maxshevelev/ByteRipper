@@ -227,6 +227,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     private let fileTypesController = FileTypesSettingsViewController()
     private let favoritesController = FavoritePatternsSettingsViewController()
     private let languageController = LanguageSettingsViewController()
+    private let agentController = AgentSettingsViewController()
 
     private static let appearanceItemID = NSToolbarItem.Identifier("Appearance")
     private static let layoutItemID = NSToolbarItem.Identifier("Layout")
@@ -236,6 +237,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     private static let fileTypesItemID = NSToolbarItem.Identifier("FileTypes")
     private static let favoritesItemID = NSToolbarItem.Identifier("Favorites")
     private static let languageItemID = NSToolbarItem.Identifier("Language")
+    private static let agentItemID = NSToolbarItem.Identifier("Agent")
 
     init() {
         let window = SettingsWindow(
@@ -303,6 +305,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         case favoritesItemID: return L("Search Patterns")
         case fileTypesItemID: return L("File Types")
         case languageItemID: return L("Language")
+        case agentItemID: return L("Agent")
         default: return ""
         }
     }
@@ -320,7 +323,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
 
     static let tabIdentifiers: [NSToolbarItem.Identifier] = [
         appearanceItemID, layoutItemID, comparisonItemID, editingItemID,
-        textDecodingItemID, favoritesItemID, fileTypesItemID, languageItemID,
+        textDecodingItemID, favoritesItemID, fileTypesItemID, languageItemID, agentItemID,
     ]
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
@@ -379,6 +382,14 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             item.image = NSImage(systemSymbolName: "globe", accessibilityDescription: L("Language"))
             item.target = self
             item.action = #selector(languageTabTapped)
+        // help: settings.agent
+        case Self.agentItemID:
+            item.label = Self.label(for: itemIdentifier)
+            item.paletteLabel = item.label
+            item.image = NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted",
+                                 accessibilityDescription: L("Agent"))
+            item.target = self
+            item.action = #selector(agentTabTapped)
         // help: settings.text-decoding
         case Self.textDecodingItemID:
             item.label = Self.label(for: itemIdentifier)
@@ -451,6 +462,10 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         selectTab(languageController)
     }
 
+    @objc private func agentTabTapped() {
+        selectTab(agentController)
+    }
+
     /// Re-sizes the window to the tab it is showing. The Language tab grows
     /// when it starts offering the relaunch, and the window is sized to its
     /// content rather than the other way round.
@@ -469,4 +484,15 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         selectTab(favoritesController)
         showWindow(sender)
     }
+
+    /// Opens the window on the Agent tab — where the Agent window and the menu
+    /// bar's agent item send someone who wants to switch the service on or
+    /// copy a client's configuration.
+    func showAgent(_ sender: Any?) {
+        selectTab(agentController)
+        showWindow(sender)
+    }
+
+    /// The Agent tab, for the tests that drive it.
+    var agent: AgentSettingsViewController { agentController }
 }

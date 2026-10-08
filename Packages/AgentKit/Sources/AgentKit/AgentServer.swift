@@ -67,6 +67,8 @@ public struct AgentCallRecord: Equatable, Sendable {
     public let tool: String
     public let arguments: JSONValue
     public let duration: Duration
+    /// When the call ended, by this Mac's clock.
+    public let finished: Date
     /// The size of the answer as the tool produced it, sent or not.
     public let answerBytes: Int
     public let outcome: Outcome

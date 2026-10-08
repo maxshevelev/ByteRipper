@@ -34,8 +34,9 @@ moving the view, selecting, and marking. That needs the app.
   conversation is about it. So the service is application-wide, like the
   bookmarks or the search history, and lives as long as the app.
 - **Its own window, not the tool panel.** What the agent has to show — whether
-  a client is connected, the request log, its marks, its findings, the two
-  switches — goes in a window of its own (Window ▸ Agent). Put in the tool
+  a client is connected, the request log, its marks, its findings — goes in a
+  window of its own (Window ▸ Agent); the switches and the client
+  configurations are in Settings ▸ Agent. Put in the tool
   panel it would push out the very tree the conversation is about.
 - **Agent tools come from three places.** The host's own (caret, reads, view,
   marks, edits, documents); each tool-module's *queries*, declared on the
@@ -124,10 +125,10 @@ switch in Settings is off, it answers every request with an error that says
 where the switch is. It knows nothing about MCP beyond reading a request's
 `id` for that answer.
 
-The relay is what a client is configured with. The Agent window has a button
+The relay is what a client is configured with. Settings ▸ Agent has a button
 that copies the configuration for Claude Code
-(`claude mcp add byteripper -- <path>`) and for Claude Desktop (the JSON
-block), with the bundle's real path in it.
+(`claude mcp add --scope user byteripper -- <path>`) and one for Claude
+Desktop (the JSON block), with the bundle's real path in it.
 
 ### `AgentService`
 
@@ -145,7 +146,10 @@ In the app target, `ByteRipperApp/Agent/`, on the main actor.
   when the agent or the person clears them.
 - Keeps a log of every call — tool, target, how long, how big the answer, the
   error if any — for the Agent window. Bounded, not persisted.
-- While a client is connected, the status bar shows it.
+- While the service is on, a mark in the menu bar shows it, filled while a
+  client is connected. The menu bar rather than a window's status bar: the
+  person talking to the agent is typing in another app, with ByteRipper
+  behind it.
 
 ## What a tool-module contributes
 
@@ -222,7 +226,7 @@ by its index path: two images do not number their volumes the same way.
 | `documents` | Every open document — tab, pane A or B, or fragment panel; file name and path; size; modified or not — and every background one. Each with the id the other tools take. |
 | `focus` | The key window's active pane: caret, selection, the first byte on screen; and, from each live session, what its panel has chosen (`navigationMark` read as data). What "this" means when the person says "look at this". |
 | `read` | Bytes of a range as hex, ASCII, UCS-2 or integers of a width and an endianness. 4 KiB at most. |
-| `reveal` / `select` | Scroll to a range; select it. Each is a navigation step, so Back returns. |
+| `reveal` | Bring the document's tab forward, scroll to a range, select it (`select`, by default when a length is given). A navigation step, so Back returns. |
 | `open_panel` | Switch a tab's tool panel to a module, through the same door the Tools menu uses: the panel that was there parks its state, and the switch is a navigation step. Refused while a sheet is up, blocking work is running, or a field is being edited. |
 | `mark` / `unmark` / `marks` | The agent's marks (below). |
 | `write` | Overwrite bytes in an open document as one undo step named by the agent's label. Only with the edit switch on, only overwrite — a write that would move bytes is refused. |
@@ -331,11 +335,14 @@ Each ends in something that works and is committed.
    through it, cancellation and progress included. *(Done. The transcripts in
    the tests follow the schemas; a real client's is recorded at stage 2, where
    there is a socket to record it on.)*
-2. **The loop, end to end.** Relay, service, the Settings switch, the status
-   bar, the Agent window with the log; `documents`, `focus`, `read`, `reveal`,
-   `select`. Done when Claude Code, configured from the window's button,
-   answers "what is under the caret" and "go to 0x7F3000", and Back returns.
-   `Design/AGENT_PROTOCOL.md` starts here.
+2. **The loop, end to end.** Relay, service, the Settings switch, the menu
+   bar mark, the Agent window with the log; `documents`, `focus`, `read`,
+   `reveal`. Done when Claude Code answers "what is under the caret" and "go
+   to 0x7F3000", and Back returns. *(Done. Claude Code 2.1.292 speaks the
+   modern era and refused the tool list until it carried `ttlMs` and
+   `cacheScope`; its recorded requests are `RecordedClientTests`. The
+   protocol document waits for stage 3, when module tools give it something
+   beyond four host tools to fix.)*
 3. **UEFI queries and actions.** `ToolReadHost`; `agentQueries` and
    `agentActions` on the seam; the language override; `tree`, `node`, `find`,
    `at`; `select_node`, `panel_selection`; `open_panel`. Done when, with the

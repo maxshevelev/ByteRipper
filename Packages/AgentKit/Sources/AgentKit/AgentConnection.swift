@@ -299,7 +299,7 @@ public actor AgentConnection {
         func log(_ outcome: AgentCallRecord.Outcome, bytes: Int) {
             observer(AgentCallRecord(
                 client: record.client, tool: record.tool, arguments: record.arguments,
-                duration: record.duration, answerBytes: bytes, outcome: outcome))
+                duration: record.duration, finished: Date(), answerBytes: bytes, outcome: outcome))
         }
         // Gone from the table means the client cancelled it, or went: either
         // way nobody is waiting, and the protocol forbids writing to them

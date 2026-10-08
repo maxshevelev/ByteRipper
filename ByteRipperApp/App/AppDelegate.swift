@@ -105,6 +105,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             // socket a running copy of the app is serving its agent on.
             AgentService.shared = agentService
             agentService.apply()
+            agentStatusItem = AgentStatusItem(
+                service: agentService,
+                showWindow: { [weak self] in self?.showAgentWindow(nil) },
+                showSettings: { [weak self] in self?.showAgentSettings(nil) })
         }
         // The menu bar belongs to the application, not to a window: it is built
         // once, here, and its commands travel the responder chain to whichever
@@ -244,6 +248,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     @objc func showSettings(_ sender: Any?) {
         settingsWindowController.showWindow(sender)
+    }
+
+    /// Window ▸ Agent (`Design/AGENT_PLAN.md`): the service's state and the log
+    /// of what agents have asked. One for the app, built when first shown.
+    private lazy var agentWindowController: AgentWindowController = {
+        let controller = AgentWindowController(service: AgentService.shared)
+        controller.showSettings = { [weak self] in self?.showAgentSettings(nil) }
+        return controller
+    }()
+
+    /// The mark in the menu bar while the service is switched on.
+    private var agentStatusItem: AgentStatusItem?
+
+    @objc func showAgentWindow(_ sender: Any?) {
+        agentWindowController.showWindow(sender)
+        agentWindowController.window?.makeKeyAndOrderFront(sender)
+    }
+
+    @objc func showAgentSettings(_ sender: Any?) {
+        settingsWindowController.showAgent(sender)
     }
 
     /// Every item of the Help menu, and the ⌘? that opens the first of them.

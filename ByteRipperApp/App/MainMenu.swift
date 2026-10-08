@@ -12,9 +12,9 @@ import Localization
 /// `MainViewController`. A menu addressed to one particular controller would go
 /// on addressing it after the user switched to another tab.
 enum MainMenu {
-    /// Builds the whole bar. `appTarget` receives the two commands that belong
-    /// to the application rather than to a document — Settings… (⌘,) and every
-    /// item of the Help menu — as an explicit target rather than through the
+    /// Builds the whole bar. `appTarget` receives the commands that belong to
+    /// the application rather than to a document — Settings… (⌘,), Window ▸
+    /// Agent and every item of the Help menu — as an explicit target rather than through the
     /// responder chain, so they work while the hex view, which swallows
     /// unmodified keystrokes, is first responder, and while AppKit would
     /// otherwise answer for them (see `makeHelpMenu`).
@@ -75,6 +75,12 @@ enum MainMenu {
         let windowMenu = NSMenu(title: L("Window", context: "menu"))
         windowMenu.addItem(withTitle: L("Minimize"), action: #selector(NSWindow.performMiniaturize(_:)), keyEquivalent: "m")
         windowMenu.addItem(withTitle: L("Zoom"), action: #selector(NSWindow.performZoom(_:)), keyEquivalent: "")
+        windowMenu.addItem(.separator())
+        // help: menu.window.agent
+        let agentItem = NSMenuItem(title: L("Agent"), action: #selector(AppDelegate.showAgentWindow(_:)),
+                                   keyEquivalent: "")
+        agentItem.target = appTarget
+        windowMenu.addItem(agentItem)
         windowItem.submenu = windowMenu
 
         // Help menu

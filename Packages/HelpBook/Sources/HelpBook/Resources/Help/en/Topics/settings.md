@@ -15,6 +15,7 @@
 - **Text Decoding** — the encoding the text column decodes with.
 - **Search Patterns** — the named search patterns, and the folder through which the library can be synchronised between installations ([[topic:search|Finding Bytes and Text]]).
 - **File Types** — which extensions open in ByteRipper from the Finder. `.rom` and `.dump` belong to the program; `.bin` and the others are offered here because the system already holds a handler for them.
+- **Agent** — whether agents may connect to ByteRipper, and the text a client program is set up with ([[topic:agent|Working with an Agent]]).
 - **Language** — whether the program follows the language of the Mac or uses a chosen one. The help book changes language immediately; menus and windows change after a restart. Firmware terms remain in English in every language, those being the names datasheets and tools give them.
 
 Settings apply to the program rather than to a window: a font size chosen here applies to every open dump.

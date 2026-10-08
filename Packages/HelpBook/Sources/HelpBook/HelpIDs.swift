@@ -81,6 +81,9 @@ extension HelpTopicID {
     public static let recipeMicrocode = HelpTopicID("recipe-microcode")
     public static let recipeChecksums = HelpTopicID("recipe-checksums")
 
+    // Working with an agent
+    public static let agent = HelpTopicID("agent")
+
     // Settings
     public static let settings = HelpTopicID("settings")
 }

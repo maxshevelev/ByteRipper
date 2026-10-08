@@ -63,6 +63,9 @@ public enum HelpContents {
             .recipeMicrocode,
             .recipeChecksums
         ]),
+        ("agent", [
+            .agent
+        ]),
         ("settings", [
             .settings
         ])

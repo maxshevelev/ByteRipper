@@ -1275,3 +1275,35 @@
 "Back/Forward" = "Zurück/Vorwärts";
 "Go back to where the last jump left" = "Zurück zu der Stelle, die der letzte Sprung verlassen hat";
 "Go forward to where Back left" = "Vorwärts zu der Stelle, die „Zurück“ verlassen hat";
+
+/* The agent service (Design/AGENT_PLAN.md) */
+"Agent" = "Agent";
+"Let agents connect to ByteRipper" = "Agenten die Verbindung mit ByteRipper erlauben";
+"An agent — Claude Code, Claude Desktop or another MCP client on this Mac — can then list the files open here, read their bytes and show places in them. It cannot save a file. The connection is local, but what the agent reads, its program passes to the model behind it." = "Ein Agent — Claude Code, Claude Desktop oder ein anderer MCP-Client auf diesem Mac — kann dann die hier geöffneten Dateien auflisten, ihre Bytes lesen und Stellen darin zeigen. Eine Datei sichern kann er nicht. Die Verbindung ist lokal, doch was der Agent liest, gibt sein Programm an das Modell weiter, auf dem er beruht.";
+"Copy Command for Claude Code" = "Befehl für Claude Code kopieren";
+"Copy the Terminal command that connects Claude Code to this copy of ByteRipper" = "Den Terminal-Befehl kopieren, der Claude Code mit dieser Kopie von ByteRipper verbindet";
+"Copy Configuration for Claude Desktop" = "Konfiguration für Claude Desktop kopieren";
+"Copy the block that goes into Claude Desktop's configuration file" = "Den Block für die Konfigurationsdatei von Claude Desktop kopieren";
+"The agent service is not available in this copy of the app." = "In dieser Kopie des Programms ist der Agentendienst nicht verfügbar.";
+"Could not start: %1$@" = "Start nicht möglich: %1$@";
+"Switched off." = "Ausgeschaltet.";
+"Waiting for an agent." = "Wartet auf einen Agenten.";
+"One agent connected." = "Ein Agent verbunden.";
+"Agents connected: %1$@." = "Verbundene Agenten: %1$@.";
+"Copied." = "Kopiert.";
+"Time" = "Zeit";
+"Tool" = "Werkzeug";
+"Arguments" = "Argumente";
+"Took" = "Dauer";
+"Answer" = "Antwort";
+"Result" = "Ergebnis";
+"Clear Log" = "Protokoll leeren";
+"Agent Settings…" = "Agent-Einstellungen…";
+"%1$@ ms" = "%1$@ ms";
+"%1$@ s" = "%1$@ s";
+"Answered" = "Beantwortet";
+"Too long, not sent" = "Zu lang, nicht gesendet";
+"Cancelled" = "Abgebrochen";
+"ByteRipper agent service" = "Agentendienst von ByteRipper";
+"Show Agent Window" = "Agentenfenster zeigen";
+"Switch Off Agent Service" = "Agentendienst ausschalten";
