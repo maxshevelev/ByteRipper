@@ -28,6 +28,12 @@ public enum FITToolModule: ToolModule {
     }
 }
 
+/// What the window's navigation history keeps of the panel.
+struct FITNavigationMark: Hashable {
+    var focus: Int?
+    var zone: String?
+}
+
 /// What a parked session hands back: the row the user was looking at, and
 /// which zone of it was in front — the row itself, what it points at, or the
 /// table. The reading is worth doing again — it is a handful of lookups
@@ -127,6 +133,7 @@ struct FITParkedState: ToolSessionState {
     public init(host: any ToolHost) {
         self.host = host
         controller.onSelect = { [weak self] index in self?.select(index) }
+        controller.onWillChoose = { [weak self] in self?.host.noteNavigationStep() }
         controller.onGoToTarget = { [weak self] index in self?.goToOffset(of: index) }
         controller.onSelectTable = { [weak self] in self?.showTable() }
         controller.onCopyCPUID = { [weak self] index in self?.copyCPUID(of: index) }
@@ -230,6 +237,26 @@ struct FITParkedState: ToolSessionState {
         guard let state = state as? FITParkedState else { return }
         focus = state.focus
         focusZone = state.focusZone
+    }
+
+    /// The row in focus and the zone the outline is on — the row itself, or
+    /// what it points at — for the window's navigation history.
+    public var navigationMark: AnyHashable? {
+        focus == nil && focusZone == nil ? nil : AnyHashable(FITNavigationMark(focus: focus, zone: focusZone))
+    }
+
+    /// Back or Forward came to where `mark` was in focus: the row is chosen
+    /// again with the zone it was on, without taking the dump anywhere.
+    public func showNavigationMark(_ mark: AnyHashable) {
+        guard let mark = mark.base as? FITNavigationMark else { return }
+        focus = mark.focus
+        focusZone = mark.zone
+        if let index = mark.focus, let row = display.rows.first(where: { $0.key == index }),
+           mark.zone == row.zoneToFocus, mark.zone != FITPresenter.rowZoneID(index) {
+            show(display.focusingTarget(of: index))
+        } else {
+            show(display.focusing(mark.focus))
+        }
     }
 
     // MARK: - Reading
@@ -513,6 +540,7 @@ struct FITParkedState: ToolSessionState {
     /// this is the level the app's tests drive.
     public func goToOffset(of index: Int) {
         guard let row = display.rows.first(where: { $0.key == index }) else { return }
+        host.noteNavigationStep()
         focus = index
         focusZone = row.zoneToFocus
         show(display.focusingTarget(of: index))
@@ -528,6 +556,7 @@ struct FITParkedState: ToolSessionState {
     public func showTable() {
         guard let range = display.zones.zones.first(where: { $0.id == FITPresenter.tableZoneID })?.range
         else { return }
+        host.noteNavigationStep()
         focusZone = FITPresenter.tableZoneID
         show(display.focusing(zoneID: FITPresenter.tableZoneID))
         host.reveal(range, select: false)
@@ -568,6 +597,7 @@ struct FITParkedState: ToolSessionState {
         guard index < display.problems.count, let offset = display.problems[index].offset else {
             return
         }
+        host.noteNavigationStep()
         host.reveal(offset..<min(offset + 16, host.contentSize), select: true)
     }
 

@@ -19,6 +19,10 @@ import UEFITool
 @MainActor final class UEFIToolViewController: NSViewController {
     /// The node the user picked in the tree, or nil for nothing.
     var onSelect: ((NodeID?) -> Void)?
+    /// The reader is about to choose a row on purpose — a click, a search
+    /// match — rather than walk to it with the arrow keys: a step for the
+    /// window's navigation history, taken before the choice changes.
+    var onWillChoose: (() -> Void)?
     /// The title was clicked. Only ever fired when the summary stands for a
     /// node that has no row of its own.
     var onSelectTop: (() -> Void)?
@@ -1477,6 +1481,7 @@ import UEFITool
         if let node = tree?.node(id), isMERegion(node) { way.removeLast() }
         openForSearch(way, from: 0) { [weak self] in
             guard let self, self.tree?.node(id) != nil else { return }
+            self.onWillChoose?()
             self.selectSearchMatch(id)
             self.closeForSearch(self.searchOpenings.closings(whenLandingOn: id), keepingInView: id)
             if run.walk.wrapped { self.onSearchWrapped?(run.walk.direction == .forward) }
@@ -2505,6 +2510,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // because its branch was shut is not a choice: the search goes on from
         // where it was.
         if outline.selectedRow >= 0 { searchCursor = nil }
+        if outline.isHandlingClick { onWillChoose?() }
         isReportingReadersSelection = true
         defer { isReportingReadersSelection = false }
         chooseNode(atRow: outline.selectedRow)
@@ -2557,7 +2563,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
 /// dump does not move). A click on it is how the user asks for the zone, so it
 /// chooses the row afresh. The disclosure triangle, a double click and a
 /// modifier click keep their own meanings.
-private final class UEFIOutlineView: NSOutlineView {
+private final class UEFIOutlineView: ToolPanelOutlineView {
     /// What a right-click on this outline offers, decided on the main actor.
     var onContextMenu: ((NSEvent) -> NSMenu?)?
     /// A plain click landed on the row that was already selected.

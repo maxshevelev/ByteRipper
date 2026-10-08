@@ -939,12 +939,8 @@ final class FilePaneView: NSView {
     /// The same rule the bookmark popover uses to make sure it has something to
     /// point at (§20.3).
     func revealOffsetIfOffScreen(_ offset: UInt64) {
-        guard !isOffsetOnScreen(offset) else { return }
+        guard !hexView.visibleByteRange().contains(offset) else { return }
         hexView.revealOffsetCentered(offset)
-    }
-
-    func isOffsetOnScreen(_ offset: UInt64) -> Bool {
-        hexView.visibleByteRange().contains(offset)
     }
 
     /// The first byte on screen: where a place in the navigation history keeps

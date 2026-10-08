@@ -113,6 +113,19 @@ import Foundation
     /// Where it opens is the app's business, not the tool-module's — which is
     /// why this is named after what it opens rather than after where.
     func openPart(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>)
+
+    /// The reader is about to choose something else in the panel on purpose —
+    /// a click on a row, a search match, a Go To from a row — and the place
+    /// they are leaving, the panel's choice (`ToolSession.navigationMark`) and
+    /// the dump's view together, goes into the window's navigation history.
+    /// Called before the choice changes. An arrow key walking the rows is not
+    /// such a choice.
+    func noteNavigationStep()
+}
+
+public extension ToolHost {
+    /// A host with no history to keep — a test double — keeps nothing.
+    func noteNavigationStep() {}
 }
 
 /// The handle on a sheet `ToolHost.beginBlockingWork` put up.

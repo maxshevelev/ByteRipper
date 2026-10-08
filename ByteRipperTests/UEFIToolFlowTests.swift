@@ -227,6 +227,50 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(tree.selectedRow, 0, "and the selection is where it was")
     }
 
+    /// Each click on a row is a step of the window's navigation history:
+    /// Back chooses the rows clicked before in reverse order, their zones
+    /// drawn again, and Forward walks them the other way. The arrow keys are
+    /// not steps.
+    func testBackWalksTheRowsClickedInTheTree() throws {
+        let controller = try open(UEFITestImage.withTwoVolumes())
+        let tree = try outline()
+        let pane = controller.windowModel.pane1
+        // A test host's window is never key, so a synthetic click selects
+        // nothing: the row is chosen as the click would choose it.
+        func click(_ row: Int) {
+            let clickable = tree as? ToolPanelOutlineView
+            XCTAssertNotNil(clickable)
+            clickable?.handlingClick {
+                tree.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            }
+            followUEFISelection(controller)
+        }
+        func chosen() throws -> String { try node(atRow: tree.selectedRow).id.description }
+        func zoned() -> String? { pane.zones.focus.flatMap(UEFIPresenter.nodeID(ofZone:))?.description }
+
+        click(0)
+        click(1)
+        click(0)
+        XCTAssertEqual(controller.windowModel.navigationHistory.backStack.count, 3)
+
+        controller.navigateBack()
+        XCTAssertTrue(pumpUntil(2) { (try? chosen()) == "0.1" }, "back to the second click's row")
+        XCTAssertEqual(zoned(), "0.1", "its zones drawn again")
+        controller.navigateBack()
+        XCTAssertTrue(pumpUntil(2) { (try? chosen()) == "0.0" })
+        XCTAssertEqual(zoned(), "0.0")
+        controller.navigateForward()
+        XCTAssertTrue(pumpUntil(2) { (try? chosen()) == "0.1" })
+        XCTAssertEqual(zoned(), "0.1")
+
+        // A selection that moves with no click — an arrow key — is no step.
+        let steps = controller.windowModel.navigationHistory.backStack.count
+        tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        followUEFISelection(controller)
+        XCTAssertEqual(try chosen(), "0.0")
+        XCTAssertEqual(controller.windowModel.navigationHistory.backStack.count, steps)
+    }
+
     /// A row the reader opens brings its rows into view — as many as fit, and
     /// never the row itself off the top — including a branch read only now.
     func testOpeningARowBringsItsRowsIntoView() throws {

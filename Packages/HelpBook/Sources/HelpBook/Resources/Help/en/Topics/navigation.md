@@ -34,9 +34,9 @@ In comparison mode the jump moves **both** panes, which are locked to the same a
 
 ## Back to where you were
 
-Every jump records the place it leaves: Go To, a bookmark, the next or previous difference, a search result, a click on the minimap, a row picked in a tool panel that takes the dump to bytes off screen. **View ▸ Back** (**⌘[**) returns there — the same selection, the same rows on screen — and **View ▸ Forward** (**⌘]**) goes the other way. The same two commands are the **‹ ›** buttons in the toolbar, to the right of the Tools menu.
+Every jump records the place it leaves: Go To, a bookmark, the next or previous difference, a search result, a click on the minimap, a click on a row of a tool panel. **View ▸ Back** (**⌘[**) returns there — the same selection, the same rows on screen, and the same row chosen in the tool panel with its zones — and **View ▸ Forward** (**⌘]**) goes the other way. The same two commands are the **‹ ›** buttons in the toolbar, to the right of the Tools menu.
 
-Moving the caret with the arrow keys, the mouse or the scroll bar is not a jump and is not recorded. Moving through a tool panel's rows counts as one jump, however many rows are passed.
+Moving the caret with the arrow keys, the mouse or the scroll bar is not a jump and is not recorded. Nor is moving through a tool panel's rows with the arrow keys: only a click on a row is.
 
 The history belongs to the tab and holds the last fifty places. In comparison mode a place covers both panes. A place in a file that has since been closed, or replaced by another file, is skipped.
 

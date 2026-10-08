@@ -2,7 +2,8 @@ import ByteRipperCore
 import Foundation
 
 /// A place in the navigation history (§10.6): the selection in each pane a
-/// jump moved, and the first byte on screen in the pane it was made in.
+/// jump moved, the first byte on screen in the pane it was made in, and the
+/// row the tool panel had chosen.
 ///
 /// A pane is held weakly and named with the document it held: a pane outlives
 /// the file in it, and a place in a file since closed, or replaced by another
@@ -29,8 +30,16 @@ struct NavigationPlace: Equatable {
         }
     }
 
+    /// What the tool reading the pane had chosen — a row, a node — so Back
+    /// chooses it again, zones and all.
+    struct ToolChoice: Equatable {
+        let module: String
+        let mark: AnyHashable
+    }
+
     /// The pane the jump was made in first; in a comparison, the other one
     /// after it.
     var spots: [Spot]
     var top: UInt64
+    var tool: ToolChoice? = nil
 }

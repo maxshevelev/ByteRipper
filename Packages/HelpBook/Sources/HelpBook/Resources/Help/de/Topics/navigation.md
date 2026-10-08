@@ -1,4 +1,4 @@
-@source-sha 659724c265525225e4ed80a072672a46b87265743efab1d6372980c39d9a1f0d
+@source-sha 290fd4299b37311fc2767d6d9a12d6fcdfb6aa8e5ae67820a53f3d7d4f23ac2f
 # Sich bewegen
 
 > Zwischen Unterschieden springen, zu einer Adresse springen oder auf einem Byte stehen und ablesen, wo man ist.
@@ -23,9 +23,9 @@ Im Vergleichsmodus bewegt der Sprung **beide** Bereiche, die an dieselbe Adresse
 
 ## Zurück, wo man war
 
-Jeder Sprung merkt sich die Stelle, die er verlässt: „Gehe zu“, ein Lesezeichen, der nächste oder vorherige Unterschied, ein Suchtreffer, ein Klick in die Minimap, eine Zeile eines Werkzeugbereichs, für die der Dump zu Bytes außerhalb des Bildschirms rollt. **Darstellung ▸ Zurück** (**⌘[**) kehrt dorthin zurück — mit derselben Auswahl und denselben Zeilen auf dem Bildschirm —, **Darstellung ▸ Vorwärts** (**⌘]**) geht in die andere Richtung. Dieselben Befehle sind die Tasten **‹ ›** in der Symbolleiste, rechts vom Werkzeugmenü.
+Jeder Sprung merkt sich die Stelle, die er verlässt: „Gehe zu“, ein Lesezeichen, der nächste oder vorherige Unterschied, ein Suchtreffer, ein Klick in die Minimap, ein Klick auf eine Zeile eines Werkzeugbereichs. **Darstellung ▸ Zurück** (**⌘[**) kehrt dorthin zurück — mit derselben Auswahl, denselben Zeilen auf dem Bildschirm und derselben im Werkzeugbereich gewählten Zeile samt ihren Zonen —, **Darstellung ▸ Vorwärts** (**⌘]**) geht in die andere Richtung. Dieselben Befehle sind die Tasten **‹ ›** in der Symbolleiste, rechts vom Werkzeugmenü.
 
-Bewegungen der Einfügemarke mit den Pfeiltasten, der Maus oder dem Rollbalken sind keine Sprünge und werden nicht gemerkt. Das Durchlaufen der Zeilen eines Werkzeugbereichs zählt als ein Sprung, gleich wie viele Zeilen es sind.
+Bewegungen der Einfügemarke mit den Pfeiltasten, der Maus oder dem Rollbalken sind keine Sprünge und werden nicht gemerkt. Auch das Durchlaufen der Zeilen eines Werkzeugbereichs mit den Pfeiltasten wird nicht gemerkt — nur ein Klick auf eine Zeile.
 
 Der Verlauf gehört zum Tab und hält die letzten fünfzig Stellen. Im Vergleichsmodus umfasst eine Stelle beide Bereiche. Eine Stelle in einer Datei, die inzwischen geschlossen oder durch eine andere ersetzt wurde, wird übersprungen.
 

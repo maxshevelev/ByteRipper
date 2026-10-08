@@ -101,6 +101,11 @@ import MEFirmware
         owner.revealForTool(range, in: pane, select: select)
     }
 
+    func noteNavigationStep() {
+        guard let pane, let owner else { return }
+        owner.recordJump(in: pane)
+    }
+
     /// The window's own plate, the one a search result is reported in: a
     /// tool-module's confirmation is the same kind of report and is shown
     /// through the same presenter, so the two cannot come to look like

@@ -117,6 +117,7 @@ struct MEAParkedState: ToolSessionState {
         self.host = host
         analyzer = MEFirmwareAnalyzer(data: Self.dataSource)
         controller.onSelect = { [weak self] path in self?.select(path) }
+        controller.onWillChoose = { [weak self] in self?.host.noteNavigationStep() }
         controller.onTabChanged = { [weak self] tab in self?.selectTab(tab) }
         controller.onRetry = { [weak self] in self?.reparse() }
         // A copy is confirmed over the window rather than in the status row: it
@@ -195,6 +196,17 @@ struct MEAParkedState: ToolSessionState {
         guard let state = state as? MEAParkedState else { return }
         tabIndex = state.tabIndex
         focusPath = state.focusPath
+    }
+
+    /// The row in focus, by its path, for the window's navigation history.
+    public var navigationMark: AnyHashable? { focusPath.map(AnyHashable.init) }
+
+    /// Back or Forward came to where the row at `mark` was in focus: it is
+    /// chosen again and its zone drawn, without taking the dump anywhere.
+    public func showNavigationMark(_ mark: AnyHashable) {
+        guard let path = mark.base as? [Int], MEATree.node(at: path, in: roots) != nil else { return }
+        focusPath = path
+        show()
     }
 
     // MARK: - Reading

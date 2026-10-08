@@ -40,6 +40,13 @@ public enum UEFIToolModule: ToolModule {
     }
 }
 
+/// What the window's navigation history keeps of the panel: the row in
+/// focus, one of the two halves of the selection.
+enum UEFINavigationMark: Hashable {
+    case node(NodeID)
+    case me([Int])
+}
+
 /// What a parked session hands back: the node the user was looking at, and
 /// nothing else. The tree itself is the pane's, not the session's — parking
 /// costs it nothing and reactivating finds it exactly as it was left
@@ -242,6 +249,7 @@ private struct ChecksumPass: Sendable {
         self.host = host
         self.analyzer = MEFirmwareAnalyzer(data: Self.dataSource)
         controller.onSelect = { [weak self] nodeID in self?.select(nodeID) }
+        controller.onWillChoose = { [weak self] in self?.host.noteNavigationStep() }
         controller.onSelectTop = { [weak self] in self?.showTopNode() }
         controller.onRevealAtCaret = { [weak self] in self?.revealNodeAtCaret() }
         controller.onFixChecksum = { [weak self] nodeID in
@@ -407,6 +415,30 @@ private struct ChecksumPass: Sendable {
         guard let state = state as? UEFIParkedState else { return }
         focus = state.focus
         meFocus = state.meFocus
+    }
+
+    /// The row in focus — a node of the tree, or a row of the ME sub-tree —
+    /// for the window's navigation history.
+    public var navigationMark: AnyHashable? {
+        if let meFocus { return AnyHashable(UEFINavigationMark.me(meFocus)) }
+        return focus.map { AnyHashable(UEFINavigationMark.node($0)) }
+    }
+
+    /// Back or Forward came to a place where `mark` was the row in focus: it
+    /// is chosen again and its zones drawn, the way a click would.
+    public func showNavigationMark(_ mark: AnyHashable) {
+        guard let mark = mark.base as? UEFINavigationMark else { return }
+        switch mark {
+        case .node(let id):
+            guard currentImage?.node(id) != nil else { return }
+            focus = id
+            meFocus = nil
+        case .me(let path):
+            guard MEATree.node(at: path, in: meRoots) != nil else { return }
+            meFocus = path
+            focus = nil
+        }
+        show(publish: true)
     }
 
     // MARK: - Reading
@@ -1248,6 +1280,7 @@ private struct ChecksumPass: Sendable {
         // The ME half first, because the walk below has never heard of it. The
         // two halves route by the same rule `zoneSelected` uses.
         if let path = mePath(covering: offset) {
+            host.noteNavigationStep()
             selectME(path)
             return
         }
@@ -1274,6 +1307,7 @@ private struct ChecksumPass: Sendable {
             guard let self else { return }
             self.controller.endBusy()
             guard let node = chain.last else { return }
+            self.host.noteNavigationStep()
             // Empty padding is left out of the rows unless asked for, so a
             // caret inside it has no row to land on. Say so, and offer the
             // rows, rather than answer with nothing.

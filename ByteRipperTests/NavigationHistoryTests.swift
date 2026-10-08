@@ -146,40 +146,14 @@ final class NavigationHistoryFlowTests: XCTestCase {
         XCTAssertEqual(pane.caretOffset, 0x4000 + 5 * 16)
     }
 
-    /// A tool walking its tree reveals on every row; the run is one jump.
-    func testARunOfToolRevealsIsOneJump() throws {
+    /// A tool moving the dump is not a step by itself: a tree reveals on
+    /// every row its arrow keys pass. The tool says which moves are steps.
+    func testAToolsRevealAndZoneScrollRecordNothing() throws {
         let (controller, _) = try openSingle([UInt8](repeating: 0x11, count: 0x10000))
         let pane = controller.windowModel.pane1
-        for offset: UInt64 in [0x1000, 0x2000, 0x3000] {
-            controller.revealForTool(offset..<offset + 16, in: pane, select: false)
-        }
-        XCTAssertEqual(controller.windowModel.navigationHistory.backStack.count, 1)
-        // Moving off the last reveal ends the run: the next reveal records.
-        pane.moveCaret(by: 16, center: false)
-        controller.revealForTool(0x5000..<0x5010, in: pane, select: false)
-        XCTAssertEqual(controller.windowModel.navigationHistory.backStack.count, 2)
-    }
-
-    /// A tree row picked to look at the dump scrolls it to the row's bytes:
-    /// that is a place left, and Back brings the view back. Rows walked one
-    /// after another are one step; a zone already on screen moves nothing and
-    /// records nothing.
-    func testAToolScrollingTheViewToAZoneIsOneStep() throws {
-        let (controller, _) = try openSingle([UInt8](repeating: 0x11, count: 0x10000))
-        let pane = controller.windowModel.pane1
-        let topBefore = try top(controller, pane)
-
-        controller.showZoneStartForTool(0x10, in: pane)
-        XCTAssertTrue(controller.windowModel.navigationHistory.backStack.isEmpty, "on screen: nothing moved")
-
+        controller.revealForTool(0x1000..<0x1010, in: pane, select: false)
         controller.showZoneStartForTool(0x8000, in: pane)
-        controller.showZoneStartForTool(0xC000, in: pane)
-        XCTAssertEqual(controller.windowModel.navigationHistory.backStack.count, 1)
-        XCTAssertNotEqual(try top(controller, pane), topBefore)
-
-        controller.navigateBack()
-        XCTAssertEqual(try top(controller, pane), topBefore, "the rows the reader was looking at")
-        XCTAssertEqual(pane.caretOffset, 0, "the caret was never moved")
+        XCTAssertTrue(controller.windowModel.navigationHistory.backStack.isEmpty)
     }
 
     /// A place in a file that is no longer in its pane is not one to go to.

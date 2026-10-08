@@ -722,11 +722,6 @@ final class MainViewController: NSViewController {
     private var fragmentDockHeight: NSLayoutConstraint?
 
     /// The fragment panels this tab has open, and the dock they fold into.
-    /// Where the last of a run of tool reveals left the dump, so the run is
-    /// one jump in the navigation history (§10.6). Nil when the last jump was
-    /// not a tool's.
-    private var toolRevealLanding: NavigationPlace?
-
     private(set) lazy var fragments = FragmentPanels(host: self,
                                                      container: fragmentHost,
                                                      strip: fragmentDockStrip)
@@ -2463,33 +2458,17 @@ final class MainViewController: NSViewController {
     /// or a search result gets, in the pane the session is bound to rather than
     /// in the active one.
     ///
-    /// A run of these is one jump for the history (§10.6): a tool reveals on
-    /// every row its tree's arrow keys pass, and only the place the run left
-    /// is worth going back to. The run ends when the user moves off the place
-    /// the last reveal landed on.
+    /// Not a step of the navigation history by itself: a tool reveals on every
+    /// row its tree's arrow keys pass. The tool says which of its moves are
+    /// the reader's choices (`ToolHost.noteNavigationStep`, §10.6).
     func revealForTool(_ range: Range<UInt64>, in pane: PaneViewModel, select: Bool) {
         guard pane.isOpen else { return }
-        moveForTool(in: pane) {
-            if select, !range.isEmpty {
-                pane.select(range: range)
-            } else {
-                pane.moveCaret(to: range.lowerBound)
-            }
-            filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
+        if select, !range.isEmpty {
+            pane.select(range: range)
+        } else {
+            pane.moveCaret(to: range.lowerBound)
         }
-    }
-
-    /// A tool moving the dump — the caret, or only the view — as one step of a
-    /// run the history records once (§10.6): the place before the run's first
-    /// move is recorded, and every later move that starts from where the last
-    /// one landed continues the run.
-    private func moveForTool(in pane: PaneViewModel, _ move: () -> Void) {
-        let toolRun = toolRevealLanding
-        if toolRun == nil || navigationPlace(of: pane) != toolRun {
-            recordJump(in: pane)
-        }
-        move()
-        toolRevealLanding = navigationPlace(of: pane)
+        filePaneView(for: pane)?.revealOffsetCentered(range.lowerBound)
     }
 
     /// Brings the start of the zone a tool-module has just focused into view:
@@ -2500,12 +2479,8 @@ final class MainViewController: NSViewController {
     /// user may well be part-way through something in the dump. Going is the
     /// tool-module's own `reveal`, which centres and can select.
     func showZoneStartForTool(_ offset: UInt64, in pane: PaneViewModel) {
-        guard pane.isOpen, let view = filePaneView(for: pane),
-              !view.isOffsetOnScreen(offset) else { return }
-        // The view going to a zone is a place left, as a click on the minimap
-        // is: a row picked to look at the dump is one the reader may want to
-        // come back from (§10.6).
-        moveForTool(in: pane) { view.revealOffsetIfOffScreen(offset) }
+        guard pane.isOpen else { return }
+        filePaneView(for: pane)?.revealOffsetIfOffScreen(offset)
     }
 
     /// The published zone map changed — a publish, a focus moving, or a session
@@ -7801,14 +7776,13 @@ extension MainViewController {
     /// by nothing the caret does a row at a time.
     func recordJump(in pane: PaneViewModel) {
         guard pane.isOpen else { return }
-        toolRevealLanding = nil
         windowModel.navigationHistory.record(leaving: navigationPlace(of: pane))
         revalidateToolbar()
     }
 
     /// Where `pane` stands: its selection and the first byte on screen — and,
     /// in a comparison, the other pane's selection too, since a jump moves
-    /// both.
+    /// both — and what the tool reading it has chosen.
     func navigationPlace(of pane: PaneViewModel) -> NavigationPlace {
         var panes = [pane]
         if mode == .comparison, pane === windowModel.pane1 || pane === windowModel.pane2 {
@@ -7820,7 +7794,13 @@ extension MainViewController {
                                         selection: document.selection)
         }
         let top = filePaneView(for: pane)?.firstVisibleOffset ?? pane.caretOffset
-        return NavigationPlace(spots: spots, top: top)
+        let tools = tools(reading: pane)
+        var tool: NavigationPlace.ToolChoice?
+        if tools.boundPane === pane, let module = tools.activeModule,
+           let mark = tools.session?.navigationMark {
+            tool = NavigationPlace.ToolChoice(module: module.identifier, mark: mark)
+        }
+        return NavigationPlace(spots: spots, top: top, tool: tool)
     }
 
     /// A place can be gone back to while every pane it names is still in this
@@ -7839,7 +7819,6 @@ extension MainViewController {
     /// they were and the view scrolled where it was.
     private func go(to place: NavigationPlace) {
         guard let first = place.spots.first?.pane else { return }
-        toolRevealLanding = nil
         if let panel = fragments.panel(holding: first) {
             if fragments.expanded != panel { fragments.expand(panel, animated: false) }
         } else {
@@ -7848,6 +7827,15 @@ extension MainViewController {
                 let index = first === windowModel.pane1 ? 0 : 1
                 if index != windowModel.activePaneIndex { activatePane(at: index) }
             }
+        }
+        // The tool's choice first: choosing it publishes its zones, and the
+        // host may scroll to them — which the place's own view then replaces.
+        // A place whose tool is no longer the one open on the pane gives back
+        // the dump alone.
+        let tools = tools(reading: first)
+        if let choice = place.tool, tools.boundPane === first,
+           tools.activeModule?.identifier == choice.module {
+            tools.session?.showNavigationMark(choice.mark)
         }
         for spot in place.spots {
             spot.pane?.select(range: spot.start..<spot.end)

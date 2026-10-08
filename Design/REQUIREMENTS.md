@@ -1047,20 +1047,23 @@ browser's history does.
 - A jump records the place it leaves: Go To (an address or a bookmark), the
   next or previous difference or same block, a search result (a step, a find,
   a row of the results list), a click on the minimap, Select Block, a
-  segment or a zone selected from a menu, a tool-module's reveal, and the
-  scroll to a zone a tool-module has put in focus (a tree row picked whose
-  bytes were off screen).
-- Arrow keys, the mouse, scrolling and the minimap's viewport drag do not
-  record. A run of tool-module reveals — a tree walked with the arrow keys —
-  records once: the place the run left. The run ends when the caret or the
-  view moves off where the last reveal put it. A focused zone already on
-  screen moves nothing and records nothing.
+  segment or a zone selected from a menu, and a tool-module's own choices:
+  a click on a row of its table or tree, a search match in its tree, its
+  reveal of the node under the caret, its Go To from a row
+  (`ToolHost.noteNavigationStep`, called before the choice changes).
+- Arrow keys, the mouse in the dump, scrolling and the minimap's viewport
+  drag do not record, nor does a tool's table walked with the arrow keys:
+  the host never records a tool's reveal or zone scroll by itself — only
+  the tool can tell a click from a key.
 - Back or Forward with nowhere to go does nothing, silently: the commands
   are greyed out, and a beep on a held key would only be noise.
 - A place is the selection in each pane the jump moved (both panes in a
-  comparison) and the first byte on screen. Going back restores both, and
-  brings forward the fragment panel the place is in, or puts the panels away
-  for a place in the tab's own panes.
+  comparison), the first byte on screen, and what the tool reading the pane
+  had chosen (`ToolSession.navigationMark`). Going back chooses the tool's
+  row again with its zones (`showNavigationMark`) when the same tool is still
+  open on the pane, then restores the selections and the view, and brings
+  forward the fragment panel the place is in, or puts the panels away for a
+  place in the tab's own panes.
 - Walking the history records nothing; a new jump clears the forward stack.
   Fifty places are kept. A place in a file since closed, or replaced in its
   pane, is skipped.

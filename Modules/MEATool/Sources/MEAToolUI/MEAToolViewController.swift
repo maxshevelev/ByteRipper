@@ -19,6 +19,9 @@ import ToolModuleKit
     /// The user picked a row in the tree, or cleared it. The value is the row's
     /// tree path — the identity a parked session keeps.
     var onSelect: (([Int]?) -> Void)?
+    /// A click is about to choose a row: a step for the window's navigation
+    /// history, taken before the choice changes. The arrow keys are not.
+    var onWillChoose: (() -> Void)?
     /// The user picked a tab (0 = Summary, 1 = Full Info).
     var onTabChanged: ((Int) -> Void)?
     /// The status row's Try Again was pressed, after a failed analysis.
@@ -903,10 +906,11 @@ extension MEAToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate 
         guard !isShowingState else { return }
         let row = outline.selectedRow
         let node = row >= 0 ? outline.item(atRow: row) as? MEANode : nil
+        if outline.isHandlingClick { onWillChoose?() }
         onSelect?(node?.path)
     }
 }
 
 /// The tree, with no behaviour past NSOutlineView's — kept as its own subclass
 /// so a future context menu (like the UEFI tool's Fix Checksum) has a home.
-private final class MEOutlineView: NSOutlineView {}
+private final class MEOutlineView: ToolPanelOutlineView {}

@@ -76,6 +76,20 @@ import AppKit
     /// tool-module's type — from a build where this one meant something else —
     /// is for the session to refuse rather than for the host to police.
     func restore(_ state: any ToolSessionState)
+
+    /// What the reader has chosen in the panel — a row, a node — as a value
+    /// the session can be handed back, or nil when nothing is chosen.
+    ///
+    /// The host keeps it with each place in the window's navigation history
+    /// (`ToolHost.noteNavigationStep`), so Back returns to the row the reader
+    /// was on as well as to the bytes. Like a parked state, it is a hint: the
+    /// row may be gone when it comes back.
+    var navigationMark: AnyHashable? { get }
+
+    /// Chooses what `mark` names again, the zones with it, as if the reader
+    /// had picked it — without taking the dump anywhere: the host puts the
+    /// dump back where it was itself.
+    func showNavigationMark(_ mark: AnyHashable)
 }
 
 public extension ToolSession {
@@ -83,6 +97,9 @@ public extension ToolSession {
     /// panel is a function of the file and holds no decision of the user's.
     var parkedState: (any ToolSessionState)? { nil }
     func restore(_ state: any ToolSessionState) {}
+    /// The default is a panel with nothing to go back to.
+    var navigationMark: AnyHashable? { nil }
+    func showNavigationMark(_ mark: AnyHashable) {}
     /// The default is to ignore it: the bytes are selected either way, and a
     /// panel with nothing to point at should not have to say so.
     func zoneSelected(_ id: Zone.ID) {}

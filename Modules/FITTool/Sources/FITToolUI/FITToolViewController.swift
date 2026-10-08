@@ -13,6 +13,9 @@ import ToolModuleKit
 /// outlines in the dump are one state rather than two copies of it.
 @MainActor final class FITToolViewController: NSViewController {
     var onSelect: ((Int?) -> Void)?
+    /// A click is about to choose a row: a step for the window's navigation
+    /// history, taken before the choice changes. The arrow keys are not.
+    var onWillChoose: (() -> Void)?
     var onGoToTarget: ((Int) -> Void)?
     var onSelectTable: (() -> Void)?
     var onCopyCPUID: ((Int) -> Void)?
@@ -43,7 +46,7 @@ import ToolModuleKit
     /// re-shows and selects again until the stack runs out.
     private var isShowingState = false
 
-    let entries = NSTableView()
+    let entries = ToolPanelTableView()
     let problems = NSTableView()
     private let entriesScroll = NSScrollView()
     private let problemsScroll = NSScrollView()
@@ -770,6 +773,7 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
     func tableViewSelectionDidChange(_ notification: Notification) {
         guard !isShowingState, notification.object as AnyObject? === entries else { return }
         let row = entries.selectedRow
+        if entries.isHandlingClick { onWillChoose?() }
         onSelect?(displayRow(atTableRow: row)?.key)
     }
 
