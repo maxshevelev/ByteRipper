@@ -1064,6 +1064,10 @@ browser's history does.
   open on the pane, then restores the selections and the view, and brings
   forward the fragment panel the place is in, or puts the panels away for a
   place in the tab's own panes.
+- With the tool closed, Back and Forward give back the dump alone, and the
+  places they leave carry the tool's last choice (the one the closed session
+  had, or the one the walk came to since — `ToolController.closedChoice`),
+  so once the same tool is open again on the pane the rows are chosen again.
 - Walking the history records nothing; a new jump clears the forward stack.
   Fifty places are kept. A place in a file since closed, or replaced in its
   pane, is skipped.

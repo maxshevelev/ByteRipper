@@ -245,7 +245,10 @@ final class UEFIToolFlowTests: XCTestCase {
             }
             followUEFISelection(controller)
         }
-        func chosen() throws -> String { try node(atRow: tree.selectedRow).id.description }
+        // Read without `node(atRow:)`: the selection is empty for a moment
+        // while the table is refreshed, and an unwrap failing inside a poll
+        // fails the test even when the poll goes on.
+        func chosen() -> String? { (tree.item(atRow: tree.selectedRow) as? UEFITreeRow)?.id.description }
         func zoned() -> String? { pane.zones.focus.flatMap(UEFIPresenter.nodeID(ofZone:))?.description }
 
         click(0)
@@ -254,21 +257,60 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(controller.windowModel.navigationHistory.backStack.count, 3)
 
         controller.navigateBack()
-        XCTAssertTrue(pumpUntil(2) { (try? chosen()) == "0.1" }, "back to the second click's row")
+        XCTAssertTrue(pumpUntil(2) { chosen() == "0.1" }, "back to the second click's row")
         XCTAssertEqual(zoned(), "0.1", "its zones drawn again")
         controller.navigateBack()
-        XCTAssertTrue(pumpUntil(2) { (try? chosen()) == "0.0" })
+        XCTAssertTrue(pumpUntil(2) { chosen() == "0.0" })
         XCTAssertEqual(zoned(), "0.0")
         controller.navigateForward()
-        XCTAssertTrue(pumpUntil(2) { (try? chosen()) == "0.1" })
+        XCTAssertTrue(pumpUntil(2) { chosen() == "0.1" })
         XCTAssertEqual(zoned(), "0.1")
 
         // A selection that moves with no click — an arrow key — is no step.
         let steps = controller.windowModel.navigationHistory.backStack.count
         tree.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         followUEFISelection(controller)
-        XCTAssertEqual(try chosen(), "0.0")
+        XCTAssertEqual(chosen(), "0.0")
         XCTAssertEqual(controller.windowModel.navigationHistory.backStack.count, steps)
+    }
+
+    /// The tool closed and opened again on the same file: the places clicked
+    /// before still choose their rows and draw their zones.
+    func testBackChoosesTheRowAfterTheToolWasClosedAndOpenedAgain() throws {
+        let controller = try open(UEFITestImage.withTwoVolumes())
+        let pane = controller.windowModel.pane1
+        func click(_ row: Int) throws {
+            let tree = try outline()
+            (tree as? ToolPanelOutlineView)?.handlingClick {
+                tree.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            }
+            followUEFISelection(controller)
+        }
+        try click(0)
+        try click(1)
+        try click(0)
+
+        controller.tools.activate(nil, animated: false)
+        // Walked while the tool is closed: the places left on the way keep
+        // the row they had.
+        controller.navigateBack()
+        controller.navigateBack()
+        controller.tools.activate(UEFIToolModule.identifier, animated: false)
+        window?.layoutIfNeeded()
+        try waitForParse()
+
+        let tree = try outline()
+        func chosen() -> String? { (tree.item(atRow: tree.selectedRow) as? UEFITreeRow)?.id.description }
+        func zoned() -> String? { pane.zones.focus.flatMap(UEFIPresenter.nodeID(ofZone:))?.description }
+        controller.navigateForward()
+        XCTAssertTrue(pumpUntil(2) { chosen() == "0.1" }, "row \(String(describing: chosen()))")
+        XCTAssertEqual(zoned(), "0.1")
+        controller.navigateForward()
+        XCTAssertTrue(pumpUntil(2) { chosen() == "0.0" }, "row \(String(describing: chosen()))")
+        XCTAssertEqual(zoned(), "0.0")
+        controller.navigateBack()
+        XCTAssertTrue(pumpUntil(2) { chosen() == "0.1" }, "row \(String(describing: chosen()))")
+        XCTAssertEqual(zoned(), "0.1")
     }
 
     /// A row the reader opens brings its rows into view — as many as fit, and

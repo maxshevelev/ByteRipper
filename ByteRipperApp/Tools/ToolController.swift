@@ -56,6 +56,17 @@ import ToolModuleKit
 
     private var host: PaneToolHost?
 
+    /// What the panel had chosen when no session is reading the pane any more
+    /// — the last session's choice, or the one Back or Forward came to since —
+    /// so a place the navigation history records while the tool is closed
+    /// still knows the row to choose when the tool is open again (§10.6).
+    struct ClosedChoice {
+        let module: String
+        weak var pane: PaneViewModel?
+        let mark: AnyHashable
+    }
+    var closedChoice: ClosedChoice?
+
     /// The identifier of the session that is *running*, which is not always
     /// `activeIdentifier`: the choice is assigned before the old session ends,
     /// and the state that ends up parked belongs to the old one.
@@ -169,6 +180,7 @@ import ToolModuleKit
         }
         self.host = host
         self.session = session
+        closedChoice = nil
         boundPane = pane
         runningIdentifier = module.identifier
         zones = .empty
@@ -199,6 +211,12 @@ import ToolModuleKit
         if let identifier = runningIdentifier, let pane = boundPane,
            let state = session?.parkedState {
             parked[identifier] = ParkedSession(state: state, pane: pane)
+        }
+        if let identifier = runningIdentifier, let pane = boundPane,
+           let mark = session?.navigationMark {
+            closedChoice = ClosedChoice(module: identifier, pane: pane, mark: mark)
+        } else {
+            closedChoice = nil
         }
         runningIdentifier = nil
         session?.stop()

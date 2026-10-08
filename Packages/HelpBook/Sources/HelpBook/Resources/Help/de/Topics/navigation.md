@@ -1,4 +1,4 @@
-@source-sha 290fd4299b37311fc2767d6d9a12d6fcdfb6aa8e5ae67820a53f3d7d4f23ac2f
+@source-sha 02c8f1adc88d1aeec41499de878cbf093dead97ccf11eac89c6310b904dd9123
 # Sich bewegen
 
 > Zwischen Unterschieden springen, zu einer Adresse springen oder auf einem Byte stehen und ablesen, wo man ist.
@@ -27,7 +27,7 @@ Jeder Sprung merkt sich die Stelle, die er verlässt: „Gehe zu“, ein Lesezei
 
 Bewegungen der Einfügemarke mit den Pfeiltasten, der Maus oder dem Rollbalken sind keine Sprünge und werden nicht gemerkt. Auch das Durchlaufen der Zeilen eines Werkzeugbereichs mit den Pfeiltasten wird nicht gemerkt — nur ein Klick auf eine Zeile.
 
-Der Verlauf gehört zum Tab und hält die letzten fünfzig Stellen. Im Vergleichsmodus umfasst eine Stelle beide Bereiche. Eine Stelle in einer Datei, die inzwischen geschlossen oder durch eine andere ersetzt wurde, wird übersprungen.
+Der Verlauf gehört zum Tab und hält die letzten fünfzig Stellen. Im Vergleichsmodus umfasst eine Stelle beide Bereiche. Ist der Werkzeugbereich geschlossen, bringen „Zurück“ und „Vorwärts“ nur den Dump zurück; ist dasselbe Werkzeug wieder offen, werden auch seine Zeilen wieder gewählt. Eine Stelle in einer Datei, die inzwischen geschlossen oder durch eine andere ersetzt wurde, wird übersprungen.
 
 ## Einen Block auswählen
 

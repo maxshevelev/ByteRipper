@@ -7799,6 +7799,8 @@ extension MainViewController {
         if tools.boundPane === pane, let module = tools.activeModule,
            let mark = tools.session?.navigationMark {
             tool = NavigationPlace.ToolChoice(module: module.identifier, mark: mark)
+        } else if tools.session == nil, let closed = tools.closedChoice, closed.pane === pane {
+            tool = NavigationPlace.ToolChoice(module: closed.module, mark: closed.mark)
         }
         return NavigationPlace(spots: spots, top: top, tool: tool)
     }
@@ -7836,6 +7838,12 @@ extension MainViewController {
         if let choice = place.tool, tools.boundPane === first,
            tools.activeModule?.identifier == choice.module {
             tools.session?.showNavigationMark(choice.mark)
+        } else if tools.session == nil {
+            // No tool to choose it in: the choice is carried, so the place
+            // Back or Forward leaves next still has it.
+            tools.closedChoice = place.tool.map {
+                ToolController.ClosedChoice(module: $0.module, pane: first, mark: $0.mark)
+            }
         }
         for spot in place.spots {
             spot.pane?.select(range: spot.start..<spot.end)

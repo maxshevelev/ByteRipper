@@ -38,7 +38,7 @@ Every jump records the place it leaves: Go To, a bookmark, the next or previous 
 
 Moving the caret with the arrow keys, the mouse or the scroll bar is not a jump and is not recorded. Nor is moving through a tool panel's rows with the arrow keys: only a click on a row is.
 
-The history belongs to the tab and holds the last fifty places. In comparison mode a place covers both panes. A place in a file that has since been closed, or replaced by another file, is skipped.
+The history belongs to the tab and holds the last fifty places. In comparison mode a place covers both panes. With the tool panel closed, Back and Forward return the dump alone; once the same tool is open again, its rows are chosen again as well. A place in a file that has since been closed, or replaced by another file, is skipped.
 
 ## Selecting a block
 
