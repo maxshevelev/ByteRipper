@@ -159,6 +159,60 @@ final class CloseFileTests: XCTestCase {
                        "and its status bar must not still read one")
     }
 
+    // MARK: - The caret of the pane left behind
+
+    /// Two files in a comparison.
+    private func makeComparison() throws -> (MainViewController, NSWindow, [URL]) {
+        let urls = [try tempFile([UInt8](repeating: 0x11, count: 64)),
+                    try tempFile([UInt8](repeating: 0x22, count: 64))]
+        let controller = MainViewController()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.contentViewController = controller
+        window.makeKeyAndOrderFront(nil)
+        try controller.windowModel.pane1.open(url: urls[0])
+        try controller.windowModel.pane2.open(url: urls[1])
+        controller.apply(mode: .comparison)
+        window.layoutIfNeeded()
+        return (controller, window, urls)
+    }
+
+    private func hexViews(_ window: NSWindow) -> [HexView] {
+        descendants(of: window.contentView!, HexView.self)
+    }
+
+    /// The pane that stays when the *active* one is closed was the inactive
+    /// pane of the comparison, and its view is reused in single-file mode. It
+    /// must draw its caret there: nothing else in that mode would ever turn
+    /// it back on, not even closing the file and opening another.
+    func testThePaneLeftAfterClosingTheActiveOneDrawsItsCaret() throws {
+        for (active, closing) in [(1, 1), (0, 0)] {
+            let (controller, window, urls) = try makeComparison()
+            defer {
+                controller.windowModel.pane1.close()
+                controller.windowModel.pane2.close()
+                urls.forEach { try? FileManager.default.removeItem(at: $0) }
+            }
+            controller.activatePaneForTesting(active)
+            XCTAssertEqual(hexViews(window).filter(\.isActive).count, 1,
+                           "precondition: one of the two panes is inactive")
+
+            controller.closePane(at: closing)
+            window.layoutIfNeeded()
+
+            XCTAssertEqual(controller.mode, .singleFile)
+            XCTAssertEqual(hexViews(window).map(\.isActive), [true],
+                           "closing pane \(closing + 1) while it was active must leave a caret")
+
+            controller.closePane(at: 0)
+            try controller.windowModel.pane1.open(url: urls[closing == 0 ? 0 : 1])
+            controller.apply(mode: .singleFile)
+            window.layoutIfNeeded()
+            XCTAssertEqual(hexViews(window).map(\.isActive), [true],
+                           "and so must the next file opened into the same view")
+        }
+    }
+
     // MARK: - Answering for the whole tab (what Quit asks)
 
     /// Quitting asks each window what closing it would ask, and waits for the

@@ -1212,6 +1212,9 @@ final class MainViewController: NSViewController {
             // moving the active pointer to the slot that was just emptied, and
             // greying out every command that needs a file. One pane, one slot.
             pane.onActivate = nil
+            // For the same reason it may still be marked the inactive pane, and
+            // an inactive pane draws no caret.
+            pane.setSole()
             // The link to a parent document, in a tab opened from a part of one.
             pane.onRevealOrigin = { [weak self, weak paneModel] in
                 guard let paneModel else { return }

@@ -1101,6 +1101,17 @@ final class FilePaneView: NSView {
         hexView.isActive = isActive
     }
 
+    /// Puts the pane in single-file mode, where there is no other pane to be
+    /// active against: the header takes the plain look a new pane has, and the
+    /// caret is drawn. The view is reused across modes (§3.3), so it may come
+    /// from a comparison in which it was the inactive pane — and nothing else
+    /// in single-file mode sets the flag back, so a leftover `false` would hide
+    /// the caret until a second file is opened.
+    func setSole() {
+        setActive(false)
+        hexView.isActive = true
+    }
+
     // MARK: - Background operation (§14.4)
 
     /// The operation currently shown in this pane's status bar, or nil.
