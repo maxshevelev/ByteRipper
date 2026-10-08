@@ -85,6 +85,12 @@ to **correct English** rather than to `settings.language.caption`.
   upstream's. Translating them would fight that skill on every sync. They are
   engine output, and they stay in upstream's English.
 - **Format and structure names**, per the rule above.
+- **What the agent service says to a model** (`Design/AGENT_PLAN.md`): a
+  tool's name, its description, its argument schema and the answers it gives.
+  A model reads them, not the person at the bench, and they are an interface
+  — one that changed with the Mac's language would be two interfaces. They are
+  written in English without `L()`. What the Agent window shows the *person*
+  goes through `L()` like everything else.
 
 ## Which language, and the user's own choice
 

@@ -81,6 +81,11 @@ packages:
     path: Packages/HelpBook
   HelpUI:
     path: Packages/HelpUI
+  # What the app says to an agent and how: JSON, the line framing, the Model
+  # Context Protocol (`Design/AGENT_PLAN.md`). Nothing links it yet; the agent
+  # service and the seam will.
+  AgentKit:
+    path: Packages/AgentKit
   ZoneSketch:
     path: Modules/ZoneSketch
   FITTool:

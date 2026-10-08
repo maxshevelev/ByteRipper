@@ -69,7 +69,7 @@ moving the view, selecting, and marking. That needs the app.
         ▼
  AgentService (app, main actor)       — connections, sessions, the log
         │
-        ├─ AgentKit  (package, pure)  — JSON, JSON-RPC, MCP lifecycle, registry
+        ├─ AgentKit  (package, pure)  — JSON, JSON-RPC, MCP both eras, registry
         │
         ├─ host tools  (app)          — documents, focus, read, reveal, select,
         │                                open_panel, marks, edits, open_dump,
@@ -91,16 +91,26 @@ tool-module's pure target (the query handlers).
   needs to read its arguments and fail with a message that names the argument.
 - The framing: one JSON-RPC message per line, in and out; a partial line is
   held, an oversized one is refused rather than buffered.
-- The MCP lifecycle: `initialize` with version negotiation, `initialized`,
-  `ping`, `tools/list`, `tools/call`, `notifications/progress`,
-  `notifications/cancelled`. Which protocol version is implemented is decided
-  at stage 1 and written in the protocol document.
-- `AgentTool` — name, description, input schema, and an `async` handler
-  returning a `JSONValue` or a tool error. A tool error is an answer the agent
+- Both eras of MCP. Revision `2026-07-28` dropped the handshake: every
+  request carries its protocol version and the client's capabilities in
+  `_meta`, the server keeps nothing between requests, a connection is not a
+  session, and `server/discover` is required. The revisions before it
+  (`2025-11-25` back to `2024-11-05`) open with `initialize`. Clients of both
+  kinds are in use, so `AgentConnection` serves both, as the specification
+  allows: a request with the modern `_meta` is modern, an `initialize` starts
+  a legacy connection. Methods: `initialize`, `server/discover`, `ping`,
+  `tools/list`, `tools/call`; `notifications/progress` out,
+  `notifications/cancelled` in.
+- `AgentTool` — name, description, input schema, hints (read-only, view,
+  edit), and an `async` handler returning JSON or a sentence, or throwing an
+  `AgentToolError`. A tool error is an answer the agent
   reads ("the UEFI panel is not open"), not a protocol failure.
+- `AgentArguments` — the readers every handler uses. An offset is taken as
+  an integer or as hex text (`"0x7F3000"`), because a model reads addresses in
+  hex everywhere and should not convert them back.
 - The bounds: every list takes `limit` and returns `truncated` and `total`
-  when it can count them; a byte read is capped at 4 KiB; an answer over a set
-  size is cut with a note saying how to page.
+  when it can count them; a byte read is capped at 4 KiB; an answer over
+  24 KiB is not sent, and the model is told to ask for less.
 
 Nothing here knows about dumps.
 
@@ -110,8 +120,9 @@ A command-line target in `project.yml`, copied into `Contents/Helpers` by a
 copy-files phase. About a hundred lines: connect to the socket, copy stdin to
 it and it to stdout, exit when either side closes. If the socket is not there
 it launches the app with `open -b` and waits a few seconds for it; if the
-switch in Settings is off, it answers `initialize` with an error that says
-where the switch is. It knows nothing about MCP beyond that one message.
+switch in Settings is off, it answers every request with an error that says
+where the switch is. It knows nothing about MCP beyond reading a request's
+`id` for that answer.
 
 The relay is what a client is configured with. The Agent window has a button
 that copies the configuration for Claude Code
@@ -127,8 +138,11 @@ In the app target, `ByteRipperApp/Agent/`, on the main actor.
   nothing reaches it from the network. No port, no token.
 - Reads and writes off the main actor, dispatches each call to its tool, and
   hops to the main actor only for what touches the UI.
-- One MCP session per connection. More than one client at once is allowed;
-  each has its own marks.
+- One `AgentConnection` per socket connection, and any number at once. A
+  connection is not a conversation — the protocol says so, and a client may
+  restart its relay at any moment — so nothing the agent made hangs on one:
+  marks, findings and background documents belong to the service, and go
+  when the agent or the person clears them.
 - Keeps a log of every call — tool, target, how long, how big the answer, the
   error if any — for the Agent window. Bounded, not persisted.
 - While a client is connected, the status bar shows it.
@@ -234,8 +248,11 @@ pair of marks with a line between their entries in the Agent window, both ends
 clickable. Arrows drawn across the dump come later, if pairs turn out not to be
 enough.
 
-Marks belong to the connection that made them and go when it closes, unless
-the person pins them; a pinned mark becomes a bookmark.
+Marks stay until the agent removes them or the person clears them from the
+Agent window, or the document closes. Not with the connection: under the
+current protocol a connection is not a conversation, and a relay restarted
+mid-conversation must not wipe what the agent showed. A mark the person pins
+becomes a bookmark.
 
 ## Background documents and surveys
 
@@ -309,9 +326,11 @@ The same contract; its own transport.
 Each ends in something that works and is committed.
 
 0. **Out of the sandbox** — #30.
-1. **AgentKit.** JSON, framing, lifecycle, registry, bounds. Done when
-   `swift test` drives a recorded Claude Code handshake and a `tools/call`
-   through it.
+1. **AgentKit.** JSON, framing, both eras, registry, bounds. Done when
+   `swift test` drives a legacy handshake and a modern discover-list-call
+   through it, cancellation and progress included. *(Done. The transcripts in
+   the tests follow the schemas; a real client's is recorded at stage 2, where
+   there is a socket to record it on.)*
 2. **The loop, end to end.** Relay, service, the Settings switch, the status
    bar, the Agent window with the log; `documents`, `focus`, `read`, `reveal`,
    `select`. Done when Claude Code, configured from the window's button,
@@ -367,9 +386,12 @@ beside it.
 - **What a survey's query may be.** One query tool and a `group_by` is the
   start; whether it needs a filter, or two fields at once, is learnt on the
   first real survey.
-- **Marks across a relaunch.** Gone with the connection unless pinned. If
+- **Marks across a relaunch.** Gone when the app quits, unless pinned. If
   pinned marks turn out to want more than a bookmark holds, that is a project
   file (#19).
+- **Which era clients speak.** Both are served. Which one Claude Code and
+  Claude Desktop actually open with is recorded at stage 2, and the protocol
+  document says which transcripts the tests are checked against.
 - **The relay and Gatekeeper.** Whether a quarantined helper inside an app the
   person has already let run is let run by a client. Tried at stage 8; if it is
   refused, the window's button also clears the attribute on the helper.
