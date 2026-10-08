@@ -7,22 +7,77 @@ import Localization
 /// What an agent's client is configured with to reach this copy of the app
 /// (`Design/AGENT_PLAN.md`, "The relay"): the relay inside the bundle, by its
 /// real path, so a copy of the app moved to another folder hands out its own.
+///
+/// Every client is told the same three things — a name, the stdio transport,
+/// the relay's path — and each wants them in its own form: a command, a JSON
+/// block for a file, or fields in a settings screen.
 enum AgentClientConfiguration {
+    /// The name the server is registered under in every client.
+    static let serverName = "byteripper"
+
     static var relayPath: String {
         Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/byteripper-mcp").path
     }
 
-    /// The Terminal command that adds the server to Claude Code for every
-    /// project of this user — a technician talks to the app from whatever
-    /// folder they are in.
-    static func claudeCodeCommand(relay: String = relayPath) -> String {
-        "claude mcp add --scope user byteripper -- " + quoted(relay)
+    enum Client: CaseIterable {
+        case claudeCode
+        case claudeDesktop
+        case cursor
+        /// Any other MCP client: the parameters as a list, for a settings
+        /// screen that asks for them one by one.
+        case other
+
+        /// The name in the client menu. Product names, except the last.
+        var title: String {
+            switch self {
+            case .claudeCode: return "Claude Code"
+            case .claudeDesktop: return "Claude Desktop"
+            case .cursor: return "Cursor"
+            case .other: return L("Other Client")
+            }
+        }
+
+        /// Where the text goes, said above the preview.
+        var destination: String {
+            switch self {
+            case .claudeCode:
+                return L("Run this command once in Terminal. It adds ByteRipper to Claude Code for every folder.")
+            case .claudeDesktop:
+                return L("Add this to Claude Desktop's configuration file, %1$@, and restart Claude Desktop.",
+                         "~/Library/Application Support/Claude/claude_desktop_config.json")
+            case .cursor:
+                return L("Add this to Cursor's configuration file, %1$@, for every project — or to %2$@ in one project.",
+                         "~/.cursor/mcp.json", ".cursor/mcp.json")
+            case .other:
+                return L("Enter these parameters in the client's MCP server settings.")
+            }
+        }
     }
 
-    /// The block for Claude Desktop's `claude_desktop_config.json`.
-    static func claudeDesktopConfiguration(relay: String = relayPath) -> String {
-        let value: JSONValue = ["mcpServers": ["byteripper": ["command": .string(relay)]]]
-        return value.jsonText
+    /// The text for `client`, naming `relay`.
+    static func text(for client: Client, relay: String = relayPath) -> String {
+        switch client {
+        case .claudeCode:
+            // User scope: a technician talks to the app from whatever folder
+            // they are in.
+            return "claude mcp add --scope user \(serverName) -- " + quoted(relay)
+        case .claudeDesktop, .cursor:
+            // The two read the same block. A file that already lists servers
+            // takes the inner entry beside them.
+            let value: JSONValue = .object(["mcpServers": .object([serverName: ["command": .string(relay)]])])
+            return value.prettyText
+        case .other:
+            let rows: [(String, String)] = [
+                (L("Name"), serverName),
+                (L("Transport"), "stdio"),
+                (L("Command"), relay),
+                (L("Arguments"), L("none")),
+                (L("Environment"), L("none"))
+            ]
+            let width = rows.map(\.0.count).max() ?? 0
+            return rows.map { $0.0.padding(toLength: width, withPad: " ", startingAt: 0) + "  " + $0.1 }
+                .joined(separator: "\n")
+        }
     }
 
     /// A path quoted for the shell: `/Applications/ByteRipper.app` has no
@@ -33,8 +88,9 @@ enum AgentClientConfiguration {
 }
 
 /// The Agent tab of the Settings window: the switch that opens the agent
-/// socket, what it does, whether it is running, and the two configurations a
-/// client needs.
+/// socket, what it does, whether it is running, and what each kind of client
+/// is configured with — shown in full before it is copied, so the person sees
+/// the form the text is in and where it goes.
 final class AgentSettingsViewController: NSViewController {
     /// The service the tab switches. The app's own unless a test hands it
     /// another.
@@ -44,8 +100,10 @@ final class AgentSettingsViewController: NSViewController {
 
     private let enableCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let statusLabel = NSTextField(labelWithString: "")
-    private let copyCodeButton = NSButton(title: "", target: nil, action: nil)
-    private let copyDesktopButton = NSButton(title: "", target: nil, action: nil)
+    private let clientMenu = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let destinationLabel = NSTextField(wrappingLabelWithString: "")
+    private let preview = NSTextView()
+    private let copyButton = NSButton(title: "", target: nil, action: nil)
     private var observer: NSObjectProtocol?
 
     override func loadView() {
@@ -66,25 +124,46 @@ final class AgentSettingsViewController: NSViewController {
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.lineBreakMode = .byTruncatingMiddle
 
-        copyCodeButton.title = L("Copy Command for Claude Code")
-        copyCodeButton.bezelStyle = .rounded
-        copyCodeButton.target = self
-        copyCodeButton.action = #selector(copyClaudeCode)
-        ControlHelp.describe(copyCodeButton, L("Copy the Terminal command that connects Claude Code to this copy of ByteRipper"))
+        let clientLabel = NSTextField(labelWithString: L("Configuration for:"))
+        clientMenu.addItems(withTitles: AgentClientConfiguration.Client.allCases.map(\.title))
+        clientMenu.target = self
+        clientMenu.action = #selector(clientChanged)
+        ControlHelp.describe(clientMenu, L("The program the agent runs in, whose configuration is shown below"))
 
-        copyDesktopButton.title = L("Copy Configuration for Claude Desktop")
-        copyDesktopButton.bezelStyle = .rounded
-        copyDesktopButton.target = self
-        copyDesktopButton.action = #selector(copyClaudeDesktop)
-        ControlHelp.describe(copyDesktopButton, L("Copy the block that goes into Claude Desktop's configuration file"))
+        destinationLabel.font = .systemFont(ofSize: 11)
+        destinationLabel.textColor = .secondaryLabelColor
 
-        let buttons = NSStackView(views: [copyCodeButton, copyDesktopButton])
-        buttons.orientation = .horizontal
-        buttons.spacing = 8
+        // Read-only and selectable: the text is to be looked at and copied,
+        // and a person who wants only part of it can select that part.
+        preview.isEditable = false
+        preview.isSelectable = true
+        preview.isRichText = false
+        preview.font = .monospacedSystemFont(ofSize: 11, weight: .regular)
+        preview.textContainerInset = NSSize(width: 6, height: 6)
+        preview.isVerticallyResizable = true
+        preview.isHorizontallyResizable = true
+        preview.autoresizingMask = [.width]
+        preview.textContainer?.widthTracksTextView = false
+        preview.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude,
+                                                      height: CGFloat.greatestFiniteMagnitude)
+        preview.setAccessibilityLabel(L("Configuration text"))
+        let previewScroll = NSScrollView()
+        previewScroll.documentView = preview
+        previewScroll.hasVerticalScroller = true
+        previewScroll.hasHorizontalScroller = true
+        previewScroll.autohidesScrollers = true
+        previewScroll.borderType = .bezelBorder
+
+        copyButton.title = L("Copy")
+        copyButton.bezelStyle = .rounded
+        copyButton.target = self
+        copyButton.action = #selector(copyConfiguration)
+        ControlHelp.describe(copyButton, L("Copy the text above to the clipboard"))
 
         let help = HelpButton.standard(for: .topic(.agent))
 
-        for subview in [titleLabel, enableCheckbox, caption, statusLabel, buttons, help] {
+        for subview in [titleLabel, enableCheckbox, caption, statusLabel, clientLabel, clientMenu,
+                        destinationLabel, previewScroll, copyButton, help] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
@@ -106,10 +185,23 @@ final class AgentSettingsViewController: NSViewController {
             statusLabel.leadingAnchor.constraint(equalTo: caption.leadingAnchor),
             statusLabel.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 
-            buttons.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 16),
-            buttons.leadingAnchor.constraint(equalTo: caption.leadingAnchor),
-            buttons.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
-            buttons.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
+            clientLabel.firstBaselineAnchor.constraint(equalTo: clientMenu.firstBaselineAnchor),
+            clientLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            clientMenu.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 20),
+            clientMenu.leadingAnchor.constraint(equalTo: clientLabel.trailingAnchor, constant: 8),
+
+            destinationLabel.topAnchor.constraint(equalTo: clientMenu.bottomAnchor, constant: 8),
+            destinationLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            destinationLabel.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+
+            previewScroll.topAnchor.constraint(equalTo: destinationLabel.bottomAnchor, constant: 8),
+            previewScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            previewScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            previewScroll.heightAnchor.constraint(equalToConstant: 104),
+
+            copyButton.topAnchor.constraint(equalTo: previewScroll.bottomAnchor, constant: 10),
+            copyButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            copyButton.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
 
             SettingsMetrics.pinnedWidth(of: root),
         ])
@@ -119,6 +211,7 @@ final class AgentSettingsViewController: NSViewController {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
+        showClient()
         refresh()
     }
 
@@ -153,32 +246,51 @@ final class AgentSettingsViewController: NSViewController {
         }
     }
 
-    // MARK: - Actions
+    // MARK: - The client's configuration
 
-    /// The switch's state, for tests.
-    var isEnabledShown: Bool { enableCheckbox.state == .on }
+    private var client: AgentClientConfiguration.Client {
+        let all = AgentClientConfiguration.Client.allCases
+        let index = clientMenu.indexOfSelectedItem
+        return all.indices.contains(index) ? all[index] : .claudeCode
+    }
+
+    private func showClient() {
+        destinationLabel.stringValue = client.destination
+        preview.string = AgentClientConfiguration.text(for: client)
+    }
+
+    @objc private func clientChanged() {
+        showClient()
+    }
+
+    @objc private func copyConfiguration() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(AgentClientConfiguration.text(for: client), forType: .string)
+        statusLabel.stringValue = L("Copied.")
+    }
 
     @objc private func enableChanged(_ sender: NSButton) {
         service?.isEnabled = sender.state == .on
         refresh()
     }
 
-    @objc private func copyClaudeCode() {
-        copy(AgentClientConfiguration.claudeCodeCommand())
-    }
+    // MARK: - For tests
 
-    @objc private func copyClaudeDesktop() {
-        copy(AgentClientConfiguration.claudeDesktopConfiguration())
-    }
+    /// The switch's state.
+    var isEnabledShown: Bool { enableCheckbox.state == .on }
 
-    private func copy(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
-        statusLabel.stringValue = L("Copied.")
-    }
-
-    /// Clicks the switch, for tests.
+    /// Clicks the switch.
     func toggleForTesting() {
         enableCheckbox.performClick(nil)
     }
+
+    /// Picks `client` in the menu, as a click would.
+    func choose(_ client: AgentClientConfiguration.Client) {
+        clientMenu.selectItem(at: AgentClientConfiguration.Client.allCases.firstIndex(of: client) ?? 0)
+        clientChanged()
+    }
+
+    /// What the preview shows, and the line above it.
+    var previewText: String { preview.string }
+    var destinationText: String { destinationLabel.stringValue }
 }

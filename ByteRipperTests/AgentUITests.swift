@@ -64,16 +64,47 @@ final class AgentUITests: XCTestCase {
 
     func testTheClaudeCodeCommandNamesTheRelayQuotedForTheShell() {
         XCTAssertEqual(
-            AgentClientConfiguration.claudeCodeCommand(relay: "/Applications/My Tools/ByteRipper.app/Contents/Helpers/byteripper-mcp"),
+            AgentClientConfiguration.text(for: .claudeCode,
+                                          relay: "/Applications/My Tools/ByteRipper.app/Contents/Helpers/byteripper-mcp"),
             "claude mcp add --scope user byteripper -- '/Applications/My Tools/ByteRipper.app/Contents/Helpers/byteripper-mcp'")
-        XCTAssertEqual(AgentClientConfiguration.claudeCodeCommand(relay: "/a/it's"),
+        XCTAssertEqual(AgentClientConfiguration.text(for: .claudeCode, relay: "/a/it's"),
                        #"claude mcp add --scope user byteripper -- '/a/it'\''s'"#)
     }
 
-    func testTheClaudeDesktopBlockIsJSONNamingTheRelay() throws {
-        let text = AgentClientConfiguration.claudeDesktopConfiguration(relay: "/x/byteripper-mcp")
-        let value = try JSONValue.parse(Data(text.utf8))
-        XCTAssertEqual(value["mcpServers"]?["byteripper"]?["command"], "/x/byteripper-mcp")
+    /// Claude Desktop and Cursor read the same block, laid out for a file a
+    /// person edits by hand.
+    func testClaudeDesktopAndCursorGetTheSameJSONBlockOneMemberPerLine() throws {
+        for client in [AgentClientConfiguration.Client.claudeDesktop, .cursor] {
+            let text = AgentClientConfiguration.text(for: client, relay: "/x/byteripper-mcp")
+            let value = try JSONValue.parse(Data(text.utf8))
+            XCTAssertEqual(value["mcpServers"]?["byteripper"]?["command"], "/x/byteripper-mcp")
+            XCTAssertGreaterThan(text.split(separator: "\n").count, 3, "pretty, not one line: \(text)")
+        }
+    }
+
+    func testAnOtherClientIsGivenTheParametersOneByOne() {
+        let text = AgentClientConfiguration.text(for: .other, relay: "/x/byteripper-mcp")
+        XCTAssertEqual(text.split(separator: "\n").map { $0.split(separator: " ").first.map(String.init) },
+                       ["Name", "Transport", "Command", "Arguments", "Environment"])
+        XCTAssertTrue(text.contains("stdio"))
+        XCTAssertTrue(text.contains("/x/byteripper-mcp"))
+    }
+
+    /// The tab shows the text it would copy, and says where it goes.
+    func testTheTabPreviewsEachClientsConfiguration() {
+        let tab = AgentSettingsViewController()
+        tab.service = service
+        _ = tab.view
+        XCTAssertTrue(tab.previewText.hasPrefix("claude mcp add"), tab.previewText)
+        tab.choose(.cursor)
+        XCTAssertTrue(tab.previewText.contains(#""mcpServers""#), tab.previewText)
+        XCTAssertTrue(tab.destinationText.contains("~/.cursor/mcp.json"), tab.destinationText)
+        tab.choose(.other)
+        XCTAssertTrue(tab.previewText.hasPrefix("Name"), tab.previewText)
+        for client in AgentClientConfiguration.Client.allCases {
+            tab.choose(client)
+            XCTAssertEqual(tab.previewText, AgentClientConfiguration.text(for: client))
+        }
     }
 
     /// The relay the button hands out is the one inside the app's bundle.

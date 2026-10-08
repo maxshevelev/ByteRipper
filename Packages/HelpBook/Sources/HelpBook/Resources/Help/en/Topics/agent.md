@@ -19,12 +19,16 @@ The bytes an agent reads are, however, passed by the agent's own program to the 
 
 ## Connecting a program
 
-**Settings ▸ Agent** offers two buttons, each of which copies a ready text to the clipboard:
+In **Settings ▸ Agent** the menu **Configuration for:** chooses the program the agent runs in. The text that program needs is shown in full below the menu, with a line saying where it goes, and **Copy** puts it on the clipboard:
 
-- **Copy Command for Claude Code** — a command for Terminal. Run once, it registers ByteRipper with Claude Code for every folder.
-- **Copy Configuration for Claude Desktop** — a block for Claude Desktop's configuration file, `claude_desktop_config.json`.
+- **Claude Code** — a command for Terminal. Run once, it registers ByteRipper with Claude Code for every folder.
+- **Claude Desktop** — a JSON block for Claude Desktop's configuration file, `~/Library/Application Support/Claude/claude_desktop_config.json`. Claude Desktop reads it when it starts.
+- **Cursor** — the same JSON block, for `~/.cursor/mcp.json` (every project) or `.cursor/mcp.json` inside one project.
+- **Other Client** — the parameters one by one: the name `byteripper`, the transport `stdio`, the command, and no arguments or environment variables. This is what a client asks for in a form of its own.
 
-Both name the helper program inside this copy of ByteRipper. If ByteRipper is moved to another folder, the text is copied again.
+A configuration file that already lists other servers takes the `byteripper` entry beside them, inside the same `mcpServers`.
+
+Every form names the helper program inside this copy of ByteRipper. If ByteRipper is moved to another folder, the text is copied again.
 
 If ByteRipper is not running when the agent's program starts, the helper starts it. If the service is switched off, the agent's program reports that ByteRipper's agent service is not running.
 

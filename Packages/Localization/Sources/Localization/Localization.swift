@@ -70,10 +70,31 @@ public enum Localization {
     nonisolated(unsafe) private static var catalogue = Catalogue.empty
     nonisolated(unsafe) private static var loaded = false
 
+    /// The language a piece of work speaks whatever the app speaks, for as
+    /// long as the task it is set on runs:
+    ///
+    ///     Localization.$override.withValue(.english) { … }
+    ///
+    /// For the agent service (`Design/AGENT_PLAN.md`, "Language"): a tool
+    /// answers a model with the same field names the panel shows a person, and
+    /// the model reads them in English — the parsers', the specifications' and
+    /// the upstream tools' language — while the window beside it goes on
+    /// speaking Russian. Task-local rather than a switch, because the window
+    /// is drawing in its own language at the same moment.
+    @TaskLocal public static var override: AppLanguage?
+
+    nonisolated(unsafe) private static var overrideCatalogues: [AppLanguage: Catalogue] = [:]
+
     /// The catalogue in force, loading it on the first word asked for.
     static var current: Catalogue {
         lock.lock()
         defer { lock.unlock() }
+        if let language = override {
+            if let catalogue = overrideCatalogues[language] { return catalogue }
+            let catalogue = Catalogue.load(language: language, bundle: .module)
+            overrideCatalogues[language] = catalogue
+            return catalogue
+        }
         if !loaded {
             catalogue = Catalogue.load(language: resolvedLanguage(), bundle: .module)
             loaded = true

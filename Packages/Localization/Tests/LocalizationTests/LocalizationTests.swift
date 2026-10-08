@@ -60,6 +60,30 @@ final class CatalogueTests: XCTestCase {
         Localization.reload()
     }
 
+    /// What the agent service runs under: a task that speaks English while
+    /// the app speaks Russian, and the app's own words untouched outside it.
+    func testATaskCanSpeakAnotherLanguageThanTheApp() async {
+        let defaults = UserDefaults(suiteName: "LocalizationTests")!
+        defaults.removePersistentDomain(forName: "LocalizationTests")
+        let savedDefaults = Localization.defaults
+        Localization.defaults = defaults
+        defaults.set(LanguageChoice.fixed(.russian).storedValue, forKey: Localization.choiceKey)
+        Localization.reload()
+        defer {
+            Localization.defaults = savedDefaults
+            Localization.reload()
+        }
+
+        let inEnglish = await Localization.$override.withValue(.english) {
+            await Task { L("Drop files here") }.value
+        }
+        XCTAssertEqual(inEnglish, "Drop files here")
+        let inGerman = Localization.$override.withValue(.german) { L("Drop files here") }
+        XCTAssertEqual(inGerman, "Dateien hierher ziehen")
+        XCTAssertEqual(L("Drop files here"), "Перетащите файлы сюда", "the app's own language is unchanged")
+        XCTAssertEqual(Localization.language, .russian)
+    }
+
     func testAKeyWithATranslationIsTranslated() {
         withLanguage(.fixed(.russian)) {
             XCTAssertEqual(L("Drop files here"), "Перетащите файлы сюда")

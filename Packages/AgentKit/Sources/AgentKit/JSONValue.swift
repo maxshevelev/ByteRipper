@@ -170,4 +170,13 @@ extension JSONValue {
     }
 
     public var jsonText: String { String(decoding: encoded(), as: UTF8.self) }
+
+    /// The value laid out for a person to read and paste into a file: one
+    /// member per line, indented, keys sorted. Never sent over the wire —
+    /// a message is one line.
+    public var prettyText: String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        return (try? encoder.encode(self)).map { String(decoding: $0, as: UTF8.self) } ?? "null"
+    }
 }

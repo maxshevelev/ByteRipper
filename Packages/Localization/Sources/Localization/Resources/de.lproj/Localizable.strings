@@ -1280,10 +1280,6 @@
 "Agent" = "Agent";
 "Let agents connect to ByteRipper" = "Agenten die Verbindung mit ByteRipper erlauben";
 "An agent — Claude Code, Claude Desktop or another MCP client on this Mac — can then list the files open here, read their bytes and show places in them. It cannot save a file. The connection is local, but what the agent reads, its program passes to the model behind it." = "Ein Agent — Claude Code, Claude Desktop oder ein anderer MCP-Client auf diesem Mac — kann dann die hier geöffneten Dateien auflisten, ihre Bytes lesen und Stellen darin zeigen. Eine Datei sichern kann er nicht. Die Verbindung ist lokal, doch was der Agent liest, gibt sein Programm an das Modell weiter, auf dem er beruht.";
-"Copy Command for Claude Code" = "Befehl für Claude Code kopieren";
-"Copy the Terminal command that connects Claude Code to this copy of ByteRipper" = "Den Terminal-Befehl kopieren, der Claude Code mit dieser Kopie von ByteRipper verbindet";
-"Copy Configuration for Claude Desktop" = "Konfiguration für Claude Desktop kopieren";
-"Copy the block that goes into Claude Desktop's configuration file" = "Den Block für die Konfigurationsdatei von Claude Desktop kopieren";
 "The agent service is not available in this copy of the app." = "In dieser Kopie des Programms ist der Agentendienst nicht verfügbar.";
 "Could not start: %1$@" = "Start nicht möglich: %1$@";
 "Switched off." = "Ausgeschaltet.";
@@ -1307,3 +1303,16 @@
 "ByteRipper agent service" = "Agentendienst von ByteRipper";
 "Show Agent Window" = "Agentenfenster zeigen";
 "Switch Off Agent Service" = "Agentendienst ausschalten";
+"Other Client" = "Anderer Client";
+"Run this command once in Terminal. It adds ByteRipper to Claude Code for every folder." = "Diesen Befehl einmal im Terminal ausführen. Er fügt ByteRipper für alle Ordner zu Claude Code hinzu.";
+"Add this to Claude Desktop's configuration file, %1$@, and restart Claude Desktop." = "Dies in die Konfigurationsdatei von Claude Desktop, %1$@, eintragen und Claude Desktop neu starten.";
+"Add this to Cursor's configuration file, %1$@, for every project — or to %2$@ in one project." = "Dies in die Konfigurationsdatei von Cursor, %1$@, eintragen — für alle Projekte, oder in %2$@ für ein einzelnes Projekt.";
+"Enter these parameters in the client's MCP server settings." = "Diese Parameter in den MCP-Servereinstellungen des Clients eintragen.";
+"Transport" = "Transport";
+"Command" = "Befehl";
+"Environment" = "Umgebung";
+"none" = "keine";
+"Configuration for:" = "Konfiguration für:";
+"The program the agent runs in, whose configuration is shown below" = "Das Programm, in dem der Agent läuft; seine Konfiguration steht darunter";
+"Configuration text" = "Konfigurationstext";
+"Copy the text above to the clipboard" = "Den Text oben in die Zwischenablage kopieren";

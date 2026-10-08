@@ -1280,10 +1280,6 @@
 "Agent" = "Агент";
 "Let agents connect to ByteRipper" = "Разрешить агентам подключаться к ByteRipper";
 "An agent — Claude Code, Claude Desktop or another MCP client on this Mac — can then list the files open here, read their bytes and show places in them. It cannot save a file. The connection is local, but what the agent reads, its program passes to the model behind it." = "Тогда агент — Claude Code, Claude Desktop или другой клиент MCP на этом Mac — сможет получить список открытых здесь файлов, читать их байты и показывать в них нужные места. Сохранить файл он не может. Соединение локальное, но прочитанное агентом его программа передаёт модели, на которой он работает.";
-"Copy Command for Claude Code" = "Скопировать команду для Claude Code";
-"Copy the Terminal command that connects Claude Code to this copy of ByteRipper" = "Скопировать команду Терминала, которая подключает Claude Code к этой копии ByteRipper";
-"Copy Configuration for Claude Desktop" = "Скопировать настройку для Claude Desktop";
-"Copy the block that goes into Claude Desktop's configuration file" = "Скопировать блок для файла настроек Claude Desktop";
 "The agent service is not available in this copy of the app." = "В этой копии программы служба агента недоступна.";
 "Could not start: %1$@" = "Не удалось запустить: %1$@";
 "Switched off." = "Выключена.";
@@ -1307,3 +1303,16 @@
 "ByteRipper agent service" = "Служба агента ByteRipper";
 "Show Agent Window" = "Показать окно агента";
 "Switch Off Agent Service" = "Выключить службу агента";
+"Other Client" = "Другой клиент";
+"Run this command once in Terminal. It adds ByteRipper to Claude Code for every folder." = "Выполните эту команду один раз в Терминале. Она добавляет ByteRipper в Claude Code для всех папок.";
+"Add this to Claude Desktop's configuration file, %1$@, and restart Claude Desktop." = "Добавьте это в файл настроек Claude Desktop, %1$@, и перезапустите Claude Desktop.";
+"Add this to Cursor's configuration file, %1$@, for every project — or to %2$@ in one project." = "Добавьте это в файл настроек Cursor, %1$@, — для всех проектов, или в %2$@ — для одного проекта.";
+"Enter these parameters in the client's MCP server settings." = "Введите эти параметры в настройках MCP-серверов клиента.";
+"Transport" = "Транспорт";
+"Command" = "Команда";
+"Environment" = "Переменные окружения";
+"none" = "нет";
+"Configuration for:" = "Настройка для:";
+"The program the agent runs in, whose configuration is shown below" = "Программа, в которой работает агент; её настройка показана ниже";
+"Configuration text" = "Текст настройки";
+"Copy the text above to the clipboard" = "Скопировать текст выше в буфер обмена";
