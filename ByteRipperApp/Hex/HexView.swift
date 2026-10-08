@@ -1488,6 +1488,10 @@ final class HexView: NSView, NSViewToolTipOwner {
     /// When the current hop started, or nil when nothing is hopping.
     private var indicatorBounceStarted: TimeInterval?
     private var indicatorDisplayLink: CADisplayLink?
+    /// Ends the hop on time when no frame comes to end it: a display link
+    /// does not fire while the display sleeps or the window is hidden, and a
+    /// hop left running would keep its link and say it is still hopping.
+    private var indicatorBounceDeadline: Timer?
     /// Forces the hop's phase, for tests that need a frame of the animation
     /// rather than a moment of the clock.
     var indicatorBouncePhaseForTests: CGFloat?
@@ -1590,6 +1594,16 @@ final class HexView: NSView, NSViewToolTipOwner {
             link.add(to: .main, forMode: .common)
             indicatorDisplayLink = link
         }
+        indicatorBounceDeadline?.invalidate()
+        let deadline = Timer(timeInterval: Self.indicatorBounceDuration + 0.05, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.indicatorBounceStarted != nil else { return }
+                self.endIndicatorBounce()
+                self.redrawFindIndicatorRows()
+            }
+        }
+        RunLoop.main.add(deadline, forMode: .common)
+        indicatorBounceDeadline = deadline
         redrawFindIndicatorRows()
     }
 
@@ -1617,6 +1631,8 @@ final class HexView: NSView, NSViewToolTipOwner {
     private func endIndicatorBounce() {
         indicatorDisplayLink?.invalidate()
         indicatorDisplayLink = nil
+        indicatorBounceDeadline?.invalidate()
+        indicatorBounceDeadline = nil
         indicatorBounceStarted = nil
     }
 
