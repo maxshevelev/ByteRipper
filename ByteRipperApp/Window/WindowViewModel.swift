@@ -19,6 +19,10 @@ final class WindowViewModel {
     /// tab's, not a pane's: a jump in a comparison moves both panes, and Back
     /// puts both back.
     var navigationHistory = NavigationHistory<NavigationPlace>()
+    /// Whether the place the tab stands on was come to by a step in a tool's
+    /// table — a click on a row — or by Back or Forward to such a place. What
+    /// the place is marked with when it is left (`NavigationPlace.isToolStep`).
+    var arrivedByToolStep = false
 
     /// The window's own view of a bookmark change, after the panes have been
     /// told: what the controller watches, for the things that are neither pane's

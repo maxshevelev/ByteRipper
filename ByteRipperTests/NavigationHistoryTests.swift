@@ -122,6 +122,7 @@ final class NavigationHistoryFlowTests: XCTestCase {
         controller.navigateBack()
         XCTAssertEqual(pane.caretOffset, 0x40)
         XCTAssertEqual(try top(controller, pane), topBefore, "the same rows on screen")
+        XCTAssertTrue(controller.view.window?.firstResponder is HexView, "a jump in the dump: the dump has the keyboard")
         XCTAssertFalse(controller.canNavigateBack)
         XCTAssertTrue(controller.canNavigateForward)
 

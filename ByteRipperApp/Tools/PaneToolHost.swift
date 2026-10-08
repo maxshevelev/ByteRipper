@@ -103,7 +103,7 @@ import MEFirmware
 
     func noteNavigationStep() {
         guard let pane, let owner else { return }
-        owner.recordJump(in: pane)
+        owner.recordJump(in: pane, byTool: true)
     }
 
     /// The window's own plate, the one a search result is reported in: a

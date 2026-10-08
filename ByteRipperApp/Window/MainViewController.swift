@@ -7747,7 +7747,8 @@ enum AlertOutcome {
 extension MainViewController {
     /// View ▸ Back (⌘[): the place the last jump left.
     @objc func navigateBack() {
-        let current = navigationPlace(of: activePane)
+        var current = navigationPlace(of: activePane)
+        current.isToolStep = windowModel.arrivedByToolStep
         guard let place = windowModel.navigationHistory.goBack(
             from: current, isReachable: isReachable) else { return }
         go(to: place)
@@ -7755,7 +7756,8 @@ extension MainViewController {
 
     /// View ▸ Forward (⌘]): the place Back left.
     @objc func navigateForward() {
-        let current = navigationPlace(of: activePane)
+        var current = navigationPlace(of: activePane)
+        current.isToolStep = windowModel.arrivedByToolStep
         guard let place = windowModel.navigationHistory.goForward(
             from: current, isReachable: isReachable) else { return }
         go(to: place)
@@ -7773,10 +7775,16 @@ extension MainViewController {
 
     /// A jump is about to move `pane`: the place it leaves goes into the
     /// history. Called by every jump the app makes on the user's behalf — and
-    /// by nothing the caret does a row at a time.
-    func recordJump(in pane: PaneViewModel) {
+    /// by nothing the caret does a row at a time. `byTool` for a step the
+    /// tool's table made (`ToolHost.noteNavigationStep`): the place it leaves
+    /// and the place it comes to are both the table's steps, so Back and
+    /// Forward give the keyboard to the table there.
+    func recordJump(in pane: PaneViewModel, byTool: Bool = false) {
         guard pane.isOpen else { return }
-        windowModel.navigationHistory.record(leaving: navigationPlace(of: pane))
+        var place = navigationPlace(of: pane)
+        place.isToolStep = byTool || windowModel.arrivedByToolStep
+        windowModel.navigationHistory.record(leaving: place)
+        windowModel.arrivedByToolStep = byTool
         revalidateToolbar()
     }
 
@@ -7802,12 +7810,7 @@ extension MainViewController {
         } else if tools.session == nil, let closed = tools.closedChoice, closed.pane === pane {
             tool = NavigationPlace.ToolChoice(module: closed.module, mark: closed.mark)
         }
-        var keyboardInTool = false
-        if tools.boundPane === pane, let panel = tools.session?.viewController.view,
-           let responder = view.window?.firstResponder as? NSView {
-            keyboardInTool = responder.isDescendant(of: panel)
-        }
-        return NavigationPlace(spots: spots, top: top, tool: tool, keyboardInTool: keyboardInTool)
+        return NavigationPlace(spots: spots, top: top, tool: tool)
     }
 
     /// A place can be gone back to while every pane it names is still in this
@@ -7857,9 +7860,10 @@ extension MainViewController {
         }
         let view = filePaneView(for: first)
         view?.scrollRowToTop(containing: place.top)
-        // The keyboard goes back where it was: to the tool's table for a
-        // place left from it, so the arrow keys go on from the row it chose.
-        if choiceShown, place.keyboardInTool {
+        // The keyboard goes to the tool's table for a step made in it, so the
+        // arrow keys go on from the row it chose; to the dump otherwise.
+        windowModel.arrivedByToolStep = place.isToolStep
+        if choiceShown, place.isToolStep {
             tools.session?.focusChoice()
         } else {
             view?.focusHexView()

@@ -284,10 +284,24 @@ final class UEFIToolFlowTests: XCTestCase {
     /// The tool closed and opened again on the same file: the places clicked
     /// before still choose their rows and draw their zones.
     func testBackChoosesTheRowAfterTheToolWasClosedAndOpenedAgain() throws {
+        try checkTheRowsAfterTheToolWasClosed(walkingWhileClosed: true)
+    }
+
+    /// The same with no walk while the tool is closed: Back comes straight to
+    /// the rows clicked in the session that was closed.
+    func testBackChoosesTheRowClickedBeforeTheToolWasClosed() throws {
+        try checkTheRowsAfterTheToolWasClosed(walkingWhileClosed: false)
+    }
+
+    /// Three rows clicked, the tool closed and opened again: Back and Forward
+    /// still choose the rows, draw their zones and hand the keyboard to the
+    /// tree the clicks were made in.
+    private func checkTheRowsAfterTheToolWasClosed(walkingWhileClosed: Bool) throws {
         let controller = try open(UEFITestImage.withTwoVolumes())
         let pane = controller.windowModel.pane1
         func click(_ row: Int) throws {
             let tree = try outline()
+            tree.window?.makeFirstResponder(tree)
             (tree as? ToolPanelOutlineView)?.handlingClick {
                 tree.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
             }
@@ -298,26 +312,36 @@ final class UEFIToolFlowTests: XCTestCase {
         try click(0)
 
         controller.tools.activate(nil, animated: false)
-        // Walked while the tool is closed: the places left on the way keep
-        // the row they had.
-        controller.navigateBack()
-        controller.navigateBack()
+        if walkingWhileClosed {
+            // The places left on the way keep the row they had, and where
+            // the keyboard was.
+            controller.navigateBack()
+            controller.navigateBack()
+        }
         controller.tools.activate(UEFIToolModule.identifier, animated: false)
         window?.layoutIfNeeded()
         try waitForParse()
 
         let tree = try outline()
+        let hexView = try XCTUnwrap(descendants(of: try XCTUnwrap(window?.contentView), HexView.self).first)
         func chosen() -> String? { (tree.item(atRow: tree.selectedRow) as? UEFITreeRow)?.id.description }
         func zoned() -> String? { pane.zones.focus.flatMap(UEFIPresenter.nodeID(ofZone:))?.description }
-        controller.navigateForward()
-        XCTAssertTrue(pumpUntil(2) { chosen() == "0.1" }, "row \(String(describing: chosen()))")
-        XCTAssertEqual(zoned(), "0.1")
-        controller.navigateForward()
-        XCTAssertTrue(pumpUntil(2) { chosen() == "0.0" }, "row \(String(describing: chosen()))")
-        XCTAssertEqual(zoned(), "0.0")
-        controller.navigateBack()
-        XCTAssertTrue(pumpUntil(2) { chosen() == "0.1" }, "row \(String(describing: chosen()))")
-        XCTAssertEqual(zoned(), "0.1")
+        func step(_ forward: Bool, to row: String, line: UInt = #line) {
+            window?.makeFirstResponder(hexView)
+            if forward { controller.navigateForward() } else { controller.navigateBack() }
+            XCTAssertTrue(pumpUntil(2) { chosen() == row }, "row \(String(describing: chosen()))", line: line)
+            XCTAssertEqual(zoned(), row, line: line)
+            XCTAssertTrue(window?.firstResponder === tree, "the tree has the keyboard", line: line)
+        }
+        if walkingWhileClosed {
+            step(true, to: "0.1")
+            step(true, to: "0.0")
+            step(false, to: "0.1")
+        } else {
+            step(false, to: "0.1")
+            step(false, to: "0.0")
+            step(true, to: "0.1")
+        }
     }
 
     /// A row the reader opens brings its rows into view — as many as fit, and
