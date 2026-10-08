@@ -42,4 +42,13 @@ struct NavigationPlace: Equatable {
     var spots: [Spot]
     var top: UInt64
     var tool: ToolChoice? = nil
+    /// The keyboard was in the tool's panel — the reader left from its table —
+    /// so going back gives it back to the table rather than to the dump. Not
+    /// part of what makes two places the same: where the keyboard was does
+    /// not make a place to go back to.
+    var keyboardInTool = false
+
+    static func == (lhs: NavigationPlace, rhs: NavigationPlace) -> Bool {
+        lhs.spots == rhs.spots && lhs.top == rhs.top && lhs.tool == rhs.tool
+    }
 }

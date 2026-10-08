@@ -441,6 +441,10 @@ private struct ChecksumPass: Sendable {
         show(publish: true)
     }
 
+    public func focusChoice() {
+        controller.focusTree()
+    }
+
     // MARK: - Reading
 
     /// The seam a UEFI-aware tool-module reaches through for the pane's one

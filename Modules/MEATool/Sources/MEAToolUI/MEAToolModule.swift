@@ -209,6 +209,10 @@ struct MEAParkedState: ToolSessionState {
         show()
     }
 
+    public func focusChoice() {
+        controller.focusTree()
+    }
+
     // MARK: - Reading
 
     /// The last analysis's own cache and the tool's shared UEFI tree, reached

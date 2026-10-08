@@ -22,6 +22,11 @@ import ToolModuleKit
     /// A click is about to choose a row: a step for the window's navigation
     /// history, taken before the choice changes. The arrow keys are not.
     var onWillChoose: (() -> Void)?
+
+    /// The tree takes the keyboard (`ToolSession.focusChoice`).
+    func focusTree() {
+        view.window?.makeFirstResponder(outline)
+    }
     /// The user picked a tab (0 = Summary, 1 = Full Info).
     var onTabChanged: ((Int) -> Void)?
     /// The status row's Try Again was pressed, after a failed analysis.

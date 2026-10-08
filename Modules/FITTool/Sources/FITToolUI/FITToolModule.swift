@@ -259,6 +259,10 @@ struct FITParkedState: ToolSessionState {
         }
     }
 
+    public func focusChoice() {
+        controller.focusEntries()
+    }
+
     // MARK: - Reading
 
     /// The seam a UEFI-aware tool-module reaches through for the pane's one

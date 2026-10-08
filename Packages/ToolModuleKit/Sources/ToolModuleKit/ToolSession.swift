@@ -90,6 +90,11 @@ import AppKit
     /// had picked it — without taking the dump anywhere: the host puts the
     /// dump back where it was itself.
     func showNavigationMark(_ mark: AnyHashable)
+
+    /// Gives the keyboard to the table the panel's choice is in. Back and
+    /// Forward call it for a place the reader left from that table, so the
+    /// arrow keys go on from the row it came back to.
+    func focusChoice()
 }
 
 public extension ToolSession {
@@ -100,6 +105,7 @@ public extension ToolSession {
     /// The default is a panel with nothing to go back to.
     var navigationMark: AnyHashable? { nil }
     func showNavigationMark(_ mark: AnyHashable) {}
+    func focusChoice() {}
     /// The default is to ignore it: the bytes are selected either way, and a
     /// panel with nothing to point at should not have to say so.
     func zoneSelected(_ id: Zone.ID) {}

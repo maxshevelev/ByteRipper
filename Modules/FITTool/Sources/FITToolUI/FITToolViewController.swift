@@ -16,6 +16,11 @@ import ToolModuleKit
     /// A click is about to choose a row: a step for the window's navigation
     /// history, taken before the choice changes. The arrow keys are not.
     var onWillChoose: (() -> Void)?
+
+    /// The entries take the keyboard (`ToolSession.focusChoice`).
+    func focusEntries() {
+        view.window?.makeFirstResponder(entries)
+    }
     var onGoToTarget: ((Int) -> Void)?
     var onSelectTable: (() -> Void)?
     var onCopyCPUID: ((Int) -> Void)?

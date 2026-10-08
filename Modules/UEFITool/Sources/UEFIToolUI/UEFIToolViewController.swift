@@ -23,6 +23,11 @@ import UEFITool
     /// match — rather than walk to it with the arrow keys: a step for the
     /// window's navigation history, taken before the choice changes.
     var onWillChoose: (() -> Void)?
+
+    /// The tree takes the keyboard (`ToolSession.focusChoice`).
+    func focusTree() {
+        view.window?.makeFirstResponder(outline)
+    }
     /// The title was clicked. Only ever fired when the summary stands for a
     /// node that has no row of its own.
     var onSelectTop: (() -> Void)?

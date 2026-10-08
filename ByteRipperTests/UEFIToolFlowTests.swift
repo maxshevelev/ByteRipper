@@ -240,6 +240,8 @@ final class UEFIToolFlowTests: XCTestCase {
         func click(_ row: Int) {
             let clickable = tree as? ToolPanelOutlineView
             XCTAssertNotNil(clickable)
+            // A click puts the keyboard in the table before the row is chosen.
+            tree.window?.makeFirstResponder(tree)
             clickable?.handlingClick {
                 tree.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
             }
@@ -256,9 +258,14 @@ final class UEFIToolFlowTests: XCTestCase {
         click(0)
         XCTAssertEqual(controller.windowModel.navigationHistory.backStack.count, 3)
 
+        // The keyboard is somewhere else when Back is pressed: it comes back
+        // to the table the steps were made in.
+        let hexView = try XCTUnwrap(descendants(of: try XCTUnwrap(window?.contentView), HexView.self).first)
+        window?.makeFirstResponder(hexView)
         controller.navigateBack()
         XCTAssertTrue(pumpUntil(2) { chosen() == "0.1" }, "back to the second click's row")
         XCTAssertEqual(zoned(), "0.1", "its zones drawn again")
+        XCTAssertTrue(window?.firstResponder === tree, "the table has the keyboard")
         controller.navigateBack()
         XCTAssertTrue(pumpUntil(2) { chosen() == "0.0" })
         XCTAssertEqual(zoned(), "0.0")

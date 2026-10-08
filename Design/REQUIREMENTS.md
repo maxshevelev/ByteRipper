@@ -1063,7 +1063,9 @@ browser's history does.
   row again with its zones (`showNavigationMark`) when the same tool is still
   open on the pane, then restores the selections and the view, and brings
   forward the fragment panel the place is in, or puts the panels away for a
-  place in the tab's own panes.
+  place in the tab's own panes. The keyboard goes back where it was when
+  the place was left: to the tool's table (`ToolSession.focusChoice`) when
+  it was there and the row was chosen again, to the dump otherwise.
 - With the tool closed, Back and Forward give back the dump alone, and the
   places they leave carry the tool's last choice (the one the closed session
   had, or the one the walk came to since — `ToolController.closedChoice`),

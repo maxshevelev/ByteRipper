@@ -1,4 +1,4 @@
-@source-sha 02c8f1adc88d1aeec41499de878cbf093dead97ccf11eac89c6310b904dd9123
+@source-sha bab8c3118ff6f3ab789fb74570218fe988ce5829f364cca0dd4adeb2d2ca569b
 # Sich bewegen
 
 > Zwischen Unterschieden springen, zu einer Adresse springen oder auf einem Byte stehen und ablesen, wo man ist.
@@ -25,7 +25,7 @@ Im Vergleichsmodus bewegt der Sprung **beide** Bereiche, die an dieselbe Adresse
 
 Jeder Sprung merkt sich die Stelle, die er verlässt: „Gehe zu“, ein Lesezeichen, der nächste oder vorherige Unterschied, ein Suchtreffer, ein Klick in die Minimap, ein Klick auf eine Zeile eines Werkzeugbereichs. **Darstellung ▸ Zurück** (**⌘[**) kehrt dorthin zurück — mit derselben Auswahl, denselben Zeilen auf dem Bildschirm und derselben im Werkzeugbereich gewählten Zeile samt ihren Zonen —, **Darstellung ▸ Vorwärts** (**⌘]**) geht in die andere Richtung. Dieselben Befehle sind die Tasten **‹ ›** in der Symbolleiste, rechts vom Werkzeugmenü.
 
-Bewegungen der Einfügemarke mit den Pfeiltasten, der Maus oder dem Rollbalken sind keine Sprünge und werden nicht gemerkt. Auch das Durchlaufen der Zeilen eines Werkzeugbereichs mit den Pfeiltasten wird nicht gemerkt — nur ein Klick auf eine Zeile.
+Bewegungen der Einfügemarke mit den Pfeiltasten, der Maus oder dem Rollbalken sind keine Sprünge und werden nicht gemerkt. Auch das Durchlaufen der Zeilen eines Werkzeugbereichs mit den Pfeiltasten wird nicht gemerkt — nur ein Klick auf eine Zeile. Wurde eine Stelle aus der Tabelle eines Werkzeugbereichs verlassen, geht die Tastatur bei der Rückkehr wieder in diese Tabelle, und die Pfeiltasten setzen bei der zurückgeholten Zeile an.
 
 Der Verlauf gehört zum Tab und hält die letzten fünfzig Stellen. Im Vergleichsmodus umfasst eine Stelle beide Bereiche. Ist der Werkzeugbereich geschlossen, bringen „Zurück“ und „Vorwärts“ nur den Dump zurück; ist dasselbe Werkzeug wieder offen, werden auch seine Zeilen wieder gewählt. Eine Stelle in einer Datei, die inzwischen geschlossen oder durch eine andere ersetzt wurde, wird übersprungen.
 

@@ -7802,7 +7802,12 @@ extension MainViewController {
         } else if tools.session == nil, let closed = tools.closedChoice, closed.pane === pane {
             tool = NavigationPlace.ToolChoice(module: closed.module, mark: closed.mark)
         }
-        return NavigationPlace(spots: spots, top: top, tool: tool)
+        var keyboardInTool = false
+        if tools.boundPane === pane, let panel = tools.session?.viewController.view,
+           let responder = view.window?.firstResponder as? NSView {
+            keyboardInTool = responder.isDescendant(of: panel)
+        }
+        return NavigationPlace(spots: spots, top: top, tool: tool, keyboardInTool: keyboardInTool)
     }
 
     /// A place can be gone back to while every pane it names is still in this
@@ -7835,9 +7840,11 @@ extension MainViewController {
         // A place whose tool is no longer the one open on the pane gives back
         // the dump alone.
         let tools = tools(reading: first)
+        var choiceShown = false
         if let choice = place.tool, tools.boundPane === first,
            tools.activeModule?.identifier == choice.module {
             tools.session?.showNavigationMark(choice.mark)
+            choiceShown = true
         } else if tools.session == nil {
             // No tool to choose it in: the choice is carried, so the place
             // Back or Forward leaves next still has it.
@@ -7850,7 +7857,13 @@ extension MainViewController {
         }
         let view = filePaneView(for: first)
         view?.scrollRowToTop(containing: place.top)
-        view?.focusHexView()
+        // The keyboard goes back where it was: to the tool's table for a
+        // place left from it, so the arrow keys go on from the row it chose.
+        if choiceShown, place.keyboardInTool {
+            tools.session?.focusChoice()
+        } else {
+            view?.focusHexView()
+        }
         refreshDiffNavigation()
         revalidateToolbar()
     }
