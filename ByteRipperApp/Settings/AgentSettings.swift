@@ -1,5 +1,6 @@
 import Cocoa
 import AgentKit
+import AppPalette
 import HelpBook
 import HelpUI
 import Localization
@@ -230,7 +231,7 @@ final class AgentSettingsViewController: NSViewController {
         enableCheckbox.state = service?.isEnabled == true ? .on : .off
         enableCheckbox.isEnabled = service != nil
         statusLabel.stringValue = Self.statusText(of: service)
-        statusLabel.textColor = service?.failure == nil ? .secondaryLabelColor : .systemRed
+        statusLabel.textColor = service?.failure == nil ? .secondaryLabelColor : SemanticColors.bad
     }
 
     /// One line on what the service is doing — the same words the Agent

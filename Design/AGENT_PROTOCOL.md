@@ -61,6 +61,18 @@ Recorded against: Claude Code 2.1.292 (modern; `RecordedClientTests`).
 | `reveal` | `offset`; `length` (default 0); `select` (default: length > 0) | `document`, `shown` (range), `selected`. A navigation step. |
 | `open_panel` | `module` (`zonesketch`, `fit`, `uefi-structure`, `me-analyzer` — the last part of the module's identifier) | `document`, `module`, `panel`, `was_open`. A navigation step. Refused while a sheet is up. |
 
+## Marks
+
+| Tool | Arguments | Answer |
+|---|---|---|
+| `mark` | `offset`, `length` (≥ 1), `label` (≤ 80 characters); `note` (≤ 600); `related_to` (mark ids) | `id` (`m1`, `m2`… one counter for the app), `document`, `range`, `label`, `note`, `related_to`. Does not move the view. |
+| `unmark` | `ids`, or `document`, or `all: true` | `removed[]`; `not_found[]` for ids there were not. Relations to a removed mark go with it. |
+| `marks` | `document` (default: every document) | `marks[]`, each as `mark` answers. |
+
+A mark lives on its document's pane: drawn dashed in the agent's colour over
+the dump, its label and note shown under the pointer, listed in the Agent
+window. It goes with `unmark`, the window's buttons, or its document.
+
 ## UEFI Structure
 
 Queries — answered with the panel open or not, from the pane's shared tree:

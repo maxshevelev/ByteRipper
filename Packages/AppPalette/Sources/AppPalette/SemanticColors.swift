@@ -73,6 +73,11 @@ public enum ZoneColors {
     /// over whatever the dump's own layers painted, so it answers to the bytes
     /// under it rather than to the window's theme.
     public static let other = Sets.other.color
+
+    /// A mark an agent put on the dump (`Design/AGENT_PLAN.md`, "Marks"): its
+    /// own hue, drawn dashed, so what the agent is pointing at is never taken
+    /// for a tool's map or for a difference.
+    public static let agent = Sets.agent.color
 }
 
 /// The tints a partition's pieces are drawn in, cycled by label (§21.3): S0,

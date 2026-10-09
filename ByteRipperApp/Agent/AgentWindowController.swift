@@ -1,5 +1,6 @@
 import Cocoa
 import AgentKit
+import AppPalette
 import HelpBook
 import HelpUI
 import Localization
@@ -22,8 +23,13 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     var showSettings: () -> Void = {}
 
     private let statusLabel = NSTextField(labelWithString: "")
+    private let pages = NSSegmentedControl()
     private let table = NSTableView()
+    private let logScroll = NSScrollView()
+    private let marks = AgentMarksTable()
+    private let marksScroll = NSScrollView()
     private let clearButton = NSButton(title: "", target: nil, action: nil)
+    private let removeButton = NSButton(title: "", target: nil, action: nil)
     private let settingsButton = NSButton(title: "", target: nil, action: nil)
     private var observer: NSObjectProtocol?
     private var rows: [AgentCallRecord] = []
@@ -97,6 +103,17 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         statusLabel.font = .systemFont(ofSize: 12)
         statusLabel.lineBreakMode = .byTruncatingTail
 
+        // The two things the window lists: what the agent asked, and what it
+        // marked. One at a time, the way Activity Monitor's tabs are — both
+        // are long lists that want the whole height.
+        pages.segmentCount = 2
+        pages.setLabel(L("Log"), forSegment: 0)
+        pages.setLabel(L("Marks"), forSegment: 1)
+        pages.trackingMode = .selectOne
+        pages.selectedSegment = 0
+        pages.target = self
+        pages.action = #selector(pageChanged)
+
         for column in Column.allCases {
             let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.rawValue))
             tableColumn.title = column.title
@@ -109,15 +126,27 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         table.dataSource = self
         table.delegate = self
         table.allowsMultipleSelection = true
-        let scroll = NSScrollView()
-        scroll.documentView = table
-        scroll.hasVerticalScroller = true
-        scroll.borderType = .bezelBorder
+        logScroll.documentView = table
+        logScroll.hasVerticalScroller = true
+        logScroll.borderType = .bezelBorder
 
-        clearButton.title = L("Clear Log")
+        marks.build()
+        marks.onShow = { [weak self] id in self?.service?.markTools.show(id) }
+        marks.onSelectionChanged = { [weak self] in self?.refreshButtons() }
+        marksScroll.documentView = marks.table
+        marksScroll.hasVerticalScroller = true
+        marksScroll.borderType = .bezelBorder
+        marksScroll.isHidden = true
+
         clearButton.bezelStyle = .rounded
         clearButton.target = self
-        clearButton.action = #selector(clearLog)
+        clearButton.action = #selector(clearPage)
+
+        removeButton.title = L("Remove Mark")
+        removeButton.bezelStyle = .rounded
+        removeButton.target = self
+        removeButton.action = #selector(removeMarks)
+        removeButton.isHidden = true
 
         settingsButton.title = L("Agent Settings…")
         settingsButton.bezelStyle = .rounded
@@ -126,7 +155,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
         let help = HelpButton.standard(for: .topic(.agent))
 
-        for view in [statusLabel, scroll, clearButton, settingsButton, help] {
+        for view in [statusLabel, pages, logScroll, marksScroll, clearButton, removeButton, settingsButton, help] {
             view.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(view)
         }
@@ -138,11 +167,22 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             help.centerYAnchor.constraint(equalTo: statusLabel.centerYAnchor),
             help.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
 
-            scroll.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 10),
-            scroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
-            scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            pages.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 10),
+            pages.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
 
-            clearButton.topAnchor.constraint(equalTo: scroll.bottomAnchor, constant: 12),
+            logScroll.topAnchor.constraint(equalTo: pages.bottomAnchor, constant: 8),
+            logScroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            logScroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+
+            marksScroll.topAnchor.constraint(equalTo: logScroll.topAnchor),
+            marksScroll.leadingAnchor.constraint(equalTo: logScroll.leadingAnchor),
+            marksScroll.trailingAnchor.constraint(equalTo: logScroll.trailingAnchor),
+            marksScroll.bottomAnchor.constraint(equalTo: logScroll.bottomAnchor),
+
+            removeButton.centerYAnchor.constraint(equalTo: clearButton.centerYAnchor),
+            removeButton.leadingAnchor.constraint(equalTo: clearButton.trailingAnchor, constant: 8),
+
+            clearButton.topAnchor.constraint(equalTo: logScroll.bottomAnchor, constant: 12),
             clearButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             clearButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -14),
 
@@ -160,8 +200,30 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         let followed = rows.isEmpty || table.rows(in: table.visibleRect).upperBound >= rows.count
         rows = log
         table.reloadData()
-        clearButton.isEnabled = !rows.isEmpty
         if followed, !rows.isEmpty { table.scrollRowToVisible(rows.count - 1) }
+        marks.show(service?.markTools.all() ?? [])
+        refreshButtons()
+    }
+
+    private var showsMarks: Bool { pages.selectedSegment == 1 }
+
+    private func refreshButtons() {
+        clearButton.title = showsMarks ? L("Clear Marks") : L("Clear Log")
+        clearButton.isEnabled = showsMarks ? !marks.isEmpty : !rows.isEmpty
+        removeButton.isHidden = !showsMarks
+        removeButton.isEnabled = !marks.selectedIDs.isEmpty
+    }
+
+    @objc private func pageChanged() {
+        logScroll.isHidden = showsMarks
+        marksScroll.isHidden = !showsMarks
+        refreshButtons()
+    }
+
+    /// Shows the Marks list, for the menu bar and the tests.
+    func showMarks() {
+        pages.selectedSegment = 1
+        pageChanged()
     }
 
     // MARK: - Table
@@ -180,7 +242,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
                 return field
             }()
         cell.stringValue = Self.text(of: rows[row], column)
-        cell.textColor = column == .result && Self.isProblem(rows[row]) ? .systemRed : .labelColor
+        cell.textColor = column == .result && Self.isProblem(rows[row]) ? SemanticColors.bad : .labelColor
         cell.toolTip = column == .arguments || column == .result ? cell.stringValue : nil
         return cell
     }
@@ -220,8 +282,17 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
     // MARK: - Actions
 
-    @objc private func clearLog() {
-        service?.clearLog()
+    @objc private func clearPage() {
+        if showsMarks {
+            service?.markTools.remove { _ in true }
+        } else {
+            service?.clearLog()
+        }
+    }
+
+    @objc private func removeMarks() {
+        let chosen = Set(marks.selectedIDs)
+        service?.markTools.remove { chosen.contains($0.mark.id) }
     }
 
     @objc private func openSettings() {
@@ -235,4 +306,124 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     }
 
     var statusText: String { statusLabel.stringValue }
+
+    /// The marks list, for tests.
+    var marksList: AgentMarksTable { marks }
+}
+
+/// The Marks page of the Agent window: every mark an agent left, in every
+/// open document, with what it is about. A double-click shows the bytes.
+@MainActor
+final class AgentMarksTable: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+    let table = NSTableView()
+    var onShow: (String) -> Void = { _ in }
+    var onSelectionChanged: () -> Void = {}
+    private(set) var rows: [AgentMarkTools.Located] = []
+
+    private enum Column: String, CaseIterable {
+        case id, label, document, range, note, related
+
+        var title: String {
+            switch self {
+            case .id: return L("Mark")
+            case .label: return L("Label")
+            case .document: return L("File")
+            case .range: return L("Bytes")
+            case .note: return L("Note")
+            case .related: return L("About")
+            }
+        }
+
+        var width: CGFloat {
+            switch self {
+            case .id: return 44
+            case .label: return 150
+            case .document: return 110
+            case .range: return 150
+            case .note: return 220
+            case .related: return 120
+            }
+        }
+    }
+
+    func build() {
+        for column in Column.allCases {
+            let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.rawValue))
+            tableColumn.title = column.title
+            tableColumn.width = column.width
+            tableColumn.resizingMask = column == .note ? .autoresizingMask : .userResizingMask
+            table.addTableColumn(tableColumn)
+        }
+        table.usesAlternatingRowBackgroundColors = true
+        table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        table.allowsMultipleSelection = true
+        table.dataSource = self
+        table.delegate = self
+        table.target = self
+        table.doubleAction = #selector(doubleClicked)
+    }
+
+    func show(_ marks: [AgentMarkTools.Located]) {
+        let chosen = Set(selectedIDs)
+        rows = marks
+        table.reloadData()
+        table.selectRowIndexes(IndexSet(rows.indices.filter { chosen.contains(rows[$0].mark.id) }),
+                               byExtendingSelection: false)
+    }
+
+    var isEmpty: Bool { rows.isEmpty }
+    var selectedIDs: [String] { table.selectedRowIndexes.compactMap { $0 < rows.count ? rows[$0].mark.id : nil } }
+
+    func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard let id = tableColumn?.identifier, let column = Column(rawValue: id.rawValue) else { return nil }
+        let cell = (tableView.makeView(withIdentifier: id, owner: self) as? NSTextField) ?? {
+            let field = NSTextField(labelWithString: "")
+            field.identifier = id
+            field.lineBreakMode = .byTruncatingTail
+            field.font = column == .range || column == .id
+                ? .monospacedSystemFont(ofSize: 11, weight: .regular) : .systemFont(ofSize: 11)
+            return field
+        }()
+        cell.stringValue = text(row: row, column)
+        cell.toolTip = column == .note || column == .related ? cell.stringValue : nil
+        return cell
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        onSelectionChanged()
+    }
+
+    private func text(row: Int, _ column: Column) -> String {
+        let located = rows[row]
+        switch column {
+        case .id: return located.mark.id
+        case .label: return located.mark.label
+        case .document: return located.place.pane.status.fileName
+        case .range:
+            let range = located.mark.range
+            return String(format: "0x%llX–0x%llX", range.lowerBound, range.upperBound)
+        case .note: return located.mark.note
+        case .related:
+            // Each end of a relation by its id and label, so the pair reads
+            // without looking the other row up.
+            return located.mark.relatedTo.map { id in
+                let label = rows.first { $0.mark.id == id }?.mark.label
+                return label.map { "\(id) \($0)" } ?? id
+            }.joined(separator: ", ")
+        }
+    }
+
+    @objc private func doubleClicked() {
+        let row = table.clickedRow
+        guard row >= 0, row < rows.count else { return }
+        onShow(rows[row].mark.id)
+    }
+
+    /// A row's text, for tests.
+    func shownText(row: Int, column: String) -> String? {
+        guard row < rows.count, let column = Column(rawValue: column) else { return nil }
+        return text(row: row, column)
+    }
 }

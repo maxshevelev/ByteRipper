@@ -78,7 +78,12 @@ final class PaneViewModel: HexViewDataSource {
     private(set) var document: BinaryDocument? {
         // Content replaced wholesale — another file opened into the pane, a
         // close — is no longer the part a link was about.
-        didSet { if document !== oldValue { origin = nil } }
+        didSet {
+            guard document !== oldValue else { return }
+            origin = nil
+            // An agent's marks were about the bytes that were here.
+            if !agentMarks.isEmpty { setAgentMarks([]) }
+        }
     }
     /// Where this pane's bytes came from when they are a part of another open
     /// document (`DocumentOrigin`, `Design/UEFI/UPDATE_IN_PARENT.md` §2); nil
@@ -1321,6 +1326,33 @@ final class PaneViewModel: HexViewDataSource {
 
     /// Fired when the drawn zone map changes, so the view repaints.
     var onFullInvalidationOfZones: (() -> Void)?
+
+    /// What an agent has marked in this pane's document
+    /// (`Design/AGENT_PLAN.md`, "Marks"). Its own layer: a zone map is the
+    /// session's and goes with it, these stay until the agent or the person
+    /// removes them, or the document goes.
+    private(set) var agentMarks: [AgentMark] = []
+
+    func setAgentMarks(_ marks: [AgentMark]) {
+        guard marks != agentMarks else { return }
+        agentMarks = marks
+        // The same repaint a zone map asks for: both are drawn over the rows.
+        onFullInvalidationOfZones?()
+    }
+
+    func hexAgentMarkSpans(in range: Range<UInt64>) -> [HexZoneSpan] {
+        agentMarks.compactMap { mark in
+            guard mark.range.lowerBound < range.upperBound, range.lowerBound < mark.range.upperBound else { return nil }
+            return HexZoneSpan(range: mark.range, name: mark.label, isFocused: false)
+        }
+    }
+
+    /// What the agent said about the byte at `offset` — the innermost mark
+    /// holding it — or "" for none.
+    func hexAgentMarkTooltip(at offset: UInt64) -> String {
+        agentMarks.filter { $0.range.contains(offset) }
+            .min { $0.range.count < $1.range.count }?.tooltip ?? ""
+    }
 
     func hexZoneSpans(in range: Range<UInt64>) -> [HexZoneSpan] {
         guard !zones.zones.isEmpty else { return [] }

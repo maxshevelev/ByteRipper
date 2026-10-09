@@ -57,6 +57,10 @@ protocol HexViewDataSource: AnyObject {
     /// at most, since what a tool-module publishes is the slice it wants seen
     /// rather than its tree.
     func hexZoneSpans(in range: Range<UInt64>) -> [HexZoneSpan]
+    /// The ranges an agent marked that reach `range` (`AgentMark`).
+    func hexAgentMarkSpans(in range: Range<UInt64>) -> [HexZoneSpan]
+    /// What the agent said about the byte at `offset`, or "".
+    func hexAgentMarkTooltip(at offset: UInt64) -> String
     /// The matches of the active search that overlap `range`, for the dump's
     /// grey match highlight (§11). A list per range rather than a call per row,
     /// the same shape as `hexSegmentSpans`; a match starting before the range
@@ -752,12 +756,32 @@ final class HexView: NSView, NSViewToolTipOwner {
     /// tooltip bookkeeping per typed byte.
     private var bookmarkTooltipRect: CGRect?
 
+    /// One tooltip rect over the hex and text columns, answering with what an
+    /// agent said about the byte under the pointer — or nothing, over a byte
+    /// no mark holds. Registered the way the bookmark column's is, so marks
+    /// coming and going re-register nothing.
+    private(set) var agentMarkTooltipTag: NSView.ToolTipTag?
+    private var agentMarkTooltipRect: CGRect?
+
+    private func refreshAgentMarkTooltipRect() {
+        let layout = currentLayout
+        let left = layout.leftPadding + layout.offsetColumnWidth + layout.gapAfterOffset
+        let columns = CGRect(x: left, y: 0,
+                             width: layout.asciiX(column: 0) + layout.asciiColumnWidth - left,
+                             height: max(frame.height, bounds.height))
+        guard columns.width > 0, columns.height > 0, columns != agentMarkTooltipRect else { return }
+        if let agentMarkTooltipTag { removeToolTip(agentMarkTooltipTag) }
+        agentMarkTooltipTag = addToolTip(columns, owner: self, userData: nil)
+        agentMarkTooltipRect = columns
+    }
+
     /// Registers one tooltip rect over the whole Offset column rather than one
     /// per marked row: AppKit asks the owner for the string at the hovered
     /// point, so a single rect answers for every row and nothing has to be
     /// re-registered when a bookmark is added, renamed or removed — only when
     /// the column itself moves or the content grows.
     private func refreshBookmarkTooltipRect() {
+        refreshAgentMarkTooltipRect()
         let layout = currentLayout
         let column = CGRect(x: layout.leftPadding, y: 0,
                             width: layout.offsetColumnWidth + layout.gapAfterOffset,
@@ -782,6 +806,17 @@ final class HexView: NSView, NSViewToolTipOwner {
     func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag,
               point: NSPoint, userData data: UnsafeMutableRawPointer?) -> String {
         guard let dataSource else { return "" }
+        if tag == agentMarkTooltipTag {
+            let layout = currentLayout
+            guard let hit = layout.hitTest(point: point, rowCount: layout.rowCount(fileSize: dataSource.fileSize))
+            else { return "" }
+            let column: Int
+            switch hit.column {
+            case .hex(let index), .ascii(let index): column = index
+            case .offset: return ""
+            }
+            return dataSource.hexAgentMarkTooltip(at: layout.byteOffset(row: hit.row, column: column))
+        }
         let hoveredRow = Int(floor(point.y / currentLayout.rowHeight))
         guard hoveredRow >= 0 else { return "" }
         let offset = currentLayout.byteOffset(row: hoveredRow, column: 0)
@@ -944,6 +979,7 @@ final class HexView: NSView, NSViewToolTipOwner {
                 // and under the find indicator, which is a plate of its own that
                 // nothing should tint.
                 drawZoneFills(layout: layout, fileSize: fileSize, rows: rows)
+                drawAgentMarkFills(layout: layout, fileSize: fileSize, rows: rows)
                 if let currentMatch {
                     drawFindIndicator(match: currentMatch, layout: layout,
                                       drawsHex: drawsHex, drawsAscii: drawsAscii)
@@ -974,6 +1010,9 @@ final class HexView: NSView, NSViewToolTipOwner {
         // visible range rather than per row, the way the mirror contour is,
         // since a zone is one shape however many rows it covers.
         drawZoneContours(layout: layout, fileSize: fileSize, rows: rows)
+        // An agent's marks over the zones: what it is pointing at right now
+        // is the thing the reader is asked to look at.
+        drawAgentMarkContours(layout: layout, fileSize: fileSize, rows: rows)
 
         // Mirror the opposite pane: a selection is traced with one closed
         // contour on both panes, and a bare caret on the opposite pane is
@@ -2173,6 +2212,43 @@ final class HexView: NSView, NSViewToolTipOwner {
                            zone.isFocused))
         }
         return shapes
+    }
+
+    // MARK: - Agent marks
+
+    /// An agent's marks (`AgentMark`): the zone's own rounded outline, dashed
+    /// and in the agent's hue, so they are told from a tool's map at a glance
+    /// and never taken for a difference or a selection.
+    private func drawAgentMarkContours(layout: HexLayout, fileSize: UInt64, rows: Range<Int>) {
+        let dash: [CGFloat] = [4, 3]
+        for path in agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows) {
+            HexTheme.agentMark.withAlphaComponent(Self.zoneFocusedAlpha).setStroke()
+            path.lineWidth = Self.mirrorContourLineWidth
+            path.setLineDash(dash, count: dash.count, phase: 0)
+            path.stroke()
+        }
+    }
+
+    /// And a wash as light as a focused zone's, under the bytes.
+    private func drawAgentMarkFills(layout: HexLayout, fileSize: UInt64, rows: Range<Int>) {
+        for path in agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows) {
+            HexTheme.agentMark.withAlphaComponent(Self.zoneFillAlpha).setFill()
+            path.fill()
+        }
+    }
+
+    private func agentMarkShapes(layout: HexLayout, fileSize: UInt64, rows: Range<Int>) -> [NSBezierPath] {
+        guard let dataSource, !rows.isEmpty, fileSize > 0 else { return [] }
+        let lower = UInt64(rows.lowerBound) * UInt64(HexLayout.bytesPerRow)
+        let upper = UInt64(rows.upperBound) * UInt64(HexLayout.bytesPerRow)
+        return dataSource.hexAgentMarkSpans(in: lower..<upper).compactMap { mark in
+            let end = min(mark.range.upperBound, fileSize)
+            guard mark.range.lowerBound < end else { return nil }
+            let span = SelectionModel(start: mark.range.lowerBound, end: end, fileSize: fileSize)
+            let loops = contour(of: span, layout: layout, region: .hex)
+                + contour(of: span, layout: layout, region: .ascii)
+            return loops.isEmpty ? nil : roundedContourPath(loops: loops, radius: Self.mirrorContourRadius)
+        }
     }
 
     /// The strength every published zone's outline is drawn at. Focused and
@@ -3527,6 +3603,8 @@ enum HexTheme {
     /// drawn over whatever the dump's own layers painted — the same reasoning
     /// as `findIndicatorFill`'s fixed yellow.
     static let zoneFrameInactive = ZoneColors.other
+    /// An agent's mark (`AgentMark`).
+    static let agentMark = ZoneColors.agent
 
     /// The segment tints, cycled by label (§21.3) — the palette's own, so the
     /// dump's rows, the minimap's strip and the Segments form all tint S1 the

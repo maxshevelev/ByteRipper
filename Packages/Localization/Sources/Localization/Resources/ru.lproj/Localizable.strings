@@ -1316,3 +1316,11 @@
 "The program the agent runs in, whose configuration is shown below" = "Программа, в которой работает агент; её настройка показана ниже";
 "Configuration text" = "Текст настройки";
 "Copy the text above to the clipboard" = "Скопировать текст выше в буфер обмена";
+"Log" = "Журнал";
+"Marks" = "Метки";
+"Mark" = "Метка";
+"Label" = "Подпись";
+"Note" = "Пояснение";
+"About" = "Связана с";
+"Remove Mark" = "Удалить метку";
+"Clear Marks" = "Удалить все метки";

@@ -29,6 +29,11 @@ public extension SemanticColors.Sets {
 }
 
 public extension ZoneColors.Sets {
+    static let agent = PaletteColor(
+        name: "ZoneAgent",
+        light: (0.694, 0.318, 0.851, 1.000),
+        dark: (0.808, 0.541, 0.957, 1.000))
+
     static let focused = PaletteColor(
         name: "ZoneFocused",
         light: (0.349, 0.678, 0.769, 1.000),
@@ -40,7 +45,7 @@ public extension ZoneColors.Sets {
         dark: (0.855, 0.835, 0.329, 1.000))
 
     /// Every zone colour set in the catalogue, in its own order.
-    static let all = [focused, other]
+    static let all = [agent, focused, other]
 }
 
 public extension SegmentTints.Sets {

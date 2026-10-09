@@ -44,6 +44,15 @@ public struct AgentArguments: Equatable, Sendable {
         return word
     }
 
+    /// A list of strings; empty when the argument was not given.
+    public func strings(_ name: String) throws -> [String] {
+        guard let value = self[name] else { return [] }
+        guard let items = value.arrayValue, items.allSatisfy({ $0.stringValue != nil }) else {
+            throw wrong(name, "a list of strings")
+        }
+        return items.compactMap(\.stringValue)
+    }
+
     // MARK: Numbers
 
     public func integer(_ name: String) throws -> Int64 {
@@ -129,6 +138,10 @@ public enum AgentSchema {
 
     public static func choice(_ choices: [String], _ description: String) -> JSONValue {
         ["type": "string", "enum": .array(choices.map { .string($0) }), "description": .string(description)]
+    }
+
+    public static func strings(_ description: String) -> JSONValue {
+        ["type": "array", "items": ["type": "string"], "description": .string(description)]
     }
 
     public static func integer(_ description: String) -> JSONValue {

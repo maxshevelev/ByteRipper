@@ -356,6 +356,10 @@ Each ends in something that works and is committed.
    tree to the node and the dump scrolls to it. `Design/AGENT_PROTOCOL.md`
    starts here.)*
 4. **Marks.** The layer, its drawing, the window's list, relations as pairs.
+   *(Done: `mark`, `unmark`, `marks`; a dashed outline in `ZoneColors.agent`
+   with a wash under the bytes; the note under the pointer; the Agent window's
+   Marks page, a double-click going to the bytes. Not yet: marks on the
+   minimap's gutter, and pinning a mark as a bookmark.)*
 5. **Background documents.** `open_dump`, `close_dump`, `show`, `survey`,
    findings. Done on the AMD and Intel dumps in `~/Desktop/ME`: one survey
    question answered across all of them, its findings clickable.

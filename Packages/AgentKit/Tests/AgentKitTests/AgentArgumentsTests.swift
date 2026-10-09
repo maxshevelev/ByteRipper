@@ -52,6 +52,13 @@ final class AgentArgumentsTests: XCTestCase {
         XCTAssertEqual(try AgentArguments([:]).choice("format", from: ["hex", "ascii"], default: "hex"), "hex")
     }
 
+    func testAListOfStringsIsReadOrRefusedByName() throws {
+        XCTAssertEqual(try AgentArguments(["ids": ["m1", "m2"]]).strings("ids"), ["m1", "m2"])
+        XCTAssertEqual(try AgentArguments([:]).strings("ids"), [])
+        XCTAssertEqual(message { _ = try AgentArguments(["ids": [1]]).strings("ids") },
+                       "Argument `ids`: expected a list of strings.")
+    }
+
     func testABooleanDefaultsWhenAbsent() throws {
         XCTAssertTrue(try AgentArguments([:]).bool("select", default: true))
         XCTAssertFalse(try AgentArguments(["select": false]).bool("select", default: true))

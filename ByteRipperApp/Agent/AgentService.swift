@@ -31,13 +31,15 @@ final class AgentService {
     let socketPath: String
     private let defaults: UserDefaults
     private let hostTools: AgentHostTools
+    /// The agent's marks, which the Agent window lists and clears too.
+    let markTools: AgentMarkTools
     private let moduleTools: AgentModuleTools
     private let modules: [any ToolModule.Type]
     /// Built once: the tools do not change while the app runs.
     private(set) lazy var server = AgentServer(
         info: AgentServerInfo(name: "byteripper", version: Self.appVersion, title: "ByteRipper"),
         instructions: Self.instructions,
-        tools: (hostTools.tools() + moduleTools.tools(modules: modules)).map(Self.inEnglish))
+        tools: (hostTools.tools() + markTools.tools() + moduleTools.tools(modules: modules)).map(Self.inEnglish))
 
     /// `tool`, answering in English whatever the window speaks: a field label
     /// a module borrows from its panel is built with `L()`, and a model reads
@@ -67,7 +69,9 @@ final class AgentService {
         self.socketPath = socketPath
         self.modules = modules
         self.hostTools = AgentHostTools(desk: desk)
+        self.markTools = AgentMarkTools(desk: desk)
         self.moduleTools = AgentModuleTools(desk: desk, modules: { modules })
+        markTools.onChange = { [weak self] in self?.changed() }
     }
 
     // MARK: - The switch
@@ -177,7 +181,9 @@ final class AgentService {
         `focus` for what the person is looking at; when they say "this" or "here", `focus` is what they \
         mean. Addresses and sizes are hex strings such as "0x7F3000" in every answer and may be given \
         back the same way. Ranges are half-open: `end` is the first byte after the range. Use `reveal` \
-        to point at what you are talking about; the person's Back undoes it. Nothing here saves a file. \
+        to point at what you are talking about; the person's Back undoes it. `mark` labels bytes for the \
+        person while you explain them, and `related_to` says how two marks hang together. Nothing here \
+        saves a file. \
         The `uefi_` tools read a firmware image's structure and work whether or not its panel is open; \
         `uefi_select` and `uefi_selection` act on the open UEFI Structure panel, which `open_panel` opens.
         """

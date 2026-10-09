@@ -1316,3 +1316,11 @@
 "The program the agent runs in, whose configuration is shown below" = "Das Programm, in dem der Agent läuft; seine Konfiguration steht darunter";
 "Configuration text" = "Konfigurationstext";
 "Copy the text above to the clipboard" = "Den Text oben in die Zwischenablage kopieren";
+"Log" = "Protokoll";
+"Marks" = "Markierungen";
+"Mark" = "Markierung";
+"Label" = "Bezeichnung";
+"Note" = "Erläuterung";
+"About" = "Bezieht sich auf";
+"Remove Mark" = "Markierung entfernen";
+"Clear Marks" = "Alle Markierungen entfernen";
