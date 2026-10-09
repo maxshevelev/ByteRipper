@@ -33,7 +33,7 @@ final class SettingsWindowSizeTests: XCTestCase {
         // width or its own larger preference.
         let base = SettingsMetrics.width()
         let expectedWidth: [(String, CGFloat)] = [
-            ("Appearance", base), ("Layout", base), ("Comparison", base),
+            ("View", base), ("Comparison", base),
             ("Editing", base), ("TextDecoding", SettingsMetrics.width(preferring: 620)),
         ]
         for (id, width) in expectedWidth {

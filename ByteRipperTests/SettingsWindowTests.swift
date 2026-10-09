@@ -30,4 +30,47 @@ final class SettingsWindowTests: XCTestCase {
         XCTAssertTrue(window is SettingsWindow,
                       "the Settings window must be the subclass that closes on Escape")
     }
+
+    /// Appearance, Layout and Language share the View tab, and each section is
+    /// still a live view controller: its own observers run there, so a font
+    /// size changed from the View menu shows in the Appearance section while
+    /// the window is open.
+    func testTheViewTabCarriesTheSectionsLive() throws {
+        AppearanceSettings.resetToDefaults()
+        defer { AppearanceSettings.resetToDefaults() }
+        let settings = SettingsWindowController()
+        let window = try XCTUnwrap(settings.window)
+        settings.showWindow(nil)
+        defer { window.close() }
+        let content = try XCTUnwrap(window.contentViewController as? ViewSettingsViewController)
+        XCTAssertEqual(content.children.count, 3, "the View tab holds three sections")
+
+        var steppers: [NSStepper] = []
+        func walk(_ view: NSView) {
+            if let stepper = view as? NSStepper { steppers.append(stepper) }
+            view.subviews.forEach(walk)
+        }
+        walk(content.view)
+        let stepper = try XCTUnwrap(steppers.first)
+        AppearanceSettings.set(fontFamily: AppearanceSettings.fontFamily,
+                               rowHeightScale: AppearanceSettings.rowHeightScale,
+                               fontSize: AppearanceSettings.fontSize + 2)
+        XCTAssertEqual(CGFloat(stepper.integerValue), AppearanceSettings.fontSize,
+                       "the Appearance section must follow the setting")
+    }
+
+    /// The Language section's relaunch notice grows the View tab, and the
+    /// window grows with it rather than clipping the button.
+    func testTheRelaunchNoticeGrowsTheWindow() throws {
+        let settings = SettingsWindowController()
+        let window = try XCTUnwrap(settings.window)
+        settings.showWindow(nil)
+        defer { window.close() }
+        let before = window.frame.height
+
+        settings.language.showRelaunchNoticeForTesting()
+
+        XCTAssertGreaterThan(window.frame.height, before,
+                             "the window must grow to the notice")
+    }
 }

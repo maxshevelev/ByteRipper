@@ -21,13 +21,15 @@ enum LayoutSettings {
     }
 }
 
-/// The Layout tab of the Settings window (§6): the default layout direction and
-/// the default word size the app starts with. Every change persists immediately
-/// and applies live, matching the Appearance tab (§3.2).
+/// The Layout section of the Settings window's View tab (§6): the default
+/// layout direction and the default word size the app starts with. Every
+/// change persists immediately and applies live, matching the Appearance
+/// section above it (§3.2).
 final class LayoutSettingsViewController: NSViewController {
     private let layoutDirectionPopup = NSPopUpButton()
     private let wordSizePopup = NSPopUpButton()
 
+    // help: settings.layout
     override func loadView() {
         let root = NSView()
 
@@ -74,7 +76,7 @@ final class LayoutSettingsViewController: NSViewController {
             caption.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 14),
             caption.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
             // Pin the caption's trailing edge so the text wraps at the window's
-            // width; the window resizes to this view's fitting size per tab.
+            // width; the window resizes to the tab's fitting size.
             caption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
             caption.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -18),
             // Exact width: the window sizes to this view's fitting size, and a

@@ -48,8 +48,10 @@ final class SettingsToolbarFitTests: XCTestCase {
     /// A tab that wants more than the toolbar keeps what it wants.
     func testATabMayAskForMoreThanTheToolbarNeeds() {
         XCTAssertGreaterThanOrEqual(SettingsMetrics.width(preferring: 2000), 2000)
-        XCTAssertGreaterThanOrEqual(SettingsMetrics.width(preferring: 100),
-                                    SettingsMetrics.width())
+        XCTAssertGreaterThanOrEqual(
+            SettingsMetrics.width(preferring: 100),
+            SettingsMetrics.toolbarWidth(for: SettingsWindowController.toolbarLabels),
+            "a narrow tab still gets the toolbar's width")
     }
 }
 

@@ -135,7 +135,7 @@
 "All unsaved changes will be discarded." = "Alle ungesicherten Änderungen gehen verloren.";
 "Already a favourite, as “%1$@”." = "Bereits als Favorit vorhanden, unter „%1$@“.";
 "Analyzing the ME firmware…" = "ME-Firmware wird analysiert…";
-"Appearance" = "Darstellung";
+"Appearance" = "Erscheinungsbild";
 "Append" = "Anhängen";
 "Append File…" = "Datei anhängen…";
 "Append at End" = "Am Ende anhängen";
@@ -1004,6 +1004,7 @@
 "outside this image" = "außerhalb dieses Images";
 "pre-release" = "Vorabversion";
 "r.%1$@" = "r.%1$@";
+"settings|View" = "Darstellung";
 "the rest of the file" = "der Rest der Datei";
 "theme|Dark" = "Dunkel";
 "theme|Light" = "Hell";
