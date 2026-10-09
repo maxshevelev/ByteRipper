@@ -69,6 +69,8 @@ Right-click a node:
 
 A double click on a row does without the menu: it opens what the node holds as a fragment panel — for a compressed section its decompressed body, for any other node its body, and for a node with no body of its own, such as padding or free space, the node itself. On a [[term:lenv|LENV]] block or one of its entries it opens the block decoded, as **Open Decoded Block** does ([[topic:lenovo-dmi|Lenovo DMI]]). A double click on the disclosure triangle only folds or unfolds the row.
 
+A panel opened from the tree, by the menu or by a double click, opens with **UEFI Structure** on and the first level of its tree open, so the part reads as the node it was taken from.
+
 ## Comparing with an update file
 
 **Compare with PFAT Update File…** in the context menu of the [[term:bios-region|BIOS region]] row compares that region with a manufacturer's update file and, where the two differ, writes the manufacturer's bytes into the dump. The file has to be an AMI BIOS Guard update (AMI's own name for the format is PFAT): on ASUS notebooks, the file named after the model and the BIOS version, such as `X1704VAPF.306`.

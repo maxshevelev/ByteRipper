@@ -29,6 +29,10 @@ import ByteRipperCore
     /// again on every activation, and this outlives it exactly as the tree
     /// does.
     var openUEFIRows: Set<NodeID> = []
+    /// The UEFI panel is to open the tree's top level the first time it shows
+    /// it: the pane holds a part opened out of another file's UEFI tree
+    /// (`MainViewController.openPart`). Taken once.
+    var opensTopLevelUEFIRows = false
     /// The table the FIT panel last read. Any edit drops it: a table is 128
     /// bytes and the pointers behind it, and which edit could move one is
     /// not worth working out against how cheap the read is.

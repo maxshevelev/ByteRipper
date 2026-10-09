@@ -528,7 +528,14 @@ private struct ChecksumPass: Sendable {
             // What the reader had open on this file, put back before anything
             // is announced — coming back to a panel and finding the tree shut
             // is coming back to a panel that forgot.
-            self.controller.restoreOpenRows(self.treeProvider?.openUEFIRows() ?? [])
+            let remembered = self.treeProvider?.openUEFIRows() ?? []
+            if remembered.isEmpty, self.treeProvider?.takeOpensTopLevelUEFIRows() == true {
+                // A part opened out of another tree: its first level is what
+                // the reader opened it to see.
+                self.controller.openTopLevelRows()
+            } else {
+                self.controller.restoreOpenRows(remembered)
+            }
             // A parked ME focus is the sub-tree's half of the selection: run
             // the analysis (reusing the pane's cache) and open the region onto
             // it, so the row the reader was looking at is back on screen.
@@ -1659,8 +1666,8 @@ private struct ChecksumPass: Sendable {
             fail(L("There is no LENV block to decode here."))
             return
         }
-        host.openPart(named: L("%1$@ (decoded)", found.name), linkedTo: found.block.range,
-                      codec: LenovoDMIBlockCodec(block: found.block))
+        openPart(named: L("%1$@ (decoded)", found.name), linkedTo: found.block.range,
+                 layout: .image, codec: LenovoDMIBlockCodec(block: found.block))
     }
 
     /// What a double click on a node's row does: opens what the node holds as a

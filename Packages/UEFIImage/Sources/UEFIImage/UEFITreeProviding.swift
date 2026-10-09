@@ -23,4 +23,15 @@ public protocol UEFITreeProviding: AnyObject {
     /// are still read, so putting them back costs nothing.
     func openUEFIRows() -> Set<NodeID>
     func setOpenUEFIRows(_ rows: Set<NodeID>)
+
+    /// Whether the panel should open its top level the first time it shows
+    /// the tree — for a part opened out of another file's UEFI tree, whose
+    /// first level is what the reader opened it to see. Asked once: true only
+    /// the first time, so the rows the reader shuts again stay shut.
+    func takeOpensTopLevelUEFIRows() -> Bool
+}
+
+public extension UEFITreeProviding {
+    /// A provider that keeps no such wish opens nothing by itself.
+    func takeOpensTopLevelUEFIRows() -> Bool { false }
 }

@@ -159,11 +159,14 @@ import MEFirmware
 }
 
 extension PaneToolHost: UEFIPartOpening {
-    /// The same, told what a UEFI panel opened on the part reads it as.
+    /// The same, told what a UEFI panel opened on the part reads it as — and
+    /// opened with the tool that asked, its tree's first level open: a node
+    /// taken out of the tree is opened to be read as one.
     func openPart(named name: String, linkedTo source: Range<UInt64>,
                   layout: UEFIRootLayout, codec: any PartCodec) {
         guard let pane, let owner else { return }
-        owner.openPart(named: name, from: pane, source: source, layout: layout, codec: codec)
+        owner.openPart(named: name, from: pane, source: source, layout: layout, codec: codec,
+                       tool: tools?.activeIdentifier)
     }
 }
 
@@ -187,6 +190,12 @@ extension PaneToolHost: UEFITreeProviding {
 
     func setOpenUEFIRows(_ rows: Set<NodeID>) {
         pane?.uefiState.openUEFIRows = rows
+    }
+
+    func takeOpensTopLevelUEFIRows() -> Bool {
+        guard let state = pane?.uefiState, state.opensTopLevelUEFIRows else { return false }
+        state.opensTopLevelUEFIRows = false
+        return true
     }
 }
 

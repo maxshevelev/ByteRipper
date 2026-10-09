@@ -8,6 +8,7 @@ import UEFITool
 @testable import UEFIToolUI
 import LenovoDMI
 import MEFirmware
+import PartCodec
 @testable import ByteRipper
 
 /// The UEFI Structure tool-module end to end in the app: a real FFSv2 volume in
@@ -1941,6 +1942,29 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(part.fileSize, UInt64(node.body.count), "the body, not the node")
         XCTAssertEqual(try XCTUnwrap(part.origin).sourceRange, node.body)
         controller.fragments.close(id, animated: false)
+    }
+
+    /// A node taken out of the tree opens with the UEFI Structure tool on in
+    /// its panel and the tree's first level open; a part opened any other way
+    /// opens with no tool.
+    func testANodeOpenedAsAPanelOpensWithItsTreeShown() throws {
+        let controller = try open(UEFITestImage.make())
+        let volume = try node(atRow: 0)
+        try session().openNodeInPanel(for: volume.id, body: false)
+        let id = try XCTUnwrap(controller.fragments.expanded, "the panel is raised")
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        XCTAssertTrue(surface.tools.session is UEFIToolSession, "the UEFI tool is on in the panel")
+        let tree = try XCTUnwrap(descendants(of: surface.tools.panel, NSOutlineView.self).first)
+        XCTAssertTrue(pumpUntil(5) {
+            tree.numberOfRows > 1 && tree.isItemExpanded(tree.item(atRow: 0))
+        }, "the volume's row is open: \(tree.numberOfRows) rows")
+        controller.fragments.close(id, animated: false)
+
+        let pane = controller.windowModel.pane1
+        controller.openPart(named: "copy", from: pane, source: 0..<0x100, codec: CopyPartCodec())
+        let other = try XCTUnwrap(controller.fragments.expanded)
+        XCTAssertNil(controller.fragments.surface(other)?.tools.session, "a part opened otherwise has no tool")
+        controller.fragments.close(other, animated: false)
     }
 
     /// The triangle folds and unfolds on every click, however quick: two of

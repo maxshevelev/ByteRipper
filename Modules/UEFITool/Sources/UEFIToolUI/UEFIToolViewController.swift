@@ -1017,6 +1017,12 @@ import UEFITool
     /// it is, and a branch that has been dropped since is read again on the
     /// way. Each waits for the one before it, so every row exists by the time
     /// its own turn comes.
+    /// Opens every row of the top level, one level deep — what a part taken
+    /// out of another file's tree is opened to show.
+    func openTopLevelRows() {
+        restoreOpenRows(Set(UEFITreeDisplay.listed(presented.rows, showsEmptyPadding: showsEmptyPadding).map(\.id)))
+    }
+
     func restoreOpenRows(_ rows: Set<NodeID>) {
         openInTurn(rows.sorted { $0.path.count < $1.path.count }, from: 0)
     }

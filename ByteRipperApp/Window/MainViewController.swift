@@ -1931,12 +1931,17 @@ final class MainViewController: NSViewController {
     /// decompresses opens it when the bytes are ready. The window's bookmarks
     /// reach the panel only when the codec keeps the source's offsets.
     ///
+    /// `tool`, when given, is switched on in the panel — the UEFI Structure
+    /// tool for a node taken out of its tree, with the tree's first level
+    /// open.
+    ///
     /// Returns the task decoding off the main actor, for whoever has to wait
     /// on it; nil when the panel opened on the spot or could not open.
     @discardableResult
     func openPart(
         named name: String, from pane: PaneViewModel, source: Range<UInt64>,
-        partName: String? = nil, layout: UEFIRootLayout = .image, codec: any PartCodec
+        partName: String? = nil, layout: UEFIRootLayout = .image, codec: any PartCodec,
+        tool: String? = nil
     ) -> Task<Void, Never>? {
         guard let document = pane.document,
               let content = try? DocumentPartReader(document: document)
@@ -1945,7 +1950,7 @@ final class MainViewController: NSViewController {
                                 partName: partName ?? name)
         let open: @MainActor ([UInt8]) -> Void = { [weak self, weak pane] bytes in
             guard let self, let pane else { return }
-            self.openFragment(
+            let id = self.openFragment(
                 bytes,
                 named: name,
                 origin: DocumentOrigin(
@@ -1954,6 +1959,10 @@ final class MainViewController: NSViewController {
                     layout: layout, codec: codec, content: bytes
                 )
             )
+            if let tool, let id, let part = self.fragments.pane(id) {
+                part.uefiState.opensTopLevelUEFIRows = true
+                self.fragments.surface(id)?.tools.activate(tool, animated: false)
+            }
         }
         let fail: @MainActor (Error) -> Void = { [weak self] error in
             let refusal = error as? PartRefusal
