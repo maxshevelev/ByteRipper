@@ -228,8 +228,10 @@ final class AgentService {
         documents differ byte by byte and in which part of the firmware; `compare` shows the two side by \
         side and `reveal_diff` walks the person through the differences. `mark` labels bytes for the \
         person while you explain them, and `related_to` says how two marks hang together. Nothing here \
-        saves a file; `write` and the `_fix_checksum` tools change an open file, one undo step each, \
-        and only if the person allows edits. \
+        saves a file; `write`, the `_fix_checksum` tools and the microcode tools — `microcode_catalogue` \
+        lists what github.com/platomav/CPUMicrocodes offers, `fit_add_microcode`, `fit_replace_microcode` and \
+        `fit_remove_microcode` change the FIT — change an open file, one undo step each, and only if the \
+        person allows edits. \
         The `uefi_` tools read a firmware image's structure and work whether or not its panel is open; \
         `uefi_select` and `uefi_selection` act on the open UEFI Structure panel, which `open_panel` opens.
         """

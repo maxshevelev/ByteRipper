@@ -29,11 +29,11 @@ public enum FITToolModule: ToolModule {
 
     /// The table, its rows and its problems — answered with the panel open
     /// or not (`FITAgentQueries`, `Design/AGENT_PLAN.md`).
-    public static var agentQueries: [ToolAgentQuery] { FITAgentQueries.all }
+    public static var agentQueries: [ToolAgentQuery] { FITAgentQueries.all + FITAgentCatalogueTools.queries }
 
     /// The table's checksum put right, applied by the app if the person
     /// allows.
-    public static var agentEdits: [ToolAgentEdit] { [FITAgentQueries.fixChecksum] }
+    public static var agentEdits: [ToolAgentEdit] { [FITAgentQueries.fixChecksum] + FITAgentCatalogueTools.edits }
 }
 
 /// What the window's navigation history keeps of the panel.

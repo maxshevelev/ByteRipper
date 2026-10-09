@@ -145,6 +145,7 @@ adds `document` and `against` and hands the module a read host for each.
 | Tool | Arguments | Answer |
 |---|---|---|
 | `fit_table` | `entry` (the row's place, 0 the header) | `summary`, `table` (`start`, `end`, `pointer_at`, `pointer`, `checksum`, `checksum_should_be`, `checksum_checked`) or `tables_found_elsewhere`, `rows[]` (`index`, `type`, `address`, `size`, `version`, `row_start`, `points_at`, `target_start`/`target_end`, `cpuids`, `problem`), `backup` (`heading`, `rows`), `problems[]` (`message`, `severity`, `entry`, `offset`, `in_backup`), `address_mapping` when assumed; `entry` (`title`, `fields[]`). |
+| `microcode_catalogue` | `cpuid` (first digits); `in_image`; `production_only`; `latest_only`; `limit` (50, ≤ 300); `after` | `files[]` (`path`, `cpuid`, `platforms`, `revision`, `date`, `production`, `size`; with `in_image` also `serves_rows`, `newer_than_installed`), `total`; with `in_image`, `installed[]` (`entry`, `cpuids[]` — `cpuid`, `platforms` — `revision`, `date`, `catalogue`: `latest`, `outdated`, `undecided`, `not_rated`, and `newest_revision`). Intel files of github.com/platomav/CPUMicrocodes, read from their names. Paged (`next`, `after`). |
 
 Read as the panel reads: the table, then again with the branches its rows point
 into opened so `points_at` names them. The microcode catalogue's verdict —
@@ -188,9 +189,15 @@ saves.
 | `write` | `offset`, `bytes` (hex, ≤ 64 KiB), `label` (required, the person's language); `expect` (hex: the bytes that must be there now) | `written[]` (`start`, `end`, `before` — up to 64 bytes, `before_cut`), `undo`, `saved: false`. Overwrites only: past the end is refused. |
 | `uefi_fix_checksum` | `node` | as `write`. A volume's, a file's, a microcode's checksums, by the panel's own repair code. Refused inside a compressed section and when already correct. |
 | `fit_fix_checksum` | — | as `write`. The header's checksum, and the Top Swap backup's copy when it is the same table. Refused when unchecked or correct. |
+| `fit_add_microcode` | `path` (from `microcode_catalogue`) | as `write`, and `change` (`added`, or `replaced` with what it `replaced`: `cpuid`, `revision`, `date`), `entry`, `component`, `moved`, `protected_ranges`, `top_swap_backup`. The panel's Add Microcode: a row whose update serves the same processor — extended signature tables counted — is updated in place. Refused when the same update is already in the table, and for the panel's other reasons. |
+| `fit_replace_microcode` | `entry`, `path` | as `fit_add_microcode`. Refused too when the new update serves a processor, on a shared platform, that another row's already serves. |
+| `fit_remove_microcode` | `entry` | as `write`, and `change: "removed"`, `entry`, `moved`, `erased`, `protected_ranges`, `top_swap_backup`. Refused for the last microcode. |
 
 A module edit is a fourth kind of module tool, `ToolAgentEdit`: the module
-returns a `ToolTransaction` and an undo name, and the app applies it. Should
+returns a `ToolTransaction`, an undo name and what it has to say about the
+change (`ToolAgentEdit.Change`), and the app applies it. The microcode edits
+are the FIT panel's own (`FITEditor`), so every check the panel makes is made
+for an agent too; the file comes from the panel's catalogue source. Should
 the document change while the module works the edit out, nothing is written
 and the agent is told to ask again.
 

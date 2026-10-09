@@ -1307,6 +1307,8 @@
 "Too long, not sent" = "Слишком длинный, не отправлен";
 "Select a request to see all of it." = "Выберите запрос, чтобы увидеть его целиком.";
 "Client" = "Клиент";
+"Follow New Requests" = "Следить за новыми запросами";
+"Scroll the log to each new request as it arrives" = "Прокручивать журнал к каждому новому запросу";
 "Show the Agent window" = "Показать окно агента";
 "Cancelled" = "Отменено";
 "ByteRipper agent service" = "Служба агента ByteRipper";

@@ -62,6 +62,9 @@ public struct AgentCallRecord: Equatable, Sendable {
         case cancelled
     }
 
+    /// Which call this is, so a list that drops its oldest rows can still
+    /// find the one a reader selected.
+    public let id = UUID()
     /// The client's own name for itself, when it gave one.
     public let client: String?
     public let tool: String

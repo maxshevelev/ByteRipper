@@ -88,13 +88,31 @@ public struct ToolAgentEdit: Sendable {
     /// What the Edit menu calls the step — `Undo <name>` — in the app's own
     /// language. Asked for outside the English the agent is answered in.
     public let undoName: @MainActor @Sendable () -> String
-    public let run: @MainActor @Sendable (any ToolReadHost, AgentArguments) async throws -> ToolTransaction
+    public let run: @MainActor @Sendable (any ToolReadHost, AgentArguments) async throws -> Change
+
+    /// What an edit comes to: the writes, and what the module has to say
+    /// about them beyond the bytes — where a component went, what it
+    /// replaced, what moved.
+    public struct Change: Sendable {
+        public var transaction: ToolTransaction
+        /// Put after the undo step's name, language-neutral: a CPUID, a
+        /// revision. Empty for none.
+        public var undoDetail: String
+        /// Members added to the answer, beside `written` and `undo`.
+        public var report: [String: JSONValue]
+
+        public init(_ transaction: ToolTransaction, undoDetail: String = "", report: [String: JSONValue] = [:]) {
+            self.transaction = transaction
+            self.undoDetail = undoDetail
+            self.report = report
+        }
+    }
 
     public init(
         name: String, title: String, description: String,
         properties: [String: JSONValue] = [:], required: [String] = [],
         undoName: @escaping @MainActor @Sendable () -> String,
-        run: @escaping @MainActor @Sendable (any ToolReadHost, AgentArguments) async throws -> ToolTransaction
+        change: @escaping @MainActor @Sendable (any ToolReadHost, AgentArguments) async throws -> Change
     ) {
         self.name = name
         self.title = title
@@ -102,7 +120,20 @@ public struct ToolAgentEdit: Sendable {
         self.properties = properties
         self.required = required
         self.undoName = undoName
-        self.run = run
+        self.run = change
+    }
+
+    /// An edit that is its writes and nothing more to say.
+    public init(
+        name: String, title: String, description: String,
+        properties: [String: JSONValue] = [:], required: [String] = [],
+        undoName: @escaping @MainActor @Sendable () -> String,
+        run: @escaping @MainActor @Sendable (any ToolReadHost, AgentArguments) async throws -> ToolTransaction
+    ) {
+        self.init(name: name, title: title, description: description, properties: properties,
+                  required: required, undoName: undoName) { host, arguments in
+            Change(try await run(host, arguments))
+        }
     }
 }
 

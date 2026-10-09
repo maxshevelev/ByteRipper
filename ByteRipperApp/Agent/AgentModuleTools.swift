@@ -122,12 +122,19 @@ final class AgentModuleTools {
         try edits.checkEditable(place)
         let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
         let version = host.contentVersion
-        let transaction = try await edit.run(host, arguments)
+        let change = try await edit.run(host, arguments)
         guard host.contentVersion == version else {
             throw AgentToolError("\(place.id) changed while the edit was being worked out; nothing was written. Ask again.")
         }
-        let undoName = AgentEditTools.inAppLanguage { L("Agent: %1$@", edit.undoName()) }
-        return .json(try edits.apply(ToolTransaction(name: undoName, writes: transaction.writes), to: place))
+        let undoName = AgentEditTools.inAppLanguage {
+            L("Agent: %1$@", change.undoDetail.isEmpty ? edit.undoName() : edit.undoName() + " " + change.undoDetail)
+        }
+        var answer = try edits.apply(ToolTransaction(name: undoName, writes: change.transaction.writes), to: place)
+        if case .object(var members) = answer, !change.report.isEmpty {
+            members.merge(change.report) { own, _ in own }
+            answer = .object(members)
+        }
+        return .json(answer)
     }
 
     // MARK: - Actions

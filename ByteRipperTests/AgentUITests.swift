@@ -174,6 +174,44 @@ final class AgentUITests: XCTestCase {
         controller.close()
     }
 
+    /// A new request leaves the selected row selected and the log where the
+    /// reader left it; with Follow New Requests on, the log goes to it.
+    func testTheLogKeepsItsSelectionAndFollowsOnlyWhenAsked() async {
+        let saved = AgentWindowController.follows
+        defer { AgentWindowController.follows = saved }
+        let controller = AgentWindowController(service: service)
+        controller.window?.setContentSize(NSSize(width: 760, height: 420))
+        controller.showWindow(nil)
+        defer { controller.close() }
+        let connection = service.connect(send: { _ in })
+        func call(_ id: Int) async {
+            await connection.receive(Data((#"{"jsonrpc":"2.0","id":\#(id),"method":"tools/call","params":{"name":"read","arguments":{"offset":"0x10"}}}"#
+                + "\n").utf8))
+            await connection.waitUntilIdle()
+        }
+        for id in 0..<40 { await call(id) }
+        _ = await awaitUntil(2) { self.service.log.count == 40 }
+        controller.setFollowsForTesting(false)
+        controller.refresh()
+        controller.window?.layoutIfNeeded()
+        controller.selectLogRow(3)
+        controller.logScrollToTopForTesting()
+        let before = controller.logVisibleRows
+
+        await call(40)
+        _ = await awaitUntil(2) { self.service.log.count == 41 }
+        controller.refresh()
+        XCTAssertEqual(controller.logSelection, [3], "the same call stays selected")
+        XCTAssertEqual(controller.logVisibleRows, before, "and the log stays where it was")
+
+        controller.setFollowsForTesting(true)
+        await call(41)
+        _ = await awaitUntil(2) { self.service.log.count == 42 }
+        controller.refresh()
+        XCTAssertTrue(controller.logVisibleRows.contains(41), "following: the newest is on screen")
+        XCTAssertEqual(controller.logSelection, [3], "and the selection is still the reader's")
+    }
+
     func testTheWindowMenuLeadsToTheAgentWindow() throws {
         // Held here: a menu item holds its target weakly.
         let target = NSObject()

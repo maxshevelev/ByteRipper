@@ -6,6 +6,7 @@
 @covers window.agent
 @covers window.agent.details
 @covers toolbar.agent
+@covers window.agent.follow
 @covers menu.window.agent
 @covers menubar.agent
 @covers settings.agent.edits
@@ -65,7 +66,8 @@ An agent cannot save a file, and changes one only when that is allowed (below). 
 While it is on, an agent can:
 
 - overwrite bytes in a file open in a tab. A write replaces as many bytes as it carries and never inserts or deletes; it can be made conditional on the bytes that are there now;
-- put a checksum right — a volume's, a file's or a microcode's in **UEFI Structure**, the table's in **FIT Table** — computed by the same code as the panels' **Fix Checksum**.
+- put a checksum right — a volume's, a file's or a microcode's in **UEFI Structure**, the table's in **FIT Table** — computed by the same code as the panels' **Fix Checksum**;
+- add, update, replace and remove microcode in the FIT from the same online catalogue **FIT Table** offers, with the same checks: an update already in the table under another of its CPUIDs is refused, an update whose extended signature table serves a processor a row already serves takes that row's place, and a replacement that would leave two microcodes for one processor is refused naming the row to replace. The agent can also say which of the image's microcodes the catalogue has a newer revision for.
 
 Each change is one step of the file's undo, named **Agent:** and what the agent said the change is, so **Edit ▸ Undo** (**⌘Z**) takes it back. The changed bytes are red until the file is saved, like an edit made by hand, and the dump scrolls to them as a step of the navigation history. The file is saved only by the person. A file opened read-only, and a file the agent opened by its path without a tab, are never changed.
 
@@ -73,7 +75,7 @@ Each change is one step of the file's undo, named **Agent:** and what the agent 
 
 **Window ▸ Agent** shows whether the service is running, and has three lists. While the service is switched on, the toolbar has a button for it between **?** and the pane arrangement, with the icon of the Agent tab in Settings; it opens the window, or brings it to the front when it is open already.
 
-**Log** lists every request the agent has made: the time, the tool, the arguments as the agent wrote them, how long the answer took, its size and the result. A refused request is shown in red, with the reason the agent was given. The table shortens long arguments; the list under it shows the selected request whole: the time, the client, how long the answer took, its size in bytes, the full result and, under **Arguments**, the whole JSON the agent sent, one member to a line. Its text can be selected and copied. **Space** on the log, or the button in the list's corner, opens the list large over the window, as a tool panel's details open; **Space** or **Esc** closes it. **Clear Log** empties the list; the list is not kept after the program quits.
+**Log** lists every request the agent has made: the time, the tool, the arguments as the agent wrote them, how long the answer took, its size and the result. A refused request is shown in red, with the reason the agent was given. The table shortens long arguments; the list under it shows the selected request whole: the time, the client, how long the answer took, its size in bytes, the full result and, under **Arguments**, the whole JSON the agent sent, one member to a line. Its text can be selected and copied. **Space** on the log, or the button in the list's corner, opens the list large over the window, as a tool panel's details open; **Space** or **Esc** closes it. **Follow New Requests** below the log scrolls it to each new request as it arrives; while it is off, the log stays where it was left. The selected request stays selected as new ones arrive. **Clear Log** empties the list; the list is not kept after the program quits.
 
 **Marks** lists the marks the agent has left in every open file: the label, the file, the bytes, the note, and the marks it is about. A double-click on a row brings its file forward and selects its bytes, as a step of the navigation history. **Remove Mark** removes the selected rows, **Clear Marks** removes them all. A mark also goes when its file is closed or when the agent removes it.
 

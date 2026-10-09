@@ -43,6 +43,10 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     private let clearButton = NSButton(title: "", target: nil, action: nil)
     private let removeButton = NSButton(title: "", target: nil, action: nil)
     private let settingsButton = NSButton(title: "", target: nil, action: nil)
+    /// Whether the log scrolls to each new request as it comes in.
+    private let followButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    /// Where the choice is kept, so the window opens the way it was left.
+    static let followKey = "AgentLogFollowsNewRequests"
     private var observer: NSObjectProtocol?
     private var zoomObserver: NSObjectProtocol?
     /// The size the tables were last drawn at, so a zoom scales their
@@ -202,6 +206,14 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         removeButton.action = #selector(removeMarks)
         removeButton.isHidden = true
 
+        // help: window.agent.follow
+        followButton.title = L("Follow New Requests")
+        ControlHelp.describe(followButton, name: L("Follow New Requests"),
+                             tooltip: L("Scroll the log to each new request as it arrives"))
+        followButton.state = Self.follows ? .on : .off
+        followButton.target = self
+        followButton.action = #selector(followChanged)
+
         settingsButton.title = L("Agent Settings…")
         settingsButton.bezelStyle = .rounded
         settingsButton.target = self
@@ -210,7 +222,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         let help = HelpButton.standard(for: .topic(.agent))
 
         for view in [statusLabel, pages, logSplit, marksScroll, findingsScroll, clearButton, removeButton,
-                     settingsButton, help] {
+                     followButton, settingsButton, help] {
             view.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(view)
         }
@@ -242,6 +254,9 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             removeButton.centerYAnchor.constraint(equalTo: clearButton.centerYAnchor),
             removeButton.leadingAnchor.constraint(equalTo: clearButton.trailingAnchor, constant: 8),
 
+            followButton.centerYAnchor.constraint(equalTo: clearButton.centerYAnchor),
+            followButton.leadingAnchor.constraint(equalTo: clearButton.trailingAnchor, constant: 12),
+
             clearButton.topAnchor.constraint(equalTo: logSplit.bottomAnchor, constant: 12),
             clearButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             clearButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -14),
@@ -252,15 +267,28 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     }
 
     /// Reads the service's state and log into the window. New calls are
-    /// added at the bottom, and the table follows them while it is scrolled
-    /// to the end.
+    /// added at the bottom. The selection stays with the calls it was on —
+    /// found by identity, since the log drops its oldest rows — and the view
+    /// stays where the reader left it, unless Follow New Requests is on and a
+    /// call came in: then it goes to the newest.
     func refresh() {
         statusLabel.stringValue = AgentSettingsViewController.statusText(of: service)
         let log = service?.log ?? []
-        let followed = rows.isEmpty || table.rows(in: table.visibleRect).upperBound >= rows.count
+        let selected = Set(table.selectedRowIndexes.compactMap { $0 < rows.count ? rows[$0].id : nil })
+        let arrived = log.last?.id != rows.last?.id && !log.isEmpty
+        let origin = logScroll.contentView.bounds.origin
         rows = log
         table.reloadData()
-        if followed, !rows.isEmpty { table.scrollRowToVisible(rows.count - 1) }
+        let reselected = IndexSet(rows.indices.filter { selected.contains(rows[$0].id) })
+        if reselected != table.selectedRowIndexes {
+            table.selectRowIndexes(reselected, byExtendingSelection: false)
+        }
+        if arrived, Self.follows {
+            table.scrollRowToVisible(rows.count - 1)
+        } else {
+            logScroll.contentView.scroll(to: origin)
+            logScroll.reflectScrolledClipView(logScroll.contentView)
+        }
         showDetails()
         marks.show(service?.markTools.all() ?? [])
         findings.show(service?.dumpTools.findings ?? [])
@@ -277,16 +305,19 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             clearButton.title = L("Clear Log")
             clearButton.isEnabled = !rows.isEmpty
             removeButton.isHidden = true
+            followButton.isHidden = false
         case .marks:
             clearButton.title = L("Clear Marks")
             clearButton.isEnabled = !marks.isEmpty
             removeButton.title = L("Remove Mark")
             removeButton.isHidden = false
             removeButton.isEnabled = !marks.selectedIDs.isEmpty
+            followButton.isHidden = true
         case .findings:
             clearButton.title = L("Clear Findings")
             clearButton.isEnabled = !findings.isEmpty
             removeButton.isHidden = true
+            followButton.isHidden = true
         }
     }
 
@@ -445,6 +476,35 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
     @objc private func openSettings() {
         showSettings()
+    }
+
+    /// Whether the log follows new requests: on until the person turns it off.
+    static var follows: Bool {
+        get { AppDefaults.store.object(forKey: followKey) as? Bool ?? true }
+        set { AppDefaults.store.set(newValue, forKey: followKey) }
+    }
+
+    @objc private func followChanged() {
+        Self.follows = followButton.state == .on
+        if Self.follows, !rows.isEmpty { table.scrollRowToVisible(rows.count - 1) }
+    }
+
+    /// Turns Follow New Requests on or off, as a click does, for tests.
+    func setFollowsForTesting(_ on: Bool) {
+        followButton.state = on ? .on : .off
+        followChanged()
+    }
+
+    /// Scrolls the log to its first row, for tests.
+    func logScrollToTopForTesting() {
+        table.scrollRowToVisible(0)
+    }
+
+    /// The log's selected rows and the rows on screen, for tests.
+    var logSelection: IndexSet { table.selectedRowIndexes }
+    var logVisibleRows: Range<Int> {
+        let visible = table.rows(in: table.visibleRect)
+        return visible.location..<(visible.location + visible.length)
     }
 
     /// Selects a row of the log, as a click does, for tests.
