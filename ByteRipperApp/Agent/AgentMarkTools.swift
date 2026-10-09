@@ -181,9 +181,16 @@ final class AgentMarkTools {
         AgentTool(
             name: "marks",
             title: "List marks",
-            description: "The marks in `document`, or in every open document: id, document, range, label, note, related marks.",
+            description: """
+                The marks in `document`, or in every open document: id, document, range, label, note, related \
+                marks. Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound \
+                and then says `truncated: "size"`; pass `next` back as `after` until it is null. A page asked \
+                for after the marks changed is refused.
+                """,
             inputSchema: AgentSchema.object([
-                "document": AgentSchema.string("Only this document's marks. Default: every document's.")
+                "document": AgentSchema.string("Only this document's marks. Default: every document's."),
+                "limit": AgentSchema.limit(default: 50, maximum: 200),
+                "after": AgentSchema.after
             ])
         ) { call in
             try await self.list(call.arguments)
@@ -194,7 +201,13 @@ final class AgentMarkTools {
         let document = try arguments.optionalString("document")
         let pane = try document.map { try resolve(AgentArguments(["document": .string($0)])).pane }
         let marks = all().filter { pane == nil || $0.place.pane === pane }
-        return .json(["marks": .array(marks.map(Self.describe))])
+        let limit = try arguments.limit(default: 50, maximum: 200)
+        let described = marks.map(Self.describe)
+        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([described.map(\.jsonText)]),
+                                   changed: "The marks changed since that page; ask again without `after`.")
+        return .json(try paging.answer(["total": .count(marks.count)], key: "marks",
+                                       items: Array(described.dropFirst(paging.first).prefix(limit)),
+                                       total: marks.count, bound: arguments.answerBound))
     }
 
     // MARK: - Shapes

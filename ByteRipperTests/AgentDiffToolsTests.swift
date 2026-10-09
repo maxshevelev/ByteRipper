@@ -192,6 +192,38 @@ final class AgentDiffToolsTests: XCTestCase {
                        "A document changed since that page, or the range or `merge_gap` did; ask again without `after`.")
     }
 
+    /// More runs than one answer holds: `limit` is a ceiling, the page stops
+    /// short of the bound and says so, and the pages one after another are
+    /// every run once — whatever `limit` asked for.
+    func testAPageStopsAtTheSizeBoundAndGoesOn() async throws {
+        var bytes = [UInt8](repeating: 0, count: 0x2000)
+        try open(bytes)
+        for index in stride(from: 0, to: 0x2000, by: 2) { bytes[index] = 1 }
+        let other = try await background(bytes)
+
+        var seen: [String] = []
+        var after: JSONValue?
+        var pages = 0
+        repeat {
+            var arguments: [String: JSONValue] = ["against": .string(other), "merge_gap": 0, "limit": 1000]
+            if let after { arguments["after"] = after }
+            let call = try await client.call("diff", .object(arguments))
+            XCTAssertFalse(call.isError, "\(call.answer)")
+            let page = call.answer
+            XCTAssertLessThanOrEqual(page.encoded().count, 24 << 10)
+            XCTAssertEqual(page["totals"]?["runs"], 0x1000)
+            let got = runs(page)
+            XCTAssertLessThan(got.count, 1000)
+            seen += got
+            after = page["next"] == .null ? nil : page["next"]
+            XCTAssertEqual(page["truncated"], after == nil ? nil : "size")
+            pages += 1
+        } while after != nil
+        XCTAssertEqual(seen.count, 0x1000)
+        XCTAssertEqual(Set(seen).count, 0x1000, "no run twice")
+        XCTAssertGreaterThan(pages, 4)
+    }
+
     // MARK: - Where
 
     /// A changed variable is placed at its entry, inside the volume that is

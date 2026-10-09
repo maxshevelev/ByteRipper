@@ -166,6 +166,33 @@ final class AgentDumpToolsTests: XCTestCase {
         XCTAssertEqual(byValue["2"]?["files"], ["one.rom", "two.bin"])
     }
 
+    /// A survey's groups in pages: the second page is cut from the same run,
+    /// and a cursor of another survey is refused.
+    func testASurveysGroupsArePaged() async throws {
+        try openWindow()
+        try write(UEFITestImage.make(), "one.rom")
+        try write([UInt8](repeating: 0xFF, count: 0x1000), "blank.bin")
+        let question: [String: JSONValue] = [
+            "folder": .string(folder.path), "tool": "uefi_find",
+            "arguments": ["name": "MyDriver", "exact": true], "group_by": "total", "limit": 1
+        ]
+        let first = try await client.answer("survey", .object(question))
+        XCTAssertEqual(first["groups"]?.arrayValue?.count, 1)
+        XCTAssertEqual(first["groups_total"], 2)
+        let next = try XCTUnwrap(first["next"]?.stringValue, "\(first)")
+        var more = question
+        more["after"] = .string(next)
+        let second = try await client.answer("survey", .object(more))
+        XCTAssertEqual(second["groups"]?.arrayValue?.count, 1)
+        XCTAssertEqual(second["next"], .null)
+        XCTAssertNotEqual(first["groups"], second["groups"])
+
+        var other = more
+        other["group_by"] = "matches"
+        let refused = try await client.call("survey", .object(other))
+        XCTAssertEqual(refused.answer, "That page is of another survey; ask again without `after`.")
+    }
+
     func testAPathCanCountFromTheEndAndARefusalIsListed() async throws {
         try openWindow()
         let image = try write(UEFITestImage.make(), "image.rom")

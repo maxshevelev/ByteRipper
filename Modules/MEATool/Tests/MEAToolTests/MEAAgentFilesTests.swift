@@ -21,13 +21,33 @@ final class MEAAgentFilesTests: XCTestCase {
                              moved: moved, differingBytes: differing, integrityDiffers: rewritten)
     }
 
-    func testTheAnswerCountsMovedAndRewrittenFilesAmongTheSame() {
+    private func page(after: String? = nil) throws -> AgentPage {
+        try AgentPage(AgentArguments(after.map { ["after": .string($0)] } ?? [:]), fingerprint: "f")
+    }
+
+    /// A file with more stretches than one answer holds keeps the first of
+    /// them, says how many there are, and is marked.
+    func testAFileTooLargeForOneAnswerKeepsItsFirstStretches() throws {
+        let many = (0..<2000).map { 0x1000 + $0 * 0x42..<0x1040 + $0 * 0x42 }
+        var row = row(4, .different)
+        row.a = side(many, size: many.count * 0x40)
+        let answer = try MEAAgentFiles.answer(MEFileComparison(rows: [row], gaps: []), volume: nil, name: nil,
+                                              extents: true, limit: 40, page: page(), bound: 24 << 10)
+        let item = try XCTUnwrap(answer["different"]?.arrayValue?.first)
+        XCTAssertEqual(item["truncated"], "item")
+        XCTAssertEqual(item["extents"]?["document"]?.arrayValue?.count, MEAAgentFiles.extentsShortened)
+        XCTAssertEqual(item["extents"]?["document_total"], 2000)
+        XCTAssertLessThanOrEqual(answer.encoded().count, 24 << 10)
+    }
+
+    func testTheAnswerCountsMovedAndRewrittenFilesAmongTheSame() throws {
         let comparison = MEFileComparison(rows: [
             row(1, .same, moved: true), row(2, .same, rewritten: true), row(3, .same),
             row(4, .different, name: "/home/mca/eom", rewritten: true, differing: 3),
             row(5, .onlyInA), row(6, .onlyInB),
         ], gaps: [MEFileComparison.Gap(volume: .efs, inA: false, reason: .unreadable)])
-        let answer = MEAAgentFiles.answer(comparison, volume: nil, name: nil, extents: false, limit: 40)
+        let answer = try MEAAgentFiles.answer(comparison, volume: nil, name: nil, extents: false, limit: 40,
+                                              page: page(), bound: 24 << 10)
         XCTAssertEqual(answer["counts"], [
             "same": 3, "moved": 1, "rewritten": 1, "different": 1,
             "only_in_document": 1, "only_in_against": 1,
@@ -42,32 +62,40 @@ final class MEAAgentFilesTests: XCTestCase {
             "volume": "efs", "in": "against",
             "reason": "The EFS partition holds no volume that could be read; its System page may be erased.",
         ]])
-        XCTAssertNil(answer["note"])
+        XCTAssertEqual(answer["next"], .null)
     }
 
-    func testExtentsAreGivenOnlyWhenAskedFor() {
+    func testExtentsAreGivenOnlyWhenAskedFor() throws {
         let comparison = MEFileComparison(rows: [row(4, .different)], gaps: [])
-        let plain = MEAAgentFiles.answer(comparison, volume: nil, name: nil, extents: false, limit: 40)
+        let plain = try MEAAgentFiles.answer(comparison, volume: nil, name: nil, extents: false, limit: 40,
+                                             page: page(), bound: 24 << 10)
         XCTAssertNil(plain["different"]?.arrayValue?.first?["extents"])
-        let placed = MEAAgentFiles.answer(comparison, volume: nil, name: nil, extents: true, limit: 40)
+        let placed = try MEAAgentFiles.answer(comparison, volume: nil, name: nil, extents: true, limit: 40,
+                                              page: page(), bound: 24 << 10)
         XCTAssertEqual(placed["different"]?.arrayValue?.first?["extents"], [
             "document": [["start": "0x100", "end": "0x140"]],
             "against": [["start": "0x200", "end": "0x240"]],
         ])
     }
 
-    func testTheListsAreNarrowedAndCut() {
+    func testTheListsAreNarrowedAndCut() throws {
         let comparison = MEFileComparison(rows: [
             row(1, .different, name: "/home/a"), row(2, .different, name: "/home/b"),
             row(3, .different, name: "/fpf/c"),
         ], gaps: [])
-        let narrowed = MEAAgentFiles.answer(comparison, volume: nil, name: "HOME", extents: false, limit: 40)
+        let narrowed = try MEAAgentFiles.answer(comparison, volume: nil, name: "HOME", extents: false, limit: 40,
+                                                page: page(), bound: 24 << 10)
         XCTAssertEqual(narrowed["counts"]?["different"], 2)
-        let cut = MEAAgentFiles.answer(comparison, volume: nil, name: nil, extents: false, limit: 1)
+        let cut = try MEAAgentFiles.answer(comparison, volume: nil, name: nil, extents: false, limit: 1,
+                                           page: page(), bound: 24 << 10)
         XCTAssertEqual(cut["different"]?.arrayValue?.count, 1)
         XCTAssertEqual(cut["counts"]?["different"], 3, "the counts are of all of them")
-        XCTAssertNotNil(cut["note"])
-        let efsOnly = MEAAgentFiles.answer(comparison, volume: .efs, name: nil, extents: false, limit: 40)
+        XCTAssertNotNil(cut["next"]?.stringValue)
+        let second = try MEAAgentFiles.answer(comparison, volume: nil, name: nil, extents: false, limit: 1,
+                                              page: page(after: cut["next"]?.stringValue), bound: 24 << 10)
+        XCTAssertEqual(second["different"]?.arrayValue?.first?["index"], 2, "the next one, none skipped")
+        let efsOnly = try MEAAgentFiles.answer(comparison, volume: .efs, name: nil, extents: false, limit: 40,
+                                               page: page(), bound: 24 << 10)
         XCTAssertEqual(efsOnly["counts"]?["different"], 0)
     }
 

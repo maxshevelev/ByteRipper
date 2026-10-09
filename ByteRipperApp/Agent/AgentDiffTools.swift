@@ -53,8 +53,10 @@ final class AgentDiffTools {
                 (region, volume, ME partition) and the deepest node that covers the run whole — a run across \
                 a boundary is placed at the node holding both sides, never split. Ids are those `uefi_node` \
                 and `me_tree` take; `where` is empty when nothing covers it. `summary: true` answers the \
-                areas instead, those with no differences too. Pages: pass `next` back as `after`; a page \
-                asked for after either document changed is refused. Reads only; nothing on screen moves.
+                areas instead, those with no differences too. Pages: `limit` is a ceiling — a page also \
+                stops before the answer passes the size bound, and then says `truncated: "size"`; pass \
+                `next` back as `after` until it is null. A page asked for after either document changed is \
+                refused. Reads only; nothing on screen moves.
                 """,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string("The first document's id from `documents`. Default: the focused one."),
@@ -65,7 +67,7 @@ final class AgentDiffTools {
                 "structure": AgentSchema.choice(["auto", "none"], "Place each run in the firmware's structure, or not. Default auto."),
                 "summary": AgentSchema.boolean("Answer the areas of the image with their differences instead of the runs. Default false."),
                 "limit": AgentSchema.limit(default: 100, maximum: 1000),
-                "after": AgentSchema.string("The `next` of the page before.")
+                "after": AgentSchema.after
             ], required: ["against"])
         ) { call in
             try await self.diff(call.arguments)
@@ -104,24 +106,11 @@ final class AgentDiffTools {
 
         let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
         let otherHost = PaneToolHost(pane: other.pane, owner: other.controller, tools: nil)
-        var hasher = Hasher()
-        hasher.combine(host.contentVersion)
-        hasher.combine(otherHost.contentVersion)
-        hasher.combine(start)
-        hasher.combine(end)
-        hasher.combine(mergeGap)
-        let fingerprint = String(UInt(bitPattern: hasher.finalize()), radix: 16)
-        var first = 0
-        if let after = try arguments.optionalString("after") {
-            let parts = after.split(separator: ":")
-            guard parts.count == 2, let index = Int(parts[0]) else {
-                throw AgentToolError("`after` is not a `next` this tool gave.")
-            }
-            guard parts[1] == Substring(fingerprint) else {
-                throw AgentToolError("A document changed since that page, or the range or `merge_gap` did; ask again without `after`.")
-            }
-            first = index
-        }
+        let paging = try AgentPage(
+            arguments,
+            fingerprint: AgentPage.fingerprint([host.contentVersion, otherHost.contentVersion, start, end, mergeGap,
+                                                structure]),
+            changed: "A document changed since that page, or the range or `merge_gap` did; ask again without `after`.")
 
         let left = try snapshot(place)
         let right = try snapshot(other)
@@ -143,27 +132,32 @@ final class AgentDiffTools {
             answer["truncated_at"] = AgentHostTools.hex(common)
         }
 
-        if summary {
-            answer["areas"] = .array(await areas(host, start..<end, runs: runs, blocks: blocks))
-        } else {
-            let page = Array(runs.dropFirst(first).prefix(limit))
-            let places = structure == "auto" ? await locate(host, page.map(\.range)) : page.map { _ in [] }
-            answer["runs"] = .array(zip(page, places).map { run, places in
-                var members: [String: JSONValue] = [
-                    "start": AgentHostTools.hex(run.range.lowerBound),
-                    "end": AgentHostTools.hex(run.range.upperBound),
-                    "length": AgentHostTools.hex(UInt64(run.range.count)),
-                    "differing_bytes": .count(Int(run.differing))
-                ]
-                if structure == "auto" { members["where"] = .array(places.map(Self.placeJSON)) }
-                return .object(members)
-            })
-            let following = first + page.count
-            answer["next"] = following < runs.count ? .string("\(following):\(fingerprint)") : .null
-        }
         answer["document"] = .string(place.id)
         answer["against"] = .string(other.id)
-        return .json(.object(answer))
+        if summary {
+            answer["areas"] = .array(await areas(host, start..<end, runs: runs, blocks: blocks))
+            return .json(.object(answer))
+        }
+        let page = Array(runs.dropFirst(paging.first).prefix(limit))
+        let places = structure == "auto" ? await locate(host, page.map(\.range)) : page.map { _ in [] }
+        let items = zip(page, places).map { run, places -> JSONValue in
+            var members: [String: JSONValue] = [
+                "start": AgentHostTools.hex(run.range.lowerBound),
+                "end": AgentHostTools.hex(run.range.upperBound),
+                "length": AgentHostTools.hex(UInt64(run.range.count)),
+                "differing_bytes": .count(Int(run.differing))
+            ]
+            if structure == "auto" { members["where"] = .array(places.map(Self.placeJSON)) }
+            return .object(members)
+        }
+        // A run too large alone keeps only the deepest place it is in.
+        return .json(try paging.answer(answer, key: "runs", items: items, total: runs.count,
+                                       bound: arguments.answerBound) { item in
+            guard case .object(var members) = item, let place = members["where"]?.arrayValue?.last else { return nil }
+            members["where"] = [place]
+            members["truncated"] = "item"
+            return .object(members)
+        })
     }
 
     /// The runs of differing ranges in order, merged across at most

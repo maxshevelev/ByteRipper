@@ -7,9 +7,16 @@ import Foundation
 /// `guard`s with a message apiece that drift apart.
 public struct AgentArguments: Equatable, Sendable {
     public let values: [String: JSONValue]
+    /// The most an answer to this call may be, in bytes — the server's bound
+    /// (`AgentServer.Limits.maxAnswerBytes`), so a list can stop short of it
+    /// (`AgentPage`) instead of being refused whole. Not an argument the agent
+    /// gives: the connection sets it.
+    public var answerBound: Int
 
-    public init(_ values: [String: JSONValue] = [:]) {
+    public init(_ values: [String: JSONValue] = [:],
+                answerBound: Int = AgentServer.Limits().maxAnswerBytes) {
         self.values = values
+        self.answerBound = answerBound
     }
 
     public subscript(name: String) -> JSONValue? {
@@ -161,6 +168,12 @@ public enum AgentSchema {
     /// The `limit` every list takes.
     public static func limit(default fallback: Int, maximum: Int) -> JSONValue {
         ["type": "integer", "minimum": 1, "maximum": .count(maximum),
-         "description": .string("How many items to return at most. Default \(fallback), at most \(maximum).")]
+         "description": .string("The most items one page holds — a ceiling: a page stops sooner when the answer "
+             + "would pass the size bound, and says so with `truncated: \"size\"`. Default \(fallback), at most \(maximum).")]
+    }
+
+    /// The `after` every paged list takes.
+    public static var after: JSONValue {
+        string("The `next` of the page before, to go on from where it stopped.")
     }
 }

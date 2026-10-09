@@ -62,14 +62,18 @@ public enum UEFIAgentVariables {
             store no longer holds, listed only with `deleted`. Each row: name, GUID, the store's and the \
             entry's node ids, the value's bytes (`start`, `end`, `size`), and `value` — the value read as \
             its type (a number, text, a boot option, a device path, a signature list) or as hex when it \
-            is short. Other stores (EVSA, Apple SysF, flash maps) are in `uefi_tree`.
+            is short. Other stores (EVSA, Apple SysF, flash maps) are in `uefi_tree`. Pages: `limit` is \
+            a ceiling — a page also stops before the answer passes the size bound and then says \
+            `truncated: "size"`; pass `next` back as `after` until it is null. `total` counts every row. \
+            A row too large alone comes without its `value`, marked `truncated: "item"`; `read` its bytes.
             """,
         properties: [
             "name": AgentSchema.string("Part of the variable's name, any case."),
             "guid": AgentSchema.string("The vendor GUID, exact."),
             "store": AgentSchema.string("Only this store's variables: its node id from an earlier answer."),
             "deleted": AgentSchema.boolean("Also list variables the store no longer holds. Default false."),
-            "limit": AgentSchema.limit(default: 80, maximum: 300)
+            "limit": AgentSchema.limit(default: 80, maximum: 300),
+            "after": AgentSchema.after
         ]
     ) { host, arguments in
         let name = try arguments.optionalString("name")?.lowercased()
@@ -77,6 +81,8 @@ public enum UEFIAgentVariables {
         let store = try arguments.optionalString("store").map(UEFIAgentQueries.nodeID)
         let deleted = try arguments.bool("deleted", default: false)
         let limit = try arguments.limit(default: 80, maximum: 300)
+        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint(
+            [host.contentVersion, name, guid, store?.description, deleted]))
         let tree = try await UEFIAgentQueries.readyTree(host)
         await UEFIAgentQueries.openEverything(in: tree)
 
@@ -88,23 +94,33 @@ public enum UEFIAgentVariables {
             if let store, variable.store.id != store { return false }
             return true
         }
-        // The stores the rows are in, each with all it holds.
-        var stores: [NodeID: UEFINode] = [:]
-        for variable in chosen.prefix(limit) { stores[variable.store.id] = variable.store }
-        var answer: [String: JSONValue] = [
-            "variables": .array(chosen.prefix(limit).map { row($0) }),
-            "total": .count(chosen.count),
-            "stores": .array(stores.values.sorted { $0.id.path.lexicographicallyPrecedes($1.id.path) }.map { store in
+        // The stores the rows are in, each with all it holds: of every row
+        // that may go on the page while the page is cut to fit, then of the
+        // rows that did — fewer, so the answer only gets shorter.
+        @MainActor func stores(_ rows: ArraySlice<Variable>) -> JSONValue {
+            var stores: [NodeID: UEFINode] = [:]
+            for variable in rows { stores[variable.store.id] = variable.store }
+            return .array(stores.values.sorted { $0.id.path.lexicographicallyPrecedes($1.id.path) }.map { store in
                 .object(storeSummary(store, variables: all.filter { $0.store.id == store.id }.count))
             })
-        ]
-        if chosen.count > limit {
-            answer["note"] = "Cut at the limit. Narrow with `name`, `guid` or `store`, or raise `limit`."
         }
+        let candidates = chosen.dropFirst(paging.first).prefix(limit)
+        var envelope: [String: JSONValue] = ["total": .count(chosen.count), "stores": stores(candidates)]
         if all.isEmpty {
-            answer["note"] = "No VSS, NVAR, DVAR or GPNV store in this image."
+            envelope["note"] = "No VSS, NVAR, DVAR or GPNV store in this image."
         }
-        return .json(.object(answer))
+        var answer = try paging.answer(envelope, key: "variables", items: candidates.map { row($0) },
+                                       total: chosen.count, bound: arguments.answerBound) { item in
+            guard case .object(var members) = item, members["value"] != nil else { return nil }
+            members["value"] = nil
+            members["truncated"] = "item"
+            return .object(members)
+        }
+        if case .object(var members) = answer {
+            members["stores"] = stores(candidates.prefix(answer["variables"]?.arrayValue?.count ?? 0))
+            answer = .object(members)
+        }
+        return .json(answer)
     }
 
     // MARK: - variables_compare
@@ -119,15 +135,23 @@ public enum UEFIAgentVariables {
             paired by which time it is met. Answers the variables only in one of them, those whose values \
             differ — with both sizes, the bytes that differ as offsets into the value, and both values \
             read as their type — and how many are the same. Variables a store no longer holds are left \
-            out. `survey` with this tool and a fixed `against` compares a folder of dumps with one.
+            out. `survey` with this tool and a fixed `against` compares a folder of dumps with one. \
+            Pages: the three lists are one sequence — `changed`, then `only_in_document`, then \
+            `only_in_against` — and `limit` is the most items of it on one page, a ceiling: a page also \
+            stops before the answer passes the size bound and then says `truncated: "size"`. Pass `next` \
+            back as `after` until it is null; `counts` and `same` are of the whole comparison. A changed \
+            variable too large alone comes without its values, marked `truncated: "item"`.
             """,
         properties: [
             "name": AgentSchema.string("Only variables whose name contains this, any case."),
-            "limit": AgentSchema.limit(default: 40, maximum: 200)
+            "limit": AgentSchema.limit(default: 40, maximum: 200),
+            "after": AgentSchema.after
         ]
     ) { host, otherHost, arguments in
         let name = try arguments.optionalString("name")?.lowercased()
         let limit = try arguments.limit(default: 40, maximum: 200)
+        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint(
+            [host.contentVersion, otherHost.contentVersion, name]))
         let tree = try await UEFIAgentQueries.readyTree(host)
         let otherTree = try await UEFIAgentQueries.readyTree(otherHost)
         await UEFIAgentQueries.openEverything(in: tree)
@@ -149,8 +173,7 @@ public enum UEFIAgentVariables {
         let mineKeys = Set(mine.map(\.0))
 
         var onlyHere: [Variable] = []
-        var changed: [JSONValue] = []
-        var changedCount = 0
+        var changed: [(Variable, [UInt8], Variable, [UInt8])] = []
         var same = 0
         for (key, variable) in mine {
             guard let other = theirsByKey[key] else {
@@ -163,24 +186,39 @@ public enum UEFIAgentVariables {
                 same += 1
                 continue
             }
-            changedCount += 1
-            guard changed.count < limit else { continue }
-            changed.append(difference(variable, a, other, b))
+            changed.append((variable, a, other, b))
         }
         let onlyThere = theirs.filter { !mineKeys.contains($0.0) }.map(\.1)
 
-        var answer: [String: JSONValue] = [
-            "only_in_document": .array(onlyHere.prefix(limit).map { brief($0) }),
-            "only_in_against": .array(onlyThere.prefix(limit).map { brief($0) }),
-            "changed": .array(changed),
+        // The page's items, built only for the stretch of the sequence it
+        // may hold.
+        let total = changed.count + onlyHere.count + onlyThere.count
+        var items: [(key: String, item: JSONValue)] = []
+        for index in paging.first..<max(paging.first, min(total, paging.first + limit)) {
+            if index < changed.count {
+                let (variable, a, other, b) = changed[index]
+                items.append(("changed", difference(variable, a, other, b)))
+            } else if index < changed.count + onlyHere.count {
+                items.append(("only_in_document", brief(onlyHere[index - changed.count])))
+            } else {
+                items.append(("only_in_against", brief(onlyThere[index - changed.count - onlyHere.count])))
+            }
+        }
+
+        let envelope: [String: JSONValue] = [
             "same": .count(same),
             "counts": ["only_in_document": .count(onlyHere.count), "only_in_against": .count(onlyThere.count),
-                       "changed": .count(changedCount)]
+                       "changed": .count(changed.count)]
         ]
-        if onlyHere.count > limit || onlyThere.count > limit || changedCount > limit {
-            answer["note"] = "Lists cut at the limit. Narrow with `name`, or raise `limit`."
-        }
-        return .json(.object(answer))
+        return .json(try paging.answer(envelope, keys: ["changed", "only_in_document", "only_in_against"],
+                                       items: items, total: total, bound: arguments.answerBound) { item in
+            guard case .object(var members) = item,
+                  members["value"] != nil || members["against_value"] != nil else { return nil }
+            members["value"] = nil
+            members["against_value"] = nil
+            members["truncated"] = "item"
+            return .object(members)
+        })
     }
 
     // MARK: - Reading

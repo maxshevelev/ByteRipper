@@ -73,15 +73,19 @@ public enum MEAAgentQueries {
             (`start`, `end`) when it stands for some, `children` as a count, and `problem` with its \
             lines when the panel marks one. An MFS or EFS file has no one range: its bytes are scattered \
             over the volume's pages, so it says `stretches`, how many, and asked for as `node` lists \
-            them as `extents`, in the file's own order.
+            them as `extents`, in the file's own order. Pages: `limit` is the most children on one page, \
+            a ceiling — a page also stops before the answer passes the size bound and then says \
+            `truncated: "size"`; pass `next` back as `after` until it is null. `total` counts the children.
             """,
         properties: [
             "node": AgentSchema.string("A node id such as \"2.0.3\" from an earlier answer. Default: the top."),
-            "limit": AgentSchema.limit(default: 100, maximum: 400)
+            "limit": AgentSchema.limit(default: 100, maximum: 400),
+            "after": AgentSchema.after
         ]
     ) { host, arguments in
         let path = try path(arguments.optionalString("node"))
         let limit = try arguments.limit(default: 100, maximum: 400)
+        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([host.contentVersion, id(path)]))
         let analysis = try await analysis(host)
         let roots = await present(analysis)
 
@@ -115,11 +119,10 @@ public enum MEAAgentQueries {
             answer["node"] = detail
             children = node.children
         }
-        answer["children"] = .array(children.prefix(limit).map(summaryOf))
-        if children.count > limit {
-            answer["note"] = .string("\(children.count) children, cut at the limit. Raise `limit` for more.")
-        }
-        return .json(.object(answer))
+        answer["total"] = .count(children.count)
+        return .json(try paging.answer(answer, key: "children",
+                                       items: children.dropFirst(paging.first).prefix(limit).map(summaryOf),
+                                       total: children.count, bound: arguments.answerBound))
     }
 
     /// How many of a file's stretches `me_tree` lists: a 12 KiB MFS file is

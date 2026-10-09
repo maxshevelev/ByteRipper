@@ -28,36 +28,36 @@ public enum UEFIAgentQueries {
             summary of the image; with it, that node and its children. `depth` (1–3) goes further down. \
             Each node: `id` (pass it back as `node`), type, subtype, name, GUID, its bytes (`start`, `end`, \
             or `in_compressed: true` when it lives inside a decompressed section and has no file address), \
-            and `children` — a count, or "unread" for a container not opened yet (asking for it opens it).
+            and `children` — a count, or "unread" for a container not opened yet (asking for it opens it). \
+            With `depth` above 1 a child carries the levels under it as `below`. Pages: `limit` is the most \
+            children of `node` on one page, a ceiling — a page also stops before the answer passes the size \
+            bound and then says `truncated: "size"`; pass `next` back as `after` until it is null. A child \
+            whose levels below are too large alone comes without them, marked `truncated: "item"`; ask for \
+            it as `node`.
             """,
         properties: [
             "node": AgentSchema.string("A node id such as \"0.2.5\" from an earlier answer. Default: the top."),
             "depth": AgentSchema.integer("How many levels below the node. Default 1, at most 3."),
-            "limit": AgentSchema.limit(default: 100, maximum: 400)
+            "limit": AgentSchema.limit(default: 100, maximum: 400),
+            "after": AgentSchema.after
         ]
     ) { host, arguments in
         let tree = try await readyTree(host)
         let id = try nodeID(arguments.optionalString("node"))
         let depth = Int(max(1, min(3, try arguments.has("depth") ? arguments.integer("depth") : 1)))
         let limit = try arguments.limit(default: 100, maximum: 400)
-        var budget = limit
-        var total = 0
+        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([host.contentVersion, id.description, depth]))
 
-        @MainActor func listing(_ parent: NodeID, level: Int, budget: inout Int, total: inout Int) async -> [JSONValue] {
-            let children = await expanded(parent, in: tree)
-            var result: [JSONValue] = []
-            for child in children {
-                total += 1
-                guard budget > 0 else { continue }
-                budget -= 1
-                var entry = summary(of: child, in: tree)
-                if level < depth, !child.children.isEmpty || child.isExpandable {
-                    let below = await listing(child.id, level: level + 1, budget: &budget, total: &total)
-                    entry = merged(entry, ["below": .array(below)])
+        @MainActor func listed(_ node: UEFINode, level: Int) async -> JSONValue {
+            var entry = summary(of: node, in: tree)
+            if level < depth, !node.children.isEmpty || node.isExpandable {
+                var below: [JSONValue] = []
+                for child in await expanded(node.id, in: tree) {
+                    below.append(await listed(child, level: level + 1))
                 }
-                result.append(entry)
+                entry = merged(entry, ["below": .array(below)])
             }
-            return result
+            return entry
         }
 
         var answer: [String: JSONValue] = [:]
@@ -67,11 +67,19 @@ public enum UEFIAgentQueries {
             guard let node = tree.node(id) else { throw unknownNode(id) }
             answer["node"] = summary(of: node, in: tree)
         }
-        answer["children"] = .array(await listing(id, level: 1, budget: &budget, total: &total))
-        if total > limit {
-            answer["note"] = "Cut at the limit. Ask for one child with `node`, or raise `limit`."
+        let children = await expanded(id, in: tree)
+        var items: [JSONValue] = []
+        for child in children.dropFirst(paging.first).prefix(limit) {
+            items.append(await listed(child, level: 1))
         }
-        return .json(.object(answer))
+        answer["total"] = .count(children.count)
+        return .json(try paging.answer(answer, key: "children", items: items, total: children.count,
+                                       bound: arguments.answerBound) { item in
+            guard case .object(var members) = item, members["below"] != nil else { return nil }
+            members["below"] = nil
+            members["truncated"] = "item"
+            return .object(members)
+        })
     }
 
     // MARK: - uefi_node
@@ -137,14 +145,17 @@ public enum UEFIAgentQueries {
             can, which takes a few seconds on a large image the first time. Give any of: `name` (part of the \
             name, any case; the whole name with `exact`), `guid` (exact), `type` (the Type column, e.g. \
             "File", "Section", "Volume", "VSS entry", "NVAR entry"). All given must match. Each match has its \
-            id and the path of names to it.
+            id and the path of names to it; `total` counts them all. Pages: `limit` is a ceiling — a page \
+            also stops before the answer passes the size bound and then says `truncated: "size"`; pass \
+            `next` back as `after` until it is null.
             """,
         properties: [
             "name": AgentSchema.string("Part of the node's name, any case."),
             "exact": AgentSchema.boolean("Match the whole name rather than a part of it. Default false."),
             "guid": AgentSchema.string("A GUID, e.g. \"8C8CE578-8A3D-4F1C-9935-896185C32DD3\"."),
             "type": AgentSchema.string("The node type as the Type column shows it."),
-            "limit": AgentSchema.limit(default: 50, maximum: 200)
+            "limit": AgentSchema.limit(default: 50, maximum: 200),
+            "after": AgentSchema.after
         ]
     ) { host, arguments in
         let name = try arguments.optionalString("name")?.lowercased()
@@ -155,6 +166,7 @@ public enum UEFIAgentQueries {
             throw AgentToolError("Give at least one of `name`, `guid` or `type`.")
         }
         let limit = try arguments.limit(default: 50, maximum: 200)
+        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint([host.contentVersion, name, guid, type, exact]))
         let tree = try await readyTree(host)
         await openEverything(in: tree)
 
@@ -169,12 +181,13 @@ public enum UEFIAgentQueries {
             if let guid, node.guid?.description.uppercased() != guid { continue }
             if let type, UEFITreeDisplay.typeText(for: node).lowercased() != type { continue }
             total += 1
-            if matches.count < limit {
+            if total > paging.first, matches.count < limit {
                 matches.append(merged(summary(of: node, in: tree),
                                       ["path": .array(path(to: node.id, in: tree).map { .string($0) })]))
             }
         }
-        return .json(["matches": .array(matches), "total": .count(total)])
+        return .json(try paging.answer(["total": .count(total)], key: "matches", items: matches, total: total,
+                                       bound: arguments.answerBound))
     }
 
     // MARK: - uefi_at

@@ -262,7 +262,7 @@ public actor AgentConnection {
             throw RPCError(code: MCPProtocol.ErrorCode.invalidRequest, message: "A request with this id is still running")
         }
 
-        let call = AgentCall(tool: name, arguments: AgentArguments(arguments)) { [weak self] progress, total, message in
+        let call = AgentCall(tool: name, arguments: AgentArguments(arguments, answerBound: server.limits.maxAnswerBytes)) { [weak self] progress, total, message in
             await self?.reportProgress(key, progress: progress, total: total, message: message)
         }
         let client = clientName

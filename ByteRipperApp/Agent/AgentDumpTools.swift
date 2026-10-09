@@ -19,6 +19,8 @@ final class AgentDumpTools {
     var onChange: () -> Void = {}
 
     private(set) var findings: [AgentFinding] = []
+    /// The last survey run, which the pages after its first are cut from.
+    private var lastSurvey: SurveyRun?
     private var nextFinding = 1
 
     nonisolated static let maxSurveyFiles = 200
@@ -169,9 +171,13 @@ final class AgentDumpTools {
                 file in `folder` (or in `paths`), opening each in the background, and returns the answers \
                 grouped by the value at `group_by` — a dotted path into the tool's answer, e.g. "total", \
                 "matches.0.start", "values.0", "chain.-1.name" (a negative index counts from the end). Each \
-                group: the value, how many files gave it, and up to ten of their names. Files a tool refused \
-                are listed under `failed`. Takes a while on many large images; reports progress. At most \
-                \(Self.maxSurveyFiles) files.
+                group: the value, how many files gave it, and up to ten of their names; the largest groups \
+                first. Files a tool refused are listed under `failed`. Takes a while on many large images; \
+                reports progress. At most \(Self.maxSurveyFiles) files. Pages: `limit` is the most groups on \
+                one page, a ceiling — a page also stops before the answer passes the size bound and then says \
+                `truncated: "size"`; pass `next` back as `after`, with the same other arguments, until it is \
+                null. The next page is answered from the same run, not a new one. A group whose value is too \
+                large alone gives it as the start of its JSON text, marked `truncated: "item"`.
                 """,
             inputSchema: AgentSchema.object([
                 "folder": AgentSchema.string("A folder of dumps: files ending in .bin, .rom, .fd, .cap, .dump, .img, .scap."),
@@ -180,7 +186,8 @@ final class AgentDumpTools {
                 "tool": AgentSchema.string("The tool to run on each file."),
                 "arguments": ["type": "object", "description": "The tool's arguments, without `document`."],
                 "group_by": AgentSchema.string("Where in the answer the value to group by is. Default: the whole answer."),
-                "limit": AgentSchema.limit(default: 20, maximum: 100)
+                "limit": AgentSchema.limit(default: 20, maximum: 100),
+                "after": AgentSchema.after
             ], required: ["tool"]),
             annotations: .readOnly
         ) { call in
@@ -201,10 +208,65 @@ final class AgentDumpTools {
         }
         let path = try arguments.optionalString("group_by").map(Self.parsePath)
         let limit = try arguments.limit(default: 20, maximum: 100)
-        let files = try await surveyFiles(arguments)
+        // A page after the first is answered from the run that made the first:
+        // running every file again would take as long and could answer
+        // differently.
+        var question = arguments.values
+        question["after"] = nil
+        question["limit"] = nil
+        let key = JSONValue.object(question).jsonText
+        let run: SurveyRun
+        if arguments.has("after") {
+            // Never run again for a page: a cursor of another question, or of
+            // a run since replaced, is refused at once.
+            guard let last = lastSurvey, last.key == key else {
+                throw AgentToolError("That page is of another survey; ask again without `after`.")
+            }
+            run = last
+        } else {
+            run = try await surveyRun(call, key: key, tool: tool, toolName: toolName, toolArguments: toolArguments,
+                                      path: path)
+            lastSurvey = run
+        }
+        let paging = try AgentPage(arguments, fingerprint: run.fingerprint,
+                                   changed: "That page is of another survey; ask again without `after`.")
+        var envelope: [String: JSONValue] = ["files": .count(run.files), "groups_total": .count(run.groups.count)]
+        if !run.failed.isEmpty { envelope["failed"] = .array(run.failed) }
+        let items = run.groups.dropFirst(paging.first).prefix(limit).map { group -> JSONValue in
+            ["value": group.value, "count": .count(group.files.count),
+             "files": .array(group.files.prefix(10).map { .string($0) })]
+        }
+        return .json(try paging.answer(envelope, key: "groups", items: Array(items), total: run.groups.count,
+                                       bound: arguments.answerBound) { item in
+            guard case .object(var members) = item, let value = members["value"] else { return nil }
+            members["value"] = .string(String(value.jsonText.prefix(Self.surveyValueShortened)))
+            members["truncated"] = "item"
+            return .object(members)
+        })
+    }
+
+    /// One survey's answers, grouped: what a page of it is cut from.
+    struct SurveyRun {
+        var key: String
+        var files: Int
+        /// Largest first, then in the order the files gave them.
+        var groups: [(value: JSONValue, files: [String])]
+        var failed: [JSONValue]
+        var fingerprint: String
+    }
+
+    /// How much of a value too large for one answer a group keeps, as JSON
+    /// text.
+    nonisolated static let surveyValueShortened = 2000
+
+    private func surveyRun(_ call: AgentCall, key: String, tool: AgentTool, toolName: String,
+                           toolArguments: [String: JSONValue], path: [String]?) async throws -> SurveyRun {
+        var toolArguments = toolArguments
+        let files = try await surveyFiles(call.arguments)
         guard !files.isEmpty else { throw AgentToolError("No dump files to survey there.") }
 
         var groups: [String: (value: JSONValue, files: [String])] = [:]
+        var order: [String] = []
         var failed: [JSONValue] = []
         for (index, url) in files.enumerated() {
             try Task.checkCancellation()
@@ -219,7 +281,10 @@ final class AgentDumpTools {
                     document = desk.id(of: try openBackground(url))
                 }
                 toolArguments["document"] = .string(document)
-                let answer = try await tool.run(AgentCall(tool: toolName, arguments: AgentArguments(toolArguments)))
+                // Not sent anywhere — only the value at `group_by` is kept —
+                // so the answer is not cut to the bound.
+                let answer = try await tool.run(AgentCall(tool: toolName,
+                                                          arguments: AgentArguments(toolArguments, answerBound: .max)))
                 let whole: JSONValue
                 switch answer {
                 case .json(let value): whole = value
@@ -227,6 +292,7 @@ final class AgentDumpTools {
                 }
                 let value = path.map { Self.value(at: $0, in: whole) ?? .null } ?? whole
                 let key = value.jsonText
+                if groups[key] == nil { order.append(key) }
                 groups[key, default: (value, [])].files.append(name)
             } catch let error as AgentToolError {
                 if failed.count < 20 { failed.append(["file": .string(name), "error": .string(error.message)]) }
@@ -238,17 +304,14 @@ final class AgentDumpTools {
         }
         await call.progress(Double(files.count), Double(files.count), nil)
 
-        let sorted = groups.values.sorted { $0.files.count > $1.files.count }
-        var answer: [String: JSONValue] = [
-            "files": .count(files.count),
-            "groups": .array(sorted.prefix(limit).map { group in
-                ["value": group.value, "count": .count(group.files.count),
-                 "files": .array(group.files.prefix(10).map { .string($0) })]
-            })
-        ]
-        if sorted.count > limit { answer["more_groups"] = .count(sorted.count - limit) }
-        if !failed.isEmpty { answer["failed"] = .array(failed) }
-        return .json(.object(answer))
+        // A stable order, so a page boundary falls in one place: the largest
+        // first, a tie in the order the files first gave it.
+        let sorted = order.enumerated().sorted { a, b in
+            let (left, right) = (groups[a.element]!.files.count, groups[b.element]!.files.count)
+            return left != right ? left > right : a.offset < b.offset
+        }.map { groups[$0.element]! }
+        return SurveyRun(key: key, files: files.count, groups: sorted, failed: failed,
+                         fingerprint: AgentPage.fingerprint([key, UUID()]))
     }
 
     private func surveyFiles(_ arguments: AgentArguments) async throws -> [URL] {
@@ -329,9 +392,24 @@ final class AgentDumpTools {
         AgentTool(
             name: "findings",
             title: "List findings",
-            description: "The findings recorded so far, oldest first."
-        ) { _ in
-            await MainActor.run { .json(["findings": .array(self.findings.map(\.json))]) }
+            description: """
+                The findings recorded so far, oldest first. Pages: `limit` is a ceiling — a page also stops \
+                before the answer passes the size bound and then says `truncated: "size"`; pass `next` back \
+                as `after` until it is null. A page asked for after the list changed is refused.
+                """,
+            inputSchema: AgentSchema.object([
+                "limit": AgentSchema.limit(default: 50, maximum: 200),
+                "after": AgentSchema.after
+            ])
+        ) { call in
+            try await MainActor.run {
+                let limit = try call.arguments.limit(default: 50, maximum: 200)
+                let paging = try AgentPage(call.arguments, fingerprint: AgentPage.fingerprint([self.findings.map(\.id)]),
+                                           changed: "The findings changed since that page; ask again without `after`.")
+                return .json(try paging.answer(["total": .count(self.findings.count)], key: "findings",
+                                               items: self.findings.dropFirst(paging.first).prefix(limit).map(\.json),
+                                               total: self.findings.count, bound: call.arguments.answerBound))
+            }
         }
     }
 

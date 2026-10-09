@@ -219,7 +219,9 @@ final class AgentService {
         files open in it and show places in them to the person. Call `documents` for what is open and \
         `focus` for what the person is looking at; when they say "this" or "here", `focus` is what they \
         mean. Addresses and sizes are hex strings such as "0x7F3000" in every answer and may be given \
-        back the same way. Ranges are half-open: `end` is the first byte after the range. Use `reveal` \
+        back the same way. Ranges are half-open: `end` is the first byte after the range. A list comes in \
+        pages: `limit` is a ceiling, a page also stops before the answer passes the size bound and says \
+        `truncated: "size"`, and `next`, passed back as `after`, goes on until it is null. Use `reveal` \
         to point at what you are talking about; the person's Back undoes it. `open_dump` reads a file by \
         path without putting it on screen, `survey` asks one tool's question of a whole folder of dumps, and \
         `finding` records each thing found for the person to check with a click. `diff` lists where two \

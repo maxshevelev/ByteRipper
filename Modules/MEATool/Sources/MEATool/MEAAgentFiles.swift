@@ -31,7 +31,12 @@ public enum MEAAgentFiles {
             and its files are not listed as missing. `incomplete` is a file whose chain of chunks \
             broke off, so what it holds is not known whole. With `extents`, each listed file says \
             where it is stored in each dump: the stretches in the file's own order, which `read` \
-            reads back. `encrypted` is the file table's flag: an encrypted file the engine wrote again \
+            reads back. Pages: the lists are one sequence — `different`, `only_in_document`, \
+            `only_in_against`, `incomplete` — and `limit` is the most items of it on one page, a \
+            ceiling: a page also stops before the answer passes the size bound and then says \
+            `truncated: "size"`. Pass `next` back as `after` until it is null; `counts` are of the whole \
+            comparison. A file whose extents are too many for one answer lists the first of them, \
+            marked `truncated: "item"`; `me_tree` on the file lists them. `encrypted` is the file table's flag: an encrypted file the engine wrote again \
             with a new nonce differs in nearly every byte, so for it `different` says it was written, \
             not that what it holds changed.
             """,
@@ -39,7 +44,8 @@ public enum MEAAgentFiles {
             "volume": AgentSchema.string("Only this volume: \"mfs\" or \"efs\". Default: both."),
             "name": AgentSchema.string("Only files whose name contains this, any case."),
             "extents": AgentSchema.boolean("Say where each listed file is stored in each dump. Default false."),
-            "limit": AgentSchema.limit(default: 40, maximum: 200)
+            "limit": AgentSchema.limit(default: 40, maximum: 200),
+            "after": AgentSchema.after
         ]
     ) { host, otherHost, arguments in
         let volume = try arguments.optionalString("volume").map { text -> MEFileComparison.Volume in
@@ -51,6 +57,8 @@ public enum MEAAgentFiles {
         let name = try arguments.optionalString("name")
         let withExtents = try arguments.bool("extents", default: false)
         let limit = try arguments.limit(default: 40, maximum: 200)
+        let paging = try AgentPage(arguments, fingerprint: AgentPage.fingerprint(
+            [host.contentVersion, otherHost.contentVersion, volume?.rawValue, name?.lowercased(), withExtents]))
 
         let mine = try await MEAAgentQueries.analysis(host)
         let theirs = try await MEAAgentQueries.analysis(otherHost)
@@ -63,7 +71,8 @@ public enum MEAAgentFiles {
         let comparison = MEFileComparison.compare(
             mine, theirs, names: (await names(mine), await names(theirs)),
             readA: reader(try host.snapshot()), readB: reader(try otherHost.snapshot()))
-        return .json(answer(comparison, volume: volume, name: name, extents: withExtents, limit: limit))
+        return .json(try answer(comparison, volume: volume, name: name, extents: withExtents, limit: limit,
+                                page: paging, bound: arguments.answerBound))
     }
 
     private nonisolated static func isFileSystem(_ region: FPTRegion) -> Bool {
@@ -91,7 +100,8 @@ public enum MEAAgentFiles {
     // MARK: - The answer
 
     nonisolated static func answer(_ comparison: MEFileComparison, volume: MEFileComparison.Volume?,
-                                   name: String?, extents: Bool, limit: Int) -> JSONValue {
+                                   name: String?, extents: Bool, limit: Int,
+                                   page: AgentPage, bound: Int) throws -> JSONValue {
         let name = name?.lowercased()
         let rows = comparison.rows.filter { row in
             (volume.map { row.volume == $0 } ?? true)
@@ -114,28 +124,42 @@ public enum MEAAgentFiles {
         ]
         if !incomplete.isEmpty { counts["incomplete"] = .count(incomplete.count) }
 
-        var answer: [String: JSONValue] = [
-            "counts": .object(counts),
-            "different": .array(different.prefix(limit).map { file($0, extents: extents) }),
-            "only_in_document": .array(onlyHere.prefix(limit).map { file($0, extents: extents) }),
-            "only_in_against": .array(onlyThere.prefix(limit).map { file($0, extents: extents) })
-        ]
-        if !incomplete.isEmpty {
-            answer["incomplete"] = .array(incomplete.prefix(limit).map { file($0, extents: extents) })
-        }
+        var envelope: [String: JSONValue] = ["counts": .object(counts)]
         let gaps = comparison.gaps.filter { gap in volume.map { gap.volume == $0 } ?? true }
         if !gaps.isEmpty {
-            answer["not_compared"] = .array(gaps.map { gap in
+            envelope["not_compared"] = .array(gaps.map { gap in
                 .object(["volume": .string(gap.volume.rawValue),
                          "in": .string(gap.inA ? "document" : "against"),
                          "reason": .string(reason(gap))])
             })
         }
-        if [different, onlyHere, onlyThere, incomplete].contains(where: { $0.count > limit }) {
-            answer["note"] = "Lists cut at the limit. Narrow with `volume` or `name`, or raise `limit`."
+        // One sequence, list by list; the page's items built only for the
+        // stretch of it the page may hold.
+        let lists: [(key: String, rows: [MEFileComparison.Row])] = [
+            ("different", different), ("only_in_document", onlyHere),
+            ("only_in_against", onlyThere), ("incomplete", incomplete)
+        ]
+        let sequence = lists.flatMap { list in list.rows.map { (key: list.key, row: $0) } }
+        let items = sequence.dropFirst(page.first).prefix(limit).map { (key: $0.key, item: file($0.row, extents: extents)) }
+        var keys = lists.map(\.key)
+        if incomplete.isEmpty { keys.removeLast() }
+        return try page.answer(envelope, keys: keys, items: items, total: sequence.count, bound: bound) { item in
+            guard case .object(var members) = item, case .object(var stored)? = members["extents"] else { return nil }
+            for (side, list) in stored {
+                let all = list.arrayValue ?? []
+                if all.count > Self.extentsShortened {
+                    stored[side] = .array(Array(all.prefix(Self.extentsShortened)))
+                    stored[side + "_total"] = .count(all.count)
+                }
+            }
+            members["extents"] = .object(stored)
+            members["truncated"] = "item"
+            return .object(members)
         }
-        return .object(answer)
     }
+
+    /// How many stretches a file too large for one answer keeps, per dump.
+    nonisolated static let extentsShortened = 16
 
     private nonisolated static func file(_ row: MEFileComparison.Row, extents: Bool) -> JSONValue {
         var entry: [String: JSONValue] = [

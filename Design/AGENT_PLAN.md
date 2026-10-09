@@ -459,7 +459,39 @@ Each ends in something that works and is committed.
    `diff` now names a file for 7 of the 107 runs in the Data partition — the
    rest span chunks of two files or more, which is why the file comparison is
    the question to ask there.)*
-10. **Help and release.** The help page in en, ru and de with its anchors; the
+10. **Pages within the size bound.** Asked for by an agent whose `diff` with
+   `limit` 200 was refused whole at 35 KB: an answer over the 24 KiB bound is
+   not sent, and a model cannot know beforehand what `limit` fits, since an
+   item's size is the data's. `limit` becomes a ceiling: a page stops at
+   `limit` items or at the item that would pass the bound, whichever comes
+   first, and ends with `next` — null when nothing is left — to pass back as
+   `after`; a page the bound cut says `truncated: "size"`. One mechanism in
+   `AgentKit` (`AgentPage`), the size counted on the answer's own compact JSON
+   with room kept for `next`; a cursor bound to the documents' content and the
+   question, refused once either changed. Every tool that answers a list:
+   `diff`, `uefi_tree`, `uefi_find`, `me_tree`, `variables`,
+   `variables_compare`, `me_files_compare`, `survey`, and `findings` and
+   `marks`, which get a `limit`. Lists in turn (what only one document holds,
+   then the other) are paged as one sequence. An item too large alone is
+   shortened by its tool and marked `truncated: "item"`, or the call is refused
+   naming it. The bound stays; answers that are not lists keep being refused
+   whole.
+   *(Done. The bound reaches a tool on its arguments
+   (`AgentArguments.answerBound`); `survey` gives the tools it runs none,
+   since their answers are not sent. An item too large for any page is
+   shortened wherever it falls — `diff` keeps the deepest place, `uefi_tree`
+   drops `below`, `variables` the value, `me_files_compare` keeps 16 stretches
+   a dump, `survey` the start of the value's JSON — and one that would fit a
+   page of its own waits for the next page. A survey's later pages are cut
+   from the run that made the first; a cursor of another survey is refused
+   without running anything. `findings` and `marks` page with a cursor bound
+   to the list itself. The `note`s that said "raise `limit`" are gone.
+   Checked on the dumps: `diff` of `1.bin` against `2.rom` with `limit` 200,
+   five pages of 143, 127, 131, 130 and 9 runs, none over 24 576 bytes —
+   540 runs and 197 819 bytes, as the totals say; `me_files_compare` with
+   `extents` against `CSME 15.bin`, 332 files over five pages; `uefi_find`
+   of every File in `CSME 15.bin`, 636 over eight.)*
+11. **Help and release.** The help page in en, ru and de with its anchors; the
    Settings controls through `ControlHelp`; the protocol document marked
    version 1; the README; whether an ad-hoc signed, quarantined helper runs
    when a client launches it, tried on a clean account.
@@ -483,8 +515,8 @@ paying.
 AgentKit, a day and a half. The service, relay, window and settings, three
 days. The seam changes and the UEFI tools, three days. Marks, two. Background
 documents and surveys, three. ME, FIT and NVRAM, three. Edits, one. Byte
-comparison, two. ME file comparison, two. Help and
-translations, one and a half. About 20 days, 155–165 hours — three times the
+comparison, two. ME file comparison, two. Pages within the size bound, one and a half. Help
+and translations, one and a half. About 22 days, 165–175 hours — three times the
 original #23, because what is built now is a feature of the app and not a tool
 beside it.
 
@@ -504,7 +536,7 @@ beside it.
   Claude Desktop actually open with is recorded at stage 2, and the protocol
   document says which transcripts the tests are checked against.
 - **The relay and Gatekeeper.** Whether a quarantined helper inside an app the
-  person has already let run is let run by a client. Tried at stage 10; if it is
+  person has already let run is let run by a client. Tried at stage 11; if it is
   refused, the window's button also clears the attribute on the helper.
 - **A chat inside the window.** Not in this plan. Everything above is what
   such a panel would call; whether to build one is decided after the external

@@ -6,7 +6,7 @@
 > here is a change to an interface an agent may have been told about — say
 > why in the commit.
 
-Draft until stage 10 marks it version 1. The tool list grows by stage; what
+Draft until stage 11 marks it version 1. The tool list grows by stage; what
 is listed here is what the code answers today.
 
 ## Transport
@@ -47,8 +47,17 @@ Recorded against: Claude Code 2.1.292 (modern; `RecordedClientTests`).
   what to do instead. Protocol errors (`-32602` unknown tool or bad params,
   `-32601` unknown method, `-32022` unsupported version) are for malformed
   requests only.
-- **Bounds**: a list takes `limit`; a byte read is at most 4096 bytes; an
-  answer over 24 KiB is not sent and the agent is told to ask for less.
+- **Bounds**: an answer is at most 24 KiB; a byte read is at most 4096 bytes.
+- **Lists are paged.** A list takes `limit`, a ceiling: a page stops at
+  `limit` items or at the item that would take the answer over 24 KiB,
+  whichever comes first. Every page ends with `next` — null when nothing is
+  left, otherwise a cursor to pass back as `after` — and a page the size cut
+  short says `truncated: "size"`. A cursor is good while the documents and
+  the question stay the same; after either changed it is refused. Counts and
+  totals are of the whole list, whatever the page. An item too large alone is
+  shortened by its tool and says `truncated: "item"`; failing that the call is
+  refused naming it. An answer that is not a list and is over the bound is not
+  sent, and the agent is told to ask for less.
 - **English**, whatever language the window speaks.
 
 ## Host tools
@@ -67,7 +76,7 @@ Recorded against: Claude Code 2.1.292 (modern; `RecordedClientTests`).
 |---|---|---|
 | `mark` | `offset`, `length` (≥ 1), `label` (≤ 80 characters); `note` (≤ 600); `related_to` (mark ids) | `id` (`m1`, `m2`… one counter for the app), `document`, `range`, `label`, `note`, `related_to`. Does not move the view. |
 | `unmark` | `ids`, or `document`, or `all: true` | `removed[]`; `not_found[]` for ids there were not. Relations to a removed mark go with it. |
-| `marks` | `document` (default: every document) | `marks[]`, each as `mark` answers. |
+| `marks` | `document` (default: every document); `limit` (50, ≤ 200); `after` | `marks[]`, each as `mark` answers; `total`. Paged (`next`, `after`). |
 
 A mark lives on its document's pane: drawn dashed in the agent's colour over
 the dump, its label and note shown under the pointer, listed in the Agent
@@ -80,9 +89,9 @@ window. It goes with `unmark`, the window's buttons, or its document.
 | `open_dump` | `path` (absolute or `~/`) | `document`, `on_screen` (true when a tab already has the file, and the id is that tab's), `size`. Read-only, no window; the last eight are kept parsed. A file changed on disk is read again under the same id. |
 | `close_dump` | `document` | `closed`. Refuses a document in a tab. |
 | `show` | `document`; `offset`, `length` | `document` (on screen), `shown`, `replaces` (the background id it replaced). Opens a new tab, or brings forward the tab that has the file. |
-| `survey` | `folder` (+ `recursive`) or `paths`; `tool` (one that takes `document`); `arguments`; `group_by` (dotted path, `-1` for the last element); `limit` (20, ≤ 100) | `files`, `groups[]` (`value`, `count`, `files` — ten at most), `more_groups`, `failed[]` (`file`, `error`). Progress per file. At most 200 files. |
+| `survey` | `folder` (+ `recursive`) or `paths`; `tool` (one that takes `document`); `arguments`; `group_by` (dotted path, `-1` for the last element); `limit` (20, ≤ 100); `after` | `files`, `groups_total`, `groups[]` (`value`, `count`, `files` — ten at most; the largest first), `failed[]` (`file`, `error`). Progress per file. At most 200 files. Paged (`next`, `after`): a page after the first is cut from the same run, never a new one; a group whose value is too large alone gives the start of its JSON text. |
 | `finding` | `text`; `document` or `path`; `offset`, `length`, `node` | the finding: `id` (`f1`…), `path`, `range`, `node`, `text`. |
-| `findings` | — | `findings[]`. |
+| `findings` | `limit` (50, ≤ 200); `after` | `findings[]`, oldest first; `total`. Paged (`next`, `after`). |
 
 A background document is answered about by every tool that reads — `read`,
 `documents`, the module queries — and refused, with `show` named, by every
@@ -94,9 +103,9 @@ Queries — answered with the panel open or not, from the pane's shared tree:
 
 | Tool | Arguments | Answer |
 |---|---|---|
-| `uefi_tree` | `node` (default the top); `depth` 1–3; `limit` (100, ≤ 400) | `image` (summary, at the top) or `node`; `children[]`, each a node summary, with `below[]` past depth 1; `note` when cut. |
+| `uefi_tree` | `node` (default the top); `depth` 1–3; `limit` (100, ≤ 400 children of `node`); `after` | `image` (summary, at the top) or `node`; `children[]`, each a node summary, with `below[]` past depth 1; `total`. Paged (`next`, `after`). A child whose levels below are too large alone comes without `below`. |
 | `uefi_node` | `node` | `node`, `path` (names from the top), `title`, `fields[]` (`label`, `value`, `problem`), `tables[]` (`title`, `columns`, `rows`), `diagnostics[]`. |
-| `uefi_find` | any of `name` (part, any case), `exact`, `guid`, `type` (the Type column); `limit` (50, ≤ 200) | `matches[]` (node summary + `path`), `total`. Opens and decompresses everything once. |
+| `uefi_find` | any of `name` (part, any case), `exact`, `guid`, `type` (the Type column); `limit` (50, ≤ 200); `after` | `matches[]` (node summary + `path`), `total`. Opens and decompresses everything once. Paged (`next`, `after`). |
 | `uefi_at` | `offset` | `offset`, `chain[]`, outermost first. |
 
 A node summary: `id`, `type`, `subtype`, `name`, `guid`, `start`/`end` — or
@@ -118,8 +127,8 @@ container opened:
 
 | Tool | Arguments | Answer |
 |---|---|---|
-| `variables` | `name` (part, any case), `guid`, `store` (node id), `deleted`; `limit` (80, ≤ 300) | `variables[]` — `name`, `guid`, `size`, `value` (read as its type, or hex up to 32 bytes), `store`, `entry`, `start`/`end` or `in_compressed`, `copies` when over 1, `deleted`; `stores[]` the rows are in (`id`, `type`, `name` when it differs, `variables`, `start`/`end`); `total`; `note`. |
-| `variables_compare` | `against` (required); `name`; `limit` (40, ≤ 200) | `only_in_document[]`, `only_in_against[]` (`name`, `guid`, `size`, `value`), `changed[]` (`name`, `guid`, `size`, `against_size`, `differing_bytes`, `runs[]` — half-open offsets into the value, sixteen at most, `runs_total` past that — `value`, `against_value`, `entry`, `against_entry`), `same`, `counts`. |
+| `variables` | `name` (part, any case), `guid`, `store` (node id), `deleted`; `limit` (80, ≤ 300) | `variables[]` — `name`, `guid`, `size`, `value` (read as its type, or hex up to 32 bytes), `store`, `entry`, `start`/`end` or `in_compressed`, `copies` when over 1, `deleted`; `stores[]` the page's rows are in (`id`, `type`, `name` when it differs, `variables`, `start`/`end`); `total`; `note` when the image has no store. Paged (`next`, `after`). A row too large alone comes without `value`. |
+| `variables_compare` | `against` (required); `name`; `limit` (40, ≤ 200); `after` | `only_in_document[]`, `only_in_against[]` (`name`, `guid`, `size`, `value`), `changed[]` (`name`, `guid`, `size`, `against_size`, `differing_bytes`, `runs[]` — half-open offsets into the value, sixteen at most, `runs_total` past that — `value`, `against_value`, `entry`, `against_entry`), `same`, `counts`. Paged as one sequence — `changed`, `only_in_document`, `only_in_against` — `counts` and `same` of the whole. A changed variable too large alone comes without its values. |
 
 A variable is the copy that stands for it: the current one, or for a deleted
 variable the copy it was deleted as. The stores read are VSS, VSS2, NVAR, Dell
@@ -146,8 +155,8 @@ whether a newer revision exists — is the panel's alone.
 | Tool | Arguments | Answer |
 |---|---|---|
 | `me_summary` | — | `blocks[]` (`title`, `rows[]` — `label`, `value`, `tone` for a verdict: good, caution, bad). The File System State row adds `basis`: `decided_by` (`reserved_files`, `efs`, `configuration`, `nothing`), `reserved_files`, `efs`, `configuration[]`, `complete` (false when a step that could have raised the state was not taken — an EFS partition that could not be read, or files that could not be named) and `explanation`, the sentence the panel shows as **State basis**. |
-| `me_tree` | `node` (a path such as `"2.0.3"`); `limit` (100, ≤ 400) | `node` (with `fields[]`) and its `children[]`, or the top groups: `id`, `title`, `subtitle`, `start`/`end`, `children` (a count), `empty`, `problem` (`severity`, `lines`). An MFS or EFS file has no `start`/`end` but `stretches`, a count; as `node` it lists `extents[]` (`start`, `end`, the first 64, in the file's own order) and `extents_note` past them. |
-| `me_files_compare` | `against` (required); `volume` (`mfs`, `efs`); `name` (substring, any case); `extents`; `limit` (40, ≤ 200) | `counts` (`same`, of those `moved` and `rewritten`; `different`, `only_in_document`, `only_in_against`, `incomplete` when any), `different[]`, `only_in_document[]`, `only_in_against[]`, `incomplete[]`: `volume`, `index` (MFS) or `file_id` (EFS), `name`, `size` (`document`, `against` — the content, without the Integrity table), `differing_bytes` (same length, bytes read), `integrity_differs`, `encrypted` (the file table's flag), `why` for an incomplete one, `extents` (`document`, `against`) when asked. `not_compared[]` (`volume`, `in`, `reason`) for a volume one side could not give files for — its files are then not listed as missing. Reads only. |
+| `me_tree` | `node` (a path such as `"2.0.3"`); `limit` (100, ≤ 400 children); `after` | `node` (with `fields[]`) and its `children[]`, or the top groups: `id`, `title`, `subtitle`, `start`/`end`, `children` (a count), `empty`, `problem` (`severity`, `lines`). An MFS or EFS file has no `start`/`end` but `stretches`, a count; as `node` it lists `extents[]` (`start`, `end`, the first 64, in the file's own order) and `extents_note` past them; `total` children. Paged (`next`, `after`). |
+| `me_files_compare` | `against` (required); `volume` (`mfs`, `efs`); `name` (substring, any case); `extents`; `limit` (40, ≤ 200); `after` | `counts` (`same`, of those `moved` and `rewritten`; `different`, `only_in_document`, `only_in_against`, `incomplete` when any), `different[]`, `only_in_document[]`, `only_in_against[]`, `incomplete[]`: `volume`, `index` (MFS) or `file_id` (EFS), `name`, `size` (`document`, `against` — the content, without the Integrity table), `differing_bytes` (same length, bytes read), `integrity_differs`, `encrypted` (the file table's flag), `why` for an incomplete one, `extents` (`document`, `against`) when asked. `not_compared[]` (`volume`, `in`, `reason`) for a volume one side could not give files for — its files are then not listed as missing. Paged as one sequence — `different`, `only_in_document`, `only_in_against`, `incomplete` — `counts` of the whole; a file whose extents are too many alone keeps the first 16 per dump and says `document_total` / `against_total`. Reads only. |
 
 The analysis is the pane's (`MEAAnalysisProviding`): one a panel made is used
 at once, and one made here is kept for the panels unless the content changed
