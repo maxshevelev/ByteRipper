@@ -1,4 +1,4 @@
-@source-sha d1002b20a223f379a7c7f8c755e1629a8f05a19831f4d27dc80d97dfae56feb9
+@source-sha bc92a2f24bd7943e5806e9fd5c3bc64f1b5ed17ab260dc9db48e8a4f51fd3459
 # Mit einem Agenten arbeiten
 
 > ByteRipper lässt sich mit einem Agenten verbinden — Claude Code, Claude Desktop oder einem anderen Programm, das MCP spricht. Der Agent sieht dann die im Programm geöffneten Dateien, liest ihre Bytes und zeigt Stellen darin; das Gespräch mit ihm findet in seinem eigenen Fenster statt.
@@ -66,7 +66,7 @@ Jede Änderung ist ein Schritt des Widerrufens der Datei, benannt mit **Agent:**
 
 **Fenster ▸ Agent** zeigt, ob der Dienst läuft, und enthält drei Listen. Solange der Dienst eingeschaltet ist, hat die Symbolleiste zwischen **?** und dem Umschalter für die Anordnung der Bereiche eine Taste dafür, mit dem Symbol des Reiters „Agent“ in den Einstellungen; sie öffnet das Fenster oder holt es nach vorn, wenn es schon offen ist.
 
-**Protokoll** listet jede Anfrage des Agenten auf: Uhrzeit, Werkzeug, die Argumente so, wie der Agent sie geschrieben hat, Antwortzeit, Größe der Antwort und Ergebnis. Eine abgelehnte Anfrage erscheint rot, mit dem Grund, der dem Agenten genannt wurde. Lange Argumente werden in der Tabelle gekürzt; die Liste darunter zeigt die ausgewählte Anfrage vollständig: Uhrzeit, Client, Antwortzeit, Größe der Antwort in Bytes, das vollständige Ergebnis und jedes Argument in einer eigenen Zeile, einen zusammengesetzten Wert mit einem Teil je Zeile. Ihr Text lässt sich auswählen und kopieren. **Protokoll leeren** leert die Liste; nach dem Beenden des Programms wird sie nicht aufbewahrt.
+**Protokoll** listet jede Anfrage des Agenten auf: Uhrzeit, Werkzeug, die Argumente so, wie der Agent sie geschrieben hat, Antwortzeit, Größe der Antwort und Ergebnis. Eine abgelehnte Anfrage erscheint rot, mit dem Grund, der dem Agenten genannt wurde. Lange Argumente werden in der Tabelle gekürzt; die Liste darunter zeigt die ausgewählte Anfrage vollständig: Uhrzeit, Client, Antwortzeit, Größe der Antwort in Bytes, das vollständige Ergebnis und unter **Argumente** das gesamte JSON, das der Agent gesendet hat, ein Element je Zeile. Ihr Text lässt sich auswählen und kopieren. Die **Leertaste** im Protokoll oder die Taste in der Ecke der Liste öffnet sie groß über dem Fenster, wie die Details eines Werkzeugbereichs; **Leertaste** oder **Esc** schließt sie wieder. **Protokoll leeren** leert die Liste; nach dem Beenden des Programms wird sie nicht aufbewahrt.
 
 **Markierungen** listet die Markierungen auf, die der Agent in allen geöffneten Dateien gesetzt hat: Bezeichnung, Datei, Bytes, Erläuterung und die Markierungen, auf die sie sich bezieht. Ein Doppelklick auf eine Zeile holt ihre Datei nach vorn und wählt ihre Bytes aus, als Schritt des Verlaufs. **Markierung entfernen** entfernt die gewählten Zeilen, **Alle Markierungen entfernen** alle. Eine Markierung verschwindet auch, wenn ihre Datei geschlossen wird oder der Agent sie entfernt.
 

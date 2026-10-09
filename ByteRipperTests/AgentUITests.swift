@@ -152,11 +152,26 @@ final class AgentUITests: XCTestCase {
 
         controller.selectLogRow(0)
         let shown = Dictionary(uniqueKeysWithValues: controller.shownDetails.map { ($0.label, $0.value) })
-        XCTAssertEqual(shown["offset"], "0x10", "a text as it is, without quotes")
-        XCTAssertEqual(shown["length"], "64")
-        XCTAssertEqual(shown["paths"], "[\n  \"/a/one.bin\",\n  \"/b/two.bin\"\n]", "anything else laid out")
         XCTAssertEqual(shown["Result"], "No file is open in ByteRipper.")
-        XCTAssertEqual(controller.shownDetails.last?.label, "paths", "arguments last, by name")
+        XCTAssertEqual(controller.shownArguments, """
+            {
+              "format" : "u8",
+              "length" : 64,
+              "offset" : "0x10",
+              "paths" : [
+                "/a/one.bin",
+                "/b/two.bin"
+              ]
+            }
+            """, "the whole JSON, laid out")
+
+        // Space or the corner button opens it over the window, as a tool
+        // panel's details open.
+        XCTAssertTrue(controller.detailsPane.showQuickLook())
+        XCTAssertTrue(controller.detailsPane.isQuickLookShown)
+        controller.detailsPane.closeQuickLook()
+        XCTAssertFalse(controller.detailsPane.isQuickLookShown)
+        controller.close()
     }
 
     func testTheWindowMenuLeadsToTheAgentWindow() throws {

@@ -32,7 +32,10 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     /// arguments to a column, and an agent's arguments are what a reader
     /// checks it against.
     private let logSplit = ALSplitView()
-    private let details = ToolDetailScroll()
+    /// The details in their pane, and the large view they open into — Space
+    /// on the log or the button in the list's corner, as a tool panel's do.
+    private let detailPane = ToolDetailPane()
+    private var details: ToolDetailScroll { detailPane.detail }
     private let marks = AgentMarksTable()
     private let marksScroll = NSScrollView()
     private let findings = AgentFindingsTable()
@@ -145,7 +148,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         logSplit.isVertical = false
         logSplit.dividerThickness = 1
         logSplit.addPane(logScroll)
-        logSplit.addPane(details)
+        logSplit.addPane(detailPane)
+        detailPane.attach(to: table)
         logSplit.setPaneLayout(.fill, at: 0)
         logSplit.setPaneLayout(.fixed(170), at: 1)
 
@@ -338,8 +342,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     // MARK: - Details
 
     /// The call in focus — the row clicked last, or the one selected — with
-    /// every field whole: the result's full sentence, and each argument on a
-    /// row of its own, a text as it is and anything else as indented JSON.
+    /// every field whole: the result's full sentence, and the arguments as the
+    /// agent sent them, the whole JSON laid out with one member to a line.
     // help: window.agent.details
     private func showDetails() {
         let row = table.clickedRow >= 0 && table.isRowSelected(table.clickedRow) ? table.clickedRow : table.selectedRow
@@ -353,42 +357,42 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         title.font = ToolPanelFont.title()
         title.translatesAutoresizingMaskIntoConstraints = false
         details.content.addArrangedSubview(title)
-        let fields = Self.detailFields(of: record)
-        addList(fields.filter { !$0.isArgument })
-        let arguments = fields.filter(\.isArgument)
-        guard !arguments.isEmpty else { return }
-        let heading = NSTextField(labelWithString: L("Arguments"))
-        heading.font = ToolPanelFont.title()
-        heading.translatesAutoresizingMaskIntoConstraints = false
-        if let above = details.content.arrangedSubviews.last { details.content.setCustomSpacing(10, after: above) }
-        details.content.addArrangedSubview(heading)
-        addList(arguments)
-    }
-
-    private func addList(_ fields: [DetailField]) {
-        let list = ToolFieldList(fields: fields.map { field in
-            let value = NSMutableAttributedString(string: field.value, attributes: [
-                .font: field.isArgument
-                    ? NSFont.monospacedSystemFont(ofSize: ToolPanelFont.body().pointSize, weight: .regular)
-                    : ToolPanelFont.body(),
+        let list = ToolFieldList(fields: Self.detailFields(of: record).map { field in
+            let value = NSAttributedString(string: field.value, attributes: [
+                .font: ToolPanelFont.body(),
                 .foregroundColor: field.isProblem ? SemanticColors.bad : NSColor.labelColor
             ])
             return .init(label: field.label, value: value)
         })
         details.content.addArrangedSubview(list)
         list.widthAnchor.constraint(equalTo: details.content.widthAnchor).isActive = true
+
+        let heading = NSTextField(labelWithString: L("Arguments"))
+        heading.font = ToolPanelFont.title()
+        heading.translatesAutoresizingMaskIntoConstraints = false
+        details.content.setCustomSpacing(10, after: list)
+        details.content.addArrangedSubview(heading)
+        let json = ToolWrappingLabel(string: Self.argumentsText(of: record))
+        json.font = .monospacedSystemFont(ofSize: ToolPanelFont.body().pointSize, weight: .regular)
+        json.lineBreakMode = .byCharWrapping
+        json.isSelectable = true
+        details.content.addArrangedSubview(json)
+        json.widthAnchor.constraint(equalTo: details.content.widthAnchor).isActive = true
+    }
+
+    /// The arguments as the agent sent them, laid out: one member to a line,
+    /// nested ones indented, keys sorted.
+    static func argumentsText(of record: AgentCallRecord) -> String {
+        record.arguments.prettyText
     }
 
     struct DetailField: Equatable {
         var label: String
         var value: String
-        var isArgument = false
         var isProblem = false
     }
 
-    /// The rows the details list shows for `record`: the call's own fields,
-    /// then — under a heading of their own — its arguments, in the order of
-    /// their names.
+    /// The rows the details list shows for `record`, above its arguments.
     static func detailFields(of record: AgentCallRecord) -> [DetailField] {
         var fields = [
             DetailField(label: L("Time"), value: DateFormatter.localizedString(
@@ -399,11 +403,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         ]
         if let client = record.client {
             fields.insert(DetailField(label: L("Client"), value: client), at: 1)
-        }
-        let arguments = record.arguments.objectValue ?? [:]
-        for name in arguments.keys.sorted() {
-            let value = arguments[name]!
-            fields.append(DetailField(label: name, value: value.stringValue ?? value.prettyText, isArgument: true))
         }
         return fields
     }
@@ -442,6 +441,14 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         details.content.arrangedSubviews.compactMap { $0 as? ToolFieldList }.flatMap(\.rows)
             .map { ($0.label, $0.valueText) }
     }
+
+    /// The arguments' JSON as the details show it, for tests.
+    var shownArguments: String? {
+        details.content.arrangedSubviews.compactMap { $0 as? ToolWrappingLabel }.first?.stringValue
+    }
+
+    /// The details' pane, whose large view the tests open.
+    var detailsPane: ToolDetailPane { detailPane }
 
     /// The rows' texts, for tests.
     func shownText(row: Int, column: String) -> String? {
