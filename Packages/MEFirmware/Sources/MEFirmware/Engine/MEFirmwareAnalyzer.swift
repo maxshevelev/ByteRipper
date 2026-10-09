@@ -137,7 +137,17 @@ public actor MEFirmwareAnalyzer {
                     usesFTBL: info.usesFTBL,
                     presentFileCount: present.count,
                     fileBytes: present.reduce(0) { $0 + $1.content.count },
-                    files: present.map { MFSFile(index: $0.index, size: $0.content.count) },
+                    // Where each file is, moved from the volume's buffer to the
+                    // image; the digest is of the whole chain until the
+                    // Integrity split below says where the content ends.
+                    files: present.map {
+                        MFSFile(index: $0.index, size: $0.content.count,
+                                extents: $0.extents.map {
+                                    ($0.lowerBound + mfsRegion.offset)..<($0.upperBound + mfsRegion.offset)
+                                },
+                                contentDigest: Digest.sha256Hex($0.content),
+                                chainIntact: $0.intact)
+                    },
                     // The Configuration streams are filled in phase 9: which
                     // record struct they carry is `get_cfg_rec_size`, and that
                     // needs the identity this phase does not have yet.
@@ -791,12 +801,17 @@ public actor MEFirmwareAnalyzer {
                 variant: identity.variant, major: identity.major,
                 minor: identity.minor, platform: info.ftblPlatform)
             let byIndex = Dictionary(uniqueKeysWithValues: splits.map { ($0.fileIndex, $0) })
+            let contents = Dictionary(info.files.map { ($0.index, $0.content) },
+                                      uniquingKeysWith: { first, _ in first })
             if var volume = mfsVolume {
                 volume.files = volume.files.map { file in
                     guard let split = byIndex[file.index] else { return file }
                     var file = file
                     file.contentSize = split.contentSize
                     file.integrity = split.integrity
+                    if let content = contents[file.index] {
+                        file.contentDigest = Digest.sha256Hex(content.prefix(split.contentSize))
+                    }
                     return file
                 }
                 mfsVolume = volume
@@ -834,10 +849,24 @@ public actor MEFirmwareAnalyzer {
                                               offset: efsRegion.offset - baseOffset,
                                               size: efsRegion.size,
                                               order: efs.dataPageOrder)
+                // Where each file is in the image: its stored bytes, after the
+                // 4-byte metadata, through the pages the area was read from.
+                let pages = EFSParser.dataAreaPages(in: region,
+                                                    offset: efsRegion.offset - baseOffset,
+                                                    size: efsRegion.size,
+                                                    order: efs.dataPageOrder)
+                    .map { ($0.lowerBound + baseOffset)..<($0.upperBound + baseOffset) }
                 efs.files = EFSParser.files(
                     dataArea: area, entries: entries, integrityFileIDs: protected,
                     variant: identity.variant, major: identity.major,
                     minor: identity.minor, platform: resolution.platform)
+                    .map { file in
+                        var file = file
+                        let start = file.dataOffset + EFSParser.metadataSize
+                        file.extents = EFSParser.extents(of: start..<(start + file.storedSize),
+                                                         through: pages)
+                        return file
+                    }
                 efsVolume = efs
             }
         }

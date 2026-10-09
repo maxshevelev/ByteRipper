@@ -10,9 +10,13 @@ import ToolModuleKit
 /// (`precedence` 1). The areas are the partition table's entries — of the
 /// top groups of `me_tree`, the one whose rows with bytes cover the most of
 /// the file. A range is placed in the area that covers it and at the
-/// smallest node of the whole tree that covers it whole: a file of the file
-/// system rather than the partition it is in. Nothing is analysed for a
-/// range outside the ME region, nor for a file with none.
+/// smallest node of the whole tree that covers it whole. Inside a file system
+/// it goes one further: an MFS or EFS file has no one range, its bytes are
+/// scattered over the volume's pages, so a range is placed at the file when
+/// that file is the only one whose stored bytes it touches — what else it
+/// touches is the volume's own bookkeeping, a chunk's CRC or a page's header.
+/// Nothing is analysed for a range outside the ME region, nor for a file with
+/// none.
 @MainActor
 public enum MEAAgentLocator {
     nonisolated public static let locator = ToolAgentLocator(
@@ -28,13 +32,24 @@ public enum MEAAgentLocator {
                   let roots = await roots(host)
             else { return none }
             let areas = areas(in: roots)
-            let nodes = flattened(roots).filter { $0.range != nil }
+            let all = flattened(roots)
+            let nodes = all.filter { $0.range != nil }
+            let files = FileIndex(all.filter { $0.extents?.isEmpty == false })
             return ranges.map { range in
                 guard range.overlaps(region) else { return [] }
                 let covering = nodes.filter { $0.range!.lowerBound <= range.lowerBound && range.upperBound <= $0.range!.upperBound }
-                guard let deepest = covering.min(by: { a, b in
+                guard var deepest = covering.min(by: { a, b in
                     a.range!.count != b.range!.count ? a.range!.count < b.range!.count : a.path.count > b.path.count
                 }) else { return [] }
+                // The file, when the range stays inside the partition the file
+                // is in: a run past it touches the file and much besides.
+                if let file = files.only(touching: range), let extents = file.extents,
+                   let lower = extents.map(\.lowerBound).min(), let upper = extents.map(\.upperBound).max(),
+                   let home = nodes.filter({ $0.range!.lowerBound <= lower && upper <= $0.range!.upperBound })
+                       .min(by: { $0.range!.count < $1.range!.count }),
+                   home.range!.lowerBound <= range.lowerBound, range.upperBound <= home.range!.upperBound {
+                    deepest = file
+                }
                 let area = areas.first { $0.range!.lowerBound <= range.lowerBound && range.upperBound <= $0.range!.upperBound }
                 if let area, area.path != deepest.path { return [place(area), place(deepest)] }
                 return [place(deepest)]
@@ -63,6 +78,41 @@ public enum MEAAgentLocator {
             result.append(row)
         }
         return result
+    }
+
+    /// The file rows' stretches in address order, so a range finds the files
+    /// it touches without a pass over every chunk of every file.
+    struct FileIndex {
+        private let stretches: [(range: Range<UInt64>, file: Int)]
+        private let files: [MEANode]
+
+        init(_ files: [MEANode]) {
+            self.files = files
+            stretches = files.enumerated()
+                .flatMap { index, file in file.extents!.map { ($0, index) } }
+                .sorted { $0.0.lowerBound < $1.0.lowerBound }
+        }
+
+        /// The one file whose stretches `range` overlaps; nil when it touches
+        /// none, or more than one.
+        func only(touching range: Range<UInt64>) -> MEANode? {
+            var low = 0
+            var high = stretches.count
+            while low < high {
+                let mid = (low + high) / 2
+                if stretches[mid].range.upperBound <= range.lowerBound { low = mid + 1 } else { high = mid }
+            }
+            // Stretches never overlap, so from the first one ending after the
+            // range starts, every one that starts before it ends is touched.
+            var found: Int?
+            for stretch in stretches[low...] {
+                guard stretch.range.lowerBound < range.upperBound else { break }
+                guard stretch.range.overlaps(range) else { continue }
+                if let found, found != stretch.file { return nil }
+                found = stretch.file
+            }
+            return found.map { files[$0] }
+        }
     }
 
     private static func flattened(_ nodes: [MEANode]) -> [MEANode] {

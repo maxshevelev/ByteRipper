@@ -6,7 +6,7 @@
 > here is a change to an interface an agent may have been told about — say
 > why in the commit.
 
-Draft until stage 8 marks it version 1. The tool list grows by stage; what
+Draft until stage 10 marks it version 1. The tool list grows by stage; what
 is listed here is what the code answers today.
 
 ## Transport
@@ -146,12 +146,23 @@ whether a newer revision exists — is the panel's alone.
 | Tool | Arguments | Answer |
 |---|---|---|
 | `me_summary` | — | `blocks[]` (`title`, `rows[]` — `label`, `value`, `tone` for a verdict: good, caution, bad). The File System State row adds `basis`: `decided_by` (`reserved_files`, `efs`, `configuration`, `nothing`), `reserved_files`, `efs`, `configuration[]`, `complete` (false when a step that could have raised the state was not taken — an EFS partition that could not be read, or files that could not be named) and `explanation`, the sentence the panel shows as **State basis**. |
-| `me_tree` | `node` (a path such as `"2.0.3"`); `limit` (100, ≤ 400) | `node` (with `fields[]`) and its `children[]`, or the top groups: `id`, `title`, `subtitle`, `start`/`end`, `children` (a count), `empty`, `problem` (`severity`, `lines`). |
+| `me_tree` | `node` (a path such as `"2.0.3"`); `limit` (100, ≤ 400) | `node` (with `fields[]`) and its `children[]`, or the top groups: `id`, `title`, `subtitle`, `start`/`end`, `children` (a count), `empty`, `problem` (`severity`, `lines`). An MFS or EFS file has no `start`/`end` but `stretches`, a count; as `node` it lists `extents[]` (`start`, `end`, the first 64, in the file's own order) and `extents_note` past them. |
+| `me_files_compare` | `against` (required); `volume` (`mfs`, `efs`); `name` (substring, any case); `extents`; `limit` (40, ≤ 200) | `counts` (`same`, of those `moved` and `rewritten`; `different`, `only_in_document`, `only_in_against`, `incomplete` when any), `different[]`, `only_in_document[]`, `only_in_against[]`, `incomplete[]`: `volume`, `index` (MFS) or `file_id` (EFS), `name`, `size` (`document`, `against` — the content, without the Integrity table), `differing_bytes` (same length, bytes read), `integrity_differs`, `encrypted` (the file table's flag), `why` for an incomplete one, `extents` (`document`, `against`) when asked. `not_compared[]` (`volume`, `in`, `reason`) for a volume one side could not give files for — its files are then not listed as missing. Reads only. |
 
 The analysis is the pane's (`MEAAnalysisProviding`): one a panel made is used
 at once, and one made here is kept for the panels unless the content changed
 meanwhile (`ToolReadHost.contentVersion`). Files are named from the firmware
 database's file table when the dump needs it and it can be fetched.
+
+`me_files_compare` matches files by what each volume calls them, not by
+address: an MFS volume moves its pages to spread the wear, so one machine's
+two dumps keep a file in different places. Content is compared without the
+Integrity table, which is reported apart — it changes on every write of the
+file. The bytes are read through each file's extents, which the engine keeps
+(`MFSFile.extents`, `EFSFile.extents`), and checked against the digest the
+analysis made of them; bytes that changed since leave the verdict to the two
+digests. The comparison is `MEFileComparison` in `MEPresentation`, the value a
+panel is to show.
 
 ## Edits
 
@@ -186,7 +197,10 @@ The comparison is the window's own (`DiffEngine`): absolute offsets, never
 aligned. `where` comes from the tool-modules' `ToolAgentLocator`s: each says
 which of its areas a range is in and its deepest node covering the range whole,
 and the finest that answers wins — ME partitions and files inside the ME
-region, the UEFI tree elsewhere. A run across a node boundary is placed at the
+region, the UEFI tree elsewhere. An MFS or EFS file has no one range; a run
+is placed at it when it is the only file whose stored bytes the run touches
+and the run stays inside the file's partition — a run over chunks of two
+files is placed at the partition. A run across a node boundary is placed at the
 node holding both sides, never split. The summary's areas are the coarsest
 locator's — regions, the BIOS region's volumes — with any a finer one divides
 replaced by the finer ones and the stretches between them kept under the

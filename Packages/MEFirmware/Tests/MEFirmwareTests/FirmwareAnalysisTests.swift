@@ -110,7 +110,7 @@ final class FirmwareAnalysisModelTests: XCTestCase {
     }
 
     func testEngineModelRevisionBumpsWithAdditiveChanges() {
-        XCTAssertEqual(EngineModelRevision.current, 39)
+        XCTAssertEqual(EngineModelRevision.current, 40)
     }
 
     /// The additive contract reaches *inside* the model too, and a Swift
@@ -144,6 +144,7 @@ final class FirmwareAnalysisModelTests: XCTestCase {
         let decoded = try JSONDecoder().decode(
             FirmwareAnalysis.self, from: Data(payload.utf8))
         XCTAssertNil(decoded.efsVolume?.files)
+        XCTAssertNil(decoded.mfsStateBasis)
         XCTAssertNil(decoded.mfsVolume?.configurationsByID)
         XCTAssertNil(decoded.oemConfiguration?.records)
         XCTAssertNil(decoded.oemConfiguration?.recordsByID)

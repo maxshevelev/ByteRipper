@@ -31,6 +31,14 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   `EFSVolume.files`). The file's *name* and *path*, read from the same table,
   do not: those are the panel's lookup (`MFSFileNames`, `EFSFileNames`,
   `ConfigRecordPaths`).
+- **Some fields are ByteRipper's own, not upstream's.** MEAnalyzer prints no
+  address for a file and no digest of it, and decides the File System State
+  without saying on what. `FirmwareAnalysis.mfsStateBasis`, `MFSFile.extents` /
+  `.contentDigest` / `.chainIntact` and `EFSFile.extents` / `.contentDigest`
+  (revision 40) are facts the engine read out of the same bytes for the app's
+  own use — the file comparison and, later, outlining a file's chunks. A sync
+  keeps them, fills them, and leaves them out of any comparison with upstream's
+  output.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct

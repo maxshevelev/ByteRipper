@@ -71,7 +71,9 @@ public enum MEAAgentQueries {
             groups; with it, that node's fields and its children. Each node: `id` (pass it back as \
             `node`; ids are positions, so they hold for this dump only), `title`, `subtitle`, its bytes \
             (`start`, `end`) when it stands for some, `children` as a count, and `problem` with its \
-            lines when the panel marks one.
+            lines when the panel marks one. An MFS or EFS file has no one range: its bytes are scattered \
+            over the volume's pages, so it says `stretches`, how many, and asked for as `node` lists \
+            them as `extents`, in the file's own order.
             """,
         properties: [
             "node": AgentSchema.string("A node id such as \"2.0.3\" from an earlier answer. Default: the top."),
@@ -98,6 +100,16 @@ public enum MEAAgentQueries {
                     if field.tone.isStatus { entry["tone"] = .string(toneName(field.tone)) }
                     return .object(entry)
                 })
+                // A file's bytes are where the volume put them: the stretches
+                // in the file's order, which `read` reads back.
+                if let extents = node.extents, !extents.isEmpty {
+                    members["extents"] = .array(extents.prefix(Self.extentsShown).map {
+                        .object(["start": .string(hex($0.lowerBound)), "end": .string(hex($0.upperBound))])
+                    })
+                    if extents.count > Self.extentsShown {
+                        members["extents_note"] = .string("\(extents.count) stretches; the first \(Self.extentsShown) are listed.")
+                    }
+                }
                 detail = .object(members)
             }
             answer["node"] = detail
@@ -109,6 +121,10 @@ public enum MEAAgentQueries {
         }
         return .json(.object(answer))
     }
+
+    /// How many of a file's stretches `me_tree` lists: a 12 KiB MFS file is
+    /// some 190 chunks.
+    nonisolated static let extentsShown = 64
 
     // MARK: - The analysis
 
@@ -234,6 +250,7 @@ public enum MEAAgentQueries {
             members["start"] = .string(hex(range.lowerBound))
             members["end"] = .string(hex(range.upperBound))
         }
+        if let extents = node.extents, !extents.isEmpty { members["stretches"] = .count(extents.count) }
         if !node.children.isEmpty { members["children"] = .count(node.children.count) }
         if node.isEmptySection { members["empty"] = true }
         if let problem = node.marks.problem {

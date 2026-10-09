@@ -53,9 +53,18 @@ struct MFSVolumeInfo {
 /// One present low-level MFS file (upstream 7849–7877): the raw bytes of its
 /// FAT chain. `content` is nil for unused/erased/empty records — those are not
 /// listed in `MFSVolumeInfo.files`.
+///
+/// `extents` are where those bytes are, as offsets into the buffer `parse`
+/// read, in the chain's order: one per chunk, the 0x40 payload bytes (fewer
+/// for the last) without the CRC that follows each. Laid one after another
+/// they are `content`. Not merged: two chunks are never adjacent, their CRC
+/// is always between. `intact` is false where the chain ended early or ran in
+/// a circle, so `content` is what the walk got, not the whole file.
 struct MFSLowLevelFile {
     var index: Int
     var content: Data
+    var extents: [Range<Int>] = []
+    var intact = true
 }
 
 /// A decoded legacy MFS Configuration stream (upstream `mfs_cfg_anl` MEA.py
@@ -165,6 +174,9 @@ enum MFSParser {
             / (systemIndexSize + chunkAllSize)
         let systemIndexSizeTotal = systemChunkCount * systemIndexSize + systemIndexSize
         var chunks: [Int: Data] = [:]
+        // Where each chunk's payload is in `buffer` — what a file's extents are
+        // made of.
+        var chunkOffsets: [Int: Int] = [:]
         for (page, _) in systemPages {
             let base = page * pageSize
             var running: UInt16 = 0
@@ -180,6 +192,7 @@ enum MFSParser {
                 let at = base + chunkStart + slot * chunkAllSize
                 guard at + chunkRawSize <= base + pageSize else { break }
                 chunks[index] = buffer.subdata(in: at..<(at + chunkRawSize))
+                chunkOffsets[index] = at
             }
         }
 
@@ -197,6 +210,7 @@ enum MFSParser {
                 let at = base + chunkStart + slot * chunkAllSize
                 guard at + chunkRawSize <= base + pageSize else { break }
                 chunks[firstChunk + slot] = buffer.subdata(in: at..<(at + chunkRawSize))
+                chunkOffsets[firstChunk + slot] = at
             }
         }
 
@@ -280,6 +294,8 @@ enum MFSParser {
                 var value = fatValue(record)
                 if value == 0x0000 || value == 0xFFFE || value == 0xFFFF { continue }
                 var body = Data()
+                var extents: [Range<Int>] = []
+                var fileIntact = true
                 var steps = 0
                 while true {
                     // A file chain can never visit more distinct Data chunks than
@@ -287,31 +303,36 @@ enum MFSParser {
                     // spin on; the engine must not).
                     steps += 1
                     if steps > maxDataChunks + 1 {
-                        intact = false
+                        fileIntact = false
                         break
                     }
                     if value < info.fileRecordCount {   // points back into the records
-                        intact = false
+                        fileIntact = false
                         break
                     }
                     let dataSlot = Int(value) - info.fileRecordCount
                     guard dataSlot >= 0, dataSlot < maxDataChunks else {
-                        intact = false
+                        fileIntact = false
                         break
                     }
                     let chunkIndex = effectiveSystemChunkCount + dataSlot
                     guard let chunk = chunks[chunkIndex] else {   // missing chunk
-                        intact = false
+                        fileIntact = false
                         break
                     }
+                    let at = chunkOffsets[chunkIndex] ?? 0
                     value = fatValue(Int(value))                  // next slot in the chain
                     if value >= 1 && value <= UInt16(chunkRawSize) {   // EOF marker
                         body.append(chunk.prefix(Int(value)))
+                        extents.append(at..<(at + Int(value)))
                         break
                     }
                     body.append(chunk)
+                    extents.append(at..<(at + chunk.count))
                 }
-                files.append(MFSLowLevelFile(index: record, content: body))
+                if !fileIntact { intact = false }
+                files.append(MFSLowLevelFile(index: record, content: body,
+                                             extents: extents, intact: fileIntact))
             }
             info.files = files
             info.fileChainsIntact = intact

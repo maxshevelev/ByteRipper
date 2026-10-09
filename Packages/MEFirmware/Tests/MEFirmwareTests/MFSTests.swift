@@ -226,6 +226,77 @@ final class MFSTests: XCTestCase {
         XCTAssertEqual(info.files[1].content, Data(repeating: 0x42, count: 4))
     }
 
+    /// A volume whose System area is four chunks, so that its file records
+    /// can outnumber 0x40 and a FAT value can point to a Data chunk rather
+    /// than read as an end-of-file count. The Data page's first chunk is 4;
+    /// FAT data slot `f` is Data-page slot `f − fileRecords`.
+    private static func makeChainVolume(fileRecords: UInt16, fat: [Int: UInt16],
+                                        dataSlotContents: [Data]) -> Data {
+        let systemChunks = 4
+        var area = Data(repeating: 0x00, count: systemChunks * 0x40)
+        area.replaceSubrange(0..<4, with: le32(0x724F_6201))
+        area[4] = 0x0A; area[5] = 0x01
+        area.replaceSubrange(8..<12, with: le32(0x1200))
+        area.replaceSubrange(12..<14, with: le16(fileRecords))
+        for record in 0..<Int(fileRecords) {
+            area.replaceSubrange((0x0E + record * 2)..<(0x10 + record * 2), with: le16(0xFFFF))
+        }
+        for (slot, value) in fat {
+            area.replaceSubrange((0x0E + slot * 2)..<(0x10 + slot * 2), with: le16(value))
+        }
+        var system = Data(repeating: 0xFF, count: 0x2000)
+        system.replaceSubrange(0..<4, with: le32(0xAA55_7887))
+        system.replaceSubrange(4..<8, with: le32(1))
+        system.replaceSubrange(14..<16, with: le16(0))
+        let sysChunkCount = (0x2000 - 0x12 - 2) / (2 + 0x42)
+        var running: UInt16 = 0
+        for index in 0..<systemChunks {
+            let stored = CRC16_14.transform(running) ^ UInt16(index)
+            system.replaceSubrange((0x12 + index * 2)..<(0x14 + index * 2), with: le16(stored))
+            running = UInt16(index)
+        }
+        for slot in systemChunks...sysChunkCount {
+            system.replaceSubrange((0x12 + slot * 2)..<(0x14 + slot * 2), with: le16(0xC000))
+        }
+        let chunkStart = 0x12 + sysChunkCount * 2 + 2
+        for index in 0..<systemChunks {
+            let at = chunkStart + index * 0x42
+            system.replaceSubrange(at..<(at + 0x40), with: area[(index * 0x40)..<((index + 1) * 0x40)])
+        }
+        var data = Data(repeating: 0xFF, count: 0x2000)
+        data.replaceSubrange(0..<4, with: le32(0xAA55_7887))
+        data.replaceSubrange(4..<8, with: le32(2))
+        data.replaceSubrange(14..<16, with: le16(UInt16(systemChunks)))
+        let dataChunkCount = (0x2000 - 0x12) / (1 + 0x42)
+        for (slot, content) in dataSlotContents.enumerated() {
+            data[0x12 + slot] = 0x00
+            let at = 0x12 + dataChunkCount + slot * 0x42
+            data.replaceSubrange(at..<(at + content.count), with: content)
+        }
+        return system + data
+    }
+
+    /// A file's extents are where its chunks are, in the chain's order and not
+    /// in address order, each without the CRC that follows it; laid one after
+    /// another they read back the file.
+    func testAFilesExtentsAreItsChunksInChainOrder() throws {
+        // Record 0 → slot 0x52 (the third Data chunk) → slot 0x50 (the first),
+        // which ends the file after 5 bytes.
+        let chunks = (0..<3).map { n in Data((0..<0x40).map { UInt8(n * 0x40 + $0) }) }
+        let region = Self.makeChainVolume(fileRecords: 0x50,
+                                          fat: [0: 0x52, 0x52: 0x50, 0x50: 5],
+                                          dataSlotContents: chunks)
+        let info = try XCTUnwrap(MFSParser.parse(in: region, offset: 0, size: region.count))
+        let file = try XCTUnwrap(info.files.first)
+        XCTAssertTrue(file.intact)
+        XCTAssertEqual(file.content, chunks[2] + chunks[0].prefix(5))
+        XCTAssertEqual(file.extents.map(\.count), [0x40, 5])
+        XCTAssertEqual(file.extents[0].lowerBound - file.extents[1].lowerBound, 2 * 0x42,
+                       "backwards through the page, two chunks and their CRCs apart")
+        let read = file.extents.reduce(into: Data()) { $0.append(region[$1]) }
+        XCTAssertEqual(read, file.content)
+    }
+
     func testUsedButCorruptChainIsNonFatalAndFlagged() throws {
         // Record 0's FAT value (a data slot ≥ fileRecords) points at a Data chunk
         // the volume does not carry → the walk stops with what it has and reports
@@ -240,6 +311,8 @@ final class MFSTests: XCTestCase {
         XCTAssertFalse(info.fileChainsIntact)
         XCTAssertEqual(info.files.count, 1)           // the used record is still listed
         XCTAssertTrue(info.files[0].content.isEmpty)  // but no chunk was reachable
+        XCTAssertFalse(info.files[0].intact, "and the file says so of itself")
+        XCTAssertEqual(info.files[0].extents, [])
     }
 
     // MARK: Legacy Configuration record decode (files 6/7)

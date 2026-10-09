@@ -1364,16 +1364,30 @@ public struct EFSFile: Codable, Sendable, Equatable {
     /// unprotected file — and on a protected one whose tail is too short to
     /// read, which still splits (`storedSize - contentSize` is the tail).
     public var integrity: MFSIntegrityTable?
+    /// Where the file is stored: the stretches of the analysed image holding
+    /// its `storedSize` bytes — after its 4-byte metadata, Integrity table
+    /// included — in the file's order, so that their bytes one after another
+    /// are the file. More than one where the file runs over the end of a Data
+    /// page, whose footer and the next page's header are not the file's, or
+    /// where the next logical page is elsewhere in the volume. Ours, not
+    /// upstream's.
+    public var extents: [Range<Int>]?
+    /// SHA-256 of the first `contentSize` stored bytes — the content without
+    /// the Integrity table — uppercase hex. Ours, not upstream's.
+    public var contentDigest: String?
 
     public init(fileID: Int, dataOffset: Int, storedSize: Int,
                 metadataUnknown: Int, contentSize: Int,
-                integrity: MFSIntegrityTable? = nil) {
+                integrity: MFSIntegrityTable? = nil,
+                extents: [Range<Int>]? = nil, contentDigest: String? = nil) {
         self.fileID = fileID
         self.dataOffset = dataOffset
         self.storedSize = storedSize
         self.metadataUnknown = metadataUnknown
         self.contentSize = contentSize
         self.integrity = integrity
+        self.extents = extents
+        self.contentDigest = contentDigest
     }
 }
 
@@ -1562,13 +1576,34 @@ public struct MFSFile: Codable, Sendable, Equatable, Identifiable {
     /// The table that came off the end, when one did (`MFSIntegrityTable.size`
     /// says which of 0x28 / 0x34 / 0x38 it turned out to be).
     public var integrity: MFSIntegrityTable?
+    /// Where the file is stored: the stretches of the analysed image its
+    /// chain's chunks hold, in the chain's order, so that their bytes one
+    /// after another are the file, Integrity table included. One per chunk —
+    /// a chunk's 0x40 bytes are followed by its CRC, so no two are adjacent —
+    /// and in no address order: the volume moves its pages to spread the
+    /// wear, and one machine's two dumps keep the same file in different
+    /// places. Ours, not upstream's: MEAnalyzer prints no address for a file.
+    public var extents: [Range<Int>]?
+    /// SHA-256 of the file's content — the first `contentSize` bytes where a
+    /// table was split off, all of them otherwise — uppercase hex. What two
+    /// dumps' files are compared by; ours, not upstream's.
+    public var contentDigest: String?
+    /// False where the file's FAT chain ended early or ran in a circle: then
+    /// `size`, `extents` and `contentDigest` describe what the walk got, not
+    /// the whole file (`MFSVolume`'s Issue 13 says so of the volume).
+    public var chainIntact: Bool?
 
     public init(index: Int, size: Int, contentSize: Int? = nil,
-                integrity: MFSIntegrityTable? = nil) {
+                integrity: MFSIntegrityTable? = nil,
+                extents: [Range<Int>]? = nil, contentDigest: String? = nil,
+                chainIntact: Bool? = nil) {
         self.index = index
         self.size = size
         self.contentSize = contentSize
         self.integrity = integrity
+        self.extents = extents
+        self.contentDigest = contentDigest
+        self.chainIntact = chainIntact
     }
 }
 
@@ -2240,5 +2275,12 @@ public enum EngineModelRevision {
     /// which are no longer a fact of the MFS volume — upstream reads them from
     /// the FTPR `intl.cfg` module too, and prefers that copy. `MFSVolume.pchInit`
     /// keeps its meaning and now holds only what that volume itself carried.
-    public static let current = 39
+    ///
+    /// 40 adds `mfsStateBasis`, what the File System State was decided on, and
+    /// the files' places: `MFSFile.extents` / `.contentDigest` / `.chainIntact`
+    /// and `EFSFile.extents` / `.contentDigest` — where in the image each file
+    /// is stored, in its own order, and a digest of what it holds, so two
+    /// dumps' files can be compared by content wherever the volume put them.
+    /// None of them is upstream's; the sync comparison leaves them out.
+    public static let current = 40
 }

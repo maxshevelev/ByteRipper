@@ -1,3 +1,4 @@
+import CryptoKit
 import XCTest
 import Foundation
 @testable import MEFirmware
@@ -248,6 +249,38 @@ final class EFSTests: XCTestCase {
         XCTAssertEqual(area[pageData], 0x00)
     }
 
+    /// Where the data area comes from: each Data page's body in index order,
+    /// and a span of the area as stretches of the image — cut at a page's end,
+    /// and read back as the area's own bytes.
+    func testASpanOfTheDataAreaIsFoundInThePagesItCameFrom() throws {
+        let region = Self.makeVolume()
+        let order: [UInt8] = [1, 0]
+        let area = EFSParser.dataArea(in: region, offset: 0, size: region.count, order: order)
+        let pages = EFSParser.dataAreaPages(in: region, offset: 0, size: region.count, order: order)
+        let body = Self.pageSize - Self.pageHeaderSize - 0x08
+        XCTAssertEqual(pages, [(2 * Self.pageSize + Self.pageHeaderSize)..<(3 * Self.pageSize - 8),
+                               (Self.pageSize + Self.pageHeaderSize)..<(2 * Self.pageSize - 8)])
+
+        let span = (body - 0x10)..<(body + 0x20)
+        let extents = try XCTUnwrap(EFSParser.extents(of: span, through: pages))
+        XCTAssertEqual(extents.map(\.count), [0x10, 0x20], "cut where the first page's body ends")
+        let read = extents.reduce(into: Data()) { $0.append(region[$1]) }
+        XCTAssertEqual(read, area.subdata(in: span))
+
+        XCTAssertEqual(EFSParser.extents(of: 0x20..<0x30, through: pages), [pages[0].lowerBound + 0x20..<pages[0].lowerBound + 0x30])
+        XCTAssertNil(EFSParser.extents(of: (2 * body - 4)..<(2 * body + 4), through: pages),
+                     "a span past the area has no place")
+    }
+
+    /// Pages that follow each other in the image as in the area still have a
+    /// footer and a header between them, so the extents are joined only where
+    /// the bytes really touch.
+    func testExtentsJoinOnlyWhereTheyTouch() {
+        XCTAssertEqual(EFSParser.extents(of: 0..<8, through: [0x100..<0x104, 0x104..<0x110]), [0x100..<0x108])
+        XCTAssertEqual(EFSParser.extents(of: 0..<8, through: [0x100..<0x104, 0x200..<0x210]),
+                       [0x100..<0x104, 0x200..<0x204])
+    }
+
     /// An index area that is not a permutation of the volume's Data pages
     /// leaves no data area: without it there is no saying which page is first,
     /// and a wrong order would name every file's bytes wrong.
@@ -281,6 +314,8 @@ final class EFSTests: XCTestCase {
         XCTAssertEqual(file.contentSize, 0x20, "nothing flagged, nothing split off")
         XCTAssertEqual(file.metadataUnknown, 0xAB12)
         XCTAssertNil(file.integrity)
+        XCTAssertEqual(file.contentDigest,
+                       SHA256.hash(data: area.subdata(in: 0x14..<0x34)).map { String(format: "%02X", $0) }.joined())
     }
 
     /// The Integrity flag comes from the FTBL row, and nothing in the EFS bytes
@@ -317,6 +352,9 @@ final class EFSTests: XCTestCase {
         XCTAssertEqual(flagged.integrity?.size, 0x28)
         XCTAssertEqual(flagged.integrity?.arCounter, 9)
         XCTAssertEqual(flagged.integrity?.hmacHex.prefix(4), "A1A1")
+        XCTAssertEqual(flagged.contentDigest,
+                       SHA256.hash(data: Data(repeating: 0x33, count: 0x40)).map { String(format: "%02X", $0) }.joined(),
+                       "the digest is of the content, the table left off")
         XCTAssertEqual(files[1].contentSize, 0x10, "unflagged: whole")
         XCTAssertNil(files[1].integrity)
     }

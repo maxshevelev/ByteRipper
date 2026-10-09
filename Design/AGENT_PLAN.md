@@ -420,9 +420,46 @@ Each ends in something that works and is committed.
    `FileTable.dat` instead of one per file — which `me_tree` and the ME
    Analyzer's own naming paid too, and the analysis twice more. Not done:
    MFS and EFS files have no address in the model, so a run stops at the
-   partition; that needs the analyzer to keep each file's fragments (#32,
-   after fragmented zones, #31).)*
-9. **Help and release.** The help page in en, ru and de with its anchors; the
+   partition; that needs the analyzer to keep each file's fragments (#32).)*
+9. **ME file comparison.** Byte comparison is the wrong question inside MFS:
+   the volume moves its pages to spread the wear, so one machine's two dumps
+   hold the same file at different addresses, and most of what `diff` finds
+   there is pages moved, not files changed. Two dumps' files are compared by
+   what they hold instead, keyed as `variables_compare` keys variables. Three
+   layers, the first two for the panel as much as for the agent:
+   - *The model* (`MEFirmware`): each MFS and EFS file keeps its `extents` —
+     the stretches of the dump it is stored in, in the file's order, so that
+     the bytes of the extents one after another are the file — and a digest of
+     its content, the Integrity table left off. Both optional, so an analysis
+     saved before them still reads. Files a legacy volume keeps inside its
+     low-level files 6–8 (the home directory, the configuration streams) come
+     second.
+   - *The comparison* (`MEPresentation`, pure): two analyses' files matched by
+     volume and index or file ID — the same, different, only in one —
+     with sizes, extents on both sides, how many bytes of the content differ
+     and whether the Integrity table does, and a file whose chain is broken
+     said to be that, never "different". Names are put on by the table the
+     panel names its rows with. A panel shows this result later; it computes
+     nothing of its own.
+   - *The agent*: `me_files_compare` in the ME module, a `ToolAgentComparison`
+     like `variables_compare`; and the ME locator names the file a `diff` run
+     falls in, from the extents.
+   Highlighting a file's fragments on screen is #31 and waits for the panel.
+   *(Done. An EFS file's extents are its stored bytes after its 4-byte
+   metadata, cut at each Data page's footer; an MFS file's are one per chunk,
+   never joined across the CRC between two. The bytes read through them are
+   checked against the analysis's digest, so a dump edited since is judged by
+   the digests. `encrypted` comes from the file table: an encrypted file
+   written again differs in nearly every byte. On `1.bin` against `2.rom`:
+   136 MFS files, 120 the same — 23 of them moved, 23 written again with the
+   same content — and 16 different, the PTT, DAL and `si_features` files
+   among them; EFS not compared, its System page in `2.rom` erased. Against
+   another board's `CSME 15.bin`, EFS too: 9 of 13 files differ, one only in
+   `1.bin`. Ten seconds for the first call, both analyses; 0.12 s after.
+   `diff` now names a file for 7 of the 107 runs in the Data partition — the
+   rest span chunks of two files or more, which is why the file comparison is
+   the question to ask there.)*
+10. **Help and release.** The help page in en, ru and de with its anchors; the
    Settings controls through `ControlHelp`; the protocol document marked
    version 1; the README; whether an ad-hoc signed, quarantined helper runs
    when a client launches it, tried on a clean account.
@@ -446,8 +483,8 @@ paying.
 AgentKit, a day and a half. The service, relay, window and settings, three
 days. The seam changes and the UEFI tools, three days. Marks, two. Background
 documents and surveys, three. ME, FIT and NVRAM, three. Edits, one. Byte
-comparison, two. Help and
-translations, one and a half. About 18 days, 140–150 hours — three times the
+comparison, two. ME file comparison, two. Help and
+translations, one and a half. About 20 days, 155–165 hours — three times the
 original #23, because what is built now is a feature of the app and not a tool
 beside it.
 
@@ -467,7 +504,7 @@ beside it.
   Claude Desktop actually open with is recorded at stage 2, and the protocol
   document says which transcripts the tests are checked against.
 - **The relay and Gatekeeper.** Whether a quarantined helper inside an app the
-  person has already let run is let run by a client. Tried at stage 8; if it is
+  person has already let run is let run by a client. Tried at stage 10; if it is
   refused, the window's button also clears the attribute on the helper.
 - **A chat inside the window.** Not in this plan. Everything above is what
   such a panel would call; whether to build one is decided after the external

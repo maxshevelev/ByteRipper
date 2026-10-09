@@ -50,6 +50,11 @@ public struct MEANode: Sendable, Equatable, Hashable, Identifiable {
     /// gives no reliable range (a manifest has an offset but no length). Only
     /// non-nil ranges are revealed and zoned.
     public var range: Range<UInt64>?
+    /// Where a row whose bytes are scattered is stored — an MFS or EFS file,
+    /// its stretches in the file's own order (`MFSFile.extents`). Nil for
+    /// every other row, and for a file from an analysis made before the model
+    /// kept them. Not zoned yet: a zone is one range until #31.
+    public var extents: [Range<UInt64>]?
     /// The detail list shown when the row is selected.
     public var fields: [MEAField]
     /// Rows under a group node. Empty for a leaf.
@@ -85,6 +90,7 @@ public struct MEANode: Sendable, Equatable, Hashable, Identifiable {
         title: String,
         subtitle: String = "",
         range: Range<UInt64>? = nil,
+        extents: [Range<UInt64>]? = nil,
         fields: [MEAField] = [],
         children: [MEANode] = [],
         isEmptySection: Bool = false,
@@ -95,6 +101,7 @@ public struct MEANode: Sendable, Equatable, Hashable, Identifiable {
         self.title = title
         self.subtitle = subtitle
         self.range = range
+        self.extents = extents
         self.fields = fields
         self.children = children
         self.isEmptySection = isEmptySection

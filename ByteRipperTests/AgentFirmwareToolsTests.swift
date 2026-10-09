@@ -83,12 +83,13 @@ final class AgentFirmwareToolsTests: XCTestCase {
 
     func testTheFirmwareToolsAreListed() throws {
         let tools = Dictionary(uniqueKeysWithValues: service.server.tools.map { ($0.name, $0) })
-        for name in ["variables", "variables_compare", "fit_table", "me_summary", "me_tree"] {
+        for name in ["variables", "variables_compare", "fit_table", "me_summary", "me_tree", "me_files_compare"] {
             let tool = try XCTUnwrap(tools[name], name)
             XCTAssertNotNil(tool.inputSchema["properties"]?["document"], name)
             XCTAssertEqual(tool.annotations.readOnly, true, name)
         }
         XCTAssertEqual(tools["variables_compare"]?.inputSchema["required"], ["against"])
+        XCTAssertEqual(tools["me_files_compare"]?.inputSchema["required"], ["against"])
     }
 
     // MARK: - variables
@@ -232,6 +233,18 @@ final class AgentFirmwareToolsTests: XCTestCase {
         XCTAssertNotNil(controller.windowModel.pane1.uefiState.cachedMEAnalysis())
         let wrong = try await client.call("me_tree", ["node": "9.9"])
         XCTAssertEqual(wrong.answer, "No ME node 9.9. Ids come from `me_tree` on the same document.")
+    }
+
+    // MARK: - me_files_compare
+
+    /// Two ME regions with no file system: nothing to compare, said as such
+    /// rather than as two empty lists.
+    func testFilesAreComparedOnlyWhereThereIsAFileSystem() async throws {
+        try open(METestImage.fptFile())
+        let other = try await background(METestImage.fptFile(), "other.bin")
+        let answer = try await client.call("me_files_compare", ["against": .string(other)])
+        XCTAssertTrue(answer.isError)
+        XCTAssertEqual(answer.answer, "Neither document has an MFS or EFS file system the ME engine could find.")
     }
 }
 

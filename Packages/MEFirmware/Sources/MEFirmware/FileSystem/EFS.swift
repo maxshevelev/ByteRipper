@@ -224,6 +224,48 @@ enum EFSParser {
         return area
     }
 
+    /// Where the data area's bytes are: for each Data page in System-index
+    /// order, the stretch of `region` its contribution to the area comes from
+    /// — the same pages, in the same order, `dataArea` reads. Empty where
+    /// `dataArea` is.
+    static func dataAreaPages(in region: Data, offset: Int, size: Int,
+                              order: [UInt8]) -> [Range<Int>] {
+        guard offset >= 0, size >= pageSize, offset + size <= region.count else { return [] }
+        let buffer = region.subdata(in: offset..<(offset + size))
+        let bases = dataPageBases(in: buffer)
+        guard order.count == bases.count,
+              order.allSatisfy({ Int($0) < bases.count }),
+              Set(order).count == order.count else { return [] }
+        return order.map { value in
+            let base = offset + bases[Int(value)]
+            return (base + pageHeaderSize)..<(base + pageSize - pageFooterSize)
+        }
+    }
+
+    /// `span` of the data area as stretches of the image, in the data area's
+    /// order: cut where a page's contribution ends, and joined where the next
+    /// one happens to follow it in the image. `pages` are `dataAreaPages`,
+    /// already moved to image addresses; nil when the span runs past them.
+    static func extents(of span: Range<Int>, through pages: [Range<Int>]) -> [Range<Int>]? {
+        var result: [Range<Int>] = []
+        var areaStart = 0
+        for page in pages {
+            let areaEnd = areaStart + page.count
+            defer { areaStart = areaEnd }
+            let lower = max(span.lowerBound, areaStart)
+            let upper = min(span.upperBound, areaEnd)
+            guard lower < upper else { continue }
+            let piece = (page.lowerBound + lower - areaStart)..<(page.lowerBound + upper - areaStart)
+            if let last = result.last, last.upperBound == piece.lowerBound {
+                result[result.count - 1] = last.lowerBound..<piece.upperBound
+            } else {
+                result.append(piece)
+            }
+        }
+        guard result.reduce(0, { $0 + $1.count }) == span.count else { return nil }
+        return result
+    }
+
     /// The physical bases of the volume's Data pages, in page order — the same
     /// classification `parse` makes: a Data page carries a Dictionary of
     /// 0x0000/0xFFFF and a written Unknown0.
@@ -296,7 +338,8 @@ enum EFSParser {
             }
             result.append(EFSFile(fileID: entry.fileID, dataOffset: start,
                                   storedSize: stored, metadataUnknown: Int(unknown),
-                                  contentSize: contentSize, integrity: integrity))
+                                  contentSize: contentSize, integrity: integrity,
+                                  contentDigest: Digest.sha256Hex(content.prefix(contentSize))))
         }
         return result
     }

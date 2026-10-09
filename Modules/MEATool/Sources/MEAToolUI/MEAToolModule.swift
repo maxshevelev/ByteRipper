@@ -35,6 +35,10 @@ public enum MEAToolModule: ToolModule {
     /// or not (`MEAAgentQueries`, `Design/AGENT_PLAN.md`).
     public static var agentQueries: [ToolAgentQuery] { MEAAgentQueries.all }
 
+    /// Two dumps' MFS and EFS files compared by what they hold
+    /// (`MEAAgentFiles`).
+    public static var agentComparisons: [ToolAgentComparison] { MEAAgentFiles.comparisons }
+
     /// Where a range of the ME region is in the decoded structure, for a byte
     /// comparison's runs.
     public static var agentLocator: ToolAgentLocator? { MEAAgentLocator.locator }

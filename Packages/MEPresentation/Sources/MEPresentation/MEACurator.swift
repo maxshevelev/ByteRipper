@@ -453,12 +453,18 @@ public enum MEACurator {
                                     subtitle: MEAText.size(integrity.size),
                                     fields: MEAValueText.fields(of: integrity)))
         }
-        // A present file has content, but its byte position is the FAT
-        // chain walk the engine does not expose — no reliable range.
+        // A present file has no one range: its chunks are wherever the FAT
+        // chain put them, so it carries them as its extents instead.
         return MEANode(path: [], title: record?.path ?? "File \(file.index)",
                        subtitle: mfsFileSubtitle(file, named: record != nil),
+                       extents: file.extents.map(addresses),
                        fields: fields, children: children,
                        isEmptySection: file.size == 0)
+    }
+
+    /// A file's extents as the file addresses a node speaks in.
+    private static func addresses(_ extents: [Range<Int>]) -> [Range<UInt64>] {
+        extents.map { UInt64($0.lowerBound)..<UInt64($0.upperBound) }
     }
 
     /// A named row's subtitle keeps the number the flash actually carries: the
@@ -637,6 +643,7 @@ public enum MEACurator {
                        subtitle: name == nil
                            ? MEAText.size(file.contentSize)
                            : "#\(file.fileID) · \(MEAText.size(file.contentSize))",
+                       extents: file.extents.map(addresses),
                        fields: fields, children: children,
                        isEmptySection: file.contentSize == 0)
     }
