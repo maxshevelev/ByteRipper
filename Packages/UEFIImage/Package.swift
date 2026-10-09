@@ -7,9 +7,10 @@
 //  is how the two would drift apart. It depends on no part of the app — not on
 //  `ToolModuleKit`, not on the app itself — because a parser that can be run by
 //  `swift test` over a hand-built image is a parser whose diagnostics can be
-//  pinned down without a window. The one package it links is
+//  pinned down without a window. The packages it links are
 //  `FirmwareCompression`, for the compressed sections most of an image's DXE
-//  volume sits inside (`Design/UEFI/COMPRESSED_SECTIONS.md`).
+//  volume sits inside (`Design/UEFI/COMPRESSED_SECTIONS.md`), and `LenovoDMI`,
+//  for the store Lenovo keeps a machine's identity in.
 //
 //  `Design/UEFI/UEFI_IMAGE_FORMAT.md` is the specification this follows, and
 //  its section numbers are quoted throughout.
@@ -34,12 +35,16 @@ let package = Package(
         .package(path: "../FirmwareCompression"),
         // The parser names the gaps it finds — "Free space", "Padding" — and
         // those names are what the tree's Name column shows a reader.
-        .package(path: "../Localization")
+        .package(path: "../Localization"),
+        // Lenovo's DMI store is read into the tree in the format's own terms,
+        // so the tree and whatever else reads the store cannot drift apart.
+        .package(path: "../LenovoDMI")
     ],
     targets: [
         .target(name: "UEFIImage", dependencies: [
             .product(name: "FirmwareCompression", package: "FirmwareCompression"),
-            .product(name: "Localization", package: "Localization")
+            .product(name: "Localization", package: "Localization"),
+            .product(name: "LenovoDMI", package: "LenovoDMI")
         ]),
         .testTarget(
             name: "UEFIImageTests",

@@ -1213,6 +1213,11 @@ public enum UEFIDetail {
         case .amdEFS, .amdDirectory, .amdFirmwareEntry:
             break
 
+        // Lenovo's DMI store: its fields are read from the store as a whole,
+        // in the format's own terms (`LenovoDMI`), not from one row's bytes.
+        case .lenovoDMIStore, .ldbgLog, .ldbgEntry, .lenvBlock, .lenvEntry:
+            break
+
         // Its header is the table; the platform and the count are what the
         // blocks say of themselves. The table itself is read in `build`.
         case .biosGuardUpdate:
@@ -1696,6 +1701,11 @@ public enum UEFIDetail {
         case .hpSignatureBlock: return L("HP signature block")
         case .gpnvStore: return L("GPNV store")
         case .gpnvRecord: return L("GPNV record")
+        case .lenovoDMIStore: return L("Lenovo DMI store")
+        case .ldbgLog: return L("LDBG change log")
+        case .ldbgEntry: return L("LDBG entry")
+        case .lenvBlock: return L("LENV block")
+        case .lenvEntry: return L("LENV entry")
         case .amdEFS: return L("Embedded Firmware Structure")
         case .amdDirectory: return L("AMD firmware directory")
         case .amdFirmwareEntry: return L("AMD firmware entry")

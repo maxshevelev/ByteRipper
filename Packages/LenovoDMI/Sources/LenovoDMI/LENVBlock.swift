@@ -143,6 +143,19 @@ public struct LENVBlock: Equatable, Sendable {
         entriesFit = encoding != .undetermined
     }
 
+    /// The block `stored` holds, when its header reads as one on its own,
+    /// away from an area: signed, a whole page, and holding entries that fit
+    /// or nothing at all. A stray `LENV` in a driver's code has a count that
+    /// does not parse under either reading; a block emptied has none.
+    public static func found(stored: [UInt8], offset: UInt64) -> LENVBlock? {
+        guard stored.count == Int(LenovoDMIFormat.lenvSize),
+              Array(stored[0..<4]) == LenovoDMIFormat.lenvSignature
+        else { return nil }
+        let block = LENVBlock(offset: offset, stored: stored)
+        guard block.entriesFit && (block.declaredEntries > 0 || block.isBlank) else { return nil }
+        return block
+    }
+
     /// The entries of `body` read one after another, until `count` have been
     /// read or one does not fit.
     static func walk(

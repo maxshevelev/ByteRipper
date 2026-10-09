@@ -104,15 +104,38 @@ public struct LenovoDMIArea: Equatable, Sendable {
     /// image ends before the second block does.
     public static func read(_ image: [UInt8], at offset: Int) -> LenovoDMIArea? {
         guard offset >= 0, offset + Int(LenovoDMIFormat.areaSize) <= image.count else { return nil }
-        let logEnd = offset + Int(LenovoDMIFormat.ldbgSize)
+        return read(stored: Array(image[offset..<(offset + Int(LenovoDMIFormat.areaSize))]),
+                    offset: UInt64(offset))
+    }
+
+    /// Reads an area from its own bytes, `stored`, which start at `offset` of
+    /// the file. Nil unless `stored` is exactly one area long.
+    public static func read(stored: [UInt8], offset: UInt64) -> LenovoDMIArea? {
+        guard stored.count == Int(LenovoDMIFormat.areaSize) else { return nil }
+        let logSize = Int(LenovoDMIFormat.ldbgSize)
         let blocks = (0..<2).map { index -> LENVBlock in
-            let start = logEnd + index * Int(LenovoDMIFormat.lenvSize)
-            return LENVBlock(offset: UInt64(start),
-                             stored: Array(image[start..<(start + Int(LenovoDMIFormat.lenvSize))]))
+            let start = logSize + index * Int(LenovoDMIFormat.lenvSize)
+            return LENVBlock(offset: offset + UInt64(start),
+                             stored: Array(stored[start..<(start + Int(LenovoDMIFormat.lenvSize))]))
         }
-        let log = LDBGLog(offset: UInt64(offset), stored: Array(image[offset..<logEnd]),
+        let log = LDBGLog(offset: offset, stored: Array(stored[0..<logSize]),
                           candidateKeys: blocks.filter(\.hasSignature).map(\.xorKey))
-        return LenovoDMIArea(offset: UInt64(offset), log: log, blocks: blocks)
+        return LenovoDMIArea(offset: offset, log: log, blocks: blocks)
+    }
+
+    /// The area `stored` holds, when it is one: the `LDBG` signature, its
+    /// write offset and eight zero bytes (upstream's pattern), and at least one
+    /// of the two blocks signed where it should be. The second condition is
+    /// what upstream does not check, and it is what keeps a stray `LDBG` in a
+    /// driver's code from being taken for the store.
+    public static func found(stored: [UInt8], offset: UInt64) -> LenovoDMIArea? {
+        guard stored.count == Int(LenovoDMIFormat.areaSize),
+              Array(stored[0..<4]) == LenovoDMIFormat.ldbgSignature,
+              stored[8..<16].allSatisfy({ $0 == 0 }),
+              let area = read(stored: stored, offset: offset),
+              area.blocks.contains(where: \.hasSignature)
+        else { return nil }
+        return area
     }
 }
 
@@ -213,11 +236,9 @@ public enum LenovoDMI {
                 guard offset + size <= buffer.count,
                       !areas.contains(where: { $0.range.contains(UInt64(offset)) })
                 else { continue }
-                let block = LENVBlock(offset: UInt64(offset),
-                                      stored: Array(buffer[offset..<(offset + size)]))
-                // A stray `LENV` in a driver's code has a count that does not
-                // parse under either reading; a block emptied has none.
-                guard block.entriesFit && (block.declaredEntries > 0 || block.isBlank) else { continue }
+                guard let block = LENVBlock.found(stored: Array(buffer[offset..<(offset + size)]),
+                                                  offset: UInt64(offset))
+                else { continue }
                 blocks.append(block)
                 start = offset + size
             }
@@ -225,12 +246,8 @@ public enum LenovoDMI {
         return LenovoDMIReading(areas: areas, blocks: blocks)
     }
 
-    /// Every area in `image`: each `LDBG` signature followed by its write
-    /// offset and eight zero bytes (upstream's pattern), with at least one of
-    /// the two blocks signed where it should be.
-    ///
-    /// The second condition is what upstream does not check, and it is what
-    /// keeps a stray `LDBG` in a driver's code from being taken for the store.
+    /// Every area in `image`: each `LDBG` signature that starts one
+    /// (`LenovoDMIArea.found`).
     public static func locate(in image: [UInt8]) -> [LenovoDMIArea] {
         let signature = LenovoDMIFormat.ldbgSignature
         let areaSize = Int(LenovoDMIFormat.areaSize)
@@ -245,9 +262,8 @@ public enum LenovoDMI {
                 let offset = base.distance(to: hit.assumingMemoryBound(to: UInt8.self))
                 start = offset + 1
                 guard offset + areaSize <= buffer.count,
-                      buffer[(offset + 8)..<(offset + 16)].allSatisfy({ $0 == 0 }),
-                      let area = LenovoDMIArea.read(image, at: offset),
-                      area.blocks.contains(where: \.hasSignature)
+                      let area = LenovoDMIArea.found(stored: Array(buffer[offset..<(offset + areaSize)]),
+                                                     offset: UInt64(offset))
                 else { continue }
                 areas.append(area)
                 start = offset + areaSize

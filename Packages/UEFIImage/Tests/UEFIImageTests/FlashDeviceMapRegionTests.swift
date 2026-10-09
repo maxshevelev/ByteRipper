@@ -15,28 +15,7 @@ final class FlashDeviceMapRegionTests: XCTestCase {
 
     /// A flash device map whose entries carry the region types given.
     private static func map(_ entries: [Entry]) -> [UInt8] {
-        var body = BinaryWriter()
-        for entry in entries {
-            body.guid(entry.type)
-            body.fill(16, with: 0)                   // RegionId
-            body.u64(entry.offset)
-            body.u64(entry.size)
-            body.u32(FlashDeviceMap.modifiable)
-            body.fill(32, with: 0)                   // Hash
-        }
-        var header = BinaryWriter()
-        header.u32(FlashDeviceMap.signature)
-        header.u32(UInt32(FlashDeviceMap.headerSize) + UInt32(body.count))
-        header.u32(UInt32(FlashDeviceMap.headerSize))
-        header.u32(FlashDeviceMap.entrySize)
-        header.u8(FlashDeviceMap.entryFormat)
-        header.u8(3)                                 // Revision
-        header.u8(0)                                 // ExtensionCount
-        header.u8(0)                                 // Checksum, filled in below
-        header.u64(base)
-        var bytes = header.bytes
-        bytes[FlashDeviceMap.checksumOffset] = 0 &- Checksums.sum8(bytes)
-        return bytes + body.bytes
+        TestFlashDeviceMap.map(entries, base: base)
     }
 
     private static let firstStore = TestNVRAM.vssStore(

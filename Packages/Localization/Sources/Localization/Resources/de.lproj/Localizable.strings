@@ -1167,6 +1167,10 @@
 "Name in the catalogue" = "Name im Katalog";
 "Contents" = "Inhalt";
 "GPNV record" = "GPNV-Eintrag";
+"Lenovo DMI store" = "Lenovo-DMI-Speicher";
+"LDBG change log" = "LDBG-Änderungsprotokoll";
+"LDBG entry" = "LDBG-Eintrag";
+"LENV entry" = "LENV-Eintrag";
 "GPNV store" = "GPNV-Speicher";
 "Text" = "Text";
 "Text in the record" = "Text im Eintrag";

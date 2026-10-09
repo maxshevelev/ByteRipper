@@ -1167,6 +1167,10 @@
 "Name in the catalogue" = "Имя в каталоге";
 "Contents" = "Содержимое";
 "GPNV record" = "Запись GPNV";
+"Lenovo DMI store" = "Хранилище Lenovo DMI";
+"LDBG change log" = "Журнал изменений LDBG";
+"LDBG entry" = "Запись LDBG";
+"LENV entry" = "Запись LENV";
 "GPNV store" = "Хранилище GPNV";
 "Text" = "Текст";
 "Text in the record" = "Текст в записи";
