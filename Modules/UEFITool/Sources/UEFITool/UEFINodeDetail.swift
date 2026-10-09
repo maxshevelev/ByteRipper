@@ -153,7 +153,8 @@ public enum UEFIDetail {
         image: UEFIImage,
         reader: ImageReader,
         repairs: [ChecksumRepair] = [],
-        catalogue: GuidsCatalogue = .empty
+        catalogue: GuidsCatalogue = .empty,
+        lenovoDMIReaders: LenovoDMIFirmwareReaders? = nil
     ) -> UEFINodeDetail {
         var fields = commonFields(for: node, image: image)
         fields += headerFields(
@@ -342,6 +343,13 @@ public enum UEFIDetail {
             let amd = UEFIAMDFirmwareDetail.build(for: node, image: image, reader: reader, repairs: repairs)
             fields += amd.fields
             tables += amd.tables
+        }
+        // Lenovo's DMI store, read as a whole: the store's row sums it up.
+        if UEFILenovoDMIDetail.reads(node.kind) {
+            let lenovo = UEFILenovoDMIDetail.build(for: node, image: image, reader: reader,
+                                                   firmwareReaders: lenovoDMIReaders)
+            fields += lenovo.fields
+            tables += lenovo.tables
         }
         // A GPNV record's data is fields nobody has published: the text in
         // it is what can be read, at its offset in the data.
@@ -1213,6 +1221,11 @@ public enum UEFIDetail {
         case .amdEFS, .amdDirectory, .amdFirmwareEntry:
             break
 
+        // Lenovo's DMI store: its fields are read from the store as a whole,
+        // in the format's own terms (`LenovoDMI`), not from one row's bytes.
+        case .lenovoDMIStore, .ldbgLog, .ldbgEntry, .lenvBlock, .lenvEntry:
+            break
+
         // Its header is the table; the platform and the count are what the
         // blocks say of themselves. The table itself is read in `build`.
         case .biosGuardUpdate:
@@ -1696,6 +1709,11 @@ public enum UEFIDetail {
         case .hpSignatureBlock: return L("HP signature block")
         case .gpnvStore: return L("GPNV store")
         case .gpnvRecord: return L("GPNV record")
+        case .lenovoDMIStore: return L("Lenovo DMI store")
+        case .ldbgLog: return L("LDBG change log")
+        case .ldbgEntry: return L("LDBG entry")
+        case .lenvBlock: return L("LENV block")
+        case .lenvEntry: return L("LENV entry")
         case .amdEFS: return L("Embedded Firmware Structure")
         case .amdDirectory: return L("AMD firmware directory")
         case .amdFirmwareEntry: return L("AMD firmware entry")
@@ -1716,6 +1734,7 @@ public enum UEFIDetail {
         case .file: return UEFITypeNames.file(subtype)
         case .section: return UEFITypeNames.section(subtype)
         case .volume: return "Revision \(subtype)"
+        case .lenvBlock: return subtype == 1 ? L("In use", context: "LENV block") : L("Not in use")
         case .amdDirectory:
             return AMDFirmware.DirectoryKind(rawValue: subtype).map(AMDFirmware.kindName) ?? hex(subtype)
         case .region:

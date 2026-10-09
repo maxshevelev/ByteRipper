@@ -1,7 +1,9 @@
 import AgentKit
 import AppKit
 import HelpBook
+import LenovoDMI
 import Localization
+import PartCodec
 import MEFirmware
 import MEPresentation
 import MEReads
@@ -302,6 +304,7 @@ private struct ChecksumPass: Sendable {
         controller.onWillChoose = { [weak self] in self?.host.noteNavigationStep() }
         controller.onSelectTop = { [weak self] in self?.showTopNode() }
         controller.onRevealAtCaret = { [weak self] in self?.revealNodeAtCaret() }
+        controller.onShowDMIStore = { [weak self] index in self?.showDMIStore(index) }
         controller.onFixChecksum = { [weak self] nodeID in
             self?.fixChecksum(for: nodeID)
         }
@@ -316,6 +319,9 @@ private struct ChecksumPass: Sendable {
         }
         controller.onOpenUnpacked = { [weak self] nodeID in
             self?.openUnpackedInNewTab(for: nodeID)
+        }
+        controller.onOpenDecodedBlock = { [weak self] nodeID in
+            self?.openDecodedBlock(for: nodeID)
         }
         controller.onCompareWithUpdate = { [weak self] nodeID in
             self?.compareWithUpdate(for: nodeID)
@@ -542,6 +548,8 @@ private struct ChecksumPass: Sendable {
         meFileTableTask = nil
         meChecksumsTask?.cancel()
         meChecksumsTask = nil
+        // The last file's stores are not this one's.
+        controller.showDMIStores(tree?.dmiStores ?? [])
 
         guard let tree else {
             controller.endBusy()
@@ -570,7 +578,14 @@ private struct ChecksumPass: Sendable {
             // What the reader had open on this file, put back before anything
             // is announced — coming back to a panel and finding the tree shut
             // is coming back to a panel that forgot.
-            self.controller.restoreOpenRows(self.treeProvider?.openUEFIRows() ?? [])
+            let remembered = self.treeProvider?.openUEFIRows() ?? []
+            if remembered.isEmpty, self.treeProvider?.takeOpensTopLevelUEFIRows() == true {
+                // A part opened out of another tree: its first level is what
+                // the reader opened it to see.
+                self.controller.openTopLevelRows()
+            } else {
+                self.controller.restoreOpenRows(remembered)
+            }
             // A parked ME focus is the sub-tree's half of the selection: run
             // the analysis (reusing the pane's cache) and open the region onto
             // it, so the row the reader was looking at is back on screen.
@@ -578,6 +593,7 @@ private struct ChecksumPass: Sendable {
                 self.openMERegion(regionID)
             }
             self.requestProtectedRanges(after: 0)
+            self.requestDMIStores()
             // `onDisplay` means "the panel is showing this file": the top
             // level, and its own checksums read. A branch opened later brings
             // its own pass, announced through `onChecksums`.
@@ -614,9 +630,22 @@ private struct ChecksumPass: Sendable {
                 askedForAddresses = false
                 // Not on every keystroke: a reading opens every volume's files.
                 requestProtectedRanges(after: 0.5)
+                // The stores went with the edit; the button waits for them.
+                controller.showDMIStores([])
+                requestDMIStores()
             }
             verifyNewChecksums()
             show(publish: true, rowsChanged: true)
+        case .dmiStoresRead:
+            controller.showDMIStores(tree?.dmiStores ?? [])
+            // Lenovo's store names its entries by key; which drivers read
+            // each is a search of every driver, decompressed — behind the
+            // store, which is worth reading before that is done.
+            if tree?.dmiStores?.contains(where: { $0.kind == .lenovoDMIStore }) == true {
+                tree?.resolveLenovoDMIReaders()
+            }
+        case .lenovoDMIReadersRead:
+            show(rowsChanged: false)
         case .expanded, .addressesResolved, .protectedRangesRead, .dvarSettingsRead:
             // A branch appearing does not move the rows on screen: the panel
             // opens the row it was asked to open, itself, when the branch is
@@ -639,6 +668,12 @@ private struct ChecksumPass: Sendable {
             tree.resolveProtectedRanges {}
             tree.resolveDvarSettings()
         }
+    }
+
+    /// Where the image keeps the board's identity, found by the tree off the
+    /// main actor; the DMI button appears when it lands.
+    private func requestDMIStores() {
+        tree?.resolveDMIStores()
     }
 
     /// What the reader has open, written through to where the tree lives. It
@@ -811,7 +846,8 @@ private struct ChecksumPass: Sendable {
                     for: $0, image: image,
                     reader: readers.reader(for: $0.space) ?? ImageReader([UInt8]()),
                     repairs: nodeRepairs[$0.id] ?? [],
-                    catalogue: guids
+                    catalogue: guids,
+                    lenovoDMIReaders: tree.lenovoDMIReaders
                 )
             } ?? .empty
         }
@@ -1476,6 +1512,29 @@ private struct ChecksumPass: Sendable {
         }
     }
 
+    /// Shows the store of the board's identity at `index` of the tree's list
+    /// (`LazyUEFITree.dmiStores`): opens the branches on the way, selects
+    /// its row and brings its bytes on screen in the dump — the DMI button's
+    /// answer, and unlike the reveal a move of the dump, since nothing in the
+    /// dump asked.
+    public func showDMIStore(_ index: Int) {
+        guard let tree, tree.isReady, let stores = tree.dmiStores, stores.indices.contains(index) else { return }
+        let store = stores[index]
+        controller.showBusy()
+        tree.materialize(containing: store.range.lowerBound) { [weak self] chain in
+            guard let self else { return }
+            self.controller.endBusy()
+            guard let node = chain.last(where: { $0.kind == store.kind && $0.range == store.range }) else { return }
+            self.host.noteNavigationStep()
+            // A whole show, not a selection's: the row may sit in branches
+            // the outline has not opened, and the show is what opens them.
+            // Published, so the dump comes to the store's bytes.
+            self.focus = node.id
+            self.meFocus = nil
+            self.show(publish: true)
+        }
+    }
+
     // help: panel.uefi.fix-checksum
     public func fixChecksum(for nodeID: NodeID) {
         guard !host.isReadOnly else {
@@ -1576,19 +1635,31 @@ private struct ChecksumPass: Sendable {
                 source = UEFIPresenter.fileSource(of: node, in: image)
             }
         }
-        let chosenSource = source
-        withDecompressedBytes(of: nodeID, nothing: L("There is nothing decompressed to open here.")) {
-            [weak self] decompressed, bytes in
-            guard let self, let source = chosenSource else { return }
-            let name = decompressed.tabName(fileName: self.host.fileName)
-            if let provider = self.treeProvider {
-                // Where the bytes go back to: the whole buffer, a run of
-                // sections (`UPDATE_IN_PARENT.md` §6).
-                provider.openPart(bytes, named: name, linkedTo: source, layout: decompressed.layout,
-                                  part: UEFIRebuild.Target(space: decompressed.space))
-            } else {
-                self.host.openPart(bytes, named: name, linkedTo: source)
-            }
+        guard let tree, tree.isReady, let node = tree.image().node(nodeID),
+              let decompressed = UEFIPresenter.decompressedBody(for: node), let source
+        else {
+            fail(L("There is nothing decompressed to open here."))
+            return
+        }
+        // Where the bytes go back to: the whole buffer, a run of sections
+        // (`UPDATE_IN_PARENT.md` §6). The codec decompresses them for the
+        // panel and compresses them again on the way back.
+        let codec = UEFIPartCodec(
+            target: UEFIRebuild.Target(space: decompressed.space),
+            compression: UEFIPresenter.compressionName(of: decompressed.space, in: tree.image()),
+            readers: tree.spaceReaders
+        )
+        openPart(named: decompressed.tabName(fileName: host.fileName), linkedTo: source,
+                 layout: decompressed.layout, codec: codec)
+    }
+
+    /// A part through the host: told its layout when the host can take it.
+    private func openPart(named name: String, linkedTo source: Range<UInt64>,
+                          layout: UEFIRootLayout, codec: any PartCodec) {
+        if let opener = host as? any UEFIPartOpening {
+            opener.openPart(named: name, linkedTo: source, layout: layout, codec: codec)
+        } else {
+            host.openPart(named: name, linkedTo: source, codec: codec)
         }
     }
 
@@ -1622,8 +1693,31 @@ private struct ChecksumPass: Sendable {
                 self.fail(L("The variable does not decompress."))
                 return
             }
-            self.host.openPart(text, named: name, linkedTo: source)
+            self.host.openPart(named: name, linkedTo: source, codec: ReadOnlyPartCodec(
+                text,
+                title: L("This cannot be put back"),
+                reason: L("This is the text the variable unpacks to, and nothing here packs it again.")
+            ))
         }
+    }
+
+    /// The LENV block a row is or is in, decoded, in a fragment panel over
+    /// the dump: the serial number reads as text there and can be typed over.
+    /// Update in Parent puts it back through the same codec — encoded again
+    /// with the key in its header, its checksum recomputed — and the codec
+    /// travels with the panel, so that works after this session has ended.
+    ///
+    /// Public for the same reason as `openNodeInPanel(for:body:)`.
+    public func openDecodedBlock(for nodeID: NodeID) {
+        guard let tree, tree.isReady, let image = currentImage, let node = image.node(nodeID),
+              let reader = tree.spaceReaders.reader(for: .file),
+              let found = UEFILenovoDMIDetail.decodableBlock(for: node, image: image, reader: reader)
+        else {
+            fail(L("There is no LENV block to decode here."))
+            return
+        }
+        openPart(named: L("%1$@ (decoded)", found.name), linkedTo: found.block.range,
+                 layout: .image, codec: LenovoDMIBlockCodec(block: found.block))
     }
 
     /// What a double click on a node's row does: opens what the node holds as a
@@ -1636,6 +1730,13 @@ private struct ChecksumPass: Sendable {
     public func openNodeContent(for nodeID: NodeID) {
         guard let tree, tree.isReady, let node = tree.image().node(nodeID) else {
             fail(L("There is nothing to open here."))
+            return
+        }
+        // A LENV block's bytes are encoded: what it holds is the block
+        // decoded, from the block's row and from any of its entries'.
+        if let reader = tree.spaceReaders.reader(for: .file),
+           UEFILenovoDMIDetail.decodableBlock(for: node, image: tree.image(), reader: reader) != nil {
+            openDecodedBlock(for: nodeID)
             return
         }
         switch UEFIPresenter.content(of: node) {
@@ -1662,31 +1763,21 @@ private struct ChecksumPass: Sendable {
             fail(L("There is nothing to open here."))
             return
         }
-        let readers = tree.spaceReaders
-        let name = open.partName(fileName: host.fileName)
-        controller.showBusy()
-        Task { [weak self] in
-            let bytes = await UEFIToolSession.bytes(of: open, readers: readers)
-            guard let self else { return }
-            self.controller.endBusy()
-            guard let bytes, !bytes.isEmpty else {
-                self.fail(L("Those bytes could not be read."))
-                return
-            }
-            guard let provider = self.treeProvider else {
-                self.host.openPart(bytes, named: name, linkedTo: open.source)
-                return
-            }
-            if open.space == .file {
-                provider.openFilePart(bytes, named: name, linkedTo: open.source,
-                                      layout: open.layout, part: open.rebuild)
-            } else {
-                provider.openPart(bytes, named: name, linkedTo: open.source,
-                                  layout: open.layout,
-                                  part: open.rebuild ?? UEFIRebuild.Target(space: open.space,
-                                                                           range: open.range))
-            }
+        // The file's own bytes go back as they are, or through the planner
+        // when the node is a structure it lays out again; bytes of a buffer a
+        // compressed section opened to go back through that section.
+        let codec: any PartCodec
+        if open.space == .file, open.rebuild == nil {
+            codec = CopyPartCodec()
+        } else {
+            codec = UEFIPartCodec(
+                target: open.rebuild ?? UEFIRebuild.Target(space: open.space, range: open.range),
+                compression: UEFIPresenter.compressionName(of: open.space, in: tree.image()),
+                readers: tree.spaceReaders
+            )
         }
+        openPart(named: open.partName(fileName: host.fileName), linkedTo: open.source,
+                 layout: open.layout, codec: codec)
     }
 
     /// Saves a node of the tree — or its body alone — to a file: the bytes

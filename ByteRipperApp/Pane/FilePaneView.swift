@@ -134,6 +134,12 @@ final class FilePaneView: NSView {
     /// broken (`Design/UEFI/UPDATE_IN_PARENT.md` §2.2). Internal so a test can
     /// read what it says.
     let linkButton = NSButton()
+    /// What the part's codec says its bytes are — `LZMA`, `XOR 77` — beside
+    /// the title, so a panel of plain text does not read as the file's own
+    /// bytes. Collapsed for a copy, which has nothing to say.
+    let codecBadge = PartBadgeView()
+    private var badgeCollapsed: NSLayoutConstraint?
+    private var badgeGap: NSLayoutConstraint?
 
     /// Which symbol the link is showing: `link` while there is a way back,
     /// `xmark.octagon` once there is not, nil with no link at all.
@@ -488,6 +494,7 @@ final class FilePaneView: NSView {
         header.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         header.addSubview(documentIcon)
         header.addSubview(titleLabel)
+        header.addSubview(codecBadge)
         header.addSubview(linkButton)
         header.addSubview(updateButton)
         header.addSubview(lockLabel)
@@ -496,6 +503,15 @@ final class FilePaneView: NSView {
         documentIcon.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         linkButton.translatesAutoresizingMaskIntoConstraints = false
+        codecBadge.translatesAutoresizingMaskIntoConstraints = false
+        codecBadge.setContentHuggingPriority(.required, for: .horizontal)
+        // Holds its word while the parent's name gives way, as the Modified
+        // button does: it is short, and it says what the bytes are.
+        codecBadge.setContentCompressionResistancePriority(NSLayoutConstraint.Priority(500), for: .horizontal)
+        codecBadge.isHidden = true
+        let badgeCollapsed = codecBadge.widthAnchor.constraint(equalToConstant: 0)
+        badgeCollapsed.isActive = true
+        self.badgeCollapsed = badgeCollapsed
         lockLabel.translatesAutoresizingMaskIntoConstraints = false
         updateButton.translatesAutoresizingMaskIntoConstraints = false
         // The word and the glyph in one button, so what it says and what it
@@ -560,7 +576,12 @@ final class FilePaneView: NSView {
         let headerChain: [NSLayoutConstraint] = [
             documentIcon.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 10),
             titleLabel.leadingAnchor.constraint(equalTo: documentIcon.trailingAnchor, constant: 6),
-            linkButton.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 6),
+            {
+                let gap = codecBadge.leadingAnchor.constraint(equalTo: titleLabel.trailingAnchor, constant: 0)
+                badgeGap = gap
+                return gap
+            }(),
+            linkButton.leadingAnchor.constraint(equalTo: codecBadge.trailingAnchor, constant: 6),
             updateButton.leadingAnchor.constraint(equalTo: linkButton.trailingAnchor, constant: 6),
             updateButton.trailingAnchor.constraint(lessThanOrEqualTo: lockLabel.leadingAnchor, constant: -6),
             lockLabel.trailingAnchor.constraint(equalTo: collapseButton.leadingAnchor, constant: -6),
@@ -572,6 +593,7 @@ final class FilePaneView: NSView {
             documentIcon.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             linkButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            codecBadge.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             updateButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             lockLabel.centerYAnchor.constraint(equalTo: header.centerYAnchor),
             collapseButton.centerYAnchor.constraint(equalTo: header.centerYAnchor),
@@ -1230,6 +1252,7 @@ final class FilePaneView: NSView {
         collapseButton.isHidden = !headerFits || onCollapse == nil
         lockLabel.isHidden = !headerFits
         linkButton.isHidden = !headerFits || viewModel.origin == nil
+        codecBadge.isHidden = !headerFits || viewModel.origin?.codec.badge == nil
         updateButton.isHidden = !headerFits || !updateOffered
         // Both halves of the bar's own chrome go together: the indicator is
         // pinned to the bar rather than arranged in the stack, so hiding the
@@ -1631,6 +1654,7 @@ final class FilePaneView: NSView {
     /// in colour reads as a stray glyph. It is deliberately not the red of
     /// modified bytes: that one means "not saved yet", which this is not.
     private func updateLink() {
+        updateCodecBadge()
         guard let origin = viewModel.origin else {
             linkButton.isHidden = true
             linkCollapsed?.isActive = true
@@ -1663,6 +1687,18 @@ final class FilePaneView: NSView {
         observeParent(origin.parent)
         // The parent changing is also how a pane learns its changes went back.
         updateUpdateOffer()
+    }
+
+    /// The codec's badge, or none: a part that is a copy of its source has
+    /// nothing to say about its bytes, and a pane with no parent is no part.
+    // help: pane.header.codec-badge
+    private func updateCodecBadge() {
+        let badge = viewModel.origin?.codec.badge
+        codecBadge.text = badge?.text ?? ""
+        ControlHelp.describe(codecBadge, name: badge?.text ?? "", tooltip: badge?.explanation)
+        codecBadge.isHidden = badge == nil || bounds.width < Self.trailingChromeMinWidth && !isHeaderHoisted
+        badgeCollapsed?.isActive = badge == nil
+        badgeGap?.constant = badge == nil ? 0 : 6
     }
 
     /// Listens to the parent — its bytes changing, its closing — so the link

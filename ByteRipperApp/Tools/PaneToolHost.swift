@@ -1,6 +1,8 @@
 import Cocoa
 import ByteRipperCore
 import ToolModuleKit
+import UEFIContentSource
+import PartCodec
 import UEFIImage
 import FITTool
 import MEFirmware
@@ -157,33 +159,22 @@ import MEFirmware
                                 outcome: isProblem ? .problem : .success)
     }
 
-    /// The source's own bytes, copied out: they go back as they are.
-    func openPart(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>) {
+    /// A part of the file, through the window's one way of opening parts.
+    func openPart(named name: String, linkedTo source: Range<UInt64>, codec: any PartCodec) {
         guard let pane, let owner else { return }
-        owner.openPartForTool(bytes, named: name, from: pane, source: source,
-                                       layout: .image, kind: .copy, part: nil)
+        owner.openPart(named: name, from: pane, source: source, codec: codec)
     }
+}
 
-    /// `UEFITreeProviding`'s other form: a part of the file itself — a node of
-    /// the tree, or its body — which goes back as it is.
-    func openFilePart(
-        _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>,
-        layout: UEFIRootLayout, part: UEFIRebuild.Target?
-    ) {
+extension PaneToolHost: UEFIPartOpening {
+    /// The same, told what a UEFI panel opened on the part reads it as — and
+    /// opened with the tool that asked, its tree's first level open: a node
+    /// taken out of the tree is opened to be read as one.
+    func openPart(named name: String, linkedTo source: Range<UInt64>,
+                  layout: UEFIRootLayout, codec: any PartCodec) {
         guard let pane, let owner else { return }
-        owner.openPartForTool(bytes, named: name, from: pane, source: source,
-                              layout: layout, kind: .copy, part: part)
-    }
-
-    /// `UEFITreeProviding`'s form: what the source decompresses to, told what
-    /// its bytes are and where they go back to.
-    func openPart(
-        _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>,
-        layout: UEFIRootLayout, part: UEFIRebuild.Target
-    ) {
-        guard let pane, let owner else { return }
-        owner.openPartForTool(bytes, named: name, from: pane, source: source,
-                                       layout: layout, kind: .decompressed, part: part)
+        owner.openPart(named: name, from: pane, source: source, layout: layout, codec: codec,
+                       tool: tools?.activeIdentifier)
     }
 }
 
@@ -207,6 +198,12 @@ extension PaneToolHost: UEFITreeProviding {
 
     func setOpenUEFIRows(_ rows: Set<NodeID>) {
         pane?.uefiState.openUEFIRows = rows
+    }
+
+    func takeOpensTopLevelUEFIRows() -> Bool {
+        guard let state = pane?.uefiState, state.opensTopLevelUEFIRows else { return false }
+        state.opensTopLevelUEFIRows = false
+        return true
     }
 }
 

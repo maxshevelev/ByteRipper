@@ -40,6 +40,8 @@ let package = Package(
         .package(path: "../../Packages/AppPalette"),
         .package(path: "../../Packages/UEFIImage"),
         .package(path: "../../Packages/UEFIContentSource"),
+        // The codec a part the panel opens goes back into the image through.
+        .package(path: "../../Packages/PartCodec"),
         .package(path: "../../Packages/FreshData"),
         // The ME branch of the structure tree: the engine's model and the
         // shared presentation over it (Design/ME_REGION_IN_UEFI_TREE_PLAN.md).
@@ -51,6 +53,9 @@ let package = Package(
         // What the module answers an agent with (`UEFIAgentQueries`,
         // Design/AGENT_PLAN.md).
         .package(path: "../../Packages/AgentKit"),
+        // Lenovo's DMI store, read in the format's own terms for the rows the
+        // parser makes of it.
+        .package(path: "../../Packages/LenovoDMI"),
         // Only for the tests, to build a compressed section byte by byte.
         .package(path: "../../Packages/FirmwareCompression")
     ],
@@ -60,7 +65,8 @@ let package = Package(
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
-            .product(name: "AgentKit", package: "AgentKit")
+            .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "LenovoDMI", package: "LenovoDMI")
         ]),
         .target(name: "UEFIToolUI", dependencies: [
             .product(name: "HelpUI", package: "HelpUI"),
@@ -73,10 +79,12 @@ let package = Package(
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "UEFIContentSource", package: "UEFIContentSource"),
+            .product(name: "PartCodec", package: "PartCodec"),
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "MEPresentation", package: "MEPresentation"),
             .product(name: "MEReads", package: "MEReads"),
-            .product(name: "AgentKit", package: "AgentKit")
+            .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "LenovoDMI", package: "LenovoDMI")
         ]),
         .testTarget(name: "UEFIToolTests", dependencies: [
             "UEFITool",
@@ -84,7 +92,8 @@ let package = Package(
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "FirmwareCompressionTestSupport", package: "FirmwareCompression"),
-            .product(name: "AgentKit", package: "AgentKit")
+            .product(name: "AgentKit", package: "AgentKit"),
+            .product(name: "LenovoDMI", package: "LenovoDMI")
         ])
     ]
 )

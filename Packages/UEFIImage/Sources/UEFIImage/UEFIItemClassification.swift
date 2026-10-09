@@ -44,7 +44,8 @@ extension UEFINode {
         // makes of them.
         case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent, .picture, .sound, .hpSignatureBlock,
              .gpnvStore, .gpnvRecord, .amdEFS, .amdDirectory, .amdFirmwareEntry,
-             .biosGuardUpdate, .biosGuardEntry:
+             .biosGuardUpdate, .biosGuardEntry,
+             .lenovoDMIStore, .ldbgLog, .ldbgEntry, .lenvBlock, .lenvEntry:
             return UEFITypes.Item.padding.rawValue
         case .freeSpace: return UEFITypes.Item.freeSpace.rawValue
         // Data nobody claimed is a run of bytes with a type, not a structure, so
@@ -93,7 +94,8 @@ extension UEFINode {
             return UEFITypes.Sub.x86128kStartupApDataEntry
         case .padding, .flashDeviceMapRegion, .ecImage, .fitComponent, .picture, .sound, .hpSignatureBlock,
              .gpnvStore, .gpnvRecord, .amdEFS, .amdDirectory, .amdFirmwareEntry,
-             .biosGuardUpdate, .biosGuardEntry:
+             .biosGuardUpdate, .biosGuardEntry,
+             .lenovoDMIStore, .ldbgLog, .ldbgEntry, .lenvBlock, .lenvEntry:
             return Self.paddingSubtype(of: self)
         case .freeSpace:
             return nil

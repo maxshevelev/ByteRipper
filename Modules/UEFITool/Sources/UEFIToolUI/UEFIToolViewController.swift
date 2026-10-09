@@ -34,6 +34,9 @@ import UEFITool
     /// The title-row reveal button was clicked: show the node under the caret
     /// in the dump.
     var onRevealAtCaret: (() -> Void)?
+    /// The DMI button, or one of its menu's stores, was chosen: show that
+    /// store, by its place in `showDMIStores`'s list.
+    var onShowDMIStore: ((Int) -> Void)?
     /// A node's Open item was chosen: the node itself, or its body alone
     /// (`Design/FRAGMENT_PANELS_PLAN.md`).
     var onOpenNode: ((NodeID, Bool) -> Void)?
@@ -56,6 +59,8 @@ import UEFITool
     var onOpenContent: ((NodeID) -> Void)?
     /// The Open Decompressed item of a bzip2 variable was chosen.
     var onOpenUnpacked: ((NodeID) -> Void)?
+    /// The Open Decoded Block item of a LENV block or entry was chosen.
+    var onOpenDecodedBlock: ((NodeID) -> Void)?
     /// The BIOS region's Compare with PFAT Update File item was chosen.
     var onCompareWithUpdate: ((NodeID) -> Void)?
     /// A row was opened or shut. What is open belongs to the file rather than
@@ -225,6 +230,14 @@ import UEFITool
     /// Whether a refresh is already queued, and whether any of the shows it
     /// stands for moved rows. One refresh serves however many shows land while
     /// an animation runs.
+    /// The top level as the outline last counted it. What `topLevelRows`
+    /// reads changes the moment a show lands, but the outline is reloaded only
+    /// when its turn in the queue comes (`queueRefresh`); a layout pass in
+    /// between asks for rows by the count it already holds, and has to get
+    /// that many. So the rows are taken when the outline counts them, and
+    /// handed out from here until it counts again.
+    private var countedTopLevelRows: [Any] = []
+
     private var queuedRefresh: Bool?
 
     private let summaryLabel = NSTextField(labelWithString: "")
@@ -246,6 +259,15 @@ import UEFITool
     private let filterButton = NSButton()
     /// Opens and shuts the search bar: left of the filter, the same quiet icon.
     private let searchButton = NSButton()
+    /// Goes to where the image keeps the board's identity — Lenovo's DMI
+    /// store, ASUS's GPNV — however deep in the tree it lies. Left of the
+    /// search, and there only when the image has one: a button that can only
+    /// say "none here" is a button on every dump of every other board.
+    private let dmiButton = NSButton()
+    private var dmiButtonWidth: NSLayoutConstraint?
+    private var dmiButtonGap: NSLayoutConstraint?
+    /// The stores the button goes to, in file order.
+    private var dmiStores: [DMIStore] = []
     private let searchBar = UEFISearchBar()
     /// What the search has opened in the tree and owes a closing.
     private var searchOpenings = UEFISearchOpenings()
@@ -375,6 +397,22 @@ import UEFITool
         filterButton.action = #selector(filterClicked)
         filterButton.translatesAutoresizingMaskIntoConstraints = false
 
+        // help: panel.uefi.dmi-area
+        dmiButton.image = NSImage(
+            systemSymbolName: "person.text.rectangle",
+            accessibilityDescription: L("Show DMI Area")
+        )
+        dmiButton.symbolConfiguration = revealButton.symbolConfiguration
+        dmiButton.isBordered = false
+        dmiButton.imagePosition = .imageOnly
+        dmiButton.contentTintColor = .secondaryLabelColor
+        ControlHelp.describe(dmiButton, name: L("Show DMI Area"),
+                             tooltip: L("Show in the tree where the image keeps the board's serial number, UUID and model"))
+        dmiButton.target = self
+        dmiButton.action = #selector(dmiClicked)
+        dmiButton.translatesAutoresizingMaskIntoConstraints = false
+        dmiButton.isHidden = true
+
         // help: panel.uefi.search
         searchButton.image = NSImage(
             systemSymbolName: "magnifyingglass",
@@ -455,6 +493,7 @@ import UEFITool
         bottomRow.addArrangedSubview(noticeLabel)
 
         view.addSubview(summaryLabel)
+        view.addSubview(dmiButton)
         view.addSubview(searchButton)
         view.addSubview(filterButton)
         view.addSubview(revealButton)
@@ -462,6 +501,11 @@ import UEFITool
         view.addSubview(splitter)
         view.addSubview(bottomRow)
 
+        // Hidden, the button takes no room and leaves no gap.
+        let dmiWidth = dmiButton.widthAnchor.constraint(equalToConstant: 0)
+        let dmiGap = dmiButton.trailingAnchor.constraint(equalTo: searchButton.leadingAnchor, constant: 0)
+        dmiButtonWidth = dmiWidth
+        dmiButtonGap = dmiGap
         let barWidth = progressBar.widthAnchor.constraint(equalToConstant: 150)
         barWidth.priority = .defaultHigh
         NSLayoutConstraint.activate([
@@ -470,8 +514,12 @@ import UEFITool
             // The button owns the title row's right end; a long image name
             // truncates before it rather than running under it.
             summaryLabel.trailingAnchor.constraint(
-                lessThanOrEqualTo: searchButton.leadingAnchor, constant: -8
+                lessThanOrEqualTo: dmiButton.leadingAnchor, constant: -8
             ),
+            dmiWidth,
+            dmiGap,
+            dmiButton.heightAnchor.constraint(equalToConstant: 18),
+            dmiButton.centerYAnchor.constraint(equalTo: summaryLabel.centerYAnchor),
             searchButton.widthAnchor.constraint(equalToConstant: 18),
             searchButton.heightAnchor.constraint(equalToConstant: 18),
             searchButton.trailingAnchor.constraint(equalTo: filterButton.leadingAnchor, constant: -4),
@@ -969,6 +1017,12 @@ import UEFITool
     /// it is, and a branch that has been dropped since is read again on the
     /// way. Each waits for the one before it, so every row exists by the time
     /// its own turn comes.
+    /// Opens every row of the top level, one level deep — what a part taken
+    /// out of another file's tree is opened to show.
+    func openTopLevelRows() {
+        restoreOpenRows(Set(UEFITreeDisplay.listed(presented.rows, showsEmptyPadding: showsEmptyPadding).map(\.id)))
+    }
+
     func restoreOpenRows(_ rows: Set<NodeID>) {
         openInTurn(rows.sorted { $0.path.count < $1.path.count }, from: 0)
     }
@@ -1275,6 +1329,43 @@ import UEFITool
     @objc private func revealClicked() {
         onRevealAtCaret?()
     }
+
+    // MARK: - The board's identity
+
+    /// The stores of the board's identity the image holds: the DMI button
+    /// shows when there is one, and goes away for an image with none.
+    func showDMIStores(_ stores: [DMIStore]) {
+        dmiStores = stores
+        dmiButton.isHidden = stores.isEmpty
+        dmiButtonWidth?.constant = stores.isEmpty ? 0 : 18
+        dmiButtonGap?.constant = stores.isEmpty ? 0 : -4
+    }
+
+    /// One store is gone to at once; between several the reader picks from a
+    /// menu under the button, each by what it is and where.
+    @objc private func dmiClicked() {
+        guard dmiStores.count > 1 else {
+            if !dmiStores.isEmpty { onShowDMIStore?(0) }
+            return
+        }
+        let menu = NSMenu()
+        for (index, store) in dmiStores.enumerated() {
+            let item = NSMenuItem(title: UEFITreeDisplay.dmiStoreTitle(store),
+                                  action: #selector(dmiStoreChosen(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = index
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: dmiButton.bounds.height + 4), in: dmiButton)
+    }
+
+    @objc private func dmiStoreChosen(_ item: NSMenuItem) {
+        onShowDMIStore?(item.tag)
+    }
+
+    /// For the tests: whether the DMI button is on screen, and its click.
+    var isDMIButtonShownForTesting: Bool { !dmiButton.isHidden }
+    func clickDMIButtonForTesting() { dmiClicked() }
 
     // MARK: - Searching the tree
 
@@ -2057,7 +2148,10 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     }
 
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
-        guard let item else { return topLevelRows.count }
+        guard let item else {
+            countedTopLevelRows = topLevelRows
+            return countedTopLevelRows.count
+        }
         if let meRow = item as? MEOutlineRow {
             return meNode(of: meRow)?.children.count ?? 0
         }
@@ -2071,7 +2165,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             return meRow(children[index].path)
         }
         guard let item, let row = item as? UEFITreeRow, !row.isLoading
-        else { return topLevelRows[index] }
+        else { return countedTopLevelRows[index] }
         return childrenList(for: row.id)[index]
     }
 
@@ -2183,8 +2277,10 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// What a row wears besides its name, decided in the pure target.
     private func marks(for node: UEFINode) -> ToolRowMarks {
         guard let image else { return .none }
+        // The bytes, only for a row whose marks are read off them.
+        let reader = node.kind == .lenvBlock ? tree?.spaceReaders.reader(for: node.space) : nil
         return UEFITreeMarks.marks(for: node, in: image, badChecksums: badChecksums[node.id] ?? [],
-                                   isOpen: outline.isItemExpanded(row(node.id)))
+                                   isOpen: outline.isItemExpanded(row(node.id)), reader: reader)
     }
 
     /// One row's marks again, on its row view and its Name cell — what a row
@@ -2239,7 +2335,8 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             // space; a VSS one is read by its store's format, and the store
             // is in the tree as it has been opened, not in the image.
             let reader = UEFITreeDisplay.showsValue(node) ? tree?.spaceReaders.reader(for: node.space) : nil
-            let store = node.kind == .vssEntry && !node.id.path.isEmpty
+            let store = (node.kind == .vssEntry || node.kind == .lenvEntry || node.kind == .ldbgEntry)
+                && !node.id.path.isEmpty
                 ? tree?.node(NodeID(Array(node.id.path.dropLast()))) : nil
             return UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image, reader: reader, store: store)
         }
@@ -2412,6 +2509,20 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = node.id
             items.append(item)
         }
+        // A LENV block, or an entry in one, opens decoded: the entries read
+        // as text and can be typed over, and go back encoded.
+        // help: panel.uefi.open-decoded-block
+        if let image, let reader = tree?.spaceReaders.reader(for: .file),
+           UEFILenovoDMIDetail.decodableBlock(for: node, image: image, reader: reader) != nil {
+            let open = NSMenuItem(
+                title: L("Open Decoded Block"),
+                action: #selector(openDecodedBlockClicked(_:)),
+                keyEquivalent: ""
+            )
+            open.target = self
+            open.representedObject = node.id
+            items.append(open)
+        }
         if UEFIPresenter.isBZip2Variable(node) {
             let open = NSMenuItem(
                 title: L("Open Decompressed Variable"),
@@ -2473,6 +2584,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     @objc private func saveDecompressedClicked(_ sender: NSMenuItem) {
         guard let nodeID = sender.representedObject as? NodeID else { return }
         onSaveDecompressed?(nodeID)
+    }
+
+    @objc private func openDecodedBlockClicked(_ sender: NSMenuItem) {
+        guard let nodeID = sender.representedObject as? NodeID else { return }
+        onOpenDecodedBlock?(nodeID)
     }
 
     @objc private func openUnpackedClicked(_ sender: NSMenuItem) {

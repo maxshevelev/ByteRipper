@@ -1,4 +1,5 @@
 import XCTest
+import PartCodec
 import AppKit
 @testable import ToolModuleKit
 
@@ -58,7 +59,7 @@ final class SeamTests: XCTestCase {
         func report(title: String, message: String, isProblem: Bool) {}
         func requestFile(kinds: [String]) async -> ToolFile? { nil }
         func exportFile(_ bytes: [UInt8], suggestedName: String) async -> Bool { false }
-        func openPart(_ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>) {}
+        func openPart(named name: String, linkedTo source: Range<UInt64>, codec: any PartCodec) {}
     }
 
     private struct FrozenBytes: ToolContentReader {

@@ -263,6 +263,9 @@ final class Parser {
         // What tables elsewhere name, then what announces itself only in
         // padding — each read into the padding as rows of its own.
         var read = readingMapRegions(nodes, emptyByte: emptyByte, depth: depth)
+        // Before anything else reads padding: the map's three regions become
+        // the one store they are.
+        read = readingLenovoDMIStores(read, emptyByte: emptyByte)
         read = readingFITComponents(read, emptyByte: emptyByte)
         read = readingECFirmware(read, emptyByte: emptyByte)
         read = readingHPSignatureBlocks(read, emptyByte: emptyByte)

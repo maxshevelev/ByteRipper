@@ -45,7 +45,10 @@ let package = Package(
         // The shape of an agent's tool (`ToolAgent.swift`): what a
         // tool-module answers an agent with, declared on the seam so the app
         // can list it without knowing the module (`Design/AGENT_PLAN.md`).
-        .package(path: "../AgentKit")
+        .package(path: "../AgentKit"),
+        // What a part panel's bytes are to the file's: the seam hands a
+        // codec over when a tool-module opens a part.
+        .package(path: "../PartCodec")
     ],
     targets: [
         .target(name: "ToolModuleKit",
@@ -55,7 +58,8 @@ let package = Package(
                     .product(name: "HelpBook", package: "HelpBook"),
                     .product(name: "HelpUI", package: "HelpUI"),
                     .product(name: "ALSplitView", package: "ALSplitView"),
-                    .product(name: "AgentKit", package: "AgentKit")
+                    .product(name: "AgentKit", package: "AgentKit"),
+                    .product(name: "PartCodec", package: "PartCodec")
                 ]),
         .testTarget(
             name: "ToolModuleKitTests",
@@ -69,7 +73,8 @@ let package = Package(
                 .product(name: "HelpUI", package: "HelpUI"),
                 .product(name: "Localization", package: "Localization"),
                 .product(name: "ALSplitView", package: "ALSplitView"),
-                .product(name: "AgentKit", package: "AgentKit")
+                .product(name: "AgentKit", package: "AgentKit"),
+                .product(name: "PartCodec", package: "PartCodec")
             ]
         )
     ]

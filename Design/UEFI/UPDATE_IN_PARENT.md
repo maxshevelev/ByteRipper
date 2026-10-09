@@ -166,31 +166,36 @@ A zone no tool-module rebuilds (a FIT table, a microcode, a range someone
 published): **the same length only**, written over the zone's range. Any other
 length is refused — the app does not know what the bytes after the zone mean.
 
-### 4.2. A structured origin
+### 4.2. A structured origin — the codec
 
-The app owns the link, the header and the command. What an origin *means* is a
-tool-module's business, so a tool-module can say it rebuilds origins of a kind:
+*As built (2026-10-03).* Every part carries a codec (`Packages/PartCodec`):
 
 ```swift
-/// A tool-module that can put a part back into its parent.
-public protocol ToolRebuilder {
-    /// Whether this origin is one this module rebuilds.
-    func canRebuild(_ origin: ToolOrigin) -> Bool
-    /// The writes that put `bytes` back, or why not. Off the main actor,
-    /// over a snapshot of the parent.
-    func rebuild(_ bytes: [UInt8], at origin: ToolOrigin,
-                 in parent: any ToolContentReader) async -> ToolRebuild
-}
-
-public enum ToolRebuild {
-    case writes(ToolTransaction, warnings: [String])
-    case refused(String)
+public protocol PartCodec: Sendable {
+    func decode(_ parent: PartParent) throws -> [UInt8]          // what the panel shows
+    func encode(_ part: [UInt8], into parent: PartParent) throws -> PartUpdate  // what goes back
+    var isImmediate: Bool { get }        // encode on the spot, or behind a sheet
+    var decodesImmediately: Bool { get } // open now, or when decoded off the main actor
+    var keepsOffsets: Bool { get }       // the parent's bookmarks reach the panel
+    var badge: PartBadge? { get }        // what the panel header says the bytes are
 }
 ```
 
-The UEFI Structure module rebuilds a decompressed body, a node's bytes from
-inside one, and a zone that is a UEFI node — a file or a volume. The work itself
-is pure and lives in `UEFIImage` (§6); the module only adapts it.
+The app has one way to open a part — `MainViewController.openPart(named:from:source:layout:codec:)` —
+whoever asks: a zone (Open Zone), a selection, a tool-module (`ToolHost.openPart(named:linkedTo:codec:)`).
+`DocumentOrigin` keeps the codec, and Update in Parent is `codec.encode` and one write. Nothing in the
+app knows what any codec does. The ones there are:
+
+| Codec | Where | Decode | Encode | Badge |
+| --- | --- | --- | --- | --- |
+| `CopyPartCodec` | `PartCodec` | the source | the same bytes, same length only (§4.1) | none |
+| `ReadOnlyPartCodec` | `PartCodec` | bytes given | refused, with the reason | Read-only |
+| `UEFIPartCodec` | `UEFIContentSource` | a node of the file, or a buffer along its chain | the rebuild planner (§6), protected ranges read in its own parse | the compression, or Structure |
+| `LenovoDMIBlockCodec` | `LenovoDMI` | a `LENV` block decoded | encoded again, checksum recomputed | XOR and the key |
+
+The `ToolRebuilder` protocol proposed here before is superseded: a codec is the rebuilder and the
+reader in one value, made by whoever opens the part, and the app never has to ask a tool-module
+whether it rebuilds an origin.
 
 ---
 

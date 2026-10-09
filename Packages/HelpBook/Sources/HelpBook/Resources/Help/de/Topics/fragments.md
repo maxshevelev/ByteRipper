@@ -1,4 +1,4 @@
-@source-sha 07ba3c9d35c4ccbf19e3c0e0a14219a432690b536fe9e5f12e9432c36c494e68
+@source-sha a81bf55a614ff8008e5c5a35b58e1864198bfac7b57df24cedbd2eb82c8ec857
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
@@ -33,6 +33,18 @@ Vor dem Schreiben werden die folgenden Bedingungen geprüft, und das Programm ne
 ## Entpackte Fragmente
 
 Eine komprimierte UEFI-Sektion lässt sich **entpackt** öffnen. Angezeigt werden dann nicht die in der Datei gehaltenen Bytes, sondern das, wozu sie sich entfalten. Nach dem Bearbeiten und Zurückschreiben wird die Sektion neu komprimiert und das Image um die entstandene Größe herum neu gelegt. Das Ergebnis gleicht dem Original des Herstellers auch dann nicht Byte für Byte, wenn nichts geändert wurde, da ein anderer Kompressor aus derselben Eingabe eine andere Ausgabe erzeugt.
+
+## Was das Abzeichen in der Kopfzeile besagt
+
+Ein Fragment enthält nicht immer die Bytes der Datei so, wie sie dort liegen. Eine entpackte Sektion enthält das, wozu sich die Sektion entfaltet; ein dekodiert geöffneter Lenovo-[[term:lenv|LENV]]-Block zeigt seine Einträge im Klartext. Ein solches Fragment trägt neben seinem Namen ein Abzeichen, das angibt, wie seine Bytes zur Datei stehen; unter dem Mauszeiger erscheint die vollständige Erläuterung.
+
+- **LZMA**, **Tiano**, **EFI 1.1** und die übrigen Kompressionsverfahren: Die Bytes wurden entpackt, und **In der Quelle aktualisieren** packt sie mit demselben Verfahren wieder.
+- **Struktur**: ein Volume, eine Datei oder eine Sektion des Images. Beim Aktualisieren wird das Image um diesen Teil herum neu angeordnet, seine Länge kann sich also ändern.
+- **XOR** mit Schlüssel: Die Bytes wurden dekodiert; beim Aktualisieren werden sie wieder kodiert und die Prüfsumme neu berechnet.
+- **Unkodiert**: ein LENV-Block, der unkodiert gespeichert ist. Beim Aktualisieren wird nur seine Prüfsumme neu berechnet.
+- **Nur lesbar**: Die Bytes wurden durch eine Umformung gewonnen, die das Programm nicht umkehren kann; sie lassen sich nicht zurückschreiben.
+
+Ein Fragment ohne Abzeichen ist eine einfache Kopie: Seine Bytes sind die der Datei und werden unverändert zurückgeschrieben.
 
 ## Ein Fragment als UEFI-Teilbaum
 

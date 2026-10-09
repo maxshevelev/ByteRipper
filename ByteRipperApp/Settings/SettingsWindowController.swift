@@ -1,8 +1,11 @@
 import Cocoa
+import HelpBook
+import HelpUI
 import Localization
 
-/// The Appearance tab of the Settings window (§3.2): the monospaced font
-/// (family and size), the row-height factor, and the app theme. Every change
+/// The Appearance section of the Settings window's View tab (§3.2): the
+/// monospaced font (family and size), the row-height factor, and the app
+/// theme. Every change
 /// persists immediately through `AppearanceSettings.set` / `AppTheme.set` and
 /// re-lays out every open hex view (or re-themes the app), so the effect is
 /// visible live behind the settings window.
@@ -14,6 +17,7 @@ final class AppearanceSettingsViewController: NSViewController {
     private let scaleValueLabel = NSTextField(labelWithString: "")
     private let themePopup = NSPopUpButton()
 
+    // help: settings.appearance
     override func loadView() {
         let root = NSView()
 
@@ -215,28 +219,25 @@ final class SettingsWindow: NSWindow {
 }
 
 /// The app's Settings window — a standard toolbar-tabbed preference dialog,
-/// with an Appearance tab (§3.2), a Layout tab (§6), a Comparison tab (§10.3.1),
-/// a Text Decoding tab (§3.4), a Favorites tab (§11) and a File Types tab (§25). Owned by `MainWindowController`; the App
-/// menu's "Settings…" item shows it.
+/// with a View tab (Appearance §3.2, Layout §6 and Language), a Comparison tab
+/// (§10.3.1), an Editing tab, a Text Decoding tab (§3.4), a Favorites tab (§11)
+/// and a File Types tab (§25). Owned by `MainWindowController`; the App menu's
+/// "Settings…" item shows it.
 final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
-    private let appearanceController = AppearanceSettingsViewController()
-    private let layoutController = LayoutSettingsViewController()
+    private let viewController = ViewSettingsViewController()
     private let comparisonController = ComparisonSettingsViewController()
     private let editingController = EditingSettingsViewController()
     private let textDecodingController = TextDecodingSettingsViewController()
     private let fileTypesController = FileTypesSettingsViewController()
     private let favoritesController = FavoritePatternsSettingsViewController()
-    private let languageController = LanguageSettingsViewController()
     private let agentController = AgentSettingsViewController()
 
-    private static let appearanceItemID = NSToolbarItem.Identifier("Appearance")
-    private static let layoutItemID = NSToolbarItem.Identifier("Layout")
+    private static let viewItemID = NSToolbarItem.Identifier("View")
     private static let comparisonItemID = NSToolbarItem.Identifier("Comparison")
     private static let editingItemID = NSToolbarItem.Identifier("Editing")
     private static let textDecodingItemID = NSToolbarItem.Identifier("TextDecoding")
     private static let fileTypesItemID = NSToolbarItem.Identifier("FileTypes")
     private static let favoritesItemID = NSToolbarItem.Identifier("Favorites")
-    private static let languageItemID = NSToolbarItem.Identifier("Language")
     private static let agentItemID = NSToolbarItem.Identifier("Agent")
 
     init() {
@@ -260,8 +261,41 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         toolbar.allowsUserCustomization = false
         window.toolbar = toolbar
 
-        window.contentViewController = appearanceController
+        window.contentViewController = viewController
+        installHelpButton()
     }
+
+    /// The `?` for the whole window: at the trailing end of the title bar,
+    /// level with the traffic lights.
+    ///
+    /// One button for every tab, not one per tab: the Settings page covers the
+    /// whole window, and a `?` that appears on some tabs and not on others
+    /// reads as though only those tabs have help. It lives in the window's
+    /// chrome so that it stays put while the tabs below it change size.
+    ///
+    /// Not a titlebar accessory: with a preference-style toolbar, AppKit puts
+    /// a trailing accessory in the toolbar's row, beside the last tab. The
+    /// view the traffic lights sit in is the one row that is the title's, so
+    /// the button goes there and centres on the close button.
+    private let helpButton: HelpButton = {
+        let help = HelpButton.standard(for: .topic(.settings))
+        help.controlSize = .small
+        return help
+    }()
+
+    private func installHelpButton() {
+        guard let close = window?.standardWindowButton(.closeButton),
+              let titlebar = close.superview else { return }
+        helpButton.translatesAutoresizingMaskIntoConstraints = false
+        titlebar.addSubview(helpButton)
+        NSLayoutConstraint.activate([
+            helpButton.centerYAnchor.constraint(equalTo: close.centerYAnchor),
+            helpButton.trailingAnchor.constraint(equalTo: titlebar.trailingAnchor, constant: -8),
+        ])
+    }
+
+    /// The window's `?`, for the tests.
+    var helpButtonForTesting: HelpButton { helpButton }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
@@ -297,14 +331,12 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     /// second copy would be the one deciding how wide the window is.
     static func label(for identifier: NSToolbarItem.Identifier) -> String {
         switch identifier {
-        case appearanceItemID: return L("Appearance")
-        case layoutItemID: return L("Layout")
+        case viewItemID: return L("View", context: "settings")
         case comparisonItemID: return L("Comparison")
         case editingItemID: return L("Editing")
         case textDecodingItemID: return L("Text Decoding")
         case favoritesItemID: return L("Search Patterns")
         case fileTypesItemID: return L("File Types")
-        case languageItemID: return L("Language")
         case agentItemID: return L("Agent")
         default: return ""
         }
@@ -314,7 +346,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     /// actually showing.
     ///
     /// Captured once, the first time anything asks. Picking another language
-    /// in the Language tab changes what `L()` returns straight away, but not
+    /// in the View tab changes what `L()` returns straight away, but not
     /// what the toolbar says: its items were built with the old words and keep
     /// them until the app restarts. Measuring the new words would resize the
     /// window around labels nobody can see — which is what made the window
@@ -322,28 +354,21 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     static let toolbarLabels: [String] = tabIdentifiers.map(label(for:))
 
     static let tabIdentifiers: [NSToolbarItem.Identifier] = [
-        appearanceItemID, layoutItemID, comparisonItemID, editingItemID,
-        textDecodingItemID, favoritesItemID, fileTypesItemID, languageItemID, agentItemID,
+        viewItemID, comparisonItemID, editingItemID,
+        textDecodingItemID, favoritesItemID, fileTypesItemID, agentItemID,
     ]
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         let item = NSToolbarItem(itemIdentifier: itemIdentifier)
         switch itemIdentifier {
-        // help: settings.appearance
-        case Self.appearanceItemID:
+        // help: settings.view
+        case Self.viewItemID:
             item.label = Self.label(for: itemIdentifier)
             item.paletteLabel = item.label
-            item.image = NSImage(systemSymbolName: "paintbrush", accessibilityDescription: L("Appearance"))
+            item.image = NSImage(systemSymbolName: "paintbrush", accessibilityDescription: item.label)
             item.target = self
-            item.action = #selector(appearanceTabTapped)
-        // help: settings.layout
-        case Self.layoutItemID:
-            item.label = Self.label(for: itemIdentifier)
-            item.paletteLabel = item.label
-            item.image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: L("Layout"))
-            item.target = self
-            item.action = #selector(layoutTabTapped)
+            item.action = #selector(viewTabTapped)
         // help: settings.comparison
         case Self.comparisonItemID:
             item.label = Self.label(for: itemIdentifier)
@@ -375,13 +400,6 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
                                  accessibilityDescription: L("File Types"))
             item.target = self
             item.action = #selector(fileTypesTabTapped)
-        // help: settings.language
-        case Self.languageItemID:
-            item.label = Self.label(for: itemIdentifier)
-            item.paletteLabel = item.label
-            item.image = NSImage(systemSymbolName: "globe", accessibilityDescription: L("Language"))
-            item.target = self
-            item.action = #selector(languageTabTapped)
         // help: settings.agent
         case Self.agentItemID:
             item.label = Self.label(for: itemIdentifier)
@@ -430,12 +448,8 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         fitWindowToContent()
     }
 
-    @objc private func appearanceTabTapped() {
-        selectTab(appearanceController)
-    }
-
-    @objc private func layoutTabTapped() {
-        selectTab(layoutController)
+    @objc private func viewTabTapped() {
+        selectTab(viewController)
     }
 
     @objc private func comparisonTabTapped() {
@@ -458,23 +472,19 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         selectTab(favoritesController)
     }
 
-    @objc private func languageTabTapped() {
-        selectTab(languageController)
-    }
-
     @objc private func agentTabTapped() {
         selectTab(agentController)
     }
 
-    /// Re-sizes the window to the tab it is showing. The Language tab grows
-    /// when it starts offering the relaunch, and the window is sized to its
+    /// Re-sizes the window to the tab it is showing. The View tab grows when
+    /// its Language section starts offering the relaunch, and the window is sized to its
     /// content rather than the other way round.
     func fitToCurrentTab() {
         fitWindowToContent()
     }
 
-    /// The Language tab, for the tests that drive the choice.
-    var language: LanguageSettingsViewController { languageController }
+    /// The Language section, for the tests that drive the choice.
+    var language: LanguageSettingsViewController { viewController.language }
 
     /// Opens the window on the Favorites tab — where **Manage Favorites…** in
     /// the Find bar's menu leads (§11). A named destination rather than "open

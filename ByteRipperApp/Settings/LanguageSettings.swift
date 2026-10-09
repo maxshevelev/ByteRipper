@@ -1,9 +1,9 @@
 import Cocoa
 import HelpBook
-import HelpUI
 import Localization
 
-/// The Language tab of the Settings window: which language the app speaks.
+/// The Language section of the Settings window's View tab: which language
+/// the app speaks.
 ///
 /// It exists because the Mac's language and the bench's language are not always
 /// the same. A shop in Germany may run its Macs in German and want its firmware
@@ -11,7 +11,7 @@ import Localization
 /// other tools say; a technician may want the opposite. Following the system is
 /// the default and the right one, but it must not be the only one.
 ///
-/// The change needs a relaunch, and the tab says so rather than pretending
+/// The change needs a relaunch, and the section says so rather than pretending
 /// otherwise. A menu bar, a window's labels and a panel's columns are built
 /// when they are built; re-reading every one of them at run time would be a
 /// second layout path through the whole app, kept correct forever, for a
@@ -30,6 +30,7 @@ final class LanguageSettingsViewController: NSViewController {
         [.system] + AppLanguage.allCases.map(LanguageChoice.fixed)
     }
 
+    // help: settings.language
     override func loadView() {
         let root = NSView()
 
@@ -47,8 +48,8 @@ final class LanguageSettingsViewController: NSViewController {
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 4
 
-        // Shown only once the choice has actually moved, so a tab the user is
-        // only looking at says nothing about relaunching.
+        // Shown only once the choice has actually moved, so a section the user
+        // is only looking at says nothing about relaunching.
         noticeLabel.font = .systemFont(ofSize: 11)
         noticeLabel.textColor = SemanticSettingsColors.notice
         noticeLabel.maximumNumberOfLines = 2
@@ -70,8 +71,6 @@ final class LanguageSettingsViewController: NSViewController {
         relaunchButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         relaunchButton.setContentHuggingPriority(.required, for: .horizontal)
 
-        let help = HelpButton.standard(for: .topic(.settings))
-
         let grid = NSGridView(views: [[languageLabel, languagePopup]])
         grid.rowSpacing = 12
         grid.columnSpacing = 12
@@ -82,33 +81,31 @@ final class LanguageSettingsViewController: NSViewController {
         noticeRow.alignment = .centerY
         noticeRow.spacing = 10
 
-        for subview in [titleLabel, grid, caption, noticeRow, help] {
+        for subview in [titleLabel, grid, caption, noticeRow] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
-            titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            help.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            help.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 18),
+            titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
 
             grid.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
-            grid.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            grid.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -20),
+            grid.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
+            grid.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -18),
 
             caption.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 14),
-            caption.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            caption.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
             // Pinned rather than bounded, so the label wraps at the window's
             // width and the fitting size the window is sized to comes out right.
-            caption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            caption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
 
             noticeRow.topAnchor.constraint(equalTo: caption.bottomAnchor, constant: 14),
-            noticeRow.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            noticeRow.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
             // Pinned, not bounded: the row has to know its width for the
             // notice to wrap inside it. Bounded, the label kept its full
             // one-line width and the button was pushed out of the window.
-            noticeRow.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            noticeRow.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -20),
+            noticeRow.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
+            noticeRow.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -18),
 
             SettingsMetrics.pinnedWidth(of: root),
         ])
@@ -152,13 +149,13 @@ final class LanguageSettingsViewController: NSViewController {
             : .system
     }
 
-    /// Whether the tab is offering the relaunch, for the tests.
+    /// Whether the section is offering the relaunch, for the tests.
     var offersRelaunch: Bool { !relaunchButton.isHidden }
 
     /// The button itself, so a test can check it is not clipped.
     var relaunchButtonForTesting: NSButton { relaunchButton }
 
-    /// Puts the tab in the state a language change leaves it in.
+    /// Puts the section in the state a language change leaves it in.
     func showRelaunchNoticeForTesting() { showRelaunchNotice() }
 
     @objc private func languageChanged(_ sender: NSPopUpButton) {
@@ -175,7 +172,7 @@ final class LanguageSettingsViewController: NSViewController {
         noticeLabel.stringValue = L("The help changes language now. The menus and windows change when ByteRipper starts again.")
         noticeLabel.isHidden = false
         relaunchButton.isHidden = false
-        // The tab grew; the window is sized to its content.
+        // The section grew; the window is sized to its content.
         (view.window?.windowController as? SettingsWindowController)?.fitToCurrentTab()
     }
 
@@ -196,7 +193,7 @@ final class LanguageSettingsViewController: NSViewController {
     }
 }
 
-/// The one colour this tab needs that is not a state: a line saying something
+/// The one colour this section needs that is not a state: a line saying something
 /// is waiting on the user. The palette's caution, which is what it is.
 private enum SemanticSettingsColors {
     static var notice: NSColor { .secondaryLabelColor }

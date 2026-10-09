@@ -349,6 +349,46 @@ enum TreeMaterialization {
         return DellSetup.read(UEFIImage(size: size, roots: nodes), readers: readers)
     }
 
+    /// The stores of the board's identity in the image `roots` are the top of
+    /// (`DMIStore`), over a copy of the tree with every container in the file
+    /// opened and no compressed section: neither store is ever inside one.
+    static func dmiStores(
+        roots: [UEFINode],
+        reader: ImageReader,
+        limits: UEFIParser.Limits,
+        buffers: DecompressedBuffers
+    ) -> [DMIStore] {
+        var nodes = roots
+        var discarded: [UEFIDiagnostic] = []
+        materializeAll(&nodes, reader: reader, limits: limits, buffers: buffers,
+                       diagnostics: &discarded, opensCompressed: false)
+        return DMIStore.all(in: nodes)
+    }
+
+    /// Which drivers ask for which entries of the Lenovo stores among
+    /// `roots` (`LenovoDMIFirmwareReaders`), over a copy of the tree opened
+    /// all the way down: the drivers that read the store sit in compressed
+    /// sections. Seconds on an image with compressed volumes. Nil when the
+    /// image has no Lenovo store — a block on its own has no drivers around
+    /// it, and "no driver names it" would be a claim about firmware that is
+    /// not there.
+    static func lenovoDMIReaders(
+        roots: [UEFINode],
+        reader: ImageReader,
+        limits: UEFIParser.Limits,
+        buffers: DecompressedBuffers
+    ) -> LenovoDMIFirmwareReaders? {
+        var nodes = roots
+        var discarded: [UEFIDiagnostic] = []
+        materializeAll(&nodes, reader: reader, limits: limits, buffers: buffers,
+                       diagnostics: &discarded, opensCompressed: false)
+        let namespaces = LenovoDMIFirmwareReaders.namespaces(of: nodes, reader: reader)
+        guard !namespaces.isEmpty else { return nil }
+        materializeAll(&nodes, reader: reader, limits: limits, buffers: buffers, diagnostics: &discarded)
+        let readers = SpaceReaders(file: reader, buffers: buffers, limit: limits.maxDecompressedSize)
+        return LenovoDMIFirmwareReaders.find(in: nodes, readers: readers, namespaces: namespaces)
+    }
+
     /// Ids are stamped relative to `parent` the same way `UEFIImage` stamps a
     /// freshly-built tree — the parser itself never carries a counter, a
     /// node's place is only known once its parent has decided to keep it.

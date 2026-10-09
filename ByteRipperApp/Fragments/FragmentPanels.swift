@@ -181,7 +181,7 @@ import ToolModuleKit
             // does, at the dump's own offsets.
             return BookmarkSpace(store: host.windowModel.bookmarkStore)
         }
-        guard origin.kind == .copy, let parent = origin.parent?.bookmarks else { return nil }
+        guard origin.codec.keepsOffsets, let parent = origin.parent?.bookmarks else { return nil }
         return BookmarkSpace(store: parent.store,
                              origin: parent.origin + origin.sourceRange.lowerBound)
     }

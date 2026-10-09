@@ -24,28 +24,14 @@ public protocol UEFITreeProviding: AnyObject {
     func openUEFIRows() -> Set<NodeID>
     func setOpenUEFIRows(_ rows: Set<NodeID>)
 
-    /// Opens `bytes` — what a compressed section of this file, or a node inside
-    /// one, decompressed to — as a panel of their own, linked to `source`, the
-    /// compressed bytes of this file they came out of, and read by a UEFI panel
-    /// there as `layout` (`Design/UEFI/UPDATE_IN_PARENT.md` §2). `part` is
-    /// where the bytes go back to (§6). Bytes copied out as they are go through
-    /// `ToolHost.openPart(_:named:linkedTo:)`.
-    func openPart(
-        _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>,
-        layout: UEFIRootLayout, part: UEFIRebuild.Target
-    )
+    /// Whether the panel should open its top level the first time it shows
+    /// the tree — for a part opened out of another file's UEFI tree, whose
+    /// first level is what the reader opened it to see. Asked once: true only
+    /// the first time, so the rows the reader shuts again stay shut.
+    func takeOpensTopLevelUEFIRows() -> Bool
+}
 
-    /// Opens `bytes` that **are** a range of this file — a node of the tree, or
-    /// a node's body — as a panel of their own, linked to that range and read
-    /// there as `layout`. `part` is where they go back to through the rebuild
-    /// planner, or nil for bytes that go back as they are.
-    ///
-    /// The difference from the method above is what the bytes are, and it
-    /// decides what putting them back means: these are the file's own, so they
-    /// go back as they are, while what a compressed section decompressed to
-    /// goes back compressed again.
-    func openFilePart(
-        _ bytes: [UInt8], named name: String, linkedTo source: Range<UInt64>,
-        layout: UEFIRootLayout, part: UEFIRebuild.Target?
-    )
+public extension UEFITreeProviding {
+    /// A provider that keeps no such wish opens nothing by itself.
+    func takeOpensTopLevelUEFIRows() -> Bool { false }
 }

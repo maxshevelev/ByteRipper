@@ -2,7 +2,9 @@ import AgentKit
 import ByteRipperCore
 import Foundation
 import Localization
+import PartCodec
 import ToolModuleKit
+import UEFIContentSource
 import UEFIImage
 import UEFITool
 
@@ -269,8 +271,9 @@ final class AgentFindTools {
         let place = try diff.resolve(arguments.optionalString("document"))
         let controller = try place.onScreen()
         let named = try arguments.optionalString("name")
-        let opened: FragmentDock.PanelID?
         var answer: [String: JSONValue] = ["parent": .string(place.id)]
+        let before = Set(controller.fragments.panelsLinked(to: place.pane))
+        let opening: Task<Void, Never>?
 
         if let text = try arguments.optionalString("node") {
             guard !arguments.has("offset"), !arguments.has("length") else {
@@ -279,27 +282,29 @@ final class AgentFindTools {
             let body = try arguments.choice("part", from: ["all", "body"], default: "all") == "body"
             let host = PaneToolHost(pane: place.pane, owner: controller, tools: nil)
             let found = try await UEFIAgentNodeData.bytes(host, node: text, part: body ? .body : .all)
-            guard let open = UEFIPresenter.nodeOpen(for: found.node, in: found.tree.image(), body: body) else {
+            let image = found.tree.image()
+            guard let open = UEFIPresenter.nodeOpen(for: found.node, in: image, body: body) else {
                 throw AgentToolError("Node \(text) cannot be opened as a part: there is nothing there, "
                     + "or its compressed section cannot be traced back to the file.")
             }
-            guard let bytes = found.tree.spaceReaders.reader(for: open.space)?.bytes(open.range), !bytes.isEmpty else {
-                throw AgentToolError("The bytes of node \(text) could not be read.")
-            }
-            let name = named ?? open.partName(fileName: place.pane.status.fileName)
-            if open.space == .file {
-                opened = controller.openPartForTool(bytes, named: name, from: place.pane, source: open.source,
-                                                    layout: open.layout, kind: .copy, part: open.rebuild)
+            // As the UEFI panel's Open: the file's own bytes go back as they
+            // are, or through the planner for a structure; a decompressed
+            // node's go back through its section, compressed again.
+            let codec: any PartCodec
+            if open.space == .file, open.rebuild == nil {
+                codec = CopyPartCodec()
             } else {
-                opened = controller.openPartForTool(
-                    bytes, named: name, from: place.pane, source: open.source, layout: open.layout,
-                    kind: .decompressed,
-                    part: open.rebuild ?? UEFIRebuild.Target(space: open.space, range: open.range))
+                codec = UEFIPartCodec(
+                    target: open.rebuild ?? UEFIRebuild.Target(space: open.space, range: open.range),
+                    compression: UEFIPresenter.compressionName(of: open.space, in: image),
+                    readers: found.tree.spaceReaders)
             }
+            opening = controller.openPart(named: named ?? open.partName(fileName: place.pane.status.fileName),
+                                          from: place.pane, source: open.source, layout: open.layout, codec: codec)
             answer["node"] = .string(found.node.id.description)
             answer["in_compressed"] = .bool(open.space != .file)
             answer["source"] = AgentHostTools.range(open.source)
-            answer["size"] = AgentHostTools.hex(UInt64(bytes.count))
+            answer["size"] = AgentHostTools.hex(UInt64(open.range.count))
         } else {
             guard arguments.has("offset"), arguments.has("length") else {
                 throw AgentToolError("Give `offset` and `length`, or `node`.")
@@ -312,15 +317,24 @@ final class AgentFindTools {
                     + "do not fit in \(place.id), which is \(AgentHostTools.hexText(size)) bytes long.")
             }
             let source = offset..<(offset + length)
-            let bytes = try diff.snapshot(place).read(at: offset, length: Int(length))
             let stem = (place.pane.status.fileName as NSString).deletingPathExtension
             let name = named ?? "\(stem)_\(AgentHostTools.hexText(offset))-\(AgentHostTools.hexText(source.upperBound))"
-            opened = controller.openPartForTool(bytes, named: name, from: place.pane, source: source,
-                                                layout: .image, kind: .copy, part: nil)
+            // As Open Zone: a stretch that is a structure of the image goes
+            // back through the rebuild planner, any other as it is.
+            let image = place.pane.uefiState.tree?.image()
+            let layout = image.map { UEFIRootLayout.forFileRange(source, in: $0) } ?? .image
+            let codec: any PartCodec = image
+                .flatMap { UEFIRebuild.target(forFileRange: source, in: $0) }
+                .map { UEFIPartCodec(target: $0) }
+                ?? CopyPartCodec()
+            opening = controller.openPart(named: name, from: place.pane, source: source, layout: layout, codec: codec)
             answer["source"] = AgentHostTools.range(source)
             answer["size"] = AgentHostTools.hex(length)
         }
-        guard let opened, let pane = controller.fragments.pane(opened), let document = pane.document else {
+        // A part that decompresses opens when its bytes are ready.
+        await opening?.value
+        guard let opened = controller.fragments.panelsLinked(to: place.pane).first(where: { !before.contains($0) }),
+              let pane = controller.fragments.pane(opened), let document = pane.document else {
             throw AgentToolError("The part could not be opened.")
         }
         answer["document"] = .string(desk.id(of: document))

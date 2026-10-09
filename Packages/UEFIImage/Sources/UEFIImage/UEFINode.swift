@@ -263,6 +263,17 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     /// it. Padding to UEFITool, as an HP signature block is.
     case gpnvStore
     case gpnvRecord
+    /// Lenovo's store of the machine's identity (`LenovoDMIStore`): the
+    /// `LDBG` change log and its entries, and the two `LENV` blocks — the
+    /// subtype 1 on the one the firmware reads, 0 on the other — and their
+    /// entries.
+    /// Read in place of the map regions that declare them, or out of
+    /// padding. Padding to UEFITool, as a GPNV store is.
+    case lenovoDMIStore
+    case ldbgLog
+    case ldbgEntry
+    case lenvBlock
+    case lenvEntry
     /// The AMD PSP's map read out of padding (`AMDFirmware`): the Embedded
     /// Firmware Structure, a directory — the subtype is its
     /// `AMDFirmware.DirectoryKind` — and a blob a directory lists, whose
