@@ -1,4 +1,6 @@
 import Cocoa
+import HelpBook
+import HelpUI
 import Localization
 
 /// The Appearance section of the Settings window's View tab (§3.2): the
@@ -258,7 +260,40 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         window.toolbar = toolbar
 
         window.contentViewController = viewController
+        installHelpButton()
     }
+
+    /// The `?` for the whole window: at the trailing end of the title bar,
+    /// level with the traffic lights.
+    ///
+    /// One button for every tab, not one per tab: the Settings page covers the
+    /// whole window, and a `?` that appears on some tabs and not on others
+    /// reads as though only those tabs have help. It lives in the window's
+    /// chrome so that it stays put while the tabs below it change size.
+    ///
+    /// Not a titlebar accessory: with a preference-style toolbar, AppKit puts
+    /// a trailing accessory in the toolbar's row, beside the last tab. The
+    /// view the traffic lights sit in is the one row that is the title's, so
+    /// the button goes there and centres on the close button.
+    private let helpButton: HelpButton = {
+        let help = HelpButton.standard(for: .topic(.settings))
+        help.controlSize = .small
+        return help
+    }()
+
+    private func installHelpButton() {
+        guard let close = window?.standardWindowButton(.closeButton),
+              let titlebar = close.superview else { return }
+        helpButton.translatesAutoresizingMaskIntoConstraints = false
+        titlebar.addSubview(helpButton)
+        NSLayoutConstraint.activate([
+            helpButton.centerYAnchor.constraint(equalTo: close.centerYAnchor),
+            helpButton.trailingAnchor.constraint(equalTo: titlebar.trailingAnchor, constant: -8),
+        ])
+    }
+
+    /// The window's `?`, for the tests.
+    var helpButtonForTesting: HelpButton { helpButton }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {

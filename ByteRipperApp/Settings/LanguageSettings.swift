@@ -1,6 +1,5 @@
 import Cocoa
 import HelpBook
-import HelpUI
 import Localization
 
 /// The Language section of the Settings window's View tab: which language
@@ -72,8 +71,6 @@ final class LanguageSettingsViewController: NSViewController {
         relaunchButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         relaunchButton.setContentHuggingPriority(.required, for: .horizontal)
 
-        let help = HelpButton.standard(for: .topic(.settings))
-
         let grid = NSGridView(views: [[languageLabel, languagePopup]])
         grid.rowSpacing = 12
         grid.columnSpacing = 12
@@ -84,15 +81,13 @@ final class LanguageSettingsViewController: NSViewController {
         noticeRow.alignment = .centerY
         noticeRow.spacing = 10
 
-        for subview in [titleLabel, grid, caption, noticeRow, help] {
+        for subview in [titleLabel, grid, caption, noticeRow] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 18),
             titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
-            help.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            help.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
 
             grid.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
             grid.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),

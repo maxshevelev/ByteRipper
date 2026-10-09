@@ -1,6 +1,4 @@
 import Cocoa
-import HelpBook
-import HelpUI
 import Localization
 
 /// The persisted editing behaviour: whether the edits that shift the file ask
@@ -60,24 +58,13 @@ final class EditingSettingsViewController: NSViewController {
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 3
 
-        // The one settings tab whose switch has consequences on a bench: it
-        // turns off the dialogs that stand between a flash dump and an edit
-        // that shifts every byte after it. The `?` opens the page that says why
-        // those edits are the dangerous ones.
-        let help = HelpButton.standard(for: .topic(.editing))
-
-        for subview in [titleLabel, warnCheckbox, caption, help] {
+        for subview in [titleLabel, warnCheckbox, caption] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
             titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
             titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-
-            // In the title's row, against the trailing edge — where a Mac
-            // settings pane's help button goes.
-            help.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
-            help.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 
             warnCheckbox.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
             warnCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),

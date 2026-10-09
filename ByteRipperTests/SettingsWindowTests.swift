@@ -1,4 +1,5 @@
 import Cocoa
+import HelpBook
 import XCTest
 @testable import ByteRipper
 
@@ -72,5 +73,23 @@ final class SettingsWindowTests: XCTestCase {
 
         XCTAssertGreaterThan(window.frame.height, before,
                              "the window must grow to the notice")
+    }
+
+    /// One `?` for the whole window, in the title's row beside the traffic
+    /// lights, leading to the Settings page — the same on every tab.
+    func testTheHelpButtonSitsInTheTitleRow() throws {
+        let settings = SettingsWindowController()
+        let window = try XCTUnwrap(settings.window)
+        settings.showWindow(nil)
+        defer { window.close() }
+        window.layoutIfNeeded()
+
+        let help = settings.helpButtonForTesting
+        let close = try XCTUnwrap(window.standardWindowButton(.closeButton))
+        XCTAssertTrue(help.superview === close.superview, "the ? must sit in the title row")
+        XCTAssertEqual(help.convert(help.bounds, to: nil).midY,
+                       close.convert(close.bounds, to: nil).midY, accuracy: 1,
+                       "the ? must be level with the traffic lights")
+        XCTAssertEqual(help.opens, .topic(.settings))
     }
 }
