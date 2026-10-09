@@ -1171,6 +1171,16 @@
 "LDBG change log" = "LDBG-Änderungsprotokoll";
 "LDBG entry" = "LDBG-Eintrag";
 "LENV entry" = "LENV-Eintrag";
+"%1$@ = %2$@" = "%1$@ = %2$@";
+"%1$@ · %2$@" = "%1$@ · %2$@";
+"Entries in use" = "Einträge des verwendeten Blocks";
+"LENV block %1$@, generation %2$@" = "LENV-Block %1$@, Generation %2$@";
+"None: no LENV block the firmware would read" = "Keiner: Die Firmware würde keinen der LENV-Blöcke lesen";
+"None: the store is empty" = "Keiner: Der Speicher ist leer";
+"Not in use" = "Nicht verwendet";
+"LENV block|In use" = "Verwendet";
+"Block in use" = "Verwendeter Block";
+"Note" = "Hinweis";
 "GPNV store" = "GPNV-Speicher";
 "Text" = "Text";
 "Text in the record" = "Text im Eintrag";

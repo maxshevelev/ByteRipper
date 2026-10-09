@@ -147,8 +147,7 @@ extension Parser {
         node.children = log.entries.map { entry in
             UEFINode(
                 kind: .ldbgEntry,
-                subtype: entry.operation,
-                name: entry.timestampText ?? "\(entry.index)",
+                name: entry.timestampText ?? L("No date"),
                 header: entry.range,
                 body: entry.range.upperBound..<entry.range.upperBound,
                 isFixed: true
@@ -175,7 +174,6 @@ extension Parser {
         node.children = block.entries.map { entry in
             UEFINode(
                 kind: .lenvEntry,
-                subtype: entry.flags,
                 name: LenovoDMIValue.name(of: entry.key),
                 header: entry.offset..<entry.dataRange.lowerBound,
                 body: entry.dataRange,

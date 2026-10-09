@@ -50,6 +50,9 @@ let package = Package(
         // The region's bytes and the reads over them — the same reading the ME
         // Analyzer makes, shared rather than written out twice.
         .package(path: "../../Packages/MEReads"),
+        // Lenovo's DMI store, read in the format's own terms for the rows the
+        // parser makes of it.
+        .package(path: "../../Packages/LenovoDMI"),
         // Only for the tests, to build a compressed section byte by byte.
         .package(path: "../../Packages/FirmwareCompression")
     ],
@@ -58,7 +61,8 @@ let package = Package(
             .product(name: "Localization", package: "Localization"),
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
-            .product(name: "UEFIImage", package: "UEFIImage")
+            .product(name: "UEFIImage", package: "UEFIImage"),
+            .product(name: "LenovoDMI", package: "LenovoDMI")
         ]),
         .target(name: "UEFIToolUI", dependencies: [
             .product(name: "HelpUI", package: "HelpUI"),
@@ -81,6 +85,7 @@ let package = Package(
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
+            .product(name: "LenovoDMI", package: "LenovoDMI"),
             .product(name: "FirmwareCompressionTestSupport", package: "FirmwareCompression")
         ])
     ]

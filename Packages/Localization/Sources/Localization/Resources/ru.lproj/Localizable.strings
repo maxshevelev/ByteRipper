@@ -1171,6 +1171,16 @@
 "LDBG change log" = "Журнал изменений LDBG";
 "LDBG entry" = "Запись LDBG";
 "LENV entry" = "Запись LENV";
+"%1$@ = %2$@" = "%1$@ = %2$@";
+"%1$@ · %2$@" = "%1$@ · %2$@";
+"Entries in use" = "Записи действующего блока";
+"LENV block %1$@, generation %2$@" = "Блок LENV %1$@, поколение %2$@";
+"None: no LENV block the firmware would read" = "Нет: ни один блок LENV прошивка читать не станет";
+"None: the store is empty" = "Нет: хранилище пустое";
+"Not in use" = "Не используется";
+"LENV block|In use" = "Используется";
+"Block in use" = "Действующий блок";
+"Note" = "Примечание";
 "GPNV store" = "Хранилище GPNV";
 "Text" = "Текст";
 "Text in the record" = "Текст в записи";

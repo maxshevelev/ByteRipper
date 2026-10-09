@@ -265,8 +265,8 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     case gpnvRecord
     /// Lenovo's store of the machine's identity (`LenovoDMIStore`): the
     /// `LDBG` change log and its entries, and the two `LENV` blocks — the
-    /// subtype 1 on the one the firmware reads — and their entries, whose
-    /// subtype is the entry's flags byte; a log entry's is its operation.
+    /// subtype 1 on the one the firmware reads, 0 on the other — and their
+    /// entries.
     /// Read in place of the map regions that declare them, or out of
     /// padding. Padding to UEFITool, as a GPNV store is.
     case lenovoDMIStore

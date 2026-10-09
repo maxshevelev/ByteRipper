@@ -343,6 +343,12 @@ public enum UEFIDetail {
             fields += amd.fields
             tables += amd.tables
         }
+        // Lenovo's DMI store, read as a whole: the store's row sums it up.
+        if UEFILenovoDMIDetail.reads(node.kind) {
+            let lenovo = UEFILenovoDMIDetail.build(for: node, image: image, reader: reader)
+            fields += lenovo.fields
+            tables += lenovo.tables
+        }
         // A GPNV record's data is fields nobody has published: the text in
         // it is what can be read, at its offset in the data.
         if node.kind == .gpnvRecord, let body = reader.bytes(node.body) {
@@ -1726,6 +1732,7 @@ public enum UEFIDetail {
         case .file: return UEFITypeNames.file(subtype)
         case .section: return UEFITypeNames.section(subtype)
         case .volume: return "Revision \(subtype)"
+        case .lenvBlock: return subtype == 1 ? L("In use", context: "LENV block") : L("Not in use")
         case .amdDirectory:
             return AMDFirmware.DirectoryKind(rawValue: subtype).map(AMDFirmware.kindName) ?? hex(subtype)
         case .region:

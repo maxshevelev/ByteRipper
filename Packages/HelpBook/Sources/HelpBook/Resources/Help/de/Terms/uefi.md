@@ -1,4 +1,4 @@
-@source-sha 008d61b27b212e6c4b6e66be479e49417db3ba2e6442e58c2cc0a5ec5dbaf45c
+@source-sha 2fe4ae21d472af1bb614b20ebc0fa0f5da8d59c649e1c4b41a8ac88dfb5b147a
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -465,6 +465,8 @@ Verlorene Felder sind nicht immer endgültig verloren. Einige Hersteller — dar
 Wo diese Felder im Abbild stehen, ist nicht standardisiert. Jeder Hersteller legt sie dorthin, wo er will, und die Aufteilung wandert von Generation zu Generation; im Allgemeinen läuft das Übertragen deshalb auf den Vergleich zweier Abbilder hinaus.
 
 Eine Ausnahme, die das Programm lesen kann, ist die Firmware Lenovo InsydeH2O. Sie hält diese Felder in einem eigenen, kodierten Speicher, den [[term:lenv|LENV]]-Blöcken, die **Werkzeuge ▸ Lenovo DMI** dekodiert und anzeigt ([[topic:tool-lenovo-dmi|Lenovo DMI]]).
+
+Im Baum von **Werkzeuge ▸ UEFI-Struktur** erscheint derselbe Speicher als ein Knoten, **Lenovo DMI**, gleich wo er im Abbild liegt: anstelle der drei Regionen, die die Insyde-Flash-Device-Map als „Unknown" deklariert, oder innerhalb von Padding, wenn es keine Map gibt. Seine Beschreibung nennt den Block, den die Firmware liest, und führt dessen Einträge dekodiert auf, darunter Seriennummer und UUID; ein Klick auf einen Eintrag öffnet seinen Knoten. Unter dem Knoten liegen das Änderungsprotokoll und beide Blöcke, jeder Eintrag mit seinem Wert neben dem Namen.
 
 @see term:serial-data
 @see term:lenv

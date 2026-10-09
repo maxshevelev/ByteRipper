@@ -115,7 +115,6 @@ final class LenovoDMIStoreTests: XCTestCase {
         let writes = store.children[0].children
         XCTAssertEqual(writes.map(\.name), ["2022-06-29 20:30:25"])
         XCTAssertEqual(writes.map(\.kind), [.ldbgEntry])
-        XCTAssertEqual(writes[0].subtype, LDBGEntry.Operation.setData.rawValue)
     }
 
     /// To UEFITool these bytes are padding, as a GPNV store's are.

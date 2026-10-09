@@ -465,6 +465,8 @@ Where the fields sit inside the image is not standardised. Each vendor puts them
 
 Lenovo InsydeH2O firmware is the exception the app reads: it keeps these fields in an encoded store of its own, the [[term:lenv|LENV]] blocks, which **Tools ▸ Lenovo DMI** decodes and lists ([[topic:tool-lenovo-dmi|Lenovo DMI]]).
 
+**Tools ▸ UEFI Structure** shows the same store as one row of the tree, **Lenovo DMI**, wherever in the image it lies: in place of the three regions the Insyde flash device map declares as "Unknown", or inside padding where there is no map. Its detail names the block the firmware reads and lists that block's entries decoded, the serial number and the UUID among them; a click on an entry opens its row. Under the row are the change log and both blocks, each entry with its value beside its name.
+
 @see term:serial-data
 @see term:lenv
 @see topic:recipe-board-data

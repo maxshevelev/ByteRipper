@@ -1,4 +1,5 @@
 import Foundation
+import LenovoDMI
 import Localization
 import UEFIImage
 
@@ -32,6 +33,7 @@ public enum UEFITreeDisplay {
         // Padding to UEFITool; what the column can say of a record is
         // whether it is the one in force.
         case .gpnvRecord: return node.subtype == 1 ? L("Current") : L("Superseded")
+        case .lenvBlock: return node.subtype == 1 ? L("In use", context: "LENV block") : L("Not in use")
         default: return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? ""
         }
     }
@@ -230,6 +232,7 @@ public enum UEFITreeDisplay {
     /// Whether the row of `node` says a value, and so needs the bytes.
     public static func showsValue(_ node: UEFINode) -> Bool {
         node.kind == .dvarEntry || node.kind == .vssEntry || node.kind == .nvarEntry || node.kind == .gpnvRecord
+            || node.kind == .lenvBlock || node.kind == .lenvEntry || node.kind == .ldbgEntry
     }
 
     private static func kibibytes(_ length: UInt64) -> UInt64 {
@@ -282,6 +285,12 @@ public enum UEFITreeDisplay {
         if node.kind == .gpnvRecord, let reader {
             return gpnvRow(node, reader: reader)
         }
+        // Lenovo's DMI store says what it holds, decoded: a block its
+        // generation, an entry its value, a write of the log what it did.
+        // `store` is the row's parent — the block, or the log.
+        if let reader, let text = lenovoDMIRow(node, parent: store, reader: reader) {
+            return text
+        }
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind) : node.name
         }
@@ -326,6 +335,33 @@ public enum UEFITreeDisplay {
         // it knows while the catalogue has no name for them; the GUID itself
         // is the last resort.
         return catalogue.name(of: guid) ?? NvramGuids.name(of: guid) ?? guid.description
+    }
+
+    /// `Baseboard serial number = PF0TEST1`, `LENV block 2 · generation 84`,
+    /// `2022-06-29 20:30:25 · Set · Baseboard serial number`; nil for a row
+    /// of anything else, or one whose bytes do not read.
+    static func lenovoDMIRow(_ node: UEFINode, parent: UEFINode?, reader: ImageReader) -> String? {
+        switch node.kind {
+        case .lenvBlock:
+            guard let stored = reader.bytes(node.range),
+                  let text = UEFILenovoDMIDetail.blockText(LENVBlock(offset: node.range.lowerBound, stored: stored))
+            else { return nil }
+            return L("%1$@ · %2$@", node.name, text)
+        case .lenvEntry:
+            guard let parent, parent.kind == .lenvBlock, let stored = reader.bytes(parent.range),
+                  let entry = LENVBlock(offset: parent.range.lowerBound, stored: stored)
+                    .entries.first(where: { $0.offset == node.header.lowerBound })
+            else { return nil }
+            return L("%1$@ = %2$@", node.name, LenovoDMIValue.text(of: entry))
+        case .ldbgEntry:
+            guard let parent, parent.kind == .ldbgLog,
+                  let entry = UEFILenovoDMIDetail.area(startingAt: parent.range.lowerBound, reader: reader)?
+                    .log.entries.first(where: { $0.offset == node.range.lowerBound })
+            else { return nil }
+            return L("%1$@ · %2$@", node.name, UEFILenovoDMIDetail.logEntryText(entry))
+        default:
+            return nil
+        }
     }
 
     /// `MFG0 = M8NRKD00311031C, 90NR0551-M04320, …`: a record's name and the

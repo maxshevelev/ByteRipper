@@ -2239,7 +2239,8 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             // space; a VSS one is read by its store's format, and the store
             // is in the tree as it has been opened, not in the image.
             let reader = UEFITreeDisplay.showsValue(node) ? tree?.spaceReaders.reader(for: node.space) : nil
-            let store = node.kind == .vssEntry && !node.id.path.isEmpty
+            let store = (node.kind == .vssEntry || node.kind == .lenvEntry || node.kind == .ldbgEntry)
+                && !node.id.path.isEmpty
                 ? tree?.node(NodeID(Array(node.id.path.dropLast()))) : nil
             return UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image, reader: reader, store: store)
         }
