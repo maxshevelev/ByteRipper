@@ -1,3 +1,4 @@
+import AgentKit
 import Cocoa
 import HelpBook
 import XCTest
@@ -110,6 +111,16 @@ final class ToolbarItemsTests: XCTestCase {
         let button = try item(window, .agentWindow)
         XCTAssertEqual(button.action, #selector(AppDelegate.showAgentWindow(_:)))
         XCTAssertEqual(button.toolTip, "Show the Agent window")
+
+        // Hollow while nobody is connected, filled once a client speaks — the
+        // menu bar's mark, for a screen whose notch hides the menu bar's.
+        func filled() -> Bool { (try? item(window, .agentWindow).image?.description.contains("point.3.filled")) == true }
+        XCTAssertFalse(filled())
+        let fd = try UnixSocket.connect(to: service.socketPath)
+        defer { close(fd) }
+        let hello = #"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"toolbar-test","version":"1"}}}"#
+        XCTAssertTrue(UnixSocket.writeAll(fd, Data((hello + "\n").utf8)))
+        XCTAssertTrue(pumpUntil(2) { filled() }, "the button fills while an agent is connected")
 
         service.isEnabled = false
         XCTAssertTrue(pumpUntil(2) { !toolbar.items.contains { $0.itemIdentifier == .agentWindow } })

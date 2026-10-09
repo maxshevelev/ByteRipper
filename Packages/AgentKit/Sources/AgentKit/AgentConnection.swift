@@ -16,6 +16,9 @@ public actor AgentConnection {
     public let server: AgentServer
     private let send: @Sendable (Data) -> Void
     private let observer: @Sendable (AgentCallRecord) -> Void
+    private let onFirstMessage: @Sendable () -> Void
+    /// Whether the client has sent anything yet.
+    private var hasSpoken = false
 
     private var framer: LineFramer
     /// The version an `initialize` agreed on. Nil until a legacy client
@@ -39,14 +42,20 @@ public actor AgentConnection {
 
     /// `send` is given one message at a time, a complete line with its
     /// newline. `observer` hears about every tool call once it is over.
+    /// `onFirstMessage` is called once, when the first complete message
+    /// arrives: until then the other end is a transport, not yet a client —
+    /// a relay a client started and then abandoned before its handshake
+    /// holds a connection open and never says a word.
     public init(
         server: AgentServer,
         send: @escaping @Sendable (Data) -> Void,
-        observer: @escaping @Sendable (AgentCallRecord) -> Void = { _ in }
+        observer: @escaping @Sendable (AgentCallRecord) -> Void = { _ in },
+        onFirstMessage: @escaping @Sendable () -> Void = {}
     ) {
         self.server = server
         self.send = send
         self.observer = observer
+        self.onFirstMessage = onFirstMessage
         self.framer = LineFramer(maxLineBytes: server.limits.maxLineBytes)
     }
 
@@ -56,6 +65,10 @@ public actor AgentConnection {
         for line in framer.append(chunk) {
             switch line {
             case .message(let data):
+                if !hasSpoken {
+                    hasSpoken = true
+                    onFirstMessage()
+                }
                 handle(data)
             case .tooLong:
                 write(RPCMessage.error(id: .null, RPCError(

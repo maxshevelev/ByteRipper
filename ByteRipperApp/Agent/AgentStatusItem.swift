@@ -2,7 +2,8 @@ import Cocoa
 import Localization
 
 /// The agent service's mark in the menu bar: there while the service is
-/// switched on, filled while an agent is connected (`Design/AGENT_PLAN.md`).
+/// switched on — dimmed while it waits, full and filled while an agent is
+/// connected (`Design/AGENT_PLAN.md`).
 ///
 /// In the menu bar rather than in a window, because the person talking to an
 /// agent is typing in another app — a terminal, Claude Desktop — and
@@ -44,9 +45,13 @@ final class AgentStatusItem: NSObject {
         let item = self.item ?? NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         self.item = item
         let connected = service.connectionCount > 0
-        let symbol = connected ? "point.3.filled.connected.trianglepath.dotted" : "point.3.connected.trianglepath.dotted"
+        let symbol = AgentService.symbolName(connected: connected)
         let status = AgentSettingsViewController.statusText(of: service)
         item.button?.image = NSImage(systemSymbolName: symbol, accessibilityDescription: L("ByteRipper agent service"))
+        // The filled glyph alone is not enough: at menu-bar size the hollow
+        // circles close up to a point, and the two read the same. Dimmed is
+        // the status bar's own word for "on, but idle".
+        item.button?.appearsDisabled = !connected
         item.button?.toolTip = L("ByteRipper agent service") + " — " + status
         item.menu = menu(status: status)
     }
@@ -83,4 +88,8 @@ final class AgentStatusItem: NSObject {
 
     /// Whether the mark is in the menu bar, for tests.
     var isShown: Bool { item != nil }
+
+    /// The mark's image and whether it is dimmed, for tests.
+    var imageForTesting: NSImage? { item?.button?.image }
+    var isDimmedForTesting: Bool { item?.button?.appearsDisabled ?? false }
 }

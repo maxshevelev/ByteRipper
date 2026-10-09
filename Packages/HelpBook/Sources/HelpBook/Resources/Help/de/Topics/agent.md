@@ -1,4 +1,4 @@
-@source-sha b2122a7c6d46f04c5d92e081f840d21d951af333311088666cfac9cb98bc0073
+@source-sha 2bb8583d3e8a179ab5ce8b199eee8a855ad2420c72a2bf34508a3c7b1fecf001
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -7,7 +7,7 @@ Agent und Techniker arbeiten mit denselben Fenstern. Fragen Sie den Agenten nach
 
 ## Dienst einschalten
 
-Im Auslieferungszustand ist der Agentendienst ausgeschaltet. Eingeschaltet wird er unter **Einstellungen ▸ Agent** mit der Option **Agenten die Verbindung mit ByteRipper erlauben**. Solange der Dienst läuft, zeigt die Menüleiste von macOS ein Symbol dafür an; ist ein Agent verbunden, erscheint das Symbol ausgefüllt.
+Im Auslieferungszustand ist der Agentendienst ausgeschaltet. Eingeschaltet wird er unter **Einstellungen ▸ Agent** mit der Option **Agenten die Verbindung mit ByteRipper erlauben**. Solange der Dienst läuft, zeigt die Menüleiste von macOS ein Symbol dafür an: drei durch eine gepunktete Linie verbundene Punkte. Wartet der Dienst auf einen Agenten, ist das Symbol abgeblendet; ist ein Agent verbunden, sind die Punkte ausgefüllt. Die Taste für das Agentenfenster in der Symbolleiste zeigt den Zustand auf dieselbe Weise. Das ist bei einem Mac mit Kameraaussparung von Bedeutung: Ist die Menüleiste voll belegt, verschwindet ihr rechter Teil hinter der Aussparung.
 
 Die Verbindung ist ausschließlich lokal; ein Netzwerkport wird nicht geöffnet. ByteRipper legt dazu im Ordner „Library“ des Benutzers eine Datei an, die nur Programmen desselben Benutzerkontos zugänglich ist.
 

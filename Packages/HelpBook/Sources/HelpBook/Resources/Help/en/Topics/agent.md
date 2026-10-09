@@ -15,7 +15,7 @@ The agent works on the same windows as the person at the bench. When it is asked
 
 ## Switching the service on
 
-The service is off after installation. It is switched on in **Settings ▸ Agent** with **Let agents connect to ByteRipper**. While it is on, a mark is shown in the menu bar at the top of the screen; the mark is filled while an agent is connected.
+The service is off after installation. It is switched on in **Settings ▸ Agent** with **Let agents connect to ByteRipper**. While it is on, a mark of three joined points is shown in the menu bar at the top of the screen: dimmed while the service waits, and with the points filled while an agent is connected. The Agent button in the window's toolbar fills its points the same way, which matters on a Mac whose camera notch hides the right-hand part of a crowded menu bar.
 
 The connection is local. ByteRipper opens a file in the user's Library through which only programs of the same user account can reach it; there is no network port.
 
