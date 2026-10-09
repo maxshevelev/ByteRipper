@@ -74,6 +74,9 @@ public struct LENVBlock: Equatable, Sendable {
             ? encodedChecksum : computedChecksum
     }
 
+    /// Every byte `FF`: the page was erased and nothing was written since.
+    public var isErased: Bool { stored.allSatisfy { $0 == 0xFF } }
+
     /// A block the firmware can use: signed, with a generation.
     public var isUsable: Bool { hasSignature && generation != 0 }
 

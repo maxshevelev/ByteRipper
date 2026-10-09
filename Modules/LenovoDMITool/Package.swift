@@ -38,6 +38,8 @@ let package = Package(
         .package(path: "../../Packages/ToolModuleKit"),
         .package(path: "../../Packages/AppPalette"),
         .package(path: "../../Packages/LenovoDMI"),
+        // The image's drivers, searched for the entries they ask for.
+        .package(path: "../../Packages/UEFIImage"),
         .package(path: "../../Packages/PartCodec")
     ],
     targets: [
@@ -45,7 +47,8 @@ let package = Package(
             .product(name: "Localization", package: "Localization"),
             .product(name: "HelpBook", package: "HelpBook"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
-            .product(name: "LenovoDMI", package: "LenovoDMI")
+            .product(name: "LenovoDMI", package: "LenovoDMI"),
+            .product(name: "UEFIImage", package: "UEFIImage")
         ]),
         .target(name: "LenovoDMIToolUI", dependencies: [
             .product(name: "HelpUI", package: "HelpUI"),

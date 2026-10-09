@@ -42,6 +42,9 @@ struct LenovoDMIParkedState: ToolSessionState {
     public private(set) var display = LenovoDMIDisplay.empty
     /// Called on the main actor once a reading has landed and been shown.
     public var onDisplay: ((LenovoDMIDisplay) -> Void)?
+    /// Called once the drivers that ask for each entry have been named — the
+    /// pass that runs behind the store.
+    public var onReadersNamed: (() -> Void)?
     private var focus: String?
     /// Which reading is the current one: an edit during a read starts another,
     /// and only the newest may land.
@@ -108,9 +111,10 @@ struct LenovoDMIParkedState: ToolSessionState {
         controller.say(L("Reading…"))
         controller.showBusy()
         Task { [weak self] in
-            let display = await Task.detached(priority: .userInitiated) {
+            let (reading, display) = await Task.detached(priority: .userInitiated) {
                 let bytes = (try? snapshot.read(at: 0, length: Int(snapshot.size))) ?? []
-                return LenovoDMIPresenter.display(LenovoDMI.read(bytes))
+                let reading = LenovoDMI.read(bytes)
+                return (reading, LenovoDMIPresenter.display(reading))
             }.value
             guard let self, self.generation == generation else { return }
             // A row the new reading does not have is not one to hold on to.
@@ -121,6 +125,31 @@ struct LenovoDMIParkedState: ToolSessionState {
             self.controller.endBusy()
             self.controller.say("")
             self.onDisplay?(display)
+            self.nameReaders(of: reading, in: snapshot, generation: generation)
+        }
+    }
+
+    /// Searches the image's drivers for the entries they ask for and shows
+    /// the store again with them named — behind the store rather than in
+    /// front of it: it parses the whole image, compressed volumes included,
+    /// and the store is worth reading before that is done.
+    ///
+    /// Only for a store in a firmware image: a block on its own — a fragment —
+    /// has no drivers around it, and "no driver names it" would be a claim
+    /// about firmware that is not there.
+    private func nameReaders(of reading: LenovoDMIReading, in snapshot: any ToolContentReader,
+                             generation: Int) {
+        guard !reading.areas.isEmpty else { return }
+        let namespaces = Array(Set(reading.areas.flatMap { $0.blocks.flatMap { $0.entries.map(\.key.namespace) } }))
+        Task { [weak self] in
+            let display = await Task.detached(priority: .utility) {
+                let bytes = (try? snapshot.read(at: 0, length: Int(snapshot.size))) ?? []
+                let readers = LenovoDMIFirmwareReaders.scan(bytes, namespaces: namespaces)
+                return LenovoDMIPresenter.display(reading, readers: readers)
+            }.value
+            guard let self, self.generation == generation else { return }
+            self.show(display)
+            self.onReadersNamed?()
         }
     }
 

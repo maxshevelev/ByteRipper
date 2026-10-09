@@ -1,4 +1,4 @@
-@source-sha d3aeabbbc3fbf3586a0e989b48535fa4f0bfeb8452c424f03c9197c290e8b9b7
+@source-sha a45086a7b08f79b23db89a50e4867cbcb92034629c0093b1291f22795d2fc38d
 # Lenovo DMI
 
 > Der Speicher, in dem die Firmware Lenovo InsydeH2O die Identität eines Geräts ablegt – Seriennummer, UUID, Maschinentyp und Modell, Windows-Schlüssel –, dekodiert und ausgewertet.
@@ -30,7 +30,7 @@ Der Speicher liegt doppelt vor, in **LENV-Block 1** und **LENV-Block 2**, damit 
 
 Die Firmware liest den Block mit der höheren Generation; das Panel nennt ihn den **aktiven** Block. Diese Regel stammt aus der Analyse von `LenovoVariableDxe` durch LenovoDMIDecryptor, und die untersuchten Dumps bestätigen sie: Der Eintrag, den das letzte Ereignis des Protokolls entfernt, fehlt im Block mit der höheren Generation und ist im anderen noch vorhanden. Bei gleicher Generation wertet das Werkzeug wie LenovoDMIDecryptor Block 1 als aktiv.
 
-Generation **0** kommt auf einer funktionierenden Platine nicht vor. Sie zeigt ein Block, dessen Kopf genullt wurde, etwa in einem gelöschten Speicher; einen solchen Block liest die Firmware nicht. Haben beide Blöcke Generation 0, gibt es nichts zu lesen.
+Generation **0** kommt auf einer funktionierenden Platine nicht vor. Sie zeigt ein Block, dessen Kopf genullt wurde, etwa in einem gelöschten Speicher; einen solchen Block liest die Firmware nicht. Haben beide Blöcke Generation 0, gibt es nichts zu lesen. Ein Block, dessen Bytes sämtlich `FF` sind, wurde gelöscht und seitdem nicht beschrieben; das Panel nennt ihn gelöscht, und die Firmware liest die andere Kopie.
 
 Ob die Firmware auf den anderen Block ausweicht, wenn die Prüfsumme des aktiven nicht stimmt, ist nicht bekannt; das Panel weist an der betreffenden Stelle darauf hin.
 
@@ -51,6 +51,8 @@ Der Befehl steht für einen Block zur Verfügung, der Einträge enthält und des
 Ein Eintrag ist durch einen Namensraum und einen Typ bestimmt. Für den Namensraum SMBIOS sind folgende Typen bekannt: der Windows-Schlüssel, die OA3-Schlüssel-ID, die Bezeichnung der Hauptplatine, Maschinentyp und Modell (MTM), die Seriennummer der Hauptplatine, die System-UUID, die Plattform-ID der Hauptplatine und das Suffix des vorinstallierten Betriebssystems. Diese Einträge benennt das Panel und zeigt ihre Werte als Text, die UUID in der Bytereihenfolge von SMBIOS.
 
 In realen Images kommen weitere Typen vor, deren Bedeutung nicht dokumentiert ist. Das Panel bezeichnet sie als unbekannt, nennt die Typnummer und zeigt den Wert als Text, sofern alle Bytes druckbar sind, andernfalls hexadezimal. Die Merkmale eines Eintrags und zwei seiner Felder, die in allen untersuchten Images null sind, werden unverändert wiedergegeben.
+
+**Von der Firmware gelesen** in der Detailliste eines Eintrags nennt die Treiber dieses Images, die den Eintrag bei der Firmware abfragen. Das Werkzeug findet sie, indem es den Code jedes Treibers im Image nach dem Schlüssel des Eintrags durchsucht, nachdem der Speicher angezeigt ist; in den untersuchten Images dauert das weniger als eine Sekunde. Dort liest zum Beispiel `InstallMsdm` den Windows-Schlüssel und baut daraus die ACPI-Tabelle MSDM, und `L05SmbiosOverride` oder `OemUpdateSMBios` liest die Einträge, aus denen die SMBIOS-Tabellen gefüllt werden – so zeigt sich, wofür ein Eintrag dient, auch wo seine Bedeutung nicht dokumentiert ist. Ein Treiber, der den Schlüssel zur Laufzeit berechnet, statt ihn als Konstante zu nennen, wird nicht gefunden; **Kein Treiber dieses Images greift darauf zu** bedeutet daher, dass kein Treiber den Schlüssel als Konstante nennt. Für einen Block, der für sich in einem Fragment geöffnet ist, entfällt die Zeile: Um ihn herum gibt es keine Firmware.
 
 ## Der Eintrag des Windows-Schlüssels
 
@@ -73,7 +75,7 @@ Das Protokoll hält fest, was die Firmware wann in den Speicher geschrieben hat:
 
 Das Format hat das Projekt [[web:https://github.com/Shmurkio/LenovoDMIDecryptor|LenovoDMIDecryptor]] aus dem Modul `LenovoVariableDxe` rekonstruiert; das Projekt [[web:https://github.com/Shmurkio/LenovoVar|LenovoVar]] desselben Autors, das den Speicher über das Protokoll der Firmware selbst liest und schreibt, bestätigt die Eintragstypen und die Bytereihenfolge der UUID. Das Werkzeug wurde an realen Dumps überprüft. Wo die Beschreibung des Projekts und die Dumps voneinander abweichen, folgt das Werkzeug den Dumps: Ein Protokollereignis ist 32 Bytes lang, obwohl die Feldoffsets der Beschreibung zusammen 24 ergeben, und das Jahr eines Ereignisses ist als BCD-Jahrhundert und BCD-Jahr gespeichert, nicht als 2000 plus ein Byte.
 
-Nicht bestätigt ist, wie die Firmware auf die Schreibschutzbits eines Blocks und eines Eintrags reagiert, mit welchem der beiden Schlüssel das Protokoll kodiert ist, wenn sich die Schlüssel der Blöcke unterscheiden, und was die unbekannten Typen und Felder enthalten.
+Nicht bestätigt ist, wie die Firmware auf die Schreibschutzbits eines Blocks und eines Eintrags reagiert, und was die unbekannten Typen und Felder enthalten. Das Änderungsprotokoll ist nicht immer mit dem Schlüssel der Blöcke kodiert: In einem der untersuchten Dumps sind die Blöcke mit `A0` und das Protokoll mit `88` kodiert. Der freie Platz des Protokolls besteht aus kodierten Nullen; das wiederholte Byte nach dem letzten Ereignis ist daher sein Schlüssel, und das Werkzeug entnimmt ihn dort.
 
 ! Das Werkzeug selbst ändert nichts am Speicher: Bearbeitet wird in einem Fragment, das mit „Dekodierten Block öffnen“ geöffnet und mit „In der Quelle aktualisieren“ zurückgeschrieben wird; ob die Platine danach mit den neuen Werten startet, ist nicht bestätigt. Sind beide Blöcke leer, wurde der Speicher gelöscht oder nie beschrieben: Seriennummer und UUID der Platine sind in diesem Image nicht enthalten. Sie lassen sich dann nur einem früheren Dump derselben Platine, sofern einer aufbewahrt wurde, oder dem Typenschild entnehmen.
 

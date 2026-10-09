@@ -1374,3 +1374,7 @@
 "MSDM licensing data, %1$@ bytes of key" = "MSDM-Lizenzdaten, Schlüssel %1$@ Bytes";
 "The first 16 bytes are %1$@, not the MSDM signature %2$@." = "Die ersten 16 Bytes sind %1$@, nicht die MSDM-Signatur %2$@.";
 "The key holds bytes that are not printable." = "Der Schlüssel enthält nicht druckbare Bytes.";
+"Erased: every byte is FF" = "Gelöscht: alle Bytes sind FF";
+"LENV block %1$@ is erased: every byte is FF. The firmware reads the other copy." = "LENV-Block %1$@ ist gelöscht: alle Bytes sind FF. Die Firmware liest die andere Kopie.";
+"No driver in this image names it" = "Kein Treiber dieses Images greift darauf zu";
+"Read by the firmware" = "Von der Firmware gelesen";

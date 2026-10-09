@@ -242,6 +242,18 @@ final class LenovoDMIToolFlowTests: XCTestCase {
         XCTAssertEqual(inPanel.display.rows[0].children.first?.value, "QF0TEST1")
     }
 
+    /// Behind the store, the image's drivers are searched and each entry says
+    /// which of them read it — none, in an image that is only a store.
+    func testTheDriversThatReadAnEntryArriveAfterTheStore() throws {
+        _ = try open(LenovoTestImage.make())
+        let named = expectation(description: "the drivers are named")
+        try session().onReadersNamed = { named.fulfill() }
+        wait(for: [named], timeout: 10)
+        let entry = try XCTUnwrap(try session().display.rows[2].children.first)
+        XCTAssertEqual(entry.fields.first { $0.label == "Read by the firmware" }?.value,
+                       "No driver in this image names it")
+    }
+
     func testAnImageWithoutAStoreSaysSo() throws {
         let controller = try open([UInt8](repeating: 0xFF, count: 0x8000))
         XCTAssertEqual(try session().display.summary, "No Lenovo DMI store in this image.")

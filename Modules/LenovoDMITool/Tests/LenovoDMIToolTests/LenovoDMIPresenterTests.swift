@@ -189,4 +189,22 @@ final class LenovoDMIPresenterTests: XCTestCase {
         XCTAssertEqual(fine.fields.first { $0.label == "Key header" }?.value,
                        "MSDM licensing data, 29 bytes of key")
     }
+
+    /// Once the image's drivers are searched, each entry says which of them
+    /// ask for it; before that the line is not there at all.
+    func testAnEntrySaysWhichDriversReadIt() throws {
+        let reading = LenovoDMI.read(Store.image([
+            Store.block(generation: 2, key: 0x77, entries: [Store.serial, Store.unknown]),
+            Store.block(generation: 1, key: 0x77, entries: [Store.serial])
+        ]))
+        func line(_ display: LenovoDMIDisplay, _ index: Int) -> String? {
+            display.rows[1].children[index].fields.first { $0.label == "Read by the firmware" }?.value
+        }
+        XCTAssertNil(line(LenovoDMIPresenter.display(reading), 0))
+
+        let readers = LenovoDMIFirmwareReaders(drivers: [.smbios(0x0400): ["L05SmbiosOverride", "SetupUtility"]])
+        let named = LenovoDMIPresenter.display(reading, readers: readers)
+        XCTAssertEqual(line(named, 0), "L05SmbiosOverride, SetupUtility")
+        XCTAssertEqual(line(named, 1), "No driver in this image names it")
+    }
 }

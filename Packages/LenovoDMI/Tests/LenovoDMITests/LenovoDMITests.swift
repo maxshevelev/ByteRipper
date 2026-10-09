@@ -441,3 +441,86 @@ final class WindowsKeyTests: XCTestCase {
         XCTAssertEqual(LenovoDMIValue.WindowsKey.problem(other), .signature(Array(other[..<16])))
     }
 }
+
+final class LogKeyAndErasedBlockTests: XCTestCase {
+    /// A log under a key of its own — `88` against the blocks' `A0` on a real
+    /// dump — is read under its own: its free space names it.
+    func testALogUnderAKeyOfItsOwnReads() throws {
+        let image = TestStore.image(
+            log: TestStore.log(TestStore.standardLog, key: 0x88),
+            blocks: [
+                TestStore.block(generation: 2, key: 0xA0, entries: TestStore.standardEntries),
+                TestStore.block(generation: 1, key: 0xA0, entries: TestStore.standardEntries)
+            ]
+        )
+        let area = try XCTUnwrap(LenovoDMI.locate(in: image).first)
+        XCTAssertEqual(area.log.key, 0x88)
+        XCTAssertEqual(area.log.entries.map(\.key), TestStore.standardLog.map(\.key))
+    }
+
+    /// A block erased to FF is erased, not a block with a strange header.
+    func testAnErasedBlockIsErased() throws {
+        let image = TestStore.image(
+            log: TestStore.log(TestStore.standardLog, key: 0x58),
+            blocks: [
+                TestStore.block(generation: 74, key: 0x58, entries: TestStore.standardEntries),
+                [UInt8](repeating: 0xFF, count: 0x1000)
+            ]
+        )
+        let area = try XCTUnwrap(LenovoDMI.locate(in: image).first)
+        XCTAssertTrue(area.blocks[1].isErased)
+        XCTAssertEqual(area.liveIndex, 0)
+        XCTAssertTrue(area.findings.contains(.erased(block: 1)))
+        XCTAssertFalse(area.findings.contains(.missingSignature(block: 1)))
+    }
+}
+
+final class KeyReferencesTests: XCTestCase {
+    private let ns = LenovoDMIFormat.smbiosNamespace
+    private func found(_ code: [UInt8]) -> [UInt16] {
+        LenovoDMIKeyReferences.keys(in: code, namespaces: [ns]).map(\.type).sorted()
+    }
+    private let pad: [UInt8] = [0x90, 0x90, 0x90, 0x90]
+
+    /// The key as a constant in the driver's data.
+    func testAConstantKey() {
+        XCTAssertEqual(found(pad + ns + [0x01, 0x00] + pad), [0x0001])
+    }
+
+    /// Four dword stores into the frame — `InstallMsdm`'s form.
+    func testAKeyBuiltOnTheStack() {
+        func store(_ d: UInt8, _ imm: ArraySlice<UInt8>) -> [UInt8] { [0xC7, 0x45, d] + imm }
+        let code = pad + store(0xF0, ns[0..<4]) + store(0xF4, ns[4..<8]) + store(0xF8, ns[8..<12])
+            + store(0xFC, ns[12..<14] + [0x01, 0x00]) + pad
+        XCTAssertEqual(found(code), [0x0001])
+    }
+
+    /// The same through `[rsp+d]`.
+    func testAKeyBuiltOnTheStackThroughRSP() {
+        func store(_ d: UInt8, _ imm: ArraySlice<UInt8>) -> [UInt8] { [0xC7, 0x44, 0x24, d] + imm }
+        let code = pad + store(0x34, ns[0..<4]) + store(0x38, ns[4..<8]) + store(0x3C, ns[8..<12])
+            + store(0x40, ns[12..<14] + [0x11, 0x00]) + pad
+        XCTAssertEqual(found(code), [0x0011])
+    }
+
+    /// The type left open and set byte by byte before each call —
+    /// `L05SmbiosOverride`'s table; clearing the low byte is not a key.
+    func testATypeSetByteByByte() {
+        var code = pad
+        code += [0xC7, 0x45, 0xF0] + ns[0..<4]
+        code += [0xC7, 0x45, 0xF4] + ns[4..<8]
+        code += [0xC7, 0x45, 0xF8] + ns[8..<12]
+        code += [0x66, 0xC7, 0x45, 0xFC] + ns[12..<14]
+        code += [0xC6, 0x45, 0xFE, 0x00]          // clear the low byte
+        code += [0xC6, 0x45, 0xFF, 0x02] + pad    // 0x0200
+        code += [0xC6, 0x45, 0xFF, 0x05] + pad    // 0x0500
+        code += [0x66, 0xC7, 0x45, 0xFE, 0x0B, 0x00] + pad  // 0x000B
+        code += [0xC3, 0xCC]
+        code += [0xC6, 0x45, 0xFF, 0x09]          // another function: not ours
+        XCTAssertEqual(found(code), [0x000B, 0x0200, 0x0500])
+    }
+
+    func testCodeWithoutTheNamespaceNamesNothing() {
+        XCTAssertEqual(found([UInt8](repeating: 0xC7, count: 64)), [])
+    }
+}

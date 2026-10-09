@@ -1374,3 +1374,7 @@
 "MSDM licensing data, %1$@ bytes of key" = "Лицензионные данные MSDM, ключ — %1$@ байт";
 "The first 16 bytes are %1$@, not the MSDM signature %2$@." = "Первые 16 байт — %1$@, а не сигнатура MSDM %2$@.";
 "The key holds bytes that are not printable." = "В ключе есть непечатные байты.";
+"Erased: every byte is FF" = "Стёрт: все байты равны FF";
+"LENV block %1$@ is erased: every byte is FF. The firmware reads the other copy." = "Блок LENV %1$@ стёрт: все его байты равны FF. Прошивка читает другую копию.";
+"No driver in this image names it" = "Ни один драйвер этого образа к ней не обращается";
+"Read by the firmware" = "Читается прошивкой";

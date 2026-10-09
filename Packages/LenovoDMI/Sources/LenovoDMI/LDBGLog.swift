@@ -11,9 +11,11 @@ public struct LDBGLog: Equatable, Sendable {
     /// examined; what they are for is not known.
     public var unknownHeader: [UInt8]
     /// The key the entries were decoded with, or nil when there is nothing to
-    /// decode. Upstream uses the first block's key; on the dumps examined both
-    /// blocks carry the same one, so which of them the firmware means is not
-    /// settled — the key chosen is the one under which the entries read.
+    /// decode. Upstream uses the first block's key, and on most dumps the log
+    /// does share it — but not on all: one dump examined has blocks under `A0`
+    /// and a log under `88`. The log's free space is zeros encoded, so a run
+    /// of one byte after the last entry names the key; failing that, the key
+    /// is the one under which the most entries read as entries.
     public var key: UInt8?
     public var entries: [LDBGEntry]
     /// What is wrong with the write offset, if anything.
@@ -65,9 +67,26 @@ public struct LDBGLog: Equatable, Sendable {
             return
         }
 
+        // The free space after the entries, if it is one byte repeated, is
+        // that byte encoding zeros: the log's own key, whatever the blocks'.
         var keys: [UInt8] = []
+        let tail = stored[end...]
+        if let first = tail.first, tail.count >= size, tail.allSatisfy({ $0 == first }), first != 0xFF {
+            keys.append(first)
+        }
         for candidate in candidateKeys + [0] where !keys.contains(candidate) {
             keys.append(candidate)
+        }
+        // Nothing reads under any of them: every key, the best reading kept.
+        let read = { (candidate: UInt8) -> Int in
+            (0..<count).filter { index in
+                let start = header + index * size
+                return LDBGEntry(index: index, offset: 0,
+                                 bytes: Array(stored[start..<(start + size)]).xored(with: candidate)).looksLikeAnEntry
+            }.count
+        }
+        if keys.allSatisfy({ read($0) == 0 }) {
+            keys += (0...255).map(UInt8.init).filter { !keys.contains($0) }
         }
         var best: (key: UInt8, entries: [LDBGEntry], score: Int)?
         for candidate in keys {

@@ -58,6 +58,10 @@ public struct LenovoDMIArea: Equatable, Sendable {
             found.append(.noUsableBlock)
         }
         for (index, block) in blocks.enumerated() {
+            if block.isErased {
+                found.append(.erased(block: index))
+                continue
+            }
             if !block.hasSignature {
                 found.append(.missingSignature(block: index))
                 continue
@@ -120,6 +124,8 @@ public enum LenovoDMIFinding: Equatable, Sendable {
     /// Neither block is signed with a generation the firmware would use.
     case noUsableBlock
     case missingSignature(block: Int)
+    /// The block's page is all `FF`: erased, and never written again.
+    case erased(block: Int)
     case checksumMismatch(block: Int, stored: UInt16, computed: UInt16)
     /// The header's entry count runs past the end of the block under either
     /// reading.
@@ -147,6 +153,8 @@ public enum LenovoDMIFinding: Equatable, Sendable {
             return L("Both LENV blocks are empty: the store has been wiped or was never written. The board's serial number and UUID are not in this image.")
         case .noUsableBlock:
             return L("Neither LENV block is one the firmware would read.")
+        case .erased(let block):
+            return L("LENV block %1$@ is erased: every byte is FF. The firmware reads the other copy.", block + 1)
         case .missingSignature(let block):
             return L("LENV block %1$@ has no signature where it should start.", block + 1)
         case .checksumMismatch(let block, let stored, let computed):

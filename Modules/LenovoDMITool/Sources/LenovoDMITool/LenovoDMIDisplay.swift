@@ -113,12 +113,16 @@ public enum LenovoDMIPresenter {
         display(LenovoDMIReading(areas: areas, blocks: []))
     }
 
-    public static func display(_ reading: LenovoDMIReading) -> LenovoDMIDisplay {
+    /// `readers`, once the image's drivers have been searched, adds to each
+    /// entry the drivers that ask for it; nil leaves the line out until then.
+    public static func display(
+        _ reading: LenovoDMIReading, readers: LenovoDMIFirmwareReaders? = nil
+    ) -> LenovoDMIDisplay {
         let areas = reading.areas
         guard !areas.isEmpty else {
             return reading.blocks.isEmpty ? noStore : blocksOnTheirOwn(reading.blocks)
         }
-        return storesDisplay(areas)
+        return storesDisplay(areas, readers: readers)
     }
 
     private static var noStore: LenovoDMIDisplay {
@@ -169,7 +173,9 @@ public enum LenovoDMIPresenter {
         return LenovoDMIDisplay(summary: summary, rows: rows, notes: notes, blocks: blocks)
     }
 
-    private static func storesDisplay(_ areas: [LenovoDMIArea]) -> LenovoDMIDisplay {
+    private static func storesDisplay(
+        _ areas: [LenovoDMIArea], readers: LenovoDMIFirmwareReaders?
+    ) -> LenovoDMIDisplay {
         var rows: [LenovoDMIRow] = []
         var notes: [LenovoDMINote] = []
         var blocks: [String: LENVBlock] = [:]
@@ -179,7 +185,7 @@ public enum LenovoDMIPresenter {
             rows.append(logRow(area.log, id: id + ".log", prefix: prefix))
             for index in area.blocks.indices {
                 let blockID = id + ".lenv\(index + 1)"
-                rows.append(blockRow(index, in: area, id: blockID, prefix: prefix))
+                rows.append(blockRow(index, in: area, id: blockID, prefix: prefix, readers: readers))
                 if LenovoDMIDecodedBlock.canOpen(area.blocks[index]) {
                     blocks[blockID] = area.blocks[index]
                 }
@@ -276,22 +282,25 @@ public enum LenovoDMIPresenter {
     // MARK: - A block
 
     private static func blockRow(
-        _ index: Int, in area: LenovoDMIArea, id: String, prefix: String
+        _ index: Int, in area: LenovoDMIArea, id: String, prefix: String,
+        readers: LenovoDMIFirmwareReaders?
     ) -> LenovoDMIRow {
         let other = area.blocks.indices.first { $0 != index }.map { area.blocks[$0] }
         return blockRow(area.blocks[index], id: id, name: prefix + L("LENV block %1$@", index + 1),
                         live: (area.liveIndex == index, liveText(index, in: area)),
-                        other: other, otherNumber: index == 0 ? 2 : 1)
+                        other: other, otherNumber: index == 0 ? 2 : 1, readers: readers)
     }
 
     /// One block's row. `live` is whether the firmware reads it and why — nil
     /// for a block on its own, where there is no other copy to choose from.
     private static func blockRow(
         _ block: LENVBlock, id: String, name: String, live: (isLive: Bool, text: String)?,
-        other: LENVBlock?, otherNumber: Int
+        other: LENVBlock?, otherNumber: Int, readers: LenovoDMIFirmwareReaders? = nil
     ) -> LenovoDMIRow {
         let value: String
-        if !block.hasSignature {
+        if block.isErased {
+            value = L("Erased")
+        } else if !block.hasSignature {
             value = L("No signature")
         } else if block.isBlank {
             value = L("Empty")
@@ -301,6 +310,14 @@ public enum LenovoDMIPresenter {
                 : L("Generation %1$@", block.generation)
         }
 
+        if block.isErased {
+            return LenovoDMIRow(
+                id: id, name: name, value: value, range: block.range, isProblem: false,
+                fields: [LenovoDMIField(L("State"), L("Erased: every byte is FF")),
+                         LenovoDMIField(L("Offset"), hex(block.offset, 8))],
+                term: HelpTermID("lenv"), decodableBlock: nil, children: []
+            )
+        }
         var fields = [
             LenovoDMIField(L("Offset"), hex(block.offset, 8)),
             LenovoDMIField(L("Signature"), block.hasSignature ? "LENV" : L("Missing"),
@@ -321,15 +338,15 @@ public enum LenovoDMIPresenter {
             fields.insert(LenovoDMIField(L("State"), L("Empty: wiped or never written")), at: 0)
         }
 
-        let decodeable = LenovoDMIDecodedBlock.canOpen(block) ? id : nil
+        let decodable = LenovoDMIDecodedBlock.canOpen(block) ? id : nil
         return LenovoDMIRow(
             id: id, name: name, value: value, range: block.range,
             isProblem: !block.hasSignature || !block.entriesFit
                 || (!block.isBlank && !block.checksumIsValid),
-            fields: fields, term: HelpTermID("lenv"), decodableBlock: decodeable,
+            fields: fields, term: HelpTermID("lenv"), decodableBlock: decodable,
             children: block.entries.map {
                 entryRow($0, id: id + ".\($0.index)", other: other, otherNumber: otherNumber,
-                         decodableBlock: decodeable)
+                         decodableBlock: decodable, readers: readers)
             }
         )
     }
@@ -369,7 +386,7 @@ public enum LenovoDMIPresenter {
 
     private static func entryRow(
         _ entry: LENVEntry, id: String, other: LENVBlock?, otherNumber: Int,
-        decodableBlock: String?
+        decodableBlock: String?, readers: LenovoDMIFirmwareReaders? = nil
     ) -> LenovoDMIRow {
         let value = LenovoDMIValue.text(of: entry)
         var fields = [
@@ -384,6 +401,13 @@ public enum LenovoDMIPresenter {
             LenovoDMIField(L("Offset"), hex(entry.offset, 8)),
             LenovoDMIField(L("Value at"), hex(entry.dataRange.lowerBound, 8))
         ]
+        if let readers {
+            let drivers = readers.drivers(of: entry.key)
+            fields.insert(LenovoDMIField(
+                L("Read by the firmware"),
+                drivers.isEmpty ? L("No driver in this image names it") : drivers.joined(separator: ", ")
+            ), at: 1)
+        }
         var keyHeaderWrong = false
         if entry.knownType == .windowsKey {
             let size = LenovoDMIValue.WindowsKey.headerSize

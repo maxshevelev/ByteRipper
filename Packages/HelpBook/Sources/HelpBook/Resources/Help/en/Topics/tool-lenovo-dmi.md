@@ -34,7 +34,7 @@ The store is kept twice, in **LENV block 1** and **LENV block 2**, so that a wri
 
 The block with the higher generation is the one the firmware reads; the panel calls it the block **in use**. This rule comes from the reverse-engineering of `LenovoVariableDxe` by LenovoDMIDecryptor, and the dumps examined agree with it: the entry that the last record of the change log removes is absent from the block with the higher generation and still present in the other. When both generations are equal, the tool takes block 1, as LenovoDMIDecryptor does.
 
-A generation of **0** does not occur on a working board. It is what a block shows when its header has been cleared, as on a store that was wiped: the firmware does not read such a block. If both blocks show 0, there is no copy to read.
+A generation of **0** does not occur on a working board. It is what a block shows when its header has been cleared, as on a store that was wiped: the firmware does not read such a block. If both blocks show 0, there is no copy to read. A block whose every byte is `FF` has been erased and never written again; the panel calls it erased, and the firmware reads the other copy.
 
 Whether the firmware passes over a block whose checksum does not match and reads the other one instead is not known; the panel states this where it applies.
 
@@ -55,6 +55,8 @@ The command is offered for a block that holds entries and whose encoding was rec
 An entry is filed under a namespace and a type. For the SMBIOS namespace the following types are known: the Windows key, the OA3 key ID, the motherboard name, the machine type and model (MTM), the baseboard serial number, the system UUID, the baseboard platform ID and the OS preload suffix. The panel names these and shows their values as text, the UUID in the byte order SMBIOS uses.
 
 Real images carry further types whose meaning has not been documented. The panel calls them unknown, gives their type number and shows the value as text where every byte is printable and as hex otherwise. The flags of an entry, and two fields of every entry that are zero on all images examined, are shown as they are.
+
+**Read by the firmware**, in the detail list of an entry, names the drivers of this image that ask the firmware for that entry. The tool finds them by searching the code of every driver in the image for the entry's key, after the store is shown; on the images examined this takes under a second. On those images, for example, `InstallMsdm` reads the Windows key and builds the ACPI MSDM table from it, and `L05SmbiosOverride` or `OemUpdateSMBios` reads the entries the SMBIOS tables are filled from — which says what an entry is for even where its meaning has not been documented. A driver that computes the key at run time rather than naming it by constant is not found, so **No driver in this image names it** means that no driver names it by constant. The line is not shown for a block opened on its own in a fragment, which has no firmware around it.
 
 ## The Windows key entry
 
@@ -77,7 +79,7 @@ The log records what the firmware wrote to the store and when: the date and time
 
 The format was reverse-engineered from `LenovoVariableDxe` by the [[web:https://github.com/Shmurkio/LenovoDMIDecryptor|LenovoDMIDecryptor]] project; the same author's [[web:https://github.com/Shmurkio/LenovoVar|LenovoVar]], which reads and writes the store through the firmware's own protocol, confirms the entry types and the byte order of the UUID. The tool has been checked against real dumps. Where its description and the dumps disagree, the tool follows the dumps: a log record is 32 bytes long, although the field offsets in that description add up to 24, and the year in a log record is a BCD century followed by a BCD year rather than 2000 plus a byte.
 
-Not confirmed: what the write-protect bits of a block and of an entry cause the firmware to do, which of the two block keys the log is encoded with when they differ, and what the unknown types and fields hold.
+Not confirmed: what the write-protect bits of a block and of an entry cause the firmware to do, and what the unknown types and fields hold. The change log does not always share the blocks' key: on one dump examined the blocks are encoded with `A0` and the log with `88`. The log's free space is zeros encoded, so a run of one byte after its last record gives its key, and the tool takes the key from there.
 
 ! The tool itself changes nothing in the store: an edit is made in a fragment opened with Open Decoded Block and written back with Update in Parent, and whether the board then boots with the new values has not been confirmed. A store that is empty on both blocks has been wiped or was never written: the board's serial number and UUID are not in this image, and they have to be taken from an earlier dump of this board, if one was kept, or from the sticker.
 
