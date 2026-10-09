@@ -30,13 +30,30 @@ public enum MEAAgentQueries {
             whether the firmware database knows this build, and the analysis's messages (a corrupted \
             partition, a module whose hash fails, an update that will not apply). `tone` marks a verdict: \
             good, caution or bad. A value of "Coming soon" is a row this engine does not answer yet. \
-            The first call on a dump analyses its ME region, which takes a second or two.
+            The File System State row carries `basis`: what each of the three steps that decide it found \
+            (the reserved MFS files, whether the EFS volume holds files, the configuration partitions), \
+            which step decided it, `complete: false` when a step that could have raised the state could \
+            not be taken — an EFS partition that could not be read — and an `explanation`. Say the basis \
+            when you report the state: Configured with an unreadable EFS is not the same fact as \
+            Configured with an empty one. The first call on a dump analyses its ME region, which takes a \
+            second or two.
             """
     ) { host, _ in
         let analysis = try await analysis(host)
         let blocks = MEASummary.build(analysis)
         return .json(["blocks": .array(blocks.map { block in
-            var members: [String: JSONValue] = ["rows": .array(block.rows.map(row))]
+            var members: [String: JSONValue] = ["rows": .array(block.rows.map { summaryRow in
+                var entry = row(summaryRow)
+                // The one verdict whose evidence is not in the row: what each
+                // of its three steps found, and which decided it.
+                if summaryRow.label == "File System State", summaryRow.value.isValue,
+                   let state = analysis.mfsState, let basis = analysis.mfsStateBasis,
+                   case .object(var fields) = entry {
+                    fields["basis"] = basisJSON(state: state, basis: basis)
+                    entry = .object(fields)
+                }
+                return entry
+            })]
             if let title = block.title { members["title"] = .string(title) }
             return .object(members)
         })])
@@ -140,6 +157,68 @@ public enum MEAAgentQueries {
                                   configPaths: names?.config ?? .none)
     }
 
+    // MARK: - The File System State's basis
+
+    static func basisJSON(state: MFSState, basis: MFSStateBasis) -> JSONValue {
+        [
+            "decided_by": .string(stepName(basis.decidedBy)),
+            "reserved_files": .string(reservedText(basis.reservedFiles)),
+            "efs": .string(efsText(basis.efs)),
+            "configuration": .array(basis.configuration.map { .string($0) }),
+            "complete": .bool(!basis.isIncomplete),
+            "explanation": .string(explanation(state: state, basis: basis))
+        ]
+    }
+
+    nonisolated static func stepName(_ step: MFSStateBasis.Step) -> String {
+        switch step {
+        case .reservedFiles: return "reserved_files"
+        case .efs: return "efs"
+        case .configuration: return "configuration"
+        case .nothing: return "nothing"
+        }
+    }
+
+    nonisolated static func reservedText(_ files: MFSStateBasis.ReservedFiles) -> String {
+        switch files {
+        case .notRead:
+            return "not read: this volume names its files through its own tables (CSME 15/16), so no state is claimed from file indices"
+        case .none:
+            return "none of the reserved low-level files (0–5, 7, 8, 9) is present"
+        case .initializing(let indices):
+            return "present: \(list(indices)), which mean Initialized"
+        case .configuring(let indices):
+            return "present: \(list(indices)), which mean Configured"
+        }
+    }
+
+    nonisolated static func efsText(_ efs: MFSStateBasis.EFS) -> String {
+        switch efs {
+        case .holdsFiles:
+            return "the EFS volume holds file content, which means Initialized"
+        case .noFileContent:
+            return "the EFS volume was read and holds no file content"
+        case .filesNotNamed:
+            return "the EFS volume was read, but its files are known only from the firmware database's file table, which was not available"
+        case .unreadable(let offset):
+            return "unreadable: the partition table lists an EFS partition at \(hex(UInt64(offset))), but no EFS volume could be read there"
+        case .noPartition:
+            return "no EFS partition"
+        }
+    }
+
+    /// One paragraph: the state, the step that set it, and — when a step
+    /// that could have raised it was not taken — what is not known. The
+    /// panel's own words (`MEAText.fileSystemStateBasis`), in the English
+    /// every agent call is answered in.
+    static func explanation(state: MFSState, basis: MFSStateBasis) -> String {
+        MEAText.fileSystemStateBasis(state, basis)
+    }
+
+    private nonisolated static func list(_ indices: [Int]) -> String {
+        indices.map { "file \($0)" }.joined(separator: ", ")
+    }
+
     // MARK: - Shapes
 
     private static func row(_ row: MEASummaryRow) -> JSONValue {
@@ -186,5 +265,5 @@ public enum MEAAgentQueries {
         return parts.compactMap { $0 }
     }
 
-    static func hex(_ value: UInt64) -> String { String(format: "0x%llX", value) }
+    nonisolated static func hex(_ value: UInt64) -> String { String(format: "0x%llX", value) }
 }

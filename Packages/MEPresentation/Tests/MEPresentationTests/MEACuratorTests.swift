@@ -68,6 +68,25 @@ final class MEACuratorTests: XCTestCase {
     /// While `Huffman.dat` is on the way, the Issues group ends with a row
     /// that says the module checks are still to come — a group of its own
     /// when nothing else was raised, and none at all once they are done.
+    /// The state's basis follows it on the Firmware row: drawn as a caution
+    /// when the EFS step could not be taken, plain when it could.
+    func testTheStateIsFollowedByWhatItRestsOn() throws {
+        var a = try analysis(["mfsState": "configured"])
+        a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .unreadable(offset: 0x267000),
+                                        configuration: ["FITC"], decidedBy: .configuration)
+        let firmware = try XCTUnwrap(find("Firmware", in: MEACurator.present(a)))
+        let basis = try XCTUnwrap(firmware.fields.first { $0.label == "State basis" })
+        XCTAssertEqual(basis.tone, .caution)
+        XCTAssertTrue(basis.value.contains("The EFS partition at 0x267000 could not be read"), basis.value)
+        let labels = firmware.fields.map(\.label)
+        XCTAssertEqual(labels.firstIndex(of: "State basis"), labels.firstIndex(of: "File System State").map { $0 + 1 })
+
+        a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .noFileContent,
+                                        configuration: ["FITC"], decidedBy: .configuration)
+        let settled = try XCTUnwrap(find("Firmware", in: MEACurator.present(a)))
+        XCTAssertEqual(settled.fields.first { $0.label == "State basis" }?.tone, .standard)
+    }
+
     func testIssuesSayTheModuleChecksAreToCome() throws {
         let quiet = try analysis([:])
         let issues = try XCTUnwrap(find("Issues", in: MEACurator.present(quiet, pending: MEAPending(huffman: true))))

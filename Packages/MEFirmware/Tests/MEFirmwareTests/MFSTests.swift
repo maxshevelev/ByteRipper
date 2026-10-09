@@ -979,6 +979,39 @@ final class MFSTests: XCTestCase {
 /// on `mfs_parsed_idx` (MEA.py 7489–7493). `usesFTBL` mirrors the
 /// `mfs_found and not param.cse_unpack` gate on a *non*-legacy volume.
 final class MFSStateDecoderTests: XCTestCase {
+    /// What each step found, and which decided: an EFS partition that could
+    /// not be read leaves a CSME 15 image Configured from its configuration,
+    /// and the basis says the EFS step was not taken.
+    func testTheBasisSaysAnUnreadableEFSLeftTheStateToTheConfiguration() {
+        let (state, basis) = MFSStateDecoder.decide(usesFTBL: true, presentFileIndices: [],
+                                                    efs: .unreadable(offset: 0x267000),
+                                                    configuration: ["FITC"])
+        XCTAssertEqual(state, .configured)
+        XCTAssertEqual(basis.decidedBy, .configuration)
+        XCTAssertEqual(basis.reservedFiles, .notRead)
+        XCTAssertTrue(basis.isIncomplete)
+
+        let (read, readBasis) = MFSStateDecoder.decide(usesFTBL: true, presentFileIndices: [],
+                                                       efs: .holdsFiles, configuration: ["FITC"])
+        XCTAssertEqual(read, .initialized)
+        XCTAssertEqual(readBasis.decidedBy, .efs)
+        XCTAssertFalse(readBasis.isIncomplete)
+
+        let (empty, emptyBasis) = MFSStateDecoder.decide(usesFTBL: true, presentFileIndices: [],
+                                                         efs: .noFileContent, configuration: ["FITC"])
+        XCTAssertEqual(empty, .configured)
+        XCTAssertFalse(emptyBasis.isIncomplete, "an EFS read and found empty is a fact, not a gap")
+    }
+
+    func testTheBasisNamesTheReservedFilesThatDecided() {
+        let (state, basis) = MFSStateDecoder.decide(usesFTBL: false, presentFileIndices: [9, 2, 7],
+                                                    efs: .unreadable(offset: 0x1000), configuration: [])
+        XCTAssertEqual(state, .initialized)
+        XCTAssertEqual(basis.reservedFiles, .initializing([2]))
+        XCTAssertEqual(basis.decidedBy, .reservedFiles)
+        XCTAssertFalse(basis.isIncomplete, "already Initialized: no EFS could raise it")
+    }
+
     func testLegacyIndexSetMapsToInitialized() {
         // Any present file in {0,1,2,3,4,5,8} marks a legacy volume Initialized —
         // the reserved directories exist on it (typical CSME 11–14).

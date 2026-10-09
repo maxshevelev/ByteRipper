@@ -97,6 +97,12 @@ public enum MEACurator {
         } else if let state = a.mfsState {
             fields.append(MEAField("File System State", MEAText.title(state.rawValue),
                                    tone: MEATones.fileSystemState(state)))
+            // What the state rests on, and — a caution — when a step that
+            // could have raised it could not be taken.
+            if let basis = a.mfsStateBasis {
+                fields.append(MEAField(L("State basis"), MEAText.fileSystemStateBasis(state, basis),
+                                       tone: basis.isIncomplete ? .caution : .standard))
+            }
         }
         // Row 19 for a non-IFWI image: the $FPT header's FIT (an IFWI image's
         // FIT sits on each boot BPDT, surfaced under "Boot Partitions (BPDT)").

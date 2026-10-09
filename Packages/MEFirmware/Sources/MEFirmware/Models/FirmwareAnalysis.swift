@@ -107,6 +107,9 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// when a legacy-MFS file-index set says so, else Unconfigured. nil when no
     /// MFS region was found at all.
     public var mfsState: MFSState? = nil
+    /// What `mfsState` was decided from (`MFSStateBasis`). Ours; nil where
+    /// `mfsState` is.
+    public var mfsStateBasis: MFSStateBasis? = nil
     /// Power Down Mitigation (row 12a, upstream `pdm_status`): whether a
     /// CSME 11 firmware carries the power-down mitigation, as its database row
     /// records it. nil for every other family and major — the row upstream
@@ -287,6 +290,70 @@ public enum PowerDownMitigation: String, Codable, Sendable {
 /// produced by the current decoders, kept for enum completeness.
 public enum MFSState: String, Codable, Sendable {
     case unconfigured, initialized, configured, error
+}
+
+/// What the File System State (`mfsState`) was decided from: each of the
+/// three steps' evidence, and the step that decided it. Ours, not upstream's
+/// — MEAnalyzer prints the state alone — so a reader can tell a state the
+/// flash shows from one that only a step that could not be taken left
+/// standing: a Configured that would have been Initialized had the EFS
+/// volume been readable.
+public struct MFSStateBasis: Codable, Sendable, Equatable {
+    /// Step 1: the reserved low-level files.
+    public enum ReservedFiles: Codable, Sendable, Equatable {
+        /// The volume names its files through its tables (CSME 15/16), so
+        /// nothing is claimed from indices.
+        case notRead
+        /// None of the reserved indices is present.
+        case none
+        /// Present indices among 0–5 and 8, which mean Initialized.
+        case initializing([Int])
+        /// Present indices among 7 and 9, which mean Configured.
+        case configuring([Int])
+    }
+
+    /// Step 2: whether an EFS volume holds file content.
+    public enum EFS: Codable, Sendable, Equatable {
+        /// The last EFS file has bytes.
+        case holdsFiles
+        /// The volume was read and its last file has none.
+        case noFileContent
+        /// The volume was read, but which of its bytes are files only the
+        /// firmware database's file table says, and it was not there.
+        case filesNotNamed
+        /// The partition table lists an EFS partition at this file offset,
+        /// but no EFS volume could be read from it.
+        case unreadable(offset: Int)
+        /// No EFS partition.
+        case noPartition
+    }
+
+    /// Which step set the state.
+    public enum Step: String, Codable, Sendable {
+        case reservedFiles, efs, configuration, nothing
+    }
+
+    public var reservedFiles: ReservedFiles
+    public var efs: EFS
+    /// Step 3: the configuration found — `fitc.cfg`, `FITC`, `CDMD`, `MFSB`.
+    public var configuration: [String]
+    public var decidedBy: Step
+
+    public init(reservedFiles: ReservedFiles, efs: EFS, configuration: [String], decidedBy: Step) {
+        self.reservedFiles = reservedFiles
+        self.efs = efs
+        self.configuration = configuration
+        self.decidedBy = decidedBy
+    }
+
+    /// Whether a step that could have raised the state was not taken: the
+    /// EFS volume is there and could not be read, or could not be named.
+    public var isIncomplete: Bool {
+        switch efs {
+        case .unreadable, .filesNotNamed: return decidedBy != .efs && decidedBy != .reservedFiles
+        case .holdsFiles, .noFileContent, .noPartition: return false
+        }
+    }
 }
 
 /// One Flash Partition Table row (upstream `FPT_Entry`, `MEA.py` ~0x20 layout).

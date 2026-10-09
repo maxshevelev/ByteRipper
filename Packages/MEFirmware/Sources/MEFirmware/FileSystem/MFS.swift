@@ -453,20 +453,45 @@ enum MFSStateDecoder {
     ///    `elif`, so a volume raised by step 2 never sees it.
     static func state(usesFTBL: Bool, presentFileIndices: [Int],
                       efsHoldsFiles: Bool, hasConfiguration: Bool) -> MFSState {
+        decide(usesFTBL: usesFTBL, presentFileIndices: presentFileIndices,
+               efs: efsHoldsFiles ? .holdsFiles : .noPartition,
+               configuration: hasConfiguration ? ["configuration"] : []).state
+    }
+
+    /// The state, with what each step found and which one decided it. The
+    /// state is upstream's exactly: `efs` raises it only when it is
+    /// `.holdsFiles`, and any configuration at all is step 3's evidence.
+    static func decide(usesFTBL: Bool, presentFileIndices: [Int],
+                       efs: MFSStateBasis.EFS, configuration: [String]) -> (state: MFSState, basis: MFSStateBasis) {
         var state = MFSState.unconfigured
-        if !usesFTBL {
-            if presentFileIndices.contains(where: { [0, 1, 2, 3, 4, 5, 8].contains($0) }) {
+        var step = MFSStateBasis.Step.nothing
+        let reserved: MFSStateBasis.ReservedFiles
+        if usesFTBL {
+            reserved = .notRead
+        } else {
+            let initializing = presentFileIndices.filter { [0, 1, 2, 3, 4, 5, 8].contains($0) }.sorted()
+            let configuring = presentFileIndices.filter { [7, 9].contains($0) }.sorted()
+            if !initializing.isEmpty {
                 state = .initialized
-            } else if presentFileIndices.contains(where: { [7, 9].contains($0) }) {
+                step = .reservedFiles
+                reserved = .initializing(initializing)
+            } else if !configuring.isEmpty {
                 state = .configured
+                step = .reservedFiles
+                reserved = .configuring(configuring)
+            } else {
+                reserved = .none
             }
         }
-        if state != .initialized, efsHoldsFiles {
+        if state != .initialized, efs == .holdsFiles {
             state = .initialized
-        } else if state == .unconfigured, hasConfiguration {
+            step = .efs
+        } else if state == .unconfigured, !configuration.isEmpty {
             state = .configured
+            step = .configuration
         }
-        return state
+        return (state, MFSStateBasis(reservedFiles: reserved, efs: efs,
+                                     configuration: configuration, decidedBy: step))
     }
 }
 

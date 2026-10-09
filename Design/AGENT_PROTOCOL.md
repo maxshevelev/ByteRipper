@@ -145,7 +145,7 @@ whether a newer revision exists — is the panel's alone.
 
 | Tool | Arguments | Answer |
 |---|---|---|
-| `me_summary` | — | `blocks[]` (`title`, `rows[]` — `label`, `value`, `tone` for a verdict: good, caution, bad). |
+| `me_summary` | — | `blocks[]` (`title`, `rows[]` — `label`, `value`, `tone` for a verdict: good, caution, bad). The File System State row adds `basis`: `decided_by` (`reserved_files`, `efs`, `configuration`, `nothing`), `reserved_files`, `efs`, `configuration[]`, `complete` (false when a step that could have raised the state was not taken — an EFS partition that could not be read, or files that could not be named) and `explanation`, the sentence the panel shows as **State basis**. |
 | `me_tree` | `node` (a path such as `"2.0.3"`); `limit` (100, ≤ 400) | `node` (with `fields[]`) and its `children[]`, or the top groups: `id`, `title`, `subtitle`, `start`/`end`, `children` (a count), `empty`, `problem` (`severity`, `lines`). |
 
 The analysis is the pane's (`MEAAnalysisProviding`): one a panel made is used

@@ -968,11 +968,31 @@ public actor MEFirmwareAnalyzer {
         // (upstream `oem_config or fitc_found or mfsb_found or cdmd_found`):
         // the Flash Image Tool's own configuration module, and the three
         // configuration partitions.
-        let configurationPresent = OEMDetector.fitConfiguration(
-            codePartition, in: region, baseOffset: baseOffset)
-            || (fpt?.partitions.contains { part in
+        let configurationFound = (OEMDetector.fitConfiguration(
+            codePartition, in: region, baseOffset: baseOffset) ? ["fitc.cfg"] : [])
+            + (fpt?.partitions.filter { part in
                 ["FITC", "CDMD", "MFSB"].contains(part.name) && !part.empty
-            } ?? false)
+            }.map(\.name) ?? [])
+        // What step 2 of row 17 had to go on, said apart from the state: a
+        // volume that could not be read leaves the state where the other
+        // steps put it, and the reader should know that.
+        let efsEvidence: MFSStateBasis.EFS = {
+            if let efs = efsVolume {
+                guard let files = efs.files else { return .filesNotNamed }
+                return (files.last.map { $0.storedSize > 0 } ?? false) ? .holdsFiles : .noFileContent
+            }
+            if let partition = regions.first(where: { $0.name == "EFS" && $0.size > 0 }) {
+                return .unreadable(offset: partition.offset)
+            }
+            return .noPartition
+        }()
+        let fileSystemState = MFSStateDecoder.decide(
+            usesFTBL: mfsInfo?.usesFTBL ?? false,
+            presentFileIndices: mfsInfo?.files
+                .filter { !$0.content.isEmpty }
+                .map(\.index) ?? [],
+            efs: efsEvidence,
+            configuration: configurationFound)
         let oemCustomized = OEMDetector.oemCustomized(
             fpt: fpt, bootPartitions: bootPartitions, codePartition: codePartition,
             in: region, baseOffset: baseOffset)
@@ -1102,13 +1122,8 @@ public actor MEFirmwareAnalyzer {
             // raises upstream applies after it — a written EFS volume, and any
             // configuration partition at all. Answered for every image, as
             // upstream's own variable is; the row's family gate is the panel's.
-            mfsState: MFSStateDecoder.state(
-                usesFTBL: mfsInfo?.usesFTBL ?? false,
-                presentFileIndices: mfsInfo?.files
-                    .filter { !$0.content.isEmpty }
-                    .map(\.index) ?? [],
-                efsHoldsFiles: efsVolume?.files?.last.map { $0.storedSize > 0 } ?? false,
-                hasConfiguration: configurationPresent),
+            mfsState: fileSystemState.state,
+            mfsStateBasis: fileSystemState.basis,
             // Row 12a is CSME 11's alone, the way upstream gates it, so the
             // token is read only there — a later family's row cell 4 means
             // something else.
