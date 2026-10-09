@@ -44,6 +44,10 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     private let removeButton = NSButton(title: "", target: nil, action: nil)
     private let settingsButton = NSButton(title: "", target: nil, action: nil)
     private var observer: NSObjectProtocol?
+    private var zoomObserver: NSObjectProtocol?
+    /// The size the tables were last drawn at, so a zoom scales their
+    /// columns by what it changed.
+    private var drawnSize = ToolPanelFont.size
     private var rows: [AgentCallRecord] = []
 
     private static let timeFormatter: DateFormatter = {
@@ -69,7 +73,20 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.refresh() }
         }
+        // The tables are drawn as the tool panels' are, and follow the same
+        // zoom.
+        zoomObserver = ToolPanelFont.observeZoom { [weak self] in self?.zoomChanged() }
         refresh()
+    }
+
+    private func zoomChanged() {
+        let ratio = ToolPanelFont.size / drawnSize
+        drawnSize = ToolPanelFont.size
+        for table in [table, marks.table, findings.table] {
+            ToolPanelTable.scaleColumnWidths(of: table, by: ratio)
+            AgentTableStyle.apply(to: table)
+            table.reloadData()
+        }
     }
 
     @available(*, unavailable)
@@ -79,6 +96,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
     deinit {
         if let observer { NotificationCenter.default.removeObserver(observer) }
+        if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
     }
 
     // MARK: - Content
@@ -130,12 +148,17 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         for column in Column.allCases {
             let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.rawValue))
             tableColumn.title = column.title
-            tableColumn.width = column.width
-            tableColumn.resizingMask = column == .arguments ? .autoresizingMask : .userResizingMask
+            tableColumn.width = ToolPanelFont.scaled(column.width)
+            // Every column gives way with the window, in proportion: with the
+            // text at the panels' size there is less room to spare, and one
+            // column left to take all the shortfall was squeezed to nothing.
+            tableColumn.resizingMask = [.autoresizingMask, .userResizingMask]
+            tableColumn.minWidth = ToolPanelFont.scaled(36)
             table.addTableColumn(tableColumn)
         }
         table.usesAlternatingRowBackgroundColors = true
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        AgentTableStyle.apply(to: table)
         table.dataSource = self
         table.delegate = self
         table.allowsMultipleSelection = true
@@ -292,18 +315,11 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let id = tableColumn?.identifier, let column = Column(rawValue: id.rawValue) else { return nil }
-        let cell = (tableView.makeView(withIdentifier: id, owner: self) as? NSTextField)
-            ?? {
-                let field = NSTextField(labelWithString: "")
-                field.identifier = id
-                field.lineBreakMode = .byTruncatingTail
-                field.font = column == .arguments
-                    ? .monospacedSystemFont(ofSize: 11, weight: .regular) : .systemFont(ofSize: 11)
-                return field
-            }()
-        cell.stringValue = Self.text(of: rows[row], column)
-        cell.textColor = column == .result && Self.isProblem(rows[row]) ? SemanticColors.bad : .labelColor
-        cell.toolTip = column == .arguments || column == .result ? cell.stringValue : nil
+        let cell = AgentTableStyle.cell(in: tableView, id: id, owner: self, code: column == .arguments)
+        let field = cell.textField!
+        field.stringValue = Self.text(of: rows[row], column)
+        field.textColor = column == .result && Self.isProblem(rows[row]) ? SemanticColors.bad : .labelColor
+        cell.toolTip = column == .arguments || column == .result ? field.stringValue : nil
         return cell
     }
 
@@ -503,12 +519,17 @@ final class AgentMarksTable: NSObject, NSTableViewDataSource, NSTableViewDelegat
         for column in Column.allCases {
             let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.rawValue))
             tableColumn.title = column.title
-            tableColumn.width = column.width
-            tableColumn.resizingMask = column == .note ? .autoresizingMask : .userResizingMask
+            tableColumn.width = ToolPanelFont.scaled(column.width)
+            // Every column gives way with the window, in proportion: with the
+            // text at the panels' size there is less room to spare, and one
+            // column left to take all the shortfall was squeezed to nothing.
+            tableColumn.resizingMask = [.autoresizingMask, .userResizingMask]
+            tableColumn.minWidth = ToolPanelFont.scaled(36)
             table.addTableColumn(tableColumn)
         }
         table.usesAlternatingRowBackgroundColors = true
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        AgentTableStyle.apply(to: table)
         table.allowsMultipleSelection = true
         table.dataSource = self
         table.delegate = self
@@ -531,16 +552,9 @@ final class AgentMarksTable: NSObject, NSTableViewDataSource, NSTableViewDelegat
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let id = tableColumn?.identifier, let column = Column(rawValue: id.rawValue) else { return nil }
-        let cell = (tableView.makeView(withIdentifier: id, owner: self) as? NSTextField) ?? {
-            let field = NSTextField(labelWithString: "")
-            field.identifier = id
-            field.lineBreakMode = .byTruncatingTail
-            field.font = column == .range || column == .id
-                ? .monospacedSystemFont(ofSize: 11, weight: .regular) : .systemFont(ofSize: 11)
-            return field
-        }()
-        cell.stringValue = text(row: row, column)
-        cell.toolTip = column == .note || column == .related ? cell.stringValue : nil
+        let cell = AgentTableStyle.cell(in: tableView, id: id, owner: self, digits: column == .range || column == .id)
+        cell.textField?.stringValue = text(row: row, column)
+        cell.toolTip = column == .note || column == .related ? cell.textField?.stringValue : nil
         return cell
     }
 
@@ -617,12 +631,17 @@ final class AgentFindingsTable: NSObject, NSTableViewDataSource, NSTableViewDele
         for column in Column.allCases {
             let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.rawValue))
             tableColumn.title = column.title
-            tableColumn.width = column.width
-            tableColumn.resizingMask = column == .text ? .autoresizingMask : .userResizingMask
+            tableColumn.width = ToolPanelFont.scaled(column.width)
+            // Every column gives way with the window, in proportion: with the
+            // text at the panels' size there is less room to spare, and one
+            // column left to take all the shortfall was squeezed to nothing.
+            tableColumn.resizingMask = [.autoresizingMask, .userResizingMask]
+            tableColumn.minWidth = ToolPanelFont.scaled(36)
             table.addTableColumn(tableColumn)
         }
         table.usesAlternatingRowBackgroundColors = true
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        AgentTableStyle.apply(to: table)
         table.dataSource = self
         table.delegate = self
         table.target = self
@@ -640,16 +659,10 @@ final class AgentFindingsTable: NSObject, NSTableViewDataSource, NSTableViewDele
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard let id = tableColumn?.identifier, let column = Column(rawValue: id.rawValue) else { return nil }
-        let cell = (tableView.makeView(withIdentifier: id, owner: self) as? NSTextField) ?? {
-            let field = NSTextField(labelWithString: "")
-            field.identifier = id
-            field.lineBreakMode = .byTruncatingTail
-            field.font = column == .place || column == .id
-                ? .monospacedSystemFont(ofSize: 11, weight: .regular) : .systemFont(ofSize: 11)
-            return field
-        }()
-        cell.stringValue = text(row: row, column)
-        cell.toolTip = column == .text || column == .file ? (column == .file ? rows[row].url.path : cell.stringValue) : nil
+        let cell = AgentTableStyle.cell(in: tableView, id: id, owner: self, digits: column == .place || column == .id)
+        cell.textField?.stringValue = text(row: row, column)
+        cell.toolTip = column == .text || column == .file
+            ? (column == .file ? rows[row].url.path : cell.textField?.stringValue) : nil
         return cell
     }
 
@@ -684,5 +697,28 @@ final class AgentFindingsTable: NSObject, NSTableViewDataSource, NSTableViewDele
     func shownText(row: Int, column: String) -> String? {
         guard row < rows.count, let column = Column(rawValue: column) else { return nil }
         return text(row: row, column)
+    }
+}
+
+/// The Agent window's tables drawn as the tool panels' are
+/// (`ToolPanelTable`): their font and row height, the text centred in its row,
+/// the header in the same type — so a log read beside a panel reads as one
+/// with it.
+@MainActor
+enum AgentTableStyle {
+    static func apply(to table: NSTableView) {
+        ToolPanelTable.apply(to: table)
+    }
+
+    /// A cell from the pool or a new one, its text in the panels' body font —
+    /// in digits of one width for addresses and ids (`digits`), in a
+    /// monospaced face for JSON (`code`).
+    static func cell(in tableView: NSTableView, id: NSUserInterfaceItemIdentifier, owner: Any?,
+                     digits: Bool = false, code: Bool = false) -> NSTableCellView {
+        let cell = tableView.makeView(withIdentifier: id, owner: owner) as? NSTableCellView
+            ?? ToolPanelTable.makeCell(identifier: id)
+        cell.textField?.font = code ? .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
+            : digits ? ToolPanelFont.monospacedDigits() : ToolPanelFont.body()
+        return cell
     }
 }
