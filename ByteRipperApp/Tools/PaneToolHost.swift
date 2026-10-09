@@ -35,6 +35,11 @@ import MEFirmware
 
     var fileName: String { pane?.status.fileName ?? "" }
     var contentSize: UInt64 { pane?.fileSize ?? 0 }
+    /// The document, and how many times its bytes have changed.
+    var contentVersion: AnyHashable? {
+        guard let pane, let document = pane.document else { return nil }
+        return AnyHashable([AnyHashable(ObjectIdentifier(document)), AnyHashable(pane.contentGeneration)])
+    }
     var isReadOnly: Bool { pane?.status.isReadOnly ?? true }
 
     var caret: UInt64 { pane?.caretOffset ?? 0 }

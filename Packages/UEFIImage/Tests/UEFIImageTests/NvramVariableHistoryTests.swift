@@ -81,6 +81,39 @@ final class NvramVariableHistoryTests: XCTestCase {
         XCTAssertEqual(lang.versions.map { reader.bytes($0.value) }, [[0x65, 0x6E], [0x64, 0x65]])
     }
 
+    /// A store's variables, one each, in the order the copies standing for
+    /// them were written: the current copy, or the last of a deleted one.
+    func testAStoresVariablesAreTheCopiesStandingForThem() throws {
+        let (store, reader) = vssStore([
+            TestNVRAM.vssVariable(name: "BootOrder", data: [1, 0], state: Self.marked),
+            TestNVRAM.vssVariable(name: "Gone", state: Self.marked),
+            TestNVRAM.vssVariable(name: "Lang", data: [0x65]),
+            TestNVRAM.vssVariable(name: "BootOrder", data: [2, 0]),
+        ])
+        let e = store.children.filter { $0.kind == .vssEntry }.map(\.id)
+        let variables = NvramVariableHistory.variables(in: store, reader: reader)
+        XCTAssertEqual(variables.map(\.name), ["Gone", "Lang", "BootOrder"])
+        XCTAssertEqual(variables.map(\.entry), [e[1], e[2], e[3]])
+        XCTAssertEqual(variables.map(\.state), [.deleted, .current, .current])
+        XCTAssertEqual(variables.map(\.copies), [1, 1, 2])
+        XCTAssertEqual(reader.bytes(variables[2].value), [2, 0])
+        XCTAssertEqual(variables[1].guid, TestImage.driverGUID)
+    }
+
+    func testAnNVARChainIsOneVariable() throws {
+        let head = TestNVAR.entry(next: UInt32(TestNVAR.entry(data: [0x01]).count), name: "Setup", data: [0x01])
+        let (store, reader) = nvarStore([head, TestNVAR.dataEntry(data: [0x03])])
+        let variables = NvramVariableHistory.variables(in: store, reader: reader)
+        XCTAssertEqual(variables.map(\.name), ["Setup"])
+        XCTAssertEqual(variables.first.flatMap { reader.bytes($0.value) }, [0x03])
+        XCTAssertEqual(variables.first?.copies, 2)
+    }
+
+    func testANodeThatIsNoStoreHasNoVariables() {
+        let bytes = TestNVRAM.nvramVolume(stores: [])
+        XCTAssertEqual(NvramVariableHistory.variables(in: UEFIParser.parse(bytes).roots[0], reader: ImageReader(bytes)), [])
+    }
+
     /// What a tree can leave out: each replaced copy, standing behind the
     /// current one; a deleted variable keeps its last copy; a variable with
     /// one copy, and every current one, stays.

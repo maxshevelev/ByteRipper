@@ -21,12 +21,13 @@ final class AgentModuleTools {
         self.modules = modules
     }
 
-    /// Every module's queries, then every module's actions, then
-    /// `open_panel`.
+    /// Every module's queries, its comparisons of two documents, then every
+    /// module's actions, then `open_panel`.
     nonisolated func tools(modules list: [any ToolModule.Type]) -> [AgentTool] {
         let queries = list.flatMap { module in module.agentQueries.map { query(module, $0) } }
+        let comparisons = list.flatMap { module in module.agentComparisons.map { comparison($0) } }
         let actions = list.flatMap { module in module.agentActions.map { action(module, $0) } }
-        return queries + actions + [openPanelTool(list)]
+        return queries + comparisons + actions + [openPanelTool(list)]
     }
 
     /// What `open_panel` and the "not open" answers call a module: the last
@@ -58,6 +59,37 @@ final class AgentModuleTools {
         var answer = try await query.run(host, arguments)
         if case .json(let value) = answer, case .object(var members) = value {
             members["document"] = .string(place.id)
+            answer = .json(.object(members))
+        }
+        return answer
+    }
+
+    // MARK: - Comparisons
+
+    private nonisolated func comparison(_ comparison: ToolAgentComparison) -> AgentTool {
+        var properties = comparison.properties
+        properties["document"] = AgentSchema.string("The first document's id from `documents`. Default: the focused one.")
+        properties["against"] = AgentSchema.string("The id of the document to set beside it, from `documents` or `open_dump`.")
+        return AgentTool(
+            name: comparison.name, title: comparison.title, description: comparison.description,
+            inputSchema: AgentSchema.object(properties, required: comparison.required + ["against"])
+        ) { call in
+            try await self.runComparison(comparison, call.arguments)
+        }
+    }
+
+    private func runComparison(_ comparison: ToolAgentComparison, _ arguments: AgentArguments) async throws -> AgentAnswer {
+        let place = try resolve(arguments)
+        let other = try resolve(id: arguments.string("against"))
+        guard other.pane !== place.pane else {
+            throw AgentToolError("`document` and `against` are the same document, \(place.id).")
+        }
+        let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
+        let otherHost = PaneToolHost(pane: other.pane, owner: other.controller, tools: nil)
+        var answer = try await comparison.run(host, otherHost, arguments)
+        if case .json(let value) = answer, case .object(var members) = value {
+            members["document"] = .string(place.id)
+            members["against"] = .string(other.id)
             answer = .json(.object(members))
         }
         return answer
@@ -146,8 +178,12 @@ final class AgentModuleTools {
     // MARK: - Documents
 
     private func resolve(_ arguments: AgentArguments) throws -> AgentDesk.Place {
+        try resolve(id: arguments.optionalString("document"))
+    }
+
+    private func resolve(id: String?) throws -> AgentDesk.Place {
         do {
-            return try desk.place(named: arguments.optionalString("document"))
+            return try desk.place(named: id)
         } catch let error as AgentDeskError {
             throw AgentToolError(error.description)
         }

@@ -43,13 +43,17 @@ let package = Package(
         .package(path: "../../Packages/AppPalette"),
         .package(path: "../../Packages/UEFIImage"),
         .package(path: "../../Packages/UEFIContentSource"),
-        .package(path: "../../Packages/FreshData")
+        .package(path: "../../Packages/FreshData"),
+        // What the module answers an agent with (`FITAgentQueries`,
+        // Design/AGENT_PLAN.md).
+        .package(path: "../../Packages/AgentKit")
     ],
     targets: [
         .target(name: "FITTool", dependencies: [
             .product(name: "Localization", package: "Localization"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
-            .product(name: "UEFIImage", package: "UEFIImage")
+            .product(name: "UEFIImage", package: "UEFIImage"),
+            .product(name: "AgentKit", package: "AgentKit")
         ]),
         .target(name: "FITToolUI", dependencies: [
             .product(name: "HelpUI", package: "HelpUI"),
@@ -61,7 +65,8 @@ let package = Package(
             .product(name: "ALSplitView", package: "ALSplitView"),
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
-            .product(name: "UEFIContentSource", package: "UEFIContentSource")
+            .product(name: "UEFIContentSource", package: "UEFIContentSource"),
+            .product(name: "AgentKit", package: "AgentKit")
         ]),
         .testTarget(name: "FITToolTests", dependencies: ["FITTool"])
     ]

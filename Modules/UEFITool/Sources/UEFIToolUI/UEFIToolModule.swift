@@ -42,7 +42,10 @@ public enum UEFIToolModule: ToolModule {
 
     /// The tree, a node, a search, an address — answered with the panel
     /// open or not (`UEFIAgentQueries`, `Design/AGENT_PLAN.md`).
-    public static var agentQueries: [ToolAgentQuery] { UEFIAgentQueries.all }
+    public static var agentQueries: [ToolAgentQuery] { UEFIAgentQueries.all + UEFIAgentVariables.queries }
+
+    /// The variables of two dumps, set side by side by name and GUID.
+    public static var agentComparisons: [ToolAgentComparison] { UEFIAgentVariables.comparisons }
 
     /// Choosing a node in the open panel, and saying which one the reader
     /// chose.
@@ -52,7 +55,10 @@ public enum UEFIToolModule: ToolModule {
         name: "uefi_select",
         title: "Choose a UEFI node in the panel",
         description: """
-            Chooses a node in the open UEFI Structure panel, as a click would: the tree opens down to it             and selects it, the detail shows its fields, and the dump scrolls to its bytes with them             outlined. A step of the navigation history, so the person's Back returns. Needs the panel open             in the document's tab — `open_panel` opens it.
+            Chooses a node in the open UEFI Structure panel, as a click would: the tree opens down to it \
+            and selects it, the detail shows its fields, and the dump scrolls to its bytes with them \
+            outlined. A step of the navigation history, so the person's Back returns. Needs the panel open \
+            in the document's tab — `open_panel` opens it.
             """,
         properties: ["node": AgentSchema.string("The node's id, e.g. \"0.2.5\".")],
         required: ["node"],
@@ -66,7 +72,8 @@ public enum UEFIToolModule: ToolModule {
         name: "uefi_selection",
         title: "The UEFI node the reader chose",
         description: """
-            The node chosen in the open UEFI Structure panel — what the person means by "this node" —             or null when nothing is chosen. Needs the panel open in the document's tab.
+            The node chosen in the open UEFI Structure panel — what the person means by "this node" — \
+            or null when nothing is chosen. Needs the panel open in the document's tab.
             """,
         changesView: false
     ) { session, _ in

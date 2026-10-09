@@ -113,6 +113,38 @@ public struct NvramVariableHistory: Equatable, Sendable {
         return hidden
     }
 
+    /// One variable of a store, as a reader of the image takes it: the copy
+    /// that stands for it — the current one, or the copy a deleted variable
+    /// was deleted as — and how many copies the store keeps.
+    public struct Variable: Equatable, Sendable {
+        public var name: String
+        public var guid: EFIGUID?
+        /// The copy that stands for the variable.
+        public var entry: NodeID
+        public var value: Range<UInt64>
+        /// `.current`, or `.deleted` for a variable the store no longer holds.
+        public var state: Version.State
+        /// Every copy, the standing one included.
+        public var copies: Int
+    }
+
+    /// The store's variables in the order their standing copies were
+    /// written. Empty for a node that is not a store of VSS, NVAR, DVAR or
+    /// GPNV entries.
+    public static func variables(in store: UEFINode, reader: ImageReader) -> [Variable] {
+        guard store.children.contains(where: isCopy) else { return [] }
+        let all = copies(in: store, reader: reader)
+        var byVariable: [Key: [Copy]] = [:]
+        for copy in all { byVariable[copy.key, default: []].append(copy) }
+        return all.compactMap { copy in
+            guard let versions = byVariable[copy.key] else { return nil }
+            let standing = versions.last(where: \.isCurrent) ?? versions[versions.count - 1]
+            guard standing.entry == copy.entry else { return nil }
+            return Variable(name: copy.key.name, guid: copy.key.guid, entry: copy.entry, value: copy.value,
+                            state: copy.isCurrent ? .current : .deleted, copies: versions.count)
+        }
+    }
+
     /// `to` against `from`: their sizes, and the runs of bytes that differ.
     public static func change(from: Version, to: Version, reader: ImageReader) -> Change? {
         guard let old = reader.bytes(from.value), let new = reader.bytes(to.value) else { return nil }

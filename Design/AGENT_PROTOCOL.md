@@ -110,3 +110,45 @@ Actions — on the live panel in the document's tab; refused with a pointer to
 |---|---|---|
 | `uefi_select` | `node` | `selected` (node summary). Opens the tree down to it, selects it, publishes its zone so the dump scrolls there. A navigation step. |
 | `uefi_selection` | — | `selected` (node summary or null); `note` when an ME row is chosen instead. |
+
+## NVRAM variables
+
+Part of the UEFI Structure module, read off the same shared tree, every
+container opened:
+
+| Tool | Arguments | Answer |
+|---|---|---|
+| `variables` | `name` (part, any case), `guid`, `store` (node id), `deleted`; `limit` (80, ≤ 300) | `variables[]` — `name`, `guid`, `size`, `value` (read as its type, or hex up to 32 bytes), `store`, `entry`, `start`/`end` or `in_compressed`, `copies` when over 1, `deleted`; `stores[]` the rows are in (`id`, `type`, `name` when it differs, `variables`, `start`/`end`); `total`; `note`. |
+| `variables_compare` | `against` (required); `name`; `limit` (40, ≤ 200) | `only_in_document[]`, `only_in_against[]` (`name`, `guid`, `size`, `value`), `changed[]` (`name`, `guid`, `size`, `against_size`, `differing_bytes`, `runs[]` — half-open offsets into the value, sixteen at most, `runs_total` past that — `value`, `against_value`, `entry`, `against_entry`), `same`, `counts`. |
+
+A variable is the copy that stands for it: the current one, or for a deleted
+variable the copy it was deleted as. The stores read are VSS, VSS2, NVAR, Dell
+DVAR and GPNV; EVSA, Apple SysF and flash maps are only in `uefi_tree`.
+
+Two documents are matched by name, GUID and which time the pair is met in tree
+order — never by address. `variables_compare` is the one *comparison* so far: a
+module question about two documents (`ToolAgentComparison`), for which the app
+adds `document` and `against` and hands the module a read host for each.
+`survey` runs it with a fixed `against`, comparing a folder with one dump.
+
+## FIT Table
+
+| Tool | Arguments | Answer |
+|---|---|---|
+| `fit_table` | `entry` (the row's place, 0 the header) | `summary`, `table` (`start`, `end`, `pointer_at`, `pointer`, `checksum`, `checksum_should_be`, `checksum_checked`) or `tables_found_elsewhere`, `rows[]` (`index`, `type`, `address`, `size`, `version`, `row_start`, `points_at`, `target_start`/`target_end`, `cpuids`, `problem`), `backup` (`heading`, `rows`), `problems[]` (`message`, `severity`, `entry`, `offset`, `in_backup`), `address_mapping` when assumed; `entry` (`title`, `fields[]`). |
+
+Read as the panel reads: the table, then again with the branches its rows point
+into opened so `points_at` names them. The microcode catalogue's verdict —
+whether a newer revision exists — is the panel's alone.
+
+## ME Analyzer
+
+| Tool | Arguments | Answer |
+|---|---|---|
+| `me_summary` | — | `blocks[]` (`title`, `rows[]` — `label`, `value`, `tone` for a verdict: good, caution, bad). |
+| `me_tree` | `node` (a path such as `"2.0.3"`); `limit` (100, ≤ 400) | `node` (with `fields[]`) and its `children[]`, or the top groups: `id`, `title`, `subtitle`, `start`/`end`, `children` (a count), `empty`, `problem` (`severity`, `lines`). |
+
+The analysis is the pane's (`MEAAnalysisProviding`): one a panel made is used
+at once, and one made here is kept for the panels unless the content changed
+meanwhile (`ToolReadHost.contentVersion`). Files are named from the firmware
+database's file table when the dump needs it and it can be fetched.

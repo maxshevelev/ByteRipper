@@ -30,6 +30,10 @@ public enum MEAToolModule: ToolModule {
     @MainActor public static func makeSession(host: any ToolHost) -> any ToolSession {
         MEAToolSession(host: host)
     }
+
+    /// The summary and the decoded structure — answered with the panel open
+    /// or not (`MEAAgentQueries`, `Design/AGENT_PLAN.md`).
+    public static var agentQueries: [ToolAgentQuery] { MEAAgentQueries.all }
 }
 
 /// What a parked session hands back: the tab the user was on and the tree row

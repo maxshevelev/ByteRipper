@@ -41,6 +41,8 @@ At present an agent can:
 - read bytes — as hex rows, as text, or as 16-, 32- and 64-bit numbers — including unsaved edits;
 - show a place: bring its tab forward, scroll to it and select it;
 - read the structure of a firmware image as **UEFI Structure** shows it — the tree, the fields of a node, the nodes holding an address — and search it by name, GUID or type. This works whether or not the panel is open;
+- read the FIT table as **FIT Table** shows it — its rows, what each points at, the rules it breaks — and the Intel ME firmware as **ME Analyzer** shows it: the summary and the decoded structure. This too works with the panels closed;
+- list the NVRAM variables of a dump with their values, read as their types, and set the variables of two dumps side by side by name and GUID: which only one of them has, which differ and in which bytes. Two dumps of different boards or BIOS versions compare as well as two of one board, and a folder of dumps can be compared with one of them at once;
 - mark bytes while explaining them: a dashed outline in a colour of its own, with a short label; resting the pointer on the marked bytes shows the agent's note. A mark can name others it is about — a pointer and its target, a checksum and what it covers;
 - open a file by its path without putting it on screen, and ask the same question of every dump in a folder at once — how many copies of a variable each holds, which address a structure starts at — getting the answers grouped by value. A file opened this way is only read; the agent puts it in a tab of its own when there is something in it to show;
 - record findings: each a sentence and the place it is about, listed in the Agent window;

@@ -39,10 +39,11 @@ public enum UEFIAgentQueries {
         let tree = try await readyTree(host)
         let id = try nodeID(arguments.optionalString("node"))
         let depth = Int(max(1, min(3, try arguments.has("depth") ? arguments.integer("depth") : 1)))
-        var budget = try arguments.limit(default: 100, maximum: 400)
+        let limit = try arguments.limit(default: 100, maximum: 400)
+        var budget = limit
         var total = 0
 
-        @MainActor func listing(_ parent: NodeID, level: Int) async -> [JSONValue] {
+        @MainActor func listing(_ parent: NodeID, level: Int, budget: inout Int, total: inout Int) async -> [JSONValue] {
             let children = await expanded(parent, in: tree)
             var result: [JSONValue] = []
             for child in children {
@@ -51,7 +52,7 @@ public enum UEFIAgentQueries {
                 budget -= 1
                 var entry = summary(of: child, in: tree)
                 if level < depth, !child.children.isEmpty || child.isExpandable {
-                    let below = await listing(child.id, level: level + 1)
+                    let below = await listing(child.id, level: level + 1, budget: &budget, total: &total)
                     entry = merged(entry, ["below": .array(below)])
                 }
                 result.append(entry)
@@ -66,8 +67,8 @@ public enum UEFIAgentQueries {
             guard let node = tree.node(id) else { throw unknownNode(id) }
             answer["node"] = summary(of: node, in: tree)
         }
-        answer["children"] = .array(await listing(id, level: 1))
-        if budget == 0, total > 0 {
+        answer["children"] = .array(await listing(id, level: 1, budget: &budget, total: &total))
+        if total > limit {
             answer["note"] = "Cut at the limit. Ask for one child with `node`, or raise `limit`."
         }
         return .json(.object(answer))

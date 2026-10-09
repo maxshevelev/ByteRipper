@@ -44,6 +44,10 @@ public protocol ToolModule {
     /// panel open or not (`ToolAgentQuery`). Default: nothing.
     static var agentQueries: [ToolAgentQuery] { get }
 
+    /// What it answers about two documents set side by side
+    /// (`ToolAgentComparison`). Default: nothing.
+    static var agentComparisons: [ToolAgentComparison] { get }
+
     /// What it does in its open panel at an agent's asking
     /// (`ToolAgentAction`). Default: nothing.
     static var agentActions: [ToolAgentAction] { get }

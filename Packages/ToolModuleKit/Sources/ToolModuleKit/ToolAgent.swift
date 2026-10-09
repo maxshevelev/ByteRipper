@@ -38,6 +38,38 @@ public struct ToolAgentQuery: Sendable {
     }
 }
 
+/// A question about two documents at once — the variables two dumps keep,
+/// set side by side by name and GUID — answered from the bytes alone, like a
+/// query (`Design/AGENT_PLAN.md`, stage 6).
+///
+/// Keyed comparison is the module's to do: only it knows what makes an entry
+/// in one dump the same entry in another, since two images do not lay out
+/// their stores alike. The app adds both document arguments — `document` and
+/// `against` — and hands the query a read host for each.
+public struct ToolAgentComparison: Sendable {
+    public let name: String
+    public let title: String
+    public let description: String
+    /// The properties of the argument object, not counting `document` and
+    /// `against`.
+    public let properties: [String: JSONValue]
+    public let required: [String]
+    public let run: @MainActor @Sendable (any ToolReadHost, any ToolReadHost, AgentArguments) async throws -> AgentAnswer
+
+    public init(
+        name: String, title: String, description: String,
+        properties: [String: JSONValue] = [:], required: [String] = [],
+        run: @escaping @MainActor @Sendable (any ToolReadHost, any ToolReadHost, AgentArguments) async throws -> AgentAnswer
+    ) {
+        self.name = name
+        self.title = title
+        self.description = description
+        self.properties = properties
+        self.required = required
+        self.run = run
+    }
+}
+
 /// Something a tool-module does in its open panel at an agent's asking —
 /// choose a node in the tree, say which node the reader chose.
 ///
@@ -76,6 +108,8 @@ public struct ToolAgentAction: Sendable {
 extension ToolModule {
     /// A tool-module that answers no questions is one an agent cannot ask.
     public static var agentQueries: [ToolAgentQuery] { [] }
+    /// Nor compare two documents.
+    public static var agentComparisons: [ToolAgentComparison] { [] }
     /// Nor act in its panel.
     public static var agentActions: [ToolAgentAction] { [] }
 }

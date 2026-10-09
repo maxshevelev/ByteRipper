@@ -171,7 +171,7 @@ public enum NvramValueText {
     }
 
     /// Bytes as a dump prints them, up to `detailByteLimit`.
-    private static func hexBytes(_ bytes: [UInt8]) -> String {
+    static func hexBytes(_ bytes: [UInt8]) -> String {
         let shown = bytes.prefix(detailByteLimit).map { String(format: "%02X", $0) }.joined(separator: " ")
         guard bytes.count > detailByteLimit else { return shown }
         return L("%1$@ … (%2$@ bytes in all)", shown, "\(bytes.count)")

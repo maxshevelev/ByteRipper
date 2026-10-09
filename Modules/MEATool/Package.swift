@@ -45,7 +45,10 @@ let package = Package(
         .package(path: "../../Packages/MEFirmware"),
         .package(path: "../../Packages/MEPresentation"),
         .package(path: "../../Packages/MEReads"),
-        .package(path: "../../Packages/UEFIImage")
+        .package(path: "../../Packages/UEFIImage"),
+        // What the module answers an agent with (`MEAAgentQueries`,
+        // Design/AGENT_PLAN.md).
+        .package(path: "../../Packages/AgentKit")
     ],
     targets: [
         .target(name: "MEATool", dependencies: [
@@ -55,7 +58,13 @@ let package = Package(
             // The tone a value is drawn by — the shared vocabulary in
             // `ToolValueTone`, which the UEFI Structure's pure target links for
             // the same reason.
-            .product(name: "ToolModuleKit", package: "ToolModuleKit")
+            .product(name: "ToolModuleKit", package: "ToolModuleKit"),
+            // An agent's questions (`MEAAgentQueries`): the reading every panel
+            // makes of the region, the region from the shared tree, and the
+            // answers' shape.
+            .product(name: "MEReads", package: "MEReads"),
+            .product(name: "UEFIImage", package: "UEFIImage"),
+            .product(name: "AgentKit", package: "AgentKit")
         ]),
         .target(name: "MEAToolUI", dependencies: [
             .product(name: "HelpUI", package: "HelpUI"),

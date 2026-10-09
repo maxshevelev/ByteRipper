@@ -1,4 +1,4 @@
-@source-sha 102242d5a22339e4b10ab5baf62dc2f646729e62db999d8c7426b1b30a0261c0
+@source-sha 152d973f159d80fd4573cae3929669f8f7c8ac7f6afb49ec078954db382c6fb1
 # Mit einem Agenten arbeiten
 
 > ByteRipper lässt sich mit einem Agenten verbinden — Claude Code, Claude Desktop oder einem anderen Programm, das MCP spricht. Der Agent sieht dann die im Programm geöffneten Dateien, liest ihre Bytes und zeigt Stellen darin; das Gespräch mit ihm findet in seinem eigenen Fenster statt.
@@ -37,6 +37,8 @@ Derzeit kann ein Agent:
 - Bytes lesen — als Hex-Zeilen, als Text oder als 16-, 32- und 64-Bit-Zahlen —, ungesicherte Änderungen eingeschlossen;
 - eine Stelle zeigen: ihren Tab nach vorn holen, dorthin scrollen und sie auswählen;
 - die Struktur eines Firmware-Images so lesen, wie **UEFI-Struktur** sie zeigt — den Baum, die Felder eines Knotens, die Knoten, die eine Adresse enthalten — und darin nach Name, GUID oder Typ suchen. Das geht unabhängig davon, ob der Bereich geöffnet ist;
+- die FIT-Tabelle so lesen, wie **FIT-Tabelle** sie zeigt — ihre Einträge, worauf jeder verweist, welche Regeln der Spezifikation sie verletzt —, und die Intel-ME-Firmware so, wie **ME Analyzer** sie zeigt: die Übersicht und die dekodierte Struktur. Auch das geht bei geschlossenen Bereichen;
+- die NVRAM-Variablen eines Dumps mit ihren Werten auflisten, nach ihrem Typ gelesen, und die Variablen zweier Dumps nach Name und GUID gegenüberstellen: welche nur einer von beiden enthält, welche sich unterscheiden und in welchen Bytes. Dumps verschiedener Boards oder BIOS-Versionen lassen sich ebenso vergleichen wie zwei Dumps eines Boards, und ein ganzer Ordner von Dumps lässt sich auf einmal mit einem davon vergleichen;
 - Bytes markieren, während er sie erklärt: ein gestrichelter Rahmen in eigener Farbe mit einer kurzen Bezeichnung; ruht der Zeiger auf den markierten Bytes, erscheint die Erläuterung des Agenten. Eine Markierung kann andere nennen, auf die sie sich bezieht — einen Zeiger und sein Ziel, eine Prüfsumme und die Bytes, die sie abdeckt;
 - eine Datei über ihren Pfad öffnen, ohne sie anzuzeigen, und allen Dumps eines Ordners auf einmal dieselbe Frage stellen — wie viele Kopien einer Variablen jeder enthält, an welcher Adresse eine Struktur beginnt —, mit den Antworten nach Wert gruppiert. Eine so geöffnete Datei wird nur gelesen; gibt es darin etwas zu zeigen, öffnet der Agent sie in einem eigenen Tab;
 - Befunde festhalten: jeweils ein Satz und die Stelle, auf die er sich bezieht; das Agentenfenster listet sie auf;

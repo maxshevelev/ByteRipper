@@ -372,7 +372,16 @@ Each ends in something that works and is committed.
    run off it.)*
 6. **ME, FIT and NVRAM.** The ME and FIT modules' queries; `variables` across
    VSS, NVAR and the rest, and a comparison of two documents' variables by
-   name and GUID.
+   name and GUID. *(Done. `fit_table`, `me_summary`, `me_tree`, `variables`
+   and `variables_compare`. The comparison is a third kind of module tool —
+   `ToolAgentComparison`, a question about two documents — so the keyed
+   matching stays with the module that knows what makes two entries the same.
+   The ME analysis an agent asks for is kept for the panels only when the
+   bytes held still meanwhile, which needed `ToolReadHost.contentVersion`.
+   Checked on the five dumps: `1.bin` against `2.rom` in under four seconds —
+   another SSD's model and serial in `WBMN` and `WBSN`, another `UnlockID`,
+   `MemoryConfig` retrained; a `survey` of `variables_compare` against `1.bin`
+   and one of `me_summary` grouping the folder by ME version.)*
 7. **Edits.** `write`, the edit switch, checksum repair as an action.
 8. **Help and release.** The help page in en, ru and de with its anchors; the
    Settings controls through `ControlHelp`; the protocol document marked

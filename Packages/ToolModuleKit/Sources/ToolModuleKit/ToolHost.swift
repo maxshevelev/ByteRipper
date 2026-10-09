@@ -139,6 +139,17 @@ public extension ToolHost {
     /// halfway through it — the edit arrives as `ToolContentChange` and the
     /// tool-module decides what to do about it.
     func snapshot() throws -> any ToolContentReader
+
+    /// A value that changes whenever the content does — an edit, an undo,
+    /// another file opened in its place — and only then. What a reading that
+    /// took a while compares before keeping its result where others will find
+    /// it, when it has no session told of every change. Nil from a host that
+    /// cannot say, and a reading under it keeps nothing.
+    var contentVersion: AnyHashable? { get }
+}
+
+public extension ToolReadHost {
+    var contentVersion: AnyHashable? { nil }
 }
 
 /// The handle on a sheet `ToolHost.beginBlockingWork` put up.

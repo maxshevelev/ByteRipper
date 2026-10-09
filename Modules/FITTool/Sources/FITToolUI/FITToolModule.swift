@@ -26,6 +26,10 @@ public enum FITToolModule: ToolModule {
     @MainActor public static func makeSession(host: any ToolHost) -> any ToolSession {
         FITToolSession(host: host)
     }
+
+    /// The table, its rows and its problems — answered with the panel open
+    /// or not (`FITAgentQueries`, `Design/AGENT_PLAN.md`).
+    public static var agentQueries: [ToolAgentQuery] { FITAgentQueries.all }
 }
 
 /// What the window's navigation history keeps of the panel.
