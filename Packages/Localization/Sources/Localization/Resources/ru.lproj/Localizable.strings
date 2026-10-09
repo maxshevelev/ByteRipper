@@ -631,6 +631,10 @@
 "Pane showing 0x%1$@ through 0x%2$@." = "Файловая панель показывает диапазон с 0x%1$@ по 0x%2$@.";
 "Panes showing 0x%1$@ through 0x%2$@." = "Файловые панели показывают диапазон с 0x%1$@ по 0x%2$@.";
 "Partly inside protected ranges" = "Частично попадает в защищённые диапазоны";
+"Stored encoded: its bytes are not what it holds" = "Хранится закодированным: байты не совпадают с содержимым";
+"Encoded where it is stored, and in the clear here" = "Закодирован там, где хранится, а здесь — в открытом виде";
+"Encoded with the XOR key %1$@" = "Закодирован по XOR ключом %1$@";
+"Decoded: the key %1$@ encodes it again on the way back" = "Декодирован: при записи обратно ключ %1$@ снова его закодирует";
 "Paste Insert" = "Вставить со сдвигом";
 "Paste Insert failed." = "Не удалось вставить со сдвигом.";
 "PRD" = "PRD";

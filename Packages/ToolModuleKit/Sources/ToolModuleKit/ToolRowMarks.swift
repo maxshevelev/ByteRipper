@@ -52,6 +52,9 @@ public struct ToolRowMarks: Hashable, Sendable {
         case holdsChecks(String)
         /// Partly covered by protected ranges.
         case partlyProtected
+        /// Holds bytes stored encoded — `decoded` when they lie in the clear
+        /// here instead, as in a part opened decoded. The words say how.
+        case encoded(String, decoded: Bool)
     }
 
     public var protection: Protection?
@@ -121,6 +124,8 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
     case compressedUndecoded
     case holdsChecks
     case partlyProtected
+    case encoded
+    case decoded
 
     /// The channels of `ROW_MARKS.md` §1, in the order a legend lists them.
     public enum Channel: Int, Comparable, Sendable {
@@ -135,7 +140,8 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
         case .decompressed: return .rail
         case .newest, .newerListed, .newerMaybe: return .verdict
         case .error, .caution: return .problem
-        case .compressed, .compressedUndecoded, .holdsChecks, .partlyProtected: return .role
+        case .compressed, .compressedUndecoded, .holdsChecks, .partlyProtected,
+             .encoded, .decoded: return .role
         }
     }
 
@@ -166,6 +172,10 @@ public enum ToolRowMark: CaseIterable, Hashable, Sendable {
             return L("Holds what other structures are checked against")
         case .partlyProtected:
             return L("Partly inside protected ranges")
+        case .encoded:
+            return L("Stored encoded: its bytes are not what it holds")
+        case .decoded:
+            return L("Encoded where it is stored, and in the clear here")
         }
     }
 }

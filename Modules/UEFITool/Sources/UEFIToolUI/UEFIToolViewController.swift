@@ -2277,8 +2277,10 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     /// What a row wears besides its name, decided in the pure target.
     private func marks(for node: UEFINode) -> ToolRowMarks {
         guard let image else { return .none }
+        // The bytes, only for a row whose marks are read off them.
+        let reader = node.kind == .lenvBlock ? tree?.spaceReaders.reader(for: node.space) : nil
         return UEFITreeMarks.marks(for: node, in: image, badChecksums: badChecksums[node.id] ?? [],
-                                   isOpen: outline.isItemExpanded(row(node.id)))
+                                   isOpen: outline.isItemExpanded(row(node.id)), reader: reader)
     }
 
     /// One row's marks again, on its row view and its Name cell — what a row

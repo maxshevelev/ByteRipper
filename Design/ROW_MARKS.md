@@ -110,6 +110,8 @@ which is drawn in the dump and not in a panel.
 | `zipper.page` | badge | holds compressed data it does not decode — an unsupported algorithm, an encrypted module, a missing dictionary, a failed decode (which also raises a problem) | `secondaryLabelColor` |
 | `lock.shield` | badge | holds what others are checked against — protected ranges, or the hashes of other structures | `secondaryLabelColor` |
 | `shield.lefthalf.filled` | badge | partly covered by protected ranges | `secondaryLabelColor` |
+| `lock` | badge | stored encoded: its bytes are not what it holds (a Lenovo LENV block, XORed with its key) | `secondaryLabelColor` |
+| `lock.open` | badge | encoded where it is stored and in the clear here — a LENV block opened decoded | `secondaryLabelColor` |
 
 | `checkmark.seal.fill` | verdict | the newest revision the catalogue lists for this board | `SemanticColors.good` |
 | `arrow.up.circle` | verdict | a newer revision serves this board | `SemanticColors.caution` |
@@ -135,7 +137,7 @@ after it, the red octagon.
 | Rail | the node's `space` is not `.file`, or it is a compressed section whose row is open on its decompressed children |
 | Verdict | none |
 | Problem | a wrong checksum (error) — today; a protected range whose hash does not match (error), a compressed section that did not decompress (caution) — with that work |
-| Badges | `zipper.page` on a compressed section; `lock.shield` on an AMI or Phoenix hash file and an Insyde Flash Device Map; `shield.lefthalf.filled` on a partly covered node |
+| Badges | `zipper.page` on a compressed section; `lock.shield` on an AMI or Phoenix hash file and an Insyde Flash Device Map; `shield.lefthalf.filled` on a partly covered node; `lock` on a LENV block stored encoded, `lock.open` on one in the clear in a part opened decoded |
 
 ### 5.2. FIT — the table
 

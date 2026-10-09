@@ -17,7 +17,7 @@ If the image holds no store, the tree has no such row and the title row has no *
 ## What the tree shows
 
 - **The store's row** sums the store up in its details: **Block in use** names the block the firmware reads and its generation, **Entries in use** lists what that block holds — the serial number, the UUID, the model and the Windows key first — and a click on an entry there opens its row. A **Problem** or a **Note** follows for an empty store, a checksum that does not match, an erased block or blocks that disagree.
-- **Under it**, the change log and both blocks. A block's row gives its generation, and its **Subtype** says whether it is **In use**. An entry's row gives its value beside its name; a record of the log gives its date, its operation and the entry.
+- **Under it**, the change log and both blocks. A block's row gives its generation, and its **Subtype** says whether it is **In use**. A lock on the row says the block is stored encoded; an open lock, on the row of a block opened decoded, that its entries are in the clear there. An entry's row gives its value beside its name; a record of the log gives its date, its operation and the entry.
 - **The details** of a block or an entry describe its fields; the `?` beside the name explains the term.
 
 As everywhere in the tree, the row in focus is outlined in the dump, and the details' text can be selected and copied.

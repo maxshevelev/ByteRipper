@@ -21,6 +21,8 @@ public extension ToolRowMark {
         case .compressed, .compressedUndecoded: return "zipper.page"
         case .holdsChecks: return "lock.shield"
         case .partlyProtected: return "shield.lefthalf.filled"
+        case .encoded: return "lock"
+        case .decoded: return "lock.open"
         }
     }
 
@@ -35,7 +37,8 @@ public extension ToolRowMark {
         case .newerListed, .newerMaybe: return SemanticColors.caution
         case .error: return SemanticColors.bad
         case .caution: return SemanticColors.caution
-        case .compressedUndecoded, .holdsChecks, .partlyProtected: return .secondaryLabelColor
+        case .compressedUndecoded, .holdsChecks, .partlyProtected, .encoded, .decoded:
+            return .secondaryLabelColor
         }
     }
 }
@@ -46,6 +49,7 @@ extension ToolRowMarks.Role {
         case .compressed(_, let decoded): return decoded ? .compressed : .compressedUndecoded
         case .holdsChecks: return .holdsChecks
         case .partlyProtected: return .partlyProtected
+        case .encoded(_, let decoded): return decoded ? .decoded : .encoded
         }
     }
 
@@ -58,6 +62,7 @@ extension ToolRowMarks.Role {
                 : L("%1$@ compressed data that does not open here", algorithm)
         case .holdsChecks(let words): return words
         case .partlyProtected: return ToolRowMark.partlyProtected.meaning
+        case .encoded(let words, _): return words
         }
     }
 }

@@ -1,4 +1,4 @@
-@source-sha f24cadf6d6f2ff7ff85c1826cdb5ab91816dd65976db3b745fff740e3a84e606
+@source-sha 46e650a56c13db4861e73d106002c2eb735837e6f4e3faadbb54ef559cb56eef
 # Lenovo DMI
 
 > Der Speicher, in dem die Firmware Lenovo InsydeH2O die Identität eines Geräts ablegt – Seriennummer, UUID, Maschinentyp und Modell, Windows-Schlüssel –, so wie der Baum der UEFI-Struktur ihn liest.
@@ -16,7 +16,7 @@ Enthält das Image keinen Speicher, hat der Baum keinen solchen Knoten, und in d
 ## Was der Baum zeigt
 
 - **Der Knoten des Speichers** fasst ihn in seinen Details zusammen: **Verwendeter Block** nennt den Block, den die Firmware liest, und seine Generation; **Einträge des verwendeten Blocks** führt auf, was dieser Block enthält – zuerst Seriennummer, UUID, Modell und Windows-Schlüssel –, und ein Klick auf einen Eintrag dort öffnet dessen Knoten. Darunter folgen **Problem** oder **Hinweis**: ein leerer Speicher, eine nicht stimmende Prüfsumme, ein gelöschter Block oder voneinander abweichende Blöcke.
-- **Darunter** liegen das Änderungsprotokoll und beide Blöcke. Der Knoten eines Blocks nennt seine Generation, und die Spalte **Subtype** sagt, ob er **Verwendet** wird. Beim Knoten eines Eintrags steht der Wert neben dem Namen; ein Ereignis des Protokolls nennt Datum, Vorgang und Eintrag.
+- **Darunter** liegen das Änderungsprotokoll und beide Blöcke. Der Knoten eines Blocks nennt seine Generation, und die Spalte **Subtype** sagt, ob er **Verwendet** wird. Ein Schloss in der Zeile zeigt, dass der Block kodiert gespeichert ist; ein offenes Schloss in der Zeile eines dekodiert geöffneten Blocks, dass seine Einträge dort im Klartext stehen. Beim Knoten eines Eintrags steht der Wert neben dem Namen; ein Ereignis des Protokolls nennt Datum, Vorgang und Eintrag.
 - **Die Details** eines Blocks oder Eintrags beschreiben seine Felder; das `?` neben dem Namen erklärt den Begriff.
 
 Wie überall im Baum wird der ausgewählte Knoten im Dump umrahmt, und der Text der Details lässt sich auswählen und kopieren.

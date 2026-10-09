@@ -631,6 +631,10 @@
 "Pane showing 0x%1$@ through 0x%2$@." = "Bereich zeigt 0x%1$@ bis 0x%2$@.";
 "Panes showing 0x%1$@ through 0x%2$@." = "Bereiche zeigen 0x%1$@ bis 0x%2$@.";
 "Partly inside protected ranges" = "Teilweise innerhalb geschützter Bereiche";
+"Stored encoded: its bytes are not what it holds" = "Kodiert gespeichert: Die Bytes sind nicht der Inhalt";
+"Encoded where it is stored, and in the clear here" = "Dort, wo es gespeichert ist, kodiert, hier im Klartext";
+"Encoded with the XOR key %1$@" = "Per XOR mit dem Schlüssel %1$@ kodiert";
+"Decoded: the key %1$@ encodes it again on the way back" = "Dekodiert: Beim Zurückschreiben kodiert der Schlüssel %1$@ ihn erneut";
 "Paste Insert" = "Mit Verschieben einsetzen";
 "Paste Insert failed." = "Einsetzen mit Verschieben fehlgeschlagen.";
 "PRD" = "PRD";

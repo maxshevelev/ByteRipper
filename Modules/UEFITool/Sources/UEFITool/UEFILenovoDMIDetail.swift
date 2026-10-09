@@ -1,6 +1,7 @@
 import Foundation
 import LenovoDMI
 import Localization
+import ToolModuleKit
 import UEFIImage
 
 /// What the details and the tree say of Lenovo's DMI store (`LenovoDMI`):
@@ -75,6 +76,22 @@ public enum UEFILenovoDMIDetail {
         let block = LENVBlock(offset: row.range.lowerBound, stored: stored)
         guard LenovoDMIDecodedBlock.canOpen(block) else { return nil }
         return (block, row.name)
+    }
+
+    /// The badge a LENV block's row wears: a lock on a block stored encoded,
+    /// an open one on a block in the clear under a key — a block opened
+    /// decoded. None on a block with nothing to encode: erased, empty, a key
+    /// of zero, or one that reads neither way.
+    static func encodingRole(of node: UEFINode, reader: ImageReader) -> ToolRowMarks.Role? {
+        guard node.kind == .lenvBlock, node.space == .file, let stored = reader.bytes(node.range) else { return nil }
+        let block = LENVBlock(offset: node.range.lowerBound, stored: stored)
+        guard block.hasSignature, !block.isBlank else { return nil }
+        let key = hex(UInt64(block.xorKey), 2)
+        switch block.encoding {
+        case .encoded: return .encoded(L("Encoded with the XOR key %1$@", key), decoded: false)
+        case .plain: return .encoded(L("Decoded: the key %1$@ encodes it again on the way back", key), decoded: true)
+        case .keyIsZero, .undetermined: return nil
+        }
     }
 
     // MARK: - Finding the store

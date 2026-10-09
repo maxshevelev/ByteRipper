@@ -17,18 +17,22 @@ public enum UEFITreeMarks {
     /// Every mark this tree draws — what its legend lists.
     public static let legendMarks: [ToolRowMark] = [
         .protectedIBB, .protectedFirmware, .decompressed, .error, .caution,
-        .compressed, .compressedUndecoded, .holdsChecks, .partlyProtected
+        .compressed, .compressedUndecoded, .holdsChecks, .partlyProtected,
+        .encoded, .decoded
     ]
 
     /// - Parameters:
     ///   - badChecksums: the node's checksum fields the last pass found wrong.
     ///   - isOpen: the node's row is open in the outline — state of the view,
     ///     not of the tree, which keeps a branch it has read after the row shuts.
+    ///   - reader: the bytes of the node's space, for the marks read off them —
+    ///     whether a LENV block is stored encoded. Without it those are left off.
     public static func marks(
         for node: UEFINode,
         in image: UEFIImage,
         badChecksums: Set<UEFIChecksumField> = [],
-        isOpen: Bool = false
+        isOpen: Bool = false,
+        reader: ImageReader? = nil
     ) -> ToolRowMarks {
         var errors: [String] = []
         var cautions: [String] = []
@@ -58,6 +62,9 @@ public enum UEFITreeMarks {
 
         if let holds = holdsChecks(node) {
             roles.append(.holdsChecks(holds))
+        }
+        if let reader, let encoded = UEFILenovoDMIDetail.encodingRole(of: node, reader: reader) {
+            roles.append(encoded)
         }
         var protection: ToolRowMarks.Protection?
         if let ranges = image.protectedRanges {

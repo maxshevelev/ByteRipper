@@ -1,5 +1,6 @@
 import XCTest
 import LenovoDMI
+import ToolModuleKit
 import UEFIImage
 @testable import UEFITool
 
@@ -102,6 +103,30 @@ final class UEFILenovoDMIDetailTests: XCTestCase {
         let write = detail(try node(.ldbgEntry, in: parsed.image), parsed)
         XCTAssertEqual(value("Operation", in: write), "Set")
         XCTAssertEqual(value("Entry", in: write), "Baseboard serial number")
+    }
+
+    /// A block stored encoded wears a lock; the same block opened decoded —
+    /// in the clear under its key — an open one; the store and the entries
+    /// wear neither.
+    func testABlocksRowSaysWhetherItIsEncoded() throws {
+        let parsed = parsed
+        func roles(_ node: UEFINode, _ image: UEFIImage, _ reader: ImageReader) -> [ToolRowMarks.Role] {
+            UEFITreeMarks.marks(for: node, in: image, reader: reader).roles
+        }
+        let block = try node(.lenvBlock, 1, in: parsed.image)
+        XCTAssertEqual(roles(block, parsed.image, parsed.reader),
+                       [.encoded("Encoded with the XOR key 0x77", decoded: false)])
+        XCTAssertEqual(roles(try node(.lenovoDMIStore, in: parsed.image), parsed.image, parsed.reader), [])
+        XCTAssertEqual(roles(try node(.lenvEntry, in: parsed.image), parsed.image, parsed.reader), [])
+        XCTAssertEqual(UEFITreeMarks.marks(for: block, in: parsed.image).roles, [],
+                       "without the bytes, nothing is said")
+
+        let stored = try XCTUnwrap(parsed.reader.bytes(block.range))
+        let decoded = LenovoDMIDecodedBlock.decode(LENVBlock(offset: 0, stored: stored))
+        let alone = UEFIParser.parse(decoded)
+        let row = try node(.lenvBlock, in: alone)
+        XCTAssertEqual(roles(row, alone, ImageReader(decoded)),
+                       [.encoded("Decoded: the key 0x77 encodes it again on the way back", decoded: true)])
     }
 
     /// The tree's rows say what they hold without being opened.
