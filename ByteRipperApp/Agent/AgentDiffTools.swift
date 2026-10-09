@@ -22,6 +22,9 @@ final class AgentDiffTools {
     /// Opens two files as a pair in a new tab. A test opens them in its own
     /// window instead.
     var openPairInNewTab: (URL, URL) -> Void
+    /// The tab a pair of copies opens in, beside the given one. Swappable for
+    /// the tests, whose windows have no tab group.
+    var tabForCopies: (MainViewController) -> MainViewController? = { $0.makeSiblingTab?() }
 
     nonisolated static let defaultMergeGap: UInt64 = 0x10
 
@@ -184,7 +187,7 @@ final class AgentDiffTools {
     }
 
     /// Each range placed by the finest locator that can say.
-    private func locate(_ host: PaneToolHost, _ ranges: [Range<UInt64>]) async -> [[ToolAgentPlace]] {
+    func locate(_ host: PaneToolHost, _ ranges: [Range<UInt64>]) async -> [[ToolAgentPlace]] {
         var result = ranges.map { _ -> [ToolAgentPlace] in [] }
         guard !ranges.isEmpty else { return result }
         for locator in locators {
@@ -283,7 +286,10 @@ final class AgentDiffTools {
                 differences coloured — in the window's own comparison. A pair already on screen is brought \
                 forward; a document alone in its tab gets the other beside it; otherwise the two open in a new \
                 tab, leaving the person's tabs as they are. Answers the ids of A and B as they are on screen \
-                (a background document gets a new one). Then `reveal_diff` walks the differences.
+                (a background document gets a new one). Then `reveal_diff` walks the differences. A part \
+                (`open_part`), or anything never saved, has no file to open beside another: the two open \
+                as copies of their bytes in a new tab, and the answer says `copies` — an edit there reaches \
+                neither the documents nor a parent.
                 """,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string("The document to show as A. Default: the focused one."),
@@ -303,6 +309,13 @@ final class AgentDiffTools {
         }
         if let pair = pair(of: place.pane, other.pane) {
             return .json(shown(pair, was: true))
+        }
+        // A part, or anything else never saved, has no file to open beside
+        // another: the pair is opened from copies of its bytes, in a tab of
+        // their own, and says so — an edit there reaches neither the part nor
+        // its parent.
+        if place.pane.isUntitled || other.pane.isUntitled {
+            return .json(try compareCopies(place, other))
         }
         let firstURL = try url(of: place)
         let secondURL = try url(of: other)
@@ -327,6 +340,34 @@ final class AgentDiffTools {
         }
         return .json(shown(pair, was: false))
     }
+
+    private func compareCopies(_ place: AgentDesk.Place, _ other: AgentDesk.Place) throws -> JSONValue {
+        guard let controller = place.controller ?? other.controller ?? desk.keyTab(),
+              let tab = tabForCopies(controller) else {
+            throw AgentToolError("There is no window to open the pair in; put one of the documents on screen with `show`.")
+        }
+        let sizes = [place.pane.fileSize, other.pane.fileSize]
+        guard sizes.allSatisfy({ $0 <= Self.copyLimit }) else {
+            throw AgentToolError("Copies are made of documents up to \(hex(Self.copyLimit)) bytes; "
+                + "compare them with `diff`, or open a smaller part.")
+        }
+        let first = try snapshot(place).read(at: 0, length: Int(sizes[0]))
+        let second = try snapshot(other).read(at: 0, length: Int(sizes[1]))
+        tab.windowModel.pane1.openBytes(first, named: place.pane.status.fileName)
+        tab.windowModel.pane2.openBytes(second, named: other.pane.status.fileName)
+        tab.apply(mode: .comparison)
+        guard let pair = pair(of: tab.windowModel.pane1, tab.windowModel.pane2) else {
+            throw AgentToolError("ByteRipper could not put the two side by side.")
+        }
+        desk.bringForward(pair.a)
+        guard case .object(var members) = shown(pair, was: false) else { return shown(pair, was: false) }
+        members["copies"] = "copies of the documents' bytes as they are now: an edit in this tab reaches neither them nor a parent"
+        return .object(members)
+    }
+
+    /// The largest document whose bytes `compare` copies into a tab of their
+    /// own.
+    nonisolated static let copyLimit: UInt64 = 64 << 20
 
     private struct Pair {
         var a: AgentDesk.Place
@@ -431,14 +472,14 @@ final class AgentDiffTools {
 
     /// The document's bytes as they are now, frozen, to compare off the main
     /// actor.
-    private func snapshot(_ place: AgentDesk.Place) throws -> any ByteStorage {
+    func snapshot(_ place: AgentDesk.Place) throws -> any ByteStorage {
         guard let overlay = place.pane.document?.storage as? EditOverlayStorage else {
             throw AgentToolError("\(place.id) could not be read.")
         }
         return try overlay.contentSnapshot(scratch: scratch)
     }
 
-    private func resolve(_ id: String?) throws -> AgentDesk.Place {
+    func resolve(_ id: String?) throws -> AgentDesk.Place {
         do {
             return try desk.place(named: id)
         } catch let error as AgentDeskError {

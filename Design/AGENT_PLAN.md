@@ -491,7 +491,36 @@ Each ends in something that works and is committed.
    540 runs and 197 819 bytes, as the totals say; `me_files_compare` with
    `extents` against `CSME 15.bin`, 332 files over five pages; `uefi_find`
    of every File in `CSME 15.bin`, 636 over eight.)*
-11. **Help and release.** The help page in en, ru and de with its anchors; the
+11. **Search and extract.** Asked for by an agent looking for where a dump
+   keeps the serial number and the model: nothing searched the bytes, and the
+   SMBIOS modules sit in LZMA sections no tool could read. Three tools:
+   `find_bytes`, every match of a text (ASCII, UTF-16LE or both, any case or
+   not) or of hex bytes with `??` for any byte, in a document, a range or one
+   UEFI node — inside a compressed section, in what it decompressed to — each
+   with `where` as `diff` places a run, a `preview` around it, an exact `total`
+   and pages; `uefi_node_data`, a node's bytes as `read` shows them, a node in
+   a compressed section included, at offsets inside the node; `open_part`, a
+   range or a node opened as a part over its parent, as Open Zone and the UEFI
+   panel's Open open one, so two blocks at different addresses compare from
+   zero with `diff`. The search is the find bar's own engine, given masks,
+   overlapping matches and a decompressed buffer to search; the find bar
+   itself learns the first two in #33.
+   *(Done. A compressed section named as `node` is searched in what it
+   decompresses to — its own bytes are compressed and hold no text — and
+   `uefi_node_data` reads that buffer as part `decompressed`. A part opens as
+   a fragment panel over its parent, the window's one place for a part, linked
+   and put back with Update in Parent; `compare` of a part, which has no file,
+   opens copies in a new tab and says so. Checked on `1.bin` and `2.rom`:
+   `$DMI` at 0x6CF000 in SMBIOS Update, `$BVDT` at 0x6CE000 before `$V1.18`,
+   in 0.1–0.5 s over 16 MiB; "Acer" in PK, KEK and db is ASCII, inside their
+   certificates — not UTF-16, as the request had it; "WDC PC SN530" in
+   `1.bin` alone, through `survey`; `SmbiosUpdateDxe`'s PE32 image starts with
+   `MZ`; 157 "Acer" in the decompressed DXE volume that no tool could read
+   before; MemoryConfig opened as parts of the two dumps differs in 1361
+   bytes, 824 runs, as `variables_compare` counts. `FF FF` over a whole dump,
+   4.4 million matches, takes seven seconds in a debug build and a tenth of
+   a second in a release one.)*
+12. **Help and release.** The help page in en, ru and de with its anchors; the
    Settings controls through `ControlHelp`; the protocol document marked
    version 1; the README; whether an ad-hoc signed, quarantined helper runs
    when a client launches it, tried on a clean account.
@@ -515,8 +544,9 @@ paying.
 AgentKit, a day and a half. The service, relay, window and settings, three
 days. The seam changes and the UEFI tools, three days. Marks, two. Background
 documents and surveys, three. ME, FIT and NVRAM, three. Edits, one. Byte
-comparison, two. ME file comparison, two. Pages within the size bound, one and a half. Help
-and translations, one and a half. About 22 days, 165–175 hours — three times the
+comparison, two. ME file comparison, two. Pages within the size bound, one and a half. Search
+and extract, two. Help and translations, one and a half. About 24 days,
+180–190 hours — three times the
 original #23, because what is built now is a feature of the app and not a tool
 beside it.
 
@@ -536,7 +566,7 @@ beside it.
   Claude Desktop actually open with is recorded at stage 2, and the protocol
   document says which transcripts the tests are checked against.
 - **The relay and Gatekeeper.** Whether a quarantined helper inside an app the
-  person has already let run is let run by a client. Tried at stage 11; if it is
+  person has already let run is let run by a client. Tried at stage 12; if it is
   refused, the window's button also clears the attribute on the helper.
 - **A chat inside the window.** Not in this plan. Everything above is what
   such a panel would call; whether to build one is decided after the external

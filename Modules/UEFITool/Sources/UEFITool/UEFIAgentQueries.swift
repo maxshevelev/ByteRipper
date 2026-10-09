@@ -216,7 +216,7 @@ public enum UEFIAgentQueries {
     // MARK: - The tree
 
     /// The pane's shared tree, once its top level is there.
-    static func readyTree(_ host: any ToolReadHost) async throws -> LazyUEFITree {
+    public static func readyTree(_ host: any ToolReadHost) async throws -> LazyUEFITree {
         guard let tree = (host as? any UEFITreeProviding)?.uefiTree() else {
             throw AgentToolError("This document has no UEFI structure to read.")
         }
@@ -227,7 +227,7 @@ public enum UEFIAgentQueries {
     }
 
     /// The children of `id`, reading them first if nobody has yet.
-    static func expanded(_ id: NodeID, in tree: LazyUEFITree) async -> [UEFINode] {
+    public static func expanded(_ id: NodeID, in tree: LazyUEFITree) async -> [UEFINode] {
         if id == .root { return tree.rootNodes }
         return await withCheckedContinuation { continuation in
             tree.expand(id) { continuation.resume(returning: $0) }
@@ -309,5 +309,5 @@ public enum UEFIAgentQueries {
         return .object(members)
     }
 
-    static func hex(_ value: UInt64) -> String { String(format: "0x%llX", value) }
+    public static func hex(_ value: UInt64) -> String { String(format: "0x%llX", value) }
 }

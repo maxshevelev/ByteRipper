@@ -42,7 +42,9 @@ public enum UEFIToolModule: ToolModule {
 
     /// The tree, a node, a search, an address — answered with the panel
     /// open or not (`UEFIAgentQueries`, `Design/AGENT_PLAN.md`).
-    public static var agentQueries: [ToolAgentQuery] { UEFIAgentQueries.all + UEFIAgentVariables.queries }
+    public static var agentQueries: [ToolAgentQuery] {
+        UEFIAgentQueries.all + UEFIAgentVariables.queries + UEFIAgentNodeData.all
+    }
 
     /// The variables of two dumps, set side by side by name and GUID.
     public static var agentComparisons: [ToolAgentComparison] { UEFIAgentVariables.comparisons }

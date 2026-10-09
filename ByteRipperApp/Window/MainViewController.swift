@@ -1925,11 +1925,12 @@ final class MainViewController: NSViewController {
     /// out of, for `ToolHost.openPart` — the untitled copy Open Zone makes, of
     /// bytes that are not a range of this file. The window's bookmarks stay
     /// behind: their offsets are the dump's, not these bytes'.
+    @discardableResult
     func openPartForTool(
         _ bytes: [UInt8], named name: String, from pane: PaneViewModel,
         source: Range<UInt64>, layout: UEFIRootLayout, kind: DocumentOrigin.Kind,
         part: UEFIRebuild.Target?
-    ) {
+    ) -> FragmentDock.PanelID? {
         openFragment(
             bytes,
             named: name,

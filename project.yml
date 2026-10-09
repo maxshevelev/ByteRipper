@@ -43,7 +43,8 @@ packages:
   UEFIImage:
     path: Packages/UEFIImage
   # The decoders for compressed firmware data, vendored C behind a Swift API.
-  # UEFIImage and MEFirmware link it; no target here does.
+  # UEFIImage and MEFirmware link it; of the targets here, only the tests do —
+  # to build a compressed section to search in.
   FirmwareCompression:
     path: Packages/FirmwareCompression
   # The ME/engine analysis engine. MEATool consumes it; the app's flow tests
@@ -146,6 +147,10 @@ targets:
         product: FITToolUI
       - package: UEFITool
         product: UEFIToolUI
+      # The agent's node tools find a node and its bytes through the UEFI
+      # module's own helpers (`UEFIAgentNodeData`).
+      - package: UEFITool
+        product: UEFITool
       - package: MEATool
         product: MEAToolUI
       # The agent service: the protocol, the tools' shape, the socket
@@ -332,6 +337,8 @@ targets:
       - package: MEATool
         product: MEAToolUI
       - package: AgentKit
+      # A compressed section built in a test, for the agent's search inside one.
+      - package: FirmwareCompression
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: dev.maxik.ByteRipperTests

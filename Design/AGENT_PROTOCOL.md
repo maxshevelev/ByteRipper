@@ -6,7 +6,7 @@
 > here is a change to an interface an agent may have been told about — say
 > why in the commit.
 
-Draft until stage 11 marks it version 1. The tool list grows by stage; what
+Draft until stage 12 marks it version 1. The tool list grows by stage; what
 is listed here is what the code answers today.
 
 ## Transport
@@ -107,6 +107,7 @@ Queries — answered with the panel open or not, from the pane's shared tree:
 | `uefi_node` | `node` | `node`, `path` (names from the top), `title`, `fields[]` (`label`, `value`, `problem`), `tables[]` (`title`, `columns`, `rows`), `diagnostics[]`. |
 | `uefi_find` | any of `name` (part, any case), `exact`, `guid`, `type` (the Type column); `limit` (50, ≤ 200); `after` | `matches[]` (node summary + `path`), `total`. Opens and decompresses everything once. Paged (`next`, `after`). |
 | `uefi_at` | `offset` | `offset`, `chain[]`, outermost first. |
+| `uefi_node_data` | `node`; `part` (`body`, `header`, `all`, `decompressed` — a compressed section's buffer); `offset` (0); `length` (256, ≤ 4096); `format`, `endian` as `read` | as `read`, at addresses inside the part; `node`, `part`, `size` (the whole part), `in_compressed`, `file_start` for a node of the file, `source` (`section`, `start`, `end`, `algorithm`, `nested`) for bytes a compressed section decompressed to, `cut_at_end_of_part`. |
 
 A node summary: `id`, `type`, `subtype`, `name`, `guid`, `start`/`end` — or
 `in_compressed: true` and `size` for a node inside a decompressed section —
@@ -223,3 +224,21 @@ replaced by the finer ones and the stretches between them kept under the
 coarse name. The cursor carries a fingerprint of both documents' content
 versions, the range and `merge_gap`; a page asked for after any changed is
 refused.
+
+## Search and parts
+
+| Tool | Arguments | Answer |
+|---|---|---|
+| `find_bytes` | `text` (with `encoding` `ascii`·`utf16le`·`both`, default both; `ignore_case`) or `hex` (pairs, `??` for any byte); `overlapping`; `offset`, `end`; `node`; `context` (≤ 64); `limit` (100, ≤ 1000); `after` | `document`, `range`, `total`, `matches[]` (`start`, `end` — or `node_start`, `node_end` in a decompressed buffer — `encoding`, `where[]`, `preview` with `hex`, `text`, `before`), `next`, `truncated`. With `node`: `node`, `node_size`, `in_compressed`, `decompressed` (a compressed section searched in its buffer), `source`. Reads only. |
+| `open_part` | `offset`, `length` — or `node` with `part` (`all`, `body`); `name` | `document` (the part's id), `parent`, `name`, `source` (the parent's bytes it is linked to), `size`; with `node`, `node` and `in_compressed`. |
+
+`find_bytes` is the find bar's engine (`SearchEngine.matches`), given holes
+and overlapping matches; a match across two reads is found once. The file is
+searched as stored: a node inside a compressed section, or a compressed
+section itself, is searched in what the tree decompressed it to, never
+decompressed again. `where` is placed by the locators as `diff` places a run;
+in a buffer, it is the deepest node under the one searched. `open_part` opens
+as Open Zone (a range) and the UEFI panel's Open (a node) do: a fragment
+panel over the parent's tab, linked, its edits going back with Update in
+Parent — a decompressed node's compressed again. `compare` of a part, which
+has no file, opens copies in a new tab and says `copies`.

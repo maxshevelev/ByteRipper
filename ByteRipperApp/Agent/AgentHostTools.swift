@@ -159,26 +159,11 @@ final class AgentHostTools {
         guard let storage = place.pane.byteStorage else { throw AgentDeskError.nothingOpen }
         let bytes = try storage.read(at: offset, length: Int(end - offset))
 
-        var answer: [String: JSONValue] = [
-            "document": .string(place.id),
-            "offset": Self.hex(offset),
-            "length": Self.hex(end - offset),
-            "format": .string(format)
-        ]
+        var answer = AgentBytes.shown(bytes, at: offset, format: format, bigEndian: bigEndian)
+        answer["document"] = .string(place.id)
+        answer["offset"] = Self.hex(offset)
+        answer["length"] = Self.hex(end - offset)
         if end - offset < asked { answer["cut_at_end_of_file"] = true }
-        switch format {
-        case "hex":
-            answer["rows"] = .array(Self.hexRows(bytes, at: offset).map { .string($0) })
-        case "ascii":
-            answer["text"] = .string(Self.printable(bytes))
-        case "utf16le":
-            let units = stride(from: 0, to: bytes.count - 1, by: 2).map { UInt16(bytes[$0]) | UInt16(bytes[$0 + 1]) << 8 }
-            answer["text"] = .string(String(decoding: units, as: UTF16.self))
-        default:
-            let width = ["u8": 1, "u16": 2, "u32": 4, "u64": 8][format] ?? 1
-            answer["values"] = .array(Self.integers(bytes, width: width, bigEndian: bigEndian))
-            if width > 1 { answer["endian"] = .string(bigEndian ? "big" : "little") }
-        }
         return .object(answer)
     }
 
@@ -250,32 +235,5 @@ final class AgentHostTools {
     /// byte after it.
     nonisolated static func range(_ range: Range<UInt64>) -> JSONValue {
         ["start": hex(range.lowerBound), "end": hex(range.upperBound), "length": hex(range.upperBound - range.lowerBound)]
-    }
-
-    nonisolated static func printable(_ bytes: [UInt8]) -> String {
-        String(decoding: bytes.map { (0x20...0x7E).contains($0) ? $0 : UInt8(ascii: ".") }, as: UTF8.self)
-    }
-
-    /// Rows as the dump draws them — address, sixteen bytes, their text —
-    /// counted from `offset` rather than from a row boundary, so the first row
-    /// starts with the byte asked for.
-    nonisolated static func hexRows(_ bytes: [UInt8], at offset: UInt64) -> [String] {
-        stride(from: 0, to: bytes.count, by: 16).map { start in
-            let row = Array(bytes[start..<min(start + 16, bytes.count)])
-            let hex = row.map { String(format: "%02X", $0) }.joined(separator: " ")
-            let padded = hex.padding(toLength: 16 * 3 - 1, withPad: " ", startingAt: 0)
-            return String(format: "%08llX  ", offset + UInt64(start)) + padded + "  |" + printable(row) + "|"
-        }
-    }
-
-    nonisolated static func integers(_ bytes: [UInt8], width: Int, bigEndian: Bool) -> [JSONValue] {
-        stride(from: 0, through: bytes.count - width, by: width).map { start in
-            var value: UInt64 = 0
-            for index in 0..<width {
-                let byte = UInt64(bytes[start + (bigEndian ? index : width - 1 - index)])
-                value = value << 8 | byte
-            }
-            return .string(String(format: "0x%0*llX", width * 2, value))
-        }
     }
 }
