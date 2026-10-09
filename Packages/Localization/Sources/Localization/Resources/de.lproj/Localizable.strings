@@ -731,6 +731,8 @@
 "Reverting the segment failed." = "Das Zurücksetzen des Segments ist fehlgeschlagen.";
 "Review Changes…" = "Änderungen durchsehen…";
 "Revision" = "Revision";
+"Row #%1$@ already holds a microcode for CPUID %2$@ on the same platforms" = "Zeile #%1$@ enthält bereits einen Microcode für CPUID %2$@ auf denselben Plattformen";
+"Row #%1$@ already holds a microcode for CPUID %2$@ on the same platforms. To update it, replace that row. Nothing was changed." = "Zeile #%1$@ enthält bereits einen Microcode für CPUID %2$@ auf denselben Plattformen. Um ihn zu aktualisieren, ersetzen Sie den Microcode in dieser Zeile. Es wurde nichts geändert.";
 "Row Height:" = "Zeilenhöhe:";
 "Same as the Mac (%1$@)" = "Wie der Mac (%1$@)";
 "Save" = "Sichern";
@@ -897,6 +899,7 @@
 "This dump has segments that came from %1$@, and writing there would replace the files those segments are measured against. Choose another name." = "Dieser Dump hat Segmente aus %1$@, und ein Schreiben dorthin würde die Dateien ersetzen, gegen die diese Segmente gemessen werden. Wählen Sie einen anderen Namen.";
 "This file is open read-only." = "Diese Datei ist schreibgeschützt geöffnet.";
 "This image keeps a Top Swap backup of the boot block at 0x%1$@–0x%2$@, and it is not the same as the block the FIT is in, so the change cannot be made in both. Nothing was changed." = "Dieses Image führt eine Top-Swap-Sicherung des Bootblocks bei 0x%1$@–0x%2$@, und sie ist nicht dieselbe wie der Block, in dem die FIT liegt; die Änderung lässt sich daher nicht in beiden vornehmen. Es wurde nichts geändert.";
+"This microcode is already in the table, in row #%1$@. Nothing was changed." = "Dieser Microcode steht bereits in der Tabelle, in Zeile #%1$@. Es wurde nichts geändert.";
 "This merges every piece into a single segment. The bytes are untouched — only the cuts are removed." = "Alle Teile werden zu einem Segment. Die Bytes bleiben unverändert — nur die Schnitte verschwinden.";
 "Those bytes could not be read." = "Diese Bytes ließen sich nicht lesen.";
 "Those questions were answered on your other Mac, so they are settled here too." = "Diese Fragen wurden auf Ihrem anderen Mac beantwortet und sind damit auch hier erledigt.";

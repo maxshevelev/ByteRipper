@@ -506,6 +506,72 @@ final class FITEditorTests: XCTestCase {
         XCTAssertEqual(now.processorSignature, 0x000906EA)
     }
 
+    // MARK: - The same microcode twice
+
+    /// Two rows, the first an update for B06A2 and B06A3, the second for
+    /// 906EA.
+    private func twoRows(platformIDs: UInt32 = 1) -> (image: [UInt8], first: [UInt8]) {
+        let first = TestFIT.microcode(signature: 0x000B_06A2, revision: 0x7C, platformIDs: platformIDs,
+                                      extended: [(0x000B_06A2, platformIDs), (0x000B_06A3, platformIDs)])
+        let image = TestFIT.image(
+            rows: [TestFIT.Row(FIT.microcodeType, target: microcode),
+                   TestFIT.Row(FIT.microcodeType, target: 0x2100)],
+            contents: [microcode: first + [UInt8](repeating: 0xFF, count: 0x100 - first.count),
+                       0x2100: TestFIT.microcode(signature: 0x000906EA, totalSize: 0x100)]
+        )
+        return (image, first)
+    }
+
+    /// The catalogue files one update under each processor it serves, so the
+    /// one already in the table comes back under another CPUID. Adding it is
+    /// refused with the row that holds it — not taken for a replacement that
+    /// writes nothing.
+    func testAddingAMicrocodeTheTableAlreadyHoldsIsRefused() throws {
+        let (bytes, first) = twoRows()
+
+        guard case .failure(let problem) = try addOrReplace(first, in: bytes) else {
+            return XCTFail("expected a refusal")
+        }
+        XCTAssertEqual(problem, .alreadyInTheTable(entry: 1))
+        XCTAssertTrue(problem.message.contains("row #2"))
+    }
+
+    /// Replacing a row with what another row already holds would leave the same
+    /// microcode in the table twice.
+    func testReplacingARowWithAnotherRowsMicrocodeIsRefused() throws {
+        let (bytes, first) = twoRows()
+
+        guard case .failure(let problem) = try replace(first, at: 2, in: bytes) else {
+            return XCTFail("expected a refusal")
+        }
+        XCTAssertEqual(problem, .alreadyInTheTable(entry: 1))
+    }
+
+    /// A replacement for a processor another row already serves — here B06A3,
+    /// which the first row's extended table names — is refused, and says which
+    /// row to replace instead.
+    func testAReplacementForAProcessorAnotherRowServesIsRefused() throws {
+        let (bytes, _) = twoRows()
+        let forB06A3 = TestFIT.microcode(signature: 0x000B_06A3, revision: 0x80, totalSize: 0x100)
+
+        guard case .failure(let problem) = try replace(forB06A3, at: 2, in: bytes) else {
+            return XCTFail("expected a refusal")
+        }
+        XCTAssertEqual(problem, .servedByAnotherRow(entry: 1, cpuids: [0x000B_06A3]))
+        XCTAssertTrue(problem.message.contains("Row #2"))
+        XCTAssertTrue(problem.message.contains("B06A3"))
+    }
+
+    /// The same CPUID on platforms the other row does not serve is another
+    /// board's microcode, and a row may hold it.
+    func testAReplacementForTheSameCpuidOnOtherPlatformsIsMade() throws {
+        let (bytes, _) = twoRows(platformIDs: 0x02)
+        let otherBoard = TestFIT.microcode(signature: 0x000B_06A3, revision: 0x80, totalSize: 0x100,
+                                           platformIDs: 0x20)
+
+        XCTAssertEqual(try replace(otherBoard, at: 2, in: bytes).map(\.1.kind), .success(.replaced))
+    }
+
     /// A header, or an index past the end, is not a row to replace.
     func testReplacingAnIndexThatIsNotAMicrocodeIsRefused() throws {
         let bytes = image()

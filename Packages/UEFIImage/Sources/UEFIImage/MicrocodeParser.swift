@@ -172,6 +172,21 @@ public struct MicrocodeHeader: Equatable, Sendable {
             + trustedExtendedSignatures.map { ($0.processorSignature, $0.platformIDs) }
     }
 
+    /// The processors this update and another both serve on a platform they
+    /// share: each signature both name, where the platform IDs each gives it
+    /// meet. A mask of zero serves every platform. Two updates with anything
+    /// here are both for the same processor on the same board.
+    public func sharedProcessors(with other: MicrocodeHeader) -> [UInt32] {
+        func masks(_ header: MicrocodeHeader) -> [UInt32: UInt32] {
+            header.processorPlatforms.reduce(into: [:]) { masks, pair in
+                masks[pair.signature, default: 0] |= pair.platformIDs == 0 ? .max : pair.platformIDs
+            }
+        }
+        let mine = masks(self)
+        let theirs = masks(other)
+        return processorSignatures.filter { (mine[$0] ?? 0) & (theirs[$0] ?? 0) != 0 }
+    }
+
     /// The extended table's signatures, where the table holds together. Bytes
     /// behind the data are read as a table whatever they are, and padding
     /// makes a count of thousands; only one that fits the image and sums to

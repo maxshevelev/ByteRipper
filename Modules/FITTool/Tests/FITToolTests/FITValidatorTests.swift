@@ -121,6 +121,32 @@ final class FITValidatorTests: XCTestCase {
     }
 
     /// Every problem knows where to send the dump.
+    /// Two rows whose microcodes serve one processor on a shared platform are
+    /// worth a warning on the later row, naming the earlier one — found through
+    /// the extended table, since neither row shows the shared CPUID first.
+    func testTwoRowsForOneProcessorAreAWarning() {
+        func image(secondPlatforms: UInt32) -> [UInt8] {
+            TestFIT.image(
+                rows: [goodRow, TestFIT.Row(FIT.microcodeType, target: 0x2100)],
+                contents: [
+                    microcode: TestFIT.microcode(signature: 0x0009_0672, platformIDs: 0x07,
+                                                 extended: [(0x0009_0672, 0x07), (0x000B_06F2, 0x07)]),
+                    0x2100: TestFIT.microcode(signature: 0x000B_06F2, totalSize: 0x100,
+                                              platformIDs: secondPlatforms)
+                ]
+            )
+        }
+        let found = FITReader.read(ImageReader(image(secondPlatforms: 0x03)), image: nil).problems
+
+        XCTAssertEqual(found.map(\.kind), [.sameProcessorsAsRow(entry: 1, cpuids: [0x000B_06F2])])
+        XCTAssertEqual(found.first?.entryIndex, 2)
+        XCTAssertEqual(found.first?.severity, .warning)
+        XCTAssertEqual(found.first?.message, "Row #2 already holds a microcode for CPUID B06F2 on the same platforms")
+
+        XCTAssertTrue(FITReader.read(ImageReader(image(secondPlatforms: 0x40)), image: nil).problems.isEmpty,
+                      "platforms that do not meet are two boards' microcodes")
+    }
+
     func testEveryProblemPointsSomewhere() {
         let found = problems([
             TestFIT.Row(FIT.startupACMType, address: 0x40),
