@@ -6,6 +6,7 @@
 @covers window.agent
 @covers menu.window.agent
 @covers menubar.agent
+@covers settings.agent.edits
 
 The agent works on the same windows as the person at the bench. When it is asked about "this" byte, it reads the position of the caret and the selection; when it refers to a place in the dump, it moves the view there and selects it. The two therefore point at the same bytes rather than describing addresses to each other in words.
 
@@ -50,7 +51,18 @@ At present an agent can:
 
 Each place an agent shows, each panel it opens and each node it chooses is a step of the navigation history: **View ▸ Back** (**⌘[**) returns to the place the view was at before ([[topic:navigation|Moving Around]]).
 
-An agent cannot save a file and cannot change one. Addresses in its answers are given in hex, as in the dump.
+An agent cannot save a file, and changes one only when that is allowed (below). Addresses in its answers are given in hex, as in the dump.
+
+## Letting an agent edit
+
+**Let agents edit open files** in **Settings ▸ Agent** is off after installation, and is separate from the switch that lets agents connect. While it is off, an agent asked to change something says what it would change instead.
+
+While it is on, an agent can:
+
+- overwrite bytes in a file open in a tab. A write replaces as many bytes as it carries and never inserts or deletes; it can be made conditional on the bytes that are there now;
+- put a checksum right — a volume's, a file's or a microcode's in **UEFI Structure**, the table's in **FIT Table** — computed by the same code as the panels' **Fix Checksum**.
+
+Each change is one step of the file's undo, named **Agent:** and what the agent said the change is, so **Edit ▸ Undo** (**⌘Z**) takes it back. The changed bytes are red until the file is saved, like an edit made by hand, and the dump scrolls to them as a step of the navigation history. The file is saved only by the person. A file opened read-only, and a file the agent opened by its path without a tab, are never changed.
 
 ## The Agent window
 

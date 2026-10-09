@@ -24,6 +24,9 @@ final class AgentService {
 
     /// Where the switch is kept.
     static let enabledKey = "AgentServiceEnabled"
+    /// Where the edit switch is kept: whether an agent may change an open
+    /// file. Off after an install, and independent of the service's switch.
+    static let editsKey = "AgentEditsAllowed"
     /// How many calls the log keeps.
     static let logLimit = 500
 
@@ -36,13 +39,15 @@ final class AgentService {
     /// Background documents, surveys and findings; the window lists the
     /// findings.
     let dumpTools: AgentDumpTools
+    /// `write`, and the gate every module's edit goes through.
+    let editTools: AgentEditTools
     private let moduleTools: AgentModuleTools
     private let modules: [any ToolModule.Type]
     /// Built once: the tools do not change while the app runs.
     private(set) lazy var server = AgentServer(
         info: AgentServerInfo(name: "byteripper", version: Self.appVersion, title: "ByteRipper"),
         instructions: Self.instructions,
-        tools: (hostTools.tools() + markTools.tools() + dumpTools.tools()
+        tools: (hostTools.tools() + markTools.tools() + dumpTools.tools() + editTools.tools()
                 + moduleTools.tools(modules: modules)).map(Self.inEnglish))
 
     /// `tool`, answering in English whatever the window speaks: a field label
@@ -75,7 +80,9 @@ final class AgentService {
         self.hostTools = AgentHostTools(desk: desk)
         self.markTools = AgentMarkTools(desk: desk)
         self.dumpTools = AgentDumpTools(desk: desk)
-        self.moduleTools = AgentModuleTools(desk: desk, modules: { modules })
+        self.editTools = AgentEditTools(desk: desk)
+        self.moduleTools = AgentModuleTools(desk: desk, edits: editTools, modules: { modules })
+        editTools.isAllowed = { [weak self] in self?.editsAllowed ?? false }
         markTools.onChange = { [weak self] in self?.changed() }
         dumpTools.onChange = { [weak self] in self?.changed() }
         // A survey runs the other tools; it finds them in the finished list.
@@ -89,6 +96,15 @@ final class AgentService {
         set {
             defaults.set(newValue, forKey: Self.enabledKey)
             apply()
+        }
+    }
+
+    /// Whether an agent may write into an open file (`AgentEditTools`).
+    var editsAllowed: Bool {
+        get { defaults.bool(forKey: Self.editsKey) }
+        set {
+            defaults.set(newValue, forKey: Self.editsKey)
+            changed()
         }
     }
 
@@ -195,7 +211,8 @@ final class AgentService {
         path without putting it on screen, `survey` asks one tool's question of a whole folder of dumps, and \
         `finding` records each thing found for the person to check with a click. `mark` labels bytes for the \
         person while you explain them, and `related_to` says how two marks hang together. Nothing here \
-        saves a file. \
+        saves a file; `write` and the `_fix_checksum` tools change an open file, one undo step each, \
+        and only if the person allows edits. \
         The `uefi_` tools read a firmware image's structure and work whether or not its panel is open; \
         `uefi_select` and `uefi_selection` act on the open UEFI Structure panel, which `open_panel` opens.
         """

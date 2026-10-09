@@ -1,5 +1,6 @@
 import Cocoa
 import AgentKit
+import Localization
 import ToolModuleKit
 
 /// The tools the tool-modules contribute, turned into tools the server lists,
@@ -14,20 +15,25 @@ import ToolModuleKit
 @MainActor
 final class AgentModuleTools {
     let desk: AgentDesk
+    /// The one door a module's edit is applied through.
+    private let edits: AgentEditTools
     private let modules: () -> [any ToolModule.Type]
 
-    init(desk: AgentDesk, modules: @escaping () -> [any ToolModule.Type] = { ToolRegistry.modules }) {
+    init(desk: AgentDesk, edits: AgentEditTools,
+         modules: @escaping () -> [any ToolModule.Type] = { ToolRegistry.modules }) {
         self.desk = desk
+        self.edits = edits
         self.modules = modules
     }
 
-    /// Every module's queries, its comparisons of two documents, then every
-    /// module's actions, then `open_panel`.
+    /// Every module's queries, its comparisons of two documents, its edits,
+    /// then every module's actions, then `open_panel`.
     nonisolated func tools(modules list: [any ToolModule.Type]) -> [AgentTool] {
         let queries = list.flatMap { module in module.agentQueries.map { query(module, $0) } }
         let comparisons = list.flatMap { module in module.agentComparisons.map { comparison($0) } }
+        let edits = list.flatMap { module in module.agentEdits.map { edit($0) } }
         let actions = list.flatMap { module in module.agentActions.map { action(module, $0) } }
-        return queries + comparisons + actions + [openPanelTool(list)]
+        return queries + comparisons + edits + actions + [openPanelTool(list)]
     }
 
     /// What `open_panel` and the "not open" answers call a module: the last
@@ -93,6 +99,35 @@ final class AgentModuleTools {
             answer = .json(.object(members))
         }
         return answer
+    }
+
+    // MARK: - Edits
+
+    private nonisolated func edit(_ edit: ToolAgentEdit) -> AgentTool {
+        var properties = edit.properties
+        properties["document"] = AgentSchema.string("The document's id from `documents`. Default: the focused one.")
+        return AgentTool(
+            name: edit.name, title: edit.title, description: edit.description,
+            inputSchema: AgentSchema.object(properties, required: edit.required),
+            annotations: .edit
+        ) { call in
+            try await self.runEdit(edit, call.arguments)
+        }
+    }
+
+    /// The module works the change out; `AgentEditTools` decides whether it
+    /// is made — asked first too, so a refused edit costs no parse.
+    private func runEdit(_ edit: ToolAgentEdit, _ arguments: AgentArguments) async throws -> AgentAnswer {
+        let place = try resolve(arguments)
+        try edits.checkEditable(place)
+        let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
+        let version = host.contentVersion
+        let transaction = try await edit.run(host, arguments)
+        guard host.contentVersion == version else {
+            throw AgentToolError("\(place.id) changed while the edit was being worked out; nothing was written. Ask again.")
+        }
+        let undoName = AgentEditTools.inAppLanguage { L("Agent: %1$@", edit.undoName()) }
+        return .json(try edits.apply(ToolTransaction(name: undoName, writes: transaction.writes), to: place))
     }
 
     // MARK: - Actions

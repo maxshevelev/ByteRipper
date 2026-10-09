@@ -48,6 +48,10 @@ public protocol ToolModule {
     /// (`ToolAgentComparison`). Default: nothing.
     static var agentComparisons: [ToolAgentComparison] { get }
 
+    /// The changes to the file it works out for an agent
+    /// (`ToolAgentEdit`). Default: none.
+    static var agentEdits: [ToolAgentEdit] { get }
+
     /// What it does in its open panel at an agent's asking
     /// (`ToolAgentAction`). Default: nothing.
     static var agentActions: [ToolAgentAction] { get }

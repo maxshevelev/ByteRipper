@@ -70,6 +70,42 @@ public struct ToolAgentComparison: Sendable {
     }
 }
 
+/// A change to the file a tool-module works out for an agent — a checksum put
+/// right — with its panel open or not (`Design/AGENT_PLAN.md`, "Edits").
+///
+/// The module only *computes* the edit: `run` reads through a read host and
+/// returns the transaction, and the app decides whether it is applied. It
+/// applies it only with the person's edit switch on, only to a document in a
+/// tab and not opened read-only, as one undo step — so a module cannot write
+/// on an agent's behalf by any other door. Throw to refuse, with a sentence
+/// the model can act on ("already correct", "inside a compressed section").
+public struct ToolAgentEdit: Sendable {
+    public let name: String
+    public let title: String
+    public let description: String
+    public let properties: [String: JSONValue]
+    public let required: [String]
+    /// What the Edit menu calls the step — `Undo <name>` — in the app's own
+    /// language. Asked for outside the English the agent is answered in.
+    public let undoName: @MainActor @Sendable () -> String
+    public let run: @MainActor @Sendable (any ToolReadHost, AgentArguments) async throws -> ToolTransaction
+
+    public init(
+        name: String, title: String, description: String,
+        properties: [String: JSONValue] = [:], required: [String] = [],
+        undoName: @escaping @MainActor @Sendable () -> String,
+        run: @escaping @MainActor @Sendable (any ToolReadHost, AgentArguments) async throws -> ToolTransaction
+    ) {
+        self.name = name
+        self.title = title
+        self.description = description
+        self.properties = properties
+        self.required = required
+        self.undoName = undoName
+        self.run = run
+    }
+}
+
 /// Something a tool-module does in its open panel at an agent's asking —
 /// choose a node in the tree, say which node the reader chose.
 ///
@@ -110,6 +146,8 @@ extension ToolModule {
     public static var agentQueries: [ToolAgentQuery] { [] }
     /// Nor compare two documents.
     public static var agentComparisons: [ToolAgentComparison] { [] }
+    /// Nor change the file.
+    public static var agentEdits: [ToolAgentEdit] { [] }
     /// Nor act in its panel.
     public static var agentActions: [ToolAgentAction] { [] }
 }

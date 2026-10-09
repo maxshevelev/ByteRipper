@@ -152,3 +152,24 @@ The analysis is the pane's (`MEAAnalysisProviding`): one a panel made is used
 at once, and one made here is kept for the panels unless the content changed
 meanwhile (`ToolReadHost.contentVersion`). Files are named from the firmware
 database's file table when the dump needs it and it can be fetched.
+
+## Edits
+
+Every change to a file goes through one door, whichever tool asks: the
+person's edit switch (Settings ▸ Agent, "Let agents edit open files", key
+`AgentEditsAllowed`, off after an install) must be on, the document must be in
+a tab — a background document is refused with `show` named — and not opened
+read-only. The change is one undo step named `Agent: <label>` in the app's own
+language, shows red until saved, and is revealed as a navigation step. Nothing
+saves.
+
+| Tool | Arguments | Answer |
+|---|---|---|
+| `write` | `offset`, `bytes` (hex, ≤ 64 KiB), `label` (required, the person's language); `expect` (hex: the bytes that must be there now) | `written[]` (`start`, `end`, `before` — up to 64 bytes, `before_cut`), `undo`, `saved: false`. Overwrites only: past the end is refused. |
+| `uefi_fix_checksum` | `node` | as `write`. A volume's, a file's, a microcode's checksums, by the panel's own repair code. Refused inside a compressed section and when already correct. |
+| `fit_fix_checksum` | — | as `write`. The header's checksum, and the Top Swap backup's copy when it is the same table. Refused when unchecked or correct. |
+
+A module edit is a fourth kind of module tool, `ToolAgentEdit`: the module
+returns a `ToolTransaction` and an undo name, and the app applies it. Should
+the document change while the module works the edit out, nothing is written
+and the agent is told to ask again.

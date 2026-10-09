@@ -383,6 +383,15 @@ Each ends in something that works and is committed.
    `MemoryConfig` retrained; a `survey` of `variables_compare` against `1.bin`
    and one of `me_summary` grouping the folder by ME version.)*
 7. **Edits.** `write`, the edit switch, checksum repair as an action.
+   *(Done. Checksum repair became a module edit rather than a panel action —
+   `ToolAgentEdit`, computed by the module with its panel closed and applied
+   only by the app, so no module can write by another door: `uefi_fix_checksum`
+   and `fit_fix_checksum`. `write` takes an `expect` so a patch lands only on
+   the bytes the agent read. The undo step is named in the app's language,
+   outside the English override, from the agent's own label. Checked in a
+   Russian UI on a copy of `CSME 12.BIN`: the FIT checksum broken by `write`,
+   reported by `fit_table`, put right by `fit_fix_checksum`; two undo steps,
+   the file on disk untouched.)*
 8. **Help and release.** The help page in en, ru and de with its anchors; the
    Settings controls through `ControlHelp`; the protocol document marked
    version 1; the README; whether an ad-hoc signed, quarantined helper runs

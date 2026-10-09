@@ -1279,6 +1279,9 @@
 /* The agent service (Design/AGENT_PLAN.md) */
 "Agent" = "Агент";
 "Let agents connect to ByteRipper" = "Разрешить агентам подключаться к ByteRipper";
+"Let agents edit open files" = "Разрешить агентам изменять открытые файлы";
+"An agent's edit goes into the open file as one step of its undo and shows red until the file is saved, like an edit made by hand. Saving stays with you. A file opened read-only is never changed." = "Изменение, сделанное агентом, вносится в открытый файл одним шагом отмены и выделяется красным до сохранения файла, как правка, сделанная вручную. Сохраняет файл только пользователь. Файл, открытый только для чтения, не изменяется.";
+"Agent: %1$@" = "Агент: %1$@";
 "An agent — Claude Code, Claude Desktop or another MCP client on this Mac — can then list the files open here, read their bytes and show places in them. It cannot save a file. The connection is local, but what the agent reads, its program passes to the model behind it." = "Тогда агент — Claude Code, Claude Desktop или другой клиент MCP на этом Mac — сможет получить список открытых здесь файлов, читать их байты и показывать в них нужные места. Сохранить файл он не может. Соединение локальное, но прочитанное агентом его программа передаёт модели, на которой он работает.";
 "The agent service is not available in this copy of the app." = "В этой копии программы служба агента недоступна.";
 "Could not start: %1$@" = "Не удалось запустить: %1$@";

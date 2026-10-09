@@ -1,5 +1,6 @@
 import AgentKit
 import Foundation
+import Localization
 import ToolModuleKit
 import UEFIImage
 
@@ -78,6 +79,33 @@ public enum FITAgentQueries {
             ]
         }
         return .json(.object(answer))
+    }
+
+    // MARK: - fit_fix_checksum
+
+    nonisolated public static let fixChecksum = ToolAgentEdit(
+        name: "fit_fix_checksum",
+        title: "Fix the FIT checksum",
+        description: """
+            Writes the checksum the FIT table should have into its header row — and into the Top Swap \
+            backup's copy when that copy is the same table — as the FIT panel's Fix Checksum does, as one \
+            undo step. Refused when there is no table, when its checksum is not checked or already \
+            correct, and without the person's permission to edit.
+            """,
+        undoName: { L("Fix FIT Checksum") }
+    ) { host, _ in
+        let tree = try await readyTree(host)
+        let report = await read(tree)
+        guard let table = report.table else {
+            throw AgentToolError("There is no FIT table here to fix; `fit_table` says what was found.")
+        }
+        guard table.checksumIsChecked else {
+            throw AgentToolError("The table's ChecksumValid bit is clear: its checksum is not checked, and nothing needs writing.")
+        }
+        guard let fix = FITPresenter.display(report).checksumFix else {
+            throw AgentToolError("The FIT checksum is already correct; nothing to write.")
+        }
+        return fix
     }
 
     // MARK: - Reading

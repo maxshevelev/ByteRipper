@@ -100,6 +100,7 @@ final class AgentSettingsViewController: NSViewController {
     }
 
     private let enableCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let editsCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let statusLabel = NSTextField(labelWithString: "")
     private let clientMenu = NSPopUpButton(frame: .zero, pullsDown: false)
     private let destinationLabel = NSTextField(wrappingLabelWithString: "")
@@ -119,6 +120,15 @@ final class AgentSettingsViewController: NSViewController {
 
         let caption = NSTextField(wrappingLabelWithString:
             L("An agent — Claude Code, Claude Desktop or another MCP client on this Mac — can then list the files open here, read their bytes and show places in them. It cannot save a file. The connection is local, but what the agent reads, its program passes to the model behind it."))
+
+        // help: settings.agent.edits
+        editsCheckbox.title = L("Let agents edit open files")
+        editsCheckbox.target = self
+        editsCheckbox.action = #selector(editsChanged(_:))
+        let editsCaption = NSTextField(wrappingLabelWithString:
+            L("An agent's edit goes into the open file as one step of its undo and shows red until the file is saved, like an edit made by hand. Saving stays with you. A file opened read-only is never changed."))
+        editsCaption.font = .systemFont(ofSize: 11)
+        editsCaption.textColor = .secondaryLabelColor
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = .secondaryLabelColor
 
@@ -163,7 +173,8 @@ final class AgentSettingsViewController: NSViewController {
 
         let help = HelpButton.standard(for: .topic(.agent))
 
-        for subview in [titleLabel, enableCheckbox, caption, statusLabel, clientLabel, clientMenu,
+        for subview in [titleLabel, enableCheckbox, caption, statusLabel, editsCheckbox, editsCaption,
+                        clientLabel, clientMenu,
                         destinationLabel, previewScroll, copyButton, help] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
@@ -188,7 +199,14 @@ final class AgentSettingsViewController: NSViewController {
 
             clientLabel.firstBaselineAnchor.constraint(equalTo: clientMenu.firstBaselineAnchor),
             clientLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            clientMenu.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 20),
+            editsCheckbox.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 16),
+            editsCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+
+            editsCaption.topAnchor.constraint(equalTo: editsCheckbox.bottomAnchor, constant: 8),
+            editsCaption.leadingAnchor.constraint(equalTo: caption.leadingAnchor),
+            editsCaption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+
+            clientMenu.topAnchor.constraint(equalTo: editsCaption.bottomAnchor, constant: 20),
             clientMenu.leadingAnchor.constraint(equalTo: clientLabel.trailingAnchor, constant: 8),
 
             destinationLabel.topAnchor.constraint(equalTo: clientMenu.bottomAnchor, constant: 8),
@@ -230,6 +248,8 @@ final class AgentSettingsViewController: NSViewController {
         guard isViewLoaded else { return }
         enableCheckbox.state = service?.isEnabled == true ? .on : .off
         enableCheckbox.isEnabled = service != nil
+        editsCheckbox.state = service?.editsAllowed == true ? .on : .off
+        editsCheckbox.isEnabled = service != nil
         statusLabel.stringValue = Self.statusText(of: service)
         statusLabel.textColor = service?.failure == nil ? .secondaryLabelColor : SemanticColors.bad
     }
@@ -270,6 +290,11 @@ final class AgentSettingsViewController: NSViewController {
         statusLabel.stringValue = L("Copied.")
     }
 
+    @objc private func editsChanged(_ sender: NSButton) {
+        service?.editsAllowed = sender.state == .on
+        refresh()
+    }
+
     @objc private func enableChanged(_ sender: NSButton) {
         service?.isEnabled = sender.state == .on
         refresh()
@@ -283,6 +308,13 @@ final class AgentSettingsViewController: NSViewController {
     /// Clicks the switch.
     func toggleForTesting() {
         enableCheckbox.performClick(nil)
+    }
+
+    /// The edit switch's state, and a click on it.
+    var editsAllowedShown: Bool { editsCheckbox.state == .on }
+
+    func toggleEditsForTesting() {
+        editsCheckbox.performClick(nil)
     }
 
     /// Picks `client` in the menu, as a click would.

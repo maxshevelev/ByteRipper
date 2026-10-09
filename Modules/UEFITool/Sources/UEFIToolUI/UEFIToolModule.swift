@@ -47,6 +47,9 @@ public enum UEFIToolModule: ToolModule {
     /// The variables of two dumps, set side by side by name and GUID.
     public static var agentComparisons: [ToolAgentComparison] { UEFIAgentVariables.comparisons }
 
+    /// A node's checksum put right, applied by the app if the person allows.
+    public static var agentEdits: [ToolAgentEdit] { UEFIAgentEdits.all }
+
     /// Choosing a node in the open panel, and saying which one the reader
     /// chose.
     public static var agentActions: [ToolAgentAction] { [selectAction, selectionAction] }

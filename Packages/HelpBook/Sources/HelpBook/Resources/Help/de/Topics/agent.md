@@ -1,4 +1,4 @@
-@source-sha 152d973f159d80fd4573cae3929669f8f7c8ac7f6afb49ec078954db382c6fb1
+@source-sha 27e3235718b318be7fa04994df555b847fd91fa476712b2a22e459e35df75ad6
 # Mit einem Agenten arbeiten
 
 > ByteRipper lässt sich mit einem Agenten verbinden — Claude Code, Claude Desktop oder einem anderen Programm, das MCP spricht. Der Agent sieht dann die im Programm geöffneten Dateien, liest ihre Bytes und zeigt Stellen darin; das Gespräch mit ihm findet in seinem eigenen Fenster statt.
@@ -46,7 +46,18 @@ Derzeit kann ein Agent:
 
 Jede Stelle, die ein Agent zeigt, jeder Bereich, den er öffnet, und jeder Knoten, den er wählt, ist ein Schritt des Verlaufs: **Darstellung ▸ Zurück** (**⌘[**) kehrt dorthin zurück, wo die Ansicht vorher war ([[topic:navigation|Sich bewegen]]).
 
-Eine Datei sichern oder ändern kann ein Agent nicht. Adressen in seinen Antworten sind hexadezimal, wie im Dump.
+Eine Datei sichern kann ein Agent nicht; ändern kann er sie nur, wenn es erlaubt ist (siehe unten). Adressen in seinen Antworten sind hexadezimal, wie im Dump.
+
+## Änderungen durch den Agenten erlauben
+
+**Agenten das Ändern geöffneter Dateien erlauben** in **Einstellungen ▸ Agent** ist nach der Installation ausgeschaltet und unabhängig von dem Schalter, der die Verbindung erlaubt. Solange er ausgeschaltet ist, nennt ein Agent, der etwas ändern soll, stattdessen die Änderung, die er vornehmen würde.
+
+Ist er eingeschaltet, kann ein Agent:
+
+- Bytes in einer Datei überschreiben, die in einem Tab geöffnet ist. Ein Schreibvorgang ersetzt genau so viele Bytes, wie er enthält, und fügt nie Bytes ein oder entfernt sie; er lässt sich an die Bedingung knüpfen, dass an der Adresse bestimmte Bytes stehen;
+- eine Prüfsumme korrigieren — die eines Volumes, einer Datei oder eines Microcodes in **UEFI-Struktur**, die der Tabelle in **FIT-Tabelle** — mit demselben Code wie der Befehl **Prüfsumme korrigieren** der Bereiche.
+
+Jede Änderung ist ein Schritt des Widerrufens der Datei, benannt mit **Agent:** und der Beschreibung des Agenten; **Bearbeiten ▸ Widerrufen** (**⌘Z**) nimmt sie zurück. Die geänderten Bytes sind bis zum Sichern rot markiert, wie bei einer Änderung von Hand, und der Dump scrollt zu ihnen, als Schritt des Verlaufs. Gesichert wird die Datei nur vom Benutzer. Eine schreibgeschützt geöffnete Datei und eine Datei, die der Agent ohne Tab über ihren Pfad geöffnet hat, werden nie geändert.
 
 ## Das Agentenfenster
 
