@@ -48,18 +48,20 @@ final class AgentHostTools {
         let focused = desk.focused()
         var tabs: [ObjectIdentifier: Int] = [:]
         let entries: [JSONValue] = desk.places().map { place in
-            let tab = tabs[ObjectIdentifier(place.controller)] ?? (tabs.count + 1)
-            tabs[ObjectIdentifier(place.controller)] = tab
             let pane = place.pane
             var entry: [String: JSONValue] = [
                 "id": .string(place.id),
                 "name": .string(pane.status.fileName),
                 "size": Self.hex(pane.fileSize),
-                "unsaved_edits": .bool(pane.status.isDirty),
-                "read_only": .bool(pane.status.isReadOnly),
-                "tab": .count(tab),
                 "slot": .string(place.slot)
             ]
+            if let controller = place.controller {
+                let tab = tabs[ObjectIdentifier(controller)] ?? (tabs.count + 1)
+                tabs[ObjectIdentifier(controller)] = tab
+                entry["tab"] = .count(tab)
+                entry["unsaved_edits"] = .bool(pane.status.isDirty)
+                entry["read_only"] = .bool(pane.status.isReadOnly)
+            }
             if !pane.isUntitled, let url = pane.document?.url { entry["path"] = .string(url.path) }
             if let origin = pane.origin, let parent = origin.parent?.document {
                 entry["part_of"] = .string(desk.id(of: parent))
@@ -98,11 +100,12 @@ final class AgentHostTools {
         ]
         let selection = pane.hexSelection()
         answer["selection"] = selection.isEmpty ? .null : Self.range(selection.start..<selection.end)
-        if let view = place.controller.filePaneView(for: pane) {
+        let controller = try place.onScreen()
+        if let view = controller.filePaneView(for: pane) {
             answer["on_screen"] = Self.range(view.visibleOffsets)
         }
-        let model = place.controller.windowModel
-        if place.controller.mode == .comparison, place.slot != "part" {
+        let model = controller.windowModel
+        if controller.mode == .comparison, place.slot != "part" {
             let other = pane === model.pane1 ? model.pane2 : model.pane1
             if let document = other.document { answer["compared_with"] = .string(desk.id(of: document)) }
         }
@@ -208,6 +211,7 @@ final class AgentHostTools {
         let offset = try arguments.offset("offset")
         let length = try arguments.optionalOffset("length") ?? 0
         let select = try arguments.bool("select", default: length > 0)
+        let controller = try place.onScreen()
         let size = place.pane.fileSize
         guard offset < size || (offset == size && length == 0) else {
             throw AgentToolError("Offset \(Self.hexText(offset)) is past the end of \(place.id), "
@@ -217,8 +221,8 @@ final class AgentHostTools {
         desk.bringForward(place)
         // The place the reader is leaving goes into the history first, so
         // their Back undoes what the agent did.
-        place.controller.recordJump(in: place.pane)
-        place.controller.revealForTool(offset..<end, in: place.pane, select: select && end > offset)
+        controller.recordJump(in: place.pane)
+        controller.revealForTool(offset..<end, in: place.pane, select: select && end > offset)
         return [
             "document": .string(place.id),
             "shown": Self.range(offset..<end),
@@ -238,24 +242,24 @@ final class AgentHostTools {
         }
     }
 
-    static func hexText(_ value: UInt64) -> String { String(format: "0x%llX", value) }
+    nonisolated static func hexText(_ value: UInt64) -> String { String(format: "0x%llX", value) }
 
-    static func hex(_ value: UInt64) -> JSONValue { .string(hexText(value)) }
+    nonisolated static func hex(_ value: UInt64) -> JSONValue { .string(hexText(value)) }
 
     /// A half-open range, as the app keeps every range: `end` is the first
     /// byte after it.
-    static func range(_ range: Range<UInt64>) -> JSONValue {
+    nonisolated static func range(_ range: Range<UInt64>) -> JSONValue {
         ["start": hex(range.lowerBound), "end": hex(range.upperBound), "length": hex(range.upperBound - range.lowerBound)]
     }
 
-    static func printable(_ bytes: [UInt8]) -> String {
+    nonisolated static func printable(_ bytes: [UInt8]) -> String {
         String(decoding: bytes.map { (0x20...0x7E).contains($0) ? $0 : UInt8(ascii: ".") }, as: UTF8.self)
     }
 
     /// Rows as the dump draws them — address, sixteen bytes, their text —
     /// counted from `offset` rather than from a row boundary, so the first row
     /// starts with the byte asked for.
-    static func hexRows(_ bytes: [UInt8], at offset: UInt64) -> [String] {
+    nonisolated static func hexRows(_ bytes: [UInt8], at offset: UInt64) -> [String] {
         stride(from: 0, to: bytes.count, by: 16).map { start in
             let row = Array(bytes[start..<min(start + 16, bytes.count)])
             let hex = row.map { String(format: "%02X", $0) }.joined(separator: " ")
@@ -264,7 +268,7 @@ final class AgentHostTools {
         }
     }
 
-    static func integers(_ bytes: [UInt8], width: Int, bigEndian: Bool) -> [JSONValue] {
+    nonisolated static func integers(_ bytes: [UInt8], width: Int, bigEndian: Bool) -> [JSONValue] {
         stride(from: 0, through: bytes.count - width, by: width).map { start in
             var value: UInt64 = 0
             for index in 0..<width {

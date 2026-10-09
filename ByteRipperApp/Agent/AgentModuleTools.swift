@@ -83,7 +83,7 @@ final class AgentModuleTools {
     private func runAction(_ action: ToolAgentAction, identifier: String, title: String, short: String,
                            _ arguments: AgentArguments) async throws -> AgentAnswer {
         let place = try resolve(arguments)
-        let tools = place.controller.tools(reading: place.pane)
+        let tools = try place.onScreen().tools(reading: place.pane)
         guard tools.activeIdentifier == identifier, tools.boundPane === place.pane, let session = tools.session else {
             throw AgentToolError("The \(title) panel is not open on \(place.id). "
                 + "Call `open_panel` with module \"\(short)\" first, or show the bytes with `reveal`.")
@@ -123,17 +123,18 @@ final class AgentModuleTools {
             throw AgentToolError("No module \"\(short)\" in this copy of ByteRipper.")
         }
         let place = try resolve(arguments)
-        if let window = place.controller.view.window, window.attachedSheet != nil {
+        let controller = try place.onScreen()
+        if let window = controller.view.window, window.attachedSheet != nil {
             throw AgentToolError("A dialog is open in that window. Ask the person to finish it first.")
         }
-        let tools = place.controller.tools(reading: place.pane)
+        let tools = controller.tools(reading: place.pane)
         let alreadyOpen = tools.activeIdentifier == module.identifier && tools.boundPane === place.pane
         if !alreadyOpen {
             desk.bringForward(place)
-            place.controller.recordJump(in: place.pane)
+            controller.recordJump(in: place.pane)
             tools.activate(module.identifier)
             if tools.boundPane !== place.pane { tools.rebind(to: place.pane) }
-            place.controller.refreshToolPanelHeader()
+            controller.refreshToolPanelHeader()
         }
         guard tools.activeIdentifier == module.identifier, tools.boundPane === place.pane else {
             throw AgentToolError("The \(module.title) panel could not be opened on \(place.id).")

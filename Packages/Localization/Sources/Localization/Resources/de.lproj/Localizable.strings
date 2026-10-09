@@ -1324,3 +1324,9 @@
 "About" = "Bezieht sich auf";
 "Remove Mark" = "Markierung entfernen";
 "Clear Marks" = "Alle Markierungen entfernen";
+"Findings" = "Befunde";
+"Clear Findings" = "Alle Befunde entfernen";
+"Finding" = "Befund";
+"What was found" = "Was gefunden wurde";
+"Where" = "Wo";
+"node %1$@" = "Knoten %1$@";

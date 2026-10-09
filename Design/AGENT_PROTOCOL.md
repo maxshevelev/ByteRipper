@@ -73,6 +73,21 @@ A mark lives on its document's pane: drawn dashed in the agent's colour over
 the dump, its label and note shown under the pointer, listed in the Agent
 window. It goes with `unmark`, the window's buttons, or its document.
 
+## Many dumps
+
+| Tool | Arguments | Answer |
+|---|---|---|
+| `open_dump` | `path` (absolute or `~/`) | `document`, `on_screen` (true when a tab already has the file, and the id is that tab's), `size`. Read-only, no window; the last eight are kept parsed. A file changed on disk is read again under the same id. |
+| `close_dump` | `document` | `closed`. Refuses a document in a tab. |
+| `show` | `document`; `offset`, `length` | `document` (on screen), `shown`, `replaces` (the background id it replaced). Opens a new tab, or brings forward the tab that has the file. |
+| `survey` | `folder` (+ `recursive`) or `paths`; `tool` (one that takes `document`); `arguments`; `group_by` (dotted path, `-1` for the last element); `limit` (20, ≤ 100) | `files`, `groups[]` (`value`, `count`, `files` — ten at most), `more_groups`, `failed[]` (`file`, `error`). Progress per file. At most 200 files. |
+| `finding` | `text`; `document` or `path`; `offset`, `length`, `node` | the finding: `id` (`f1`…), `path`, `range`, `node`, `text`. |
+| `findings` | — | `findings[]`. |
+
+A background document is answered about by every tool that reads — `read`,
+`documents`, the module queries — and refused, with `show` named, by every
+tool that shows: `focus`, `reveal`, `mark`, `open_panel`, panel actions.
+
 ## UEFI Structure
 
 Queries — answered with the panel open or not, from the pane's shared tree:

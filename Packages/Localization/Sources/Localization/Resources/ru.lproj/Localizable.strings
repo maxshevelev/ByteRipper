@@ -1324,3 +1324,9 @@
 "About" = "Связана с";
 "Remove Mark" = "Удалить метку";
 "Clear Marks" = "Удалить все метки";
+"Findings" = "Находки";
+"Clear Findings" = "Удалить все находки";
+"Finding" = "Находка";
+"What was found" = "Что найдено";
+"Where" = "Где";
+"node %1$@" = "узел %1$@";

@@ -28,6 +28,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     private let logScroll = NSScrollView()
     private let marks = AgentMarksTable()
     private let marksScroll = NSScrollView()
+    private let findings = AgentFindingsTable()
+    private let findingsScroll = NSScrollView()
     private let clearButton = NSButton(title: "", target: nil, action: nil)
     private let removeButton = NSButton(title: "", target: nil, action: nil)
     private let settingsButton = NSButton(title: "", target: nil, action: nil)
@@ -106,9 +108,10 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         // The two things the window lists: what the agent asked, and what it
         // marked. One at a time, the way Activity Monitor's tabs are — both
         // are long lists that want the whole height.
-        pages.segmentCount = 2
+        pages.segmentCount = 3
         pages.setLabel(L("Log"), forSegment: 0)
         pages.setLabel(L("Marks"), forSegment: 1)
+        pages.setLabel(L("Findings"), forSegment: 2)
         pages.trackingMode = .selectOne
         pages.selectedSegment = 0
         pages.target = self
@@ -138,6 +141,14 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         marksScroll.borderType = .bezelBorder
         marksScroll.isHidden = true
 
+        findings.build()
+        findings.onShow = { [weak self] finding in self?.service?.dumpTools.show(finding) }
+        findings.onSelectionChanged = { [weak self] in self?.refreshButtons() }
+        findingsScroll.documentView = findings.table
+        findingsScroll.hasVerticalScroller = true
+        findingsScroll.borderType = .bezelBorder
+        findingsScroll.isHidden = true
+
         clearButton.bezelStyle = .rounded
         clearButton.target = self
         clearButton.action = #selector(clearPage)
@@ -155,7 +166,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
         let help = HelpButton.standard(for: .topic(.agent))
 
-        for view in [statusLabel, pages, logScroll, marksScroll, clearButton, removeButton, settingsButton, help] {
+        for view in [statusLabel, pages, logScroll, marksScroll, findingsScroll, clearButton, removeButton,
+                     settingsButton, help] {
             view.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(view)
         }
@@ -178,6 +190,11 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             marksScroll.leadingAnchor.constraint(equalTo: logScroll.leadingAnchor),
             marksScroll.trailingAnchor.constraint(equalTo: logScroll.trailingAnchor),
             marksScroll.bottomAnchor.constraint(equalTo: logScroll.bottomAnchor),
+
+            findingsScroll.topAnchor.constraint(equalTo: logScroll.topAnchor),
+            findingsScroll.leadingAnchor.constraint(equalTo: logScroll.leadingAnchor),
+            findingsScroll.trailingAnchor.constraint(equalTo: logScroll.trailingAnchor),
+            findingsScroll.bottomAnchor.constraint(equalTo: logScroll.bottomAnchor),
 
             removeButton.centerYAnchor.constraint(equalTo: clearButton.centerYAnchor),
             removeButton.leadingAnchor.constraint(equalTo: clearButton.trailingAnchor, constant: 8),
@@ -202,22 +219,44 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         table.reloadData()
         if followed, !rows.isEmpty { table.scrollRowToVisible(rows.count - 1) }
         marks.show(service?.markTools.all() ?? [])
+        findings.show(service?.dumpTools.findings ?? [])
         refreshButtons()
     }
 
-    private var showsMarks: Bool { pages.selectedSegment == 1 }
+    private enum Page: Int { case log, marks, findings }
+    private var page: Page { Page(rawValue: pages.selectedSegment) ?? .log }
+    private var showsMarks: Bool { page == .marks }
 
     private func refreshButtons() {
-        clearButton.title = showsMarks ? L("Clear Marks") : L("Clear Log")
-        clearButton.isEnabled = showsMarks ? !marks.isEmpty : !rows.isEmpty
-        removeButton.isHidden = !showsMarks
-        removeButton.isEnabled = !marks.selectedIDs.isEmpty
+        switch page {
+        case .log:
+            clearButton.title = L("Clear Log")
+            clearButton.isEnabled = !rows.isEmpty
+            removeButton.isHidden = true
+        case .marks:
+            clearButton.title = L("Clear Marks")
+            clearButton.isEnabled = !marks.isEmpty
+            removeButton.title = L("Remove Mark")
+            removeButton.isHidden = false
+            removeButton.isEnabled = !marks.selectedIDs.isEmpty
+        case .findings:
+            clearButton.title = L("Clear Findings")
+            clearButton.isEnabled = !findings.isEmpty
+            removeButton.isHidden = true
+        }
     }
 
     @objc private func pageChanged() {
-        logScroll.isHidden = showsMarks
-        marksScroll.isHidden = !showsMarks
+        logScroll.isHidden = page != .log
+        marksScroll.isHidden = page != .marks
+        findingsScroll.isHidden = page != .findings
         refreshButtons()
+    }
+
+    /// Shows the Findings list, for tests.
+    func showFindings() {
+        pages.selectedSegment = 2
+        pageChanged()
     }
 
     /// Shows the Marks list, for the menu bar and the tests.
@@ -283,10 +322,10 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     // MARK: - Actions
 
     @objc private func clearPage() {
-        if showsMarks {
-            service?.markTools.remove { _ in true }
-        } else {
-            service?.clearLog()
+        switch page {
+        case .log: service?.clearLog()
+        case .marks: service?.markTools.remove { _ in true }
+        case .findings: service?.dumpTools.clearFindings()
         }
     }
 
@@ -309,6 +348,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
     /// The marks list, for tests.
     var marksList: AgentMarksTable { marks }
+    /// The findings list, for tests.
+    var findingsList: AgentFindingsTable { findings }
 }
 
 /// The Marks page of the Agent window: every mark an agent left, in every
@@ -419,6 +460,112 @@ final class AgentMarksTable: NSObject, NSTableViewDataSource, NSTableViewDelegat
         let row = table.clickedRow
         guard row >= 0, row < rows.count else { return }
         onShow(rows[row].mark.id)
+    }
+
+    /// A row's text, for tests.
+    func shownText(row: Int, column: String) -> String? {
+        guard row < rows.count, let column = Column(rawValue: column) else { return nil }
+        return text(row: row, column)
+    }
+}
+
+/// The Findings page of the Agent window: what an agent found, file by file,
+/// each a line to check. A double-click opens the file at the place — the tab
+/// that has it, or a new one.
+@MainActor
+final class AgentFindingsTable: NSObject, NSTableViewDataSource, NSTableViewDelegate {
+    let table = NSTableView()
+    var onShow: (AgentFinding) -> Void = { _ in }
+    var onSelectionChanged: () -> Void = {}
+    private(set) var rows: [AgentFinding] = []
+
+    private enum Column: String, CaseIterable {
+        case id, text, file, place
+
+        var title: String {
+            switch self {
+            case .id: return L("Finding")
+            case .text: return L("What was found")
+            case .file: return L("File")
+            case .place: return L("Where")
+            }
+        }
+
+        var width: CGFloat {
+            switch self {
+            case .id: return 50
+            case .text: return 330
+            case .file: return 140
+            case .place: return 150
+            }
+        }
+    }
+
+    func build() {
+        for column in Column.allCases {
+            let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.rawValue))
+            tableColumn.title = column.title
+            tableColumn.width = column.width
+            tableColumn.resizingMask = column == .text ? .autoresizingMask : .userResizingMask
+            table.addTableColumn(tableColumn)
+        }
+        table.usesAlternatingRowBackgroundColors = true
+        table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        table.dataSource = self
+        table.delegate = self
+        table.target = self
+        table.doubleAction = #selector(doubleClicked)
+    }
+
+    func show(_ findings: [AgentFinding]) {
+        rows = findings
+        table.reloadData()
+    }
+
+    var isEmpty: Bool { rows.isEmpty }
+
+    func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard let id = tableColumn?.identifier, let column = Column(rawValue: id.rawValue) else { return nil }
+        let cell = (tableView.makeView(withIdentifier: id, owner: self) as? NSTextField) ?? {
+            let field = NSTextField(labelWithString: "")
+            field.identifier = id
+            field.lineBreakMode = .byTruncatingTail
+            field.font = column == .place || column == .id
+                ? .monospacedSystemFont(ofSize: 11, weight: .regular) : .systemFont(ofSize: 11)
+            return field
+        }()
+        cell.stringValue = text(row: row, column)
+        cell.toolTip = column == .text || column == .file ? (column == .file ? rows[row].url.path : cell.stringValue) : nil
+        return cell
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        onSelectionChanged()
+    }
+
+    private func text(row: Int, _ column: Column) -> String {
+        let finding = rows[row]
+        switch column {
+        case .id: return finding.id
+        case .text: return finding.text
+        case .file: return finding.url.lastPathComponent
+        case .place:
+            var parts: [String] = []
+            if let range = finding.range {
+                parts.append(range.isEmpty ? String(format: "0x%llX", range.lowerBound)
+                             : String(format: "0x%llX–0x%llX", range.lowerBound, range.upperBound))
+            }
+            if let node = finding.node { parts.append(L("node %1$@", node)) }
+            return parts.joined(separator: " · ")
+        }
+    }
+
+    @objc private func doubleClicked() {
+        let row = table.clickedRow
+        guard row >= 0, row < rows.count else { return }
+        onShow(rows[row])
     }
 
     /// A row's text, for tests.

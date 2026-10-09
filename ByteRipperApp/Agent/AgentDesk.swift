@@ -1,4 +1,5 @@
 import Cocoa
+import AgentKit
 import ByteRipperCore
 
 /// The open documents as the agent service sees them: which there are, what
@@ -19,7 +20,14 @@ final class AgentDesk {
     private let keyController: () -> MainViewController?
 
     private let ids = NSMapTable<BinaryDocument, NSString>.weakToStrongObjects()
+    /// A background document keeps its id when it is read again after a
+    /// change on disk, which makes a new `BinaryDocument`: so its id is the
+    /// entry's, not the document's.
+    private var backgroundIDs: [ObjectIdentifier: String] = [:]
     private var nextID = 1
+
+    /// The files an agent opened by path, with no window.
+    let background = AgentBackgroundDocuments()
 
     init(controllers: @escaping () -> [MainViewController],
          keyController: @escaping () -> MainViewController?) {
@@ -27,14 +35,27 @@ final class AgentDesk {
         self.keyController = keyController
     }
 
-    /// One open document: the pane it is in and the tab that holds the pane.
+    /// One open document: the pane it is in and the tab that holds the pane —
+    /// none for a background document.
     struct Place {
         let id: String
         let pane: PaneViewModel
-        let controller: MainViewController
+        let controller: MainViewController?
         /// "A" or "B" for one of the tab's own panes, "part" for a fragment
-        /// panel.
+        /// panel, "background" for a file opened by path with no window.
         let slot: String
+
+        var isOnScreen: Bool { controller != nil }
+
+        /// The tab, for a tool that shows something; a background document
+        /// is refused with the way to put it on screen.
+        func onScreen() throws -> MainViewController {
+            guard let controller else {
+                throw AgentToolError("\(id) is open in the background, not on screen. "
+                    + "Call `show` to open it in a tab first.")
+            }
+            return controller
+        }
     }
 
     // MARK: - Ids
@@ -43,10 +64,21 @@ final class AgentDesk {
     /// Short, because a model writes it back on every call.
     func id(of document: BinaryDocument) -> String {
         if let id = ids.object(forKey: document) { return id as String }
-        let id = "d\(nextID)"
-        nextID += 1
+        let id = mint()
         ids.setObject(id as NSString, forKey: document)
         return id
+    }
+
+    func id(of entry: AgentBackgroundDocuments.Entry) -> String {
+        if let id = backgroundIDs[ObjectIdentifier(entry)] { return id }
+        let id = mint()
+        backgroundIDs[ObjectIdentifier(entry)] = id
+        return id
+    }
+
+    private func mint() -> String {
+        defer { nextID += 1 }
+        return "d\(nextID)"
     }
 
     // MARK: - What is open
@@ -72,7 +104,23 @@ final class AgentDesk {
                 }
             }
         }
+        for entry in background.entries where entry.pane.isOpen {
+            result.append(Place(id: id(of: entry), pane: entry.pane, controller: nil, slot: "background"))
+        }
         return result
+    }
+
+    /// The on-screen place holding the file at `url`, if a tab has it open.
+    func onScreenPlace(of url: URL) -> Place? {
+        let identity = FileIdentity(url: url)
+        return places().first { place in
+            place.isOnScreen && !place.pane.isUntitled && place.pane.document?.identity == identity
+        }
+    }
+
+    /// The tab in front: where a file the agent puts on screen opens beside.
+    func keyTab() -> MainViewController? {
+        keyController() ?? controllers().first
     }
 
     /// The document the reader is in: the active pane of the frontmost tab —
@@ -91,6 +139,9 @@ final class AgentDesk {
             guard let place = places().first(where: { $0.id == id }) else {
                 throw AgentDeskError.noSuchDocument(id)
             }
+            // A background file changed on disk is read again before it is
+            // answered about.
+            if !place.isOnScreen { background.touch(place.pane) }
             return place
         }
         guard let place = focused() else { throw AgentDeskError.nothingOpen }
@@ -104,15 +155,16 @@ final class AgentDesk {
     /// from whatever app the person is typing in. The agent shows; it does
     /// not grab.
     func bringForward(_ place: Place) {
-        if let window = place.controller.view.window {
+        guard let controller = place.controller else { return }
+        if let window = controller.view.window {
             if let group = window.tabGroup, group.selectedWindow !== window {
                 group.selectedWindow = window
             }
             window.orderFront(nil)
         }
-        if place.slot == "part", let panel = place.controller.fragments.panel(holding: place.pane),
-           place.controller.fragments.expanded != panel {
-            place.controller.fragments.expand(panel, animated: false)
+        if place.slot == "part", let panel = controller.fragments.panel(holding: place.pane),
+           controller.fragments.expanded != panel {
+            controller.fragments.expand(panel, animated: false)
         }
     }
 }

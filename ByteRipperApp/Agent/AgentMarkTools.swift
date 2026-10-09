@@ -70,6 +70,9 @@ final class AgentMarkTools {
 
     private func mark(_ arguments: AgentArguments) async throws -> AgentAnswer {
         let place = try resolve(arguments)
+        // A mark is drawn on the dump; a file with no window has none to draw
+        // it on, and would carry a mark nobody can see.
+        _ = try place.onScreen()
         let offset = try arguments.offset("offset")
         let length = try arguments.offset("length")
         let label = try arguments.string("label").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -163,12 +166,13 @@ final class AgentMarkTools {
     /// double-click on its row in the Agent window does. A step of the
     /// navigation history, like `reveal`.
     func show(_ id: String) {
-        guard let located = all().first(where: { $0.mark.id == id }) else { return }
+        guard let located = all().first(where: { $0.mark.id == id }),
+              let controller = located.place.controller else { return }
         let place = located.place
         desk.bringForward(place)
-        place.controller.view.window?.makeKeyAndOrderFront(nil)
-        place.controller.recordJump(in: place.pane)
-        place.controller.revealForTool(located.mark.range, in: place.pane, select: true)
+        controller.view.window?.makeKeyAndOrderFront(nil)
+        controller.recordJump(in: place.pane)
+        controller.revealForTool(located.mark.range, in: place.pane, select: true)
     }
 
     // MARK: - marks

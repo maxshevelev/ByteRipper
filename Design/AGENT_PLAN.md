@@ -362,7 +362,14 @@ Each ends in something that works and is committed.
    minimap's gutter, and pinning a mark as a bookmark.)*
 5. **Background documents.** `open_dump`, `close_dump`, `show`, `survey`,
    findings. Done on the AMD and Intel dumps in `~/Desktop/ME`: one survey
-   question answered across all of them, its findings clickable.
+   question answered across all of them, its findings clickable. *(Done. A
+   background document is a `PaneViewModel` no window shows, so every query
+   answers about it unchanged. Checked on five dumps from `~/Desktop/ME`:
+   `survey` of `uefi_find` for `Setup` grouped by `total`, eight seconds with
+   every compressed section opened. Found on the way: the first read of a
+   folder macOS guards waits in the kernel for the person's answer, and on the
+   main thread that froze the app — listing and the first read of a file now
+   run off it.)*
 6. **ME, FIT and NVRAM.** The ME and FIT modules' queries; `variables` across
    VSS, NVAR and the rest, and a comparison of two documents' variables by
    name and GUID.

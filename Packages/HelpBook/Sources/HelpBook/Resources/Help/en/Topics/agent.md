@@ -42,6 +42,8 @@ At present an agent can:
 - show a place: bring its tab forward, scroll to it and select it;
 - read the structure of a firmware image as **UEFI Structure** shows it — the tree, the fields of a node, the nodes holding an address — and search it by name, GUID or type. This works whether or not the panel is open;
 - mark bytes while explaining them: a dashed outline in a colour of its own, with a short label; resting the pointer on the marked bytes shows the agent's note. A mark can name others it is about — a pointer and its target, a checksum and what it covers;
+- open a file by its path without putting it on screen, and ask the same question of every dump in a folder at once — how many copies of a variable each holds, which address a structure starts at — getting the answers grouped by value. A file opened this way is only read; the agent puts it in a tab of its own when there is something in it to show;
+- record findings: each a sentence and the place it is about, listed in the Agent window;
 - open a tool panel on a document, as the **Tools** menu does, and choose a node in the open **UEFI Structure** panel. The tree opens down to the node and the dump scrolls to its bytes.
 
 Each place an agent shows, each panel it opens and each node it chooses is a step of the navigation history: **View ▸ Back** (**⌘[**) returns to the place the view was at before ([[topic:navigation|Moving Around]]).
@@ -55,6 +57,12 @@ An agent cannot save a file and cannot change one. Addresses in its answers are 
 **Log** lists every request the agent has made: the time, the tool, the arguments as the agent wrote them, how long the answer took, its size and the result. A refused request is shown in red, with the reason the agent was given. **Clear Log** empties the list; the list is not kept after the program quits.
 
 **Marks** lists the marks the agent has left in every open file: the label, the file, the bytes, the note, and the marks it is about. A double-click on a row brings its file forward and selects its bytes, as a step of the navigation history. **Remove Mark** removes the selected rows, **Clear Marks** removes them all. A mark also goes when its file is closed or when the agent removes it.
+
+**Findings** lists what the agent found and where: the sentence, the file, the bytes or the node. A double-click opens the file at that place — in the tab that already has it, or in a new one. **Clear Findings** empties the list.
+
+## Files outside the open windows
+
+When the agent first reads a folder that macOS protects — Desktop, Documents, Downloads — macOS asks whether ByteRipper may access it. The agent's request waits for the answer; the rest of the program does not. The answer is remembered for ByteRipper, as for any other access the program asks for.
 
 ## When the service does not start
 
