@@ -153,7 +153,8 @@ public enum UEFIDetail {
         image: UEFIImage,
         reader: ImageReader,
         repairs: [ChecksumRepair] = [],
-        catalogue: GuidsCatalogue = .empty
+        catalogue: GuidsCatalogue = .empty,
+        lenovoDMIReaders: LenovoDMIFirmwareReaders? = nil
     ) -> UEFINodeDetail {
         var fields = commonFields(for: node, image: image)
         fields += headerFields(
@@ -345,7 +346,8 @@ public enum UEFIDetail {
         }
         // Lenovo's DMI store, read as a whole: the store's row sums it up.
         if UEFILenovoDMIDetail.reads(node.kind) {
-            let lenovo = UEFILenovoDMIDetail.build(for: node, image: image, reader: reader)
+            let lenovo = UEFILenovoDMIDetail.build(for: node, image: image, reader: reader,
+                                                   firmwareReaders: lenovoDMIReaders)
             fields += lenovo.fields
             tables += lenovo.tables
         }

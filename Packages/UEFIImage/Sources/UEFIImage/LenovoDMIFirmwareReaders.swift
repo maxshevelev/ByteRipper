@@ -1,9 +1,8 @@
 import Foundation
 import LenovoDMI
-import UEFIImage
 
-/// Which drivers of the image ask for which entries of the store — the
-/// firmware's own answer to "what is this entry for".
+/// Which drivers of the image ask for which entries of Lenovo's DMI store —
+/// the firmware's own answer to "what is this entry for".
 ///
 /// Read off the image itself rather than written down from one dump: the
 /// drivers differ from platform to platform (an IdeaPad has no RGB keyboard
@@ -21,13 +20,12 @@ public struct LenovoDMIFirmwareReaders: Equatable, Sendable {
 
     public func drivers(of key: LenovoDMIKey) -> [String] { drivers[key] ?? [] }
 
-    /// Parses `image` and searches each driver for keys under `namespaces` —
-    /// the namespaces the store holds, so a key under one the store does not
-    /// use is not looked for. Seconds for an image with compressed volumes;
-    /// run it off the main actor.
-    public static func scan(_ image: [UInt8], namespaces: [[UInt8]]) -> LenovoDMIFirmwareReaders {
-        let parsed = UEFIParser.parse(image, readsProtectedRanges: false)
-        let readers = SpaceReaders(file: ImageReader(image))
+    /// Searches each driver under `roots` — a tree opened all the way down,
+    /// compressed sections included — for keys under `namespaces`: the
+    /// namespaces the store holds, so a key under one the store does not use
+    /// is not looked for.
+    public static func find(in roots: [UEFINode], readers: SpaceReaders,
+                            namespaces: [[UInt8]]) -> LenovoDMIFirmwareReaders {
         var found: [LenovoDMIKey: Set<String>] = [:]
         // Each code section belongs to the file nearest above it: a driver
         // inside a compressed volume is that driver, not the file the volume
@@ -44,7 +42,22 @@ public struct LenovoDMIFirmwareReaders: Equatable, Sendable {
             }
             for child in node.children { walk(child, in: file) }
         }
-        for root in parsed.roots { walk(root, in: nil) }
+        for root in roots { walk(root, in: nil) }
         return LenovoDMIFirmwareReaders(drivers: found.mapValues { $0.sorted() })
+    }
+
+    /// The namespaces the Lenovo stores among `roots` hold entries under.
+    static func namespaces(of roots: [UEFINode], reader: ImageReader) -> [[UInt8]] {
+        let stores = DMIStore.all(in: roots).filter { $0.kind == .lenovoDMIStore }
+        var namespaces: Set<[UInt8]> = []
+        for store in stores {
+            guard let stored = reader.bytes(store.range),
+                  let area = LenovoDMIArea.read(stored: stored, offset: store.range.lowerBound)
+            else { continue }
+            for block in area.blocks {
+                for entry in block.entries { namespaces.insert(entry.key.namespace) }
+            }
+        }
+        return Array(namespaces)
     }
 }

@@ -1,4 +1,4 @@
-@source-sha 2fe4ae21d472af1bb614b20ebc0fa0f5da8d59c649e1c4b41a8ac88dfb5b147a
+@source-sha 1ac4349a5177a67cd734dec0bfd1721b7952a4e927f1544acf546a41cd9c2b37
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -464,9 +464,9 @@ Verlorene Felder sind nicht immer endgültig verloren. Einige Hersteller — dar
 
 Wo diese Felder im Abbild stehen, ist nicht standardisiert. Jeder Hersteller legt sie dorthin, wo er will, und die Aufteilung wandert von Generation zu Generation; im Allgemeinen läuft das Übertragen deshalb auf den Vergleich zweier Abbilder hinaus.
 
-Eine Ausnahme, die das Programm lesen kann, ist die Firmware Lenovo InsydeH2O. Sie hält diese Felder in einem eigenen, kodierten Speicher, den [[term:lenv|LENV]]-Blöcken, die **Werkzeuge ▸ Lenovo DMI** dekodiert und anzeigt ([[topic:tool-lenovo-dmi|Lenovo DMI]]).
+Eine Ausnahme, die das Programm lesen kann, ist die Firmware Lenovo InsydeH2O. Sie hält diese Felder in einem eigenen, kodierten Speicher, den [[term:lenv|LENV]]-Blöcken ([[topic:lenovo-dmi|Lenovo DMI]]).
 
-Im Baum von **Werkzeuge ▸ UEFI-Struktur** erscheint derselbe Speicher als ein Knoten, **Lenovo DMI**, gleich wo er im Abbild liegt: anstelle der drei Regionen, die die Insyde-Flash-Device-Map als „Unknown" deklariert, oder innerhalb von Padding, wenn es keine Map gibt. Seine Beschreibung nennt den Block, den die Firmware liest, und führt dessen Einträge dekodiert auf, darunter Seriennummer und UUID; ein Klick auf einen Eintrag öffnet seinen Knoten. Unter dem Knoten liegen das Änderungsprotokoll und beide Blöcke, jeder Eintrag mit seinem Wert neben dem Namen.
+Im Baum von **Werkzeuge ▸ UEFI-Struktur** erscheint dieser Speicher als ein Knoten, **Lenovo DMI**, gleich wo er im Abbild liegt: anstelle der drei Regionen, die die Insyde-Flash-Device-Map als „Unknown" deklariert, oder innerhalb von Padding, wenn es keine Map gibt. Seine Beschreibung nennt den Block, den die Firmware liest, und führt dessen Einträge dekodiert auf, darunter Seriennummer und UUID; ein Klick auf einen Eintrag öffnet seinen Knoten. Unter dem Knoten liegen das Änderungsprotokoll und beide Blöcke, jeder Eintrag mit seinem Wert neben dem Namen.
 
 @see term:serial-data
 @see term:lenv
@@ -485,7 +485,7 @@ Die Prüfsumme ist die Summe der Bytes nach dem Kopf in ihrer gespeicherten, als
 Die Länge eines Werts lässt sich an Ort und Stelle nicht ändern: Die Firmware baut die SMBIOS-Tabellen aus diesen Einträgen zum Teil über feste Offsets auf.
 
 @see term:ldbg
-@see topic:tool-lenovo-dmi
+@see topic:lenovo-dmi
 
 @term ldbg
 @name LDBG-Änderungsprotokoll
@@ -496,7 +496,7 @@ Der 8 KiB große Bereich mit der Signatur `LDBG` steht vor den beiden [[term:len
 Ein Ereignis umfasst 32 Bytes: Datum und Uhrzeit aus der Echtzeituhr, den Vorgang (Schreiben, Schützen oder Schutz aufheben), den betroffenen Eintrag und die Zahl der geschriebenen Bytes. Werte enthält das Protokoll nicht. Es zeigt aber, wann Seriennummer oder Windows-Schlüssel zuletzt geschrieben wurden, und unterscheidet so einen Eintrag aus dem Werk von einem späteren. Ein Schreib-Offset von `FFFFFFFF` bedeutet, dass das Protokoll gelöscht ist.
 
 @see term:lenv
-@see topic:tool-lenovo-dmi
+@see topic:lenovo-dmi
 
 @term slic
 @name SLIC / MSDM

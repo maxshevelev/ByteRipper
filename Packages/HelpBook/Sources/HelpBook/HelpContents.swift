@@ -53,7 +53,7 @@ public enum HelpContents {
             .toolUEFI,
             .toolME,
             .toolFIT,
-            .toolLenovoDMI,
+            .lenovoDMI,
             .databases,
             .provenance
         ]),

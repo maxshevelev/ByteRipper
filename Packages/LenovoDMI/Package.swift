@@ -8,11 +8,12 @@
 //  6dc9bdf, 2026-04-05), and checked here against real dumps; where the two
 //  disagree, the dumps win and the comment says so.
 //
-//  A shared package rather than the pure half of the tool-module: the UEFI
-//  Structure tool shows the same three regions — the Insyde flash device map
-//  declares them, as "Unknown" — and naming them there must not mean one
-//  tool-module depending on another. It depends on nothing but the words it
-//  says, so `swift test` reads blocks built byte by byte.
+//  A package of its own rather than part of `UEFIImage`: the tree reads the
+//  store with it — in place of the three regions the Insyde flash device map
+//  declares as "Unknown" — and the UEFI Structure panel decodes the store's
+//  rows with it, and the format is worth testing apart from either. It
+//  depends on nothing but the words it says and the codec a block opened
+//  decoded goes back through, so `swift test` reads blocks built byte by byte.
 //
 
 import PackageDescription

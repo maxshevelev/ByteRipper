@@ -94,12 +94,10 @@ packages:
   # puts back every part through one, whoever asked for it.
   PartCodec:
     path: Packages/PartCodec
-  # The Lenovo identity store's format and parse. Only LenovoDMITool links it;
-  # listed so Xcode can see it.
+  # The Lenovo identity store's format and parse. UEFIImage reads the store
+  # into the tree with it; the app's tests build and check blocks with it.
   LenovoDMI:
     path: Packages/LenovoDMI
-  LenovoDMITool:
-    path: Modules/LenovoDMITool
 
 targets:
   ByteRipper:
@@ -154,8 +152,6 @@ targets:
         product: UEFIToolUI
       - package: MEATool
         product: MEAToolUI
-      - package: LenovoDMITool
-        product: LenovoDMIToolUI
       # The one way a part panel opens and goes back (`openPart`), and the
       # codec a zone that is a UEFI structure goes back through.
       - package: PartCodec
@@ -310,10 +306,7 @@ targets:
         product: MEFirmware
       - package: MEATool
         product: MEAToolUI
-      - package: LenovoDMITool
-        product: LenovoDMITool
-      - package: LenovoDMITool
-        product: LenovoDMIToolUI
+      - package: LenovoDMI
       - package: PartCodec
       - package: UEFIContentSource
     settings:

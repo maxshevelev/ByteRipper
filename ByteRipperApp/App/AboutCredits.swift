@@ -48,7 +48,7 @@ enum AboutCredits {
             author: "Shmurkio",
             repository: URL(string: "https://github.com/Shmurkio/LenovoDMIDecryptor")!,
             profile: URL(string: "https://github.com/Shmurkio")!,
-            taken: L("The format of the Lenovo DMI store — the LENV blocks, their encoding and checksum, and the LDBG change log — which the Lenovo DMI tool reads.")
+            taken: L("The format of the Lenovo DMI store — the LENV blocks, their encoding and checksum, and the LDBG change log — which the UEFI Structure tool reads.")
         ),
     ]
 

@@ -11,7 +11,7 @@ import UEFIImage
 /// each selection: 16 KiB, decoded in microseconds. The entries' values are
 /// XORed in the file, which is why they are read here, in the format's own
 /// terms, and never from a row's bytes.
-enum UEFILenovoDMIDetail {
+public enum UEFILenovoDMIDetail {
     /// The kinds this reads.
     static func reads(_ kind: UEFINodeKind) -> Bool {
         switch kind {
@@ -20,7 +20,11 @@ enum UEFILenovoDMIDetail {
         }
     }
 
-    static func build(for node: UEFINode, image: UEFIImage, reader: ImageReader)
+    /// `firmwareReaders`, once the image's drivers have been searched, adds to
+    /// each entry of the store the drivers that ask for it; nil leaves the
+    /// line out until then, and for a block on its own for good.
+    static func build(for node: UEFINode, image: UEFIImage, reader: ImageReader,
+                      firmwareReaders: LenovoDMIFirmwareReaders? = nil)
         -> (fields: [UEFIDetailField], tables: [UEFIDetailTable]) {
         guard node.space == .file, reads(node.kind) else { return ([], []) }
         let found = context(of: node, image: image, reader: reader)
@@ -46,12 +50,31 @@ enum UEFILenovoDMIDetail {
             for (index, block) in blocks.enumerated() {
                 guard let entry = block.entries.first(where: { $0.offset == node.header.lowerBound }) else { continue }
                 let other = blocks.count == 2 ? (blocks[1 - index], 2 - index) : nil
-                return (entryFields(entry, other: other), [])
+                let drivers = found.area == nil ? nil : firmwareReaders?.drivers(of: entry.key)
+                return (entryFields(entry, other: other, drivers: drivers), [])
             }
             return ([], [])
         default:
             return ([], [])
         }
+    }
+
+    /// The block Open Decoded Block opens from `node` — the block itself, or
+    /// the one an entry is in — and the row's name for it; nil on any other
+    /// row, and on a block with nothing to decode (`LenovoDMIDecodedBlock`).
+    public static func decodableBlock(for node: UEFINode, image: UEFIImage, reader: ImageReader)
+        -> (block: LENVBlock, name: String)? {
+        guard node.space == .file else { return nil }
+        let row: UEFINode?
+        switch node.kind {
+        case .lenvBlock: row = node
+        case .lenvEntry: row = node.id.path.isEmpty ? nil : image.node(NodeID(Array(node.id.path.dropLast())))
+        default: return nil
+        }
+        guard let row, row.kind == .lenvBlock, let stored = reader.bytes(row.range) else { return nil }
+        let block = LENVBlock(offset: row.range.lowerBound, stored: stored)
+        guard LenovoDMIDecodedBlock.canOpen(block) else { return nil }
+        return (block, row.name)
     }
 
     // MARK: - Finding the store
@@ -240,8 +263,15 @@ enum UEFILenovoDMIDetail {
 
     /// `other` is the store's other block and its number, for a block in a
     /// store; nil for a block on its own.
-    private static func entryFields(_ entry: LENVEntry, other: (block: LENVBlock, number: Int)?) -> [UEFIDetailField] {
+    /// `drivers` are the image's drivers that name the entry's key, once
+    /// they have been searched.
+    private static func entryFields(_ entry: LENVEntry, other: (block: LENVBlock, number: Int)?,
+                                    drivers: [String]? = nil) -> [UEFIDetailField] {
         var fields: [UEFIDetailField] = [.init(L("Value"), LenovoDMIValue.text(of: entry))]
+        if let drivers {
+            fields.append(.init(L("Read by the firmware"),
+                                drivers.isEmpty ? L("No driver in this image names it") : drivers.joined(separator: ", ")))
+        }
         if entry.knownType == .windowsKey {
             fields.append(windowsKeyField(entry))
         }

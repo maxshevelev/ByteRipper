@@ -59,6 +59,8 @@ import UEFITool
     var onOpenContent: ((NodeID) -> Void)?
     /// The Open Decompressed item of a bzip2 variable was chosen.
     var onOpenUnpacked: ((NodeID) -> Void)?
+    /// The Open Decoded Block item of a LENV block or entry was chosen.
+    var onOpenDecodedBlock: ((NodeID) -> Void)?
     /// The BIOS region's Compare with PFAT Update File item was chosen.
     var onCompareWithUpdate: ((NodeID) -> Void)?
     /// A row was opened or shut. What is open belongs to the file rather than
@@ -228,6 +230,14 @@ import UEFITool
     /// Whether a refresh is already queued, and whether any of the shows it
     /// stands for moved rows. One refresh serves however many shows land while
     /// an animation runs.
+    /// The top level as the outline last counted it. What `topLevelRows`
+    /// reads changes the moment a show lands, but the outline is reloaded only
+    /// when its turn in the queue comes (`queueRefresh`); a layout pass in
+    /// between asks for rows by the count it already holds, and has to get
+    /// that many. So the rows are taken when the outline counts them, and
+    /// handed out from here until it counts again.
+    private var countedTopLevelRows: [Any] = []
+
     private var queuedRefresh: Bool?
 
     private let summaryLabel = NSTextField(labelWithString: "")
@@ -2132,7 +2142,10 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     }
 
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
-        guard let item else { return topLevelRows.count }
+        guard let item else {
+            countedTopLevelRows = topLevelRows
+            return countedTopLevelRows.count
+        }
         if let meRow = item as? MEOutlineRow {
             return meNode(of: meRow)?.children.count ?? 0
         }
@@ -2146,7 +2159,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             return meRow(children[index].path)
         }
         guard let item, let row = item as? UEFITreeRow, !row.isLoading
-        else { return topLevelRows[index] }
+        else { return countedTopLevelRows[index] }
         return childrenList(for: row.id)[index]
     }
 
@@ -2488,6 +2501,20 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             item.representedObject = node.id
             items.append(item)
         }
+        // A LENV block, or an entry in one, opens decoded: the entries read
+        // as text and can be typed over, and go back encoded.
+        // help: panel.uefi.open-decoded-block
+        if let image, let reader = tree?.spaceReaders.reader(for: .file),
+           UEFILenovoDMIDetail.decodableBlock(for: node, image: image, reader: reader) != nil {
+            let open = NSMenuItem(
+                title: L("Open Decoded Block"),
+                action: #selector(openDecodedBlockClicked(_:)),
+                keyEquivalent: ""
+            )
+            open.target = self
+            open.representedObject = node.id
+            items.append(open)
+        }
         if UEFIPresenter.isBZip2Variable(node) {
             let open = NSMenuItem(
                 title: L("Open Decompressed Variable"),
@@ -2549,6 +2576,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     @objc private func saveDecompressedClicked(_ sender: NSMenuItem) {
         guard let nodeID = sender.representedObject as? NodeID else { return }
         onSaveDecompressed?(nodeID)
+    }
+
+    @objc private func openDecodedBlockClicked(_ sender: NSMenuItem) {
+        guard let nodeID = sender.representedObject as? NodeID else { return }
+        onOpenDecodedBlock?(nodeID)
     }
 
     @objc private func openUnpackedClicked(_ sender: NSMenuItem) {

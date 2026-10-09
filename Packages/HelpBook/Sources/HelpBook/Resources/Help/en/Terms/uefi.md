@@ -463,9 +463,9 @@ Lost fields are not always lost for good. Some vendors — HP and Acer among the
 
 Where the fields sit inside the image is not standardised. Each vendor puts them where it likes and the layout moves between generations, so carrying them over is in general a job of comparing two images.
 
-Lenovo InsydeH2O firmware is the exception the app reads: it keeps these fields in an encoded store of its own, the [[term:lenv|LENV]] blocks, which **Tools ▸ Lenovo DMI** decodes and lists ([[topic:tool-lenovo-dmi|Lenovo DMI]]).
+Lenovo InsydeH2O firmware is the exception the app reads: it keeps these fields in an encoded store of its own, the [[term:lenv|LENV]] blocks ([[topic:lenovo-dmi|Lenovo DMI]]).
 
-**Tools ▸ UEFI Structure** shows the same store as one row of the tree, **Lenovo DMI**, wherever in the image it lies: in place of the three regions the Insyde flash device map declares as "Unknown", or inside padding where there is no map. Its detail names the block the firmware reads and lists that block's entries decoded, the serial number and the UUID among them; a click on an entry opens its row. Under the row are the change log and both blocks, each entry with its value beside its name.
+**Tools ▸ UEFI Structure** shows that store as one row of the tree, **Lenovo DMI**, wherever in the image it lies: in place of the three regions the Insyde flash device map declares as "Unknown", or inside padding where there is no map. Its detail names the block the firmware reads and lists that block's entries decoded, the serial number and the UUID among them; a click on an entry opens its row. Under the row are the change log and both blocks, each entry with its value beside its name.
 
 @see term:serial-data
 @see term:lenv
@@ -484,7 +484,7 @@ The checksum is the sum of the bytes after the header as stored, that is encoded
 A value cannot change its length in place: the firmware builds the SMBIOS tables from these entries partly at fixed offsets.
 
 @see term:ldbg
-@see topic:tool-lenovo-dmi
+@see topic:lenovo-dmi
 
 @term ldbg
 @name LDBG change log
@@ -495,7 +495,7 @@ The 8 KiB area with the signature `LDBG` precedes the two [[term:lenv|LENV]] blo
 A record is 32 bytes: a date and time taken from the real-time clock, the operation (set, protect or unprotect), the entry it concerns and the number of bytes written. The log holds no values. It shows when the serial number or the Windows key was last written, which tells a factory entry from a later one. A write offset of `FFFFFFFF` means the log has been erased.
 
 @see term:lenv
-@see topic:tool-lenovo-dmi
+@see topic:lenovo-dmi
 
 @term slic
 @name SLIC / MSDM

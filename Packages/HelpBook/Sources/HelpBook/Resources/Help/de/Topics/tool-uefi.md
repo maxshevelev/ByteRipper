@@ -1,4 +1,4 @@
-@source-sha 976d2697c9f69e4ee2d84f7a5abf2a4cd0ba798a5a14b4060f089f8f2aa037dd
+@source-sha 0da32e035b19c9c2736feb68eeb511e28fed7fc25d645075b3a39c4195662764
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -46,7 +46,7 @@ Rechtsklick auf einen Knoten:
 - **Entpackte Variable öffnen** bei der Variable `overrides` des Apple-Systemspeichers — ihre Geräteüberschreibungen liegen als bzip2-Datenstrom vor und werden als Text in einem Tab geöffnet. Der Tab ist eine Kopie: Der Text wird hier nicht wieder komprimiert, eine Änderung der Kopie lässt den Dump daher unberührt.
 - **Zur Top-Swap-Kopie** / **Zum Original** bei einem Knoten in einem der beiden Blöcke eines Images mit [[term:top-swap|Top-Swap]]-Kopie — wählt denselben Knoten im anderen Block aus und zeigt seine Bytes im Dump, sodass sich jedem Teil der Kopie der Teil des obersten Blocks zuordnen lässt, den er wiederholt.
 
-Ein Doppelklick auf eine Zeile ersetzt das Menü: Er öffnet, was der Knoten enthält, als Fragment-Bereich — bei einer komprimierten Sektion ihren entpackten Rumpf, bei jedem anderen Knoten seinen Rumpf und bei einem Knoten ohne eigenen Rumpf, etwa Padding oder freiem Platz, den Knoten selbst. Ein Doppelklick auf das Aufklapp-Dreieck klappt die Zeile nur ein oder aus.
+Ein Doppelklick auf eine Zeile ersetzt das Menü: Er öffnet, was der Knoten enthält, als Fragment-Bereich — bei einer komprimierten Sektion ihren entpackten Rumpf, bei jedem anderen Knoten seinen Rumpf und bei einem Knoten ohne eigenen Rumpf, etwa Padding oder freiem Platz, den Knoten selbst. Auf einem [[term:lenv|LENV]]-Block oder einem seiner Einträge öffnet er den Block dekodiert, wie **Dekodierten Block öffnen** ([[topic:lenovo-dmi|Lenovo DMI]]). Ein Doppelklick auf das Aufklapp-Dreieck klappt die Zeile nur ein oder aus.
 
 ## Vergleich mit einer Update-Datei
 

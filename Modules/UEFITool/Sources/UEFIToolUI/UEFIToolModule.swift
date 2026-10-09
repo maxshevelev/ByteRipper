@@ -1,5 +1,6 @@
 import AppKit
 import HelpBook
+import LenovoDMI
 import Localization
 import PartCodec
 import MEFirmware
@@ -268,6 +269,9 @@ private struct ChecksumPass: Sendable {
         }
         controller.onOpenUnpacked = { [weak self] nodeID in
             self?.openUnpackedInNewTab(for: nodeID)
+        }
+        controller.onOpenDecodedBlock = { [weak self] nodeID in
+            self?.openDecodedBlock(for: nodeID)
         }
         controller.onCompareWithUpdate = { [weak self] nodeID in
             self?.compareWithUpdate(for: nodeID)
@@ -577,6 +581,14 @@ private struct ChecksumPass: Sendable {
             show(publish: true, rowsChanged: true)
         case .dmiStoresRead:
             controller.showDMIStores(tree?.dmiStores ?? [])
+            // Lenovo's store names its entries by key; which drivers read
+            // each is a search of every driver, decompressed — behind the
+            // store, which is worth reading before that is done.
+            if tree?.dmiStores?.contains(where: { $0.kind == .lenovoDMIStore }) == true {
+                tree?.resolveLenovoDMIReaders()
+            }
+        case .lenovoDMIReadersRead:
+            show(rowsChanged: false)
         case .expanded, .addressesResolved, .protectedRangesRead, .dvarSettingsRead:
             // A branch appearing does not move the rows on screen: the panel
             // opens the row it was asked to open, itself, when the branch is
@@ -777,7 +789,8 @@ private struct ChecksumPass: Sendable {
                     for: $0, image: image,
                     reader: readers.reader(for: $0.space) ?? ImageReader([UInt8]()),
                     repairs: nodeRepairs[$0.id] ?? [],
-                    catalogue: guids
+                    catalogue: guids,
+                    lenovoDMIReaders: tree.lenovoDMIReaders
                 )
             } ?? .empty
         }
@@ -1631,6 +1644,25 @@ private struct ChecksumPass: Sendable {
         }
     }
 
+    /// The LENV block a row is or is in, decoded, in a fragment panel over
+    /// the dump: the serial number reads as text there and can be typed over.
+    /// Update in Parent puts it back through the same codec — encoded again
+    /// with the key in its header, its checksum recomputed — and the codec
+    /// travels with the panel, so that works after this session has ended.
+    ///
+    /// Public for the same reason as `openNodeInPanel(for:body:)`.
+    public func openDecodedBlock(for nodeID: NodeID) {
+        guard let tree, tree.isReady, let image = currentImage, let node = image.node(nodeID),
+              let reader = tree.spaceReaders.reader(for: .file),
+              let found = UEFILenovoDMIDetail.decodableBlock(for: node, image: image, reader: reader)
+        else {
+            fail(L("There is no LENV block to decode here."))
+            return
+        }
+        host.openPart(named: L("%1$@ (decoded)", found.name), linkedTo: found.block.range,
+                      codec: LenovoDMIBlockCodec(block: found.block))
+    }
+
     /// What a double click on a node's row does: opens what the node holds as a
     /// panel — the body a compressed section decompresses to, otherwise the
     /// node's body, and the whole node where it has none apart from itself
@@ -1641,6 +1673,13 @@ private struct ChecksumPass: Sendable {
     public func openNodeContent(for nodeID: NodeID) {
         guard let tree, tree.isReady, let node = tree.image().node(nodeID) else {
             fail(L("There is nothing to open here."))
+            return
+        }
+        // A LENV block's bytes are encoded: what it holds is the block
+        // decoded, from the block's row and from any of its entries'.
+        if let reader = tree.spaceReaders.reader(for: .file),
+           UEFILenovoDMIDetail.decodableBlock(for: node, image: tree.image(), reader: reader) != nil {
+            openDecodedBlock(for: nodeID)
             return
         }
         switch UEFIPresenter.content(of: node) {

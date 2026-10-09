@@ -6,6 +6,7 @@ import FITToolUI
 import UEFIImage
 import UEFITool
 @testable import UEFIToolUI
+import LenovoDMI
 import MEFirmware
 @testable import ByteRipper
 
@@ -740,6 +741,59 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(zones.zones.first { $0.id == zones.focus }?.range,
                        UInt64(LenovoTestImage.area)..<UInt64(LenovoTestImage.area + 0x4000),
                        "the dump is given the store to show")
+    }
+
+    /// A LENV block opens in the clear in a fragment panel; a value typed
+    /// there goes back into the dump encoded, with a checksum that adds up.
+    func testADecodedBlockGoesBackEncoded() throws {
+        let controller = try open(LenovoTestImage.make())
+        let tree = try XCTUnwrap(controller.windowModel.pane1.uefiState.tree)
+        let block2 = UInt64(LenovoTestImage.area + 0x3000)
+        var row: UEFINode?
+        let reached = expectation(description: "the way to block 2 is opened")
+        tree.materialize(containing: block2) { chain in
+            row = chain.last { $0.kind == .lenvBlock }
+            reached.fulfill()
+        }
+        wait(for: [reached], timeout: 5)
+        try session().openDecodedBlock(for: try XCTUnwrap(row?.id))
+        let id = try XCTUnwrap(controller.fragments.expanded, "the block opens in a panel")
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        let value = 0x10 + 0x18
+        XCTAssertEqual(try part.document?.read(at: UInt64(value), length: 8), Array("PF0TEST1".utf8),
+                       "the panel holds the block in the clear")
+
+        // `P` → `Q`, typed in the clear.
+        part.moveCaret(to: UInt64(value))
+        part.typeHexNibble(0x5)
+        part.typeHexNibble(0x1)
+        controller.performUpdateInParent(of: part)
+
+        let dump = try XCTUnwrap(controller.windowModel.pane1.document)
+        let stored = try dump.read(at: UInt64(LenovoTestImage.serialInBlock2), length: 1)
+        XCTAssertEqual(stored, [UInt8(ascii: "Q") ^ LenovoTestImage.key], "the dump holds it encoded")
+        let block = LENVBlock(offset: block2, stored: try dump.read(at: block2, length: 0x1000))
+        XCTAssertTrue(block.checksumIsValid, "encoded again, with its checksum recomputed")
+    }
+
+    /// A double click on an entry of a LENV block opens the block decoded,
+    /// not the entry's encoded bytes.
+    func testADoubleClickOnALENVEntryOpensItsBlockDecoded() throws {
+        let controller = try open(LenovoTestImage.make())
+        let tree = try XCTUnwrap(controller.windowModel.pane1.uefiState.tree)
+        var entry: UEFINode?
+        let reached = expectation(description: "the way to the entry is opened")
+        tree.materialize(containing: UInt64(LenovoTestImage.serialInBlock2)) { chain in
+            entry = chain.last { $0.kind == .lenvEntry }
+            reached.fulfill()
+        }
+        wait(for: [reached], timeout: 5)
+        try session().openNodeContent(for: try XCTUnwrap(entry?.id))
+        let id = try XCTUnwrap(controller.fragments.expanded, "the block opens in a panel")
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        XCTAssertEqual(part.document?.size, 0x1000, "the whole block")
+        XCTAssertEqual(try part.document?.read(at: 0x10 + 0x18, length: 8), Array("PF0TEST1".utf8),
+                       "decoded")
     }
 
     /// An image with no store has no button: one that could only say "none

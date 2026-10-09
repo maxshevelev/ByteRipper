@@ -71,7 +71,7 @@ extension HelpTopicID {
     public static let toolUEFI = HelpTopicID("tool-uefi")
     public static let toolME = HelpTopicID("tool-me")
     public static let toolFIT = HelpTopicID("tool-fit")
-    public static let toolLenovoDMI = HelpTopicID("tool-lenovo-dmi")
+    public static let lenovoDMI = HelpTopicID("lenovo-dmi")
     public static let databases = HelpTopicID("databases")
     public static let provenance = HelpTopicID("provenance")
 

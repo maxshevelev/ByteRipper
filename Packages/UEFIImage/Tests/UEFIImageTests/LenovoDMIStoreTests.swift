@@ -157,6 +157,32 @@ final class LenovoDMIStoreTests: XCTestCase {
         XCTAssertEqual(tree.dmiStores, [])
     }
 
+    /// The drivers that name an entry's key are found in the image's code —
+    /// here a constant, the namespace and the type in a row — and named by
+    /// their files.
+    @MainActor
+    func testTheTreeNamesTheDriversThatReadAnEntry() async {
+        let code = [UInt8](repeating: 0, count: 0x20) + LenovoDMIFormat.smbiosNamespace + [0x00, 0x04]
+        let driver = TestImage.sectionedFile(sections: [
+            TestImage.section(type: 0x10, body: code),
+            TestImage.nameSection("L05SmbiosOverride")
+        ])
+        var bytes = Self.image(mapped: false)
+        let volume = TestImage.volume(length: 0x1000, files: [driver])
+        bytes.replaceSubrange(0x1000..<0x2000, with: volume)
+        let tree = LazyUEFITree(bytes)
+        await withCheckedContinuation { continuation in tree.whenReady { continuation.resume() } }
+        let named = expectation(description: "the drivers are searched")
+        let token = tree.addObserver { change in
+            if case .lenovoDMIReadersRead = change { named.fulfill() }
+        }
+        tree.resolveLenovoDMIReaders()
+        await fulfillment(of: [named], timeout: 5)
+        tree.removeObserver(token)
+        XCTAssertEqual(tree.lenovoDMIReaders?.drivers(of: .smbios(0x0400)), ["L05SmbiosOverride"])
+        XCTAssertEqual(tree.lenovoDMIReaders?.drivers(of: .smbios(0x0200)), [])
+    }
+
     /// `LDBG` with nothing signed after it is not the store: driver code
     /// names the signature too.
     func testAStrayLDBGIsNotAStore() {

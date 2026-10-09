@@ -78,7 +78,8 @@ let package = Package(
             .product(name: "PartCodec", package: "PartCodec"),
             .product(name: "MEFirmware", package: "MEFirmware"),
             .product(name: "MEPresentation", package: "MEPresentation"),
-            .product(name: "MEReads", package: "MEReads")
+            .product(name: "MEReads", package: "MEReads"),
+            .product(name: "LenovoDMI", package: "LenovoDMI")
         ]),
         .testTarget(name: "UEFIToolTests", dependencies: [
             "UEFITool",
