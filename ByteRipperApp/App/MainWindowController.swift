@@ -41,6 +41,9 @@ final class MainWindowController: NSWindowController {
     private(set) var wordSizeItem: NSToolbarItem?
     private(set) var paneLayoutItem: NSToolbarItem?
     private(set) var helpItem: NSToolbarItem?
+    /// The Agent button: in the toolbar only while the agent service is on
+    /// (`MainViewController.syncAgentToolbarItem`).
+    private(set) var agentWindowItem: NSToolbarItem?
     /// The Tools pull-down (Design/TOOL_MODULES_PLAN.md): the wrench, and the
     /// name of the tool-module the tab is on.
     private(set) var toolsItem: NSToolbarItem?
@@ -475,6 +478,21 @@ final class MainWindowController: NSWindowController {
     ///
     /// No target and no action: this is the one item with nothing to validate,
     /// since the book is there whatever the window holds.
+    /// Window ▸ Agent: opens the Agent window, or brings it forward when it
+    /// is open already. The icon is the Agent tab's in Settings.
+    // help: toolbar.agent
+    private func makeAgentWindowItem() -> NSToolbarItem {
+        let item = NSToolbarItem(itemIdentifier: .agentWindow)
+        item.image = NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted",
+                             accessibilityDescription: L("Agent"))
+        item.label = L("Agent")
+        item.paletteLabel = L("Agent")
+        ControlHelp.describe(item, L("Show the Agent window"))
+        item.target = NSApp.delegate
+        item.action = #selector(AppDelegate.showAgentWindow(_:))
+        return item
+    }
+
     // help: toolbar.help
     private func makeHelpItem() -> NSToolbarItem {
         let item = NSMenuToolbarItem(itemIdentifier: .help)
@@ -521,6 +539,8 @@ extension NSToolbarItem.Identifier {
     static let tools = NSToolbarItem.Identifier("Tools")
     /// The Help pull-down, beside the pane-arrangement toggle.
     static let help = NSToolbarItem.Identifier("Help")
+    /// Window ▸ Agent as a button, while the agent service is switched on.
+    static let agentWindow = NSToolbarItem.Identifier("AgentWindow")
 }
 
 /// A toolbar item whose content is a control of our own. AppKit's own
@@ -542,7 +562,7 @@ extension MainWindowController: NSToolbarDelegate {
         // from the default items and the diff block ends up on the LEFT edge.
         [.flexibleSpace, .space,
          .tools, .historyNavigation, .goTo, .find, .segments, .wordSize,
-         .diffNavigation, .filesIdentical, .help, .paneLayout, .toggleMinimap]
+         .diffNavigation, .filesIdentical, .help, .agentWindow, .paneLayout, .toggleMinimap]
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -634,6 +654,11 @@ extension MainWindowController: NSToolbarDelegate {
                 helpItem = makeHelpItem()
             }
             return helpItem
+        case .agentWindow:
+            if agentWindowItem == nil {
+                agentWindowItem = makeAgentWindowItem()
+            }
+            return agentWindowItem
         case .toggleMinimap:
             if minimapToggleItem == nil {
                 let item = NSToolbarItem(itemIdentifier: .toggleMinimap)

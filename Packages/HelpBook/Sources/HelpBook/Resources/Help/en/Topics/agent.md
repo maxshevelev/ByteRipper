@@ -4,6 +4,8 @@
 
 @covers settings.agent
 @covers window.agent
+@covers window.agent.details
+@covers toolbar.agent
 @covers menu.window.agent
 @covers menubar.agent
 @covers settings.agent.edits
@@ -69,9 +71,9 @@ Each change is one step of the file's undo, named **Agent:** and what the agent 
 
 ## The Agent window
 
-**Window ▸ Agent** shows whether the service is running, and has two lists.
+**Window ▸ Agent** shows whether the service is running, and has three lists. While the service is switched on, the toolbar has a button for it between **?** and the pane arrangement, with the icon of the Agent tab in Settings; it opens the window, or brings it to the front when it is open already.
 
-**Log** lists every request the agent has made: the time, the tool, the arguments as the agent wrote them, how long the answer took, its size and the result. A refused request is shown in red, with the reason the agent was given. **Clear Log** empties the list; the list is not kept after the program quits.
+**Log** lists every request the agent has made: the time, the tool, the arguments as the agent wrote them, how long the answer took, its size and the result. A refused request is shown in red, with the reason the agent was given. The table shortens long arguments; the list under it shows the selected request whole: the time, the client, how long the answer took, its size in bytes, the full result and each argument on a line of its own, a value made of several parts laid out one part per line. Its text can be selected and copied. **Clear Log** empties the list; the list is not kept after the program quits.
 
 **Marks** lists the marks the agent has left in every open file: the label, the file, the bytes, the note, and the marks it is about. A double-click on a row brings its file forward and selects its bytes, as a step of the navigation history. **Remove Mark** removes the selected rows, **Clear Marks** removes them all. A mark also goes when its file is closed or when the agent removes it.
 

@@ -1,9 +1,11 @@
 import Cocoa
 import AgentKit
+import ALSplitView
 import AppPalette
 import HelpBook
 import HelpUI
 import Localization
+import ToolModuleKit
 
 /// Window ▸ Agent: whether the agent service is running, who is connected,
 /// and every call an agent has made, newest at the bottom
@@ -26,6 +28,11 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     private let pages = NSSegmentedControl()
     private let table = NSTableView()
     private let logScroll = NSScrollView()
+    /// The log above, the selected call's details below: the table cuts the
+    /// arguments to a column, and an agent's arguments are what a reader
+    /// checks it against.
+    private let logSplit = ALSplitView()
+    private let details = ToolDetailScroll()
     private let marks = AgentMarksTable()
     private let marksScroll = NSScrollView()
     private let findings = AgentFindingsTable()
@@ -133,6 +140,15 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         logScroll.hasVerticalScroller = true
         logScroll.borderType = .bezelBorder
 
+        details.borderType = .bezelBorder
+        details.showPlaceholder(L("Select a request to see all of it."))
+        logSplit.isVertical = false
+        logSplit.dividerThickness = 1
+        logSplit.addPane(logScroll)
+        logSplit.addPane(details)
+        logSplit.setPaneLayout(.fill, at: 0)
+        logSplit.setPaneLayout(.fixed(170), at: 1)
+
         marks.build()
         marks.onShow = { [weak self] id in self?.service?.markTools.show(id) }
         marks.onSelectionChanged = { [weak self] in self?.refreshButtons() }
@@ -166,7 +182,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
         let help = HelpButton.standard(for: .topic(.agent))
 
-        for view in [statusLabel, pages, logScroll, marksScroll, findingsScroll, clearButton, removeButton,
+        for view in [statusLabel, pages, logSplit, marksScroll, findingsScroll, clearButton, removeButton,
                      settingsButton, help] {
             view.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(view)
@@ -182,24 +198,24 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             pages.topAnchor.constraint(equalTo: statusLabel.bottomAnchor, constant: 10),
             pages.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
 
-            logScroll.topAnchor.constraint(equalTo: pages.bottomAnchor, constant: 8),
-            logScroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
-            logScroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
+            logSplit.topAnchor.constraint(equalTo: pages.bottomAnchor, constant: 8),
+            logSplit.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            logSplit.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
 
-            marksScroll.topAnchor.constraint(equalTo: logScroll.topAnchor),
-            marksScroll.leadingAnchor.constraint(equalTo: logScroll.leadingAnchor),
-            marksScroll.trailingAnchor.constraint(equalTo: logScroll.trailingAnchor),
-            marksScroll.bottomAnchor.constraint(equalTo: logScroll.bottomAnchor),
+            marksScroll.topAnchor.constraint(equalTo: logSplit.topAnchor),
+            marksScroll.leadingAnchor.constraint(equalTo: logSplit.leadingAnchor),
+            marksScroll.trailingAnchor.constraint(equalTo: logSplit.trailingAnchor),
+            marksScroll.bottomAnchor.constraint(equalTo: logSplit.bottomAnchor),
 
-            findingsScroll.topAnchor.constraint(equalTo: logScroll.topAnchor),
-            findingsScroll.leadingAnchor.constraint(equalTo: logScroll.leadingAnchor),
-            findingsScroll.trailingAnchor.constraint(equalTo: logScroll.trailingAnchor),
-            findingsScroll.bottomAnchor.constraint(equalTo: logScroll.bottomAnchor),
+            findingsScroll.topAnchor.constraint(equalTo: logSplit.topAnchor),
+            findingsScroll.leadingAnchor.constraint(equalTo: logSplit.leadingAnchor),
+            findingsScroll.trailingAnchor.constraint(equalTo: logSplit.trailingAnchor),
+            findingsScroll.bottomAnchor.constraint(equalTo: logSplit.bottomAnchor),
 
             removeButton.centerYAnchor.constraint(equalTo: clearButton.centerYAnchor),
             removeButton.leadingAnchor.constraint(equalTo: clearButton.trailingAnchor, constant: 8),
 
-            clearButton.topAnchor.constraint(equalTo: logScroll.bottomAnchor, constant: 12),
+            clearButton.topAnchor.constraint(equalTo: logSplit.bottomAnchor, constant: 12),
             clearButton.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             clearButton.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -14),
 
@@ -218,6 +234,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         rows = log
         table.reloadData()
         if followed, !rows.isEmpty { table.scrollRowToVisible(rows.count - 1) }
+        showDetails()
         marks.show(service?.markTools.all() ?? [])
         findings.show(service?.dumpTools.findings ?? [])
         refreshButtons()
@@ -247,7 +264,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     }
 
     @objc private func pageChanged() {
-        logScroll.isHidden = page != .log
+        logSplit.isHidden = page != .log
         marksScroll.isHidden = page != .marks
         findingsScroll.isHidden = page != .findings
         refreshButtons()
@@ -314,6 +331,83 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         }
     }
 
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        showDetails()
+    }
+
+    // MARK: - Details
+
+    /// The call in focus — the row clicked last, or the one selected — with
+    /// every field whole: the result's full sentence, and each argument on a
+    /// row of its own, a text as it is and anything else as indented JSON.
+    // help: window.agent.details
+    private func showDetails() {
+        let row = table.clickedRow >= 0 && table.isRowSelected(table.clickedRow) ? table.clickedRow : table.selectedRow
+        guard row >= 0, row < rows.count else {
+            details.showPlaceholder(L("Select a request to see all of it."))
+            return
+        }
+        let record = rows[row]
+        details.prepareForRows(subject: "\(row)")
+        let title = NSTextField(labelWithString: record.tool)
+        title.font = ToolPanelFont.title()
+        title.translatesAutoresizingMaskIntoConstraints = false
+        details.content.addArrangedSubview(title)
+        let fields = Self.detailFields(of: record)
+        addList(fields.filter { !$0.isArgument })
+        let arguments = fields.filter(\.isArgument)
+        guard !arguments.isEmpty else { return }
+        let heading = NSTextField(labelWithString: L("Arguments"))
+        heading.font = ToolPanelFont.title()
+        heading.translatesAutoresizingMaskIntoConstraints = false
+        if let above = details.content.arrangedSubviews.last { details.content.setCustomSpacing(10, after: above) }
+        details.content.addArrangedSubview(heading)
+        addList(arguments)
+    }
+
+    private func addList(_ fields: [DetailField]) {
+        let list = ToolFieldList(fields: fields.map { field in
+            let value = NSMutableAttributedString(string: field.value, attributes: [
+                .font: field.isArgument
+                    ? NSFont.monospacedSystemFont(ofSize: ToolPanelFont.body().pointSize, weight: .regular)
+                    : ToolPanelFont.body(),
+                .foregroundColor: field.isProblem ? SemanticColors.bad : NSColor.labelColor
+            ])
+            return .init(label: field.label, value: value)
+        })
+        details.content.addArrangedSubview(list)
+        list.widthAnchor.constraint(equalTo: details.content.widthAnchor).isActive = true
+    }
+
+    struct DetailField: Equatable {
+        var label: String
+        var value: String
+        var isArgument = false
+        var isProblem = false
+    }
+
+    /// The rows the details list shows for `record`: the call's own fields,
+    /// then — under a heading of their own — its arguments, in the order of
+    /// their names.
+    static func detailFields(of record: AgentCallRecord) -> [DetailField] {
+        var fields = [
+            DetailField(label: L("Time"), value: DateFormatter.localizedString(
+                from: record.finished, dateStyle: .none, timeStyle: .medium)),
+            DetailField(label: L("Took"), value: text(of: record, .duration)),
+            DetailField(label: L("Answer"), value: L("%1$@ bytes", record.answerBytes)),
+            DetailField(label: L("Result"), value: text(of: record, .result), isProblem: isProblem(record))
+        ]
+        if let client = record.client {
+            fields.insert(DetailField(label: L("Client"), value: client), at: 1)
+        }
+        let arguments = record.arguments.objectValue ?? [:]
+        for name in arguments.keys.sorted() {
+            let value = arguments[name]!
+            fields.append(DetailField(label: name, value: value.stringValue ?? value.prettyText, isArgument: true))
+        }
+        return fields
+    }
+
     private static func isProblem(_ record: AgentCallRecord) -> Bool {
         if case .answered = record.outcome { return false }
         return true
@@ -336,6 +430,17 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
     @objc private func openSettings() {
         showSettings()
+    }
+
+    /// Selects a row of the log, as a click does, for tests.
+    func selectLogRow(_ row: Int) {
+        table.selectRowIndexes([row], byExtendingSelection: false)
+    }
+
+    /// The details list on screen: its rows' names and values, for tests.
+    var shownDetails: [(label: String, value: String)] {
+        details.content.arrangedSubviews.compactMap { $0 as? ToolFieldList }.flatMap(\.rows)
+            .map { ($0.label, $0.valueText) }
     }
 
     /// The rows' texts, for tests.

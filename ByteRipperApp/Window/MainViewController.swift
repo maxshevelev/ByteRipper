@@ -21,6 +21,8 @@ struct DiffNavigationState: Equatable {
 final class MainViewController: NSViewController {
     private(set) var mode: WindowMode = .empty
     /// Whether a toolbar sync is already queued for the next run-loop turn.
+    /// The agent service's switch, which the toolbar's Agent button follows.
+    private var agentServiceObserver: NSObjectProtocol?
     private var diffToolbarSyncScheduled = false
 
     /// Current diff-navigation availability. Recomputed on every mode, index,
@@ -2677,6 +2679,14 @@ final class MainViewController: NSViewController {
         // The toolbar can only be reconfigured once it is up, which is not the
         // case while the window controller is still building (§10.3).
         syncDiffNavigationToolbarItem()
+        if agentServiceObserver == nil {
+            agentServiceObserver = NotificationCenter.default.addObserver(
+                forName: AgentService.didChange, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.syncAgentToolbarItem() }
+            }
+        }
+        syncAgentToolbarItem()
     }
 
     /// How many of `buffer[from..<to]` are neither 0x00 nor 0xFF — how "full"
@@ -5130,6 +5140,28 @@ final class MainViewController: NSViewController {
         // only asks whether the target responds to the action — so it would
         // offer a live-looking Prev Diff until the next validation pass (§10.3).
         toolbar.validateVisibleItems()
+    }
+
+    /// Adds the toolbar's Agent button while the agent service is switched on
+    /// and takes it away while it is off: a door to a window about a service
+    /// that is not there would open onto "Switched off." and nothing else.
+    /// Between the help book and the pane arrangement, each with a space of
+    /// its own on either side, as the right-hand group's items have.
+    func syncAgentToolbarItem() {
+        DispatchQueue.main.async { [weak self] in self?.applyAgentToolbarItem() }
+    }
+
+    private func applyAgentToolbarItem() {
+        guard let window = viewIfLoaded?.window, window.isVisible, let toolbar = window.toolbar else { return }
+        let wanted = AgentService.shared?.isEnabled == true
+        let shown = toolbar.items.firstIndex { $0.itemIdentifier == .agentWindow }
+        if wanted, shown == nil, let help = toolbar.items.firstIndex(where: { $0.itemIdentifier == .help }) {
+            toolbar.insertItem(withItemIdentifier: .agentWindow, at: help + 1)
+            toolbar.insertItem(withItemIdentifier: .space, at: help + 1)
+        } else if !wanted, let shown {
+            toolbar.removeItem(at: shown)
+            if shown > 0, toolbar.items[shown - 1].itemIdentifier == .space { toolbar.removeItem(at: shown - 1) }
+        }
     }
 
     /// Whether the toolbar shows the "Files are identical" badge instead of the

@@ -135,6 +135,30 @@ final class AgentUITests: XCTestCase {
         XCTAssertNil(controller.shownText(row: 0, column: "tool"))
     }
 
+    /// The table cuts the arguments to a column; the details under it give
+    /// the selected call whole, each argument on a row of its own.
+    func testTheDetailsShowTheSelectedCallWhole() async {
+        let controller = AgentWindowController(service: service)
+        _ = controller.window
+        let connection = service.connect(send: { _ in })
+        let arguments = #"{"offset":"0x10","length":64,"format":"u8","paths":["/a/one.bin","/b/two.bin"]}"#
+        await connection.receive(Data((#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read","arguments":"#
+            + arguments + "}}\n").utf8))
+        await connection.waitUntilIdle()
+        let logged = await awaitUntil(1) { self.service.log.count == 1 }
+        XCTAssertTrue(logged)
+        controller.refresh()
+        XCTAssertTrue(controller.shownDetails.isEmpty, "nothing selected: the placeholder")
+
+        controller.selectLogRow(0)
+        let shown = Dictionary(uniqueKeysWithValues: controller.shownDetails.map { ($0.label, $0.value) })
+        XCTAssertEqual(shown["offset"], "0x10", "a text as it is, without quotes")
+        XCTAssertEqual(shown["length"], "64")
+        XCTAssertEqual(shown["paths"], "[\n  \"/a/one.bin\",\n  \"/b/two.bin\"\n]", "anything else laid out")
+        XCTAssertEqual(shown["Result"], "No file is open in ByteRipper.")
+        XCTAssertEqual(controller.shownDetails.last?.label, "paths", "arguments last, by name")
+    }
+
     func testTheWindowMenuLeadsToTheAgentWindow() throws {
         // Held here: a menu item holds its target weakly.
         let target = NSObject()

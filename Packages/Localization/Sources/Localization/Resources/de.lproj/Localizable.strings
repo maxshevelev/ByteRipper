@@ -1302,6 +1302,9 @@
 "%1$@ s" = "%1$@ s";
 "Answered" = "Beantwortet";
 "Too long, not sent" = "Zu lang, nicht gesendet";
+"Select a request to see all of it." = "Eine Anfrage auswählen, um sie vollständig zu sehen.";
+"Client" = "Client";
+"Show the Agent window" = "Das Agentenfenster zeigen";
 "Cancelled" = "Abgebrochen";
 "ByteRipper agent service" = "Agentendienst von ByteRipper";
 "Show Agent Window" = "Agentenfenster zeigen";

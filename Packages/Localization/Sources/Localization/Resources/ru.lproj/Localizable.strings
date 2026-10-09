@@ -1302,6 +1302,9 @@
 "%1$@ s" = "%1$@ с";
 "Answered" = "Отвечено";
 "Too long, not sent" = "Слишком длинный, не отправлен";
+"Select a request to see all of it." = "Выберите запрос, чтобы увидеть его целиком.";
+"Client" = "Клиент";
+"Show the Agent window" = "Показать окно агента";
 "Cancelled" = "Отменено";
 "ByteRipper agent service" = "Служба агента ByteRipper";
 "Show Agent Window" = "Показать окно агента";

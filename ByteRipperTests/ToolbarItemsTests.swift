@@ -82,6 +82,40 @@ final class ToolbarItemsTests: XCTestCase {
                         .flexibleSpace, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
     }
 
+    /// The Agent button is there while the agent service is switched on,
+    /// between the help book and the pane arrangement, and goes with it.
+    func testTheAgentButtonFollowsTheServiceSwitch() throws {
+        let (name, defaults) = isolatedDefaults(for: self)
+        let service = AgentService(desk: AgentDesk(controllers: { [] }, keyController: { nil }), defaults: defaults,
+                                   socketPath: "/tmp/br-\(UUID().uuidString.prefix(8)).sock")
+        let previous = AgentService.shared
+        AgentService.shared = service
+        defer {
+            service.stop()
+            AgentService.shared = previous
+            discardIsolatedDefaults(name, defaults)
+        }
+        let (wc, window) = makeWindow()
+        defer { wc.close() }
+        let toolbar = try XCTUnwrap(window.toolbar)
+        func rightGroup() -> [NSToolbarItem.Identifier] {
+            Array(toolbar.items.map(\.itemIdentifier).drop { $0 != .flexibleSpace })
+        }
+        XCTAssertEqual(rightGroup(), [.flexibleSpace, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
+
+        service.isEnabled = true
+        XCTAssertTrue(pumpUntil(2) { toolbar.items.contains { $0.itemIdentifier == .agentWindow } })
+        XCTAssertEqual(rightGroup(), [.flexibleSpace, .space, .help, .space, .agentWindow, .space, .paneLayout,
+                                      .space, .toggleMinimap])
+        let button = try item(window, .agentWindow)
+        XCTAssertEqual(button.action, #selector(AppDelegate.showAgentWindow(_:)))
+        XCTAssertEqual(button.toolTip, "Show the Agent window")
+
+        service.isEnabled = false
+        XCTAssertTrue(pumpUntil(2) { !toolbar.items.contains { $0.itemIdentifier == .agentWindow } })
+        XCTAssertEqual(rightGroup(), [.flexibleSpace, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
+    }
+
     /// The insert-mode button is gone from the toolbar (§24.2): the mode is the
     /// one readout a pane's status bar carries in a box of its own, and a click
     /// on it flips the mode of the pane it is drawn in — a second control in the
