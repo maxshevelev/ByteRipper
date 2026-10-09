@@ -42,13 +42,25 @@ final class AgentService {
     /// `write`, and the gate every module's edit goes through.
     let editTools: AgentEditTools
     private let moduleTools: AgentModuleTools
+    /// `diff`, `compare` and `reveal_diff`.
+    let diffTools: AgentDiffTools
     private let modules: [any ToolModule.Type]
     /// Built once: the tools do not change while the app runs.
     private(set) lazy var server = AgentServer(
         info: AgentServerInfo(name: "byteripper", version: Self.appVersion, title: "ByteRipper"),
         instructions: Self.instructions,
-        tools: (hostTools.tools() + markTools.tools() + dumpTools.tools() + editTools.tools()
-                + moduleTools.tools(modules: modules)).map(Self.inEnglish))
+        tools: allTools.map(Self.inEnglish))
+
+    /// Every tool, in the order `tools/list` gives them.
+    private var allTools: [AgentTool] {
+        var tools: [AgentTool] = hostTools.tools()
+        tools += markTools.tools()
+        tools += dumpTools.tools()
+        tools += diffTools.tools()
+        tools += editTools.tools()
+        tools += moduleTools.tools(modules: modules)
+        return tools
+    }
 
     /// `tool`, answering in English whatever the window speaks: a field label
     /// a module borrows from its panel is built with `L()`, and a model reads
@@ -81,6 +93,7 @@ final class AgentService {
         self.markTools = AgentMarkTools(desk: desk)
         self.dumpTools = AgentDumpTools(desk: desk)
         self.editTools = AgentEditTools(desk: desk)
+        self.diffTools = AgentDiffTools(desk: desk, modules: { modules })
         self.moduleTools = AgentModuleTools(desk: desk, edits: editTools, modules: { modules })
         editTools.isAllowed = { [weak self] in self?.editsAllowed ?? false }
         markTools.onChange = { [weak self] in self?.changed() }
@@ -209,7 +222,9 @@ final class AgentService {
         back the same way. Ranges are half-open: `end` is the first byte after the range. Use `reveal` \
         to point at what you are talking about; the person's Back undoes it. `open_dump` reads a file by \
         path without putting it on screen, `survey` asks one tool's question of a whole folder of dumps, and \
-        `finding` records each thing found for the person to check with a click. `mark` labels bytes for the \
+        `finding` records each thing found for the person to check with a click. `diff` lists where two \
+        documents differ byte by byte and in which part of the firmware; `compare` shows the two side by \
+        side and `reveal_diff` walks the person through the differences. `mark` labels bytes for the \
         person while you explain them, and `related_to` says how two marks hang together. Nothing here \
         saves a file; `write` and the `_fix_checksum` tools change an open file, one undo step each, \
         and only if the person allows edits. \

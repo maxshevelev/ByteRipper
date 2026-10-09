@@ -392,7 +392,37 @@ Each ends in something that works and is committed.
    Russian UI on a copy of `CSME 12.BIN`: the FIT checksum broken by `write`,
    reported by `fit_table`, put right by `fit_fix_checksum`; two undo steps,
    the file on disk untouched.)*
-8. **Help and release.** The help page in en, ru and de with its anchors; the
+8. **Byte comparison.** Asked for by an agent that compared two dumps with
+   `read` and `variables_compare` and could not say whether the BIOS volumes
+   and the rest of ME differ. `diff`: the runs where `document` and `against`
+   differ by absolute offset — the window's own `DiffEngine` and its hunks,
+   so the runs are the ones A/B shows — merged across `merge_gap` matching
+   bytes, exact `totals` over the whole range, pages behind an `after`
+   cursor that refuses once either document has changed, the longer file's
+   tail reported apart and not counted. Each run says `where` it is: the
+   top-level area (region, volume, ME partition) and the deepest node that
+   covers it whole — a common ancestor, never a run split at a boundary.
+   `summary` gives the areas instead, those with no differences too.
+   `structure`: `auto` or `none`. Counts are numbers, addresses hex. Then
+   `compare`, the two documents as an A/B pair in a new tab, and
+   `reveal_diff`, the next or previous difference in that pair through the
+   window's own navigation. No alignment: shifted data is one long run, and
+   the description says so. Checked on `1.bin` against `2.rom`: the EFS
+   header at `0x267000–0x267010`, eleven bytes; the descriptor, MFS header
+   and FLOG the same; the NVRAM runs named as `variables_compare` names them.
+   *(Done. Where a run is comes from a fifth kind of module tool,
+   `ToolAgentLocator` — areas and the deepest covering node — so the app knows
+   no tree. On `1.bin` against `2.rom`: 540 runs, 197 819 bytes, all in ME's
+   Data partition (MFS, and EFS's header at `0x267000`, eleven bytes as
+   foretold) and in the NVRAM store; every BIOS volume, the descriptor and the
+   rest of ME the same. The comparison takes 0.12 s; placing it took five
+   seconds a call until the ME file names were looked up in one pass over
+   `FileTable.dat` instead of one per file — which `me_tree` and the ME
+   Analyzer's own naming paid too, and the analysis twice more. Not done:
+   MFS and EFS files have no address in the model, so a run stops at the
+   partition; that needs the analyzer to keep each file's fragments (#32,
+   after fragmented zones, #31).)*
+9. **Help and release.** The help page in en, ru and de with its anchors; the
    Settings controls through `ControlHelp`; the protocol document marked
    version 1; the README; whether an ad-hoc signed, quarantined helper runs
    when a client launches it, tried on a clean account.
@@ -415,7 +445,8 @@ paying.
 
 AgentKit, a day and a half. The service, relay, window and settings, three
 days. The seam changes and the UEFI tools, three days. Marks, two. Background
-documents and surveys, three. ME, FIT and NVRAM, three. Edits, one. Help and
+documents and surveys, three. ME, FIT and NVRAM, three. Edits, one. Byte
+comparison, two. Help and
 translations, one and a half. About 18 days, 140–150 hours — three times the
 original #23, because what is built now is a feature of the app and not a tool
 beside it.

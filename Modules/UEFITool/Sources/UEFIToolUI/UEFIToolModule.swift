@@ -50,6 +50,9 @@ public enum UEFIToolModule: ToolModule {
     /// A node's checksum put right, applied by the app if the person allows.
     public static var agentEdits: [ToolAgentEdit] { UEFIAgentEdits.all }
 
+    /// Where a range of the file is in the tree, for a byte comparison's runs.
+    public static var agentLocator: ToolAgentLocator? { UEFIAgentLocator.locator }
+
     /// Choosing a node in the open panel, and saying which one the reader
     /// chose.
     public static var agentActions: [ToolAgentAction] { [selectAction, selectionAction] }

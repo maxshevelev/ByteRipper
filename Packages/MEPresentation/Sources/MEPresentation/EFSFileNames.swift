@@ -75,15 +75,10 @@ public struct EFSFileNames: Sendable, Equatable {
                                        dictionary: resolution.dictionary,
                                        revision: revision) ?? []
         var names: [Int: FileTable.EFSEntry] = [:]
-        var records: [Int: FileTable.Entry] = [:]
-        for entry in entries {
-            names[entry.fileID] = entry
-            if let record = table.record(namingFileIndex: entry.fileID,
-                                         platform: resolution.platform,
-                                         dictionary: resolution.dictionary) {
-                records[entry.fileID] = record
-            }
-        }
+        for entry in entries { names[entry.fileID] = entry }
+        let records = table.records(namingFileIndices: Set(names.keys),
+                                    platform: resolution.platform,
+                                    dictionary: resolution.dictionary)
         self = EFSFileNames(names: names, records: records,
                             resolution: resolution, revision: revision,
                             hasTable: hasTable)

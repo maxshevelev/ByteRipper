@@ -173,3 +173,23 @@ A module edit is a fourth kind of module tool, `ToolAgentEdit`: the module
 returns a `ToolTransaction` and an undo name, and the app applies it. Should
 the document change while the module works the edit out, nothing is written
 and the agent is told to ask again.
+
+## Byte comparison
+
+| Tool | Arguments | Answer |
+|---|---|---|
+| `diff` | `against` (required); `offset` (0), `end` (the shorter file's end); `merge_gap` (16; at most this many matching bytes between two runs make one); `structure` (`auto`, `none`); `summary`; `limit` (100, ≤ 1000); `after` | `range`, `sizes`, `totals` (`runs`, `differing_bytes` — the whole range, whatever the page), `tail` (`in`, `start`, `end`) and `truncated_at` when the sizes differ, then `runs[]` (`start`, `end`, `length`, `differing_bytes`, `where[]`) and `next` — or with `summary`, `areas[]` (`kind`, `id`, `name`, `start`, `end`, `differing_bytes`, `runs`, and an `outside` entry for bytes in no area). Reads only. |
+| `compare` | `against` (required) | `a`, `b` (on-screen ids), `names`, `was_shown`. A pair already shown is brought forward; a document alone in its tab (slot A, no B) gets the other as B; otherwise both open in a new tab. Refused for a document with unsaved edits that would have to be opened again from disk. |
+| `reveal_diff` | `direction` (`next`, `previous`); `from` (default the caret) | `start`, `end`, `length`, `found` — or `found: false`. Both carets land on the difference, as the window's arrows land, by the person's grouping gap; a navigation step. Only on a pair `compare` (or the person) set up. |
+
+The comparison is the window's own (`DiffEngine`): absolute offsets, never
+aligned. `where` comes from the tool-modules' `ToolAgentLocator`s: each says
+which of its areas a range is in and its deepest node covering the range whole,
+and the finest that answers wins — ME partitions and files inside the ME
+region, the UEFI tree elsewhere. A run across a node boundary is placed at the
+node holding both sides, never split. The summary's areas are the coarsest
+locator's — regions, the BIOS region's volumes — with any a finer one divides
+replaced by the finer ones and the stretches between them kept under the
+coarse name. The cursor carries a fingerprint of both documents' content
+versions, the range and `merge_gap`; a page asked for after any changed is
+refused.

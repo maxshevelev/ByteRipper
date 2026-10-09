@@ -739,4 +739,32 @@ final class DiffEngineTests: XCTestCase {
                                            "seed \(String(seed, radix: 16)) round \(round)")
         }
     }
+
+    // MARK: - A part of the file
+
+    /// A range is compared as the whole scan compares it, across chunk
+    /// boundaries, and a run that starts before the range is cut at its start.
+    func testBlocksInARangeAreTheScansOwn() throws {
+        var left = [UInt8](repeating: 0, count: 64)
+        var right = left
+        right[3] = 1
+        right[15] = 1; right[16] = 1   // across a chunk boundary at 16
+        right[40] = 9
+        let blocks = try DiffEngine.blocks(left: ArrayStorage(left), right: ArrayStorage(right),
+                                           in: 4..<41, chunkSize: 16)
+        XCTAssertEqual(blocks.filter { $0.kind == .different }.map(\.range), [15..<17, 40..<41])
+        XCTAssertEqual(blocks.first?.range.lowerBound, 4)
+        XCTAssertEqual(blocks.last?.range.upperBound, 41)
+        left[0] = 7
+        XCTAssertEqual(try DiffEngine.blocks(left: ArrayStorage(left), right: ArrayStorage(right), in: 0..<1)
+            .map(\.kind), [.different])
+    }
+
+    /// Only the bytes both hold: the longer file's tail is no difference.
+    func testTheLongerFilesTailIsLeftOut() throws {
+        let blocks = try DiffEngine.blocks(left: ArrayStorage([1, 2, 3]), right: ArrayStorage([1, 2, 3, 4, 5]),
+                                           in: 0..<5)
+        XCTAssertEqual(blocks, [DiffBlock(kind: .same, range: 0..<3)])
+        XCTAssertEqual(try DiffEngine.blocks(left: ArrayStorage([1]), right: ArrayStorage([1, 2]), in: 1..<2), [])
+    }
 }

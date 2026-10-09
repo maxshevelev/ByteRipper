@@ -782,11 +782,10 @@ public actor MEFirmwareAnalyzer {
            let table = fileTable {
             let resolution = table.resolve(platform: info.ftblPlatform,
                                            dictionary: info.ftblDictionary)
-            let protected = Set(info.files.map(\.index).filter { index in
-                table.record(namingFileIndex: index,
-                             platform: resolution.platform,
-                             dictionary: resolution.dictionary)?.integrity == true
-            })
+            let protected = Set(table.records(namingFileIndices: Set(info.files.map(\.index)),
+                                              platform: resolution.platform,
+                                              dictionary: resolution.dictionary)
+                .filter { $0.value.integrity }.keys)
             let splits = MFSHomeDecoder.ftblFileIntegrity(
                 files: info.files, protectedIndices: protected,
                 variant: identity.variant, major: identity.major,
@@ -827,11 +826,10 @@ public actor MEFirmwareAnalyzer {
                                               dictionary: resolution.dictionary,
                                               revision: Int(efs.dictionaryRevision)),
                !entries.isEmpty {
-                let protected = Set(entries.map(\.fileID).filter { id in
-                    table.record(namingFileIndex: id,
-                                 platform: resolution.platform,
-                                 dictionary: resolution.dictionary)?.integrity == true
-                })
+                let protected = Set(table.records(namingFileIndices: Set(entries.map(\.fileID)),
+                                                  platform: resolution.platform,
+                                                  dictionary: resolution.dictionary)
+                    .filter { $0.value.integrity }.keys)
                 let area = EFSParser.dataArea(in: region,
                                               offset: efsRegion.offset - baseOffset,
                                               size: efsRegion.size,

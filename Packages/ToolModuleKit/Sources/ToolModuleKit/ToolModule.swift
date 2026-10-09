@@ -52,6 +52,10 @@ public protocol ToolModule {
     /// (`ToolAgentEdit`). Default: none.
     static var agentEdits: [ToolAgentEdit] { get }
 
+    /// Where ranges of the file are in its structure, for answers that are
+    /// not its own (`ToolAgentLocator`). Default: none.
+    static var agentLocator: ToolAgentLocator? { get }
+
     /// What it does in its open panel at an agent's asking
     /// (`ToolAgentAction`). Default: nothing.
     static var agentActions: [ToolAgentAction] { get }

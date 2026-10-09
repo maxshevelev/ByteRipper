@@ -106,6 +106,51 @@ public struct ToolAgentEdit: Sendable {
     }
 }
 
+/// A place in the file a tool-module can name: a node of its tree, by the id
+/// its own tools take.
+public struct ToolAgentPlace: Equatable, Sendable {
+    /// Whose id it is — `"uefi"`, `"me"`: what tells an agent which tool
+    /// takes it.
+    public var kind: String
+    public var id: String
+    public var name: String
+    /// Its bytes in the file; nil for one with no file address.
+    public var range: Range<UInt64>?
+
+    public init(kind: String, id: String, name: String, range: Range<UInt64>?) {
+        self.kind = kind
+        self.id = id
+        self.name = name
+        self.range = range
+    }
+}
+
+/// How a tool-module says where ranges of the file are in its structure, for
+/// an answer that is not its own — the runs a byte comparison found
+/// (`Design/AGENT_PLAN.md`, stage 8).
+///
+/// Two questions. `areas`: the parts the file divides into at the top — the
+/// descriptor's regions, the BIOS region's volumes — in address order. And
+/// `locate`: for each range, the area it is in and the deepest node that
+/// covers it whole, or nothing when the module cannot say. Where two modules
+/// both answer, the one with the higher `precedence` is the finer one and
+/// wins: an ME partition inside the ME region.
+public struct ToolAgentLocator: Sendable {
+    public let precedence: Int
+    public let areas: @MainActor @Sendable (any ToolReadHost) async -> [ToolAgentPlace]
+    public let locate: @MainActor @Sendable (any ToolReadHost, [Range<UInt64>]) async -> [[ToolAgentPlace]]
+
+    public init(
+        precedence: Int,
+        areas: @escaping @MainActor @Sendable (any ToolReadHost) async -> [ToolAgentPlace],
+        locate: @escaping @MainActor @Sendable (any ToolReadHost, [Range<UInt64>]) async -> [[ToolAgentPlace]]
+    ) {
+        self.precedence = precedence
+        self.areas = areas
+        self.locate = locate
+    }
+}
+
 /// Something a tool-module does in its open panel at an agent's asking —
 /// choose a node in the tree, say which node the reader chose.
 ///
@@ -148,6 +193,8 @@ extension ToolModule {
     public static var agentComparisons: [ToolAgentComparison] { [] }
     /// Nor change the file.
     public static var agentEdits: [ToolAgentEdit] { [] }
+    /// Nor say where a range of the file is.
+    public static var agentLocator: ToolAgentLocator? { nil }
     /// Nor act in its panel.
     public static var agentActions: [ToolAgentAction] { [] }
 }

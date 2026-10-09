@@ -5202,20 +5202,43 @@ final class MainViewController: NSViewController {
                 comparisonView?.showNavigationMessage(message)
                 return
             }
-            // Forward navigation lands on the block start; backward navigation
-            // lands on the block's LAST byte (not the byte past it), so a
-            // repeated previous press skips the current block and finds the one
-            // before it — landing past the block would re-find it (§10.3).
-            let target = direction == .backward ? block.range.upperBound - 1 : block.range.lowerBound
-            recordJump(in: windowModel.activePane)
-            windowModel.pane1.moveCaret(to: target)
-            windowModel.pane2.moveCaret(to: target)
-            comparisonView?.refreshComparisonInfo()
-            // Show the block start mid-pane, the way the Find bar centres a
-            // match; the panes' synchronized scroll (§9) centres both (§10.3).
-            activeFilePane?.revealSelectionCentered()
+            land(on: block, direction: direction)
             focusActiveHexView()
         }
+    }
+
+    /// Puts both carets on `block` and shows it mid-pane, as one step of the
+    /// navigation history — the landing the difference arrows make, shared
+    /// with the agent's `reveal_diff`.
+    private func land(on block: DiffBlock, direction: SearchDirection) {
+        // Forward navigation lands on the block start; backward navigation
+        // lands on the block's LAST byte (not the byte past it), so a
+        // repeated previous press skips the current block and finds the one
+        // before it — landing past the block would re-find it (§10.3).
+        let target = direction == .backward ? block.range.upperBound - 1 : block.range.lowerBound
+        recordJump(in: windowModel.activePane)
+        windowModel.pane1.moveCaret(to: target)
+        windowModel.pane2.moveCaret(to: target)
+        comparisonView?.refreshComparisonInfo()
+        // Show the block start mid-pane, the way the Find bar centres a
+        // match; the panes' synchronized scroll (§9) centres both (§10.3).
+        activeFilePane?.revealSelectionCentered()
+    }
+
+    /// The agent's step to the next or previous difference of this tab's
+    /// pair, from `from` or the active caret: the hunks the arrows step by,
+    /// landed on the same way, without taking the keyboard. Nil when there is
+    /// none that way. Waits for an index still being built.
+    func revealDifferenceForAgent(direction: SearchDirection, from: UInt64?) async -> Range<UInt64>? {
+        guard mode == .comparison else { return nil }
+        for _ in 0..<200 where comparisonCoordinator.isBuilding || comparisonCoordinator.hunkIndex == nil {
+            try? await Task.sleep(for: .milliseconds(25))
+        }
+        let origin = from ?? windowModel.activePane.caretOffset
+        guard let block = comparisonCoordinator.findBlock(kind: .different, direction: direction, from: origin)
+        else { return nil }
+        land(on: block, direction: direction)
+        return block.range
     }
 
     /// View > Toggle Pane Layout (§3.3).

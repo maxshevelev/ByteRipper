@@ -121,7 +121,7 @@ public enum MEAAgentQueries {
 
     /// The ME region the descriptor names, from the shared tree; nil when
     /// there is no descriptor and the engine has to find the firmware itself.
-    private static func region(_ host: any ToolReadHost) async -> Range<UInt64>? {
+    static func region(_ host: any ToolReadHost) async -> Range<UInt64>? {
         guard let tree = (host as? any UEFITreeProviding)?.uefiTree() else { return nil }
         await withCheckedContinuation { continuation in tree.whenReady { continuation.resume() } }
         return tree.region(.me)
@@ -129,7 +129,7 @@ public enum MEAAgentQueries {
 
     /// The panel's tree, with the files named from the firmware database's
     /// file table when the dump needs it and it can be had.
-    private static func present(_ analysis: FirmwareAnalysis) async -> [MEANode] {
+    static func present(_ analysis: FirmwareAnalysis) async -> [MEANode] {
         guard MEReads.fileTableWanted(analysis) else { return MEACurator.present(analysis) }
         let volume = analysis.mfsVolume
         let names = await MEReads.fileNames(

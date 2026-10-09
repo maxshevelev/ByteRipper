@@ -230,6 +230,26 @@ public struct FileTable: Sendable, Equatable {
         return best
     }
 
+    /// `record(namingFileIndex:)` for many indices in one pass over the
+    /// table: each index's record, the one with the lowest file ID where
+    /// several name it. A volume names hundreds of files, and asking one at a
+    /// time read — and parsed — every record of the table for each of them.
+    public func records(namingFileIndices indices: Set<Int>,
+                        platform: Int, dictionary: Int) -> [Int: Entry] {
+        let resolution = resolve(platform: platform, dictionary: dictionary)
+        guard !indices.isEmpty, !resolution.missing,
+              let records = tables[Self.key(resolution.platform)]?[
+                  Self.key(resolution.dictionary)]?["FTBL"] else { return [:] }
+        var best: [Int: Entry] = [:]
+        for (fileID, record) in records {
+            guard let entry = Self.entry(fileID: fileID, record: record),
+                  indices.contains(entry.vfsID) else { continue }
+            if let held = best[entry.vfsID], held.fileID <= entry.fileID { continue }
+            best[entry.vfsID] = entry
+        }
+        return best
+    }
+
     /// The `FTBL` record stored **under `fileID` as its key** — the lookup a
     /// Configuration record needs, which is not the same lookup a file index
     /// needs: an MFS/EFS file is found by the `vfsID` *inside* a record

@@ -1,4 +1,4 @@
-@source-sha 27e3235718b318be7fa04994df555b847fd91fa476712b2a22e459e35df75ad6
+@source-sha 634ed984d1ff13772c2ce38f54720637f726c22fce10bfa090d10d440295bedc
 # Mit einem Agenten arbeiten
 
 > ByteRipper lässt sich mit einem Agenten verbinden — Claude Code, Claude Desktop oder einem anderen Programm, das MCP spricht. Der Agent sieht dann die im Programm geöffneten Dateien, liest ihre Bytes und zeigt Stellen darin; das Gespräch mit ihm findet in seinem eigenen Fenster statt.
@@ -42,6 +42,8 @@ Derzeit kann ein Agent:
 - Bytes markieren, während er sie erklärt: ein gestrichelter Rahmen in eigener Farbe mit einer kurzen Bezeichnung; ruht der Zeiger auf den markierten Bytes, erscheint die Erläuterung des Agenten. Eine Markierung kann andere nennen, auf die sie sich bezieht — einen Zeiger und sein Ziel, eine Prüfsumme und die Bytes, die sie abdeckt;
 - eine Datei über ihren Pfad öffnen, ohne sie anzuzeigen, und allen Dumps eines Ordners auf einmal dieselbe Frage stellen — wie viele Kopien einer Variablen jeder enthält, an welcher Adresse eine Struktur beginnt —, mit den Antworten nach Wert gruppiert. Eine so geöffnete Datei wird nur gelesen; gibt es darin etwas zu zeigen, öffnet der Agent sie in einem eigenen Tab;
 - Befunde festhalten: jeweils ein Satz und die Stelle, auf die er sich bezieht; das Agentenfenster listet sie auf;
+- zwei Dateien Byte für Byte vergleichen, wie es der Vergleich zweier Bereiche tut — an denselben Adressen, ohne verschobene Daten auszurichten. Die Antwort ist entweder eine Liste der abweichenden Abschnitte, jeweils mit dem Teil der Firmware, in dem er liegt (Region, Volume, Variable, ME-Partition oder ME-Datei), oder eine Übersicht über Regionen, Volumes und ME-Partitionen, die auch die unveränderten nennt. Ein ganzer Ordner von Dumps lässt sich auf einmal mit einem davon vergleichen;
+- zwei Dateien als Paar nebeneinander in einem neuen Tab zeigen — oder neben einer Datei, die allein in ihrem Tab ist — und ihre Abweichungen so durchgehen, wie es die Pfeile zum Navigieren zwischen Abweichungen im Fenster tun;
 - einen Werkzeugbereich für ein Dokument öffnen, wie es das Menü **Werkzeuge** tut, und im geöffneten Bereich **UEFI-Struktur** einen Knoten wählen. Der Baum öffnet sich bis zum Knoten, und der Dump scrollt zu seinen Bytes.
 
 Jede Stelle, die ein Agent zeigt, jeder Bereich, den er öffnet, und jeder Knoten, den er wählt, ist ein Schritt des Verlaufs: **Darstellung ▸ Zurück** (**⌘[**) kehrt dorthin zurück, wo die Ansicht vorher war ([[topic:navigation|Sich bewegen]]).

@@ -66,6 +66,20 @@ final class FileTableTests: XCTestCase {
         XCTAssertEqual(entry.unknown, 448)
     }
 
+    /// Many indices at once answer what each asked alone answers — the first
+    /// record of a file claimed twice included — and an index the table does
+    /// not name is left out.
+    func testManyIndicesAtOnceAreEachIndexAlone() throws {
+        let table = try table()
+        let indices: Set<Int> = [6, 63, 256, 99_999]
+        let batch = table.records(namingFileIndices: indices, platform: 4, dictionary: 0x0A)
+        for index in indices {
+            XCTAssertEqual(batch[index], table.record(namingFileIndex: index, platform: 4, dictionary: 0x0A), "\(index)")
+        }
+        XCTAssertNil(batch[99_999])
+        XCTAssertEqual(batch[256]?.path, "/home/ish_srv/bios2ish")
+    }
+
     /// An index the table names as `0` integrity is not flagged — the flag is
     /// read, not assumed from its neighbours.
     func testTheIntegrityFlagIsPerRecord() throws {

@@ -49,14 +49,9 @@ public struct MFSFileNames: Sendable, Equatable {
             self = MFSFileNames(entries: [:], resolution: resolution)
             return
         }
-        var found: [Int: FileTable.Entry] = [:]
-        for index in Set(volume.files.map(\.index)) {
-            if let record = table.record(namingFileIndex: index,
-                                         platform: resolution.platform,
-                                         dictionary: resolution.dictionary) {
-                found[index] = record
-            }
-        }
+        let found = table.records(namingFileIndices: Set(volume.files.map(\.index)),
+                                  platform: resolution.platform,
+                                  dictionary: resolution.dictionary)
         self = MFSFileNames(entries: found, resolution: resolution)
     }
 

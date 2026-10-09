@@ -271,6 +271,25 @@ public enum DiffEngine {
         }
     }
 
+    /// The same and different runs of `range`, compared at the same absolute
+    /// offsets — the scan `scan` makes of the whole file, over a part of it.
+    /// Only bytes both storages hold are compared: a range past the shorter
+    /// one's end is cut there, and the longer one's tail is not called a
+    /// difference. Throws `CancellationError` when `shouldCancel` returns true
+    /// between chunks.
+    public static func blocks(
+        left: ByteStorage,
+        right: ByteStorage,
+        in range: Range<UInt64>,
+        chunkSize: Int = defaultChunkSize,
+        shouldCancel: () -> Bool = { false }
+    ) throws -> [DiffBlock] {
+        let end = min(range.upperBound, left.size, right.size)
+        guard range.lowerBound < end else { return [] }
+        return try scanRange(left: left, right: right, from: range.lowerBound, to: end,
+                             chunkSize: chunkSize, shouldCancel: shouldCancel, progress: { _ in })
+    }
+
     /// Scans `[from, to)` and returns the blocks, folding the EOF-only tail
     /// (bytes present in only the longer file) into a different block.
     private static func scanRange(

@@ -34,6 +34,10 @@ public enum MEAToolModule: ToolModule {
     /// The summary and the decoded structure — answered with the panel open
     /// or not (`MEAAgentQueries`, `Design/AGENT_PLAN.md`).
     public static var agentQueries: [ToolAgentQuery] { MEAAgentQueries.all }
+
+    /// Where a range of the ME region is in the decoded structure, for a byte
+    /// comparison's runs.
+    public static var agentLocator: ToolAgentLocator? { MEAAgentLocator.locator }
 }
 
 /// What a parked session hands back: the tab the user was on and the tree row
