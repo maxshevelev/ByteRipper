@@ -723,6 +723,35 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(try node(atRow: tree.selectedRow).kind, .padding)
     }
 
+    /// **Show DMI Area** is in the title row only on an image whose identity
+    /// store the tree reads, and a click selects the store's row — opening
+    /// the branches on the way — and moves the dump to its bytes.
+    func testTheDMIButtonGoesToTheStore() throws {
+        let controller = try open(LenovoTestImage.make())
+        let vc = try XCTUnwrap(session().viewController as? UEFIToolViewController)
+        XCTAssertTrue(pumpUntil(5) { vc.isDMIButtonShownForTesting }, "the image has a store")
+
+        vc.clickDMIButtonForTesting()
+        let tree = try outline()
+        XCTAssertTrue(pumpUntil(5) {
+            tree.selectedRow >= 0 && (try? self.node(atRow: tree.selectedRow))?.kind == .lenovoDMIStore
+        }, "the store's row is selected")
+        let zones = controller.windowModel.pane1.zones
+        XCTAssertEqual(zones.zones.first { $0.id == zones.focus }?.range,
+                       UInt64(LenovoTestImage.area)..<UInt64(LenovoTestImage.area + 0x4000),
+                       "the dump is given the store to show")
+    }
+
+    /// An image with no store has no button: one that could only say "none
+    /// here" would be on every dump of every other board.
+    func testWithoutAStoreThereIsNoDMIButton() throws {
+        _ = try open(UEFITestImage.make())
+        let vc = try XCTUnwrap(session().viewController as? UEFIToolViewController)
+        let tree = try XCTUnwrap(controller?.windowModel.pane1.uefiState.tree)
+        XCTAssertTrue(pumpUntil(5) { tree.dmiStores != nil }, "the image has been searched")
+        XCTAssertFalse(vc.isDMIButtonShownForTesting)
+    }
+
     /// Another file opened into the pane is another tree to read: until it is
     /// there the panel shows none — not the last file's rows, nor the detail
     /// of the row that was selected in it — and the selection does not carry

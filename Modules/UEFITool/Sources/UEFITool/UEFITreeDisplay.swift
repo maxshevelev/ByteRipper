@@ -337,6 +337,12 @@ public enum UEFITreeDisplay {
         return catalogue.name(of: guid) ?? NvramGuids.name(of: guid) ?? guid.description
     }
 
+    /// A store of the board's identity as the panel's DMI menu lists it:
+    /// what it is and where — "Lenovo DMI store at 0x00630000".
+    public static func dmiStoreTitle(_ store: DMIStore) -> String {
+        L("%1$@ at %2$@", kindLabel(store.kind), String(format: "0x%08llX", store.range.lowerBound))
+    }
+
     /// `Baseboard serial number = PF0TEST1`, `LENV block 2 · generation 84`,
     /// `2022-06-29 20:30:25 · Set · Baseboard serial number`; nil for a row
     /// of anything else, or one whose bytes do not read.

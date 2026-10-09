@@ -349,6 +349,22 @@ enum TreeMaterialization {
         return DellSetup.read(UEFIImage(size: size, roots: nodes), readers: readers)
     }
 
+    /// The stores of the board's identity in the image `roots` are the top of
+    /// (`DMIStore`), over a copy of the tree with every container in the file
+    /// opened and no compressed section: neither store is ever inside one.
+    static func dmiStores(
+        roots: [UEFINode],
+        reader: ImageReader,
+        limits: UEFIParser.Limits,
+        buffers: DecompressedBuffers
+    ) -> [DMIStore] {
+        var nodes = roots
+        var discarded: [UEFIDiagnostic] = []
+        materializeAll(&nodes, reader: reader, limits: limits, buffers: buffers,
+                       diagnostics: &discarded, opensCompressed: false)
+        return DMIStore.all(in: nodes)
+    }
+
     /// Ids are stamped relative to `parent` the same way `UEFIImage` stamps a
     /// freshly-built tree — the parser itself never carries a counter, a
     /// node's place is only known once its parent has decided to keep it.

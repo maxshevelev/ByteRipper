@@ -85,6 +85,13 @@ public final class LazyUEFITree {
     private var isReadingDvarSettings = false
     private var dvarSettingsCallbacks: [@MainActor () -> Void] = []
 
+    /// The stores of the board's identity (`DMIStore`), once
+    /// `resolveDMIStores` has found them. Nil until then, and again after an
+    /// edit.
+    public private(set) var dmiStores: [DMIStore]?
+    private var isReadingDMIStores = false
+    private var dmiStoresCallbacks: [@MainActor () -> Void] = []
+
     /// Whether the top level is there yet. False only between `init` and the
     /// end of the background build — which on a plain chip dump is a scan of
     /// the whole file, and on an Intel image is instant.
@@ -146,6 +153,9 @@ public final class LazyUEFITree {
         /// Dell's Setup forms have been read, over a copy of the tree like the
         /// protected ranges.
         case dvarSettingsRead
+        /// The stores of the board's identity have been found, over a copy
+        /// of the tree like the protected ranges.
+        case dmiStoresRead
         /// An edit dropped memoized subtrees; everything below is suspect.
         case invalidated
     }
@@ -599,6 +609,44 @@ public final class LazyUEFITree {
         for callback in waiting { callback() }
     }
 
+    /// Finds the stores of the board's identity (`DMIStore`) off the main
+    /// actor, and announces `.dmiStoresRead` when they land; `done` runs then,
+    /// or at once when they are already found. It opens every container in
+    /// the file and no compressed section.
+    public func resolveDMIStores(_ done: @escaping @MainActor () -> Void = {}) {
+        if dmiStores != nil {
+            done()
+            return
+        }
+        dmiStoresCallbacks.append(done)
+        guard !isReadingDMIStores else { return }
+        isReadingDMIStores = true
+        let requested = generation
+        whenReady { [weak self] in
+            guard let self, self.isReadingDMIStores, self.generation == requested else { return }
+            let roots = self.roots
+            let reader = self.reader
+            let limits = self.limits
+            let buffers = self.buffers
+            Task.detached(priority: .utility) { [weak self] in
+                let stores = TreeMaterialization.dmiStores(
+                    roots: roots, reader: reader, limits: limits, buffers: buffers
+                )
+                await self?.landDMIStores(stores, expectedGeneration: requested)
+            }
+        }
+    }
+
+    private func landDMIStores(_ stores: [DMIStore], expectedGeneration: Int) {
+        guard generation == expectedGeneration, isReadingDMIStores else { return }
+        isReadingDMIStores = false
+        dmiStores = stores
+        let waiting = dmiStoresCallbacks
+        dmiStoresCallbacks.removeAll()
+        announce(.dmiStoresRead)
+        for callback in waiting { callback() }
+    }
+
     private func findNode(
         in nodes: [UEFINode], where matches: (UEFINode) -> Bool
     ) -> UEFINode? {
@@ -659,6 +707,11 @@ public final class LazyUEFITree {
         dvarSettings = nil
         isReadingDvarSettings = false
         dvarSettingsCallbacks.removeAll()
+        // And the stores: an edit may have made or unmade one.
+        let abandonedStores = dmiStoresCallbacks
+        dmiStores = nil
+        isReadingDMIStores = false
+        dmiStoresCallbacks.removeAll()
         // The diagnostics of the subtrees being dropped go with them; what is
         // left is re-collected as those subtrees are expanded again.
         diagnostics.removeAll()
@@ -684,6 +737,7 @@ public final class LazyUEFITree {
         for callback in abandonedAddresses { callback() }
         for callback in abandonedRanges { callback() }
         for callback in abandonedSettings { callback() }
+        for callback in abandonedStores { callback() }
     }
 
     // MARK: - Observers

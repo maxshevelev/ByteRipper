@@ -253,6 +253,7 @@ private struct ChecksumPass: Sendable {
         controller.onWillChoose = { [weak self] in self?.host.noteNavigationStep() }
         controller.onSelectTop = { [weak self] in self?.showTopNode() }
         controller.onRevealAtCaret = { [weak self] in self?.revealNodeAtCaret() }
+        controller.onShowDMIStore = { [weak self] index in self?.showDMIStore(index) }
         controller.onFixChecksum = { [weak self] nodeID in
             self?.fixChecksum(for: nodeID)
         }
@@ -493,6 +494,8 @@ private struct ChecksumPass: Sendable {
         meFileTableTask = nil
         meChecksumsTask?.cancel()
         meChecksumsTask = nil
+        // The last file's stores are not this one's.
+        controller.showDMIStores(tree?.dmiStores ?? [])
 
         guard let tree else {
             controller.endBusy()
@@ -529,6 +532,7 @@ private struct ChecksumPass: Sendable {
                 self.openMERegion(regionID)
             }
             self.requestProtectedRanges(after: 0)
+            self.requestDMIStores()
             // `onDisplay` means "the panel is showing this file": the top
             // level, and its own checksums read. A branch opened later brings
             // its own pass, announced through `onChecksums`.
@@ -565,9 +569,14 @@ private struct ChecksumPass: Sendable {
                 askedForAddresses = false
                 // Not on every keystroke: a reading opens every volume's files.
                 requestProtectedRanges(after: 0.5)
+                // The stores went with the edit; the button waits for them.
+                controller.showDMIStores([])
+                requestDMIStores()
             }
             verifyNewChecksums()
             show(publish: true, rowsChanged: true)
+        case .dmiStoresRead:
+            controller.showDMIStores(tree?.dmiStores ?? [])
         case .expanded, .addressesResolved, .protectedRangesRead, .dvarSettingsRead:
             // A branch appearing does not move the rows on screen: the panel
             // opens the row it was asked to open, itself, when the branch is
@@ -590,6 +599,12 @@ private struct ChecksumPass: Sendable {
             tree.resolveProtectedRanges {}
             tree.resolveDvarSettings()
         }
+    }
+
+    /// Where the image keeps the board's identity, found by the tree off the
+    /// main actor; the DMI button appears when it lands.
+    private func requestDMIStores() {
+        tree?.resolveDMIStores()
     }
 
     /// What the reader has open, written through to where the tree lives. It
@@ -1424,6 +1439,29 @@ private struct ChecksumPass: Sendable {
             self.controller.endBusy()
             guard let twin = UEFITopSwap.twin(of: counterpart, in: chain) else { return }
             self.select(twin.id)
+        }
+    }
+
+    /// Shows the store of the board's identity at `index` of the tree's list
+    /// (`LazyUEFITree.dmiStores`): opens the branches on the way, selects
+    /// its row and brings its bytes on screen in the dump — the DMI button's
+    /// answer, and unlike the reveal a move of the dump, since nothing in the
+    /// dump asked.
+    public func showDMIStore(_ index: Int) {
+        guard let tree, tree.isReady, let stores = tree.dmiStores, stores.indices.contains(index) else { return }
+        let store = stores[index]
+        controller.showBusy()
+        tree.materialize(containing: store.range.lowerBound) { [weak self] chain in
+            guard let self else { return }
+            self.controller.endBusy()
+            guard let node = chain.last(where: { $0.kind == store.kind && $0.range == store.range }) else { return }
+            self.host.noteNavigationStep()
+            // A whole show, not a selection's: the row may sit in branches
+            // the outline has not opened, and the show is what opens them.
+            // Published, so the dump comes to the store's bytes.
+            self.focus = node.id
+            self.meFocus = nil
+            self.show(publish: true)
         }
     }
 

@@ -67,6 +67,14 @@ final class GPNVStoreTests: XCTestCase {
         XCTAssertEqual(padding.children.map(\.kind), [.padding, .gpnvStore, .padding])
     }
 
+    /// ASUS's store is where the board's identity is, as Lenovo's is.
+    func testTheStoreIsADMIStore() {
+        var bytes = TestImage.image(TestImage.volume(length: 0x1000), after: 0x3000)
+        bytes.replaceSubrange(0x2000..<(0x2000 + records.count), with: records)
+        XCTAssertEqual(DMIStore.all(in: UEFIParser.parse(bytes).roots),
+                       [DMIStore(kind: .gpnvStore, range: 0x2000..<(0x2000 + 3 * 0x10C))])
+    }
+
     /// A header that is nearly one — a state that is neither, a length past
     /// the end — is not a store, and nothing is said about it.
     func testANearMissIsNoStore() {

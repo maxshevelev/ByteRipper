@@ -137,6 +137,26 @@ final class LenovoDMIStoreTests: XCTestCase {
         XCTAssertTrue(stores(parsed).isEmpty)
     }
 
+    /// The tree finds the store without the panel opening the way to it:
+    /// a copy with every container in the file opened says where it is.
+    @MainActor
+    func testTheTreeFindsTheStoreWhereverItLies() async {
+        let tree = LazyUEFITree(Self.image(mapped: true))
+        await withCheckedContinuation { continuation in tree.whenReady { continuation.resume() } }
+        await withCheckedContinuation { continuation in tree.resolveDMIStores { continuation.resume() } }
+        XCTAssertEqual(tree.dmiStores, [DMIStore(kind: .lenovoDMIStore, range: 0x8000..<0xC000)])
+    }
+
+    @MainActor
+    func testAnImageWithoutAStoreHasNone() async {
+        var bytes = Self.image(mapped: false)
+        bytes.replaceSubrange(0x8000..<0xC000, with: [UInt8](repeating: 0xFF, count: 0x4000))
+        let tree = LazyUEFITree(bytes)
+        await withCheckedContinuation { continuation in tree.whenReady { continuation.resume() } }
+        await withCheckedContinuation { continuation in tree.resolveDMIStores { continuation.resume() } }
+        XCTAssertEqual(tree.dmiStores, [])
+    }
+
     /// `LDBG` with nothing signed after it is not the store: driver code
     /// names the signature too.
     func testAStrayLDBGIsNotAStore() {

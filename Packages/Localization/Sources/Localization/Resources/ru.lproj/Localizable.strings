@@ -1180,6 +1180,8 @@
 "Not in use" = "Не используется";
 "LENV block|In use" = "Используется";
 "Block in use" = "Действующий блок";
+"Show DMI Area" = "Показать зону DMI";
+"Show in the tree where the image keeps the board's serial number, UUID and model" = "Показать в дереве, где образ хранит серийный номер, UUID и модель платы";
 "Note" = "Примечание";
 "GPNV store" = "Хранилище GPNV";
 "Text" = "Текст";
