@@ -1,4 +1,4 @@
-@source-sha 2de2d7e5aac82a21a27cfc99271ffd8aca40c37b8ef9194dbc42e1f24ae3771b
+@source-sha 008d61b27b212e6c4b6e66be479e49417db3ba2e6442e58c2cc0a5ec5dbaf45c
 @term flash-descriptor
 @name Flash descriptor
 @short Первые `0x1000` байт образа Intel: карта чипа памяти.

@@ -320,7 +320,7 @@ public enum LenovoDMIPresenter {
         }
         var fields = [
             LenovoDMIField(L("Offset"), hex(block.offset, 8)),
-            LenovoDMIField(L("Signature"), block.hasSignature ? "LENV" : L("Missing"),
+            LenovoDMIField(L("Signature", context: "block header"), block.hasSignature ? "LENV" : L("Missing"),
                            isProblem: !block.hasSignature),
             LenovoDMIField(L("Generation"), "\(block.generation)"),
             LenovoDMIField(L("Entries"), L("%1$@ of %2$@ declared", block.entries.count, block.declaredEntries),

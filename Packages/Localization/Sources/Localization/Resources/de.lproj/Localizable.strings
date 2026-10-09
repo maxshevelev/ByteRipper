@@ -1378,3 +1378,4 @@
 "LENV block %1$@ is erased: every byte is FF. The firmware reads the other copy." = "LENV-Block %1$@ ist gelöscht: alle Bytes sind FF. Die Firmware liest die andere Kopie.";
 "No driver in this image names it" = "Kein Treiber dieses Images greift darauf zu";
 "Read by the firmware" = "Von der Firmware gelesen";
+"block header|Signature" = "Signatur";
