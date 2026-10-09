@@ -36,6 +36,16 @@ Every form names the helper program inside this copy of ByteRipper. If ByteRippe
 
 If ByteRipper is not running when the agent's program starts, the helper starts it. If the service is switched off, the agent's program reports that ByteRipper's agent service is not running.
 
+## Why not over HTTP
+
+Some programs, Claude Desktop among them, add a server reached over HTTP from their own settings, without a configuration file and without a restart. ByteRipper does not offer such a server, on purpose:
+
+- A server over HTTP listens on a network port, and every program on the computer can reach it — web pages open in a browser included. It would need a password of its own, kept in the agent's configuration, and checks against requests from pages. The file ByteRipper opens in the user's Library can be reached only by programs of the same user account; there is nothing to set up and nothing to leak.
+- An agent reads dumps and, when allowed, changes them. Access to it is therefore no wider than access to the dumps themselves.
+- The agent's program starts the helper itself. The helper starts ByteRipper when it is not running and says so when the service is switched off; a server over HTTP is simply not there in either case.
+
+The price is the configuration step described above, made once per program, and a connection from the same computer only: an agent running on another computer cannot connect.
+
 ## What an agent can do
 
 At present an agent can:

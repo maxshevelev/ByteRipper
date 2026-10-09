@@ -1,4 +1,4 @@
-@source-sha b2122a7c6d46f04c5d92e081f840d21d951af333311088666cfac9cb98bc0073
+@source-sha 2c7cf430733d36d115aad229cfa73262954dd2cc024614bd394fe7c3132773f7
 # Mit einem Agenten arbeiten
 
 > ByteRipper lässt sich mit einem Agenten verbinden — Claude Code, Claude Desktop oder einem anderen Programm, das MCP spricht. Der Agent sieht dann die im Programm geöffneten Dateien, liest ihre Bytes und zeigt Stellen darin; das Gespräch mit ihm findet in seinem eigenen Fenster statt.
@@ -27,6 +27,16 @@ Führt eine Konfigurationsdatei bereits andere Server auf, kommt der Eintrag `by
 Jede Form verweist auf das Hilfsprogramm in genau dieser Kopie von ByteRipper. Wird ByteRipper in einen anderen Ordner verschoben, ist der Text erneut zu kopieren.
 
 Läuft ByteRipper nicht, wenn das Programm des Agenten startet, startet das Hilfsprogramm es. Ist der Dienst ausgeschaltet, meldet das Programm des Agenten, dass der Agentendienst von ByteRipper nicht läuft.
+
+## Warum nicht über HTTP
+
+Manche Programme, darunter Claude Desktop, binden einen über HTTP erreichbaren Server direkt in ihren Einstellungen ein — ohne Konfigurationsdatei und ohne Neustart. ByteRipper bietet einen solchen Server bewusst nicht an:
+
+- Ein Server über HTTP wartet an einem Netzwerkport, und jedes Programm auf dem Computer kann ihn erreichen, auch im Browser geöffnete Webseiten. Er bräuchte ein eigenes Passwort, das in der Konfiguration des Agenten steht, und Schutz vor Anfragen von Webseiten. Die Datei, die ByteRipper in der Library des Benutzers anlegt, erreichen nur Programme desselben Benutzerkontos; es gibt nichts einzurichten und nichts, was nach außen gelangen könnte.
+- Ein Agent liest Dumps und ändert sie, wenn es erlaubt ist. Der Zugang zu ihm ist daher nicht weiter gefasst als der Zugang zu den Dumps selbst.
+- Das Programm des Agenten startet das Hilfsprogramm selbst. Dieses startet ByteRipper, wenn es nicht läuft, und meldet, wenn der Dienst ausgeschaltet ist; ein Server über HTTP wäre in beiden Fällen schlicht nicht erreichbar.
+
+Der Preis dafür ist die oben beschriebene Einrichtung, einmal je Programm, und eine Verbindung nur vom selben Computer aus: Ein Agent, der auf einem anderen Computer läuft, kann sich nicht verbinden.
 
 ## Was ein Agent kann
 
