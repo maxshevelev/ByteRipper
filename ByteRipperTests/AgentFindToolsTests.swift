@@ -247,6 +247,56 @@ final class AgentFindToolsTests: XCTestCase {
         XCTAssertEqual(read["text"], "PF0TEST1", "decoded")
     }
 
+    /// A decompressed part is a file of its own to every tool: read, searched,
+    /// its own UEFI tree, its own tool panel — the parent's is untouched —
+    /// and `documents` says what its bytes are.
+    func testADecompressedPartIsAFileToEveryTool() async throws {
+        let controller = try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let tree = try await client.answer("uefi_find", ["type": "Section", "limit": 50])
+        let section = try XCTUnwrap(tree["matches"]?.arrayValue?.first { $0["subtype"] == "Compressed section" })
+        let opened = try await client.answer("open_part", ["node": section["id"] ?? .null, "part": "decompressed"])
+        let part = try XCTUnwrap(opened["document"])
+
+        let documents = try await client.answer("documents")
+        let entry = try XCTUnwrap(documents["documents"]?.arrayValue?.first { $0["id"] == part })
+        XCTAssertEqual(entry["decoded"], "LZMA")
+        XCTAssertEqual(entry["keeps_offsets"], false)
+
+        let found = try await client.answer("find_bytes", ["document": part, "text": "GH51G"])
+        XCTAssertEqual(found["total"], 1)
+        let raw = try await client.answer("uefi_tree", ["document": part])
+        XCTAssertEqual(raw["children"]?.arrayValue?.first?["name"], "Raw", "the part's own tree")
+
+        let panel = try await client.answer("open_panel", ["document": part, "module": "uefi-structure"])
+        XCTAssertEqual(panel["document"], part)
+        let pane = try XCTUnwrap(controller.fragments.pane(try XCTUnwrap(controller.fragments.expanded)))
+        XCTAssertEqual(controller.tools(reading: pane).activeIdentifier, "dev.maxik.tool.uefi-structure",
+                       "the part's own tool panel")
+        XCTAssertFalse(controller.tools(reading: controller.windowModel.pane1) === controller.tools(reading: pane))
+        let selected = try await client.answer("uefi_select", ["document": part, "node": "0"])
+        XCTAssertEqual(selected["selected"]?["name"], "Raw")
+
+        // A finding in bytes the file holds only compressed leads to the
+        // section they came out of.
+        let finding = try await client.answer("finding", ["document": part, "offset": "0x4", "length": 4, "text": "t"])
+        XCTAssertEqual(finding["from_part"]?["exact"], false)
+        XCTAssertEqual(finding["range"]?["start"], opened["source"]?["start"])
+        XCTAssertEqual(finding["range"]?["end"], opened["source"]?["end"])
+    }
+
+    /// A finding in a part that keeps the file's addresses lands on the same
+    /// bytes of the file.
+    func testAFindingInAPartLeadsToTheSameBytesOfTheFile() async throws {
+        try open([UInt8](repeating: 0, count: 0x1000))
+        let opened = try await client.answer("open_part", ["offset": "0x800", "length": "0x100"])
+        let finding = try await client.answer("finding", ["document": opened["document"] ?? .null,
+                                                          "offset": "0x10", "length": 4, "text": "t"])
+        XCTAssertEqual(finding["range"]?["start"], "0x810")
+        XCTAssertEqual(finding["range"]?["end"], "0x814")
+        XCTAssertEqual(finding["from_part"]?["exact"], true)
+        XCTAssertTrue(finding["path"]?.stringValue?.hasSuffix("front.bin") == true)
+    }
+
     func testAPartNeedsItsParentOnScreenAndAPlace() async throws {
         try open([UInt8](repeating: 0, count: 0x100))
         let url = folder.appendingPathComponent("other.bin")

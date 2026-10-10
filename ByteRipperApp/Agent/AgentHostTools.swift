@@ -35,8 +35,11 @@ final class AgentHostTools {
             description: """
                 Lists every file open in ByteRipper: its id (pass it as `document` to the other tools), \
                 name, path, size, whether it has unsaved edits, and where it is — pane A or B of a tab, \
-                or a part opened over its parent file ("part", with the parent's id and the bytes of \
-                the parent it came from). The document the reader is in comes first and is marked \
+                or a part opened over its parent file ("part", with the parent's id, the bytes of the \
+                parent it came from, and `decoded` — what the part's bytes are to those: `LZMA`, `XOR 77`, \
+                `Read-only`…, absent for a plain copy — and `keeps_offsets`, whether byte n of the part is \
+                byte n of the source). A part is read, searched and analysed by every tool as a file of its \
+                own, from address 0, in its decoded form, and its tool panel is its own. The document the reader is in comes first and is marked \
                 `focused`. Ids last as long as the file stays open.
                 """
         ) { _ in
@@ -66,6 +69,8 @@ final class AgentHostTools {
             if let origin = pane.origin, let parent = origin.parent?.document {
                 entry["part_of"] = .string(desk.id(of: parent))
                 entry["source"] = Self.range(origin.sourceRange)
+                if let badge = origin.codec.badge { entry["decoded"] = .string(badge.text) }
+                entry["keeps_offsets"] = .bool(origin.codec.keepsOffsets)
             }
             if let focused, focused.pane === pane { entry["focused"] = true }
             return .object(entry)

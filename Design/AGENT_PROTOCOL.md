@@ -64,7 +64,7 @@ Recorded against: Claude Code 2.1.292 (modern; `RecordedClientTests`).
 
 | Tool | Arguments | Answer |
 |---|---|---|
-| `documents` | — | `documents[]`: `id`, `name`, `path` (not for an untitled one), `size`, `unsaved_edits`, `read_only`, `tab`, `slot` (`A`, `B`, `part`), `focused`; for a part, `part_of` and `source` (range in the parent). |
+| `documents` | — | `documents[]`: `id`, `name`, `path` (not for an untitled one), `size`, `unsaved_edits`, `read_only`, `tab`, `slot` (`A`, `B`, `part`), `focused`; for a part, `part_of`, `source` (range in the parent), `decoded` (the codec's badge — `LZMA`, `XOR 77`, `Read-only`; absent for a copy) and `keeps_offsets`. A part is a document like any other: every tool that takes `document` reads it in its decoded form from address 0, and `open_panel` and the panel tools act on the part's own tool panel. |
 | `focus` | — | `document`, `name`, `caret`, `selection` (range or null), `on_screen` (range), `compared_with` (the other document of a comparison). |
 | `read` | `offset`; `length` (default 256, ≤ 4096); `format` `hex`·`ascii`·`utf16le`·`u8`·`u16`·`u32`·`u64`; `endian` `little`·`big` | `document`, `offset`, `length`, `format`; `rows` (hex: `"00001000  4D 5A …  |MZ..|"`), `text`, or `values` (hex strings); `cut_at_end_of_file` when cut. |
 | `reveal` | `offset`; `length` (default 0); `select` (default: length > 0) | `document`, `shown` (range), `selected`. A navigation step. |
@@ -90,7 +90,7 @@ window. It goes with `unmark`, the window's buttons, or its document.
 | `close_dump` | `document` | `closed`. Refuses a document in a tab. |
 | `show` | `document`; `offset`, `length` | `document` (on screen), `shown`, `replaces` (the background id it replaced). Opens a new tab, or brings forward the tab that has the file. |
 | `survey` | `folder` (+ `recursive`) or `paths`; `tool` (one that takes `document`); `arguments`; `group_by` (dotted path, `-1` for the last element); `limit` (20, ≤ 100); `after` | `files`, `groups_total`, `groups[]` (`value`, `count`, `files` — ten at most; the largest first), `failed[]` (`file`, `error`). Progress per file. At most 200 files. Paged (`next`, `after`): a page after the first is cut from the same run, never a new one; a group whose value is too large alone gives the start of its JSON text. |
-| `finding` | `text`; `document` or `path`; `offset`, `length`, `node` | the finding: `id` (`f1`…), `path`, `range`, `node`, `text`. |
+| `finding` | `text`; `document` or `path`; `offset`, `length`, `node` | the finding: `id` (`f1`…), `path`, `range`, `node`, `text`. A finding in a part is recorded in the file on disk it came out of — the same bytes through every codec that keeps offsets, else the source range — with `from_part` (`document`, `range`, `exact`). |
 | `findings` | `limit` (50, ≤ 200); `after` | `findings[]`, oldest first; `total`. Paged (`next`, `after`). |
 
 A background document is answered about by every tool that reads — `read`,

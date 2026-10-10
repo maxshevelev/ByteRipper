@@ -228,7 +228,7 @@ final class AgentUITests: XCTestCase {
         controller.refresh()
         XCTAssertEqual(controller.shownRows.map(\.tool), ["read"])
         XCTAssertEqual(controller.shownText(row: 0, column: "result"), "Running…")
-        XCTAssertEqual(controller.shownText(row: 0, column: "duration"), "")
+        XCTAssertEqual(controller.shownText(row: 0, column: "duration"), "0 s", "counts up while it runs")
         XCTAssertEqual(controller.shownText(row: 0, column: "size"), "")
 
         let done = AgentCallRecord(id: running.id, client: "test", tool: "read", arguments: ["offset": "0x10"],

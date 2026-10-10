@@ -1,6 +1,7 @@
 import Cocoa
 import AgentKit
 import ByteRipperCore
+import UEFITool
 
 /// Work across many dumps (`Design/AGENT_PLAN.md`, "Background documents and
 /// surveys"): opening a file by path with no window, asking one question of a
@@ -350,7 +351,10 @@ final class AgentDumpTools {
                 Records one finding for the person to check: a sentence, and where it is — a document, or a \
                 file `path`, with an `offset` and `length` or a UEFI `node`. The Agent window lists findings; a \
                 double-click opens the file at that place. Use it for each claim a survey supports, so seven \
-                files out of fifty become seven lines the person can click.
+                files out of fifty become seven lines the person can click. A finding in a part — a fragment \
+                panel, decompressed or decoded — is recorded in the file on disk the part came out of: at the \
+                same bytes where the part keeps the file's addresses, otherwise at the bytes the part was \
+                decoded from; the answer's `from_part` says where it was in the part.
                 """,
             inputSchema: AgentSchema.object([
                 "text": AgentSchema.string("What was found, in a sentence."),
@@ -370,24 +374,59 @@ final class AgentDumpTools {
         let text = try arguments.string("text").trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw AgentToolError("Argument `text` must say something.") }
         let url: URL
+        var range = try arguments.optionalOffset("offset").map { offset in
+            offset..<(offset + (try arguments.optionalOffset("length") ?? 0))
+        }
+        var node = try arguments.optionalString("node")
+        var fromPart: JSONValue?
         if let path = try arguments.optionalString("path") {
             url = try Self.fileURL(path)
         } else {
             let place = try resolve(try arguments.optionalString("document"))
-            guard !place.pane.isUntitled, let document = place.pane.document else {
+            var pane = place.pane
+            if pane.origin != nil {
+                // A node of the part's own tree is named by the part's ids,
+                // which mean nothing in the file: it goes as its bytes.
+                if let id = node {
+                    let host = PaneToolHost(pane: pane, owner: place.controller, tools: nil)
+                    let found = try await UEFIAgentNodeData.bytes(host, node: id, part: .all)
+                    range = found.fileRange ?? UEFIPresenter.fileSource(of: found.node, in: found.tree.image())
+                    node = nil
+                }
+                var answer: [String: JSONValue] = ["document": .string(place.id)]
+                if let range { answer["range"] = AgentHostTools.range(range) }
+                // Out through every part to the file: byte for byte where
+                // the codec keeps the addresses, otherwise the bytes the
+                // part was decoded from.
+                var exact = true
+                while let origin = pane.origin {
+                    guard let parent = origin.parent else {
+                        throw AgentToolError("\(place.id)'s parent is closed, so a finding could not lead back to it.")
+                    }
+                    let source = origin.sourceRange
+                    if let inside = range, origin.codec.keepsOffsets, exact {
+                        range = (source.lowerBound + inside.lowerBound)..<(source.lowerBound + inside.upperBound)
+                    } else {
+                        range = source
+                        exact = false
+                    }
+                    pane = parent
+                }
+                answer["exact"] = .bool(exact)
+                fromPart = .object(answer)
+            }
+            guard !pane.isUntitled, let document = pane.document else {
                 throw AgentToolError("\(place.id) is not a file on disk, so a finding could not lead back to it.")
             }
             url = document.url
         }
-        let offset = try arguments.optionalOffset("offset")
-        let length = try arguments.optionalOffset("length") ?? 0
-        let finding = AgentFinding(
-            id: "f\(nextFinding)", url: url, range: offset.map { $0..<($0 + length) },
-            node: try arguments.optionalString("node"), text: text)
+        let finding = AgentFinding(id: "f\(nextFinding)", url: url, range: range, node: node, text: text)
         nextFinding += 1
         findings.append(finding)
         onChange()
-        return .json(finding.json)
+        guard let fromPart, case .object(var members) = finding.json else { return .json(finding.json) }
+        members["from_part"] = fromPart
+        return .json(.object(members))
     }
 
     private nonisolated var findingsTool: AgentTool {
