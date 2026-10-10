@@ -54,13 +54,14 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         var width: CGFloat {
             switch self {
-            case .tool: return 140
-            case .kind: return 90
-            case .calls: return 50
-            case .failures: return 110
-            case .average: return 64
-            case .size: return 70
-            case .last: return 64
+            // Wide enough for `uefi_fix_checksum` behind the names' indent.
+            case .tool: return 190
+            case .kind: return 80
+            case .calls: return 44
+            case .failures: return 92
+            case .average: return 60
+            case .size: return 64
+            case .last: return 60
             }
         }
 
@@ -77,7 +78,11 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
             table.addTableColumn(tableColumn)
         }
         table.usesAlternatingRowBackgroundColors = true
-        table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        // The names take what the window adds or gives back; the numbers keep
+        // the widths they were given. Shared out evenly, every column came to
+        // the same width, which cut the longer names short behind their
+        // indent and "Not Answered" down to "Not".
+        table.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
         // Plain: the automatic and full-width styles put a 20-point blank
         // band above every section's heading but the first (measured).
         table.style = .plain
@@ -139,8 +144,57 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
     }
 
     func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
-        if case .header = items[row] { return tableView.rowHeight + 4 }
-        return tableView.rowHeight
+        guard case .header = items[row] else { return tableView.rowHeight }
+        // The heading's own line, and room above it that sets the section off
+        // from the last tool of the one before.
+        let font = Self.headingFont
+        return (font.ascender - font.descender + font.leading).rounded(.up)
+            + Self.headingSpaceAbove + Self.headingSpaceBelow
+    }
+
+    /// A section's heading: a size above the tool names, so the groups read as
+    /// groups rather than as one more row.
+    static var headingFont: NSFont { .systemFont(ofSize: ToolPanelFont.titleSize + 2, weight: .semibold) }
+    private static var headingSpaceAbove: CGFloat { ToolPanelFont.scaled(10) }
+    private static var headingSpaceBelow: CGFloat { ToolPanelFont.scaled(3) }
+    /// How far the tool names stand in from their headings.
+    static var toolIndent: CGFloat { ToolPanelFont.scaled(14) }
+
+    /// A heading's cell: its text on the row's bottom, so the space the row
+    /// adds lies above it.
+    private func headingCell(in tableView: NSTableView) -> NSTableCellView {
+        let id = NSUserInterfaceItemIdentifier("section")
+        if let cell = tableView.makeView(withIdentifier: id, owner: self) as? NSTableCellView { return cell }
+        let cell = NSTableCellView()
+        cell.identifier = id
+        let field = NSTextField(labelWithString: "")
+        field.lineBreakMode = .byTruncatingTail
+        field.translatesAutoresizingMaskIntoConstraints = false
+        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        cell.addSubview(field)
+        cell.textField = field
+        let trailing = field.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2)
+        trailing.priority = .defaultHigh - 1
+        NSLayoutConstraint.activate([
+            field.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
+            trailing,
+            field.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -Self.headingSpaceBelow),
+        ])
+        return cell
+    }
+
+    /// A tool name's cell: the shared cell, stood in from the column's edge
+    /// so the names sit under their heading rather than flush with it.
+    private func toolCell(in tableView: NSTableView, id: NSUserInterfaceItemIdentifier) -> NSTableCellView {
+        if let cell = tableView.makeView(withIdentifier: id, owner: self) as? NSTableCellView { return cell }
+        let cell = AgentTableStyle.cell(in: tableView, id: id, owner: self, code: true)
+        if let field = cell.textField,
+           let leading = cell.constraints.first(where: {
+               $0.firstAttribute == .leading && ($0.firstItem as? NSView) === field && ($0.secondItem as? NSView) === cell
+           }) {
+            leading.constant = 2 + Self.toolIndent
+        }
+        return cell
     }
 
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
@@ -149,16 +203,21 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         if case .header(let title) = items[row] {
-            let id = NSUserInterfaceItemIdentifier("section")
-            let cell = AgentTableStyle.cell(in: tableView, id: id, owner: self)
+            let cell = headingCell(in: tableView)
             cell.textField?.stringValue = title
-            cell.textField?.font = ToolPanelFont.title()
+            cell.textField?.font = Self.headingFont
             cell.textField?.textColor = .secondaryLabelColor
             return cell
         }
         guard let id = tableColumn?.identifier, let column = Column(rawValue: id.rawValue),
               let entry = entry(at: row) else { return nil }
-        let cell = AgentTableStyle.cell(in: tableView, id: id, owner: self, digits: column.isNumber, code: column == .tool)
+        let cell = column == .tool
+            ? toolCell(in: tableView, id: id)
+            : AgentTableStyle.cell(in: tableView, id: id, owner: self, digits: column.isNumber)
+        if column == .tool {
+            // Set every time: the shared cell's font follows the panel's size.
+            cell.textField?.font = .monospacedSystemFont(ofSize: ToolPanelFont.size, weight: .regular)
+        }
         cell.textField?.stringValue = text(row: row, column)
         cell.textField?.textColor = column == .failures && (stats[entry.tool.name]?.failures ?? 0) > 0
             ? SemanticColors.bad : .labelColor

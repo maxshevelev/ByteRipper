@@ -160,6 +160,22 @@ final class AgentUITests: XCTestCase {
         XCTAssertEqual(page.sectionTitles.count, Set(page.sectionTitles).count, "each group once")
         XCTAssertTrue(page.table.delegate?.tableView?(page.table, isGroupRow: 0) == true)
         XCTAssertFalse(page.table.delegate?.tableView?(page.table, shouldSelectRow: 0) ?? true, "a heading is not chosen")
+        // A heading stands out: a size above the names, with room above it;
+        // the names stand in from their heading.
+        let heading = try XCTUnwrap(page.table.delegate?.tableView?(page.table, viewFor: nil, row: 0) as? NSTableCellView)
+        let firstTool = try XCTUnwrap(page.table.delegate?.tableView?(
+            page.table, viewFor: page.table.tableColumns.first, row: 1) as? NSTableCellView)
+        let headingSize = try XCTUnwrap(heading.textField?.font?.pointSize)
+        XCTAssertGreaterThan(headingSize, try XCTUnwrap(firstTool.textField?.font?.pointSize))
+        XCTAssertGreaterThanOrEqual(page.table.delegate?.tableView?(page.table, heightOfRow: 0) ?? 0,
+                                    page.table.rowHeight + 10, "room above a heading")
+        firstTool.frame = NSRect(x: 0, y: 0, width: 140, height: page.table.rowHeight)
+        heading.frame = NSRect(x: 0, y: 0, width: 140, height: 40)
+        firstTool.layoutSubtreeIfNeeded()
+        heading.layoutSubtreeIfNeeded()
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(firstTool.textField?.frame.minX),
+                                    try XCTUnwrap(heading.textField?.frame.minX) + AgentToolsPage.toolIndent - 1,
+                                    "the names stand in from their heading")
         let read = try XCTUnwrap(page.row(of: "read"))
         XCTAssertEqual(page.shownText(row: read, column: "kind"), "Read")
         XCTAssertEqual(page.shownText(row: read, column: "calls"), "2")
