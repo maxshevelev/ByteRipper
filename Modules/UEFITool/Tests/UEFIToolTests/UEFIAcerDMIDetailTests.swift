@@ -10,7 +10,7 @@ final class UEFIAcerDMIDetailTests: XCTestCase {
     /// 22 alphanumerics: "N" first, "00" at 7, "3400" at the end.
     private static let serial = "N51TEST000000000003400"
     /// 22 alphanumerics: "NB" first, "1100" at 5, "3400" at the end.
-    private static let tag = "NB2TE11000000000003400"
+    private static let motherboardSerial = "NB2TE11000000000003400"
     /// Version 1, variant 1; the last six bytes are the tail the block copies.
     private static let uuid: [UInt8] = [0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0x17, 0x88, 0x89, 0xCD,
                                         0xEF, 0x01, 0x02, 0x03, 0x04, 0x05]
@@ -30,7 +30,7 @@ final class UEFIAcerDMIDetailTests: XCTestCase {
         for (index, byte) in AcerDMIArea.signature.enumerated() {
             bytes[Int(AcerDMIArea.signatureOffset) + index] = byte
         }
-        put(&bytes, tag, at: 0x50)
+        put(&bytes, motherboardSerial, at: 0x50)
         for (index, byte) in uuid.enumerated() {
             bytes[0x70 + index] = byte
         }
@@ -69,7 +69,7 @@ final class UEFIAcerDMIDetailTests: XCTestCase {
         let detail = UEFIDetail.build(for: parsed.node, image: parsed.image, reader: parsed.reader)
         XCTAssertEqual(value("Kind", in: detail), "Acer DMI")
         XCTAssertEqual(value("System serial", in: detail), Self.serial)
-        XCTAssertEqual(value("Service tag", in: detail), Self.tag)
+        XCTAssertEqual(value("MB Serial", in: detail), Self.motherboardSerial)
         XCTAssertEqual(value("UUID", in: detail), "78563412-AB90-1788-89CD-EF0102030405")
         XCTAssertEqual(value("Model", in: detail), "TEST-1050")
         XCTAssertEqual(value("Product name", in: detail), "Test Model")

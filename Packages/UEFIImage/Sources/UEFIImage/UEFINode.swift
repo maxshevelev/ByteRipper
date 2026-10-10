@@ -275,8 +275,9 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     case lenvBlock
     case lenvEntry
     /// The DMI area where Acer's firmware keeps the machine's identity
-    /// (`AcerDMIStore`): an 8 KiB block of the system serial, the service
-    /// tag, the UUID, the model. Read out of the padding inside the BIOS
+    /// (`AcerDMIStore`): an 8 KiB block of the system serial, the
+    /// motherboard serial, the UUID, the model. Read out of the padding
+    /// inside the BIOS
     /// region — no PDR, no fixed offset, found by its content. Padding to
     /// UEFITool, as a GPNV store is.
     case acerDMIStore

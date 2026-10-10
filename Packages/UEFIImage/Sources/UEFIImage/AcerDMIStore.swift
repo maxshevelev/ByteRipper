@@ -2,7 +2,8 @@ import Foundation
 import Localization
 
 /// Acer's DMI region, where the firmware keeps the machine's identity
-/// (`UEFI_IMAGE_FORMAT.md` §9): the system serial number, the service tag,
+/// (`UEFI_IMAGE_FORMAT.md` §9): the system serial number, the motherboard
+/// serial,
 /// the UUID, the model. What the bench calls the DMI area. An 8 KiB block on
 /// a 4 KiB boundary, in the padding inside the BIOS region: it is no region
 /// of the descriptor, no map region, and it lies at no fixed offset — the
@@ -13,7 +14,7 @@ import Localization
 /// 0x30  a flag the factory writes per build
 /// 0x3C  06 FF FF FF
 /// 0x40  "Acer"
-/// 0x50  the service tag, 22 alphanumerics starting with "NB"
+/// 0x50  the motherboard serial, 22 alphanumerics starting with "NB"
 /// 0x70  the UUID, 16 bytes
 /// 0x80  the model
 /// 0xA0  the asset tag, where written
@@ -52,8 +53,8 @@ public struct AcerDMIArea: Equatable, Sendable {
     /// The system serial: 22 alphanumerics, what the sticker says.
     public var systemSerial: String { String(decoding: stored[0..<0x16], as: UTF8.self) }
 
-    /// The service tag: 22 alphanumerics.
-    public var serviceTag: String { String(decoding: stored[0x50..<0x66], as: UTF8.self) }
+    /// The motherboard serial: 22 alphanumerics, the board's own number.
+    public var motherboardSerial: String { String(decoding: stored[0x50..<0x66], as: UTF8.self) }
 
     /// The UUID, as stored: the first two words little-endian, the rest as
     /// they read — the way SMBIOS writes one.
@@ -120,8 +121,8 @@ public struct AcerDMIArea: Equatable, Sendable {
         if !Self.holds(systemSerial, "00", at: 7) || !Self.holds(systemSerial, "3400", at: 18) {
             found.append(.serialPattern)
         }
-        if !Self.holds(serviceTag, "1100", at: 5) || !Self.holds(serviceTag, "3400", at: 18) {
-            found.append(.serviceTagPattern)
+        if !Self.holds(motherboardSerial, "1100", at: 5) || !Self.holds(motherboardSerial, "3400", at: 18) {
+            found.append(.motherboardSerialPattern)
         }
         let uuid = uuid
         if uuid[6] >> 4 != 1 {
@@ -147,14 +148,15 @@ public struct AcerDMIArea: Equatable, Sendable {
 
     /// The block `stored` holds, when the checks a wiped or tampered block
     /// fails all pass: the signature at +0x3C, a 4 KiB-aligned start, a
-    /// system serial that reads as one, a service tag that reads as one, and
+    /// system serial that reads as one, a motherboard serial that reads as
+    /// one, and
     /// padding everywhere the fields are not.
     public static func found(stored: [UInt8], offset: UInt64) -> AcerDMIArea? {
         guard stored.count == Int(size),
               offset % alignment == 0,
               Array(stored[Int(signatureOffset)..<Int(signatureOffset) + signature.count]) == signature,
               isSerial(stored[0..<0x16]),
-              isServiceTag(stored[0x50..<0x66]),
+              isMotherboardSerial(stored[0x50..<0x66]),
               isSparse(stored)
         else { return nil }
         return AcerDMIArea(offset: offset, stored: stored)
@@ -165,8 +167,8 @@ public struct AcerDMIArea: Equatable, Sendable {
         isAlnum(bytes) && bytes.first == 0x4E
     }
 
-    /// The service tag: 22 alphanumerics, the first two of them "NB".
-    private static func isServiceTag(_ bytes: ArraySlice<UInt8>) -> Bool {
+    /// The motherboard serial: 22 alphanumerics, the first two of them "NB".
+    private static func isMotherboardSerial(_ bytes: ArraySlice<UInt8>) -> Bool {
         isAlnum(bytes) && Array(bytes.prefix(2)) == Array("NB".utf8)
     }
 
@@ -215,9 +217,9 @@ public struct AcerDMIArea: Equatable, Sendable {
 public enum AcerDMIFinding: Equatable, Sendable {
     /// The factory serials read "00" at offset 7 and "3400" at the end.
     case serialPattern
-    /// The factory service tags read "1100" at offset 5 and "3400" at the
-    /// end.
-    case serviceTagPattern
+    /// The factory motherboard serials read "1100" at offset 5 and "3400"
+    /// at the end.
+    case motherboardSerialPattern
     /// The factory UUIDs are version 1.
     case uuidVersion
     /// The factory UUIDs are variant 1: the top bit of their ninth byte is
@@ -241,8 +243,8 @@ public enum AcerDMIFinding: Equatable, Sendable {
         switch self {
         case .serialPattern:
             return L("The serial does not hold the factory pattern: the factory ones read 00 at offset 7 and 3400 at the end.")
-        case .serviceTagPattern:
-            return L("The service tag does not hold the factory pattern: the factory ones read 1100 at offset 5 and 3400 at the end.")
+        case .motherboardSerialPattern:
+            return L("The motherboard serial does not hold the factory pattern: the factory ones read 1100 at offset 5 and 3400 at the end.")
         case .uuidVersion:
             return L("The UUID is not a version 1 one, as the factory ones are.")
         case .uuidVariant:

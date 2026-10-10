@@ -1455,13 +1455,13 @@
 "block header|Signature" = "Signatur";
 "Acer DMI" = "Acer DMI";
 "System serial" = "System-Seriennummer";
-"Service tag" = "Service-Tag";
+"MB Serial" = "Platine-Seriennummer";
 "Asset tag" = "Inventarnummer";
 "Manufacturing code" = "Fertigungscode";
 "Model" = "Modell";
 "UUID" = "UUID";
 "The serial does not hold the factory pattern: the factory ones read 00 at offset 7 and 3400 at the end." = "Die Seriennummer hält das Werksmuster nicht: die Werksnummern lesen 00 an Offset 7 und 3400 am Ende.";
-"The service tag does not hold the factory pattern: the factory ones read 1100 at offset 5 and 3400 at the end." = "Der Service-Tag hält das Werksmuster nicht: die Werks-Tags lesen 1100 an Offset 5 und 3400 am Ende.";
+"The motherboard serial does not hold the factory pattern: the factory ones read 1100 at offset 5 and 3400 at the end." = "Die Seriennummer der Platine hält das Werksmuster nicht: die Werksnummern lesen 1100 an Offset 5 und 3400 am Ende.";
 "The UUID is not a version 1 one, as the factory ones are." = "Die UUID ist keine Version 1, wie die Werks-UUIDs.";
 "The UUID's variant bit is not set, as it is on the factory ones. A cleaned or tampered UUID is the usual reason." = "Das Varianten-Bit der UUID ist nicht gesetzt, wie bei den Werks-UUIDs. Die übliche Ursache ist eine bereinigte oder veränderte UUID.";
 "The constant at +0xF3 is not 02." = "Die Konstante an +0xF3 ist nicht 02.";

@@ -3,7 +3,7 @@ import Localization
 import UEFIImage
 
 /// What the details say of Acer's DMI area (`AcerDMIStore`): the identity
-/// fields — the system serial, the service tag, the UUID, the model, the
+/// fields — the system serial, the motherboard serial, the UUID, the model,
 /// product name — read off the 8 KiB block, then what the integrity checks
 /// found in them.
 ///
@@ -26,7 +26,7 @@ public enum UEFIAcerDMIDetail {
         else { return ([], []) }
         var fields: [UEFIDetailField] = [
             .init(L("System serial"), area.systemSerial),
-            .init(L("Service tag"), area.serviceTag),
+            .init(L("MB Serial"), area.motherboardSerial),
             .init(L("UUID"), area.uuidText),
             .init(L("Model"), area.model.isEmpty ? "—" : area.model),
         ]

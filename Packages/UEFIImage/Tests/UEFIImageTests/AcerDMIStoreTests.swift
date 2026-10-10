@@ -11,7 +11,7 @@ final class AcerDMIStoreTests: XCTestCase {
     /// 22 alphanumerics: "N" first, "00" at 7, "3400" at the end.
     private static let serial = "N51TEST000000000003400"
     /// 22 alphanumerics: "NB" first, "1100" at 5, "3400" at the end.
-    private static let tag = "NB2TE11000000000003400"
+    private static let motherboardSerial = "NB2TE11000000000003400"
     /// Version 1, variant 1; the last six bytes are the tail the block copies.
     private static let uuid: [UInt8] = [0x12, 0x34, 0x56, 0x78, 0x90, 0xAB, 0x17, 0x88, 0x89, 0xCD,
                                         0xEF, 0x01, 0x02, 0x03, 0x04, 0x05]
@@ -34,7 +34,7 @@ final class AcerDMIStoreTests: XCTestCase {
         for (index, byte) in AcerDMIArea.signature.enumerated() {
             bytes[Int(AcerDMIArea.signatureOffset) + index] = byte
         }
-        put(&bytes, tag, at: 0x50)
+        put(&bytes, motherboardSerial, at: 0x50)
         for (index, byte) in uuid.enumerated() {
             bytes[0x70 + index] = byte
         }
@@ -166,7 +166,7 @@ final class AcerDMIStoreTests: XCTestCase {
         parsed = parse {
             $0.replaceSubrange(at + 0x50..<(at + 0x50 + 22), with: Array("MB2TE11000000000003400".utf8))
         }
-        XCTAssertTrue(stores(parsed).isEmpty, "the service tag is not one")
+        XCTAssertTrue(stores(parsed).isEmpty, "the motherboard serial is not one")
         parsed = UEFIParser.parse(Self.image(blockAt: 0x9800)) // a start not 4 KiB-aligned
         XCTAssertTrue(stores(parsed).isEmpty, "the start is not aligned")
         parsed = parse { $0[at + 0x200] = 0x42 } // data where only padding may be
@@ -186,7 +186,7 @@ final class AcerDMIStoreTests: XCTestCase {
     func testTheFieldsAreReadOffTheBlock() throws {
         let area = try XCTUnwrap(AcerDMIArea.found(stored: Self.block(), offset: 0x8000))
         XCTAssertEqual(area.systemSerial, Self.serial)
-        XCTAssertEqual(area.serviceTag, Self.tag)
+        XCTAssertEqual(area.motherboardSerial, Self.motherboardSerial)
         XCTAssertEqual(area.uuid, Self.uuid)
         XCTAssertEqual(area.uuidText, "78563412-AB90-1788-89CD-EF0102030405")
         XCTAssertEqual(area.model, "TEST-1050")
@@ -227,7 +227,7 @@ final class AcerDMIStoreTests: XCTestCase {
             return try! AcerDMIArea.found(stored: bytes, offset: 0x8000)!.findings
         }
         XCTAssertEqual(findings { $0[7] = 0x35 }, [.serialPattern], "the serial's pattern is gone")
-        XCTAssertEqual(findings { $0[0x50 + 5] = 0x32 }, [.serviceTagPattern], "the tag's pattern is gone")
+        XCTAssertEqual(findings { $0[0x50 + 5] = 0x32 }, [.motherboardSerialPattern], "the motherboard serial's pattern is gone")
         XCTAssertEqual(findings { $0[0x70 + 6] = 0x47 }, [.uuidVersion], "the UUID is version 4")
         XCTAssertEqual(findings { $0[0x70 + 8] = 0x09 }, [.uuidVariant], "the variant bit is not set")
         XCTAssertEqual(findings { $0[0xF3] = 0x00 }, [.constantWrong], "the constant is not 02")

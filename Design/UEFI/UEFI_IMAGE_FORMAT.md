@@ -1680,7 +1680,7 @@ published.
 
 A block is the eight kilobytes at a 4 KiB boundary of written padding — or of
 the flash-device-map region that holds it — that pass the checks: the
-signature at `+0x3C`, a system serial and a service tag that read as one, and
+signature at `+0x3C`, a system serial and a motherboard serial that read as one, and
 padding — `FF` or `00` — everywhere the fields are not. That last line is what
 keeps a secure-boot string or an EC image from passing: the block is ~97%
 padding.
@@ -1690,7 +1690,7 @@ padding.
 | `0x00` | the system serial, 22 alphanumerics, the first of them `N` |
 | `0x30` | a flag the factory writes per build |
 | `0x3C` | `06 FF FF FF` and `Acer` at `0x40` — the block's signature |
-| `0x50` | the service tag, 22 alphanumerics, the first two of them `NB` |
+| `0x50` | the motherboard serial, 22 alphanumerics, the first two of them `NB` |
 | `0x70` | the UUID, 16 bytes |
 | `0x80` | the model |
 | `0xA0` | the asset tag, where written |
@@ -1709,7 +1709,7 @@ decimal digits and two 6-byte records; what they are is not documented.
 
 What a wiped or tampered block reads wrong is listed in the details, and does
 not hide it: the factory serials read `00` at offset 7 and `3400` at the end,
-the factory service tags read `1100` at offset 5 and `3400` at the end, the
+the factory motherboard serials read `1100` at offset 5 and `3400` at the end, the
 factory UUIDs are version 1 and variant 1, and `+0xF3` reads `02`. The node
 is an `acerDMIStore`, fixed, named `Acer DMI` with the serial its row carries,
 classified as UEFITool's padding. A wiped block is all `FF`, its signature is
