@@ -21,7 +21,6 @@ final class AppearanceSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-
         // Font row: a popup of "System" + the monospaced families, with the
         // font-size stepper + value sharing the same row (the size has no label
         // of its own). NSStepper's min/max/increment are Doubles; the size is an
@@ -266,7 +265,10 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     /// One button for every tab, not one per tab: the Settings page covers the
     /// whole window, and a `?` that appears on some tabs and not on others
     /// reads as though only those tabs have help. It lives in the window's
-    /// chrome so that it stays put while the tabs below it change size.
+    /// chrome so that it stays put while the tabs below it change size. Two
+    /// tabs add a `?` of their own beside their first control, because a page
+    /// other than Settings explains them: Editing (the editing modes, and why
+    /// the shifting edits ask first) and Agent.
     ///
     /// Not a titlebar accessory: with a preference-style toolbar, AppKit puts
     /// a trailing accessory in the toolbar's row, beside the last tab. The

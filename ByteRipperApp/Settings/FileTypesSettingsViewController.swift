@@ -63,7 +63,6 @@ final class FileTypesSettingsViewController: NSViewController,
     override func loadView() {
         let root = NSView()
 
-
         let list = makeTable()
         let footer = makeFooter()
 
@@ -78,7 +77,6 @@ final class FileTypesSettingsViewController: NSViewController,
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-
             list.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
             list.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
             list.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),

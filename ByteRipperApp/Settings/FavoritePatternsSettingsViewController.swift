@@ -80,7 +80,6 @@ final class FavoritePatternsSettingsViewController: NSViewController,
     override func loadView() {
         let root = NSView()
 
-
         let list = makeTable()
         let footer = makeFooter()
 
@@ -103,7 +102,6 @@ final class FavoritePatternsSettingsViewController: NSViewController,
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-
             location.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
             location.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
             location.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),

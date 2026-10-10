@@ -18,7 +18,6 @@ final class TextDecodingSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-
         // Decoding table popup.
         let tableLabel = NSTextField(labelWithString: L("Decoding table:"))
         tablePopup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)

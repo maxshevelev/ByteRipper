@@ -1,4 +1,6 @@
 import Cocoa
+import HelpBook
+import HelpUI
 import Localization
 
 /// The persisted editing behaviour: whether the edits that shift the file ask
@@ -45,7 +47,6 @@ final class EditingSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-
         warnCheckbox.title = L("Ask before edits that shift the file")
         warnCheckbox.target = self
         warnCheckbox.action = #selector(warnChanged(_:))
@@ -56,14 +57,24 @@ final class EditingSettingsViewController: NSViewController {
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 3
 
-        for subview in [warnCheckbox, caption] {
+        // A `?` of its own beside the window's: this tab's switch turns off the
+        // dialogs that stand between a flash dump and an edit that shifts every
+        // byte after it, and the page on editing says how the modes differ and
+        // why those edits are the dangerous ones (the Agent tab keeps one for
+        // the same reason: its page is not the Settings page).
+        let help = HelpButton.standard(for: .topic(.editing))
+
+        for subview in [warnCheckbox, caption, help] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-
             warnCheckbox.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
             warnCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+
+            help.centerYAnchor.constraint(equalTo: warnCheckbox.centerYAnchor),
+            help.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            warnCheckbox.trailingAnchor.constraint(lessThanOrEqualTo: help.leadingAnchor, constant: -8),
 
             caption.topAnchor.constraint(equalTo: warnCheckbox.bottomAnchor, constant: 12),
             caption.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),

@@ -34,7 +34,6 @@ final class LanguageSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-
         let languageLabel = NSTextField(labelWithString: L("Language:"))
         languagePopup.target = self
         languagePopup.action = #selector(languageChanged(_:))
@@ -84,7 +83,6 @@ final class LanguageSettingsViewController: NSViewController {
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-
             grid.topAnchor.constraint(equalTo: root.topAnchor, constant: 18),
             grid.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
             grid.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -18),

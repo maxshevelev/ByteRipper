@@ -33,7 +33,6 @@ final class LayoutSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-
         // Layout direction row: the split orientation a new comparison opens in.
         let layoutLabel = NSTextField(labelWithString: L("Layout Direction:"))
         layoutDirectionPopup.target = self

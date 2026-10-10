@@ -111,7 +111,6 @@ final class AgentSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-
         enableCheckbox.title = L("Let agents connect to ByteRipper")
         enableCheckbox.target = self
         enableCheckbox.action = #selector(enableChanged(_:))
@@ -178,7 +177,6 @@ final class AgentSettingsViewController: NSViewController {
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-
             help.centerYAnchor.constraint(equalTo: enableCheckbox.centerYAnchor),
             help.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 

@@ -52,7 +52,6 @@ final class ComparisonSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-
         let groupingLabel = NSTextField(labelWithString: L("Group Differences Within:"))
         groupingPopup.target = self
         groupingPopup.action = #selector(groupingChanged(_:))
