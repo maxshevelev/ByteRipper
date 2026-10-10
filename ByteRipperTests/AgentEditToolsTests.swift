@@ -79,11 +79,28 @@ final class AgentEditToolsTests: XCTestCase {
 
     func testTheEditToolsAreListedAsEdits() throws {
         let tools = Dictionary(uniqueKeysWithValues: service.server.tools.map { ($0.name, $0) })
-        for name in ["write", "uefi_fix_checksum", "fit_fix_checksum"] {
+        for name in ["write", "copy_to_other_pane", "uefi_fix_checksum", "fit_fix_checksum"] {
             let tool = try XCTUnwrap(tools[name], name)
             XCTAssertEqual(tool.annotations, .edit, name)
             XCTAssertNotNil(tool.inputSchema["properties"]?["document"], name)
         }
+    }
+
+    /// Two files side by side in one tab, A first; B read-only when asked.
+    private func openPair(_ a: [UInt8], _ b: [UInt8], bReadOnly: Bool = false) throws -> (PaneViewModel, PaneViewModel) {
+        let first = try open(a)
+        let url = try write(b, "back.bin")
+        if bReadOnly {
+            try FileManager.default.setAttributes([.posixPermissions: 0o444], ofItemAtPath: url.path)
+        }
+        let controller = try XCTUnwrap(self.controller)
+        try controller.windowModel.pane2.open(url: url)
+        controller.apply(mode: .comparison)
+        return (first, controller.windowModel.pane2)
+    }
+
+    private func id(of pane: PaneViewModel) throws -> String {
+        try XCTUnwrap(service.desk.places().first { $0.pane === pane }?.id)
     }
 
     // MARK: - The switch
@@ -124,6 +141,79 @@ final class AgentEditToolsTests: XCTestCase {
 
         XCTAssertTrue(try pane.undo())
         XCTAssertEqual(try bytes(pane, 0..<5), [0x10, 0x11, 0x12, 0x13, 0x14])
+    }
+
+    // MARK: - copy_to_other_pane
+
+    /// The bytes go over the same addresses in the other file, as ⌥⌘C does:
+    /// one undo step there, the source untouched, the count of bytes that
+    /// actually changed in the answer.
+    func testACopyToTheOtherPaneIsOneUndoStepThere() async throws {
+        let (a, b) = try openPair([1, 2, 3, 4, 5, 6], [1, 9, 3, 9, 9, 6])
+        service.editsAllowed = true
+        let answer = try await client.answer("copy_to_other_pane",
+                                             ["document": .string(try id(of: a)), "offset": 1, "length": "0x4"])
+        XCTAssertEqual(try bytes(b, 0..<6), [1, 2, 3, 4, 5, 6])
+        XCTAssertEqual(try bytes(a, 0..<6), [1, 2, 3, 4, 5, 6], "the source is only read")
+        XCTAssertEqual(answer["changed"], 3)
+        XCTAssertEqual(answer["to"], .string(try id(of: b)))
+        XCTAssertEqual(answer["end"], "0x5")
+        XCTAssertEqual(answer["undo"], "Agent: Copy to Other Pane")
+        XCTAssertEqual(b.undoLabel, "Agent: Copy to Other Pane")
+        XCTAssertFalse(a.status.isDirty)
+        XCTAssertTrue(try b.undo())
+        XCTAssertEqual(try bytes(b, 0..<6), [1, 9, 3, 9, 9, 6])
+
+        // And back, B into A, under the agent's own words.
+        _ = try await client.answer("copy_to_other_pane", ["document": .string(try id(of: b)), "offset": 0,
+                                                           "length": 2, "label": "Take B's header"])
+        XCTAssertEqual(try bytes(a, 0..<2), [1, 9])
+        XCTAssertEqual(a.undoLabel, "Agent: Take B's header")
+    }
+
+    /// The answer says where in the firmware the copied range lies, as
+    /// `diff` and `find_bytes` do.
+    func testACopyNamesThePartOfTheFirmwareItCovers() async throws {
+        let image = try CompressedTestImage.make(holding: "MODEL")
+        let (_, b) = try openPair(image, [UInt8](repeating: 0xFF, count: image.count))
+        service.editsAllowed = true
+        let answer = try await client.answer("copy_to_other_pane", ["offset": 0, "length": .int(Int64(image.count))])
+        XCTAssertEqual(try bytes(b, 0..<UInt64(image.count)), image)
+        XCTAssertNotNil(answer["where"]?.arrayValue?.first?["name"], "\(answer)")
+    }
+
+    func testACopyOverIdenticalBytesWritesNothing() async throws {
+        let (_, b) = try openPair([1, 2, 3], [1, 2, 3])
+        service.editsAllowed = true
+        let answer = try await client.answer("copy_to_other_pane", ["offset": 0, "length": 3])
+        XCTAssertEqual(answer["changed"], 0)
+        XCTAssertEqual(answer["undo"], .null)
+        XCTAssertFalse(b.status.isDirty, "no undo step for nothing")
+    }
+
+    func testACopyIsRefusedWhereTheMenuRefusesIt() async throws {
+        let (a, b) = try openPair([1, 2, 3, 4, 5, 6], [0, 0, 0, 0])
+        let off = try await client.call("copy_to_other_pane", ["offset": 0, "length": 2])
+        XCTAssertTrue(off.answer.stringValue?.hasPrefix("Editing is switched off.") == true, "\(off.answer)")
+        service.editsAllowed = true
+        let past = try await client.call("copy_to_other_pane",
+                                         ["document": .string(try id(of: a)), "offset": 2, "length": 4])
+        XCTAssertTrue(past.isError)
+        XCTAssertTrue(past.answer.stringValue?.contains("past the end of") == true, "\(past.answer)")
+        XCTAssertEqual(try bytes(b, 0..<4), [0, 0, 0, 0], "a copy never grows the file")
+    }
+
+    func testACopyNeedsASecondFileThatCanBeWritten() async throws {
+        try open([1, 2, 3])
+        service.editsAllowed = true
+        let alone = try await client.call("copy_to_other_pane", ["offset": 0, "length": 1])
+        XCTAssertTrue(alone.answer.stringValue?.contains("alone in its tab") == true, "\(alone.answer)")
+
+        let (a, b) = try openPair([1, 2, 3], [0, 0, 0], bReadOnly: true)
+        let readOnly = try await client.call("copy_to_other_pane",
+                                             ["document": .string(try id(of: a)), "offset": 0, "length": 1])
+        XCTAssertTrue(readOnly.answer.stringValue?.contains("read-only") == true, "\(readOnly.answer)")
+        XCTAssertEqual(try bytes(b, 0..<3), [0, 0, 0])
     }
 
     func testExpectWritesOnlyOverTheBytesNamed() async throws {

@@ -1,4 +1,4 @@
-@source-sha dd577fa76d8e38e87914fa55049ba2908141faa3693df766f06ed0de06708aa0
+@source-sha d4f7a92d6a13e66c3041cf0be164569c9a906e7df890d83367fd5d8202e577e6
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -93,6 +93,7 @@ Die Option **Agenten das Ändern geöffneter Dateien erlauben** unter **Einstell
 Ist sie eingeschaltet, kann der Agent:
 
 - Bytes in einer Datei überschreiben, die in einem Tab geöffnet ist. Ein Schreibvorgang ersetzt genau so viele Bytes, wie er mitbringt, und fügt niemals Bytes ein oder entfernt welche. Er lässt sich an die Bedingung knüpfen, dass an der Adresse derzeit bestimmte Bytes stehen;
+- einen Abschnitt einer der beiden Dateien eines Tabs an dieselben Adressen der anderen kopieren, wie es **Bearbeiten ▸ In den anderen Bereich kopieren** mit der Auswahl tut. Die Bytes gehen innerhalb von ByteRipper von Datei zu Datei und nicht über den Agenten, sodass sich eine ganze Region auf einmal kopieren lässt; die Antwort nennt, wie viele Bytes sich tatsächlich geändert haben. Ein Kopieren über das Ende der anderen Datei hinaus und in eine schreibgeschützt geöffnete Datei wird abgelehnt;
 - Prüfsummen korrigieren — die eines Volumes, einer Datei oder eines Microcodes in **UEFI-Struktur** und die der Tabelle in **FIT-Tabelle**. Die Berechnung erfolgt mit demselben Code wie beim Befehl **Prüfsumme korrigieren** der Bereiche;
 - Microcode in der FIT hinzufügen, aktualisieren, ersetzen und entfernen, und zwar aus demselben Online-Katalog, den **FIT-Tabelle** anbietet, und mit denselben Prüfungen. Ein Update, das unter einer anderen seiner CPUIDs bereits in der Tabelle steht, wird abgelehnt. Ein Update, dessen erweiterte Signaturtabelle einen Prozessor abdeckt, für den bereits ein Eintrag zuständig ist, tritt an die Stelle dieses Eintrags. Ein Ersatz, nach dem einem Prozessor zwei Microcodes zugeordnet wären, wird abgelehnt, wobei der zu ersetzende Eintrag genannt wird;
 - ermitteln, für welche Microcodes des Images der Katalog eine neuere Revision bereithält.

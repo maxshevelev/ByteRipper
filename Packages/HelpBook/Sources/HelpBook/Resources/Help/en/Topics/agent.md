@@ -78,6 +78,7 @@ An agent cannot save a file, and changes one only when that is allowed (below). 
 While it is on, an agent can:
 
 - overwrite bytes in a file open in a tab. A write replaces as many bytes as it carries and never inserts or deletes; it can be made conditional on the bytes that are there now;
+- copy a stretch of one of a tab's two files over the same addresses in the other, as **Edit ▸ Copy to Other Pane** does with the selection. The bytes pass from file to file inside ByteRipper and not through the agent, so a whole region is copied at once; the answer says how many bytes actually changed. A copy past the end of the other file is refused, as is a copy into a file opened read-only;
 - put a checksum right — a volume's, a file's or a microcode's in **UEFI Structure**, the table's in **FIT Table** — computed by the same code as the panels' **Fix Checksum**;
 - add, update, replace and remove microcode in the FIT from the same online catalogue **FIT Table** offers, with the same checks: an update already in the table under another of its CPUIDs is refused, an update whose extended signature table serves a processor a row already serves takes that row's place, and a replacement that would leave two microcodes for one processor is refused naming the row to replace. The agent can also say which of the image's microcodes the catalogue has a newer revision for.
 

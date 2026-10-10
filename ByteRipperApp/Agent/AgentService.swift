@@ -105,6 +105,9 @@ final class AgentService {
         self.findTools = AgentFindTools(desk: desk, diff: diffTools)
         self.moduleTools = AgentModuleTools(desk: desk, edits: editTools, modules: { modules })
         editTools.isAllowed = { [weak self] in self?.editsAllowed ?? false }
+        editTools.locate = { [diffTools] host, range in
+            await diffTools.locate(host, [range]).first?.map(AgentDiffTools.placeJSON) ?? []
+        }
         markTools.onChange = { [weak self] in self?.changed() }
         dumpTools.onChange = { [weak self] in self?.changed() }
         // A survey runs the other tools; it finds them in the finished list.

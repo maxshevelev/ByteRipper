@@ -17,6 +17,9 @@ final class AgentEditTools {
     let desk: AgentDesk
     /// The edit switch, read at each call.
     var isAllowed: () -> Bool = { false }
+    /// Where a range lies in the firmware, as `diff` names it — set by the
+    /// service, which has the locators.
+    var locate: (PaneToolHost, Range<UInt64>) async -> [JSONValue] = { _, _ in [] }
 
     /// The most bytes one `write` carries: a patch, not an image.
     static let writeLimit = 0x1_0000
@@ -25,7 +28,7 @@ final class AgentEditTools {
         self.desk = desk
     }
 
-    nonisolated func tools() -> [AgentTool] { [writeTool] }
+    nonisolated func tools() -> [AgentTool] { [writeTool, copyTool] }
 
     // MARK: - write
 
@@ -81,6 +84,101 @@ final class AgentEditTools {
         }
         let undoName = Self.inAppLanguage { L("Agent: %1$@", label) }
         return .json(try apply(ToolTransaction(name: undoName, offset: offset, bytes: bytes), to: place))
+    }
+
+    // MARK: - copy_to_other_pane
+
+    private nonisolated var copyTool: AgentTool {
+        AgentTool(
+            name: "copy_to_other_pane",
+            title: "Copy bytes to the other pane",
+            description: """
+                Copies a range of one of a tab's two files over the same addresses in the other — what \
+                Edit ▸ Copy to Other Pane (⌥⌘C) does with the selection. The bytes go from file to file \
+                inside ByteRipper and never through you, so there is no size limit: a whole region or \
+                volume is one call. Overwrites only: a range past the end of the other file is refused, \
+                never grown. One undo step in the receiving file, named by `label`; the copied bytes show \
+                red until the person saves, and its pane scrolls to them. The answer says how many bytes \
+                actually changed and where in the firmware the range lies. Needs the person's permission \
+                — Settings ▸ Agent, "Let agents edit open files". Never saves; checksums are not updated.
+                """,
+            inputSchema: AgentSchema.object([
+                "document": AgentSchema.string(
+                    "The file to copy from: one of a tab's two files, by its id from `documents`. "
+                    + "Default: the focused one."),
+                "offset": AgentSchema.offset("The first byte, e.g. \"0x7F3000\"."),
+                "length": AgentSchema.offset("How many bytes, at least 1."),
+                "label": AgentSchema.string(
+                    "What the copy is, for the undo step, in the person's language. Default: Copy to Other Pane.")
+            ], required: ["offset", "length"]),
+            annotations: .edit
+        ) { call in
+            try await self.copyToOtherPane(call.arguments)
+        }
+    }
+
+    private func copyToOtherPane(_ arguments: AgentArguments) async throws -> AgentAnswer {
+        let source = try resolve(arguments.optionalString("document"))
+        let controller = try source.onScreen()
+        let model = controller.windowModel
+        guard source.slot == "A" || source.slot == "B" else {
+            throw AgentToolError("\(source.id) is a part over a file, not one of a tab's two files; it has no "
+                + "pane beside it. Use `write`, or copy in the tab's own files.")
+        }
+        let other = source.pane === model.pane1 ? model.pane2 : model.pane1
+        guard let otherDocument = other.document,
+              let destination = desk.places().first(where: { $0.pane === other && $0.pane.document === otherDocument })
+        else {
+            throw AgentToolError("\(source.id) is alone in its tab; there is no other pane to copy into. "
+                + "`compare` puts a second file beside it.")
+        }
+        let offset = try arguments.offset("offset")
+        let length = try arguments.offset("length")
+        guard length > 0 else { throw AgentToolError("Argument `length` must be at least 1.") }
+        guard offset < source.pane.fileSize, length <= source.pane.fileSize - offset else {
+            throw AgentToolError("The range \(AgentHostTools.hexText(offset))+\(AgentHostTools.hexText(length)) "
+                + "runs past the end of \(source.id), which is \(AgentHostTools.hexText(source.pane.fileSize)) bytes long.")
+        }
+        guard length <= UInt64(Int.max) else { throw AgentToolError("The range is too long.") }
+        try checkEditable(destination)
+        let range = offset..<(offset + length)
+        guard range.upperBound <= destination.pane.fileSize else {
+            throw AgentToolError("The range ends at \(AgentHostTools.hexText(range.upperBound)), past the end of "
+                + "\(destination.id), which is \(AgentHostTools.hexText(destination.pane.fileSize)) bytes long. "
+                + "Nothing was copied; a copy overwrites, it does not grow the file.")
+        }
+        let bytes = try source.pane.byteStorage?.read(at: offset, length: Int(length)) ?? []
+        let there = try destination.pane.byteStorage?.read(at: offset, length: Int(length)) ?? []
+        guard bytes.count == Int(length), there.count == Int(length) else {
+            throw AgentToolError("Could not read \(AgentHostTools.hexText(length)) bytes at \(AgentHostTools.hexText(offset)).")
+        }
+        let changed = zip(bytes, there).reduce(0) { $0 + ($1.0 == $1.1 ? 0 : 1) }
+        let label = (try arguments.optionalString("label") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let undoName = Self.inAppLanguage {
+            L("Agent: %1$@", label.isEmpty ? L("Copy to Other Pane") : label)
+        }
+        var answer: [String: JSONValue] = [
+            "from": .string(source.id),
+            "to": .string(destination.id),
+            "start": AgentHostTools.hex(range.lowerBound),
+            "end": AgentHostTools.hex(range.upperBound),
+            "length": AgentHostTools.hex(length),
+            "changed": .int(Int64(changed))
+        ]
+        let host = PaneToolHost(pane: source.pane, owner: controller, tools: nil)
+        let places = await locate(host, range)
+        if !places.isEmpty { answer["where"] = .array(places) }
+        guard changed > 0 else {
+            // Nothing to undo: the other file holds these bytes already.
+            answer["undo"] = .null
+            answer["note"] = "The other file already holds these bytes; nothing was written."
+            return .json(.object(answer))
+        }
+        guard case .object(let applied) = try apply(ToolTransaction(name: undoName, offset: offset, bytes: bytes),
+                                                    to: destination) else { return .json(.object(answer)) }
+        answer["undo"] = applied["undo"]
+        answer["saved"] = false
+        return .json(.object(answer))
     }
 
     // MARK: - Applying
