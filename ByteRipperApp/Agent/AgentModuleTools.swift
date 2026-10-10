@@ -69,13 +69,31 @@ final class AgentModuleTools {
         return .json(await AgentNodeLinks(desk: desk).annotate(value, place: place))
     }
 
+    /// `body`, with a refusal over a node id `place` has not got saying which
+    /// open part or parent has it — the id an agent carried over from the
+    /// other document of the pair, the commonest way to get one wrong.
+    private func explainingNodes(place: AgentDesk.Place, links: Bool,
+                                 _ body: () async throws -> AgentAnswer) async throws -> AgentAnswer {
+        do {
+            return try await body()
+        } catch let error as AgentToolError where links {
+            let prefix = "No node "
+            guard error.message.hasPrefix(prefix) else { throw error }
+            let id = String(error.message.dropFirst(prefix.count).prefix { $0.isNumber || $0 == "." })
+            let holders = await AgentNodeLinks(desk: desk).documents(holding: id, besides: place)
+            guard !holders.isEmpty else { throw error }
+            let said = holders.map { "\(id) is a node of \($0.document) (\($0.name)); call it with `document` \"\($0.document)\"." }
+            throw AgentToolError(error.message + " " + said.joined(separator: " "))
+        }
+    }
+
     private func runQuery(_ query: ToolAgentQuery, links: Bool, _ arguments: AgentArguments) async throws -> AgentAnswer {
         let place = try resolve(arguments)
         // A host that reads and nothing else: no session is behind it, and a
         // query must not draw zones or put up sheets on a panel that is not
         // there.
         let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
-        var answer = try await query.run(host, arguments)
+        var answer = try await explainingNodes(place: place, links: links) { try await query.run(host, arguments) }
         if links { answer = await linked(answer, place: place) }
         if case .json(let value) = answer, case .object(var members) = value {
             members["document"] = .string(place.id)
@@ -179,7 +197,13 @@ final class AgentModuleTools {
                 + "Call `open_panel` with module \"\(short)\" first, or show the bytes with `reveal`.")
         }
         if action.changesView { desk.bringForward(place) }
-        let answer = try await action.run(session, arguments)
+        var answer = try await explainingNodes(place: place, links: links) { try await action.run(session, arguments) }
+        // The answer says which document it was, as a query's does: with a
+        // part and its parent both open, which panel chose the node.
+        if case .json(.object(var members)) = answer {
+            members["document"] = .string(place.id)
+            answer = .json(.object(members))
+        }
         return links ? await linked(answer, place: place) : answer
     }
 

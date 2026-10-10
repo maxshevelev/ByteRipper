@@ -277,9 +277,26 @@ final class AgentFindToolsTests: XCTestCase {
         XCTAssertEqual(own["counterpart"]?.arrayValue?.first?["as"], "encoded")
         XCTAssertNil(back["focus_note"], "the call went where the focus is")
 
+        // The part's top wraps the block, the same bytes: only the block —
+        // the innermost — is linked, so one node of the parent has one here.
+        let chain = try XCTUnwrap(back["chain"]?.arrayValue)
+        let blockRange = (start: "0x0", end: "0x1000")
+        let wrappers = chain.filter { $0["start"]?.stringValue == blockRange.start && $0["end"]?.stringValue == blockRange.end }
+        XCTAssertGreaterThanOrEqual(wrappers.count, 2, "the top and the block: \(chain)")
+        XCTAssertEqual(wrappers.filter { $0["counterpart"] != nil }.count, 1, "\(wrappers)")
+
         let refused = try await client.call("uefi_tree", ["document": "d1", "node": "9.9.9"])
         XCTAssertTrue(refused.isError)
         XCTAssertTrue(refused.answer.stringValue?.contains("The focus is on \(part)") == true, "\(refused.answer)")
+        // The part's id asked of the parent: the refusal says whose it is.
+        let carried = try await client.call("uefi_tree", ["document": "d1", "node": .string(partNode)])
+        XCTAssertTrue(carried.isError)
+        XCTAssertTrue(carried.answer.stringValue?.contains("\(partNode) is a node of \(part)") == true, "\(carried.answer)")
+
+        // A panel's answer says which document's panel chose the node.
+        _ = try await client.answer("open_panel", ["module": "uefi-structure", "document": .string(part)])
+        let selected = try await client.answer("uefi_select", ["document": .string(part), "node": .string(partNode)])
+        XCTAssertEqual(selected["document"]?.stringValue, part, "\(selected)")
     }
 
     /// A compressed section and every node it decompresses to say how the

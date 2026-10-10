@@ -46,7 +46,9 @@ public enum UEFIAgentQueries {
             whose levels below are too large alone comes without them, marked `truncated: "item"`; ask for \
             it as `node`. Ids belong to the document they were listed on: a part opened with `open_part` has \
             a tree of its own, with ids that start over (the parent's 0.3.4.1.2.5 is 0.0.5 in the \
-            decoded block), so give the `document` the id came from.
+            decoded block), so give the `document` the id came from. Asked of the parent while the focus is \
+            on its part, or the other way round, the answer carries a `focus_note`; a refusal over an id of \
+            the other one names the document that has it.
             """,
         properties: [
             "node": AgentSchema.string("A node id such as \"0.2.5\" from an earlier answer. Default: the top."),
