@@ -1,6 +1,6 @@
 /* ByteRipper — русский. Ключ — английский текст.
    Термины прошивок ($FPT, Boot Guard, FIT, MFS…) не переводятся:
-   так их называют даташиты, форумы и остальные инструменты. */
+   так они обозначены в даташитах, на форумах и в остальных инструментах. */
 
 " (last published %1$@)" = " (последняя публикация %1$@)";
 " — cannot be published: %1$@" = " — не удаётся опубликовать: %1$@";
@@ -394,7 +394,7 @@
 "Fix FIT Checksum" = "Исправление контрольной суммы FIT";
 "Flags" = "Признаки";
 "Flash chips in VSCC table" = "Микросхемы flash в таблице VSCC";
-"Follow the Mac, or pick a language of your own. Firmware terms — $FPT, Boot Guard, FIT — keep their English names in every language, because that is what the datasheets and the other tools call them." = "Следовать языку Mac или выбрать свой. Термины прошивок — $FPT, Boot Guard, FIT — во всех языках остаются английскими: так их называют даташиты и остальные инструменты.";
+"Follow the Mac, or pick a language of your own. Firmware terms — $FPT, Boot Guard, FIT — keep their English names in every language, because that is what the datasheets and the other tools call them." = "Следовать языку Mac или выбрать свой. Термины прошивок — $FPT, Boot Guard, FIT — во всех языках остаются английскими: так они обозначены в даташитах и остальных инструментах.";
 "Font:" = "Шрифт:";
 "Forget the selected zone" = "Убрать выбранную зону из списка";
 "Forward" = "Вперёд";
@@ -662,7 +662,7 @@
 "Processor" = "Процессор";
 "Protected by" = "Чем защищено";
 "Protection" = "Защита";
-"Put a microcode in the image and name it in the table" = "Положить микрокод в образ и назвать его в таблице";
+"Put a microcode in the image and name it in the table" = "Положить микрокод в образ и внести его в таблицу";
 "Put the caret somewhere in the dump first." = "Сначала установите курсор в дампе.";
 "Put “%1$@” back into %2$@?" = "Записать «%1$@» обратно в %2$@?";
 "Quit ByteRipper" = "Завершить ByteRipper";
