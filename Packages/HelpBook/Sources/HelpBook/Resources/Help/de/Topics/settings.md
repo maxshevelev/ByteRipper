@@ -1,12 +1,9 @@
-@source-sha 67f66809f17aea62f547443db52c42a00c1d01f2212352d6777d3d07047a330b
+@source-sha 4e78c3adce2768f157c100b7207bfe6647054b68b52f4035de09ab0fa5f53c8e
 # Einstellungen
 
 > ⌘, — die programmweiten Einstellungen.
 
-- **Darstellung** — das Aussehen des Programms und die Sprache seiner Oberfläche: drei Abschnitte auf einer Seite.
-- **Darstellung ▸ Erscheinungsbild** — die nichtproportionale Schrift, ihre Größe und die Zeilenhöhe der Hex-Ansicht, und ob das Programm dem System folgt oder fest hell oder dunkel ist. Die Schriftgröße lässt sich auch über **⌘=** / **⌘−** im Menü „Darstellung“ ändern.
-- **Darstellung ▸ Aufteilung** — wie die Bereiche angeordnet sind und was sich das Fenster merkt.
-- **Darstellung ▸ Sprache** — dem Mac folgen oder eine eigene wählen. Die Hilfe wechselt sofort, Menüs und Fenster nach einem Neustart. Firmware-Begriffe bleiben in jeder Sprache englisch: so heißen sie in den Datenblättern und in den übrigen Werkzeugen.
+- **Darstellung** — das Aussehen des Programms und die Sprache seiner Oberfläche, in drei durch Linien getrennten Gruppen. Die erste legt die nichtproportionale Schrift, ihre Größe und die Zeilenhöhe der Hex-Ansicht fest sowie, ob das Programm dem Erscheinungsbild des Systems folgt oder stets hell oder dunkel ist; die Schriftgröße lässt sich auch mit **⌘=** / **⌘−** im Menü „Darstellung“ ändern. Die zweite bestimmt die Anordnung der Bereiche und die Wortbreite, mit der ein neuer Vergleich geöffnet wird. Die dritte wählt die Sprache: die des Mac oder eine eigene. Die Hilfe wechselt sofort, Menüs und Fenster nach einem Neustart. Firmware-Begriffe bleiben in jeder Sprache englisch, denn so heißen sie in den Datenblättern und in den übrigen Werkzeugen.
 - **Vergleich** — wie Unterschiede gezeigt und gezählt werden.
 - **Bearbeiten** — die Rückfragen vor Änderungen, welche die Länge der Datei verändern ([[topic:editing|Bytes bearbeiten]]). Sie sind voreingestellt, und es ist dieselbe Einstellung wie das Kästchen „Nicht mehr fragen“ in den Dialogen selbst.
 - **Textdecodierung** — die Codierung, mit der die Textspalte gelesen wird.

@@ -45,8 +45,6 @@ final class EditingSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: L("Editing"))
-        titleLabel.font = .boldSystemFont(ofSize: 15)
 
         warnCheckbox.title = L("Ask before edits that shift the file")
         warnCheckbox.target = self
@@ -58,15 +56,13 @@ final class EditingSettingsViewController: NSViewController {
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 3
 
-        for subview in [titleLabel, warnCheckbox, caption] {
+        for subview in [warnCheckbox, caption] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
-            titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
 
-            warnCheckbox.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
+            warnCheckbox.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
             warnCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
 
             caption.topAnchor.constraint(equalTo: warnCheckbox.bottomAnchor, constant: 12),

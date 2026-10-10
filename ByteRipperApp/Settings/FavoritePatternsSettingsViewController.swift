@@ -80,8 +80,6 @@ final class FavoritePatternsSettingsViewController: NSViewController,
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: L("Search Patterns"))
-        titleLabel.font = .boldSystemFont(ofSize: 15)
 
         let list = makeTable()
         let footer = makeFooter()
@@ -100,15 +98,13 @@ final class FavoritePatternsSettingsViewController: NSViewController,
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 4
 
-        for subview in [titleLabel, location, list, footer, message, caption] {
+        for subview in [location, list, footer, message, caption] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
-            titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
 
-            location.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 10),
+            location.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
             location.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
             location.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 

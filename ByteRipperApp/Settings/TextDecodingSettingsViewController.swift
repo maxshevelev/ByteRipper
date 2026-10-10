@@ -18,8 +18,6 @@ final class TextDecodingSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: L("Text Decoding"))
-        titleLabel.font = .boldSystemFont(ofSize: 15)
 
         // Decoding table popup.
         let tableLabel = NSTextField(labelWithString: L("Decoding table:"))
@@ -69,12 +67,11 @@ final class TextDecodingSettingsViewController: NSViewController {
         grid.column(at: 0).xPlacement = .trailing
         grid.setContentHuggingPriority(.defaultLow, for: .horizontal)
 
-        // Left column: title, controls, caption, reset.
+        // Left column: controls, caption, reset.
         let leftStack = NSStackView()
         leftStack.orientation = .vertical
         leftStack.alignment = .leading
         leftStack.spacing = 14
-        leftStack.addArrangedSubview(titleLabel)
         leftStack.addArrangedSubview(grid)
         leftStack.addArrangedSubview(previewCaption)
         leftStack.addArrangedSubview(resetButton)

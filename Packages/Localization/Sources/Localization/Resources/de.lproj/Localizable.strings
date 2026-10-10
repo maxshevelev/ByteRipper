@@ -135,7 +135,6 @@
 "All unsaved changes will be discarded." = "Alle ungesicherten Änderungen gehen verloren.";
 "Already a favourite, as “%1$@”." = "Bereits als Favorit vorhanden, unter „%1$@“.";
 "Analyzing the ME firmware…" = "ME-Firmware wird analysiert…";
-"Appearance" = "Erscheinungsbild";
 "Append" = "Anhängen";
 "Append File…" = "Datei anhängen…";
 "Append at End" = "Am Ende anhängen";
@@ -495,10 +494,8 @@
 "Keep the pattern library in a folder of your own — a synced one puts it on your other Macs, and one that already has a library joins it" = "Die Musterbibliothek in einem eigenen Ordner halten — ein abgeglichener Ordner bringt sie auf Ihre anderen Macs, und einer, der schon eine Bibliothek enthält, schließt sich ihr an";
 "Keeping “%1$@” — %2$@." = "Gesichert wird „%1$@“ — %2$@.";
 "Kind" = "Art";
-"Language" = "Sprache";
 "Language:" = "Sprache:";
 "Later" = "Später";
-"Layout" = "Aufteilung";
 "Layout Direction:" = "Anordnung:";
 "Left / Right" = "Links / rechts";
 "Legend" = "Legende";

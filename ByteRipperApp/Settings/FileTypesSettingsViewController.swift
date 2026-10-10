@@ -63,8 +63,6 @@ final class FileTypesSettingsViewController: NSViewController,
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: L("File Types"))
-        titleLabel.font = .boldSystemFont(ofSize: 15)
 
         let list = makeTable()
         let footer = makeFooter()
@@ -75,15 +73,13 @@ final class FileTypesSettingsViewController: NSViewController,
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 4
 
-        for subview in [titleLabel, list, footer, caption] {
+        for subview in [list, footer, caption] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
-            titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
 
-            list.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 14),
+            list.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
             list.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
             list.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 

@@ -111,8 +111,6 @@ final class AgentSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: L("Agent"))
-        titleLabel.font = .boldSystemFont(ofSize: 15)
 
         enableCheckbox.title = L("Let agents connect to ByteRipper")
         enableCheckbox.target = self
@@ -173,20 +171,18 @@ final class AgentSettingsViewController: NSViewController {
 
         let help = HelpButton.standard(for: .topic(.agent))
 
-        for subview in [titleLabel, enableCheckbox, caption, statusLabel, editsCheckbox, editsCaption,
+        for subview in [enableCheckbox, caption, statusLabel, editsCheckbox, editsCaption,
                         clientLabel, clientMenu,
                         destinationLabel, previewScroll, copyButton, help] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
-            titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
 
-            help.centerYAnchor.constraint(equalTo: titleLabel.centerYAnchor),
+            help.centerYAnchor.constraint(equalTo: enableCheckbox.centerYAnchor),
             help.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 
-            enableCheckbox.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
+            enableCheckbox.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
             enableCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
 
             caption.topAnchor.constraint(equalTo: enableCheckbox.bottomAnchor, constant: 8),

@@ -21,8 +21,6 @@ final class AppearanceSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: L("Appearance"))
-        titleLabel.font = .boldSystemFont(ofSize: 15)
 
         // Font row: a popup of "System" + the monospaced families, with the
         // font-size stepper + value sharing the same row (the size has no label
@@ -85,14 +83,12 @@ final class AppearanceSettingsViewController: NSViewController {
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 3
 
-        for subview in [titleLabel, grid, caption] {
+        for subview in [grid, caption] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 18),
-            titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
-            grid.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
+            grid.topAnchor.constraint(equalTo: root.topAnchor, constant: 18),
             grid.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
             grid.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -18),
             caption.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 14),

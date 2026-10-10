@@ -33,8 +33,6 @@ final class LayoutSettingsViewController: NSViewController {
     override func loadView() {
         let root = NSView()
 
-        let titleLabel = NSTextField(labelWithString: L("Layout"))
-        titleLabel.font = .boldSystemFont(ofSize: 15)
 
         // Layout direction row: the split orientation a new comparison opens in.
         let layoutLabel = NSTextField(labelWithString: L("Layout Direction:"))
@@ -63,14 +61,12 @@ final class LayoutSettingsViewController: NSViewController {
         caption.textColor = .secondaryLabelColor
         caption.maximumNumberOfLines = 2
 
-        for subview in [titleLabel, grid, caption] {
+        for subview in [grid, caption] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
         }
         NSLayoutConstraint.activate([
-            titleLabel.topAnchor.constraint(equalTo: root.topAnchor, constant: 18),
-            titleLabel.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
-            grid.topAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: 16),
+            grid.topAnchor.constraint(equalTo: root.topAnchor, constant: 18),
             grid.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
             grid.trailingAnchor.constraint(lessThanOrEqualTo: root.trailingAnchor, constant: -18),
             caption.topAnchor.constraint(equalTo: grid.bottomAnchor, constant: 14),

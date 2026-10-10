@@ -9,7 +9,9 @@ import Localization
 /// All three are about how the app looks rather than what it does, so they
 /// share a page. Each section is still its own view controller — it keeps its
 /// own syncing, its own observers and its own tests — and this one only stacks
-/// them, with a rule between.
+/// them, with a rule between. No headings, as in Finder's and Safari's
+/// settings: the window's title already names the tab, and a heading over
+/// two controls is more words than the controls.
 final class ViewSettingsViewController: NSViewController {
     private let appearanceController = AppearanceSettingsViewController()
     private let layoutController = LayoutSettingsViewController()

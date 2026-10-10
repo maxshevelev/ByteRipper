@@ -135,7 +135,6 @@
 "All unsaved changes will be discarded." = "Все несохранённые изменения будут потеряны.";
 "Already a favourite, as “%1$@”." = "Уже в избранном под именем «%1$@».";
 "Analyzing the ME firmware…" = "Анализ прошивки ME…";
-"Appearance" = "Внешний вид";
 "Append" = "Добавить в конец";
 "Append File…" = "Дописать файл в конец…";
 "Append at End" = "Дописать в конец";
@@ -495,10 +494,8 @@
 "Keep the pattern library in a folder of your own — a synced one puts it on your other Macs, and one that already has a library joins it" = "Держать библиотеку шаблонов в своей папке: синхронизируемая раздаст её на другие Mac, а папка с готовой библиотекой присоединит её";
 "Keeping “%1$@” — %2$@." = "Сохраняется «%1$@» — %2$@.";
 "Kind" = "Вид";
-"Language" = "Язык";
 "Language:" = "Язык:";
 "Later" = "Позже";
-"Layout" = "Расположение";
 "Layout Direction:" = "Направление панелей:";
 "Left / Right" = "Слева / справа";
 "Legend" = "Легенда";
