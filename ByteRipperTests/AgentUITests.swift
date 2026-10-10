@@ -37,7 +37,7 @@ final class AgentUITests: XCTestCase {
         tab.toggleForTesting()
         XCTAssertTrue(service.isEnabled)
         XCTAssertTrue(service.isRunning)
-        XCTAssertEqual(AgentSettingsViewController.statusText(of: service), "Waiting for an agent.")
+        XCTAssertEqual(AgentSettingsViewController.statusText(of: service), "Waiting for a connection.")
 
         tab.toggleForTesting()
         XCTAssertFalse(service.isRunning)

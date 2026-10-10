@@ -1303,9 +1303,9 @@
 "The agent service is not available in this copy of the app." = "In dieser Kopie des Programms ist der Agentendienst nicht verfügbar.";
 "Could not start: %1$@" = "Start nicht möglich: %1$@";
 "Switched off." = "Ausgeschaltet.";
-"Waiting for an agent." = "Wartet auf einen Agenten.";
-"One agent connected." = "Ein Agent verbunden.";
-"Agents connected: %1$@." = "Verbundene Agenten: %1$@.";
+"Waiting for a connection." = "Wartet auf eine Verbindung.";
+"Connected." = "Verbunden.";
+"Connections: %1$@." = "Verbindungen: %1$@.";
 "Copied." = "Kopiert.";
 "Time" = "Zeit";
 "Tool" = "Werkzeug";

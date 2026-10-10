@@ -255,9 +255,9 @@ final class AgentSettingsViewController: NSViewController {
         if let failure = service.failure { return L("Could not start: %1$@", failure) }
         guard service.isRunning else { return L("Switched off.") }
         switch service.connectionCount {
-        case 0: return L("Waiting for an agent.")
-        case 1: return L("One agent connected.")
-        default: return L("Agents connected: %1$@.", service.connectionCount)
+        case 0: return L("Waiting for a connection.")
+        case 1: return L("Connected.")
+        default: return L("Connections: %1$@.", service.connectionCount)
         }
     }
 
