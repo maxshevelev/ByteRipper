@@ -51,7 +51,7 @@ final class AgentService {
     private(set) lazy var server = AgentServer(
         info: AgentServerInfo(name: "byteripper", version: Self.appVersion, title: "ByteRipper"),
         instructions: Self.instructions,
-        tools: catalogue.map { Self.inEnglish($0.tool) })
+        tools: catalogue.map { noted(Self.inEnglish($0.tool)) })
 
     /// Every tool, in the order `tools/list` gives them, with where it comes
     /// from and what it does — what the Agent window's Tools page lists.
@@ -94,6 +94,52 @@ final class AgentService {
                   inputSchema: tool.inputSchema, annotations: tool.annotations) { call in
             try await Localization.$override.withValue(.english) { try await tool.run(call) }
         }
+    }
+
+    /// `tool`, saying so when the call names a document that is not the
+    /// focused one but its part or its parent: the focus is on the decoded
+    /// block and the call went to the dump it came from, or the other way
+    /// round. Read before the call — `open_part` moves the focus — and added
+    /// to a refusal too, where it most often explains one: a node id of one
+    /// of the two is not a node of the other.
+    private func noted(_ tool: AgentTool) -> AgentTool {
+        AgentTool(name: tool.name, title: tool.title, description: tool.description,
+                  inputSchema: tool.inputSchema, annotations: tool.annotations) { [weak self] call in
+            let note = await self?.focusNote(call.arguments)
+            do {
+                let answer = try await tool.run(call)
+                guard let note, case .json(.object(var members)) = answer else { return answer }
+                members["focus_note"] = .string(note)
+                return .json(.object(members))
+            } catch let error as AgentToolError {
+                guard let note else { throw error }
+                throw AgentToolError(error.message + " " + note)
+            }
+        }
+    }
+
+    func focusNote(_ arguments: AgentArguments) -> String? {
+        guard let named = try? arguments.optionalString("document"), let focused = desk.focused(),
+              focused.id != named, let place = try? desk.place(named: named) else { return nil }
+        if Self.isPart(focused.pane, of: place.pane) {
+            return "The focus is on \(focused.id), a part of \(named); this call went to \(named), as `document` asked. "
+                + "The part's nodes have ids of their own."
+        }
+        if Self.isPart(place.pane, of: focused.pane) {
+            return "The focus is on \(focused.id); this call went to \(named), a part of it, as `document` asked. "
+                + "The part's nodes have ids of their own."
+        }
+        return nil
+    }
+
+    /// Whether `pane` was taken out of `other`, directly or through parts.
+    private static func isPart(_ pane: PaneViewModel, of other: PaneViewModel) -> Bool {
+        var parent = pane.origin?.parent
+        while let at = parent {
+            if at === other { return true }
+            parent = at.origin?.parent
+        }
+        return false
     }
 
     private var listener: UnixSocketListener?
@@ -314,7 +360,10 @@ final class AgentService {
         decoded with `part: "decoded"` — as a part of its own, in a panel over the same window; prefer it to a \
         new tab, which is for changing context or comparing two parts. Asking again for a part that is open \
         raises its panel (`reused: true`); a new part takes the focus, and its tree has ids of its own, so name the \
-        `document` a node id was listed on. \
+        `document` a node id was listed on. A UEFI node says how the file holds it — `encoded` ("XOR 77"), \
+        `compressed` — and, while its block is open decoded or it is in a part, names the same node there \
+        (`decoded_in`, `counterpart`); an answer for a document that is a part or the parent of the focused \
+        one carries a `focus_note`. \
         A part is a document to every tool, and `update_in_parent` puts its bytes back. `diff` lists where two \
         documents differ byte by byte and in which part of the firmware; `compare` shows the two side by \
         side and `reveal_diff` walks the person through the differences. `mark` labels bytes for the \

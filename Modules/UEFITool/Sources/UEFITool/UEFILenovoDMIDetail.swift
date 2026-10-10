@@ -60,6 +60,18 @@ public enum UEFILenovoDMIDetail {
         }
     }
 
+    /// The key a LENV block — or the block an entry is in — is stored in the
+    /// file encoded with; nil for a block stored in the clear, a block opened
+    /// decoded, and any row that is not one. What tells an agent that the
+    /// bytes it would read or show at this node are not the text.
+    @MainActor public static func storedXORKey(of node: UEFINode, in tree: LazyUEFITree) -> UInt8? {
+        guard node.kind == .lenvBlock || node.kind == .lenvEntry,
+              let reader = tree.spaceReaders.reader(for: .file),
+              let found = decodableBlock(for: node, image: tree.image(), reader: reader),
+              found.block.encoding == .encoded else { return nil }
+        return found.block.xorKey
+    }
+
     /// The block Open Decoded Block opens from `node` — the block itself, or
     /// the one an entry is in — and the row's name for it; nil on any other
     /// row, and on a block with nothing to decode (`LenovoDMIDecodedBlock`).

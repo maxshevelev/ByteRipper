@@ -48,21 +48,35 @@ final class AgentModuleTools {
     private nonisolated func query(_ module: any ToolModule.Type, _ query: ToolAgentQuery) -> AgentTool {
         var properties = query.properties
         properties["document"] = AgentSchema.string("The document's id from `documents`. Default: the focused one.")
+        let links = Self.linksNodes(module)
         return AgentTool(
             name: query.name, title: query.title, description: query.description,
             inputSchema: AgentSchema.object(properties, required: query.required)
         ) { call in
-            try await self.runQuery(query, call.arguments)
+            try await self.runQuery(query, links: links, call.arguments)
         }
     }
 
-    private func runQuery(_ query: ToolAgentQuery, _ arguments: AgentArguments) async throws -> AgentAnswer {
+    /// The module whose answers name nodes of a firmware tree, which a part
+    /// and its parent number differently (`AgentNodeLinks`).
+    nonisolated static func linksNodes(_ module: any ToolModule.Type) -> Bool {
+        shortName(of: module) == "uefi-structure"
+    }
+
+    /// The answer with the same nodes in the related documents named.
+    private func linked(_ answer: AgentAnswer, place: AgentDesk.Place) async -> AgentAnswer {
+        guard case .json(let value) = answer else { return answer }
+        return .json(await AgentNodeLinks(desk: desk).annotate(value, place: place))
+    }
+
+    private func runQuery(_ query: ToolAgentQuery, links: Bool, _ arguments: AgentArguments) async throws -> AgentAnswer {
         let place = try resolve(arguments)
         // A host that reads and nothing else: no session is behind it, and a
         // query must not draw zones or put up sheets on a panel that is not
         // there.
         let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
         var answer = try await query.run(host, arguments)
+        if links { answer = await linked(answer, place: place) }
         if case .json(let value) = answer, case .object(var members) = value {
             members["document"] = .string(place.id)
             answer = .json(.object(members))
@@ -145,17 +159,19 @@ final class AgentModuleTools {
         let identifier = module.identifier
         let title = module.title
         let short = Self.shortName(of: module)
+        let links = Self.linksNodes(module)
         return AgentTool(
             name: action.name, title: action.title, description: action.description,
             inputSchema: AgentSchema.object(properties, required: action.required),
             annotations: action.changesView ? .view : .readOnly
         ) { call in
-            try await self.runAction(action, identifier: identifier, title: title, short: short, call.arguments)
+            try await self.runAction(action, identifier: identifier, title: title, short: short, links: links,
+                                     call.arguments)
         }
     }
 
     private func runAction(_ action: ToolAgentAction, identifier: String, title: String, short: String,
-                           _ arguments: AgentArguments) async throws -> AgentAnswer {
+                           links: Bool, _ arguments: AgentArguments) async throws -> AgentAnswer {
         let place = try resolve(arguments)
         let tools = try place.onScreen().tools(reading: place.pane)
         guard tools.activeIdentifier == identifier, tools.boundPane === place.pane, let session = tools.session else {
@@ -163,7 +179,8 @@ final class AgentModuleTools {
                 + "Call `open_panel` with module \"\(short)\" first, or show the bytes with `reveal`.")
         }
         if action.changesView { desk.bringForward(place) }
-        return try await action.run(session, arguments)
+        let answer = try await action.run(session, arguments)
+        return links ? await linked(answer, place: place) : answer
     }
 
     // MARK: - open_panel

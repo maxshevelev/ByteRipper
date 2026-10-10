@@ -264,6 +264,8 @@ final class AgentFindTools {
                 compresses them again. The answer says which `part` opened, and a LENV block opened \
                 without "decoded" comes with a `hint`. Asking again for a part that is already open \
                 raises its panel and answers `reused: true` with its `document` — not a second copy. \
+                `tool_panel` names the tool panel the part shows, null when none: `open_panel` with the \
+                part's `document` opens one on it. \
                 The new part takes the focus, so a call that leaves out `document` now goes to the part, \
                 and a node id belongs to the document it was listed on, the parent: give `document` \
                 (the `parent` of the answer) when you go on with that node. A part has its own tree, \
@@ -415,7 +417,23 @@ final class AgentFindTools {
         answer["reused"] = true
         answer["document"] = part.pane.document.map { .string(desk.id(of: $0)) } ?? .null
         answer["name"] = .string(part.pane.status.fileName)
+        answer.merge(toolPanel(of: part.id, controller: controller, document: answer["document"])) { _, new in new }
         return .json(.object(answer))
+    }
+
+    /// Which tool panel the part's panel shows, and, when none, how to open
+    /// one on the part — not on the parent, whose tree numbers the same nodes
+    /// otherwise and whose bytes may be the encoded ones.
+    private func toolPanel(of id: FragmentDock.PanelID, controller: MainViewController,
+                           document: JSONValue?) -> [String: JSONValue] {
+        let active = controller.fragments.surface(id)?.tools.activeIdentifier
+        guard let active else {
+            let named = document?.stringValue.map { "\"\($0)\"" } ?? "the part's id"
+            return ["tool_panel": .null,
+                    "next": .string("No tool panel on the part yet: `open_panel` with `document` \(named) opens one on it "
+                        + "(module \"uefi-structure\" for its tree), and `uefi_select` then chooses the part's own nodes.")]
+        }
+        return ["tool_panel": .string(String(active.split(separator: ".").last ?? Substring(active)))]
     }
 
     /// What a part is opened as, before it is: its name, the bytes of the
@@ -470,6 +488,7 @@ final class AgentFindTools {
         }
         answer["document"] = .string(desk.id(of: document))
         answer["name"] = .string(pane.status.fileName)
+        answer.merge(toolPanel(of: opened, controller: controller, document: answer["document"])) { _, new in new }
         return .json(.object(answer))
     }
 }

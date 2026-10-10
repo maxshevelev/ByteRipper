@@ -241,6 +241,66 @@ final class AgentFindToolsTests: XCTestCase {
         XCTAssertEqual(controller.fragments.panelsLinked(to: controller.windowModel.pane1).count, 3)
     }
 
+    /// A node of a LENV block stored encoded says so; with the block open
+    /// decoded, the parent's node names the part's and the part's names the
+    /// parent's. A call that names the parent while the focus is on the part
+    /// says that too.
+    func testANodeNamesItsDecodedCounterpartAndTheOtherWayRound() async throws {
+        try open(LenovoTestImage.make())
+        let offset = String(format: "0x%X", LenovoTestImage.serialInBlock2)
+        let before = try await client.answer("uefi_at", ["offset": .string(offset)])
+        let entry = try XCTUnwrap(before["chain"]?.arrayValue?.last)
+        XCTAssertEqual(entry["encoded"], "XOR 77", "\(entry)")
+        XCTAssertNil(entry["counterpart"], "nothing is open yet")
+
+        let opened = try await client.answer("open_part", ["node": entry["id"] ?? .null, "part": "decoded"])
+        let part = try XCTUnwrap(opened["document"]?.stringValue)
+        XCTAssertEqual(opened["tool_panel"], .null)
+        XCTAssertTrue(opened["next"]?.stringValue?.contains("open_panel") == true, "\(opened)")
+
+        // The focus is on the part now; the call names the parent.
+        let after = try await client.answer("uefi_at", ["document": "d1", "offset": .string(offset)])
+        let linked = try XCTUnwrap(after["chain"]?.arrayValue?.last)
+        XCTAssertEqual(linked["decoded_in"]?["document"]?.stringValue, part, "\(linked)")
+        let partNode = try XCTUnwrap(linked["decoded_in"]?["node"]?.stringValue)
+        XCTAssertNotEqual(partNode, entry["id"]?.stringValue, "the part numbers its nodes from its own top")
+        XCTAssertEqual(linked["counterpart"]?.arrayValue?.first?["as"], "decoded")
+        XCTAssertTrue(after["focus_note"]?.stringValue?.contains("a part of d1") == true, "\(after)")
+
+        let inPart = String(format: "0x%X", LenovoTestImage.serialInBlock2 - 0x4000)
+        let back = try await client.answer("uefi_at", ["document": .string(part), "offset": .string(inPart)])
+        let own = try XCTUnwrap(back["chain"]?.arrayValue?.last)
+        XCTAssertEqual(own["id"]?.stringValue, partNode)
+        XCTAssertNil(own["encoded"], "the part holds it in the clear")
+        XCTAssertEqual(own["counterpart"]?.arrayValue?.first?["document"], "d1")
+        XCTAssertEqual(own["counterpart"]?.arrayValue?.first?["node"], entry["id"])
+        XCTAssertEqual(own["counterpart"]?.arrayValue?.first?["as"], "encoded")
+        XCTAssertNil(back["focus_note"], "the call went where the focus is")
+
+        let refused = try await client.call("uefi_tree", ["document": "d1", "node": "9.9.9"])
+        XCTAssertTrue(refused.isError)
+        XCTAssertTrue(refused.answer.stringValue?.contains("The focus is on \(part)") == true, "\(refused.answer)")
+    }
+
+    /// A compressed section and every node it decompresses to say how the
+    /// file holds them, and the latter which section to open.
+    func testACompressedSectionAndWhatItHoldsSayTheyAreCompressed() async throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let sections = try await client.answer("uefi_find", ["type": "Section", "limit": 50])
+        let matches = try XCTUnwrap(sections["matches"]?.arrayValue)
+        let section = try XCTUnwrap(matches.first { $0["subtype"] == "Compressed section" })
+        let algorithm = try XCTUnwrap(section["compressed"]?.stringValue, "\(section)")
+        XCTAssertNil(section["compressed_in"])
+        let tree = try await client.answer("uefi_tree", ["node": section["id"] ?? .null])
+        let child = try XCTUnwrap(tree["children"]?.arrayValue?.first, "\(tree)")
+        XCTAssertEqual(child["compressed"]?.stringValue, algorithm)
+        XCTAssertEqual(child["compressed_in"], section["id"])
+        let at = try await client.answer("uefi_at", ["offset": section["start"] ?? .null])
+        let outside = try XCTUnwrap(at["chain"]?.arrayValue?.dropLast())
+        XCTAssertFalse(outside.isEmpty)
+        XCTAssertTrue(outside.allSatisfy { $0["compressed"] == nil }, "what holds the section is the file's: \(outside)")
+    }
+
     /// What a compressed section decompresses to opens as a part, in a panel
     /// over the same window — not a tab — and goes back compressed.
     func testACompressedSectionOpensDecompressedInAPanel() async throws {
