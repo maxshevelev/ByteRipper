@@ -1,4 +1,4 @@
-@source-sha d4f7a92d6a13e66c3041cf0be164569c9a906e7df890d83367fd5d8202e577e6
+@source-sha 46913c2efe383f7043ff4ff3e041fed5ef6f1c7db6cf8905faee71760ef0c2db
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -54,7 +54,7 @@ Adressen gibt der Agent stets hexadezimal an, wie im Dump.
 
 Der Agent liest ein Firmware-Image in derselben Aufschlüsselung wie die Werkzeugbereiche; geöffnet sein müssen die Bereiche dafür nicht.
 
-- **UEFI-Struktur** — der Baum des Images, die Felder eines Knotens und die Knoten, in die eine bestimmte Adresse fällt. Der Baum lässt sich nach Name, GUID oder Typ durchsuchen. Auch die Bytes eines einzelnen Knotens kann der Agent lesen, selbst wenn dieser in einem komprimierten Abschnitt liegt.
+- **UEFI-Struktur** — der Baum des Images, die Felder eines Knotens und die Knoten, in die eine bestimmte Adresse fällt. Der Baum lässt sich nach Name, GUID oder Typ durchsuchen. Die Felder eines Knotens sind dieselben wie in den Details des Bereichs, einschließlich des Dateinamens aus dem GUID-Katalog. Der Agent prüft außerdem alle Prüfsummen des Images auf einmal — die eines Volumes, einer Datei, eines Microcodes, eines PSP-Verzeichnisses — und nennt die falschen mit dem richtigen Wert, wie es die roten Markierungen im Bereich tun. Auch die Bytes eines einzelnen Knotens kann der Agent lesen, selbst wenn dieser in einem komprimierten Abschnitt liegt.
 - **FIT-Tabelle** — die Einträge der Tabelle, die Objekte, auf die sie verweisen, und die verletzten Regeln der Spezifikation.
 - **ME Analyzer** — Übersicht und dekodierte Struktur der Intel-ME-Firmware.
 - NVRAM-Variablen — die Variablen eines Dumps mit ihren Werten, ausgewertet gemäß ihrem Typ.
@@ -94,7 +94,7 @@ Ist sie eingeschaltet, kann der Agent:
 
 - Bytes in einer Datei überschreiben, die in einem Tab geöffnet ist. Ein Schreibvorgang ersetzt genau so viele Bytes, wie er mitbringt, und fügt niemals Bytes ein oder entfernt welche. Er lässt sich an die Bedingung knüpfen, dass an der Adresse derzeit bestimmte Bytes stehen;
 - einen Abschnitt einer der beiden Dateien eines Tabs an dieselben Adressen der anderen kopieren, wie es **Bearbeiten ▸ In den anderen Bereich kopieren** mit der Auswahl tut. Die Bytes gehen innerhalb von ByteRipper von Datei zu Datei und nicht über den Agenten, sodass sich eine ganze Region auf einmal kopieren lässt; die Antwort nennt, wie viele Bytes sich tatsächlich geändert haben. Ein Kopieren über das Ende der anderen Datei hinaus und in eine schreibgeschützt geöffnete Datei wird abgelehnt;
-- Prüfsummen korrigieren — die eines Volumes, einer Datei oder eines Microcodes in **UEFI-Struktur** und die der Tabelle in **FIT-Tabelle**. Die Berechnung erfolgt mit demselben Code wie beim Befehl **Prüfsumme korrigieren** der Bereiche;
+- Prüfsummen korrigieren — die eines Volumes, einer Datei, eines Microcodes oder eines PSP-Verzeichnisses in **UEFI-Struktur** und die der Tabelle in **FIT-Tabelle**. Die Berechnung erfolgt mit demselben Code wie beim Befehl **Prüfsumme korrigieren** der Bereiche. In **UEFI-Struktur** kann der Agent alle falschen Prüfsummen auf einmal korrigieren, als einen Schritt des Widerrufens; eine Datei, die ein Volume enthält, wird nach den Dateien darin korrigiert. Eine Prüfsumme in einem komprimierten Abschnitt wird nicht geändert: Die Datei enthält diese Bytes komprimiert;
 - Microcode in der FIT hinzufügen, aktualisieren, ersetzen und entfernen, und zwar aus demselben Online-Katalog, den **FIT-Tabelle** anbietet, und mit denselben Prüfungen. Ein Update, das unter einer anderen seiner CPUIDs bereits in der Tabelle steht, wird abgelehnt. Ein Update, dessen erweiterte Signaturtabelle einen Prozessor abdeckt, für den bereits ein Eintrag zuständig ist, tritt an die Stelle dieses Eintrags. Ein Ersatz, nach dem einem Prozessor zwei Microcodes zugeordnet wären, wird abgelehnt, wobei der zu ersetzende Eintrag genannt wird;
 - ermitteln, für welche Microcodes des Images der Katalog eine neuere Revision bereithält.
 

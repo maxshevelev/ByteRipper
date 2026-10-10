@@ -1,5 +1,6 @@
 import AgentKit
 import Localization
+import UEFIImage
 import UEFIToolUI
 import XCTest
 @testable import ByteRipper
@@ -104,6 +105,20 @@ final class AgentModuleToolsTests: XCTestCase {
         XCTAssertEqual(chain.first?["start"], "0x0", "outermost first")
     }
 
+    /// The detail names a file by the GUID catalogue, as the panel's does.
+    func testTheNodeIsNamedByTheGUIDCatalogueAsInThePanel() async throws {
+        try open(UEFITestImage.make())
+        let id = try await driverID()
+        let plain = try await client.answer("uefi_node", ["node": .string(id)])
+        let guid = try XCTUnwrap(plain["node"]?["guid"]?.stringValue)
+        let held = UEFIToolSession.guidsSource
+        defer { UEFIToolSession.guidsSource = held }
+        UEFIToolSession.guidsSource = FixedGuids(catalogue: GuidsCatalogue(names: [try XCTUnwrap(EFIGUID(guid)): "CatalogueDriver"]))
+        let node = try await client.answer("uefi_node", ["node": .string(id)])
+        let field = node["fields"]?.arrayValue?.first { $0["label"] == "Name in the catalogue" }
+        XCTAssertEqual(field?["value"], "CatalogueDriver", "\(node)")
+    }
+
     func testABadNodeIdSaysWhereIdsComeFrom() async throws {
         try open(UEFITestImage.make())
         let refused = try await client.call("uefi_node", ["node": "volume"])
@@ -161,4 +176,10 @@ final class AgentModuleToolsTests: XCTestCase {
         XCTAssertTrue(refused.isError)
         XCTAssertTrue(refused.answer.stringValue?.contains("uefi-structure") == true, "\(refused.answer)")
     }
+}
+
+/// A GUID catalogue that is just this list, so a test does not reach GitHub.
+private struct FixedGuids: GuidsSource {
+    let catalogue: GuidsCatalogue
+    func guids() async throws -> GuidsCatalogue { catalogue }
 }

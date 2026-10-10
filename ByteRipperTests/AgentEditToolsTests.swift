@@ -280,6 +280,44 @@ final class AgentEditToolsTests: XCTestCase {
         XCTAssertEqual(again.answer, "The checksums of 0 already check out; nothing to write.")
     }
 
+    /// Every checksum checked at once, and every wrong one put right at once.
+    func testEveryWrongChecksumIsListedAndFixedAtOnce() async throws {
+        let good = UEFITestImage.make()
+        var corrupt = good
+        corrupt[0x32] ^= 0xFF          // the volume's header checksum
+        corrupt[0x48 + 0x10] ^= 0x01   // the driver's header checksum
+        let pane = try open(corrupt)
+
+        let checked = try await client.answer("uefi_checksums")
+        XCTAssertEqual(checked["checked"], 2, "\(checked)")
+        XCTAssertEqual(checked["wrong"], 2)
+        XCTAssertEqual(checked["fixable"], 2)
+        let nodes = try XCTUnwrap(checked["nodes"]?.arrayValue)
+        let volume = try XCTUnwrap(nodes.first?["checksums"]?.arrayValue?.first)
+        XCTAssertEqual(volume["field"], "volume")
+        XCTAssertEqual(volume["at"], "0x32")
+        XCTAssertEqual(volume["should_be"], .string(String(format: "%02X %02X", good[0x32], good[0x33])))
+        XCTAssertEqual(nodes.last?["checksums"]?.arrayValue?.first?["field"], "fileHeader")
+
+        service.editsAllowed = true
+        let fixed = try await client.answer("uefi_fix_checksum", ["all": true])
+        XCTAssertEqual(fixed["fixed"]?.arrayValue?.count, 2, "\(fixed)")
+        XCTAssertEqual(fixed["skipped_compressed"], 0)
+        // Only the checksums move: the volume's back to what it was, the
+        // driver's to what its header sums to (the fixture leaves it 0).
+        let after = try bytes(pane, 0..<UInt64(good.count))
+        XCTAssertEqual(after.indices.filter { after[$0] != corrupt[$0] }, [0x32, 0x33, 0x58].filter { after[$0] != corrupt[$0] })
+        XCTAssertEqual(Array(after[0x32..<0x34]), Array(good[0x32..<0x34]))
+        XCTAssertEqual(pane.undoLabel, "Agent: Fix Checksum", "one undo step for all of them")
+
+        let clean = try await client.answer("uefi_checksums")
+        XCTAssertEqual(clean["wrong"], 0)
+        let nothing = try await client.call("uefi_fix_checksum", ["all": true])
+        XCTAssertEqual(nothing.answer, "Every checksum checks out; nothing to write.")
+        let neither = try await client.call("uefi_fix_checksum")
+        XCTAssertTrue(neither.isError)
+    }
+
     func testTheFITChecksumIsPutRight() async throws {
         let pane = try open(FITTestImage.make(checksum: 0x42))
         service.editsAllowed = true

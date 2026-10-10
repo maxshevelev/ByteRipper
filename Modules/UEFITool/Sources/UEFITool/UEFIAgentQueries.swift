@@ -15,7 +15,13 @@ import UEFIImage
 /// two images do not number their volumes alike.
 @MainActor
 public enum UEFIAgentQueries {
-    nonisolated public static var all: [ToolAgentQuery] { [tree, node, find, at] }
+    nonisolated public static var all: [ToolAgentQuery] { all(catalogue: { .empty }) }
+
+    /// The same, with `uefi_node` naming a file by the GUID catalogue as the
+    /// panel does — `catalogue` is the UI target's, which holds the download.
+    nonisolated public static func all(catalogue: @escaping @Sendable () async -> GuidsCatalogue) -> [ToolAgentQuery] {
+        [tree, node(catalogue: catalogue), find, at]
+    }
 
     // MARK: - uefi_tree
 
@@ -84,7 +90,8 @@ public enum UEFIAgentQueries {
 
     // MARK: - uefi_node
 
-    nonisolated static let node = ToolAgentQuery(
+    nonisolated static func node(catalogue: @escaping @Sendable () async -> GuidsCatalogue) -> ToolAgentQuery {
+      ToolAgentQuery(
         name: "uefi_node",
         title: "UEFI node",
         description: """
@@ -104,10 +111,16 @@ public enum UEFIAgentQueries {
         let image = tree.image()
         let readers = tree.spaceReaders
         let repairs = UEFIChecksumCheck.repairs(in: image, only: [id], readers: readers)[id] ?? []
+        // What the panel's detail is built with: the catalogue's name for a
+        // file, and for Lenovo's DMI store the drivers that read it.
+        let names = node.kind == .file && node.guid != nil ? await catalogue() : .empty
+        let lenovo = await lenovoDMIReaders(for: node, in: tree)
         let detail = UEFIDetail.build(
             for: node, image: image,
             reader: readers.reader(for: node.space) ?? ImageReader([UInt8]()),
-            repairs: repairs)
+            repairs: repairs,
+            catalogue: names,
+            lenovoDMIReaders: lenovo)
 
         var answer: [String: JSONValue] = [
             "node": summary(of: node, in: tree),
@@ -133,6 +146,33 @@ public enum UEFIAgentQueries {
             }
         }
         return .json(.object(answer))
+      }
+    }
+
+    /// The drivers that read Lenovo's DMI store, for a node of the store —
+    /// searched for the first time it is asked, as the panel does, and
+    /// waited for a while; without them the detail says less, not wrong.
+    static func lenovoDMIReaders(for node: UEFINode, in tree: LazyUEFITree) async -> LenovoDMIFirmwareReaders? {
+        guard UEFILenovoDMIDetail.reads(node.kind) else { return nil }
+        if tree.lenovoDMIReadersSearched { return tree.lenovoDMIReaders }
+        final class Wait { var done = false; var token: LazyUEFITree.ObserverToken? }
+        let wait = Wait()
+        return await withCheckedContinuation { continuation in
+            let finish: @MainActor () -> Void = {
+                guard !wait.done else { return }
+                wait.done = true
+                if let token = wait.token { tree.removeObserver(token) }
+                continuation.resume(returning: tree.lenovoDMIReaders)
+            }
+            wait.token = tree.addObserver { change in
+                if case .lenovoDMIReadersRead = change { finish() }
+            }
+            tree.resolveLenovoDMIReaders()
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(20))
+                finish()
+            }
+        }
     }
 
     // MARK: - uefi_find

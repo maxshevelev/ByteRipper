@@ -96,6 +96,9 @@ public final class LazyUEFITree {
     /// `resolveLenovoDMIReaders` has searched them. Nil until then, again
     /// after an edit, and for good on an image with no Lenovo store.
     public private(set) var lenovoDMIReaders: LenovoDMIFirmwareReaders?
+    /// Whether the drivers have been searched for them since the last edit —
+    /// true also when the search found none, so it is not run again.
+    public private(set) var lenovoDMIReadersSearched = false
     private var isReadingLenovoDMIReaders = false
 
     /// Whether the top level is there yet. False only between `init` and the
@@ -648,11 +651,11 @@ public final class LazyUEFITree {
 
     /// Searches the drivers for the entries of Lenovo's DMI store they ask
     /// for (`LenovoDMIFirmwareReaders`), off the main actor, and announces
-    /// `.lenovoDMIReadersRead` when it lands with any. It decodes every
+    /// `.lenovoDMIReadersRead` when it lands, with any or none. It decodes every
     /// compressed section, so it is asked for only once a Lenovo store has
     /// been found.
     public func resolveLenovoDMIReaders() {
-        guard lenovoDMIReaders == nil, !isReadingLenovoDMIReaders else { return }
+        guard !lenovoDMIReadersSearched, !isReadingLenovoDMIReaders else { return }
         isReadingLenovoDMIReaders = true
         let requested = generation
         whenReady { [weak self] in
@@ -673,7 +676,7 @@ public final class LazyUEFITree {
     private func landLenovoDMIReaders(_ readers: LenovoDMIFirmwareReaders?, expectedGeneration: Int) {
         guard generation == expectedGeneration, isReadingLenovoDMIReaders else { return }
         isReadingLenovoDMIReaders = false
-        guard let readers else { return }
+        lenovoDMIReadersSearched = true
         lenovoDMIReaders = readers
         announce(.lenovoDMIReadersRead)
     }
@@ -754,6 +757,7 @@ public final class LazyUEFITree {
         isReadingDMIStores = false
         dmiStoresCallbacks.removeAll()
         lenovoDMIReaders = nil
+        lenovoDMIReadersSearched = false
         isReadingLenovoDMIReaders = false
         // The diagnostics of the subtrees being dropped go with them; what is
         // left is re-collected as those subtrees are expanded again.

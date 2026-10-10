@@ -45,7 +45,25 @@ public enum UEFIToolModule: ToolModule {
     /// The tree, a node, a search, an address — answered with the panel
     /// open or not (`UEFIAgentQueries`, `Design/AGENT_PLAN.md`).
     public static var agentQueries: [ToolAgentQuery] {
-        UEFIAgentQueries.all + UEFIAgentVariables.queries + UEFIAgentNodeData.all
+        UEFIAgentQueries.all(catalogue: agentCatalogue) + UEFIAgentChecksums.all + UEFIAgentVariables.queries
+            + UEFIAgentNodeData.all
+    }
+
+    /// The GUID catalogue for an agent's `uefi_node`: the one the panel holds,
+    /// or the download — waited for a few seconds at most, so a bench with no
+    /// network answers without the catalogue's names rather than late.
+    @Sendable static func agentCatalogue() async -> GuidsCatalogue {
+        let source = await MainActor.run { UEFIToolSession.guidsSource }
+        return await withTaskGroup(of: GuidsCatalogue?.self) { group in
+            group.addTask { try? await source.guids() }
+            group.addTask {
+                try? await Task.sleep(for: .seconds(5))
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first ?? .empty
+        }
     }
 
     /// The variables of two dumps, set side by side by name and GUID.
@@ -282,7 +300,7 @@ private struct ChecksumPass: Sendable {
 
     /// Where the fresh catalogue comes from. A test installs its own so the
     /// suite does not reach GitHub.
-    static var guidsSource: any GuidsSource = LongSoftGuidsRepository()
+    public static var guidsSource: any GuidsSource = LongSoftGuidsRepository()
 
     /// Called on the main actor once the tree's top level is there and the
     /// panel has been shown. The build runs off the main actor, so a test that
