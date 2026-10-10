@@ -221,4 +221,19 @@ final class AgentUITests: XCTestCase {
         XCTAssertEqual(item.action, #selector(AppDelegate.showAgentWindow(_:)))
         XCTAssertTrue(item.target === target, "aimed at the app, not at whichever window is key")
     }
+
+    /// The keyboard lands on the list in view — when the window is shown, and
+    /// on the new page's list when another page is picked.
+    func testTheKeyboardIsOnThePagesList() throws {
+        let controller = AgentWindowController(service: nil)
+        let window = try XCTUnwrap(controller.window)
+        controller.showWindow(nil)
+        defer { window.close() }
+        controller.focusList()
+        XCTAssertTrue(window.firstResponder === controller.shownList)
+        controller.showMarks()
+        XCTAssertTrue(window.firstResponder === controller.marksList.table)
+        controller.showFindings()
+        XCTAssertTrue(window.firstResponder === controller.findingsList.table)
+    }
 }

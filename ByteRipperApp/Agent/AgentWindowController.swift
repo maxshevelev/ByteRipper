@@ -326,6 +326,23 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         marksScroll.isHidden = page != .marks
         findingsScroll.isHidden = page != .findings
         refreshButtons()
+        focusList()
+    }
+
+    /// The table of the page in view.
+    var shownList: NSTableView {
+        switch page {
+        case .log: return table
+        case .marks: return marks.table
+        case .findings: return findings.table
+        }
+    }
+
+    /// Puts the keyboard on the page's table, so the arrows walk its rows and
+    /// Space opens the details — when the window is shown and when a page is
+    /// picked.
+    func focusList() {
+        window?.makeFirstResponder(shownList)
     }
 
     /// Shows the Findings list, for tests.

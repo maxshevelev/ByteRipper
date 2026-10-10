@@ -264,6 +264,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     @objc func showAgentWindow(_ sender: Any?) {
         agentWindowController.showWindow(sender)
         agentWindowController.window?.makeKeyAndOrderFront(sender)
+        agentWindowController.focusList()
     }
 
     @objc func showAgentSettings(_ sender: Any?) {
