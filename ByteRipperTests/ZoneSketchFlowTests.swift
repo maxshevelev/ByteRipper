@@ -64,6 +64,24 @@ final class ZoneSketchFlowTests: XCTestCase {
         return try XCTUnwrap(descendants(of: panel, NSTableView.self).first)
     }
 
+    /// Picking a panel from Tools, the toolbar or its shortcut gives it the
+    /// keyboard, so the arrow keys walk its rows at once; None gives it back
+    /// to the dump.
+    func testThePickedPanelTakesTheKeyboardAndNoneGivesItBack() throws {
+        let controller = try open()
+        controller.tools.activate(nil, animated: false)
+        let window = try XCTUnwrap(self.window)
+        controller.filePaneView(for: controller.windowModel.pane1)?.focusHexView()
+        let item = NSMenuItem()
+        item.representedObject = ZoneSketchModule.identifier
+        controller.activateTool(item)
+        window.layoutIfNeeded()
+        XCTAssertTrue(window.firstResponder === (try table()), "the panel's table has the keyboard")
+
+        controller.activateTool(NSMenuItem())
+        XCTAssertTrue(window.firstResponder is HexView, "None hands it back to the dump")
+    }
+
     /// A demonstration panel, and only that: this build lists it because it is
     /// the build the seam is worked on in. A shipping build does not.
     func testItIsOfferedByADebugBuildAndNotByAShippingOne() {

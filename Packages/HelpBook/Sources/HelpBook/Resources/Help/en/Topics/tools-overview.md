@@ -15,7 +15,7 @@ The **Tools** menu turns on one panel at a time beside the dump. Each panel read
 - **[[topic:tool-me|ME Analyzer]]** — the Intel Management Engine firmware held in the image: its version, its partitions and its configuration.
 - **[[topic:tool-fit|FIT Table]]** — the Firmware Interface Table, and whether its entries point at what they declare.
 
-The panels have the keys **⌘1**, **⌘2**, **⌘3** in the order the menu lists them; **⌘0** closes the panel. The key of the panel already shown does nothing.
+The panels have the keys **⌘1**, **⌘2**, **⌘3** in the order the menu lists them; **⌘0** closes the panel. The key of the panel already shown does nothing. A panel opened from the menu, the toolbar or its key takes the keyboard: the arrow keys move through its table at once. **⌘0** gives the keyboard back to the dump.
 
 ## What they have in common
 

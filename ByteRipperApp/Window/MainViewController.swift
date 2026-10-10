@@ -1851,8 +1851,19 @@ final class MainViewController: NSViewController {
     /// Tools ▸ ⟨module⟩ and Tools ▸ None. The item carries the tool-module's
     /// identifier in `representedObject`, and None carries nothing, so one
     /// action serves every row.
+    ///
+    /// The keyboard goes with the choice: to the panel's table when a panel
+    /// opens, so the arrow keys walk its rows at once, and back to the dump the
+    /// panel read when None closes it.
     @objc func activateTool(_ sender: NSMenuItem) {
-        frontTools.activate(sender.representedObject as? String)
+        let tools = frontTools
+        let reading = tools.boundPane
+        tools.activate(sender.representedObject as? String)
+        if tools.session != nil {
+            tools.session?.focusChoice()
+        } else if let reading {
+            filePaneView(for: reading)?.focusHexView()
+        }
     }
 
     // MARK: - Files, for a tool-module (Design/TOOL_MODULES_PLAN.md)

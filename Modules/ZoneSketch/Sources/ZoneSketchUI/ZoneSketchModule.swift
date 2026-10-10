@@ -56,6 +56,10 @@ public enum ZoneSketchModule: ToolModule {
         refresh()
     }
 
+    public func focusChoice() {
+        controller.view.window?.makeFirstResponder(controller.table)
+    }
+
     /// The file changed under the sketch. Nothing is re-read — there is nothing
     /// to re-read — but the map is republished so the host can clamp it to a
     /// file that may have shrunk, and the list follows.

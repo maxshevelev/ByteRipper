@@ -1,4 +1,4 @@
-@source-sha d4724ee7d6fef62b0e4cc4f5773ec46aae9b80830083a9ab2925ca248daaec64
+@source-sha 45b2f1f1a328486882f5c5473ba339a8404a8c0213090858b21bf4a825a3270e
 # Die Werkzeugbereiche
 
 > Werkzeuge, die den geöffneten Dump decodieren und melden, welche Strukturen er enthält.
@@ -9,7 +9,7 @@ Das Menü **Werkzeuge** schaltet jeweils einen Bereich neben dem Dump ein. Jedes
 - **[[topic:tool-me|ME Analyzer]]** — was für eine Intel-Management-Engine-Firmware im Image steckt: ihre Version, ihre Partitionen, ihre Konfiguration.
 - **[[topic:tool-fit|FIT-Tabelle]]** — die Firmware Interface Table und ob ihre Einträge noch auf das zeigen, was sie behaupten.
 
-Die Werkzeuge haben die Tasten **⌘1**, **⌘2**, **⌘3** in der Reihenfolge des Menüs; **⌘0** schließt den Bereich. Die Taste des gerade gezeigten Werkzeugs bewirkt nichts.
+Die Werkzeuge haben die Tasten **⌘1**, **⌘2**, **⌘3** in der Reihenfolge des Menüs; **⌘0** schließt den Bereich. Die Taste des gerade gezeigten Werkzeugs bewirkt nichts. Ein Bereich, der über das Menü, die Symbolleiste oder seine Taste geöffnet wird, erhält sofort den Tastaturfokus: Die Pfeiltasten bewegen die Auswahl in seiner Tabelle. **⌘0** gibt den Fokus an den Dump zurück.
 
 ## Was sie gemeinsam haben
 
