@@ -157,7 +157,7 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     /// A section's heading: a size above the tool names, so the groups read as
     /// groups rather than as one more row.
-    static var headingFont: NSFont { .systemFont(ofSize: ToolPanelFont.titleSize + 2, weight: .semibold) }
+    static var headingFont: NSFont { .systemFont(ofSize: ToolPanelFont.titleSize, weight: .semibold) }
     private static var headingSpaceAbove: CGFloat { ToolPanelFont.scaled(12) }
     private static var headingSpaceBelow: CGFloat { ToolPanelFont.scaled(4) }
     /// How far the tool names stand in from their headings.
@@ -173,7 +173,7 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         override func draw(_ dirtyRect: NSRect) {
             let attributes: [NSAttributedString.Key: Any] = [
-                .font: AgentToolsPage.headingFont, .foregroundColor: NSColor.systemGray]
+                .font: AgentToolsPage.headingFont, .foregroundColor: NSColor.tertiaryLabelColor]
             let text = NSAttributedString(string: title, attributes: attributes)
             let size = text.size()
             // On the view's bottom, so the room the row adds lies above it.
