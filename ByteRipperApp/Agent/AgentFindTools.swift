@@ -265,7 +265,9 @@ final class AgentFindTools {
                 without "decoded" comes with a `hint`. Asking again for a part that is already open \
                 raises its panel and answers `reused: true` with its `document` — not a second copy. \
                 `tool_panel` names the tool panel the part shows, null when none: `open_panel` with the \
-                part's `document` opens one on it. \
+                part's `document` opens one on it. From then on the UEFI tools name the same node in the \
+                parent and the part (`counterpart`, `decoded_in`), and a call that names the parent while the \
+                focus is on the part answers with a `focus_note`. \
                 The new part takes the focus, so a call that leaves out `document` now goes to the part, \
                 and a node id belongs to the document it was listed on, the parent: give `document` \
                 (the `parent` of the answer) when you go on with that node. A part has its own tree, \

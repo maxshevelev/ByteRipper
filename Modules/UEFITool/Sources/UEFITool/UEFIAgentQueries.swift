@@ -34,9 +34,11 @@ public enum UEFIAgentQueries {
             summary of the image; with it, that node and its children. `depth` (1–3) goes further down. \
             Each node: `id` (pass it back as `node`), type, subtype, name, GUID, its bytes (`start`, `end`, \
             or `in_compressed: true` when it lives inside a decompressed section and has no file address), \
-            `compressed` with the algorithm for a compressed section and every node it decompresses to (and \
-            `compressed_in`, the section's id, on the latter), `encoded` ("XOR 77") for a LENV block or entry \
-            stored encoded in the file, \
+            `compressed` — a compressed section's own algorithm, or for a node it decompresses to the \
+            algorithm it came out of — and `compressed_in`, the innermost section it was decompressed out \
+            of, on every node with `in_compressed`; `encoded` ("XOR 77") for a LENV block or entry stored \
+            encoded in the file; `counterpart` and `decoded_in` for a node also open in a part (see \
+            `uefi_at`: {document, node, as}), \
             and `children` — a count, or "unread" for a container not opened yet (asking for it opens it). \
             With `depth` above 1 a child carries the levels under it as `below`. Pages: `limit` is the most \
             children of `node` on one page, a ceiling — a page also stops before the answer passes the size \
@@ -242,10 +244,14 @@ public enum UEFIAgentQueries {
         title: "UEFI nodes at an address",
         description: """
             The chain of nodes that hold a byte of the file, outermost first — region, volume, file, \
-            section — opening the containers on the way. The last one is the innermost. A node whose \
+            section — opening the containers on the way. The last one is the innermost. Each node as \
+            `uefi_tree` gives it, with `encoded` ("XOR 77") for a LENV block or entry stored encoded and \
+            `compressed` / `compressed_in` for one inside a compressed section. A node whose \
             bytes are also those of an open part, or of the parent of the part asked about, names its \
             node there as `counterpart` ({document, node, as: "decoded" | "encoded" | "same"}), and \
-            `decoded_in` when that part is its LENV block opened decoded — read and show it there.
+            `decoded_in` when that part is its LENV block opened decoded — read and show it there. Asked \
+            of the parent while the focus is on its part, or the other way round, the answer carries a \
+            `focus_note`.
             """,
         properties: ["offset": AgentSchema.offset("A file address, e.g. \"0x7F3000\".")],
         required: ["offset"]
@@ -331,19 +337,20 @@ public enum UEFIAgentQueries {
         if let key = UEFILenovoDMIDetail.storedXORKey(of: node, in: tree) {
             entry["encoded"] = .string(String(format: "XOR %02X", key))
         }
-        if let compressed = compression(of: node, in: tree) {
-            entry["compressed"] = .string(compressed.algorithm)
-            if let section = compressed.section { entry["compressed_in"] = .string(section.description) }
+        let outer = enclosingCompression(of: node, in: tree)
+        if let algorithm = node.compression?.algorithm ?? outer?.algorithm {
+            entry["compressed"] = .string(algorithm)
         }
+        if let outer { entry["compressed_in"] = .string(outer.section.description) }
         return .object(entry)
     }
 
-    /// How the file holds `node`: a compressed section's own algorithm, or,
-    /// for a node it decompresses to, the algorithm of the innermost
-    /// compressed section above it and that section's id — the node to open
-    /// with `part: "decompressed"`. Nil for a node whose bytes are the file's.
-    static func compression(of node: UEFINode, in tree: LazyUEFITree) -> (algorithm: String, section: NodeID?)? {
-        if let own = node.compression { return (own.algorithm, nil) }
+    /// The innermost compressed section `node` was decompressed out of — the
+    /// node to open with `part: "decompressed"` — and its algorithm; nil for
+    /// a node whose bytes are the file's. A compressed section inside another
+    /// has one too: its own `compressed` says how its body is held, this says
+    /// what it is in.
+    static func enclosingCompression(of node: UEFINode, in tree: LazyUEFITree) -> (algorithm: String, section: NodeID)? {
         guard node.space != .file else { return nil }
         var path = node.id.path
         while !path.isEmpty {

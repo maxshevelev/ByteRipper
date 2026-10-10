@@ -342,37 +342,24 @@ final class AgentService {
 
     /// Read by the model once, before it uses any tool.
     static let instructions = """
-        ByteRipper is a hex editor for firmware dumps, open on the person's Mac. These tools read the \
-        files open in it and show places in them to the person. Call `documents` for what is open and \
-        `focus` for what the person is looking at; when they say "this" or "here", `focus` is what they \
-        mean. Addresses and sizes are hex strings such as "0x7F3000" in every answer and may be given \
-        back the same way. Ranges are half-open: `end` is the first byte after the range. A tool refuses an \
-        argument it does not take and names the ones it does — to see whether a client passes arguments on, \
-        call a reading tool such as `documents` with one it does not take; do not try it on `open_part`, which \
-        opens a panel when it is let through. A list comes in \
-        pages: `limit` is a ceiling, a page also stops before the answer passes the size bound and says \
-        `truncated: "size"`, and `next`, passed back as `after`, goes on until it is null. Use `reveal` \
-        to point at what you are talking about; the person's Back undoes it. `open_dump` reads a file by \
-        path without putting it on screen, `survey` asks one tool's question of a whole folder of dumps, and \
-        `finding` records each thing found for the person to check with a click. `find_bytes` searches the \
-        bytes for a text or a pattern — inside a compressed section with `node` — `uefi_node_data` reads a \
-        node's bytes, and `open_part` opens a stretch or a node — a compressed one too, or a Lenovo LENV block \
-        decoded with `part: "decoded"` — as a part of its own, in a panel over the same window; prefer it to a \
-        new tab, which is for changing context or comparing two parts. Asking again for a part that is open \
-        raises its panel (`reused: true`); a new part takes the focus, and its tree has ids of its own, so name the \
-        `document` a node id was listed on. A UEFI node says how the file holds it — `encoded` ("XOR 77"), \
-        `compressed` — and, while its block is open decoded or it is in a part, names the same node there \
-        (`decoded_in`, `counterpart`); an answer for a document that is a part or the parent of the focused \
-        one carries a `focus_note`. \
-        A part is a document to every tool, and `update_in_parent` puts its bytes back. `diff` lists where two \
-        documents differ byte by byte and in which part of the firmware; `compare` shows the two side by \
-        side and `reveal_diff` walks the person through the differences. `mark` labels bytes for the \
-        person while you explain them, and `related_to` says how two marks hang together. Nothing here \
-        saves a file; `write`, `update_in_parent`, the `_fix_checksum` tools and the microcode tools — `microcode_catalogue` \
-        lists what github.com/platomav/CPUMicrocodes offers, `fit_add_microcode`, `fit_replace_microcode` and \
-        `fit_remove_microcode` change the FIT — change an open file, one undo step each, and only if the \
-        person allows edits. \
-        The `uefi_` tools read a firmware image's structure and work whether or not its panel is open; \
-        `uefi_select` and `uefi_selection` act on the open UEFI Structure panel, which `open_panel` opens.
+        ByteRipper is a hex editor for firmware dumps, open on the person's Mac. These tools read the files \
+        open in it and show places in them to the person. `documents` lists what is open, `focus` what the \
+        person is looking at — what they mean by "this" or "here". Addresses and sizes are hex strings \
+        ("0x7F3000") both ways; ranges are half-open. A list comes in pages: pass `next` back as `after` \
+        until it is null. `reveal` points at what you are talking about, `mark` labels bytes as you explain \
+        them. `open_dump` reads a file by path without showing it, `survey` asks one tool's question of a \
+        folder of dumps, `finding` records a thing found for the person to check. `find_bytes` searches the \
+        bytes; the `uefi_` tools read a firmware image's structure. `open_part` opens a stretch or a node as \
+        a part of its own, in a panel over the same window — decompressed, or a Lenovo LENV block decoded \
+        with `part: "decoded"`; asking again raises the open one (`reused: true`). A part is a document to \
+        every tool, takes the focus, and has a tree with ids of its own: name the `document` a node id was \
+        listed on. A node says how the file holds it (`encoded`, `compressed`) and names the same node in \
+        an open part or in its parent (`counterpart`, `decoded_in`); `focus_note` says a call went to the \
+        parent or a part of the focused document; `tool_panel` says whether a part has a panel, which \
+        `open_panel` with the part's `document` opens. `diff`, `compare` and `reveal_diff` set two documents \
+        side by side. Nothing here saves a file; `write`, `update_in_parent`, the `_fix_checksum` and the \
+        microcode tools change an open file, one undo step each, and only if the person allows edits. \
+        `uefi_select` and `uefi_selection` act on the open UEFI Structure panel. A tool refuses an argument \
+        it does not take; to test a client, use `documents`, never `open_part`.
         """
 }

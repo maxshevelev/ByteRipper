@@ -86,6 +86,14 @@ final class AgentServiceTests: XCTestCase {
 
     // MARK: - The tools
 
+    /// Claude Code shows a model the server's instructions only up to about
+    /// 2,040 characters and drops the rest without a word: what is past that
+    /// is never read.
+    func testTheInstructionsFitWhatAClientShows() {
+        XCTAssertLessThanOrEqual(AgentService.instructions.count, 1950)
+        XCTAssertTrue(AgentService.instructions.hasSuffix("never `open_part`."), "the last sentence is there whole")
+    }
+
     func testTheToolsAreListedInAFixedOrder() {
         let host = Array(service.server.tools.prefix(4))
         XCTAssertEqual(host.map(\.name), ["documents", "focus", "read", "reveal"])

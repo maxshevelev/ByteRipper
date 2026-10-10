@@ -33,7 +33,11 @@ public enum UEFITreeDisplay {
         // Padding to UEFITool; what the column can say of a record is
         // whether it is the one in force.
         case .gpnvRecord: return node.subtype == 1 ? L("Current") : L("Superseded")
-        case .lenvBlock: return node.subtype == 1 ? L("In use", context: "LENV block") : L("Not in use")
+        // Only a block of a store has another to be chosen over; one on its
+        // own — a block opened decoded — is whatever its bytes say, and
+        // calling it "Not in use" contradicted the store it was taken from.
+        case .lenvBlock where node.subtype != nil:
+            return node.subtype == 1 ? L("In use", context: "LENV block") : L("Not in use")
         default: return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? ""
         }
     }

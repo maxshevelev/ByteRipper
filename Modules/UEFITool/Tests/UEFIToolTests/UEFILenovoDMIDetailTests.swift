@@ -127,6 +127,11 @@ final class UEFILenovoDMIDetailTests: XCTestCase {
         let row = try node(.lenvBlock, in: alone)
         XCTAssertEqual(roles(row, alone, ImageReader(decoded)),
                        [.encoded("Decoded: the key 0x77 encodes it again on the way back", decoded: true)])
+        // On its own a block has no other to be chosen over: neither in use
+        // nor not, whatever the store it came from says.
+        let said = UEFITreeDisplay.subtypeText(for: row)
+        XCTAssertNotEqual(said, "Not in use")
+        XCTAssertNotEqual(said, "In use")
     }
 
     /// The tree's rows say what they hold without being opened.
