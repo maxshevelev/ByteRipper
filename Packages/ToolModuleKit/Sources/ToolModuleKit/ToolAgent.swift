@@ -1,4 +1,5 @@
 import AgentKit
+import Localization
 
 /// A question a tool-module answers an agent from the bytes alone — the
 /// children of a node, a node's fields, what holds an address
@@ -85,9 +86,10 @@ public struct ToolAgentEdit: Sendable {
     public let description: String
     public let properties: [String: JSONValue]
     public let required: [String]
-    /// What the Edit menu calls the step — `Undo <name>` — in the app's own
-    /// language. Asked for outside the English the agent is answered in.
-    public let undoName: @MainActor @Sendable () -> String
+    /// What the Edit menu calls the step — `Undo <name>`. Put into words in
+    /// the app's own language where the step is made, not in the English the
+    /// agent is answered in.
+    public let undoName: LocalizedText
     public let run: @MainActor @Sendable (any ToolReadHost, AgentArguments) async throws -> Change
 
     /// What an edit comes to: the writes, and what the module has to say
@@ -111,7 +113,7 @@ public struct ToolAgentEdit: Sendable {
     public init(
         name: String, title: String, description: String,
         properties: [String: JSONValue] = [:], required: [String] = [],
-        undoName: @escaping @MainActor @Sendable () -> String,
+        undoName: LocalizedText,
         change: @escaping @MainActor @Sendable (any ToolReadHost, AgentArguments) async throws -> Change
     ) {
         self.name = name
@@ -127,7 +129,7 @@ public struct ToolAgentEdit: Sendable {
     public init(
         name: String, title: String, description: String,
         properties: [String: JSONValue] = [:], required: [String] = [],
-        undoName: @escaping @MainActor @Sendable () -> String,
+        undoName: LocalizedText,
         run: @escaping @MainActor @Sendable (any ToolReadHost, AgentArguments) async throws -> ToolTransaction
     ) {
         self.init(name: name, title: title, description: description, properties: properties,

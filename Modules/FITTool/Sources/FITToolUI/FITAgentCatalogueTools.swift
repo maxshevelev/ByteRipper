@@ -64,7 +64,7 @@ enum FITAgentCatalogueTools {
             """,
         properties: ["path": AgentSchema.string("A file's `path` from `microcode_catalogue`.")],
         required: ["path"],
-        undoName: { L("Add Microcode") }
+        undoName: L("Add Microcode")
     ) { host, arguments in
         let component = try await download(arguments.string("path"))
         return try await FITAgentMicrocode.add(component, to: host)
@@ -87,7 +87,7 @@ enum FITAgentCatalogueTools {
             "path": AgentSchema.string("A file's `path` from `microcode_catalogue`.")
         ],
         required: ["entry", "path"],
-        undoName: { L("Replace Microcode") }
+        undoName: L("Replace Microcode")
     ) { host, arguments in
         let entry = Int(try arguments.integer("entry"))
         let component = try await download(arguments.string("path"))
@@ -106,7 +106,7 @@ enum FITAgentCatalogueTools {
             """,
         properties: ["entry": AgentSchema.integer("The microcode row's place in the table, from `fit_table`.")],
         required: ["entry"],
-        undoName: { L("Remove Microcode") }
+        undoName: L("Remove Microcode")
     ) { host, arguments in
         try await FITAgentMicrocode.remove(Int(try arguments.integer("entry")), from: host)
     }

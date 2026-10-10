@@ -130,10 +130,11 @@ public struct PartUpdate: Equatable, Sendable {
     /// Where the source is once the run is written — the same range, unless
     /// the way back laid it out again at another length.
     public var source: Range<UInt64>
-    /// Said after the update, above the line about undoing it.
-    public var notes: [String]
+    /// Said after the update, above the line about undoing it — put into
+    /// words by whoever says it, in its reader's language.
+    public var notes: [LocalizedText]
 
-    public init(offset: UInt64, bytes: [UInt8], source: Range<UInt64>, notes: [String] = []) {
+    public init(offset: UInt64, bytes: [UInt8], source: Range<UInt64>, notes: [LocalizedText] = []) {
         self.offset = offset
         self.bytes = bytes
         self.source = source
@@ -146,12 +147,14 @@ public struct PartUpdate: Equatable, Sendable {
     }
 }
 
-/// Why a part cannot go back, in the words the user is shown.
+/// Why a part cannot go back. Made where the codec runs, off the main actor,
+/// and put into words by whoever shows it: the person in the app's language,
+/// an agent in English.
 public struct PartRefusal: Error, Equatable, Sendable {
-    public var title: String
-    public var message: String
+    public var title: LocalizedText
+    public var message: LocalizedText
 
-    public init(title: String, message: String) {
+    public init(title: LocalizedText, message: LocalizedText) {
         self.title = title
         self.message = message
     }
@@ -193,10 +196,10 @@ public struct CopyPartCodec: PartCodec {
 /// as given and are refused on the way back, with the reason.
 public struct ReadOnlyPartCodec: PartCodec {
     public var bytes: [UInt8]
-    public var title: String
-    public var reason: String
+    public var title: LocalizedText
+    public var reason: LocalizedText
 
-    public init(_ bytes: [UInt8], title: String, reason: String) {
+    public init(_ bytes: [UInt8], title: LocalizedText, reason: LocalizedText) {
         self.bytes = bytes
         self.title = title
         self.reason = reason

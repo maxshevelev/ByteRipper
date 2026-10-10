@@ -27,7 +27,7 @@ struct GivenBytesCodec: PartCodec {
 struct ElsewhereCodec: PartCodec {
     func decode(_ parent: PartParent) throws -> [UInt8] { try parent.sourceBytes() }
     func encode(_ part: [UInt8], into parent: PartParent) throws -> PartUpdate {
-        throw PartRefusal(title: "This cannot be put back", message: "A test body.")
+        throw PartRefusal(title: .verbatim("This cannot be put back"), message: .verbatim("A test body."))
     }
     var keepsOffsets: Bool { false }
 }

@@ -92,7 +92,7 @@ public enum FITAgentQueries {
             undo step. Refused when there is no table, when its checksum is not checked or already \
             correct, and without the person's permission to edit.
             """,
-        undoName: { L("Fix FIT Checksum") }
+        undoName: L("Fix FIT Checksum")
     ) { host, _ in
         let tree = try await readyTree(host)
         let report = await read(tree)

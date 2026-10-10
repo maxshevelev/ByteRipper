@@ -51,6 +51,67 @@ public func L(_ key: String, _ arguments: Any...) -> String {
     Localization.format(Localization.current.string(key), arguments)
 }
 
+/// The word for `key` in `language`, whatever the app or the task is
+/// speaking — for a sentence meant for one reader in particular: an agent
+/// answered in English while the window speaks Russian, or the undo step an
+/// agent's change leaves in the person's Edit menu, in the person's language.
+///
+///     L("Update from %1$@", in: Localization.appLanguage, name)
+public func L(_ key: String, in language: AppLanguage) -> String {
+    Localization.catalogue(for: language).string(key)
+}
+
+/// The same, with something in it.
+public func L(_ key: String, in language: AppLanguage, _ arguments: Any...) -> String {
+    Localization.format(Localization.catalogue(for: language).string(key), arguments)
+}
+
+/// The sentence for `key`, not yet in any language: where the expected type is
+/// `LocalizedText` — an error made off the main actor, a note handed on —
+/// the sentence is put into words by whoever shows it, in that reader's
+/// language. The same `L("…")` at the site, so the catalogue checks see the key.
+@_disfavoredOverload
+public func L(_ key: String) -> LocalizedText {
+    LocalizedText(key: key, context: nil, arguments: [])
+}
+
+@_disfavoredOverload
+public func L(_ key: String, context: String) -> LocalizedText {
+    LocalizedText(key: key, context: context, arguments: [])
+}
+
+@_disfavoredOverload
+public func L(_ key: String, _ arguments: Any...) -> LocalizedText {
+    LocalizedText(key: key, context: nil, arguments: Localization.texts(of: arguments))
+}
+
+/// A sentence kept as its key and what goes into it, put into words when it is
+/// shown and in the language of whoever shows it (`L(_:in:)`). `verbatim` for
+/// words that have no key — a parser's own English.
+public struct LocalizedText: Equatable, Sendable, CustomStringConvertible {
+    let key: String
+    let context: String?
+    let arguments: [String]
+    var isVerbatim = false
+
+    public static func verbatim(_ text: String) -> LocalizedText {
+        LocalizedText(key: text, context: nil, arguments: [], isVerbatim: true)
+    }
+
+    /// The sentence in `language`.
+    public func text(in language: AppLanguage) -> String {
+        guard !isVerbatim else { return key }
+        let catalogue = Localization.catalogue(for: language)
+        let format = context.flatMap { catalogue.entries[$0 + "|" + key] } ?? catalogue.string(key)
+        return Localization.format(format, arguments)
+    }
+
+    /// The sentence in the language in force where it is asked for.
+    public var text: String { text(in: Localization.language) }
+
+    public var description: String { text }
+}
+
 /// Which language the app speaks, and the words it says in it.
 ///
 /// One catalogue, loaded once per language, held behind a lock because the
@@ -102,8 +163,30 @@ public enum Localization {
         return catalogue
     }
 
-    /// The language the app is speaking now.
+    /// The language in force here: the task's override, else the app's.
     public static var language: AppLanguage { current.language }
+
+    /// The language the app speaks to the person, whatever a task overrides.
+    public static var appLanguage: AppLanguage {
+        lock.lock()
+        defer { lock.unlock() }
+        if !loaded {
+            catalogue = Catalogue.load(language: resolvedLanguage(), bundle: .module)
+            loaded = true
+        }
+        return catalogue.language
+    }
+
+    /// The catalogue of `language`, loaded once.
+    static func catalogue(for language: AppLanguage) -> Catalogue {
+        if language == appLanguage { return lock.withLock { Self.catalogue } }
+        lock.lock()
+        defer { lock.unlock() }
+        if let cached = overrideCatalogues[language] { return cached }
+        let loaded = Catalogue.load(language: language, bundle: .module)
+        overrideCatalogues[language] = loaded
+        return loaded
+    }
 
     /// What the user has chosen, as stored. `.system` until they choose
     /// otherwise.
@@ -154,11 +237,7 @@ public enum Localization {
     /// that can be seen and fixed, and a silently dropped one is not.
     static func format(_ format: String, _ arguments: [Any]) -> String {
         guard !arguments.isEmpty else { return format }
-        let texts = arguments.map { argument -> String in
-            if let text = argument as? String { return text }
-            if let convertible = argument as? CustomStringConvertible { return convertible.description }
-            return String(describing: argument)
-        }
+        let texts = texts(of: arguments)
         var result = ""
         var rest = Substring(format)
         while let percent = rest.firstIndex(of: "%") {
@@ -180,6 +259,15 @@ public enum Localization {
             rest = rest.dropFirst(digits.count + 2)
         }
         return result + rest
+    }
+
+    /// What each argument reads as, as interpolation would put it.
+    static func texts(of arguments: [Any]) -> [String] {
+        arguments.map { argument -> String in
+            if let text = argument as? String { return text }
+            if let convertible = argument as? CustomStringConvertible { return convertible.description }
+            return String(describing: argument)
+        }
     }
 
     /// Every key the catalogue of `language` holds — what the coverage script

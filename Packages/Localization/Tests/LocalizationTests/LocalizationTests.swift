@@ -60,6 +60,18 @@ final class CatalogueTests: XCTestCase {
         Localization.reload()
     }
 
+    private func withLanguageAsync(_ choice: LanguageChoice, _ body: () async -> Void) async {
+        let defaults = UserDefaults(suiteName: "LocalizationTests")!
+        defaults.removePersistentDomain(forName: "LocalizationTests")
+        let savedDefaults = Localization.defaults
+        Localization.defaults = defaults
+        defaults.set(choice.storedValue, forKey: Localization.choiceKey)
+        Localization.reload()
+        await body()
+        Localization.defaults = savedDefaults
+        Localization.reload()
+    }
+
     /// What the agent service runs under: a task that speaks English while
     /// the app speaks Russian, and the app's own words untouched outside it.
     func testATaskCanSpeakAnotherLanguageThanTheApp() async {
@@ -82,6 +94,25 @@ final class CatalogueTests: XCTestCase {
         XCTAssertEqual(inGerman, "Dateien hierher ziehen")
         XCTAssertEqual(L("Drop files here"), "Перетащите файлы сюда", "the app's own language is unchanged")
         XCTAssertEqual(Localization.language, .russian)
+    }
+
+    /// A sentence asked for in a language comes in that language, whatever
+    /// the app or the task speaks; one made off the main actor waits as its
+    /// key and is put into words by whoever shows it.
+    func testWordsCanBeAskedForInALanguage() async {
+        await withLanguageAsync(.fixed(.russian)) {
+            XCTAssertEqual(L("Drop files here", in: .english), "Drop files here")
+            XCTAssertEqual(L("Drop files here", in: .german), "Dateien hierher ziehen")
+            XCTAssertEqual(Localization.$override.withValue(.english) { L("Drop files here", in: Localization.appLanguage) },
+                           "Перетащите файлы сюда", "the app's language, under a task's override")
+
+            let made: LocalizedText = await Task.detached { L("Drop files here") }.value
+            XCTAssertEqual(made.text(in: .english), "Drop files here")
+            XCTAssertEqual(made.text, "Перетащите файлы сюда")
+            XCTAssertEqual(LocalizedText.verbatim("as is").text(in: .german), "as is")
+            let plain: String = L("Drop files here")
+            XCTAssertEqual(plain, "Перетащите файлы сюда", "a String where a String is wanted")
+        }
     }
 
     func testAKeyWithATranslationIsTranslated() {

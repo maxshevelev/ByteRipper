@@ -1,4 +1,5 @@
 import AgentKit
+import Localization
 import XCTest
 @testable import ByteRipper
 
@@ -180,6 +181,31 @@ final class AgentEditToolsTests: XCTestCase {
         let refused = try await client.call("update_in_parent", ["document": id])
         XCTAssertTrue(refused.isError)
         XCTAssertTrue(refused.answer.stringValue?.contains("Nothing was written") == true, "\(refused.answer)")
+    }
+
+    /// With the app in Russian, a refusal still reaches the agent in English,
+    /// and the undo step the person's Edit menu offers is in Russian.
+    func testUpdateInParentAnswersInEnglishAndUndoesInTheAppsLanguage() async throws {
+        let saved = Localization.defaults
+        Localization.defaults = defaults
+        defaults.set(LanguageChoice.fixed(.russian).storedValue, forKey: Localization.choiceKey)
+        Localization.reload()
+        defer {
+            Localization.defaults = saved
+            Localization.reload()
+        }
+        try open([UInt8](repeating: 0, count: 0x1000))
+        service.editsAllowed = true
+        let part = try await client.answer("open_part", ["offset": "0x800", "length": "0x100"])
+        let id = try XCTUnwrap(part["document"])
+        _ = try await client.answer("write", ["document": id, "offset": "0x0", "bytes": "22", "label": "t"])
+        let updated = try await client.answer("update_in_parent", ["document": id])
+        XCTAssertTrue(updated["undo"]?.stringValue?.hasPrefix("Обновить из") == true, "\(updated)")
+
+        _ = try await client.answer("write", ["document": id, "offset": "0x0", "bytes": "33", "label": "t"])
+        controller?.windowModel.pane1.close()
+        let refused = try await client.call("update_in_parent", ["document": id])
+        XCTAssertTrue(refused.answer.stringValue?.contains("is no longer open") == true, "\(refused.answer)")
     }
 
     /// Two files side by side in one tab, A first; B read-only when asked.

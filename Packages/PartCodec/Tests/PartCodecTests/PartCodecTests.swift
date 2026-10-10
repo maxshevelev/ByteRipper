@@ -23,15 +23,15 @@ final class PartCodecTests: XCTestCase {
 
     func testACopyGoesBackOnlyAtItsLength() {
         XCTAssertThrowsError(try CopyPartCodec().encode([1, 2, 3], into: parent)) {
-            XCTAssertEqual(($0 as? PartRefusal)?.title, "The length changed")
+            XCTAssertEqual(($0 as? PartRefusal)?.title.text(in: .english), "The length changed")
         }
     }
 
     func testAReadOnlyPartOpensAsGivenAndIsRefused() {
-        let codec = ReadOnlyPartCodec([7, 7], title: "No", reason: "Nothing compresses it again.")
+        let codec = ReadOnlyPartCodec([7, 7], title: .verbatim("No"), reason: .verbatim("Nothing compresses it again."))
         XCTAssertEqual(try codec.decode(parent), [7, 7])
         XCTAssertThrowsError(try codec.encode([7, 7], into: parent)) {
-            XCTAssertEqual($0 as? PartRefusal, PartRefusal(title: "No", message: "Nothing compresses it again."))
+            XCTAssertEqual($0 as? PartRefusal, PartRefusal(title: .verbatim("No"), message: .verbatim("Nothing compresses it again.")))
         }
         XCTAssertFalse(codec.keepsOffsets)
     }

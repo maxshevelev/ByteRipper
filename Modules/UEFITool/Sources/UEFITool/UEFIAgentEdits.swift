@@ -30,7 +30,7 @@ public enum UEFIAgentEdits {
             "node": AgentSchema.string("The node's id, e.g. \"0.2.5\". With `all`, only under it."),
             "all": AgentSchema.boolean("Every wrong checksum in the image, or under `node`. Default false.")
         ],
-        undoName: { L("Fix Checksum") }
+        undoName: L("Fix Checksum")
     ) { host, arguments in
         let tree = try await UEFIAgentQueries.readyTree(host)
         let id = try UEFIAgentQueries.nodeID(arguments.optionalString("node"))

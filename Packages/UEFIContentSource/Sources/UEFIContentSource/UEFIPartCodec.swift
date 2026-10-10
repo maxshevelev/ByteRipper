@@ -76,13 +76,13 @@ public struct UEFIPartCodec: PartCodec {
         }
         switch result {
         case .failure(let refusal):
-            throw PartRefusal(title: L("“%1$@” cannot be put back", parent.partName), message: refusal.message)
+            throw PartRefusal(title: L("“%1$@” cannot be put back", parent.partName), message: .verbatim(refusal.message))
         case .success(let plan):
             return PartUpdate(
                 offset: plan.offset, bytes: plan.bytes, source: plan.source,
                 notes: plan.warnings.isEmpty
-                    ? [L("Nothing was written inside a Boot Guard or vendor protected range.")]
-                    : plan.warnings
+                    ? [L("Nothing was written inside a Boot Guard or vendor protected range.") as LocalizedText]
+                    : plan.warnings.map(LocalizedText.verbatim)
             )
         }
     }

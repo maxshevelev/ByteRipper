@@ -82,7 +82,7 @@ final class AgentEditTools {
                     + "\(Self.hexText(actual)), not \(Self.hexText(expected)).")
             }
         }
-        let undoName = Self.inAppLanguage { L("Agent: %1$@", label) }
+        let undoName = L("Agent: %1$@", in: Localization.appLanguage, label)
         return .json(try apply(ToolTransaction(name: undoName, offset: offset, bytes: bytes), to: place))
     }
 
@@ -154,9 +154,8 @@ final class AgentEditTools {
         }
         let changed = zip(bytes, there).reduce(0) { $0 + ($1.0 == $1.1 ? 0 : 1) }
         let label = (try arguments.optionalString("label") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let undoName = Self.inAppLanguage {
-            L("Agent: %1$@", label.isEmpty ? L("Copy to Other Pane") : label)
-        }
+        let app = Localization.appLanguage
+        let undoName = L("Agent: %1$@", in: app, label.isEmpty ? L("Copy to Other Pane", in: app) : label)
         var answer: [String: JSONValue] = [
             "from": .string(source.id),
             "to": .string(destination.id),
@@ -238,8 +237,8 @@ final class AgentEditTools {
             answer["updated"] = false
             answer["note"] = .string("The part holds nothing \(parentName) has not got back already; nothing was written.")
             return .json(.object(answer))
-        case .refused(let title, let message):
-            throw AgentToolError("\(title). \(message) Nothing was written.")
+        case .refused(let refusal):
+            throw AgentToolError("\(refusal.title.text(in: .english)). \(refusal.message.text(in: .english)) Nothing was written.")
         case .sourceChanged:
             throw AgentToolError("The bytes \(place.id) was opened from (\(AgentHostTools.hexText(sourceBefore.lowerBound))–"
                 + "\(AgentHostTools.hexText(sourceBefore.upperBound)) in \(parentName)) have changed there since. "
@@ -254,8 +253,10 @@ final class AgentEditTools {
             answer["updated"] = true
             answer["written"] = AgentHostTools.range(update.offset..<(update.offset + UInt64(update.bytes.count)))
             answer["source"] = AgentHostTools.range(update.source)
-            if !update.notes.isEmpty { answer["notes"] = .array(update.notes.map { JSONValue.string($0) }) }
-            answer["undo"] = .string(L("Update from %1$@", place.pane.status.fileName))
+            if !update.notes.isEmpty {
+                answer["notes"] = .array(update.notes.map { JSONValue.string($0.text(in: .english)) })
+            }
+            answer["undo"] = .string(MainViewController.updateStepName(of: place.pane))
             answer["saved"] = false
             return .json(.object(answer))
         }
@@ -327,11 +328,6 @@ final class AgentEditTools {
 
     // MARK: - Helpers
 
-    /// `body` in the app's own language rather than the English the agent is
-    /// answered in: for words the person reads, such as the undo step.
-    static func inAppLanguage<T>(_ body: () -> T) -> T {
-        Localization.$override.withValue(nil) { body() }
-    }
 
     /// Hex text as bytes: pairs of digits, spaces and `0x` prefixes ignored.
     nonisolated static func hexBytes(_ text: String, name: String) throws -> [UInt8] {

@@ -30,7 +30,8 @@ import UEFIImage
         /// when the source has changed in the parent since, and overwriting it
         /// has to be asked for.
         case encode(codec: any PartCodec, bytes: [UInt8], confirm: Bool)
-        case refused(title: String, message: String)
+        /// Put into words by whoever shows it.
+        case refused(PartRefusal)
     }
 
     private(set) weak var parent: PaneViewModel?
@@ -140,21 +141,21 @@ import UEFIImage
     /// to.
     func planUpdate(from child: PaneViewModel) -> Update {
         guard let parent, state != .parentClosed else {
-            return .refused(
+            return .refused(PartRefusal(
                 title: L("The parent is closed"),
                 message: L("“%1$@” is no longer open, so there is nothing to put “%2$@” back into.", parentName, partName)
-            )
+            ))
         }
         guard !parent.status.isReadOnly else {
-            return .refused(
+            return .refused(PartRefusal(
                 title: L("“%1$@” is read-only", parentName),
                 message: L("Its bytes cannot be changed, so “%1$@” cannot be put back into it.", partName)
-            )
+            ))
         }
         guard let document = child.document,
               let bytes = try? document.read(at: 0, length: Int(document.size))
         else {
-            return .refused(title: L("The tab could not be read"), message: L("Nothing was changed in %1$@.", parentName))
+            return .refused(PartRefusal(title: L("The tab could not be read"), message: L("Nothing was changed in %1$@.", parentName)))
         }
         return .encode(codec: codec, bytes: bytes, confirm: state == .sourceChanged)
     }

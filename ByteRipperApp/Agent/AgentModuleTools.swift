@@ -126,9 +126,9 @@ final class AgentModuleTools {
         guard host.contentVersion == version else {
             throw AgentToolError("\(place.id) changed while the edit was being worked out; nothing was written. Ask again.")
         }
-        let undoName = AgentEditTools.inAppLanguage {
-            L("Agent: %1$@", change.undoDetail.isEmpty ? edit.undoName() : edit.undoName() + " " + change.undoDetail)
-        }
+        let app = Localization.appLanguage
+        let step = edit.undoName.text(in: app)
+        let undoName = L("Agent: %1$@", in: app, change.undoDetail.isEmpty ? step : step + " " + change.undoDetail)
         var answer = try edits.apply(ToolTransaction(name: undoName, writes: change.transaction.writes), to: place)
         if case .object(var members) = answer, !change.report.isEmpty {
             members.merge(change.report) { own, _ in own }

@@ -1979,8 +1979,8 @@ final class MainViewController: NSViewController {
         }
         let fail: @MainActor (Error) -> Void = { [weak self] error in
             let refusal = error as? PartRefusal
-            self?.presentAlert(title: refusal?.title ?? L("Those bytes could not be read."),
-                               message: refusal?.message ?? "\(error)", outcome: .problem)
+            self?.presentAlert(title: refusal?.title.text ?? L("Those bytes could not be read."),
+                               message: refusal?.message.text ?? "\(error)", outcome: .problem)
         }
         guard !codec.decodesImmediately else {
             do { open(try codec.decode(parent)) } catch { fail(error) }
@@ -2287,10 +2287,10 @@ final class MainViewController: NSViewController {
     @discardableResult
     func performUpdateInParent(of pane: PaneViewModel) -> Task<Void, Never>? {
         guard let origin = pane.origin, origin.hasChanges(in: pane) else { return nil }
-        let stepName = L("Update from %1$@", pane.status.fileName)
+        let stepName = Self.updateStepName(of: pane)
         switch origin.planUpdate(from: pane) {
-        case .refused(let title, let message):
-            presentAlert(title: title, message: message, outcome: .problem)
+        case .refused(let refusal):
+            presentAlert(title: refusal.title.text, message: refusal.message.text, outcome: .problem)
             return nil
 
         case .encode(let codec, let bytes, let confirm):
@@ -2374,7 +2374,7 @@ final class MainViewController: NSViewController {
         revealUpdateDestination(from: pane, to: parent)
         presentSheetAlert(
             title: L("Updated “%1$@”", origin.parentName),
-            message: (update.notes + [Self.undoLine(for: origin)]).joined(separator: "\n\n"),
+            message: (update.notes.map(\.text) + [Self.undoLine(for: origin)]).joined(separator: "\n\n"),
             on: window ?? (Self.controller(holding: parent, among: openDocuments?.controllers ?? [])
                            ?? self).view.window,
             outcome: .success)
@@ -2409,8 +2409,8 @@ final class MainViewController: NSViewController {
         /// The part holds nothing the parent has not got back.
         case unchanged
         /// It cannot go back: the parent is closed or read-only, or the codec
-        /// refused — in the codec's words.
-        case refused(title: String, message: String)
+        /// refused — in the codec's words, put into words by the caller.
+        case refused(PartRefusal)
         /// The source changed in the parent since the part was opened; going
         /// back would overwrite that, and it was not allowed to.
         case sourceChanged
@@ -2429,14 +2429,15 @@ final class MainViewController: NSViewController {
                                overwritingChangedSource: Bool) async -> QuietUpdateOutcome {
         guard let origin = pane.origin, origin.hasChanges(in: pane) else { return .unchanged }
         switch origin.planUpdate(from: pane) {
-        case .refused(let title, let message):
-            return .refused(title: title, message: message)
+        case .refused(let refusal):
+            return .refused(refusal)
         case .encode(let codec, let bytes, let confirm):
             guard let parent = origin.parent, let document = parent.document,
                   let content = try? DocumentPartReader(document: document) else {
-                return .refused(title: L("The parent is closed"),
-                                message: L("“%1$@” is no longer open, so there is nothing to put “%2$@” back into.",
-                                           origin.parentName, origin.partName))
+                return .refused(PartRefusal(
+                    title: L("The parent is closed"),
+                    message: L("“%1$@” is no longer open, so there is nothing to put “%2$@” back into.",
+                               origin.parentName, origin.partName)))
             }
             if confirm, !overwritingChangedSource { return .sourceChanged }
             let partParent = PartParent(content: content, source: origin.sourceRange,
@@ -2452,9 +2453,8 @@ final class MainViewController: NSViewController {
             }
             switch result {
             case .failure(let error):
-                let refusal = error as? PartRefusal
-                return .refused(title: refusal?.title ?? L("“%1$@” cannot be put back", origin.partName),
-                                message: refusal?.message ?? "\(error)")
+                return .refused(error as? PartRefusal ?? PartRefusal(
+                    title: L("“%1$@” cannot be put back", origin.partName), message: .verbatim("\(error)")))
             case .success(let update):
                 // Worked out over the bytes as they were when asked.
                 guard parent.contentGeneration == generation, parent.document === document else {
@@ -2462,7 +2462,7 @@ final class MainViewController: NSViewController {
                 }
                 do {
                     guard try landUpdate(update, into: parent, for: origin, content: content, tabBytes: bytes,
-                                         named: L("Update from %1$@", pane.status.fileName)) else {
+                                         named: Self.updateStepName(of: pane)) else {
                         return .writeFailed(L("The tab could not be read"))
                     }
                 } catch {
@@ -2474,11 +2474,17 @@ final class MainViewController: NSViewController {
         }
     }
 
+    /// What the parent's Edit menu offers to undo after an update: in the
+    /// app's language even when an agent asked for the update in English.
+    static func updateStepName(of pane: PaneViewModel) -> String {
+        L("Update from %1$@", in: Localization.appLanguage, pane.status.fileName)
+    }
+
     /// Why a part did not go back, in the codec's words.
     private func presentRefusal(_ error: Error, of origin: DocumentOrigin, on window: NSWindow?) {
         let refusal = error as? PartRefusal
-        presentSheetAlert(title: refusal?.title ?? L("“%1$@” cannot be put back", origin.partName),
-                          message: refusal?.message ?? "\(error)", on: window ?? view.window,
+        presentSheetAlert(title: refusal?.title.text ?? L("“%1$@” cannot be put back", origin.partName),
+                          message: refusal?.message.text ?? "\(error)", on: window ?? view.window,
                           outcome: .problem)
     }
 
