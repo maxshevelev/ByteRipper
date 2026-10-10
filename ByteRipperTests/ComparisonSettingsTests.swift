@@ -92,7 +92,7 @@ final class ComparisonSettingsTests: XCTestCase {
                                                   willBeInsertedIntoToolbar: true))
         XCTAssertEqual(item.label, "Comparison")
         let target = try XCTUnwrap(item.target as? NSObject)
-        target.perform(try XCTUnwrap(item.action))
+        target.perform(try XCTUnwrap(item.action), with: item)
         XCTAssertTrue(settings.window?.contentViewController is ComparisonSettingsViewController)
     }
 

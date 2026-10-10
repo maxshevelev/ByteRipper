@@ -18,7 +18,7 @@ final class SettingsWindowSizeTests: XCTestCase {
             settings.toolbar(toolbar, itemForItemIdentifier: NSToolbarItem.Identifier(id),
                              willBeInsertedIntoToolbar: true))
         let target = try XCTUnwrap(item.target as? NSObject)
-        target.perform(try XCTUnwrap(item.action))
+        target.perform(try XCTUnwrap(item.action), with: item)
         window.layoutIfNeeded()
     }
 
@@ -59,5 +59,23 @@ final class SettingsWindowSizeTests: XCTestCase {
         try switchTo(settings, "TextDecoding")   // back to the tall tab
         XCTAssertEqual(window.frame.height, tallHeight, accuracy: 1,
                        "returning to a tab must restore its height")
+    }
+
+    /// As in Finder's and Safari's settings: the tab on screen is the one the
+    /// toolbar marks, and its name is the window's title.
+    func testTheTabOnScreenIsMarkedAndNamed() throws {
+        let settings = SettingsWindowController()
+        let window = try XCTUnwrap(settings.window)
+        window.makeKeyAndOrderFront(nil)
+        defer { window.close() }
+
+        XCTAssertEqual(window.toolbar?.selectedItemIdentifier?.rawValue, "View")
+        XCTAssertEqual(window.title, SettingsWindowController.label(for: NSToolbarItem.Identifier("View")))
+        try switchTo(settings, "Comparison")
+        XCTAssertEqual(window.toolbar?.selectedItemIdentifier?.rawValue, "Comparison")
+        XCTAssertEqual(window.title, "Comparison")
+        settings.showFavorites(nil)
+        XCTAssertEqual(window.toolbar?.selectedItemIdentifier?.rawValue, "Favorites")
+        XCTAssertEqual(window.title, "Search Patterns")
     }
 }

@@ -247,10 +247,9 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             backing: .buffered,
             defer: false
         )
-        window.title = L("ByteRipper Settings")
         window.isReleasedWhenClosed = false
         // Autosave the position only. The size must track the active tab's
-        // content (see `selectTab`), so it is deliberately not autosaved — a
+        // content (see `select`), so it is deliberately not autosaved — a
         // saved size would pin the window at whatever tab was last shown.
         super.init(window: window)
 
@@ -261,8 +260,8 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         toolbar.allowsUserCustomization = false
         window.toolbar = toolbar
 
-        window.contentViewController = viewController
         installHelpButton()
+        select(Self.viewItemID, animate: false)
     }
 
     /// The `?` for the whole window: at the trailing end of the title bar,
@@ -324,6 +323,13 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         Self.tabIdentifiers
     }
 
+    /// Every tab is selectable: the toolbar marks the one on screen, as
+    /// Finder's and Safari's settings do, instead of leaving the reader to
+    /// tell it from the content below.
+    func toolbarSelectableItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        Self.tabIdentifiers
+    }
+
     /// What each tab is called, in one place.
     ///
     /// The toolbar builds its items from this and `SettingsMetrics` measures
@@ -368,7 +374,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             item.paletteLabel = item.label
             item.image = NSImage(systemSymbolName: "paintbrush", accessibilityDescription: item.label)
             item.target = self
-            item.action = #selector(viewTabTapped)
+            item.action = #selector(tabTapped(_:))
         // help: settings.comparison
         case Self.comparisonItemID:
             item.label = Self.label(for: itemIdentifier)
@@ -376,7 +382,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             item.image = NSImage(systemSymbolName: "arrow.left.arrow.right",
                                  accessibilityDescription: L("Comparison"))
             item.target = self
-            item.action = #selector(comparisonTabTapped)
+            item.action = #selector(tabTapped(_:))
         // help: settings.editing
         case Self.editingItemID:
             item.label = Self.label(for: itemIdentifier)
@@ -384,14 +390,14 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             item.image = NSImage(systemSymbolName: "square.and.pencil",
                                  accessibilityDescription: L("Editing"))
             item.target = self
-            item.action = #selector(editingTabTapped)
+            item.action = #selector(tabTapped(_:))
         // help: settings.patterns
         case Self.favoritesItemID:
             item.label = Self.label(for: itemIdentifier)
             item.paletteLabel = item.label
             item.image = NSImage(systemSymbolName: "star", accessibilityDescription: L("Search Patterns"))
             item.target = self
-            item.action = #selector(favoritesTabTapped)
+            item.action = #selector(tabTapped(_:))
         // help: settings.file-types
         case Self.fileTypesItemID:
             item.label = Self.label(for: itemIdentifier)
@@ -399,7 +405,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             item.image = NSImage(systemSymbolName: "doc.badge.gearshape",
                                  accessibilityDescription: L("File Types"))
             item.target = self
-            item.action = #selector(fileTypesTabTapped)
+            item.action = #selector(tabTapped(_:))
         // help: settings.agent
         case Self.agentItemID:
             item.label = Self.label(for: itemIdentifier)
@@ -407,14 +413,14 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
             item.image = NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted",
                                  accessibilityDescription: L("Agent"))
             item.target = self
-            item.action = #selector(agentTabTapped)
+            item.action = #selector(tabTapped(_:))
         // help: settings.text-decoding
         case Self.textDecodingItemID:
             item.label = Self.label(for: itemIdentifier)
             item.paletteLabel = item.label
             item.image = NSImage(systemSymbolName: "textformat.abc", accessibilityDescription: L("Text Decoding"))
             item.target = self
-            item.action = #selector(textDecodingTabTapped)
+            item.action = #selector(tabTapped(_:))
         default:
             return nil
         }
@@ -428,7 +434,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     /// it — so the size is driven explicitly from the view's fitting size. Each
     /// tab's view sizes itself via constraints (a min-width the text wraps to,
     /// and a height pinned from the top), so the fitting size is the right size.
-    private func fitWindowToContent() {
+    private func fitWindowToContent(animate: Bool = false) {
         guard let window, let controller = window.contentViewController else { return }
         // The tabs' widths depend on the translated toolbar labels and on the
         // system's UI font size; both are re-measured here rather than frozen
@@ -440,40 +446,40 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         var frame = window.frame
         frame.size = windowSize
         frame.origin.y = top - windowSize.height
-        window.setFrame(frame, display: true, animate: false)
+        window.setFrame(frame, display: true, animate: animate)
     }
 
-    private func selectTab(_ controller: NSViewController) {
-        window?.contentViewController = controller
-        fitWindowToContent()
+    /// The controller each tab shows.
+    private func controller(for identifier: NSToolbarItem.Identifier) -> NSViewController? {
+        switch identifier {
+        case Self.viewItemID: return viewController
+        case Self.comparisonItemID: return comparisonController
+        case Self.editingItemID: return editingController
+        case Self.textDecodingItemID: return textDecodingController
+        case Self.favoritesItemID: return favoritesController
+        case Self.fileTypesItemID: return fileTypesController
+        case Self.agentItemID: return agentController
+        default: return nil
+        }
     }
 
-    @objc private func viewTabTapped() {
-        selectTab(viewController)
+    /// Shows a tab the way the system's own settings windows do: its item
+    /// marked in the toolbar, its name as the window's title, and the window
+    /// growing or shrinking to it in one short animation while it is on
+    /// screen. The title is the tab's because the toolbar already says whose
+    /// settings these are; Finder's window reads "General", not "Finder
+    /// Settings".
+    private func select(_ identifier: NSToolbarItem.Identifier, animate: Bool = true) {
+        guard let window, let controller = controller(for: identifier) else { return }
+        window.toolbar?.selectedItemIdentifier = identifier
+        window.title = Self.label(for: identifier)
+        window.contentViewController = controller
+        fitWindowToContent(animate: animate && window.isVisible
+                           && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
-    @objc private func comparisonTabTapped() {
-        selectTab(comparisonController)
-    }
-
-    @objc private func editingTabTapped() {
-        selectTab(editingController)
-    }
-
-    @objc private func textDecodingTabTapped() {
-        selectTab(textDecodingController)
-    }
-
-    @objc private func fileTypesTabTapped() {
-        selectTab(fileTypesController)
-    }
-
-    @objc private func favoritesTabTapped() {
-        selectTab(favoritesController)
-    }
-
-    @objc private func agentTabTapped() {
-        selectTab(agentController)
+    @objc private func tabTapped(_ sender: NSToolbarItem) {
+        select(sender.itemIdentifier)
     }
 
     /// Re-sizes the window to the tab it is showing. The View tab grows when
@@ -491,7 +497,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     /// Settings and look for it": the menu item promises a list, so it lands on
     /// the list.
     func showFavorites(_ sender: Any?) {
-        selectTab(favoritesController)
+        select(Self.favoritesItemID)
         showWindow(sender)
     }
 
@@ -499,7 +505,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
     /// bar's agent item send someone who wants to switch the service on or
     /// copy a client's configuration.
     func showAgent(_ sender: Any?) {
-        selectTab(agentController)
+        select(Self.agentItemID)
         showWindow(sender)
     }
 

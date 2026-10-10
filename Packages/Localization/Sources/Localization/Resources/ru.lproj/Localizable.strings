@@ -211,7 +211,6 @@
 "Both" = "Обе";
 "Building" = "Построение";
 "ByteRipper Help" = "Справка ByteRipper";
-"ByteRipper Settings" = "Настройки ByteRipper";
 "ByteRipper has no permission to access “%1$@”. Check the file’s permissions (Finder ▸ Get Info), and whether ByteRipper is allowed its folder under System Settings ▸ Privacy & Security ▸ Files and Folders." = "У ByteRipper нет прав доступа к «%1$@». Проверьте права на файл (Finder ▸ Свойства) и разрешён ли ByteRipper доступ к его папке: Системные настройки ▸ Конфиденциальность и безопасность ▸ Файлы и папки.";
 "Bytes from offset %1$@ will be removed. Subsequent offsets will shift — the file structure may be affected." = "Байты начиная с адреса %1$@ будут удалены. Последующие адреса сдвинутся — структура файла может быть нарушена.";
 "Bytes per word in the hex grid" = "Байт в слове в hex-сетке";

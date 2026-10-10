@@ -28,9 +28,12 @@ import Localization
     /// "Appearance" is 62.95 pt of text and the item comes out 75 pt wide.
     private static let itemPadding: CGFloat = 12
 
-    /// No item is narrower than its 32 pt icon and that icon's own padding,
-    /// however short the word under it.
-    private static let minimumItemWidth: CGFloat = 44
+    /// No item is narrower than its icon and the room around it, however
+    /// short the word under it. Measured on selectable items — the tabs are
+    /// selectable, so the toolbar can mark the one on screen — which keep
+    /// space for the selection's backdrop: "View" and "Agent" come out 55 pt
+    /// wide, where a plain item was 44.
+    private static let minimumItemWidth: CGFloat = 55
 
     /// What the toolbar keeps at each end. The items are centred, and below
     /// 16 pt a side AppKit starts folding the last of them into the overflow
