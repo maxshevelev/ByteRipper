@@ -40,6 +40,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     private let marksScroll = NSScrollView()
     private let findings = AgentFindingsTable()
     private let findingsScroll = NSScrollView()
+    private let tools = AgentToolsPage()
     private let clearButton = NSButton(title: "", target: nil, action: nil)
     private let removeButton = NSButton(title: "", target: nil, action: nil)
     private let settingsButton = NSButton(title: "", target: nil, action: nil)
@@ -86,7 +87,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     private func zoomChanged() {
         let ratio = ToolPanelFont.size / drawnSize
         drawnSize = ToolPanelFont.size
-        for table in [table, marks.table, findings.table] {
+        for table in [table, marks.table, findings.table, tools.table] {
             ToolPanelTable.scaleColumnWidths(of: table, by: ratio)
             AgentTableStyle.apply(to: table)
             table.reloadData()
@@ -140,10 +141,11 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         // The two things the window lists: what the agent asked, and what it
         // marked. One at a time, the way Activity Monitor's tabs are — both
         // are long lists that want the whole height.
-        pages.segmentCount = 3
+        pages.segmentCount = 4
         pages.setLabel(L("Log"), forSegment: 0)
         pages.setLabel(L("Marks"), forSegment: 1)
         pages.setLabel(L("Findings"), forSegment: 2)
+        pages.setLabel(L("Tools"), forSegment: 3)
         pages.trackingMode = .selectOne
         pages.selectedSegment = 0
         pages.target = self
@@ -196,6 +198,10 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         findingsScroll.borderType = .bezelBorder
         findingsScroll.isHidden = true
 
+        tools.build()
+        tools.onSelectionChanged = { [weak self] in self?.refreshButtons() }
+        tools.split.isHidden = true
+
         clearButton.bezelStyle = .rounded
         clearButton.target = self
         clearButton.action = #selector(clearPage)
@@ -221,7 +227,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
         let help = HelpButton.standard(for: .topic(.agent))
 
-        for view in [statusLabel, pages, logSplit, marksScroll, findingsScroll, clearButton, removeButton,
+        for view in [statusLabel, pages, logSplit, marksScroll, findingsScroll, tools.split, clearButton, removeButton,
                      followButton, settingsButton, help] {
             view.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(view)
@@ -250,6 +256,11 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             findingsScroll.leadingAnchor.constraint(equalTo: logSplit.leadingAnchor),
             findingsScroll.trailingAnchor.constraint(equalTo: logSplit.trailingAnchor),
             findingsScroll.bottomAnchor.constraint(equalTo: logSplit.bottomAnchor),
+
+            tools.split.topAnchor.constraint(equalTo: logSplit.topAnchor),
+            tools.split.leadingAnchor.constraint(equalTo: logSplit.leadingAnchor),
+            tools.split.trailingAnchor.constraint(equalTo: logSplit.trailingAnchor),
+            tools.split.bottomAnchor.constraint(equalTo: logSplit.bottomAnchor),
 
             removeButton.centerYAnchor.constraint(equalTo: clearButton.centerYAnchor),
             removeButton.leadingAnchor.constraint(equalTo: clearButton.trailingAnchor, constant: 8),
@@ -292,10 +303,11 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         showDetails()
         marks.show(service?.markTools.all() ?? [])
         findings.show(service?.dumpTools.findings ?? [])
+        tools.show(service?.catalogue ?? [], stats: service?.toolStats ?? [:])
         refreshButtons()
     }
 
-    private enum Page: Int { case log, marks, findings }
+    private enum Page: Int { case log, marks, findings, tools }
     private var page: Page { Page(rawValue: pages.selectedSegment) ?? .log }
     private var showsMarks: Bool { page == .marks }
 
@@ -318,6 +330,11 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             clearButton.isEnabled = !findings.isEmpty
             removeButton.isHidden = true
             followButton.isHidden = true
+        case .tools:
+            clearButton.title = L("Reset Statistics")
+            clearButton.isEnabled = tools.hasStats
+            removeButton.isHidden = true
+            followButton.isHidden = true
         }
     }
 
@@ -325,6 +342,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         logSplit.isHidden = page != .log
         marksScroll.isHidden = page != .marks
         findingsScroll.isHidden = page != .findings
+        tools.split.isHidden = page != .tools
         refreshButtons()
         focusList()
     }
@@ -335,6 +353,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         case .log: return table
         case .marks: return marks.table
         case .findings: return findings.table
+        case .tools: return tools.table
         }
     }
 
@@ -348,6 +367,12 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     /// Shows the Findings list, for tests.
     func showFindings() {
         pages.selectedSegment = 2
+        pageChanged()
+    }
+
+    /// Shows the Tools list, for tests.
+    func showTools() {
+        pages.selectedSegment = 3
         pageChanged()
     }
 
@@ -483,6 +508,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         case .log: service?.clearLog()
         case .marks: service?.markTools.remove { _ in true }
         case .findings: service?.dumpTools.clearFindings()
+        case .tools: service?.resetToolStats()
         }
     }
 
@@ -550,6 +576,9 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     }
 
     var statusText: String { statusLabel.stringValue }
+
+    /// The Tools page, for tests.
+    var toolsPage: AgentToolsPage { tools }
 
     /// The marks list, for tests.
     var marksList: AgentMarksTable { marks }

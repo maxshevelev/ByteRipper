@@ -51,20 +51,40 @@ final class AgentService {
     private(set) lazy var server = AgentServer(
         info: AgentServerInfo(name: "byteripper", version: Self.appVersion, title: "ByteRipper"),
         instructions: Self.instructions,
-        tools: allTools.map(Self.inEnglish))
+        tools: catalogue.map { Self.inEnglish($0.tool) })
 
-    /// Every tool, in the order `tools/list` gives them.
-    private var allTools: [AgentTool] {
-        var tools: [AgentTool] = hostTools.tools()
-        tools += markTools.tools()
-        tools += dumpTools.tools()
-        tools += diffTools.tools()
-        tools += findTools.tools()
-        tools += refsTools.tools()
-        tools += editTools.tools()
-        tools += moduleTools.tools(modules: modules)
-        return tools
-    }
+    /// Every tool, in the order `tools/list` gives them, with where it comes
+    /// from and what it does — what the Agent window's Tools page lists.
+    private(set) lazy var catalogue: [AgentToolEntry] = {
+        func entries(_ tools: [AgentTool], _ group: AgentToolGroup) -> [AgentToolEntry] {
+            tools.map { tool in
+                AgentToolEntry(tool: tool, group: group,
+                               kind: group.isEdits ? .edit : tool.annotations.readOnly ? .read : .screen)
+            }
+        }
+        var list = entries(hostTools.tools(), .files)
+        list += entries(markTools.tools(), .marks)
+        list += entries(dumpTools.tools(), .dumps)
+        list += entries(diffTools.tools(), .comparison)
+        list += entries(findTools.tools() + refsTools.tools(), .search)
+        list += entries(editTools.tools(), .edits)
+        // A module's tools under the module; its edits are edits.
+        let modules = self.modules
+        for tool in moduleTools.tools(modules: modules) {
+            let module = modules.first { module in
+                (module.agentQueries.map(\.name) + module.agentComparisons.map(\.name)
+                    + module.agentEdits.map(\.name) + module.agentActions.map(\.name)).contains(tool.name)
+            }
+            let edits = module?.agentEdits.contains { $0.name == tool.name } ?? false
+            list.append(AgentToolEntry(tool: tool, group: module.map { .module($0) } ?? .panels,
+                                       kind: edits ? .edit : tool.annotations.readOnly ? .read : .screen))
+        }
+        return list
+    }()
+
+    /// How each tool has been used since the app started, by name. Kept
+    /// apart from the log, which keeps only its last calls.
+    private(set) var toolStats: [String: AgentToolStats] = [:]
 
     /// `tool`, answering in English whatever the window speaks: a field label
     /// a module borrows from its panel is built with `L()`, and a model reads
@@ -226,6 +246,7 @@ final class AgentService {
     }
 
     private func record(_ record: AgentCallRecord) {
+        toolStats[record.tool, default: AgentToolStats()].add(record)
         log.append(record)
         if log.count > Self.logLimit { log.removeFirst(log.count - Self.logLimit) }
         changed()
@@ -233,6 +254,11 @@ final class AgentService {
 
     func clearLog() {
         log.removeAll()
+        changed()
+    }
+
+    func resetToolStats() {
+        toolStats.removeAll()
         changed()
     }
 

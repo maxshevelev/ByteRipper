@@ -1,4 +1,4 @@
-@source-sha c163ea57319cb8939e88325562d7be33e6cd6d2ae6d3bbfd123aa1d6469289e5
+@source-sha d2a4f523e6be240a549985931fd4840bd1110f45b8cb33a72eaebaf3a741bf96
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -106,7 +106,7 @@ Jede Änderung des Agenten bildet einen eigenen Schritt im Widerrufen-Verlauf de
 
 ## Das Agentenfenster
 
-**Fenster ▸ Agent** zeigt den Zustand des Dienstes und enthält drei Listen. Solange der Dienst eingeschaltet ist, befindet sich in der Symbolleiste zwischen **?** und dem Umschalter für die Anordnung der Bereiche eine Taste für dieses Fenster, mit demselben Symbol wie der Reiter „Agent“ in den Einstellungen. Sie öffnet das Agentenfenster oder holt es nach vorn, falls es bereits geöffnet ist. Die Tastatur wirkt danach auf die Liste der angezeigten Seite; die Pfeiltasten bewegen die Auswahl durch ihre Zeilen. Beim Wechsel auf eine andere Seite geht die Tastatur auf deren Liste über.
+**Fenster ▸ Agent** zeigt den Zustand des Dienstes und enthält vier Listen. Solange der Dienst eingeschaltet ist, befindet sich in der Symbolleiste zwischen **?** und dem Umschalter für die Anordnung der Bereiche eine Taste für dieses Fenster, mit demselben Symbol wie der Reiter „Agent“ in den Einstellungen. Sie öffnet das Agentenfenster oder holt es nach vorn, falls es bereits geöffnet ist. Die Tastatur wirkt danach auf die Liste der angezeigten Seite; die Pfeiltasten bewegen die Auswahl durch ihre Zeilen. Beim Wechsel auf eine andere Seite geht die Tastatur auf deren Liste über.
 
 **Protokoll** verzeichnet jede Anfrage des Agenten mit Uhrzeit, Werkzeug, den Argumenten in der vom Agenten übergebenen Form, Antwortzeit, Größe der Antwort und Ergebnis. Abgelehnte Anfragen sind rot dargestellt, zusammen mit dem Grund, der dem Agenten mitgeteilt wurde.
 
@@ -117,6 +117,8 @@ Ist **Neuen Anfragen folgen** unter dem Protokoll eingeschaltet, scrollt das Pro
 **Markierungen** führt die Markierungen auf, die der Agent in allen geöffneten Dateien gesetzt hat: Bezeichnung, Datei, Bytes und Erläuterung; zugehörige Markierungen stehen nach der Erläuterung, hinter **Zugehörige Markierungen:**. Ein Doppelklick auf eine Zeile holt die Datei nach vorn und wählt die markierten Bytes aus; dieser Sprung wird im Verlauf festgehalten. **Markierung entfernen** entfernt die ausgewählten Zeilen, **Alle Markierungen entfernen** sämtliche Markierungen. Darüber hinaus verschwindet eine Markierung, wenn ihre Datei geschlossen wird oder der Agent sie selbst entfernt.
 
 **Befunde** führt auf, was der Agent gefunden hat und wo: Aussage, Datei, Bytes oder Knoten. Ein Doppelklick öffnet die Datei an dieser Stelle — in dem Tab, in dem sie bereits geöffnet ist, oder in einem neuen. **Alle Befunde entfernen** leert die Liste.
+
+**Werkzeuge** listet jedes Werkzeug auf, das dem Agenten angeboten wird: den Namen, die Gruppe — ein Teil von ByteRipper oder der Bereich, etwa **UEFI-Struktur**, aus dem es stammt — und die Art: **Lesen** ändert nichts, **Anzeige** ändert, was das Fenster zeigt (die Ansicht, eine Markierung, einen Befund, einen Tab), **Ändert eine Datei** schreibt in eine geöffnete Datei. Daneben die Nutzung seit dem Start von ByteRipper: die Aufrufe, die Aufrufe **Ohne Antwort**, die durchschnittliche Dauer, der Umfang der Antworten und der letzte Aufruf. Die Liste darunter zeigt das ausgewählte Werkzeug so, wie der Agent es beschrieben bekommt: die **Beschreibung** und unter **Argumente** die Argumente als JSON-Schema, beide auf Englisch, wie der Agent sie liest. **Statistik zurücksetzen** setzt die Zähler auf null; nach dem Beenden des Programms werden sie nicht aufbewahrt.
 
 ## Zugriff auf Ordner außerhalb der geöffneten Fenster
 

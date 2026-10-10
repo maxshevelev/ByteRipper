@@ -135,6 +135,46 @@ final class AgentUITests: XCTestCase {
         XCTAssertNil(controller.shownText(row: 0, column: "tool"))
     }
 
+    /// The Tools page lists every tool the agent is offered, grouped and
+    /// classed, with what it has been used for; the details give the tool as
+    /// the agent reads it.
+    func testTheToolsPageListsEveryToolWithItsUseAndWhatTheAgentReads() async throws {
+        let controller = AgentWindowController(service: service)
+        _ = controller.window
+        let connection = service.connect(send: { _ in })
+        for id in 1...2 {
+            await connection.receive(Data((#"{"jsonrpc":"2.0","id":"# + "\(id)"
+                + #","method":"tools/call","params":{"name":"read","arguments":{}}}"# + "\n").utf8))
+        }
+        await connection.waitUntilIdle()
+        let logged = await awaitUntil(1) { self.service.toolStats["read"]?.calls == 2 }
+        XCTAssertTrue(logged)
+        controller.refresh()
+        controller.showTools()
+        let page = controller.toolsPage
+        XCTAssertEqual(page.rows.map(\.tool.name), service.server.tools.map(\.name), "every tool, in the agent's order")
+        let read = try XCTUnwrap(page.rows.firstIndex { $0.tool.name == "read" })
+        XCTAssertEqual(page.shownText(row: read, column: "group"), "Files and View")
+        XCTAssertEqual(page.shownText(row: read, column: "kind"), "Read")
+        XCTAssertEqual(page.shownText(row: read, column: "calls"), "2")
+        XCTAssertEqual(page.shownText(row: read, column: "failures"), "2", "no file was open")
+        let write = try XCTUnwrap(page.rows.firstIndex { $0.tool.name == "write" })
+        XCTAssertEqual(page.shownText(row: write, column: "kind"), "Edits a File")
+        XCTAssertEqual(page.shownText(row: write, column: "calls"), "")
+        let fix = try XCTUnwrap(page.rows.first { $0.tool.name == "uefi_fix_checksum" })
+        XCTAssertEqual(fix.group.title, "UEFI Structure")
+        XCTAssertEqual(fix.kind, .edit)
+
+        page.select(read)
+        let tool = try XCTUnwrap(service.server.tools.first { $0.name == "read" })
+        XCTAssertEqual(page.shownTexts.first, tool.description, "the description as the agent reads it")
+        XCTAssertEqual(page.shownTexts.last, tool.inputSchema.prettyText)
+
+        service.resetToolStats()
+        controller.refresh()
+        XCTAssertEqual(page.shownText(row: read, column: "calls"), "")
+    }
+
     /// The table cuts the arguments to a column; the details under it give
     /// the selected call whole, each argument on a row of its own.
     func testTheDetailsShowTheSelectedCallWhole() async {

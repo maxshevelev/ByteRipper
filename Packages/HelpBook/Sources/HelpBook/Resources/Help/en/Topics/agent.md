@@ -7,6 +7,7 @@
 @covers window.agent.details
 @covers toolbar.agent
 @covers window.agent.follow
+@covers window.agent.tools
 @covers menu.window.agent
 @covers menubar.agent
 @covers settings.agent.edits
@@ -88,13 +89,15 @@ Each change is one step of the file's undo, named **Agent:** and what the agent 
 
 ## The Agent window
 
-**Window ▸ Agent** shows whether the service is running, and has three lists. While the service is switched on, the toolbar has a button for it between **?** and the pane arrangement, with the icon of the Agent tab in Settings; it opens the window, or brings it to the front when it is open already. The keyboard is then on the list of the page shown, and the arrow keys move through its rows; choosing another page moves the keyboard to that page's list.
+**Window ▸ Agent** shows whether the service is running, and has four lists. While the service is switched on, the toolbar has a button for it between **?** and the pane arrangement, with the icon of the Agent tab in Settings; it opens the window, or brings it to the front when it is open already. The keyboard is then on the list of the page shown, and the arrow keys move through its rows; choosing another page moves the keyboard to that page's list.
 
 **Log** lists every request the agent has made: the time, the tool, the arguments as the agent wrote them, how long the answer took, its size and the result. A refused request is shown in red, with the reason the agent was given. The table shortens long arguments; the list under it shows the selected request whole: the time, the client, how long the answer took, its size in bytes, the full result and, under **Arguments**, the whole JSON the agent sent, one member to a line. Its text can be selected and copied. **Space** on the log, or the button in the list's corner, opens the list large over the window, as a tool panel's details open; **Space** or **Esc** closes it. **Follow New Requests** below the log scrolls it to each new request as it arrives; while it is off, the log stays where it was left. The selected request stays selected as new ones arrive. **Clear Log** empties the list; the list is not kept after the program quits.
 
 **Marks** lists the marks the agent has left in every open file: the label, the file, the bytes and the note; the marks a mark is about follow its note, after **Related Marks:**. A double-click on a row brings its file forward and selects its bytes, as a step of the navigation history. **Remove Mark** removes the selected rows, **Clear Marks** removes them all. A mark also goes when its file is closed or when the agent removes it.
 
 **Findings** lists what the agent found and where: the sentence, the file, the bytes or the node. A double-click opens the file at that place — in the tab that already has it, or in a new one. **Clear Findings** empties the list.
+
+**Tools** lists every tool an agent is offered: its name, its group — a part of ByteRipper, or the panel such as **UEFI Structure** it comes from — and its kind: **Read** changes nothing, **On Screen** changes what the window shows (the view, a mark, a finding, a tab), **Edits a File** writes into an open file. Beside each, how it has been used since ByteRipper started: the calls, those **Not Answered**, the average time, the size of its answers and the last call. The list under it shows the selected tool as the agent is told about it: the **Description** and, under **Arguments**, the arguments it takes as a JSON schema, both in English, as the agent reads them. **Reset Statistics** sets the counts back to zero; they are not kept after the program quits.
 
 ## Files outside the open windows
 
