@@ -114,7 +114,7 @@ final class ToolbarItemsTests: XCTestCase {
 
         // Hollow while nobody is connected, filled once a client speaks — the
         // menu bar's mark, for a screen whose notch hides the menu bar's.
-        func filled() -> Bool { (try? item(window, .agentWindow).image?.description.contains("point.3.filled")) == true }
+        func filled() -> Bool { (try? item(window, .agentWindow).image?.description.contains(AgentService.symbolName(connected: true))) == true }
         XCTAssertFalse(filled())
         let fd = try UnixSocket.connect(to: service.socketPath)
         defer { close(fd) }

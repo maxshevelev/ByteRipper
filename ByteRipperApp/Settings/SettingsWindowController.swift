@@ -408,7 +408,7 @@ final class SettingsWindowController: NSWindowController, NSToolbarDelegate {
         case Self.agentItemID:
             item.label = Self.label(for: itemIdentifier)
             item.paletteLabel = item.label
-            item.image = NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted",
+            item.image = NSImage(systemSymbolName: AgentService.symbolName(connected: false),
                                  accessibilityDescription: L("Agent"))
             item.target = self
             item.action = #selector(tabTapped(_:))

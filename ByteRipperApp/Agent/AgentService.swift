@@ -160,12 +160,16 @@ final class AgentService {
     /// The agents connected: the connections whose client has spoken.
     var connectionCount: Int { clients.count }
 
-    /// The service's picture: three points joined, hollow while no agent is
-    /// connected and filled while one is. One name for every place that shows
-    /// the state — the menu bar and the window's toolbar — so the two cannot
-    /// disagree about it.
+    /// The service's picture: a plug, hollow while no agent is connected and
+    /// filled while one is. One name for every place that shows the service —
+    /// the menu bar, the window's toolbar, the Settings tab — so they cannot
+    /// disagree about it. The plug is macOS 15's; macOS 14 has no such symbol
+    /// and keeps the three joined points it had before.
     static func symbolName(connected: Bool) -> String {
-        connected ? "point.3.filled.connected.trianglepath.dotted" : "point.3.connected.trianglepath.dotted"
+        if #available(macOS 15, *) {
+            return connected ? "powerplug.portrait.fill" : "powerplug.portrait"
+        }
+        return connected ? "point.3.filled.connected.trianglepath.dotted" : "point.3.connected.trianglepath.dotted"
     }
 
     /// Opens or closes the socket to match the switch.

@@ -305,7 +305,7 @@ final class AgentServiceTests: XCTestCase {
         defer { service.isEnabled = false }
         let mark = AgentStatusItem(service: service, showWindow: {}, showSettings: {})
         XCTAssertTrue(mark.isShown)
-        XCTAssertFalse(mark.imageForTesting?.description.contains("point.3.filled") ?? true,
+        XCTAssertFalse(mark.imageForTesting?.description.contains(AgentService.symbolName(connected: true)) ?? true,
                        "\(String(describing: mark.imageForTesting))")
         XCTAssertTrue(mark.isDimmedForTesting)
 
@@ -317,7 +317,7 @@ final class AgentServiceTests: XCTestCase {
         XCTAssertTrue(counted)
         _ = await awaitUntil(0.3) { false }
 
-        XCTAssertTrue(mark.imageForTesting?.description.contains("point.3.filled") ?? false,
+        XCTAssertTrue(mark.imageForTesting?.description.contains(AgentService.symbolName(connected: true)) ?? false,
                       "\(String(describing: mark.imageForTesting))")
         XCTAssertFalse(mark.isDimmedForTesting)
     }
