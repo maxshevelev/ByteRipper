@@ -287,7 +287,7 @@ public enum UEFIAgentQueries {
     }
 
     /// Opens every closed container in the image, breadth first.
-    static func openEverything(in tree: LazyUEFITree) async {
+    public static func openEverything(in tree: LazyUEFITree) async {
         var queue = tree.rootNodes
         while !queue.isEmpty {
             let node = queue.removeFirst()
@@ -324,7 +324,7 @@ public enum UEFIAgentQueries {
     }
 
     /// The names from the top of the tree down to `id`.
-    static func path(to id: NodeID, in tree: LazyUEFITree) -> [String] {
+    public static func path(to id: NodeID, in tree: LazyUEFITree) -> [String] {
         (1...max(1, id.path.count)).compactMap { length in
             tree.node(NodeID(Array(id.path.prefix(length)))).map { UEFITreeDisplay.ownName(of: $0) ?? $0.name }
         }

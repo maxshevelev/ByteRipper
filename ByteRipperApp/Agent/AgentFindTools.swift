@@ -53,7 +53,7 @@ final class AgentFindTools {
                 around them — with part `decompressed` for a section's. \
                 Each match: `start`, `end` (half-open), the `encoding` that matched, `where` it is — as \
                 `diff` places a run: the top-level area and the deepest node that holds it — and, with \
-                `context`, a `preview` of the bytes around it. `total` counts every match in the range. \
+                `context`, a `preview` of the bytes around it — none, and `redacted: true`, in an area the flash map names MSDM, Password or Key. `total` counts every match in the range. \
                 Matches do not overlap unless `overlapping`: "AA" in "AAAA" is two, or three with it. \
                 Pages: `limit` is a ceiling — a page also stops before the answer passes the size bound and \
                 says `truncated: "size"`; pass `next` back as `after` until it is null. With `survey`, which \
@@ -214,7 +214,11 @@ final class AgentFindTools {
                 members["start"] = AgentHostTools.hex(match.range.lowerBound)
                 members["end"] = AgentHostTools.hex(match.range.upperBound)
             }
-            if context > 0 {
+            // An area the flash map names for a secret — MSDM, a password, a
+            // key — gives its matches but not the bytes around them.
+            let secret = places.contains { UEFIAgentRegions.isSecretName($0["name"]?.stringValue ?? "") }
+            if secret, context > 0 { members["redacted"] = true }
+            if context > 0, !secret {
                 let around = max(scope.lowerBound, match.range.lowerBound &- UInt64(min(UInt64(context), match.range.lowerBound)))
                     ..< min(scope.upperBound, match.range.upperBound + UInt64(context))
                 let bytes = (try? storage.read(at: around.lowerBound, length: around.count)) ?? []
@@ -345,7 +349,7 @@ final class AgentFindTools {
 
 /// A buffer the tree holds — what a compressed section decompressed to — as
 /// the storage the search engine reads.
-private struct ReaderStorage: ByteStorage {
+struct ReaderStorage: ByteStorage {
     let reader: ImageReader
 
     var size: UInt64 { UInt64(reader.count) }

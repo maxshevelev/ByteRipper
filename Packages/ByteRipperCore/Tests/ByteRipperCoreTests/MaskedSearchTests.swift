@@ -92,6 +92,22 @@ final class MaskedSearchTests: XCTestCase {
         XCTAssertEqual(found.map(\.1), [0, 1])
     }
 
+    /// A pattern that starts with 0x00 is found by a rarer byte of it, and
+    /// still from where it starts — at the very start, at the end, across a
+    /// read boundary.
+    func testAPatternLeadingWithZeroIsFoundEverywhereItIs() throws {
+        var bytes = [UInt8](repeating: 0, count: 64)
+        let address: [UInt8] = [0x00, 0x80, 0x66, 0xFF]
+        bytes.replaceSubrange(0..<4, with: address)
+        bytes.replaceSubrange(14..<18, with: address)
+        bytes.replaceSubrange(60..<64, with: address)
+        for chunk in [5, 16, 1 << 20] {
+            XCTAssertEqual(try starts([MaskedPattern(bytes: address)], in: bytes, chunk: chunk), [0, 14, 60], "chunk \(chunk)")
+        }
+        XCTAssertEqual(try starts([try MaskedPattern.hex("00 ?? 66")], in: bytes), [0, 14, 60])
+        XCTAssertEqual(try starts([MaskedPattern(bytes: [0, 0, 0])], in: [0, 0, 0, 0], overlapping: true), [0, 1])
+    }
+
     func testVisitStopsTheScan() throws {
         var seen = 0
         try SearchEngine.matches(of: [MaskedPattern(bytes: [0])], in: ArrayStorage([UInt8](repeating: 0, count: 100))) { _, _ in

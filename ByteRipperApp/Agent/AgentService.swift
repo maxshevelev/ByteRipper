@@ -45,6 +45,7 @@ final class AgentService {
     /// `diff`, `compare` and `reveal_diff`.
     let diffTools: AgentDiffTools
     let findTools: AgentFindTools
+    let refsTools: AgentRefsTools
     private let modules: [any ToolModule.Type]
     /// Built once: the tools do not change while the app runs.
     private(set) lazy var server = AgentServer(
@@ -59,6 +60,7 @@ final class AgentService {
         tools += dumpTools.tools()
         tools += diffTools.tools()
         tools += findTools.tools()
+        tools += refsTools.tools()
         tools += editTools.tools()
         tools += moduleTools.tools(modules: modules)
         return tools
@@ -103,6 +105,7 @@ final class AgentService {
         self.editTools = AgentEditTools(desk: desk)
         self.diffTools = AgentDiffTools(desk: desk, modules: { modules })
         self.findTools = AgentFindTools(desk: desk, diff: diffTools)
+        self.refsTools = AgentRefsTools(desk: desk, diff: diffTools)
         self.moduleTools = AgentModuleTools(desk: desk, edits: editTools, modules: { modules })
         editTools.isAllowed = { [weak self] in self?.editsAllowed ?? false }
         editTools.locate = { [diffTools] host, range in

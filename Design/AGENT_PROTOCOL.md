@@ -232,13 +232,15 @@ refused.
 | Tool | Arguments | Answer |
 |---|---|---|
 | `find_bytes` | `text` (with `encoding` `ascii`·`utf16le`·`both`, default both; `ignore_case`) or `hex` (pairs, `??` for any byte); `overlapping`; `offset`, `end`; `node`; `context` (≤ 64); `limit` (100, ≤ 1000); `after` | `document`, `range`, `total`, `matches[]` (`start`, `end` — or `node_start`, `node_end` in a decompressed buffer — `encoding`, `where[]`, `preview` with `hex`, `text`, `before`), `next`, `truncated`. With `node`: `node`, `node_size`, `in_compressed`, `decompressed` (a compressed section searched in its buffer), `source`. Reads only. |
+| `refs` | `guid`, or `address` (with `relative_to` `file`·`region`, `forms` of `bus`·`file`·`region`, default all); `scope` `all`·`raw`·`compressed`; `limit` (50, ≤ 200, on files); `after` | `document`, `scope`, `guid` or `forms` (each form's bytes; `bus64` too), `skipped_forms`, `total` (hits), `files` (groups), `refs[]`: `file` (or `node` for a hit in no FFS file), `name`, `guid`, `type`, `in_compressed`, `hits[]` (`form`, `section`, `section_offset`, `file_start` or `node_start` + `in_compressed`, `node` when deeper), `hits_total` past 20. Bus form: the BIOS region's end at 0x100000000. A hit inside a longer form's hit is left out; a form under 0x100 is skipped. |
+| `region_scan` | `node` (default: the BIOS region); `kinds` (Type or Subtype, default `Padding`, `Raw`); `min_size` (0x100); `limit` (50, ≤ 200); `after` | `total`, `under`, `nodes[]`: as `uefi_tree` (`node` for `id`), `size`, `inner` (a child covering it whole), `class` (`empty` ≥ 99 % 0x00/0xFF, `text` ≥ 50 % of the rest in strings, `code` by x86-64 markers or `MZ`, else `data`), `fill`, `first_nonfill`, `last_nonfill`, `strings[]` (≤ 5: `at`, `text` ≤ 64, `encoding`), `redacted` — no strings for an area named MSDM, Password or Key. A node its children divide gives way to them. |
 | `open_part` | `offset`, `length` — or `node` with `part` (`all`, `body`); `name` | `document` (the part's id), `parent`, `name`, `source` (the parent's bytes it is linked to), `size`; with `node`, `node` and `in_compressed`. |
 
 `find_bytes` is the find bar's engine (`SearchEngine.matches`), given holes
 and overlapping matches; a match across two reads is found once. The file is
 searched as stored: a node inside a compressed section, or a compressed
 section itself, is searched in what the tree decompressed it to, never
-decompressed again. `where` is placed by the locators as `diff` places a run;
+decompressed again. `where` is placed by the locators as `diff` places a run; a match in an area named MSDM, Password or Key gets `redacted: true` instead of a `preview`;
 in a buffer, it is the deepest node under the one searched. `open_part` opens
 as Open Zone (a range) and the UEFI panel's Open (a node) do: a fragment
 panel over the parent's tab, linked, its edits going back with Update in

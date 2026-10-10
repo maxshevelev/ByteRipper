@@ -138,9 +138,13 @@ extension SearchEngine {
         let count = pattern.count
         let lastStart = min(below - 1, window.count - count)
         guard from <= lastStart else { return nil }
-        // Anchored on the first byte that is not a hole: found fast, and only
-        // there is the rest compared.
-        guard let anchor = pattern.isWild.firstIndex(of: false) else { return nil }
+        // Anchored on a byte that is not a hole: found fast, and only there is
+        // the rest compared. Not on 0x00 or 0xFF where the pattern has another
+        // byte — a dump is full of both, and an anchor on them stops at almost
+        // every byte: an address such as `00 80 66 FF` is found by its 0x80.
+        guard let anchor = pattern.isWild.indices.first(where: {
+            !pattern.isWild[$0] && pattern.bytes[$0] != 0x00 && pattern.bytes[$0] != 0xFF
+        }) ?? pattern.isWild.firstIndex(of: false) else { return nil }
         let first = pattern.bytes[anchor]
         let alternative = alternativeCase(of: first, at: anchor, in: pattern)
         return window.withUnsafeBufferPointer { buffer -> Int? in

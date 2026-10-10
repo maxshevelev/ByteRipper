@@ -234,9 +234,15 @@ final class AgentFindToolsTests: XCTestCase {
 /// a raw section with `text`: bytes the file holds only compressed.
 enum CompressedTestImage {
     static func make(holding text: String) throws -> [UInt8] {
+        try make(payload: Array(text.utf8))
+    }
+
+    /// The same image with `bytes` in the raw section the compressed one
+    /// decompresses to.
+    static func make(payload bytes: [UInt8]) throws -> [UInt8] {
         func u24(_ value: Int) -> [UInt8] { [UInt8(value & 0xFF), UInt8(value >> 8 & 0xFF), UInt8(value >> 16 & 0xFF)] }
         func u32(_ value: Int) -> [UInt8] { (0..<4).map { UInt8(truncatingIfNeeded: value >> (8 * $0)) } }
-        let payload = Array(text.utf8) + [UInt8](repeating: 0, count: 12)
+        let payload = bytes + [UInt8](repeating: 0, count: 12)
         let raw = u24(4 + payload.count) + [0x19] + payload
         let stream = try FirmwareCompression.compress(raw, as: .lzma)
         var section = u24(4 + 5 + stream.count) + [0x01] + u32(raw.count) + [0x02] + stream

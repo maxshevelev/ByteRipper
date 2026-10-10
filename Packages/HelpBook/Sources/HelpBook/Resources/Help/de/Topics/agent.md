@@ -1,4 +1,4 @@
-@source-sha 46913c2efe383f7043ff4ff3e041fed5ef6f1c7db6cf8905faee71760ef0c2db
+@source-sha c163ea57319cb8939e88325562d7be33e6cd6d2ae6d3bbfd123aa1d6469289e5
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -74,6 +74,10 @@ Der dateiweise Vergleich der ME-Dateisysteme ist erforderlich, weil ein MFS- ode
 ## Suchen
 
 Der Agent sucht in einer Datei nach Text oder nach einer Bytefolge. Text wird als ASCII oder UTF-16 ohne Unterscheidung von Groß- und Kleinschreibung gesucht; in einer Bytefolge steht `??` für ein beliebiges Byte. Die Suche erstreckt sich auch auf die komprimierten Abschnitte eines Firmware-Images, die in der Datei nur in komprimierter Form vorliegen. Zu jedem Treffer wird der Teil der Firmware angegeben, in dem er sich befindet.
+
+Der Agent findet außerdem, wer in einem Firmware-Image auf eine Adresse oder eine GUID verweist: die Module, in deren Code sie vorkommt — in der Datei selbst und in komprimierten Abschnitten —, gruppiert nach FFS-Dateien. Eine Adresse wird in drei Formen gesucht: so, wie der Prozessor sie sieht (die BIOS-Region liegt unterhalb der 4-GB-Grenze), als Adresse in der Datei und als Offset in der BIOS-Region. Eine Übereinstimmung von vier Bytes im Code kann zufällig sein; deshalb ist bei jeder angegeben, in welcher Form sie gefunden wurde.
+
+Bereiche, denen der Parser keinen Namen geben kann — Füllbereiche, ungenutzte und unbekannte Bereiche der Flash-Karte, Raw-Dateien —, beurteilt der Agent nach ihrem Inhalt: leer, Text, Daten oder Code, mit einigen der darin gefundenen Zeichenketten. Für einen Bereich, den die Flash-Karte MSDM, Password oder Key nennt, werden keine Zeichenketten ausgegeben, und die Suche zeigt keine Bytes um einen Treffer darin.
 
 ## Wie der Agent Ergebnisse zeigt
 

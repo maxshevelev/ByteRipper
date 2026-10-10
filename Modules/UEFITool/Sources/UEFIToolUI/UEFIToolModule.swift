@@ -45,7 +45,8 @@ public enum UEFIToolModule: ToolModule {
     /// The tree, a node, a search, an address — answered with the panel
     /// open or not (`UEFIAgentQueries`, `Design/AGENT_PLAN.md`).
     public static var agentQueries: [ToolAgentQuery] {
-        UEFIAgentQueries.all(catalogue: agentCatalogue) + UEFIAgentChecksums.all + UEFIAgentVariables.queries
+        UEFIAgentQueries.all(catalogue: agentCatalogue) + UEFIAgentChecksums.all + UEFIAgentRegions.all
+            + UEFIAgentVariables.queries
             + UEFIAgentNodeData.all
     }
 
