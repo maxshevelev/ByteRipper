@@ -215,6 +215,38 @@ final class AgentFindToolsTests: XCTestCase {
         XCTAssertEqual(walked["start"], "0x10")
     }
 
+    /// What a compressed section decompresses to opens as a part, in a panel
+    /// over the same window — not a tab — and goes back compressed.
+    func testACompressedSectionOpensDecompressedInAPanel() async throws {
+        let controller = try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let tree = try await client.answer("uefi_find", ["type": "Section", "limit": 50])
+        let section = try XCTUnwrap(tree["matches"]?.arrayValue?.first { $0["subtype"] == "Compressed section" }?["id"]?.stringValue)
+        let opened = try await client.answer("open_part", ["node": .string(section), "part": "decompressed"])
+        XCTAssertEqual(opened["in_compressed"], true)
+        XCTAssertEqual(opened["parent"], "d1")
+        XCTAssertEqual(controller.fragments.panelsLinked(to: controller.windowModel.pane1).count, 1,
+                       "a panel of the same window")
+        let part = try XCTUnwrap(opened["document"]?.stringValue)
+        let found = try await client.answer("find_bytes", ["document": .string(part), "text": "GH51G"])
+        XCTAssertEqual(found["total"], 1, "the part holds the decompressed bytes")
+
+        let plain = try await client.call("open_part", ["node": .string(section), "part": "decoded"])
+        XCTAssertTrue(plain.isError, "a compressed section is not a LENV block")
+    }
+
+    /// A LENV block, or an entry in one, opens with its XOR encoding removed.
+    func testALENVBlockOpensDecodedInAPanel() async throws {
+        let controller = try open(LenovoTestImage.make())
+        let at = try await client.answer("uefi_at", ["offset": .string(String(format: "0x%X", LenovoTestImage.serialInBlock2))])
+        let entry = try XCTUnwrap(at["chain"]?.arrayValue?.last?["id"]?.stringValue, "\(at)")
+        let opened = try await client.answer("open_part", ["node": .string(entry), "part": "decoded"])
+        XCTAssertEqual(opened["size"], "0x1000", "the whole block")
+        XCTAssertEqual(controller.fragments.panelsLinked(to: controller.windowModel.pane1).count, 1)
+        let part = try XCTUnwrap(opened["document"]?.stringValue)
+        let read = try await client.answer("read", ["document": .string(part), "offset": "0x28", "length": 8, "format": "ascii"])
+        XCTAssertEqual(read["text"], "PF0TEST1", "decoded")
+    }
+
     func testAPartNeedsItsParentOnScreenAndAPlace() async throws {
         try open([UInt8](repeating: 0, count: 0x100))
         let url = folder.appendingPathComponent("other.bin")

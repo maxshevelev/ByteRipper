@@ -1,6 +1,7 @@
 import AgentKit
 import ByteRipperCore
 import Foundation
+import LenovoDMI
 import Localization
 import PartCodec
 import ToolModuleKit
@@ -255,8 +256,10 @@ final class AgentFindTools {
                 `compare` opens one. The part's \
                 addresses start at 0, so two blocks at different addresses of two dumps compare with `diff` \
                 and `compare`; every tool that takes `document` works on it. Give `offset` and `length`, or \
-                `node` (with `part` "all", the default, or "body") for a UEFI node's bytes — a node inside a \
-                compressed section opens as what it decompressed to. The part stays linked: edits to it stay \
+                `node` (with `part`) for a UEFI node: "all" (the default) or "body" for its bytes — a node \
+                inside a compressed section opens as what it decompressed to — "decompressed" for what a \
+                compressed section decompresses to, "decoded" for a Lenovo LENV block (or one of its \
+                entries) decoded, its XOR encoding removed. The part stays linked: edits to it stay \
                 in it until the person puts them back with Update in Parent, which for a decompressed node \
                 compresses them again. The parent must be on screen (`show` puts a background dump there). \
                 Closes with `close_dump` or by the person.
@@ -266,7 +269,8 @@ final class AgentFindTools {
                 "offset": AgentSchema.offset("Where the part starts in the parent."),
                 "length": AgentSchema.offset("How many bytes the part is."),
                 "node": AgentSchema.string("Instead of `offset` and `length`: a UEFI node's id."),
-                "part": AgentSchema.choice(["all", "body"], "With `node`: the whole node, or its body. Default \"all\"."),
+                "part": AgentSchema.choice(["all", "body", "decompressed", "decoded"],
+                    "With `node`: the whole node, its body, what a compressed section decompresses to, or a LENV block decoded. Default \"all\"."),
                 "name": AgentSchema.string("What the part is called. Default: the parent's name and what it is.")
             ]),
             annotations: .view
@@ -287,10 +291,24 @@ final class AgentFindTools {
             guard !arguments.has("offset"), !arguments.has("length") else {
                 throw AgentToolError("Give `node`, or `offset` and `length` — not both.")
             }
-            let body = try arguments.choice("part", from: ["all", "body"], default: "all") == "body"
+            let which = try arguments.choice("part", from: ["all", "body", "decompressed", "decoded"], default: "all")
+            let body = which == "body"
             let host = PaneToolHost(pane: place.pane, owner: controller, tools: nil)
-            let found = try await UEFIAgentNodeData.bytes(host, node: text, part: body ? .body : .all)
+            let found = try await UEFIAgentNodeData.bytes(
+                host, node: text, part: which == "decompressed" ? .decompressed : body ? .body : .all)
             let image = found.tree.image()
+            if which == "decompressed" || which == "decoded" {
+                let name = which == "decompressed"
+                    ? try Self.decompressedPart(found, in: image, fileName: place.pane.status.fileName)
+                    : try Self.decodedPart(found, in: image)
+                opening = controller.openPart(named: named ?? name.name, from: place.pane, source: name.source,
+                                              layout: name.layout, codec: name.codec)
+                answer["node"] = .string(found.node.id.description)
+                answer["in_compressed"] = .bool(which == "decompressed")
+                answer["source"] = AgentHostTools.range(name.source)
+                answer["size"] = AgentHostTools.hex(name.size)
+                return try await finishOpening(opening, controller: controller, place: place, before: before, answer: answer)
+            }
             guard let open = UEFIPresenter.nodeOpen(for: found.node, in: image, body: body) else {
                 throw AgentToolError("Node \(text) cannot be opened as a part: there is nothing there, "
                     + "or its compressed section cannot be traced back to the file.")
@@ -339,6 +357,53 @@ final class AgentFindTools {
             answer["source"] = AgentHostTools.range(source)
             answer["size"] = AgentHostTools.hex(length)
         }
+        return try await finishOpening(opening, controller: controller, place: place, before: before, answer: answer)
+    }
+
+    /// What a part is opened as, before it is: its name, the bytes of the
+    /// parent it is linked to, how the panel lays it out and the codec that
+    /// decodes it and puts it back.
+    private struct PartPlan {
+        var name: String
+        var source: Range<UInt64>
+        var layout: UEFIRootLayout
+        var codec: any PartCodec
+        var size: UInt64
+    }
+
+    /// As the UEFI panel's Open Decompressed Body: the buffer a compressed
+    /// section opens to, linked to the section and compressed again on the way
+    /// back.
+    private static func decompressedPart(_ found: UEFIAgentNodeData.Bytes, in image: UEFIImage,
+                                         fileName: String) throws -> PartPlan {
+        guard let body = UEFIPresenter.decompressedBody(for: found.node),
+              let source = UEFIPresenter.fileSource(of: found.node, in: image) else {
+            throw AgentToolError("Node \(found.node.id) is not a compressed section; part \"decompressed\" is a compressed section's.")
+        }
+        let codec = UEFIPartCodec(
+            target: UEFIRebuild.Target(space: body.space),
+            compression: UEFIPresenter.compressionName(of: body.space, in: image),
+            readers: found.tree.spaceReaders)
+        return PartPlan(name: body.tabName(fileName: fileName), source: source, layout: body.layout,
+                        codec: codec, size: UInt64(found.reader.count))
+    }
+
+    /// As Open Decoded Block: a LENV block, or the one an entry is in, with its
+    /// XOR encoding removed; Update in Parent encodes it again and writes the
+    /// checksum.
+    private static func decodedPart(_ found: UEFIAgentNodeData.Bytes, in image: UEFIImage) throws -> PartPlan {
+        guard let reader = found.tree.spaceReaders.reader(for: .file),
+              let block = UEFILenovoDMIDetail.decodableBlock(for: found.node, image: image, reader: reader) else {
+            throw AgentToolError("Node \(found.node.id) is not a LENV block, or in one, that has anything to decode.")
+        }
+        return PartPlan(name: L("%1$@ (decoded)", block.name), source: block.block.range, layout: .image,
+                        codec: LenovoDMIBlockCodec(block: block.block), size: block.block.range.upperBound - block.block.range.lowerBound)
+    }
+
+    private func finishOpening(_ opening: Task<Void, Never>?, controller: MainViewController,
+                               place: AgentDesk.Place, before: Set<FragmentDock.PanelID>,
+                               answer: [String: JSONValue]) async throws -> AgentAnswer {
+        var answer = answer
         // A part that decompresses opens when its bytes are ready.
         await opening?.value
         guard let opened = controller.fragments.panelsLinked(to: place.pane).first(where: { !before.contains($0) }),
