@@ -90,6 +90,7 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
         // band above every section's heading but the first (measured).
         table.style = .plain
         AgentTableStyle.apply(to: table)
+        keepColumnWidths(of: table, as: "AgentToolsTable")
         table.dataSource = self
         table.delegate = self
         scroll.documentView = table

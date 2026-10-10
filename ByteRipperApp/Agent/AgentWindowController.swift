@@ -52,6 +52,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     static let followKey = "AgentLogFollowsNewRequests"
     private var observer: NSObjectProtocol?
     private var zoomObserver: NSObjectProtocol?
+    /// Ticks once a second while a call runs, so its Took cell counts up.
+    private var elapsedTimer: Timer?
     /// The size the tables were last drawn at, so a zoom scales their
     /// columns by what it changed.
     private var drawnSize = ToolPanelFont.size
@@ -121,6 +123,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     }
 
     deinit {
+        elapsedTimer?.invalidate()
         if let observer { NotificationCenter.default.removeObserver(observer) }
         if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
     }
@@ -176,16 +179,18 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.rawValue))
             tableColumn.title = column.title
             tableColumn.width = ToolPanelFont.scaled(column.width)
-            // Every column gives way with the window, in proportion: with the
-            // text at the panels' size there is less room to spare, and one
-            // column left to take all the shortfall was squeezed to nothing.
-            tableColumn.resizingMask = [.autoresizingMask, .userResizingMask]
+            // Only Arguments, the column with the most to say, gives way with
+            // the window; the others keep their widths, and the person can
+            // still drag them.
+            tableColumn.resizingMask = column == .arguments
+                ? [.autoresizingMask, .userResizingMask] : .userResizingMask
             tableColumn.minWidth = ToolPanelFont.scaled(36)
             table.addTableColumn(tableColumn)
         }
         table.usesAlternatingRowBackgroundColors = true
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         AgentTableStyle.apply(to: table)
+        keepColumnWidths(of: table, as: "AgentLogTable")
         table.dataSource = self
         table.delegate = self
         table.allowsMultipleSelection = true
@@ -303,6 +308,28 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     /// found by identity, since the log drops its oldest rows — and the view
     /// stays where the reader left it, unless Follow New Requests is on and a
     /// call came in: then it goes to the newest.
+    private func updateElapsedTimer() {
+        let running = rows.contains { $0.isRunning }
+        if running, elapsedTimer == nil {
+            let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.tickElapsed() }
+            }
+            RunLoop.main.add(timer, forMode: .common)
+            elapsedTimer = timer
+        } else if !running {
+            elapsedTimer?.invalidate()
+            elapsedTimer = nil
+        }
+    }
+
+    private func tickElapsed() {
+        let running = IndexSet(rows.indices.filter { rows[$0].isRunning })
+        guard !running.isEmpty,
+              let column = table.tableColumns.firstIndex(where: { $0.identifier.rawValue == Column.duration.rawValue })
+        else { return }
+        table.reloadData(forRowIndexes: running, columnIndexes: IndexSet(integer: column))
+    }
+
     func refresh() {
         statusLabel.stringValue = AgentSettingsViewController.statusText(of: service)
         let log = service?.log ?? []
@@ -311,6 +338,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         let origin = logScroll.contentView.bounds.origin
         rows = log
         table.reloadData()
+        updateElapsedTimer()
         let reselected = IndexSet(rows.indices.filter { selected.contains(rows[$0].id) })
         if reselected != table.selectedRowIndexes {
             table.selectRowIndexes(reselected, byExtendingSelection: false)
@@ -429,7 +457,9 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             // words, and what a reader checks the agent against.
             return record.arguments == .object([:]) ? "" : record.arguments.jsonText
         case .duration:
-            guard !record.isRunning else { return "" }
+            if record.isRunning {
+                return L("%1$@ s", String(format: "%.0f", max(0, Date().timeIntervalSince(record.started))))
+            }
             let milliseconds = Double(record.duration.components.seconds) * 1000
                 + Double(record.duration.components.attoseconds) / 1e15
             return milliseconds < 1000
@@ -666,6 +696,7 @@ final class AgentMarksTable: NSObject, NSTableViewDataSource, NSTableViewDelegat
         table.usesAlternatingRowBackgroundColors = true
         table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         AgentTableStyle.apply(to: table)
+        keepColumnWidths(of: table, as: "AgentMarksTable")
         table.allowsMultipleSelection = true
         table.dataSource = self
         table.delegate = self
@@ -776,6 +807,7 @@ final class AgentFindingsTable: NSObject, NSTableViewDataSource, NSTableViewDele
         table.usesAlternatingRowBackgroundColors = true
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         AgentTableStyle.apply(to: table)
+        keepColumnWidths(of: table, as: "AgentFindingsTable")
         table.dataSource = self
         table.delegate = self
         table.target = self
@@ -855,4 +887,11 @@ enum AgentTableStyle {
             : digits ? ToolPanelFont.monospacedDigits() : ToolPanelFont.body()
         return cell
     }
+}
+
+/// Has the table remember its column widths between launches.
+@MainActor
+func keepColumnWidths(of table: NSTableView, as name: String) {
+    table.autosaveName = name
+    table.autosaveTableColumns = true
 }
