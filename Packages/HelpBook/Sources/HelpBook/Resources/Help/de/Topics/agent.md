@@ -1,4 +1,4 @@
-@source-sha d2a4f523e6be240a549985931fd4840bd1110f45b8cb33a72eaebaf3a741bf96
+@source-sha b606594cc98163e06d36b81f4e6dcf09e1cbdf3932ce677733efd35478bffdff
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -118,7 +118,7 @@ Ist **Neuen Anfragen folgen** unter dem Protokoll eingeschaltet, scrollt das Pro
 
 **Befunde** führt auf, was der Agent gefunden hat und wo: Aussage, Datei, Bytes oder Knoten. Ein Doppelklick öffnet die Datei an dieser Stelle — in dem Tab, in dem sie bereits geöffnet ist, oder in einem neuen. **Alle Befunde entfernen** leert die Liste.
 
-**Werkzeuge** listet jedes Werkzeug auf, das dem Agenten angeboten wird: den Namen, die Gruppe — ein Teil von ByteRipper oder der Bereich, etwa **UEFI-Struktur**, aus dem es stammt — und die Art: **Lesen** ändert nichts, **Anzeige** ändert, was das Fenster zeigt (die Ansicht, eine Markierung, einen Befund, einen Tab), **Ändert eine Datei** schreibt in eine geöffnete Datei. Daneben die Nutzung seit dem Start von ByteRipper: die Aufrufe, die Aufrufe **Ohne Antwort**, die durchschnittliche Dauer, der Umfang der Antworten und der letzte Aufruf. Die Liste darunter zeigt das ausgewählte Werkzeug so, wie der Agent es beschrieben bekommt: die **Beschreibung** und unter **Argumente** die Argumente als JSON-Schema, beide auf Englisch, wie der Agent sie liest. **Statistik zurücksetzen** setzt die Zähler auf null; nach dem Beenden des Programms werden sie nicht aufbewahrt.
+**Werkzeuge** listet jedes Werkzeug auf, das dem Agenten angeboten wird, in Abschnitten; die Überschrift eines Abschnitts nennt, woher die Werkzeuge stammen: ein Teil von ByteRipper oder ein Bereich wie **UEFI-Struktur**. Zu jedem Werkzeug stehen Name und Art: **Lesen** ändert nichts, **Anzeige** ändert, was das Fenster zeigt (die Ansicht, eine Markierung, einen Befund, einen Tab), **Ändert eine Datei** schreibt in eine geöffnete Datei. Daneben die Nutzung seit dem Start von ByteRipper: die Aufrufe, die Aufrufe **Ohne Antwort**, die durchschnittliche Dauer, der Umfang der Antworten und der letzte Aufruf. Die Liste darunter zeigt das ausgewählte Werkzeug so, wie der Agent es beschrieben bekommt: die **Beschreibung** und unter **Argumente** die Argumente als JSON-Schema, beide auf Englisch, wie der Agent sie liest. **Statistik zurücksetzen** setzt die Zähler auf null; nach dem Beenden des Programms werden sie nicht aufbewahrt.
 
 ## Zugriff auf Ordner außerhalb der geöffneten Fenster
 

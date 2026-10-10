@@ -19,16 +19,30 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
     let detailPane = ToolDetailPane()
     private var details: ToolDetailScroll { detailPane.detail }
     var onSelectionChanged: () -> Void = {}
-    private(set) var rows: [AgentToolEntry] = []
+    /// A section's title, or a tool in it.
+    private enum Item {
+        case header(String)
+        case tool(AgentToolEntry)
+    }
+    private var items: [Item] = []
     private(set) var stats: [String: AgentToolStats] = [:]
 
+    /// The tools in the order the table shows them, section by section.
+    var rows: [AgentToolEntry] {
+        items.compactMap { if case .tool(let entry) = $0 { return entry } else { return nil } }
+    }
+
+    private func entry(at row: Int) -> AgentToolEntry? {
+        guard row >= 0, row < items.count, case .tool(let entry) = items[row] else { return nil }
+        return entry
+    }
+
     private enum Column: String, CaseIterable {
-        case tool, group, kind, calls, failures, average, size, last
+        case tool, kind, calls, failures, average, size, last
 
         var title: String {
             switch self {
             case .tool: return L("Tool")
-            case .group: return L("Group")
             case .kind: return L("Kind")
             case .calls: return L("Calls")
             case .failures: return L("Not Answered")
@@ -41,17 +55,16 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
         var width: CGFloat {
             switch self {
             case .tool: return 140
-            case .group: return 120
             case .kind: return 90
             case .calls: return 50
-            case .failures: return 70
+            case .failures: return 110
             case .average: return 64
             case .size: return 70
             case .last: return 64
             }
         }
 
-        var isNumber: Bool { ![.tool, .group, .kind].contains(self) }
+        var isNumber: Bool { ![.tool, .kind].contains(self) }
     }
 
     func build() {
@@ -65,6 +78,9 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
         }
         table.usesAlternatingRowBackgroundColors = true
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        // Plain: the automatic and full-width styles put a 20-point blank
+        // band above every section's heading but the first (measured).
+        table.style = .plain
         AgentTableStyle.apply(to: table)
         table.dataSource = self
         table.delegate = self
@@ -83,13 +99,21 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
         split.setPaneLayout(.fixed(170), at: 1)
     }
 
-    /// The tools and their use; the selection stays with the tool it was on.
+    /// The tools and their use, a section to each group in the order the
+    /// groups first come; the selection stays with the tool it was on.
     func show(_ entries: [AgentToolEntry], stats: [String: AgentToolStats]) {
-        let chosen = table.selectedRow >= 0 && table.selectedRow < rows.count ? rows[table.selectedRow].tool.name : nil
-        rows = entries
+        let chosen = entry(at: table.selectedRow)?.tool.name
+        var order: [String] = []
+        var sections: [String: [AgentToolEntry]] = [:]
+        for entry in entries {
+            let title = entry.group.title
+            if sections[title] == nil { order.append(title) }
+            sections[title, default: []].append(entry)
+        }
+        items = order.flatMap { title in [Item.header(title)] + sections[title, default: []].map { .tool($0) } }
         self.stats = stats
         table.reloadData()
-        if let chosen, let row = rows.firstIndex(where: { $0.tool.name == chosen }) {
+        if let chosen, let row = row(of: chosen) {
             table.selectRowIndexes([row], byExtendingSelection: false)
         }
         showDetails()
@@ -97,13 +121,46 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     var hasStats: Bool { !stats.isEmpty }
 
-    func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
+    /// The table row of the tool named `name`.
+    func row(of name: String) -> Int? {
+        items.firstIndex { if case .tool(let entry) = $0 { return entry.tool.name == name } else { return false } }
+    }
+
+    /// The sections' titles, in order, for tests.
+    var sectionTitles: [String] {
+        items.compactMap { if case .header(let title) = $0 { return title } else { return nil } }
+    }
+
+    func numberOfRows(in tableView: NSTableView) -> Int { items.count }
+
+    func tableView(_ tableView: NSTableView, isGroupRow row: Int) -> Bool {
+        if case .header = items[row] { return true }
+        return false
+    }
+
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        if case .header = items[row] { return tableView.rowHeight + 4 }
+        return tableView.rowHeight
+    }
+
+    func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        entry(at: row) != nil
+    }
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard let id = tableColumn?.identifier, let column = Column(rawValue: id.rawValue) else { return nil }
+        if case .header(let title) = items[row] {
+            let id = NSUserInterfaceItemIdentifier("section")
+            let cell = AgentTableStyle.cell(in: tableView, id: id, owner: self)
+            cell.textField?.stringValue = title
+            cell.textField?.font = ToolPanelFont.title()
+            cell.textField?.textColor = .secondaryLabelColor
+            return cell
+        }
+        guard let id = tableColumn?.identifier, let column = Column(rawValue: id.rawValue),
+              let entry = entry(at: row) else { return nil }
         let cell = AgentTableStyle.cell(in: tableView, id: id, owner: self, digits: column.isNumber, code: column == .tool)
         cell.textField?.stringValue = text(row: row, column)
-        cell.textField?.textColor = column == .failures && (stats[rows[row].tool.name]?.failures ?? 0) > 0
+        cell.textField?.textColor = column == .failures && (stats[entry.tool.name]?.failures ?? 0) > 0
             ? SemanticColors.bad : .labelColor
         cell.textField?.alignment = column.isNumber ? .right : .natural
         return cell
@@ -115,11 +172,10 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
     }
 
     private func text(row: Int, _ column: Column) -> String {
-        let entry = rows[row]
+        guard let entry = entry(at: row) else { return "" }
         let used = stats[entry.tool.name]
         switch column {
         case .tool: return entry.tool.name
-        case .group: return entry.group.title
         case .kind: return entry.kind.title
         case .calls: return used.map { "\($0.calls)" } ?? ""
         case .failures: return used.map { $0.failures == 0 ? "" : "\($0.failures)" } ?? ""
@@ -148,12 +204,10 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
     /// agent reads — the description and the arguments' schema, in English
     /// as the agent gets them.
     private func showDetails() {
-        let row = table.selectedRow
-        guard row >= 0, row < rows.count else {
+        guard let entry = entry(at: table.selectedRow) else {
             details.showPlaceholder(L("Select a tool to see what the agent is told about it."))
             return
         }
-        let entry = rows[row]
         details.prepareForRows(subject: entry.tool.name)
         let title = NSTextField(labelWithString: entry.tool.name)
         title.font = ToolPanelFont.title()
@@ -209,7 +263,7 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     /// A row's text, for tests.
     func shownText(row: Int, column: String) -> String? {
-        guard row < rows.count, let column = Column(rawValue: column) else { return nil }
+        guard entry(at: row) != nil, let column = Column(rawValue: column) else { return nil }
         return text(row: row, column)
     }
 
