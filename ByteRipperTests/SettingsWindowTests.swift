@@ -92,4 +92,32 @@ final class SettingsWindowTests: XCTestCase {
                        "the ? must be level with the traffic lights")
         XCTAssertEqual(help.opens, .topic(.settings))
     }
+
+    /// The View tab's three sections share one label column: every label ends
+    /// at the same x, and every control starts at the same x.
+    func testTheViewTabsLabelsLineUp() throws {
+        let settings = SettingsWindowController()
+        let window = try XCTUnwrap(settings.window)
+        settings.showWindow(nil)
+        defer { window.close() }
+        window.layoutIfNeeded()
+        let content = try XCTUnwrap(window.contentViewController as? ViewSettingsViewController)
+
+        var grids: [NSGridView] = []
+        func walk(_ view: NSView) {
+            if let grid = view as? NSGridView { grids.append(grid); return }
+            view.subviews.forEach(walk)
+        }
+        walk(content.view)
+        XCTAssertEqual(grids.count, 3, "Appearance, Layout and Language")
+
+        let labelEnds = grids.flatMap { grid in
+            (0..<grid.numberOfRows).compactMap { grid.cell(atColumnIndex: 0, rowIndex: $0).contentView }
+        }.map { $0.convert($0.bounds, to: nil).maxX }
+        let controlStarts = grids.flatMap { grid in
+            (0..<grid.numberOfRows).compactMap { grid.cell(atColumnIndex: 1, rowIndex: $0).contentView }
+        }.map { $0.convert($0.bounds, to: nil).minX }
+        for end in labelEnds { XCTAssertEqual(end, labelEnds[0], accuracy: 1, "labels end at one edge") }
+        for start in controlStarts { XCTAssertEqual(start, controlStarts[0], accuracy: 1, "controls start at one edge") }
+    }
 }
