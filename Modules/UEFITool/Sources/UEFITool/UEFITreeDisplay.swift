@@ -291,6 +291,11 @@ public enum UEFITreeDisplay {
         if let reader, let text = lenovoDMIRow(node, parent: store, reader: reader) {
             return text
         }
+        // Acer's DMI area says what it holds: the serial, the rest in the
+        // detail.
+        if node.kind == .acerDMIStore, let reader {
+            return acerDMIRow(node, reader: reader)
+        }
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind) : node.name
         }
@@ -368,6 +373,15 @@ public enum UEFITreeDisplay {
         default:
             return nil
         }
+    }
+
+    /// `Acer DMI · N51…`: the area's name and the system serial it holds;
+    /// the tag, the UUID, the model and the product name are in the detail.
+    static func acerDMIRow(_ node: UEFINode, reader: ImageReader) -> String {
+        guard let stored = reader.bytes(node.range),
+              let area = AcerDMIArea.found(stored: stored, offset: node.range.lowerBound)
+        else { return node.name }
+        return L("%1$@ · %2$@", node.name, area.systemSerial)
     }
 
     /// `MFG0 = M8NRKD00311031C, 90NR0551-M04320, …`: a record's name and the
@@ -485,6 +499,7 @@ public enum UEFITreeDisplay {
         case .ldbgEntry: return L("LDBG entry")
         case .lenvBlock: return L("LENV block")
         case .lenvEntry: return L("LENV entry")
+        case .acerDMIStore: return L("Acer DMI")
         case .amdEFS: return L("Embedded Firmware Structure")
         case .amdDirectory: return L("AMD firmware directory")
         case .amdFirmwareEntry: return L("AMD firmware entry")

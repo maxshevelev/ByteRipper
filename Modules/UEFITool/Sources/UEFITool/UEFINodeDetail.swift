@@ -351,6 +351,13 @@ public enum UEFIDetail {
             fields += lenovo.fields
             tables += lenovo.tables
         }
+        // Acer's DMI area, read off the block as a whole: the identity
+        // fields, and what the integrity checks found in them.
+        if UEFIAcerDMIDetail.reads(node.kind) {
+            let acer = UEFIAcerDMIDetail.build(for: node, image: image, reader: reader)
+            fields += acer.fields
+            tables += acer.tables
+        }
         // A GPNV record's data is fields nobody has published: the text in
         // it is what can be read, at its offset in the data.
         if node.kind == .gpnvRecord, let body = reader.bytes(node.body) {
@@ -1226,6 +1233,11 @@ public enum UEFIDetail {
         case .lenovoDMIStore, .ldbgLog, .ldbgEntry, .lenvBlock, .lenvEntry:
             break
 
+        // Acer's DMI area: its fields are read off the block as a whole, in
+        // `build` (`UEFIAcerDMIDetail`), not from one row's bytes.
+        case .acerDMIStore:
+            break
+
         // Its header is the table; the platform and the count are what the
         // blocks say of themselves. The table itself is read in `build`.
         case .biosGuardUpdate:
@@ -1714,6 +1726,7 @@ public enum UEFIDetail {
         case .ldbgEntry: return L("LDBG entry")
         case .lenvBlock: return L("LENV block")
         case .lenvEntry: return L("LENV entry")
+        case .acerDMIStore: return L("Acer DMI")
         case .amdEFS: return L("Embedded Firmware Structure")
         case .amdDirectory: return L("AMD firmware directory")
         case .amdFirmwareEntry: return L("AMD firmware entry")

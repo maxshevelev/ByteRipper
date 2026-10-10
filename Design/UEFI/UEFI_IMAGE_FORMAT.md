@@ -1668,6 +1668,53 @@ with state `1` current. The nodes are a `gpnvStore` named `GPNV` and a
 `gpnvRecord` per record named by its name, both classified as UEFITool's
 padding; the Subtype column says whether a record is current or superseded.
 
+**Acer's DMI area** (`AcerDMIStore.swift`) is where Acer keeps in one place
+what the factory wrote of the machine — what a repair bench calls the DMI
+area. An 8 KiB block on a 4 KiB boundary, in the padding inside the BIOS
+region: no region of the descriptor, and at no fixed offset — the board's
+BIOS layout sets where. Where the Insyde flash device map carves it out of
+the padding it is one of those map regions, and otherwise it is padding
+itself. It is found by its content; the layout is read off the 44 Acer dumps
+at hand, where 16 carry the block and the rest have it wiped, and nothing is
+published.
+
+A block is the eight kilobytes at a 4 KiB boundary of written padding — or of
+the flash-device-map region that holds it — that pass the checks: the
+signature at `+0x3C`, a system serial and a service tag that read as one, and
+padding — `FF` or `00` — everywhere the fields are not. That last line is what
+keeps a secure-boot string or an EC image from passing: the block is ~97%
+padding.
+
+| Offset | Field |
+|---|---|
+| `0x00` | the system serial, 22 alphanumerics, the first of them `N` |
+| `0x30` | a flag the factory writes per build |
+| `0x3C` | `06 FF FF FF` and `Acer` at `0x40` — the block's signature |
+| `0x50` | the service tag, 22 alphanumerics, the first two of them `NB` |
+| `0x70` | the UUID, 16 bytes |
+| `0x80` | the model |
+| `0xA0` | the asset tag, where written |
+| `0xC0` | the product name |
+| `0xF3` | the constant `02` |
+| `0x128` or `0x130` | a copy of the UUID's last six bytes |
+
+There is no checksum over the block: checked over all 16 blocks at hand, no
+sum8 / xor8 / complement-8 field matches any combination of the fields, and
+no md5 / sha1 / sha256 of the block occurs in the dumps. The one redundancy
+is the copy of the UUID's last six bytes: a copy, not a checksum, that goes
+stale when the UUID is changed after. The other single-byte fields — `+0xEB`,
+`+0xEC`, `+0xEE`, `+0xF4`, `+0xF6`, `+0xF8`, `+0xFB` — are per-build and
+per-model variants, and `+0x690..+0x6D5` holds, where written, a run of
+decimal digits and two 6-byte records; what they are is not documented.
+
+What a wiped or tampered block reads wrong is listed in the details, and does
+not hide it: the factory serials read `00` at offset 7 and `3400` at the end,
+the factory service tags read `1100` at offset 5 and `3400` at the end, the
+factory UUIDs are version 1 and variant 1, and `+0xF3` reads `02`. The node
+is an `acerDMIStore`, fixed, named `Acer DMI` with the serial its row carries,
+classified as UEFITool's padding. A wiped block is all `FF`, its signature is
+not there, and it leaves no row.
+
 **The AMD PSP's map** (`AMDFirmware.swift`) is read from the Embedded
 Firmware Structure: `0x55AA55AA` at one of `0x20000`, `0xFA0000`, `0xF20000`,
 `0xE20000`, `0xC20000`, `0x820000`, `0x120000`, tried in that order, with at

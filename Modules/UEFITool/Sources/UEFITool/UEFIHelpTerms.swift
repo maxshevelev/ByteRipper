@@ -56,6 +56,7 @@ public enum UEFIHelpTerms {
         case .hpSignatureBlock: return HelpTermID("hp-signature-block")
         case .gpnvStore, .gpnvRecord: return HelpTermID("gpnv")
         case .lenovoDMIStore: return HelpTermID("dmi")
+        case .acerDMIStore: return HelpTermID("acer-dmi")
         case .lenvBlock, .lenvEntry: return HelpTermID("lenv")
         case .ldbgLog, .ldbgEntry: return HelpTermID("ldbg")
         case .amdEFS, .amdDirectory, .amdFirmwareEntry: return HelpTermID("amd-psp")

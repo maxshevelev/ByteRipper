@@ -274,6 +274,12 @@ public enum UEFINodeKind: String, Equatable, Sendable, CaseIterable {
     case ldbgEntry
     case lenvBlock
     case lenvEntry
+    /// The DMI area where Acer's firmware keeps the machine's identity
+    /// (`AcerDMIStore`): an 8 KiB block of the system serial, the service
+    /// tag, the UUID, the model. Read out of the padding inside the BIOS
+    /// region — no PDR, no fixed offset, found by its content. Padding to
+    /// UEFITool, as a GPNV store is.
+    case acerDMIStore
     /// The AMD PSP's map read out of padding (`AMDFirmware`): the Embedded
     /// Firmware Structure, a directory — the subtype is its
     /// `AMDFirmware.DirectoryKind` — and a blob a directory lists, whose
