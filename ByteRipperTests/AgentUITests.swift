@@ -162,20 +162,20 @@ final class AgentUITests: XCTestCase {
         XCTAssertFalse(page.table.delegate?.tableView?(page.table, shouldSelectRow: 0) ?? true, "a heading is not chosen")
         // A heading stands out: a size above the names, with room above it;
         // the names stand in from their heading.
-        let heading = try XCTUnwrap(page.table.delegate?.tableView?(page.table, viewFor: nil, row: 0) as? NSTableCellView)
         let firstTool = try XCTUnwrap(page.table.delegate?.tableView?(
             page.table, viewFor: page.table.tableColumns.first, row: 1) as? NSTableCellView)
-        let headingSize = try XCTUnwrap(heading.textField?.font?.pointSize)
-        XCTAssertGreaterThan(headingSize, try XCTUnwrap(firstTool.textField?.font?.pointSize))
+        XCTAssertGreaterThan(AgentToolsPage.headingFont.pointSize,
+                             try XCTUnwrap(firstTool.textField?.font?.pointSize), "a heading is larger than a name")
         XCTAssertGreaterThanOrEqual(page.table.delegate?.tableView?(page.table, heightOfRow: 0) ?? 0,
                                     page.table.rowHeight + 10, "room above a heading")
         firstTool.frame = NSRect(x: 0, y: 0, width: 140, height: page.table.rowHeight)
-        heading.frame = NSRect(x: 0, y: 0, width: 140, height: 40)
         firstTool.layoutSubtreeIfNeeded()
-        heading.layoutSubtreeIfNeeded()
-        XCTAssertGreaterThanOrEqual(try XCTUnwrap(firstTool.textField?.frame.minX),
-                                    try XCTUnwrap(heading.textField?.frame.minX) + AgentToolsPage.toolIndent - 1,
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(firstTool.textField?.frame.minX), AgentToolsPage.toolIndent,
                                     "the names stand in from their heading")
+        // What the window adds goes to the last column and to no other.
+        XCTAssertEqual(page.table.columnAutoresizingStyle, .lastColumnOnlyAutoresizingStyle)
+        XCTAssertEqual(page.table.tableColumns.map { $0.resizingMask.contains(.autoresizingMask) },
+                       page.table.tableColumns.indices.map { $0 == page.table.tableColumns.count - 1 })
         let read = try XCTUnwrap(page.row(of: "read"))
         XCTAssertEqual(page.shownText(row: read, column: "kind"), "Read")
         XCTAssertEqual(page.shownText(row: read, column: "calls"), "2")
@@ -195,6 +195,71 @@ final class AgentUITests: XCTestCase {
         service.resetToolStats()
         controller.refresh()
         XCTAssertEqual(page.shownText(row: read, column: "calls"), "")
+    }
+
+    /// The window's width goes to one column in the Marks and Tools lists: Note
+    /// and Last Call, the last in each. The others keep the widths they were
+    /// given.
+    func testTheLastColumnTakesWhatTheWindowAddsInMarksAndTools() {
+        let controller = AgentWindowController(service: service)
+        _ = controller.window
+        for table in [controller.marksList.table, controller.toolsPage.table] {
+            XCTAssertEqual(table.columnAutoresizingStyle, .lastColumnOnlyAutoresizingStyle)
+            XCTAssertEqual(table.tableColumns.map { $0.resizingMask.contains(.autoresizingMask) },
+                           table.tableColumns.indices.map { $0 == table.tableColumns.count - 1 })
+        }
+        XCTAssertEqual(controller.marksList.table.tableColumns.last?.title, "Note")
+        XCTAssertEqual(controller.toolsPage.table.tableColumns.last?.title, "Last Call")
+    }
+
+    /// The log shows a request while the tool is still working on it, and the
+    /// row is the same one when the answer comes.
+    func testTheLogShowsARequestWhileItRuns() async throws {
+        let controller = AgentWindowController(service: service)
+        _ = controller.window
+        let connection = service.connect(send: { _ in })
+        // `survey` over no files answers at once; `open_dump` of a path that
+        // does not exist fails at once: neither holds still, so the running
+        // record is made by hand and then replaced by the finished one.
+        let running = AgentCallRecord(client: "test", tool: "read", arguments: ["offset": "0x10"],
+                                      started: Date(), duration: .zero, finished: Date(),
+                                      answerBytes: 0, outcome: .running)
+        service.recordForTesting(running)
+        controller.refresh()
+        XCTAssertEqual(controller.shownRows.map(\.tool), ["read"])
+        XCTAssertEqual(controller.shownText(row: 0, column: "result"), "Running…")
+        XCTAssertEqual(controller.shownText(row: 0, column: "duration"), "")
+        XCTAssertEqual(controller.shownText(row: 0, column: "size"), "")
+
+        let done = AgentCallRecord(id: running.id, client: "test", tool: "read", arguments: ["offset": "0x10"],
+                                   started: running.started, duration: .milliseconds(12), finished: Date(),
+                                   answerBytes: 100, outcome: .answered)
+        service.recordForTesting(done)
+        controller.refresh()
+        XCTAssertEqual(controller.shownRows.count, 1, "the finished call took the running one's place")
+        XCTAssertEqual(controller.shownText(row: 0, column: "result"), "Answered")
+        XCTAssertEqual(service.toolStats["read"]?.calls, 1, "counted once, when it ended")
+        _ = connection
+    }
+
+    /// The window opens tall the first time and keeps the frame it was left in.
+    func testTheWindowOpensTallAndKeepsItsFrame() throws {
+        let key = "NSWindow Frame " + AgentWindowController.frameAutosaveName
+        UserDefaults.standard.removeObject(forKey: key)
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+
+        let first = try XCTUnwrap(AgentWindowController(service: service).window)
+        XCTAssertEqual(first.frameAutosaveName, AgentWindowController.frameAutosaveName,
+                       "the name survives the window controller taking the window")
+        let room = try XCTUnwrap((first.screen ?? NSScreen.main)?.visibleFrame.height) - 40
+        XCTAssertGreaterThanOrEqual(first.frame.height, min(AgentWindowController.initialSize.height, room))
+
+        first.setFrame(NSRect(x: 120, y: 140, width: 640, height: 500), display: false)
+        first.saveFrame(usingName: AgentWindowController.frameAutosaveName)
+        let second = try XCTUnwrap(AgentWindowController(service: service).window)
+        XCTAssertEqual(second.frame.width, 640, accuracy: 1)
+        XCTAssertEqual(second.frame.height, 500, accuracy: 1)
+        XCTAssertEqual(second.frame.origin.x, 120, accuracy: 1)
     }
 
     /// The table cuts the arguments to a column; the details under it give

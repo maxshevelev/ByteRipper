@@ -1325,6 +1325,7 @@
 "Scroll the log to each new request as it arrives" = "Das Protokoll zu jeder neuen Anfrage scrollen";
 "Show the Agent window" = "Das Agentenfenster zeigen";
 "Cancelled" = "Abgebrochen";
+"Running…" = "Wird ausgeführt…";
 "ByteRipper agent service" = "Agentendienst von ByteRipper";
 "Show Agent Window" = "Agentenfenster zeigen";
 "Switch Off Agent Service" = "Agentendienst ausschalten";

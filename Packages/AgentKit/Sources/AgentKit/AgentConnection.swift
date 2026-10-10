@@ -17,6 +17,7 @@ public actor AgentConnection {
     private let send: @Sendable (Data) -> Void
     private let observer: @Sendable (AgentCallRecord) -> Void
     private let onFirstMessage: @Sendable () -> Void
+    private let onCallStarted: @Sendable (AgentCallRecord) -> Void
     /// Whether the client has sent anything yet.
     private var hasSpoken = false
 
@@ -50,12 +51,14 @@ public actor AgentConnection {
         server: AgentServer,
         send: @escaping @Sendable (Data) -> Void,
         observer: @escaping @Sendable (AgentCallRecord) -> Void = { _ in },
-        onFirstMessage: @escaping @Sendable () -> Void = {}
+        onFirstMessage: @escaping @Sendable () -> Void = {},
+        onCallStarted: @escaping @Sendable (AgentCallRecord) -> Void = { _ in }
     ) {
         self.server = server
         self.send = send
         self.observer = observer
         self.onFirstMessage = onFirstMessage
+        self.onCallStarted = onCallStarted
         self.framer = LineFramer(maxLineBytes: server.limits.maxLineBytes)
     }
 
@@ -279,6 +282,14 @@ public actor AgentConnection {
             await self?.reportProgress(key, progress: progress, total: total, message: message)
         }
         let client = clientName
+        // A record for the call while it runs — `onCallStarted`, so a log can
+        // show what the tool is busy with — which the finished one, under the
+        // same id, replaces. `observer` hears only finished calls.
+        let callID = UUID()
+        let startedAt = Date()
+        onCallStarted(AgentCallRecord(
+            id: callID, client: client, tool: name, arguments: .object(arguments),
+            started: startedAt, duration: .zero, finished: startedAt, answerBytes: 0, outcome: .running))
         let task = Task { [weak self] in
             let clock = ContinuousClock()
             let started = clock.now
@@ -294,7 +305,7 @@ public actor AgentConnection {
             }
             await self?.finishCall(
                 id: id, key: key, era: era, outcome: outcome,
-                record: (client, name, .object(arguments), clock.now - started))
+                record: (callID, startedAt, client, name, .object(arguments), clock.now - started))
         }
         inFlight[key] = InFlight(task: task, progressToken: params["_meta"]?[MCPProtocol.Meta.progressToken])
     }
@@ -307,12 +318,13 @@ public actor AgentConnection {
 
     private func finishCall(
         id: JSONValue, key: RequestKey, era: MCPEra, outcome: CallOutcome,
-        record: (client: String?, tool: String, arguments: JSONValue, duration: Duration)
+        record: (id: UUID, started: Date, client: String?, tool: String, arguments: JSONValue, duration: Duration)
     ) {
         func log(_ outcome: AgentCallRecord.Outcome, bytes: Int) {
             observer(AgentCallRecord(
-                client: record.client, tool: record.tool, arguments: record.arguments,
-                duration: record.duration, finished: Date(), answerBytes: bytes, outcome: outcome))
+                id: record.id, client: record.client, tool: record.tool, arguments: record.arguments,
+                started: record.started, duration: record.duration, finished: Date(),
+                answerBytes: bytes, outcome: outcome))
         }
         // Gone from the table means the client cancelled it, or went: either
         // way nobody is waiting, and the protocol forbids writing to them

@@ -242,15 +242,33 @@ final class AgentService {
                  onFirstMessage: @escaping @Sendable () -> Void = {}) -> AgentConnection {
         AgentConnection(server: server, send: send, observer: { [weak self] record in
             Task { @MainActor in self?.record(record) }
-        }, onFirstMessage: onFirstMessage)
+        }, onFirstMessage: onFirstMessage, onCallStarted: { [weak self] record in
+            Task { @MainActor in self?.record(record) }
+        })
     }
 
+    /// A call into the log: a running one at the bottom, and a finished one
+    /// in the place of its running record, so a request the tool is still
+    /// working on is in the log from the moment it arrives and its row does
+    /// not move when it ends. A running record that arrives after its call
+    /// has finished — the two hop to this actor separately — is dropped.
     private func record(_ record: AgentCallRecord) {
-        toolStats[record.tool, default: AgentToolStats()].add(record)
-        log.append(record)
+        if let index = log.firstIndex(where: { $0.id == record.id }) {
+            guard !record.isRunning else { return }
+            log[index] = record
+        } else {
+            log.append(record)
+        }
+        if !record.isRunning {
+            toolStats[record.tool, default: AgentToolStats()].add(record)
+        }
         if log.count > Self.logLimit { log.removeFirst(log.count - Self.logLimit) }
         changed()
     }
+
+    /// A record handed straight to the log, for tests that need a call in a
+    /// state a real one passes through too quickly to catch.
+    func recordForTesting(_ call: AgentCallRecord) { record(call) }
 
     func clearLog() {
         log.removeAll()

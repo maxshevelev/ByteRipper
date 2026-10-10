@@ -1325,6 +1325,7 @@
 "Scroll the log to each new request as it arrives" = "Прокручивать журнал к каждому новому запросу";
 "Show the Agent window" = "Показать окно агента";
 "Cancelled" = "Отменено";
+"Running…" = "Выполняется…";
 "ByteRipper agent service" = "Служба агента ByteRipper";
 "Show Agent Window" = "Показать окно агента";
 "Switch Off Agent Service" = "Выключить службу агента";

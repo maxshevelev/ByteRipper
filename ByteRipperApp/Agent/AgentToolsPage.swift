@@ -73,16 +73,19 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
             let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.rawValue))
             tableColumn.title = column.title
             tableColumn.width = ToolPanelFont.scaled(column.width)
-            tableColumn.resizingMask = [.autoresizingMask, .userResizingMask]
+            // Only the last column gives way with the window; the others keep
+            // the widths they were given, and the person can still drag them.
+            tableColumn.resizingMask = column == Column.allCases.last
+                ? [.autoresizingMask, .userResizingMask] : .userResizingMask
             tableColumn.minWidth = ToolPanelFont.scaled(36)
             table.addTableColumn(tableColumn)
         }
         table.usesAlternatingRowBackgroundColors = true
-        // The names take what the window adds or gives back; the numbers keep
-        // the widths they were given. Shared out evenly, every column came to
-        // the same width, which cut the longer names short behind their
-        // indent and "Not Answered" down to "Not".
-        table.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
+        // What the window adds or gives back goes to Last Call, the column at
+        // the end. Shared out evenly, every column came to the same width,
+        // which cut the longer names short behind their indent and "Not
+        // Answered" down to "Not".
+        table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         // Plain: the automatic and full-width styles put a 20-point blank
         // band above every section's heading but the first (measured).
         table.style = .plain
@@ -155,32 +158,35 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
     /// A section's heading: a size above the tool names, so the groups read as
     /// groups rather than as one more row.
     static var headingFont: NSFont { .systemFont(ofSize: ToolPanelFont.titleSize + 2, weight: .semibold) }
-    private static var headingSpaceAbove: CGFloat { ToolPanelFont.scaled(10) }
-    private static var headingSpaceBelow: CGFloat { ToolPanelFont.scaled(3) }
+    private static var headingSpaceAbove: CGFloat { ToolPanelFont.scaled(12) }
+    private static var headingSpaceBelow: CGFloat { ToolPanelFont.scaled(4) }
     /// How far the tool names stand in from their headings.
     static var toolIndent: CGFloat { ToolPanelFont.scaled(14) }
 
-    /// A heading's cell: its text on the row's bottom, so the space the row
-    /// adds lies above it.
-    private func headingCell(in tableView: NSTableView) -> NSTableCellView {
+    /// A heading's view, which draws its own text. A text field in a group
+    /// row is not left to its own font: AppKit sizes the field to the row
+    /// style (13 pt here, whatever was set, and read back as set), so the
+    /// heading is drawn by a view of its own.
+    private final class HeadingView: NSView {
+        var title = "" { didSet { needsDisplay = true } }
+        override var isFlipped: Bool { true }
+
+        override func draw(_ dirtyRect: NSRect) {
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: AgentToolsPage.headingFont, .foregroundColor: NSColor.systemGray]
+            let text = NSAttributedString(string: title, attributes: attributes)
+            let size = text.size()
+            // On the view's bottom, so the room the row adds lies above it.
+            text.draw(at: NSPoint(x: 2, y: bounds.height - size.height - AgentToolsPage.headingSpaceBelow))
+        }
+    }
+
+    private func headingView(in tableView: NSTableView) -> HeadingView {
         let id = NSUserInterfaceItemIdentifier("section")
-        if let cell = tableView.makeView(withIdentifier: id, owner: self) as? NSTableCellView { return cell }
-        let cell = NSTableCellView()
-        cell.identifier = id
-        let field = NSTextField(labelWithString: "")
-        field.lineBreakMode = .byTruncatingTail
-        field.translatesAutoresizingMaskIntoConstraints = false
-        field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        cell.addSubview(field)
-        cell.textField = field
-        let trailing = field.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2)
-        trailing.priority = .defaultHigh - 1
-        NSLayoutConstraint.activate([
-            field.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
-            trailing,
-            field.bottomAnchor.constraint(equalTo: cell.bottomAnchor, constant: -Self.headingSpaceBelow),
-        ])
-        return cell
+        if let view = tableView.makeView(withIdentifier: id, owner: self) as? HeadingView { return view }
+        let view = HeadingView()
+        view.identifier = id
+        return view
     }
 
     /// A tool name's cell: the shared cell, stood in from the column's edge
@@ -203,11 +209,9 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         if case .header(let title) = items[row] {
-            let cell = headingCell(in: tableView)
-            cell.textField?.stringValue = title
-            cell.textField?.font = Self.headingFont
-            cell.textField?.textColor = .secondaryLabelColor
-            return cell
+            let view = headingView(in: tableView)
+            view.title = title
+            return view
         }
         guard let id = tableColumn?.identifier, let column = Column(rawValue: id.rawValue),
               let entry = entry(at: row) else { return nil }
@@ -221,7 +225,9 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
         cell.textField?.stringValue = text(row: row, column)
         cell.textField?.textColor = column == .failures && (stats[entry.tool.name]?.failures ?? 0) > 0
             ? SemanticColors.bad : .labelColor
-        cell.textField?.alignment = column.isNumber ? .right : .natural
+        // Right-aligned figures, except under Last Call: the column that takes
+        // the window's extra width would carry its time far from its header.
+        cell.textField?.alignment = column.isNumber && column != .last ? .right : .natural
         return cell
     }
 

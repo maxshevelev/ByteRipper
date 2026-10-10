@@ -7,6 +7,7 @@ private final class Wire: @unchecked Sendable {
     private let lock = NSLock()
     private var written: [JSONValue] = []
     private var records: [AgentCallRecord] = []
+    private var starts: [AgentCallRecord] = []
     private var badLines = 0
 
     func send(_ data: Data) {
@@ -27,6 +28,13 @@ private final class Wire: @unchecked Sendable {
         records.append(record)
     }
 
+    func callStarted(_ record: AgentCallRecord) {
+        lock.lock()
+        defer { lock.unlock() }
+        starts.append(record)
+    }
+
+    var started: [AgentCallRecord] { lock.withLock { starts } }
     var messages: [JSONValue] { lock.withLock { written } }
     var calls: [AgentCallRecord] { lock.withLock { records } }
     var malformed: Int { lock.withLock { badLines } }
@@ -69,7 +77,8 @@ final class AgentConnectionTests: XCTestCase {
         let server = AgentServer(
             info: info, instructions: "Ask about the dump.", tools: tools ?? [echo], limits: limits)
         let connection = AgentConnection(
-            server: server, send: { wire.send($0) }, observer: { wire.record($0) })
+            server: server, send: { wire.send($0) }, observer: { wire.record($0) },
+            onCallStarted: { wire.callStarted($0) })
         return (connection, wire)
     }
 
@@ -256,6 +265,33 @@ final class AgentConnectionTests: XCTestCase {
         await gate.release()
         await connection.waitUntilIdle()
         XCTAssertEqual(wire.messages.map { $0["id"] }, [2, 1])
+    }
+
+    /// A log can show what the tool is busy with: the call is reported when it
+    /// starts, as running, and again under the same id when it ends.
+    func testACallIsReportedWhenItStartsAndAgainWhenItEnds() async throws {
+        let gate = Gate()
+        let slow = AgentTool(name: "slow", description: "Waits.") { _ in
+            await gate.wait()
+            return .text("done")
+        }
+        let (connection, wire) = connection(tools: [slow])
+        await connection.receive(Data((#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"slow","arguments":{"n":1}}}"# + "\n").utf8))
+
+        let running = try XCTUnwrap(wire.started.first)
+        XCTAssertEqual(wire.started.count, 1)
+        XCTAssertEqual(running.tool, "slow")
+        XCTAssertEqual(running.arguments, ["n": 1])
+        XCTAssertTrue(running.isRunning)
+        XCTAssertTrue(wire.calls.isEmpty, "nothing is finished yet")
+
+        await gate.release()
+        await connection.waitUntilIdle()
+        let finished = try XCTUnwrap(wire.calls.first)
+        XCTAssertEqual(wire.calls.count, 1)
+        XCTAssertEqual(finished.id, running.id, "the finished record replaces the running one")
+        XCTAssertEqual(finished.outcome, .answered)
+        XCTAssertEqual(finished.started, running.started)
     }
 
     func testACancelledCallIsStoppedAndNeverAnswered() async throws {

@@ -1,4 +1,4 @@
-@source-sha b606594cc98163e06d36b81f4e6dcf09e1cbdf3932ce677733efd35478bffdff
+@source-sha 9a5afad5639bedac683c55856d65af07e8e5cd7c3799be3de5aa016a90698efd
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -108,7 +108,7 @@ Jede Änderung des Agenten bildet einen eigenen Schritt im Widerrufen-Verlauf de
 
 **Fenster ▸ Agent** zeigt den Zustand des Dienstes und enthält vier Listen. Solange der Dienst eingeschaltet ist, befindet sich in der Symbolleiste zwischen **?** und dem Umschalter für die Anordnung der Bereiche eine Taste für dieses Fenster, mit demselben Symbol wie der Reiter „Agent“ in den Einstellungen. Sie öffnet das Agentenfenster oder holt es nach vorn, falls es bereits geöffnet ist. Die Tastatur wirkt danach auf die Liste der angezeigten Seite; die Pfeiltasten bewegen die Auswahl durch ihre Zeilen. Beim Wechsel auf eine andere Seite geht die Tastatur auf deren Liste über.
 
-**Protokoll** verzeichnet jede Anfrage des Agenten mit Uhrzeit, Werkzeug, den Argumenten in der vom Agenten übergebenen Form, Antwortzeit, Größe der Antwort und Ergebnis. Abgelehnte Anfragen sind rot dargestellt, zusammen mit dem Grund, der dem Agenten mitgeteilt wurde.
+**Protokoll** verzeichnet jede Anfrage des Agenten, auch eine, an der das Werkzeug noch arbeitet: Sie erscheint beim Eintreffen mit dem Ergebnis **Wird ausgeführt…**, und dieselbe Zeile wird vervollständigt, sobald die Antwort vorliegt. Für jede Anfrage werden Uhrzeit, Werkzeug, die Argumente in der vom Agenten übergebenen Form, Antwortzeit, Größe der Antwort und Ergebnis angegeben. Abgelehnte Anfragen sind rot dargestellt, zusammen mit dem Grund, der dem Agenten mitgeteilt wurde.
 
 In der Tabelle werden lange Argumente gekürzt. Die Liste darunter zeigt die ausgewählte Anfrage vollständig: Uhrzeit, Client, Antwortzeit, Größe der Antwort in Bytes, das vollständige Ergebnis und unter **Argumente** das gesamte vom Agenten gesendete JSON, ein Element pro Zeile. Der Text dieser Liste lässt sich auswählen und kopieren. Die **Leertaste** im Protokoll oder die Taste in der Ecke der Liste vergrößert die Liste über das ganze Fenster, wie bei den Details eines Werkzeugbereichs; **Leertaste** oder **Esc** verkleinert sie wieder.
 

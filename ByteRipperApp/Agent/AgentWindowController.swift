@@ -37,6 +37,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     private let detailPane = ToolDetailPane()
     private var details: ToolDetailScroll { detailPane.detail }
     private let marks = AgentMarksTable()
+    /// The log's rows, for tests.
+    var shownRows: [AgentCallRecord] { rows }
     private let marksScroll = NSScrollView()
     private let findings = AgentFindingsTable()
     private let findingsScroll = NSScrollView()
@@ -61,17 +63,36 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         return formatter
     }()
 
+    /// Where the window's frame is kept between launches.
+    static let frameAutosaveName = "AgentWindow"
+    /// The size the window opens at the first time, before the person has
+    /// resized it: tall enough for the tool list and the details under it.
+    static let initialSize = NSSize(width: 720, height: 720)
+
     init(service: AgentService?) {
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 360),
+            contentRect: NSRect(origin: .zero, size: Self.initialSize),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered, defer: false)
         window.title = L("Agent")
         window.isReleasedWhenClosed = false
-        window.setFrameAutosaveName("AgentWindow")
         window.minSize = NSSize(width: 480, height: 220)
         self.service = service
         super.init(window: window)
+        // After `super.init(window:)`, never before it: taking ownership of a
+        // window clears the name it was carrying, so a name set above was
+        // silently dropped and neither the size nor the position was ever
+        // saved. With no saved frame the window opens at its initial size,
+        // centred, and no taller than the screen has room for.
+        if !window.setFrameAutosaveName(Self.frameAutosaveName) {
+            if let room = (window.screen ?? NSScreen.main)?.visibleFrame {
+                var frame = window.frame
+                frame.size.height = min(frame.height, room.height - 40)
+                frame.size.width = min(frame.width, room.width - 40)
+                window.setFrame(frame, display: false)
+            }
+            window.center()
+        }
         buildContent()
         observer = NotificationCenter.default.addObserver(
             forName: AgentService.didChange, object: nil, queue: .main
@@ -399,7 +420,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     private static func text(of record: AgentCallRecord, _ column: Column) -> String {
         switch column {
         case .time:
-            return timeFormatter.string(from: record.finished)
+            // A call still running has no end yet: the row says when it came in.
+            return timeFormatter.string(from: record.isRunning ? record.started : record.finished)
         case .tool:
             return record.tool
         case .arguments:
@@ -407,12 +429,14 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             // words, and what a reader checks the agent against.
             return record.arguments == .object([:]) ? "" : record.arguments.jsonText
         case .duration:
+            guard !record.isRunning else { return "" }
             let milliseconds = Double(record.duration.components.seconds) * 1000
                 + Double(record.duration.components.attoseconds) / 1e15
             return milliseconds < 1000
                 ? L("%1$@ ms", Int(milliseconds.rounded()))
                 : L("%1$@ s", String(format: "%.1f", milliseconds / 1000))
         case .size:
+            guard !record.isRunning else { return "" }
             return ByteCountFormatter.string(fromByteCount: Int64(record.answerBytes), countStyle: .memory)
         case .result:
             switch record.outcome {
@@ -420,6 +444,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             case .toolError(let message): return message
             case .overBound: return L("Too long, not sent")
             case .cancelled: return L("Cancelled")
+            case .running: return L("Running…")
             }
         }
     }
@@ -485,11 +510,15 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     static func detailFields(of record: AgentCallRecord) -> [DetailField] {
         var fields = [
             DetailField(label: L("Time"), value: DateFormatter.localizedString(
-                from: record.finished, dateStyle: .none, timeStyle: .medium)),
+                from: record.isRunning ? record.started : record.finished, dateStyle: .none, timeStyle: .medium)),
             DetailField(label: L("Took"), value: text(of: record, .duration)),
             DetailField(label: L("Answer"), value: L("%1$@ bytes", record.answerBytes)),
             DetailField(label: L("Result"), value: text(of: record, .result), isProblem: isProblem(record))
         ]
+        // Nothing to say yet about how long a call took or what it answered.
+        if record.isRunning {
+            fields.removeAll { $0.label == L("Took") || $0.label == L("Answer") }
+        }
         if let client = record.client {
             fields.insert(DetailField(label: L("Client"), value: client), at: 1)
         }
@@ -497,8 +526,10 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     }
 
     private static func isProblem(_ record: AgentCallRecord) -> Bool {
-        if case .answered = record.outcome { return false }
-        return true
+        switch record.outcome {
+        case .answered, .running: return false
+        default: return true
+        }
     }
 
     // MARK: - Actions
@@ -624,15 +655,16 @@ final class AgentMarksTable: NSObject, NSTableViewDataSource, NSTableViewDelegat
             let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.rawValue))
             tableColumn.title = column.title
             tableColumn.width = ToolPanelFont.scaled(column.width)
-            // Every column gives way with the window, in proportion: with the
-            // text at the panels' size there is less room to spare, and one
-            // column left to take all the shortfall was squeezed to nothing.
-            tableColumn.resizingMask = [.autoresizingMask, .userResizingMask]
+            // Only Note, the last column and the one with the most to say, gives
+            // way with the window; the others keep their widths, and the
+            // person can still drag them.
+            tableColumn.resizingMask = column == Column.allCases.last
+                ? [.autoresizingMask, .userResizingMask] : .userResizingMask
             tableColumn.minWidth = ToolPanelFont.scaled(36)
             table.addTableColumn(tableColumn)
         }
         table.usesAlternatingRowBackgroundColors = true
-        table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
+        table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         AgentTableStyle.apply(to: table)
         table.allowsMultipleSelection = true
         table.dataSource = self

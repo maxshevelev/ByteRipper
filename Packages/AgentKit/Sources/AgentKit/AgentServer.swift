@@ -60,11 +60,17 @@ public struct AgentCallRecord: Equatable, Sendable {
         case overBound
         /// The client withdrew the request; nothing was sent.
         case cancelled
+        /// The tool is still working on it: the record a call is given when
+        /// it starts, which its finished record replaces (same `id`).
+        case running
     }
 
     /// Which call this is, so a list that drops its oldest rows can still
-    /// find the one a reader selected.
-    public let id = UUID()
+    /// find the one a reader selected — and so a call's finished record can
+    /// take the place of the one it was given when it started.
+    public let id: UUID
+    /// When the call came in, by this Mac's clock.
+    public let started: Date
     /// The client's own name for itself, when it gave one.
     public let client: String?
     public let tool: String
@@ -75,4 +81,21 @@ public struct AgentCallRecord: Equatable, Sendable {
     /// The size of the answer as the tool produced it, sent or not.
     public let answerBytes: Int
     public let outcome: Outcome
+
+    public init(id: UUID = UUID(), client: String?, tool: String, arguments: JSONValue,
+                started: Date? = nil, duration: Duration, finished: Date,
+                answerBytes: Int, outcome: Outcome) {
+        self.id = id
+        self.client = client
+        self.tool = tool
+        self.arguments = arguments
+        self.started = started ?? finished
+        self.duration = duration
+        self.finished = finished
+        self.answerBytes = answerBytes
+        self.outcome = outcome
+    }
+
+    /// Whether the tool is still working on the call.
+    public var isRunning: Bool { outcome == .running }
 }
