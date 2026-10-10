@@ -4799,11 +4799,11 @@ final class MainViewController: NSViewController {
         return SegmentMenuAnchor(view: viewIfLoaded ?? NSView(), rect: .zero)
     }
 
-    /// The bookmark block of the offset context menu (§20.3). One item marks and
-    /// unmarks — *Toggle Bookmark at «address»*, the same command ⌘D is, so there
-    /// is one thing to learn — and a marked row is offered *Edit Bookmark…*
-    /// besides. The address is the ROW's, not the clicked byte's: a right-click on
-    /// a byte marks its row (§20.1), and the title is what says so.
+    /// The bookmark block of the offset context menu (§20.3): what can be done
+    /// to the clicked row, said outright — *Add Bookmark at «address»* on a row
+    /// with no mark, *Delete Bookmark at «address»* and *Edit Bookmark…* on one
+    /// that has. The address is the ROW's, not the clicked byte's: a right-click
+    /// on a byte marks its row (§20.1), and the title is what says so.
     private func addBookmarkMenuItems(to menu: NSMenu, for pane: PaneViewModel, offset: UInt64) {
         let target = OffsetContextTarget(pane: pane, offset: offset)
         let address = BookmarkStore.row(containing: offset).bareAddress
@@ -4812,9 +4812,11 @@ final class MainViewController: NSViewController {
             item.target = self
             item.representedObject = target
         }
-        add(L("Toggle Bookmark at %1$@", address), #selector(toggleBookmarkAtOffset(_:)))
         if pane.bookmarks?.bookmark(atRowContaining: offset) != nil {
+            add(L("Delete Bookmark at %1$@", address), #selector(deleteBookmarkAtOffset(_:)))
             add(L("Edit Bookmark…"), #selector(editBookmarkAtOffset(_:)))
+        } else {
+            add(L("Add Bookmark at %1$@", address), #selector(addBookmarkAtOffset(_:)))
         }
     }
 
@@ -5620,7 +5622,7 @@ final class MainViewController: NSViewController {
 
     // MARK: - Bookmarks (§20)
 
-    /// Edit > Toggle Bookmark (⌘D), and the offset menu's item: toggles the mark
+    /// Edit > Add Bookmark / Delete Bookmark (⌘D): toggles the mark
     /// on `pane`'s row containing `offset` (§20.3). A bookmark marks a row, not a
     /// byte — the offset is rounded down to its row — and the list is shared by
     /// both panes, so the same row is marked in both panes of a comparison.
@@ -5835,11 +5837,21 @@ final class MainViewController: NSViewController {
         editBookmarkInPane(activePane, rowContaining: activePane.hexSelection().start)
     }
 
-    /// Offset context menu > Toggle Bookmark: the same act on the row that was
-    /// right-clicked rather than the caret's, in the pane that was right-clicked.
-    @objc func toggleBookmarkAtOffset(_ sender: Any?) {
-        guard let target = offsetContextTarget(from: sender) else { return }
-        toggleBookmarkInPane(target.pane, rowContaining: target.offset)
+    /// Offset context menu > Add Bookmark at…: marks the row that was
+    /// right-clicked, in the pane that was, and opens the naming popover on it
+    /// as ⌘D does.
+    @objc func addBookmarkAtOffset(_ sender: Any?) {
+        guard let target = offsetContextTarget(from: sender), target.pane.isOpen,
+              let marks = target.pane.bookmarks,
+              marks.bookmark(atRowContaining: target.offset) == nil else { return }
+        markAndNameBookmark(in: target.pane, rowContaining: target.offset)
+    }
+
+    /// Offset context menu > Delete Bookmark at…: removes the right-clicked
+    /// row's mark.
+    @objc func deleteBookmarkAtOffset(_ sender: Any?) {
+        guard let target = offsetContextTarget(from: sender), target.pane.isOpen else { return }
+        _ = target.pane.bookmarks?.remove(rowContaining: target.offset)
     }
 
     /// Offset context menu > Edit Bookmark…: the edit popover for the
@@ -7816,6 +7828,10 @@ extension MainViewController: NSMenuItemValidation {
              #selector(selectAllBytes):
             return activePane.isOpen
         case #selector(toggleBookmark):
+            // The title says what ⌘D will do to the caret's row: add a mark,
+            // or delete the one that is there.
+            let marked = activePane.bookmarks?.bookmark(atRowContaining: activePane.hexSelection().start) != nil
+            menuItem.title = marked ? L("Delete Bookmark") : L("Add Bookmark")
             // Nothing to mark where the pane has no list: a decompressed body's
             // rows are at no address in the file the marks belong to (§20.7).
             return activePane.isOpen && activePane.bookmarks != nil

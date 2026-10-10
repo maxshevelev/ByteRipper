@@ -114,6 +114,8 @@
 "Access width" = "Ширина доступа";
 "Action" = "Действие";
 "Add" = "Добавить";
+"Add Bookmark" = "Поставить закладку";
+"Add Bookmark at %1$@" = "Поставить закладку на строку %1$@";
 "Add Cut" = "Разрезать";
 "Add Cut…" = "Разрезать…";
 "Add Favorite" = "Добавить в избранное";
@@ -154,6 +156,7 @@
 "Could not remove the microcode" = "Не удалось удалить микрокод";
 "Could not replace the microcode" = "Не удалось заменить микрокод";
 "Declared size" = "Размер по заголовку";
+"Delete Bookmark at %1$@" = "Удалить закладку со строки %1$@";
 "Device or properties" = "Устройство или свойства";
 "Device overrides" = "Переопределения устройств";
 "EC firmware image" = "Образ прошивки EC";
@@ -903,8 +906,6 @@
 "Ticking a type asks macOS to open files with that extension in ByteRipper; macOS may ask you to confirm. Unticking hands the type back to the app it was taken from. Add any extension you keep dumps under — it works the same." = "Галочка просит macOS открывать файлы с этим расширением в ByteRipper; macOS может переспросить. Снятая галочка возвращает тип той программе, у которой он был взят. Добавьте любое расширение, под которым храните дампы, — работает так же.";
 "To Beginning" = "В начало";
 "To End" = "В конец";
-"Toggle Bookmark" = "Закладка вкл/выкл";
-"Toggle Bookmark at %1$@" = "Закладка на %1$@: вкл/выкл";
 "Toggle Minimap" = "Миникарта вкл/выкл";
 "Toggle Pane Layout" = "Сменить расположение файловых панелей";
 "Too many matches to highlight — navigation and the map still cover all of them." = "Совпадений слишком много для подсветки — переходы и карта по-прежнему охватывают все.";

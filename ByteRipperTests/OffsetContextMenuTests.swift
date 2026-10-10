@@ -308,7 +308,7 @@ final class OffsetContextMenuTests: XCTestCase {
                        ["Copy offset", "",
                         "Select Block from Here at 00000024", "",
                         "Split Here at 00000024", "",
-                        "Toggle Bookmark at 00000020"])
+                        "Add Bookmark at 00000020"])
         XCTAssertEqual(menu.items[0].action, #selector(MainViewController.copyOffset(_:)))
         XCTAssertEqual(menu.items[2].action, #selector(MainViewController.selectBlockFromHere(_:)))
         // The segment block: with no cuts it is the one position item.
@@ -360,9 +360,9 @@ final class OffsetContextMenuTests: XCTestCase {
                         // Split Here alone — the piece items and Merge work on
                         // a partition that does not exist yet (§21.3).
                         "Split Here at 00000014", "",
-                        // The bookmark block: one item marks and unmarks, and an
-                        // unmarked row has nothing to rename (§20.3).
-                        "Toggle Bookmark at 00000010"])
+                        // The bookmark block: an unmarked row is offered a
+                        // mark, and nothing to edit or delete (§20.3).
+                        "Add Bookmark at 00000010"])
 
         // The selection items act on the pane they were built for.
         let copy = menu.items[0]
@@ -395,7 +395,7 @@ final class OffsetContextMenuTests: XCTestCase {
             XCTAssertEqual(menu.items.map(\.title),
                            ["Copy offset", "", "Select Block from Here at \(outside.bareAddress)", "",
                             "Split Here at \(outside.bareAddress)", "",
-                            "Toggle Bookmark at \(BookmarkStore.row(containing: outside).bareAddress)"],
+                            "Add Bookmark at \(BookmarkStore.row(containing: outside).bareAddress)"],
                            "0x\(String(outside, radix: 16)) is outside: no selection actions")
         }
     }

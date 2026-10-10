@@ -1041,17 +1041,20 @@ final class BookmarkTests: XCTestCase {
     func testRenameIsEnabledOnlyOnAMarkedRow() throws {
         let (controller, close) = try makeControllerWithFile()
         defer { close() }
-        let toggleItem = NSMenuItem(title: "Toggle Bookmark",
+        let toggleItem = NSMenuItem(title: "Add Bookmark",
                                     action: #selector(MainViewController.toggleBookmark), keyEquivalent: "d")
         let renameItem = NSMenuItem(title: "Edit Bookmark…",
                                     action: #selector(MainViewController.editBookmark), keyEquivalent: "D")
         controller.windowModel.pane1.moveCaret(to: 20)
 
         XCTAssertTrue(controller.validateMenuItem(toggleItem), "a file is open")
+        XCTAssertEqual(toggleItem.title, "Add Bookmark", "⌘D says what it will do")
         XCTAssertFalse(controller.validateMenuItem(renameItem), "nothing to rename yet")
 
         controller.windowModel.bookmarkStore.add(rowContaining: 20)
         XCTAssertTrue(controller.validateMenuItem(renameItem), "the caret's row carries a mark")
+        XCTAssertTrue(controller.validateMenuItem(toggleItem))
+        XCTAssertEqual(toggleItem.title, "Delete Bookmark", "on a marked row ⌘D deletes")
 
         controller.windowModel.pane1.moveCaret(to: 40)
         XCTAssertFalse(controller.validateMenuItem(renameItem),
@@ -1062,7 +1065,7 @@ final class BookmarkTests: XCTestCase {
     func testEditMenuHasBothBookmarkCommands() throws {
         let items = MainMenu.makeEditMenu().items
         let toggle = try XCTUnwrap(items.first { $0.action == #selector(MainViewController.toggleBookmark) })
-        XCTAssertEqual(toggle.title, "Toggle Bookmark")
+        XCTAssertEqual(toggle.title, "Add Bookmark", "until validation names it for the caret's row")
         XCTAssertEqual(toggle.keyEquivalent, "d")
         XCTAssertEqual(toggle.keyEquivalentModifierMask, [.command])
 
@@ -1225,32 +1228,34 @@ final class BookmarkTests: XCTestCase {
 
     // MARK: - Naming: the context menu (§20.3)
 
-    /// The offset menu carries ONE item for marking and unmarking — the same
-    /// command ⌘D is — plus Rename on a row that has something to rename. The
-    /// address is the ROW's: a right-click on a byte marks that byte's row, and
-    /// the title is what says so (§20.1).
-    func testTheContextMenuTogglesAndRenames() throws {
+    /// The offset menu says what it will do to the row: Add on a row with no
+    /// mark; Delete and Edit on one that has. The address is the ROW's: a
+    /// right-click on a byte marks that byte's row, and the title is what says
+    /// so (§20.1).
+    func testTheContextMenuAddsOrDeletesAndEdits() throws {
         let (controller, close) = try makeControllerWithFile(bytes: 64)
         defer { close() }
         let pane = controller.windowModel.pane1
 
         // A byte in the middle of row 0x10, so the row address has to be derived.
         let unmarked = controller.makeOffsetMenu(for: pane, offset: 0x1B).items.map(\.title)
-        XCTAssertTrue(unmarked.contains("Toggle Bookmark at 00000010"),
+        XCTAssertTrue(unmarked.contains("Add Bookmark at 00000010"),
                       "the row's address, not the clicked byte's: \(unmarked)")
+        XCTAssertFalse(unmarked.contains { $0.hasPrefix("Delete Bookmark") }, "nothing to delete")
         XCTAssertFalse(unmarked.contains("Edit Bookmark…"),
                        "nothing to rename on an unmarked row")
 
         controller.windowModel.bookmarkStore.add(rowContaining: 0x1B, name: "ME region")
         let marked = controller.makeOffsetMenu(for: pane, offset: 0x1B).items.map(\.title)
-        XCTAssertTrue(marked.contains("Toggle Bookmark at 00000010"), "\(marked)")
+        XCTAssertTrue(marked.contains("Delete Bookmark at 00000010"), "\(marked)")
+        XCTAssertFalse(marked.contains { $0.hasPrefix("Add Bookmark") }, "nothing to add: \(marked)")
         XCTAssertTrue(marked.contains("Edit Bookmark…"))
     }
 
     /// The items act on the row that was right-clicked, in the pane that was
     /// right-clicked — the `representedObject` pattern the rest of the offset
-    /// menu uses (§10.2). Toggling from the menu asks for the name the same way
-    /// ⌘D does.
+    /// menu uses (§10.2). Adding from the menu asks for the name the same way
+    /// ⌘D does; deleting asks nothing.
     func testTheContextMenuItemsActOnTheClickedRow() throws {
         let (controller, close) = try makeControllerWithFile(bytes: 64)
         defer { close() }
@@ -1258,10 +1263,10 @@ final class BookmarkTests: XCTestCase {
         let store = controller.windowModel.bookmarkStore
         let requests = captureEditing(controller)
 
-        let toggleItem = try XCTUnwrap(controller.makeOffsetMenu(for: pane, offset: 0x2A).items
-            .first { $0.action == #selector(MainViewController.toggleBookmarkAtOffset(_:)) })
-        XCTAssertTrue(toggleItem.target === controller)
-        controller.toggleBookmarkAtOffset(toggleItem)
+        let addItem = try XCTUnwrap(controller.makeOffsetMenu(for: pane, offset: 0x2A).items
+            .first { $0.action == #selector(MainViewController.addBookmarkAtOffset(_:)) })
+        XCTAssertTrue(addItem.target === controller)
+        controller.addBookmarkAtOffset(addItem)
         XCTAssertEqual(store.bookmarks.map(\.row), [0x20], "the clicked byte's row is marked")
 
         let request = try XCTUnwrap(requests().first, "the menu's toggle names the mark it makes")
@@ -1269,8 +1274,10 @@ final class BookmarkTests: XCTestCase {
         request.commit(request.row, "vendor block")
         XCTAssertEqual(store.bookmarks, [Bookmark(row: 0x20, name: "vendor block")])
 
-        // And the same item takes it away again, with nothing to dismiss.
-        controller.toggleBookmarkAtOffset(toggleItem)
+        // The menu on the marked row deletes it, with nothing to dismiss.
+        let deleteItem = try XCTUnwrap(controller.makeOffsetMenu(for: pane, offset: 0x2A).items
+            .first { $0.action == #selector(MainViewController.deleteBookmarkAtOffset(_:)) })
+        controller.deleteBookmarkAtOffset(deleteItem)
         XCTAssertTrue(store.bookmarks.isEmpty)
         XCTAssertEqual(requests().count, 1, "removing asks nothing")
     }

@@ -5,7 +5,9 @@
 @covers menu.edit.bookmark-toggle
 @covers menu.edit.bookmark-edit
 
-**⌘D** sets a bookmark on the row the caret is on, or removes the one that is there. The address of that row is then drawn on a purple arrow, and the row is marked in the same colour in the margin of the [[topic:minimap|minimap]].
+**⌘D** sets a bookmark on the row the caret is on, or removes the one that is there. The Edit menu names which of the two it will do: **Edit ▸ Add Bookmark** on a row without a bookmark, **Edit ▸ Delete Bookmark** on a row that has one. The address of a bookmarked row is drawn on a purple arrow, and the row is marked in the same colour in the margin of the [[topic:minimap|minimap]].
+
+A right-click on a row offers the same for that row, with its address in the item: *Add Bookmark at…*, or *Delete Bookmark at…* and *Edit Bookmark…* where the row already has one.
 
 - **⇧⌘D** gives the bookmark a name, or edits the name it has. A bookmark with no name displays its address.
 - **⌘L** opens Go To, and the lower half of that window is the bookmark list: Tab moves the keyboard into it, Return jumps to the selected bookmark.

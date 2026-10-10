@@ -1,9 +1,11 @@
-@source-sha d3dcb36e1baa80e4d7c47dcb6a5c58eda771a32d64118e0657c0a484709b99ec
+@source-sha 5f952d99dd534e65f99f2cd7452f4c75bfecf46bdbd9645d5ac28408921405f0
 # Lesezeichen
 
 > Markierte Adressen, zu denen schnell zurückgekehrt werden kann: auf der Zeile angezeigt und beiden Bereichen gemeinsam.
 
-**⌘D** setzt ein Lesezeichen auf der Zeile, auf der die Einfügemarke steht, oder entfernt ein vorhandenes. Die Adresse dieser Zeile wird dann auf einem violetten Pfeil dargestellt, und die Zeile wird in derselben Farbe am Rand der [[topic:minimap|Minimap]] markiert.
+**⌘D** setzt ein Lesezeichen auf der Zeile, auf der die Einfügemarke steht, oder entfernt ein vorhandenes. Der Eintrag im Menü „Bearbeiten“ nennt die jeweilige Aktion: auf einer Zeile ohne Lesezeichen **Bearbeiten ▸ Lesezeichen setzen**, auf einer Zeile mit Lesezeichen **Bearbeiten ▸ Lesezeichen löschen**. Die Adresse einer Zeile mit Lesezeichen wird auf einem violetten Pfeil dargestellt, und die Zeile wird in derselben Farbe am Rand der [[topic:minimap|Minimap]] markiert.
+
+Im Kontextmenü einer Zeile gelten dieselben Befehle für diese Zeile, und ihre Adresse steht im Namen des Eintrags: ohne Lesezeichen *Lesezeichen auf Zeile … setzen*, mit Lesezeichen *Lesezeichen auf Zeile … löschen* und *Lesezeichen bearbeiten…*.
 
 - **⇧⌘D** gibt dem Lesezeichen einen Namen oder ändert den vorhandenen. Ein Lesezeichen ohne Namen zeigt seine Adresse.
 - **⌘L** öffnet „Gehe zu“, und die untere Hälfte dieses Fensters ist die Lesezeichenliste: Tab bringt die Tastatur hinein, Return springt zum ausgewählten Lesezeichen.

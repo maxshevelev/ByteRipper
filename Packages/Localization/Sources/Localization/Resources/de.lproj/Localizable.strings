@@ -114,6 +114,8 @@
 "Access width" = "Zugriffsbreite";
 "Action" = "Aktion";
 "Add" = "Hinzufügen";
+"Add Bookmark" = "Lesezeichen setzen";
+"Add Bookmark at %1$@" = "Lesezeichen auf Zeile %1$@ setzen";
 "Add Cut" = "Schnitt hinzufügen";
 "Add Cut…" = "Schnitt hinzufügen…";
 "Add Favorite" = "Favorit hinzufügen";
@@ -154,6 +156,7 @@
 "Could not remove the microcode" = "Microcode konnte nicht entfernt werden";
 "Could not replace the microcode" = "Microcode konnte nicht ersetzt werden";
 "Declared size" = "Größe laut Kopf";
+"Delete Bookmark at %1$@" = "Lesezeichen auf Zeile %1$@ löschen";
 "Device or properties" = "Gerät oder Eigenschaften";
 "Device overrides" = "Geräteüberschreibungen";
 "EC firmware image" = "EC-Firmware-Abbild";
@@ -903,8 +906,6 @@
 "Ticking a type asks macOS to open files with that extension in ByteRipper; macOS may ask you to confirm. Unticking hands the type back to the app it was taken from. Add any extension you keep dumps under — it works the same." = "Ein Häkchen bittet macOS, Dateien mit dieser Endung in ByteRipper zu öffnen; macOS fragt unter Umständen nach. Ohne Häkchen geht der Typ an die App zurück, von der er übernommen wurde. Fügen Sie jede Endung hinzu, unter der Sie Dumps ablegen — das funktioniert genauso.";
 "To Beginning" = "An den Anfang";
 "To End" = "Ans Ende";
-"Toggle Bookmark" = "Lesezeichen setzen/entfernen";
-"Toggle Bookmark at %1$@" = "Lesezeichen bei %1$@ ein/aus";
 "Toggle Minimap" = "Minimap ein-/ausblenden";
 "Toggle Pane Layout" = "Fensteraufteilung wechseln";
 "Too many matches to highlight — navigation and the map still cover all of them." = "Zu viele Treffer zum Hervorheben — Navigation und Karte erfassen weiterhin alle.";

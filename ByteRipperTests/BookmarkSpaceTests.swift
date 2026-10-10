@@ -236,7 +236,7 @@ final class BookmarkSpaceTests: XCTestCase {
 
         let titles = part.controller.makeOffsetMenu(for: part.pane, offset: 0x10).items.map(\.title)
 
-        XCTAssertFalse(titles.contains { $0.hasPrefix("Toggle Bookmark") }, "\(titles)")
+        XCTAssertFalse(titles.contains { $0.contains("Bookmark at") }, "\(titles)")
         XCTAssertFalse(titles.contains("Edit Bookmark…"), "\(titles)")
         XCTAssertFalse(titles.last?.isEmpty ?? false, "and no separator left dangling: \(titles)")
     }
@@ -247,7 +247,7 @@ final class BookmarkSpaceTests: XCTestCase {
 
         let titles = part.controller.makeOffsetMenu(for: part.pane, offset: 0x1B).items.map(\.title)
 
-        XCTAssertTrue(titles.contains("Toggle Bookmark at 00000010"),
+        XCTAssertTrue(titles.contains("Add Bookmark at 00000010"),
                       "the part's own address, which is the one drawn beside it: \(titles)")
     }
 

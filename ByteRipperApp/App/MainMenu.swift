@@ -411,10 +411,11 @@ enum MainMenu {
                          keyEquivalent: "e")
         // ⌘D marks (or unmarks) the caret's row — the gesture that has to cost
         // nothing on a bench (§20). It sits beside Go To: mark where you are,
-        // then go to a position. The title says Toggle rather than Add because
-        // the one command does both, whatever the caret's row currently is.
+        // then go to a position. One key does both, and the title says which:
+        // Add Bookmark on a row with no mark, Delete Bookmark on one that has
+        // (set as the menu is validated).
         // help: menu.edit.bookmark-toggle
-        editMenu.addItem(withTitle: L("Toggle Bookmark"), action: #selector(MainViewController.toggleBookmark), keyEquivalent: "d")
+        editMenu.addItem(withTitle: L("Add Bookmark"), action: #selector(MainViewController.toggleBookmark), keyEquivalent: "d")
         // ⇧⌘D edits the caret's row's mark — its address and its name. Making one
         // is ⌘D's job, which opens the same popover, so this command only ever
         // edits, and is greyed out on a row that carries no mark (§20.3).
