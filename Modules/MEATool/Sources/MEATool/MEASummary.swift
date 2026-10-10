@@ -251,14 +251,24 @@ public enum MEASummary {
         }
         // 17 · File System State. An EFS volume that holds files raises the
         // state, and which files it holds is in `FileTable.dat`: without the
-        // table it reads as holding none.
+        // table it reads as holding none. Under it, what the state rests on —
+        // the same paragraph as the Firmware row's detail in Full Info. Not
+        // upstream's row: MEAnalyzer prints the state alone, and a state that
+        // a step which could not be taken left standing (an EFS partition
+        // with its system page erased) then reads as settled, in green, with
+        // the reason only in the messages at the bottom.
         if isMFSFamily(analysis.family) {
             if pending.fileTable, analysis.efsVolume != nil, analysis.mfsState != nil {
                 add("File System State", .pending)
             } else if let state = analysis.mfsState {
                 rows.append(MEASummaryRow("File System State",
                                           .value(MEAText.title(state.rawValue)),
-                                          tone: MEATones.fileSystemState(state)))
+                                          tone: MEATones.fileSystemState(state, basis: analysis.mfsStateBasis)))
+                if let basis = analysis.mfsStateBasis {
+                    rows.append(MEASummaryRow(L("State basis"),
+                                              .value(MEAText.fileSystemStateBasis(state, basis)),
+                                              tone: MEATones.stateBasis(basis)))
+                }
             } else if identified {
                 add("File System State", .comingSoon)
             }

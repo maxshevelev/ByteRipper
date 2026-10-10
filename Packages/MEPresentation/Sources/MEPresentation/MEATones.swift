@@ -20,4 +20,22 @@ public enum MEATones {
         case .error: return .bad
         }
     }
+
+    /// The File System State's tone once what it rests on is known. A state
+    /// a step that could not be taken left standing — an EFS partition that
+    /// could not be read, whose files would have made it Initialized — is not
+    /// a settled one, and green would say it is: it reads as a caution at
+    /// best, and keeps red where the state itself is an error.
+    public static func fileSystemState(_ state: MFSState, basis: MFSStateBasis?) -> ToolValueTone {
+        let own = fileSystemState(state)
+        guard let basis, basis.isIncomplete else { return own }
+        return own == .bad ? .bad : .caution
+    }
+
+    /// The State basis row's tone: a caution when the basis is incomplete,
+    /// so the row that says why the state cannot be relied on is not passed
+    /// over; plain otherwise.
+    public static func stateBasis(_ basis: MFSStateBasis) -> ToolValueTone {
+        basis.isIncomplete ? .caution : .standard
+    }
 }

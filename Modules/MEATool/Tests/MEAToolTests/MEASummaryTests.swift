@@ -341,6 +341,30 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(tone("Family", in: try state("configured")), .standard)
     }
 
+    /// The Summary says what the File System State rests on, directly under
+    /// it, in the same words as Full Info — and a state an unread EFS left
+    /// standing is neither green nor its basis plain. The case is a CSME 15
+    /// dump whose EFS system page was erased: Configured from the FITC alone.
+    func testTheStateBasisFollowsTheStateInTheSummary() throws {
+        var a = try analysis(["manifest": manifestJSON(), "mfsState": "configured"])
+        a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .unreadable(offset: 0x267000),
+                                        configuration: ["FITC"], decidedBy: .configuration)
+        let rows = tableRows(a)
+        let labels = rows.map(\.label)
+        let state = try XCTUnwrap(labels.firstIndex(of: "File System State"))
+        XCTAssertEqual(labels[state + 1], "State basis")
+        XCTAssertEqual(value("State basis", in: rows),
+                       .value(MEAText.fileSystemStateBasis(.configured, try XCTUnwrap(a.mfsStateBasis))))
+        XCTAssertEqual(tone("State basis", in: rows), .caution)
+        XCTAssertEqual(tone("File System State", in: rows), .caution, "an incomplete state is not green")
+
+        a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .noFileContent,
+                                        configuration: ["FITC"], decidedBy: .configuration)
+        let settled = tableRows(a)
+        XCTAssertEqual(tone("State basis", in: settled), .standard)
+        XCTAssertEqual(tone("File System State", in: settled), .good)
+    }
+
     /// A chipset with no stepping letters is the plain chipset label, and a
     /// derived stepping letter stands on its own row.
     func testChipsetRowsWhenThereAreLettersOrNot() throws {

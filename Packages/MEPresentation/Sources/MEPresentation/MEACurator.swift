@@ -96,12 +96,12 @@ public enum MEACurator {
             fields.append(MEAField("File System State", pendingValue))
         } else if let state = a.mfsState {
             fields.append(MEAField("File System State", MEAText.title(state.rawValue),
-                                   tone: MEATones.fileSystemState(state)))
+                                   tone: MEATones.fileSystemState(state, basis: a.mfsStateBasis)))
             // What the state rests on, and — a caution — when a step that
             // could have raised it could not be taken.
             if let basis = a.mfsStateBasis {
                 fields.append(MEAField(L("State basis"), MEAText.fileSystemStateBasis(state, basis),
-                                       tone: basis.isIncomplete ? .caution : .standard))
+                                       tone: MEATones.stateBasis(basis)))
             }
         }
         // Row 19 for a non-IFWI image: the $FPT header's FIT (an IFWI image's

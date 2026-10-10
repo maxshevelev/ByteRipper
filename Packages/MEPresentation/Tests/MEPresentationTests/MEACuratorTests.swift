@@ -80,11 +80,14 @@ final class MEACuratorTests: XCTestCase {
         XCTAssertTrue(basis.value.contains("The EFS partition at 0x267000 could not be read"), basis.value)
         let labels = firmware.fields.map(\.label)
         XCTAssertEqual(labels.firstIndex(of: "State basis"), labels.firstIndex(of: "File System State").map { $0 + 1 })
+        // A state the unread EFS left standing is not drawn as settled.
+        XCTAssertEqual(firmware.fields.first { $0.label == "File System State" }?.tone, .caution)
 
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .noFileContent,
                                         configuration: ["FITC"], decidedBy: .configuration)
         let settled = try XCTUnwrap(find("Firmware", in: MEACurator.present(a)))
         XCTAssertEqual(settled.fields.first { $0.label == "State basis" }?.tone, .standard)
+        XCTAssertEqual(settled.fields.first { $0.label == "File System State" }?.tone, .good)
     }
 
     func testIssuesSayTheModuleChecksAreToCome() throws {
