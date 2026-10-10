@@ -1,4 +1,4 @@
-@source-sha 7d7f8da12195d1bfd65d4e778d5ea904b9cc03fe5f10b85897925aa6e95522c5
+@source-sha 1fd0cd7a994aab12eb6e4b8f104c0c214a71ce0eb2d98702b5b0a5691b74f803
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -79,7 +79,7 @@ Der Agent sucht in einer Datei nach Text oder nach einer Bytefolge. Text wird al
 
 - Stelle anzeigen: Der Agent holt den Tab der Datei nach vorn, scrollt den Dump an die betreffende Stelle und wählt sie aus.
 - Werkzeugbereiche: Der Agent öffnet einen Bereich für ein Dokument wie über das Menü **Werkzeuge** und wählt im geöffneten Bereich **UEFI-Struktur** einen Knoten aus; der Baum wird bis zu diesem Knoten aufgeklappt, und der Dump scrollt zu dessen Bytes.
-- Markierungen: Während der Agent Bytes erläutert, umgibt er sie mit einem gestrichelten Rahmen in eigener Farbe und versieht sie mit einer kurzen Bezeichnung; verweilt der Zeiger über den markierten Bytes, erscheint die Erläuterung des Agenten. Eine Markierung kann auf zugehörige Markierungen verweisen — etwa ein Zeiger auf sein Ziel oder eine Prüfsumme auf die Daten, über die sie gebildet wird.
+- Markierungen: Während der Agent Bytes erläutert, umgibt er sie mit einem gestrichelten Rahmen in eigener Farbe und versieht sie mit einer kurzen Bezeichnung; verweilt der Zeiger über den markierten Bytes, erscheint die Erläuterung des Agenten. Eine Markierung kann auf zugehörige Markierungen verweisen — etwa ein Zeiger auf sein Ziel oder eine Prüfsumme auf die Daten, über die sie gebildet wird. Solche Markierungen folgen auf die Erläuterung, nach **Zugehörige Markierungen:**, mit Nummer und Bezeichnung.
 - Befunde: Jeder Befund besteht aus einer Aussage und der Stelle, auf die sie sich bezieht. Das Agentenfenster führt alle Befunde auf.
 
 Jede vom Agenten angezeigte Stelle, jeder von ihm geöffnete Bereich und jeder von ihm gewählte Knoten wird im Verlauf festgehalten. Mit **Darstellung ▸ Zurück** (**⌘[**) kehren Sie zur vorherigen Ansicht zurück ([[topic:navigation|Sich bewegen]]).
@@ -109,7 +109,7 @@ In der Tabelle werden lange Argumente gekürzt. Die Liste darunter zeigt die aus
 
 Ist **Neuen Anfragen folgen** unter dem Protokoll eingeschaltet, scrollt das Protokoll zu jeder eintreffenden Anfrage; andernfalls behält es seine Position bei. Eine ausgewählte Anfrage bleibt auch beim Eintreffen neuer Anfragen ausgewählt. **Protokoll leeren** entfernt alle Einträge; nach dem Beenden des Programms wird das Protokoll nicht aufbewahrt.
 
-**Markierungen** führt die Markierungen auf, die der Agent in allen geöffneten Dateien gesetzt hat: Bezeichnung, Datei, Bytes, Erläuterung und zugehörige Markierungen. Ein Doppelklick auf eine Zeile holt die Datei nach vorn und wählt die markierten Bytes aus; dieser Sprung wird im Verlauf festgehalten. **Markierung entfernen** entfernt die ausgewählten Zeilen, **Alle Markierungen entfernen** sämtliche Markierungen. Darüber hinaus verschwindet eine Markierung, wenn ihre Datei geschlossen wird oder der Agent sie selbst entfernt.
+**Markierungen** führt die Markierungen auf, die der Agent in allen geöffneten Dateien gesetzt hat: Bezeichnung, Datei, Bytes und Erläuterung; zugehörige Markierungen stehen nach der Erläuterung, hinter **Zugehörige Markierungen:**. Ein Doppelklick auf eine Zeile holt die Datei nach vorn und wählt die markierten Bytes aus; dieser Sprung wird im Verlauf festgehalten. **Markierung entfernen** entfernt die ausgewählten Zeilen, **Alle Markierungen entfernen** sämtliche Markierungen. Darüber hinaus verschwindet eine Markierung, wenn ihre Datei geschlossen wird oder der Agent sie selbst entfernt.
 
 **Befunde** führt auf, was der Agent gefunden hat und wo: Aussage, Datei, Bytes oder Knoten. Ein Doppelklick öffnet die Datei an dieser Stelle — in dem Tab, in dem sie bereits geöffnet ist, oder in einem neuen. **Alle Befunde entfernen** leert die Liste.
 

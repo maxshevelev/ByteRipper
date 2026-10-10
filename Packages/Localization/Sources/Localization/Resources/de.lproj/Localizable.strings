@@ -1349,7 +1349,7 @@
 "Marks" = "Markierungen";
 "Mark" = "Markierung";
 "Label" = "Bezeichnung";
-"About" = "Bezieht sich auf";
+"Related Marks: %1$@" = "Zugehörige Markierungen: %1$@";
 "Remove Mark" = "Markierung entfernen";
 "Clear Marks" = "Alle Markierungen entfernen";
 "Findings" = "Befunde";

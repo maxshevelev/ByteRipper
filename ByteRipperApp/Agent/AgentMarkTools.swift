@@ -49,8 +49,11 @@ final class AgentMarkTools {
                 Marks a range of an open document with a short label and, optionally, a note — drawn over the \
                 dump with a dashed outline in a colour of its own, the note shown when the person rests the \
                 pointer on the bytes, and listed in the Agent window. Use it to show what bytes are while you \
-                talk about them. `related_to` names marks this one is about (a pointer and its target, a \
-                checksum and what it covers); the Agent window shows each pair. Does not move the view — \
+                talk about them. Whenever a mark is about bytes you have already marked — a pointer and its \
+                target, an offset or size field and the stretch it names, a checksum and what it covers, a \
+                header and its body — mark the other end first and pass its id in `related_to`: the person \
+                sees the relation in the note over the dump and in the Agent window, and cannot see it \
+                otherwise. Does not move the view — \
                 `reveal` does. Marks stay until removed with `unmark`, cleared by the person, or the document \
                 closes.
                 """,
@@ -60,7 +63,9 @@ final class AgentMarkTools {
                 "length": AgentSchema.offset("How many bytes, at least 1."),
                 "label": AgentSchema.string("A few words: what the bytes are. At most \(Self.maxLabel) characters."),
                 "note": AgentSchema.string("A sentence or two: why they matter. At most \(Self.maxNote) characters."),
-                "related_to": AgentSchema.strings("Ids of marks this one is about, e.g. [\"m1\"].")
+                "related_to": AgentSchema.strings(
+                    "Ids of marks this one is about, e.g. [\"m1\"] for the target of a pointer. Give it whenever "
+                    + "there is such a mark.")
             ], required: ["offset", "length", "label"]),
             annotations: AgentTool.Annotations(readOnly: false, idempotent: false)
         ) { call in

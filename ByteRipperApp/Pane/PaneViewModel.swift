@@ -1350,8 +1350,9 @@ final class PaneViewModel: HexViewDataSource {
     /// What the agent said about the byte at `offset` — the innermost mark
     /// holding it — or "" for none.
     func hexAgentMarkTooltip(at offset: UInt64) -> String {
-        agentMarks.filter { $0.range.contains(offset) }
-            .min { $0.range.count < $1.range.count }?.tooltip ?? ""
+        let labels = Dictionary(agentMarks.map { ($0.id, $0.label) }, uniquingKeysWith: { first, _ in first })
+        return agentMarks.filter { $0.range.contains(offset) }
+            .min { $0.range.count < $1.range.count }?.tooltip(labels: labels) ?? ""
     }
 
     func hexZoneSpans(in range: Range<UInt64>) -> [HexZoneSpan] {

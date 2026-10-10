@@ -550,7 +550,7 @@ final class AgentMarksTable: NSObject, NSTableViewDataSource, NSTableViewDelegat
     private(set) var rows: [AgentMarkTools.Located] = []
 
     private enum Column: String, CaseIterable {
-        case id, label, document, range, note, related
+        case id, label, document, range, note
 
         var title: String {
             switch self {
@@ -559,7 +559,6 @@ final class AgentMarksTable: NSObject, NSTableViewDataSource, NSTableViewDelegat
             case .document: return L("File")
             case .range: return L("Bytes")
             case .note: return L("Note")
-            case .related: return L("About")
             }
         }
 
@@ -569,8 +568,7 @@ final class AgentMarksTable: NSObject, NSTableViewDataSource, NSTableViewDelegat
             case .label: return 150
             case .document: return 110
             case .range: return 150
-            case .note: return 220
-            case .related: return 120
+            case .note: return 340
             }
         }
     }
@@ -614,7 +612,7 @@ final class AgentMarksTable: NSObject, NSTableViewDataSource, NSTableViewDelegat
         guard let id = tableColumn?.identifier, let column = Column(rawValue: id.rawValue) else { return nil }
         let cell = AgentTableStyle.cell(in: tableView, id: id, owner: self, digits: column == .range || column == .id)
         cell.textField?.stringValue = text(row: row, column)
-        cell.toolTip = column == .note || column == .related ? cell.textField?.stringValue : nil
+        cell.toolTip = column == .note ? cell.textField?.stringValue : nil
         return cell
     }
 
@@ -631,14 +629,12 @@ final class AgentMarksTable: NSObject, NSTableViewDataSource, NSTableViewDelegat
         case .range:
             let range = located.mark.range
             return String(format: "0x%llX–0x%llX", range.lowerBound, range.upperBound)
-        case .note: return located.mark.note
-        case .related:
-            // Each end of a relation by its id and label, so the pair reads
-            // without looking the other row up.
-            return located.mark.relatedTo.map { id in
-                let label = rows.first { $0.mark.id == id }?.mark.label
-                return label.map { "\(id) \($0)" } ?? id
-            }.joined(separator: ", ")
+        case .note:
+            // The marks this one is about follow the note, each by its id and
+            // label, so the pair reads without looking the other row up.
+            let labels = Dictionary(rows.map { ($0.mark.id, $0.mark.label) }, uniquingKeysWith: { first, _ in first })
+            return [located.mark.note, located.mark.relations(labels: labels)]
+                .filter { !$0.isEmpty }.joined(separator: " ")
         }
     }
 

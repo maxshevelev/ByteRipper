@@ -144,7 +144,8 @@ final class AgentMarkTests: XCTestCase {
         let list = agentWindow.marksList
         XCTAssertEqual(list.shownText(row: 0, column: "label"), "Table")
         XCTAssertEqual(list.shownText(row: 1, column: "range"), "0x20–0x24")
-        XCTAssertEqual(list.shownText(row: 1, column: "related"), "m1 Table")
+        XCTAssertEqual(list.shownText(row: 1, column: "note"), "Related Marks: m1 Table", "the relation follows the note")
+        XCTAssertEqual(pane.hexAgentMarkTooltip(at: 0x20), "Pointer\nRelated Marks: m1 Table")
 
         service.markTools.remove { _ in true }
         XCTAssertTrue(pane.agentMarks.isEmpty)

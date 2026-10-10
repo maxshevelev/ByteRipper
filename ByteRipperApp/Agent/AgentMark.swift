@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// A place an agent marked in a dump and what it said about it
 /// (`Design/AGENT_PLAN.md`, "Marks").
@@ -23,8 +24,17 @@ struct AgentMark: Equatable {
     /// clickable.
     let relatedTo: [String]
 
-    /// What the pointer resting on the bytes shows.
-    var tooltip: String {
-        note.isEmpty ? label : label + "\n" + note
+    /// What the pointer resting on the bytes shows: the label, the note and
+    /// the marks this one is about, named by `labels` where it knows them.
+    func tooltip(labels: [String: String]) -> String {
+        [label, note, relations(labels: labels)].filter { !$0.isEmpty }.joined(separator: "\n")
+    }
+
+    /// "Related Marks: m1 FIT pointer, m3", or "" for a mark about no other — the
+    /// one place a relation reads, in the Agent window and over the dump.
+    func relations(labels: [String: String]) -> String {
+        guard !relatedTo.isEmpty else { return "" }
+        let named = relatedTo.map { id in labels[id].map { "\(id) \($0)" } ?? id }
+        return String(format: L("Related Marks: %1$@"), named.joined(separator: ", "))
     }
 }
