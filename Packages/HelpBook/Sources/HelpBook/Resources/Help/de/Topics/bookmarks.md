@@ -5,7 +5,7 @@
 
 **⌘D** setzt ein Lesezeichen auf der Zeile, auf der die Einfügemarke steht, oder entfernt ein vorhandenes. Der Eintrag im Menü „Bearbeiten“ nennt die jeweilige Aktion: auf einer Zeile ohne Lesezeichen **Bearbeiten ▸ Lesezeichen setzen**, auf einer Zeile mit Lesezeichen **Bearbeiten ▸ Lesezeichen löschen**. Die Adresse einer Zeile mit Lesezeichen wird auf einem violetten Pfeil dargestellt, und die Zeile wird in derselben Farbe am Rand der [[topic:minimap|Minimap]] markiert.
 
-Im Kontextmenü einer Zeile gelten dieselben Befehle für diese Zeile, und ihre Adresse steht im Namen des Eintrags: ohne Lesezeichen *Lesezeichen auf Zeile … setzen*, mit Lesezeichen *Lesezeichen auf Zeile … löschen* und *Lesezeichen bearbeiten…*.
+Das Kontextmenü (Rechtsklick) wirkt auf die angeklickte Zeile und nennt deren Adresse. Hat die Zeile kein Lesezeichen, enthält es *Lesezeichen auf Zeile … setzen*; hat sie eines, enthält es *Lesezeichen auf Zeile … löschen* und *Lesezeichen bearbeiten…*.
 
 - **⇧⌘D** gibt dem Lesezeichen einen Namen oder ändert den vorhandenen. Ein Lesezeichen ohne Namen zeigt seine Adresse.
 - **⌘L** öffnet „Gehe zu“, und die untere Hälfte dieses Fensters ist die Lesezeichenliste: Tab bringt die Tastatur hinein, Return springt zum ausgewählten Lesezeichen.
