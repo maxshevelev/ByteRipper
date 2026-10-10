@@ -111,7 +111,9 @@ final class AgentDumpTools {
             description: """
                 Opens a background document in a new tab — or brings forward the tab that already has the \
                 file — and shows `offset` there, selecting `length` bytes when given. Returns the on-screen \
-                document's id, which replaces the background one. Never opens into a pane that holds a file.
+                document's id, which replaces the background one. Never opens into a pane that holds a file. A tab is a change of context: to look inside a \
+                node or a stretch of a dump that is already on screen, use `open_part`, which opens a panel \
+                in the same window instead.
                 """,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string("The document's id."),

@@ -303,7 +303,8 @@ final class AgentService {
         path without putting it on screen, `survey` asks one tool's question of a whole folder of dumps, and \
         `finding` records each thing found for the person to check with a click. `find_bytes` searches the \
         bytes for a text or a pattern — inside a compressed section with `node` — `uefi_node_data` reads a \
-        node's bytes, and `open_part` opens a stretch as a part of its own. `diff` lists where two \
+        node's bytes, and `open_part` opens a stretch or a node — a compressed one too — as a part of its own, in a \
+        panel over the same window; prefer it to a new tab, which is for changing context or comparing two parts. `diff` lists where two \
         documents differ byte by byte and in which part of the firmware; `compare` shows the two side by \
         side and `reveal_diff` walks the person through the differences. `mark` labels bytes for the \
         person while you explain them, and `related_to` says how two marks hang together. Nothing here \

@@ -244,5 +244,8 @@ decompressed again. `where` is placed by the locators as `diff` places a run; a 
 in a buffer, it is the deepest node under the one searched. `open_part` opens
 as Open Zone (a range) and the UEFI panel's Open (a node) do: a fragment
 panel over the parent's tab, linked, its edits going back with Update in
-Parent — a decompressed node's compressed again. `compare` of a part, which
+Parent — a decompressed node's compressed again. It is the route to look
+into a node, compressed or not: the same window, the parent showing behind.
+A tab is for a change of context or a comparison of two parts (`compare`);
+the web edition, which has no tabs, has only the panel. `compare` of a part, which
 has no file, opens copies in a new tab and says `copies`.

@@ -247,8 +247,12 @@ final class AgentFindTools {
             name: "open_part",
             title: "Open a part",
             description: """
-                Opens a stretch of a document as a part of its own, over its parent's tab — as Open Zone \
-                and the UEFI Structure panel's Open do — and answers its new `document` id. The part's \
+                Opens a stretch of a document as a part of its own, in a fragment panel over its parent's \
+                tab — as Open Zone and the UEFI Structure panel's Open do — and answers its new `document` \
+                id. This is the way to open a node, compressed or not, or any stretch you want to read or \
+                edit: it keeps the person in the window they are in, with the parent showing behind the \
+                panel. A new tab is for switching to another context or for comparing two parts; \
+                `compare` opens one. The part's \
                 addresses start at 0, so two blocks at different addresses of two dumps compare with `diff` \
                 and `compare`; every tool that takes `document` works on it. Give `offset` and `length`, or \
                 `node` (with `part` "all", the default, or "body") for a UEFI node's bytes — a node inside a \
