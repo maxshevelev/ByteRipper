@@ -28,7 +28,7 @@ final class AgentEditTools {
         self.desk = desk
     }
 
-    nonisolated func tools() -> [AgentTool] { [writeTool, copyTool] }
+    nonisolated func tools() -> [AgentTool] { [writeTool, copyTool, updateInParentTool] }
 
     // MARK: - write
 
@@ -179,6 +179,86 @@ final class AgentEditTools {
         answer["undo"] = applied["undo"]
         answer["saved"] = false
         return .json(.object(answer))
+    }
+
+    // MARK: - update_in_parent
+
+    private nonisolated var updateInParentTool: AgentTool {
+        AgentTool(
+            name: "update_in_parent",
+            title: "Update in Parent",
+            description: """
+                Puts a part's bytes back into the document it was opened from — File ▸ Update in Parent. \
+                The part's codec says how: a copy goes back as it is, a decompressed body is compressed again \
+                and the image laid out around it, a decoded block is encoded again with its checksum. One undo \
+                step in the parent; the parent's bytes show red until the person saves, and the parent is \
+                shown where they landed. A part with nothing new answers `updated: false`. Refused, with \
+                nothing written: when the parent is closed or read-only; when the codec cannot put the bytes \
+                back (a part whose length changed, a body that no longer fits once compressed — the answer \
+                gives the codec's reason); when the parent changed while the update was worked out (call \
+                again); and when the bytes the part came from have changed in the parent since it was \
+                opened — then ask the person, and call again with `overwrite_changed_source: true` only if \
+                they agree. Needs the person's permission — Settings ▸ Agent, "Let agents edit open files". \
+                Never saves.
+                """,
+            inputSchema: AgentSchema.object([
+                "document": AgentSchema.string("The part's id from `documents`. Default: the focused one."),
+                "overwrite_changed_source": AgentSchema.boolean(
+                    "Overwrite the parent's bytes even though they changed since the part was opened. "
+                    + "Only after the person said so. Default false.")
+            ]),
+            annotations: .edit
+        ) { call in
+            try await self.updateInParent(call.arguments)
+        }
+    }
+
+    private func updateInParent(_ arguments: AgentArguments) async throws -> AgentAnswer {
+        let place = try resolve(arguments.optionalString("document"))
+        let controller = try place.onScreen()
+        guard let origin = place.pane.origin else {
+            throw AgentToolError("\(place.id) is not a part, so it has no parent to go back into. "
+                + "`open_part` opens a part; `documents` lists which documents are parts.")
+        }
+        guard isAllowed() else {
+            throw AgentToolError("Editing is switched off. The person allows it in ByteRipper's Settings ▸ Agent, "
+                + "\"Let agents edit open files\". Say what you would put back instead.")
+        }
+        let parentID = origin.parent?.document.map { desk.id(of: $0) }
+        let parentName = parentID ?? "the parent"
+        if let window = controller.view.window, window.attachedSheet != nil {
+            throw AgentToolError("A dialog is open in that window. Ask the person to finish it first. Nothing was written.")
+        }
+        let overwrite = try arguments.bool("overwrite_changed_source", default: false)
+        let sourceBefore = origin.sourceRange
+        var answer: [String: JSONValue] = ["document": .string(place.id)]
+        if let parentID { answer["parent"] = .string(parentID) }
+        switch await controller.updateInParentQuietly(of: place.pane, overwritingChangedSource: overwrite) {
+        case .unchanged:
+            answer["updated"] = false
+            answer["note"] = .string("The part holds nothing \(parentName) has not got back already; nothing was written.")
+            return .json(.object(answer))
+        case .refused(let title, let message):
+            throw AgentToolError("\(title). \(message) Nothing was written.")
+        case .sourceChanged:
+            throw AgentToolError("The bytes \(place.id) was opened from (\(AgentHostTools.hexText(sourceBefore.lowerBound))–"
+                + "\(AgentHostTools.hexText(sourceBefore.upperBound)) in \(parentName)) have changed there since. "
+                + "Updating would overwrite those changes. Nothing was written. Ask the person; call again with "
+                + "`overwrite_changed_source: true` only if they agree.")
+        case .parentChanged:
+            throw AgentToolError("\(parentName) changed while the update was being worked out. Nothing was written; "
+                + "call again to work it out over its bytes as they are now.")
+        case .writeFailed(let reason):
+            throw AgentToolError("Could not write into \(parentName): \(reason). Nothing was written.")
+        case .updated(let update):
+            answer["updated"] = true
+            answer["written"] = AgentHostTools.range(update.offset..<(update.offset + UInt64(update.bytes.count)))
+            answer["source"] = AgentHostTools.range(update.source)
+            if !update.notes.isEmpty { answer["notes"] = .array(update.notes.map { JSONValue.string($0) }) }
+            answer["undo"] = .string(L("Update from %1$@", place.pane.status.fileName))
+            answer["saved"] = false
+            return .json(.object(answer))
+        }
     }
 
     // MARK: - Applying

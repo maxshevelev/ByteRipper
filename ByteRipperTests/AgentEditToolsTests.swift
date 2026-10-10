@@ -79,11 +79,107 @@ final class AgentEditToolsTests: XCTestCase {
 
     func testTheEditToolsAreListedAsEdits() throws {
         let tools = Dictionary(uniqueKeysWithValues: service.server.tools.map { ($0.name, $0) })
-        for name in ["write", "copy_to_other_pane", "uefi_fix_checksum", "fit_fix_checksum"] {
+        for name in ["write", "copy_to_other_pane", "update_in_parent", "uefi_fix_checksum", "fit_fix_checksum"] {
             let tool = try XCTUnwrap(tools[name], name)
             XCTAssertEqual(tool.annotations, .edit, name)
             XCTAssertNotNil(tool.inputSchema["properties"]?["document"], name)
         }
+    }
+
+    // MARK: - update_in_parent
+
+    /// A part edited and put back: the parent gets the bytes as one undo step;
+    /// asked again, there is nothing new to put back.
+    func testAPartGoesBackIntoItsParent() async throws {
+        let parent = try open([UInt8](repeating: 0, count: 0x1000))
+        service.editsAllowed = true
+        let part = try await client.answer("open_part", ["offset": "0x800", "length": "0x100"])
+        let id = try XCTUnwrap(part["document"])
+        _ = try await client.answer("write", ["document": id, "offset": "0x10", "bytes": "DEADBEEF", "label": "t"])
+        let updated = try await client.answer("update_in_parent", ["document": id])
+        XCTAssertEqual(updated["updated"], true)
+        XCTAssertEqual(updated["parent"], "d1")
+        XCTAssertEqual(updated["saved"], false)
+        XCTAssertEqual(try bytes(parent, 0x810..<0x814), [0xDE, 0xAD, 0xBE, 0xEF])
+        XCTAssertTrue(parent.status.isDirty)
+
+        let again = try await client.answer("update_in_parent", ["document": id])
+        XCTAssertEqual(again["updated"], false, "nothing new")
+    }
+
+    /// A decompressed body goes back compressed: the file then holds the
+    /// change only inside the section, and the section reads it.
+    func testADecompressedPartGoesBackCompressed() async throws {
+        let parent = try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        service.editsAllowed = true
+        let found = try await client.answer("uefi_find", ["type": "Section", "limit": 50])
+        let section = try XCTUnwrap(found["matches"]?.arrayValue?.first { $0["subtype"] == "Compressed section" }?["id"])
+        let part = try await client.answer("open_part", ["node": section, "part": "decompressed"])
+        let id = try XCTUnwrap(part["document"])
+        let at = try await client.answer("find_bytes", ["document": id, "text": "GH51G"])
+        let start = try XCTUnwrap(at["matches"]?.arrayValue?.first?["start"])
+        _ = try await client.answer("write", ["document": id, "offset": start, "bytes": "58593939 5A", "label": "t"])
+
+        let updated = try await client.answer("update_in_parent", ["document": id])
+        XCTAssertEqual(updated["updated"], true, "\(updated)")
+        XCTAssertTrue(parent.status.isDirty)
+        let inFile = try await client.answer("find_bytes", ["document": "d1", "text": "XY99Z"])
+        XCTAssertEqual(inFile["total"], 0, "the file holds it compressed")
+        let inSection = try await client.answer("find_bytes", ["document": "d1", "node": section, "text": "XY99Z"])
+        XCTAssertEqual(inSection["total"], 1, "the section decompresses to the change")
+    }
+
+    /// Bytes changed in the parent since the part was opened are not
+    /// overwritten unless the call says so.
+    func testAChangedSourceIsOverwrittenOnlyWhenAsked() async throws {
+        let parent = try open([UInt8](repeating: 0, count: 0x1000))
+        service.editsAllowed = true
+        let part = try await client.answer("open_part", ["offset": "0x800", "length": "0x100"])
+        let id = try XCTUnwrap(part["document"])
+        _ = try await client.answer("write", ["document": "d1", "offset": "0x880", "bytes": "11", "label": "t"])
+        _ = try await client.answer("write", ["document": id, "offset": "0x0", "bytes": "22", "label": "t"])
+
+        let refused = try await client.call("update_in_parent", ["document": id])
+        XCTAssertTrue(refused.isError)
+        XCTAssertTrue(refused.answer.stringValue?.contains("overwrite_changed_source") == true, "\(refused.answer)")
+        XCTAssertEqual(try bytes(parent, 0x800..<0x801), [0x00], "nothing written")
+
+        let updated = try await client.answer("update_in_parent", ["document": id, "overwrite_changed_source": true])
+        XCTAssertEqual(updated["updated"], true)
+        XCTAssertEqual(try bytes(parent, 0x800..<0x801), [0x22])
+        XCTAssertEqual(try bytes(parent, 0x880..<0x881), [0x00], "the part's bytes, over the parent's change")
+    }
+
+    /// What has no parent, may not be changed, or cannot be put back is
+    /// refused, and nothing is written.
+    func testWhatCannotGoBackIsRefused() async throws {
+        let parent = try open([UInt8](repeating: 0, count: 0x1000))
+        let notPart = try await client.call("update_in_parent", ["document": "d1"])
+        XCTAssertTrue(notPart.answer.stringValue?.contains("is not a part") == true, "\(notPart.answer)")
+
+        let part = try await client.answer("open_part", ["offset": "0x800", "length": "0x100"])
+        let id = try XCTUnwrap(part["document"])
+        let switchedOff = try await client.call("update_in_parent", ["document": id])
+        XCTAssertTrue(switchedOff.answer.stringValue?.contains("Editing is switched off") == true)
+
+        service.editsAllowed = true
+        _ = try await client.answer("write", ["document": id, "offset": "0x0", "bytes": "22", "label": "t"])
+        parent.close()
+        let closed = try await client.call("update_in_parent", ["document": id])
+        XCTAssertTrue(closed.isError, "\(closed.answer)")
+        XCTAssertTrue(closed.answer.stringValue?.contains("is no longer open") == true, "\(closed.answer)")
+    }
+
+    /// A read-only parent cannot take the part back.
+    func testAReadOnlyParentIsRefused() async throws {
+        try open([UInt8](repeating: 0, count: 0x1000), readOnly: true)
+        service.editsAllowed = true
+        let part = try await client.answer("open_part", ["offset": "0x800", "length": "0x100"])
+        let id = try XCTUnwrap(part["document"])
+        _ = try await client.answer("write", ["document": id, "offset": "0x0", "bytes": "22", "label": "t"])
+        let refused = try await client.call("update_in_parent", ["document": id])
+        XCTAssertTrue(refused.isError)
+        XCTAssertTrue(refused.answer.stringValue?.contains("Nothing was written") == true, "\(refused.answer)")
     }
 
     /// Two files side by side in one tab, A first; B read-only when asked.

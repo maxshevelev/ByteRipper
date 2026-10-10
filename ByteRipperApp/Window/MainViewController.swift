@@ -2363,20 +2363,14 @@ final class MainViewController: NSViewController {
         for origin: DocumentOrigin, content: any PartReader, tabBytes: [UInt8],
         named stepName: String, on window: NSWindow?
     ) {
-        // What the source will be once the run is written: the parent as it is,
-        // with the run laid over it. The file never changes length.
-        guard var source = try? content.read(update.source) else { return }
-        let run = update.offset..<(update.offset + UInt64(update.bytes.count))
-        let overlap = max(run.lowerBound, update.source.lowerBound)..<min(run.upperBound, update.source.upperBound)
-        if !overlap.isEmpty {
-            source.replaceSubrange(
-                Int(overlap.lowerBound - update.source.lowerBound)..<Int(overlap.upperBound - update.source.lowerBound),
-                with: update.bytes[Int(overlap.lowerBound - run.lowerBound)..<Int(overlap.upperBound - run.lowerBound)])
+        do {
+            guard try landUpdate(update, into: parent, for: origin, content: content,
+                                 tabBytes: tabBytes, named: stepName) else { return }
+        } catch {
+            presentFileError(L("Could not update “%1$@”.", origin.parentName), error,
+                             url: parent.document?.url)
+            return
         }
-        guard writeUpdate(update.bytes, at: update.offset, into: parent, for: origin,
-                          tabBytes: tabBytes, sourceBytes: source,
-                          sourceRange: update.source, named: stepName)
-        else { return }
         revealUpdateDestination(from: pane, to: parent)
         presentSheetAlert(
             title: L("Updated “%1$@”", origin.parentName),
@@ -2384,6 +2378,100 @@ final class MainViewController: NSViewController {
             on: window ?? (Self.controller(holding: parent, among: openDocuments?.controllers ?? [])
                            ?? self).view.window,
             outcome: .success)
+    }
+
+    /// Writes an update the codec worked out into the parent. False when the
+    /// parent's bytes could not be read to work out what the source becomes;
+    /// throws when the write itself fails, with the link as it was.
+    private func landUpdate(
+        _ update: PartUpdate, into parent: PaneViewModel, for origin: DocumentOrigin,
+        content: any PartReader, tabBytes: [UInt8], named stepName: String
+    ) throws -> Bool {
+        // What the source will be once the run is written: the parent as it is,
+        // with the run laid over it. The file never changes length.
+        guard var source = try? content.read(update.source) else { return false }
+        let run = update.offset..<(update.offset + UInt64(update.bytes.count))
+        let overlap = max(run.lowerBound, update.source.lowerBound)..<min(run.upperBound, update.source.upperBound)
+        if !overlap.isEmpty {
+            source.replaceSubrange(
+                Int(overlap.lowerBound - update.source.lowerBound)..<Int(overlap.upperBound - update.source.lowerBound),
+                with: update.bytes[Int(overlap.lowerBound - run.lowerBound)..<Int(overlap.upperBound - run.lowerBound)])
+        }
+        try writeUpdate(update.bytes, at: update.offset, into: parent, for: origin,
+                        tabBytes: tabBytes, sourceBytes: source, sourceRange: update.source, named: stepName)
+        return true
+    }
+
+    /// What Update in Parent came to, for a caller that asks no questions and
+    /// shows no dialogs — the agent: every case the menu command answers with
+    /// an alert is a value here.
+    enum QuietUpdateOutcome {
+        /// The part holds nothing the parent has not got back.
+        case unchanged
+        /// It cannot go back: the parent is closed or read-only, or the codec
+        /// refused — in the codec's words.
+        case refused(title: String, message: String)
+        /// The source changed in the parent since the part was opened; going
+        /// back would overwrite that, and it was not allowed to.
+        case sourceChanged
+        /// The parent changed while the update was worked out; nothing was written.
+        case parentChanged
+        /// The write itself failed; nothing was written.
+        case writeFailed(String)
+        case updated(PartUpdate)
+    }
+
+    /// Update in Parent with no questions and no dialogs: what the menu command
+    /// does, the answers handed back instead of shown. `overwritingChangedSource`
+    /// is the answer to the one question the command asks. The parent's tab is
+    /// brought forward to show where the bytes landed, as the command does.
+    func updateInParentQuietly(of pane: PaneViewModel,
+                               overwritingChangedSource: Bool) async -> QuietUpdateOutcome {
+        guard let origin = pane.origin, origin.hasChanges(in: pane) else { return .unchanged }
+        switch origin.planUpdate(from: pane) {
+        case .refused(let title, let message):
+            return .refused(title: title, message: message)
+        case .encode(let codec, let bytes, let confirm):
+            guard let parent = origin.parent, let document = parent.document,
+                  let content = try? DocumentPartReader(document: document) else {
+                return .refused(title: L("The parent is closed"),
+                                message: L("“%1$@” is no longer open, so there is nothing to put “%2$@” back into.",
+                                           origin.parentName, origin.partName))
+            }
+            if confirm, !overwritingChangedSource { return .sourceChanged }
+            let partParent = PartParent(content: content, source: origin.sourceRange,
+                                        name: origin.parentName, partName: origin.partName)
+            let generation = parent.contentGeneration
+            let result: Result<PartUpdate, Error>
+            if codec.isImmediate {
+                result = Result { try codec.encode(bytes, into: partParent) }
+            } else {
+                result = await Task.detached(priority: .userInitiated) {
+                    Result { try codec.encode(bytes, into: partParent) }
+                }.value
+            }
+            switch result {
+            case .failure(let error):
+                let refusal = error as? PartRefusal
+                return .refused(title: refusal?.title ?? L("“%1$@” cannot be put back", origin.partName),
+                                message: refusal?.message ?? "\(error)")
+            case .success(let update):
+                // Worked out over the bytes as they were when asked.
+                guard parent.contentGeneration == generation, parent.document === document else {
+                    return .parentChanged
+                }
+                do {
+                    guard try landUpdate(update, into: parent, for: origin, content: content, tabBytes: bytes,
+                                         named: L("Update from %1$@", pane.status.fileName)) else {
+                        return .writeFailed(L("The tab could not be read"))
+                    }
+                } catch {
+                    return .writeFailed(error.localizedDescription)
+                }
+                revealUpdateDestination(from: pane, to: parent)
+                return .updated(update)
+            }
+        }
     }
 
     /// Why a part did not go back, in the codec's words.
@@ -2438,17 +2526,14 @@ final class MainViewController: NSViewController {
     private func writeUpdate(
         _ bytes: [UInt8], at offset: UInt64, into parent: PaneViewModel, for origin: DocumentOrigin,
         tabBytes: [UInt8], sourceBytes: [UInt8], sourceRange: Range<UInt64>, named name: String
-    ) -> Bool {
+    ) throws {
         let snapshot = origin.adopt(tabBytes: tabBytes, sourceBytes: sourceBytes, sourceRange: sourceRange)
-        guard !bytes.isEmpty else { return true }
+        guard !bytes.isEmpty else { return }
         do {
             try parent.applyToolWrites([(offset: offset, bytes: bytes)], named: name)
-            return true
         } catch {
             origin.restore(snapshot)
-            presentFileError(L("Could not update “%1$@”.", origin.parentName), error,
-                             url: parent.document?.url)
-            return false
+            throw error
         }
     }
 
