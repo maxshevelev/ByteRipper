@@ -297,7 +297,9 @@ final class AgentService {
         `focus` for what the person is looking at; when they say "this" or "here", `focus` is what they \
         mean. Addresses and sizes are hex strings such as "0x7F3000" in every answer and may be given \
         back the same way. Ranges are half-open: `end` is the first byte after the range. A tool refuses an \
-        argument it does not take and names the ones it does. A list comes in \
+        argument it does not take and names the ones it does — to see whether a client passes arguments on, \
+        call a reading tool such as `documents` with one it does not take; do not try it on `open_part`, which \
+        opens a panel when it is let through. A list comes in \
         pages: `limit` is a ceiling, a page also stops before the answer passes the size bound and says \
         `truncated: "size"`, and `next`, passed back as `after`, goes on until it is null. Use `reveal` \
         to point at what you are talking about; the person's Back undoes it. `open_dump` reads a file by \
@@ -306,7 +308,9 @@ final class AgentService {
         bytes for a text or a pattern — inside a compressed section with `node` — `uefi_node_data` reads a \
         node's bytes, and `open_part` opens a stretch or a node — a compressed one too, or a Lenovo LENV block \
         decoded with `part: "decoded"` — as a part of its own, in a panel over the same window; prefer it to a \
-        new tab, which is for changing context or comparing two parts. \
+        new tab, which is for changing context or comparing two parts. Asking again for a part that is open \
+        raises its panel (`reused: true`); a new part takes the focus, and its tree has ids of its own, so name the \
+        `document` a node id was listed on. \
         A part is a document to every tool, and `update_in_parent` puts its bytes back. `diff` lists where two \
         documents differ byte by byte and in which part of the firmware; `compare` shows the two side by \
         side and `reveal_diff` walks the person through the differences. `mark` labels bytes for the \

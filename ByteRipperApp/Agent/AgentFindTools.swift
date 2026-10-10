@@ -262,7 +262,12 @@ final class AgentFindTools {
                 entries) decoded, its XOR encoding removed. The part stays linked: edits to it stay \
                 in it until the person puts them back with Update in Parent, which for a decompressed node \
                 compresses them again. The answer says which `part` opened, and a LENV block opened \
-                without "decoded" comes with a `hint`. The parent must be on screen (`show` puts a background dump there). \
+                without "decoded" comes with a `hint`. Asking again for a part that is already open \
+                raises its panel and answers `reused: true` with its `document` — not a second copy. \
+                The new part takes the focus, so a call that leaves out `document` now goes to the part, \
+                and a node id belongs to the document it was listed on, the parent: give `document` \
+                (the `parent` of the answer) when you go on with that node. A part has its own tree, \
+                with its own ids: the parent's 0.3.4.1.2.5 is 0.0.5 in the decoded block. The parent must be on screen (`show` puts a background dump there). \
                 Closes with `close_dump` or by the person.
                 """,
             inputSchema: AgentSchema.object([
@@ -302,13 +307,17 @@ final class AgentFindTools {
                 let name = which == "decompressed"
                     ? try Self.decompressedPart(found, in: image, fileName: place.pane.status.fileName)
                     : try Self.decodedPart(found, in: image)
-                opening = controller.openPart(named: named ?? name.name, from: place.pane, source: name.source,
-                                              layout: name.layout, codec: name.codec)
                 answer["node"] = .string(found.node.id.description)
                 answer["part"] = .string(which)
                 answer["in_compressed"] = .bool(which == "decompressed")
                 answer["source"] = AgentHostTools.range(name.source)
                 answer["size"] = AgentHostTools.hex(name.size)
+                if let reused = reusedPart(controller, place, source: name.source, layout: name.layout,
+                                           codec: name.codec, defaultName: name.name) {
+                    return reuse(reused, controller: controller, answer: answer)
+                }
+                opening = controller.openPart(named: named ?? name.name, from: place.pane, source: name.source,
+                                              layout: name.layout, codec: name.codec)
                 return try await finishOpening(opening, controller: controller, place: place, before: before, answer: answer)
             }
             guard let open = UEFIPresenter.nodeOpen(for: found.node, in: image, body: body) else {
@@ -327,8 +336,7 @@ final class AgentFindTools {
                     compression: UEFIPresenter.compressionName(of: open.space, in: image),
                     readers: found.tree.spaceReaders)
             }
-            opening = controller.openPart(named: named ?? open.partName(fileName: place.pane.status.fileName),
-                                          from: place.pane, source: open.source, layout: open.layout, codec: codec)
+            let defaultName = open.partName(fileName: place.pane.status.fileName)
             answer["node"] = .string(found.node.id.description)
             answer["part"] = .string(which)
             answer["in_compressed"] = .bool(open.space != .file)
@@ -341,6 +349,12 @@ final class AgentFindTools {
                 answer["hint"] = .string("A Lenovo LENV block: its bytes are XOR-encoded as they are in the file. "
                     + "part: \"decoded\" opens it decoded.")
             }
+            if let reused = reusedPart(controller, place, source: open.source, layout: open.layout,
+                                       codec: codec, defaultName: defaultName) {
+                return reuse(reused, controller: controller, answer: answer)
+            }
+            opening = controller.openPart(named: named ?? defaultName,
+                                          from: place.pane, source: open.source, layout: open.layout, codec: codec)
         } else {
             guard arguments.has("offset"), arguments.has("length") else {
                 throw AgentToolError("Give `offset` and `length`, or `node`.")
@@ -363,11 +377,45 @@ final class AgentFindTools {
                 .flatMap { UEFIRebuild.target(forFileRange: source, in: $0) }
                 .map { UEFIPartCodec(target: $0) }
                 ?? CopyPartCodec()
-            opening = controller.openPart(named: name, from: place.pane, source: source, layout: layout, codec: codec)
             answer["source"] = AgentHostTools.range(source)
             answer["size"] = AgentHostTools.hex(length)
+            let defaultName = "\(stem)_\(AgentHostTools.hexText(offset))-\(AgentHostTools.hexText(source.upperBound))"
+            if let reused = reusedPart(controller, place, source: source, layout: layout,
+                                       codec: codec, defaultName: defaultName) {
+                return reuse(reused, controller: controller, answer: answer)
+            }
+            opening = controller.openPart(named: name, from: place.pane, source: source, layout: layout, codec: codec)
         }
         return try await finishOpening(opening, controller: controller, place: place, before: before, answer: answer)
+    }
+
+    /// The panel of `place` that already holds this part, if one does: the same
+    /// bytes of the parent, read the same way, under the name it would be given.
+    /// A second call for the same part raises that panel instead of opening a
+    /// copy beside it — a copy the reader has to close, and edits that would
+    /// then be in one of two places.
+    private func reusedPart(_ controller: MainViewController, _ place: AgentDesk.Place, source: Range<UInt64>,
+                            layout: UEFIRootLayout, codec: any PartCodec, defaultName: String)
+        -> (id: FragmentDock.PanelID, pane: PaneViewModel)? {
+        let partName = MainViewController.partName(ofTab: defaultName, parent: place.pane.status.fileName)
+        for id in controller.fragments.panelsLinked(to: place.pane) {
+            guard let pane = controller.fragments.pane(id), let origin = pane.origin,
+                  origin.sourceRange == source, origin.layout == layout,
+                  type(of: origin.codec) == type(of: codec), origin.partName == partName
+            else { continue }
+            return (id, pane)
+        }
+        return nil
+    }
+
+    private func reuse(_ part: (id: FragmentDock.PanelID, pane: PaneViewModel), controller: MainViewController,
+                       answer: [String: JSONValue]) -> AgentAnswer {
+        var answer = answer
+        controller.fragments.expand(part.id)
+        answer["reused"] = true
+        answer["document"] = part.pane.document.map { .string(desk.id(of: $0)) } ?? .null
+        answer["name"] = .string(part.pane.status.fileName)
+        return .json(.object(answer))
     }
 
     /// What a part is opened as, before it is: its name, the bytes of the

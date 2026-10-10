@@ -39,7 +39,9 @@ public enum UEFIAgentQueries {
             children of `node` on one page, a ceiling — a page also stops before the answer passes the size \
             bound and then says `truncated: "size"`; pass `next` back as `after` until it is null. A child \
             whose levels below are too large alone comes without them, marked `truncated: "item"`; ask for \
-            it as `node`.
+            it as `node`. Ids belong to the document they were listed on: a part opened with `open_part` has \
+            a tree of its own, with ids that start over (the parent's 0.3.4.1.2.5 is 0.0.5 in the \
+            decoded block), so give the `document` the id came from.
             """,
         properties: [
             "node": AgentSchema.string("A node id such as \"0.2.5\" from an earlier answer. Default: the top."),
@@ -340,7 +342,9 @@ public enum UEFIAgentQueries {
     }
 
     public static func unknownNode(_ id: NodeID) -> AgentToolError {
-        AgentToolError("No node \(id.description) in this image. Ids come from `uefi_tree`, `uefi_find` or `uefi_at` on the same document.")
+        AgentToolError("No node \(id.description) in this image. Ids come from `uefi_tree`, `uefi_find` or `uefi_at` on the same document: "
+            + "a part opened with `open_part` has its own tree and its own ids, and a call that leaves out `document` goes to the focused one — "
+            + "the part, after `open_part` — so give the `document` the id was listed on.")
     }
 
     static func merged(_ value: JSONValue, _ more: [String: JSONValue]) -> JSONValue {

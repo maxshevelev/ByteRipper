@@ -87,7 +87,8 @@ public enum UEFIToolModule: ToolModule {
             Chooses a node in the open UEFI Structure panel, as a click would: the tree opens down to it \
             and selects it, the detail shows its fields, and the dump scrolls to its bytes with them \
             outlined. A step of the navigation history, so the person's Back returns. Needs the panel open \
-            in the document's tab — `open_panel` opens it.
+            in the document's tab — `open_panel` opens it. The id is the one listed on the document the call \
+            goes to: a part has its own ids, not its parent's.
             """,
         properties: ["node": AgentSchema.string("The node's id, e.g. \"0.2.5\".")],
         required: ["node"],

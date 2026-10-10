@@ -215,6 +215,32 @@ final class AgentFindToolsTests: XCTestCase {
         XCTAssertEqual(walked["start"], "0x10")
     }
 
+    /// Asking again for a part that is open raises its panel, and answers with
+    /// it: no copy beside it. Another way of opening the same bytes is another
+    /// part.
+    func testAskingAgainForAnOpenPartReusesItsPanel() async throws {
+        let controller = try open(LenovoTestImage.make())
+        let at = try await client.answer("uefi_at", ["offset": .string(String(format: "0x%X", LenovoTestImage.serialInBlock2))])
+        let entry = try XCTUnwrap(at["chain"]?.arrayValue?.last?["id"]?.stringValue, "\(at)")
+        let first = try await client.answer("open_part", ["node": .string(entry), "part": "decoded"])
+        XCTAssertNil(first["reused"])
+        let again = try await client.answer("open_part", ["document": "d1", "node": .string(entry), "part": "decoded"])
+        XCTAssertEqual(again["reused"], true)
+        XCTAssertEqual(again["document"], first["document"])
+        XCTAssertEqual(controller.fragments.panelsLinked(to: controller.windowModel.pane1).count, 1, "one panel, not two")
+
+        let raw = try await client.answer("open_part", ["document": "d1", "node": .string(entry)])
+        XCTAssertNil(raw["reused"], "the encoded bytes are another part")
+        XCTAssertNotEqual(raw["document"], first["document"])
+        XCTAssertEqual(controller.fragments.panelsLinked(to: controller.windowModel.pane1).count, 2)
+
+        let stretch = try await client.answer("open_part", ["document": "d1", "offset": "0x800", "length": "0x100"])
+        let sameStretch = try await client.answer("open_part", ["document": "d1", "offset": "0x800", "length": "0x100"])
+        XCTAssertEqual(sameStretch["reused"], true)
+        XCTAssertEqual(sameStretch["document"], stretch["document"])
+        XCTAssertEqual(controller.fragments.panelsLinked(to: controller.windowModel.pane1).count, 3)
+    }
+
     /// What a compressed section decompresses to opens as a part, in a panel
     /// over the same window — not a tab — and goes back compressed.
     func testACompressedSectionOpensDecompressedInAPanel() async throws {
