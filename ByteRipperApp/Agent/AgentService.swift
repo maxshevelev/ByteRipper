@@ -76,6 +76,12 @@ final class AgentService {
 
     private var listener: UnixSocketListener?
     private var connections: [ObjectIdentifier: UnixSocketConnection] = [:]
+    /// The connections whose client has sent a message. A socket alone is
+    /// not an agent: Claude Desktop, starting its servers, launches the relay,
+    /// abandons it a second later for a fresh one, and leaves the first
+    /// running with its pipes open. That relay connects and never speaks,
+    /// and counting it showed two agents where there was one.
+    private var clients: Set<ObjectIdentifier> = []
 
     /// Why the socket could not be opened, when it could not — another copy
     /// of the app holds it, the folder cannot be written. Nil while running
@@ -125,7 +131,16 @@ final class AgentService {
     }
 
     var isRunning: Bool { listener != nil }
-    var connectionCount: Int { connections.count }
+    /// The agents connected: the connections whose client has spoken.
+    var connectionCount: Int { clients.count }
+
+    /// The service's picture: three points joined, hollow while no agent is
+    /// connected and filled while one is. One name for every place that shows
+    /// the state — the menu bar and the window's toolbar — so the two cannot
+    /// disagree about it.
+    static func symbolName(connected: Bool) -> String {
+        connected ? "point.3.filled.connected.trianglepath.dotted" : "point.3.connected.trianglepath.dotted"
+    }
 
     /// Opens or closes the socket to match the switch.
     func apply() {
@@ -154,6 +169,7 @@ final class AgentService {
         listener = nil
         for socket in connections.values { socket.close() }
         connections.removeAll()
+        clients.removeAll()
         // Nobody is left to ask about them, and each holds a parsed image.
         desk.background.closeAll()
         failure = nil
@@ -169,7 +185,13 @@ final class AgentService {
         }
         let key = ObjectIdentifier(socket)
         connections[key] = socket
-        let connection = connect(send: { socket.write($0) })
+        let connection = connect(send: { socket.write($0) }, onFirstMessage: { [weak self] in
+            Task { @MainActor in
+                guard let self, self.connections[key] != nil else { return }
+                self.clients.insert(key)
+                self.changed()
+            }
+        })
         // One consumer, in order: the chunks of a stream must reach the
         // framer in the order they were read.
         let (chunks, feed) = AsyncStream<Data>.makeStream()
@@ -181,6 +203,7 @@ final class AgentService {
             feed.finish()
             Task { @MainActor in
                 self?.connections[key] = nil
+                self?.clients.remove(key)
                 self?.changed()
             }
         })
@@ -189,10 +212,11 @@ final class AgentService {
 
     /// A connection to the service over whatever carries the bytes — the
     /// socket, or a test's own pipe.
-    func connect(send: @escaping @Sendable (Data) -> Void) -> AgentConnection {
+    func connect(send: @escaping @Sendable (Data) -> Void,
+                 onFirstMessage: @escaping @Sendable () -> Void = {}) -> AgentConnection {
         AgentConnection(server: server, send: send, observer: { [weak self] record in
             Task { @MainActor in self?.record(record) }
-        })
+        }, onFirstMessage: onFirstMessage)
     }
 
     private func record(_ record: AgentCallRecord) {

@@ -275,6 +275,52 @@ final class AgentServiceTests: XCTestCase {
         service.isEnabled = false
         XCTAssertFalse(FileManager.default.fileExists(atPath: service.socketPath))
     }
+
+    /// A socket that never says a word is not an agent. Claude Desktop starts
+    /// the relay, abandons it a second later for a fresh one and leaves the
+    /// first connected; counting sockets showed two agents where there was
+    /// one.
+    func testASilentConnectionIsNotCountedAsAnAgent() async throws {
+        service.isEnabled = true
+        XCTAssertTrue(service.isRunning, service.failure ?? "")
+        defer { service.isEnabled = false }
+
+        let silent = try UnixSocket.connect(to: service.socketPath)
+        defer { close(silent) }
+        let talking = try UnixSocket.connect(to: service.socketPath)
+        defer { close(talking) }
+        let hello = #"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"socket-test","version":"1"}}}"#
+        XCTAssertTrue(UnixSocket.writeAll(talking, Data((hello + "\n").utf8)))
+
+        let counted = await awaitUntil(2) { self.service.connectionCount == 1 }
+        XCTAssertTrue(counted, "the client that spoke is one agent")
+        _ = await awaitUntil(0.5) { self.service.connectionCount > 1 }
+        XCTAssertEqual(service.connectionCount, 1, "the silent socket is not an agent")
+    }
+
+    /// The menu bar's mark changes when an agent connects: the filled glyph,
+    /// and no longer dimmed.
+    func testTheMenuBarMarkFillsWhenAnAgentConnects() async throws {
+        service.isEnabled = true
+        defer { service.isEnabled = false }
+        let mark = AgentStatusItem(service: service, showWindow: {}, showSettings: {})
+        XCTAssertTrue(mark.isShown)
+        XCTAssertFalse(mark.imageForTesting?.description.contains("point.3.filled") ?? true,
+                       "\(String(describing: mark.imageForTesting))")
+        XCTAssertTrue(mark.isDimmedForTesting)
+
+        let fd = try UnixSocket.connect(to: service.socketPath)
+        defer { close(fd) }
+        let hello = #"{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"socket-test","version":"1"}}}"#
+        XCTAssertTrue(UnixSocket.writeAll(fd, Data((hello + "\n").utf8)))
+        let counted = await awaitUntil(2) { self.service.connectionCount == 1 }
+        XCTAssertTrue(counted)
+        _ = await awaitUntil(0.3) { false }
+
+        XCTAssertTrue(mark.imageForTesting?.description.contains("point.3.filled") ?? false,
+                      "\(String(describing: mark.imageForTesting))")
+        XCTAssertFalse(mark.isDimmedForTesting)
+    }
 }
 
 /// Lines read off a socket on another thread.

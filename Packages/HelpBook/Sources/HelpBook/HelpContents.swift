@@ -57,15 +57,15 @@ public enum HelpContents {
             .databases,
             .provenance
         ]),
+        ("agent", [
+            .agent
+        ]),
         ("bench", [
             .recipeDonor,
             .recipeBoardData,
             .recipeMECheck,
             .recipeMicrocode,
             .recipeChecksums
-        ]),
-        ("agent", [
-            .agent
         ]),
         ("settings", [
             .settings

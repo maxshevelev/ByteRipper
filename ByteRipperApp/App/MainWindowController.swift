@@ -479,11 +479,12 @@ final class MainWindowController: NSWindowController {
     /// No target and no action: this is the one item with nothing to validate,
     /// since the book is there whatever the window holds.
     /// Window ▸ Agent: opens the Agent window, or brings it forward when it
-    /// is open already. The icon is the Agent tab's in Settings.
+    /// is open already. The icon is the Agent tab's in Settings, filled while
+    /// an agent is connected (`MainViewController.syncAgentToolbarItem`).
     // help: toolbar.agent
     private func makeAgentWindowItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .agentWindow)
-        item.image = NSImage(systemSymbolName: "point.3.connected.trianglepath.dotted",
+        item.image = NSImage(systemSymbolName: AgentService.symbolName(connected: false),
                              accessibilityDescription: L("Agent"))
         item.label = L("Agent")
         item.paletteLabel = L("Agent")
