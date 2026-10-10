@@ -271,7 +271,8 @@ final class AgentConnectionTests: XCTestCase {
     /// starts, as running, and again under the same id when it ends.
     func testACallIsReportedWhenItStartsAndAgainWhenItEnds() async throws {
         let gate = Gate()
-        let slow = AgentTool(name: "slow", description: "Waits.") { _ in
+        let slow = AgentTool(name: "slow", description: "Waits.",
+                             inputSchema: AgentSchema.object(["n": AgentSchema.integer("Anything.")])) { _ in
             await gate.wait()
             return .text("done")
         }

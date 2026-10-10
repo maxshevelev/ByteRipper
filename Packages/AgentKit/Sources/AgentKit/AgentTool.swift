@@ -35,7 +35,72 @@ public struct AgentTool: Sendable {
         self.description = description
         self.inputSchema = inputSchema
         self.annotations = annotations
-        self.run = run
+        // Every way in — a client's call, `survey` asking on a model's behalf
+        // — meets the same check, so an argument the tool does not take is a
+        // refusal and never a call that silently did something else.
+        self.run = { [name, inputSchema] call in
+            try Self.refuseUnknownArguments(call.arguments, of: name, schema: inputSchema)
+            return try await run(call)
+        }
+    }
+
+    /// Throws when `arguments` names one the schema does not.
+    ///
+    /// The schema says `additionalProperties: false`, but a client may not
+    /// hold a model to it: one that drops what it does not know sends the call
+    /// on without it, and the tool answers as if the argument had never been
+    /// given — `open_part` with `decoded: true` opened the block still encoded,
+    /// and the answer looked like success. The refusal names what the tool
+    /// does take and, when it can tell, what was meant.
+    static func refuseUnknownArguments(_ arguments: AgentArguments, of tool: String, schema: JSONValue) throws {
+        let properties = schema["properties"]?.objectValue ?? [:]
+        let unknown = arguments.values.keys.filter { properties[$0] == nil }.sorted()
+        guard let first = unknown.first else { return }
+        let names = unknown.map { "`\($0)`" }.joined(separator: ", ")
+        var message = "`\(tool)` takes no argument \(names)."
+        if let meant = meaning(of: first, in: properties) {
+            message += " Perhaps \(meant)."
+        }
+        let taken = properties.keys.sorted()
+        message += taken.isEmpty
+            ? " It takes no arguments."
+            : " It takes: \(taken.joined(separator: ", "))."
+        throw AgentToolError(message)
+    }
+
+    /// What a model most likely meant by an argument the tool does not take:
+    /// a value of one it does (`decoded` for `part: "decoded"`), or one whose
+    /// name is a slip away from it.
+    static func meaning(of name: String, in properties: [String: JSONValue]) -> String? {
+        let lower = name.lowercased()
+        for key in properties.keys.sorted() {
+            let choices = properties[key]?["enum"]?.arrayValue?.compactMap(\.stringValue) ?? []
+            if let choice = choices.first(where: { $0.lowercased() == lower }) {
+                return "`\(key): \"\(choice)\"`"
+            }
+        }
+        let near = properties.keys
+            .map { (key: $0, distance: editDistance(lower, $0.lowercased())) }
+            .filter { $0.distance <= max(1, min(2, name.count / 3)) }
+            .min { ($0.distance, $0.key) < ($1.distance, $1.key) }
+        return near.map { "`\($0.key)`" }
+    }
+
+    private static func editDistance(_ a: String, _ b: String) -> Int {
+        let a = Array(a), b = Array(b)
+        guard !a.isEmpty else { return b.count }
+        guard !b.isEmpty else { return a.count }
+        var row = Array(0...b.count)
+        for i in 1...a.count {
+            var previous = row[0]
+            row[0] = i
+            for j in 1...b.count {
+                let kept = row[j]
+                row[j] = a[i - 1] == b[j - 1] ? previous : 1 + min(previous, row[j], row[j - 1])
+                previous = kept
+            }
+        }
+        return row[b.count]
     }
 
     /// What a tool does to the world, as hints a client may use to decide

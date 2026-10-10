@@ -71,4 +71,50 @@ final class AgentArgumentsTests: XCTestCase {
         XCTAssertEqual(schema["required"], ["path"])
         XCTAssertEqual(schema["properties"]?["path"]?["type"], "string")
     }
+
+    // MARK: Arguments a tool does not take
+
+    private let openPart = AgentTool(
+        name: "open_part",
+        description: "Opens a part.",
+        inputSchema: AgentSchema.object([
+            "node": AgentSchema.string("A node."),
+            "offset": AgentSchema.offset("Where."),
+            "part": AgentSchema.choice(["all", "body", "decoded"], "Which bytes.")
+        ])
+    ) { _ in .text("opened") }
+
+    private func refusal(_ tool: AgentTool, _ arguments: [String: JSONValue]) async -> String? {
+        do {
+            _ = try await tool.run(AgentCall(tool: tool.name, arguments: AgentArguments(arguments)))
+            return nil
+        } catch let error as AgentToolError {
+            return error.message
+        } catch {
+            return "\(error)"
+        }
+    }
+
+    /// The case that opened a LENV block still encoded: `decoded` is a value
+    /// of `part`, and the refusal says so.
+    func testAnArgumentThatIsAValueOfAnotherIsRefusedWithWhatWasMeant() async {
+        let message = await refusal(openPart, ["node": "0.3.4.1.2", "decoded": true])
+        XCTAssertEqual(message, "`open_part` takes no argument `decoded`. Perhaps `part: \"decoded\"`. "
+            + "It takes: node, offset, part.")
+    }
+
+    func testAMisspeltArgumentIsRefusedWithTheNearestName() async {
+        let message = await refusal(openPart, ["ofset": "0x10"])
+        XCTAssertEqual(message, "`open_part` takes no argument `ofset`. Perhaps `offset`. It takes: node, offset, part.")
+        let unrelated = await refusal(openPart, ["colour": "red"])
+        XCTAssertEqual(unrelated, "`open_part` takes no argument `colour`. It takes: node, offset, part.")
+    }
+
+    func testTheArgumentsAToolTakesAreLetThrough() async {
+        let answered = await refusal(openPart, ["node": "0.1", "part": "decoded"])
+        XCTAssertNil(answered)
+        let bare = AgentTool(name: "documents", description: "Lists.") { _ in .text("none") }
+        let message = await refusal(bare, ["limit": 5])
+        XCTAssertEqual(message, "`documents` takes no argument `limit`. It takes no arguments.")
+    }
 }

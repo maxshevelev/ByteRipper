@@ -245,6 +245,24 @@ final class AgentFindToolsTests: XCTestCase {
         let part = try XCTUnwrap(opened["document"]?.stringValue)
         let read = try await client.answer("read", ["document": .string(part), "offset": "0x28", "length": 8, "format": "ascii"])
         XCTAssertEqual(read["text"], "PF0TEST1", "decoded")
+        XCTAssertEqual(opened["part"], "decoded")
+        XCTAssertNil(opened["hint"])
+    }
+
+    /// A LENV block opened as it is says it is encoded and how to open it
+    /// decoded; an argument `open_part` does not take is refused, not dropped.
+    func testALENVBlockOpenedAsItIsSaysHowToDecodeIt() async throws {
+        try open(LenovoTestImage.make())
+        let at = try await client.answer("uefi_at", ["offset": .string(String(format: "0x%X", LenovoTestImage.serialInBlock2))])
+        let entry = try XCTUnwrap(at["chain"]?.arrayValue?.last?["id"]?.stringValue, "\(at)")
+        let raw = try await client.answer("open_part", ["node": .string(entry)])
+        XCTAssertEqual(raw["part"], "all")
+        XCTAssertTrue(raw["hint"]?.stringValue?.contains("part: \"decoded\"") == true, "\(raw)")
+
+        let refused = try await client.call("open_part", ["node": .string(entry), "decoded": true])
+        XCTAssertTrue(refused.isError)
+        let message = refused.answer.stringValue ?? ""
+        XCTAssertTrue(message.contains("Perhaps `part: \"decoded\"`"), message)
     }
 
     /// A decompressed part is a file of its own to every tool: read, searched,

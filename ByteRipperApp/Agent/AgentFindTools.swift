@@ -261,7 +261,8 @@ final class AgentFindTools {
                 compressed section decompresses to, "decoded" for a Lenovo LENV block (or one of its \
                 entries) decoded, its XOR encoding removed. The part stays linked: edits to it stay \
                 in it until the person puts them back with Update in Parent, which for a decompressed node \
-                compresses them again. The parent must be on screen (`show` puts a background dump there). \
+                compresses them again. The answer says which `part` opened, and a LENV block opened \
+                without "decoded" comes with a `hint`. The parent must be on screen (`show` puts a background dump there). \
                 Closes with `close_dump` or by the person.
                 """,
             inputSchema: AgentSchema.object([
@@ -304,6 +305,7 @@ final class AgentFindTools {
                 opening = controller.openPart(named: named ?? name.name, from: place.pane, source: name.source,
                                               layout: name.layout, codec: name.codec)
                 answer["node"] = .string(found.node.id.description)
+                answer["part"] = .string(which)
                 answer["in_compressed"] = .bool(which == "decompressed")
                 answer["source"] = AgentHostTools.range(name.source)
                 answer["size"] = AgentHostTools.hex(name.size)
@@ -328,9 +330,17 @@ final class AgentFindTools {
             opening = controller.openPart(named: named ?? open.partName(fileName: place.pane.status.fileName),
                                           from: place.pane, source: open.source, layout: open.layout, codec: codec)
             answer["node"] = .string(found.node.id.description)
+            answer["part"] = .string(which)
             answer["in_compressed"] = .bool(open.space != .file)
             answer["source"] = AgentHostTools.range(open.source)
             answer["size"] = AgentHostTools.hex(UInt64(open.range.count))
+            // A LENV block opened as it is reads as XOR noise, and nothing in
+            // the answer said there was a decoded way to open it.
+            if let reader = found.tree.spaceReaders.reader(for: .file),
+               UEFILenovoDMIDetail.decodableBlock(for: found.node, image: image, reader: reader) != nil {
+                answer["hint"] = .string("A Lenovo LENV block: its bytes are XOR-encoded as they are in the file. "
+                    + "part: \"decoded\" opens it decoded.")
+            }
         } else {
             guard arguments.has("offset"), arguments.has("length") else {
                 throw AgentToolError("Give `offset` and `length`, or `node`.")

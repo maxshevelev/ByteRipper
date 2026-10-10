@@ -268,8 +268,8 @@ final class AgentUITests: XCTestCase {
         let controller = AgentWindowController(service: service)
         _ = controller.window
         let connection = service.connect(send: { _ in })
-        let arguments = #"{"offset":"0x10","length":64,"format":"u8","paths":["/a/one.bin","/b/two.bin"]}"#
-        await connection.receive(Data((#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"read","arguments":"#
+        let arguments = #"{"offset":"0x10","length":64,"label":"Model","related_to":["m1","m2"]}"#
+        await connection.receive(Data((#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"mark","arguments":"#
             + arguments + "}}\n").utf8))
         await connection.waitUntilIdle()
         let logged = await awaitUntil(1) { self.service.log.count == 1 }
@@ -282,12 +282,12 @@ final class AgentUITests: XCTestCase {
         XCTAssertEqual(shown["Result"], "No file is open in ByteRipper.")
         XCTAssertEqual(controller.shownArguments, """
             {
-              "format" : "u8",
+              "label" : "Model",
               "length" : 64,
               "offset" : "0x10",
-              "paths" : [
-                "/a/one.bin",
-                "/b/two.bin"
+              "related_to" : [
+                "m1",
+                "m2"
               ]
             }
             """, "the whole JSON, laid out")

@@ -21,7 +21,11 @@ final class RecordedClientTests: XCTestCase {
     ]
 
     private func stub(_ name: String) -> AgentTool {
-        AgentTool(name: name, description: "Stands in for the app's own.") { call in
+        AgentTool(name: name, description: "Stands in for the app's own.", inputSchema: AgentSchema.object([
+            "offset": AgentSchema.offset("Where."),
+            "length": AgentSchema.offset("How much."),
+            "format": AgentSchema.string("As what.")
+        ])) { call in
             .json(["tool": .string(call.tool), "length": call.arguments["length"] ?? .null])
         }
     }
