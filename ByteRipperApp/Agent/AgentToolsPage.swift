@@ -173,7 +173,7 @@ final class AgentToolsPage: NSObject, NSTableViewDataSource, NSTableViewDelegate
 
         override func draw(_ dirtyRect: NSRect) {
             let attributes: [NSAttributedString.Key: Any] = [
-                .font: AgentToolsPage.headingFont, .foregroundColor: NSColor.tertiaryLabelColor]
+                .font: AgentToolsPage.headingFont, .foregroundColor: NSColor.secondaryLabelColor]
             let text = NSAttributedString(string: title, attributes: attributes)
             let size = text.size()
             // On the view's bottom, so the room the row adds lies above it.
