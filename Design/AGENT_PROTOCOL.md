@@ -70,17 +70,24 @@ Recorded against: Claude Code 2.1.292 (modern; `RecordedClientTests`).
 | `reveal` | `offset`; `length` (default 0); `select` (default: length > 0) | `document`, `shown` (range), `selected`. A navigation step. |
 | `open_panel` | `module` (`zonesketch`, `fit`, `uefi-structure`, `me-analyzer` — the last part of the module's identifier) | `document`, `module`, `panel`, `was_open`. A navigation step. Refused while a sheet is up. |
 
-## Marks
+## Annotations
 
 | Tool | Arguments | Answer |
 |---|---|---|
-| `mark` | `offset`, `length` (≥ 1), `label` (≤ 80 characters); `note` (≤ 600); `related_to` (mark ids) | `id` (`m1`, `m2`… one counter for the app), `document`, `range`, `label`, `note`, `related_to`. Does not move the view. |
-| `unmark` | `ids`, or `document`, or `all: true` | `removed[]`; `not_found[]` for ids there were not. Relations to a removed mark go with it. |
-| `marks` | `document` (default: every document); `limit` (50, ≤ 200); `after` | `marks[]`, each as `mark` answers; `total`. Paged (`next`, `after`). |
+| `annotate` | `title` (≤ 80 characters); `note` (≤ 600); `document` or `path`; `offset` + `length` (default 1) or `node`; `related_to` (annotation ids); `reveal` | `id` (`a1`, `a2`… one counter for the app), `path` (a file on disk), `document` (while the file is open), `range`, `node`, `title`, `note`, `related_to`; `from_part` (`document`, `range`, `exact`) for one made in a part. |
+| `annotations` | `document` or `path` (default: every file); `limit` (50, ≤ 200); `after` | `annotations[]`, each as `annotate` answers, oldest first; `total`. Paged (`next`, `after`). |
+| `remove_annotations` | `ids`, or `document`, or `path`, or `all: true` | `removed[]`; `not_found[]` for ids there were not. Relations to a removed annotation go with it. |
 
-A mark lives on its document's pane: drawn dashed in the agent's colour over
-the dump, its label and note shown under the pointer, listed in the Agent
-window. It goes with `unmark`, the window's buttons, or its document.
+An annotation belongs to a file (issue #37): a file on disk, found again by
+its identity, or a document never saved, which it goes with. It is kept for
+the session, whether the file is open or not, and drawn dashed in the agent's
+colour over the bytes whenever the file is on screen — in a tab, or in a part
+whose codecs keep the file's addresses — its title and note under the
+pointer, listed in the Agent window. Made in a part, it is recorded in the
+file the part came out of: the same bytes through every codec that keeps
+offsets, else the source range. A node of a file that is not open is kept as
+the node; one of an open file is placed by its tree. It goes with
+`remove_annotations` or the window's buttons.
 
 ## Many dumps
 
@@ -90,12 +97,11 @@ window. It goes with `unmark`, the window's buttons, or its document.
 | `close_dump` | `document` | `closed`. Refuses a document in a tab. |
 | `show` | `document`; `offset`, `length` | `document` (on screen), `shown`, `replaces` (the background id it replaced). Opens a new tab, or brings forward the tab that has the file. |
 | `survey` | `folder` (+ `recursive`) or `paths`; `tool` (one that takes `document`); `arguments`; `group_by` (dotted path, `-1` for the last element); `limit` (20, ≤ 100); `after` | `files`, `groups_total`, `groups[]` (`value`, `count`, `files` — ten at most; the largest first), `failed[]` (`file`, `error`). Progress per file. At most 200 files. Paged (`next`, `after`): a page after the first is cut from the same run, never a new one; a group whose value is too large alone gives the start of its JSON text. |
-| `finding` | `text`; `document` or `path`; `offset`, `length`, `node` | the finding: `id` (`f1`…), `path`, `range`, `node`, `text`. A finding in a part is recorded in the file on disk it came out of — the same bytes through every codec that keeps offsets, else the source range — with `from_part` (`document`, `range`, `exact`). |
-| `findings` | `limit` (50, ≤ 200); `after` | `findings[]`, oldest first; `total`. Paged (`next`, `after`). |
 
 A background document is answered about by every tool that reads — `read`,
 `documents`, the module queries — and refused, with `show` named, by every
-tool that shows: `focus`, `reveal`, `mark`, `open_panel`, panel actions.
+tool that shows: `focus`, `reveal`, `open_panel`, panel actions. An annotation
+on it belongs to its file and is drawn once the file is shown.
 
 ## UEFI Structure
 

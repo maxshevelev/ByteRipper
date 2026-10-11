@@ -2,7 +2,7 @@
 
 > An agent beside the person at the bench. It sees the caret and the
 > selection, asks the parsers about the dump, opens the panel it needs and
-> shows a node in it, marks bytes and says what they are, and — when allowed —
+> shows a node in it, annotates bytes and says what they are, and — when allowed —
 > edits the open file through the undo the person uses. As a second class of
 > work, it reads a folder of dumps without putting them on screen and reports
 > what they share and where they differ. Issue #23.
@@ -34,12 +34,12 @@ moving the view, selecting, and marking. That needs the app.
   conversation is about it. So the service is application-wide, like the
   bookmarks or the search history, and lives as long as the app.
 - **Its own window, not the tool panel.** What the agent has to show — whether
-  a client is connected, the request log, its marks, its findings — goes in a
+  a client is connected, the request log, its annotations, its tools — goes in a
   window of its own (Window ▸ Agent); the switches and the client
   configurations are in Settings ▸ Agent. Put in the tool
   panel it would push out the very tree the conversation is about.
 - **Agent tools come from three places.** The host's own (caret, reads, view,
-  marks, edits, documents); each tool-module's *queries*, declared on the
+  annotations, edits, documents); each tool-module's *queries*, declared on the
   module's type and answered with its panel closed; and each live session's
   *panel actions*. The two module levels are explained under "What a
   tool-module contributes".
@@ -73,7 +73,7 @@ moving the view, selecting, and marking. That needs the app.
         ├─ AgentKit  (package, pure)  — JSON, JSON-RPC, MCP both eras, registry
         │
         ├─ host tools  (app)          — documents, focus, read, reveal, select,
-        │                                open_panel, marks, edits, open_dump,
+        │                                open_panel, annotations, edits, open_dump,
         │                                show, survey
         ├─ module queries             — ToolModule.agentQueries, against a
         │                                read host (open or background document)
@@ -142,7 +142,7 @@ In the app target, `ByteRipperApp/Agent/`, on the main actor.
 - One `AgentConnection` per socket connection, and any number at once. A
   connection is not a conversation — the protocol says so, and a client may
   restart its relay at any moment — so nothing the agent made hangs on one:
-  marks, findings and background documents belong to the service, and go
+  annotations and background documents belong to the service, and go
   when the agent or the person clears them.
 - Keeps a log of every call — tool, target, how long, how big the answer, the
   error if any — for the Agent window. Bounded, not persisted.
@@ -231,35 +231,42 @@ by its index path: two images do not number their volumes the same way.
 | `read` | Bytes of a range as hex, ASCII, UCS-2 or integers of a width and an endianness. 4 KiB at most. |
 | `reveal` | Bring the document's tab forward, scroll to a range, select it (`select`, by default when a length is given). A navigation step, so Back returns. |
 | `open_panel` | Switch a tab's tool panel to a module, through the same door the Tools menu uses: the panel that was there parks its state, and the switch is a navigation step. Refused while a sheet is up, blocking work is running, or a field is being edited. |
-| `mark` / `unmark` / `marks` | The agent's marks (below). |
+| `annotate` / `annotations` / `remove_annotations` | The agent's annotations (below). |
 | `write` | Overwrite bytes in an open document as one undo step named by the agent's label. Only with the edit switch on, only overwrite — a write that would move bytes is refused. |
 | `open_dump` / `close_dump` | A background document from a path. |
 | `show` | Open a background document in a new tab, at a range. Never into a pane that holds a file. |
 | `survey` | One query over many files (below). |
-| `finding` | Add a finding to the Agent window's list. |
 
 Saving is not a tool. Neither is closing a document the person opened.
 
-## Marks
+## Annotations
+
+Marks and findings were one thing to the person — a short text pointing at a
+place — built as two: a mark drawn but gone with its document, a finding kept
+but drawn nowhere. They are one now (issue #37), an **annotation**
+(«заметка», «Anmerkung»): a title, a note, and a place in a file — a range,
+or a UEFI node.
 
 Zones belong to the session that published them, and `ToolController`
 clears them when it stops — deliberately: nothing else draws zones. The
-agent's marks are therefore a layer of their own on `PaneViewModel`, drawn in
+agent's annotations are therefore a layer of their own, kept by the service
+(`AgentAnnotationTools`) and drawn by every pane that shows their file — in
 the dump and the minimap's gutter as a fourth state: not the difference
-background, not the red of an unsaved edit, not a tool's zone outline. Each
-has a range, a short label and a sentence; hovering shows the sentence,
-the Agent window lists them, a click goes to one.
+background, not the red of an unsaved edit, not a tool's zone outline. A pane
+asks for its file's annotations when it draws, so a file opened later shows
+the ones made for it before; a part whose codecs keep the file's addresses
+shows those over its stretch.
 
-A relation — "this pointer leads there", "this checksum covers that" — is a
-pair of marks with a line between their entries in the Agent window, both ends
-clickable. Arrows drawn across the dump come later, if pairs turn out not to be
-enough.
+A relation — "this pointer leads there", "this checksum covers that" — is
+named after the note in the Agent window and under the pointer. Arrows drawn
+across the dump come later, if that is not enough.
 
-Marks stay until the agent removes them or the person clears them from the
-Agent window, or the document closes. Not with the connection: under the
-current protocol a connection is not a conversation, and a relay restarted
-mid-conversation must not wipe what the agent showed. A mark the person pins
-becomes a bookmark.
+Annotations are kept for the session, not saved: they stay until the agent
+removes them or the person clears them, whether the file is open or not. Not
+with the connection: under the current protocol a connection is not a
+conversation, and a relay restarted mid-conversation must not wipe what the
+agent showed. One on a document never saved goes with it. The person does not
+make annotations by hand; bookmarks stay the person's navigation.
 
 ## Background documents and surveys
 
@@ -279,9 +286,10 @@ module's query tools with its arguments — not code — and `group_by` names a
 field of its answer. Detail comes after, by `open_dump` on the files that
 matter.
 
-A **finding** is a file, a range or a node, and a sentence. The Agent window
-lists them; a click opens the file in a new tab at that place. A claim about
-seven files out of fifty becomes seven lines the person can check.
+What a survey leaves is an **annotation** on each file that matches (above):
+listed in the Agent window, a click opening the file at that place, and drawn
+over the bytes when it is open. A claim about seven files out of fifty becomes
+seven lines the person can check.
 
 ## Language
 
@@ -359,7 +367,8 @@ Each ends in something that works and is committed.
    *(Done: `mark`, `unmark`, `marks`; a dashed outline in `ZoneColors.agent`
    with a wash under the bytes; the note under the pointer; the Agent window's
    Marks page, a double-click going to the bytes. Not yet: marks on the
-   minimap's gutter, and pinning a mark as a bookmark.)*
+   minimap's gutter, and pinning a mark as a bookmark. Marks and findings were
+   merged into annotations later — issue #37.)*
 5. **Background documents.** `open_dump`, `close_dump`, `show`, `survey`,
    findings. Done on the AMD and Intel dumps in `~/Desktop/ME`: one survey
    question answered across all of them, its findings clickable. *(Done. A
@@ -559,9 +568,9 @@ beside it.
 - **What a survey's query may be.** One query tool and a `group_by` is the
   start; whether it needs a filter, or two fields at once, is learnt on the
   first real survey.
-- **Marks across a relaunch.** Gone when the app quits, unless pinned. If
-  pinned marks turn out to want more than a bookmark holds, that is a project
-  file (#19).
+- **Annotations across a relaunch.** Gone when the app quits (issue #37
+  settled it for the session). If they turn out to be wanted later, that is a
+  project file (#19).
 - **Which era clients speak.** Both are served. Which one Claude Code and
   Claude Desktop actually open with is recorded at stage 2, and the protocol
   document says which transcripts the tests are checked against.

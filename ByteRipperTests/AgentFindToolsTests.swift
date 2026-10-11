@@ -397,25 +397,28 @@ final class AgentFindToolsTests: XCTestCase {
         let selected = try await client.answer("uefi_select", ["document": part, "node": "0"])
         XCTAssertEqual(selected["selected"]?["name"], "Raw")
 
-        // A finding in bytes the file holds only compressed leads to the
+        // An annotation on bytes the file holds only compressed leads to the
         // section they came out of.
-        let finding = try await client.answer("finding", ["document": part, "offset": "0x4", "length": 4, "text": "t"])
+        let finding = try await client.answer("annotate", ["document": part, "offset": "0x4", "length": 4, "title": "t"])
         XCTAssertEqual(finding["from_part"]?["exact"], false)
         XCTAssertEqual(finding["range"]?["start"], opened["source"]?["start"])
         XCTAssertEqual(finding["range"]?["end"], opened["source"]?["end"])
     }
 
-    /// A finding in a part that keeps the file's addresses lands on the same
-    /// bytes of the file.
-    func testAFindingInAPartLeadsToTheSameBytesOfTheFile() async throws {
-        try open([UInt8](repeating: 0, count: 0x1000))
+    /// An annotation in a part that keeps the file's addresses lands on the
+    /// same bytes of the file, and is drawn in both.
+    func testAnAnnotationInAPartLeadsToTheSameBytesOfTheFile() async throws {
+        let controller = try open([UInt8](repeating: 0, count: 0x1000))
         let opened = try await client.answer("open_part", ["offset": "0x800", "length": "0x100"])
-        let finding = try await client.answer("finding", ["document": opened["document"] ?? .null,
-                                                          "offset": "0x10", "length": 4, "text": "t"])
-        XCTAssertEqual(finding["range"]?["start"], "0x810")
-        XCTAssertEqual(finding["range"]?["end"], "0x814")
-        XCTAssertEqual(finding["from_part"]?["exact"], true)
-        XCTAssertTrue(finding["path"]?.stringValue?.hasSuffix("front.bin") == true)
+        let annotation = try await client.answer("annotate", ["document": opened["document"] ?? .null,
+                                                              "offset": "0x10", "length": 4, "title": "t"])
+        XCTAssertEqual(annotation["range"]?["start"], "0x810")
+        XCTAssertEqual(annotation["range"]?["end"], "0x814")
+        XCTAssertEqual(annotation["from_part"]?["exact"], true)
+        XCTAssertTrue(annotation["path"]?.stringValue?.hasSuffix("front.bin") == true)
+        XCTAssertEqual(controller.windowModel.pane1.hexAgentMarkSpans(in: 0..<0x1000).map(\.range), [0x810..<0x814])
+        let part = try XCTUnwrap(controller.fragments.pane(try XCTUnwrap(controller.fragments.expanded)))
+        XCTAssertEqual(part.hexAgentMarkSpans(in: 0..<0x100).map(\.range), [0x10..<0x14], "at the part's own addresses")
     }
 
     func testAPartNeedsItsParentOnScreenAndAPlace() async throws {

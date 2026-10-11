@@ -57,7 +57,7 @@ protocol HexViewDataSource: AnyObject {
     /// at most, since what a tool-module publishes is the slice it wants seen
     /// rather than its tree.
     func hexZoneSpans(in range: Range<UInt64>) -> [HexZoneSpan]
-    /// The ranges an agent marked that reach `range` (`AgentMark`).
+    /// The ranges an agent annotated that reach `range` (`AgentAnnotation`).
     func hexAgentMarkSpans(in range: Range<UInt64>) -> [HexZoneSpan]
     /// What the agent said about the byte at `offset`, or "".
     func hexAgentMarkTooltip(at offset: UInt64) -> String
@@ -2216,7 +2216,7 @@ final class HexView: NSView, NSViewToolTipOwner {
 
     // MARK: - Agent marks
 
-    /// An agent's marks (`AgentMark`): the zone's own rounded outline, dashed
+    /// An agent's annotations (`AgentAnnotation`): the zone's own rounded outline, dashed
     /// and in the agent's hue, so they are told from a tool's map at a glance
     /// and never taken for a difference or a selection.
     private func drawAgentMarkContours(layout: HexLayout, fileSize: UInt64, rows: Range<Int>) {
@@ -3603,7 +3603,7 @@ enum HexTheme {
     /// drawn over whatever the dump's own layers painted — the same reasoning
     /// as `findIndicatorFill`'s fixed yellow.
     static let zoneFrameInactive = ZoneColors.other
-    /// An agent's mark (`AgentMark`).
+    /// An agent's annotation (`AgentAnnotation`).
     static let agentMark = ZoneColors.agent
 
     /// The segment tints, cycled by label (§21.3) — the palette's own, so the

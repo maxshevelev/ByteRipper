@@ -86,8 +86,11 @@ final class AgentDumpToolsTests: XCTestCase {
 
         let reveal = try await client.call("reveal", ["document": .string(id), "offset": 0])
         XCTAssertEqual(reveal.answer, .string("\(id) is open in the background, not on screen. Call `show` to open it in a tab first."))
-        let mark = try await client.call("mark", ["document": .string(id), "offset": 0, "length": 1, "label": "X"])
-        XCTAssertTrue(mark.isError)
+        // An annotation on a file with no window belongs to the file, and is
+        // drawn once it is shown.
+        let annotated = try await client.answer("annotate", ["document": .string(id), "offset": 0, "title": "X"])
+        XCTAssertNotNil(annotated["path"])
+        XCTAssertNil(annotated["document"], "not on screen")
     }
 
     func testAFileAlreadyInATabAnswersWithThatTabsId() async throws {
@@ -227,29 +230,31 @@ final class AgentDumpToolsTests: XCTestCase {
         XCTAssertTrue(service.desk.background.entries.isEmpty, "the background copy gave way to the tab")
     }
 
-    // MARK: - Findings
+    // MARK: - Annotations
 
-    func testAFindingIsListedAndLeadsBackToItsPlace() async throws {
+    /// What a survey leaves: an annotation, listed in the window, which leads
+    /// back to its place.
+    func testAnAnnotationIsListedAndLeadsBackToItsPlace() async throws {
         let controller = try openWindow(with: [UInt8](repeating: 0, count: 0x10000))
-        let recorded = try await client.answer("finding", ["document": "d1", "offset": "0x8000", "length": 8,
-                                                           "text": "A stray byte."])
-        XCTAssertEqual(recorded["id"], "f1")
-        let listed = try await client.answer("findings")["findings"]?.arrayValue
-        XCTAssertEqual(listed?.first?["text"], "A stray byte.")
+        let recorded = try await client.answer("annotate", ["document": "d1", "offset": "0x8000", "length": 8,
+                                                            "title": "Stray byte", "note": "A stray byte."])
+        XCTAssertEqual(recorded["id"], "a1")
+        let listed = try await client.answer("annotations")["annotations"]?.arrayValue
+        XCTAssertEqual(listed?.first?["note"], "A stray byte.")
 
         let agentWindow = AgentWindowController(service: service)
         _ = agentWindow.window
         agentWindow.refresh()
-        agentWindow.showFindings()
-        XCTAssertEqual(agentWindow.findingsList.shownText(row: 0, column: "file"), "front.bin")
-        XCTAssertEqual(agentWindow.findingsList.shownText(row: 0, column: "place"), "0x8000–0x8008")
+        agentWindow.showAnnotations()
+        XCTAssertEqual(agentWindow.annotationsList.shownText(row: 0, column: "file"), "front.bin")
+        XCTAssertEqual(agentWindow.annotationsList.shownText(row: 0, column: "place"), "0x8000–0x8008")
 
-        service.dumpTools.show(service.dumpTools.findings[0])
+        service.annotationTools.show("a1")
         let selection = controller.windowModel.pane1.hexSelection()
         XCTAssertEqual(selection.start..<selection.end, 0x8000..<0x8008)
 
-        service.dumpTools.clearFindings()
+        service.annotationTools.remove { _ in true }
         agentWindow.refresh()
-        XCTAssertTrue(agentWindow.findingsList.isEmpty)
+        XCTAssertTrue(agentWindow.annotationsList.isEmpty)
     }
 }

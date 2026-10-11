@@ -197,18 +197,18 @@ final class AgentUITests: XCTestCase {
         XCTAssertEqual(page.shownText(row: read, column: "calls"), "")
     }
 
-    /// The window's width goes to one column in the Marks and Tools lists: Note
+    /// The window's width goes to one column in the Annotations and Tools lists: Note
     /// and Last Call, the last in each. The others keep the widths they were
     /// given.
-    func testTheLastColumnTakesWhatTheWindowAddsInMarksAndTools() {
+    func testTheLastColumnTakesWhatTheWindowAddsInAnnotationsAndTools() {
         let controller = AgentWindowController(service: service)
         _ = controller.window
-        for table in [controller.marksList.table, controller.toolsPage.table] {
+        for table in [controller.annotationsList.table, controller.toolsPage.table] {
             XCTAssertEqual(table.columnAutoresizingStyle, .lastColumnOnlyAutoresizingStyle)
             XCTAssertEqual(table.tableColumns.map { $0.resizingMask.contains(.autoresizingMask) },
                            table.tableColumns.indices.map { $0 == table.tableColumns.count - 1 })
         }
-        XCTAssertEqual(controller.marksList.table.tableColumns.last?.title, "Note")
+        XCTAssertEqual(controller.annotationsList.table.tableColumns.last?.title, "Note")
         XCTAssertEqual(controller.toolsPage.table.tableColumns.last?.title, "Last Call")
     }
 
@@ -268,8 +268,8 @@ final class AgentUITests: XCTestCase {
         let controller = AgentWindowController(service: service)
         _ = controller.window
         let connection = service.connect(send: { _ in })
-        let arguments = #"{"offset":"0x10","length":64,"label":"Model","related_to":["m1","m2"]}"#
-        await connection.receive(Data((#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"mark","arguments":"#
+        let arguments = #"{"offset":"0x10","length":64,"title":"Model","related_to":["a1","a2"]}"#
+        await connection.receive(Data((#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"annotate","arguments":"#
             + arguments + "}}\n").utf8))
         await connection.waitUntilIdle()
         let logged = await awaitUntil(1) { self.service.log.count == 1 }
@@ -279,16 +279,16 @@ final class AgentUITests: XCTestCase {
 
         controller.selectLogRow(0)
         let shown = Dictionary(uniqueKeysWithValues: controller.shownDetails.map { ($0.label, $0.value) })
-        XCTAssertEqual(shown["Result"], "No file is open in ByteRipper.")
+        XCTAssertEqual(shown["Result"], "No annotation a1. Call `annotations` for the ones there are.")
         XCTAssertEqual(controller.shownArguments, """
             {
-              "label" : "Model",
               "length" : 64,
               "offset" : "0x10",
               "related_to" : [
-                "m1",
-                "m2"
-              ]
+                "a1",
+                "a2"
+              ],
+              "title" : "Model"
             }
             """, "the whole JSON, laid out")
 
@@ -358,9 +358,9 @@ final class AgentUITests: XCTestCase {
         defer { window.close() }
         controller.focusList()
         XCTAssertTrue(window.firstResponder === controller.shownList)
-        controller.showMarks()
-        XCTAssertTrue(window.firstResponder === controller.marksList.table)
-        controller.showFindings()
-        XCTAssertTrue(window.firstResponder === controller.findingsList.table)
+        controller.showAnnotations()
+        XCTAssertTrue(window.firstResponder === controller.annotationsList.table)
+        controller.showTools()
+        XCTAssertTrue(window.firstResponder === controller.toolsPage.table)
     }
 }

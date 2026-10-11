@@ -34,8 +34,8 @@ final class AgentService {
     let socketPath: String
     private let defaults: UserDefaults
     private let hostTools: AgentHostTools
-    /// The agent's marks, which the Agent window lists and clears too.
-    let markTools: AgentMarkTools
+    /// The agent's annotations, which the Agent window lists and clears too.
+    let annotationTools: AgentAnnotationTools
     /// Background documents, surveys and findings; the window lists the
     /// findings.
     let dumpTools: AgentDumpTools
@@ -63,7 +63,7 @@ final class AgentService {
             }
         }
         var list = entries(hostTools.tools(), .files)
-        list += entries(markTools.tools(), .marks)
+        list += entries(annotationTools.tools(), .annotations)
         list += entries(dumpTools.tools(), .dumps)
         list += entries(diffTools.tools(), .comparison)
         list += entries(findTools.tools() + refsTools.tools(), .search)
@@ -166,7 +166,7 @@ final class AgentService {
         self.socketPath = socketPath
         self.modules = modules
         self.hostTools = AgentHostTools(desk: desk)
-        self.markTools = AgentMarkTools(desk: desk)
+        self.annotationTools = AgentAnnotationTools(desk: desk)
         self.dumpTools = AgentDumpTools(desk: desk)
         self.editTools = AgentEditTools(desk: desk)
         self.diffTools = AgentDiffTools(desk: desk, modules: { modules })
@@ -177,8 +177,11 @@ final class AgentService {
         editTools.locate = { [diffTools] host, range in
             await diffTools.locate(host, [range]).first?.map(AgentDiffTools.placeJSON) ?? []
         }
-        markTools.onChange = { [weak self] in self?.changed() }
-        dumpTools.onChange = { [weak self] in self?.changed() }
+        annotationTools.onChange = { [weak self] in self?.changed() }
+        annotationTools.openInNewTab = { [weak dumpTools] url in dumpTools?.openInNewTab(url) }
+        // Every pane draws the annotations on its bytes from here.
+        PaneViewModel.annotationSource = { [weak annotationTools] pane in annotationTools?.annotations(for: pane) ?? [] }
+        PaneViewModel.annotationTitles = { [weak annotationTools] in annotationTools?.titles() ?? [:] }
         // A survey runs the other tools; it finds them in the finished list.
         dumpTools.toolNamed = { [weak self] name in self?.server.tools.first { $0.name == name } }
     }
@@ -346,9 +349,10 @@ final class AgentService {
         open in it and show places in them to the person. `documents` lists what is open, `focus` what the \
         person is looking at — what they mean by "this" or "here". Addresses and sizes are hex strings \
         ("0x7F3000") both ways; ranges are half-open. A list comes in pages: pass `next` back as `after` \
-        until it is null. `reveal` points at what you are talking about, `mark` labels bytes as you explain \
-        them. `open_dump` reads a file by path without showing it, `survey` asks one tool's question of a \
-        folder of dumps, `finding` records a thing found for the person to check. `find_bytes` searches the \
+        until it is null. `reveal` points at what you are talking about; `annotate` notes a place — what \
+        bytes are, or what you found — drawn over them and kept with the file. `open_dump` reads a file by path without showing it, `survey` asks one tool's question of a \
+        folder of dumps, an annotation on each file that matches is \
+        what the person checks. `find_bytes` searches the \
         bytes; the `uefi_` tools read a firmware image's structure. `open_part` opens a stretch or a node as \
         a part of its own, in a panel over the same window — decompressed, or a Lenovo LENV block decoded \
         with `part: "decoded"`; asking again raises the open one (`reused: true`). A part is a document to \

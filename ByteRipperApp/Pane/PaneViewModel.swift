@@ -81,8 +81,6 @@ final class PaneViewModel: HexViewDataSource {
         didSet {
             guard document !== oldValue else { return }
             origin = nil
-            // An agent's marks were about the bytes that were here.
-            if !agentMarks.isEmpty { setAgentMarks([]) }
         }
     }
     /// Where this pane's bytes came from when they are a part of another open
@@ -1327,32 +1325,59 @@ final class PaneViewModel: HexViewDataSource {
     /// Fired when the drawn zone map changes, so the view repaints.
     var onFullInvalidationOfZones: (() -> Void)?
 
-    /// What an agent has marked in this pane's document
-    /// (`Design/AGENT_PLAN.md`, "Marks"). Its own layer: a zone map is the
-    /// session's and goes with it, these stay until the agent or the person
-    /// removes them, or the document goes.
-    private(set) var agentMarks: [AgentMark] = []
+    /// Where an agent's annotations come from (`AgentAnnotationTools`): the
+    /// ones for this pane's bytes, at its addresses, and every annotation's
+    /// title by id. Set by the agent service; nil, none.
+    static var annotationSource: ((PaneViewModel) -> [AgentAnnotation])?
+    static var annotationTitles: (() -> [String: String])?
+    /// Bumped whenever annotations change anywhere, so each pane asks again.
+    static var annotationGeneration = 0
 
-    func setAgentMarks(_ marks: [AgentMark]) {
-        guard marks != agentMarks else { return }
-        agentMarks = marks
+    /// What the list was worked out for: the annotations' generation, the
+    /// document and its link — the pane's bytes being another file's, or a
+    /// part's, is what makes the list another.
+    private var annotationCache: (generation: Int, untitled: Bool, list: [AgentAnnotation])?
+    /// Held weakly and compared by identity: an object identifier of a
+    /// closed document can come back as the next one's.
+    private weak var annotationDocument: BinaryDocument?
+    private weak var annotationOrigin: DocumentOrigin?
+
+    /// The agent's annotations on this pane's bytes (`Design/AGENT_PLAN.md`,
+    /// "Annotations"). Their own layer over the rows: a zone map is a
+    /// session's and goes with it; these belong to the file and outlast the
+    /// window.
+    var agentAnnotations: [AgentAnnotation] {
+        if let cache = annotationCache, cache.generation == Self.annotationGeneration, cache.untitled == isUntitled,
+           annotationDocument === document, annotationOrigin === origin {
+            return cache.list
+        }
+        let list = (Self.annotationSource?(self) ?? []).filter { $0.range.map { !$0.isEmpty } ?? false }
+        annotationCache = (Self.annotationGeneration, isUntitled, list)
+        annotationDocument = document
+        annotationOrigin = origin
+        return list
+    }
+
+    /// The annotations changed: draw them again.
+    func annotationsChanged() {
         // The same repaint a zone map asks for: both are drawn over the rows.
         onFullInvalidationOfZones?()
     }
 
     func hexAgentMarkSpans(in range: Range<UInt64>) -> [HexZoneSpan] {
-        agentMarks.compactMap { mark in
-            guard mark.range.lowerBound < range.upperBound, range.lowerBound < mark.range.upperBound else { return nil }
-            return HexZoneSpan(range: mark.range, name: mark.label, isFocused: false)
+        agentAnnotations.compactMap { annotation in
+            guard let at = annotation.range, at.lowerBound < range.upperBound, range.lowerBound < at.upperBound
+            else { return nil }
+            return HexZoneSpan(range: at, name: annotation.title, isFocused: false)
         }
     }
 
-    /// What the agent said about the byte at `offset` — the innermost mark
-    /// holding it — or "" for none.
+    /// What the agent said about the byte at `offset` — the innermost
+    /// annotation holding it — or "" for none.
     func hexAgentMarkTooltip(at offset: UInt64) -> String {
-        let labels = Dictionary(agentMarks.map { ($0.id, $0.label) }, uniquingKeysWith: { first, _ in first })
-        return agentMarks.filter { $0.range.contains(offset) }
-            .min { $0.range.count < $1.range.count }?.tooltip(labels: labels) ?? ""
+        let titles = Self.annotationTitles?() ?? [:]
+        return agentAnnotations.filter { $0.range?.contains(offset) == true }
+            .min { ($0.range?.count ?? 0) < ($1.range?.count ?? 0) }?.tooltip(titles: titles) ?? ""
     }
 
     func hexZoneSpans(in range: Range<UInt64>) -> [HexZoneSpan] {

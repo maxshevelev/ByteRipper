@@ -5,8 +5,7 @@ import UEFITool
 
 /// Work across many dumps (`Design/AGENT_PLAN.md`, "Background documents and
 /// surveys"): opening a file by path with no window, asking one question of a
-/// folder of them, putting one on screen, and leaving findings the person can
-/// check by clicking.
+/// folder of them, and putting one on screen.
 @MainActor
 final class AgentDumpTools {
     let desk: AgentDesk
@@ -16,13 +15,8 @@ final class AgentDumpTools {
     /// Opens a file in a tab of its own. The app's is the key tab's "open in
     /// new tab"; a test hands its own.
     var openInNewTab: (URL) -> Void
-    /// Told when the findings change, for the Agent window.
-    var onChange: () -> Void = {}
-
-    private(set) var findings: [AgentFinding] = []
     /// The last survey run, which the pages after its first are cut from.
     private var lastSurvey: SurveyRun?
-    private var nextFinding = 1
 
     nonisolated static let maxSurveyFiles = 200
     nonisolated static let dumpExtensions: Set<String> = ["bin", "rom", "fd", "cap", "dump", "img", "scap"]
@@ -36,7 +30,7 @@ final class AgentDumpTools {
     }
 
     nonisolated func tools() -> [AgentTool] {
-        [openDumpTool, closeDumpTool, showTool, surveyTool, findingTool, findingsTool]
+        [openDumpTool, closeDumpTool, showTool, surveyTool]
     }
 
     // MARK: - open_dump / close_dump
@@ -48,7 +42,7 @@ final class AgentDumpTools {
             description: """
                 Opens a file by path without putting it on screen, read-only, and returns its document id — \
                 for the tools that take `document` (`read`, `uefi_tree`, `uefi_find`…), but not for the ones \
-                that show things (`reveal`, `mark`, panels); `show` puts it on screen. A file already open in a \
+                that show things (`reveal`, `annotate`, panels); `show` puts it on screen. A file already open in a \
                 tab answers with that tab's id. The last eight are kept parsed; older ones are closed and opened \
                 again when asked for. A file changed on disk is read again and keeps its id.
                 """,
@@ -341,140 +335,6 @@ final class AgentDumpTools {
         return urls
     }
 
-    // MARK: - Findings
-
-    private nonisolated var findingTool: AgentTool {
-        AgentTool(
-            name: "finding",
-            title: "Record a finding",
-            description: """
-                Records one finding for the person to check: a sentence, and where it is — a document, or a \
-                file `path`, with an `offset` and `length` or a UEFI `node`. The Agent window lists findings; a \
-                double-click opens the file at that place. Use it for each claim a survey supports, so seven \
-                files out of fifty become seven lines the person can click. A finding in a part — a fragment \
-                panel, decompressed or decoded — is recorded in the file on disk the part came out of: at the \
-                same bytes where the part keeps the file's addresses, otherwise at the bytes the part was \
-                decoded from; the answer's `from_part` says where it was in the part.
-                """,
-            inputSchema: AgentSchema.object([
-                "text": AgentSchema.string("What was found, in a sentence."),
-                "document": AgentSchema.string("The document it is in."),
-                "path": AgentSchema.string("Or the file it is in, by path."),
-                "offset": AgentSchema.offset("Where in the file."),
-                "length": AgentSchema.offset("How many bytes. Default 0."),
-                "node": AgentSchema.string("Or the UEFI node it is about, e.g. \"0.2.5\".")
-            ], required: ["text"]),
-            annotations: AgentTool.Annotations(readOnly: false, idempotent: false)
-        ) { call in
-            try await self.recordFinding(call.arguments)
-        }
-    }
-
-    private func recordFinding(_ arguments: AgentArguments) async throws -> AgentAnswer {
-        let text = try arguments.string("text").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { throw AgentToolError("Argument `text` must say something.") }
-        let url: URL
-        var range = try arguments.optionalOffset("offset").map { offset in
-            offset..<(offset + (try arguments.optionalOffset("length") ?? 0))
-        }
-        var node = try arguments.optionalString("node")
-        var fromPart: JSONValue?
-        if let path = try arguments.optionalString("path") {
-            url = try Self.fileURL(path)
-        } else {
-            let place = try resolve(try arguments.optionalString("document"))
-            var pane = place.pane
-            if pane.origin != nil {
-                // A node of the part's own tree is named by the part's ids,
-                // which mean nothing in the file: it goes as its bytes.
-                if let id = node {
-                    let host = PaneToolHost(pane: pane, owner: place.controller, tools: nil)
-                    let found = try await UEFIAgentNodeData.bytes(host, node: id, part: .all)
-                    range = found.fileRange ?? UEFIPresenter.fileSource(of: found.node, in: found.tree.image())
-                    node = nil
-                }
-                var answer: [String: JSONValue] = ["document": .string(place.id)]
-                if let range { answer["range"] = AgentHostTools.range(range) }
-                // Out through every part to the file: byte for byte where
-                // the codec keeps the addresses, otherwise the bytes the
-                // part was decoded from.
-                var exact = true
-                while let origin = pane.origin {
-                    guard let parent = origin.parent else {
-                        throw AgentToolError("\(place.id)'s parent is closed, so a finding could not lead back to it.")
-                    }
-                    let source = origin.sourceRange
-                    if let inside = range, origin.codec.keepsOffsets, exact {
-                        range = (source.lowerBound + inside.lowerBound)..<(source.lowerBound + inside.upperBound)
-                    } else {
-                        range = source
-                        exact = false
-                    }
-                    pane = parent
-                }
-                answer["exact"] = .bool(exact)
-                fromPart = .object(answer)
-            }
-            guard !pane.isUntitled, let document = pane.document else {
-                throw AgentToolError("\(place.id) is not a file on disk, so a finding could not lead back to it.")
-            }
-            url = document.url
-        }
-        let finding = AgentFinding(id: "f\(nextFinding)", url: url, range: range, node: node, text: text)
-        nextFinding += 1
-        findings.append(finding)
-        onChange()
-        guard let fromPart, case .object(var members) = finding.json else { return .json(finding.json) }
-        members["from_part"] = fromPart
-        return .json(.object(members))
-    }
-
-    private nonisolated var findingsTool: AgentTool {
-        AgentTool(
-            name: "findings",
-            title: "List findings",
-            description: """
-                The findings recorded so far, oldest first. Pages: `limit` is a ceiling — a page also stops \
-                before the answer passes the size bound and then says `truncated: "size"`; pass `next` back \
-                as `after` until it is null. A page asked for after the list changed is refused.
-                """,
-            inputSchema: AgentSchema.object([
-                "limit": AgentSchema.limit(default: 50, maximum: 200),
-                "after": AgentSchema.after
-            ])
-        ) { call in
-            try await MainActor.run {
-                let limit = try call.arguments.limit(default: 50, maximum: 200)
-                let paging = try AgentPage(call.arguments, fingerprint: AgentPage.fingerprint([self.findings.map(\.id)]),
-                                           changed: "The findings changed since that page; ask again without `after`.")
-                return .json(try paging.answer(["total": .count(self.findings.count)], key: "findings",
-                                               items: self.findings.dropFirst(paging.first).prefix(limit).map(\.json),
-                                               total: self.findings.count, bound: call.arguments.answerBound))
-            }
-        }
-    }
-
-    func clearFindings() {
-        findings.removeAll()
-        onChange()
-    }
-
-    /// Opens the finding's file — the tab that has it, or a new one — and
-    /// shows its place. What a double-click on its row does.
-    func show(_ finding: AgentFinding) {
-        let place = desk.onScreenPlace(of: finding.url) ?? {
-            openInNewTab(finding.url)
-            return desk.onScreenPlace(of: finding.url)
-        }()
-        guard let place, let controller = place.controller else { return }
-        desk.bringForward(place)
-        controller.view.window?.makeKeyAndOrderFront(nil)
-        guard let range = finding.range, range.lowerBound <= place.pane.fileSize else { return }
-        controller.recordJump(in: place.pane)
-        let end = min(range.upperBound, place.pane.fileSize)
-        controller.revealForTool(range.lowerBound..<end, in: place.pane, select: end > range.lowerBound)
-    }
-
     // MARK: - Helpers
 
     /// The dump files in `root`, sorted as Finder sorts them.
@@ -543,22 +403,5 @@ final class AgentDumpTools {
             }
         }
         return current
-    }
-}
-
-/// One thing an agent found, and where, for the person to check
-/// (`Design/AGENT_PLAN.md`, "findings").
-struct AgentFinding: Equatable {
-    let id: String
-    let url: URL
-    let range: Range<UInt64>?
-    let node: String?
-    let text: String
-
-    var json: JSONValue {
-        var entry: [String: JSONValue] = ["id": .string(id), "path": .string(url.path), "text": .string(text)]
-        if let range { entry["range"] = AgentHostTools.range(range) }
-        if let node { entry["node"] = .string(node) }
-        return .object(entry)
     }
 }
