@@ -1,4 +1,4 @@
-@source-sha a81bf55a614ff8008e5c5a35b58e1864198bfac7b57df24cedbd2eb82c8ec857
+@source-sha bc68a5bf86d3c0858a8219913ce56b0433ab3144145811ee1bb21454052d358d
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
@@ -51,6 +51,10 @@ Ein Fragment ohne Abzeichen ist eine einfache Kopie: Seine Bytes sind die der Da
 Ein Fragment, das aus einem Knoten des Baums [[topic:tool-uefi|UEFI-Struktur]] geöffnet wurde, enthält die Bytes dieses Knotens; auf dem Fragment geöffnet, zerlegt UEFI-Struktur sie daher als eigenes Image: Was der Baum im Bereich zeigt, ist der Teilbaum unter jenem Knoten, mit den eigenen Adressen des Bereichs ab null.
 
 Hier ist es nützlich, eine komprimierte Sektion entpackt zu öffnen. Im Bereich der Quelle hat ein Knoten innerhalb einer komprimierten Sektion keine eigenen Bytes in der Datei; der Dump markiert deshalb die ganze komprimierte Sektion. In einem entpackten Fragment hat jeder Knoten eigene Bytes: Wird ein Knoten ausgewählt, markiert der Dump genau diese Bytes, und **Zone auswählen**, **Zone öffnen** und **Zone sichern unter…** wirken auf sie.
+
+## Ein Fragment in einem eigenen Tab
+
+**In neuem Tab öffnen** im Menü der Kopfzeile oder im Menü der Pille im Dock, oder das Ziehen des Bereichs an seiner Kopfzeile auf den Streifen für einen neuen Tab, verschiebt das Fragment in einen eigenen Tab. Dort ist es kein Fragment-Bereich mehr, sondern die Datei des Tabs, und daneben lässt sich eine zweite Datei zum Vergleich öffnen, auch ein anderes Fragment: Dessen Bereich wird an der Kopfzeile auf den Tab gezogen und über **Als zweite Datei öffnen** losgelassen. Der Bereich verlässt das Dock und wird die zweite Datei des Tabs; mit gedrückter ⌥-Taste wird das Fragment kopiert und bleibt im Dock. Die Streifen zum Anfügen nehmen ein Fragment nicht an: Seine Bytes gelangen über **In der Quelle aktualisieren** in die Quelle zurück.
 
 ## Lesezeichen zwischen Quelle und Fragmenten
 

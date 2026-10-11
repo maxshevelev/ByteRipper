@@ -55,6 +55,10 @@ A fragment opened from a node of the [[topic:tool-uefi|UEFI Structure]] tree hol
 
 Opening a compressed section decompressed is useful here. In the parent's pane a node inside a compressed section has no bytes of its own in the file, so the dump marks the whole compressed section. In a decompressed fragment every node has its own bytes: selecting a node marks exactly those bytes in the dump, and **Select Zone**, **Open Zone** and **Save Zone as…** work on them.
 
+## A fragment in a tab of its own
+
+**Open in New Tab** in the panel's header menu or the pill's menu, or dragging the panel by its header onto the New Tab strip, moves the fragment into a tab of its own. There it is no longer a panel but the tab's file, and a second file can be opened beside it for comparison — another fragment included: drag that panel by its header onto the tab and release it over **Open as Second File**. The panel leaves the dock and becomes the tab's second file; with ⌥ held it is copied instead and stays in the dock. A fragment released over the bands that join files is not accepted: its bytes go back into the parent through **Update in Parent**.
+
 ## Bookmarks across a parent and its fragments
 
 [[topic:bookmarks|Bookmarks]] are one list per tab, and the panes and every fragment panel share it. A panel counts from its own first byte while the list keeps the file's addresses, so one mark is one byte at two addresses: `0x1F400` in the dump is `0x400` in a part taken out at `0x1F000`. Marking a row in either place marks it in the other, and a part opened out of a part adds the two offsets up.

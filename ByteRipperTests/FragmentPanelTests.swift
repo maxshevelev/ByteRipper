@@ -691,6 +691,62 @@ final class FragmentPanelTests: XCTestCase {
         XCTAssertEqual(tab.windowModel.pane1.fileSize, 3)
     }
 
+    /// A panel torn off into a tab is that tab's pane, not a panel: a second
+    /// panel let go on the tab's free half becomes its second pane, and the
+    /// two are compared.
+    func testASecondPanelLetGoOnATornOffTabIsComparedWithTheFirst() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let first = try XCTUnwrap(controller.openFragment([0x01, 0x02, 0x03], named: "one", animated: false))
+        let tab = MainViewController()
+        defer { tab.windowModel.pane1.close(); tab.windowModel.pane2.close() }
+        let registry = OpenDocumentRegistry()
+        registry.register(controller)
+        registry.register(tab)
+        controller.openDocuments = registry
+        tab.openDocuments = registry
+        controller.makeSiblingTab = { tab }
+        controller.tearOffFragment(first)
+        let second = try XCTUnwrap(controller.openFragment([0x01, 0x09, 0x03], named: "two", animated: false))
+        let part = try XCTUnwrap(controller.fragments.pane(second))
+
+        XCTAssertEqual(tab.paneDropOutcome(draggedPaneID: part.dragID, onPaneAt: 1, band: .addSecond),
+                       .move(intoPane: 1))
+        XCTAssertEqual(tab.paneDropOutcome(draggedPaneID: part.dragID, onPaneAt: 0, band: .appendAtEnd),
+                       .none, "a panel's bytes are not joined into a pane")
+        tab.performPaneDrop(draggedPaneID: part.dragID, onPaneAt: 1, band: .addSecond)
+
+        XCTAssertTrue(controller.fragments.isEmpty, "the dock has let it go")
+        XCTAssertTrue(tab.windowModel.pane2 === part, "the pane itself moved")
+        XCTAssertEqual(tab.mode, .comparison)
+        XCTAssertEqual(tab.paneDropOutcome(draggedPaneID: UUID(), onPaneAt: 1, band: .addSecond), .none)
+    }
+
+    /// With Option held the second panel is copied into the tab and stays.
+    func testOptionLettingAPanelGoOnATabsFreeHalfCopiesIt() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let first = try XCTUnwrap(controller.openFragment([0x01, 0x02, 0x03], named: "one", animated: false))
+        let tab = MainViewController()
+        defer { tab.windowModel.pane1.close(); tab.windowModel.pane2.close() }
+        let registry = OpenDocumentRegistry()
+        registry.register(controller)
+        registry.register(tab)
+        controller.openDocuments = registry
+        tab.openDocuments = registry
+        controller.makeSiblingTab = { tab }
+        controller.tearOffFragment(first)
+        let second = try XCTUnwrap(controller.openFragment([0x01, 0x09, 0x03], named: "two", animated: false))
+        let part = try XCTUnwrap(controller.fragments.pane(second))
+
+        tab.performPaneDrop(draggedPaneID: part.dragID, onPaneAt: 1, band: .addSecond, copying: true)
+
+        XCTAssertEqual(controller.fragments.count, 1, "the panel stays")
+        XCTAssertFalse(tab.windowModel.pane2 === part)
+        XCTAssertEqual(tab.windowModel.pane2.fileSize, 3)
+        XCTAssertEqual(tab.mode, .comparison)
+    }
+
     /// A folded panel has no header to drag, so its pill carries the same
     /// command in its own menu.
     func testAPillsMenuOffersOpeningThePanelInATab() throws {

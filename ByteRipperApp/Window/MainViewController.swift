@@ -461,7 +461,10 @@ final class MainViewController: NSViewController {
     func paneDropOutcome(draggedPaneID: UUID, onPaneAt index: Int,
                          band: SingleFileDropTarget = .replace,
                          copying: Bool = false) -> PaneDrop.Outcome {
-        guard let origin = paneLocation(ofPaneWith: draggedPaneID) else { return .none }
+        guard let origin = paneLocation(ofPaneWith: draggedPaneID) else {
+            return fragmentDropOutcome(draggedPaneID: draggedPaneID, onPaneAt: index,
+                                       band: band, copying: copying)
+        }
         let outcome = PaneDrop.outcome(
             draggingPaneAt: origin.paneIndex,
             onto: .pane(index: index, inOriginWindow: origin.controller === self, band: band),
@@ -500,6 +503,11 @@ final class MainViewController: NSViewController {
     func performPaneDrop(draggedPaneID: UUID, onPaneAt index: Int,
                          band: SingleFileDropTarget = .replace,
                          copying: Bool = false) {
+        if paneLocation(ofPaneWith: draggedPaneID) == nil {
+            performFragmentDrop(draggedPaneID: draggedPaneID, onPaneAt: index,
+                                band: band, copying: copying)
+            return
+        }
         switch paneDropOutcome(draggedPaneID: draggedPaneID, onPaneAt: index,
                                band: band, copying: copying) {
         case .swap:
@@ -541,6 +549,62 @@ final class MainViewController: NSViewController {
             // A tear-off never lands on a pane; the strip owns that one.
             break
         }
+    }
+
+    /// What letting a fragment panel go on this window's pane `index` would do.
+    ///
+    /// A panel let go on a pane stops being a panel: it becomes that pane, the
+    /// way it becomes a tab's only one when it is torn off. That is what lets a
+    /// part torn off into a tab of its own be compared with another — the
+    /// second is let go on the tab's free half. Option copies it instead, as
+    /// for a pane. The join bands take nothing from a panel: a part's bytes
+    /// belong in its parent, which Update in Parent already puts them in.
+    private func fragmentDropOutcome(draggedPaneID: UUID, onPaneAt index: Int,
+                                     band: SingleFileDropTarget,
+                                     copying: Bool) -> PaneDrop.Outcome {
+        guard !band.isJoin,
+              let found = fragmentLocation(ofPaneWith: draggedPaneID),
+              let source = found.controller.fragments.pane(found.panel), source.isOpen else { return .none }
+        let target = index == 0 ? windowModel.pane1 : windowModel.pane2
+        // The free half is on screen only while that pane is free.
+        if band == .addSecond, target.isOpen { return .none }
+        if copying {
+            guard source.fileSize > 0 else { return .none }
+            return .duplicate(intoPane: index)
+        }
+        return .move(intoPane: index)
+    }
+
+    /// Performs a fragment panel's drop on this window's pane `index`.
+    private func performFragmentDrop(draggedPaneID: UUID, onPaneAt index: Int,
+                                     band: SingleFileDropTarget, copying: Bool) {
+        let outcome = fragmentDropOutcome(draggedPaneID: draggedPaneID, onPaneAt: index,
+                                          band: band, copying: copying)
+        guard outcome != .none, let found = fragmentLocation(ofPaneWith: draggedPaneID),
+              let source = found.controller.fragments.pane(found.panel) else { return }
+        let target = index == 0 ? windowModel.pane1 : windowModel.pane2
+        if case .duplicate = outcome {
+            copyPane(source, into: index)
+            return
+        }
+        guard confirmReplaceDirtyPane(target, onSaved: { [weak self] in
+            self?.performFragmentDrop(draggedPaneID: draggedPaneID, onPaneAt: index,
+                                      band: band, copying: copying)
+        }) else { return }
+        guard let released = found.controller.fragments.release(found.panel) else { return }
+        if target.isOpen {
+            paneViews.removeValue(forKey: ObjectIdentifier(target))?
+                .searchResults.removeFromParent()
+            target.close()
+        }
+        // A window with nothing open takes the panel's marks, as a tab made
+        // for it does; one that holds a file keeps its own list, which the
+        // pane beside the part is read under.
+        if windowModel.openPaneCount == 0 {
+            windowModel.bookmarkStore.seed(released.bookmarks)
+        }
+        windowModel.adopt(released.pane, at: index)
+        apply(mode: windowModel.openPaneCount >= 2 ? .comparison : .singleFile)
     }
 
     /// Where the pane with `dragID` is, asked of the whole app when there is a
