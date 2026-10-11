@@ -1,4 +1,5 @@
 import AgentKit
+import ToolModuleKit
 import XCTest
 @testable import ByteRipper
 
@@ -232,6 +233,66 @@ final class AgentAnnotationTests: XCTestCase {
             with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
             characters: "\u{7F}", charactersIgnoringModifiers: "\u{7F}", isARepeat: false, keyCode: 51)))
         XCTAssertEqual(service.annotationTools.all().map(\.id), ["a1", "a3"])
+    }
+
+    /// A card is as tall as its text laid out at the card's width: a note that
+    /// wraps to several lines stays inside the outline.
+    func testACardHoldsAllOfItsWrappedText() throws {
+        let content = AnnotationCardView.Content(
+            id: "a2", title: "LBLDESP: панель 2560×1600", isOpen: true,
+            place: "SPI_C86018_128Mbit.03022026.orig.bin · 0xEACFFB–0xEAD005", path: nil,
+            site: "LBLDESP",
+            note: "Lenovo Panel descriptor: здесь width=0x0A00 (2560), height=0x0640 (1600). "
+                + "В другом дампе 1920×1080 — другая модель экрана.",
+            related: [])
+        for width: CGFloat in [200, 260, 330, 420] {
+            let sizer = AnnotationCardView()
+            sizer.show(content)
+            let height = ceil(sizer.height(forWidth: width))
+            let card = AnnotationCardView(frame: NSRect(x: 0, y: 0, width: width, height: height))
+            card.show(content)
+            card.layoutSubtreeIfNeeded()
+            let bottom = card.subviews.flatMap { [$0] + $0.subviews }.map { card.convert($0.bounds, from: $0).maxY }.max() ?? 0
+            XCTAssertLessThanOrEqual(bottom, height - AnnotationCardView.padding + 0.5, "width \(width): text ends at \(bottom), card is \(height)")
+            for field in card.subviews.compactMap({ $0 as? NSTextField }) {
+                let needs = field.cell?.cellSize(forBounds: NSRect(x: 0, y: 0, width: field.frame.width, height: 10_000)).height ?? 0
+                XCTAssertGreaterThanOrEqual(field.frame.height, needs, "width \(width): \(field.stringValue) is cut")
+            }
+        }
+    }
+
+    /// The same, for the cards the window shows.
+    func testTheWindowsCardsHoldAllOfTheirText() async throws {
+        try open(0x1000)
+        for index in 0..<4 {
+            _ = try await client.answer("annotate", [
+                "offset": .int(Int64(index * 16)), "length": 6, "title": .string("LBLDESP: панель 2560×1600 \(index)"),
+                "note": .string("Lenovo Panel descriptor: здесь width=0x0A00 (2560), height=0x0640 (1600). "
+                                + String(repeating: "В другом дампе 1920×1080 — другая модель экрана. ", count: index + 1))])
+        }
+        let agentWindow = AgentWindowController(service: service)
+        let window = try XCTUnwrap(agentWindow.window)
+        let saved = ToolPanelFont.defaults.object(forKey: ToolPanelFont.zoomSizeKey)
+        defer { ToolPanelFont.defaults.set(saved, forKey: ToolPanelFont.zoomSizeKey) }
+        for (width, zoom) in [(420.0, 13.0), (700, 13), (1100, 13), (420, 17), (700, 17)] {
+            window.setContentSize(NSSize(width: width, height: 600))
+            agentWindow.refresh()
+            agentWindow.showAnnotations()
+            window.layoutIfNeeded()
+            ToolPanelFont.defaults.set(zoom, forKey: ToolPanelFont.zoomSizeKey)
+            NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+            window.layoutIfNeeded()
+            let cards = agentWindow.annotationsList
+            cards.collection.layoutSubtreeIfNeeded()
+            XCTAssertFalse(cards.collection.visibleItems().isEmpty)
+            for item in cards.collection.visibleItems() {
+                let card = item.view
+                card.layoutSubtreeIfNeeded()
+                let bottom = card.subviews.flatMap { [$0] + $0.subviews }.map { card.convert($0.bounds, from: $0).maxY }.max() ?? 0
+                XCTAssertLessThanOrEqual(bottom, card.bounds.height - AnnotationCardView.padding + 0.5,
+                                         "window \(width), card \(card.frame): text ends at \(bottom)")
+            }
+        }
     }
 
     /// A double-click on a row goes to its bytes, and Back comes back.

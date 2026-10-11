@@ -271,23 +271,17 @@ final class AnnotationCardView: NSView {
     var onSite: () -> Void = {}
     var onRelated: (String) -> Void = { _ in }
 
-    private let stack = NSStackView()
-    private var widthConstraint: NSLayoutConstraint?
+    /// The lines under the header, top to bottom; a wrapping line takes the
+    /// card's whole width, a link only its own.
+    private var lines: [(view: NSView, wraps: Bool)] = []
+    private var header: (number: NSTextField, title: NSTextField, dot: NSTextField)?
     static let padding: CGFloat = 10
+    static let spacing: CGFloat = 4
+    private static let headerSpacing: CGFloat = 6
     private(set) var texts: [String] = []
 
     override init(frame: NSRect) {
         super.init(frame: frame)
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 4
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: Self.padding),
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.padding),
-            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Self.padding)
-        ])
     }
 
     @available(*, unavailable)
@@ -296,64 +290,96 @@ final class AnnotationCardView: NSView {
     override var isFlipped: Bool { true }
 
     func show(_ content: Content) {
-        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        subviews.forEach { $0.removeFromSuperview() }
+        lines = []
         texts = []
-        let header = NSStackView()
-        header.orientation = .horizontal
-        header.spacing = 6
         let number = label(content.id, font: ToolPanelFont.monospacedDigits(), color: .secondaryLabelColor)
         let title = label(content.title, font: ToolPanelFont.title(), wraps: true)
         let dot = label(content.isOpen ? "●" : "○", font: ToolPanelFont.body(), color: ZoneColors.agent)
         dot.toolTip = content.isOpen ? L("The file is open") : L("The file is not open")
-        title.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        // The title takes the room between the number and the dot, so the dot
-        // keeps to the card's right edge.
-        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        number.setContentHuggingPriority(.required, for: .horizontal)
-        dot.setContentHuggingPriority(.required, for: .horizontal)
-        header.distribution = .fill
-        header.alignment = .firstBaseline
-        header.addArrangedSubview(number)
-        header.addArrangedSubview(title)
-        header.addArrangedSubview(dot)
-        add(header, fill: true)
+        [number, title, dot].forEach(addSubview)
+        header = (number, title, dot)
         texts += [content.id, content.title]
 
         let place = label(content.place, font: ToolPanelFont.monospacedDigits(), color: .secondaryLabelColor, wraps: true)
         place.toolTip = content.path
-        add(place, fill: true)
+        add(place, wraps: true)
         texts.append(content.place)
         if let site = content.site {
             let link = linkButton(site) { [weak self] in self?.onSite() }
             link.toolTip = L("Show in UEFI Structure")
-            add(link)
+            add(link, wraps: false)
             texts.append(site)
         }
         if !content.note.isEmpty {
-            add(label(content.note, font: ToolPanelFont.body(), wraps: true), fill: true)
+            add(label(content.note, font: ToolPanelFont.body(), wraps: true), wraps: true)
             texts.append(content.note)
         }
         for related in content.related {
             let text = "→ \(related.id) \(related.title)"
-            add(linkButton(text) { [weak self] in self?.onRelated(related.id) })
+            add(linkButton(text) { [weak self] in self?.onRelated(related.id) }, wraps: false)
             texts.append(text)
         }
+        needsLayout = true
         needsDisplay = true
     }
 
     /// The height the card takes at `width`.
+    ///
+    /// The lines are placed by hand, by the same code that measures them, so
+    /// the height the layout gives the card is the height its text takes.
+    /// Measured by Auto Layout instead, a wrapping field's height followed the
+    /// width it had last been laid out at, and a note could run out of the
+    /// card's bottom.
     func height(forWidth width: CGFloat) -> CGFloat {
-        frame.size.width = width
-        widthConstraint?.isActive = false
-        widthConstraint = widthAnchor.constraint(equalToConstant: width)
-        widthConstraint?.isActive = true
-        layoutSubtreeIfNeeded()
-        return stack.fittingSize.height + 2 * Self.padding
+        place(width: width)
     }
 
-    private func add(_ view: NSView, fill: Bool = false) {
-        stack.addArrangedSubview(view)
-        if fill { view.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
+    override func layout() {
+        super.layout()
+        place(width: bounds.width)
+    }
+
+    /// Frames every line for a card `width` wide; answers the card's height.
+    @discardableResult
+    private func place(width: CGFloat) -> CGFloat {
+        let inner = max(0, width - 2 * Self.padding)
+        var bottom = Self.padding
+        if let (number, title, dot) = header {
+            let numberSize = fitted(number, width: inner)
+            let dotSize = fitted(dot, width: inner)
+            let titleWidth = max(0, inner - numberSize.width - dotSize.width - 2 * Self.headerSpacing)
+            title.frame = NSRect(x: Self.padding + numberSize.width + Self.headerSpacing, y: bottom,
+                                 width: titleWidth, height: fitted(title, width: titleWidth).height)
+            // The number and the dot sit on the title's first line.
+            let baseline = bottom + title.firstBaselineOffsetFromTop
+            number.frame = NSRect(origin: NSPoint(x: Self.padding, y: 0), size: numberSize)
+            number.frame.origin.y = baseline - number.firstBaselineOffsetFromTop
+            dot.frame = NSRect(origin: NSPoint(x: Self.padding + inner - dotSize.width, y: 0), size: dotSize)
+            dot.frame.origin.y = baseline - dot.firstBaselineOffsetFromTop
+            bottom = [title, number, dot].map(\.frame.maxY).max() ?? bottom
+        }
+        for line in lines {
+            bottom += Self.spacing
+            let size = fitted(line.view, width: inner)
+            line.view.frame = NSRect(x: Self.padding, y: bottom,
+                                     width: line.wraps ? inner : min(size.width, inner), height: size.height)
+            bottom = line.view.frame.maxY
+        }
+        return ceil(bottom + Self.padding)
+    }
+
+    /// What `view` takes at most `width` wide: a field's text wrapped at
+    /// that width, a link on one line.
+    private func fitted(_ view: NSView, width: CGFloat) -> NSSize {
+        guard let control = view as? NSControl, let cell = control.cell else { return view.fittingSize }
+        let size = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude))
+        return NSSize(width: ceil(size.width), height: ceil(size.height))
+    }
+
+    private func add(_ view: NSView, wraps: Bool) {
+        addSubview(view)
+        lines.append((view, wraps))
     }
 
     private func label(_ text: String, font: NSFont, color: NSColor = .labelColor, wraps: Bool = false) -> NSTextField {
@@ -361,7 +387,6 @@ final class AnnotationCardView: NSView {
         field.font = font
         field.textColor = color
         field.isSelectable = false
-        if wraps { field.preferredMaxLayoutWidth = 0 }
         return field
     }
 
