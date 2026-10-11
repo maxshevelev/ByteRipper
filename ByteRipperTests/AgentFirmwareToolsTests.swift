@@ -154,7 +154,8 @@ final class AgentFirmwareToolsTests: XCTestCase {
     func testAComparisonNeedsTwoDocuments() async throws {
         try open(NvramTestImage.vss([.init("Setup", [1])]))
         let itself = try await client.call("variables_compare", ["against": "d1"])
-        XCTAssertEqual(itself.answer, "`document` and `against` are the same document, d1.")
+        XCTAssertTrue(itself.answer.stringValue?.hasPrefix("`document` and `against` are the same document, ") == true)
+        XCTAssertTrue(itself.answer.stringValue?.hasSuffix(" (d1).") == true, "named by its file and its id: \(itself.answer)")
         let missing = try await client.call("variables_compare")
         XCTAssertTrue(missing.isError)
         let unknown = try await client.call("variables_compare", ["against": "d9"])

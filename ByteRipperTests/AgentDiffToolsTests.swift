@@ -156,7 +156,7 @@ final class AgentDiffToolsTests: XCTestCase {
         try open([1, 2, 3, 4])
         let other = try await background([1, 2, 3, 4])
         let itself = try await client.call("diff", ["against": "d1"])
-        XCTAssertEqual(itself.answer, "`document` and `against` are the same document, d1.")
+        XCTAssertEqual(itself.answer, "`document` and `against` are the same document, front.bin (d1).")
         let backwards = try await client.call("diff", ["against": .string(other), "offset": "0x3", "end": "0x2"])
         XCTAssertEqual(backwards.answer, "`offset` 0x3 is not below `end` 0x2.")
     }
@@ -326,7 +326,7 @@ final class AgentDiffToolsTests: XCTestCase {
     func testRevealDiffNeedsAPair() async throws {
         try open([0, 1])
         let refused = try await client.call("reveal_diff")
-        XCTAssertEqual(refused.answer, "d1 is not one of a pair shown side by side. `compare` shows it beside another.")
+        XCTAssertEqual(refused.answer, "front.bin (d1) is not one of a pair shown side by side. `compare` shows it beside another.")
     }
 
     // MARK: - Merging

@@ -88,7 +88,9 @@ While it is on, an agent can:
 
 Each change is one step of the file's undo, named **Agent:** and what the agent said the change is, so **Edit ▸ Undo** (**⌘Z**) takes it back. The changed bytes are red until the file is saved, like an edit made by hand, and the dump scrolls to them as a step of the navigation history. The file is saved only by the person. A file opened read-only, and a file the agent opened by its path without a tab, are never changed.
 
-## Links to nodes
+## Links to files and nodes
+
+The agent names a file by its name — with its folder, when two open files have the same name — and writes it as a link that brings the file forward in ByteRipper, or opens it.
 
 When the agent names a node of a firmware image's structure, it calls it as **UEFI Structure** does — by its name, and by its addresses as well where the name only says what kind of area it is, such as **Unused** or **Padding** — and writes it as a link. A click on the link, in a program that opens such links, brings the file forward in ByteRipper or opens it, opens **UEFI Structure** and chooses the node; **View ▸ Back** (**⌘[**) returns. If the file has been moved, deleted or changed since, ByteRipper says so. Whether a link can be clicked depends on the agent's program and, for Claude Code, on the terminal it runs in.
 

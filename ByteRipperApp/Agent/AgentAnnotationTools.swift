@@ -179,7 +179,7 @@ final class AgentAnnotationTools {
             size = pane.fileSize
             if let range, range.upperBound > pane.fileSize {
                 throw AgentToolError("The range \(AgentHostTools.hexText(range.lowerBound))–\(AgentHostTools.hexText(range.upperBound)) "
-                    + "runs past the end of \(place.id), which is \(AgentHostTools.hexText(pane.fileSize)) bytes long.")
+                    + "runs past the end of \(place.named), which is \(AgentHostTools.hexText(pane.fileSize)) bytes long.")
             }
             if pane.origin != nil {
                 var answer: [String: JSONValue] = ["document": .string(place.id)]
@@ -210,7 +210,7 @@ final class AgentAnnotationTools {
                     pane = place.pane
                 }
             }
-            guard let document = pane.document else { throw AgentToolError("\(place.id) holds no bytes.") }
+            guard let document = pane.document else { throw AgentToolError("\(place.named) holds no bytes.") }
             file = pane.isUntitled ? .document(WeakDocument(document)) : .disk(document.url, document.identity)
             size = pane.fileSize
         }

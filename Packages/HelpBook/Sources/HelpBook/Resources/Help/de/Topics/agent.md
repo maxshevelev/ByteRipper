@@ -1,4 +1,4 @@
-@source-sha 266b67d88c1b5cda2359ca289d3b9e9a1cd341cd93f5035144528df2e243bee9
+@source-sha 6d5eaac599e6b2d803d0f61ffa26995ce47c125282714aeffe1ce4270736af74
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -103,7 +103,9 @@ Ist sie eingeschaltet, kann der Agent:
 
 Jede Änderung des Agenten bildet einen eigenen Schritt im Widerrufen-Verlauf der Datei. Der Schritt trägt die Bezeichnung **Agent:** und die Beschreibung, die der Agent der Änderung gegeben hat; **Bearbeiten ▸ Widerrufen** (**⌘Z**) nimmt ihn zurück. Bis zum Sichern erscheinen die geänderten Bytes rot, wie bei einer Änderung von Hand; der Dump scrollt zu ihnen, und dieser Sprung wird im Verlauf festgehalten. Gesichert wird eine Datei ausschließlich vom Benutzer. Eine schreibgeschützt geöffnete Datei sowie eine Datei, die der Agent ohne Tab über ihren Pfad geöffnet hat, werden niemals verändert.
 
-## Links auf Knoten
+## Links auf Dateien und Knoten
+
+Eine Datei nennt der Agent mit ihrem Namen — sind zwei Dateien gleichen Namens geöffnet, zusammen mit dem Ordner — und schreibt sie als Link, der die Datei in ByteRipper nach vorn holt oder öffnet.
 
 Nennt der Agent einen Knoten der Struktur eines Firmware-Images, bezeichnet er ihn wie **UEFI-Struktur**: mit seinem Namen und, wo der Name nur die Art des Bereichs angibt, etwa **Unused** oder **Padding**, zusätzlich mit seinen Adressen. Den Knoten schreibt er als Link. Ein Klick auf den Link in einem Programm, das solche Links öffnet, holt die Datei in ByteRipper nach vorn oder öffnet sie, öffnet **UEFI-Struktur** und wählt den Knoten aus; **Darstellung ▸ Zurück** (**⌘[**) kehrt zurück. Wurde die Datei inzwischen verschoben, gelöscht oder geändert, meldet ByteRipper dies. Ob sich ein Link anklicken lässt, hängt vom Programm des Agenten ab, bei Claude Code auch vom Terminal, in dem er läuft.
 

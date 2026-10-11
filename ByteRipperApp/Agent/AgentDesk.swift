@@ -44,14 +44,21 @@ final class AgentDesk {
         /// "A" or "B" for one of the tab's own panes, "part" for a fragment
         /// panel, "background" for a file opened by path with no window.
         let slot: String
+        /// What to call it to the person (`AgentDesk.label`): the file's
+        /// name, told apart from another of the same name. Ids are for tools.
+        var label = ""
 
         var isOnScreen: Bool { controller != nil }
+
+        /// The label with the id, for a sentence the agent reads: it names
+        /// the document to the person by the first and to a tool by the second.
+        var named: String { label.isEmpty || label == id ? id : "\(label) (\(id))" }
 
         /// The tab, for a tool that shows something; a background document
         /// is refused with the way to put it on screen.
         func onScreen() throws -> MainViewController {
             guard let controller else {
-                throw AgentToolError("\(id) is open in the background, not on screen. "
+                throw AgentToolError("\(named) is open in the background, not on screen. "
                     + "Call `show` to open it in a tab first.")
             }
             return controller
@@ -107,7 +114,45 @@ final class AgentDesk {
         for entry in background.entries where entry.pane.isOpen {
             result.append(Place(id: id(of: entry), pane: entry.pane, controller: nil, slot: "background"))
         }
-        return result
+        return Self.labelled(result)
+    }
+
+    /// Each place with what to call it to the person: the file's name — a
+    /// part's own name — and, where another open document has the same name,
+    /// what tells them apart: the folder, when they are different files; the
+    /// pane, the tab or "not on screen", when they are one file open twice.
+    static func labelled(_ places: [Place]) -> [Place] {
+        let names = places.map { $0.pane.status.fileName }
+        var tabs: [ObjectIdentifier: Int] = [:]
+        for place in places {
+            if let controller = place.controller, tabs[ObjectIdentifier(controller)] == nil {
+                tabs[ObjectIdentifier(controller)] = tabs.count + 1
+            }
+        }
+        return places.enumerated().map { index, place in
+            var labelled = place
+            let name = names[index]
+            let twins = places.indices.filter { $0 != index && names[$0] == name }
+            guard !twins.isEmpty else {
+                labelled.label = name
+                return labelled
+            }
+            let path = place.pane.isUntitled ? nil : place.pane.document?.url.path
+            let samePath = twins.contains { other in
+                !places[other].pane.isUntitled && places[other].pane.document?.url.path == path
+            }
+            if let path, !samePath {
+                let folder = (path as NSString).deletingLastPathComponent
+                labelled.label = "\((folder as NSString).lastPathComponent)/\(name)"
+            } else if let controller = place.controller {
+                let tab = tabs[ObjectIdentifier(controller)] ?? 1
+                let inOneTab = twins.contains { places[$0].controller === controller }
+                labelled.label = inOneTab ? "\(name), \(place.slot)" : "\(name), tab \(tab)"
+            } else {
+                labelled.label = "\(name), not on screen"
+            }
+            return labelled
+        }
     }
 
     /// The on-screen place holding the file at `url`, if a tab has it open.

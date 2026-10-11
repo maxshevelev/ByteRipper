@@ -85,12 +85,39 @@ final class AgentDumpToolsTests: XCTestCase {
         XCTAssertEqual(bytes["values"]?.arrayValue?.count, 4)
 
         let reveal = try await client.call("reveal", ["document": .string(id), "offset": 0])
-        XCTAssertEqual(reveal.answer, .string("\(id) is open in the background, not on screen. Call `show` to open it in a tab first."))
+        XCTAssertTrue(reveal.answer.stringValue?.hasSuffix("(\(id)) is open in the background, not on screen. "
+                                                         + "Call `show` to open it in a tab first.") == true,
+                      "named by its file and its id: \(reveal.answer)")
         // An annotation on a file with no window belongs to the file, and is
         // drawn once it is shown.
         let annotated = try await client.answer("annotate", ["document": .string(id), "offset": 0, "title": "X"])
         XCTAssertNotNil(annotated["path"])
         XCTAssertNil(annotated["document"], "not on screen")
+    }
+
+    /// A document is named to the person by its file, never by its id: two
+    /// files of one name are told apart by their folders, and a file on disk
+    /// has a link that brings it forward.
+    func testADocumentIsNamedByItsFileAndToldApartFromItsTwin() async throws {
+        try openWindow()
+        let other = folder.appendingPathComponent("Dell")
+        try FileManager.default.createDirectory(at: other, withIntermediateDirectories: true)
+        let twin = other.appendingPathComponent("front.bin")
+        try Data([9, 9]).write(to: twin)
+        _ = try await client.answer("open_dump", ["path": .string(twin.path)])
+
+        let documents = try await client.answer("documents")
+        let listed = try XCTUnwrap(documents["documents"]?.arrayValue)
+        let labels = listed.compactMap { $0["label"]?.stringValue }
+        XCTAssertEqual(Set(labels), ["\(folder.lastPathComponent)/front.bin", "Dell/front.bin"], "\(listed)")
+        let link = try XCTUnwrap(listed.first?["link"]?.stringValue)
+        XCTAssertTrue(link.hasPrefix("[\(labels[0])](byteripper://file?path="), link)
+        let url = try XCTUnwrap(URL(string: String(link.dropFirst(labels[0].count + 3).dropLast())))
+        XCTAssertNil(AgentNodeURLs.parse(url)?.node, "a link to the file itself")
+
+        // Every answer about a document names it as well.
+        let read = try await client.answer("read", ["document": "d1", "offset": 0, "length": 2])
+        XCTAssertEqual(read["document_label"], .string(labels[0]))
     }
 
     func testAFileAlreadyInATabAnswersWithThatTabsId() async throws {
@@ -135,7 +162,7 @@ final class AgentDumpToolsTests: XCTestCase {
         XCTAssertEqual(closed["closed"]?.stringValue, id)
         XCTAssertTrue(service.desk.background.entries.isEmpty)
         let refused = try await client.call("close_dump", ["document": "d1"])
-        XCTAssertEqual(refused.answer, "d1 is open in a tab; only the person closes it.")
+        XCTAssertEqual(refused.answer, "front.bin (d1) is open in a tab; only the person closes it.")
     }
 
     func testAMissingFileIsRefusedWithItsPath() async throws {

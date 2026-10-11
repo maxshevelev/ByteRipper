@@ -168,7 +168,7 @@ final class AgentRefsTools {
             let bios = Self.biosRegion(in: image) ?? 0..<place.pane.fileSize
             let file = relative ? bios.lowerBound + address : address
             guard file < place.pane.fileSize else {
-                throw AgentToolError("\(AgentHostTools.hexText(file)) is past the end of \(place.id).")
+                throw AgentToolError("\(AgentHostTools.hexText(file)) is past the end of \(place.named).")
             }
             // An address outside the BIOS region has no bus or region form.
             guard bios.contains(file) || names.contains("file") else {

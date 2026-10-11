@@ -188,7 +188,7 @@ final class AgentServiceTests: XCTestCase {
 
         let refused = try await call("read", ["offset": "0x10"])
         XCTAssertTrue(refused.isError)
-        XCTAssertEqual(refused.answer, "Offset 0x10 is past the end of d1, which is 0x4 bytes long.")
+        XCTAssertTrue(refused.answer.stringValue?.hasSuffix(" (d1), which is 0x4 bytes long.") == true, "\(refused.answer)")
         let value9 = try await call("read", ["offset": 0, "length": 5000]).isError
         XCTAssertTrue(value9)
     }

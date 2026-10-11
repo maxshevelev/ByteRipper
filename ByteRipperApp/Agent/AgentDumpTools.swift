@@ -91,7 +91,7 @@ final class AgentDumpTools {
     private func closeDump(_ arguments: AgentArguments) async throws -> AgentAnswer {
         let place = try resolve(arguments.string("document"))
         guard !place.isOnScreen else {
-            throw AgentToolError("\(place.id) is open in a tab; only the person closes it.")
+            throw AgentToolError("\(place.named) is open in a tab; only the person closes it.")
         }
         desk.background.close(place.pane)
         return .json(["closed": .string(place.id)])
@@ -130,7 +130,7 @@ final class AgentDumpTools {
         if place.isOnScreen {
             onScreen = place
         } else {
-            guard let url = place.pane.document?.url else { throw AgentToolError("\(place.id) has no file.") }
+            guard let url = place.pane.document?.url else { throw AgentToolError("\(place.named) has no file.") }
             if let existing = desk.onScreenPlace(of: url) {
                 onScreen = existing
             } else {

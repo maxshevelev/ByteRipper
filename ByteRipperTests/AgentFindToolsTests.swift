@@ -136,7 +136,7 @@ final class AgentFindToolsTests: XCTestCase {
         let long = try await client.call("find_bytes", ["text": "longer than the file"])
         XCTAssertEqual(long.answer, "The pattern is longer than the range searched.")
         let past = try await client.call("find_bytes", ["hex": "01", "end": "0x10"])
-        XCTAssertTrue(past.answer.stringValue?.hasPrefix("The range 0x0–0x10 is not inside d1") == true, "\(past.answer)")
+        XCTAssertTrue(past.answer.stringValue?.hasPrefix("The range 0x0–0x10 is not inside front.bin (d1)") == true, "\(past.answer)")
     }
 
     // MARK: - Inside a compressed section

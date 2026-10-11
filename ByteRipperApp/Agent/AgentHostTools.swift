@@ -33,8 +33,10 @@ final class AgentHostTools {
             name: "documents",
             title: "Open documents",
             description: """
-                Lists every file open in ByteRipper: its id (pass it as `document` to the other tools), \
-                name, path, size, whether it has unsaved edits, and where it is — pane A or B of a tab, \
+                Lists every file open in ByteRipper: its id (pass it as `document` to the other tools — \
+                never show it to the person), `label` (what to call it to the person: the file's name, told \
+                apart from another of the same name), `link` for a file on disk (the label as a Markdown \
+                link that brings it forward in ByteRipper — write it where you name the file), name, path, size, whether it has unsaved edits, and where it is — pane A or B of a tab, \
                 or a part opened over its parent file ("part", with the parent's id, the bytes of the \
                 parent it came from, and `decoded` — what the part's bytes are to those: `LZMA`, `XOR 77`, \
                 `Read-only`…, absent for a plain copy — and `keeps_offsets`, whether byte n of the part is \
@@ -54,6 +56,7 @@ final class AgentHostTools {
             let pane = place.pane
             var entry: [String: JSONValue] = [
                 "id": .string(place.id),
+                "label": .string(place.label),
                 "name": .string(pane.status.fileName),
                 "size": Self.hex(pane.fileSize),
                 "slot": .string(place.slot)
@@ -65,7 +68,12 @@ final class AgentHostTools {
                 entry["unsaved_edits"] = .bool(pane.status.isDirty)
                 entry["read_only"] = .bool(pane.status.isReadOnly)
             }
-            if !pane.isUntitled, let url = pane.document?.url { entry["path"] = .string(url.path) }
+            if !pane.isUntitled, let url = pane.document?.url {
+                entry["path"] = .string(url.path)
+                if pane.origin == nil, let link = AgentNodeURLs.url(file: url) {
+                    entry["link"] = .string("[\(place.label)](\(link.absoluteString))")
+                }
+            }
             if let origin = pane.origin, let parent = origin.parent?.document {
                 entry["part_of"] = .string(desk.id(of: parent))
                 entry["source"] = Self.range(origin.sourceRange)
@@ -157,7 +165,7 @@ final class AgentHostTools {
         }
         let size = place.pane.fileSize
         guard offset < size else {
-            throw AgentToolError("Offset \(Self.hexText(offset)) is past the end of \(place.id), "
+            throw AgentToolError("Offset \(Self.hexText(offset)) is past the end of \(place.named), "
                 + "which is \(Self.hexText(size)) bytes long.")
         }
         let end = min(offset + asked, size)
@@ -204,7 +212,7 @@ final class AgentHostTools {
         let controller = try place.onScreen()
         let size = place.pane.fileSize
         guard offset < size || (offset == size && length == 0) else {
-            throw AgentToolError("Offset \(Self.hexText(offset)) is past the end of \(place.id), "
+            throw AgentToolError("Offset \(Self.hexText(offset)) is past the end of \(place.named), "
                 + "which is \(Self.hexText(size)) bytes long.")
         }
         let end = min(offset + length, size)

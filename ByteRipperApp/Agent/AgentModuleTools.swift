@@ -120,7 +120,7 @@ final class AgentModuleTools {
         let place = try resolve(arguments)
         let other = try resolve(id: arguments.string("against"))
         guard other.pane !== place.pane else {
-            throw AgentToolError("`document` and `against` are the same document, \(place.id).")
+            throw AgentToolError("`document` and `against` are the same document, \(place.named).")
         }
         let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
         let otherHost = PaneToolHost(pane: other.pane, owner: other.controller, tools: nil)
@@ -156,7 +156,7 @@ final class AgentModuleTools {
         let version = host.contentVersion
         let change = try await edit.run(host, arguments)
         guard host.contentVersion == version else {
-            throw AgentToolError("\(place.id) changed while the edit was being worked out; nothing was written. Ask again.")
+            throw AgentToolError("\(place.named) changed while the edit was being worked out; nothing was written. Ask again.")
         }
         let app = Localization.appLanguage
         let step = edit.undoName.text(in: app)
@@ -193,7 +193,7 @@ final class AgentModuleTools {
         let place = try resolve(arguments)
         let tools = try place.onScreen().tools(reading: place.pane)
         guard tools.activeIdentifier == identifier, tools.boundPane === place.pane, let session = tools.session else {
-            throw AgentToolError("The \(title) panel is not open on \(place.id). "
+            throw AgentToolError("The \(title) panel is not open on \(place.named). "
                 + "Call `open_panel` with module \"\(short)\" first, or show the bytes with `reveal`.")
         }
         if action.changesView { desk.bringForward(place) }
@@ -252,7 +252,7 @@ final class AgentModuleTools {
             controller.refreshToolPanelHeader()
         }
         guard tools.activeIdentifier == module.identifier, tools.boundPane === place.pane else {
-            throw AgentToolError("The \(module.title) panel could not be opened on \(place.id).")
+            throw AgentToolError("The \(module.title) panel could not be opened on \(place.named).")
         }
         return .json(["document": .string(place.id), "module": .string(short),
                       "panel": .string(module.title), "was_open": .bool(alreadyOpen)])

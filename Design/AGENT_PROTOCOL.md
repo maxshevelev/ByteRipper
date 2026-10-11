@@ -103,6 +103,19 @@ A background document is answered about by every tool that reads — `read`,
 tool that shows: `focus`, `reveal`, `open_panel`, panel actions. An annotation
 on it belongs to its file and is drawn once the file is shown.
 
+## Naming a document to the person
+
+A document's `id` (`d1`, `d2`…) is for tools too. `documents` gives each a
+`label`: the file's name — a part's own name — and, where another open
+document has the same name, what tells them apart: the folder
+(`Dell/1.bin`) for two files, the pane (`1.bin, B`), the tab (`1.bin, tab 2`)
+or `not on screen` for one file open twice. A file on disk, not a part, also
+has a `link`, `[label](byteripper://file?path=<path>)`, which brings its tab
+forward or opens it. Every answer with a top-level `document` carries
+`document_label`; a refusal names a document as `label (id)` —
+`1.bin (d2) is open read-only…` — the label for the person, the id for the
+next call.
+
 ## Naming a node to the person
 
 A node's `id` is for tools; the person never needs it. Every UEFI node an

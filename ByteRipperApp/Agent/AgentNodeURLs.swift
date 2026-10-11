@@ -20,10 +20,26 @@ enum AgentNodeURLs {
         return components.url
     }
 
-    /// The file and the node a link names, or nil for one that is not ours.
-    static func parse(_ url: URL) -> (file: URL, node: String)? {
-        guard url.scheme == scheme, url.host == "node",
-              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
+    /// The link that brings the file at `file` forward, or opens it:
+    /// `byteripper://file?path=…`.
+    static func url(file: URL) -> URL? {
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = "file"
+        components.queryItems = [URLQueryItem(name: "path", value: file.path)]
+        return components.url
+    }
+
+    /// The file and the node a link names — no node for a link to the file
+    /// itself — or nil for one that is not ours.
+    static func parse(_ url: URL) -> (file: URL, node: String?)? {
+        guard url.scheme == scheme,
+              let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems else { return nil }
+        if url.host == "file" {
+            guard let path = items.first(where: { $0.name == "path" })?.value, path.hasPrefix("/") else { return nil }
+            return (URL(fileURLWithPath: path), nil)
+        }
+        guard url.host == "node",
               // A path as the system writes it — here an absolute POSIX one;
               // the Windows edition takes `C:\…` (`Design/AGENT_PROTOCOL.md`).
               let path = items.first(where: { $0.name == "file" })?.value, path.hasPrefix("/"),

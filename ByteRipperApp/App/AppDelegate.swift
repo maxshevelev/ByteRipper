@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// they queue here and drain once it is up.
     private var pendingOpenURLs: [URL] = []
     /// Node links that came before the first window: opened once it is up.
-    private var pendingNodeLinks: [(file: URL, node: String)] = []
+    private var pendingNodeLinks: [(file: URL, node: String?)] = []
     private var isReady = false
     /// Observes theme changes so a Settings change re-themes the running app
     /// without a relaunch (§3.2).
@@ -254,7 +254,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         }
     }
 
-    private func openNodeLinks(_ links: [(file: URL, node: String)]) {
+    private func openNodeLinks(_ links: [(file: URL, node: String?)]) {
         for link in links {
             Task { @MainActor in await agentService.openNode(file: link.file, id: link.node) }
         }

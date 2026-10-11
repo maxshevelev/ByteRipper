@@ -162,7 +162,7 @@ final class AgentFindTools {
         let end = try arguments.optionalOffset("end") ?? UInt64(scope.count)
         guard offset < end, end <= UInt64(scope.count) else {
             throw AgentToolError("The range \(AgentHostTools.hexText(offset))–\(AgentHostTools.hexText(end)) is not inside "
-                + (node == nil ? "\(place.id), which is " : "the node, which is ")
+                + (node == nil ? "\(place.named), which is " : "the node, which is ")
                 + "\(AgentHostTools.hexText(UInt64(scope.count))) bytes long.")
         }
         let range = (scope.lowerBound + offset)..<(scope.lowerBound + end)
@@ -369,7 +369,7 @@ final class AgentFindTools {
             let size = place.pane.fileSize
             guard length > 0, offset < size, length <= size - offset else {
                 throw AgentToolError("\(AgentHostTools.hexText(offset)) and \(AgentHostTools.hexText(length)) bytes "
-                    + "do not fit in \(place.id), which is \(AgentHostTools.hexText(size)) bytes long.")
+                    + "do not fit in \(place.named), which is \(AgentHostTools.hexText(size)) bytes long.")
             }
             let source = offset..<(offset + length)
             let stem = (place.pane.status.fileName as NSString).deletingPathExtension

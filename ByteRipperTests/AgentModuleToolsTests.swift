@@ -146,7 +146,8 @@ final class AgentModuleToolsTests: XCTestCase {
         let id = try await driverID()
         let refused = try await client.call("uefi_select", ["node": .string(id)])
         XCTAssertTrue(refused.isError)
-        let expected = "The UEFI Structure panel is not open on d1. "
+        let name = try XCTUnwrap(controller?.windowModel.pane1.status.fileName)
+        let expected = "The UEFI Structure panel is not open on \(name) (d1). "
             + #"Call `open_panel` with module "uefi-structure" first, or show the bytes with `reveal`."#
         XCTAssertEqual(refused.answer, .string(expected))
     }

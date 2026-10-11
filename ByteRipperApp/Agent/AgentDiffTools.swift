@@ -88,7 +88,7 @@ final class AgentDiffTools {
         let place = try resolve(arguments.optionalString("document"))
         let other = try resolve(arguments.string("against"))
         guard other.pane !== place.pane else {
-            throw AgentToolError("`document` and `against` are the same document, \(place.id).")
+            throw AgentToolError("`document` and `against` are the same document, \(place.named).")
         }
         let sizes = (place.pane.fileSize, other.pane.fileSize)
         let common = min(sizes.0, sizes.1)
@@ -306,7 +306,7 @@ final class AgentDiffTools {
         let place = try resolve(arguments.optionalString("document"))
         let other = try resolve(arguments.string("against"))
         guard other.pane !== place.pane else {
-            throw AgentToolError("`document` and `against` are the same document, \(place.id).")
+            throw AgentToolError("`document` and `against` are the same document, \(place.named).")
         }
         if let pair = pair(of: place.pane, other.pane) {
             return .json(shown(pair, was: true))
@@ -408,7 +408,7 @@ final class AgentDiffTools {
 
     private func url(of place: AgentDesk.Place) throws -> URL {
         guard !place.pane.isUntitled, let url = place.pane.document?.url else {
-            throw AgentToolError("\(place.id) has never been saved; only a file on disk can be opened beside another.")
+            throw AgentToolError("\(place.named) has never been saved; only a file on disk can be opened beside another.")
         }
         return url
     }
@@ -417,7 +417,7 @@ final class AgentDiffTools {
     /// one whose tab holds unsaved edits.
     private func reopenable(_ place: AgentDesk.Place) throws {
         guard place.isOnScreen, place.pane.status.isDirty else { return }
-        throw AgentToolError("\(place.id) has unsaved edits, which a second copy opened from disk would not show. "
+        throw AgentToolError("\(place.named) has unsaved edits, which a second copy opened from disk would not show. "
             + "Ask the person to save it, or to put the other file beside it.")
     }
 
@@ -452,7 +452,7 @@ final class AgentDiffTools {
         let controller = try place.onScreen()
         guard place.slot == "A" || place.slot == "B", controller.mode == .comparison,
               controller.windowModel.pane1.isOpen, controller.windowModel.pane2.isOpen else {
-            throw AgentToolError("\(place.id) is not one of a pair shown side by side. `compare` shows it beside another.")
+            throw AgentToolError("\(place.named) is not one of a pair shown side by side. `compare` shows it beside another.")
         }
         desk.bringForward(place)
         guard let range = await controller.revealDifferenceForAgent(
@@ -475,7 +475,7 @@ final class AgentDiffTools {
     /// actor.
     func snapshot(_ place: AgentDesk.Place) throws -> any ByteStorage {
         guard let overlay = place.pane.document?.storage as? EditOverlayStorage else {
-            throw AgentToolError("\(place.id) could not be read.")
+            throw AgentToolError("\(place.named) could not be read.")
         }
         return try overlay.contentSnapshot(scratch: scratch)
     }

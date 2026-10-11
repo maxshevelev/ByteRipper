@@ -96,7 +96,7 @@ final class AgentAnnotationTests: XCTestCase {
     func testAnAnnotationPastTheEndOrWithoutATitleOrAPlaceIsRefused() async throws {
         try open(0x100)
         let past = try await client.call("annotate", ["offset": "0xF0", "length": "0x20", "title": "Tail"])
-        XCTAssertEqual(past.answer, "The range 0xF0–0x110 runs past the end of d1, which is 0x100 bytes long.")
+        XCTAssertTrue(past.answer.stringValue?.hasSuffix(" (d1), which is 0x100 bytes long.") == true, "\(past.answer)")
         let empty = try await client.call("annotate", ["offset": 0, "title": "  "])
         XCTAssertTrue(empty.isError)
         let zero = try await client.call("annotate", ["offset": 0, "length": 0, "title": "Nothing"])

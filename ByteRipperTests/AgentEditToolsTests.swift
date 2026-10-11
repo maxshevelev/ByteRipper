@@ -367,7 +367,7 @@ final class AgentEditToolsTests: XCTestCase {
         XCTAssertTrue(pane.status.isReadOnly)
         service.editsAllowed = true
         let refused = try await client.call("write", ["offset": 0, "bytes": "AA", "label": "X"])
-        XCTAssertEqual(refused.answer, "d1 is open read-only; nothing in it can be changed.")
+        XCTAssertEqual(refused.answer, "front.bin (d1) is open read-only; nothing in it can be changed.")
     }
 
     func testABackgroundDumpIsNeverChanged() async throws {
@@ -377,7 +377,9 @@ final class AgentEditToolsTests: XCTestCase {
         let opened = try await client.answer("open_dump", ["path": .string(url.path)])
         let id = try XCTUnwrap(opened["document"]?.stringValue)
         let refused = try await client.call("write", ["document": .string(id), "offset": 0, "bytes": "AA", "label": "X"])
-        XCTAssertEqual(refused.answer, .string("\(id) is open in the background, not on screen. Call `show` to open it in a tab first."))
+        XCTAssertTrue(refused.answer.stringValue?.hasSuffix("(\(id)) is open in the background, not on screen. "
+                                                          + "Call `show` to open it in a tab first.") == true,
+                      "\(refused.answer)")
         XCTAssertEqual(try Data(contentsOf: url), Data([1, 2]))
     }
 

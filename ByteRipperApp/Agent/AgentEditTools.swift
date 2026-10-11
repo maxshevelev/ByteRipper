@@ -74,7 +74,7 @@ final class AgentEditTools {
             let expected = try Self.hexBytes(arguments.string("expect"), name: "expect")
             let end = offset &+ UInt64(expected.count)
             guard end <= place.pane.fileSize else {
-                throw AgentToolError("`expect` runs past the end of \(place.id).")
+                throw AgentToolError("`expect` runs past the end of \(place.named).")
             }
             let actual = try place.pane.byteStorage?.read(at: offset, length: expected.count) ?? []
             guard actual == expected else {
@@ -122,14 +122,14 @@ final class AgentEditTools {
         let controller = try source.onScreen()
         let model = controller.windowModel
         guard source.slot == "A" || source.slot == "B" else {
-            throw AgentToolError("\(source.id) is a part over a file, not one of a tab's two files; it has no "
+            throw AgentToolError("\(source.named) is a part over a file, not one of a tab's two files; it has no "
                 + "pane beside it. Use `write`, or copy in the tab's own files.")
         }
         let other = source.pane === model.pane1 ? model.pane2 : model.pane1
         guard let otherDocument = other.document,
               let destination = desk.places().first(where: { $0.pane === other && $0.pane.document === otherDocument })
         else {
-            throw AgentToolError("\(source.id) is alone in its tab; there is no other pane to copy into. "
+            throw AgentToolError("\(source.named) is alone in its tab; there is no other pane to copy into. "
                 + "`compare` puts a second file beside it.")
         }
         let offset = try arguments.offset("offset")
@@ -137,14 +137,14 @@ final class AgentEditTools {
         guard length > 0 else { throw AgentToolError("Argument `length` must be at least 1.") }
         guard offset < source.pane.fileSize, length <= source.pane.fileSize - offset else {
             throw AgentToolError("The range \(AgentHostTools.hexText(offset))+\(AgentHostTools.hexText(length)) "
-                + "runs past the end of \(source.id), which is \(AgentHostTools.hexText(source.pane.fileSize)) bytes long.")
+                + "runs past the end of \(source.named), which is \(AgentHostTools.hexText(source.pane.fileSize)) bytes long.")
         }
         guard length <= UInt64(Int.max) else { throw AgentToolError("The range is too long.") }
         try checkEditable(destination)
         let range = offset..<(offset + length)
         guard range.upperBound <= destination.pane.fileSize else {
             throw AgentToolError("The range ends at \(AgentHostTools.hexText(range.upperBound)), past the end of "
-                + "\(destination.id), which is \(AgentHostTools.hexText(destination.pane.fileSize)) bytes long. "
+                + "\(destination.named), which is \(AgentHostTools.hexText(destination.pane.fileSize)) bytes long. "
                 + "Nothing was copied; a copy overwrites, it does not grow the file.")
         }
         let bytes = try source.pane.byteStorage?.read(at: offset, length: Int(length)) ?? []
@@ -216,7 +216,7 @@ final class AgentEditTools {
         let place = try resolve(arguments.optionalString("document"))
         let controller = try place.onScreen()
         guard let origin = place.pane.origin else {
-            throw AgentToolError("\(place.id) is not a part, so it has no parent to go back into. "
+            throw AgentToolError("\(place.named) is not a part, so it has no parent to go back into. "
                 + "`open_part` opens a part; `documents` lists which documents are parts.")
         }
         guard isAllowed() else {
@@ -240,7 +240,7 @@ final class AgentEditTools {
         case .refused(let refusal):
             throw AgentToolError("\(refusal.title.text(in: .english)). \(refusal.message.text(in: .english)) Nothing was written.")
         case .sourceChanged:
-            throw AgentToolError("The bytes \(place.id) was opened from (\(AgentHostTools.hexText(sourceBefore.lowerBound))–"
+            throw AgentToolError("The bytes \(place.named) was opened from (\(AgentHostTools.hexText(sourceBefore.lowerBound))–"
                 + "\(AgentHostTools.hexText(sourceBefore.upperBound)) in \(parentName)) have changed there since. "
                 + "Updating would overwrite those changes. Nothing was written. Ask the person; call again with "
                 + "`overwrite_changed_source: true` only if they agree.")
@@ -273,7 +273,7 @@ final class AgentEditTools {
         }
         _ = try place.onScreen()
         guard !place.pane.status.isReadOnly else {
-            throw AgentToolError("\(place.id) is open read-only; nothing in it can be changed.")
+            throw AgentToolError("\(place.named) is open read-only; nothing in it can be changed.")
         }
     }
 
@@ -291,7 +291,7 @@ final class AgentEditTools {
         }
         let size = place.pane.fileSize
         if let past = checked.writes.first(where: { $0.range.upperBound > size }) {
-            throw AgentToolError("A write at \(AgentHostTools.hexText(past.offset)) runs past the end of \(place.id), "
+            throw AgentToolError("A write at \(AgentHostTools.hexText(past.offset)) runs past the end of \(place.named), "
                 + "which is \(AgentHostTools.hexText(size)) bytes long. Writes overwrite; they do not grow the file.")
         }
         let before = try checked.writes.map { write in
@@ -301,7 +301,7 @@ final class AgentEditTools {
         do {
             try host.apply(checked)
         } catch {
-            throw AgentToolError("Could not write into \(place.id): \(error).")
+            throw AgentToolError("Could not write into \(place.named): \(error).")
         }
         let covered = checked.writes.first!.offset..<checked.writes.last!.range.upperBound
         desk.bringForward(place)
