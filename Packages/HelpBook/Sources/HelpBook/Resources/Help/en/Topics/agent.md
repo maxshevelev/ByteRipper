@@ -9,6 +9,7 @@
 @covers window.agent.follow
 @covers window.agent.tools
 @covers window.agent.annotations
+@covers agent.node-link
 @covers menu.window.agent
 @covers menubar.agent
 @covers settings.agent.edits
@@ -86,6 +87,10 @@ While it is on, an agent can:
 - add, update, replace and remove microcode in the FIT from the same online catalogue **FIT Table** offers, with the same checks: an update already in the table under another of its CPUIDs is refused, an update whose extended signature table serves a processor a row already serves takes that row's place, and a replacement that would leave two microcodes for one processor is refused naming the row to replace. The agent can also say which of the image's microcodes the catalogue has a newer revision for.
 
 Each change is one step of the file's undo, named **Agent:** and what the agent said the change is, so **Edit ▸ Undo** (**⌘Z**) takes it back. The changed bytes are red until the file is saved, like an edit made by hand, and the dump scrolls to them as a step of the navigation history. The file is saved only by the person. A file opened read-only, and a file the agent opened by its path without a tab, are never changed.
+
+## Links to nodes
+
+When the agent names a node of a firmware image's structure, it calls it as **UEFI Structure** does — by its name, and by its addresses as well where the name only says what kind of area it is, such as **Unused** or **Padding** — and writes it as a link. A click on the link, in a program that opens such links, brings the file forward in ByteRipper or opens it, opens **UEFI Structure** and chooses the node; **View ▸ Back** (**⌘[**) returns. If the file has been moved, deleted or changed since, ByteRipper says so. Whether a link can be clicked depends on the agent's program and, for Claude Code, on the terminal it runs in.
 
 ## The Agent window
 

@@ -20,6 +20,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// before `applicationDidFinishLaunching` finishes building the window, so
     /// they queue here and drain once it is up.
     private var pendingOpenURLs: [URL] = []
+    /// Node links that came before the first window: opened once it is up.
+    private var pendingNodeLinks: [(file: URL, node: String)] = []
     private var isReady = false
     /// Observes theme changes so a Settings change re-themes the running app
     /// without a relaunch (§3.2).
@@ -156,6 +158,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             pendingOpenURLs.removeAll()
             openFiles(urls)
         }
+        if !pendingNodeLinks.isEmpty {
+            let links = pendingNodeLinks
+            pendingNodeLinks.removeAll()
+            openNodeLinks(links)
+        }
     }
 
     /// File ▸ New Window (⇧⌘N).
@@ -231,10 +238,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// into the same open pipeline as the Open panel (§4.1), in the window in
     /// front — a file launched with the app opens directly into a pane.
     func application(_ application: NSApplication, open urls: [URL]) {
+        // A node link an agent wrote: the file, then the node in its tree.
+        let links = urls.compactMap(AgentNodeURLs.parse)
+        let files = urls.filter { AgentNodeURLs.parse($0) == nil }
         if isReady {
-            openFiles(urls)
+            openNodeLinks(links)
         } else {
-            pendingOpenURLs.append(contentsOf: urls)
+            pendingNodeLinks.append(contentsOf: links)
+        }
+        guard !files.isEmpty else { return }
+        if isReady {
+            openFiles(files)
+        } else {
+            pendingOpenURLs.append(contentsOf: files)
+        }
+    }
+
+    private func openNodeLinks(_ links: [(file: URL, node: String)]) {
+        for link in links {
+            Task { @MainActor in await agentService.openNode(file: link.file, id: link.node) }
         }
     }
 

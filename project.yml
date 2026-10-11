@@ -214,6 +214,12 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHumanReadableCopyright: "Copyright © 2026"
+        # byteripper://node?file=…&id=… — a node an agent names, opened in the
+        # UEFI tree with a click in the client it is talking in
+        # (`AgentNodeURLs`).
+        CFBundleURLTypes:
+          - CFBundleURLName: dev.maxik.ByteRipper.node
+            CFBundleURLSchemes: [byteripper]
         CFBundleDocumentTypes:
           # The dump extensions the app is about (§25.2). The icon is generated
           # by the system from the app icon, so a dump on the desktop is

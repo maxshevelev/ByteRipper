@@ -1,4 +1,4 @@
-@source-sha 5a37e58d30e83ba1264f5ad656ac45255a054a5d44f439b6d26ae43519c6693a
+@source-sha 94b9815cb4e5d7de8227094ace16cf60e94880c5d8e8a2f604fa90e8491b2f0f
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -102,6 +102,10 @@ Ist sie eingeschaltet, kann der Agent:
 - ermitteln, für welche Microcodes des Images der Katalog eine neuere Revision bereithält.
 
 Jede Änderung des Agenten bildet einen eigenen Schritt im Widerrufen-Verlauf der Datei. Der Schritt trägt die Bezeichnung **Agent:** und die Beschreibung, die der Agent der Änderung gegeben hat; **Bearbeiten ▸ Widerrufen** (**⌘Z**) nimmt ihn zurück. Bis zum Sichern erscheinen die geänderten Bytes rot, wie bei einer Änderung von Hand; der Dump scrollt zu ihnen, und dieser Sprung wird im Verlauf festgehalten. Gesichert wird eine Datei ausschließlich vom Benutzer. Eine schreibgeschützt geöffnete Datei sowie eine Datei, die der Agent ohne Tab über ihren Pfad geöffnet hat, werden niemals verändert.
+
+## Links auf Knoten
+
+Nennt der Agent einen Knoten der Struktur eines Firmware-Images, bezeichnet er ihn wie **UEFI-Struktur**: mit seinem Namen und, wo der Name nur die Art des Bereichs angibt, etwa **Unused** oder **Padding**, zusätzlich mit seinen Adressen. Den Knoten schreibt er als Link. Ein Klick auf den Link in einem Programm, das solche Links öffnet, holt die Datei in ByteRipper nach vorn oder öffnet sie, öffnet **UEFI-Struktur** und wählt den Knoten aus; **Darstellung ▸ Zurück** (**⌘[**) kehrt zurück. Wurde die Datei inzwischen verschoben, gelöscht oder geändert, meldet ByteRipper dies. Ob sich ein Link anklicken lässt, hängt vom Programm des Agenten ab, bei Claude Code auch vom Terminal, in dem er läuft.
 
 ## Das Agentenfenster
 

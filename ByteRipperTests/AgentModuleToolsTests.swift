@@ -153,6 +153,50 @@ final class AgentModuleToolsTests: XCTestCase {
 
     /// The whole of "find it and show it to me": open the panel, choose the
     /// node, read the choice back — and Back undoes it.
+    /// A node is named to the person by its label — the name, with its
+    /// addresses where the name is only a kind — and carries a link that
+    /// opens it, never its id alone.
+    func testANodeIsNamedByItsLabelAndLinked() async throws {
+        let controller = try open(UEFITestImage.withTrailingPadding())
+        let id = try await driverID()
+        let node = try await client.answer("uefi_node", ["node": .string(id)])
+        XCTAssertEqual(node["node"]?["label"], "MyDriver")
+        let path = try XCTUnwrap(controller.windowModel.pane1.document?.url.path)
+        let link = try XCTUnwrap(node["node"]?["link"]?.stringValue, "\(node)")
+        XCTAssertTrue(link.hasPrefix("[MyDriver](byteripper://node?"), link)
+        let url = try XCTUnwrap(URL(string: String(link.dropFirst("[MyDriver](".count).dropLast())))
+        let parsed = try XCTUnwrap(AgentNodeURLs.parse(url))
+        XCTAssertEqual(parsed.file.path, path)
+        XCTAssertEqual(parsed.node, id)
+
+        let found = try await client.answer("uefi_find", ["type": "Padding"])
+        let padding = try XCTUnwrap(found["matches"]?.arrayValue?.first, "\(found)")
+        XCTAssertEqual(padding["label"], .string("\(padding["name"]?.stringValue ?? ""), "
+                       + "\(padding["start"]?.stringValue ?? "")–\(padding["end"]?.stringValue ?? "")"),
+                       "a name that is only a kind gets its addresses")
+    }
+
+    func testANodeLinkIsOursOnlyWithAFileAndANodeID() {
+        XCTAssertNil(AgentNodeURLs.parse(URL(string: "byteripper://node?file=/a.bin&id=x.1")!))
+        XCTAssertNil(AgentNodeURLs.parse(URL(string: "byteripper://node?id=0.1")!))
+        XCTAssertNil(AgentNodeURLs.parse(URL(string: "https://node?file=/a.bin&id=0.1")!))
+        let url = AgentNodeURLs.url(file: URL(fileURLWithPath: "/tmp/a b[1].bin"), node: "0.2.5")!
+        XCTAssertEqual(AgentNodeURLs.parse(url)?.file.path, "/tmp/a b[1].bin")
+        XCTAssertEqual(AgentNodeURLs.parse(url)?.node, "0.2.5")
+    }
+
+    /// A click on a node link opens the UEFI Structure panel on the file and
+    /// chooses the node.
+    func testOpeningANodeLinkChoosesTheNodeInThePanel() async throws {
+        let controller = try open(UEFITestImage.make())
+        let id = try await driverID()
+        let file = try XCTUnwrap(controller.windowModel.pane1.document?.url)
+        await service.openNode(file: file, id: id)
+        XCTAssertEqual(controller.tools.activeIdentifier, UEFIToolModule.identifier)
+        let chosen = try await client.answer("uefi_selection")
+        XCTAssertEqual(chosen["selected"]?["name"], "MyDriver")
+    }
+
     func testOpenPanelThenSelectChoosesTheNodeAndBackReturns() async throws {
         let controller = try open(UEFITestImage.make())
         let id = try await driverID()

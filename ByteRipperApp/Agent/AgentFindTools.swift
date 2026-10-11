@@ -196,7 +196,8 @@ final class AgentFindTools {
                                                               under: node.node, in: node.tree)
                 places.append([AgentDiffTools.placeJSON(ToolAgentPlace(
                     kind: "uefi", id: deepest.id.description,
-                    name: UEFITreeDisplay.ownName(of: deepest) ?? deepest.name, range: nil))])
+                    name: UEFITreeDisplay.ownName(of: deepest) ?? deepest.name, range: nil,
+                    label: UEFIAgentQueries.label(of: deepest, in: node.tree)))])
             }
         } else {
             places = await diff.locate(host, page.map(\.range)).map { $0.map(AgentDiffTools.placeJSON) }

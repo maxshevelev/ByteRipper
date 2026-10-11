@@ -32,7 +32,10 @@ public enum UEFIAgentQueries {
             The structure of a firmware image as the UEFI Structure panel shows it: regions, volumes, \
             files, sections, NVRAM stores and the rest. Without `node`, the top of the tree and a one-line \
             summary of the image; with it, that node and its children. `depth` (1–3) goes further down. \
-            Each node: `id` (pass it back as `node`), type, subtype, name, GUID, its bytes (`start`, `end`, \
+            Each node: `id` (pass it back as `node` — never show it to the person), `label` (what to call \
+            it to the person: its name, with its addresses where the name is only a kind such as Unused), \
+            on a file on disk `link` (the label as a Markdown link that opens the node in ByteRipper — \
+            write it where you name the node), type, subtype, name, GUID, its bytes (`start`, `end`, \
             or `in_compressed: true` when it lives inside a decompressed section and has no file address), \
             `compressed` — a compressed section's own algorithm, or for a node it decompresses to the \
             algorithm it came out of — and `compressed_in`, the innermost section it was decompressed out \
@@ -318,7 +321,8 @@ public enum UEFIAgentQueries {
         var entry: [String: JSONValue] = [
             "id": .string(node.id.description),
             "type": .string(UEFITreeDisplay.typeText(for: node)),
-            "name": .string(UEFITreeDisplay.ownName(of: node) ?? node.name)
+            "name": .string(UEFITreeDisplay.ownName(of: node) ?? node.name),
+            "label": .string(label(of: node, in: tree))
         ]
         let subtype = UEFITreeDisplay.subtypeText(for: node)
         if !subtype.isEmpty { entry["subtype"] = .string(subtype) }
@@ -362,6 +366,42 @@ public enum UEFIAgentQueries {
             }
         }
         return nil
+    }
+
+    /// What to call a node to the person: its name as the panel's Name column
+    /// shows it — and, where that name says only what kind of thing it is
+    /// (Padding, Unused, Raw…), where it is: its addresses, or for one inside
+    /// a compressed section the named node it is in. Never the id, which
+    /// means nothing on screen.
+    public static func label(of node: UEFINode, in tree: LazyUEFITree?) -> String {
+        let name = UEFITreeDisplay.ownName(of: node) ?? node.name
+        guard isPlaceholder(name, of: node) else { return name }
+        if let range = node.fileRange {
+            return "\(name), \(hex(range.lowerBound))–\(hex(range.upperBound))"
+        }
+        // In a buffer: the nearest node above with a name of its own.
+        if let tree {
+            var path = node.id.path
+            while path.count > 1 {
+                path.removeLast()
+                guard let above = tree.node(NodeID(path)) else { break }
+                let aboveName = UEFITreeDisplay.ownName(of: above) ?? above.name
+                if !isPlaceholder(aboveName, of: above) { return "\(name) in \(aboveName)" }
+            }
+        }
+        return name
+    }
+
+    /// Names that say what a node is rather than which one.
+    nonisolated static let placeholderNames: Set<String> = [
+        "unused", "unknown", "padding", "empty padding", "free space", "non-uefi data", "raw"
+    ]
+
+    static func isPlaceholder(_ name: String, of node: UEFINode) -> Bool {
+        let lowered = name.lowercased()
+        return placeholderNames.contains(lowered)
+            || lowered == UEFITreeDisplay.typeText(for: node).lowercased()
+            || lowered == UEFITreeDisplay.subtypeText(for: node).lowercased()
     }
 
     /// The names from the top of the tree down to `id`.

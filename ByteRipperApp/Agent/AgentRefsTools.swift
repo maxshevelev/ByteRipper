@@ -261,6 +261,7 @@ final class AgentRefsTools {
             }
             var entry: [String: JSONValue] = [
                 "name": .string(UEFITreeDisplay.ownName(of: owner) ?? owner.name),
+                "label": .string(UEFIAgentQueries.label(of: owner, in: tree)),
                 "type": .string(UEFITreeDisplay.subtypeText(for: owner).isEmpty
                                 ? UEFITreeDisplay.typeText(for: owner) : UEFITreeDisplay.subtypeText(for: owner)),
                 "in_compressed": .bool(owner.space != .file)

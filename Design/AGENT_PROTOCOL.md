@@ -103,6 +103,30 @@ A background document is answered about by every tool that reads — `read`,
 tool that shows: `focus`, `reveal`, `open_panel`, panel actions. An annotation
 on it belongs to its file and is drawn once the file is shown.
 
+## Naming a node to the person
+
+A node's `id` is for tools; the person never needs it. Every UEFI node an
+answer names — in `uefi_tree`, `uefi_node`, `uefi_find`, `uefi_at`,
+`uefi_checksums`, `region_scan`, `refs`, and the `where` of `diff` and
+`find_bytes` — has a `label`: its name as the panel's Name column shows it,
+and, where that name is only a kind (`Unused`, `Unknown`, `Padding`,
+`Empty padding`, `Free space`, `Non-UEFI data`, `Raw`, or its own Type or
+Subtype), its file addresses — `Unused, 0x668000–0x66A000` — or, inside a
+compressed section, the nearest named node: `Raw in SmbiosDxe`.
+
+On a document that is a file on disk, each such node also has a `link`: the
+label as a Markdown link, `[label](byteripper://node?file=<path>&id=<id>)`.
+`file` is the file's path as the system writes it — an absolute POSIX path on
+macOS, `C:\…` on Windows — percent-encoded; `id` is the node's id in that
+file's own tree. The app registers the `byteripper` scheme; opening a link
+brings the file's tab forward or opens the file, opens UEFI Structure and
+chooses the node, as `open_panel` and `uefi_select` do. A missing file, or an
+id the file no longer has, is said so. The links are added after a tool cuts
+its page, so a tool is given three quarters of the answer bound; an answer
+the links would push over the bound goes without them. A part's nodes are
+labelled but not linked: a part has no path. The Electron edition registers
+the same scheme (`app.setAsDefaultProtocolClient`); a browser page cannot.
+
 ## UEFI Structure
 
 Queries — answered with the panel open or not, from the pane's shared tree:

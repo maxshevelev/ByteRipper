@@ -149,12 +149,16 @@ public struct ToolAgentPlace: Equatable, Sendable {
     public var name: String
     /// Its bytes in the file; nil for one with no file address.
     public var range: Range<UInt64>?
+    /// What to call it to the person, where the name alone is not enough to
+    /// tell it from another; nil for the name.
+    public var label: String?
 
-    public init(kind: String, id: String, name: String, range: Range<UInt64>?) {
+    public init(kind: String, id: String, name: String, range: Range<UInt64>?, label: String? = nil) {
         self.kind = kind
         self.id = id
         self.name = name
         self.range = range
+        self.label = label
     }
 }
 

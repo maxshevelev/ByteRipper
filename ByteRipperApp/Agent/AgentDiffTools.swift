@@ -272,6 +272,7 @@ final class AgentDiffTools {
     nonisolated static func placeJSON(_ place: ToolAgentPlace) -> JSONValue {
         var members: [String: JSONValue] = ["kind": .string(place.kind), "name": .string(place.name)]
         if !place.id.isEmpty { members["id"] = .string(place.id) }
+        if let label = place.label { members["label"] = .string(label) }
         return .object(members)
     }
 

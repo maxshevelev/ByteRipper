@@ -1350,6 +1350,9 @@
 "Related Annotations: %1$@" = "Связанные заметки: %1$@";
 "Remove Annotation" = "Удалить заметку";
 "The file is not there" = "Файл не найден";
+"The node is not there" = "Узел не найден";
+"“%1$@” has been moved or deleted since the agent named it." = "Файл «%1$@» перемещён или удалён после того, как агент на него сослался.";
+"“%1$@” has no node the link names; the file may have changed since." = "В файле «%1$@» нет узла, на который указывает ссылка; возможно, файл с тех пор изменился.";
 "“%1$@” has been moved or deleted since the agent annotated it." = "Файл «%1$@» перемещён или удалён после того, как агент сделал заметку.";
 "Answers" = "Ответы";
 "Average" = "Среднее";

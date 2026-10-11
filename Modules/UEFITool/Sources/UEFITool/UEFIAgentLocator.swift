@@ -78,6 +78,7 @@ public enum UEFIAgentLocator {
 
     static func place(_ node: UEFINode) -> ToolAgentPlace {
         ToolAgentPlace(kind: "uefi", id: node.id.description,
-                       name: UEFITreeDisplay.ownName(of: node) ?? node.name, range: node.fileRange)
+                       name: UEFITreeDisplay.ownName(of: node) ?? node.name, range: node.fileRange,
+                       label: UEFIAgentQueries.label(of: node, in: nil))
     }
 }

@@ -51,7 +51,7 @@ final class AgentService {
     private(set) lazy var server = AgentServer(
         info: AgentServerInfo(name: "byteripper", version: Self.appVersion, title: "ByteRipper"),
         instructions: Self.instructions,
-        tools: catalogue.map { noted(Self.inEnglish($0.tool)) })
+        tools: catalogue.map { linking(noted(Self.inEnglish($0.tool))) })
 
     /// Every tool, in the order `tools/list` gives them, with where it comes
     /// from and what it does — what the Agent window's Tools page lists.
@@ -94,6 +94,76 @@ final class AgentService {
                   inputSchema: tool.inputSchema, annotations: tool.annotations) { call in
             try await Localization.$override.withValue(.english) { try await tool.run(call) }
         }
+    }
+
+    /// `tool`, with a `link` beside every UEFI node's `label` in its answer
+    /// when the answer's `document` is a file on disk (`AgentNodeURLs`).
+    /// The links are added after the tool has cut its page, so the tool is
+    /// given a quarter less room; an answer they would still push over the
+    /// bound goes without them.
+    private func linking(_ tool: AgentTool) -> AgentTool {
+        AgentTool(name: tool.name, title: tool.title, description: tool.description,
+                  inputSchema: tool.inputSchema, annotations: tool.annotations) { [weak self] call in
+            var arguments = call.arguments
+            let bound = arguments.answerBound
+            arguments.answerBound = bound / 4 * 3
+            let answer = try await tool.run(AgentCall(tool: call.tool, arguments: arguments, progress: call.progress))
+            guard case .json(let value) = answer, case .string(let id)? = value["document"],
+                  let file = await self?.diskFile(of: id) else { return answer }
+            let linked = AgentNodeURLs.adding(to: value, file: file)
+            return linked.jsonText.utf8.count <= bound ? .json(linked) : answer
+        }
+    }
+
+    /// Opens node `id` of the file at `file` in the UEFI Structure panel — the
+    /// tab that has the file, or a new one — as a click on an agent's node
+    /// link asks (`AgentNodeURLs`). The same steps an agent takes: the panel,
+    /// then the node, each a step of the navigation history.
+    // help: agent.node-link
+    func openNode(file: URL, id: String) async {
+        guard FileManager.default.fileExists(atPath: file.path) else {
+            Self.say(L("The file is not there"), L("“%1$@” has been moved or deleted since the agent named it.", file.path))
+            return
+        }
+        var place = desk.onScreenPlace(of: file)
+        if place == nil {
+            dumpTools.openInNewTab(file)
+            place = desk.onScreenPlace(of: file)
+        }
+        guard let place, let controller = place.controller else { return }
+        desk.bringForward(place)
+        NSApp.activate(ignoringOtherApps: true)
+        controller.view.window?.makeKeyAndOrderFront(nil)
+        let tools = server.tools
+        func run(_ name: String, _ arguments: [String: JSONValue]) async -> String? {
+            guard let tool = tools.first(where: { $0.name == name }) else { return "no \(name)" }
+            do {
+                _ = try await tool.run(AgentCall(tool: name, arguments: AgentArguments(arguments)))
+                return nil
+            } catch {
+                return "\(error)"
+            }
+        }
+        _ = await run("open_panel", ["document": .string(place.id), "module": "uefi-structure"])
+        if await run("uefi_select", ["document": .string(place.id), "node": .string(id)]) != nil {
+            Self.say(L("The node is not there"), L("“%1$@” has no node the link names; the file may have changed since.",
+                                                    file.lastPathComponent))
+        }
+    }
+
+    private static func say(_ title: String, _ text: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = text
+        alert.runModal()
+    }
+
+    /// The file on disk document `id` is, as a whole — not a part, not a
+    /// document never saved: what a node link can name.
+    private func diskFile(of id: String) -> URL? {
+        guard let place = desk.places().first(where: { $0.id == id }), place.pane.origin == nil,
+              !place.pane.isUntitled, let document = place.pane.document else { return nil }
+        return document.url
     }
 
     /// `tool`, saying so when the call names a document that is not the
@@ -350,20 +420,20 @@ final class AgentService {
         person is looking at — what they mean by "this" or "here". Addresses and sizes are hex strings \
         ("0x7F3000") both ways; ranges are half-open. A list comes in pages: pass `next` back as `after` \
         until it is null. `reveal` points at what you are talking about; `annotate` notes a place — what \
-        bytes are, or what you found — drawn over them and kept with the file. `open_dump` reads a file by path without showing it, `survey` asks one tool's question of a \
-        folder of dumps, an annotation on each file that matches is \
-        what the person checks. `find_bytes` searches the \
-        bytes; the `uefi_` tools read a firmware image's structure. `open_part` opens a stretch or a node as \
-        a part of its own, in a panel over the same window — decompressed, or a Lenovo LENV block decoded \
-        with `part: "decoded"`; asking again raises the open one (`reused: true`). A part is a document to \
-        every tool, takes the focus, and has a tree with ids of its own: name the `document` a node id was \
-        listed on. A node says how the file holds it (`encoded`, `compressed`) and names the same node in \
-        an open part or in its parent (`counterpart`, `decoded_in`); `focus_note` says a call went to the \
-        parent or a part of the focused document; `tool_panel` says whether a part has a panel, which \
-        `open_panel` with the part's `document` opens. `diff`, `compare` and `reveal_diff` set two documents \
-        side by side. Nothing here saves a file; `write`, `update_in_parent`, the `_fix_checksum` and the \
-        microcode tools change an open file, one undo step each, and only if the person allows edits. \
-        `uefi_select` and `uefi_selection` act on the open UEFI Structure panel. A tool refuses an argument \
-        it does not take; to test a client, use `documents`, never `open_part`.
+        bytes are, or what you found — drawn over them and kept with the file. `open_dump` reads a file by \
+        path without showing it, `survey` asks one tool's question of a folder of dumps. `find_bytes` \
+        searches the bytes; the `uefi_` tools read a firmware image's structure. To the person, name a node \
+        by its `link`, never by its id. `open_part` opens a stretch or a node as a part of its own, in a \
+        panel over the same window — decompressed, or a Lenovo LENV block decoded with `part: "decoded"`; \
+        asking again raises the open one (`reused: true`). A part is a document to every tool, takes the \
+        focus, and has a tree with ids of its own: name the `document` a node id was listed on. A node says \
+        how the file holds it (`encoded`, `compressed`) and names the same node in an open part or in its \
+        parent (`counterpart`, `decoded_in`); `focus_note` says a call went to the parent or a part of the \
+        focused document; `tool_panel` says whether a part has a panel, which `open_panel` with the part's \
+        `document` opens. `diff`, `compare` and `reveal_diff` set two documents side by side. Nothing here \
+        saves a file; `write`, `update_in_parent`, the `_fix_checksum` and the microcode tools change an \
+        open file, one undo step each, and only if the person allows edits. `uefi_select` and \
+        `uefi_selection` act on the open UEFI Structure panel. A tool refuses an argument it does not take; \
+        to test a client, use `documents`, never `open_part`.
         """
 }
