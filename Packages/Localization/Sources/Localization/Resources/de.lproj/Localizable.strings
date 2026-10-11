@@ -1343,7 +1343,10 @@
 "Configuration text" = "Konfigurationstext";
 "Copy the text above to the clipboard" = "Den Text oben in die Zwischenablage kopieren";
 "Log" = "Protokoll";
-"Annotation" = "Anmerkung";
+"Show in UEFI Structure" = "In UEFI-Struktur zeigen";
+"The agent has not annotated anything yet." = "Der Agent hat noch keine Anmerkungen gemacht.";
+"The file is not open" = "Die Datei ist nicht geöffnet";
+"The file is open" = "Die Datei ist geöffnet";
 "Annotations" = "Anmerkungen";
 "Clear Annotations" = "Alle Anmerkungen entfernen";
 "Dumps" = "Dumps";
@@ -1371,8 +1374,6 @@
 "Select a tool to see what the agent is told about it." = "Wählen Sie ein Werkzeug, um zu sehen, was der Agent darüber erfährt.";
 "Title" = "Titel";
 "Tool Panels" = "Werkzeugbereiche";
-"Where" = "Wo";
-"node %1$@" = "Knoten %1$@";
 "State basis" = "Grundlage des Zustands";
 "%1$@, from the reserved MFS files present." = "%1$@: nach den vorhandenen reservierten MFS-Dateien.";
 "%1$@, because the EFS volume holds file content: the engine has run and written its files." = "%1$@: Das EFS-Volume enthält Dateiinhalte, die Engine ist also gelaufen und hat ihre Dateien geschrieben.";

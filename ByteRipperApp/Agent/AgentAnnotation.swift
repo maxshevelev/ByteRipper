@@ -28,6 +28,16 @@ struct AgentAnnotation: Equatable {
     /// The annotations this one is about — a pointer and what it points at,
     /// a checksum and what it covers.
     let relatedTo: [String]
+    /// What its place is called on screen: the node as UEFI Structure names
+    /// it — given, or the deepest one holding the range — and that node's id
+    /// in the file's tree, for the link that opens it. Nil where the file has
+    /// no tree, or was not open to read one.
+    var site: Site? = nil
+
+    struct Site: Equatable {
+        let label: String
+        let node: String
+    }
 
     /// The file an annotation belongs to.
     enum File: Equatable {
@@ -45,13 +55,14 @@ struct AgentAnnotation: Equatable {
 
     /// The same annotation at another range: the place as a pane shows it.
     func at(_ range: Range<UInt64>?) -> AgentAnnotation {
-        AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, relatedTo: relatedTo)
+        AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, relatedTo: relatedTo,
+                        site: site)
     }
 
     /// Without the relations to the ones `gone` names.
     func dropping(_ gone: Set<String>) -> AgentAnnotation {
         AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note,
-                        relatedTo: relatedTo.filter { !gone.contains($0) })
+                        relatedTo: relatedTo.filter { !gone.contains($0) }, site: site)
     }
 
     /// What the pointer resting on the bytes shows: the title, the note and

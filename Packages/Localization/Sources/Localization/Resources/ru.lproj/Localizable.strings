@@ -1343,7 +1343,10 @@
 "Configuration text" = "Текст настройки";
 "Copy the text above to the clipboard" = "Скопировать текст выше в буфер обмена";
 "Log" = "Журнал";
-"Annotation" = "Заметка";
+"Show in UEFI Structure" = "Показать в Структуре UEFI";
+"The agent has not annotated anything yet." = "Агент ещё не сделал заметок.";
+"The file is not open" = "Файл не открыт";
+"The file is open" = "Файл открыт";
 "Annotations" = "Заметки";
 "Clear Annotations" = "Удалить все заметки";
 "Dumps" = "Дампы";
@@ -1371,8 +1374,6 @@
 "Select a tool to see what the agent is told about it." = "Выберите инструмент, чтобы увидеть, что о нём сообщается агенту.";
 "Title" = "Заголовок";
 "Tool Panels" = "Панели инструментов";
-"Where" = "Где";
-"node %1$@" = "узел %1$@";
 "State basis" = "Основание состояния";
 "%1$@, from the reserved MFS files present." = "%1$@: по присутствующим зарезервированным файлам MFS.";
 "%1$@, because the EFS volume holds file content: the engine has run and written its files." = "%1$@: том EFS содержит данные файлов, то есть движок уже запускался и записал свои файлы.";

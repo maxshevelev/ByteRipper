@@ -17,6 +17,9 @@ final class AgentAnnotationTools {
     var onChange: () -> Void = {}
     /// Opens a file in a tab of its own; the service hands `show`'s.
     var openInNewTab: (URL) -> Void = { _ in }
+    /// The places a range of a document lies in, as `diff` names them — set
+    /// by the service, which has the locators.
+    var locate: (PaneToolHost, Range<UInt64>) async -> [JSONValue] = { _, _ in [] }
     private(set) var items: [AgentAnnotation] = []
     private var nextID = 1
     /// Bumped by every change, so a pane knows its drawn list is stale.
@@ -219,8 +222,9 @@ final class AgentAnnotationTools {
             throw AgentToolError("Give the place: `offset`, or `node`.")
         }
 
+        let site = await self.site(of: file, range: range, node: node)
         let annotation = AgentAnnotation(id: "a\(nextID)", file: file, range: range, node: node, title: title,
-                                         note: note, relatedTo: related)
+                                         note: note, relatedTo: related, site: site)
         nextID += 1
         items.append(annotation)
         changed()
@@ -228,6 +232,25 @@ final class AgentAnnotationTools {
         guard case .object(var members) = describe(annotation) else { return .json(describe(annotation)) }
         if let fromPart { members["from_part"] = fromPart }
         return .json(.object(members))
+    }
+
+    /// What the place is called on screen, read off the file's tree while the
+    /// file is open somewhere: the node given, or the deepest node holding
+    /// the range.
+    private func site(of file: AgentAnnotation.File, range: Range<UInt64>?, node: String?) async -> AgentAnnotation.Site? {
+        guard case .disk(_, let identity) = file, let place = desk.places().first(where: { place in
+            place.pane.origin == nil && !place.pane.isUntitled && place.pane.document?.identity == identity
+        }) else { return nil }
+        let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
+        if let node, let found = try? await UEFIAgentNodeData.bytes(host, node: node, part: .all) {
+            return AgentAnnotation.Site(label: UEFIAgentQueries.label(of: found.node, in: found.tree), node: node)
+        }
+        guard let range else { return nil }
+        let places = await locate(host, range)
+        guard let deepest = places.last(where: { $0["kind"] == "uefi" }),
+              case .string(let id)? = deepest["id"] else { return nil }
+        let label = deepest["label"]?.stringValue ?? deepest["name"]?.stringValue ?? id
+        return AgentAnnotation.Site(label: label, node: id)
     }
 
     /// Where a UEFI node of `place` is in its bytes.
@@ -386,6 +409,7 @@ final class AgentAnnotationTools {
         if let place = place(of: annotation) { entry["document"] = .string(place.id) }
         if let range = annotation.range { entry["range"] = AgentHostTools.range(range) }
         if let node = annotation.node { entry["node"] = .string(node) }
+        if let site = annotation.site { entry["label"] = .string(site.label) }
         if !annotation.note.isEmpty { entry["note"] = .string(annotation.note) }
         if !annotation.relatedTo.isEmpty { entry["related_to"] = .array(annotation.relatedTo.map { .string($0) }) }
         return .object(entry)

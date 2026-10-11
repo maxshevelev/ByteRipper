@@ -246,8 +246,8 @@ final class AgentDumpToolsTests: XCTestCase {
         _ = agentWindow.window
         agentWindow.refresh()
         agentWindow.showAnnotations()
-        XCTAssertEqual(agentWindow.annotationsList.shownText(row: 0, column: "file"), "front.bin")
-        XCTAssertEqual(agentWindow.annotationsList.shownText(row: 0, column: "place"), "0x8000–0x8008")
+        XCTAssertTrue(agentWindow.annotationsList.shownTexts(of: "a1").contains("front.bin · 0x8000–0x8008"),
+                      "\(agentWindow.annotationsList.shownTexts(of: "a1"))")
 
         service.annotationTools.show("a1")
         let selection = controller.windowModel.pane1.hexSelection()

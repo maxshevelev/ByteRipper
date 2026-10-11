@@ -249,6 +249,9 @@ final class AgentService {
         }
         annotationTools.onChange = { [weak self] in self?.changed() }
         annotationTools.openInNewTab = { [weak dumpTools] url in dumpTools?.openInNewTab(url) }
+        annotationTools.locate = { [diffTools] host, range in
+            await diffTools.locate(host, [range]).first?.map(AgentDiffTools.placeJSON) ?? []
+        }
         // Every pane draws the annotations on its bytes from here.
         PaneViewModel.annotationSource = { [weak annotationTools] pane in annotationTools?.annotations(for: pane) ?? [] }
         PaneViewModel.annotationTitles = { [weak annotationTools] in annotationTools?.titles() ?? [:] }

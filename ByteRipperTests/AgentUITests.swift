@@ -197,18 +197,16 @@ final class AgentUITests: XCTestCase {
         XCTAssertEqual(page.shownText(row: read, column: "calls"), "")
     }
 
-    /// The window's width goes to one column in the Annotations and Tools lists: Note
-    /// and Last Call, the last in each. The others keep the widths they were
-    /// given.
-    func testTheLastColumnTakesWhatTheWindowAddsInAnnotationsAndTools() {
+    /// The window's width goes to one column in the Tools list: Last Call,
+    /// the last. The others keep the widths they were given.
+    func testTheLastColumnTakesWhatTheWindowAddsInTools() {
         let controller = AgentWindowController(service: service)
         _ = controller.window
-        for table in [controller.annotationsList.table, controller.toolsPage.table] {
+        for table in [controller.toolsPage.table] {
             XCTAssertEqual(table.columnAutoresizingStyle, .lastColumnOnlyAutoresizingStyle)
             XCTAssertEqual(table.tableColumns.map { $0.resizingMask.contains(.autoresizingMask) },
                            table.tableColumns.indices.map { $0 == table.tableColumns.count - 1 })
         }
-        XCTAssertEqual(controller.annotationsList.table.tableColumns.last?.title, "Note")
         XCTAssertEqual(controller.toolsPage.table.tableColumns.last?.title, "Last Call")
     }
 
@@ -359,7 +357,7 @@ final class AgentUITests: XCTestCase {
         controller.focusList()
         XCTAssertTrue(window.firstResponder === controller.shownList)
         controller.showAnnotations()
-        XCTAssertTrue(window.firstResponder === controller.annotationsList.table)
+        XCTAssertTrue(window.firstResponder === controller.annotationsList.collection)
         controller.showTools()
         XCTAssertTrue(window.firstResponder === controller.toolsPage.table)
     }

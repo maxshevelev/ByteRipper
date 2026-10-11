@@ -183,15 +183,55 @@ final class AgentAnnotationTests: XCTestCase {
         agentWindow.refresh()
         agentWindow.showAnnotations()
         let list = agentWindow.annotationsList
-        XCTAssertEqual(list.shownText(row: 0, column: "title"), "Table")
-        XCTAssertEqual(list.shownText(row: 0, column: "file"), pane.document?.url.lastPathComponent)
-        XCTAssertEqual(list.shownText(row: 1, column: "place"), "0x20–0x24")
-        XCTAssertEqual(list.shownText(row: 1, column: "note"), "Related Annotations: a1 Table", "the relation follows the note")
+        let name = try XCTUnwrap(pane.document?.url.lastPathComponent)
+        // A card: the number and the title, the file and the place, the note,
+        // and the annotations it is about as links.
+        // The place's node as UEFI Structure names it: a file that is all
+        // padding, by its addresses.
+        XCTAssertEqual(list.shownTexts(of: "a1"), ["a1", "Table", "\(name) · 0x100–0x140", "Padding, 0x0–0x1000"])
+        XCTAssertEqual(list.shownTexts(of: "a2"), ["a2", "Pointer", "\(name) · 0x20–0x24", "Padding, 0x0–0x1000",
+                                                   "→ a1 Table"])
+        list.select("a1")
+        XCTAssertEqual(list.selectedIDs, ["a1"])
         XCTAssertEqual(pane.hexAgentMarkTooltip(at: 0x20), "Pointer\nRelated Annotations: a1 Table")
 
         service.annotationTools.remove { _ in true }
         XCTAssertTrue(pane.agentAnnotations.isEmpty)
         XCTAssertTrue(list.isEmpty, "the window heard about it")
+    }
+
+    /// Cards go in as many columns as the width holds, each into the shortest
+    /// one; Delete removes the selected; the place's node is named as UEFI
+    /// Structure names it.
+    func testTheCardsFillTheShortestColumnAndDeleteRemoves() async throws {
+        try open(0x1000)
+        _ = try await client.answer("annotate", ["offset": 0, "title": "Long",
+                                                 "note": .string(String(repeating: "A long note that wraps. ", count: 12))])
+        _ = try await client.answer("annotate", ["offset": 1, "title": "Short"])
+        _ = try await client.answer("annotate", ["offset": 2, "title": "Third"])
+        XCTAssertEqual(AnnotationMasonryLayout.columns(forWidth: 500), 1)
+        XCTAssertEqual(AnnotationMasonryLayout.columns(forWidth: 800), 2)
+        XCTAssertEqual(AnnotationMasonryLayout.columns(forWidth: 1200), 3)
+
+        let agentWindow = AgentWindowController(service: service)
+        let window = try XCTUnwrap(agentWindow.window)
+        window.setContentSize(NSSize(width: 820, height: 500))
+        agentWindow.refresh()
+        agentWindow.showAnnotations()
+        window.layoutIfNeeded()
+        let cards = agentWindow.annotationsList
+        cards.collection.layoutSubtreeIfNeeded()
+        let frames = try XCTUnwrap(cards.collection.collectionViewLayout as? AnnotationMasonryLayout).itemFrames
+        XCTAssertEqual(frames.count, 3)
+        XCTAssertGreaterThan(frames[0].height, frames[1].height, "the long note makes a taller card")
+        XCTAssertGreaterThan(frames[1].minX, frames[0].minX, "the second card beside the first")
+        XCTAssertEqual(frames[2].minX, frames[1].minX, "the third under the shorter one")
+
+        cards.select("a2")
+        cards.collection.keyDown(with: try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+            characters: "\u{7F}", charactersIgnoringModifiers: "\u{7F}", isARepeat: false, keyCode: 51)))
+        XCTAssertEqual(service.annotationTools.all().map(\.id), ["a1", "a3"])
     }
 
     /// A double-click on a row goes to its bytes, and Back comes back.

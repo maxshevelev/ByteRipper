@@ -36,10 +36,10 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     /// on the log or the button in the list's corner, as a tool panel's do.
     private let detailPane = ToolDetailPane()
     private var details: ToolDetailScroll { detailPane.detail }
-    private let annotations = AgentAnnotationsTable()
+    private let annotations = AgentAnnotationCards()
     /// The log's rows, for tests.
     var shownRows: [AgentCallRecord] { rows }
-    private let annotationsScroll = NSScrollView()
+    private var annotationsScroll: NSScrollView { annotations.scroll }
     private let tools = AgentToolsPage()
     private let clearButton = NSButton(title: "", target: nil, action: nil)
     private let removeButton = NSButton(title: "", target: nil, action: nil)
@@ -108,7 +108,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     private func zoomChanged() {
         let ratio = ToolPanelFont.size / drawnSize
         drawnSize = ToolPanelFont.size
-        for table in [table, annotations.table, tools.table] {
+        annotations.zoomChanged()
+        for table in [table, tools.table] {
             ToolPanelTable.scaleColumnWidths(of: table, by: ratio)
             AgentTableStyle.apply(to: table)
             table.reloadData()
@@ -208,9 +209,15 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         annotations.build()
         annotations.onShow = { [weak self] id in self?.showAnnotation(id) }
         annotations.onSelectionChanged = { [weak self] in self?.refreshButtons() }
-        annotationsScroll.documentView = annotations.table
-        annotationsScroll.hasVerticalScroller = true
-        annotationsScroll.borderType = .bezelBorder
+        annotations.onRemove = { [weak self] ids in
+            let chosen = Set(ids)
+            self?.service?.annotationTools.remove { chosen.contains($0.id) }
+        }
+        annotations.onOpenSite = { [weak self] annotation in
+            guard let service = self?.service, let file = annotation.file.url, let site = annotation.site else { return }
+            Task { @MainActor in await service.openNode(file: file, id: site.node) }
+        }
+        annotations.isOpen = { [weak self] annotation in self?.service?.annotationTools.place(of: annotation) != nil }
         annotationsScroll.isHidden = true
 
         tools.build()
@@ -373,10 +380,10 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     }
 
     /// The table of the page in view.
-    var shownList: NSTableView {
+    var shownList: NSView {
         switch page {
         case .log: return table
-        case .annotations: return annotations.table
+        case .annotations: return annotations.collection
         case .tools: return tools.table
         }
     }
@@ -626,134 +633,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     /// The Tools page, for tests.
     var toolsPage: AgentToolsPage { tools }
 
-    /// The annotations list, for tests.
-    var annotationsList: AgentAnnotationsTable { annotations }
-}
-
-/// The Annotations page of the Agent window: every annotation an agent made,
-/// on every file, open or not, with what it says. A double-click brings the
-/// file forward — or opens it — and selects the place.
-@MainActor
-final class AgentAnnotationsTable: NSObject, NSTableViewDataSource, NSTableViewDelegate {
-    let table = NSTableView()
-    var onShow: (String) -> Void = { _ in }
-    var onSelectionChanged: () -> Void = {}
-    private(set) var rows: [AgentAnnotation] = []
-
-    private enum Column: String, CaseIterable {
-        case id, title, file, place, note
-
-        var title: String {
-            switch self {
-            case .id: return L("Annotation")
-            case .title: return L("Title")
-            case .file: return L("File")
-            case .place: return L("Where")
-            case .note: return L("Note")
-            }
-        }
-
-        var width: CGFloat {
-            switch self {
-            case .id: return 70
-            case .title: return 160
-            case .file: return 120
-            case .place: return 150
-            case .note: return 320
-            }
-        }
-    }
-
-    func build() {
-        for column in Column.allCases {
-            let tableColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(column.rawValue))
-            tableColumn.title = column.title
-            tableColumn.width = ToolPanelFont.scaled(column.width)
-            // Only Note, the last column and the one with the most to say, gives
-            // way with the window; the others keep their widths, and the
-            // person can still drag them.
-            tableColumn.resizingMask = column == Column.allCases.last
-                ? [.autoresizingMask, .userResizingMask] : .userResizingMask
-            tableColumn.minWidth = ToolPanelFont.scaled(36)
-            table.addTableColumn(tableColumn)
-        }
-        table.usesAlternatingRowBackgroundColors = true
-        table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
-        AgentTableStyle.apply(to: table)
-        keepColumnWidths(of: table, as: "AgentAnnotationsTable")
-        table.allowsMultipleSelection = true
-        table.dataSource = self
-        table.delegate = self
-        table.target = self
-        table.doubleAction = #selector(doubleClicked)
-    }
-
-    func show(_ annotations: [AgentAnnotation]) {
-        let chosen = Set(selectedIDs)
-        rows = annotations
-        table.reloadData()
-        table.selectRowIndexes(IndexSet(rows.indices.filter { chosen.contains(rows[$0].id) }),
-                               byExtendingSelection: false)
-    }
-
-    var isEmpty: Bool { rows.isEmpty }
-    var selectedIDs: [String] { table.selectedRowIndexes.compactMap { $0 < rows.count ? rows[$0].id : nil } }
-
-    func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
-
-    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard let id = tableColumn?.identifier, let column = Column(rawValue: id.rawValue) else { return nil }
-        let cell = AgentTableStyle.cell(in: tableView, id: id, owner: self, digits: column == .place || column == .id)
-        cell.textField?.stringValue = text(row: row, column)
-        switch column {
-        case .note, .title: cell.toolTip = cell.textField?.stringValue
-        case .file: cell.toolTip = rows[row].file.url?.path
-        default: cell.toolTip = nil
-        }
-        return cell
-    }
-
-    func tableViewSelectionDidChange(_ notification: Notification) {
-        onSelectionChanged()
-    }
-
-    private func text(row: Int, _ column: Column) -> String {
-        let annotation = rows[row]
-        switch column {
-        case .id: return annotation.id
-        case .title: return annotation.title
-        case .file:
-            switch annotation.file {
-            case .disk(let url, _): return url.lastPathComponent
-            case .document(let held): return held.document?.url.lastPathComponent ?? ""
-            }
-        case .place:
-            var parts: [String] = []
-            if let range = annotation.range {
-                parts.append(range.count <= 1 ? String(format: "0x%llX", range.lowerBound)
-                             : String(format: "0x%llX–0x%llX", range.lowerBound, range.upperBound))
-            }
-            if let node = annotation.node { parts.append(L("node %1$@", node)) }
-            return parts.joined(separator: " · ")
-        case .note:
-            // The annotations this one is about follow the note, each by its
-            // id and title, so the pair reads without looking the other row up.
-            let titles = Dictionary(rows.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
-            return [annotation.note, annotation.relations(titles: titles)].filter { !$0.isEmpty }.joined(separator: " ")
-        }
-    }
-
-    @objc private func doubleClicked() {
-        let row = table.clickedRow
-        guard row >= 0, row < rows.count else { return }
-        onShow(rows[row].id)
-    }
-
-    /// A row's text, for tests.
-    func shownText(row: Int, column: String) -> String? {
-        guard row < rows.count, let column = Column(rawValue: column) else { return nil }
-        return text(row: row, column)
-    }
+    /// The annotations' cards, for tests.
+    var annotationsList: AgentAnnotationCards { annotations }
 }
 
 /// The Agent window's tables drawn as the tool panels' are
