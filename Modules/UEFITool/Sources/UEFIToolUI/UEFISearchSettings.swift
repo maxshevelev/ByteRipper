@@ -17,7 +17,7 @@ import UEFITool
     static let modeKey = "UEFIStructure.Search.Mode"
     static let contentTextKey = "UEFIStructure.Search.ContentText"
     static let contentIsHexKey = "UEFIStructure.Search.ContentIsHex"
-    static let contentWholeTreeKey = "UEFIStructure.Search.ContentWholeTree"
+    static let contentFromSelectionKey = "UEFIStructure.Search.ContentFromSelection"
 
     /// Posted when the query or whether the bar is open changed.
     static let didChange = Notification.Name("UEFIStructureSearchDidChange")
@@ -64,27 +64,27 @@ import UEFITool
     }
 
     /// What the Contents search asks for: a text — in ASCII and in UTF-16,
-    /// any case — or hex bytes with `??` holes; in the node selected when
-    /// the search starts, or in the whole tree.
+    /// any case — or hex bytes with `??` holes; in the whole tree, or in the
+    /// node selected when the search starts.
     struct Content: Equatable {
         var text = ""
         var isHex = false
-        var fromSelection = true
+        var wholeTree = true
     }
 
     static var content: Content {
         get {
-            // Stored as "the whole tree", so a bench that never touched the
-            // box starts from the selected node.
+            // Stored as "from the selection", so a bench that never touched
+            // the box searches the whole tree.
             Content(text: defaults.string(forKey: contentTextKey) ?? "",
                     isHex: defaults.bool(forKey: contentIsHexKey),
-                    fromSelection: !defaults.bool(forKey: contentWholeTreeKey))
+                    wholeTree: !defaults.bool(forKey: contentFromSelectionKey))
         }
         set {
             guard newValue != content else { return }
             defaults.set(newValue.text, forKey: contentTextKey)
             defaults.set(newValue.isHex, forKey: contentIsHexKey)
-            defaults.set(!newValue.fromSelection, forKey: contentWholeTreeKey)
+            defaults.set(!newValue.wholeTree, forKey: contentFromSelectionKey)
             NotificationCenter.default.post(name: didChange, object: nil)
         }
     }

@@ -110,6 +110,63 @@ final class UEFIContentSearchTests: XCTestCase {
         }
     }
 
+    /// A descriptor that maps an ME region at 0x1000–0x1FFF, with `marker`
+    /// written once in the descriptor's own bytes and once in the ME region.
+    private func imageWithME(marker: [UInt8]) -> [UInt8] {
+        var image = [UInt8](repeating: 0xFF, count: 0x2000)
+        func put(_ value: UInt32, at offset: Int) {
+            for index in 0..<4 { image[offset + index] = UInt8(truncatingIfNeeded: value >> (8 * index)) }
+        }
+        func put16(_ value: UInt16, at offset: Int) {
+            image[offset] = UInt8(truncatingIfNeeded: value)
+            image[offset + 1] = UInt8(truncatingIfNeeded: value >> 8)
+        }
+        put(0x0FF0_A55A, at: 0x10)
+        put(0x0004_0000, at: 0x14)
+        put(0x1200_00FF, at: 0x18)
+        put(0x0021_0120, at: 0x1C)
+        image[0x0EFF] = 0x00
+        for index in 0..<16 { put16(0, at: 0x40 + index * 4); put16(0, at: 0x40 + index * 4 + 2) }
+        put16(0x01, at: 0x48)
+        put16(0x01, at: 0x4A)
+        image.replaceSubrange(0x400..<(0x400 + marker.count), with: marker)
+        image.replaceSubrange(0x1100..<(0x1100 + marker.count), with: marker)
+        return image
+    }
+
+    func testTheMERegionIsNotSearched() async throws {
+        let marker = Array("MEONLYMARK".utf8)
+        let tree = await tree(imageWithME(marker: marker))
+        let me = try XCTUnwrap(tree.rootNodes.flatMap { [$0] + $0.children }.first(where: UEFIContentSearch.isMERegion),
+                               "\(tree.rootNodes.map(\.name))")
+        let pattern = [MaskedPattern(bytes: marker)]
+
+        let whole = try await UEFIContentSearch.run(pattern, from: .root, in: tree)
+        XCTAssertEqual(whole.total, 1, "the descriptor's copy, not the ME region's")
+        XCTAssertEqual(whole.matches.first?.fileRange?.lowerBound, 0x400)
+        let inME = try await UEFIContentSearch.run(pattern, from: me.id, in: tree)
+        XCTAssertEqual(inME.total, 0, "started on the ME region, nothing is searched")
+        XCTAssertEqual(inME.searchedBytes, 0)
+    }
+
+    func testTheSameSearchOfTheSameBytesIsAnsweredFromTheLastOne() async throws {
+        let tree = await tree(image().bytes)
+        let text = [try MaskedPattern.ascii(hidden, ignoringCase: false)]
+        XCTAssertFalse(UEFIContentSearch.isRemembered(text, from: .root, in: tree))
+        let first = try await UEFIContentSearch.run(text, from: .root, in: tree)
+        XCTAssertTrue(UEFIContentSearch.isRemembered(text, from: .root, in: tree))
+        let again = try await UEFIContentSearch.run(text, from: .root, in: tree)
+        XCTAssertEqual(again, first)
+
+        let other = [try MaskedPattern.hex("DEADBEEF")]
+        XCTAssertFalse(UEFIContentSearch.isRemembered(other, from: .root, in: tree), "another pattern")
+        XCTAssertFalse(UEFIContentSearch.isRemembered(text, from: NodeID([0]), in: tree), "another node")
+        let otherTree = await self.tree(image().bytes)
+        XCTAssertFalse(UEFIContentSearch.isRemembered(text, from: .root, in: otherTree), "another file")
+        tree.invalidate(editedRange: 0x48..<0x49, sizeDelta: 0)
+        XCTAssertFalse(UEFIContentSearch.isRemembered(text, from: .root, in: tree), "an edit since")
+    }
+
     // MARK: - Building an image
 
     private func le(_ value: UInt64, _ count: Int) -> [UInt8] {

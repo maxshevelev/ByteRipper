@@ -10,10 +10,15 @@ import UEFITool
 /// search leaves out said under them when the image has it.
 ///
 /// In its Contents mode it looks for a pattern in what the nodes hold rather
-/// than for a node by its name: a text or hex bytes, in the node selected and
-/// everything under it or in the whole tree — the box says which, and the line
-/// beside it names the node — all at once: Find All, and the results panel
+/// than for a node by its name: a text or hex bytes, in the whole tree or in
+/// the node selected and everything under it — the box beside the switch says
+/// which, and names the node — all at once: Find All, and the results panel
 /// under the tree (`UEFIContentResultsView`).
+///
+/// Three lines: what to search — the switch, the box, and the note on the ME
+/// region, which neither search goes into; the text, with the arrows or with
+/// the pattern's kind and Find All; and the name search's type and subtype,
+/// with how the search went.
 ///
 /// It holds no query of its own. What it shows is `UEFISearchSettings`', and
 /// what the reader changes goes back there; the other pane's bar reads the
@@ -40,7 +45,7 @@ import UEFITool
     private let statusLabel = NSTextField(labelWithString: "")
     private let progressBar = NSProgressIndicator()
     private let stopButton = NSButton()
-    private let meNote = NSTextField(wrappingLabelWithString: "")
+    private let meNote = NSTextField(labelWithString: "")
     private var observer: NSObjectProtocol?
 
     /// What the status line says when there is something to say.
@@ -53,7 +58,7 @@ import UEFITool
     }
 
     var status: Status = .none {
-        didSet { updateStatus() }
+        didSet { updateStatus(); updateBottomRow() }
     }
 
     /// Where in the file the row the search is looking at lies, from 0 to 1.
@@ -129,7 +134,7 @@ import UEFITool
         findAllButton.action = #selector(findAllClicked)
         findAllButton.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         ControlHelp.describe(findAllButton, name: L("Find All"),
-                             tooltip: L("List every place the pattern occurs in the selected node, compressed sections included"))
+                             tooltip: L("List every place the pattern occurs, compressed sections included"))
 
         encodingPopUp.controlSize = .regular
         encodingPopUp.font = ToolPanelFont.body()
@@ -140,13 +145,13 @@ import UEFITool
         ControlHelp.describe(encodingPopUp, name: L("Pattern"),
                              tooltip: L("Text is found in ASCII and in UTF-16, in any case; hex is bytes, ?? for any byte"))
 
-        scopeCheck.title = L("Only in the selected node")
+        scopeCheck.title = L("The whole tree")
         scopeCheck.font = ToolPanelFont.body()
         scopeCheck.target = self
         scopeCheck.action = #selector(scopeChosen)
         scopeCheck.setContentHuggingPriority(.defaultHigh, for: .horizontal)
-        ControlHelp.describe(scopeCheck, name: L("Only in the selected node"),
-                             tooltip: L("Search the selected node and what is under it; unticked, the whole tree"))
+        ControlHelp.describe(scopeCheck, name: L("The whole tree"),
+                             tooltip: L("Search the whole tree; unticked, the selected node and what is under it"))
         scopeLabel.font = ToolPanelFont.body()
         scopeLabel.textColor = .secondaryLabelColor
         scopeLabel.lineBreakMode = .byTruncatingMiddle
@@ -194,29 +199,34 @@ import UEFITool
                   tooltip: L("Stop reading branches to look for a match"), action: #selector(stopClicked))
         stopButton.contentTintColor = .tertiaryLabelColor
 
-        meNote.stringValue = L("The contents of an ME region are not searched.")
+        meNote.stringValue = L("ME Region is not searched")
         meNote.font = NSFont.systemFont(ofSize: max(ToolPanelFont.size - 1, 9))
+        meNote.lineBreakMode = .byTruncatingTail
+        meNote.maximumNumberOfLines = 1
+        meNote.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        meNote.setContentHuggingPriority(NSLayoutConstraint.Priority(1), for: .horizontal)
         meNote.textColor = .tertiaryLabelColor
         meNote.isHidden = true
 
-        let top = NSStackView(views: [modeControl, field, previousButton, nextButton, findAllButton])
+        let head = NSStackView(views: [modeControl, scopeCheck, scopeLabel, meNote])
+        head.orientation = .horizontal
+        head.spacing = 10
+        head.alignment = .centerY
+        head.setCustomSpacing(4, after: scopeCheck)
+
+        let top = NSStackView(views: [field, previousButton, nextButton, encodingPopUp, findAllButton])
         top.orientation = .horizontal
         top.spacing = 8
         top.alignment = .centerY
 
-        let bottom = NSStackView(views: [typePopUp, subtypePopUp, encodingPopUp,
+        let bottom = NSStackView(views: [typePopUp, subtypePopUp,
                                          statusLabel, progressBar, stopButton])
         bottom.orientation = .horizontal
         bottom.spacing = 10
         bottom.alignment = .centerY
 
-        let scopeRow = NSStackView(views: [scopeCheck, scopeLabel])
-        scopeRow.orientation = .horizontal
-        scopeRow.spacing = 8
-        scopeRow.alignment = .firstBaseline
-        self.scopeRow = scopeRow
-
-        let column = NSStackView(views: [top, bottom, scopeRow, meNote])
+        bottomRow = bottom
+        let column = NSStackView(views: [head, top, bottom])
         column.orientation = .vertical
         column.alignment = .leading
         column.spacing = 8
@@ -230,8 +240,7 @@ import UEFITool
             column.trailingAnchor.constraint(equalTo: trailingAnchor),
             top.widthAnchor.constraint(equalTo: column.widthAnchor),
             bottom.widthAnchor.constraint(equalTo: column.widthAnchor),
-            meNote.widthAnchor.constraint(equalTo: column.widthAnchor),
-            scopeRow.widthAnchor.constraint(equalTo: column.widthAnchor),
+            head.widthAnchor.constraint(equalTo: column.widthAnchor),
             progressBar.widthAnchor.constraint(equalToConstant: 90),
             stopButton.widthAnchor.constraint(equalToConstant: 16),
             stopButton.heightAnchor.constraint(equalToConstant: 16),
@@ -283,8 +292,9 @@ import UEFITool
         let contents = mode == .contents
         modeControl.selectedSegment = contents ? 1 : 0
         for view in [previousButton, nextButton, typePopUp, subtypePopUp] as [NSView] { view.isHidden = contents }
-        for view in [findAllButton, encodingPopUp, scopeRow].compactMap({ $0 }) as [NSView] { view.isHidden = !contents }
+        for view in [findAllButton, encodingPopUp, scopeCheck] as [NSView] { view.isHidden = !contents }
         updateMENote()
+        updateBottomRow()
         if contents {
             let content = UEFISearchSettings.content
             if field.stringValue != content.text, field.currentEditor() == nil || field.placeholderString != contentPlaceholder {
@@ -294,7 +304,7 @@ import UEFITool
             ControlHelp.describe(field, name: L("Search the contents"),
                                  tooltip: L("A text, or hex bytes such as 24 ?? 4D 49"))
             encodingPopUp.selectItem(at: content.isHex ? 1 : 0)
-            scopeCheck.state = content.fromSelection ? .on : .off
+            scopeCheck.state = content.wholeTree ? .on : .off
             updateScope()
             findAllButton.isEnabled = !content.text.trimmingCharacters(in: .whitespaces).isEmpty
             return
@@ -314,18 +324,21 @@ import UEFITool
         if !hasQuery { status = .none }
     }
 
-    private var scopeRow: NSStackView?
+    /// The third line: the name search's type and subtype; in Contents mode
+    /// there only to say a pattern is not one.
+    private var bottomRow: NSStackView?
 
-    /// The line beside the box: where Find All will look.
+    private func updateBottomRow() {
+        bottomRow?.isHidden = mode == .contents && status != .badPattern
+    }
+
+    /// The words after the box, while it is clear: the node Find All will
+    /// start from.
     private func updateScope() {
-        let fromSelection = UEFISearchSettings.content.fromSelection
-        if fromSelection, let name = selectedNodeName {
-            scopeLabel.stringValue = name
-        } else if fromSelection {
-            scopeLabel.stringValue = L("Nothing selected: the whole tree")
-        } else {
-            scopeLabel.stringValue = L("The whole tree")
-        }
+        let content = UEFISearchSettings.content
+        scopeLabel.isHidden = mode != .contents || content.wholeTree
+        scopeLabel.stringValue = selectedNodeName.map { L("from %1$@", $0) }
+            ?? L("Nothing selected: the whole tree")
         scopeLabel.toolTip = scopeLabel.stringValue
     }
 
@@ -334,13 +347,12 @@ import UEFITool
         UEFISearchSettings.content.isHex ? L("Hex bytes") : L("Text to find")
     }
 
-    /// What the ME region's note says: the name search does not go into the
-    /// region, and the Contents search reads it as it is stored.
+    /// The note on the ME region, which neither search goes into, while the
+    /// image has one — but not for a Contents search from the selected node,
+    /// whose own place is what the line says then.
     private func updateMENote() {
-        meNote.isHidden = !showsMENote
-        meNote.stringValue = mode == .contents
-            ? L("The ME region is searched as it is stored: its modules are not unpacked.")
-            : L("The contents of an ME region are not searched.")
+        let fromNode = mode == .contents && !UEFISearchSettings.content.wholeTree
+        meNote.isHidden = !showsMENote || fromNode
     }
 
     private func fillTypes(selecting type: UInt8?) {
@@ -447,8 +459,8 @@ import UEFITool
     }
 
     @objc private func scopeChosen() {
-        let fromSelection = scopeCheck.state == .on
-        storeContent { $0.fromSelection = fromSelection }
+        let wholeTree = scopeCheck.state == .on
+        storeContent { $0.wholeTree = wholeTree }
     }
 
     @objc private func findAllClicked() { onFindAll?() }

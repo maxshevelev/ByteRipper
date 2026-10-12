@@ -2012,14 +2012,30 @@ final class MainViewController: NSViewController {
     /// tool for a node taken out of its tree, with the tree's first level
     /// open.
     ///
+    /// `selection`, in the part's own addresses, is selected and brought into
+    /// view once the panel is open. With it, a panel of the same part already
+    /// open over `pane` — the same bytes read the same way under the same
+    /// name — is raised and selected in, not opened a second time: the UEFI
+    /// panel's search results go to match after match in one body.
+    ///
     /// Returns the task decoding off the main actor, for whoever has to wait
     /// on it; nil when the panel opened on the spot or could not open.
     @discardableResult
     func openPart(
         named name: String, from pane: PaneViewModel, source: Range<UInt64>,
         partName: String? = nil, layout: UEFIRootLayout = .image, codec: any PartCodec,
-        tool: String? = nil
+        tool: String? = nil, selecting selection: Range<UInt64>? = nil
     ) -> Task<Void, Never>? {
+        let ownName = partName ?? Self.partName(ofTab: name, parent: pane.status.fileName)
+        if let selection, let open = fragments.panelsLinked(to: pane).first(where: { id in
+            guard let origin = fragments.pane(id)?.origin else { return false }
+            return origin.sourceRange == source && origin.layout == layout
+                && type(of: origin.codec) == type(of: codec) && origin.partName == ownName
+        }), let part = fragments.pane(open) {
+            fragments.expand(open)
+            revealForTool(selection, in: part, select: true)
+            return nil
+        }
         guard let document = pane.document,
               let content = try? DocumentPartReader(document: document)
         else { return nil }
@@ -2039,6 +2055,9 @@ final class MainViewController: NSViewController {
             if let tool, let id, let part = self.fragments.pane(id) {
                 part.uefiState.opensTopLevelUEFIRows = true
                 self.fragments.surface(id)?.tools.activate(tool, animated: false)
+            }
+            if let selection, let id, let part = self.fragments.pane(id) {
+                self.revealForTool(selection, in: part, select: true)
             }
         }
         let fail: @MainActor (Error) -> Void = { [weak self] error in

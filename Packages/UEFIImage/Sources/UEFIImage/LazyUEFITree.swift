@@ -108,8 +108,9 @@ public final class LazyUEFITree {
 
     /// Generation, bumped on every `invalidate`, so a background scan that
     /// finishes after the tree has moved on is discarded instead of being
-    /// written into a now-stale path.
-    private var generation = 0
+    /// written into a now-stale path — and an answer worked out from the
+    /// bytes before an edit is known to be stale.
+    public private(set) var generation = 0
 
     /// Ids with a materialization in flight, and the callbacks waiting on it —
     /// a second `expand` on the same id while one is already running coalesces

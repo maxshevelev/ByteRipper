@@ -363,6 +363,7 @@ private struct ChecksumPass: Sendable {
             self?.host.showNotice(symbol: SearchWrapSigns.sign(forward: forward), lines: [])
         }
         controller.onRevealMatch = { [weak self] range in self?.host.reveal(range, select: true) }
+        controller.onOpenMatch = { [weak self] match in self?.openContentMatch(match) }
         controller.onSelectME = { [weak self] path in self?.selectME(path) }
         controller.onOpenMERegion = { [weak self] id in self?.openMERegion(id) }
         controller.onMERegionLoading = { [weak self] id, loading in
@@ -1674,14 +1675,52 @@ private struct ChecksumPass: Sendable {
                  layout: decompressed.layout, codec: codec)
     }
 
-    /// A part through the host: told its layout when the host can take it.
+    /// A part through the host: told its layout when the host can take it,
+    /// and what to select in it once it is open.
     private func openPart(named name: String, linkedTo source: Range<UInt64>,
-                          layout: UEFIRootLayout, codec: any PartCodec) {
+                          layout: UEFIRootLayout, codec: any PartCodec, selecting selection: Range<UInt64>? = nil) {
         if let opener = host as? any UEFIPartOpening {
-            opener.openPart(named: name, linkedTo: source, layout: layout, codec: codec)
+            if let selection {
+                opener.openPart(named: name, linkedTo: source, layout: layout, codec: codec, selecting: selection)
+            } else {
+                opener.openPart(named: name, linkedTo: source, layout: layout, codec: codec)
+            }
         } else {
             host.openPart(named: name, linkedTo: source, codec: codec)
         }
+    }
+
+    /// A double click on a Contents search match that is not the file's own
+    /// bytes: the panel those bytes are read in — what the compressed section
+    /// it is in decompresses to, or its LENV block decoded — with the match
+    /// selected. A match in the file is already selected in the dump by a
+    /// click.
+    ///
+    /// Public for the same reason as `openNodeInPanel(for:body:)`.
+    // help: panel.uefi.content-search
+    public func openContentMatch(_ match: UEFIContentSearch.Match) {
+        guard let tree, tree.isReady else { return }
+        let image = tree.image()
+        if match.decodedXORKey != nil, let id = match.node, let node = image.node(id),
+           let reader = tree.spaceReaders.reader(for: .file),
+           let found = UEFILenovoDMIDetail.decodableBlock(for: node, image: image, reader: reader) {
+            let start = found.block.range.lowerBound
+            openPart(named: L("%1$@ (decoded)", found.name), linkedTo: found.block.range,
+                     layout: .image, codec: LenovoDMIBlockCodec(block: found.block),
+                     selecting: (match.range.lowerBound - start)..<(match.range.upperBound - start))
+            return
+        }
+        guard match.fileRange == nil, let id = match.section, let node = image.node(id),
+              let decompressed = UEFIPresenter.decompressedBody(for: node),
+              let source = UEFIPresenter.fileSource(of: node, in: image)
+        else { return }
+        let codec = UEFIPartCodec(
+            target: UEFIRebuild.Target(space: decompressed.space),
+            compression: UEFIPresenter.compressionName(of: decompressed.space, in: image),
+            readers: tree.spaceReaders
+        )
+        openPart(named: decompressed.tabName(fileName: host.fileName), linkedTo: source,
+                 layout: decompressed.layout, codec: codec, selecting: match.range)
     }
 
     /// Opens what a bzip2 variable of an Apple system-flags store unpacks to —

@@ -156,8 +156,10 @@ match to match: Find All runs to the end and lists every match. A search of
 the dump cannot find a driver's text, which is in the file only compressed;
 this one can.
 
-- **What is searched.** The node selected — with **Only in the selected
-  node** ticked, the default — or the whole tree. Every container under it is
+- **What is searched.** The whole tree — with **The whole tree** ticked, the
+  default — or the node selected and what is under it. An ME region is left
+  out altogether: its bytes are cut out of the scan, and nothing under it is
+  opened. Every container under it is
   opened first (`UEFIContentSearch.openEverything`, depth first so the
   progress moves one way). Then the node's own bytes are scanned, and every
   buffer under it: what each compressed section decompresses to, a BIOS Guard
@@ -173,14 +175,21 @@ this one can.
   it whole, the volume that node is in, and the offset from the volume's first
   byte when the volume is in the same bytes. A match in decompressed bytes has
   no file address; it says which section's buffer it is in and where.
+- **Asked again.** The model keeps the last search and its answer; the same
+  tree, at the same edit generation (`LazyUEFITree.generation`), the same
+  start and the same patterns are answered from it without reading a byte.
 - **The order** is the tree's, by node path and then by address. A search
   keeps the first ten thousand matches and counts the rest.
 - **The panel.** The results open in a panel under the tree, the counterpart
   of the dump's Search Results under the dump: the header carries the count,
   the progress while the search runs, a stop button and a ×; a row carries the
-  volume, the offset in it, the address, an excerpt with the match in bold and
-  the node. A click opens the way to the node and selects it, and for a match
-  in the file selects its bytes in the dump.
+  volume — after a badge per codec the bytes came through, the fragment
+  panel's own badge text — an excerpt with the match in bold and the node; the
+  address is under the pointer. A click opens the way to the node and selects
+  it, and for a match in the file selects its bytes in the dump. A double
+  click on a match behind a codec opens its buffer (or its LENV block decoded)
+  as a fragment panel with the match selected, raising one already open
+  (`MainViewController.openPart(…, selecting:)`).
 - **For an agent** the same search is `uefi_find_bytes`
   (`UEFIAgentContentSearch`).
 

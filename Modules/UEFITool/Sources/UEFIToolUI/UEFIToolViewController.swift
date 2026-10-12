@@ -87,6 +87,9 @@ import UEFITool
     /// The reader went to a match of the Contents search that is in the file:
     /// the dump selects its bytes.
     var onRevealMatch: ((Range<UInt64>) -> Void)?
+    /// The reader double-clicked a match in decompressed or decoded bytes:
+    /// the panel those bytes are read in opens with the match selected.
+    var onOpenMatch: ((UEFIContentSearch.Match) -> Void)?
 
     /// The tree as one value, for everything that reads it rather than walks
     /// it: the summary line, the title fold, the detail panel. It is the
@@ -444,6 +447,7 @@ import UEFITool
         searchBar.onStop = { [weak self] in self?.stopSearching() }
         searchBar.onFindAll = { [weak self] in self?.findAllContents() }
         contentResults.onChoose = { [weak self] index in self?.goToContentMatch(index) }
+        contentResults.onOpen = { [weak self] index in self?.openContentMatch(index) }
         contentResults.onStop = { [weak self] in self?.stopSearching() }
         contentResults.onClose = { [weak self] in self?.closeContentResults() }
 
@@ -494,6 +498,9 @@ import UEFITool
         treeSplit.addPane(contentResults)
         treeSplit.setPaneLayout(.fill, at: 0)
         treeSplit.setPaneLayout(.fixed(0), at: 1)
+        // Shut, it is hidden too: a pane of no height leaves its header and
+        // list with no size the layout can solve.
+        contentResults.isHidden = true
         splitter.addPane(treeSplit)
         splitter.addPane(detailPane)
         detailPane.attach(to: outline)
@@ -1514,9 +1521,9 @@ import UEFITool
                 try? MaskedPattern.utf16LE(text, ignoringCase: true)].compactMap { $0 }
     }
 
-    /// Find All: every match of the pattern in the node selected and under
-    /// it while the bar's box is ticked — the whole tree when it is not, or
-    /// nothing is selected — in the results panel under the tree, which shows
+    /// Find All: every match of the pattern in the whole tree while the bar's
+    /// box is ticked — in the node selected and under it when it is not, the
+    /// whole tree again with nothing selected — in the results panel under the tree, which shows
     /// the search's progress while it runs and lists the matches once the
     /// walk is over.
     func findAllContents() {
@@ -1527,7 +1534,7 @@ import UEFITool
             searchBar.status = .badPattern
             return
         }
-        let start = content.fromSelection ? (selectedNode() ?? .root) : .root
+        let start = content.wholeTree ? .root : (selectedNode() ?? .root)
         cancelSearch()
         searchBar.status = .none
         contentMatches = []
@@ -1562,6 +1569,7 @@ import UEFITool
     private func showContentResults(_ shown: Bool) {
         let height = shown ? min(UEFIContentResultsView.panelHeight, max(80, treeSplit.bounds.height / 2)) : 0
         if case .fixed(let now) = treeSplit.paneLayouts[1], (now > 0) == shown { return }
+        contentResults.isHidden = !shown
         treeSplit.setPaneLayout(.fixed(height), at: 1)
     }
 
@@ -1589,6 +1597,24 @@ import UEFITool
             return
         }
         let hex = { (value: UInt64) in String(format: "0x%llX", value) }
+        // The codecs a space's bytes came through, outermost first — the
+        // compressions of the sections on its chain, each looked up once.
+        var compressions: [ByteSpace: String] = [:]
+        let codecs = { [image] (match: UEFIContentSearch.Match) -> [String] in
+            var names: [String] = []
+            if case .decompressed(let chain) = match.space, let image {
+                for length in 1...chain.count {
+                    let space = ByteSpace.decompressed(chain: Array(chain.prefix(length)))
+                    if compressions[space] == nil {
+                        compressions[space] = UEFIPresenter.compressionName(of: space, in: image)
+                            ?? L("Decompressed", context: "part badge")
+                    }
+                    names.append(compressions[space]!)
+                }
+            }
+            if let key = match.decodedXORKey { names.append(String(format: "XOR %02X", key)) }
+            return names
+        }
         let name = { [catalogue, image] (id: NodeID?) -> String? in
             id.flatMap(tree.node).map { UEFITreeDisplay.name(for: $0, catalogue: catalogue, in: image) }
         }
@@ -1601,7 +1627,7 @@ import UEFITool
             }
             return UEFIContentResultsView.Row(
                 volume: name(match.volume) ?? "—",
-                volumeOffset: match.volumeOffset.map(hex) ?? "—",
+                codecs: codecs(match),
                 address: address,
                 node: name(match.node) ?? "—",
                 path: match.node.map { UEFIAgentQueries.path(to: $0, in: tree).joined(separator: " ▸ ") } ?? "",
@@ -1633,6 +1659,17 @@ import UEFITool
             self.closeForSearch(self.searchOpenings.closings(whenLandingOn: id), keepingInView: id)
             reveal()
         }
+    }
+
+    /// Opens the match on row `index` where its bytes are read: a match in
+    /// decompressed or decoded bytes, in a fragment panel of them with the
+    /// match selected. A match in the file's own bytes is in the dump, where
+    /// a click has selected it.
+    func openContentMatch(_ index: Int) {
+        guard contentMatches.indices.contains(index), tree === contentMatchesTree else { return }
+        let match = contentMatches[index]
+        guard match.fileRange == nil || match.decodedXORKey != nil else { return }
+        onOpenMatch?(match)
     }
 
     /// The reader stopped a search that was reading branches.

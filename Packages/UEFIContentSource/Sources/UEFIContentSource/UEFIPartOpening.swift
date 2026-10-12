@@ -12,4 +12,11 @@ import UEFIImage
 @MainActor public protocol UEFIPartOpening: AnyObject {
     func openPart(named name: String, linkedTo source: Range<UInt64>,
                   layout: UEFIRootLayout, codec: any PartCodec)
+
+    /// The same, with `selection` — in the part's own addresses — selected
+    /// and in view once it is open: a search match in a decompressed body.
+    /// A panel of the same part already open over the parent is raised and
+    /// selected in rather than opened twice.
+    func openPart(named name: String, linkedTo source: Range<UInt64>,
+                  layout: UEFIRootLayout, codec: any PartCodec, selecting selection: Range<UInt64>?)
 }

@@ -13,9 +13,13 @@ import UEFIImage
 /// and a Lenovo LENV block stored XOR-encoded, decoded — and looks for the
 /// pattern in each, as well as in the node's own bytes. Each match is placed
 /// in the tree: the deepest node that holds it whole, and the volume that node
-/// is in.
+/// is in. An ME region is left out altogether, its bytes and what is under it:
+/// it is another structure, read by the ME tools.
 ///
-/// Not a step-by-step search: it runs to the end and hands back the list.
+/// Not a step-by-step search: it runs to the end and hands back the list. The
+/// same search asked again of the same bytes — the same tree, no edit since,
+/// the same node, the same patterns — is answered with the last result, not
+/// run again.
 @MainActor
 public enum UEFIContentSearch {
     /// One occurrence.
@@ -80,6 +84,8 @@ public enum UEFIContentSearch {
         /// The node to place matches under; nil for the top of the tree.
         var base: NodeID?
         var section: NodeID?
+        /// A stretch of the start's own bytes, not a buffer under it.
+        var isOwn = false
     }
 
     /// How many bytes an excerpt shows either side of a match — as many as
@@ -88,6 +94,37 @@ public enum UEFIContentSearch {
 
     /// The most matches a search keeps; it goes on counting past them.
     nonisolated public static let defaultKeep = 10_000
+
+    /// What the last search was asked, and what it answered.
+    @MainActor private struct Asked {
+        weak var tree: LazyUEFITree?
+        var generation: Int
+        var start: NodeID
+        var patterns: [MaskedPattern]
+        var overlapping: Bool
+        var keep: Int
+        var result: Result
+
+        func answers(_ tree: LazyUEFITree, _ start: NodeID, _ patterns: [MaskedPattern],
+                     _ overlapping: Bool, _ keep: Int) -> Bool {
+            self.tree === tree && generation == tree.generation && self.start == start
+                && self.patterns == patterns && self.overlapping == overlapping && self.keep >= keep
+        }
+    }
+
+    private static var last: Asked?
+
+    /// Whether a search of these is answered from the last one, without
+    /// reading anything — for a test.
+    static func isRemembered(_ patterns: [MaskedPattern], from start: NodeID, in tree: LazyUEFITree,
+                             overlapping: Bool = false, keep: Int = defaultKeep) -> Bool {
+        last?.answers(tree, start, patterns, overlapping, keep) == true
+    }
+
+    /// Whether `node` is an ME region, which the search leaves out.
+    static func isMERegion(_ node: UEFINode) -> Bool {
+        node.kind == .region && node.subtype == UInt8(FlashRegionType.me.rawValue)
+    }
 
     /// Searches `start` — the whole image for `.root` — for `patterns`.
     /// `progress` hears how far the search is, from 0 to 1: the first half
@@ -102,6 +139,13 @@ public enum UEFIContentSearch {
         keep: Int = defaultKeep,
         progress: @escaping @MainActor (Double) -> Void = { _ in }
     ) async throws -> Result {
+        if let last, last.answers(tree, start, patterns, overlapping, keep) {
+            progress(1)
+            var result = last.result
+            result.matches = Array(result.matches.prefix(keep))
+            return result
+        }
+        let generation = tree.generation
         let top: UEFINode?
         if start == .root {
             top = nil
@@ -178,12 +222,18 @@ public enum UEFIContentSearch {
             return match
         }
         matches.sort(by: treeOrder)
-        return Result(
+        let result = Result(
             matches: Array(matches.prefix(keep)),
             total: scanned.count,
             searchedBytes: total,
-            buffers: scopes.count - 1,
+            buffers: scopes.filter { !$0.isOwn }.count,
             unreadSections: unread)
+        // Remembered only when the bytes did not move under the search.
+        if tree.generation == generation {
+            last = Asked(tree: tree, generation: generation, start: start, patterns: patterns,
+                         overlapping: overlapping, keep: keep, result: result)
+        }
+        return result
     }
 
     // MARK: - What is searched
@@ -197,6 +247,7 @@ public enum UEFIContentSearch {
         var stack = Array((node.map { [$0] } ?? tree.rootNodes).reversed())
         while let next = stack.popLast() {
             if Task.isCancelled { return }
+            if isMERegion(next) { continue }
             if next.isExpandable, let at = fileRange(of: next, in: tree)?.lowerBound, span.count > 0 {
                 let inside = min(max(at, span.lowerBound), span.upperBound)
                 progress(Double(inside - span.lowerBound) / Double(span.count))
@@ -226,15 +277,36 @@ public enum UEFIContentSearch {
         var scopes: [Scope] = []
         var unread: [NodeID] = []
         let readers = tree.spaceReaders
-        if let top {
-            scopes.append(Scope(space: top.space, range: top.range, base: top.id,
-                                section: enclosingSection(of: top, in: tree)))
-        } else {
-            scopes.append(Scope(space: .file, range: 0..<tree.imageReader.count, base: nil, section: nil))
+        // The start's own bytes, but for the ME regions in them.
+        let space = top?.space ?? .file
+        let whole = top?.range ?? 0..<tree.imageReader.count
+        var left: [UInt64] = []
+        func gatherME(_ nodes: [UEFINode]) {
+            for node in nodes where node.space == space {
+                if isMERegion(node) {
+                    left.append(contentsOf: [node.range.lowerBound, node.range.upperBound])
+                } else {
+                    gatherME(node.children)
+                }
+            }
+        }
+        if let top, isMERegion(top) { return ([], []) }
+        gatherME(top.map { [$0] } ?? tree.rootNodes)
+        var from = whole.lowerBound
+        var cuts = stride(from: 0, to: left.count, by: 2).map { left[$0]..<left[$0 + 1] }
+        cuts.sort { $0.lowerBound < $1.lowerBound }
+        for cut in cuts + [whole.upperBound..<whole.upperBound] {
+            let to = min(max(cut.lowerBound, from), whole.upperBound)
+            if to > from {
+                scopes.append(Scope(space: space, range: from..<to, base: top?.id,
+                                    section: top.flatMap { enclosingSection(of: $0, in: tree) }, isOwn: true))
+            }
+            from = max(from, cut.upperBound)
         }
         let fileReader = readers.reader(for: .file)
         let image = tree.image()
         func visit(_ node: UEFINode) {
+            if isMERegion(node) { return }
             if let body = UEFIPresenter.decompressedBody(for: node) {
                 if let reader = readers.reader(for: body.space), reader.count > 0 {
                     scopes.append(Scope(space: body.space, range: 0..<reader.count, base: node.id, section: node.id))
