@@ -1,5 +1,5 @@
 import XCTest
-import ToolModuleKit
+@testable import ToolModuleKit
 import UEFIImage
 import UEFITool
 @testable import UEFIToolUI
@@ -118,6 +118,12 @@ final class UEFIContentSearchFlowTests: XCTestCase {
 
         results.choose(0)
         XCTAssertTrue(pumpUntil(5) { (try? self.selectedNode())??.subtype == 0x19 }, "the raw section is selected")
+        // The dump selects the compressed section the match came out of.
+        let tree = try XCTUnwrap(controller?.windowModel.pane1.uefiState.tree)
+        let section = try XCTUnwrap(tree.image().allNodes.first { $0.compression != nil && $0.space == .file })
+        let pane = try XCTUnwrap(controller?.windowModel.pane1)
+        XCTAssertTrue(pumpUntil(5) { pane.hexSelection().start == section.range.lowerBound },
+                      "the dump stands on the section: \(pane.hexSelection().start)")
     }
 
     func testAMatchInTheFileIsSelectedInTheDump() throws {
@@ -167,7 +173,20 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         let bytes = try XCTUnwrap(part.byteStorage).read(at: UInt64(start), length: 5)
         XCTAssertEqual(bytes, Array("GH51G".utf8), "the match is selected")
 
-        results.open(0)
+        // The part's own tree opens to the node the match is in.
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        XCTAssertTrue(pumpUntil(5) {
+            guard let outline = self.descendants(of: surface.tools.panel, NSOutlineView.self).first,
+                  outline.selectedRow >= 0,
+                  let row = outline.item(atRow: outline.selectedRow) as? UEFITreeRow,
+                  let node = part.uefiState.tree?.node(row.id) else { return false }
+            return node.kind == .section && node.subtype == 0x19
+        }, "the raw section holding the match is selected in the part's tree")
+
+        // The right-click menu says the same and does the same.
+        let item = try XCTUnwrap(results.menu(forRow: 0).items.first)
+        XCTAssertEqual(item.title, "Open Decompressed Body")
+        _ = item.target?.perform(item.action, with: item)
         _ = pumpUntil(0.5) { false }
         XCTAssertEqual(controller.fragments.panelsLinked(to: pane).count, 1, "not opened twice")
     }
@@ -175,6 +194,7 @@ final class UEFIContentSearchFlowTests: XCTestCase {
     func testADoubleClickOnAMatchInTheFileOpensNothing() throws {
         try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
         let results = try findAll("_FVH")
+        XCTAssertTrue(results.menu(forRow: 0).items.isEmpty, "nothing to open: the dump shows it")
         results.open(0)
         _ = pumpUntil(0.5) { false }
         let controller = try XCTUnwrap(controller)
@@ -208,6 +228,72 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         XCTAssertEqual(note()?.isHidden, true, "from the selected node: not said")
         UEFISearchSettings.mode = .names
         XCTAssertEqual(note()?.isHidden, false, "the name search says it whatever the box")
+    }
+
+    /// A variable is named after its store, though the store is called by its
+    /// kind: that says which list of variables it is in.
+    func testAVariableIsNamedAfterItsStore() throws {
+        try open(NvramTestImage.vss([NvramTestImage.Variable("SetupMode", Array("FINDME-MARK".utf8))]))
+        let results = try findAll("FINDME-MARK")
+        let row = try XCTUnwrap(results.rows.first, "\(results.state)")
+        XCTAssertTrue(row.node.hasPrefix("VSS store: "), row.node)
+        XCTAssertTrue(row.node.contains("SetupMode"), row.node)
+    }
+
+    /// Space on the results opens the details large, as on the tree, and the
+    /// arrows then go from match to match, the details following.
+    func testSpaceOnTheResultsOpensTheDetailsLarge() throws {
+        try open(NvramTestImage.vss([NvramTestImage.Variable("FirstVar", Array("FINDME-MARK".utf8)),
+                                     NvramTestImage.Variable("SecondVar", Array("FINDME-MARK".utf8))]))
+        let results = try findAll("FINDME-MARK")
+        XCTAssertGreaterThanOrEqual(results.rows.count, 2)
+        let window = try XCTUnwrap(window)
+        results.choose(0)
+        XCTAssertTrue(pumpUntil(5) { (try? self.selectedNode()) != nil }, "the first match's node is selected")
+        window.makeFirstResponder(results.table)
+        let pane = try XCTUnwrap(descendants(of: try XCTUnwrap(controller?.tools.panel), ToolDetailPane.self).first)
+        func key(_ characters: String, _ code: UInt16) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                           windowNumber: window.windowNumber, context: nil, characters: characters,
+                                           charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code))
+        }
+        XCTAssertTrue(pane.handleKeyWhileShut(try key(" ", 49)), "Space on the results is taken")
+        XCTAssertTrue(pane.isQuickLookShown)
+        XCTAssertTrue(window.firstResponder === results.table, "the focus stays on the results")
+
+        let first = try XCTUnwrap(selectedNode()).id
+        let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
+        XCTAssertTrue(pane.handleKeyWhileShown(try key(down, 125)))
+        XCTAssertEqual(results.table.selectedRow, 1, "the arrow moves the results")
+        XCTAssertTrue(pumpUntil(5) { (try? self.selectedNode())??.id != first }, "the tree follows the match")
+        pane.closeQuickLook()
+    }
+
+    /// The arrows on the results go to each match as a click does: the tree
+    /// selects its node and the dump its bytes, so the three agree.
+    func testTheArrowsOnTheResultsGoToEachMatch() throws {
+        try open(NvramTestImage.vss([NvramTestImage.Variable("FirstVar", Array("FINDME-MARK".utf8)),
+                                     NvramTestImage.Variable("SecondVar", Array("FINDME-MARK".utf8))]))
+        let results = try findAll("FINDME-MARK")
+        XCTAssertEqual(results.rows.count, 2)
+        let window = try XCTUnwrap(window)
+        let pane = try XCTUnwrap(controller?.windowModel.pane1)
+        let addresses = results.rows.compactMap { UInt64($0.address.dropFirst(2), radix: 16) }
+        XCTAssertEqual(addresses.count, 2, "\(results.rows.map(\.address))")
+
+        results.choose(0)
+        XCTAssertTrue(pumpUntil(5) { pane.hexSelection().start == addresses[0] }, "the first match in the dump")
+        let first = try XCTUnwrap(selectedNode()).id
+        window.makeFirstResponder(results.table)
+        let down = String(UnicodeScalar(NSDownArrowFunctionKey)!)
+        results.table.keyDown(with: try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, characters: down,
+            charactersIgnoringModifiers: down, isARepeat: false, keyCode: 125)))
+        XCTAssertEqual(results.table.selectedRow, 1)
+        XCTAssertTrue(pumpUntil(5) { pane.hexSelection().start == addresses[1] }, "the dump follows the arrow")
+        XCTAssertTrue(pumpUntil(5) { (try? self.selectedNode())??.id != first }, "so does the tree")
+        XCTAssertTrue(window.firstResponder === results.table, "and the keyboard stays on the results")
     }
 
     func testTheCrossShutsTheResults() throws {

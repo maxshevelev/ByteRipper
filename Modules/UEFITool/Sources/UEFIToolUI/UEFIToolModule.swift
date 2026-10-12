@@ -621,6 +621,11 @@ private struct ChecksumPass: Sendable {
             // its own pass, announced through `onChecksums`.
             self.verifyNewChecksums {
                 self.show(publish: true, rowsChanged: true)
+                self.isAwaitingFirstShow = false
+                if let offset = self.pendingReveal {
+                    self.pendingReveal = nil
+                    self.revealNode(at: offset)
+                }
                 self.onDisplay?(self.currentImage)
             }
         }
@@ -1383,6 +1388,23 @@ private struct ChecksumPass: Sendable {
         [ToolDumpAction(title: L("Show in Tree"), isEnabled: tree?.isReady ?? false) { [weak self] in
             self?.revealNode(at: offset)
         }]
+    }
+
+    /// A byte to show in the tree once the tree is shown: asked for before
+    /// the panel had read the file — a part opened on a search match.
+    private var pendingReveal: UInt64?
+    /// True until the panel has shown its file for the first time: a reveal
+    /// before then would land in rows about to be laid out again.
+    private var isAwaitingFirstShow = true
+
+    /// The node holding the byte at `offset`, shown as soon as the tree is
+    /// there — now, or once the panel has shown the file.
+    public func showItem(at offset: UInt64) {
+        guard let tree, tree.isReady, currentImage != nil, !isAwaitingFirstShow else {
+            pendingReveal = offset
+            return
+        }
+        revealNode(at: offset)
     }
 
     /// Shows in the tree the innermost node holding the byte at `offset`,

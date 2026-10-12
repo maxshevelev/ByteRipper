@@ -64,7 +64,16 @@ extension Notification.Name {
 
     /// The table whose rows the list details: Space on it opens and closes
     /// the large view, and the arrow keys pressed while it is open move it.
+    /// With more than one attached, the one Space was pressed on.
     private weak var table: NSTableView?
+
+    /// Other tables whose rows the list details too — a list of search
+    /// matches beside the tree, each standing for a row of it.
+    private var others: [WeakTable] = []
+
+    private struct WeakTable {
+        weak var table: NSTableView?
+    }
 
     /// The card, from the moment it leaves the pane until it is back in it.
     private var card: QuickLookCard?
@@ -121,6 +130,21 @@ extension Notification.Name {
     /// modifier, while it has the focus — opens the large view.
     public func attach(to table: NSTableView) {
         self.table = table
+        primary = table
+    }
+
+    /// Names another table whose rows the list details: Space on it works as
+    /// on the first.
+    public func attach(also table: NSTableView) {
+        others.append(WeakTable(table: table))
+    }
+
+    /// The table `attach(to:)` named, which Space falls back to.
+    private weak var primary: NSTableView?
+
+    /// The attached table that is `view`, or holds it.
+    private func attachedTable(holding view: NSView) -> NSTableView? {
+        ([primary] + others.map(\.table)).compactMap { $0 }.first { view === $0 || view.isDescendant(of: $0) }
     }
 
     /// Opens the large view, or closes it. False — the key is not taken — when
@@ -460,11 +484,17 @@ extension Notification.Name {
     /// select a value is reading them, and wants them larger just as much.
     /// True when it was taken.
     func handleKeyWhileShut(_ event: NSEvent) -> Bool {
-        guard !isQuickLookShown, let table, let window = table.window,
+        guard !isQuickLookShown, let primary, let window = primary.window,
               event.window === window, Self.isPlainSpace(event),
-              let focus = window.firstResponder as? NSView,
-              focus === table || focus.isDescendant(of: detail)
+              let focus = window.firstResponder as? NSView
         else { return false }
+        if let focused = attachedTable(holding: focus) {
+            table = focused
+        } else if focus.isDescendant(of: detail) {
+            table = table ?? primary
+        } else {
+            return false
+        }
         return showQuickLook()
     }
 

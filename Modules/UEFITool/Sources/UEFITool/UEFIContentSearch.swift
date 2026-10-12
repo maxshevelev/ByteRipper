@@ -262,7 +262,7 @@ public enum UEFIContentSearch {
 
     /// Where `node`'s bytes are in the file: its own range, or for a node in
     /// decompressed bytes the compressed section's they came out of.
-    static func fileRange(of node: UEFINode?, in tree: LazyUEFITree) -> Range<UInt64>? {
+    public static func fileRange(of node: UEFINode?, in tree: LazyUEFITree) -> Range<UInt64>? {
         guard let node else { return nil }
         if let range = node.fileRange { return range }
         var path = node.id.path

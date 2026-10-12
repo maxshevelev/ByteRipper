@@ -504,6 +504,9 @@ import UEFITool
         splitter.addPane(treeSplit)
         splitter.addPane(detailPane)
         detailPane.attach(to: outline)
+        // A match is a node of the tree, and its row shows that node's detail:
+        // Space on the results opens it large as it does on the tree.
+        detailPane.attach(also: contentResults.table)
         splitter.setPaneLayout(.fill, at: 0)
         splitter.setPaneLayout(.proportional(1.0 / 3), at: 1)
 
@@ -1597,14 +1600,16 @@ import UEFITool
             return
         }
         let hex = { (value: UInt64) in String(format: "0x%llX", value) }
-        // The node, after its parent where the parent has a name of its own
-        // rather than a word for what it is (Padding, Raw…).
+        // The node, after its parent — unless the parent is called only by a
+        // word for the bytes it covers (Padding, Raw, Free space…). A store
+        // named by its kind, `VSS store`, is a parent worth naming: it says
+        // which of the variables this is.
         let label = { [catalogue, image] (id: NodeID?) -> String in
             guard let id, let node = tree.node(id) else { return "—" }
             let own = UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image)
             guard id.path.count > 1, let parent = tree.node(NodeID(Array(id.path.dropLast()))) else { return own }
             let above = UEFITreeDisplay.name(for: parent, catalogue: catalogue, in: image)
-            guard !UEFIAgentQueries.isPlaceholder(above, of: parent) else { return own }
+            guard !UEFIAgentQueries.placeholderNames.contains(above.lowercased()) else { return own }
             return L("%1$@: %2$@", above, own)
         }
         // The codecs a space's bytes came through, outermost first — the
@@ -1640,19 +1645,26 @@ import UEFITool
                 codecs: codecs(match),
                 address: address,
                 path: match.node.map { UEFIAgentQueries.path(to: $0, in: tree).joined(separator: " ▸ ") } ?? "",
+                openTitle: match.decodedXORKey != nil ? L("Open Decoded Block")
+                    : match.fileRange != nil ? nil
+                    : match.section.flatMap(tree.node)?.kind == .biosGuardUpdate ? L("Open Assembled BIOS Region")
+                    : L("Open Decompressed Body"),
                 excerpt: match.excerpt,
                 excerptMatch: match.excerptMatch)
         }, total: total, scope: scope)
     }
 
     /// Goes to the match on row `index`: its node in the tree, opened the way
-    /// there as a search opens it, and — for a match in the file — its bytes
-    /// in the dump.
+    /// there as a search opens it, and its bytes in the dump — or, for a match
+    /// in decompressed bytes, which are no bytes of the file, the compressed
+    /// section in the file they came out of. The dump never keeps standing on
+    /// the match before.
     func goToContentMatch(_ index: Int) {
         guard contentMatches.indices.contains(index), let tree, tree === contentMatchesTree else { return }
         let match = contentMatches[index]
+        let inFile = match.fileRange ?? UEFIContentSearch.fileRange(of: match.node.flatMap(tree.node), in: tree)
         let reveal = { [weak self] in
-            if let range = match.fileRange { self?.onRevealMatch?(range) }
+            if let range = inFile { self?.onRevealMatch?(range) }
         }
         guard let id = match.node, tree.node(id) != nil else {
             reveal()

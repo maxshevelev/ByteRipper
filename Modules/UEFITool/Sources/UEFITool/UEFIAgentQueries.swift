@@ -393,7 +393,7 @@ public enum UEFIAgentQueries {
     }
 
     /// Names that say what a node is rather than which one.
-    nonisolated static let placeholderNames: Set<String> = [
+    nonisolated public static let placeholderNames: Set<String> = [
         "unused", "unknown", "padding", "empty padding", "free space", "non-uefi data", "raw"
     ]
 

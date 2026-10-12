@@ -49,6 +49,13 @@ import AppKit
     /// menu.
     func dumpActions(at offset: UInt64) -> [ToolDumpAction]
 
+    /// Shows the panel's own item for the byte at `offset` — the UEFI
+    /// Structure's node that holds it, opened and selected — once the panel
+    /// has read what it needs to. What the app asks of a panel that opens on
+    /// a part with a byte already chosen in it: a search match in a
+    /// decompressed body.
+    func showItem(at offset: UInt64)
+
     /// What this session wants handed back if the user returns to this
     /// tool-module on this file, or nil to start afresh every time.
     ///
@@ -112,6 +119,9 @@ public extension ToolSession {
     /// The default is to offer nothing: most panels have nothing to say about
     /// a single byte.
     func dumpActions(at offset: UInt64) -> [ToolDumpAction] { [] }
+    /// The default is to show nothing: a panel with no item per byte has
+    /// nothing to point at.
+    func showItem(at offset: UInt64) {}
 }
 
 /// A tool-module's own state, kept by the host while that tool-module is not

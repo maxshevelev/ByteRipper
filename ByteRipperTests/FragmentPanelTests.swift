@@ -179,6 +179,21 @@ final class FragmentPanelTests: XCTestCase {
                       "the dock gives its height back when the last panel goes")
     }
 
+    /// ⌘W closes the panel in front as its ✕ does: at once, with no fold —
+    /// a close takes the pill the fold would land in.
+    func testCommandWClosesThePanelAsItsCrossDoes() throws {
+        let (controller, _) = makeController()
+        defer { cleanup(controller) }
+        let id = try XCTUnwrap(controller.openFragment([0x01], named: "one", animated: false))
+        let pane = try XCTUnwrap(controller.fragments.pane(id))
+        let view = try XCTUnwrap(controller.filePaneView(for: pane))
+        XCTAssertNotNil(view.window, "the premise: the panel is on screen")
+
+        controller.closeDocument()
+        XCTAssertNil(controller.fragments.pane(id))
+        XCTAssertNil(view.window, "gone at once, not folded away")
+    }
+
     /// A panel let go of rather than closed keeps its document: the pane is
     /// handed over whole, which is what tearing one off into a tab needs.
     func testReleasingAPanelHandsBackItsPaneStillOpen() throws {

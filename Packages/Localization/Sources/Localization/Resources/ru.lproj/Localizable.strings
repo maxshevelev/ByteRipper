@@ -1507,3 +1507,4 @@
 "List every place the pattern occurs, compressed sections included" = "Показать все вхождения шаблона, включая сжатые секции";
 "%1$@: %2$@" = "%1$@: %2$@";
 "The node that holds the match, after the node above it and the codecs its bytes came through" = "Узел, содержащий вхождение; перед ним — узел над ним и кодеки, через которые прошли байты";
+"Open the bytes this match is in as a panel, the match selected" = "Открыть байты, в которых лежит вхождение, панелью с выделенным вхождением";

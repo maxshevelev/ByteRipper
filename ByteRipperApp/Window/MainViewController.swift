@@ -2034,6 +2034,7 @@ final class MainViewController: NSViewController {
         }), let part = fragments.pane(open) {
             fragments.expand(open)
             revealForTool(selection, in: part, select: true)
+            fragments.surface(open)?.tools.session?.showItem(at: selection.lowerBound)
             return nil
         }
         guard let document = pane.document,
@@ -2058,6 +2059,9 @@ final class MainViewController: NSViewController {
             }
             if let selection, let id, let part = self.fragments.pane(id) {
                 self.revealForTool(selection, in: part, select: true)
+                // The part's own tool shows its item for the match: the UEFI
+                // tree opens to the node that holds it.
+                self.fragments.surface(id)?.tools.session?.showItem(at: selection.lowerBound)
             }
         }
         let fail: @MainActor (Error) -> Void = { [weak self] error in
@@ -2106,12 +2110,13 @@ final class MainViewController: NSViewController {
     /// nobody wants on disk. A part with nowhere to put its bytes back gets the
     /// ordinary save/discard question.
     ///
-    /// `animated` is false for the header's ✕, and true for everything else. A
-    /// close takes the panel's pill with it, so the flight has nowhere to land
-    /// — the panel would fly at a pill that is leaving with it. The fold the
-    /// collapse button asks for is another thing: there the pill stays, and
-    /// watching the panel fall into it is what says where the panel went.
-    func closeFragment(_ id: FragmentDock.PanelID, animated: Bool = true) {
+    /// A close is one act however it is asked for — the header's ✕, ⌘W, the
+    /// header's Close, the pill's — and none of them animates: a close takes
+    /// the panel's pill with it, so the flight has nowhere to land — the panel
+    /// would fly at a pill that is leaving with it. The fold the collapse
+    /// button asks for is another thing: there the pill stays, and watching
+    /// the panel fall into it is what says where the panel went.
+    func closeFragment(_ id: FragmentDock.PanelID, animated: Bool = false) {
         guard let pane = fragments.pane(id) else { return }
         // Parts taken out of this one lose their way back when it goes, and a
         // link that dies without a word is a link the reader meets later, when
@@ -2138,7 +2143,7 @@ final class MainViewController: NSViewController {
     /// window asks this of every panel and asks the other of none: nothing is
     /// stranded when everything goes at once.
     private func closeFragment(_ id: FragmentDock.PanelID, pane: PaneViewModel,
-                               animated: Bool = true,
+                               animated: Bool = false,
                                then done: ((Bool) -> Void)? = nil) {
         if let origin = pane.origin, origin.hasChanges(in: pane) {
             switch confirmClosingUnreturnedPart(origin) {
@@ -2186,7 +2191,7 @@ final class MainViewController: NSViewController {
     /// bytes the reader has just been told could not be put back.
     private func closeFragmentIfPutBack(_ id: FragmentDock.PanelID,
                                         pane: PaneViewModel, origin: DocumentOrigin,
-                                        animated: Bool = true,
+                                        animated: Bool = false,
                                         then done: ((Bool) -> Void)? = nil) {
         guard !origin.hasChanges(in: pane) else {
             fragments.refreshDock()

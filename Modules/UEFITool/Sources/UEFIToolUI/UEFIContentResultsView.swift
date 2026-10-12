@@ -14,9 +14,10 @@ import ToolModuleKit
 ///
 /// A click goes to the match: the node in the tree and, for a match in the
 /// file, the bytes in the dump. A double click on a match behind a codec
-/// opens the bytes it is in as a fragment panel, the match selected.
+/// opens the bytes it is in as a fragment panel, the match selected — and so
+/// does the row's right-click menu, which names what opens.
 // help: panel.uefi.content-search
-@MainActor final class UEFIContentResultsView: NSView, NSTableViewDataSource, NSTableViewDelegate {
+@MainActor final class UEFIContentResultsView: NSView, NSTableViewDataSource, NSTableViewDelegate, NSMenuDelegate {
     /// One line of the list, as the panel words it.
     struct Row: Equatable {
         /// The node that holds the match, after its parent's name where the
@@ -31,6 +32,10 @@ import ToolModuleKit
         var address: String
         /// The names from the top of the tree down to the node.
         var path: String
+        /// What opening the row opens — Open Decompressed Body, Open Decoded
+        /// Block — for a match behind a codec; nil for the file's own bytes,
+        /// which the dump already shows.
+        var openTitle: String?
         /// The bytes around the match, and where the match is in them.
         var excerpt: [UInt8]
         var excerptMatch: Range<Int>
@@ -131,6 +136,9 @@ import ToolModuleKit
         table.target = self
         table.action = #selector(rowClicked)
         table.doubleAction = #selector(rowDoubleClicked)
+        let menu = NSMenu()
+        menu.delegate = self
+        table.menu = menu
         table.setAccessibilityLabel(L("Search results"))
         ToolPanelTable.apply(to: table)
 
@@ -331,9 +339,28 @@ import ToolModuleKit
         return result
     }
 
+    /// True between a selection moving and the click that moved it, so the
+    /// click does not go to the row a second time.
+    private var selectionJustMoved = false
+
+    /// A row chosen by the keyboard — the arrows, also while the details are
+    /// open large — or by a click on another row.
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        let row = table.selectedRow
+        guard rows.indices.contains(row) else { return }
+        selectionJustMoved = true
+        DispatchQueue.main.async { [weak self] in self?.selectionJustMoved = false }
+        onChoose?(row)
+    }
+
+    /// A click on the row already selected goes to it again.
     @objc private func rowClicked() {
         let row = table.clickedRow >= 0 ? table.clickedRow : table.selectedRow
         guard rows.indices.contains(row) else { return }
+        if selectionJustMoved {
+            selectionJustMoved = false
+            return
+        }
         onChoose?(row)
     }
 
@@ -343,19 +370,48 @@ import ToolModuleKit
         onOpen?(row)
     }
 
+    /// The right-click menu: the row's Open, when it has one.
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        fill(menu, row: table.clickedRow)
+    }
+
+    /// The menu a right-click on `row` shows, for a test.
+    func menu(forRow row: Int) -> NSMenu {
+        let menu = NSMenu()
+        fill(menu, row: row)
+        return menu
+    }
+
+    private func fill(_ menu: NSMenu, row: Int) {
+        menu.removeAllItems()
+        guard rows.indices.contains(row), let title = rows[row].openTitle else { return }
+        let item = NSMenuItem(title: title, action: #selector(openFromMenu(_:)), keyEquivalent: "")
+        item.target = self
+        item.tag = row
+        ControlHelp.describe(item, L("Open the bytes this match is in as a panel, the match selected"))
+        menu.addItem(item)
+    }
+
+    @objc private func openFromMenu(_ item: NSMenuItem) {
+        guard rows.indices.contains(item.tag) else { return }
+        onOpen?(item.tag)
+    }
+
     @objc private func stopClicked() { onStop?() }
     @objc private func closeClicked() { onClose?() }
 
     /// The row double-clicked, for a test.
     func open(_ row: Int) {
-        table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
         onOpen?(row)
     }
 
     /// The row chosen, for a test.
     func choose(_ row: Int) {
-        table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
-        onChoose?(row)
+        if table.selectedRow == row {
+            onChoose?(row)
+        } else {
+            table.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
     }
 }
 

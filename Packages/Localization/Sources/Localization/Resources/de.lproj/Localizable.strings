@@ -1507,3 +1507,4 @@
 "List every place the pattern occurs, compressed sections included" = "Alle Fundstellen des Musters auflisten, komprimierte Sections eingeschlossen";
 "%1$@: %2$@" = "%1$@: %2$@";
 "The node that holds the match, after the node above it and the codecs its bytes came through" = "Der Knoten, der die Fundstelle enthält; davor der Knoten darüber und die Codecs, durch die ihre Bytes gegangen sind";
+"Open the bytes this match is in as a panel, the match selected" = "Die Bytes, in denen die Fundstelle liegt, als Bereich mit ausgewählter Fundstelle öffnen";
