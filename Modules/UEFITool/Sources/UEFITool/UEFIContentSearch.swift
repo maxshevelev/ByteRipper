@@ -13,8 +13,10 @@ import UEFIImage
 /// and a Lenovo LENV block stored XOR-encoded, decoded — and looks for the
 /// pattern in each, as well as in the node's own bytes. Each match is placed
 /// in the tree: the deepest node that holds it whole, and the volume that node
-/// is in. An ME region is left out altogether, its bytes and what is under it:
-/// it is another structure, read by the ME tools.
+/// is in. Bytes as they are stored behind a codec — a compressed section's
+/// body, an encoded LENV block — are not searched: only what they decompress
+/// or decode to. An ME region is left out altogether, its bytes and what is
+/// under it: it is another structure, read by the ME tools.
 ///
 /// Not a step-by-step search: it runs to the end and hands back the list. The
 /// same search asked again of the same bytes — the same tree, no edit since,
@@ -226,7 +228,7 @@ public enum UEFIContentSearch {
             matches: Array(matches.prefix(keep)),
             total: scanned.count,
             searchedBytes: total,
-            buffers: scopes.filter { !$0.isOwn }.count,
+            buffers: Set(scopes.filter { !$0.isOwn }.compactMap(\.base)).count,
             unreadSections: unread)
         // Remembered only when the bytes did not move under the search.
         if tree.generation == generation {
@@ -273,53 +275,74 @@ public enum UEFIContentSearch {
 
     /// The stretches to scan: the start's own bytes, then every buffer under
     /// it in tree order — and the compressed sections that would not open.
+    ///
+    /// Bytes nothing can be found in as they are stored are cut out of every
+    /// stretch: a compressed section's body, which is searched in what it
+    /// decompresses to; a LENV block stored encoded, searched decoded; and an
+    /// ME region, left out altogether.
     static func scopes(from top: UEFINode?, in tree: LazyUEFITree) -> ([Scope], [NodeID]) {
         var scopes: [Scope] = []
         var unread: [NodeID] = []
         let readers = tree.spaceReaders
-        // The start's own bytes, but for the ME regions in them.
-        let space = top?.space ?? .file
-        let whole = top?.range ?? 0..<tree.imageReader.count
-        var left: [UInt64] = []
-        func gatherME(_ nodes: [UEFINode]) {
-            for node in nodes where node.space == space {
-                if isMERegion(node) {
-                    left.append(contentsOf: [node.range.lowerBound, node.range.upperBound])
-                } else {
-                    gatherME(node.children)
-                }
-            }
-        }
-        if let top, isMERegion(top) { return ([], []) }
-        gatherME(top.map { [$0] } ?? tree.rootNodes)
-        var from = whole.lowerBound
-        var cuts = stride(from: 0, to: left.count, by: 2).map { left[$0]..<left[$0 + 1] }
-        cuts.sort { $0.lowerBound < $1.lowerBound }
-        for cut in cuts + [whole.upperBound..<whole.upperBound] {
-            let to = min(max(cut.lowerBound, from), whole.upperBound)
-            if to > from {
-                scopes.append(Scope(space: space, range: from..<to, base: top?.id,
-                                    section: top.flatMap { enclosingSection(of: $0, in: tree) }, isOwn: true))
-            }
-            from = max(from, cut.upperBound)
-        }
         let fileReader = readers.reader(for: .file)
         let image = tree.image()
+
+        func encodedBlock(_ node: UEFINode) -> LENVBlock? {
+            guard node.kind == .lenvBlock, let fileReader,
+                  let found = UEFILenovoDMIDetail.decodableBlock(for: node, image: image, reader: fileReader),
+                  found.block.encoding == .encoded else { return nil }
+            return found.block
+        }
+        /// The bytes of `node` not to scan as they are stored.
+        func opaque(_ node: UEFINode) -> Range<UInt64>? {
+            if isMERegion(node) { return node.range }
+            if UEFIPresenter.decompressedBody(for: node) != nil { return node.body }
+            if encodedBlock(node) != nil { return node.range }
+            return nil
+        }
+        /// `range` of `space`, less what the nodes in it keep opaque.
+        func stretches(of range: Range<UInt64>, in space: ByteSpace, under nodes: [UEFINode]) -> [Range<UInt64>] {
+            var cuts: [Range<UInt64>] = []
+            func gather(_ nodes: [UEFINode]) {
+                for node in nodes where node.space == space {
+                    if let cut = opaque(node) { cuts.append(cut) } else { gather(node.children) }
+                }
+            }
+            gather(nodes)
+            cuts.sort { $0.lowerBound < $1.lowerBound }
+            var result: [Range<UInt64>] = []
+            var from = range.lowerBound
+            for cut in cuts + [range.upperBound..<range.upperBound] {
+                let to = min(max(cut.lowerBound, from), range.upperBound)
+                if to > from { result.append(from..<to) }
+                from = max(from, min(cut.upperBound, range.upperBound))
+            }
+            return result
+        }
+
+        if let top, isMERegion(top) { return ([], []) }
+        let space = top?.space ?? .file
+        let section = top.flatMap { enclosingSection(of: $0, in: tree) }
+        for stretch in stretches(of: top?.range ?? 0..<tree.imageReader.count, in: space,
+                                 under: top.map { [$0] } ?? tree.rootNodes) {
+            scopes.append(Scope(space: space, range: stretch, base: top?.id, section: section, isOwn: true))
+        }
         func visit(_ node: UEFINode) {
             if isMERegion(node) { return }
             if let body = UEFIPresenter.decompressedBody(for: node) {
                 if let reader = readers.reader(for: body.space), reader.count > 0 {
-                    scopes.append(Scope(space: body.space, range: 0..<reader.count, base: node.id, section: node.id))
+                    let inside = node.children.filter { $0.space == body.space }
+                    for stretch in stretches(of: 0..<reader.count, in: body.space, under: inside) {
+                        scopes.append(Scope(space: body.space, range: stretch, base: node.id, section: node.id))
+                    }
                 } else {
                     unread.append(node.id)
                 }
             }
-            if node.kind == .lenvBlock, let fileReader,
-               let found = UEFILenovoDMIDetail.decodableBlock(for: node, image: image, reader: fileReader),
-               found.block.encoding == .encoded {
+            if let block = encodedBlock(node) {
                 scopes.append(Scope(space: .file, range: node.range,
-                                    decoded: LenovoDMIDecodedBlock.decode(found.block),
-                                    xorKey: found.block.xorKey, base: node.id, section: nil))
+                                    decoded: LenovoDMIDecodedBlock.decode(block),
+                                    xorKey: block.xorKey, base: node.id, section: nil))
             }
             node.children.forEach(visit)
         }

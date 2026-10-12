@@ -397,7 +397,7 @@ public enum UEFIAgentQueries {
         "unused", "unknown", "padding", "empty padding", "free space", "non-uefi data", "raw"
     ]
 
-    static func isPlaceholder(_ name: String, of node: UEFINode) -> Bool {
+    public static func isPlaceholder(_ name: String, of node: UEFINode) -> Bool {
         let lowered = name.lowercased()
         return placeholderNames.contains(lowered)
             || lowered == UEFITreeDisplay.typeText(for: node).lowercased()

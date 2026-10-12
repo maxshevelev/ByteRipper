@@ -1597,6 +1597,16 @@ import UEFITool
             return
         }
         let hex = { (value: UInt64) in String(format: "0x%llX", value) }
+        // The node, after its parent where the parent has a name of its own
+        // rather than a word for what it is (Padding, Raw…).
+        let label = { [catalogue, image] (id: NodeID?) -> String in
+            guard let id, let node = tree.node(id) else { return "—" }
+            let own = UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image)
+            guard id.path.count > 1, let parent = tree.node(NodeID(Array(id.path.dropLast()))) else { return own }
+            let above = UEFITreeDisplay.name(for: parent, catalogue: catalogue, in: image)
+            guard !UEFIAgentQueries.isPlaceholder(above, of: parent) else { return own }
+            return L("%1$@: %2$@", above, own)
+        }
         // The codecs a space's bytes came through, outermost first — the
         // compressions of the sections on its chain, each looked up once.
         var compressions: [ByteSpace: String] = [:]
@@ -1626,10 +1636,9 @@ import UEFITool
                 address = L("%1$@ in %2$@", hex(match.range.lowerBound), name(match.section) ?? "—")
             }
             return UEFIContentResultsView.Row(
-                volume: name(match.volume) ?? "—",
+                node: label(match.node),
                 codecs: codecs(match),
                 address: address,
-                node: name(match.node) ?? "—",
                 path: match.node.map { UEFIAgentQueries.path(to: $0, in: tree).joined(separator: " ▸ ") } ?? "",
                 excerpt: match.excerpt,
                 excerptMatch: match.excerptMatch)

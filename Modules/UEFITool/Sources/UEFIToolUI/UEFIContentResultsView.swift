@@ -6,11 +6,11 @@ import ToolModuleKit
 /// The Contents search's results, under the tree — the panel the dump's Search
 /// All opens under the dump, read the same way: a header with the count and a
 /// ×, and a row per match with the bytes around it, the match in bold. What
-/// the dump's panel has no need of is said beside them: the volume the match
-/// is in — after a badge for each codec its bytes came through, `LZMA`,
-/// `XOR 81`, the badge a fragment panel of them wears — and the node that
-/// holds it. While the search runs the header carries its progress and a
-/// stop button.
+/// the dump's panel has no need of comes first: the node that holds the match,
+/// after the node above it where that one has a name of its own — `VSS store:
+/// SetupMode` — and after a badge for each codec its bytes came through,
+/// `LZMA`, `XOR 81`, the badge a fragment panel of them wears. While the
+/// search runs the header carries its progress and a stop button.
 ///
 /// A click goes to the match: the node in the tree and, for a match in the
 /// file, the bytes in the dump. A double click on a match behind a codec
@@ -19,7 +19,9 @@ import ToolModuleKit
 @MainActor final class UEFIContentResultsView: NSView, NSTableViewDataSource, NSTableViewDelegate {
     /// One line of the list, as the panel words it.
     struct Row: Equatable {
-        var volume: String
+        /// The node that holds the match, after its parent's name where the
+        /// parent has one of its own: `VSS store: SetupMode`.
+        var node: String
         /// The codecs the match's bytes came through, outermost first: a
         /// compression for each compressed section it is in, `XOR 81` for a
         /// LENV block decoded. None for the file's own bytes.
@@ -27,7 +29,6 @@ import ToolModuleKit
         /// The file address, or where in a compressed section's decompressed
         /// bytes — said under the pointer.
         var address: String
-        var node: String
         /// The names from the top of the tree down to the node.
         var path: String
         /// The bytes around the match, and where the match is in them.
@@ -70,10 +71,9 @@ import ToolModuleKit
     static let panelHeight: CGFloat = 180
 
     private enum Column {
-        static let volume = NSUserInterfaceItemIdentifier("volume")
+        static let node = NSUserInterfaceItemIdentifier("node")
         static let hex = NSUserInterfaceItemIdentifier("hex")
         static let text = NSUserInterfaceItemIdentifier("text")
-        static let node = NSUserInterfaceItemIdentifier("node")
     }
 
     init() {
@@ -110,11 +110,10 @@ import ToolModuleKit
                   tooltip: L("Close search results"), action: #selector(closeClicked))
 
         for (identifier, title, width, tooltip) in [
-            (Column.volume, L("Volume"), CGFloat(200),
-             L("The volume the match is in, after the codecs its bytes came through")),
+            (Column.node, L("Node"), CGFloat(240),
+             L("The node that holds the match, after the node above it and the codecs its bytes came through")),
             (Column.hex, L("Excerpt Hex"), CGFloat(300), ""),
-            (Column.text, L("Excerpt Text"), CGFloat(170), ""),
-            (Column.node, L("Node"), CGFloat(160), L("The deepest node that holds the match whole"))
+            (Column.text, L("Excerpt Text"), CGFloat(170), "")
         ] {
             let column = NSTableColumn(identifier: identifier)
             column.title = title
@@ -283,10 +282,10 @@ import ToolModuleKit
         guard let identifier = tableColumn?.identifier, rows.indices.contains(row) else { return nil }
         let line = rows[row]
         let tooltip = [line.path, line.address].filter { !$0.isEmpty }.joined(separator: "\n")
-        if identifier == Column.volume {
+        if identifier == Column.node {
             let cell = (tableView.makeView(withIdentifier: identifier, owner: self) as? UEFIBadgedCell)
                 ?? UEFIBadgedCell(identifier: identifier)
-            cell.show(badges: line.codecs, text: line.volume)
+            cell.show(badges: line.codecs, text: line.node)
             cell.toolTip = tooltip
             return cell
         }
@@ -297,17 +296,11 @@ import ToolModuleKit
         switch identifier {
         case Column.hex:
             field?.attributedStringValue = hexExcerpt(line)
-        case Column.text:
-            field?.attributedStringValue = textExcerpt(line)
         default:
-            field?.attributedStringValue = plain(line.node, font: ToolPanelFont.body())
+            field?.attributedStringValue = textExcerpt(line)
         }
         cell.toolTip = tooltip
         return cell
-    }
-
-    private func plain(_ text: String, font: NSFont, color: NSColor = .labelColor) -> NSAttributedString {
-        NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: color])
     }
 
     /// "AB CD EF", the matched bytes bold — as the dump's results draw them.
@@ -366,7 +359,7 @@ import ToolModuleKit
     }
 }
 
-/// The Volume column's cell: a badge for each codec, then the volume's name.
+/// The Node column's cell: a badge for each codec, then the node's name.
 @MainActor final class UEFIBadgedCell: NSTableCellView {
     private let stack = NSStackView()
     private let label = NSTextField(labelWithString: "")

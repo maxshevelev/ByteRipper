@@ -110,8 +110,7 @@ final class UEFIContentSearchFlowTests: XCTestCase {
 
         XCTAssertEqual(results.state, .done(total: 1, scope: nil))
         let row = try XCTUnwrap(results.rows.first)
-        XCTAssertEqual(row.node, "Raw")
-        XCTAssertFalse(row.volume.isEmpty || row.volume == "—", "the volume is named")
+        XCTAssertEqual(row.node, "LZMA compressed section: Raw", "the node after the one above it")
         XCTAssertEqual(row.codecs, ["LZMA"], "the badge of the codec its bytes came through")
         XCTAssertTrue(row.address.contains(" in "), row.address)
         XCTAssertEqual(Array(row.excerpt[row.excerptMatch]), Array("GH51G".utf8), "the excerpt holds the match")

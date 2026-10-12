@@ -64,6 +64,21 @@ final class UEFIContentSearchTests: XCTestCase {
         XCTAssertTrue(result.unreadSections.isEmpty)
     }
 
+    /// A compressed stream holds nothing to look for: its bytes as stored are
+    /// not searched, only what they decompress to.
+    func testTheBytesOfACompressedStreamAreNotSearched() async throws {
+        let built = image()
+        let tree = await tree(built.bytes)
+        _ = try await UEFIContentSearch.run([try MaskedPattern.hex("FF")], from: .root, in: tree)
+        let section = try XCTUnwrap(tree.image().allNodes.first { $0.compression != nil })
+        let stored = Array(built.bytes[Int(section.body.lowerBound + 8)..<Int(section.body.lowerBound + 16)])
+        let pattern = [MaskedPattern(bytes: stored)]
+        let result = try await UEFIContentSearch.run(pattern, from: .root, in: tree)
+        XCTAssertEqual(result.total, 0, "the stream's own bytes")
+        let fromSection = try await UEFIContentSearch.run(pattern, from: section.id, in: tree)
+        XCTAssertEqual(fromSection.total, 0, "nor from the section itself")
+    }
+
     func testAMatchInTheFileHasItsAddressAndItsPlaceInTheVolume() async throws {
         let built = image()
         let tree = await tree(built.bytes)

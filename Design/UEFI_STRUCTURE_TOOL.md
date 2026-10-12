@@ -164,9 +164,11 @@ this one can.
   progress moves one way). Then the node's own bytes are scanned, and every
   buffer under it: what each compressed section decompresses to, a BIOS Guard
   update's assembled region (both `UEFIPresenter.decompressedBody`), and each
-  LENV block stored XOR-encoded, decoded at the same addresses. Each byte is
-  in exactly one scan, so no match is counted twice; a compressed section's
-  own stored bytes are scanned too, as the file's.
+  LENV block stored XOR-encoded, decoded at the same addresses. What sits
+  behind a codec is searched only that way: a compressed section's body and
+  an encoded LENV block, as they are stored, are cut out of every scan —
+  nothing a technician looks for is in a compressed stream. Each byte is in
+  exactly one scan, so no match is counted twice.
 - **The scan** is the find bar's (`PatternScan`, in `Packages/BytePattern`,
   which `ByteRipperCore` re-exports and the tool-module links directly): holes,
   ASCII and UTF-16 case folding. A text is looked for as both, any case; hex
@@ -183,9 +185,10 @@ this one can.
 - **The panel.** The results open in a panel under the tree, the counterpart
   of the dump's Search Results under the dump: the header carries the count,
   the progress while the search runs, a stop button and a ×; a row carries the
-  volume — after a badge per codec the bytes came through, the fragment
-  panel's own badge text — an excerpt with the match in bold and the node; the
-  address is under the pointer. A click opens the way to the node and selects
+  node — after its parent's name where the parent has one of its own (`VSS
+  store: SetupMode`), and after a badge per codec the bytes came through, the
+  fragment panel's own badge text — and an excerpt with the match in bold; the
+  path and the address are under the pointer. A click opens the way to the node and selects
   it, and for a match in the file selects its bytes in the dump. A double
   click on a match behind a codec opens its buffer (or its LENV block decoded)
   as a fragment panel with the match selected, raising one already open

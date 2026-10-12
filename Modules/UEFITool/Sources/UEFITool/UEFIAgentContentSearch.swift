@@ -59,7 +59,8 @@ public enum UEFIAgentContentSearch {
             Every place a text or a byte pattern occurs in what the UEFI tree holds — the bytes of the \
             image and, unlike `find_bytes`, what every compressed section decompresses to (LZMA, Tiano, \
             Brotli and the rest, nested ones too), a BIOS Guard update's assembled region, and a Lenovo \
-            LENV block stored XOR-encoded, decoded. An ME region is not searched at all. Opens every container \
+            LENV block stored XOR-encoded, decoded — and only so: a compressed section's body and an \
+            encoded LENV block as they are stored are not searched. An ME region is not searched at all. Opens every container \
             first, which takes a few seconds on a large image the first time; the same search of unchanged \
             bytes again — a next page — is answered from the last one. `node` (an id from `uefi_tree`, `uefi_find` or `uefi_at`) \
             searches only that node and what is under it; without it, the whole image. `text` is looked \
