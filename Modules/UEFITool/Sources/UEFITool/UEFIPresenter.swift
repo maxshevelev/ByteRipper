@@ -191,10 +191,13 @@ public enum UEFIPresenter {
     }
 
     /// What a double click on a node's row opens: the body a compressed section
-    /// decompresses to, otherwise the node's body, and the whole node where it
-    /// has no body apart from itself (padding, free space, a node with a header
-    /// and nothing after it). The same choices the tree's menu offers, taken
-    /// without asking.
+    /// decompresses to; the whole node, header and all, where it holds rows of
+    /// its own — opened so, the panel's tree is that node with its rows, a DMI
+    /// store or a volume as the structure it is, where its body alone read as
+    /// rows with nothing over them; otherwise the node's body, and the whole
+    /// node where it has no body apart from itself (padding, free space, a node
+    /// with a header and nothing after it). The same choices the tree's menu
+    /// offers, taken without asking.
     public enum Content: Equatable, Sendable {
         case decompressedBody
         case body
@@ -203,6 +206,7 @@ public enum UEFIPresenter {
 
     public static func content(of node: UEFINode) -> Content {
         if decompressedBody(for: node) != nil { return .decompressedBody }
+        if !node.children.isEmpty || node.isExpandable { return .node }
         if !node.header.isEmpty, nodeOpenTitle(for: node, body: true) != nil { return .body }
         return .node
     }

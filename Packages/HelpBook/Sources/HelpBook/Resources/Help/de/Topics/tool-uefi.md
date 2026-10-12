@@ -1,4 +1,4 @@
-@source-sha bc3646bc5d09086d4f219141d8c3b4e4808fa7aa5e4f6c6b7353f302b2d3cec1
+@source-sha 8cd69761ffb96fda94d32994e2c9f6b4f1bd07095d58ef95e93de506c0f40762
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -46,7 +46,7 @@ Rechtsklick auf einen Knoten:
 - **Entpackte Variable öffnen** bei der Variable `overrides` des Apple-Systemspeichers — ihre Geräteüberschreibungen liegen als bzip2-Datenstrom vor und werden als Text in einem Tab geöffnet. Der Tab ist eine Kopie: Der Text wird hier nicht wieder komprimiert, eine Änderung der Kopie lässt den Dump daher unberührt.
 - **Zur Top-Swap-Kopie** / **Zum Original** bei einem Knoten in einem der beiden Blöcke eines Images mit [[term:top-swap|Top-Swap]]-Kopie — wählt denselben Knoten im anderen Block aus und zeigt seine Bytes im Dump, sodass sich jedem Teil der Kopie der Teil des obersten Blocks zuordnen lässt, den er wiederholt.
 
-Ein Doppelklick auf eine Zeile ersetzt das Menü: Er öffnet, was der Knoten enthält, als Fragment-Bereich — bei einer komprimierten Sektion ihren entpackten Rumpf, bei jedem anderen Knoten seinen Rumpf und bei einem Knoten ohne eigenen Rumpf, etwa Padding oder freiem Platz, den Knoten selbst. Auf einem [[term:lenv|LENV]]-Block oder einem seiner Einträge öffnet er den Block dekodiert, wie **Dekodierten Block öffnen** ([[topic:lenovo-dmi|Lenovo DMI]]). Ein Doppelklick auf das Aufklapp-Dreieck klappt die Zeile nur ein oder aus.
+Ein Doppelklick auf eine Zeile ersetzt das Menü: Er öffnet, was der Knoten enthält, als Fragment-Bereich — bei einer komprimierten Sektion ihren entpackten Rumpf; bei einem Knoten mit Zeilen darunter — einem Volume, einer Datei mit Sektionen, einem DMI- oder NVRAM-Speicher — den ganzen Knoten samt Kopf, sodass der Baum des Bereichs ihn als die Struktur zeigt, die er ist, mit seinen Zeilen darunter; bei jedem anderen Knoten seinen Rumpf; und bei einem Knoten ohne eigenen Rumpf, etwa Padding oder freiem Platz, den Knoten selbst. Auf einem [[term:lenv|LENV]]-Block oder einem seiner Einträge öffnet er den Block dekodiert, wie **Dekodierten Block öffnen** ([[topic:lenovo-dmi|Lenovo DMI]]). Ein Doppelklick auf das Aufklapp-Dreieck klappt die Zeile nur ein oder aus.
 
 Ein Bereich, der aus dem Baum geöffnet wird – über das Menü oder per Doppelklick –, öffnet sich mit eingeschalteter **UEFI-Struktur** und aufgeklappter erster Ebene des Baums, sodass der Teil sich wie der Knoten liest, aus dem er stammt.
 

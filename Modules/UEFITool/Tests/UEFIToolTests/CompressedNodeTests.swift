@@ -176,8 +176,9 @@ final class CompressedNodeTests: XCTestCase {
     // MARK: - A double click
 
     /// A double click opens what the node holds: the decompressed body of a
-    /// compressed section, the body of any other node, and the node itself
-    /// where it has no body apart from itself.
+    /// compressed section, the whole node where it holds rows, the body of
+    /// any other node, and the node itself where it has no body apart from
+    /// itself.
     func testADoubleClickOpensTheDecompressedBodyOrTheBody() {
         let built = built()
         XCTAssertEqual(UEFIPresenter.content(of: built.section), .decompressedBody)
@@ -198,5 +199,15 @@ final class CompressedNodeTests: XCTestCase {
         XCTAssertEqual(UEFIPresenter.content(of: headerless), .node)
         let bare = UEFINode(kind: .section, name: "Bare", header: 0..<4, body: 4..<4)
         XCTAssertEqual(UEFIPresenter.content(of: bare), .node, "a header and nothing after it")
+
+        let entry = UEFINode(kind: .vssEntry, name: "Setup", header: 0x10..<0x20, body: 0x20..<0x40)
+        let store = UEFINode(kind: .vssStore, name: "VSS store", header: 0..<0x10, body: 0x10..<0x40,
+                             children: [entry])
+        XCTAssertEqual(UEFIPresenter.content(of: store), .node,
+                       "a node with rows opens whole, so its tree shows it over them")
+        XCTAssertEqual(UEFIPresenter.content(of: entry), .body)
+        var volume = UEFINode(kind: .volume, name: "Volume", header: 0..<0x48, body: 0x48..<0x100)
+        volume.isExpandable = true
+        XCTAssertEqual(UEFIPresenter.content(of: volume), .node, "rows not yet opened are rows all the same")
     }
 }

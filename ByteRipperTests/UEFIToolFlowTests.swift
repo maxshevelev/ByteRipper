@@ -1922,14 +1922,16 @@ final class UEFIToolFlowTests: XCTestCase {
         controller.fragments.close(id, animated: false)
     }
 
-    /// A double click on a row opens what the node holds — its body, where it
-    /// has one apart from itself — as a panel linked to those bytes.
-    func testADoubleClickOnARowOpensItsBodyAsAPanel() throws {
+    /// A double click on a row with rows under it opens the whole node, header
+    /// and all, as a panel linked to those bytes — so the panel's tree shows
+    /// it as the structure it is, not its rows with nothing over them.
+    func testADoubleClickOnARowWithRowsOpensTheWholeNodeAsAPanel() throws {
         let controller = try open(UEFITestImage.make())
         let outline = try outline()
         let window = try XCTUnwrap(self.window)
         let node = try node(atRow: 0)
-        try XCTSkipIf(node.header.isEmpty, "this node has no header to leave behind")
+        try XCTSkipIf(node.header.isEmpty, "this node has no header to keep")
+        try XCTSkipIf(node.children.isEmpty && !node.isExpandable, "this node has no rows")
 
         // Inside the name column, past the disclosure triangle.
         let rect = outline.rect(ofRow: 0)
@@ -1939,8 +1941,8 @@ final class UEFIToolFlowTests: XCTestCase {
 
         let id = try XCTUnwrap(controller.fragments.expanded)
         let part = try XCTUnwrap(controller.fragments.pane(id))
-        XCTAssertEqual(part.fileSize, UInt64(node.body.count), "the body, not the node")
-        XCTAssertEqual(try XCTUnwrap(part.origin).sourceRange, node.body)
+        XCTAssertEqual(part.fileSize, UInt64(node.range.count), "the node, header and all")
+        XCTAssertEqual(try XCTUnwrap(part.origin).sourceRange, node.range)
         controller.fragments.close(id, animated: false)
     }
 
