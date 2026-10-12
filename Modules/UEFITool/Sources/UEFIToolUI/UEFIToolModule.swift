@@ -459,8 +459,27 @@ private struct ChecksumPass: Sendable {
             focus = nil
             meFocus = nil
         }
+        // An edit leaves the dump as it is: the zones on screen stay until the
+        // tree is read again, and a focus whose zone the dump was not showing
+        // — a node shown in the tree without being published — is not
+        // published by the reading. Published then, the node's zone would read
+        // to the host as a focus just given, and the dump would select it and
+        // scroll from the byte being typed to the node's start.
+        isRereadingAfterEdit = change != .reloaded
         bind()
     }
+
+    /// True from an edit until the tree is read again.
+    private var isRereadingAfterEdit = false
+
+    /// Whether the zones the dump shows are the focused node's: true once a
+    /// show has published them, false while the focus is one a reveal moved
+    /// to without publishing.
+    private var dumpShowsFocus = false
+
+    /// Whether a show of the reading after an edit publishes: only what the
+    /// dump was already showing.
+    private var republishes: Bool { !isRereadingAfterEdit || dumpShowsFocus }
 
     public func stop() {
         endMEReadingStatus()
@@ -587,7 +606,7 @@ private struct ChecksumPass: Sendable {
             controller.say(L("Reading UEFI…"))
             controller.showBusy()
         }
-        show(publish: true, rowsChanged: true)
+        show(publish: republishes, rowsChanged: true)
 
         tree.whenReady { [weak self] in
             guard let self, self.tree === tree else { return }
@@ -620,7 +639,8 @@ private struct ChecksumPass: Sendable {
             // level, and its own checksums read. A branch opened later brings
             // its own pass, announced through `onChecksums`.
             self.verifyNewChecksums {
-                self.show(publish: true, rowsChanged: true)
+                self.show(publish: self.republishes, rowsChanged: true)
+                self.isRereadingAfterEdit = false
                 self.isAwaitingFirstShow = false
                 if let offset = self.pendingReveal {
                     self.pendingReveal = nil
@@ -662,7 +682,15 @@ private struct ChecksumPass: Sendable {
                 requestDMIStores()
             }
             verifyNewChecksums()
-            show(publish: true, rowsChanged: true)
+            // An edit republishes only zones the dump was showing: a focus a
+            // reveal moved to without publishing stays unpublished, or the
+            // dump would select the node and scroll to its start under the
+            // byte being typed.
+            if case .invalidated = change {
+                show(publish: dumpShowsFocus, rowsChanged: true)
+            } else {
+                show(publish: true, rowsChanged: true)
+            }
         case .dmiStoresRead:
             controller.showDMIStores(tree?.dmiStores ?? [])
             // Lenovo's store names its entries by key; which drivers read
@@ -829,7 +857,7 @@ private struct ChecksumPass: Sendable {
                 isBuilding: tree != nil, rowsChanged: true,
                 meRoots: meRoots, meFocus: meFocus
             )
-            if publish { host.publish(.empty) }
+            if publish, !isRereadingAfterEdit { host.publish(.empty) }
             return
         }
         // The mapping is asked for the first time a node is in focus, and not
@@ -899,6 +927,7 @@ private struct ChecksumPass: Sendable {
             // kept apart, so at most one is published.
             host.publish(meNode.map(MEAZones.build)
                          ?? UEFIPresenter.zones(for: node, in: image))
+            dumpShowsFocus = true
         }
     }
 
@@ -1473,6 +1502,8 @@ private struct ChecksumPass: Sendable {
         let crossedHalves = meFocus != nil
         focus = id
         meFocus = nil
+        // The dump stays where the reader is; its zones are not this node's.
+        dumpShowsFocus = false
         show()
         if crossedHalves { host.publish(.empty) }
     }

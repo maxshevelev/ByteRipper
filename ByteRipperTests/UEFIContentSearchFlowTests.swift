@@ -296,6 +296,40 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         XCTAssertTrue(window.firstResponder === results.table, "and the keyboard stays on the results")
     }
 
+    /// Typing in a part opened from the results leaves the dump where the
+    /// reader is typing: the caret moves on, nothing else is selected and the
+    /// view does not jump to the node's start.
+    func testTypingInAPartOpenedFromTheResultsStaysWhereItIs() throws {
+        try open(try CompressedTestImage.make(payload: [UInt8](repeating: 0x20, count: 0x300) + Array("GH51G".utf8)
+                                               + [UInt8](repeating: 0x20, count: 0x300)))
+        let results = try findAll("GH51G")
+        let controller = try XCTUnwrap(controller)
+        results.open(0)
+        XCTAssertTrue(pumpUntil(5) { controller.fragments.panelsLinked(to: controller.windowModel.pane1).count == 1 })
+        let id = try XCTUnwrap(controller.fragments.panelsLinked(to: controller.windowModel.pane1).first)
+        let part = try XCTUnwrap(controller.fragments.pane(id))
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        XCTAssertTrue(pumpUntil(5) {
+            guard let outline = self.descendants(of: surface.tools.panel, NSOutlineView.self).first else { return false }
+            return outline.selectedRow >= 0
+        }, "the part's tree has opened to the match's node")
+        _ = pumpUntil(0.5) { false }
+        let view = try XCTUnwrap(controller.filePaneView(for: part))
+        let clip = try XCTUnwrap(descendants(of: view, NSClipView.self).first)
+        let at = part.hexSelection().start
+        let scrolled = clip.bounds.origin.y
+        print("PROBE before: selection \(part.hexSelection()) scrolled \(scrolled)")
+
+        part.moveCaret(to: at, center: false)
+        part.typeHexNibble(0x4)
+        part.typeHexNibble(0x1)
+        _ = pumpUntil(1.5) { false }
+        print("PROBE after: selection \(part.hexSelection()) scrolled \(clip.bounds.origin.y)")
+        XCTAssertEqual(part.hexSelection().start, at + 1, "the caret moved on past the byte typed")
+        XCTAssertEqual(part.hexSelection().end, part.hexSelection().start, "nothing selected")
+        XCTAssertEqual(clip.bounds.origin.y, scrolled, accuracy: 1, "the view stayed")
+    }
+
     func testTheCrossShutsTheResults() throws {
         try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
         let results = try findAll("GH51G")
