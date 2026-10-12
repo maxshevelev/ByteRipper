@@ -266,8 +266,12 @@ public enum UEFIPresenter {
     public static func compressionName(of space: ByteSpace, in image: UEFIImage) -> String? {
         guard case .decompressed(let chain) = space, let last = chain.last else { return nil }
         let parent: ByteSpace = chain.count == 1 ? .file : .decompressed(chain: Array(chain.dropLast()))
+        // Several nodes can start where the section does — an AMD firmware
+        // entry is the first thing in the Boot Firmware Volume that holds it —
+        // so the holder is the one that opens into this space, not merely the
+        // first one found at its address.
         guard let holder = image.allNodes.first(where: {
-            $0.space == parent && $0.header.lowerBound == last
+            $0.space == parent && $0.header.lowerBound == last && decompressedBody(for: $0)?.space == space
         }) else { return nil }
         // A BIOS Guard update's region is assembled from its blocks, not
         // decompressed, and its badge says what it is.

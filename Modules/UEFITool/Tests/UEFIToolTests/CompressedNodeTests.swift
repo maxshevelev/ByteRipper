@@ -179,6 +179,22 @@ final class CompressedNodeTests: XCTestCase {
     /// compressed section, the whole node where it holds rows, the body of
     /// any other node, and the node itself where it has no body apart from
     /// itself.
+    /// A compressed AMD entry is the first thing in the volume that holds it:
+    /// both start at one address. The compression is the entry's, not
+    /// nothing because the volume came first.
+    func testTheCompressionIsTheEntrysThatOpensNotTheNodeBeforeIt() {
+        let inside = UEFINode(kind: .file, subtype: 0x07, name: "Inner", header: 0..<0x18, body: 0x18..<0x40,
+                              space: .decompressed(chain: [0]))
+        var entry = UEFINode(kind: .amdFirmwareEntry, subtype: 0x62, name: "BIOS",
+                             header: 0..<0x100, body: 0x100..<0x180, children: [inside])
+        entry.compression = SectionCompression(algorithm: "Zlib (AMD)", decodes: true)
+        let volume = UEFINode(kind: .padding, subtype: 0, name: "Boot Firmware Volume",
+                              header: 0..<0, body: 0..<0x200, children: [entry])
+        let image = UEFIImage(size: 0x200, roots: [volume], addressDiff: nil)
+
+        XCTAssertEqual(UEFIPresenter.compressionName(of: .decompressed(chain: [0]), in: image), "Zlib (AMD)")
+    }
+
     func testADoubleClickOpensTheDecompressedBodyOrTheBody() {
         let built = built()
         XCTAssertEqual(UEFIPresenter.content(of: built.section), .decompressedBody)
