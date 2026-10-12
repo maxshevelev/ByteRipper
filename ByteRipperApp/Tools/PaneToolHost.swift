@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 import ByteRipperCore
 import ToolModuleKit
 import UEFIContentSource
@@ -161,6 +162,30 @@ import MEFirmware
         guard let owner else { return }
         owner.presentSheetAlert(title: title, message: message, on: owner.view.window,
                                 outcome: isProblem ? .problem : .success)
+    }
+
+    var canAnnotate: Bool { AgentAnnotationTools.current != nil }
+
+    /// Add Annotation… on a row of the tree: the same form as on a selection
+    /// of the dump, on the node.
+    // help: panel.uefi.annotate-node
+    func annotateNode(_ id: String, named name: String) {
+        guard let pane, let owner else { return }
+        NoteForm.ask(L("Add Annotation"),
+                     L("The annotation is drawn over the node's bytes and listed in the Annotations window."),
+                     button: L("Add"), title: name, in: owner.view.window) { [weak self] title, note in
+            Task { @MainActor in
+                do {
+                    _ = try await AgentAnnotationTools.current?.addNote(title: title, note: note, node: id, of: pane)
+                } catch {
+                    // What refuses a node is worded for an agent, in English:
+                    // the person is told what to do instead, in their words.
+                    self?.report(title: L("Could not add the annotation"),
+                                 message: L("This node has no place in the file to annotate here. A node inside a compressed section of a part is annotated from the tree of the file the part came out of."),
+                                 isProblem: true)
+                }
+            }
+        }
     }
 
     /// A part of the file, through the window's one way of opening parts.

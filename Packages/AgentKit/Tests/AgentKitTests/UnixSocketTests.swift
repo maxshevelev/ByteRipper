@@ -125,4 +125,15 @@ final class UnixSocketTests: XCTestCase {
 
 private final class Box: @unchecked Sendable {
     var connection: UnixSocketConnection?
+
+    /// The relay starts the app only when its client's configuration says so.
+    func testTheRelayStartsTheAppOnlyWhenToldTo() {
+        XCTAssertFalse(AgentEndpoint.launchesApp(environment: [:]))
+        XCTAssertFalse(AgentEndpoint.launchesApp(environment: ["BYTERIPPER_LAUNCH": ""]))
+        XCTAssertFalse(AgentEndpoint.launchesApp(environment: ["BYTERIPPER_LAUNCH": "0"]))
+        XCTAssertFalse(AgentEndpoint.launchesApp(environment: ["BYTERIPPER_LAUNCH": "false"]))
+        XCTAssertTrue(AgentEndpoint.launchesApp(environment: ["BYTERIPPER_LAUNCH": "1"]))
+        XCTAssertTrue(AgentEndpoint.launchesApp(environment: ["BYTERIPPER_LAUNCH": "yes"]))
+        XCTAssertTrue(AgentEndpoint.notStartedMessage.contains("Start ByteRipper when an agent connects"))
+    }
 }

@@ -15,8 +15,8 @@ import UEFIToolUI
 /// One kind where there were two: a mark, drawn but gone with its document,
 /// and a finding, kept but drawn nowhere. An annotation is kept here, for the
 /// whole app and for as long as it runs, and a pane draws the ones for its
-/// file whenever it shows it (`annotations(for:)`). Every tab's Notes panel
-/// lists them (`NotesPanel`).
+/// file whenever it shows it (`annotations(for:)`). The Annotations window
+/// lists them (`NotesWindowController`).
 @MainActor
 final class AgentAnnotationTools {
     let desk: AgentDesk
@@ -114,20 +114,22 @@ final class AgentAnnotationTools {
         for place in desk.places() { place.pane.annotationsChanged() }
         onChange()
         for tab in desk.tabs { tab.notesChanged() }
+        NotesWindowController.shared?.refresh()
     }
 
-    /// The notes have been looked at: the count on the pill goes.
+    /// The notes have been looked at: the count on the toolbar's button goes.
     func markSeen() {
         guard !unseen.isEmpty else { return }
         unseen = []
         for tab in desk.tabs { tab.notesChanged() }
     }
 
-    /// Adds `annotation` and tells everyone. An agent's note made while no
-    /// Notes panel is in view waits on the pill as unseen.
+    /// Adds `annotation` and tells everyone. An agent's note made while the
+    /// Annotations window is not in view waits on the toolbar's button as
+    /// unseen.
     private func add(_ annotation: AgentAnnotation) {
         items.append(annotation)
-        if annotation.author == .agent, !desk.tabs.contains(where: \.notesAreInView) {
+        if annotation.author == .agent, !NotesWindowController.isInView {
             unseen.insert(annotation.id)
         }
         changed()
@@ -162,6 +164,20 @@ final class AgentAnnotationTools {
         return id
     }
 
+    /// The person's note on node `id` of `pane`'s tree, placed as the agent's
+    /// `node` form places one; the new annotation's id.
+    @discardableResult
+    func addNote(title: String, note: String, node id: String, of pane: PaneViewModel) async throws -> String {
+        guard let place = desk.places().first(where: { $0.pane === pane }) else {
+            throw AgentToolError("The document is not open.")
+        }
+        let answer = try await annotate(AgentArguments([
+            "title": .string(title), "note": .string(note), "document": .string(place.id), "node": .string(id)
+        ]), author: .person)
+        guard case .json(let json) = answer, let id = json["id"]?.stringValue else { return "" }
+        return id
+    }
+
     // MARK: - annotate
 
     private nonisolated var annotateTool: AgentTool {
@@ -172,7 +188,7 @@ final class AgentAnnotationTools {
                 Puts an annotation on a place in a file: a short `title` (what the bytes are), an optional \
                 `note` (why they matter, or what you found there), and the place — a `document` or a file \
                 `path`, with `offset` and `length`, or a UEFI `node` — whole, or with `offset` and `length` counted \
-                from the node's first byte: a `find_bytes` match with `node` is `node` and `node_offset`. It is listed in the Annotations panel of every tab and \
+                from the node's first byte: a `find_bytes` match with `node` is `node` and `node_offset`. It is listed in the Annotations window and \
                 drawn over the bytes — a dashed outline, the note when the person rests the pointer on them — \
                 whenever the file is on screen, now or after it is opened later; it is kept when the file \
                 closes. Use it both to show what bytes are while you explain them and to leave a result for \
@@ -517,7 +533,7 @@ final class AgentAnnotationTools {
     }
 
     /// Removes the annotations `doomed` picks, drops relations to them, and
-    /// returns their ids. What the Annotations panel calls as well.
+    /// returns their ids. What the Annotations window calls as well.
     @discardableResult
     func remove(where doomed: (AgentAnnotation) -> Bool) -> [String] {
         let removed = all().filter(doomed).map(\.id)
@@ -531,7 +547,7 @@ final class AgentAnnotationTools {
 
     /// Brings the annotation's file forward — the tab that has it, or a new
     /// one — and goes to its place: what a double-click on its card in the
-    /// Annotations panel does, and `reveal`. A step of the navigation history.
+    /// Annotations window does, and `reveal`. A step of the navigation history.
     ///
     /// A place the UEFI tree knows is gone to the way the UEFI Structure
     /// panel's Contents search results go to a match: in the file's own bytes
@@ -551,13 +567,25 @@ final class AgentAnnotationTools {
         if let range = annotation.range, range.upperBound > place.pane.fileSize { return }
         controller.recordJump(in: place.pane)
         // A file just opened has its tree still to read, and whether the
-        // place is a node — and how to open it — is the tree's to say: the
-        // place is gone to once it is read.
+        // place is a node — and how to open it — is the tree's to say; the
+        // block or the section the place is in may sit in branches nobody has
+        // opened, and a compressed one is decompressed to open it. Seconds on
+        // a large image: the window says so, in a sheet the person can cancel,
+        // and the place is gone to once all of it is read.
         let needsTree = annotation.site != nil || annotation.decoded != nil
-        if needsTree, place.pane.uefiState.tree?.isReady != true {
+        let match = Self.match(of: annotation)
+        let ids = [match?.node, match?.section].compactMap { $0 }
+        let tree = place.pane.uefiState.tree
+        if needsTree, tree?.isReady != true || ids.contains(where: { tree?.node($0) == nil }) {
             let host = PaneToolHost(pane: place.pane, owner: controller, tools: nil)
+            var cancelled = false
+            let work = host.beginBlockingWork(title: L("Reading UEFI…")) { cancelled = true }
             Task { @MainActor [weak self] in
-                _ = try? await UEFIAgentQueries.readyTree(host)
+                if let tree = try? await UEFIAgentQueries.readyTree(host) {
+                    for id in ids where !cancelled { _ = await UEFIAgentQueries.reachable(id, in: tree) }
+                }
+                work.finish()
+                guard !cancelled else { return }
                 self?.go(to: annotation, at: place, in: controller)
             }
             return

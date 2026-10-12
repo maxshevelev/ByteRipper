@@ -107,6 +107,33 @@ final class AgentUITests: XCTestCase {
         }
     }
 
+    /// The relay starts the app only when the client's configuration says
+    /// so: off by default, the switch puts the variable in every form.
+    func testTheLaunchSwitchPutsTheLaunchVariableInEveryConfiguration() throws {
+        XCTAssertEqual(AgentClientConfiguration.text(for: .claudeCode, relay: "/x/byteripper-mcp", launches: true),
+                       "claude mcp add --scope user byteripper --env BYTERIPPER_LAUNCH=1 -- '/x/byteripper-mcp'")
+        for client in [AgentClientConfiguration.Client.claudeDesktop, .cursor] {
+            let on = try JSONValue.parse(Data(AgentClientConfiguration.text(for: client, relay: "/x/r", launches: true).utf8))
+            XCTAssertEqual(on["mcpServers"]?["byteripper"]?["env"]?["BYTERIPPER_LAUNCH"], "1")
+            let off = try JSONValue.parse(Data(AgentClientConfiguration.text(for: client, relay: "/x/r", launches: false).utf8))
+            XCTAssertNil(off["mcpServers"]?["byteripper"]?["env"])
+        }
+        XCTAssertTrue(AgentClientConfiguration.text(for: .other, relay: "/x/r", launches: true)
+            .contains("BYTERIPPER_LAUNCH=1"))
+
+        let saved = AgentClientConfiguration.launchesApp
+        defer { AgentClientConfiguration.launchesApp = saved }
+        AppDefaults.store.removeObject(forKey: AgentClientConfiguration.launchesAppKey)
+        let tab = AgentSettingsViewController()
+        tab.service = service
+        _ = tab.view
+        XCTAssertFalse(tab.launchesAppShown, "off by default: the app is not started behind the person's back")
+        XCTAssertFalse(tab.previewText.contains("BYTERIPPER_LAUNCH"))
+        tab.toggleLaunchForTesting()
+        XCTAssertTrue(AgentClientConfiguration.launchesApp)
+        XCTAssertTrue(tab.previewText.contains("--env BYTERIPPER_LAUNCH=1"), "the preview follows: \(tab.previewText)")
+    }
+
     /// The relay the button hands out is the one inside the app's bundle.
     func testTheRelayIsInsideTheAppBundle() {
         XCTAssertTrue(AgentClientConfiguration.relayPath.hasSuffix(".app/Contents/Helpers/byteripper-mcp"),

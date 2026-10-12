@@ -217,6 +217,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         return controller
     }
 
+    /// A file opened in a dump tab of its own when no dump window is open:
+    /// beside the Annotations window when that is on screen.
+    func openInNewTab(_ url: URL) {
+        let anchor = NotesWindowController.shared?.window.flatMap { $0.isVisible ? $0 : nil }
+        makeWindow(tabbedWith: anchor).mainViewController.openFiles([url])
+    }
+
     /// The window a file handed to the app should open into: the one in front,
     /// or a fresh one when every window has been closed (the app stays running
     /// with no window only while something else keeps it alive).
@@ -287,6 +294,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         agentWindowController.showWindow(sender)
         agentWindowController.window?.makeKeyAndOrderFront(sender)
         agentWindowController.focusList()
+    }
+
+    /// Window ▸ Annotations: the one Annotations window, as a tab beside the
+    /// dump in front when it is closed — or a window of its own when no dump
+    /// window is open.
+    @objc func showNotesWindow(_ sender: Any?) {
+        let anchor = frontmostWindowController()?.window
+        NotesWindowController.instance.show(tabbedWith: anchor)
     }
 
     @objc func showAgentSettings(_ sender: Any?) {

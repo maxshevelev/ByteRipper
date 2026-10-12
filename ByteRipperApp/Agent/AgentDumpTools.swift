@@ -24,7 +24,12 @@ final class AgentDumpTools {
     init(desk: AgentDesk) {
         self.desk = desk
         openInNewTab = { [weak desk] url in
-            guard let controller = desk?.keyTab() else { return }
+            guard let controller = desk?.keyTab() else {
+                // No dump window open — only the Annotations window, say: a
+                // dump tab is made beside it.
+                (NSApp.delegate as? AppDelegate)?.openInNewTab(url)
+                return
+            }
             controller.openFilesInNewTab([url])
         }
     }

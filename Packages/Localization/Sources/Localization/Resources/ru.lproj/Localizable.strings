@@ -1296,6 +1296,8 @@
 "Agent" = "Агент";
 "Let agents connect to ByteRipper" = "Разрешить агентам подключаться к ByteRipper";
 "Let agents edit open files" = "Разрешить агентам изменять открытые файлы";
+"Start ByteRipper when an agent connects" = "Запускать ByteRipper при подключении агента";
+"On, the configuration below lets the client start ByteRipper when the agent needs it and ByteRipper is not open. Off, the agent reaches ByteRipper only while it is open, and quitting it keeps it closed. Copy the configuration into the client again after changing this." = "Если флажок установлен, настройка ниже позволяет программе агента запускать ByteRipper, когда он нужен агенту, а программа не открыта. Если снят, агент подключается к ByteRipper только пока тот открыт, а закрытый ByteRipper остаётся закрытым. После изменения флажка скопируйте настройку в программу агента заново.";
 "An agent's edit goes into the open file as one step of its undo and shows red until the file is saved, like an edit made by hand. Saving stays with you. A file opened read-only is never changed." = "Изменение, сделанное агентом, вносится в открытый файл одним шагом отмены и выделяется красным до сохранения файла, как правка, сделанная вручную. Сохраняет файл только пользователь. Файл, открытый только для чтения, не изменяется.";
 "Agent: %1$@" = "Агент: %1$@";
 "An agent — Claude Code, Claude Desktop or another MCP client on this Mac — can then list the files open here, read their bytes and show places in them. It cannot save a file. The connection is local, but what the agent reads, its program passes to the model behind it." = "Тогда агент — Claude Code, Claude Desktop или другой клиент MCP на этом Mac — сможет получить список открытых здесь файлов, читать их байты и показывать в них нужные места. Сохранить файл он не может. Соединение локальное, но прочитанное агентом его программа передаёт модели, на которой он работает.";
@@ -1356,11 +1358,17 @@
 "“%1$@” has no node the link names; the file may have changed since." = "В файле «%1$@» нет узла, на который указывает ссылка; возможно, файл с тех пор изменился.";
 "“%1$@” has been moved or deleted since the annotation was made." = "Файл «%1$@» перемещён или удалён после того, как была сделана заметка.";
 "Add Annotation…" = "Добавить заметку…";
+"No Annotations" = "Заметок нет";
+"Annotations made by hand or by a connected agent are listed here. Select bytes in a dump, or a node in UEFI Structure, right-click and choose Add Annotation…" = "Здесь перечисляются заметки, сделанные вручную или подключённым агентом. Выделите байты в дампе или узел в «Структуре UEFI», кликните правой кнопкой и выберите «Добавить заметку…».";
+"Show the Annotations window" = "Показать окно заметок";
+"The annotation is drawn over the node's bytes and listed in the Annotations window." = "Заметка обводится на байтах узла и показывается в окне «Заметки».";
+"Could not add the annotation" = "Не удалось добавить заметку";
+"This node has no place in the file to annotate here. A node inside a compressed section of a part is annotated from the tree of the file the part came out of." = "У этого узла здесь нет места в файле, к которому можно привязать заметку. Узел внутри сжатой секции фрагмента размечается из дерева файла, из которого взят фрагмент.";
 "Add Annotation" = "Добавить заметку";
 "Edit Annotation" = "Изменить заметку";
 "Edit this annotation" = "Изменить заголовок и пояснение этой заметки";
 "The title and the note change; the place stays." = "Меняются заголовок и пояснение; место остаётся прежним.";
-"The annotation is drawn over the selected bytes and listed in the Annotations panel." = "Заметка обводится на выделенных байтах и показывается в панели заметок.";
+"The annotation is drawn over the selected bytes and listed in the Annotations window." = "Заметка обводится на выделенных байтах и показывается в окне «Заметки».";
 "%1$@ new annotations" = "Новых заметок: %1$@";
 "Made by the agent" = "Заметка агента";
 "Answers" = "Ответы";

@@ -55,17 +55,36 @@ enum AgentClientConfiguration {
         }
     }
 
-    /// The text for `client`, naming `relay`.
-    static func text(for client: Client, relay: String = relayPath) -> String {
+    /// Whether the configuration handed out lets the relay start the app
+    /// (`AgentEndpoint.launchKey`): the launch switch of the tab, off until
+    /// the person turns it on. The relay reads no setting of the app's, so
+    /// the choice travels in the client's configuration, and takes effect
+    /// once it is copied there again.
+    static let launchesAppKey = "AgentClientLaunchesApp"
+
+    static var launchesApp: Bool {
+        get { AppDefaults.store.bool(forKey: launchesAppKey) }
+        set { AppDefaults.store.set(newValue, forKey: launchesAppKey) }
+    }
+
+    /// The text for `client`, naming `relay`; with `launches` on, the
+    /// variable that lets the relay start the app goes with it.
+    static func text(for client: Client, relay: String = relayPath, launches: Bool = launchesApp) -> String {
+        let environment = launches ? [AgentEndpoint.launchKey: "1"] : [:]
         switch client {
         case .claudeCode:
             // User scope: a technician talks to the app from whatever folder
             // they are in.
-            return "claude mcp add --scope user \(serverName) -- " + quoted(relay)
+            // `--env` after the name: it takes every word up to the next
+            // option, and put first it would take the name too.
+            let variables = environment.sorted { $0.key < $1.key }.map { " --env \($0.key)=\($0.value)" }.joined()
+            return "claude mcp add --scope user \(serverName)\(variables) -- " + quoted(relay)
         case .claudeDesktop, .cursor:
             // The two read the same block. A file that already lists servers
             // takes the inner entry beside them.
-            let value: JSONValue = .object(["mcpServers": .object([serverName: ["command": .string(relay)]])])
+            var server: [String: JSONValue] = ["command": .string(relay)]
+            if !environment.isEmpty { server["env"] = .object(environment.mapValues { .string($0) }) }
+            let value: JSONValue = .object(["mcpServers": .object([serverName: .object(server)])])
             return value.prettyText
         case .other:
             let rows: [(String, String)] = [
@@ -73,7 +92,8 @@ enum AgentClientConfiguration {
                 (L("Transport"), "stdio"),
                 (L("Command"), relay),
                 (L("Arguments"), L("none")),
-                (L("Environment"), L("none"))
+                (L("Environment"), environment.isEmpty
+                    ? L("none") : environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: " "))
             ]
             let width = rows.map(\.0.count).max() ?? 0
             return rows.map { $0.0.padding(toLength: width, withPad: " ", startingAt: 0) + "  " + $0.1 }
@@ -101,6 +121,7 @@ final class AgentSettingsViewController: NSViewController {
 
     private let enableCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let editsCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let launchCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let statusLabel = NSTextField(labelWithString: "")
     private let clientMenu = NSPopUpButton(frame: .zero, pullsDown: false)
     private let destinationLabel = NSTextField(wrappingLabelWithString: "")
@@ -131,6 +152,15 @@ final class AgentSettingsViewController: NSViewController {
 
         statusLabel.font = .systemFont(ofSize: 11)
         statusLabel.lineBreakMode = .byTruncatingMiddle
+
+        // help: settings.agent.launch
+        launchCheckbox.title = L("Start ByteRipper when an agent connects")
+        launchCheckbox.target = self
+        launchCheckbox.action = #selector(launchChanged(_:))
+        let launchCaption = NSTextField(wrappingLabelWithString:
+            L("On, the configuration below lets the client start ByteRipper when the agent needs it and ByteRipper is not open. Off, the agent reaches ByteRipper only while it is open, and quitting it keeps it closed. Copy the configuration into the client again after changing this."))
+        launchCaption.font = .systemFont(ofSize: 11)
+        launchCaption.textColor = .secondaryLabelColor
 
         let clientLabel = NSTextField(labelWithString: L("Configuration for:"))
         clientMenu.addItems(withTitles: AgentClientConfiguration.Client.allCases.map(\.title))
@@ -171,7 +201,7 @@ final class AgentSettingsViewController: NSViewController {
         let help = HelpButton.standard(for: .topic(.agent))
 
         for subview in [enableCheckbox, caption, statusLabel, editsCheckbox, editsCaption,
-                        clientLabel, clientMenu,
+                        launchCheckbox, launchCaption, clientLabel, clientMenu,
                         destinationLabel, previewScroll, copyButton, help] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
@@ -200,7 +230,14 @@ final class AgentSettingsViewController: NSViewController {
             editsCaption.leadingAnchor.constraint(equalTo: caption.leadingAnchor),
             editsCaption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 
-            clientMenu.topAnchor.constraint(equalTo: editsCaption.bottomAnchor, constant: 20),
+            launchCheckbox.topAnchor.constraint(equalTo: editsCaption.bottomAnchor, constant: 16),
+            launchCheckbox.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+
+            launchCaption.topAnchor.constraint(equalTo: launchCheckbox.bottomAnchor, constant: 8),
+            launchCaption.leadingAnchor.constraint(equalTo: caption.leadingAnchor),
+            launchCaption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+
+            clientMenu.topAnchor.constraint(equalTo: launchCaption.bottomAnchor, constant: 20),
             clientMenu.leadingAnchor.constraint(equalTo: clientLabel.trailingAnchor, constant: 8),
 
             destinationLabel.topAnchor.constraint(equalTo: clientMenu.bottomAnchor, constant: 8),
@@ -244,6 +281,7 @@ final class AgentSettingsViewController: NSViewController {
         enableCheckbox.isEnabled = service != nil
         editsCheckbox.state = service?.editsAllowed == true ? .on : .off
         editsCheckbox.isEnabled = service != nil
+        launchCheckbox.state = AgentClientConfiguration.launchesApp ? .on : .off
         statusLabel.stringValue = Self.statusText(of: service)
         statusLabel.textColor = service?.failure == nil ? .secondaryLabelColor : SemanticColors.bad
     }
@@ -289,6 +327,12 @@ final class AgentSettingsViewController: NSViewController {
         refresh()
     }
 
+    /// The configuration shown follows at once: it is what the choice is.
+    @objc private func launchChanged(_ sender: NSButton) {
+        AgentClientConfiguration.launchesApp = sender.state == .on
+        showClient()
+    }
+
     @objc private func enableChanged(_ sender: NSButton) {
         service?.isEnabled = sender.state == .on
         refresh()
@@ -309,6 +353,13 @@ final class AgentSettingsViewController: NSViewController {
 
     func toggleEditsForTesting() {
         editsCheckbox.performClick(nil)
+    }
+
+    /// The launch switch's state, and a click on it.
+    var launchesAppShown: Bool { launchCheckbox.state == .on }
+
+    func toggleLaunchForTesting() {
+        launchCheckbox.performClick(nil)
     }
 
     /// Picks `client` in the menu, as a click would.

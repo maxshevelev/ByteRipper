@@ -117,6 +117,16 @@ import PartCodec
     /// bytes, so it asks the way the dump's Find bar does and shares its
     /// history and library (`ToolPatternQuery`). A new set each call.
     func makePatternQuery() -> (any ToolPatternQuery)?
+
+    /// Whether the app keeps annotations — notes the person puts on places
+    /// in a file — for this pane: the tree offers Add Annotation… only then.
+    var canAnnotate: Bool { get }
+
+    /// Asks the person for a title and a note and puts them on node `id` of
+    /// the pane's tree, `"0.2.5"` — the node, not only its bytes: one inside
+    /// a compressed section or a LENV block stored encoded is kept in the
+    /// bytes it decodes to. `name` is the title offered to start from.
+    func annotateNode(_ id: String, named name: String)
 }
 
 public extension ToolHost {
@@ -125,6 +135,9 @@ public extension ToolHost {
     /// A host with no pattern controls of its own — a test double — has none
     /// to hand over, and the panel asks with its own field.
     func makePatternQuery() -> (any ToolPatternQuery)? { nil }
+    /// A host that keeps no annotations — a test double — offers none.
+    var canAnnotate: Bool { false }
+    func annotateNode(_ id: String, named name: String) {}
 }
 
 /// The part of a host that reading needs: the file's name and size, its bytes,

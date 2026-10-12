@@ -27,6 +27,9 @@ func enclosingApp() -> URL? {
 /// Starts the app in the background, so a client launched before the app
 /// still finds it. Whether its agent service is switched on is the app's
 /// setting; if it is off, the socket never appears and the client is told.
+/// Only under `BYTERIPPER_LAUNCH` (`AgentEndpoint.launchKey`), which the
+/// person asks for in Settings ▸ Agent: a client restarts its server as soon
+/// as the app quits, and the person who quit it saw it come straight back.
 func launch(_ app: URL) {
     let open = Process()
     open.executableURL = URL(fileURLWithPath: "/usr/bin/open")
@@ -35,9 +38,11 @@ func launch(_ app: URL) {
     open.waitUntilExit()
 }
 
+let launches = AgentEndpoint.launchesApp()
+
 func connect(to path: String) -> Int32? {
     if let fd = try? UnixSocket.connect(to: path) { return fd }
-    guard let app = enclosingApp() else { return nil }
+    guard launches, let app = enclosingApp() else { return nil }
     launch(app)
     let deadline = Date().addingTimeInterval(launchWait)
     while Date() < deadline {
@@ -46,6 +51,10 @@ func connect(to path: String) -> Int32? {
     }
     return nil
 }
+
+/// Why there is nothing to talk to: the service is off — or, from a relay
+/// that does not start the app, the app may simply not be open.
+let unavailableMessage = launches ? AgentEndpoint.unavailableMessage : AgentEndpoint.notStartedMessage
 
 /// With no app to talk to, every request is answered with the reason, so the
 /// client shows the person something they can act on instead of a timeout.
@@ -58,7 +67,7 @@ func answerUnavailable() -> Never {
             let answer: JSONValue = [
                 "jsonrpc": "2.0", "id": id,
                 "error": ["code": .int(MCPProtocol.ErrorCode.internalError),
-                          "message": .string(AgentEndpoint.unavailableMessage)]
+                          "message": .string(unavailableMessage)]
             ]
             var data = answer.encoded()
             data.append(0x0A)
@@ -70,7 +79,7 @@ func answerUnavailable() -> Never {
 
 let path = AgentEndpoint.socketPath()
 guard let socket = connect(to: path) else {
-    FileHandle.standardError.write(Data((AgentEndpoint.unavailableMessage + "\n").utf8))
+    FileHandle.standardError.write(Data((unavailableMessage + "\n").utf8))
     answerUnavailable()
 }
 

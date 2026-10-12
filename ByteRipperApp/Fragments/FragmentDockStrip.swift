@@ -22,25 +22,6 @@ final class FragmentPillView: NSView {
     /// Whether the part holds bytes the parent has not got back yet. A dot, not
     /// a word: the pill has room for a name and no more.
     var hasChanges = false { didSet { dot.isHidden = !hasChanges } }
-    /// The Notes panel's pill: no ✕ — the panel goes with its last note, and
-    /// is only folded — and the count of the agent's notes not yet seen.
-    var isNotes = false {
-        didSet {
-            closeButton.isHidden = isNotes
-            closeWidth?.constant = isNotes ? 0 : 14
-            icon.image = NSImage(systemSymbolName: isNotes ? NotesPillSymbol.name : "doc",
-                                 accessibilityDescription: nil)
-        }
-    }
-    /// How many of the agent's notes nobody has looked at: a round badge on
-    /// the pill's corner, none at zero.
-    var unseen = 0 {
-        didSet {
-            badge.count = unseen
-            badge.isHidden = unseen == 0
-            placeBadge()
-        }
-    }
 
     var onSelect: (() -> Void)?
     var onClose: (() -> Void)?
@@ -54,14 +35,11 @@ final class FragmentPillView: NSView {
     private let label = NSTextField(labelWithString: "")
     private let dot = NSTextField(labelWithString: "•")
     private let closeButton = NSButton()
-    private var closeWidth: NSLayoutConstraint?
-    let badge = NotesCountBadge()
 
     init(id: FragmentDock.PanelID, title: String) {
         self.id = id
         super.init(frame: .zero)
         wantsLayer = true
-        clipsToBounds = false
 
         icon.image = NSImage(systemSymbolName: "doc", accessibilityDescription: nil)
         icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 10, weight: .regular)
@@ -102,12 +80,8 @@ final class FragmentPillView: NSView {
             closeButton.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 4),
             closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
             closeButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+            closeButton.widthAnchor.constraint(equalToConstant: 14),
         ])
-        closeWidth = closeButton.widthAnchor.constraint(equalToConstant: 14)
-        closeWidth?.isActive = true
-        // Over the corner, standing out of it: placed by frame, on top.
-        badge.isHidden = true
-        addSubview(badge)
         setAccessibilityRole(.button)
         setAccessibilityLabel(title)
     }
@@ -126,25 +100,6 @@ final class FragmentPillView: NSView {
         }
     }
 
-    override func layout() {
-        super.layout()
-        placeBadge()
-    }
-
-    /// The pill takes its size from the row after its own layout pass, so
-    /// the badge follows the size, not the pass.
-    override func setFrameSize(_ newSize: NSSize) {
-        super.setFrameSize(newSize)
-        placeBadge()
-    }
-
-    private func placeBadge() {
-        let size = badge.intrinsicContentSize
-        badge.frame = NSRect(x: bounds.maxX - size.width + NotesCountBadge.overhang,
-                             y: bounds.maxY - size.height + NotesCountBadge.overhang,
-                             width: size.width, height: size.height)
-    }
-
     @objc private func closeTapped() { onClose?() }
     @objc private func tearOffTapped() { onTearOff?() }
 
@@ -153,7 +108,6 @@ final class FragmentPillView: NSView {
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {
-        guard !isNotes else { return nil }
         let menu = NSMenu()
         // Built here rather than validated through the responder chain: the
         // pill is not a control the menu bar knows about, and both items act on
@@ -209,13 +163,6 @@ final class FragmentDockStrip: NSView {
         var isUp: Bool
         var hasChanges: Bool
         var canTearOff: Bool
-        var kind: Kind = .fragment
-
-        enum Kind: Equatable {
-            case fragment
-            /// The Notes panel, with the count of the agent's notes unseen.
-            case notes(unseen: Int)
-        }
     }
 
     var onSelect: ((FragmentDock.PanelID) -> Void)?
@@ -288,10 +235,6 @@ final class FragmentDockStrip: NSView {
             pill.isUp = item.isUp
             pill.hasChanges = item.hasChanges
             pill.canTearOff = item.canTearOff
-            if case .notes(let unseen) = item.kind {
-                pill.isNotes = true
-                pill.unseen = unseen
-            }
             if row.arrangedSubviews.firstIndex(of: pill) != index {
                 row.insertArrangedSubview(pill, at: index)
             }
@@ -306,40 +249,4 @@ final class FragmentDockStrip: NSView {
         pills[item.id] = pill
         return pill
     }
-}
-
-/// The round count on the Notes pill's corner: the agent's notes made while
-/// the panel was out of view.
-final class NotesCountBadge: NSView {
-    static let side: CGFloat = 16
-    /// How far it stands out of the pill's corner.
-    static let overhang: CGFloat = 5
-
-    var count = 0 {
-        didSet {
-            setAccessibilityLabel(L("%1$@ new annotations", "\(count)"))
-            invalidateIntrinsicContentSize()
-            needsDisplay = true
-        }
-    }
-
-    private var text: NSAttributedString {
-        NSAttributedString(string: count > 99 ? "99+" : "\(count)", attributes: [
-            .font: NSFont.systemFont(ofSize: 10, weight: .bold), .foregroundColor: NSColor.white
-        ])
-    }
-
-    override var intrinsicContentSize: NSSize {
-        NSSize(width: max(Self.side, ceil(text.size().width) + 8), height: Self.side)
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let shape = NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2)
-        NSColor.systemRed.setFill()
-        shape.fill()
-        let size = text.size()
-        text.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }

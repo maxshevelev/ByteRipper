@@ -4,7 +4,7 @@ import HelpUI
 import Localization
 import ToolModuleKit
 
-/// The cards of the Notes panel (`NotesPanel`): each note a card drawn as it
+/// The cards of the Annotations window (`NotesWindowController`): each note a card drawn as it
 /// is over the dump — its author's hue, a dashed outline and a light wash —
 /// with everything it says, in columns that scroll (issue #37).
 ///

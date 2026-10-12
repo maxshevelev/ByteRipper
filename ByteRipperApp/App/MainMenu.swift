@@ -81,6 +81,11 @@ enum MainMenu {
                                    keyEquivalent: "")
         agentItem.target = appTarget
         windowMenu.addItem(agentItem)
+        // help: menu.window.notes
+        let notesItem = NSMenuItem(title: L("Annotations"), action: #selector(AppDelegate.showNotesWindow(_:)),
+                                   keyEquivalent: "")
+        notesItem.target = appTarget
+        windowMenu.addItem(notesItem)
         windowItem.submenu = windowMenu
 
         // Help menu

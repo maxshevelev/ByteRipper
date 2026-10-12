@@ -38,6 +38,10 @@ final class MainWindowController: NSWindowController {
     private(set) var goToItem: NSToolbarItem?
     private(set) var findItem: NSToolbarItem?
     private(set) var segmentsItem: NSToolbarItem?
+    /// The Annotations button, and the count of the agent's notes nobody has
+    /// looked at on its corner (`syncNotesBadge`).
+    private(set) var notesItem: NSToolbarItem?
+    let notesBadge = NotesCountBadge()
     private(set) var wordSizeItem: NSToolbarItem?
     private(set) var paneLayoutItem: NSToolbarItem?
     private(set) var helpItem: NSToolbarItem?
@@ -167,6 +171,9 @@ final class MainWindowController: NSWindowController {
     /// arrangement does not enter into it — the window opens empty.
     override func showWindow(_ sender: Any?) {
         super.showWindow(sender)
+        // The count of unseen notes goes on the button once the toolbar has
+        // drawn it.
+        DispatchQueue.main.async { [weak self] in self?.syncNotesBadge() }
         guard let window else { return }
         // A window that has joined another as a tab wears that window's frame.
         // Sizing or centring it here would resize the whole tab group, and the
@@ -494,6 +501,52 @@ final class MainWindowController: NSWindowController {
         return item
     }
 
+    /// The Annotations button, right after Segments: the Annotations window,
+    /// as a tab of this window when it is closed. A plain item, drawn by the
+    /// toolbar as Segments and Find are — a button in a view of its own is
+    /// drawn smaller than they are.
+    // help: toolbar.notes
+    private func makeNotesItem() -> NSToolbarItem {
+        makeCommandItem(.notes, symbol: NotesSymbol.name, label: L("Annotations"),
+                        toolTip: L("Show the Annotations window"),
+                        action: #selector(MainViewController.showNotesWindow(_:)))
+    }
+
+    /// The count of the agent's notes nobody has looked at, on the corner of
+    /// the Annotations button, in the agent's notes' colour — whose they are.
+    /// A plain item carries no badge before macOS 26, and then only in the
+    /// system's red, so the count is laid on the button the toolbar drew for
+    /// the item; found again each time, since the toolbar may draw it anew.
+    func syncNotesBadge() {
+        let count = AgentAnnotationTools.current?.unseen.count ?? 0
+        notesBadge.count = count
+        notesBadge.isHidden = count == 0
+        guard let button = notesToolbarButton() else {
+            notesBadge.removeFromSuperview()
+            return
+        }
+        if notesBadge.superview !== button { button.addSubview(notesBadge) }
+        let size = notesBadge.intrinsicContentSize
+        notesBadge.frame = NSRect(x: button.bounds.maxX - size.width + 2,
+                                  y: button.isFlipped ? -2 : button.bounds.maxY - size.height + 2,
+                                  width: size.width, height: size.height)
+    }
+
+    /// The button the toolbar drew for the Annotations item.
+    private func notesToolbarButton() -> NSButton? {
+        guard let image = notesItem?.image, let frame = window?.contentView?.superview else { return nil }
+        func find(_ view: NSView) -> NSButton? {
+            if let button = view as? NSButton, button.image === image
+                || (button.image?.accessibilityDescription == image.accessibilityDescription
+                    && button.action == #selector(MainViewController.showNotesWindow(_:))) {
+                return button
+            }
+            for sub in view.subviews { if let found = find(sub) { return found } }
+            return nil
+        }
+        return find(frame)
+    }
+
     // help: toolbar.help
     private func makeHelpItem() -> NSToolbarItem {
         let item = NSMenuToolbarItem(itemIdentifier: .help)
@@ -532,6 +585,7 @@ extension NSToolbarItem.Identifier {
     static let find = NSToolbarItem.Identifier("Find")
     /// Segments: the partition's form (§21.4).
     static let segments = NSToolbarItem.Identifier("Segments")
+    static let notes = NSToolbarItem.Identifier("Notes")
     /// The 1 / 2 / 4 / 8 word-size radio (§6).
     static let wordSize = NSToolbarItem.Identifier("WordSize")
     /// The side-by-side ⇄ stacked pane-arrangement toggle (§3.3).
@@ -562,7 +616,7 @@ extension MainWindowController: NSToolbarDelegate {
         // The flexible space must be listed as allowed too, or AppKit drops it
         // from the default items and the diff block ends up on the LEFT edge.
         [.flexibleSpace, .space,
-         .tools, .historyNavigation, .goTo, .find, .segments, .wordSize,
+         .tools, .historyNavigation, .goTo, .find, .segments, .notes, .wordSize,
          .diffNavigation, .filesIdentical, .help, .agentWindow, .paneLayout, .toggleMinimap]
     }
 
@@ -582,8 +636,10 @@ extension MainWindowController: NSToolbarDelegate {
         // the dump.
         // Back and Forward come next, on their own between two spaces: they
         // move through where the user has been, not through the dump.
+        // Annotations follows Segments: the window of what was found in the
+        // dumps.
         [.tools, .space, .historyNavigation, .space,
-         .goTo, .find, .segments, .space, .wordSize,
+         .goTo, .find, .segments, .notes, .space, .wordSize,
          .flexibleSpace, .diffNavigation, .space, .help, .space, .paneLayout, .space, .toggleMinimap]
     }
 
@@ -635,6 +691,11 @@ extension MainWindowController: NSToolbarDelegate {
                                                action: #selector(MainViewController.showSegments))
             }
             return segmentsItem
+        case .notes:
+            if notesItem == nil {
+                notesItem = makeNotesItem()
+            }
+            return notesItem
         case .tools:
             if toolsItem == nil {
                 toolsItem = makeToolsItem()

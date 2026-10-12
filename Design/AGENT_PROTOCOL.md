@@ -83,7 +83,7 @@ its identity, or a document never saved, which it goes with. It is kept for
 the session, whether the file is open or not, and drawn dashed in the agent's
 colour over the bytes whenever the file is on screen — in a tab, or in a part
 whose codecs keep the file's addresses — its title and note under the
-pointer, listed in the Annotations panel of every tab. Made in a part, it is recorded in the
+pointer, listed in the Annotations window. Made in a part, it is recorded in the
 file the part came out of: the same bytes through every codec that keeps
 offsets, else the source range. A node of a file that is not open is kept as
 the node; one of an open file is placed by its tree. It goes with

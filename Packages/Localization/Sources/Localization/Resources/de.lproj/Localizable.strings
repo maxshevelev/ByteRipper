@@ -1296,6 +1296,8 @@
 "Agent" = "Agent";
 "Let agents connect to ByteRipper" = "Agenten die Verbindung mit ByteRipper erlauben";
 "Let agents edit open files" = "Agenten das Ändern geöffneter Dateien erlauben";
+"Start ByteRipper when an agent connects" = "ByteRipper starten, wenn sich ein Agent verbindet";
+"On, the configuration below lets the client start ByteRipper when the agent needs it and ByteRipper is not open. Off, the agent reaches ByteRipper only while it is open, and quitting it keeps it closed. Copy the configuration into the client again after changing this." = "Eingeschaltet erlaubt die Konfiguration unten dem Agentenprogramm, ByteRipper zu starten, wenn der Agent es braucht und es nicht geöffnet ist. Ausgeschaltet erreicht der Agent ByteRipper nur, solange es geöffnet ist, und ein beendetes ByteRipper bleibt beendet. Nach einer Änderung die Konfiguration erneut in das Agentenprogramm kopieren.";
 "An agent's edit goes into the open file as one step of its undo and shows red until the file is saved, like an edit made by hand. Saving stays with you. A file opened read-only is never changed." = "Eine Änderung des Agenten wird als ein Schritt des Widerrufens in die geöffnete Datei geschrieben und bleibt bis zum Sichern rot markiert, wie eine Änderung von Hand. Das Sichern bleibt dem Benutzer überlassen. Eine schreibgeschützt geöffnete Datei wird nie geändert.";
 "Agent: %1$@" = "Agent: %1$@";
 "An agent — Claude Code, Claude Desktop or another MCP client on this Mac — can then list the files open here, read their bytes and show places in them. It cannot save a file. The connection is local, but what the agent reads, its program passes to the model behind it." = "Ein Agent — Claude Code, Claude Desktop oder ein anderer MCP-Client auf diesem Mac — kann dann die hier geöffneten Dateien auflisten, ihre Bytes lesen und Stellen darin zeigen. Eine Datei sichern kann er nicht. Die Verbindung ist lokal, doch was der Agent liest, gibt sein Programm an das Modell weiter, auf dem er beruht.";
@@ -1356,11 +1358,17 @@
 "“%1$@” has no node the link names; the file may have changed since." = "„%1$@“ enthält den Knoten nicht, auf den der Link verweist; die Datei hat sich womöglich inzwischen geändert.";
 "“%1$@” has been moved or deleted since the annotation was made." = "„%1$@“ wurde verschoben oder gelöscht, nachdem die Anmerkung angelegt wurde.";
 "Add Annotation…" = "Anmerkung hinzufügen…";
+"No Annotations" = "Keine Anmerkungen";
+"Annotations made by hand or by a connected agent are listed here. Select bytes in a dump, or a node in UEFI Structure, right-click and choose Add Annotation…" = "Hier stehen die Anmerkungen, die von Hand oder von einem verbundenen Agenten angelegt wurden. Bytes in einem Dump oder einen Knoten der UEFI-Struktur auswählen, mit der rechten Maustaste klicken und „Anmerkung hinzufügen…“ wählen.";
+"Show the Annotations window" = "Das Fenster „Anmerkungen“ zeigen";
+"The annotation is drawn over the node's bytes and listed in the Annotations window." = "Die Anmerkung wird um die Bytes des Knotens gezeichnet und im Fenster „Anmerkungen“ aufgeführt.";
+"Could not add the annotation" = "Die Anmerkung konnte nicht hinzugefügt werden";
+"This node has no place in the file to annotate here. A node inside a compressed section of a part is annotated from the tree of the file the part came out of." = "Dieser Knoten hat hier keine Stelle in der Datei, an der eine Anmerkung angebracht werden kann. Ein Knoten in einem komprimierten Abschnitt eines Fragments wird aus dem Baum der Datei annotiert, aus der das Fragment stammt.";
 "Add Annotation" = "Anmerkung hinzufügen";
 "Edit Annotation" = "Anmerkung bearbeiten";
 "Edit this annotation" = "Titel und Erläuterung dieser Anmerkung bearbeiten";
 "The title and the note change; the place stays." = "Titel und Erläuterung ändern sich; die Stelle bleibt dieselbe.";
-"The annotation is drawn over the selected bytes and listed in the Annotations panel." = "Die Anmerkung wird um die ausgewählten Bytes gezeichnet und im Anmerkungsbereich aufgeführt.";
+"The annotation is drawn over the selected bytes and listed in the Annotations window." = "Die Anmerkung wird um die ausgewählten Bytes gezeichnet und im Fenster „Anmerkungen“ aufgeführt.";
 "%1$@ new annotations" = "Neue Anmerkungen: %1$@";
 "Made by the agent" = "Vom Agenten angelegt";
 "Answers" = "Antworten";

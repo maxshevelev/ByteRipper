@@ -119,16 +119,23 @@ Nothing here knows about dumps.
 
 A command-line target in `project.yml`, copied into `Contents/Helpers` by a
 copy-files phase. About a hundred lines: connect to the socket, copy stdin to
-it and it to stdout, exit when either side closes. If the socket is not there
-it launches the app with `open -b` and waits a few seconds for it; if the
-switch in Settings is off, it answers every request with an error that says
-where the switch is. It knows nothing about MCP beyond reading a request's
+it and it to stdout, exit when either side closes. If the socket is not there it
+answers every request with an error that says what to open and where the
+switch is. It launches the app with `open -g` and waits a few seconds for it
+only under `BYTERIPPER_LAUNCH=1`, which the client's configuration carries
+when **Start ByteRipper when an agent connects** is on in Settings ▸ Agent
+(off by default): a client restarts its server as soon as the app quits, and
+a relay that launched the app brought back the app the person had just
+quit. The relay reads none of the app's settings, so the choice travels in
+the environment the client gives it. It knows nothing about MCP beyond reading a request's
 `id` for that answer.
 
 The relay is what a client is configured with. Settings ▸ Agent has a button
 that copies the configuration for Claude Code
-(`claude mcp add --scope user byteripper -- <path>`) and one for Claude
-Desktop (the JSON block), with the bundle's real path in it.
+(`claude mcp add --scope user byteripper -- <path>`, with
+`--env BYTERIPPER_LAUNCH=1` after the name when the app is to be started) and
+one for Claude Desktop (the JSON block, with `"env"` then), with the bundle's
+real path in it.
 
 ### `AgentService`
 
@@ -258,15 +265,30 @@ the ones made for it before; a part whose codecs keep the file's addresses
 shows those over its stretch.
 
 A relation — "this pointer leads there", "this checksum covers that" — is
-named after the note in the Agent window and under the pointer. Arrows drawn
+named after the note in the Annotations window and under the pointer. Arrows drawn
 across the dump come later, if that is not enough.
 
 Annotations are kept for the session, not saved: they stay until the agent
 removes them or the person clears them, whether the file is open or not. Not
 with the connection: under the current protocol a connection is not a
 conversation, and a relay restarted mid-conversation must not wipe what the
-agent showed. One on a document never saved goes with it. The person does not
-make annotations by hand; bookmarks stay the person's navigation.
+agent showed. One on a document never saved goes with it. The person makes
+annotations too — on a selection of the dump, or on a node of UEFI Structure —
+drawn in a hue of their own; bookmarks stay the person's navigation.
+
+**Where they are listed.** The annotations are the app's, not a window's, so
+they are listed once: in the **Annotations window**
+(`NotesWindowController`), one for the app, a tab among the dumps' tabs. It is
+made the first time it is asked for — Window ▸ Annotations, or the toolbar's
+button after Segments — may stand empty, and is closed and opened again like
+any tab. An agent's annotation made while the window is not in front of
+anyone is counted on the toolbar's button, in the agent's hue, until it is.
+A panel in every tab's dock was tried first and read as one list per window.
+
+**The web edition keeps the panel.** It has no tabs, and one page is the
+whole app: there the annotations are a panel of the dock, made with the first
+annotation and gone with the last, with no ✕ — folded into its pill, never
+closed — and the unseen count on the pill.
 
 ## Background documents and surveys
 
@@ -287,7 +309,7 @@ field of its answer. Detail comes after, by `open_dump` on the files that
 matter.
 
 What a survey leaves is an **annotation** on each file that matches (above):
-listed in the Agent window, a click opening the file at that place, and drawn
+listed in the Annotations window, a click opening the file at that place, and drawn
 over the bytes when it is open. A claim about seven files out of fifty becomes
 seven lines the person can check.
 

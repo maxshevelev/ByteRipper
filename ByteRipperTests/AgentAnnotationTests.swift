@@ -32,6 +32,8 @@ final class AgentAnnotationTests: XCTestCase {
     }
 
     override func tearDown() {
+        NotesWindowController.discardForTesting()
+        mainWindowController = nil
         controller?.windowModel.pane1.close()
         window?.orderOut(nil)
         window = nil
@@ -66,14 +68,32 @@ final class AgentAnnotationTests: XCTestCase {
 
     private var pane: PaneViewModel { controller!.windowModel.pane1 }
 
-    /// The Notes panel's cards, the panel raised and laid out.
+    /// The Annotations window's cards, the window shown and laid out.
     private func notes(raised: Bool = true) throws -> AgentAnnotationCards {
-        let fragments = try XCTUnwrap(controller).fragments
-        let panel = try XCTUnwrap(fragments.notesPanel, "the tab has a Notes panel")
-        if raised, !fragments.notesAreUp { fragments.showNotes(animated: false) }
-        window?.layoutIfNeeded()
-        panel.cards.collection.layoutSubtreeIfNeeded()
-        return panel.cards
+        let notes = NotesWindowController.instance
+        if raised { notes.show(tabbedWith: window) }
+        notes.window?.layoutIfNeeded()
+        notes.cards.collection.layoutSubtreeIfNeeded()
+        return notes.cards
+    }
+
+    /// A window as the app makes it — with its toolbar — holding the tab.
+    private var mainWindowController: MainWindowController?
+
+    @discardableResult
+    private func openInAppWindow() throws -> MainWindowController {
+        let made = MainWindowController(frameAutosaveName: nil)
+        mainWindowController = made
+        controller = made.mainViewController
+        window = made.window
+        made.showWindow(nil)
+        try made.mainViewController.windowModel.pane1.open(url: tempFile([UInt8](repeating: 0, count: 0x100), "agent-annotation"))
+        made.mainViewController.apply(mode: .singleFile)
+        for _ in 0..<4 {
+            made.window?.displayIfNeeded()
+            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.03))
+        }
+        return made
     }
 
     // MARK: - The tools
@@ -193,11 +213,14 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(missing.answer, "There is no file at /nonexistent/file.bin.")
     }
 
-    // MARK: - The Notes panel
+    // MARK: - The Annotations window
 
-    func testTheNotesPanelListsAnnotationsWithTheirRelationsAndGoesWithTheLast() async throws {
+    func testTheNotesWindowListsAnnotationsWithTheirRelationsAndStandsEmptyWithout() async throws {
         let controller = try open()
-        XCTAssertNil(controller.fragments.notesPanel, "no notes, no panel")
+        let notesWindow = NotesWindowController.instance
+        notesWindow.show(tabbedWith: window)
+        XCTAssertFalse(notesWindow.emptyView.isHidden, "no notes: the empty screen")
+        XCTAssertTrue(notesWindow.cards.scroll.isHidden)
         _ = try await client.answer("annotate", ["offset": "0x100", "length": 0x40, "title": "Table"])
         _ = try await client.answer("annotate", ["offset": "0x20", "length": 4, "title": "Pointer", "related_to": ["a1"]])
         let list = try notes()
@@ -218,52 +241,90 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(list.selectedIDs, ["a1"])
         XCTAssertEqual(pane.hexAgentMarkTooltip(at: 0x20), "Pointer\nRelated Annotations: a1 Table")
 
+        XCTAssertTrue(notesWindow.emptyView.isHidden)
+        XCTAssertTrue(controller.fragments.isEmpty, "nothing in the tab's dock")
+
         service.annotationTools.remove { _ in true }
         XCTAssertTrue(pane.agentAnnotations.isEmpty)
-        XCTAssertNil(controller.fragments.notesPanel, "the panel went with the last note")
-        XCTAssertTrue(controller.fragments.isEmpty)
+        XCTAssertFalse(notesWindow.emptyView.isHidden, "the window stays, empty")
+        XCTAssertTrue(notesWindow.window?.isVisible == true)
     }
 
-    /// The agent's notes made while the panel is folded — or being made with
-    /// the first of them — are counted on its pill until it is raised; one
-    /// made while it is up is seen at once.
-    func testThePillCountsTheAgentsNotesUntilThePanelIsRaised() async throws {
-        let controller = try open()
+    /// The agent's notes made while the Annotations window is not in front
+    /// are counted on the toolbar's button, in the agent's hue, until it
+    /// is; one made while it is in front is seen at once. The window opens
+    /// as a tab beside the dump's, and closes like one.
+    func testTheToolbarButtonCountsTheAgentsNotesUntilTheWindowIsInFront() async throws {
+        let main = try openInAppWindow()
+        let toolbar = try XCTUnwrap(main.window?.toolbar)
+        let ids = toolbar.items.map(\.itemIdentifier)
+        XCTAssertEqual(ids.firstIndex(of: .notes), ids.firstIndex(of: .segments).map { $0 + 1 }, "right after Segments")
+        let item = try XCTUnwrap(main.notesItem)
+        XCTAssertNil(item.view, "a plain item, drawn as Segments and Find are")
+        XCTAssertEqual(item.image?.accessibilityDescription, "Annotations")
+        let badge = main.notesBadge
         _ = try await client.answer("annotate", ["offset": 0, "title": "A"])
         _ = try await client.answer("annotate", ["offset": 2, "title": "B"])
-        XCTAssertFalse(controller.fragments.notesAreUp, "the panel arrives folded")
-        let pill = try XCTUnwrap(controller.fragmentDockStripForTesting.pillsForTesting.first)
-        XCTAssertTrue(pill.isNotes)
-        XCTAssertEqual(pill.unseen, 2)
-        XCTAssertFalse(pill.badge.isHidden)
-        XCTAssertNil(pill.menu(for: NSEvent()), "no Close, no New Tab")
+        XCTAssertNil(NotesWindowController.shared, "nothing opens the window but the person")
+        XCTAssertEqual(badge.count, 2)
+        XCTAssertFalse(badge.isHidden)
+        let button = try XCTUnwrap(badge.superview as? NSButton, "on the button the toolbar drew")
+        XCTAssertEqual(button.action, #selector(MainViewController.showNotesWindow(_:)))
+        // Beside the digit, the badge is the agent's notes' colour — whose
+        // the new notes are — as a square of that colour beside it draws it:
+        // drawn off the window, the colour lands in another colour space.
+        final class Swatch: NSView {
+            var fill = NSColor.clear
+            override func draw(_ dirtyRect: NSRect) { fill.setFill(); bounds.fill() }
+        }
+        func pixel(of view: NSView) throws -> NSColor {
+            let image = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: image)
+            return try XCTUnwrap(image.colorAt(x: image.pixelsWide * 2 / 14, y: image.pixelsHigh / 2)?
+                .usingColorSpace(.sRGB))
+        }
+        let swatch = Swatch(frame: badge.frame)
+        button.addSubview(swatch, positioned: .below, relativeTo: badge)
+        defer { swatch.removeFromSuperview() }
+        swatch.fill = ZoneColors.agent
+        let drawn = try pixel(of: badge)
+        let agent = try pixel(of: swatch)
+        for (got, expected) in [(drawn.redComponent, agent.redComponent), (drawn.greenComponent, agent.greenComponent),
+                                (drawn.blueComponent, agent.blueComponent)] {
+            XCTAssertEqual(got, expected, accuracy: 0.02, "\(drawn) is the agent's \(agent)")
+        }
 
-        controller.fragments.showNotes(animated: false)
+        main.mainViewController.showNotesWindow(nil)
+        let notesWindow = try XCTUnwrap(NotesWindowController.shared?.window)
+        XCTAssertTrue(notesWindow.isVisible)
+        XCTAssertEqual(notesWindow.tabGroup?.windows.contains { $0 === main.window }, true, "a tab beside the dump's")
         XCTAssertEqual(service.annotationTools.unseen, [])
-        XCTAssertEqual(pill.unseen, 0)
-        XCTAssertTrue(pill.badge.isHidden)
+        XCTAssertEqual(badge.count, 0)
+        XCTAssertTrue(badge.isHidden)
         _ = try await client.answer("annotate", ["offset": 4, "title": "C"])
-        XCTAssertEqual(pill.unseen, 0, "made while the panel is up")
+        XCTAssertEqual(badge.count, 0, "made while the window is in front")
 
-        // Esc and ⌘W fold it; nothing closes it.
-        controller.closeDocument()
-        XCTAssertFalse(controller.fragments.notesAreUp)
-        XCTAssertNotNil(controller.fragments.notesPanel)
-        controller.fragments.showNotes(animated: false)
-        controller.cancelOperation(nil)
-        XCTAssertFalse(controller.fragments.notesAreUp)
-        XCTAssertNotNil(controller.fragments.notesPanel)
+        // ⌘W closes it like a tab; the notes stay, and new ones are counted.
+        NotesWindowController.shared?.closeDocument()
+        XCTAssertFalse(notesWindow.isVisible)
+        XCTAssertEqual(service.annotationTools.all().count, 3)
+        _ = try await client.answer("annotate", ["offset": 6, "title": "D"])
+        XCTAssertEqual(badge.count, 1)
+        main.mainViewController.showNotesWindow(nil)
+        XCTAssertTrue(notesWindow.isVisible, "the same window, opened again")
+        XCTAssertTrue(NotesWindowController.shared?.window === notesWindow)
+        XCTAssertEqual(badge.count, 0)
     }
 
-    /// The window speaks Russian: a note the agent makes draws the panel and
-    /// its pill in Russian, and the agent is answered in English.
-    func testThePanelSpeaksTheWindowsLanguageAndTheAgentEnglish() async throws {
+    /// The app speaks Russian: the Annotations window does, and the agent is
+    /// answered in English.
+    func testTheWindowSpeaksTheAppsLanguageAndTheAgentEnglish() async throws {
         try await withAppLanguage(.russian) {
-            let controller = try open(bytes: try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+            try open(bytes: try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
             let made = try await client.answer("annotate", ["offset": "0x28", "length": 4, "title": "Signature"])
-            let pill = try XCTUnwrap(controller.fragmentDockStripForTesting.pillsForTesting.first)
-            XCTAssertEqual(pill.title, "Заметки")
-            XCTAssertEqual(controller.fragments.notesPanel?.header.titleForTesting, "Заметки")
+            _ = try notes()
+            let notesWindow = try XCTUnwrap(NotesWindowController.shared)
+            XCTAssertEqual(notesWindow.window?.title, "Заметки")
             let label = try XCTUnwrap(made["label"]?.stringValue)
             XCTAssertNil(label.range(of: "\\p{Cyrillic}", options: .regularExpression), "the agent reads English: \(label)")
         }
@@ -305,6 +366,40 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(edited.range, 0x30..<0x38, "the place stays")
         XCTAssertEqual(edited.author, .person)
         XCTAssertEqual(agent.hue, ZoneColors.agent)
+    }
+
+    /// A row of UEFI Structure: right-click ▸ Add Annotation… puts the
+    /// person's note on the node — one inside a compressed section in the
+    /// bytes it decompresses to, with the codec its card shows.
+    func testThePersonsNoteIsMadeOnANodeOfTheTree() async throws {
+        let controller = try open(bytes: try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let tools = controller.surface.tools
+        tools.activate(ToolRegistry.uefiStructure, animated: false)
+        var outline: NSOutlineView?
+        let listed = await settle {
+            outline = self.descendants(of: tools.panel, NSOutlineView.self).first
+            guard let outline, outline.numberOfRows > 0,
+                  let row = outline.item(atRow: 0) as? UEFITreeRow else { return false }
+            return self.pane.uefiState.tree?.node(row.id) != nil
+        }
+        XCTAssertTrue(listed, treeState(tools))
+        let tree = try XCTUnwrap(outline)
+        let rect = tree.rect(ofRow: 0)
+        let point = tree.convert(NSPoint(x: rect.midX, y: rect.midY), to: nil)
+        let event = try XCTUnwrap(NSEvent.mouseEvent(
+            with: .rightMouseDown, location: point, modifierFlags: [], timestamp: 0,
+            windowNumber: tree.window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+        let menu = try XCTUnwrap(tree.menu(for: event), treeState(tools))
+        XCTAssertTrue(menu.items.contains { $0.title == "Add Annotation…" }, "\(menu.items.map(\.title))")
+
+        let found = try await client.answer("find_bytes", ["node": "root", "text": "GH51G"])
+        let node = try XCTUnwrap(found["matches"]?.arrayValue?.first?["node"]?["id"]?.stringValue, "\(found)")
+        let id = try await service.annotationTools.addNote(title: "Model", note: "", node: node, of: pane)
+        let note = try XCTUnwrap(service.annotationTools.all().first { $0.id == id })
+        XCTAssertEqual(note.author, .person)
+        XCTAssertEqual(note.node, node)
+        XCTAssertEqual(note.decoded?.codecs.map(\.text), ["LZMA"], "kept in the decompressed bytes")
+        XCTAssertEqual(service.annotationTools.unseen, [], "the person's own is never unseen")
     }
 
     /// Cards go in as many columns as the width holds, each into the shortest
@@ -544,6 +639,56 @@ final class AgentAnnotationTests: XCTestCase {
         let selection = part.hexSelection()
         XCTAssertEqual(try part.byteStorage?.read(at: selection.start, length: Int(selection.end - selection.start)),
                        Array("PF0TEST1".utf8))
+    }
+
+    /// A place annotated in a dump read only in the background — never on
+    /// screen, so no branch of its tree has been opened in a tab — opens in
+    /// a fragment panel the first time the file is opened for it: the
+    /// branches down to the block or the section are opened first.
+    func testAPlaceFromABackgroundDumpOpensItsPanelTheFirstTime() async throws {
+        let controller = try open()
+        for (bytes, length, expected) in [
+            (LenovoTestImage.make(), 8, Array("PF0TEST1".utf8)),
+            (try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"), 5, Array("GH51G".utf8))
+        ] {
+            let file = try tempFile(bytes, "agent-background")
+            let dump = try await client.answer("open_dump", ["path": .string(file.path)])
+            let document = try XCTUnwrap(dump["document"])
+            let made: JSONValue
+            if bytes.count == LenovoTestImage.make().count {
+                made = try await client.answer("annotate", [
+                    "path": .string(file.path), "offset": .string(String(format: "0x%X", LenovoTestImage.serialInBlock2)),
+                    "length": .count(length), "title": "Serial"])
+            } else {
+                let found = try await client.answer("find_bytes", ["document": document, "node": "root", "text": "GH51G"])
+                let match = try XCTUnwrap(found["matches"]?.arrayValue?.first)
+                made = try await client.answer("annotate", [
+                    "path": .string(file.path), "node": try XCTUnwrap(match["node"]?["id"]),
+                    "offset": try XCTUnwrap(match["node_offset"]), "length": .count(length), "title": "Model"])
+            }
+            XCTAssertNotNil(made["decoded"], "\(made)")
+            _ = try await client.answer("close_dump", ["document": document])
+            service.annotationTools.openInNewTab = { [weak self] url in try? self?.pane.open(url: url) }
+
+            service.annotationTools.show(try XCTUnwrap(made["id"]?.stringValue))
+            // Seconds on a real image: the window says it is reading, in the
+            // sheet other long reads put up, until the place is reached.
+            let sheet = controller.presentedViewControllers?.first as? BlockingOperationSheet
+            XCTAssertNotNil(sheet, "the reading is shown, not silent")
+            let opened = await settle { controller.fragments.panelsLinked(to: self.pane).count == 1 }
+            let gone = await settle { controller.presentedViewControllers?.isEmpty ?? true }
+            XCTAssertTrue(gone, "the sheet goes once the place is reached")
+            XCTAssertTrue(opened, "the panel opens on the first show of \(expected.count == 8 ? "LENV" : "LZMA")")
+            let part = try XCTUnwrap(controller.fragments.panelsLinked(to: pane).first.flatMap(controller.fragments.pane))
+            let selected = await settle { !part.hexSelection().isEmpty }
+            XCTAssertTrue(selected)
+            let selection = part.hexSelection()
+            XCTAssertEqual(try part.byteStorage?.read(at: selection.start, length: Int(selection.end - selection.start)),
+                           expected)
+            for id in controller.fragments.panelsLinked(to: pane) { controller.fragments.close(id, animated: false) }
+            controller.tools.activate(nil, animated: false)
+            pane.close()
+        }
     }
 
     /// The same for a node of the file's own bytes: UEFI Structure opens at it.

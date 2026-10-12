@@ -62,6 +62,9 @@ import UEFITool
     var onOpenUnpacked: ((NodeID) -> Void)?
     /// The Open Decoded Block item of a LENV block or entry was chosen.
     var onOpenDecodedBlock: ((NodeID) -> Void)?
+    /// Add Annotation… on a row: the node to annotate. Nil — no host that
+    /// keeps annotations — leaves the item out.
+    var onAnnotateNode: ((NodeID) -> Void)?
     /// The BIOS region's Compare with PFAT Update File item was chosen.
     var onCompareWithUpdate: ((NodeID) -> Void)?
     /// A row was opened or shut. What is open belongs to the file rather than
@@ -2628,7 +2631,16 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         guard row >= 0, let clicked = outline.item(atRow: row), let node = node(of: clicked) else {
             return nil
         }
-        let items = nodeMenuItems(for: node)
+        var items = nodeMenuItems(for: node)
+        // help: panel.uefi.annotate-node
+        if onAnnotateNode != nil {
+            if !items.isEmpty { items.append(.separator()) }
+            let item = NSMenuItem(title: L("Add Annotation…"), action: #selector(annotateNodeClicked(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = node.id
+            items.append(item)
+        }
         guard !items.isEmpty else { return nil }
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -2858,6 +2870,11 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     @objc private func saveDecompressedClicked(_ sender: NSMenuItem) {
         guard let nodeID = sender.representedObject as? NodeID else { return }
         onSaveDecompressed?(nodeID)
+    }
+
+    @objc private func annotateNodeClicked(_ sender: NSMenuItem) {
+        guard let nodeID = sender.representedObject as? NodeID else { return }
+        onAnnotateNode?(nodeID)
     }
 
     @objc private func openDecodedBlockClicked(_ sender: NSMenuItem) {

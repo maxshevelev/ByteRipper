@@ -116,7 +116,7 @@ struct AgentAnnotation: Equatable {
     }
 
     /// "Related Annotations: a1 FIT pointer, a3", or "" for one about no other
-    /// — the one place a relation reads, in the Annotations panel and over the dump.
+    /// — the one place a relation reads, in the Annotations window and over the dump.
     func relations(titles: [String: String]) -> String {
         guard !relatedTo.isEmpty else { return "" }
         let named = relatedTo.map { id in titles[id].map { "\(id) \($0)" } ?? id }

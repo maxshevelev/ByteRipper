@@ -351,6 +351,9 @@ private struct ChecksumPass: Sendable {
         controller.onCompareWithUpdate = { [weak self] nodeID in
             self?.compareWithUpdate(for: nodeID)
         }
+        if host.canAnnotate {
+            controller.onAnnotateNode = { [weak self] nodeID in self?.annotateNode(nodeID) }
+        }
         controller.onOpenNode = { [weak self] nodeID, body in
             self?.openNodeInPanel(for: nodeID, body: body)
         }
@@ -1775,8 +1778,21 @@ private struct ChecksumPass: Sendable {
         whenShown { [weak self] in self?.openMatchShown(match) }
     }
 
+    /// The block or the section the match is in may sit in branches nobody
+    /// has opened yet — a file just opened for it has only its top level —
+    /// so they are opened first; looked up unopened, it is not there.
     private func openMatchShown(_ match: UEFIContentSearch.Match) {
         guard let tree, tree.isReady else { return }
+        let ids = [match.node, match.section].compactMap { $0 }
+        Task { @MainActor [weak self] in
+            for id in ids { _ = await UEFIAgentQueries.reachable(id, in: tree) }
+            guard let self, self.tree === tree, tree.isReady else { return }
+            self.openMatchReached(match)
+        }
+    }
+
+    private func openMatchReached(_ match: UEFIContentSearch.Match) {
+        guard let tree else { return }
         let image = tree.image()
         if match.decodedXORKey != nil, let id = match.node, let node = image.node(id),
            let reader = tree.spaceReaders.reader(for: .file),
@@ -1845,6 +1861,14 @@ private struct ChecksumPass: Sendable {
     /// travels with the panel, so that works after this session has ended.
     ///
     /// Public for the same reason as `openNodeInPanel(for:body:)`.
+    /// Add Annotation… on a row: the host asks for the title, starting from
+    /// the name the row shows.
+    func annotateNode(_ nodeID: NodeID) {
+        guard let node = tree?.node(nodeID) else { return }
+        let name = UEFITreeDisplay.ownName(of: node) ?? node.displayName(in: Localization.appLanguage)
+        host.annotateNode(nodeID.description, named: name)
+    }
+
     public func openDecodedBlock(for nodeID: NodeID) {
         guard let tree, tree.isReady, let image = currentImage, let node = image.node(nodeID),
               let reader = tree.spaceReaders.reader(for: .file),

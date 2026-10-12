@@ -1,10 +1,13 @@
 # Annotations
 
-> Short notes on places in a file — made by the person at the bench or by a connected agent — drawn over the bytes and listed in a panel of their own.
+> Short notes on places in a file — made by the person at the bench or by a connected agent — drawn over the bytes and listed in a window of their own.
 
 @covers window.notes
 @covers menu.offset.note
 @covers window.notes.edit
+@covers panel.uefi.annotate-node
+@covers menu.window.notes
+@covers toolbar.notes
 
 An annotation is a title and a note about a place in a file: what the bytes are, or what was found there. It is drawn over the bytes whenever its file is on screen — in a tab, or in a part that keeps the file's addresses — as a dashed outline with a light wash; when the pointer rests on the bytes, the title and the note are shown. Annotations made by hand are drawn in green, those made by an agent ([[topic:agent|Working with an Agent]]) in violet.
 
@@ -14,13 +17,15 @@ An annotation belongs to the file, not to the window. It is kept when the file c
 
 Select the bytes, right-click inside the selection and choose **Add Annotation…**. Enter a title — a few words saying what the bytes are — and, if needed, a note under it, then click **Add**. In a fragment panel the annotation goes to the file the part came out of: at the same bytes where the part keeps the file's addresses, otherwise in the part's own bytes, where it is shown when that part is opened again.
 
-## The Annotations panel
+A node of **UEFI Structure** is annotated the same way: right-click its row and choose **Add Annotation…**; the title starts as the node's name. The annotation is about the node, not only about its bytes: a node inside a compressed section, or an entry of a Lenovo LENV block stored encoded, is kept in the bytes it decompresses or decodes to, and its card shows the codecs as badges. In a fragment panel's tree, a node inside a compressed section of the part has no place in the file to keep it: annotate it from the tree of the file the part came out of.
 
-While there is at least one annotation, every tab has an **Annotations** pill at the start of the dock along the bottom of the window ([[topic:fragments|Fragment Panels]]). A click on the pill raises the panel over the dump; a second click, the ⌄ in its header, **Esc**, **⌘W** or pulling the header down folds it back into the pill. The panel has no ✕: it goes by itself when the last annotation is removed.
+## The Annotations window
 
-When an agent annotates a place while the panel is folded — or while the panel is just appearing with its first annotation — the pill shows a round red badge with the number of annotations not yet looked at. The badge goes when the panel is raised; an annotation made while the panel is up is counted as seen.
+The annotations belong to ByteRipper, not to a window, so they are listed in one place: the **Annotations** window. **Window ▸ Annotations**, or the **Annotations** button in the toolbar after **Segments**, opens it as a tab beside the dumps' tabs, or brings it forward where it is. There is one such window. It is there with no annotation in it too, and then says how to make one; it is closed like any tab, with **⌘W** or the ✕ on its tab, and opened again the same way. The annotations are kept while it is closed.
 
-The panel shows every annotation, in every file, open or not, as cards in as many columns as the window is wide. A card is drawn as the annotation is over the dump, in the colour of whoever made it; an agent's card has the agent's plug icon before its title, and a card made by hand a pencil. A click on the pencil opens the title and the note for editing; **Save** keeps the change, and the place stays as it was. A card holds:
+When an agent annotates a place while the window is closed or another tab is in front, the toolbar's **Annotations** button shows a round badge, violet as the agent's annotations are, with the number of annotations not yet looked at. The badge goes when the window is brought forward; an annotation made while it is in front is counted as seen.
+
+The window shows every annotation, in every file, open or not, as cards in as many columns as the window is wide. A card is drawn as the annotation is over the dump, in the colour of whoever made it; an agent's card has the agent's plug icon before its title, and a card made by hand a pencil. A click on the pencil opens the title and the note for editing; **Save** keeps the change, and the place stays as it was. A card holds:
 
 - the title, with a ✕ on the card's corner;
 - the file, after a dot: filled while the file is open, hollow while it is not;
@@ -28,6 +33,6 @@ The panel shows every annotation, in every file, open or not, as cards in as man
 - the whole note;
 - the annotations it is about — a pointer and its target, a checksum and what it covers — each a link to its card. Over the dump they are listed after the note, under **Related Annotations:**.
 
-A click selects a card, with **⌘** or **⇧** more than one, and the arrow keys move between them. A double-click on a card, or **Return**, brings its file forward — or opens it in a new tab — and selects the place, as a step of the navigation history ([[topic:navigation|Moving Around]]). A panel standing over the dump is folded. In a firmware image **UEFI Structure** opens beside the dump at the node the place is in, as a click on a Contents search result does. A place in decompressed or decoded bytes opens in a fragment panel of those bytes, with the place selected and **UEFI Structure** in that panel open to the node that holds it. If the file has been moved or deleted since, the program says so.
+A click selects a card, with **⌘** or **⇧** more than one, and the arrow keys move between them. A double-click on a card, or **Return**, brings its file forward — or opens it in a new tab — and selects the place, as a step of the navigation history ([[topic:navigation|Moving Around]]). In a firmware image **UEFI Structure** opens beside the dump at the node the place is in, as a click on a Contents search result does. A place in decompressed or decoded bytes opens in a fragment panel of those bytes, with the place selected and **UEFI Structure** in that panel open to the node that holds it. A file opened for the purpose has its structure read first, and the sections on the way to the place decompressed — seconds on a large image — under a sheet with a progress bar; **Cancel** leaves the file open and goes nowhere. If the file has been moved or deleted since, the program says so.
 
 The ✕ on a card removes that annotation; **Delete** removes the selected cards. Relations to a removed annotation go with it.

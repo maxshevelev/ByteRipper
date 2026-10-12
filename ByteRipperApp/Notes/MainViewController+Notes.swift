@@ -1,20 +1,19 @@
 import Cocoa
 import Localization
 
-/// The tab's part in the notes: its Notes panel kept in line with them, and
-/// the note the person adds from the dump's right-click menu.
+/// The tab's part in the notes: the count on its toolbar's Annotations
+/// button, and the note the person adds from the dump's right-click menu.
 extension MainViewController {
-    /// The notes changed somewhere: the Notes panel follows, and — while it
-    /// is up in a window in view — the agent's new ones count as seen.
+    /// The notes changed somewhere, or were looked at: the count of the
+    /// agent's notes nobody has looked at follows.
     func notesChanged() {
-        fragments.syncNotes()
-        if notesAreInView { AgentAnnotationTools.current?.markSeen() }
+        (view.window?.windowController as? MainWindowController)?.syncNotesBadge()
     }
 
-    /// Whether this tab shows its Notes panel up, in a window on screen.
-    var notesAreInView: Bool {
-        guard fragments.notesAreUp, let window = view.window, window.isVisible else { return false }
-        return window.tabGroup?.selectedWindow.map { $0 === window } ?? true
+    /// The toolbar's Annotations button, Window ▸ Annotations: the
+    /// Annotations window, as a tab beside this one when it is closed.
+    @objc func showNotesWindow(_ sender: Any?) {
+        NotesWindowController.instance.show(tabbedWith: view.window)
     }
 
     /// Offset menu ▸ Add Annotation…: asks for a title and a note and puts them on
@@ -26,7 +25,7 @@ extension MainViewController {
         guard !selection.isEmpty else { return }
         let range = selection.start..<selection.end
         NoteForm.ask(L("Add Annotation"),
-                     L("The annotation is drawn over the selected bytes and listed in the Annotations panel."),
+                     L("The annotation is drawn over the selected bytes and listed in the Annotations window."),
                      button: L("Add"), in: view.window) { title, note in
             Task { @MainActor in
                 _ = try? await AgentAnnotationTools.current?.addNote(title: title, note: note, on: range, of: pane)

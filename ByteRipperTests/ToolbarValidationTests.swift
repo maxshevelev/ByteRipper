@@ -84,7 +84,7 @@ final class ToolbarValidationTests: XCTestCase {
         // (§24).
         XCTAssertEqual(window.toolbar?.items.map(\.itemIdentifier),
                        [.tools, .space, .historyNavigation, .space,
-                        .goTo, .find, .segments, .space, .wordSize,
+                        .goTo, .find, .segments, .notes, .space, .wordSize,
                         .flexibleSpace, .diffNavigation, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
 
         controller.windowModel.pane2.close()
@@ -177,7 +177,7 @@ final class ToolbarValidationTests: XCTestCase {
         // And it takes the block's slot.
         XCTAssertEqual(window.toolbar?.items.map(\.itemIdentifier),
                        [.tools, .space, .historyNavigation, .space,
-                        .goTo, .find, .segments, .space, .wordSize,
+                        .goTo, .find, .segments, .notes, .space, .wordSize,
                         .flexibleSpace, .filesIdentical, .space, .help, .space, .paneLayout, .space, .toggleMinimap])
 
         // The badge reads as "Files are identical" to assistive tech. The item is

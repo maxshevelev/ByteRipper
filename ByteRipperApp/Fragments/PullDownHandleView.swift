@@ -7,7 +7,7 @@ import Cocoa
 /// because there it has to be told apart from carrying the pane off to a tab.
 /// This is for the headers that have no second meaning — the tool panel's —
 /// where a downward drag is a pull and nothing else.
-class PullDownHandleView: NSView {
+final class PullDownHandleView: NSView {
     /// Fired once the press has moved far enough, and downward, to be a pull.
     /// Nil leaves the view what it was: a strip that does nothing.
     var onPulledDown: ((NSEvent) -> Void)?

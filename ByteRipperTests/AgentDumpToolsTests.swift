@@ -287,7 +287,7 @@ final class AgentDumpToolsTests: XCTestCase {
         let listed = try await client.answer("annotations")["annotations"]?.arrayValue
         XCTAssertEqual(listed?.first?["note"], "A stray byte.")
 
-        let cards = try XCTUnwrap(controller.fragments.notesPanel?.cards, "listed in the Notes panel")
+        let cards = NotesWindowController.instance.cards
         XCTAssertTrue(cards.shownTexts(of: "a1").contains("0x8000–0x8008"), "\(cards.shownTexts(of: "a1"))")
 
         service.annotationTools.show("a1")
@@ -295,6 +295,7 @@ final class AgentDumpToolsTests: XCTestCase {
         XCTAssertEqual(selection.start..<selection.end, 0x8000..<0x8008)
 
         service.annotationTools.remove { _ in true }
-        XCTAssertNil(controller.fragments.notesPanel)
+        XCTAssertTrue(cards.rows.isEmpty)
+        NotesWindowController.discardForTesting()
     }
 }

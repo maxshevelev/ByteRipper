@@ -788,8 +788,6 @@ final class MainViewController: NSViewController {
     private let fragmentHost = FragmentPanelHost()
     /// The dock along the bottom: one pill per fragment panel this tab holds.
     private let fragmentDockStrip = FragmentDockStrip()
-    /// The dock, for tests.
-    var fragmentDockStripForTesting: FragmentDockStrip { fragmentDockStrip }
     private var fragmentDockHeight: NSLayoutConstraint?
 
     /// The fragment panels this tab has open, and the dock they fold into.
@@ -1169,8 +1167,6 @@ final class MainViewController: NSViewController {
             return self.activeFilePane.map { [$0] } ?? []
         }
         apply(mode: .empty)
-        // A tab opened while there are notes has the Notes panel too.
-        fragments.syncNotes()
     }
 
     /// Swaps the content area for the given window mode (§3 of REQUIREMENTS.md).
@@ -2285,8 +2281,6 @@ final class MainViewController: NSViewController {
     func fragmentFocusChanged() {
         if let up = fragments.expanded, let pane = fragments.pane(up) {
             paneView(for: pane).focusHexView()
-        } else if let notes = fragments.notesPanel, fragments.notesAreUp {
-            view.window?.makeFirstResponder(notes.cards.collection)
         } else {
             activeFilePane?.focusHexView()
         }
@@ -4374,8 +4368,7 @@ final class MainViewController: NSViewController {
         // the same step-at-a-time rule the panes and the tab already follow
         // (`Design/FRAGMENT_PANELS_PLAN.md`).
         if let up = fragments.expanded {
-            // The Notes panel is not closed, only folded.
-            if fragments.notesAreUp { fragments.collapse() } else { closeFragment(up) }
+            closeFragment(up)
             return
         }
         guard windowModel.hasOpenFile else {
@@ -7419,13 +7412,13 @@ final class MainViewController: NSViewController {
     /// large word size makes the hex grid narrow enough for that to happen.
     ///
     /// Measured, not computed: the items' widths are AppKit's, and they differ
-    /// between releases. 810 pt clears the measured threshold with a margin —
-    /// 775 pt on macOS 15 with Back and Forward in place (§10.6), 695 pt on
-    /// macOS 26 before them, and less on 14, where the toolbar metrics are
-    /// tighter. The probe is
+    /// between releases. 850 pt clears the measured threshold with a margin —
+    /// 815 pt on macOS 15 with the Annotations button in place, 775 pt before
+    /// it with Back and Forward (§10.6), 695 pt on macOS 26 before them, and
+    /// less on 14, where the toolbar metrics are tighter. The probe is
     /// `testTheWholeToolbarFitsTheLaunchWidth`: it opens the window at exactly
     /// this width and fails if AppKit hid anything.
-    static let toolbarFitWidth: CGFloat = 810
+    static let toolbarFitWidth: CGFloat = 850
 
     /// Ideal content width the window should be when zoomed (double-click on the
     /// title bar / Window > Zoom): the hex grid width for a single pane, or
