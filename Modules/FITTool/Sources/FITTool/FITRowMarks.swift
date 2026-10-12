@@ -22,12 +22,12 @@ public enum FITRowMarks {
     /// The words on the badge of a row whose component holds what the IBB is
     /// checked against — the Boot Guard Key Manifest and Boot Policy — nil for
     /// every other row.
-    public static func holdsChecks(type: UInt8) -> String? {
+    public static func holdsChecks(type: UInt8, in language: AppLanguage) -> String? {
         switch type {
         case FIT.keyManifestType:
-            return L("Holds the Boot Guard Key Manifest: the key the Boot Policy is signed with")
+            return L("Holds the Boot Guard Key Manifest: the key the Boot Policy is signed with", in: language)
         case FIT.bootPolicyType:
-            return L("Holds the Boot Guard Boot Policy: the IBB segments and the hash they are checked against")
+            return L("Holds the Boot Guard Boot Policy: the IBB segments and the hash they are checked against", in: language)
         default:
             return nil
         }
@@ -35,24 +35,24 @@ public enum FITRowMarks {
 
     /// The row's marks, from its own problems in `problems` and what it points
     /// at.
-    public static func marks(for row: FITDisplayRow, problems: [FITProblem]) -> ToolRowMarks {
+    public static func marks(for row: FITDisplayRow, problems: [FITProblem], in language: AppLanguage) -> ToolRowMarks {
         var errors: [String] = []
         var cautions: [String] = []
         for problem in problems where problem.entryIndex == row.index && problem.inBackup == row.isBackup {
             switch problem.severity {
-            case .error: errors.append(problem.message)
-            case .warning: cautions.append(problem.message)
+            case .error: errors.append(problem.message.text(in: language))
+            case .warning: cautions.append(problem.message.text(in: language))
             }
         }
         if case .microcode(let header) = row.model.target, !header.checksumIsCorrect {
             if let computed = header.computedChecksum {
-                errors.append(L("Invalid microcode image checksum: %1$@, should be %2$@",
+                errors.append(L("Invalid microcode image checksum: %1$@, should be %2$@", in: language,
                                 hex(header.checksum), hex(computed)))
             } else {
-                cautions.append(L("The microcode image cannot be read whole, so its checksum is not checked"))
+                cautions.append(L("The microcode image cannot be read whole, so its checksum is not checked", in: language))
             }
         }
-        var roles = holdsChecks(type: row.model.entry.type).map { [ToolRowMarks.Role.holdsChecks($0)] } ?? []
+        var roles = holdsChecks(type: row.model.entry.type, in: language).map { [ToolRowMarks.Role.holdsChecks($0)] } ?? []
         // The background by the same rule as the UEFI tree's: wholly inside the
         // IBB, wholly inside what the firmware checks, or — for bytes only
         // partly covered — no tint and the badge (ROW_MARKS.md §2).
@@ -69,15 +69,15 @@ public enum FITRowMarks {
 
     /// The verdict a row's "latest" state is drawn as, and what the pointer
     /// reads on it — nil where there is no basis for one.
-    public static func verdict(of state: MicrocodeLatest) -> (mark: ToolRowMark, toolTip: String)? {
+    public static func verdict(of state: MicrocodeLatest, in language: AppLanguage) -> (mark: ToolRowMark, toolTip: String)? {
         switch state {
         case .latest:
-            return (.newest, L("Newest revision the catalogue lists for this processor and platform"))
+            return (.newest, L("Newest revision the catalogue lists for this processor and platform", in: language))
         case .outdated(let newest):
-            return (.newerListed, L("Catalogue lists a newer revision (r.%1$@)", revision(newest)))
+            return (.newerListed, L("Catalogue lists a newer revision (r.%1$@)", in: language, revision(newest)))
         case .undecided(let newest):
             return (.newerMaybe,
-                    L("Catalogue lists a newer revision (r.%1$@) whose platforms only partly overlap this one's — whether it serves this board depends on the board's own platform ID, which the image does not carry",
+                    L("Catalogue lists a newer revision (r.%1$@) whose platforms only partly overlap this one's — whether it serves this board depends on the board's own platform ID, which the image does not carry", in: language,
                       revision(newest)))
         case .notRated:
             return nil

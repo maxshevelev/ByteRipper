@@ -53,7 +53,7 @@ final class UEFILenovoDMIDetailTests: XCTestCase {
     }
 
     private func detail(_ node: UEFINode, _ parsed: (image: UEFIImage, reader: ImageReader)) -> UEFINodeDetail {
-        UEFIDetail.build(for: node, image: parsed.image, reader: parsed.reader)
+        UEFIDetail.build(for: node, image: parsed.image, reader: parsed.reader, in: .english)
     }
 
     private func value(_ label: String, in detail: UEFINodeDetail) -> String? {
@@ -111,14 +111,14 @@ final class UEFILenovoDMIDetailTests: XCTestCase {
     func testABlocksRowSaysWhetherItIsEncoded() throws {
         let parsed = parsed
         func roles(_ node: UEFINode, _ image: UEFIImage, _ reader: ImageReader) -> [ToolRowMarks.Role] {
-            UEFITreeMarks.marks(for: node, in: image, reader: reader).roles
+            UEFITreeMarks.marks(for: node, in: image, reader: reader, in: .english).roles
         }
         let block = try node(.lenvBlock, 1, in: parsed.image)
         XCTAssertEqual(roles(block, parsed.image, parsed.reader),
                        [.encoded("Encoded with the XOR key 0x77", decoded: false)])
         XCTAssertEqual(roles(try node(.lenovoDMIStore, in: parsed.image), parsed.image, parsed.reader), [])
         XCTAssertEqual(roles(try node(.lenvEntry, in: parsed.image), parsed.image, parsed.reader), [])
-        XCTAssertEqual(UEFITreeMarks.marks(for: block, in: parsed.image).roles, [],
+        XCTAssertEqual(UEFITreeMarks.marks(for: block, in: parsed.image, in: .english).roles, [],
                        "without the bytes, nothing is said")
 
         let stored = try XCTUnwrap(parsed.reader.bytes(block.range))
@@ -129,7 +129,7 @@ final class UEFILenovoDMIDetailTests: XCTestCase {
                        [.encoded("Decoded: the key 0x77 encodes it again on the way back", decoded: true)])
         // On its own a block has no other to be chosen over: neither in use
         // nor not, whatever the store it came from says.
-        let said = UEFITreeDisplay.subtypeText(for: row)
+        let said = UEFITreeDisplay.subtypeText(for: row, in: .english)
         XCTAssertNotEqual(said, "Not in use")
         XCTAssertNotEqual(said, "In use")
     }
@@ -140,13 +140,13 @@ final class UEFILenovoDMIDetailTests: XCTestCase {
         func name(_ node: UEFINode) -> String {
             let parent = parsed.image.node(NodeID(Array(node.id.path.dropLast())))
             return UEFITreeDisplay.name(for: node, catalogue: .empty, in: parsed.image,
-                                        reader: parsed.reader, store: parent)
+                                        reader: parsed.reader, store: parent, language: .english)
         }
         XCTAssertEqual(name(try node(.lenvEntry, 1, in: parsed.image)), "Machine type/model = 82XX0000GE")
         XCTAssertEqual(name(try node(.lenvBlock, 1, in: parsed.image)), "LENV block 2 · Generation 4")
         XCTAssertEqual(name(try node(.ldbgEntry, in: parsed.image)),
                        "2022-06-29 20:30:25 · Set · Baseboard serial number")
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: try node(.lenvBlock, 1, in: parsed.image)), "In use")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: try node(.lenvBlock, 1, in: parsed.image), in: .english), "In use")
         XCTAssertTrue(UEFITreeDisplay.showsValue(try node(.lenvEntry, in: parsed.image)))
     }
 }

@@ -54,7 +54,7 @@ public enum MEATreeMarks {
     /// engine's module checks said about it (`Issue.module`): an error for an
     /// error, a caution for the rest. They stay in the Issues group too.
     public static func module(_ module: CPDModule, in partition: CodePartition,
-                              analysis: FirmwareAnalysis) -> ToolRowMarks {
+                              analysis: FirmwareAnalysis, in language: AppLanguage) -> ToolRowMarks {
         var errors: [String] = []
         var cautions: [String] = []
         for issue in analysis.issues where issue.module == module.name {
@@ -70,7 +70,7 @@ public enum MEATreeMarks {
             let opens = !stored.isEncrypted && metadataModules.contains(module.name)
                 && !(analysis.rbePmMetadata ?? []).isEmpty
             roles.append(.compressed(
-                algorithm: stored.isEncrypted ? L("Encrypted %1$@", compression) : compression,
+                algorithm: stored.isEncrypted ? L("Encrypted %1$@", in: language, compression) : compression,
                 decoded: opens
             ))
         }
@@ -78,37 +78,37 @@ public enum MEATreeMarks {
     }
 
     /// The code partition's row: its directory checksum.
-    public static func codePartition(_ partition: CodePartition) -> ToolRowMarks {
+    public static func codePartition(_ partition: CodePartition, in language: AppLanguage) -> ToolRowMarks {
         guard partition.checksumValid == false else { return .none }
         let kind = partition.headerVersion == 1 ? "Checksum-8" : "CRC-32"
-        return ToolRowMarks(problem: .error([L("Invalid $CPD %1$@ checksum", kind)]))
+        return ToolRowMarks(problem: .error([L("Invalid $CPD %1$@ checksum", in: language, kind)]))
     }
 
     /// The manifest's row: it holds the hashes the modules are checked
     /// against, and its own signature may not check out.
-    public static func manifest(_ analysis: FirmwareAnalysis) -> ToolRowMarks {
+    public static func manifest(_ analysis: FirmwareAnalysis, in language: AppLanguage) -> ToolRowMarks {
         ToolRowMarks(
             problem: analysis.rsaSignatureValid == false
-                ? .error([L("The manifest's RSA signature does not check out")]) : nil,
-            roles: [.holdsChecks(L("Holds the hashes the partition's modules are checked against"))]
+                ? .error([L("The manifest's RSA signature does not check out", in: language)]) : nil,
+            roles: [.holdsChecks(L("Holds the hashes the partition's modules are checked against", in: language))]
         )
     }
 
     /// A layout table's row: its CRC-32, where its version has one.
-    public static func table(named name: String, checksumValid: Bool?) -> ToolRowMarks {
+    public static func table(named name: String, checksumValid: Bool?, in language: AppLanguage) -> ToolRowMarks {
         guard checksumValid == false else { return .none }
-        return ToolRowMarks(problem: .error([L("Invalid %1$@ CRC-32", name)]))
+        return ToolRowMarks(problem: .error([L("Invalid %1$@ CRC-32", in: language, name)]))
     }
 
     /// The RBE/PM Metadata rows: the rail when the module they were read out
     /// of is stored compressed, with its name in the words.
-    public static func metadata(_ analysis: FirmwareAnalysis) -> ToolRowMarks {
+    public static func metadata(_ analysis: FirmwareAnalysis, in language: AppLanguage) -> ToolRowMarks {
         guard let partition = analysis.codePartition,
               let module = partition.modules.first(where: { metadataModules.contains($0.name) }),
               let compression = storage(of: module, in: partition).compression
         else { return .none }
         return ToolRowMarks(
-            decompressedFrom: L("Read out of the %1$@ module, stored %2$@ compressed",
+            decompressedFrom: L("Read out of the %1$@ module, stored %2$@ compressed", in: language,
                                 module.name, compression)
         )
     }

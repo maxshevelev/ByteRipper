@@ -29,7 +29,7 @@ final class ECImageDisplayTests: XCTestCase {
     func testACopySaysSo() {
         let (image, _) = built()
         let names = image.roots[0].children.filter { $0.kind == .ecImage }
-            .map { UEFITreeDisplay.name(for: $0, catalogue: GuidsCatalogue(names: [:]), in: image) }
+            .map { UEFITreeDisplay.name(for: $0, catalogue: GuidsCatalogue(names: [:]), in: image, language: .english) }
         XCTAssertEqual(names, ["PHCM image, 4 KB", "PHCM image, 4 KB (copy)"])
     }
 
@@ -37,7 +37,7 @@ final class ECImageDisplayTests: XCTestCase {
         let (image, reader) = built()
         func fields(_ index: Int) -> [String: String] {
             let node = image.roots[0].children[index]
-            let detail = UEFIDetail.build(for: node, image: image, reader: reader)
+            let detail = UEFIDetail.build(for: node, image: image, reader: reader, in: .english)
             return Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
         }
         XCTAssertEqual(fields(0)["Kind"], "EC firmware image")

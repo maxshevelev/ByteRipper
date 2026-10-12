@@ -68,7 +68,7 @@ final class AgentModuleToolsTests: XCTestCase {
 
     func testEveryModuleToolIsListedWithADocumentArgument() {
         let names = service.server.tools.map(\.name)
-        for name in ["uefi_tree", "uefi_node", "uefi_find", "uefi_at", "uefi_select", "uefi_selection", "open_panel"] {
+        for name in ["uefi_tree", "uefi_node", "uefi_find", "uefi_at", "uefi_dmi", "uefi_select", "uefi_selection", "open_panel"] {
             XCTAssertTrue(names.contains(name), "\(name) in \(names)")
         }
         for tool in service.server.tools where tool.name.hasPrefix("uefi_") {
@@ -132,11 +132,101 @@ final class AgentModuleToolsTests: XCTestCase {
     func testAnswersAreInEnglishWhateverTheWindowSpeaks() async throws {
         try open(UEFITestImage.make())
         let id = try await driverID()
-        let node = try await Localization.$override.withValue(.russian) {
+        let node = try await withAppLanguage(.russian) {
             try await client.answer("uefi_node", ["node": .string(id)])
         }
         let labels = node["fields"]?.arrayValue?.compactMap { $0["label"]?.stringValue } ?? []
         XCTAssertTrue(labels.contains("Kind"), "English labels: \(labels)")
+    }
+
+    /// The window speaks Russian, and no word of it reaches the agent: the
+    /// whole tree of each image walked, every node's fields, the checksums,
+    /// the variables, the areas, a search, the annotations, the FIT table and
+    /// the ME firmware — in English.
+    /// The language is never switched for a call; a word the answer borrows
+    /// from a panel is asked for in English where it is made.
+    func testNoAnswerSpeaksTheWindowsLanguage() async throws {
+        try await withAppLanguage(.russian) {
+            XCTAssertEqual(L("Free space"), "Свободное место", "the window speaks Russian")
+            var asked = 0
+            for bytes in [UEFITestImage.make(), LenovoTestImage.make(),
+                          try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"),
+                          FITTestImage.make(checksum: 0x42, brokenMicrocodeRows: 2),
+                          METestImage.fptFile(),
+                          NvramTestImage.vss([.init("Setup", [1, 1]), .init("Lang", [0x65])])] {
+                try open(bytes)
+                var answers: [(String, JSONValue)] = []
+                func ask(_ tool: String, _ arguments: [String: JSONValue] = [:]) async throws {
+                    let call = try await client.call(tool, .object(arguments))
+                    answers.append(("\(tool) \(arguments)", call.answer))
+                    asked += 1
+                }
+                var queue: [String?] = [nil]
+                var seen: Set<String> = []
+                while let next = queue.first, seen.count < 300 {
+                    queue.removeFirst()
+                    let tree = try await client.call("uefi_tree", .object(next.map { ["node": .string($0)] } ?? [:]))
+                    answers.append(("uefi_tree \(next ?? "top")", tree.answer))
+                    for child in tree.answer["children"]?.arrayValue ?? [] {
+                        guard let id = child["id"]?.stringValue, seen.insert(id).inserted else { continue }
+                        try await ask("uefi_node", ["node": .string(id)])
+                        if child["children"] != nil { queue.append(id) }
+                    }
+                }
+                try await ask("uefi_at", ["offset": "0x28"])
+                try await ask("uefi_checksums")
+                try await ask("variables")
+                try await ask("region_scan")
+                try await ask("uefi_dmi")
+                try await ask("find_bytes", ["text": "MODEL", "node": "root"])
+                try await ask("annotate", ["offset": "0x28", "length": 4, "title": "Signature"])
+                try await ask("annotations")
+                try await ask("fit_table")
+                try await ask("fit_table", ["entry": 1])
+                try await ask("me_summary")
+                try await ask("me_tree")
+                for (question, answer) in answers {
+                    let text = answer.jsonText
+                    XCTAssertNil(text.range(of: "\\p{Cyrillic}", options: .regularExpression),
+                                 "\(question) answered in the window's language: \(text.prefix(400))")
+                }
+                controller?.windowModel.pane1.close()
+                service.annotationTools.remove { _ in true }
+            }
+            XCTAssertGreaterThan(asked, 30, "the walk asked enough to mean something")
+        }
+    }
+
+    /// The DMI area is answered where the panel's DMI button finds it, with
+    /// what the panel says about it.
+    func testTheDMIAreaIsTheStoreTheDMIButtonFinds() async throws {
+        try open(LenovoTestImage.make())
+        let answer = try await client.answer("uefi_dmi")
+        XCTAssertEqual(answer["total"], 1, "\(answer)")
+        let area = try XCTUnwrap(answer["areas"]?.arrayValue?.first)
+        XCTAssertEqual(area["layout"], "Lenovo DMI store")
+        XCTAssertEqual(area["start"], "0x1000", "where LenovoTestImage lays its log")
+        XCTAssertEqual(area["size"], "0x4000")
+        XCTAssertFalse(area["fields"]?.arrayValue?.isEmpty ?? true, "the panel's detail comes with it")
+        let id = try XCTUnwrap(area["id"]?.stringValue)
+        let node = try await client.answer("uefi_node", ["node": .string(id)])
+        XCTAssertEqual(node["node"]?["start"], "0x1000", "the id is the tree's")
+        XCTAssertEqual(node["node"]?["end"], "0x5000")
+    }
+
+    /// A dump the parser finds no DMI area in is not said to have none: the
+    /// answer and the tool's description both say the search knows only some
+    /// layouts.
+    func testNoDMIAreaFoundIsNotNoDMIArea() async throws {
+        try open(UEFITestImage.make())
+        let answer = try await client.answer("uefi_dmi")
+        XCTAssertEqual(answer["total"], 0)
+        XCTAssertEqual(answer["areas"], .array([]))
+        let note = try XCTUnwrap(answer["note"]?.stringValue)
+        XCTAssertTrue(note.contains("is not therefore absent from the dump"), note)
+        let tool = try XCTUnwrap(service.server.tools.first { $0.name == "uefi_dmi" })
+        XCTAssertTrue(tool.description.contains("is not therefore absent from the dump"), tool.description)
+        XCTAssertTrue(tool.description.contains("never that the dump has no DMI"), tool.description)
     }
 
     // MARK: - Actions, and opening the panel

@@ -72,30 +72,6 @@ final class CatalogueTests: XCTestCase {
         Localization.reload()
     }
 
-    /// What the agent service runs under: a task that speaks English while
-    /// the app speaks Russian, and the app's own words untouched outside it.
-    func testATaskCanSpeakAnotherLanguageThanTheApp() async {
-        let defaults = UserDefaults(suiteName: "LocalizationTests")!
-        defaults.removePersistentDomain(forName: "LocalizationTests")
-        let savedDefaults = Localization.defaults
-        Localization.defaults = defaults
-        defaults.set(LanguageChoice.fixed(.russian).storedValue, forKey: Localization.choiceKey)
-        Localization.reload()
-        defer {
-            Localization.defaults = savedDefaults
-            Localization.reload()
-        }
-
-        let inEnglish = await Localization.$override.withValue(.english) {
-            await Task { L("Drop files here") }.value
-        }
-        XCTAssertEqual(inEnglish, "Drop files here")
-        let inGerman = Localization.$override.withValue(.german) { L("Drop files here") }
-        XCTAssertEqual(inGerman, "Dateien hierher ziehen")
-        XCTAssertEqual(L("Drop files here"), "Перетащите файлы сюда", "the app's own language is unchanged")
-        XCTAssertEqual(Localization.language, .russian)
-    }
-
     /// A sentence asked for in a language comes in that language, whatever
     /// the app or the task speaks; one made off the main actor waits as its
     /// key and is put into words by whoever shows it.
@@ -103,8 +79,10 @@ final class CatalogueTests: XCTestCase {
         await withLanguageAsync(.fixed(.russian)) {
             XCTAssertEqual(L("Drop files here", in: .english), "Drop files here")
             XCTAssertEqual(L("Drop files here", in: .german), "Dateien hierher ziehen")
-            XCTAssertEqual(Localization.$override.withValue(.english) { L("Drop files here", in: Localization.appLanguage) },
-                           "Перетащите файлы сюда", "the app's language, under a task's override")
+            XCTAssertEqual(L("%1$@ (%2$@)", in: .english, L("Drop files here") as LocalizedText, "x"),
+                           "Drop files here (x)", "a sentence inside one comes in the same language")
+            let nested: LocalizedText = L("%1$@ (%2$@)", L("Drop files here") as LocalizedText, "x")
+            XCTAssertEqual(nested.text(in: .english), "Drop files here (x)")
 
             let made: LocalizedText = await Task.detached { L("Drop files here") }.value
             XCTAssertEqual(made.text(in: .english), "Drop files here")
@@ -136,7 +114,7 @@ final class CatalogueTests: XCTestCase {
     func testEnglishIsTheKeysThemselves() {
         withLanguage(.fixed(.english)) {
             XCTAssertEqual(L("Drop files here"), "Drop files here")
-            XCTAssertEqual(Localization.language, .english)
+            XCTAssertEqual(Localization.appLanguage, .english)
         }
     }
 

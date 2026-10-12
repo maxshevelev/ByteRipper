@@ -136,7 +136,7 @@ import UEFITool
 
     /// The summary and the button, after the ticks changed.
     private func update() {
-        var text = comparison.summary(writing: chosen)
+        var text = comparison.summary(writing: chosen, in: Localization.appLanguage)
         if !canWrite { text += " " + L("This file is open read-only.") }
         summaryLabel.stringValue = text
         writeButton.isEnabled = canWrite && !chosen.isEmpty
@@ -185,14 +185,14 @@ extension UEFIUpdateViewController: NSTableViewDataSource, NSTableViewDelegate {
         cell.textField?.textColor = .labelColor
         switch column.identifier {
         case Column.name:
-            cell.textField?.stringValue = entry.nameText
+            cell.textField?.stringValue = entry.nameText.text
             cell.textField?.font = .systemFont(ofSize: 11)
         case Column.address:
             cell.textField?.stringValue = Self.hex(entry.range.lowerBound)
         case Column.size:
             cell.textField?.stringValue = Self.hex(UInt64(entry.range.count))
         default:
-            cell.textField?.stringValue = entry.stateText
+            cell.textField?.stringValue = entry.stateText.text
             cell.textField?.font = .systemFont(ofSize: 11)
             cell.textField?.textColor = entry.isIdentical ? SemanticColors.quiet
                 : entry.isBoardData ? SemanticColors.caution : SemanticColors.plain

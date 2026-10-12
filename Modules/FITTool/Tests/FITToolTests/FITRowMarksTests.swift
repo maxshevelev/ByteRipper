@@ -13,11 +13,11 @@ final class FITRowMarksTests: XCTestCase {
             contents: [microcode: microcodeBytes ?? TestFIT.microcode(totalSize: 0x180)]
         )
         let parsed = UEFIImage(size: 0x1_0000, roots: [], addressDiff: 0xFFFF_0000)
-        return FITPresenter.display(FITReader.read(ImageReader(bytes), image: parsed))
+        return FITPresenter.display(FITReader.read(ImageReader(bytes), image: parsed), in: .english)
     }
 
     private func marks(_ shown: FITDisplay, row: Int) -> ToolRowMarks {
-        FITRowMarks.marks(for: shown.rows[row], problems: shown.problems)
+        FITRowMarks.marks(for: shown.rows[row], problems: shown.problems, in: .english)
     }
 
     func testAGoodMicrocodeRowHasNoProblem() {
@@ -125,12 +125,12 @@ final class FITRowMarksTests: XCTestCase {
     /// Each "latest" state is a verdict of the shared catalogue; no state, no
     /// verdict.
     func testTheLatestStatesAreTheCataloguesVerdicts() {
-        XCTAssertEqual(FITRowMarks.verdict(of: .latest)?.mark, .newest)
-        XCTAssertEqual(FITRowMarks.verdict(of: .outdated(newestRevision: 0xF0))?.mark, .newerListed)
-        XCTAssertEqual(FITRowMarks.verdict(of: .outdated(newestRevision: 0xF0))?.toolTip,
+        XCTAssertEqual(FITRowMarks.verdict(of: .latest, in: .english)?.mark, .newest)
+        XCTAssertEqual(FITRowMarks.verdict(of: .outdated(newestRevision: 0xF0), in: .english)?.mark, .newerListed)
+        XCTAssertEqual(FITRowMarks.verdict(of: .outdated(newestRevision: 0xF0), in: .english)?.toolTip,
                        "Catalogue lists a newer revision (r.F0)")
-        XCTAssertEqual(FITRowMarks.verdict(of: .undecided(newestRevision: 0xF0))?.mark, .newerMaybe)
-        XCTAssertNil(FITRowMarks.verdict(of: .notRated))
+        XCTAssertEqual(FITRowMarks.verdict(of: .undecided(newestRevision: 0xF0), in: .english)?.mark, .newerMaybe)
+        XCTAssertNil(FITRowMarks.verdict(of: .notRated, in: .english))
         XCTAssertFalse(FITRowMarks.legendMarks.contains(.decompressed),
                        "no rail: nothing a FIT address points at is inside a compressed section")
     }

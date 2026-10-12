@@ -170,7 +170,7 @@ public enum LenovoDMIFinding: Equatable, Sendable {
         }
     }
 
-    public var text: String {
+    public var text: LocalizedText {
         switch self {
         case .wiped:
             return L("Both LENV blocks are empty: the store has been wiped or was never written. The board's serial number and UUID are not in this image.")
@@ -189,7 +189,7 @@ public enum LenovoDMIFinding: Equatable, Sendable {
             return L("LENV block %1$@ is stored decoded. Whether the firmware accepts that is not known.", block + 1)
         case .blocksDiffer(let keys):
             return L("The two LENV blocks hold different values for: %1$@. The firmware reads the block in use.",
-                     keys.map(LenovoDMIValue.name(of:)).joined(separator: ", "))
+                     LocalizedText.joined(keys.map(LenovoDMIValue.name(of:)), separator: ", "))
         case .logWriteOffsetOutOfRange(let value):
             return L("The change log's write offset %1$@ is outside the log.", LE.hex(UInt64(value), digits: 8))
         case .logWriteOffsetMisaligned(let value):

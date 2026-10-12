@@ -1368,7 +1368,8 @@ final class PaneViewModel: HexViewDataSource {
         agentAnnotations.compactMap { annotation in
             guard let at = annotation.range, at.lowerBound < range.upperBound, range.lowerBound < at.upperBound
             else { return nil }
-            return HexZoneSpan(range: at, name: annotation.title, isFocused: false)
+            return HexZoneSpan(range: at, name: annotation.title, isFocused: false,
+                               byPerson: annotation.author == .person)
         }
     }
 

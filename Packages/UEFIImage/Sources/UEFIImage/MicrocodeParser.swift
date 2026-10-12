@@ -245,7 +245,7 @@ public struct MicrocodeHeader: Equatable, Sendable {
             fields.append(MicrocodeField(
                 "Extended checksum",
                 Checksums.text(table.checksum, valid: table.checksumIsCorrect,
-                               expected: table.computedChecksum.map(UInt64.init), digits: 8),
+                               expected: table.computedChecksum.map(UInt64.init), digits: 8).text(in: .english),
                 isProblem: !table.checksumIsCorrect
             ))
             if table.declaredSize != table.availableSize {
@@ -263,7 +263,7 @@ public struct MicrocodeHeader: Equatable, Sendable {
         fields.append(MicrocodeField(
             "Image checksum",
             Checksums.text(checksum, valid: checksumIsCorrect,
-                           expected: expectedChecksum.map(UInt64.init), digits: 8),
+                           expected: expectedChecksum.map(UInt64.init), digits: 8).text(in: .english),
             isProblem: !checksumIsCorrect
         ))
         return fields

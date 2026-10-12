@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import ToolModuleKit
 import UEFIImage
 
@@ -240,11 +241,11 @@ extension FITEditor {
         image: UEFIImage?,
         reader: ImageReader,
         addressDiff: UInt64,
-        protected: ProtectedRanges? = nil
+        protected: ProtectedRanges? = nil, in language: AppLanguage
     ) -> Result<(ToolTransaction, FITEditOutcome), FITEditProblem> {
         FITTopSwapBackup.mirroring(
             addOrReplaceMicrocodeInTheTopBlock(component, in: table, image: image, reader: reader,
-                                               addressDiff: addressDiff, protected: protected),
+                                               addressDiff: addressDiff, protected: protected, in: language),
             table: table, reader: reader
         ) { $0.topSwapBackup = $1 }
     }
@@ -258,11 +259,11 @@ extension FITEditor {
         image: UEFIImage?,
         reader: ImageReader,
         addressDiff: UInt64,
-        protected: ProtectedRanges? = nil
+        protected: ProtectedRanges? = nil, in language: AppLanguage
     ) -> Result<(ToolTransaction, FITEditOutcome), FITEditProblem> {
         FITTopSwapBackup.mirroring(
             replaceMicrocodeInTheTopBlock(at: index, component, in: table, image: image, reader: reader,
-                                          addressDiff: addressDiff, protected: protected),
+                                          addressDiff: addressDiff, protected: protected, in: language),
             table: table, reader: reader
         ) { $0.topSwapBackup = $1 }
     }
@@ -275,11 +276,11 @@ extension FITEditor {
         image: UEFIImage?,
         in reader: ImageReader,
         addressDiff: UInt64,
-        protected: ProtectedRanges? = nil
+        protected: ProtectedRanges? = nil, in language: AppLanguage
     ) -> Result<(ToolTransaction, FITRemovalOutcome), FITEditProblem> {
         FITTopSwapBackup.mirroring(
             removeMicrocodeFromTheTopBlock(index, from: table, image: image, in: reader,
-                                           addressDiff: addressDiff, protected: protected),
+                                           addressDiff: addressDiff, protected: protected, in: language),
             table: table, reader: reader
         ) { $0.topSwapBackup = $1 }
     }

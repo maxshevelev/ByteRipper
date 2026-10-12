@@ -51,8 +51,8 @@ public struct Sound: Equatable, Sendable {
         byteRate == 0 ? nil : Double(dataLength) / Double(byteRate)
     }
 
-    /// The format and the sample rate, in the words of the language running.
-    public var name: String {
+    /// The format and the sample rate, in words.
+    public var name: LocalizedText {
         switch channels {
         case 1: return L("WAV, %1$@ Hz, mono", "\(sampleRate)")
         case 2: return L("WAV, %1$@ Hz, stereo", "\(sampleRate)")
@@ -113,7 +113,7 @@ extension Parser {
         Sound.read(at: offset, limit: limit, in: reader).map { sound in
             UEFINode(
                 kind: .sound,
-                name: sound.name,
+                named: sound.name,
                 header: sound.range.lowerBound..<sound.range.lowerBound,
                 body: sound.range
             )

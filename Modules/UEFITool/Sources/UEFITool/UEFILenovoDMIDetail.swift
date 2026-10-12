@@ -25,34 +25,34 @@ public enum UEFILenovoDMIDetail {
     /// each entry of the store the drivers that ask for it; nil leaves the
     /// line out until then, and for a block on its own for good.
     static func build(for node: UEFINode, image: UEFIImage, reader: ImageReader,
-                      firmwareReaders: LenovoDMIFirmwareReaders? = nil)
+                      firmwareReaders: LenovoDMIFirmwareReaders? = nil, in language: AppLanguage)
         -> (fields: [UEFIDetailField], tables: [UEFIDetailTable]) {
         guard node.space == .file, reads(node.kind) else { return ([], []) }
         let found = context(of: node, image: image, reader: reader)
         switch node.kind {
         case .lenovoDMIStore:
             guard let area = found.area else { return ([], []) }
-            return summary(area, store: node)
+            return summary(area, store: node, in: language)
         case .ldbgLog:
             guard let log = found.area?.log else { return ([], []) }
-            return (logFields(log), [])
+            return (logFields(log, in: language), [])
         case .ldbgEntry:
             guard let entry = found.area?.log.entries.first(where: { $0.offset == node.range.lowerBound })
             else { return ([], []) }
-            return (logEntryFields(entry), [])
+            return (logEntryFields(entry, in: language), [])
         case .lenvBlock:
             if let area = found.area, let index = area.blocks.firstIndex(where: { $0.offset == node.range.lowerBound }) {
-                return (blockFields(area.blocks[index], live: liveText(index, in: area)), [])
+                return (blockFields(area.blocks[index], live: liveText(index, in: area, in: language), in: language), [])
             }
             guard let block = found.block else { return ([], []) }
-            return (blockFields(block, live: nil), [])
+            return (blockFields(block, live: nil, in: language), [])
         case .lenvEntry:
             let blocks = found.area?.blocks ?? found.block.map { [$0] } ?? []
             for (index, block) in blocks.enumerated() {
                 guard let entry = block.entries.first(where: { $0.offset == node.header.lowerBound }) else { continue }
                 let other = blocks.count == 2 ? (blocks[1 - index], 2 - index) : nil
                 let drivers = found.area == nil ? nil : firmwareReaders?.drivers(of: entry.key)
-                return (entryFields(entry, other: other, drivers: drivers), [])
+                return (entryFields(entry, other: other, drivers: drivers, in: language), [])
             }
             return ([], [])
         default:
@@ -76,7 +76,7 @@ public enum UEFILenovoDMIDetail {
     /// the one an entry is in — and the row's name for it; nil on any other
     /// row, and on a block with nothing to decode (`LenovoDMIDecodedBlock`).
     public static func decodableBlock(for node: UEFINode, image: UEFIImage, reader: ImageReader)
-        -> (block: LENVBlock, name: String)? {
+        -> (block: LENVBlock, name: LocalizedText)? {
         guard node.space == .file else { return nil }
         let row: UEFINode?
         switch node.kind {
@@ -87,21 +87,21 @@ public enum UEFILenovoDMIDetail {
         guard let row, row.kind == .lenvBlock, let stored = reader.bytes(row.range) else { return nil }
         let block = LENVBlock(offset: row.range.lowerBound, stored: stored)
         guard LenovoDMIDecodedBlock.canOpen(block) else { return nil }
-        return (block, row.name)
+        return (block, row.nameText ?? .verbatim(row.name))
     }
 
     /// The badge a LENV block's row wears: a lock on a block stored encoded,
     /// an open one on a block in the clear under a key — a block opened
     /// decoded. None on a block with nothing to encode: erased, empty, a key
     /// of zero, or one that reads neither way.
-    static func encodingRole(of node: UEFINode, reader: ImageReader) -> ToolRowMarks.Role? {
+    static func encodingRole(of node: UEFINode, reader: ImageReader, in language: AppLanguage) -> ToolRowMarks.Role? {
         guard node.kind == .lenvBlock, node.space == .file, let stored = reader.bytes(node.range) else { return nil }
         let block = LENVBlock(offset: node.range.lowerBound, stored: stored)
         guard block.hasSignature, !block.isBlank else { return nil }
         let key = hex(UInt64(block.xorKey), 2)
         switch block.encoding {
-        case .encoded: return .encoded(L("Encoded with the XOR key %1$@", key), decoded: false)
-        case .plain: return .encoded(L("Decoded: the key %1$@ encodes it again on the way back", key), decoded: true)
+        case .encoded: return .encoded(L("Encoded with the XOR key %1$@", in: language, key), decoded: false)
+        case .plain: return .encoded(L("Decoded: the key %1$@ encodes it again on the way back", in: language, key), decoded: true)
         case .keyIsZero, .undetermined: return nil
         }
     }
@@ -142,18 +142,18 @@ public enum UEFILenovoDMIDetail {
 
     /// The store's own row: which block the firmware reads, the values that
     /// block holds — each a way to its row — and what reads wrong.
-    private static func summary(_ area: LenovoDMIArea, store: UEFINode)
+    private static func summary(_ area: LenovoDMIArea, store: UEFINode, in language: AppLanguage)
         -> ([UEFIDetailField], [UEFIDetailTable]) {
         var fields: [UEFIDetailField] = []
         if let live = area.liveIndex {
-            fields.append(.init(L("Block in use"), L("LENV block %1$@, generation %2$@", live + 1, area.blocks[live].generation)))
+            fields.append(.init(L("Block in use", in: language), L("LENV block %1$@, generation %2$@", in: language, live + 1, area.blocks[live].generation)))
         } else {
-            fields.append(.init(L("Block in use"), area.blocks.allSatisfy(\.isBlank)
-                ? L("None: the store is empty") : L("None: no LENV block the firmware would read"),
+            fields.append(.init(L("Block in use", in: language), area.blocks.allSatisfy(\.isBlank)
+                ? L("None: the store is empty", in: language) : L("None: no LENV block the firmware would read", in: language),
                 isProblem: !area.blocks.allSatisfy(\.isBlank)))
         }
         for finding in area.findings {
-            fields.append(.init(finding.isProblem ? L("Problem") : L("Note"), finding.text,
+            fields.append(.init(finding.isProblem ? L("Problem", in: language) : L("Note", in: language), finding.text.text(in: language),
                                 isProblem: finding.isProblem))
         }
         guard let live = area.liveIndex else { return (fields, []) }
@@ -165,10 +165,10 @@ public enum UEFILenovoDMIDetail {
         let all = area.blocks[live].entries
         let entries = all.filter { $0.knownType != nil } + all.filter { $0.knownType == nil }
         let table = UEFIDetailTable(
-            title: L("Entries in use"),
+            title: L("Entries in use", in: language),
             symbol: "person.text.rectangle",
-            columns: [L("Entry"), L("Value")],
-            rows: entries.map { [.init(LenovoDMIValue.name(of: $0.key)), .init(LenovoDMIValue.text(of: $0))] },
+            columns: [L("Entry", in: language), L("Value", in: language)],
+            rows: entries.map { [.init(LenovoDMIValue.name(of: $0.key).text(in: language)), .init(LenovoDMIValue.text(of: $0))] },
             rowTargets: entries.map { entry in
                 blockRow?.children.first { $0.header.lowerBound == entry.offset }.map { .node($0.id) }
             },
@@ -179,45 +179,45 @@ public enum UEFILenovoDMIDetail {
 
     // MARK: - The log
 
-    private static func logFields(_ log: LDBGLog) -> [UEFIDetailField] {
+    private static func logFields(_ log: LDBGLog, in language: AppLanguage) -> [UEFIDetailField] {
         var fields: [UEFIDetailField] = []
         if log.writeOffsetProblem == .erased {
-            fields.append(.init(L("State"), L("Erased: nothing has been written since")))
+            fields.append(.init(L("State", in: language), L("Erased: nothing has been written since", in: language)))
         }
         let misplaced = log.writeOffsetProblem == .outOfRange || log.writeOffsetProblem == .misaligned
-        fields.append(.init(L("Write offset"), hex(UInt64(log.writeOffset), 8), isProblem: misplaced))
-        fields.append(.init(L("Entries"), L("%1$@ of %2$@", log.entries.count, log.capacity)))
-        fields.append(.init(L("XOR key"), log.key.map { hex(UInt64($0), 2) } ?? "—"))
-        fields.append(.init(L("Unknown"), LenovoDMIValue.hex(log.unknownHeader)))
+        fields.append(.init(L("Write offset", in: language), hex(UInt64(log.writeOffset), 8), isProblem: misplaced))
+        fields.append(.init(L("Entries", in: language), L("%1$@ of %2$@", in: language, log.entries.count, log.capacity)))
+        fields.append(.init(L("XOR key", in: language), log.key.map { hex(UInt64($0), 2) } ?? "—"))
+        fields.append(.init(L("Unknown", in: language), LenovoDMIValue.hex(log.unknownHeader)))
         return fields
     }
 
-    private static func logEntryFields(_ entry: LDBGEntry) -> [UEFIDetailField] {
+    private static func logEntryFields(_ entry: LDBGEntry, in language: AppLanguage) -> [UEFIDetailField] {
         [
-            .init(L("Time"), entry.timestampText ?? L("Not a date: %1$@", LenovoDMIValue.hex(entry.timestampBytes))),
-            .init(L("Operation"), operationName(entry)),
-            .init(L("Entry"), LenovoDMIValue.name(of: entry.key)),
-            .init(L("Namespace"), namespaceText(entry.key)),
-            .init(L("Entry type"), entry.key.typeText),
-            .init(L("Size"), L("%1$@ bytes", entry.size)),
-            .init(L("Unknown"), LenovoDMIValue.hex(entry.unknown))
+            .init(L("Time", in: language), entry.timestampText ?? L("Not a date: %1$@", in: language, LenovoDMIValue.hex(entry.timestampBytes))),
+            .init(L("Operation", in: language), operationName(entry, in: language)),
+            .init(L("Entry", in: language), LenovoDMIValue.name(of: entry.key).text(in: language)),
+            .init(L("Namespace", in: language), namespaceText(entry.key)),
+            .init(L("Entry type", in: language), entry.key.typeText),
+            .init(L("Size", in: language), L("%1$@ bytes", in: language, entry.size)),
+            .init(L("Unknown", in: language), LenovoDMIValue.hex(entry.unknown))
         ]
     }
 
     /// The tree's word for a write: "Set · Baseboard serial number".
-    static func logEntryText(_ entry: LDBGEntry) -> String {
-        L("%1$@ · %2$@", operationName(entry), LenovoDMIValue.name(of: entry.key))
+    static func logEntryText(_ entry: LDBGEntry, in language: AppLanguage) -> String {
+        L("%1$@ · %2$@", in: language, operationName(entry, in: language), LenovoDMIValue.name(of: entry.key).text(in: language))
     }
 
-    private static func operationName(_ entry: LDBGEntry) -> String {
+    private static func operationName(_ entry: LDBGEntry, in language: AppLanguage) -> String {
         switch entry.knownOperation {
         case .setData?:
             return entry.size == 0
-                ? L("Remove", context: "log operation")
-                : L("Set", context: "log operation")
-        case .protect?: return L("Protect", context: "log operation")
-        case .unprotect?: return L("Unprotect", context: "log operation")
-        case nil: return L("Unknown operation %1$@", hex(UInt64(entry.operation), 2))
+                ? L("Remove", context: "log operation", in: language)
+                : L("Set", context: "log operation", in: language)
+        case .protect?: return L("Protect", context: "log operation", in: language)
+        case .unprotect?: return L("Unprotect", context: "log operation", in: language)
+        case nil: return L("Unknown operation %1$@", in: language, hex(UInt64(entry.operation), 2))
         }
     }
 
@@ -225,67 +225,67 @@ public enum UEFILenovoDMIDetail {
 
     /// `live` is whether the firmware reads the block and why — nil for a
     /// block on its own, where there is no other copy to choose from.
-    private static func blockFields(_ block: LENVBlock, live: String?) -> [UEFIDetailField] {
+    private static func blockFields(_ block: LENVBlock, live: String?, in language: AppLanguage) -> [UEFIDetailField] {
         if block.isErased {
-            return [.init(L("State"), L("Erased: every byte is FF"))]
+            return [.init(L("State", in: language), L("Erased: every byte is FF", in: language))]
         }
         var fields: [UEFIDetailField] = []
         if block.isBlank {
-            fields.append(.init(L("State"), L("Empty: wiped or never written")))
+            fields.append(.init(L("State", in: language), L("Empty: wiped or never written", in: language)))
         }
-        fields.append(.init(L("Signature", context: "block header"), block.hasSignature ? "LENV" : L("Missing"),
+        fields.append(.init(L("Signature", context: "block header", in: language), block.hasSignature ? "LENV" : L("Missing", in: language),
                             isProblem: !block.hasSignature))
-        fields.append(.init(L("Generation"), "\(block.generation)"))
+        fields.append(.init(L("Generation", in: language), "\(block.generation)"))
         if let live {
-            fields.append(.init(L("Firmware reads it"), live))
+            fields.append(.init(L("Firmware reads it", in: language), live))
         }
-        fields.append(.init(L("Entries"), L("%1$@ of %2$@ declared", block.entries.count, block.declaredEntries),
+        fields.append(.init(L("Entries", in: language), L("%1$@ of %2$@ declared", in: language, block.entries.count, block.declaredEntries),
                             isProblem: !block.entriesFit))
-        fields.append(.init(L("XOR key"), hex(UInt64(block.xorKey), 2)))
-        fields.append(.init(L("Stored"), encodingText(block.encoding)))
-        fields.append(.init(L("Checksum"), checksumText(block), isProblem: !block.isBlank && !block.checksumIsValid))
-        fields.append(.init(L("Access flag"), hex(UInt64(block.accessFlag), 2)))
-        fields.append(.init(L("Write-protected"), block.accessFlag & 1 != 0 ? L("Yes") : L("No")))
+        fields.append(.init(L("XOR key", in: language), hex(UInt64(block.xorKey), 2)))
+        fields.append(.init(L("Stored", in: language), encodingText(block.encoding, in: language)))
+        fields.append(.init(L("Checksum", in: language), checksumText(block, in: language), isProblem: !block.isBlank && !block.checksumIsValid))
+        fields.append(.init(L("Access flag", in: language), hex(UInt64(block.accessFlag), 2)))
+        fields.append(.init(L("Write-protected", in: language), block.accessFlag & 1 != 0 ? L("Yes", in: language) : L("No", in: language)))
         return fields
     }
 
     /// The tree's word for a block: its generation, or why it has none.
-    static func blockText(_ block: LENVBlock) -> String? {
-        if block.isErased { return L("Erased") }
-        if !block.hasSignature { return L("No signature") }
-        if block.isBlank { return L("Empty") }
-        return L("Generation %1$@", block.generation)
+    static func blockText(_ block: LENVBlock, in language: AppLanguage) -> String? {
+        if block.isErased { return L("Erased", in: language) }
+        if !block.hasSignature { return L("No signature", in: language) }
+        if block.isBlank { return L("Empty", in: language) }
+        return L("Generation %1$@", in: language, block.generation)
     }
 
-    private static func liveText(_ index: Int, in area: LenovoDMIArea) -> String {
+    private static func liveText(_ index: Int, in area: LenovoDMIArea, in language: AppLanguage) -> String {
         let block = area.blocks[index]
         if area.liveIndex == index {
             return block.checksumIsValid
-                ? L("Yes — the higher generation")
-                : L("Yes — the higher generation, although its checksum does not add up. Whether the firmware then falls back to the other block is not known.")
+                ? L("Yes — the higher generation", in: language)
+                : L("Yes — the higher generation, although its checksum does not add up. Whether the firmware then falls back to the other block is not known.", in: language)
         }
-        if !block.hasSignature { return L("No — no signature") }
-        if block.generation == 0 { return L("No — generation 0") }
-        return L("No — the other block's generation is higher")
+        if !block.hasSignature { return L("No — no signature", in: language) }
+        if block.generation == 0 { return L("No — generation 0", in: language) }
+        return L("No — the other block's generation is higher", in: language)
     }
 
-    private static func encodingText(_ encoding: LENVBlock.Encoding) -> String {
+    private static func encodingText(_ encoding: LENVBlock.Encoding, in language: AppLanguage) -> String {
         switch encoding {
-        case .encoded: return L("Encoded")
-        case .plain: return L("Decoded")
-        case .keyIsZero: return L("Key is zero")
-        case .undetermined: return L("Undetermined: the entries do not fit either way")
+        case .encoded: return L("Encoded", in: language)
+        case .plain: return L("Decoded", in: language)
+        case .keyIsZero: return L("Key is zero", in: language)
+        case .undetermined: return L("Undetermined: the entries do not fit either way", in: language)
         }
     }
 
-    private static func checksumText(_ block: LENVBlock) -> String {
+    private static func checksumText(_ block: LENVBlock, in language: AppLanguage) -> String {
         let stored = hex(UInt64(block.checksum), 4)
         if block.checksumIsOfEncodedBody {
-            return L("%1$@ (Valid for the body encoded again)", stored)
+            return L("%1$@ (Valid for the body encoded again)", in: language, stored)
         }
         return block.checksumIsValid
-            ? L("%1$@ (Valid)", stored)
-            : L("%1$@ (Invalid), should be %2$@", stored, hex(UInt64(block.expectedChecksum), 4))
+            ? L("%1$@ (Valid)", in: language, stored)
+            : L("%1$@ (Invalid), should be %2$@", in: language, stored, hex(UInt64(block.expectedChecksum), 4))
     }
 
     // MARK: - An entry
@@ -295,55 +295,55 @@ public enum UEFILenovoDMIDetail {
     /// `drivers` are the image's drivers that name the entry's key, once
     /// they have been searched.
     private static func entryFields(_ entry: LENVEntry, other: (block: LENVBlock, number: Int)?,
-                                    drivers: [String]? = nil) -> [UEFIDetailField] {
-        var fields: [UEFIDetailField] = [.init(L("Value"), LenovoDMIValue.text(of: entry))]
+                                    drivers: [String]? = nil, in language: AppLanguage) -> [UEFIDetailField] {
+        var fields: [UEFIDetailField] = [.init(L("Value", in: language), LenovoDMIValue.text(of: entry))]
         if let drivers {
-            fields.append(.init(L("Read by the firmware"),
-                                drivers.isEmpty ? L("No driver in this image names it") : drivers.joined(separator: ", ")))
+            fields.append(.init(L("Read by the firmware", in: language),
+                                drivers.isEmpty ? L("No driver in this image names it", in: language) : drivers.joined(separator: ", ")))
         }
         if entry.knownType == .windowsKey {
-            fields.append(windowsKeyField(entry))
+            fields.append(windowsKeyField(entry, in: language))
         }
         if let other {
             let text: String
             switch other.block.entry(entry.key)?.data {
-            case nil: text = L("Not in LENV block %1$@", other.number)
-            case entry.data?: text = L("The same in LENV block %1$@", other.number)
-            default: text = L("Different in LENV block %1$@", other.number)
+            case nil: text = L("Not in LENV block %1$@", in: language, other.number)
+            case entry.data?: text = L("The same in LENV block %1$@", in: language, other.number)
+            default: text = L("Different in LENV block %1$@", in: language, other.number)
             }
-            fields.append(.init(L("Other copy"), text))
+            fields.append(.init(L("Other copy", in: language), text))
         }
         fields += [
-            .init(L("Bytes"), LenovoDMIValue.hex(entry.data)),
-            .init(L("Namespace"), namespaceText(entry.key)),
-            .init(L("Entry type"), entry.key.typeText),
-            .init(L("Size"), L("%1$@ bytes", entry.data.count)),
-            .init(L("Write-protected"), entry.isWriteProtected ? L("Yes") : L("No")),
-            .init(L("Entry flags"), hex(UInt64(entry.flags), 2)),
-            .init(L("Unknown"), hex(UInt64(entry.unknown1), 2) + " " + hex(UInt64(entry.unknown2), 4))
+            .init(L("Bytes", in: language), LenovoDMIValue.hex(entry.data)),
+            .init(L("Namespace", in: language), namespaceText(entry.key)),
+            .init(L("Entry type", in: language), entry.key.typeText),
+            .init(L("Size", in: language), L("%1$@ bytes", in: language, entry.data.count)),
+            .init(L("Write-protected", in: language), entry.isWriteProtected ? L("Yes", in: language) : L("No", in: language)),
+            .init(L("Entry flags", in: language), hex(UInt64(entry.flags), 2)),
+            .init(L("Unknown", in: language), hex(UInt64(entry.unknown1), 2) + " " + hex(UInt64(entry.unknown2), 4))
         ]
         return fields
     }
 
     /// What the MSDM header in front of the Windows key says, or what is
     /// wrong with it.
-    private static func windowsKeyField(_ entry: LENVEntry) -> UEFIDetailField {
+    private static func windowsKeyField(_ entry: LENVEntry, in language: AppLanguage) -> UEFIDetailField {
         let size = LenovoDMIValue.WindowsKey.headerSize
-        let label = L("Key header")
+        let label = L("Key header", in: language)
         switch LenovoDMIValue.WindowsKey.problem(entry.data) {
         case nil:
-            return .init(label, L("MSDM licensing data, %1$@ bytes of key", entry.data.count - size))
+            return .init(label, L("MSDM licensing data, %1$@ bytes of key", in: language, entry.data.count - size))
         case .tooShort(let count)?:
-            return .init(label, L("%1$@ bytes: shorter than the %2$@-byte header.", count, size), isProblem: true)
+            return .init(label, L("%1$@ bytes: shorter than the %2$@-byte header.", in: language, count, size), isProblem: true)
         case .signature(let head)?:
-            return .init(label, L("The first 16 bytes are %1$@, not the MSDM signature %2$@.",
+            return .init(label, L("The first 16 bytes are %1$@, not the MSDM signature %2$@.", in: language,
                                   LenovoDMIValue.hex(head), LenovoDMIValue.hex(LenovoDMIValue.WindowsKey.signature)),
                          isProblem: true)
         case .length(let declared, let actual)?:
-            return .init(label, L("The header gives the key as %1$@ bytes, and %2$@ follow it.", declared, actual),
+            return .init(label, L("The header gives the key as %1$@ bytes, and %2$@ follow it.", in: language, declared, actual),
                          isProblem: true)
         case .notText?:
-            return .init(label, L("The key holds bytes that are not printable."), isProblem: true)
+            return .init(label, L("The key holds bytes that are not printable.", in: language), isProblem: true)
         }
     }
 

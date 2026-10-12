@@ -79,11 +79,11 @@ public struct FITProblem: Equatable, Sendable {
         }
     }
 
-    public var message: String {
+    public var message: LocalizedText {
         inBackup ? L("Top Swap backup: %1$@", ownMessage) : ownMessage
     }
 
-    private var ownMessage: String {
+    private var ownMessage: LocalizedText {
         switch kind {
         case .imageHasNoPointer:
             return L("The image is too small to hold a FIT pointer")

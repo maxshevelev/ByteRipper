@@ -37,30 +37,30 @@ public enum MEACurator {
                                mfsNames: MFSFileNames = .none,
                                efsNames: EFSFileNames = .none,
                                configPaths: ConfigRecordPaths = .none,
-                               pending: MEAPending = .nothing) -> [MEANode] {
+                               pending: MEAPending = .nothing, in language: AppLanguage) -> [MEANode] {
         var roots: [MEANode] = []
         let add: (MEANode?) -> Void = { if let n = $0 { roots.append(n) } }
 
-        add(firmware(analysis, pending))
-        add(regions(analysis))
-        add(cseLayout(analysis))
-        add(bootPartitions(analysis))
-        add(codePartition(analysis))
-        add(manifest(analysis))
-        add(mfsVolume(analysis, mfsNames, configPaths))
+        add(firmware(analysis, pending, in: language))
+        add(regions(analysis, in: language))
+        add(cseLayout(analysis, in: language))
+        add(bootPartitions(analysis, in: language))
+        add(codePartition(analysis, in: language))
+        add(manifest(analysis, in: language))
+        add(mfsVolume(analysis, mfsNames, configPaths, in: language))
 
         // Fact groups — everything else a dump carried, each only when present.
-        add(chipsetInitGroup(analysis))
-        add(backupGroup(analysis))
-        add(efsGroup(analysis, efsNames))
-        add(oemGroup(analysis, configPaths))
+        add(chipsetInitGroup(analysis, in: language))
+        add(backupGroup(analysis, in: language))
+        add(efsGroup(analysis, efsNames, in: language))
+        add(oemGroup(analysis, configPaths, in: language))
         unlockTokenGroups(analysis).forEach(add)
-        add(mmeGroup(analysis))
-        add(gscGroup(analysis))
-        add(oromGroup(analysis))
-        add(rbeGroup(analysis))
+        add(mmeGroup(analysis, in: language))
+        add(gscGroup(analysis, in: language))
+        add(oromGroup(analysis, in: language))
+        add(rbeGroup(analysis, in: language))
         add(checksumsGroup(analysis))
-        add(issuesGroup(analysis, pending))
+        add(issuesGroup(analysis, pending, in: language))
 
         for (index, var node) in roots.enumerated() {
             node.path = [index]
@@ -72,7 +72,7 @@ public enum MEACurator {
 
     // MARK: - Identity
 
-    private static func firmware(_ a: FirmwareAnalysis, _ pending: MEAPending) -> MEANode {
+    private static func firmware(_ a: FirmwareAnalysis, _ pending: MEAPending, in language: AppLanguage) -> MEANode {
         var fields: [MEAField] = []
         append(&fields, "Family", MEAText.family(a.family))
         append(&fields, "Variant", a.variant, dropEmpty: true)
@@ -100,7 +100,7 @@ public enum MEACurator {
             // What the state rests on, and — a caution — when a step that
             // could have raised it could not be taken.
             if let basis = a.mfsStateBasis {
-                fields.append(MEAField(L("State basis"), MEAText.fileSystemStateBasis(state, basis),
+                fields.append(MEAField(L("State basis", in: language), MEAText.fileSystemStateBasis(state, basis, in: language),
                                        tone: MEATones.stateBasis(basis)))
             }
         }
@@ -112,14 +112,14 @@ public enum MEACurator {
                                              minor: fit.minor, hotfix: fit.hotfix,
                                              build: fit.build))
         }
-        return MEANode(path: [], title: L("Firmware"),
+        return MEANode(path: [], title: L("Firmware", in: language),
                        subtitle: "\(MEAText.family(a.family)) · \(a.version.text)",
                        fields: fields, helpTerm: HelpTermID("me"))
     }
 
     // MARK: - Regions (FPT)
 
-    private static func regions(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func regions(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard !a.regions.isEmpty else { return nil }
         let rows = a.regions.map { region -> MEANode in
             var fields: [MEAField] = []
@@ -128,20 +128,20 @@ public enum MEACurator {
             append(&fields, "Size", MEAText.size(region.size))
             append(&fields, "Flags", MEAText.hex32(region.flags))
             return MEANode(path: [],
-                           title: region.name.isEmpty ? L("(unnamed)") : region.name,
+                           title: region.name.isEmpty ? L("(unnamed)", in: language) : region.name,
                            subtitle: MEAText.range(region.offset, region.size),
                            range: MEAText.rangeValue(region.offset, region.size),
                            fields: fields,
                            isEmptySection: region.size == 0)
         }
-        return MEANode(path: [], title: L("Regions (FPT)"),
-                       subtitle: MEAText.count(rows.count, .region),
+        return MEANode(path: [], title: L("Regions (FPT)", in: language),
+                       subtitle: MEAText.count(rows.count, .region, in: language),
                        children: rows, helpTerm: HelpTermID("fpt"))
     }
 
     // MARK: - CSE Layout Table
 
-    private static func cseLayout(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func cseLayout(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let table = a.cseLayoutTable else { return nil }
         var header: [MEAField] = []
         append(&header, "Offset", MEAText.offset(table.offset))
@@ -156,7 +156,7 @@ public enum MEACurator {
             append(&fields, "Size", MEAText.size(p.size))
             append(&fields, "Empty", MEAText.yesNo(p.empty))
             return MEANode(path: [],
-                           title: p.name.isEmpty ? L("(unnamed)") : p.name,
+                           title: p.name.isEmpty ? L("(unnamed)", in: language) : p.name,
                            subtitle: MEAText.range(p.offset, p.size),
                            range: p.empty ? nil : MEAText.rangeValue(p.offset, p.size),
                            fields: fields,
@@ -164,17 +164,17 @@ public enum MEACurator {
                            // size, or one whose content is erased.
                            isEmptySection: p.empty)
         }
-        return MEANode(path: [], title: L("CSE Layout Table"),
-                       subtitle: MEAText.count(table.partitions.count, .partition),
+        return MEANode(path: [], title: L("CSE Layout Table", in: language),
+                       subtitle: MEAText.count(table.partitions.count, .partition, in: language),
                        fields: header, children: rows,
-                       marks: MEATreeMarks.table(named: L("CSE Layout Table"),
-                                                 checksumValid: table.checksumValid),
+                       marks: MEATreeMarks.table(named: L("CSE Layout Table", in: language),
+                                                 checksumValid: table.checksumValid, in: language),
                        helpTerm: HelpTermID("cse-layout-table"))
     }
 
     // MARK: - Boot Partitions (BPDT)
 
-    private static func bootPartitions(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func bootPartitions(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let tables = a.bootPartitions, !tables.isEmpty else { return nil }
         let rows = tables.map { bpdt -> MEANode in
             var header: [MEAField] = []
@@ -202,26 +202,26 @@ public enum MEACurator {
                 append(&fields, "Size", MEAText.size(e.size))
                 append(&fields, "Empty", MEAText.yesNo(e.empty))
                 return MEANode(path: [],
-                               title: e.name.isEmpty ? L("(unnamed)") : e.name,
+                               title: e.name.isEmpty ? L("(unnamed)", in: language) : e.name,
                                subtitle: MEAText.range(e.offset, e.size),
                                range: e.empty ? nil : MEAText.rangeValue(e.offset, e.size),
                                fields: fields,
                                isEmptySection: e.empty)
             }
             return MEANode(path: [], title: bpdt.partitionName,
-                           subtitle: MEAText.count(bpdt.entries.count, .entry),
+                           subtitle: MEAText.count(bpdt.entries.count, .entry, in: language),
                            fields: header, children: entries,
                            marks: MEATreeMarks.table(named: "BPDT",
-                                                     checksumValid: bpdt.checksumValid))
+                                                     checksumValid: bpdt.checksumValid, in: language))
         }
-        return MEANode(path: [], title: L("Boot Partitions (BPDT)"),
-                       subtitle: MEAText.count(tables.count, .table),
+        return MEANode(path: [], title: L("Boot Partitions (BPDT)", in: language),
+                       subtitle: MEAText.count(tables.count, .table, in: language),
                        children: rows, helpTerm: HelpTermID("bpdt"))
     }
 
     // MARK: - Code Partition ($CPD)
 
-    private static func codePartition(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func codePartition(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let cp = a.codePartition else { return nil }
         var header: [MEAField] = []
         append(&header, "Name", cp.name)
@@ -253,22 +253,22 @@ public enum MEACurator {
                                range: m.isHuffman ? nil : MEAText.rangeValue(absolute, m.size),
                                fields: fields,
                                isEmptySection: m.size == 0,
-                               marks: MEATreeMarks.module(m, in: cp, analysis: a))
+                               marks: MEATreeMarks.module(m, in: cp, analysis: a, in: language))
             }
-            children.append(MEANode(path: [], title: L("Modules"),
-                                    subtitle: MEAText.count(moduleRows.count, .module),
+            children.append(MEANode(path: [], title: L("Modules", in: language),
+                                    subtitle: MEAText.count(moduleRows.count, .module, in: language),
                                     children: moduleRows))
         }
         if let extensions = cp.extensions, !extensions.isEmpty {
             let extRows = extensions.map { MEACurator.extensionRow($0) }
-            children.append(MEANode(path: [], title: L("Extensions"),
-                                    subtitle: MEAText.count(extRows.count, .block),
+            children.append(MEANode(path: [], title: L("Extensions", in: language),
+                                    subtitle: MEAText.count(extRows.count, .block, in: language),
                                     children: extRows))
         }
-        return MEANode(path: [], title: L("Code Partition ($CPD)"),
+        return MEANode(path: [], title: L("Code Partition ($CPD)", in: language),
                        subtitle: "\(cp.name) · \(cp.headerVersion == 1 ? "R1" : "R2")",
                        fields: header, children: children,
-                       marks: MEATreeMarks.codePartition(cp),
+                       marks: MEATreeMarks.codePartition(cp, in: language),
                        helpTerm: HelpTermID("cpd"))
     }
 
@@ -322,7 +322,7 @@ public enum MEACurator {
 
     // MARK: - Manifest
 
-    private static func manifest(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func manifest(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let m = a.manifest else { return nil }
         var fields: [MEAField] = []
         append(&fields, "Tag", m.tag)
@@ -337,17 +337,17 @@ public enum MEACurator {
         if let ready = m.productionReady {
             append(&fields, "Production Ready", MEAText.yesNo(ready))
         }
-        return MEANode(path: [], title: L("Manifest"),
+        return MEANode(path: [], title: L("Manifest", in: language),
                        subtitle: "\(m.tag) · \(MEAText.manifestFormat(m.format))",
                        fields: fields,
-                       marks: MEATreeMarks.manifest(a),
+                       marks: MEATreeMarks.manifest(a, in: language),
                        helpTerm: HelpTermID("manifest"))
     }
 
     // MARK: - File System (MFS)
 
     private static func mfsVolume(_ a: FirmwareAnalysis, _ names: MFSFileNames,
-                                  _ configPaths: ConfigRecordPaths = .none) -> MEANode? {
+                                  _ configPaths: ConfigRecordPaths = .none, in language: AppLanguage) -> MEANode? {
         guard let vol = a.mfsVolume else { return nil }
         var header: [MEAField] = []
         append(&header, "Offset", MEAText.offset(vol.offset))
@@ -373,18 +373,18 @@ public enum MEACurator {
 
         var children: [MEANode] = []
         if !vol.files.isEmpty {
-            let rows = vol.files.map { mfsFileRow($0, names) }
-            children.append(MEANode(path: [], title: L("Files"),
-                                    subtitle: MEAText.count(rows.count, .file),
+            let rows = vol.files.map { mfsFileRow($0, names, in: language) }
+            children.append(MEANode(path: [], title: L("Files", in: language),
+                                    subtitle: MEAText.count(rows.count, .file, in: language),
                                     children: rows))
         }
         if !vol.configurations.isEmpty {
             let rows = vol.configurations.enumerated().map { i, c -> MEANode in
-                MEANode(path: [], title: L("Configuration %1$@", i),
+                MEANode(path: [], title: L("Configuration %1$@", in: language, i),
                         fields: MEAValueText.fields(of: c))
             }
-            children.append(MEANode(path: [], title: L("Configurations"),
-                                    subtitle: MEAText.count(rows.count, .record),
+            children.append(MEANode(path: [], title: L("Configurations", in: language),
+                                    subtitle: MEAText.count(rows.count, .record, in: language),
                                     children: rows))
         }
         // The newer layouts' Configuration streams: records that identify their
@@ -394,25 +394,25 @@ public enum MEACurator {
             children.append(configByIDGroup(stream.records,
                                             title: configStreamTitle(stream.owningFile),
                                             paths: configPaths,
-                                            payloadOffset: nil))
+                                            payloadOffset: nil, in: language))
         }
         if let home = vol.homeDirectory {
-            children.append(homeGroup(home))
+            children.append(homeGroup(home, in: language))
         }
         if let pch = vol.pchInit {
-            children.append(pchGroup(pch))
+            children.append(pchGroup(pch, in: language))
         }
         if !vol.reservedIntegrity.isEmpty {
             let rows = vol.reservedIntegrity.enumerated().map { i, r -> MEANode in
-                MEANode(path: [], title: L("Integrity %1$@", i + 1),
+                MEANode(path: [], title: L("Integrity %1$@", in: language, i + 1),
                         fields: MEAValueText.fields(of: r))
             }
-            children.append(MEANode(path: [], title: L("File Integrity"),
-                                    subtitle: MEAText.count(rows.count, .table),
+            children.append(MEANode(path: [], title: L("File Integrity", in: language),
+                                    subtitle: MEAText.count(rows.count, .table, in: language),
                                     children: rows))
         }
-        return MEANode(path: [], title: L("File System (MFS)"),
-                       subtitle: MEAText.count(vol.presentFileCount, .file),
+        return MEANode(path: [], title: L("File System (MFS)", in: language),
+                       subtitle: MEAText.count(vol.presentFileCount, .file, in: language),
                        fields: header, children: children,
                        helpTerm: HelpTermID("mfs"))
     }
@@ -424,7 +424,7 @@ public enum MEACurator {
     /// The fields describe the record the title came from, which is why the
     /// File ID is among them: a reader checking the panel against upstream's
     /// console is looking at that number.
-    private static func mfsFileRow(_ file: MFSFile, _ names: MFSFileNames) -> MEANode {
+    private static func mfsFileRow(_ file: MFSFile, _ names: MFSFileNames, in language: AppLanguage) -> MEANode {
         var fields: [MEAField] = []
         append(&fields, "Index", String(file.index))
         // The file's own bytes where the Integrity table has been taken off the
@@ -449,7 +449,7 @@ public enum MEACurator {
         // would be lost among them.
         var children: [MEANode] = []
         if let integrity = file.integrity {
-            children.append(MEANode(path: [], title: L("Integrity"),
+            children.append(MEANode(path: [], title: L("Integrity", in: language),
                                     subtitle: MEAText.size(integrity.size),
                                     fields: MEAValueText.fields(of: integrity)))
         }
@@ -476,13 +476,13 @@ public enum MEACurator {
         return "#\(file.index) · \(size)"
     }
 
-    private static func homeGroup(_ home: MFSHomeDirectory) -> MEANode {
+    private static func homeGroup(_ home: MFSHomeDirectory, in language: AppLanguage) -> MEANode {
         var fields: [MEAField] = []
         append(&fields, "Record Size", MEAText.hex(home.homeRecordSize))
         append(&fields, "Root Records", String(home.rootRecordCount))
         let rows = home.entries.map { homeRow($0) }
-        return MEANode(path: [], title: L("Home Directory"),
-                       subtitle: MEAText.count(home.entries.count, .entry),
+        return MEANode(path: [], title: L("Home Directory", in: language),
+                       subtitle: MEAText.count(home.entries.count, .entry, in: language),
                        fields: fields, children: rows)
     }
 
@@ -508,29 +508,29 @@ public enum MEACurator {
     /// there; a CSME 15/16 one has them from the FTPR `intl.cfg` and no volume
     /// node to put them under, and an image whose two copies disagree gets both
     /// rows, each where it came from.
-    private static func chipsetInitGroup(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func chipsetInitGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let chipsetInit = a.chipsetInit,
               chipsetInit != a.mfsVolume?.pchInit else { return nil }
-        return pchGroup(chipsetInit)
+        return pchGroup(chipsetInit, in: language)
     }
 
-    private static func pchGroup(_ pch: MFSPCHInit) -> MEANode {
+    private static func pchGroup(_ pch: MFSPCHInit, in language: AppLanguage) -> MEANode {
         var fields: [MEAField] = []
         append(&fields, "Records", String(pch.records.count))
         append(&fields, "Chipsets", String(pch.chipsets.count))
         let rows = pch.chipsets.map { c -> MEANode in
             MEANode(path: [], title: c.chipset, subtitle: c.steppings,
-                    fields: [MEAField(L("Chipset"), c.chipset),
-                             MEAField(L("Steppings"), c.steppings)])
+                    fields: [MEAField(L("Chipset", in: language), c.chipset),
+                             MEAField(L("Steppings", in: language), c.steppings)])
         }
-        return MEANode(path: [], title: L("Chipset Initialization"),
+        return MEANode(path: [], title: L("Chipset Initialization", in: language),
                        fields: fields, children: rows,
                        helpTerm: HelpTermID("pch-init"))
     }
 
     // MARK: - Fact groups (opaque structures, dumped)
 
-    private static func backupGroup(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func backupGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let backup = a.mfsBackup else { return nil }
         var fields: [MEAField] = []
         append(&fields, "Format", backup.format == .r1 ? "R1" : "R0")
@@ -562,12 +562,12 @@ public enum MEACurator {
             append(&fields, "Header CRC Valid", MEAText.yesNo(entry.headerCRCValid))
             append(&fields, "Data CRC", MEAText.hex32(entry.dataCRCStored))
             append(&fields, "Data CRC Valid", MEAText.yesNo(entry.dataCRCValid))
-            return MEANode(path: [], title: L("Entry %1$@", entry.fileIndex),
+            return MEANode(path: [], title: L("Entry %1$@", in: language, entry.fileIndex),
                            subtitle: backupFileNames[entry.fileIndex]
                                ?? "low-level file \(entry.fileIndex)",
                            fields: fields)
         }
-        return MEANode(path: [], title: L("MFS Backup"),
+        return MEANode(path: [], title: L("MFS Backup", in: language),
                        subtitle: backup.format == .r1 ? "R1" : "R0",
                        fields: fields, children: rows,
                        helpTerm: HelpTermID("mfs-backup"))
@@ -578,7 +578,7 @@ public enum MEACurator {
     ]
 
     private static func efsGroup(_ a: FirmwareAnalysis,
-                                 _ names: EFSFileNames) -> MEANode? {
+                                 _ names: EFSFileNames, in language: AppLanguage) -> MEANode? {
         guard let efs = a.efsVolume else { return nil }
         // The volume's own facts are dumped field by field, minus the file list
         // — that is rows, not a field, and it is the one part of the volume the
@@ -594,12 +594,12 @@ public enum MEACurator {
         var children: [MEANode] = []
         let files = efs.files ?? []
         if !files.isEmpty {
-            let rows = files.map { efsFileRow($0, names) }
-            children.append(MEANode(path: [], title: L("Files"),
-                                    subtitle: MEAText.count(rows.count, .file),
+            let rows = files.map { efsFileRow($0, names, in: language) }
+            children.append(MEANode(path: [], title: L("Files", in: language),
+                                    subtitle: MEAText.count(rows.count, .file, in: language),
                                     children: rows))
         }
-        return MEANode(path: [], title: L("EFS Volume"),
+        return MEANode(path: [], title: L("EFS Volume", in: language),
                        subtitle: MEAText.offset(efs.offset),
                        fields: fields, children: children,
                        helpTerm: HelpTermID("efs"))
@@ -611,7 +611,7 @@ public enum MEACurator {
     /// The data-area offset is among the fields and not a range on the node:
     /// it is an offset into the volume's Data pages concatenated in index
     /// order, so a long file occupies no one stretch of the dump (`EFSFile`).
-    private static func efsFileRow(_ file: EFSFile, _ names: EFSFileNames) -> MEANode {
+    private static func efsFileRow(_ file: EFSFile, _ names: EFSFileNames, in language: AppLanguage) -> MEANode {
         var fields: [MEAField] = []
         append(&fields, "VFS ID", String(file.fileID))
         append(&fields, "Size", MEAText.size(file.contentSize))
@@ -634,7 +634,7 @@ public enum MEACurator {
         }
         var children: [MEANode] = []
         if let integrity = file.integrity {
-            children.append(MEANode(path: [], title: L("Integrity"),
+            children.append(MEANode(path: [], title: L("Integrity", in: language),
                                     subtitle: MEAText.size(integrity.size),
                                     fields: MEAValueText.fields(of: integrity)))
         }
@@ -652,7 +652,7 @@ public enum MEACurator {
     /// payload carries — the OEM `fitc.cfg`, which on the newer layouts is a
     /// partition of its own rather than a low-level file of the volume.
     private static func oemGroup(_ a: FirmwareAnalysis,
-                                 _ paths: ConfigRecordPaths = .none) -> MEANode? {
+                                 _ paths: ConfigRecordPaths = .none, in language: AppLanguage) -> MEANode? {
         guard let oem = a.oemConfiguration else { return nil }
         var fields = MEAValueText.fields(of: oem)
         // The record lists are rows, not fields; the reflected dump would say
@@ -666,9 +666,9 @@ public enum MEACurator {
         var children: [MEANode] = []
         if !byID.isEmpty {
             children.append(configByIDGroup(byID,
-                                            title: L("Configuration Records"),
+                                            title: L("Configuration Records", in: language),
                                             paths: paths,
-                                            payloadOffset: oem.payloadOffset))
+                                            payloadOffset: oem.payloadOffset, in: language))
         }
         if !byName.isEmpty {
             let rows = byName.map { record in
@@ -676,11 +676,11 @@ public enum MEACurator {
                         subtitle: MEAText.size(record.size),
                         fields: MEAValueText.fields(of: record))
             }
-            children.append(MEANode(path: [], title: L("Configuration Records"),
-                                    subtitle: MEAText.count(rows.count, .record),
+            children.append(MEANode(path: [], title: L("Configuration Records", in: language),
+                                    subtitle: MEAText.count(rows.count, .record, in: language),
                                     children: rows))
         }
-        return MEANode(path: [], title: L("OEM Configuration"),
+        return MEANode(path: [], title: L("OEM Configuration", in: language),
                        subtitle: MEAText.offset(oem.offset),
                        fields: fields, children: children,
                        helpTerm: HelpTermID("oem-config"))
@@ -734,10 +734,10 @@ public enum MEACurator {
     private static func configByIDGroup(_ records: [MFSConfigIDRecord],
                                         title: String,
                                         paths: ConfigRecordPaths,
-                                        payloadOffset: Int?) -> MEANode {
+                                        payloadOffset: Int?, in language: AppLanguage) -> MEANode {
         let rows = records.map { configIDRow($0, paths, payloadOffset) }
         return MEANode(path: [], title: title,
-                       subtitle: MEAText.count(rows.count, .record),
+                       subtitle: MEAText.count(rows.count, .record, in: language),
                        children: rows)
     }
 
@@ -778,7 +778,7 @@ public enum MEACurator {
         }
     }
 
-    private static func mmeGroup(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func mmeGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let dir = a.mmeDirectory else { return nil }
         var fields: [MEAField] = []
         append(&fields, "Manifest", dir.manifestTag)
@@ -786,41 +786,41 @@ public enum MEACurator {
         append(&fields, "Declared Modules", String(dir.declaredModules))
         append(&fields, "Decoded Modules", String(dir.modules.count))
         let rows = dir.modules.enumerated().map { i, m -> MEANode in
-            MEANode(path: [], title: L("Module %1$@", i + 1),
+            MEANode(path: [], title: L("Module %1$@", in: language, i + 1),
                     fields: MEAValueText.fields(of: m))
         }
-        return MEANode(path: [], title: L("$MME Directory"), fields: fields, children: rows,
+        return MEANode(path: [], title: L("$MME Directory", in: language), fields: fields, children: rows,
                        helpTerm: HelpTermID("mme"))
     }
 
-    private static func gscGroup(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func gscGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let gsc = a.gscInfo else { return nil }
-        return MEANode(path: [], title: L("GSC Info"),
+        return MEANode(path: [], title: L("GSC Info", in: language),
                        fields: MEAValueText.fields(of: gsc),
                        helpTerm: HelpTermID("gsc"))
     }
 
-    private static func oromGroup(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func oromGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let images = a.oromImages, !images.isEmpty else { return nil }
         let rows = images.enumerated().map { i, img -> MEANode in
-            MEANode(path: [], title: L("Image %1$@", i + 1),
+            MEANode(path: [], title: L("Image %1$@", in: language, i + 1),
                     subtitle: MEAText.offset(img.offset),
                     fields: MEAValueText.fields(of: img))
         }
-        return MEANode(path: [], title: L("OROM Images"),
-                       subtitle: MEAText.count(rows.count, .image),
+        return MEANode(path: [], title: L("OROM Images", in: language),
+                       subtitle: MEAText.count(rows.count, .image, in: language),
                        children: rows, helpTerm: HelpTermID("orom"))
     }
 
-    private static func rbeGroup(_ a: FirmwareAnalysis) -> MEANode? {
+    private static func rbeGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let rows = a.rbePmMetadata, !rows.isEmpty else { return nil }
         // Read out of the pm / rbe module's decompressed body: the rail, when
         // that module is stored compressed, on the group and on every row.
-        let marks = MEATreeMarks.metadata(a)
+        let marks = MEATreeMarks.metadata(a, in: language)
         let children = rows.enumerated().map { i, r -> MEANode in
             var fields = MEAValueText.fields(of: r)
             fields.removeAll { $0.label == "unknown0" }   // raw open word, low signal
-            return MEANode(path: [], title: L("R%1$@ #%2$@", r.variant.rawValue.uppercased(), r.id),
+            return MEANode(path: [], title: L("R%1$@ #%2$@", in: language, r.variant.rawValue.uppercased(), r.id),
                            fields: fields, marks: marks)
         }
         // Upstream's leftover report: what the rbe / pm tables list that no
@@ -830,22 +830,22 @@ public enum MEACurator {
         if let unmatched = a.unmatchedMetadataHashes {
             // Every hash accounted for is a check that passed: the done mark.
             fields.append(unmatched.isEmpty
-                ? MEAField(L("Unmatched Hashes"), L("None"), tone: .good)
-                : MEAField(L("Unmatched Hashes"), String(unmatched.count)))
+                ? MEAField(L("Unmatched Hashes", in: language), L("None", in: language), tone: .good)
+                : MEAField(L("Unmatched Hashes", in: language), String(unmatched.count)))
             if !unmatched.isEmpty {
                 let rows = unmatched.enumerated().map { i, hash in
-                    MEANode(path: [], title: L("Hash %1$@", i + 1), subtitle: String(hash.prefix(16)) + "…",
-                            fields: [MEAField(L("Hash"), hash)], marks: marks)
+                    MEANode(path: [], title: L("Hash %1$@", in: language, i + 1), subtitle: String(hash.prefix(16)) + "…",
+                            fields: [MEAField(L("Hash", in: language), hash)], marks: marks)
                 }
                 nodes.append(MEANode(
-                    path: [], title: L("Unmatched Hashes"), subtitle: String(unmatched.count),
-                    fields: [MEAField(L("Meaning"),
-                        L("Listed by the rbe or pm metadata table, and hashed to by no module of the image — most often an encrypted module (NFTP pavp, PCOD), which cannot be hashed as it is loaded"))],
+                    path: [], title: L("Unmatched Hashes", in: language), subtitle: String(unmatched.count),
+                    fields: [MEAField(L("Meaning", in: language),
+                        L("Listed by the rbe or pm metadata table, and hashed to by no module of the image — most often an encrypted module (NFTP pavp, PCOD), which cannot be hashed as it is loaded", in: language))],
                     children: rows, marks: marks))
             }
         }
-        return MEANode(path: [], title: L("RBE/PM Metadata"),
-                       subtitle: MEAText.count(children.count, .row),
+        return MEANode(path: [], title: L("RBE/PM Metadata", in: language),
+                       subtitle: MEAText.count(children.count, .row, in: language),
                        fields: fields, children: nodes, marks: marks,
                        helpTerm: HelpTermID("rbe-pm"))
     }
@@ -885,21 +885,21 @@ public enum MEACurator {
 
     /// What the analysis raised, and — while `Huffman.dat` is on the way — a
     /// row that says the module checks are still to come.
-    private static func issuesGroup(_ a: FirmwareAnalysis, _ pending: MEAPending) -> MEANode? {
+    private static func issuesGroup(_ a: FirmwareAnalysis, _ pending: MEAPending, in language: AppLanguage) -> MEANode? {
         var rows = a.issues.map { issue -> MEANode in
             let name = MEAText.title(issue.severity.rawValue)
             return MEANode(path: [], title: name,
                            subtitle: issue.message,
-                           fields: [MEAField(L("Severity"), name),
-                                    MEAField(L("Message"), issue.message)])
+                           fields: [MEAField(L("Severity", in: language), name),
+                                    MEAField(L("Message", in: language), issue.message)])
         }
         if pending.huffman {
-            rows.append(MEANode(path: [], title: L("Module checks"), subtitle: pendingValue,
-                                fields: [MEAField(L("Module checks"), pendingValue)]))
+            rows.append(MEANode(path: [], title: L("Module checks", in: language), subtitle: pendingValue,
+                                fields: [MEAField(L("Module checks", in: language), pendingValue)]))
         }
         guard !rows.isEmpty else { return nil }
-        return MEANode(path: [], title: L("Issues"),
-                       subtitle: MEAText.count(a.issues.count, .issue),
+        return MEANode(path: [], title: L("Issues", in: language),
+                       subtitle: MEAText.count(a.issues.count, .issue, in: language),
                        children: rows)
     }
 

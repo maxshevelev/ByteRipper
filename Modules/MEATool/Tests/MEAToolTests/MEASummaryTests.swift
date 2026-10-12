@@ -32,7 +32,7 @@ final class MEASummaryTests: XCTestCase {
 
     /// The primary table — always the first block, which carries no title.
     private func tableRows(_ a: FirmwareAnalysis) -> [MEASummaryRow] {
-        MEASummary.build(a)[0].rows
+        MEASummary.build(a, in: .english)[0].rows
     }
 
     private func value(_ label: String, in rows: [MEASummaryRow]) -> MEASummaryValue? {
@@ -271,7 +271,7 @@ final class MEASummaryTests: XCTestCase {
     func testFileSystemStateOfAnEFSVolumeWaitsForTheFileTable() throws {
         let a = try analysis(["manifest": manifestJSON(), "mfsState": "configured",
                               "efsVolume": efsVolumeJSON])
-        let waiting = MEASummary.build(a, pending: MEAPending(fileTable: true))[0].rows
+        let waiting = MEASummary.build(a, pending: MEAPending(fileTable: true), in: .english)[0].rows
         XCTAssertEqual(value("File System State", in: waiting), .pending)
         XCTAssertEqual(tone("File System State", in: waiting), .standard)
         XCTAssertEqual(value("File System State", in: tableRows(a)), .value("Configured"))
@@ -281,7 +281,7 @@ final class MEASummaryTests: XCTestCase {
     /// wait for.
     func testFileSystemStateWithoutAnEFSVolumeDoesNotWait() throws {
         let a = try analysis(["manifest": manifestJSON(), "mfsState": "configured"])
-        let rows = MEASummary.build(a, pending: MEAPending(fileTable: true))[0].rows
+        let rows = MEASummary.build(a, pending: MEAPending(fileTable: true), in: .english)[0].rows
         XCTAssertEqual(value("File System State", in: rows), .value("Configured"))
     }
 
@@ -290,16 +290,16 @@ final class MEASummaryTests: XCTestCase {
     /// and without it there is no such row, nor a block for nothing.
     func testMessagesSayTheModuleChecksAreToCome() throws {
         let a = try analysis(["manifest": manifestJSON()])
-        let waiting = MEASummary.build(a, pending: MEAPending(huffman: true))
+        let waiting = MEASummary.build(a, pending: MEAPending(huffman: true), in: .english)
         let messages = try XCTUnwrap(waiting.last)
         XCTAssertEqual(messages.title, "Messages")
         XCTAssertEqual(messages.rows.last, MEASummaryRow("Module checks", .pending))
-        XCTAssertFalse(MEASummary.build(a).contains { $0.title == "Messages" })
+        XCTAssertFalse(MEASummary.build(a, in: .english).contains { $0.title == "Messages" })
 
         let raised = try analysis(["manifest": manifestJSON(), "issues": [
             ["id": 1, "severity": "warning", "message": "Something."],
         ]])
-        XCTAssertEqual(MEASummary.build(raised, pending: MEAPending(huffman: true)).last?.rows.map(\.value),
+        XCTAssertEqual(MEASummary.build(raised, pending: MEAPending(huffman: true), in: .english).last?.rows.map(\.value),
                        [.value("Something."), .pending])
     }
 
@@ -308,8 +308,8 @@ final class MEASummaryTests: XCTestCase {
     func testAPendingValueIsNotEmphasized() {
         XCTAssertFalse(MEASummaryRow("File System State", .pending, tone: .good).isEmphasized)
         XCTAssertTrue(MEASummaryRow("File System State", .value("Configured"), tone: .good).isEmphasized)
-        XCTAssertEqual(MEASummaryValue.pending.text, "Loading…")
-        XCTAssertEqual(MEASummaryValue.comingSoon.text, "Coming soon")
+        XCTAssertEqual(MEASummaryValue.pending.text(in: .english), "Loading…")
+        XCTAssertEqual(MEASummaryValue.comingSoon.text(in: .english), "Coming soon")
     }
 
     /// The File System State row's tone is its status: both settled states read
@@ -354,7 +354,7 @@ final class MEASummaryTests: XCTestCase {
         let state = try XCTUnwrap(labels.firstIndex(of: "File System State"))
         XCTAssertEqual(labels[state + 1], "State basis")
         XCTAssertEqual(value("State basis", in: rows),
-                       .value(MEAText.fileSystemStateBasis(.configured, try XCTUnwrap(a.mfsStateBasis))))
+                       .value(MEAText.fileSystemStateBasis(.configured, try XCTUnwrap(a.mfsStateBasis), in: .english)))
         XCTAssertEqual(tone("State basis", in: rows), .caution)
         XCTAssertEqual(tone("File System State", in: rows), .caution, "an incomplete state is not green")
 
@@ -734,7 +734,7 @@ final class MEASummaryTests: XCTestCase {
                               "version": ["major": 12, "minor": 0,
                                           "hotfix": 3, "build": 1091],
                               "independentFirmware": [pmc]])
-        let blocks = MEASummary.build(a)
+        let blocks = MEASummary.build(a, in: .english)
         XCTAssertEqual(blocks.count, 2, "the engine's table, then the PMC's")
         let block = blocks[1]
         XCTAssertEqual(block.title, "Power Management Controller")
@@ -782,7 +782,7 @@ final class MEASummaryTests: XCTestCase {
                 firmware("phy", "PHYNTGP", sku: "N", meu: false),
             ],
         ])
-        let blocks = MEASummary.build(a)
+        let blocks = MEASummary.build(a, in: .english)
         XCTAssertEqual(blocks.count, 3)
 
         XCTAssertEqual(blocks[1].title, "Platform Controller Hub Configuration")
@@ -823,7 +823,7 @@ final class MEASummaryTests: XCTestCase {
             "manifest": manifestJSON(),
             "version": ["major": 15, "minor": 0, "hotfix": 30, "build": 1659],
             "independentFirmware": [pmc(copies: ["Boot 2"])],
-        ]))
+        ]), in: .english)
         XCTAssertEqual(twice.count, 2)
         XCTAssertEqual(twice[1].rows.last?.label, "Redundant Copy")
         XCTAssertEqual(value("Redundant Copy", in: twice[1].rows), .value("Boot 2"))
@@ -832,7 +832,7 @@ final class MEASummaryTests: XCTestCase {
             "manifest": manifestJSON(),
             "version": ["major": 15, "minor": 0, "hotfix": 30, "build": 1659],
             "independentFirmware": [pmc(copies: nil)],
-        ]))
+        ]), in: .english)
         XCTAssertNil(value("Redundant Copy", in: once[1].rows))
     }
 
@@ -857,7 +857,7 @@ final class MEASummaryTests: XCTestCase {
                 "version": ["major": hostMajor, "minor": 0,
                             "hotfix": 3, "build": 1091],
                 "independentFirmware": [pmc],
-            ]))[1].rows
+            ]), in: .english)[1].rows
         }
 
         // A discrete-graphics PMC has no stepping row at all — but a CSME 12
@@ -885,7 +885,7 @@ final class MEASummaryTests: XCTestCase {
             "issues": [["id": 1, "severity": "error", "message": "checksum mismatch"],
                        ["id": 2, "severity": "note", "message": "odd padding"]],
         ])
-        let blocks = MEASummary.build(a)
+        let blocks = MEASummary.build(a, in: .english)
         XCTAssertEqual(blocks.count, 2)
         XCTAssertNil(blocks[0].title)
         XCTAssertEqual(blocks[1].title, "Messages")
@@ -896,6 +896,6 @@ final class MEASummaryTests: XCTestCase {
 
     func testNoIssuesNoMessagesBlock() throws {
         let a = try analysis([:])
-        XCTAssertEqual(MEASummary.build(a).count, 1)
+        XCTAssertEqual(MEASummary.build(a, in: .english).count, 1)
     }
 }

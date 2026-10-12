@@ -75,7 +75,7 @@ Recorded against: Claude Code 2.1.292 (modern; `RecordedClientTests`).
 | Tool | Arguments | Answer |
 |---|---|---|
 | `annotate` | `title` (≤ 80 characters); `note` (≤ 600); `document` or `path`; `offset` + `length` (default 1), or `node` — whole, or with `offset` + `length` from its first byte (`find_bytes`'s `node_offset`); `related_to` (annotation ids); `reveal` | `id` (`a1`, `a2`… one counter for the app), `path` (a file on disk), `document` (while the file is open), `range`, `node`, `title`, `note`, `related_to`; `decoded` (`node` — the compressed section or LENV block —, `range` in its decompressed or decoded bytes, `codecs`) for a place there, which has no `range` when it is no bytes of the file and opens in a fragment panel of those bytes; `from_part` (`document`, `range`, `exact`, `decoded`) for one made in a part. |
-| `annotations` | `document` or `path` (default: every file); `limit` (50, ≤ 200); `after` | `annotations[]`, each as `annotate` answers, oldest first; `total`. Paged (`next`, `after`). |
+| `annotations` | `document` or `path` (default: every file); `limit` (50, ≤ 200); `after` | `annotations[]`, each as `annotate` answers, oldest first — one the person made by hand also has `author: "person"`; `total`. Paged (`next`, `after`). |
 | `remove_annotations` | `ids`, or `document`, or `path`, or `all: true` | `removed[]`; `not_found[]` for ids there were not. Relations to a removed annotation go with it. |
 
 An annotation belongs to a file (issue #37): a file on disk, found again by
@@ -83,7 +83,7 @@ its identity, or a document never saved, which it goes with. It is kept for
 the session, whether the file is open or not, and drawn dashed in the agent's
 colour over the bytes whenever the file is on screen — in a tab, or in a part
 whose codecs keep the file's addresses — its title and note under the
-pointer, listed in the Agent window. Made in a part, it is recorded in the
+pointer, listed in the Annotations panel of every tab. Made in a part, it is recorded in the
 file the part came out of: the same bytes through every codec that keeps
 offsets, else the source range. A node of a file that is not open is kept as
 the node; one of an open file is placed by its tree. It goes with
@@ -120,7 +120,7 @@ next call.
 
 A node's `id` is for tools; the person never needs it. Every UEFI node an
 answer names — in `uefi_tree`, `uefi_node`, `uefi_find`, `uefi_at`,
-`uefi_checksums`, `region_scan`, `refs`, and the `where` of `diff` and
+`uefi_checksums`, `uefi_dmi`, `region_scan`, `refs`, and the `where` of `diff` and
 `find_bytes` — has a `label`: its name as the panel's Name column shows it,
 and, where that name is only a kind (`Unused`, `Unknown`, `Padding`,
 `Empty padding`, `Free space`, `Non-UEFI data`, `Raw`, or its own Type or
@@ -278,6 +278,7 @@ refused.
 | `find_bytes` | `text` (with `encoding` `ascii`·`utf16le`·`both`, default both; `ignore_case`) or `hex` (pairs, `??` for any byte); `overlapping`; `offset`, `end` (not with `node`); `node` (an id, or `root`); `context` (≤ 64); `limit` (100, ≤ 1000); `after` | Without `node`, the document as stored: `document`, `range`, `total`, `matches[]` (`start`, `end`, `encoding`, `where[]`, `preview` with `hex`, `text`, `before`), `next`, `truncated`. With `node`, what the tree holds at and under it — every compressed section decompressed (nested too), a BIOS Guard update assembled, an encoded LENV block decoded; compressed streams and encoded blocks as stored and an ME region not searched: `node` (summary, or `root`), `total`, `searched`, `buffers`, `unread[]`, `matches[]` in tree order (`encoding`, `node`, `node_offset`, `volume`, `volume_offset`, `start`/`end` — or `in_compressed`, `section`, `buffer_start`/`buffer_end` — `decoded`, `preview`). The UEFI panel's Contents search; the same search again is answered from the last. Reads only. |
 | `refs` | `guid`, or `address` (with `relative_to` `file`·`region`, `forms` of `bus`·`file`·`region`, default all); `scope` `all`·`raw`·`compressed`; `limit` (50, ≤ 200, on files); `after` | `document`, `scope`, `guid` or `forms` (each form's bytes; `bus64` too), `skipped_forms`, `total` (hits), `files` (groups), `refs[]`: `file` (or `node` for a hit in no FFS file), `name`, `guid`, `type`, `in_compressed`, `hits[]` (`form`, `section`, `section_offset`, `file_start` or `node_start` + `in_compressed`, `node` when deeper), `hits_total` past 20. Bus form: the BIOS region's end at 0x100000000. A hit inside a longer form's hit is left out; a form under 0x100 is skipped. |
 | `region_scan` | `node` (default: the BIOS region); `kinds` (Type or Subtype, default `Padding`, `Raw`); `min_size` (0x100); `limit` (50, ≤ 200); `after` | `total`, `under`, `nodes[]`: as `uefi_tree` (`node` for `id`), `size`, `inner` (a child covering it whole), `class` (`empty` ≥ 99 % 0x00/0xFF, `text` ≥ 50 % of the rest in strings, `code` by x86-64 markers or `MZ`, else `data`), `fill`, `first_nonfill`, `last_nonfill`, `strings[]` (≤ 5: `at`, `text` ≤ 64, `encoding`), `redacted` — no strings for an area named MSDM, Password or Key. A node its children divide gives way to them. |
+| `uefi_dmi` | — | `areas[]`: the DMI areas the DMI button of the UEFI Structure panel goes to — Lenovo DMI store, GPNV store, Acer DMI — each as `uefi_tree`, with `size`, `path` and the panel's `title`, `fields`, `tables`; `total`; `note`. Every container in the file opened, no compressed section. The `note` says that the parser finds an area only by its checks for the layouts it knows, so an area not found is not an area absent. |
 | `open_part` | `offset`, `length` — or `node` with `part` (`all`, `body`, `decompressed` — what a compressed section decompresses to, `decoded` — a Lenovo LENV block or one of its entries with the XOR removed); `name` | `document` (the part's id), `parent`, `name`, `source` (the parent's bytes it is linked to), `size`; with `node`, `node` and `in_compressed`. |
 
 `find_bytes` is the find bar's engine (`SearchEngine.matches`), given holes

@@ -75,12 +75,12 @@ extension PartCodec {
 /// The badge a part panel's header carries for its codec.
 public struct PartBadge: Equatable, Sendable {
     /// A word or two: what fits in a capsule beside the panel's name.
-    public var text: String
+    public var text: LocalizedText
     /// The sentence under the pointer: what the panel shows, and what Update
     /// in Parent does with it on the way back.
-    public var explanation: String
+    public var explanation: LocalizedText
 
-    public init(_ text: String, explanation: String) {
+    public init(_ text: LocalizedText, explanation: LocalizedText) {
         self.text = text
         self.explanation = explanation
     }

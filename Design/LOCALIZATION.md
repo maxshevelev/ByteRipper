@@ -119,6 +119,20 @@ Under test the language is pinned to English (`AppDefaults.startLocalization`).
 The suite asserts on what the app *says*, and otherwise the same suite would
 pass in Frankfurt and fail in Moscow.
 
+## A word for a reader other than the person
+
+The app speaks one language at a time, and nothing switches it for a stretch
+of work: a window drawn while a switch was on came out in the wrong language.
+A word meant for another reader — an agent, which reads English — names its
+language where it is made: `L("…", in: .english)`. A word made before anyone
+knows who will read it — a parser's name for a node it made up, a finding, a
+badge — is a `LocalizedText` (`L()` where that type is expected), put into
+words by whoever shows it with `text(in:)`. A presenter that both a panel and
+an agent read takes the language as a parameter. The pure targets an agent
+reads from make the plain `L()` unavailable (`WordsInALanguage.swift`), so a
+word in the app's language cannot slip into them unseen (`AGENT_PLAN.md`,
+"Language").
+
 ## One phrase per control
 
 A button can explain itself in two places — its tooltip and its accessibility

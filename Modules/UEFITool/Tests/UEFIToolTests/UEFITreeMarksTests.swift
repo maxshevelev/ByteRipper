@@ -29,13 +29,13 @@ final class UEFITreeMarksTests: XCTestCase {
     func testAPlainNodeWearsNothing() {
         let node = UEFINode(kind: .padding, name: "Padding", range: 0..<0x10)
         let image = UEFIImage(size: 0x10, roots: [node])
-        XCTAssertEqual(UEFITreeMarks.marks(for: node, in: image), .none)
+        XCTAssertEqual(UEFITreeMarks.marks(for: node, in: image, in: .english), .none)
     }
 
     func testAWrongChecksumIsAnError() {
         let node = UEFINode(kind: .file, name: "File", header: 0..<0x18, body: 0x18..<0x40)
         let image = UEFIImage(size: 0x40, roots: [node])
-        let marks = UEFITreeMarks.marks(for: node, in: image, badChecksums: [.fileHeader, .fileBody])
+        let marks = UEFITreeMarks.marks(for: node, in: image, badChecksums: [.fileHeader, .fileBody], in: .english)
         XCTAssertEqual(marks.problem, .error(["Invalid checksums: file body, file header"]))
     }
 
@@ -43,7 +43,7 @@ final class UEFITreeMarksTests: XCTestCase {
     /// which section the bytes came out of.
     func testANodeInsideWearsTheRailAndSaysWhereFrom() {
         let image = UEFIImage(size: 0x100, roots: [section(compression: lzma, children: [inner()])])
-        let marks = UEFITreeMarks.marks(for: image.roots[0].children[0], in: image)
+        let marks = UEFITreeMarks.marks(for: image.roots[0].children[0], in: image, in: .english)
 
         XCTAssertEqual(marks.decompressedFrom, "Decompressed from LZMA compressed section at 0x60")
         XCTAssertNil(marks.problem)
@@ -52,11 +52,11 @@ final class UEFITreeMarksTests: XCTestCase {
 
     func testAnOpenedOrOpenableSectionWearsTheCompressedBadge() {
         let opened = UEFIImage(size: 0x100, roots: [section(compression: lzma, children: [inner()])])
-        XCTAssertEqual(UEFITreeMarks.marks(for: opened.roots[0], in: opened).roles,
+        XCTAssertEqual(UEFITreeMarks.marks(for: opened.roots[0], in: opened, in: .english).roles,
                        [.compressed(algorithm: "LZMA", decoded: true)])
 
         let closed = UEFIImage(size: 0x100, roots: [section(compression: lzma, isExpandable: true)])
-        let marks = UEFITreeMarks.marks(for: closed.roots[0], in: closed)
+        let marks = UEFITreeMarks.marks(for: closed.roots[0], in: closed, in: .english)
         XCTAssertEqual(marks.roles, [.compressed(algorithm: "LZMA", decoded: true)])
         XCTAssertNil(marks.problem, "not opened yet is not a failure")
     }
@@ -67,16 +67,16 @@ final class UEFITreeMarksTests: XCTestCase {
     /// the rail to — even with the branch read.
     func testASectionStartsTheRailOnlyWhileItsRowIsOpen() {
         let opened = UEFIImage(size: 0x100, roots: [section(compression: lzma, children: [inner()])])
-        let open = UEFITreeMarks.marks(for: opened.roots[0], in: opened, isOpen: true)
+        let open = UEFITreeMarks.marks(for: opened.roots[0], in: opened, isOpen: true, in: .english)
         XCTAssertTrue(open.opensDecompressed)
         XCTAssertTrue(open.hasRail)
         XCTAssertNil(open.decompressedFrom)
 
-        XCTAssertFalse(UEFITreeMarks.marks(for: opened.roots[0], in: opened, isOpen: false).hasRail,
+        XCTAssertFalse(UEFITreeMarks.marks(for: opened.roots[0], in: opened, isOpen: false, in: .english).hasRail,
                        "read, but shut")
 
         let closed = UEFIImage(size: 0x100, roots: [section(compression: lzma, isExpandable: true)])
-        XCTAssertFalse(UEFITreeMarks.marks(for: closed.roots[0], in: closed, isOpen: true).hasRail,
+        XCTAssertFalse(UEFITreeMarks.marks(for: closed.roots[0], in: closed, isOpen: true, in: .english).hasRail,
                        "nothing under it yet")
     }
 
@@ -89,7 +89,7 @@ final class UEFITreeMarksTests: XCTestCase {
             diagnostics: [UEFIDiagnostic(.decompressionFailed(algorithm: "LZMA", truncated: false),
                                          at: 0x60)]
         )
-        let marks = UEFITreeMarks.marks(for: image.roots[0], in: image)
+        let marks = UEFITreeMarks.marks(for: image.roots[0], in: image, in: .english)
 
         XCTAssertEqual(marks.roles, [.compressed(algorithm: "LZMA", decoded: false)])
         XCTAssertEqual(marks.problem, .caution(["LZMA data does not decompress"]))
@@ -101,7 +101,7 @@ final class UEFITreeMarksTests: XCTestCase {
     func testAnUndecodedAlgorithmIsGreyAndNotAProblem() {
         let brotli = section(compression: SectionCompression(algorithm: "Brotli", decodes: false))
         let image = UEFIImage(size: 0x100, roots: [brotli])
-        let marks = UEFITreeMarks.marks(for: image.roots[0], in: image)
+        let marks = UEFITreeMarks.marks(for: image.roots[0], in: image, in: .english)
 
         XCTAssertEqual(marks.roles, [.compressed(algorithm: "Brotli", decoded: false)])
         XCTAssertNil(marks.problem)

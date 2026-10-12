@@ -25,19 +25,19 @@ public enum UEFITreeDisplay {
     /// `fileTypeToUString` / `sectionTypeToUString`, which are not in
     /// `types.cpp` — so a known type is a word and an unknown one keeps its
     /// number. Every other type reads from the generated `UEFITypes` tables.
-    public static func subtypeText(for node: UEFINode) -> String {
+    public static func subtypeText(for node: UEFINode, in language: AppLanguage) -> String {
         guard let subtype = node.uefiItemSubtype else { return "" }
         switch node.kind {
         case .file: return UEFITypeNames.file(subtype)
         case .section: return UEFITypeNames.section(subtype)
         // Padding to UEFITool; what the column can say of a record is
         // whether it is the one in force.
-        case .gpnvRecord: return node.subtype == 1 ? L("Current") : L("Superseded")
+        case .gpnvRecord: return node.subtype == 1 ? L("Current", in: language) : L("Superseded", in: language)
         // Only a block of a store has another to be chosen over; one on its
         // own — a block opened decoded — is whatever its bytes say, and
         // calling it "Not in use" contradicted the store it was taken from.
         case .lenvBlock where node.subtype != nil:
-            return node.subtype == 1 ? L("In use", context: "LENV block") : L("Not in use")
+            return node.subtype == 1 ? L("In use", context: "LENV block", in: language) : L("Not in use", in: language)
         default: return UEFITypes.subtypeName(type: node.uefiItemType, subtype) ?? ""
         }
     }
@@ -46,10 +46,10 @@ public enum UEFITreeDisplay {
     /// the tree. A capsule file leads with its capsule, a dump with its first
     /// root — the same classification the columns show, so the title and the
     /// tree below it agree on what the image is.
-    public static func imageType(of image: UEFIImage) -> String {
+    public static func imageType(of image: UEFIImage, in language: AppLanguage) -> String {
         guard let root = image.roots.first else { return "" }
         let type = typeText(for: root)
-        let subtype = subtypeText(for: root)
+        let subtype = subtypeText(for: root, in: language)
         return subtype.isEmpty ? type : "\(type) · \(subtype)"
     }
 
@@ -158,17 +158,17 @@ public enum UEFITreeDisplay {
     /// happens to have been opened — a number that starts at four on a 16 MiB
     /// dump and climbs as the reader clicks. What the line has to say is what
     /// the image is, which is known from the top level alone.
-    public static func summary(of image: UEFIImage?) -> String {
+    public static func summary(of image: UEFIImage?, in language: AppLanguage) -> String {
         guard let image else { return "" }
-        guard !image.roots.isEmpty else { return L("Nothing here looks like a firmware image.") }
+        guard !image.roots.isEmpty else { return L("Nothing here looks like a firmware image.", in: language) }
         // The image names protected ranges at all: the one thing about it
         // that says some edits are not free (`BOOT_GUARD_PROTECTED_RANGES.md` §9.3).
         if let ranges = image.protectedRanges, !ranges.ranges.isEmpty {
             let count = ranges.ranges.count
-            return titleLead(of: image) + " · " + (count == 1
-                ? L("1 protected range") : L("%1$@ protected ranges", count))
+            return titleLead(of: image, in: language) + " · " + (count == 1
+                ? L("1 protected range", in: language) : L("%1$@ protected ranges", in: language, count))
         }
-        return titleLead(of: image)
+        return titleLead(of: image, in: language)
     }
 
     /// The word the title leads with: the hidden root, named the way it reads
@@ -176,16 +176,16 @@ public enum UEFITreeDisplay {
     /// is the phrase UEFITool uses and the one worth reading in a title; a real
     /// root the file already had is a format the columns name better than its
     /// parser name does, so it reads by type · subtype.
-    private static func titleLead(of image: UEFIImage) -> String {
+    private static func titleLead(of image: UEFIImage, in language: AppLanguage) -> String {
         if let title = present(image).title {
             switch title.kind {
             case .intelImage, .uefiImage:
-                return title.name.isEmpty ? imageType(of: image) : title.name
+                return title.name.isEmpty ? imageType(of: image, in: language) : title.name
             default:
-                return imageType(of: image)
+                return imageType(of: image, in: language)
             }
         }
-        return imageType(of: image)
+        return imageType(of: image, in: language)
     }
 
     /// The name the tree shows for a node.
@@ -206,11 +206,28 @@ public enum UEFITreeDisplay {
     /// DVAR, VSS or NVAR row says its value as well. A VSS value lies where
     /// its store's format puts it: `store` is the entry's store, looked up in
     /// `image` when not given.
+    /// The node after its parent — `VSS store: SetupMode` — as the Contents
+    /// search results and an agent's annotation name the place: unless the
+    /// parent is called only by a word for the bytes it covers (Padding, Raw,
+    /// Free space…). A store named by its kind, `VSS store`, is a parent worth
+    /// naming: it says which of the variables this is. Nil for a node the
+    /// tree does not hold.
+    @MainActor
+    public static func nameAfterParent(of id: NodeID, in tree: LazyUEFITree, catalogue: GuidsCatalogue,
+                                       image: UEFIImage?, in language: AppLanguage) -> String? {
+        guard let node = tree.node(id) else { return nil }
+        let own = name(for: node, catalogue: catalogue, in: image, language: language)
+        guard id.path.count > 1, let parent = tree.node(NodeID(Array(id.path.dropLast()))) else { return own }
+        let above = name(for: parent, catalogue: catalogue, in: image, language: language)
+        guard !UEFIAgentQueries.placeholderNames.contains(above.lowercased()) else { return own }
+        return L("%1$@: %2$@", in: language, above, own)
+    }
+
     public static func name(for node: UEFINode, catalogue: GuidsCatalogue, in image: UEFIImage? = nil,
-                            reader: ImageReader? = nil, store: UEFINode? = nil) -> String {
-        let base = baseName(for: node, catalogue: catalogue, image: image, reader: reader, store: store)
+                            reader: ImageReader? = nil, store: UEFINode? = nil, language: AppLanguage) -> String {
+        let base = baseName(for: node, catalogue: catalogue, image: image, reader: reader, store: store, in: language)
         guard let image else { return base }
-        return UEFITopSwap.name(base, for: node, in: image)
+        return UEFITopSwap.name(base, for: node, in: image, in: language)
     }
 
     /// The name a file gives itself in its Name section (`EFI_SECTION_USER_INTERFACE`),
@@ -244,30 +261,30 @@ public enum UEFITreeDisplay {
     }
 
     private static func baseName(for node: UEFINode, catalogue: GuidsCatalogue,
-                                 image: UEFIImage?, reader: ImageReader?, store: UEFINode?) -> String {
+                                 image: UEFIImage?, reader: ImageReader?, store: UEFINode?, in language: AppLanguage) -> String {
         // An EC image is named by what it carries and how large it is, in
         // KiB — the bench sizes EC firmware by it (128, 192, 256) — and a copy
         // of an earlier one in the same block says so.
         if node.kind == .ecImage {
-            let sized = L("%1$@, %2$@ KB", node.name, kibibytes(UInt64(node.range.count)))
-            return node.subtype == ECImage.copySubtype ? L("%1$@ (copy)", sized) : sized
+            let sized = L("%1$@, %2$@ KB", in: language, node.displayName(in: language), kibibytes(UInt64(node.range.count)))
+            return node.subtype == ECImage.copySubtype ? L("%1$@ (copy)", in: language, sized) : sized
         }
         // A block named after the one image it holds gives that image's size
         // inside the parentheses: "EC Firmware (ITE EC-V13.6, 128 KB)".
         if let length = node.namedImageLength, node.name.hasSuffix(")") {
-            return L("%1$@, %2$@ KB", String(node.name.dropLast()), kibibytes(length)) + ")"
+            return L("%1$@, %2$@ KB", in: language, String(node.name.dropLast()), kibibytes(length)) + ")"
         }
         // A pad file (`EFI_FV_FILETYPE_FFS_PAD`) has a GUID only because every
         // file header does — all ones, as a rule — and it names nothing.
         if node.kind == .file, node.subtype == 0xF0 {
             // What its body turned out to hold, the way UEFITool renames it.
             if node.children.contains(where: { $0.kind == .startupApData }) {
-                return L("Startup AP data padding file")
+                return L("Startup AP data padding file", in: language)
             }
             if node.children.contains(where: { $0.kind == .padding && !$0.isErased }) {
-                return L("Non-empty padding file")
+                return L("Non-empty padding file", in: language)
             }
-            return L("Padding file")
+            return L("Padding file", in: language)
         }
         // A Dell variable is a number in a namespace. The row says what Setup
         // calls it, where a Setup page asks about it, and its Name ID where
@@ -277,10 +294,10 @@ public enum UEFITreeDisplay {
         // read as a number, by its size: "0x2 (16 bytes)".
         if node.kind == .dvarEntry, node.guid != nil {
             let setting = image?.dvarSettings?.setting(for: node)
-            let name = setting?.name ?? "0x" + node.name
+            let name = setting?.name ?? "0x" + node.displayName(in: language)
             guard let value = reader?.bytes(node.body) else { return name }
-            guard let text = dvarValue(value, setting: setting) else {
-                return value.count > 8 ? L("%1$@ (%2$@ bytes)", name, "\(value.count)") : name
+            guard let text = dvarValue(value, setting: setting, in: language) else {
+                return value.count > 8 ? L("%1$@ (%2$@ bytes)", in: language, name, "\(value.count)") : name
             }
             return "\(name) = \(text)"
         }
@@ -292,16 +309,16 @@ public enum UEFITreeDisplay {
         // Lenovo's DMI store says what it holds, decoded: a block its
         // generation, an entry its value, a write of the log what it did.
         // `store` is the row's parent — the block, or the log.
-        if let reader, let text = lenovoDMIRow(node, parent: store, reader: reader) {
+        if let reader, let text = lenovoDMIRow(node, parent: store, reader: reader, in: language) {
             return text
         }
         // Acer's DMI area says what it holds: the serial, the rest in the
         // detail.
         if node.kind == .acerDMIStore, let reader {
-            return acerDMIRow(node, reader: reader)
+            return acerDMIRow(node, reader: reader, in: language)
         }
         guard let guid = node.guid else {
-            return node.name.isEmpty ? kindLabel(node.kind) : node.name
+            return node.name.isEmpty ? kindLabel(node.kind, in: language) : node.displayName(in: language)
         }
         // A file that names itself is called what it says: the firmware's own
         // word for this image beats the catalogue's for the GUID, which a
@@ -314,21 +331,21 @@ public enum UEFITreeDisplay {
         // `BootOrder = 0003, 2001`, `Lang = "eng"`. The store says where the
         // value is.
         if node.kind == .vssEntry, !node.name.isEmpty {
-            guard node.subtype != UEFITypes.Sub.invalidVssEntry, let reader else { return node.name }
+            guard node.subtype != UEFITypes.Sub.invalidVssEntry, let reader else { return node.displayName(in: language) }
             let store = store ?? (node.id.path.isEmpty ? nil : image?.node(NodeID(Array(node.id.path.dropLast()))))
             guard let variable = VSSVariable.read(node, inVss2: store?.kind == .vss2Store, reader: reader)
-            else { return node.name }
-            return valueRow(node.name, guid: variable.vendorGuid, attributes: variable.attributes,
-                            value: variable.data, reader: reader)
+            else { return node.displayName(in: language) }
+            return valueRow(node.displayName(in: language), guid: variable.vendorGuid, attributes: variable.attributes,
+                            value: variable.data, reader: reader, in: language)
         }
         // So does an NVAR variable's, on the entry that holds it now: a link
         // of a chain holds a value a later entry replaced.
         if node.kind == .nvarEntry, !node.name.isEmpty {
             guard node.subtype == UEFITypes.Sub.fullNvarEntry || node.subtype == UEFITypes.Sub.dataNvarEntry,
                   let reader
-            else { return node.name }
-            return valueRow(node.name, guid: node.guid, attributes: nvarAttributes(node, reader: reader),
-                            value: node.body, reader: reader)
+            else { return node.displayName(in: language) }
+            return valueRow(node.displayName(in: language), guid: node.guid, attributes: nvarAttributes(node, reader: reader),
+                            value: node.body, reader: reader, in: language)
         }
         // A flash device map entry's GUID is a region *type*, and UEFITool
         // names the row by what the type is: "Variable Defaults", "Password".
@@ -338,7 +355,7 @@ public enum UEFITreeDisplay {
         // The region the entry names is called the same — by the parser, which
         // adds what it read inside, such as the EC firmware's identification.
         if node.kind == .flashDeviceMapRegion, FlashDeviceMap.regionTypeName(guid) != nil, !node.name.isEmpty {
-            return node.name
+            return node.displayName(in: language)
         }
         // The community catalogue first; the NVRAM classifier names the GUIDs
         // it knows while the catalogue has no name for them; the GUID itself
@@ -348,32 +365,32 @@ public enum UEFITreeDisplay {
 
     /// A store of the board's identity as the panel's DMI menu lists it:
     /// what it is and where — "Lenovo DMI store at 0x00630000".
-    public static func dmiStoreTitle(_ store: DMIStore) -> String {
-        L("%1$@ at %2$@", kindLabel(store.kind), String(format: "0x%08llX", store.range.lowerBound))
+    public static func dmiStoreTitle(_ store: DMIStore, in language: AppLanguage) -> String {
+        L("%1$@ at %2$@", in: language, kindLabel(store.kind, in: language), String(format: "0x%08llX", store.range.lowerBound))
     }
 
     /// `Baseboard serial number = PF0TEST1`, `LENV block 2 · generation 84`,
     /// `2022-06-29 20:30:25 · Set · Baseboard serial number`; nil for a row
     /// of anything else, or one whose bytes do not read.
-    static func lenovoDMIRow(_ node: UEFINode, parent: UEFINode?, reader: ImageReader) -> String? {
+    static func lenovoDMIRow(_ node: UEFINode, parent: UEFINode?, reader: ImageReader, in language: AppLanguage) -> String? {
         switch node.kind {
         case .lenvBlock:
             guard let stored = reader.bytes(node.range),
-                  let text = UEFILenovoDMIDetail.blockText(LENVBlock(offset: node.range.lowerBound, stored: stored))
+                  let text = UEFILenovoDMIDetail.blockText(LENVBlock(offset: node.range.lowerBound, stored: stored), in: language)
             else { return nil }
-            return L("%1$@ · %2$@", node.name, text)
+            return L("%1$@ · %2$@", in: language, node.displayName(in: language), text)
         case .lenvEntry:
             guard let parent, parent.kind == .lenvBlock, let stored = reader.bytes(parent.range),
                   let entry = LENVBlock(offset: parent.range.lowerBound, stored: stored)
                     .entries.first(where: { $0.offset == node.header.lowerBound })
             else { return nil }
-            return L("%1$@ = %2$@", node.name, LenovoDMIValue.text(of: entry))
+            return L("%1$@ = %2$@", in: language, node.displayName(in: language), LenovoDMIValue.text(of: entry))
         case .ldbgEntry:
             guard let parent, parent.kind == .ldbgLog,
                   let entry = UEFILenovoDMIDetail.area(startingAt: parent.range.lowerBound, reader: reader)?
                     .log.entries.first(where: { $0.offset == node.range.lowerBound })
             else { return nil }
-            return L("%1$@ · %2$@", node.name, UEFILenovoDMIDetail.logEntryText(entry))
+            return L("%1$@ · %2$@", in: language, node.displayName(in: language), UEFILenovoDMIDetail.logEntryText(entry, in: language))
         default:
             return nil
         }
@@ -381,11 +398,11 @@ public enum UEFITreeDisplay {
 
     /// `Acer DMI · N51…`: the area's name and the system serial it holds;
     /// the tag, the UUID, the model and the product name are in the detail.
-    static func acerDMIRow(_ node: UEFINode, reader: ImageReader) -> String {
+    static func acerDMIRow(_ node: UEFINode, reader: ImageReader, in language: AppLanguage) -> String {
         guard let stored = reader.bytes(node.range),
               let area = AcerDMIArea.found(stored: stored, offset: node.range.lowerBound)
-        else { return node.name }
-        return L("%1$@ · %2$@", node.name, area.systemSerial)
+        else { return node.displayName(in: language) }
+        return L("%1$@ · %2$@", in: language, node.displayName(in: language), area.systemSerial)
     }
 
     /// `MFG0 = M8NRKD00311031C, 90NR0551-M04320, …`: a record's name and the
@@ -408,12 +425,12 @@ public enum UEFITreeDisplay {
     /// one of the types a row spells out is not read: a row is drawn on every
     /// scroll.
     private static func valueRow(_ name: String, guid: EFIGUID?, attributes: UInt32,
-                                 value range: Range<UInt64>, reader: ImageReader) -> String {
+                                 value range: Range<UInt64>, reader: ImageReader, in language: AppLanguage) -> String {
         guard range.count <= valueRowReadLimit, let value = reader.bytes(range) else {
-            return L("%1$@ (%2$@ bytes)", name, "\(range.count)")
+            return L("%1$@ (%2$@ bytes)", in: language, name, "\(range.count)")
         }
         let read = NvramValue.read(name: name, guid: guid, attributes: attributes, value: value)
-        return NvramValueText.row(name, read, bytes: value)
+        return NvramValueText.row(name, read, bytes: value, in: language)
     }
 
     /// An NVAR entry's attributes in the VSS bits `NvramValue` reads: its
@@ -429,20 +446,20 @@ public enum UEFITreeDisplay {
 
     /// A DVAR value up to eight bytes long, little-endian, as a number — with
     /// what Setup calls it in front, where it says.
-    static func dvarValue(_ value: [UInt8], setting: DellSetup.Setting?) -> String? {
+    static func dvarValue(_ value: [UInt8], setting: DellSetup.Setting?, in language: AppLanguage) -> String? {
         guard !value.isEmpty, value.count <= 8 else { return nil }
         let number = value.reversed().reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
         let hex = "0x" + String(number, radix: 16, uppercase: true)
-        guard let setting, let meaning = dvarMeaning(number, setting: setting) else { return hex }
+        guard let setting, let meaning = dvarMeaning(number, setting: setting, in: language) else { return hex }
         return "\(meaning) (\(hex))"
     }
 
     /// What `number` means to the Setup question: ticked or not, the option
     /// of a list, a number as a number. Nil where Setup does not say.
-    static func dvarMeaning(_ number: UInt64, setting: DellSetup.Setting) -> String? {
+    static func dvarMeaning(_ number: UInt64, setting: DellSetup.Setting, in language: AppLanguage) -> String? {
         switch setting.kind {
         case .checkbox:
-            return number == 0 ? L("Not ticked") : number == 1 ? L("Ticked") : nil
+            return number == 0 ? L("Not ticked", in: language) : number == 1 ? L("Ticked", in: language) : nil
         case .oneOf:
             return setting.option(for: number).flatMap { $0.isEmpty ? nil : $0 }
         case .numeric:
@@ -452,7 +469,7 @@ public enum UEFITreeDisplay {
         }
     }
 
-    private static func kindLabel(_ kind: UEFINodeKind) -> String {
+    private static func kindLabel(_ kind: UEFINodeKind, in language: AppLanguage) -> String {
         switch kind {
         case .capsule: return "Capsule"
         case .intelImage: return "Intel image"
@@ -489,28 +506,28 @@ public enum UEFITreeDisplay {
         // UEFITool's own words for the gaps between structures — not names
         // the PI spec gives anything, so they translate. The kinds above are
         // the spec's and stay in its English.
-        case .padding: return L("Padding")
-        case .freeSpace: return L("Free space")
-        case .nonUEFIData: return L("Non-UEFI data")
-        case .flashDeviceMapRegion: return L("Flash device map region")
-        case .ecImage: return L("EC firmware image")
-        case .fitComponent: return L("FIT component")
-        case .hpSignatureBlock: return L("HP signature block")
-        case .gpnvStore: return L("GPNV store")
-        case .gpnvRecord: return L("GPNV record")
-        case .lenovoDMIStore: return L("Lenovo DMI store")
-        case .ldbgLog: return L("LDBG change log")
-        case .ldbgEntry: return L("LDBG entry")
-        case .lenvBlock: return L("LENV block")
-        case .lenvEntry: return L("LENV entry")
-        case .acerDMIStore: return L("Acer DMI")
-        case .amdEFS: return L("Embedded Firmware Structure")
-        case .amdDirectory: return L("AMD firmware directory")
-        case .amdFirmwareEntry: return L("AMD firmware entry")
-        case .biosGuardUpdate: return L("BIOS Guard update")
-        case .biosGuardEntry: return L("BIOS Guard entry")
-        case .picture: return L("Picture")
-        case .sound: return L("Sound")
+        case .padding: return L("Padding", in: language)
+        case .freeSpace: return L("Free space", in: language)
+        case .nonUEFIData: return L("Non-UEFI data", in: language)
+        case .flashDeviceMapRegion: return L("Flash device map region", in: language)
+        case .ecImage: return L("EC firmware image", in: language)
+        case .fitComponent: return L("FIT component", in: language)
+        case .hpSignatureBlock: return L("HP signature block", in: language)
+        case .gpnvStore: return L("GPNV store", in: language)
+        case .gpnvRecord: return L("GPNV record", in: language)
+        case .lenovoDMIStore: return L("Lenovo DMI store", in: language)
+        case .ldbgLog: return L("LDBG change log", in: language)
+        case .ldbgEntry: return L("LDBG entry", in: language)
+        case .lenvBlock: return L("LENV block", in: language)
+        case .lenvEntry: return L("LENV entry", in: language)
+        case .acerDMIStore: return L("Acer DMI", in: language)
+        case .amdEFS: return L("Embedded Firmware Structure", in: language)
+        case .amdDirectory: return L("AMD firmware directory", in: language)
+        case .amdFirmwareEntry: return L("AMD firmware entry", in: language)
+        case .biosGuardUpdate: return L("BIOS Guard update", in: language)
+        case .biosGuardEntry: return L("BIOS Guard entry", in: language)
+        case .picture: return L("Picture", in: language)
+        case .sound: return L("Sound", in: language)
         }
     }
 }

@@ -51,10 +51,14 @@ public func L(_ key: String, _ arguments: Any...) -> String {
     Localization.format(Localization.current.string(key), arguments)
 }
 
-/// The word for `key` in `language`, whatever the app or the task is
-/// speaking — for a sentence meant for one reader in particular: an agent
-/// answered in English while the window speaks Russian, or the undo step an
-/// agent's change leaves in the person's Edit menu, in the person's language.
+/// The word for `key` in `language`, whatever the app is speaking — for a
+/// sentence meant for one reader in particular: an agent answered in English
+/// while the window speaks Russian, or the undo step an agent's change leaves
+/// in the person's Edit menu, in the person's language.
+///
+/// The one way to speak another language than the app's. There is no switch
+/// that makes a stretch of work speak it: a window built while one was on
+/// came out in the wrong language, and a reader of the code could not see it.
 ///
 ///     L("Update from %1$@", in: Localization.appLanguage, name)
 public func L(_ key: String, in language: AppLanguage) -> String {
@@ -63,7 +67,13 @@ public func L(_ key: String, in language: AppLanguage) -> String {
 
 /// The same, with something in it.
 public func L(_ key: String, in language: AppLanguage, _ arguments: Any...) -> String {
-    Localization.format(Localization.catalogue(for: language).string(key), arguments)
+    Localization.format(Localization.catalogue(for: language).string(key), Localization.texts(of: arguments, in: language))
+}
+
+/// The same, in a context (`L(_:context:)`).
+public func L(_ key: String, context: String, in language: AppLanguage) -> String {
+    let catalogue = Localization.catalogue(for: language)
+    return catalogue.entries[context + "|" + key] ?? catalogue.string(key)
 }
 
 /// The sentence for `key`, not yet in any language: where the expected type is
@@ -82,32 +92,43 @@ public func L(_ key: String, context: String) -> LocalizedText {
 
 @_disfavoredOverload
 public func L(_ key: String, _ arguments: Any...) -> LocalizedText {
-    LocalizedText(key: key, context: nil, arguments: Localization.texts(of: arguments))
+    LocalizedText(key: key, context: nil, arguments: Localization.pieces(of: arguments))
 }
 
 /// A sentence kept as its key and what goes into it, put into words when it is
 /// shown and in the language of whoever shows it (`L(_:in:)`). `verbatim` for
 /// words that have no key — a parser's own English.
-public struct LocalizedText: Equatable, Sendable, CustomStringConvertible {
+public struct LocalizedText: Hashable, Sendable, CustomStringConvertible {
     let key: String
     let context: String?
-    let arguments: [String]
+    /// What goes into it: a sentence of its own put into words in the same
+    /// language as this one, anything else as it was given.
+    let arguments: [LocalizedText]
     var isVerbatim = false
+    /// `arguments` put one after another with `key` between them.
+    var isJoin = false
 
     public static func verbatim(_ text: String) -> LocalizedText {
         LocalizedText(key: text, context: nil, arguments: [], isVerbatim: true)
     }
 
+    /// `parts` one after another, `separator` between them — a list of names,
+    /// each in the language the whole is shown in.
+    public static func joined(_ parts: [LocalizedText], separator: String) -> LocalizedText {
+        LocalizedText(key: separator, context: nil, arguments: parts, isJoin: true)
+    }
+
     /// The sentence in `language`.
     public func text(in language: AppLanguage) -> String {
         guard !isVerbatim else { return key }
+        if isJoin { return arguments.map { $0.text(in: language) }.joined(separator: key) }
         let catalogue = Localization.catalogue(for: language)
         let format = context.flatMap { catalogue.entries[$0 + "|" + key] } ?? catalogue.string(key)
-        return Localization.format(format, arguments)
+        return Localization.format(format, arguments.map { $0.text(in: language) })
     }
 
-    /// The sentence in the language in force where it is asked for.
-    public var text: String { text(in: Localization.language) }
+    /// The sentence in the app's language.
+    public var text: String { text(in: Localization.appLanguage) }
 
     public var description: String { text }
 }
@@ -131,31 +152,14 @@ public enum Localization {
     nonisolated(unsafe) private static var catalogue = Catalogue.empty
     nonisolated(unsafe) private static var loaded = false
 
-    /// The language a piece of work speaks whatever the app speaks, for as
-    /// long as the task it is set on runs:
-    ///
-    ///     Localization.$override.withValue(.english) { … }
-    ///
-    /// For the agent service (`Design/AGENT_PLAN.md`, "Language"): a tool
-    /// answers a model with the same field names the panel shows a person, and
-    /// the model reads them in English — the parsers', the specifications' and
-    /// the upstream tools' language — while the window beside it goes on
-    /// speaking Russian. Task-local rather than a switch, because the window
-    /// is drawing in its own language at the same moment.
-    @TaskLocal public static var override: AppLanguage?
+    /// The catalogues of the languages other than the app's, loaded the
+    /// first time a word is asked for in one (`L(_:in:)`).
+    nonisolated(unsafe) private static var otherCatalogues: [AppLanguage: Catalogue] = [:]
 
-    nonisolated(unsafe) private static var overrideCatalogues: [AppLanguage: Catalogue] = [:]
-
-    /// The catalogue in force, loading it on the first word asked for.
+    /// The app's catalogue, loading it on the first word asked for.
     static var current: Catalogue {
         lock.lock()
         defer { lock.unlock() }
-        if let language = override {
-            if let catalogue = overrideCatalogues[language] { return catalogue }
-            let catalogue = Catalogue.load(language: language, bundle: .module)
-            overrideCatalogues[language] = catalogue
-            return catalogue
-        }
         if !loaded {
             catalogue = Catalogue.load(language: resolvedLanguage(), bundle: .module)
             loaded = true
@@ -163,28 +167,17 @@ public enum Localization {
         return catalogue
     }
 
-    /// The language in force here: the task's override, else the app's.
-    public static var language: AppLanguage { current.language }
-
-    /// The language the app speaks to the person, whatever a task overrides.
-    public static var appLanguage: AppLanguage {
-        lock.lock()
-        defer { lock.unlock() }
-        if !loaded {
-            catalogue = Catalogue.load(language: resolvedLanguage(), bundle: .module)
-            loaded = true
-        }
-        return catalogue.language
-    }
+    /// The language the app speaks to the person.
+    public static var appLanguage: AppLanguage { current.language }
 
     /// The catalogue of `language`, loaded once.
     static func catalogue(for language: AppLanguage) -> Catalogue {
-        if language == appLanguage { return lock.withLock { Self.catalogue } }
+        if language == appLanguage { return current }
         lock.lock()
         defer { lock.unlock() }
-        if let cached = overrideCatalogues[language] { return cached }
+        if let cached = otherCatalogues[language] { return cached }
         let loaded = Catalogue.load(language: language, bundle: .module)
-        overrideCatalogues[language] = loaded
+        otherCatalogues[language] = loaded
         return loaded
     }
 
@@ -262,8 +255,29 @@ public enum Localization {
     }
 
     /// What each argument reads as, as interpolation would put it.
+    /// `arguments` as words: a `LocalizedText` in `language`, anything else
+    /// as it reads.
+    static func texts(of arguments: [Any], in language: AppLanguage) -> [String] {
+        arguments.map { argument -> String in
+            if let text = argument as? LocalizedText { return text.text(in: language) }
+            if let text = argument as? String { return text }
+            if let convertible = argument as? CustomStringConvertible { return convertible.description }
+            return String(describing: argument)
+        }
+    }
+
+    /// `arguments` kept for a `LocalizedText`: a sentence stays a sentence,
+    /// to be put into words in the language it is shown in.
+    static func pieces(of arguments: [Any]) -> [LocalizedText] {
+        arguments.map { argument in
+            if let text = argument as? LocalizedText { return text }
+            return .verbatim(texts(of: [argument], in: .english)[0])
+        }
+    }
+
     static func texts(of arguments: [Any]) -> [String] {
         arguments.map { argument -> String in
+            if let text = argument as? LocalizedText { return text.text }
             if let text = argument as? String { return text }
             if let convertible = argument as? CustomStringConvertible { return convertible.description }
             return String(describing: argument)

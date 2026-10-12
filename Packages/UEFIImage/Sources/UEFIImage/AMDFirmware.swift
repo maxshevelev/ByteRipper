@@ -543,7 +543,7 @@ public struct AMDFirmware: Equatable, Sendable {
 
 extension AMDFirmware {
     /// What a kind of directory is, in words.
-    public static func kindName(_ kind: DirectoryKind) -> String {
+    public static func kindName(_ kind: DirectoryKind) -> LocalizedText {
         switch kind {
         case .psp: return L("PSP directory")
         case .pspLevel2: return L("PSP level 2 directory")
@@ -556,7 +556,7 @@ extension AMDFirmware {
     }
 
     /// What a directory is called: what it is, and its signature.
-    public static func directoryName(_ directory: Directory) -> String {
+    public static func directoryName(_ directory: Directory) -> LocalizedText {
         let signature = directory.kind.signature ?? ""
         switch directory.kind {
         case .psp: return L("PSP directory %1$@", signature)
@@ -571,8 +571,8 @@ extension AMDFirmware {
 
     /// What a blob is called: AMD's name for its type, and its instance where
     /// it has one — the PMU firmware comes in one per kind of memory.
-    public static func entryName(_ entry: Entry) -> String {
-        entry.instance == 0 ? entry.typeName : L("%1$@, instance %2$@", entry.typeName, "\(entry.instance)")
+    public static func entryName(_ entry: Entry) -> LocalizedText {
+        entry.instance == 0 ? .verbatim(entry.typeName) : L("%1$@, instance %2$@", entry.typeName, "\(entry.instance)")
     }
 
 }
@@ -608,7 +608,7 @@ extension Parser {
     static func amdFirmwareNodes(_ firmware: AMDFirmware, depth: Int) -> [UEFINode] {
         var nodes = [UEFINode(
             kind: .amdEFS,
-            name: L("Embedded Firmware Structure"),
+            named: L("Embedded Firmware Structure"),
             header: firmware.efsRange,
             body: firmware.efsRange.upperBound..<firmware.efsRange.upperBound,
             // The PSP looks for it where it is.
@@ -619,7 +619,7 @@ extension Parser {
             nodes.append(UEFINode(
                 kind: .amdDirectory,
                 subtype: directory.kind.rawValue,
-                name: AMDFirmware.directoryName(directory),
+                named: AMDFirmware.directoryName(directory),
                 header: directory.offset..<min(headerEnd, directory.range.upperBound),
                 body: min(headerEnd, directory.range.upperBound)..<directory.range.upperBound,
                 isFixed: true
@@ -632,7 +632,7 @@ extension Parser {
             nodes.append(UEFINode(
                 kind: .amdFirmwareEntry,
                 subtype: blob.entry.type,
-                name: AMDFirmware.entryName(blob.entry),
+                named: AMDFirmware.entryName(blob.entry),
                 header: range.lowerBound..<bodyStart,
                 body: bodyStart..<range.upperBound,
                 isFixed: true,

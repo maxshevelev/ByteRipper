@@ -47,7 +47,7 @@ public struct UEFIPartCodec: PartCodec {
             return PartBadge(L("Structure", context: "part badge"),
                              explanation: L("A structure of the image. Update in Parent lays the image out again around it, so its length may change."))
         }
-        let name = compression ?? L("Decompressed", context: "part badge")
+        let name = compression.map(LocalizedText.verbatim) ?? L("Decompressed", context: "part badge")
         return PartBadge(name, explanation: L("Decompressed from the file. Update in Parent compresses it again the way the section was compressed."))
     }
 

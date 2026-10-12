@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 import ToolModuleKit
 import XCTest
 @testable import ByteRipper
@@ -40,6 +41,22 @@ extension XCTestCase {
         }
         store.removePersistentDomain(forName: suite)
         return (suite, store)
+    }
+
+    /// Runs `body` with the app speaking `language`, as a person who chose it
+    /// in Settings has it, and puts the app's own choice back after.
+    func withAppLanguage<T>(_ language: AppLanguage, _ body: () async throws -> T) async rethrows -> T {
+        let (name, store) = isolatedDefaults(for: self)
+        let saved = Localization.defaults
+        Localization.defaults = store
+        store.set(LanguageChoice.fixed(language).storedValue, forKey: Localization.choiceKey)
+        Localization.reload()
+        defer {
+            Localization.defaults = saved
+            Localization.reload()
+            discardIsolatedDefaults(name, store)
+        }
+        return try await body()
     }
 
     /// Empties `name`'s domain and deletes the plist `removePersistentDomain`

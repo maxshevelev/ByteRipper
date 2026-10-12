@@ -35,6 +35,9 @@ final class AgentDesk {
         self.keyController = keyController
     }
 
+    /// Every tab, frontmost first.
+    var tabs: [MainViewController] { controllers() }
+
     /// One open document: the pane it is in and the tab that holds the pane —
     /// none for a background document.
     struct Place {

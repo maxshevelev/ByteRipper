@@ -34,7 +34,7 @@ final class FITDisplayTests: XCTestCase {
         )
         let parsed = UEFIImage(size: 0x1_0000, roots: [], addressDiff: 0xFFFF_0000)
         return FITPresenter.display(
-            FITReader.read(ImageReader(bytes), image: parsed), focus: focus
+            FITReader.read(ImageReader(bytes), image: parsed), focus: focus, in: .english
         )
     }
 
@@ -78,7 +78,7 @@ final class FITDisplayTests: XCTestCase {
             rows: [microcodeRow],
             contents: [microcode: TestFIT.microcode(totalSize: 0x180)]
         )
-        let shown = FITPresenter.display(FITReader.read(ImageReader(bytes), image: nil))
+        let shown = FITPresenter.display(FITReader.read(ImageReader(bytes), image: nil), in: .english)
 
         XCTAssertEqual(
             shown.summary,
@@ -151,7 +151,7 @@ final class FITDisplayTests: XCTestCase {
         let image = UEFIImage(size: 0x1_0000, roots: [node], addressDiff: 0xFFFF_0000)
         let bytes = TestFIT.image(rows: [TestFIT.Row(FIT.startupACMType, target: 0x3000)])
         let row = FITPresenter.display(
-            FITReader.read(ImageReader(bytes), image: image)
+            FITReader.read(ImageReader(bytes), image: image), in: .english
         ).rows[1]
 
         XCTAssertNil(row.cpuidText)
@@ -233,7 +233,7 @@ final class FITDisplayTests: XCTestCase {
     /// it.
     func testGoingToATargetFocusesTheComponent() {
         XCTAssertEqual(
-            display([microcodeRow]).focusingTarget(of: 1).zones.focus,
+            display([microcodeRow]).focusingTarget(of: 1, in: .english).zones.focus,
             "fit.target.1"
         )
     }
@@ -244,7 +244,7 @@ final class FITDisplayTests: XCTestCase {
         XCTAssertNil(display([microcodeRow]).zones.focus)
         XCTAssertEqual(display([microcodeRow], focus: 1).zones.focus, "fit.row.1")
 
-        let refocused = display([microcodeRow], focus: 1).focusing(0)
+        let refocused = display([microcodeRow], focus: 1).focusing(0, in: .english)
         XCTAssertEqual(refocused.zones.focus, "fit.row.0")
         XCTAssertEqual(refocused.rows, display([microcodeRow], focus: 1).rows)
     }
@@ -260,7 +260,7 @@ final class FITDisplayTests: XCTestCase {
 
         XCTAssertEqual(rows[1].commands,
                        [.goToOffset(microcode), .copyCPUID("806EA"), .replaceMicrocode(1)])
-        XCTAssertEqual(rows[1].commands.map(\.title),
+        XCTAssertEqual(rows[1].commands.map { $0.title.text(in: .english) },
                        ["Go to Offset", "Copy CPUID", "Replace Microcode"])
     }
 
@@ -278,7 +278,7 @@ final class FITDisplayTests: XCTestCase {
 
         let acm = display([TestFIT.Row(FIT.startupACMType, target: 0x3000)]).rows
         XCTAssertFalse(acm[1].canReplace)
-        XCTAssertFalse(acm[1].commands.contains { $0.title == "Replace Microcode" })
+        XCTAssertFalse(acm[1].commands.contains { $0.title.text(in: .english) == "Replace Microcode" })
     }
 
     /// A row that points nowhere — the header, an empty slot — still has an
@@ -310,7 +310,7 @@ final class FITDisplayTests: XCTestCase {
     func testTheLastMicrocodeIsNotOfferedForRemoval() {
         let one = display([microcodeRow]).rows
         XCTAssertFalse(one[1].canRemove)
-        XCTAssertFalse(one[1].commands.contains { $0.title == "Remove Microcode" })
+        XCTAssertFalse(one[1].commands.contains { $0.title.text(in: .english) == "Remove Microcode" })
 
         let two = display([microcodeRow, TestFIT.Row(FIT.microcodeType, target: 0x3000)]).rows
         XCTAssertTrue(two[1].canRemove)

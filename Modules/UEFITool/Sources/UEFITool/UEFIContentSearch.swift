@@ -2,6 +2,7 @@ import BytePattern
 import Foundation
 import LenovoDMI
 import UEFIImage
+import Localization
 
 /// A search through what a firmware's tree holds, not through the file as it
 /// is stored (`Design/UEFI_STRUCTURE_TOOL.md`, "Searching the contents").
@@ -58,6 +59,16 @@ public enum UEFIContentSearch {
 
         /// The match as file addresses; nil inside a compressed section.
         public var fileRange: Range<UInt64>? { space == .file ? range : nil }
+
+        public init(pattern: Int = 0, space: ByteSpace, range: Range<UInt64>, decodedXORKey: UInt8? = nil,
+                    node: NodeID? = nil, section: NodeID? = nil) {
+            self.pattern = pattern
+            self.space = space
+            self.range = range
+            self.decodedXORKey = decodedXORKey
+            self.node = node
+            self.section = section
+        }
     }
 
     public struct Result: Equatable, Sendable {
@@ -247,7 +258,7 @@ public enum UEFIContentSearch {
     /// Opens every closed container at or under `node` — the whole tree for
     /// nil — depth first, so the place in the file of the branch being opened
     /// only moves on: `progress` hears it as a share of the node's bytes.
-    static func openEverything(under node: UEFINode?, in tree: LazyUEFITree,
+    public static func openEverything(under node: UEFINode?, in tree: LazyUEFITree,
                                progress: (Double) -> Void = { _ in }) async {
         let span = node?.fileRange ?? fileRange(of: node, in: tree) ?? 0..<max(1, tree.imageReader.count)
         var stack = Array((node.map { [$0] } ?? tree.rootNodes).reversed())
@@ -348,9 +359,9 @@ public enum UEFIContentSearch {
                                     decoded: LenovoDMIDecodedBlock.decode(block),
                                     xorKey: block.xorKey, base: node.id, section: nil))
             }
-            node.children.forEach(visit)
+            node.children.forEach { visit($0) }
         }
-        if let top { visit(top) } else { tree.rootNodes.forEach(visit) }
+        if let top { visit(top) } else { tree.rootNodes.forEach { visit($0) } }
         return (scopes, unread)
     }
 

@@ -123,7 +123,7 @@ public enum FITRowCommand: Equatable, Sendable {
     /// turns red — and not on the rows it is not about.
     case fixChecksum
 
-    public var title: String {
+    public var title: LocalizedText {
         switch self {
         case .copyCPUID: return L("Copy CPUID")
         case .goToOffset: return L("Go to Offset")
@@ -163,18 +163,18 @@ public struct FITDisplay: Equatable, Sendable {
     /// The same display with another row selected. Selecting a row changes
     /// what is drawn strongly in the dump and what the detail says, so it is a
     /// change to the focus rather than a reason to read the file again.
-    public func focusing(_ key: Int?) -> FITDisplay {
-        focusing(zoneID: key.map(FITPresenter.rowZoneID))
+    public func focusing(_ key: Int?, in language: AppLanguage) -> FITDisplay {
+        focusing(zoneID: key.map(FITPresenter.rowZoneID), in: language)
     }
 
     /// The same display with what "go to the offset" leads to in focus: the
     /// component a row points at, or the row itself where it points nowhere.
-    public func focusingTarget(of key: Int) -> FITDisplay {
+    public func focusingTarget(of key: Int, in language: AppLanguage) -> FITDisplay {
         guard let row = rows.first(where: { $0.key == key }) else { return self }
-        return focusing(zoneID: row.zoneToFocus)
+        return focusing(zoneID: row.zoneToFocus, in: language)
     }
 
-    public func focusing(zoneID: String?) -> FITDisplay {
+    public func focusing(zoneID: String?, in language: AppLanguage) -> FITDisplay {
         var copy = self
         copy.zones.focus = zoneID
         // The detail follows the selection: the row the outline is on, whether
@@ -183,7 +183,7 @@ public struct FITDisplay: Equatable, Sendable {
         copy.detail = zoneID
             .flatMap(FITPresenter.rowIndex(ofZone:))
             .flatMap { key in rows.first { $0.key == key } }
-            .map { FITPresenter.detail(for: $0, problems: problems) }
+            .map { FITPresenter.detail(for: $0, problems: problems, in: language) }
             ?? .empty
         return copy
     }
@@ -271,10 +271,10 @@ public enum FITPresenter {
 
     /// What the detail says for a row: the checksum it quotes is the one its
     /// own copy of the table was checked against.
-    static func detail(for row: FITDisplayRow, problems: [FITProblem]) -> FITRowDetail {
+    static func detail(for row: FITDisplayRow, problems: [FITProblem], in language: AppLanguage) -> FITRowDetail {
         FITDetail.build(for: row.model,
                         checksumShouldBe: checksumShouldBe(in: problems.filter { $0.inBackup == row.isBackup }),
-                        inBackup: row.isBackup)
+                        inBackup: row.isBackup, in: language)
     }
 
     /// The byte the table's checksum should hold, as the validator computed it
@@ -291,10 +291,10 @@ public enum FITPresenter {
 
     /// What to show for a report. `focus` is the key of the row the user has
     /// selected.
-    public static func display(_ report: FITReport, focus: Int? = nil) -> FITDisplay {
+    public static func display(_ report: FITReport, focus: Int? = nil, in language: AppLanguage) -> FITDisplay {
         guard let table = report.table else {
             return FITDisplay(
-                summary: summary(of: report),
+                summary: summary(of: report, in: language),
                 rows: [],
                 problems: report.problems,
                 checksumFix: nil,
@@ -306,33 +306,33 @@ public enum FITPresenter {
         // header row — the one the mismatch turns red — and on no other. It is
         // made in the backup's copy too, when that copy is the same table.
         let checksumFix = checksumFix(
-            for: table, backup: report.backup.flatMap { $0.tableBytesMatch ? $0.block : nil }
+            for: table, backup: report.backup.flatMap { $0.tableBytesMatch ? $0.block : nil }, in: language
         )
         var rows = displayRows(of: table, problems: report.problems.filter { !$0.inBackup },
-                               isBackup: false, checksumFix: checksumFix)
+                               isBackup: false, checksumFix: checksumFix, in: language)
         var backupStart: Int?
         var backupHeading: String?
         if let backup = report.backup, let backupTable = backup.table {
             // The backup's copy follows the table, under a heading of its own,
             // and offers nothing that changes it.
             backupStart = rows.count
-            backupHeading = heading(of: backup)
+            backupHeading = heading(of: backup, in: language)
             rows += displayRows(of: backupTable, problems: report.problems.filter(\.inBackup),
-                                isBackup: true, checksumFix: nil)
+                                isBackup: true, checksumFix: nil, in: language)
         }
         // The detail is the row the user has selected, or nothing before a
         // selection — built here so a fresh parse shows the same detail the
         // selection would.
         let detail = focus
             .flatMap { key in rows.first { $0.key == key } }
-            .map { self.detail(for: $0, problems: report.problems) }
+            .map { self.detail(for: $0, problems: report.problems, in: language) }
             ?? .empty
         return FITDisplay(
-            summary: summary(of: report),
+            summary: summary(of: report, in: language),
             rows: rows,
             problems: report.problems,
             checksumFix: checksumFix,
-            zones: zones(of: table, backup: report.backup?.table, rows: rows, focus: focus),
+            zones: zones(of: table, backup: report.backup?.table, rows: rows, focus: focus, in: language),
             detail: detail,
             backupStart: backupStart,
             backupHeading: backupHeading
@@ -341,7 +341,7 @@ public enum FITPresenter {
 
     /// One copy of the table's rows. `problems` are that copy's own.
     private static func displayRows(
-        of table: FITTable, problems: [FITProblem], isBackup: Bool, checksumFix: ToolTransaction?
+        of table: FITTable, problems: [FITProblem], isBackup: Bool, checksumFix: ToolTransaction?, in language: AppLanguage
     ) -> [FITDisplayRow] {
         let problemRows = Set(problems.compactMap(\.entryIndex))
         // A table needs one microcode entry (§8.7), so the last one cannot go.
@@ -351,9 +351,9 @@ public enum FITPresenter {
                 index: row.entry.index,
                 typeText: typeText(of: row.entry),
                 addressText: row.entry.isHeader ? "_FIT_" : hex(row.entry.address, digits: 8),
-                sizeText: sizeText(of: row),
+                sizeText: sizeText(of: row, in: language),
                 versionText: row.entry.versionText,
-                targetText: targetText(of: row),
+                targetText: targetText(of: row, in: language),
                 cpuidText: cpuidText(of: row),
                 cpuids: cpuids(of: row),
                 hasProblem: problemRows.contains(row.entry.index),
@@ -375,19 +375,19 @@ public enum FITPresenter {
 
     /// The line above the backup's rows: where the copy is, that it is not
     /// changed on its own, and whether it agrees with the table.
-    private static func heading(of backup: FITBackupReading) -> String {
+    private static func heading(of backup: FITBackupReading, in language: AppLanguage) -> String {
         // One whole heading per state: the tail is a clause, not a word, and
         // languages put it in their own order.
         let place = hex(backup.block.backup.lowerBound)
         switch backup.status {
         case .identical:
-            return L("Top Swap backup at %1$@ · read-only · same as above", place)
+            return L("Top Swap backup at %1$@ · read-only · same as above", in: language, place)
         case .otherBytesDiffer:
-            return L("Top Swap backup at %1$@ · read-only · same table, other bytes differ", place)
+            return L("Top Swap backup at %1$@ · read-only · same table, other bytes differ", in: language, place)
         case .tableDiffers:
-            return L("Top Swap backup at %1$@ · read-only · differs from the table above", place)
+            return L("Top Swap backup at %1$@ · read-only · differs from the table above", in: language, place)
         case .noTable:
-            return L("Top Swap backup at %1$@ · read-only · no table", place)
+            return L("Top Swap backup at %1$@ · read-only · no table", in: language, place)
         }
     }
 
@@ -395,7 +395,7 @@ public enum FITPresenter {
     /// an editor that changed the table and did not recompute leaves behind
     /// (§11's second defect). One byte, one named undo step — written into the
     /// Top Swap backup's copy of the table as well, when it holds the same one.
-    public static func checksumFix(for table: FITTable, backup: FITTopSwapBackup? = nil) -> ToolTransaction? {
+    public static func checksumFix(for table: FITTable, backup: FITTopSwapBackup? = nil, in language: AppLanguage) -> ToolTransaction? {
         guard table.checksumIsChecked, !table.checksumIsCorrect else { return nil }
         let offset = table.range.lowerBound + 0x0F
         var writes = [ToolTransaction.Write(offset: offset, bytes: [table.computedChecksum])]
@@ -403,16 +403,16 @@ public enum FITPresenter {
             writes.append(ToolTransaction.Write(offset: offset - backup.size, bytes: [table.computedChecksum]))
         }
         // The undo step's name, which the Edit menu reads back as "Undo …".
-        return ToolTransaction(name: L("Fix FIT Checksum"), writes: writes)
+        return ToolTransaction(name: L("Fix FIT Checksum", in: language), writes: writes)
     }
 
     // MARK: - Text
 
-    private static func summary(of report: FITReport) -> String {
+    private static func summary(of report: FITReport, in language: AppLanguage) -> String {
         guard let table = report.table else {
             return report.candidates.isEmpty
-                ? L("No FIT table in this file.")
-                : L("No FIT table where the pointer leads. A signature sits at %1$@.",
+                ? L("No FIT table in this file.", in: language)
+                : L("No FIT table where the pointer leads. A signature sits at %1$@.", in: language,
                     report.candidates.map { hex($0) }.joined(separator: ", "))
         }
         // The count includes the header row: the panel shows the header as a
@@ -420,25 +420,25 @@ public enum FITPresenter {
         // rows a reader counts, header included.
         let count = table.rows.count
         var parts = [
-            L("FIT at %1$@", hex(table.range.lowerBound)),
-            count == 1 ? L("1 entry") : L("%1$@ entries", count)
+            L("FIT at %1$@", in: language, hex(table.range.lowerBound)),
+            count == 1 ? L("1 entry", in: language) : L("%1$@ entries", in: language, count)
         ]
         if report.addressDiffIsAssumed {
             // Said every time, because it is true every time for a region cut
             // out of a dump — and there every address in the table is wrong by
             // whatever was cut off in front of it.
-            parts.append(L("addresses assumed"))
+            parts.append(L("addresses assumed", in: language))
         }
         if let backup = report.backup {
             switch backup.status {
-            case .identical: parts.append(L("Top Swap backup matches"))
-            case .otherBytesDiffer, .tableDiffers, .noTable: parts.append(L("Top Swap backup differs"))
+            case .identical: parts.append(L("Top Swap backup matches", in: language))
+            case .otherBytesDiffer, .tableDiffers, .noTable: parts.append(L("Top Swap backup differs", in: language))
             }
         }
         if !table.checksumIsChecked {
-            parts.append(L("checksum unused"))
+            parts.append(L("checksum unused", in: language))
         } else if table.checksumIsCorrect {
-            parts.append(L("checksum %1$@", hex(UInt64(table.storedChecksum), digits: 2)))
+            parts.append(L("checksum %1$@", in: language, hex(UInt64(table.storedChecksum), digits: 2)))
             // A wrong checksum is not restated here: it is a problem, and the
             // list below already says so in red, where it is meant to be read.
         }
@@ -456,9 +456,9 @@ public enum FITPresenter {
     /// required to be zero, so the truth is the component's (§7.1); the rest
     /// use the field in 16-byte units, and an empty field is a zero, not a
     /// mystery.
-    private static func sizeText(of row: FITRow) -> String {
+    private static func sizeText(of row: FITRow, in language: AppLanguage) -> String {
         if row.entry.isHeader {
-            return L("%1$@ rows", row.entry.size)
+            return L("%1$@ rows", in: language, row.entry.size)
         }
         guard let size = row.effectiveSize else { return "0" }
         return hex(size)
@@ -493,7 +493,7 @@ public enum FITPresenter {
     /// way the summary is. A microcode row leads with its CPUID rather than
     /// with the word "microcode": the type column has already said that, and
     /// the CPUID is the thing being looked for.
-    private static func targetText(of row: FITRow) -> String {
+    private static func targetText(of row: FITRow, in language: AppLanguage) -> String {
         var parts: [String] = []
         switch row.target {
         case .nothing:
@@ -502,25 +502,25 @@ public enum FITPresenter {
             guard row.entry.isHeader else { return "" }
             // "Rows" and not "entries": the field counts the header along with
             // them, where the summary above counts what there is to look at.
-            return (row.entry.size == 1 ? L("1 row") : L("%1$@ rows", row.entry.size))
+            return (row.entry.size == 1 ? L("1 row", in: language) : L("%1$@ rows", in: language, row.entry.size))
                 + " · \(hex(row.entry.sizeInBytes))"
         case .indexIORegisters:
-            return L("Index/IO registers, not an address")
+            return L("Index/IO registers, not an address", in: language)
         case .outsideTheImage:
-            return L("outside this image")
+            return L("outside this image", in: language)
         case .microcode(let header):
             // The CPUID is what a bench hunts for, so it leads; the offset and
             // the size have their own columns, and the date closes the line.
             // An update for several processors names them all: the ones its
             // extended table adds are as much its own as the header's.
             parts = [
-                L("CPUID %1$@", cpuidsText(header.processorSignatures)),
-                L("r.%1$@", String(header.updateRevision, radix: 16, uppercase: true))
+                L("CPUID %1$@", in: language, cpuidsText(header.processorSignatures)),
+                L("r.%1$@", in: language, String(header.updateRevision, radix: 16, uppercase: true))
             ]
             parts.append(header.date)
             return parts.joined(separator: " · ")
         case .emptyMicrocodeSlot:
-            parts = [L("empty slot")]
+            parts = [L("empty slot", in: language)]
         case .bytes(let offset, let description):
             // The address leads, and the name of what is there follows it in
             // brackets — because the name arrives second. The tree names an
@@ -560,19 +560,19 @@ public enum FITPresenter {
         of table: FITTable,
         backup: FITTable?,
         rows: [FITDisplayRow],
-        focus: Int?
+        focus: Int?, in language: AppLanguage
     ) -> ZoneMap {
         var zones = [
-            Zone(id: tableZoneID, name: L("FIT table"), range: table.range),
+            Zone(id: tableZoneID, name: L("FIT table", in: language), range: table.range),
             Zone(
                 id: pointerZoneID,
-                name: L("FIT pointer"),
+                name: L("FIT pointer", in: language),
                 range: table.pointerOffset..<(table.pointerOffset + 4)
             )
         ]
         if let backup {
-            zones.append(Zone(id: backupTableZoneID, name: L("Backup FIT table"), range: backup.range))
-            zones.append(Zone(id: backupPointerZoneID, name: L("Backup FIT pointer"),
+            zones.append(Zone(id: backupTableZoneID, name: L("Backup FIT table", in: language), range: backup.range))
+            zones.append(Zone(id: backupPointerZoneID, name: L("Backup FIT pointer", in: language),
                               range: backup.pointerOffset..<(backup.pointerOffset + 4)))
         }
         for row in rows {
@@ -583,18 +583,18 @@ public enum FITPresenter {
             zones.append(Zone(
                 id: row.zoneID,
                 name: row.isBackup
-                    ? L("Backup #%1$@ %2$@", row.displayNumber, row.typeText)
-                    : L("#%1$@ %2$@", row.displayNumber, row.typeText),
+                    ? L("Backup #%1$@ %2$@", in: language, row.displayNumber, row.typeText)
+                    : L("#%1$@ %2$@", in: language, row.displayNumber, row.typeText),
                 range: row.rowRange
             ))
             if let target = row.targetRange {
                 // Named by CPUID where there is one: that is what a bench is
                 // looking for when it goes hunting for a microcode in a dump.
-                let named = !row.cpuids.isEmpty ? L("CPUID %1$@", cpuidsText(row.cpuids))
-                    : row.targetText.isEmpty ? L("#%1$@", row.displayNumber) : row.targetText
+                let named = !row.cpuids.isEmpty ? L("CPUID %1$@", in: language, cpuidsText(row.cpuids))
+                    : row.targetText.isEmpty ? L("#%1$@", in: language, row.displayNumber) : row.targetText
                 zones.append(Zone(
                     id: targetZoneID(row.key),
-                    name: row.isBackup ? L("Backup %1$@", named) : named,
+                    name: row.isBackup ? L("Backup %1$@", in: language, named) : named,
                     range: target
                 ))
             }

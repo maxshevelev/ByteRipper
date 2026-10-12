@@ -35,17 +35,17 @@ final class UEFITopSwapTests: XCTestCase {
         XCTAssertNil(UEFITopSwap.role(of: node(image, [0]), in: image))
 
         XCTAssertEqual(
-            UEFITreeDisplay.name(for: node(image, [0, 0]), catalogue: GuidsCatalogue(names: [:]), in: image),
+            UEFITreeDisplay.name(for: node(image, [0, 0]), catalogue: GuidsCatalogue(names: [:]), in: image, language: .english),
             "Volume (Top Swap copy)"
         )
-        XCTAssertEqual(UEFITreeDisplay.name(for: node(image, [0, 1]), catalogue: GuidsCatalogue(names: [:]), in: image), "Volume")
+        XCTAssertEqual(UEFITreeDisplay.name(for: node(image, [0, 1]), catalogue: GuidsCatalogue(names: [:]), in: image, language: .english), "Volume")
     }
 
     func testTheDetailsSayWhereTheOtherCopyIsAndWhetherTheyAgree() {
         let image = image()
         let reader = ImageReader([UInt8](repeating: 0, count: 0x2_0000))
         func topSwap(_ path: [Int], in image: UEFIImage) -> String? {
-            UEFIDetail.build(for: node(image, path), image: image, reader: reader)
+            UEFIDetail.build(for: node(image, path), image: image, reader: reader, in: .english)
                 .fields.first { $0.label == "Top Swap" }?.value
         }
         XCTAssertEqual(topSwap([0, 0], in: image), "Copy of 0x10000–0x20000; the copies match")
@@ -68,12 +68,12 @@ final class UEFITopSwapTests: XCTestCase {
         XCTAssertEqual(file?.range, 0x48..<0x100)
         XCTAssertEqual(file?.kind, .file)
         XCTAssertEqual(file?.isInCopy, true)
-        XCTAssertEqual(file?.menuTitle, "Go to Top Swap Copy")
+        XCTAssertEqual(file?.menuTitle.text(in: .english), "Go to Top Swap Copy")
 
         let volume = UEFITopSwap.counterpart(of: node(image, [0, 0]), in: image)
         XCTAssertEqual(volume?.range, 0x1_0000..<0x2_0000)
         XCTAssertEqual(volume?.isInCopy, false)
-        XCTAssertEqual(volume?.menuTitle, "Go to Original")
+        XCTAssertEqual(volume?.menuTitle.text(in: .english), "Go to Original")
 
         // The region holds both blocks and is in neither.
         XCTAssertNil(UEFITopSwap.counterpart(of: node(image, [0]), in: image))

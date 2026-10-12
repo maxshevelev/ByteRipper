@@ -80,7 +80,7 @@ public enum UEFIAgentQueries {
 
         var answer: [String: JSONValue] = [:]
         if id == .root {
-            answer["image"] = .string(UEFITreeDisplay.summary(of: tree.image()))
+            answer["image"] = .string(UEFITreeDisplay.summary(of: tree.image(), in: .english))
         } else {
             guard let node = tree.node(id) else { throw unknownNode(id) }
             answer["node"] = summary(of: node, in: tree)
@@ -132,25 +132,12 @@ public enum UEFIAgentQueries {
             reader: readers.reader(for: node.space) ?? ImageReader([UInt8]()),
             repairs: repairs,
             catalogue: names,
-            lenovoDMIReaders: lenovo)
+            lenovoDMIReaders: lenovo, in: .english)
 
         var answer: [String: JSONValue] = [
             "node": summary(of: node, in: tree),
-            "path": .array(path(to: id, in: tree).map { .string($0) }),
-            "title": .string(detail.title),
-            "fields": .array(detail.fields.map { field in
-                var entry: [String: JSONValue] = ["label": .string(field.label), "value": .string(field.value)]
-                if field.isProblem { entry["problem"] = true }
-                return .object(entry)
-            })
-        ]
-        if !detail.tables.isEmpty {
-            answer["tables"] = .array(detail.tables.map { table in
-                ["title": .string(table.title),
-                 "columns": .array(table.columns.map { .string($0) }),
-                 "rows": .array(table.rows.map { row in .array(row.map { .string($0.text) }) })]
-            })
-        }
+            "path": .array(path(to: id, in: tree).map { .string($0) })
+        ].merging(detailMembers(detail)) { first, _ in first }
         if let range = node.fileRange {
             let inside = image.diagnostics.filter { range.contains($0.offset) && $0.inside == nil }
             if !inside.isEmpty {
@@ -185,6 +172,28 @@ public enum UEFIAgentQueries {
                 finish()
             }
         }
+    }
+
+    /// What the panel's detail says, as an answer's members: its `title`,
+    /// its `fields` — a wrong one marked `problem` — and its `tables`, where
+    /// it has any.
+    static func detailMembers(_ detail: UEFINodeDetail) -> [String: JSONValue] {
+        var members: [String: JSONValue] = [
+            "title": .string(detail.title),
+            "fields": .array(detail.fields.map { field in
+                var entry: [String: JSONValue] = ["label": .string(field.label), "value": .string(field.value)]
+                if field.isProblem { entry["problem"] = true }
+                return .object(entry)
+            })
+        ]
+        if !detail.tables.isEmpty {
+            members["tables"] = .array(detail.tables.map { table in
+                ["title": .string(table.title),
+                 "columns": .array(table.columns.map { .string($0) }),
+                 "rows": .array(table.rows.map { row in .array(row.map { .string($0.text) }) })]
+            })
+        }
+        return members
     }
 
     // MARK: - uefi_find
@@ -324,7 +333,7 @@ public enum UEFIAgentQueries {
             "name": .string(UEFITreeDisplay.ownName(of: node) ?? node.name),
             "label": .string(label(of: node, in: tree))
         ]
-        let subtype = UEFITreeDisplay.subtypeText(for: node)
+        let subtype = UEFITreeDisplay.subtypeText(for: node, in: .english)
         if !subtype.isEmpty { entry["subtype"] = .string(subtype) }
         if let guid = node.guid { entry["guid"] = .string(guid.description) }
         if let range = node.fileRange {
@@ -401,7 +410,7 @@ public enum UEFIAgentQueries {
         let lowered = name.lowercased()
         return placeholderNames.contains(lowered)
             || lowered == UEFITreeDisplay.typeText(for: node).lowercased()
-            || lowered == UEFITreeDisplay.subtypeText(for: node).lowercased()
+            || lowered == UEFITreeDisplay.subtypeText(for: node, in: .english).lowercased()
     }
 
     /// The names from the top of the tree down to `id`.

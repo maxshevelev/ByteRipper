@@ -32,12 +32,12 @@ public enum UEFITreeMarks {
         in image: UEFIImage,
         badChecksums: Set<UEFIChecksumField> = [],
         isOpen: Bool = false,
-        reader: ImageReader? = nil
+        reader: ImageReader? = nil, in language: AppLanguage
     ) -> ToolRowMarks {
         var errors: [String] = []
         var cautions: [String] = []
         if !badChecksums.isEmpty {
-            errors.append(checksumText(badChecksums))
+            errors.append(checksumText(badChecksums, in: language))
         }
 
         var roles: [ToolRowMarks.Role] = []
@@ -56,14 +56,14 @@ public enum UEFITreeMarks {
             opens = isOpen && node.children.contains { $0.space != node.space }
             if failed {
                 cautions.append(decompressionFailure(of: node, in: image)
-                    ?? L("%1$@ data did not decompress", compression.algorithm))
+                    ?? L("%1$@ data did not decompress", in: language, compression.algorithm))
             }
         }
 
-        if let holds = holdsChecks(node) {
+        if let holds = holdsChecks(node, in: language) {
             roles.append(.holdsChecks(holds))
         }
-        if let reader, let encoded = UEFILenovoDMIDetail.encodingRole(of: node, reader: reader) {
+        if let reader, let encoded = UEFILenovoDMIDetail.encodingRole(of: node, reader: reader, in: language) {
             roles.append(encoded)
         }
         var protection: ToolRowMarks.Protection?
@@ -76,14 +76,14 @@ public enum UEFITreeMarks {
             case .partial: roles.append(.partlyProtected)
             case nil: break
             }
-            let hashes = hashProblems(of: node, in: image, ranges: ranges)
+            let hashes = hashProblems(of: node, in: image, ranges: ranges, in: language)
             errors += hashes.errors
             cautions += hashes.cautions
         }
 
         return ToolRowMarks(
             protection: protection,
-            decompressedFrom: decompressedFrom(node, in: image),
+            decompressedFrom: decompressedFrom(node, in: image, in: language),
             opensDecompressed: opens,
             problem: .worst(errors: errors, cautions: cautions),
             roles: roles
@@ -92,24 +92,24 @@ public enum UEFITreeMarks {
 
     /// Which of a node's checksums is wrong, since "invalid" alone leaves the
     /// reader to open the detail to find out.
-    public static func checksumText(_ fields: Set<UEFIChecksumField>) -> String {
-        let names = fields.map(\.label).sorted()
+    public static func checksumText(_ fields: Set<UEFIChecksumField>, in language: AppLanguage) -> String {
+        let names = fields.map { $0.label.text(in: language) }.sorted()
         return names.count == 1
-            ? L("Invalid %1$@ checksum", names[0])
-            : L("Invalid checksums: %1$@", names.joined(separator: ", "))
+            ? L("Invalid %1$@ checksum", in: language, names[0])
+            : L("Invalid checksums: %1$@", in: language, names.joined(separator: ", "))
     }
 
     /// The words on the badge of a node that holds a list of protected ranges
     /// — nil for every other node.
-    public static func holdsChecks(_ node: UEFINode) -> String? {
+    public static func holdsChecks(_ node: UEFINode, in language: AppLanguage) -> String? {
         guard node.space == .file else { return nil }
         switch node.kind {
         case .file where node.guid == KnownGUIDs.amiHashFile:
-            return L("Holds the AMI vendor hash table: ranges the firmware checks at boot")
+            return L("Holds the AMI vendor hash table: ranges the firmware checks at boot", in: language)
         case .file where node.guid == KnownGUIDs.phoenixHashFile:
-            return L("Holds the Phoenix vendor hash table: ranges the firmware checks at boot")
+            return L("Holds the Phoenix vendor hash table: ranges the firmware checks at boot", in: language)
         case .flashDeviceMapStore:
-            return L("Holds the Insyde flash device map: ranges the firmware checks at boot")
+            return L("Holds the Insyde flash device map: ranges the firmware checks at boot", in: language)
         default:
             return nil
         }
@@ -121,10 +121,10 @@ public enum UEFITreeMarks {
     /// never makes that comparison, and until it is confirmed against boards
     /// known to boot it is not a verdict (§6.1).
     private static func hashProblems(
-        of node: UEFINode, in image: UEFIImage, ranges: ProtectedRanges
+        of node: UEFINode, in image: UEFIImage, ranges: ProtectedRanges, in language: AppLanguage
     ) -> (errors: [String], cautions: [String]) {
         guard let fileRange = node.fileRange, !fileRange.isEmpty else { return ([], []) }
-        let holdsList = holdsChecks(node) != nil
+        let holdsList = holdsChecks(node, in: language) != nil
         var errors: [String] = []
         var cautions: [String] = []
         for range in ranges.ranges {
@@ -135,10 +135,10 @@ public enum UEFITreeMarks {
             guard startsHere || namesIt else { continue }
             switch range.verdict {
             case .mismatch:
-                let text = L("%1$@%2$@ does not match its hash", range.kind.name, at(range))
+                let text = L("%1$@%2$@ does not match its hash", in: language, range.kind.name, at(range))
                 if range.kind.isIBB { cautions.append(text) } else { errors.append(text) }
             case .unsupported(let algorithm):
-                cautions.append(L("%1$@%2$@ could not be checked: %3$@ is not computed here",
+                cautions.append(L("%1$@%2$@ could not be checked: %3$@ is not computed here", in: language,
                                   range.kind.name, at(range), TCGHash.name(algorithm)))
             case .matches, .unchecked:
                 break
@@ -157,16 +157,16 @@ public enum UEFITreeMarks {
     }
 
     /// The rail's words: which section the node's bytes came out of.
-    private static func decompressedFrom(_ node: UEFINode, in image: UEFIImage) -> String? {
+    private static func decompressedFrom(_ node: UEFINode, in image: UEFIImage, in language: AppLanguage) -> String? {
         guard case .decompressed(let chain) = node.space, let outermost = chain.first else {
             return nil
         }
         let section = image.innermostNode(containing: outermost)
             .flatMap { $0.header.lowerBound == outermost ? $0.name : nil }
-            ?? L("a compressed section")
+            ?? L("a compressed section", in: language)
         let hex = "0x" + String(outermost, radix: 16, uppercase: true)
-        var text = L("Decompressed from %1$@ at %2$@", section, hex)
-        if chain.count > 1 { text = L("%1$@, %2$@ compressed sections deep", text, chain.count) }
+        var text = L("Decompressed from %1$@ at %2$@", in: language, section, hex)
+        if chain.count > 1 { text = L("%1$@, %2$@ compressed sections deep", in: language, text, chain.count) }
         return text
     }
 

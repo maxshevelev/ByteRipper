@@ -658,7 +658,7 @@ extension FITToolViewController: NSMenuDelegate {
             case .removeMicrocode: action = #selector(removeMicrocodeFromMenuClicked)
             case .fixChecksum: action = #selector(fixChecksumClicked)
             }
-            let item = menu.addItem(withTitle: command.title, action: action, keyEquivalent: "")
+            let item = menu.addItem(withTitle: command.title.text, action: action, keyEquivalent: "")
             item.target = self
             if busy {
                 switch command {
@@ -693,7 +693,7 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
         if tableView === problems {
             guard row < display.problems.count else { return nil }
             let problem = display.problems[row]
-            cell.textField?.stringValue = problem.message
+            cell.textField?.stringValue = problem.message.text
             cell.textField?.font = ToolPanelFont.body()
             cell.textField?.textColor = problem.severity == .error
                 ? SemanticColors.bad : SemanticColors.quiet
@@ -709,7 +709,7 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
         // column the row is named by, in the icons of the shared catalogue.
         if column.identifier == Column.type {
             ToolPanelTable.dress(cell, with: marks(ofRow: row))
-            let verdict = FITRowMarks.verdict(of: entry.latestState)
+            let verdict = FITRowMarks.verdict(of: entry.latestState, in: Localization.appLanguage)
             ToolPanelTable.setVerdict(verdict?.mark, toolTip: verdict?.toolTip, on: cell)
         }
         switch column.identifier {
@@ -762,7 +762,7 @@ extension FITToolViewController: NSTableViewDataSource, NSTableViewDelegate {
     /// What an entry row wears besides its text, decided in the pure target.
     private func marks(ofRow row: Int) -> ToolRowMarks {
         guard let entry = displayRow(atTableRow: row) else { return .none }
-        return FITRowMarks.marks(for: entry, problems: display.problems)
+        return FITRowMarks.marks(for: entry, problems: display.problems, in: Localization.appLanguage)
     }
 
     /// The row views on screen, given their background again: reloading the

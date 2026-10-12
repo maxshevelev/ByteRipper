@@ -229,7 +229,7 @@ extension Parser {
         }
         if header.fileSystem == KnownGUIDs.appleReservedVolume,
            reader.isFilled(body, with: header.emptyByte) {
-            return [UEFINode(kind: .freeSpace, name: L("Free space"), range: body, isErased: true)]
+            return [UEFINode(kind: .freeSpace, named: L("Free space"), range: body, isErased: true)]
         }
         guard let ffsVersion = KnownGUIDs.ffsVersion(ofFileSystem: header.fileSystem) else {
             // A volume we cannot read the inside of still keeps its bytes (§3.4).
@@ -313,7 +313,7 @@ extension Parser {
         depth: Int
     ) -> [UEFINode] {
         guard let firstUsed = reader.firstOffset(in: start..<end, notEqualTo: emptyByte) else {
-            return [UEFINode(kind: .freeSpace, name: L("Free space"), range: start..<end, isErased: true)]
+            return [UEFINode(kind: .freeSpace, named: L("Free space"), range: start..<end, isErased: true)]
         }
         // Back to the eight-byte boundary at or before the byte: what follows a
         // volume's free space starts aligned, whatever it turns out to be.
@@ -324,7 +324,7 @@ extension Parser {
         var nodes: [UEFINode] = []
         if boundary > start {
             nodes.append(UEFINode(
-                kind: .freeSpace, name: L("Free space"), range: start..<boundary, isErased: true
+                kind: .freeSpace, named: L("Free space"), range: start..<boundary, isErased: true
             ))
         }
         nodes.append(nonUEFIData(boundary..<end, emptyByte: emptyByte, depth: depth))
@@ -337,7 +337,7 @@ extension Parser {
     func nonUEFIData(_ range: Range<UInt64>, emptyByte: UInt8, depth: Int) -> UEFINode {
         var node = UEFINode(
             kind: .nonUEFIData,
-            name: L("Non-UEFI data"),
+            named: L("Non-UEFI data"),
             range: range,
             isErased: reader.isFilled(range, with: emptyByte)
         )

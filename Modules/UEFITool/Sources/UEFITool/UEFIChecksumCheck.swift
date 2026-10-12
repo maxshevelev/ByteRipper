@@ -20,7 +20,7 @@ public enum UEFIChecksumField: String, Hashable, Sendable {
     /// What to call the field where the panel has to name it — the pointer's
     /// reading of a flagged row's warning, which says which checksum is wrong
     /// rather than only that one is.
-    public var label: String {
+    public var label: LocalizedText {
         switch self {
         case .volume: return L("volume header")
         case .fileHeader: return L("file header")

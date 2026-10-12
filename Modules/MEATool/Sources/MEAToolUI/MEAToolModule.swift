@@ -381,7 +381,7 @@ struct MEAParkedState: ToolSessionState {
         self.analysis = analysis
         self.pending = pending
         roots = MEACurator.present(analysis, mfsNames: mfsNames, efsNames: efsNames,
-                                   configPaths: configPaths, pending: pending)
+                                   configPaths: configPaths, pending: pending, in: Localization.appLanguage)
         if let path = focusPath, MEATree.node(at: path, in: roots) == nil {
             focusPath = nil
         }
@@ -390,7 +390,7 @@ struct MEAParkedState: ToolSessionState {
         // being waited for. If the summary is still empty it is because this
         // file has no ME firmware, which is what the empty tab now says.
         controller.setPlaceholder(.empty)
-        controller.showSummary(MEASummary.build(analysis, pending: pending))
+        controller.showSummary(MEASummary.build(analysis, pending: pending, in: Localization.appLanguage))
         show()
         loadFileNames()
     }

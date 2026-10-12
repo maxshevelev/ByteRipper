@@ -33,7 +33,7 @@ final class BIOSGuardDisplayTests: XCTestCase {
 
     func testTheUpdatesRowSaysWhatItIsAndListsItsTable() throws {
         let (image, update) = try parsed()
-        let detail = UEFIDetail.build(for: update, image: image, reader: ImageReader(Self.file))
+        let detail = UEFIDetail.build(for: update, image: image, reader: ImageReader(Self.file), in: .english)
         let fields = Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
 
         XCTAssertEqual(fields["Kind"], "BIOS Guard update")
@@ -58,8 +58,8 @@ final class BIOSGuardDisplayTests: XCTestCase {
         let (_, update) = try parsed()
         let body = try XCTUnwrap(UEFIPresenter.decompressedBody(for: update))
         XCTAssertEqual(body.space, .decompressed(chain: [0]))
-        XCTAssertEqual(body.openTitle, "Open Assembled BIOS Region")
-        XCTAssertEqual(body.saveTitle, "Save Assembled BIOS Region as…")
+        XCTAssertEqual(body.openTitle.text(in: .english), "Open Assembled BIOS Region")
+        XCTAssertEqual(body.saveTitle.text(in: .english), "Save Assembled BIOS Region as…")
         XCTAssertEqual(body.tabName(fileName: "X1704VAPF.306"), "X1704VAPF_BIOS region.bin")
         XCTAssertEqual(UEFIPresenter.content(of: update), .decompressedBody)
     }

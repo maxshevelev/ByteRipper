@@ -481,7 +481,7 @@ final class AgentFindTools {
     /// What a part is opened as, before it is: its name, the bytes of the
     /// parent it is linked to, how the panel lays it out and the codec that
     /// decodes it and puts it back.
-    struct PartPlan {
+    private struct PartPlan {
         var name: String
         var source: Range<UInt64>
         var layout: UEFIRootLayout
@@ -492,7 +492,7 @@ final class AgentFindTools {
     /// As the UEFI panel's Open Decompressed Body: the buffer a compressed
     /// section opens to, linked to the section and compressed again on the way
     /// back.
-    static func decompressedPart(_ found: UEFIAgentNodeData.Bytes, in image: UEFIImage,
+    private static func decompressedPart(_ found: UEFIAgentNodeData.Bytes, in image: UEFIImage,
                                          fileName: String) throws -> PartPlan {
         guard let body = UEFIPresenter.decompressedBody(for: found.node),
               let source = UEFIPresenter.fileSource(of: found.node, in: image) else {
@@ -509,12 +509,15 @@ final class AgentFindTools {
     /// As Open Decoded Block: a LENV block, or the one an entry is in, with its
     /// XOR encoding removed; Update in Parent encodes it again and writes the
     /// checksum.
-    static func decodedPart(_ found: UEFIAgentNodeData.Bytes, in image: UEFIImage) throws -> PartPlan {
+    private static func decodedPart(_ found: UEFIAgentNodeData.Bytes, in image: UEFIImage) throws -> PartPlan {
         guard let reader = found.tree.spaceReaders.reader(for: .file),
               let block = UEFILenovoDMIDetail.decodableBlock(for: found.node, image: image, reader: reader) else {
             throw AgentToolError("Node \(found.node.id) is not a LENV block, or in one, that has anything to decode.")
         }
-        return PartPlan(name: L("%1$@ (decoded)", block.name), source: block.block.range, layout: .image,
+        // The panel's name, which the person reads: in the app's language,
+        // as the panel the person opens on the same block is named.
+        return PartPlan(name: L("%1$@ (decoded)", in: Localization.appLanguage, block.name),
+                        source: block.block.range, layout: .image,
                         codec: LenovoDMIBlockCodec(block: block.block), size: block.block.range.upperBound - block.block.range.lowerBound)
     }
 

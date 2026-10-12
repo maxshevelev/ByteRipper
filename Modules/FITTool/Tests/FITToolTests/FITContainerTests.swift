@@ -88,7 +88,7 @@ final class FITContainerTests: XCTestCase {
         let table = try XCTUnwrap(FITReader.read(ImageReader(bytes), image: parsed).table)
 
         let (transaction, outcome) = try FITEditor.removeMicrocode(
-            1, from: table, image: parsed, in: ImageReader(bytes), addressDiff: 0xFFFF_0000
+            1, from: table, image: parsed, in: ImageReader(bytes), addressDiff: 0xFFFF_0000, in: .english
         ).get()
         let edited = try applying(transaction, to: bytes)
 
@@ -108,7 +108,7 @@ final class FITContainerTests: XCTestCase {
         let bigger = TestFIT.microcode(signature: 0x0008_06EA, revision: 0xF1, totalSize: 0x180)
 
         let (transaction, outcome) = try FITEditor.addOrReplaceMicrocode(
-            bigger, in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000
+            bigger, in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000, in: .english
         ).get()
         let edited = try applying(transaction, to: bytes)
 
@@ -137,7 +137,7 @@ final class FITContainerTests: XCTestCase {
         let table = try XCTUnwrap(FITReader.read(ImageReader(bytes), image: parsed).table)
 
         let (transaction, _) = try FITEditor.removeMicrocode(
-            1, from: table, image: parsed, in: ImageReader(bytes), addressDiff: 0xFFFF_0000
+            1, from: table, image: parsed, in: ImageReader(bytes), addressDiff: 0xFFFF_0000, in: .english
         ).get()
         let edited = try applying(transaction, to: bytes)
 
@@ -168,7 +168,7 @@ final class FITContainerTests: XCTestCase {
 
         let (transaction, outcome) = try FITEditor.addOrReplaceMicrocode(
             TestFIT.microcode(signature: 0x000A_0671, totalSize: 0x300),
-            in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000
+            in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000, in: .english
         ).get()
         let edited = try applying(transaction, to: bytes)
         let after = FITReader.read(ImageReader(edited), image: parse(edited))
@@ -219,7 +219,7 @@ final class FITContainerTests: XCTestCase {
 
         let outcome = FITEditor.addOrReplaceMicrocode(
             TestFIT.microcode(signature: 0x000A_0671, totalSize: 0x100),
-            in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000
+            in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000, in: .english
         )
 
         guard case .failure(let problem) = outcome else {
@@ -242,7 +242,7 @@ final class FITContainerTests: XCTestCase {
         let bigger = TestFIT.microcode(signature: 0x0008_06EA, totalSize: 0x400)
 
         let (transaction, outcome) = try FITEditor.addOrReplaceMicrocode(
-            bigger, in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000
+            bigger, in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000, in: .english
         ).get()
         let edited = try applying(transaction, to: bytes)
         let tree = parse(edited)
@@ -269,7 +269,7 @@ final class FITContainerTests: XCTestCase {
 
         let (transaction, outcome) = try FITEditor.addOrReplaceMicrocode(
             TestFIT.microcode(signature: 0x000A_0671, totalSize: 0x100),
-            in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000
+            in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000, in: .english
         ).get()
         let edited = try applying(transaction, to: bytes)
         let after = FITReader.read(ImageReader(edited), image: parse(edited))
@@ -288,7 +288,7 @@ final class FITContainerTests: XCTestCase {
         let tableEnd = table.range.upperBound
 
         let (transaction, _) = try FITEditor.removeMicrocode(
-            2, from: table, image: parsed, in: ImageReader(bytes), addressDiff: 0xFFFF_0000
+            2, from: table, image: parsed, in: ImageReader(bytes), addressDiff: 0xFFFF_0000, in: .english
         ).get()
         let edited = try applying(transaction, to: bytes)
 
@@ -349,7 +349,7 @@ final class FITContainerTests: XCTestCase {
         let bigger = TestFIT.microcode(signature: 0x0008_06EA, totalSize: 0x200)
 
         let outcome = FITEditor.addOrReplaceMicrocode(
-            bigger, in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000
+            bigger, in: table, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFF_0000, in: .english
         )
 
         guard case .failure(let problem) = outcome else { return XCTFail("expected a refusal") }
@@ -416,7 +416,7 @@ final class FITTopSwapTests: XCTestCase {
         let (fit, parsed) = try table(bytes)
         let (transaction, outcome) = try FITEditor.addOrReplaceMicrocode(
             TestFIT.microcode(signature: 0x000A_0671, totalSize: 0x300),
-            in: fit, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFE_0000
+            in: fit, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFE_0000, in: .english
         ).get()
         let edited = try applying(transaction, to: bytes)
 
@@ -434,7 +434,7 @@ final class FITTopSwapTests: XCTestCase {
         let bytes = block() + block()
         let (fit, parsed) = try table(bytes)
         let (transaction, outcome) = try FITEditor.removeMicrocode(
-            1, from: fit, image: parsed, in: ImageReader(bytes), addressDiff: 0xFFFE_0000
+            1, from: fit, image: parsed, in: ImageReader(bytes), addressDiff: 0xFFFE_0000, in: .english
         ).get()
         let edited = try applying(transaction, to: bytes)
 
@@ -452,7 +452,7 @@ final class FITTopSwapTests: XCTestCase {
         let (fit, parsed) = try table(bytes)
         let result = FITEditor.addOrReplaceMicrocode(
             TestFIT.microcode(signature: 0x000A_0671, totalSize: 0x300),
-            in: fit, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFE_0000
+            in: fit, image: parsed, reader: ImageReader(bytes), addressDiff: 0xFFFE_0000, in: .english
         )
         guard case .failure(.topSwapCopiesDiffer(let range)) = result else {
             return XCTFail("expected a refusal, got \(result)")
@@ -464,13 +464,13 @@ final class FITTopSwapTests: XCTestCase {
         let bytes = block(checksum: 0x00) + block(checksum: 0x00)
         let report = FITReader.read(ImageReader(bytes), image: UEFIParser.parse(bytes))
         XCTAssertEqual(report.backup?.block.backup, 0..<0x1_0000)
-        let fix = try XCTUnwrap(FITPresenter.display(report).checksumFix)
+        let fix = try XCTUnwrap(FITPresenter.display(report, in: .english).checksumFix)
         XCTAssertEqual(fix.writes.map(\.offset), [0x1_100F, 0x100F])
 
         let one = block() + block(checksum: 0x00)
         let lone = FITReader.read(ImageReader(one), image: UEFIParser.parse(one))
         XCTAssertEqual(lone.backup?.tableBytesMatch, false, "a backup whose table differs is not written into")
-        XCTAssertEqual(FITPresenter.display(lone).checksumFix?.writes.count, 1)
+        XCTAssertEqual(FITPresenter.display(lone, in: .english).checksumFix?.writes.count, 1)
     }
 
     /// The backup's copy of the table follows it, read-only, at its own offsets.
@@ -482,7 +482,7 @@ final class FITTopSwapTests: XCTestCase {
         XCTAssertEqual(backup.table?.range.lowerBound, 0x1000, "at its own place in the file")
         XCTAssertTrue(report.problems.isEmpty, "\(report.problems.map(\.message))")
 
-        let display = FITPresenter.display(report)
+        let display = FITPresenter.display(report, in: .english)
         XCTAssertEqual(display.rows.count, 6)
         XCTAssertEqual(display.backupStart, 3)
         XCTAssertEqual(display.backupHeading, "Top Swap backup at 0x0 · read-only · same as above")
@@ -498,7 +498,7 @@ final class FITTopSwapTests: XCTestCase {
         XCTAssertFalse(display.rows[1].commands.filter { if case .replaceMicrocode = $0 { return true }; return false }.isEmpty)
         XCTAssertEqual(FITPresenter.rowIndex(ofZone: "fit.backup.target.1"), FITPresenter.backupKey(1))
         XCTAssertEqual(display.zones.zones.first { $0.id == "fit.backup.target.1" }?.range.lowerBound, 0x4060)
-        XCTAssertEqual(display.focusing(copy.key).detail.title, "Backup #2 Microcode")
+        XCTAssertEqual(display.focusing(copy.key, in: .english).detail.title, "Backup #2 Microcode")
     }
 
     func testABackupWhoseMicrocodeDiffersIsWarnedAbout() throws {
@@ -513,9 +513,9 @@ final class FITTopSwapTests: XCTestCase {
         XCTAssertEqual(entry.entryIndex, 2)
         XCTAssertTrue(entry.inBackup)
         XCTAssertEqual(entry.severity, .warning)
-        XCTAssertTrue(entry.message.hasPrefix("Top Swap backup: "), entry.message)
+        XCTAssertTrue(entry.message.text(in: .english).hasPrefix("Top Swap backup: "), entry.message.text(in: .english))
 
-        let display = FITPresenter.display(report)
+        let display = FITPresenter.display(report, in: .english)
         XCTAssertEqual(display.backupHeading, "Top Swap backup at 0x0 · read-only · differs from the table above")
         let marked = display.rows.filter(\.hasProblem)
         XCTAssertEqual(marked.map(\.key), [FITPresenter.backupKey(2)], "the backup's row wears it, not the table's")

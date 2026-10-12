@@ -40,6 +40,7 @@ let package = Package(
         ]),
         .testTarget(name: "LenovoDMITests", dependencies: [
             "LenovoDMI",
+            .product(name: "Localization", package: "Localization"),
             .product(name: "PartCodec", package: "PartCodec")
         ])
     ]

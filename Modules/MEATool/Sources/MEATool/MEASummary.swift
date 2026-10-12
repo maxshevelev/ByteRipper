@@ -20,11 +20,11 @@ public enum MEASummaryValue: Sendable, Equatable {
     case pending
 
     /// What the row says — the one wording the panel and a copy of it share.
-    public var text: String {
+    public func text(in language: AppLanguage) -> String {
         switch self {
         case .value(let shown): return shown
-        case .comingSoon: return L("Coming soon")
-        case .pending: return L("Loading…")
+        case .comingSoon: return L("Coming soon", in: language)
+        case .pending: return L("Loading…", in: language)
         }
     }
 
@@ -97,7 +97,7 @@ public enum MEASummary {
     /// that depends on it says so instead of giving a value the reading with
     /// it may change.
     public static func build(_ analysis: FirmwareAnalysis,
-                             pending: MEAPending = .nothing) -> [MEASummaryBlock] {
+                             pending: MEAPending = .nothing, in language: AppLanguage) -> [MEASummaryBlock] {
         var rows: [MEASummaryRow] = []
         let add = { (label: String, value: MEASummaryValue) in
             rows.append(MEASummaryRow(label, value))
@@ -265,8 +265,8 @@ public enum MEASummary {
                                           .value(MEAText.title(state.rawValue)),
                                           tone: MEATones.fileSystemState(state, basis: analysis.mfsStateBasis)))
                 if let basis = analysis.mfsStateBasis {
-                    rows.append(MEASummaryRow(L("State basis"),
-                                              .value(MEAText.fileSystemStateBasis(state, basis)),
+                    rows.append(MEASummaryRow(L("State basis", in: language),
+                                              .value(MEAText.fileSystemStateBasis(state, basis, in: language)),
                                               tone: MEATones.stateBasis(basis)))
                 }
             } else if identified {
@@ -351,10 +351,10 @@ public enum MEASummary {
                           .value(issue.message))
         }
         if pending.huffman {
-            messages.append(MEASummaryRow(L("Module checks"), .pending))
+            messages.append(MEASummaryRow(L("Module checks", in: language), .pending))
         }
         if !messages.isEmpty {
-            blocks.append(MEASummaryBlock(title: L("Messages"), rows: messages))
+            blocks.append(MEASummaryBlock(title: L("Messages", in: language), rows: messages))
         }
         return blocks
     }

@@ -3,9 +3,9 @@ import Foundation
 import Localization
 import UEFIImage
 
-/// A short statement an agent made about a place in a file
-/// (`Design/AGENT_PLAN.md`, "Annotations"; issue #37): what the bytes are,
-/// or what it found there.
+/// A note about a place in a file — made by an agent
+/// (`Design/AGENT_PLAN.md`, "Annotations"; issue #37) or by the person: what
+/// the bytes are, or what was found there.
 ///
 /// It belongs to the file, not to a window: it is kept while the app runs,
 /// whether the file is open or not, and drawn over the bytes — a dashed
@@ -39,8 +39,20 @@ struct AgentAnnotation: Equatable {
     /// no tree, or was not open to read one.
     var site: Site? = nil
 
+    /// Who made it: the agent, or the person, from the dump's right-click
+    /// menu. The two are drawn in hues of their own.
+    var author: Author = .agent
+
+    enum Author: Equatable {
+        case agent
+        case person
+    }
+
     struct Site: Equatable {
+        /// In the person's language, for the card.
         let label: String
+        /// In English, for an agent.
+        let agentLabel: String
         let node: String
     }
 
@@ -60,7 +72,9 @@ struct AgentAnnotation: Equatable {
         let range: Range<UInt64>
         /// The badges of the codecs the bytes came through, outermost first —
         /// `LZMA`, `XOR C0` — as the panel's header shows them.
-        let codecs: [String]
+        let codecs: [LocalizedText]
+        /// The key a LENV block is decoded with; nil for a decompressed body.
+        var xorKey: UInt8? = nil
     }
 
     /// The file an annotation belongs to.
@@ -80,13 +94,19 @@ struct AgentAnnotation: Equatable {
     /// The same annotation at another range: the place as a pane shows it.
     func at(_ range: Range<UInt64>?) -> AgentAnnotation {
         AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, decoded: decoded,
-                        relatedTo: relatedTo, site: site)
+                        relatedTo: relatedTo, site: site, author: author)
+    }
+
+    /// The same annotation with another title and note: the person's edit.
+    func with(title: String, note: String) -> AgentAnnotation {
+        AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, decoded: decoded,
+                        relatedTo: relatedTo, site: site, author: author)
     }
 
     /// Without the relations to the ones `gone` names.
     func dropping(_ gone: Set<String>) -> AgentAnnotation {
         AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, decoded: decoded,
-                        relatedTo: relatedTo.filter { !gone.contains($0) }, site: site)
+                        relatedTo: relatedTo.filter { !gone.contains($0) }, site: site, author: author)
     }
 
     /// What the pointer resting on the bytes shows: the title, the note and
@@ -96,7 +116,7 @@ struct AgentAnnotation: Equatable {
     }
 
     /// "Related Annotations: a1 FIT pointer, a3", or "" for one about no other
-    /// — the one place a relation reads, in the Agent window and over the dump.
+    /// — the one place a relation reads, in the Annotations panel and over the dump.
     func relations(titles: [String: String]) -> String {
         guard !relatedTo.isEmpty else { return "" }
         let named = relatedTo.map { id in titles[id].map { "\(id) \($0)" } ?? id }

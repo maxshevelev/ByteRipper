@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import XCTest
 @testable import UEFIImage
 
@@ -163,7 +164,7 @@ final class AMDFirmwareTests: XCTestCase {
         let microcode = firmware.directories[4].entries[0]
         XCTAssertEqual(microcode.typeName, "MICROCODE_PATCH")
         XCTAssertEqual(microcode.instance, 1)
-        XCTAssertEqual(AMDFirmware.entryName(microcode), "MICROCODE_PATCH, instance 1")
+        XCTAssertEqual(AMDFirmware.entryName(microcode).text(in: .english), "MICROCODE_PATCH, instance 1")
 
         let blobs = firmware.blobs.map { $0.entry.range! }
         XCTAssertEqual(blobs.filter { $0.lowerBound == 0x3_2000 }, [0x3_2000..<0x3_2080],

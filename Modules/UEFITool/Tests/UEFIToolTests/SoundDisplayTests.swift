@@ -30,7 +30,7 @@ final class SoundDisplayTests: XCTestCase {
 
     func testTheDetailsSayWhatTheSoundIs() {
         let (image, reader) = built()
-        let detail = UEFIDetail.build(for: image.roots[0].children[0], image: image, reader: reader)
+        let detail = UEFIDetail.build(for: image.roots[0].children[0], image: image, reader: reader, in: .english)
         let fields = Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
         XCTAssertEqual(fields["Kind"], "Sound")
         XCTAssertEqual(fields["Format"], "WAV (PCM)")
@@ -43,8 +43,8 @@ final class SoundDisplayTests: XCTestCase {
     /// The panel is handed the whole WAV to play, and only a sound's.
     func testTheSoundIsHandedToThePanel() {
         let (image, reader) = built()
-        XCTAssertEqual(UEFIDetail.build(for: image.roots[0].children[0], image: image, reader: reader).sound, Self.wav)
-        XCTAssertNil(UEFIDetail.build(for: image.roots[0], image: image, reader: reader).sound)
+        XCTAssertEqual(UEFIDetail.build(for: image.roots[0].children[0], image: image, reader: reader, in: .english).sound, Self.wav)
+        XCTAssertNil(UEFIDetail.build(for: image.roots[0], image: image, reader: reader, in: .english).sound)
     }
 
     func testItOpensItsEntryAndSavesAsAWAV() {

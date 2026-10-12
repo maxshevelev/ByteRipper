@@ -252,7 +252,7 @@ extension Parser {
         if leading >= 8 {
             dataStart = body.lowerBound + leading / 8 * 8
             nodes.append(UEFINode(
-                kind: .freeSpace, name: L("Free space"),
+                kind: .freeSpace, named: L("Free space"),
                 range: body.lowerBound..<dataStart, isErased: true
             ))
         }
@@ -278,7 +278,7 @@ extension Parser {
             ).first?.children ?? []
             nodes.append(UEFINode(
                 kind: .padding,
-                name: L("Non-UEFI data"),
+                named: L("Non-UEFI data"),
                 header: dataStart..<dataStart,
                 body: data,
                 children: pieces.contains { $0.kind == .fitComponent } ? pieces : []

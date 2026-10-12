@@ -842,7 +842,7 @@ final class FITToolFlowTests: XCTestCase {
         let rows = try session().display.rows
 
         XCTAssertFalse(rows[1].canRemove)
-        XCTAssertFalse(rows[1].commands.contains { $0.title == "Remove Microcode" })
+        XCTAssertFalse(rows[1].commands.contains { $0.title.text(in: .english) == "Remove Microcode" })
         XCTAssertFalse(rows[0].canRemove)
     }
 
@@ -853,7 +853,7 @@ final class FITToolFlowTests: XCTestCase {
         let rows = try session().display.rows
 
         XCTAssertTrue(rows[2].canRemove)
-        XCTAssertTrue(rows[2].commands.contains { $0.title == "Remove Microcode" })
+        XCTAssertTrue(rows[2].commands.contains { $0.title.text(in: .english) == "Remove Microcode" })
     }
 
     /// The form opens on the whole catalogue — narrowing it is the form's job,

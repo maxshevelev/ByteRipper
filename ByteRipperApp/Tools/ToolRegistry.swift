@@ -24,6 +24,10 @@ enum ToolRegistry {
     static let shipping: [any ToolModule.Type] =
         [MEAToolModule.self, FITToolModule.self, UEFIToolModule.self]
 
+    /// UEFI Structure: what a fragment panel of decoded firmware bytes is
+    /// opened with when the place in it is a node of the tree.
+    static let uefiStructure = UEFIToolModule.identifier
+
     /// What this build offers: the shipping ones, and — in a debug build only —
     /// Zone Sketch.
     ///

@@ -55,13 +55,13 @@ final class MEACuratorTests: XCTestCase {
             "dataPageHeaderCRCsValid": true, "dataPageFooterCRCsValid": true,
         ]
         let withEFS = try analysis(["mfsState": "configured", "efsVolume": efs])
-        let waiting = try XCTUnwrap(MEACurator.present(withEFS, pending: MEAPending(fileTable: true)).first)
+        let waiting = try XCTUnwrap(MEACurator.present(withEFS, pending: MEAPending(fileTable: true), in: .english).first)
         XCTAssertEqual(field("File System State", in: waiting), MEACurator.pendingValue)
-        XCTAssertEqual(field("File System State", in: try XCTUnwrap(MEACurator.present(withEFS).first)),
+        XCTAssertEqual(field("File System State", in: try XCTUnwrap(MEACurator.present(withEFS, in: .english).first)),
                        "Configured")
 
         let without = try analysis(["mfsState": "configured"])
-        let kept = try XCTUnwrap(MEACurator.present(without, pending: MEAPending(fileTable: true)).first)
+        let kept = try XCTUnwrap(MEACurator.present(without, pending: MEAPending(fileTable: true), in: .english).first)
         XCTAssertEqual(field("File System State", in: kept), "Configured")
     }
 
@@ -74,7 +74,7 @@ final class MEACuratorTests: XCTestCase {
         var a = try analysis(["mfsState": "configured"])
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .unreadable(offset: 0x267000),
                                         configuration: ["FITC"], decidedBy: .configuration)
-        let firmware = try XCTUnwrap(find("Firmware", in: MEACurator.present(a)))
+        let firmware = try XCTUnwrap(find("Firmware", in: MEACurator.present(a, in: .english)))
         let basis = try XCTUnwrap(firmware.fields.first { $0.label == "State basis" })
         XCTAssertEqual(basis.tone, .caution)
         XCTAssertTrue(basis.value.contains("The EFS partition at 0x267000 could not be read"), basis.value)
@@ -85,17 +85,17 @@ final class MEACuratorTests: XCTestCase {
 
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .noFileContent,
                                         configuration: ["FITC"], decidedBy: .configuration)
-        let settled = try XCTUnwrap(find("Firmware", in: MEACurator.present(a)))
+        let settled = try XCTUnwrap(find("Firmware", in: MEACurator.present(a, in: .english)))
         XCTAssertEqual(settled.fields.first { $0.label == "State basis" }?.tone, .standard)
         XCTAssertEqual(settled.fields.first { $0.label == "File System State" }?.tone, .good)
     }
 
     func testIssuesSayTheModuleChecksAreToCome() throws {
         let quiet = try analysis([:])
-        let issues = try XCTUnwrap(find("Issues", in: MEACurator.present(quiet, pending: MEAPending(huffman: true))))
+        let issues = try XCTUnwrap(find("Issues", in: MEACurator.present(quiet, pending: MEAPending(huffman: true), in: .english)))
         XCTAssertEqual(issues.children.map(\.title), ["Module checks"])
         XCTAssertEqual(issues.children.first?.subtitle, MEACurator.pendingValue)
-        XCTAssertNil(find("Issues", in: MEACurator.present(quiet)))
+        XCTAssertNil(find("Issues", in: MEACurator.present(quiet, in: .english)))
     }
 
     private func child(_ title: String, of node: MEANode) -> MEANode? {
@@ -110,7 +110,7 @@ final class MEACuratorTests: XCTestCase {
         let a = try analysis([
             "regions": [regionJSON(name: "FTPR", offset: 0x1000, size: 0x125000)],
         ])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         // Checksums is the exception to "absent groups do not appear": it is
         // the row a reader selects to ask for the digests, so it is there
         // before there is anything in it.
@@ -125,7 +125,7 @@ final class MEACuratorTests: XCTestCase {
                                "partitions": [csePartitionJSON(name: "Data", offset: 0x0)]],
             "bootPartitions": [bpdtJSON()],
         ])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         XCTAssertEqual(roots.map(\.title),
                        ["Firmware", "Regions (FPT)", "CSE Layout Table",
                         "Boot Partitions (BPDT)", "Checksums"])
@@ -139,7 +139,7 @@ final class MEACuratorTests: XCTestCase {
             "checksums": ["sha256": "ABCDEF"],
             "issues": [["id": 1, "severity": "warning", "message": "odd"]],
         ] as [String: Any])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         XCTAssertEqual(roots.map(\.title),
                        ["Firmware", "Code Partition ($CPD)", "Manifest",
                         "File System (MFS)", "Checksums", "Issues"])
@@ -156,7 +156,7 @@ final class MEACuratorTests: XCTestCase {
         // No volume copy: the root carries it.
         let fromFTPR = try analysis(["chipsetInit": tables])
         let root = try XCTUnwrap(find("Chipset Initialization",
-                                      in: MEACurator.present(fromFTPR)))
+                                      in: MEACurator.present(fromFTPR, in: .english)))
         XCTAssertEqual(root.children.map(\.title), ["ADP-LP"])
         XCTAssertEqual(field("Chipsets", in: root), "1")
 
@@ -164,7 +164,7 @@ final class MEACuratorTests: XCTestCase {
         var volume = mfsJSON()
         volume["pchInit"] = tables
         let fromVolume = try analysis(["mfsVolume": volume, "chipsetInit": tables])
-        let roots = MEACurator.present(fromVolume)
+        let roots = MEACurator.present(fromVolume, in: .english)
         XCTAssertNil(find("Chipset Initialization", in: roots))
         XCTAssertNotNil(child("Chipset Initialization",
                               of: try XCTUnwrap(find("File System (MFS)", in: roots))))
@@ -175,7 +175,7 @@ final class MEACuratorTests: XCTestCase {
         other["chipsets"] = [["chipset": "TGP-LP", "steppings": "B"]]
         volume["pchInit"] = other
         let disagreeing = try analysis(["mfsVolume": volume, "chipsetInit": tables])
-        let both = MEACurator.present(disagreeing)
+        let both = MEACurator.present(disagreeing, in: .english)
         XCTAssertEqual(find("Chipset Initialization", in: both)?.children.map(\.title),
                        ["ADP-LP"])
         XCTAssertEqual(
@@ -190,7 +190,7 @@ final class MEACuratorTests: XCTestCase {
             "regions": [regionJSON(name: "FTPR", offset: 0x1000, size: 0x1000),
                         regionJSON(name: "FTUE", offset: 0x2000, size: 0x800)],
         ])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         XCTAssertEqual(roots[0].path, [0])          // Firmware
         XCTAssertEqual(roots[1].path, [1])          // Regions (FPT)
         XCTAssertEqual(roots[1].children[0].path, [1, 0])   // FTPR
@@ -207,7 +207,7 @@ final class MEACuratorTests: XCTestCase {
                         "meMajor": 15, "meMinor": 40, "meHotfix": 37,
                         "meBuild": 3121],
         ])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         let firmware = roots[0]
         XCTAssertEqual(firmware.title, "Firmware")
         XCTAssertEqual(firmware.subtitle, "CSME · 15.40.37.3121")
@@ -227,7 +227,7 @@ final class MEACuratorTests: XCTestCase {
         let a = try analysis([
             "regions": [regionJSON(name: "FTPR", offset: 0x1000, size: 0x125000)],
         ])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         let regions = roots[1]
         XCTAssertEqual(regions.subtitle, "1 region")
         let ftpr = try XCTUnwrap(child("FTPR", of: regions))
@@ -251,7 +251,7 @@ final class MEACuratorTests: XCTestCase {
                                                "offset": 0x1000, "size": 0x400,
                                                "empty": true]]],
         ])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
 
         let regions = try XCTUnwrap(roots.first { $0.title == "Regions (FPT)" })
         let empty = try XCTUnwrap(child("FTUP", of: regions))
@@ -284,7 +284,7 @@ final class MEACuratorTests: XCTestCase {
                                                                offset: 0x1000)]],
             "bootPartitions": [bpdtJSON()],
         ])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         let cse = roots[1]
         XCTAssertEqual(field("Checksum Valid", in: cse), "Yes")
         let data = try XCTUnwrap(child("Data", of: cse))
@@ -303,7 +303,7 @@ final class MEACuratorTests: XCTestCase {
 
     func testCodePartitionModulesAndExtensions() throws {
         let a = try analysis(["codePartition": cpdJSON()])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         let cpd = roots[1]
         XCTAssertEqual(cpd.subtitle, "FTPR · R1")
         XCTAssertEqual(field("Header", in: cpd), "R1")
@@ -324,7 +324,7 @@ final class MEACuratorTests: XCTestCase {
 
     func testExtensionPayloadIsDumpedFieldByField() throws {
         let a = try analysis(["codePartition": cpdJSON(ext: 0x0F)])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         let cpd = roots[1]
         let extensions = try XCTUnwrap(child("Extensions", of: cpd))
         let sp = try XCTUnwrap(child("Signed Package", of: extensions))
@@ -340,7 +340,7 @@ final class MEACuratorTests: XCTestCase {
         mods[0]["isHuffman"] = true
         json["modules"] = mods
         let a = try analysis(["codePartition": json])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         let cpd = roots[1]
         let modules = try XCTUnwrap(child("Modules", of: cpd))
         let man = try XCTUnwrap(child("$MN2", of: modules))
@@ -350,7 +350,7 @@ final class MEACuratorTests: XCTestCase {
 
     func testManifestFields() throws {
         let a = try analysis(["manifest": manifestJSON()])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         let m = roots[1]
         XCTAssertEqual(m.title, "Manifest")
         XCTAssertEqual(m.subtitle, "$MN2 · R1")
@@ -364,7 +364,7 @@ final class MEACuratorTests: XCTestCase {
 
     func testMFSFilesAreListedWithoutRange() throws {
         let a = try analysis(["mfsVolume": mfsJSON()])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         let mfs = roots[1]
         XCTAssertEqual(mfs.title, "File System (MFS)")
         XCTAssertEqual(field("Page Size", in: mfs), "0x1000 (4096 bytes)")
@@ -380,7 +380,7 @@ final class MEACuratorTests: XCTestCase {
 
     func testTheChecksumsRowWaitsWithPlaceholdersUntilItIsAskedFor() throws {
         let a = try analysis([:])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         let group = try XCTUnwrap(find("Checksums", in: roots))
         XCTAssertEqual(group.fields.map(\.label), ["SHA-256", "SHA-384", "CRC-32"])
         XCTAssertEqual(Set(group.fields.map(\.value)), [MEACurator.pendingValue])
@@ -391,7 +391,7 @@ final class MEACuratorTests: XCTestCase {
     func testTheChecksumsRowShowsTheNumbersOnceTheyArrive() throws {
         let a = try analysis(["checksums": ["sha256": "AA", "sha384": "BB",
                                             "crc32": 0x1234_5678]])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         let group = try XCTUnwrap(find("Checksums", in: roots))
         XCTAssertEqual(group.fields, [MEAField("SHA-256", "AA"),
                                       MEAField("SHA-384", "BB"),
@@ -402,7 +402,7 @@ final class MEACuratorTests: XCTestCase {
     /// `Checksums`, and the row goes rather than promising numbers forever.
     func testAnAnsweredButEmptyChecksumsDropsTheRow() throws {
         let a = try analysis(["checksums": [:]])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         XCTAssertNil(find("Checksums", in: roots))
         XCTAssertNil(MEACurator.checksumsPath(in: roots))
     }
@@ -422,7 +422,7 @@ final class MEACuratorTests: XCTestCase {
                                        "dataCRCStored": 0x2222,
                                        "dataCRCValid": true]]],
         ])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         XCTAssertEqual(roots.map(\.title),
                        ["Firmware", "MFS Backup", "Checksums", "Issues"])
 
@@ -446,7 +446,7 @@ final class MEACuratorTests: XCTestCase {
             "partition": "UTOK", "offset": 0x461FE0, "delayedAuthMode": 0,
             "reservedHex": String(repeating: "FF", count: 0x1B),
         ]]])
-        let node = try XCTUnwrap(find("Unlock Token", in: MEACurator.present(a)))
+        let node = try XCTUnwrap(find("Unlock Token", in: MEACurator.present(a, in: .english)))
         XCTAssertEqual(node.subtitle, "0x461FE0")
         XCTAssertEqual(node.range, 0x461FE0..<0x462000)
         XCTAssertEqual(field("Partition", in: node), "UTOK")
@@ -466,7 +466,7 @@ final class MEACuratorTests: XCTestCase {
                 "reservedHex": "00",
             ]]])
             return field("Delayed Authentication Mode",
-                         in: try XCTUnwrap(find("Unlock Token", in: MEACurator.present(a))))
+                         in: try XCTUnwrap(find("Unlock Token", in: MEACurator.present(a, in: .english))))
         }
         XCTAssertEqual(try mode(0), "No")
         XCTAssertEqual(try mode(1), "Yes")
@@ -482,7 +482,7 @@ final class MEACuratorTests: XCTestCase {
             ["partition": "STKN", "offset": 0x9000, "delayedAuthMode": 1,
              "reservedHex": "00"],
         ]])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         XCTAssertNil(find("Unlock Token", in: roots))
         XCTAssertNotNil(find("Unlock Token (UTOK)", in: roots))
         XCTAssertEqual(field("Delayed Authentication Mode",
@@ -493,7 +493,7 @@ final class MEACuratorTests: XCTestCase {
     /// The structure is optional in the format, so an image without one has no
     /// node saying so — the tree lists what a dump carries.
     func testAnImageWithoutTheFlagsHasNoNode() throws {
-        XCTAssertNil(find("Unlock Token", in: MEACurator.present(try analysis([:]))))
+        XCTAssertNil(find("Unlock Token", in: MEACurator.present(try analysis([:]), in: .english)))
     }
 
     // MARK: - Zones
@@ -502,7 +502,7 @@ final class MEACuratorTests: XCTestCase {
         let a = try analysis([
             "regions": [regionJSON(name: "FTPR", offset: 0x1000, size: 0x1000)],
         ])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         let ftpr = try XCTUnwrap(child("FTPR", of: roots[1]))
 
         let map = MEAZones.build(focus: ftpr)
@@ -587,7 +587,7 @@ final class MEACuratorTests: XCTestCase {
             if let term = node.helpTerm { seen.insert(term) }
             node.children.forEach(walk)
         }
-        MEACurator.present(a).forEach(walk)
+        MEACurator.present(a, in: .english).forEach(walk)
 
         XCTAssertFalse(seen.isEmpty, "no node named a term at all")
         for term in seen.sorted() {
@@ -601,7 +601,7 @@ final class MEACuratorTests: XCTestCase {
         let a = try analysis([
             "regions": [regionJSON(name: "FTPR", offset: 0x1000, size: 0x2000)],
         ])
-        let roots = MEACurator.present(a)
+        let roots = MEACurator.present(a, in: .english)
         XCTAssertEqual(find("Firmware", in: roots)?.helpTerm, HelpTermID("me"))
         XCTAssertEqual(find("Regions (FPT)", in: roots)?.helpTerm, HelpTermID("fpt"))
     }

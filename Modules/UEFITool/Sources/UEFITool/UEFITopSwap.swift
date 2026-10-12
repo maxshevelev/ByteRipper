@@ -41,7 +41,7 @@ public enum UEFITopSwap {
         public var isInCopy: Bool
 
         /// The menu item that steps there.
-        public var menuTitle: String {
+        public var menuTitle: LocalizedText {
             isInCopy ? L("Go to Top Swap Copy") : L("Go to Original")
         }
     }
@@ -84,20 +84,20 @@ public enum UEFITopSwap {
     }
 
     /// The row's name, with what it is when it is the copy.
-    static func name(_ name: String, for node: UEFINode, in image: UEFIImage) -> String {
+    static func name(_ name: String, for node: UEFINode, in image: UEFIImage, in language: AppLanguage) -> String {
         guard case .copy = role(of: node, in: image) else { return name }
-        return L("%1$@ (Top Swap copy)", name)
+        return L("%1$@ (Top Swap copy)", in: language, name)
     }
 
     /// The detail row: where the other copy is, and whether the two agree.
-    static func detail(for node: UEFINode, in image: UEFIImage) -> String? {
+    static func detail(for node: UEFINode, in image: UEFIImage, in language: AppLanguage) -> String? {
         guard let role = role(of: node, in: image), let ranges = image.protectedRanges else { return nil }
-        let agreement = ranges.topSwapCopiesMatch ? L("the copies match") : L("the copies differ")
+        let agreement = ranges.topSwapCopiesMatch ? L("the copies match", in: language) : L("the copies differ", in: language)
         switch role {
         case .copy(let top):
-            return L("Copy of %1$@–%2$@; %3$@", hex(top.lowerBound), hex(top.upperBound), agreement)
+            return L("Copy of %1$@–%2$@; %3$@", in: language, hex(top.lowerBound), hex(top.upperBound), agreement)
         case .original(let backup):
-            return L("Copied at %1$@–%2$@; %3$@", hex(backup.lowerBound), hex(backup.upperBound), agreement)
+            return L("Copied at %1$@–%2$@; %3$@", in: language, hex(backup.lowerBound), hex(backup.upperBound), agreement)
         }
     }
 

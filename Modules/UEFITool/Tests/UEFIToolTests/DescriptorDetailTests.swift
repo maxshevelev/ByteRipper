@@ -6,7 +6,7 @@ import UEFIImage
 /// reference parser prints under "Descriptor region" (`Design/UEFI_STRUCTURE_TOOL.md`).
 final class DescriptorDetailTests: XCTestCase {
     private func detail(_ built: TestUEFI.Built) -> UEFINodeDetail {
-        UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
     }
 
     private func field(_ detail: UEFINodeDetail, _ label: String) -> String? {

@@ -158,7 +158,7 @@ final class MFSFileNamesTests: XCTestCase {
     /// Before the table arrives the rows read as they always have: the number
     /// is what the flash says about the file.
     func testTheRowsKeepTheirNumbersWithoutATable() throws {
-        let roots = MEACurator.present(try analysis(with: try volume()))
+        let roots = MEACurator.present(try analysis(with: try volume()), in: .english)
         let files = try files(roots)
         XCTAssertEqual(files.children.map(\.title),
                        ["File 6", "File 7", "File 63", "File 99"])
@@ -173,7 +173,7 @@ final class MFSFileNamesTests: XCTestCase {
     func testANamedRowCarriesThePathAndTheRecordsFlags() throws {
         let volume = try volume()
         let names = MFSFileNames(table: try table(), volume: volume)
-        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names))
+        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names, in: .english))
 
         let named = try XCTUnwrap(files.children.first { $0.title == "/home/mca/manuf_ver" })
         XCTAssertEqual(named.subtitle, "#63 · 0x100 (256 bytes)")
@@ -196,7 +196,7 @@ final class MFSFileNamesTests: XCTestCase {
     func testARowNamesOneRecordAndSaysWhichOne() throws {
         let volume = try volume()
         let names = MFSFileNames(table: try table(), volume: volume)
-        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names))
+        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names, in: .english))
         let row = try XCTUnwrap(files.children.first { $0.title == "/home/ish_srv/bios2ish" })
         XCTAssertEqual(field("File ID", in: row), "0x10002000",
                        "the record the name came from, checkable against the console")
@@ -209,7 +209,7 @@ final class MFSFileNamesTests: XCTestCase {
     func testAnUnnamedFileKeepsItsNumberBesideTheNamedOnes() throws {
         let volume = try volume()
         let names = MFSFileNames(table: try table(), volume: volume)
-        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names))
+        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names, in: .english))
         let row = try XCTUnwrap(files.children.first { $0.title == "File 99" })
         XCTAssertEqual(row.subtitle, "0x100 (256 bytes)",
                        "no index in the subtitle: the title is the index")
@@ -222,7 +222,7 @@ final class MFSFileNamesTests: XCTestCase {
     func testASplitFileShowsItsContentSizeAndItsTable() throws {
         let volume = try volume(split: [63])
         let names = MFSFileNames(table: try table(), volume: volume)
-        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names))
+        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names, in: .english))
         let row = try XCTUnwrap(files.children.first { $0.title == "/home/mca/manuf_ver" })
 
         XCTAssertEqual(field("Size", in: row), "0xD8 (216 bytes)", "0x100 less the 0x28 tail")
@@ -238,7 +238,7 @@ final class MFSFileNamesTests: XCTestCase {
     func testAFileWithNoTableShowsOneSize() throws {
         let volume = try volume()
         let names = MFSFileNames(table: try table(), volume: volume)
-        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names))
+        let files = try files(MEACurator.present(try analysis(with: volume), mfsNames: names, in: .english))
         let row = try XCTUnwrap(files.children.first { $0.title == "/home/mca/manuf_ver" })
         XCTAssertEqual(field("Size", in: row), "0x100 (256 bytes)")
         XCTAssertNil(field("Chain Size", in: row))
@@ -250,7 +250,7 @@ final class MFSFileNamesTests: XCTestCase {
     func testTheVolumeSaysWhichTableNamedItsFiles() throws {
         let volume = try volume()
         let names = MFSFileNames(table: try table(), volume: volume)
-        let roots = MEACurator.present(try analysis(with: volume), mfsNames: names)
+        let roots = MEACurator.present(try analysis(with: volume), mfsNames: names, in: .english)
         let mfs = try XCTUnwrap(roots.first(where: { $0.title == "File System (MFS)" }))
         XCTAssertEqual(field("Uses FileTable.dat", in: mfs), "Yes")
         XCTAssertEqual(field("File Table", in: mfs), "04 / 0A")

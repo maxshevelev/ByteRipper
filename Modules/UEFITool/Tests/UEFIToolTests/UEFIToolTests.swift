@@ -8,7 +8,7 @@ import UEFIImage
 /// one node worth drawing.
 final class UEFIPresenterTests: XCTestCase {
     func testNothingSelectedPublishesNothing() {
-        XCTAssertEqual(UEFIPresenter.zones(for: nil), .empty)
+        XCTAssertEqual(UEFIPresenter.zones(for: nil, language: .english), .empty)
     }
 
     /// A node with a header of its own publishes two zones, and the body is
@@ -22,7 +22,7 @@ final class UEFIPresenterTests: XCTestCase {
             header: 0x1000..<0x1018,
             body: 0x1018..<0x1100
         )
-        let zones = UEFIPresenter.zones(for: node)
+        let zones = UEFIPresenter.zones(for: node, language: .english)
 
         XCTAssertEqual(zones.zones.map(\.id), ["1.2.0", "1.2.0#body"],
                        "the node first, then what is inside it")
@@ -43,7 +43,7 @@ final class UEFIPresenterTests: XCTestCase {
             header: 0x0..<0x48,
             body: 0x48..<0x1000
         )
-        let drawable = UEFIPresenter.zones(for: node).normalized(contentSize: 0x1000)
+        let drawable = UEFIPresenter.zones(for: node, language: .english).normalized(contentSize: 0x1000)
 
         XCTAssertEqual(drawable.zones.count, 2)
         XCTAssertEqual(drawable.focus, "0#body")
@@ -63,7 +63,7 @@ final class UEFIPresenterTests: XCTestCase {
             body: 0x218..<0x2F8,
             tail: 0x2F8..<0x300
         )
-        let zones = UEFIPresenter.zones(for: node)
+        let zones = UEFIPresenter.zones(for: node, language: .english)
 
         XCTAssertEqual(zones.zones[0].range, 0x200..<0x300, "the node covers its tail")
         XCTAssertEqual(zones.zones[1].range, 0x218..<0x2F8, "the body stops before it")
@@ -75,7 +75,7 @@ final class UEFIPresenterTests: XCTestCase {
     func testANodeWithoutAHeaderPublishesOneZone() {
         var node = UEFINode(kind: .freeSpace, name: "Free space", range: 0x2000..<0x4000)
         node.id = NodeID([4])
-        let zones = UEFIPresenter.zones(for: node)
+        let zones = UEFIPresenter.zones(for: node, language: .english)
 
         XCTAssertEqual(zones.zones.count, 1)
         XCTAssertEqual(zones.zones[0].range, 0x2000..<0x4000)
@@ -92,7 +92,7 @@ final class UEFIPresenterTests: XCTestCase {
             header: 0x100..<0x120,
             body: 0x120..<0x120
         )
-        let zones = UEFIPresenter.zones(for: node)
+        let zones = UEFIPresenter.zones(for: node, language: .english)
 
         XCTAssertEqual(zones.zones.count, 1)
         XCTAssertEqual(zones.focus, "2")
@@ -108,7 +108,7 @@ final class UEFIPresenterTests: XCTestCase {
             header: 0x10..<0x14,
             body: 0x14..<0x40
         )
-        XCTAssertEqual(UEFIPresenter.zones(for: node).zones.map(\.name), ["", "Body"])
+        XCTAssertEqual(UEFIPresenter.zones(for: node, language: .english).zones.map(\.name), ["", "Body"])
     }
 
     /// The trip back: a zone id is a node path, and the panel has to read it
@@ -152,7 +152,7 @@ final class UEFIDetailTests: XCTestCase {
 
     func testAVolumeSaysWhatItsHeaderSays() {
         let built = TestUEFI.volume()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(detail.title, "FFSv2")
         XCTAssertEqual(field(detail, "Kind"), "Volume")
@@ -176,7 +176,7 @@ final class UEFIDetailTests: XCTestCase {
     func testAnUnknownVolumeGuidShowsRaw() {
         let guid = EFIGUID(low: 0x11, high: 0x22)
         let built = TestUEFI.volume(guid: guid, name: "")
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "GUID"), guid.description)
         XCTAssertEqual(detail.title, "Volume")
@@ -184,7 +184,7 @@ final class UEFIDetailTests: XCTestCase {
 
     func testAFileNamesItsTypeAndReadsBackItsHeader() {
         let built = TestUEFI.file(type: 0x07, attributes: 0x04, size: 0x100, state: 0xF8)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(detail.title, "Volume Top File")
         XCTAssertEqual(field(detail, "Kind"), "FFS file")
@@ -202,7 +202,7 @@ final class UEFIDetailTests: XCTestCase {
     /// for Fix Checksum to write (§5.5).
     func testAFileMarkedInvalidShowsItsSumsUnchecked() throws {
         let built = TestUEFI.file(state: 0x00)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
         let state = try XCTUnwrap(detail.fields.first { $0.label == "State" })
 
         XCTAssertEqual(state.value, "0x0 — header marked invalid")
@@ -224,7 +224,7 @@ final class UEFIDetailTests: XCTestCase {
         }
         let node = TestUEFI.file(size: 0).node
         let image = UEFIImage(size: 0x1_0000_0000, roots: [node])
-        let detail = UEFIDetail.build(for: node, image: image, reader: ImageReader(bytes))
+        let detail = UEFIDetail.build(for: node, image: image, reader: ImageReader(bytes), in: .english)
 
         XCTAssertEqual(field(detail, "Size"), "0x100000000 (4294967296)")
     }
@@ -233,14 +233,14 @@ final class UEFIDetailTests: XCTestCase {
     /// is to say about a vendor type nobody documented.
     func testAnUnknownFileTypeKeepsItsNumber() {
         let built = TestUEFI.file(type: 0x7F)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Type"), "File type 0x7F")
     }
 
     func testASectionNamesItsTypeAndSize() {
         let built = TestUEFI.section(type: 0x19, size: 0x40)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "Section")
         XCTAssertEqual(field(detail, "Type"), "Raw")
@@ -252,7 +252,7 @@ final class UEFIDetailTests: XCTestCase {
     /// keeps the real size in 32 bits — the detail reads the 32-bit one.
     func testAnExtendedSectionReadsItsSizeInThirtyTwoBits() {
         let built = TestUEFI.section(type: 0x19, size: 0xFF_FFFF)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Size"), "0x100000 (1048576)")
         XCTAssertEqual(field(detail, "Header"), "0x0 · 0x8 (8) bytes")
@@ -260,7 +260,7 @@ final class UEFIDetailTests: XCTestCase {
 
     func testAMicrocodeHeaderComesBackValidated() {
         let built = TestUEFI.microcode(revision: 0xF0, signature: 0x0008_06EA, totalSize: 0x100)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "Microcode")
         XCTAssertEqual(field(detail, "Header type"), "0x1")
@@ -283,7 +283,7 @@ final class UEFIDetailTests: XCTestCase {
         var bytes = TestUEFI.microcode().bytes
         bytes[0] = 0x00  // HeaderType must be 1
         let built = TestUEFI.microcode()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: ImageReader(bytes))
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: ImageReader(bytes), in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "Microcode")
         XCTAssertEqual(field(detail, "Header type"), "0x0")
@@ -295,7 +295,7 @@ final class UEFIDetailTests: XCTestCase {
     /// the whole of what there is to say, and the title is the kind.
     func testPaddingShowsOnlyTheCommonFields() {
         let built = TestUEFI.padding(totalSize: 0x100)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(detail.title, "Padding")
         XCTAssertEqual(field(detail, "Kind"), "Padding")
@@ -310,7 +310,7 @@ final class UEFIDetailTests: XCTestCase {
         let built = TestUEFI.file()
         var node = built.node
         node.space = .decompressed(chain: [0])
-        let detail = UEFIDetail.build(for: node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertNil(field(detail, "Address"))
     }
@@ -320,7 +320,7 @@ final class UEFIDetailTests: XCTestCase {
     func testAnImageWithNoAddressMapHasNoAddress() {
         let built = TestUEFI.file()
         let image = UEFIImage(size: built.image.size, roots: [built.node])
-        let detail = UEFIDetail.build(for: built.node, image: image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: image, reader: built.reader, in: .english)
 
         XCTAssertNil(field(detail, "Address"))
     }
@@ -332,7 +332,7 @@ final class UEFIDetailTests: XCTestCase {
     /// default builder bytes are the map of a real Coffee Lake board.
     func testAnIntelImageReadsItsDescriptorCounters() {
         let built = TestUEFI.intelImage()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(detail.title, "Intel image")
         XCTAssertEqual(field(detail, "Kind"), "Intel image")
@@ -357,7 +357,7 @@ final class UEFIDetailTests: XCTestCase {
             flashMap1: 0x0700_0108,          // masters 1 → 2, PCH straps 7
             flashMap2: 0x8000                // PROC straps 0x80
         )
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Flash chips"), "1")
         XCTAssertEqual(field(detail, "Regions"), "3")
@@ -384,7 +384,7 @@ final class UEFIDetailTests: XCTestCase {
         let image = UEFIImage(size: 0x1000, roots: [node])
         let detail = UEFIDetail.build(
             for: node, image: image,
-            reader: ImageReader([UInt8](repeating: 0, count: 0x1000))
+            reader: ImageReader([UInt8](repeating: 0, count: 0x1000)), in: .english
         )
 
         XCTAssertEqual(detail.title, "UEFI image")
@@ -403,7 +403,7 @@ final class UEFIDetailTests: XCTestCase {
 
     func testAVssStoreReadsItsFormatAndState() {
         let built = TestUEFI.nvramVssStore()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "VSS store")
         XCTAssertEqual(field(detail, "Format"), "0x5A")
@@ -416,7 +416,7 @@ final class UEFIDetailTests: XCTestCase {
     /// 16-byte store GUID — the detail reads them at the pushed-out offsets.
     func testAVss2StoreReadsItsFormatAndState() {
         let built = TestUEFI.nvramVss2Store()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "VSS2 store")
         XCTAssertEqual(field(detail, "Format"), "0x5A")
@@ -431,7 +431,7 @@ final class UEFIDetailTests: XCTestCase {
     func testAVssVariableShowsItsVendorGuidAndAttributeWords() {
         let guid = EFIGUID(low: 0x1111_1111, high: 0x2222_2222)
         let built = TestUEFI.nvramVssVariable(attributes: 0x0000_0007, vendorGuid: guid)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(detail.title, "BootOrder")
         XCTAssertEqual(field(detail, "Kind"), "VSS entry")
@@ -449,18 +449,18 @@ final class UEFIDetailTests: XCTestCase {
     /// whether the GUID was the spec's too.
     func testAVssVariableShowsItsValueAndWhatItWasReadAs() {
         let order = TestUEFI.nvramVssVariable(data: [0x01, 0x00, 0x80, 0x20], vendorGuid: NvramValue.globalVariable)
-        var detail = UEFIDetail.build(for: order.node, image: order.image, reader: order.reader)
+        var detail = UEFIDetail.build(for: order.node, image: order.image, reader: order.reader, in: .english)
         XCTAssertEqual(field(detail, "Value"), "Boot0001, Boot2080")
         XCTAssertEqual(field(detail, "Read as"), "List of boot entries — as the UEFI specification defines the variable")
 
         let vendor = TestUEFI.nvramVssVariable(name: "Lang", data: Array("eng".utf8))
-        detail = UEFIDetail.build(for: vendor.node, image: vendor.image, reader: vendor.reader)
+        detail = UEFIDetail.build(for: vendor.node, image: vendor.image, reader: vendor.reader, in: .english)
         XCTAssertEqual(field(detail, "Value"), "eng")
         XCTAssertEqual(field(detail, "Read as"),
                        "ASCII text — by its name, which the UEFI specification defines; the GUID is a vendor's")
 
         let blob = TestUEFI.nvramVssVariable(name: "Setup", data: [0x00, 0x01, 0x02])
-        detail = UEFIDetail.build(for: blob.node, image: blob.image, reader: blob.reader)
+        detail = UEFIDetail.build(for: blob.node, image: blob.image, reader: blob.reader, in: .english)
         XCTAssertEqual(field(detail, "Value"), "00 01 02")
         XCTAssertEqual(field(detail, "Read as"), "Bytes — guessed from the bytes")
     }
@@ -478,8 +478,8 @@ final class UEFIDetailTests: XCTestCase {
         let node = UEFINode(kind: .vssEntry, subtype: UEFITypes.Sub.appleVssEntry, name: "n",
                             header: 0..<36, body: 36..<UInt64(bytes.count), isFixed: true)
         let image = UEFIImage(size: UInt64(bytes.count), roots: [node])
-        let detail = UEFIDetail.build(for: image.roots[0], image: image, reader: ImageReader(bytes))
-        XCTAssertEqual(field(detail, "Data CRC32"), Checksums.text(crc, valid: true, digits: 8))
+        let detail = UEFIDetail.build(for: image.roots[0], image: image, reader: ImageReader(bytes), in: .english)
+        XCTAssertEqual(field(detail, "Data CRC32"), Checksums.text(crc, valid: true, digits: 8).text(in: .english))
         XCTAssertEqual(field(detail, "Value"), "MacBook")
     }
 
@@ -489,7 +489,7 @@ final class UEFIDetailTests: XCTestCase {
     /// validity claim the panel cannot back up.
     func testAFtwStoreShowsItsStateAndHeaderCrc() {
         let built = TestUEFI.nvramFtwStore(crc: 0xDEAD_BEEF)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "FTW store")
         XCTAssertEqual(field(detail, "State"), "0x1")
@@ -500,18 +500,18 @@ final class UEFIDetailTests: XCTestCase {
     /// four bytes, so the detail can vouch for it the same way.
     func testASysfStoreChecksItsCrc() {
         let built = TestUEFI.nvramSysfStore()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "SysF store")
         let stored = Checksums.crc32(Array(built.bytes.dropLast(4)))
-        XCTAssertEqual(field(detail, "CRC32"), Checksums.text(stored, valid: true, digits: 8))
+        XCTAssertEqual(field(detail, "CRC32"), Checksums.text(stored, valid: true, digits: 8).text(in: .english))
     }
 
     /// Apple's device overrides are text inside a bzip2 stream; the detail
     /// unpacks them into a row a rule.
     func testAnOverridesVariableIsReadAsRules() throws {
         let built = TestUEFI.sysfOverrides()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Rules"), "2")
         let table = try XCTUnwrap(detail.tables.first { $0.title == "Device overrides" })
@@ -529,7 +529,7 @@ final class UEFIDetailTests: XCTestCase {
     func testABIOSIDSectionIsATableOfItsParts() throws {
         let string: [UInt8] = "  MBP141.88Z.0167.B00.1708080034".utf16.flatMap { [UInt8($0), UInt8(0)] } + [0, 0]
         let built = textBuilt(.section, Array("$IBIOSI$".utf8) + string)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         let table = try XCTUnwrap(detail.tables.first { $0.title == "BIOS ID" })
         let rows: [[String]] = [
@@ -542,7 +542,7 @@ final class UEFIDetailTests: XCTestCase {
     func testTheROMInformationInPaddingIsATable() throws {
         let text = Array("Apple ROM Version\n  Model:        MBA71\n  Date:         Fri\n".utf8)
         let built = textBuilt(.padding, [0xFF, 0xFF] + text + [0xFF])
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         let table = try XCTUnwrap(detail.tables.first { $0.title == "Apple ROM information" })
         XCTAssertEqual(table.rows.map { $0.map(\.text) }, [["Model", "MBA71"], ["Date", "Fri"]])
@@ -550,7 +550,7 @@ final class UEFIDetailTests: XCTestCase {
 
     func testASysfStoreFlagsABadCrc() {
         let built = TestUEFI.nvramSysfStore(crc: 0xDEAD_BEEF)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         // A wrong stored CRC reads with the value it should be — the CRC32 of
         // everything before the store's final four bytes, which the fixture put
@@ -558,7 +558,7 @@ final class UEFIDetailTests: XCTestCase {
         let shouldBe = Checksums.crc32(Array(built.bytes.dropLast(4)))
         XCTAssertEqual(
             field(detail, "CRC32"),
-            Checksums.text(0xDEAD_BEEF, valid: false, expected: UInt64(shouldBe), digits: 8)
+            Checksums.text(0xDEAD_BEEF, valid: false, expected: UInt64(shouldBe), digits: 8).text(in: .english)
         )
     }
 
@@ -566,12 +566,12 @@ final class UEFIDetailTests: XCTestCase {
     /// header, and the detail can recompute it from what is in the panel.
     func testAnEvsaStoreChecksItsHeaderChecksum() {
         let built = TestUEFI.nvramEvsaStore(attributes: 0x0000_0007)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "EVSA store")
         XCTAssertEqual(field(detail, "Attributes"), "0x7")
         XCTAssertEqual(field(detail, "Reserved"), "0x0")
-        XCTAssertEqual(field(detail, "Checksum"), Checksums.text(built.bytes[1], valid: true))
+        XCTAssertEqual(field(detail, "Checksum"), Checksums.text(built.bytes[1], valid: true).text(in: .english))
     }
 
     /// A data variable's header carries the two id words its guid and name
@@ -579,14 +579,14 @@ final class UEFIDetailTests: XCTestCase {
     /// of its own.
     func testAnEvsaDataVariableReadsItsIdsAttributesAndChecksum() {
         let built = TestUEFI.nvramEvsaDataEntry(attributes: 0x1000_0007, data: [0x01])
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(detail.title, "Lang")
         XCTAssertEqual(field(detail, "Kind"), "EVSA entry")
         XCTAssertEqual(field(detail, "VarId"), "0x2")
         XCTAssertEqual(field(detail, "GuidId"), "0x1")
         XCTAssertEqual(field(detail, "Attributes"), "0x10000007 (NonVolatile, BootService, Runtime, ExtendedHeader)")
-        XCTAssertEqual(field(detail, "Checksum"), Checksums.text(built.bytes[1], valid: true))
+        XCTAssertEqual(field(detail, "Checksum"), Checksums.text(built.bytes[1], valid: true).text(in: .english))
     }
 
     /// An NVAR entry shows its attributes in the reference's words, where its
@@ -594,7 +594,7 @@ final class UEFIDetailTests: XCTestCase {
     /// checked the same way the parser checks it.
     func testAnNvarEntryReadsItsAttributesNextAndExtendedHeader() {
         let built = TestUEFI.nvarEntry()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(detail.title, "Setup")
         XCTAssertEqual(field(detail, "Kind"), "NVAR entry")
@@ -603,13 +603,13 @@ final class UEFIDetailTests: XCTestCase {
         XCTAssertNil(field(detail, "GUID index"))
         XCTAssertEqual(field(detail, "Extended attributes"), "0x1 (Checksum)")
         let stored = built.bytes[built.bytes.count - 3]
-        XCTAssertEqual(field(detail, "Checksum"), Checksums.text(stored, valid: true))
+        XCTAssertEqual(field(detail, "Checksum"), Checksums.text(stored, valid: true).text(in: .english))
     }
 
     /// Each ITE image in the block is a row: what it says it is, and where.
     func testECFirmwareListsEveryITEImageItHolds() {
         let built = TestUEFI.itePadding()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
         XCTAssertEqual(
             detail.fields.filter { $0.label == "ITE identification" }.map(\.value),
             ["ITE5507-SB-V0.67 · 0x0", "ITE8380-EC-V0.00 · 0x1000"]
@@ -624,7 +624,7 @@ final class UEFIDetailTests: XCTestCase {
         let store = UEFINode(kind: .vssStore, name: "VSS store", header: 0..<0x10, body: 0x10..<0x110,
                              children: [entry, free])
         let bytes = [UInt8](repeating: 0, count: 0x110)
-        let detail = UEFIDetail.build(for: store, image: UEFIImage(size: 0x110, roots: [store]), reader: ImageReader(bytes))
+        let detail = UEFIDetail.build(for: store, image: UEFIImage(size: 0x110, roots: [store]), reader: ImageReader(bytes), in: .english)
 
         XCTAssertEqual(field(detail, "In use"), "0xB0 (176) · 68\u{00A0}%")
         XCTAssertEqual(field(detail, "Free space"), "0x50 (80)")
@@ -670,7 +670,7 @@ final class UEFIDetailTests: XCTestCase {
     func testAVariablesCopiesAreAHistoryTable() throws {
         let (image, reader) = setupHistory([[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 1, 1, 0, 5]])
         let focus = image.roots[0].children[2]
-        let detail = UEFIDetail.build(for: focus, image: image, reader: reader)
+        let detail = UEFIDetail.build(for: focus, image: image, reader: reader, in: .english)
         let table = try XCTUnwrap(detail.tables.first { $0.title == "Variable history" })
 
         XCTAssertEqual(field(detail, "Variable"), "Setup", "the tree calls it Invalid")
@@ -690,7 +690,7 @@ final class UEFIDetailTests: XCTestCase {
     /// no name of its variable beside its own.
     func testAVariableWithOneCopyHasNoHistory() {
         let (image, reader) = setupHistory([[1]])
-        let detail = UEFIDetail.build(for: image.roots[0].children[1], image: image, reader: reader)
+        let detail = UEFIDetail.build(for: image.roots[0].children[1], image: image, reader: reader, in: .english)
         XCTAssertNil(detail.tables.first { $0.title == "Variable history" })
         XCTAssertNil(field(detail, "Variable"))
     }
@@ -698,7 +698,7 @@ final class UEFIDetailTests: XCTestCase {
     /// Hundreds of copies list the latest, and the one in focus however old.
     func testALongHistoryShowsTheLatestCopies() throws {
         let (image, reader) = setupHistory((0..<50).map { [UInt8($0)] })
-        let detail = UEFIDetail.build(for: image.roots[0].children[1], image: image, reader: reader)
+        let detail = UEFIDetail.build(for: image.roots[0].children[1], image: image, reader: reader, in: .english)
         let rows = try XCTUnwrap(detail.tables.first { $0.title == "Variable history" }).rows
 
         XCTAssertEqual(rows.count, UEFIDetail.historyRows + 2)
@@ -717,17 +717,17 @@ final class UEFIDetailTests: XCTestCase {
         let entry = UEFINode(kind: .dvarEntry, subtype: UEFITypes.Sub.namespaceGuidDvarEntry, name: "40",
                              guid: namespace, header: 0..<23, body: 23..<25, isFixed: true)
         let image = UEFIImage(size: 25, roots: [entry])
-        let detail = UEFIDetail.build(for: image.roots[0], image: image, reader: ImageReader(bytes))
+        let detail = UEFIDetail.build(for: image.roots[0], image: image, reader: ImageReader(bytes), in: .english)
 
-        XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: .empty), "0x40", "no Setup page names it")
-        XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: .empty, reader: ImageReader(bytes)), "0x40 = 0x201",
+        XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: .empty, language: .english), "0x40", "no Setup page names it")
+        XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: .empty, reader: ImageReader(bytes), language: .english), "0x40 = 0x201",
                        "and its value, little-endian")
         let long = UEFINode(kind: .dvarEntry, subtype: UEFITypes.Sub.namespaceGuidDvarEntry, name: "2",
                             guid: namespace, header: 0..<23, body: 0..<16, isFixed: true)
-        XCTAssertEqual(UEFITreeDisplay.name(for: long, catalogue: .empty, reader: ImageReader(bytes)), "0x2 (16 bytes)",
+        XCTAssertEqual(UEFITreeDisplay.name(for: long, catalogue: .empty, reader: ImageReader(bytes), language: .english), "0x2 (16 bytes)",
                        "too long for a number: its size")
         XCTAssertEqual(UEFITreeDisplay.typeText(for: entry), "DVAR entry")
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: entry), "NamespaceGuid")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: entry, in: .english), "NamespaceGuid")
         XCTAssertEqual(field(detail, "State"), "0x5 (Stored)")
         XCTAssertEqual(field(detail, "Entry flags"), "0x6 (NameId, NamespaceGuid)")
         XCTAssertEqual(field(detail, "Namespace ID"), "0x1")
@@ -756,12 +756,12 @@ final class UEFIDetailTests: XCTestCase {
         ])
         let image = UEFIImage(size: 33, roots: [store], dvarSettings: settings)
         let shown = try XCTUnwrap(image.roots.first?.children.first)
-        let detail = UEFIDetail.build(for: shown, image: image, reader: ImageReader(bytes))
+        let detail = UEFIDetail.build(for: shown, image: image, reader: ImageReader(bytes), in: .english)
 
-        XCTAssertEqual(UEFITreeDisplay.name(for: shown, catalogue: .empty, in: image), "AllowBiosDowngrade")
-        XCTAssertEqual(UEFITreeDisplay.name(for: shown, catalogue: .empty, in: image, reader: ImageReader(bytes)),
+        XCTAssertEqual(UEFITreeDisplay.name(for: shown, catalogue: .empty, in: image, language: .english), "AllowBiosDowngrade")
+        XCTAssertEqual(UEFITreeDisplay.name(for: shown, catalogue: .empty, in: image, reader: ImageReader(bytes), language: .english),
                        "AllowBiosDowngrade = Ticked (0x1)", "the value, as Setup words it")
-        XCTAssertEqual(UEFITreeDisplay.name(for: shown, catalogue: .empty), "0x40", "before the forms are read")
+        XCTAssertEqual(UEFITreeDisplay.name(for: shown, catalogue: .empty, language: .english), "0x40", "before the forms are read")
         XCTAssertEqual(field(detail, "Setup option"), "Allow BIOS Downgrade")
         XCTAssertEqual(field(detail, "Keyword"), "AllowBiosDowngrade")
         XCTAssertEqual(field(detail, "Setup page"), "Security")
@@ -772,7 +772,7 @@ final class UEFIDetailTests: XCTestCase {
     /// The version table's region shows what the table states.
     func testABVDTRegionShowsTheVersionsTheTableStates() {
         let built = TestUEFI.bvdtRegion()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "Flash device map region")
         XCTAssertEqual(field(detail, "BIOS version"), "JKCN31WW")
@@ -788,7 +788,7 @@ final class UEFIDetailTests: XCTestCase {
     /// there — and a dash where nothing is.
     func testABVDTRegionListsTheRangesOfItsBMERecord() throws {
         let built = TestUEFI.bvdtRegion()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
         let table = try XCTUnwrap(detail.tables.first { $0.title == "Ranges listed in $BME$" })
 
         XCTAssertEqual(table.columns, ["Start", "Size", "Holds"])
@@ -836,14 +836,14 @@ final class UEFIDetailTests: XCTestCase {
                               header: 0x1000..<0x1000, body: 0x1000..<0x2000, isFixed: true)
         let reader = ImageReader(bytes)
         func rows(_ node: UEFINode, in image: UEFIImage) throws -> [[String]] {
-            let detail = UEFIDetail.build(for: node, image: image, reader: reader)
+            let detail = UEFIDetail.build(for: node, image: image, reader: reader, in: .english)
             let table = try XCTUnwrap(detail.tables.first { $0.title == "Regions of the flash device map" })
             XCTAssertEqual(table.columns, ["Type", "Address", "Start", "Size", "Holds"])
             return table.rows.map { $0.map(\.text) }
         }
 
         let image = UEFIImage(size: 0x2000, roots: [store, region], addressDiff: base)
-        let table = try XCTUnwrap(UEFIDetail.build(for: image.roots[0], image: image, reader: reader).tables.first {
+        let table = try XCTUnwrap(UEFIDetail.build(for: image.roots[0], image: image, reader: reader, in: .english).tables.first {
             $0.title == "Regions of the flash device map"
         })
         XCTAssertEqual(table.linkColumn, 2, "the start in the dump is the link")
@@ -867,7 +867,7 @@ final class UEFIDetailTests: XCTestCase {
         let node = UEFINode(kind: .flashDeviceMapStore, name: "Insyde flash device map",
                             header: 0..<0x1C, body: 0x1C..<0xC4, isFixed: true)
         let image = UEFIImage(size: 0x2000, roots: [node])
-        let focused = UEFIPresenter.zones(for: image.roots[0], in: image)
+        let focused = UEFIPresenter.zones(for: image.roots[0], in: image, language: .english)
         let outlined = UEFIPresenter.zones(outlining: 0x1000..<0x2000, named: "EC Firmware", over: focused)
 
         XCTAssertEqual(outlined.zones.dropLast(), focused.zones[...])
@@ -881,13 +881,13 @@ final class UEFIDetailTests: XCTestCase {
     /// A checksum that does not match says what it should be.
     func testAnNvarEntryWithAWrongChecksumSaysWhatItShouldBe() {
         let built = TestUEFI.nvarEntry(next: 0xFF_FFFF, wrongBy: 1)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertNil(field(detail, "Next entry"))
         let stored = built.bytes[built.bytes.count - 3]
         XCTAssertEqual(
             field(detail, "Checksum"),
-            Checksums.text(stored, valid: false, expected: UInt64(stored &- 1))
+            Checksums.text(stored, valid: false, expected: UInt64(stored &- 1)).text(in: .english)
         )
     }
 
@@ -896,7 +896,7 @@ final class UEFIDetailTests: XCTestCase {
     /// the byte soup its little-endian layout would spell.
     func testAMarkerShowsItsOemAndWindowsFlag() {
         let built = TestUEFI.nvramSlicMarker()
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "SLIC data")
         XCTAssertEqual(field(detail, "Version"), "0x1")
@@ -908,7 +908,7 @@ final class UEFIDetailTests: XCTestCase {
 
     func testAFirehoseFlashMapReadsItsCountAndReserved() {
         let built = TestUEFI.nvramFlashMapStore(numEntries: 3)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "FlashMap store")
         XCTAssertEqual(field(detail, "Entries"), "3")
@@ -925,7 +925,7 @@ final class UEFIDetailTests: XCTestCase {
             size: 0x1000,
             offset: 0x40
         )
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Kind"), "FlashMap entry")
         XCTAssertEqual(field(detail, "Data type"), "0x0")
@@ -944,7 +944,7 @@ final class UEFIDetailTests: XCTestCase {
     func testACleanVolumeChecksumIsValidAndNoProblem() {
         let built = TestUEFI.volume()
         let detail = UEFIDetail.build(
-            for: built.node, image: built.image, reader: built.reader, repairs: []
+            for: built.node, image: built.image, reader: built.reader, repairs: [], in: .english
         )
 
         XCTAssertEqual(field(detail, "Checksum"), "0x1234 (Valid)")
@@ -959,7 +959,7 @@ final class UEFIDetailTests: XCTestCase {
         let built = TestUEFI.volume()
         let detail = UEFIDetail.build(
             for: built.node, image: built.image, reader: built.reader,
-            repairs: [ChecksumRepair(offset: 0x32, bytes: [0xF1, 0xD4])]
+            repairs: [ChecksumRepair(offset: 0x32, bytes: [0xF1, 0xD4])], in: .english
         )
 
         XCTAssertEqual(field(detail, "Checksum"), "0x1234 (Invalid), should be 0xD4F1")
@@ -975,7 +975,7 @@ final class UEFIDetailTests: XCTestCase {
 
         let headerWrong = UEFIDetail.build(
             for: built.node, image: built.image, reader: built.reader,
-            repairs: [ChecksumRepair(offset: 0x10, bytes: [0xFF])]
+            repairs: [ChecksumRepair(offset: 0x10, bytes: [0xFF])], in: .english
         )
         XCTAssertEqual(field(headerWrong, "Header checksum"), "0xAA (Invalid), should be 0xFF")
         XCTAssertEqual(problem(headerWrong, "Header checksum"), true)
@@ -984,7 +984,7 @@ final class UEFIDetailTests: XCTestCase {
 
         let bodyWrong = UEFIDetail.build(
             for: built.node, image: built.image, reader: built.reader,
-            repairs: [ChecksumRepair(offset: 0x11, bytes: [0xAA])]
+            repairs: [ChecksumRepair(offset: 0x11, bytes: [0xAA])], in: .english
         )
         XCTAssertEqual(field(bodyWrong, "Header checksum"), "0xAA (Valid)")
         XCTAssertEqual(field(bodyWrong, "Body checksum"), "0xBB (Invalid), should be 0xAA")
@@ -998,14 +998,14 @@ final class UEFIDetailTests: XCTestCase {
         let built = TestUEFI.microcode()
 
         let clean = UEFIDetail.build(
-            for: built.node, image: built.image, reader: built.reader, repairs: []
+            for: built.node, image: built.image, reader: built.reader, repairs: [], in: .english
         )
         XCTAssertEqual(field(clean, "Image checksum"), "0x00000000 (Valid)")
         XCTAssertEqual(problem(clean, "Image checksum"), false)
 
         let corrupt = UEFIDetail.build(
             for: built.node, image: built.image, reader: built.reader,
-            repairs: [ChecksumRepair(offset: 0x10, bytes: [0xCA, 0xD6, 0xE2, 0xF8])]
+            repairs: [ChecksumRepair(offset: 0x10, bytes: [0xCA, 0xD6, 0xE2, 0xF8])], in: .english
         )
         XCTAssertEqual(field(corrupt, "Image checksum"), "0x00000000 (Invalid), should be 0xF8E2D6CA")
         XCTAssertEqual(problem(corrupt, "Image checksum"), true)
@@ -1016,7 +1016,7 @@ final class UEFIDetailTests: XCTestCase {
     /// wants in it.
     func testByteLengthSizesReadInDecimalAndCodesStayHex() {
         let built = TestUEFI.microcode(dataSize: 0x800, totalSize: 0x1000)
-        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader)
+        let detail = UEFIDetail.build(for: built.node, image: built.image, reader: built.reader, in: .english)
 
         XCTAssertEqual(field(detail, "Data size"), "0x800 (2048)")
         XCTAssertEqual(field(detail, "Total size"), "0x1000 (4096)")

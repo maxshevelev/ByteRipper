@@ -77,6 +77,15 @@ struct FragmentDock: Equatable {
         return (id, Transition(folding: folding, raising: id))
     }
 
+    /// Puts a panel at the head of the dock, folded: the Notes panel, which
+    /// arrives with the first note and is not what anyone asked to look at.
+    /// The head, so its pill stays in one place whatever the fragments do.
+    mutating func addFolded() -> PanelID {
+        let id = PanelID()
+        panels.insert(id, at: 0)
+        return id
+    }
+
     /// Raises `id`, folding whatever was up. A panel the dock does not hold, or
     /// the one already up, moves nothing.
     mutating func expand(_ id: PanelID) -> Transition {

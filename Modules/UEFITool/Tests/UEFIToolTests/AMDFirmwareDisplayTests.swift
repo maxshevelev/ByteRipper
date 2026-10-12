@@ -63,8 +63,8 @@ final class AMDFirmwareDisplayTests: XCTestCase {
         let blob = try row(image, .amdFirmwareEntry, at: 0x3_2000)
 
         XCTAssertEqual([efs, directory, blob].map(UEFITreeDisplay.typeText), ["Padding", "Padding", "Padding"])
-        XCTAssertEqual(UEFITreeDisplay.name(for: directory, catalogue: .empty), "PSP directory $PSP")
-        XCTAssertEqual(UEFITreeDisplay.name(for: blob, catalogue: .empty), "PSP_FW_BOOT_LOADER")
+        XCTAssertEqual(UEFITreeDisplay.name(for: directory, catalogue: .empty, language: .english), "PSP directory $PSP")
+        XCTAssertEqual(UEFITreeDisplay.name(for: blob, catalogue: .empty, language: .english), "PSP_FW_BOOT_LOADER")
         for node in [efs, directory, blob] {
             XCTAssertEqual(UEFIHelpTerms.term(for: node), HelpTermID("amd-psp"))
         }
@@ -73,14 +73,14 @@ final class AMDFirmwareDisplayTests: XCTestCase {
     func testTheEFSLeadsToItsDirectoriesAndADirectoryToItsBlobs() throws {
         let image = UEFIParser.parse(Self.bytes)
         let reader = ImageReader(Self.bytes)
-        let efs = UEFIDetail.build(for: try row(image, .amdEFS, at: 0x2_0000), image: image, reader: reader)
+        let efs = UEFIDetail.build(for: try row(image, .amdEFS, at: 0x2_0000), image: image, reader: reader, in: .english)
         let pointers = try XCTUnwrap(efs.tables.first { $0.title == "Directories" })
         XCTAssertEqual(pointers.rows.map { $0[0].text }, ["+0x14", "+0x28"])
         XCTAssertEqual(pointers.rows.map { $0[2].text }, ["PSP directory $PSP", "BIOS directory $BHD"])
         XCTAssertEqual(pointers.rowTargets, [.node(try row(image, .amdDirectory, at: 0x3_1000).id),
                                              .node(try row(image, .amdDirectory, at: 0x4_0000).id)])
 
-        let bhd = UEFIDetail.build(for: try row(image, .amdDirectory, at: 0x4_0000), image: image, reader: reader)
+        let bhd = UEFIDetail.build(for: try row(image, .amdDirectory, at: 0x4_0000), image: image, reader: reader, in: .english)
         let fields = Dictionary(bhd.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
         XCTAssertEqual(fields["Kind"], "AMD firmware directory")
         XCTAssertEqual(fields["Type"], "BIOS directory")
@@ -90,7 +90,7 @@ final class AMDFirmwareDisplayTests: XCTestCase {
         XCTAssertEqual(entries.rows.first?.map(\.text), ["0", "APCB (0x60)", "0x100 (256)", "0x41000", ""])
         XCTAssertEqual(entries.rowTargets, [.node(try row(image, .amdFirmwareEntry, at: 0x4_1000).id)])
 
-        let blob = UEFIDetail.build(for: try row(image, .amdFirmwareEntry, at: 0x4_1000), image: image, reader: reader)
+        let blob = UEFIDetail.build(for: try row(image, .amdFirmwareEntry, at: 0x4_1000), image: image, reader: reader, in: .english)
         XCTAssertTrue(blob.fields.contains { $0.label == "Entry type" && $0.value == "APCB (0x60)" })
         let listed = try XCTUnwrap(blob.tables.first { $0.title == "Listed in" })
         XCTAssertEqual(listed.rows.map { $0[0].text }, ["BIOS directory $BHD"])
@@ -109,10 +109,10 @@ final class AMDFirmwareDisplayTests: XCTestCase {
         let repairs = UEFIChecksumCheck.repairs(in: image, reader: reader)
         XCTAssertEqual(repairs[directory.id], [ChecksumRepair(offset: 0x3_1004, bytes: stored)])
         XCTAssertEqual(UEFIChecksumCheck.fields(of: repairs, in: image)[directory.id], [.pspDirectory])
-        XCTAssertEqual(UEFITreeMarks.checksumText([.pspDirectory]), "Invalid PSP directory checksum")
+        XCTAssertEqual(UEFITreeMarks.checksumText([.pspDirectory], in: .english), "Invalid PSP directory checksum")
         XCTAssertNil(repairs[try row(image, .amdDirectory, at: 0x4_0000).id], "the other one is right")
 
-        let detail = UEFIDetail.build(for: directory, image: image, reader: reader, repairs: repairs[directory.id] ?? [])
+        let detail = UEFIDetail.build(for: directory, image: image, reader: reader, repairs: repairs[directory.id] ?? [], in: .english)
         let checksum = try XCTUnwrap(detail.fields.first { $0.label == "Checksum" })
         XCTAssertTrue(checksum.isProblem)
         XCTAssertTrue(checksum.value.contains("should be"), checksum.value)

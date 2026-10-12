@@ -69,7 +69,7 @@ final class FITEditorTests: XCTestCase {
     ) throws -> Result<(ToolTransaction, FITEditOutcome), FITEditProblem> {
         FITEditor.addOrReplaceMicrocode(
             component, in: try table(bytes), image: image, reader: ImageReader(bytes),
-            addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count))
+            addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count)), in: .english
         )
     }
 
@@ -232,7 +232,7 @@ final class FITEditorTests: XCTestCase {
     ) throws -> Result<(ToolTransaction, FITEditOutcome), FITEditProblem> {
         FITEditor.addOrReplaceMicrocode(
             component, in: try table(bytes), image: nil, reader: ImageReader(bytes),
-            addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count))
+            addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count)), in: .english
         )
     }
 
@@ -384,7 +384,7 @@ final class FITEditorTests: XCTestCase {
 
         let outcome = FITEditor.addOrReplaceMicrocode(
             bigger, in: try table(bytes), image: parsed, reader: ImageReader(bytes),
-            addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count))
+            addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count)), in: .english
         )
 
         guard case .failure(let problem) = outcome else { return XCTFail("expected a refusal") }
@@ -481,7 +481,7 @@ final class FITEditorTests: XCTestCase {
     ) throws -> Result<(ToolTransaction, FITEditOutcome), FITEditProblem> {
         FITEditor.replaceMicrocode(
             at: index, component, in: try table(bytes), image: nil,
-            reader: ImageReader(bytes), addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count))
+            reader: ImageReader(bytes), addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count)), in: .english
         )
     }
 
@@ -533,7 +533,7 @@ final class FITEditorTests: XCTestCase {
             return XCTFail("expected a refusal")
         }
         XCTAssertEqual(problem, .alreadyInTheTable(entry: 1))
-        XCTAssertTrue(problem.message.contains("row #2"))
+        XCTAssertTrue(problem.message.text(in: .english).contains("row #2"))
     }
 
     /// Replacing a row with what another row already holds would leave the same
@@ -558,8 +558,8 @@ final class FITEditorTests: XCTestCase {
             return XCTFail("expected a refusal")
         }
         XCTAssertEqual(problem, .servedByAnotherRow(entry: 1, cpuids: [0x000B_06A3]))
-        XCTAssertTrue(problem.message.contains("Row #2"))
-        XCTAssertTrue(problem.message.contains("B06A3"))
+        XCTAssertTrue(problem.message.text(in: .english).contains("Row #2"))
+        XCTAssertTrue(problem.message.text(in: .english).contains("B06A3"))
     }
 
     /// The same CPUID on platforms the other row does not serve is another
@@ -610,7 +610,7 @@ final class FITEditorTests: XCTestCase {
     ) throws -> Result<(ToolTransaction, FITRemovalOutcome), FITEditProblem> {
         FITEditor.removeMicrocode(
             index, from: try table(bytes), image: nil, in: ImageReader(bytes),
-            addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count))
+            addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count)), in: .english
         )
     }
 

@@ -54,7 +54,7 @@ public enum FITEditProblem: Equatable, Sendable, Error {
     /// the one to replace is that row.
     case servedByAnotherRow(entry: Int, cpuids: [UInt32])
 
-    public var message: String {
+    public var message: LocalizedText {
         switch self {
         case .notMicrocode:
             return L("That file does not start with an Intel microcode header.")
@@ -182,14 +182,14 @@ public enum FITEditor {
     private static func spareArea(
         around offset: UInt64,
         image: UEFIImage?,
-        reader: ImageReader
+        reader: ImageReader, in language: AppLanguage
     ) -> (range: Range<UInt64>, name: String) {
-        guard let image else { return (offset..<reader.count, L("the rest of the file")) }
+        guard let image else { return (offset..<reader.count, L("the rest of the file", in: language)) }
         let chain = image.nodes(containing: offset)
         for node in chain.reversed() where node.kind != .microcode {
             return (node.range, node.name)
         }
-        return (offset..<reader.count, L("the rest of the file"))
+        return (offset..<reader.count, L("the rest of the file", in: language))
     }
 
     /// Everywhere a *new* component may go, nearest first.
@@ -209,9 +209,9 @@ public enum FITEditor {
     private static func placementAreas(
         after component: Range<UInt64>,
         image: UEFIImage?,
-        reader: ImageReader
+        reader: ImageReader, in language: AppLanguage
     ) -> [(range: Range<UInt64>, name: String)] {
-        let element = spareArea(around: component.lowerBound, image: image, reader: reader)
+        let element = spareArea(around: component.lowerBound, image: image, reader: reader, in: language)
         guard let image else { return [element] }
         let chain = image.nodes(containing: component.lowerBound)
         guard let elementIndex = chain.lastIndex(where: { $0.kind != .microcode }) else {
@@ -315,7 +315,7 @@ public enum FITEditor {
         image: UEFIImage?,
         reader: ImageReader,
         addressDiff: UInt64,
-        protected: ProtectedRanges? = nil
+        protected: ProtectedRanges? = nil, in language: AppLanguage
     ) -> Result<(ToolTransaction, FITEditOutcome), FITEditProblem> {
         let header: MicrocodeHeader
         switch microcode(in: component) {
@@ -333,14 +333,14 @@ public enum FITEditor {
               case .microcode = row.target
         else {
             return checkingProtection(
-                addingNewRow(bytes, for: header, to: table, image: image, reader: reader, addressDiff: addressDiff),
-                reader: reader, protected: protected
+                addingNewRow(bytes, for: header, to: table, image: image, reader: reader, addressDiff: addressDiff, in: language),
+                reader: reader, protected: protected, in: language
             ) { $0.protectionWarnings = $1 }
         }
         return checkingProtection(
             replacing(row, with: bytes, header: header, in: table, image: image,
-                      reader: reader, addressDiff: addressDiff),
-            reader: reader, protected: protected
+                      reader: reader, addressDiff: addressDiff, in: language),
+            reader: reader, protected: protected, in: language
         ) { $0.protectionWarnings = $1 }
     }
 
@@ -363,7 +363,7 @@ public enum FITEditor {
         image: UEFIImage?,
         reader: ImageReader,
         addressDiff: UInt64,
-        protected: ProtectedRanges? = nil
+        protected: ProtectedRanges? = nil, in language: AppLanguage
     ) -> Result<(ToolTransaction, FITEditOutcome), FITEditProblem> {
         let header: MicrocodeHeader
         switch microcode(in: component) {
@@ -390,8 +390,8 @@ public enum FITEditor {
         }
         return checkingProtection(
             replacing(row, with: bytes, header: header, in: table, image: image,
-                      reader: reader, addressDiff: addressDiff),
-            reader: reader, protected: protected
+                      reader: reader, addressDiff: addressDiff, in: language),
+            reader: reader, protected: protected, in: language
         ) { $0.protectionWarnings = $1 }
     }
 
@@ -407,6 +407,7 @@ public enum FITEditor {
         _ result: Result<(ToolTransaction, Outcome), FITEditProblem>,
         reader: ImageReader,
         protected: ProtectedRanges?,
+        in language: AppLanguage,
         record: (inout Outcome, [String]) -> Void
     ) -> Result<(ToolTransaction, Outcome), FITEditProblem> {
         guard let protected, case .success(let (transaction, found)) = result else { return result }
@@ -421,7 +422,7 @@ public enum FITEditor {
             if range.kind.isIBB {
                 return .failure(.insideProtectedRange(name: range.kind.name, at: at))
             }
-            let warning = L("It writes at 0x%1$@ inside a %2$@: the hash the firmware checks it against no longer matches.",
+            let warning = L("It writes at 0x%1$@ inside a %2$@: the hash the firmware checks it against no longer matches.", in: language,
                             String(at, radix: 16, uppercase: true), range.kind.name)
             if !warnings.contains(warning) { warnings.append(warning) }
         }
@@ -461,7 +462,7 @@ public enum FITEditor {
         in table: FITTable,
         image: UEFIImage?,
         reader: ImageReader,
-        addressDiff: UInt64
+        addressDiff: UInt64, in language: AppLanguage
     ) -> Result<(ToolTransaction, FITEditOutcome), FITEditProblem> {
         guard case .microcode(let old) = row.target else { return .failure(.noSuchEntry) }
         let run = self.run(in: table, reader: reader)
@@ -481,14 +482,14 @@ public enum FITEditor {
         if bytes.count <= Int(old.totalSize) {
             let fill = fillByte(
                 at: last.range.upperBound,
-                upTo: spareArea(around: first.offset, image: image, reader: reader).range.upperBound,
+                upTo: spareArea(around: first.offset, image: image, reader: reader, in: language).range.upperBound,
                 in: reader
             )
             let payload = bytes + [UInt8](repeating: fill, count: Int(old.totalSize) - bytes.count)
             let writes = [changedPart(of: payload, at: old.offset, in: reader)].compactMap { $0 }
             return .success((
                 withContainerRepairs(
-                    ToolTransaction(name: L("Replace Microcode"), writes: writes),
+                    ToolTransaction(name: L("Replace Microcode", in: language), writes: writes),
                     image: image, reader: reader, grownFile: nil
                 ),
                 FITEditOutcome(
@@ -505,7 +506,7 @@ public enum FITEditor {
         items[target] = .fresh(bytes)
 
         switch relayRun(items, from: first.offset, oldEnd: last.range.upperBound,
-                        image: image, reader: reader) {
+                        image: image, reader: reader, in: language) {
         case .failure(let problem):
             return .failure(problem)
         case .success(let plan):
@@ -533,7 +534,7 @@ public enum FITEditor {
             let landed = plan.freshOffset ?? old.offset
             return .success((
                 withContainerRepairs(
-                    ToolTransaction(name: L("Replace Microcode"), writes: writes),
+                    ToolTransaction(name: L("Replace Microcode", in: language), writes: writes),
                     image: image, reader: reader, grownFile: plan.growth?.grown
                 ),
                 FITEditOutcome(
@@ -655,7 +656,7 @@ public enum FITEditor {
         to table: FITTable,
         image: UEFIImage?,
         reader: ImageReader,
-        addressDiff: UInt64
+        addressDiff: UInt64, in language: AppLanguage
     ) -> Result<(ToolTransaction, FITEditOutcome), FITEditProblem> {
         let run = self.run(in: table, reader: reader)
         guard case .existing(_, let first)? = run.first,
@@ -666,7 +667,7 @@ public enum FITEditor {
         // gap an earlier removal left is used rather than stepped over.
         let plan: Relayout
         switch relayRun(run + [.fresh(bytes)], from: first.offset,
-                        oldEnd: last.range.upperBound, image: image, reader: reader) {
+                        oldEnd: last.range.upperBound, image: image, reader: reader, in: language) {
         case .success(let found): plan = found
         case .failure(let problem): return .failure(problem)
         }
@@ -706,7 +707,7 @@ public enum FITEditor {
         ))
         return .success((
             withContainerRepairs(
-                ToolTransaction(name: L("Add Microcode"), writes: writes),
+                ToolTransaction(name: L("Add Microcode", in: language), writes: writes),
                 image: image, reader: reader, grownFile: plan.growth?.grown
             ),
             FITEditOutcome(
@@ -748,7 +749,7 @@ public enum FITEditor {
         image: UEFIImage?,
         in reader: ImageReader,
         addressDiff: UInt64,
-        protected: ProtectedRanges? = nil
+        protected: ProtectedRanges? = nil, in language: AppLanguage
     ) -> Result<(ToolTransaction, FITRemovalOutcome), FITEditProblem> {
         guard index > 0 else { return .failure(.cannotRemoveTheHeader) }
         guard index < table.rows.count else { return .failure(.noSuchEntry) }
@@ -781,7 +782,7 @@ public enum FITEditor {
             return header.offset != removed.offset
         }
         switch relayRun(items, from: first.offset, oldEnd: last.range.upperBound,
-                        image: image, reader: reader) {
+                        image: image, reader: reader, in: language) {
         case .failure(let problem):
             return .failure(problem)
         case .success(let plan):
@@ -814,12 +815,12 @@ public enum FITEditor {
         return checkingProtection(
             .success((
                 withContainerRepairs(
-                    ToolTransaction(name: L("Remove Microcode"), writes: writes),
+                    ToolTransaction(name: L("Remove Microcode", in: language), writes: writes),
                     image: image, reader: reader
                 ),
                 FITRemovalOutcome(entryIndex: index, moved: moved, erased: erased)
             )),
-            reader: reader, protected: protected
+            reader: reader, protected: protected, in: language
         ) { $0.protectionWarnings = $1 }
     }
 
@@ -1018,7 +1019,7 @@ public enum FITEditor {
         from start: UInt64,
         oldEnd: UInt64,
         image: UEFIImage?,
-        reader: ImageReader
+        reader: ImageReader, in language: AppLanguage
     ) -> Result<Relayout, FITEditProblem> {
         var payload: [UInt8] = []
         var moves: [(rowIndex: Int, newOffset: UInt64)] = []
@@ -1028,7 +1029,7 @@ public enum FITEditor {
         // leaves between components.
         let alignmentFill = fillByte(
             at: oldEnd,
-            upTo: spareArea(around: start, image: image, reader: reader).range.upperBound,
+            upTo: spareArea(around: start, image: image, reader: reader, in: language).range.upperBound,
             in: reader
         )
 
@@ -1053,7 +1054,7 @@ public enum FITEditor {
 
         var growth: (write: ToolTransaction.Write, grown: UEFINode)?
         if next > oldEnd {
-            let area = spareArea(around: start, image: image, reader: reader)
+            let area = spareArea(around: start, image: image, reader: reader, in: language)
             let where_ = "\(area.name) at 0x"
                 + String(area.range.lowerBound, radix: 16, uppercase: true) + "–0x"
                 + String(area.range.upperBound, radix: 16, uppercase: true)
@@ -1075,7 +1076,7 @@ public enum FITEditor {
         } else if oldEnd > next {
             // Tidied with the fill this image uses, not with a byte of our own
             // choosing.
-            let area = spareArea(around: start, image: image, reader: reader).range
+            let area = spareArea(around: start, image: image, reader: reader, in: language).range
             payload += [UInt8](
                 repeating: fillByte(at: oldEnd, upTo: area.upperBound, in: reader),
                 count: Int(oldEnd - next)

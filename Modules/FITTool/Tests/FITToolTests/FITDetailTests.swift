@@ -22,7 +22,7 @@ final class FITDetailTests: XCTestCase {
         let bytes = TestFIT.image(rows: rows, contents: contents)
         let report = FITReader.read(ImageReader(bytes), image: nil)
         guard let row = report.table?.entries.first else { return nil }
-        return FITDetail.build(for: row)
+        return FITDetail.build(for: row, in: .english)
     }
 
     /// A microcode row says what the row is and what it leads to: the entry's
@@ -66,7 +66,7 @@ final class FITDetailTests: XCTestCase {
     func testTheHeaderRowSaysItsCountAndItsSignature() {
         let bytes = TestFIT.image(rows: [TestFIT.Row(FIT.microcodeType, target: microcode)])
         let header = FITReader.read(ImageReader(bytes), image: nil).table?.rows[0]
-        let detail = header.map { FITDetail.build(for: $0) }
+        let detail = header.map { FITDetail.build(for: $0, in: .english) }
 
         XCTAssertEqual(detail?.title, "#1 FIT Header")
         XCTAssertEqual(value(detail!, "Address"), "_FIT_")
@@ -87,7 +87,7 @@ final class FITDetailTests: XCTestCase {
         let row = TestFIT.Row(FIT.microcodeType, target: microcode)
         func header(_ bytes: [UInt8]) -> (table: FITTable?, detail: FITRowDetail) {
             let report = FITReader.read(ImageReader(bytes), image: nil)
-            return (report.table, FITPresenter.display(report, focus: 0).detail)
+            return (report.table, FITPresenter.display(report, focus: 0, in: .english).detail)
         }
 
         let wrongBytes = TestFIT.image(rows: [row], checksum: 0xCC)
@@ -136,7 +136,7 @@ final class FITDetailTests: XCTestCase {
         XCTAssertEqual(
             field(read!, "Image checksum")?.value,
             Checksums.text(UInt64(stored ?? 0), valid: false,
-                           expected: shouldBe.map(UInt64.init), digits: 8)
+                           expected: shouldBe.map(UInt64.init), digits: 8).text(in: .english)
         )
     }
 

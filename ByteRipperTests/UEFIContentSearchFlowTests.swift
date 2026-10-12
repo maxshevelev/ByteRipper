@@ -71,6 +71,63 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         window.layoutIfNeeded()
     }
 
+    /// Opens `bytes` with UEFI Structure switched on and returns at once,
+    /// while the tree may still be read.
+    private func openWithoutWaiting(_ bytes: [UInt8]) throws {
+        let url = try tempFile(bytes)
+        files.append(url)
+        let controller = MainViewController()
+        self.controller = controller
+        let window = makeTestWindow(width: 1200, height: 700)
+        self.window = window
+        window.contentViewController = controller
+        window.setContentSize(NSSize(width: 1200, height: 700))
+        try controller.windowModel.pane1.open(url: url)
+        controller.apply(mode: .singleFile)
+        UEFISearchSettings.isOpen = true
+        UEFISearchSettings.mode = .contents
+        controller.tools.activate(UEFIToolModule.identifier, animated: false)
+        window.layoutIfNeeded()
+    }
+
+    /// A chip dump with no descriptor, whose top level takes a scan to read:
+    /// the volume well into a few megabytes of erased flash.
+    private static func slowImage() throws -> [UInt8] {
+        var bytes = [UInt8](repeating: 0xFF, count: 0x800000)
+        let image = try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G")
+        bytes.replaceSubrange(0x400000..<(0x400000 + image.count), with: image)
+        return bytes
+    }
+
+    /// Find All clicked while the tree is still being read waits for it and
+    /// then searches — it is not dropped.
+    func testFindAllWaitsForTheTree() throws {
+        try openWithoutWaiting(try Self.slowImage())
+        let tree = try XCTUnwrap(controller?.windowModel.pane1.uefiState.tree)
+        XCTAssertFalse(tree.isReady, "the test asks while the tree is read")
+        UEFISearchSettings.content = .init(text: "GH51G", wholeTree: true)
+        let results = try results()
+        let button = try XCTUnwrap(descendants(of: try bar(), NSButton.self).first { $0.title == "Find All" })
+        button.performClick(nil)
+        if case .searching = results.state {} else { XCTFail("the panel says it is searching: \(results.state)") }
+        XCTAssertTrue(pumpUntil(10) { if case .done = results.state { return true }; return false }, "\(results.state)")
+        XCTAssertEqual(results.state, .done(total: 1, scope: nil))
+    }
+
+    /// The same for a search by name.
+    func testANameSearchWaitsForTheTree() throws {
+        try openWithoutWaiting(try Self.slowImage())
+        let tree = try XCTUnwrap(controller?.windowModel.pane1.uefiState.tree)
+        XCTAssertFalse(tree.isReady)
+        UEFISearchSettings.mode = .names
+        UEFISearchSettings.query = UEFITreeQuery(type: UEFITypes.Item.volume.rawValue)
+        let bar = try bar()
+        bar.onSearch?(.forward)
+        XCTAssertEqual(bar.status, .searching, "the bar says it is searching")
+        XCTAssertTrue(pumpUntil(10) { (try? self.selectedNode())??.kind == .volume },
+                      "the volume is found once the tree is there")
+    }
+
     private func bar() throws -> UEFISearchBar {
         try XCTUnwrap(descendants(of: try XCTUnwrap(controller?.tools.panel), UEFISearchBar.self).first)
     }

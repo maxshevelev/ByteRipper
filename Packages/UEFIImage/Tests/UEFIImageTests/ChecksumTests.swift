@@ -1,3 +1,4 @@
+import Localization
 import XCTest
 @testable import UEFIImage
 
@@ -60,11 +61,11 @@ final class ChecksumTests: XCTestCase {
     /// hex, and whether the structure says it counts, in words. Shared, so the
     /// panels read it the same.
     func testTheChecksumWithValidityReadsAsOneLine() {
-        XCTAssertEqual(Checksums.text(0x5C, valid: true), "0x5C (Valid)")
-        XCTAssertEqual(Checksums.text(0x5C, valid: false), "0x5C (Invalid)")
+        XCTAssertEqual(Checksums.text(0x5C, valid: true).text(in: .english), "0x5C (Valid)")
+        XCTAssertEqual(Checksums.text(0x5C, valid: false).text(in: .english), "0x5C (Invalid)")
         // A narrow value is padded to the field's width, not left ragged.
-        XCTAssertEqual(Checksums.text(0, valid: false), "0x00 (Invalid)")
-        XCTAssertEqual(Checksums.text(0x1, valid: true, digits: 4), "0x0001 (Valid)")
+        XCTAssertEqual(Checksums.text(0, valid: false).text(in: .english), "0x00 (Invalid)")
+        XCTAssertEqual(Checksums.text(0x1, valid: true, digits: 4).text(in: .english), "0x0001 (Valid)")
     }
 
     /// An invalid checksum whose correct value is known says what it should be
@@ -72,18 +73,18 @@ final class ChecksumTests: XCTestCase {
     /// back, so leaving it a mystery would say half of the story.
     func testAnInvalidChecksumSaysWhatItShouldBe() {
         XCTAssertEqual(
-            Checksums.text(0x5C, valid: false, expected: 0x5A),
+            Checksums.text(0x5C, valid: false, expected: 0x5A).text(in: .english),
             "0x5C (Invalid), should be 0x5A"
         )
         // The should-be value is padded to the field's width the same way.
         XCTAssertEqual(
-            Checksums.text(0x0C, valid: false, expected: 0x05, digits: 4),
+            Checksums.text(0x0C, valid: false, expected: 0x05, digits: 4).text(in: .english),
             "0x000C (Invalid), should be 0x0005"
         )
         // A valid checksum is already what it should be, so the words never add
         // the should-be — there is nothing to correct, even when told.
         XCTAssertEqual(
-            Checksums.text(0x5A, valid: true, expected: 0x5A),
+            Checksums.text(0x5A, valid: true, expected: 0x5A).text(in: .english),
             "0x5A (Valid)"
         )
     }

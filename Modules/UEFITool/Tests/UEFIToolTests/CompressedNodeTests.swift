@@ -51,7 +51,7 @@ final class CompressedNodeTests: XCTestCase {
 
     func testANodeInsideIsDrawnAsTheSectionThatHoldsIt() {
         let built = built()
-        let zones = UEFIPresenter.zones(for: built.inner, in: built.image)
+        let zones = UEFIPresenter.zones(for: built.inner, in: built.image, language: .english)
 
         XCTAssertEqual(zones.zones.map(\.id), ["0", "0#body"],
                        "picking it in the dump brings back the section")
@@ -63,7 +63,7 @@ final class CompressedNodeTests: XCTestCase {
     /// Without the image there is no way to find the section, and buffer
     /// offsets are never drawn over the file instead.
     func testANodeInsideWithNoImagePublishesNothing() {
-        XCTAssertEqual(UEFIPresenter.zones(for: built().inner), .empty)
+        XCTAssertEqual(UEFIPresenter.zones(for: built().inner, language: .english), .empty)
     }
 
     // MARK: - Detail
@@ -71,7 +71,7 @@ final class CompressedNodeTests: XCTestCase {
     func testTheDetailReadsTheHeaderFromTheBufferAndSaysWhereFrom() throws {
         let built = built()
         let reader = try XCTUnwrap(built.readers.reader(for: built.inner.space))
-        let detail = UEFIDetail.build(for: built.inner, image: built.image, reader: reader)
+        let detail = UEFIDetail.build(for: built.inner, image: built.image, reader: reader, in: .english)
 
         XCTAssertEqual(field(detail, "Decompressed from"), "LZMA compressed section at 0x0")
         XCTAssertEqual(field(detail, "Size"), "0x100 (256)", "read from the buffer, not the file")
@@ -102,13 +102,13 @@ final class CompressedNodeTests: XCTestCase {
 
         let body = try XCTUnwrap(UEFIPresenter.decompressedBody(for: built.section))
         XCTAssertEqual(body.space, .decompressed(chain: [0]))
-        XCTAssertEqual(body.saveTitle, "Save Decompressed Body as…")
-        XCTAssertEqual(body.openTitle, "Open Decompressed Body")
+        XCTAssertEqual(body.saveTitle.text(in: .english), "Save Decompressed Body as…")
+        XCTAssertEqual(body.openTitle.text(in: .english), "Open Decompressed Body")
         XCTAssertEqual(body.suggestedName, "LZMA compressed section decompressed.bin")
         let sectionAsNode = try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.section, in: built.image, body: false))
         XCTAssertEqual(sectionAsNode.suggestedName, "LZMA compressed section.bin",
                        "the section itself keeps its plain name; only what it opens to is marked")
-        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: built.section, body: false), "Open “LZMA compressed section”",
+        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: built.section, body: false)?.text(in: .english), "Open “LZMA compressed section”",
                        "a node of the file is opened as it always was")
         let buffer = try XCTUnwrap(built.readers.reader(for: body.space))
         XCTAssertEqual(buffer.bytes(buffer.all), TestUEFI.file().bytes)
@@ -116,17 +116,17 @@ final class CompressedNodeTests: XCTestCase {
         // Nothing else is offered for what is inside: opening or saving it is
         // reading those bytes, and the titles say they are decompressed.
         XCTAssertNil(UEFIPresenter.decompressedBody(for: built.inner))
-        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: built.inner, body: false), "Open Decompressed “Inner”")
-        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: built.inner, body: true), "Open Decompressed Body of “Inner”")
-        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: built.inner, body: false), "Save Decompressed “Inner” as…")
-        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: built.inner, body: true),
+        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: built.inner, body: false)?.text(in: .english), "Open Decompressed “Inner”")
+        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: built.inner, body: true)?.text(in: .english), "Open Decompressed Body of “Inner”")
+        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: built.inner, body: false)?.text(in: .english), "Save Decompressed “Inner” as…")
+        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: built.inner, body: true)?.text(in: .english),
                        "Save Decompressed Body of “Inner” as…")
         let unnamed = UEFINode(kind: .section, name: "", header: 0..<4, body: 4..<0x40,
                                space: .decompressed(chain: [0]))
-        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: unnamed, body: false), "Open Decompressed Node")
-        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: unnamed, body: true), "Open Decompressed Node Body")
-        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: unnamed, body: false), "Save Decompressed Node as…")
-        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: unnamed, body: true), "Save Decompressed Node Body as…")
+        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: unnamed, body: false)?.text(in: .english), "Open Decompressed Node")
+        XCTAssertEqual(UEFIPresenter.nodeOpenTitle(for: unnamed, body: true)?.text(in: .english), "Open Decompressed Node Body")
+        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: unnamed, body: false)?.text(in: .english), "Save Decompressed Node as…")
+        XCTAssertEqual(UEFIPresenter.nodeSaveTitle(for: unnamed, body: true)?.text(in: .english), "Save Decompressed Node Body as…")
 
         let asNode = try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.inner, in: built.image, body: false))
         XCTAssertEqual(asNode.range, 0..<0x100)
@@ -157,7 +157,7 @@ final class CompressedNodeTests: XCTestCase {
 
         let body = try XCTUnwrap(UEFIPresenter.decompressedBody(for: closed))
         XCTAssertEqual(body.space, .decompressed(chain: [0]))
-        XCTAssertEqual(body.openTitle, "Open Decompressed Body")
+        XCTAssertEqual(body.openTitle.text(in: .english), "Open Decompressed Body")
         let buffer = try XCTUnwrap(built.readers.reader(for: body.space))
         XCTAssertEqual(buffer.bytes(buffer.all), TestUEFI.file().bytes)
 

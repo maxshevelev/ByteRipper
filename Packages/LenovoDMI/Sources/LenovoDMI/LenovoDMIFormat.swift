@@ -99,7 +99,7 @@ public enum LenovoDMIKnownType: UInt16, CaseIterable, Sendable {
         self.init(rawValue: key.type)
     }
 
-    public var name: String {
+    public var name: LocalizedText {
         switch self {
         case .windowsKey: return L("Windows key")
         case .oa3KeyID: return L("OA3 key ID")

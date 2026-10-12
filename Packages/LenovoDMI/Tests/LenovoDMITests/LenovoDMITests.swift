@@ -1,3 +1,4 @@
+import Localization
 import XCTest
 import PartCodec
 @testable import LenovoDMI
@@ -195,8 +196,8 @@ final class ValueTests: XCTestCase {
 
     func testAnUnknownEntryThatIsNotTextReadsAsHex() {
         XCTAssertEqual(LenovoDMIValue.text(of: entry(TestStore.unknown)), "19")
-        XCTAssertEqual(LenovoDMIValue.name(of: TestStore.unknown.key), "Unknown SMBIOS entry 0x0700")
-        XCTAssertEqual(LenovoDMIValue.name(of: TestStore.serial.key), "Baseboard serial number")
+        XCTAssertEqual(LenovoDMIValue.name(of: TestStore.unknown.key).text(in: .english), "Unknown SMBIOS entry 0x0700")
+        XCTAssertEqual(LenovoDMIValue.name(of: TestStore.serial.key).text(in: .english), "Baseboard serial number")
     }
 }
 
@@ -362,7 +363,7 @@ final class BlockCodecTests: XCTestCase {
         let back = LENVBlock(offset: block.offset, stored: update.bytes)
         XCTAssertTrue(back.checksumIsValid)
         XCTAssertEqual(back.entry(.smbios(0x0400))?.data, Array("PF9NEW99".utf8))
-        XCTAssertEqual(codec.badge?.text, "XOR 7F")
+        XCTAssertEqual(codec.badge?.text.text(in: .english), "XOR 7F")
     }
 }
 

@@ -87,7 +87,7 @@ extension Parser {
                 continue
             }
             if let block = loneLENVBlock(at: at, limit: range.upperBound) {
-                found.append(lenvBlock(block, name: L("LENV block"), inUse: nil))
+                found.append(lenvBlock(block, named: L("LENV block"), inUse: nil))
                 at = block.range.upperBound
                 continue
             }
@@ -127,10 +127,10 @@ extension Parser {
     /// it is, so none of it moves.
     func lenovoDMIStore(_ area: LenovoDMIArea) -> UEFINode {
         let live = area.liveIndex
-        var store = UEFINode(kind: .lenovoDMIStore, name: L("Lenovo DMI"), range: area.range)
+        var store = UEFINode(kind: .lenovoDMIStore, named: L("Lenovo DMI"), range: area.range)
         store.isFixed = true
         store.children = [ldbgLog(area.log)] + area.blocks.enumerated().map { index, block in
-            lenvBlock(block, name: L("LENV block %1$@", index + 1), inUse: live.map { $0 == index } ?? false)
+            lenvBlock(block, named: L("LENV block %1$@", index + 1), inUse: live.map { $0 == index } ?? false)
         }
         return store
     }
@@ -139,7 +139,7 @@ extension Parser {
         let header = log.offset..<(log.offset + UInt64(LenovoDMIFormat.ldbgHeaderSize))
         var node = UEFINode(
             kind: .ldbgLog,
-            name: L("Change log (LDBG)"),
+            named: L("Change log (LDBG)"),
             header: header,
             body: header.upperBound..<log.range.upperBound,
             isFixed: true
@@ -147,7 +147,7 @@ extension Parser {
         node.children = log.entries.map { entry in
             UEFINode(
                 kind: .ldbgEntry,
-                name: entry.timestampText ?? L("No date"),
+                named: entry.timestampText.map(LocalizedText.verbatim) ?? L("No date"),
                 header: entry.range,
                 body: entry.range.upperBound..<entry.range.upperBound,
                 isFixed: true
@@ -159,12 +159,12 @@ extension Parser {
     /// A block's row, its subtype 1 for the block the firmware reads and 0
     /// for the other; none for a block on its own, which has no other to be
     /// chosen over. An erased block has no entries to show.
-    func lenvBlock(_ block: LENVBlock, name: String, inUse: Bool?) -> UEFINode {
+    func lenvBlock(_ block: LENVBlock, named name: LocalizedText, inUse: Bool?) -> UEFINode {
         let header = block.offset..<(block.offset + UInt64(LenovoDMIFormat.lenvHeaderSize))
         var node = UEFINode(
             kind: .lenvBlock,
             subtype: inUse.map { $0 ? 1 : 0 },
-            name: name,
+            named: name,
             header: header,
             body: header.upperBound..<block.range.upperBound,
             isFixed: true,
@@ -174,7 +174,7 @@ extension Parser {
         node.children = block.entries.map { entry in
             UEFINode(
                 kind: .lenvEntry,
-                name: LenovoDMIValue.name(of: entry.key),
+                named: LenovoDMIValue.name(of: entry.key),
                 header: entry.offset..<entry.dataRange.lowerBound,
                 body: entry.dataRange,
                 isFixed: true

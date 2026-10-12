@@ -51,7 +51,7 @@ final class AgentService {
     private(set) lazy var server = AgentServer(
         info: AgentServerInfo(name: "byteripper", version: Self.appVersion, title: "ByteRipper"),
         instructions: Self.instructions,
-        tools: catalogue.map { linking(noted(Self.inEnglish($0.tool))) })
+        tools: catalogue.map { linking(noted($0.tool)) })
 
     /// Every tool, in the order `tools/list` gives them, with where it comes
     /// from and what it does — what the Agent window's Tools page lists.
@@ -85,16 +85,6 @@ final class AgentService {
     /// How each tool has been used since the app started, by name. Kept
     /// apart from the log, which keeps only its last calls.
     private(set) var toolStats: [String: AgentToolStats] = [:]
-
-    /// `tool`, answering in English whatever the window speaks: a field label
-    /// a module borrows from its panel is built with `L()`, and a model reads
-    /// the parsers' language (`Design/AGENT_PLAN.md`, "Language").
-    private static func inEnglish(_ tool: AgentTool) -> AgentTool {
-        AgentTool(name: tool.name, title: tool.title, description: tool.description,
-                  inputSchema: tool.inputSchema, annotations: tool.annotations) { call in
-            try await Localization.$override.withValue(.english) { try await tool.run(call) }
-        }
-    }
 
     /// `tool`, with a `link` beside every UEFI node's `label` in its answer
     /// when the answer's `document` is a file on disk (`AgentNodeURLs`).
@@ -264,7 +254,9 @@ final class AgentService {
         annotationTools.locate = { [diffTools] host, range in
             await diffTools.locate(host, [range]).first?.map(AgentDiffTools.placeJSON) ?? []
         }
-        // Every pane draws the annotations on its bytes from here.
+        // Every pane draws the annotations on its bytes from here, and every
+        // tab's Notes panel lists them.
+        AgentAnnotationTools.current = annotationTools
         PaneViewModel.annotationSource = { [weak annotationTools] pane in annotationTools?.annotations(for: pane) ?? [] }
         PaneViewModel.annotationTitles = { [weak annotationTools] in annotationTools?.titles() ?? [:] }
         // A survey runs the other tools; it finds them in the finished list.

@@ -272,9 +272,9 @@ public enum UEFIAgentVariables {
         guard let bytes else { return nil }
         let value = NvramValue.read(name: variable.name, guid: variable.guid,
                                     attributes: variable.attributes, value: bytes)
-        if let text = NvramValueText.short(value) { return text }
+        if let text = NvramValueText.short(value, in: .english) { return text }
         guard value.content == .bytes, bytes.count <= hexLimit else { return nil }
-        return NvramValueText.hexBytes(bytes)
+        return NvramValueText.hexBytes(bytes, in: .english)
     }
 
     private static func row(_ variable: Variable) -> JSONValue {

@@ -141,7 +141,7 @@ final class FITValidatorTests: XCTestCase {
         XCTAssertEqual(found.map(\.kind), [.sameProcessorsAsRow(entry: 1, cpuids: [0x000B_06F2])])
         XCTAssertEqual(found.first?.entryIndex, 2)
         XCTAssertEqual(found.first?.severity, .warning)
-        XCTAssertEqual(found.first?.message, "Row #2 already holds a microcode for CPUID B06F2 on the same platforms")
+        XCTAssertEqual(found.first?.message.text(in: .english), "Row #2 already holds a microcode for CPUID B06F2 on the same platforms")
 
         XCTAssertTrue(FITReader.read(ImageReader(image(secondPlatforms: 0x40)), image: nil).problems.isEmpty,
                       "platforms that do not meet are two boards' microcodes")
@@ -155,6 +155,6 @@ final class FITValidatorTests: XCTestCase {
 
         XCTAssertFalse(found.isEmpty)
         XCTAssertTrue(found.allSatisfy { $0.offset != nil })
-        XCTAssertFalse(found.contains { $0.message.isEmpty })
+        XCTAssertFalse(found.contains { $0.message.text(in: .english).isEmpty })
     }
 }

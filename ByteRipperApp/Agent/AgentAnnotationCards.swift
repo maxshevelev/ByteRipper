@@ -4,29 +4,30 @@ import HelpUI
 import Localization
 import ToolModuleKit
 
-/// The Annotations page of the Agent window: each annotation a card drawn as
-/// it is over the dump — the agent's hue, a dashed outline and a light wash —
+/// The cards of the Notes panel (`NotesPanel`): each note a card drawn as it
+/// is over the dump — its author's hue, a dashed outline and a light wash —
 /// with everything it says, in columns that scroll (issue #37).
 ///
-/// A card: the number and the title, a dot filled while the file is open;
-/// the file and the place; the node it is on, as a link that opens it in
-/// UEFI Structure; the note whole; the annotations it is about, as links to
-/// their cards. A place in decompressed or decoded bytes wears the badges of
-/// the codecs before its addresses, and goes to a fragment panel of those
+/// A card: the agent's picture, on a note the agent made, and the title; the file, after a dot filled while it is open; the
+/// place — the node it is on after its parent, as the Contents search results
+/// name it, a link that opens it in UEFI Structure, or the addresses in a
+/// file with no firmware tree; the note whole; the annotations it is about,
+/// as links to their cards. A place in decompressed or decoded bytes wears
+/// the badges of the codecs before it, and goes to a fragment panel of those
 /// bytes. A click selects, ⌘ and ⇧ add; a double-click or Return goes to the
 /// place; the ✕ in the corner removes the card, Delete the selected ones; the
 /// arrows move between cards.
-// help: window.agent.annotations
+// help: window.notes
 @MainActor
 final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollectionViewDelegate {
     let collection = AnnotationCollectionView()
     let scroll = NSScrollView()
     private let layout = AnnotationMasonryLayout()
-    private let empty = NSTextField(labelWithString: "")
 
     var onShow: (String) -> Void = { _ in }
     var onOpenSite: (AgentAnnotation) -> Void = { _ in }
     var onRemove: ([String]) -> Void = { _ in }
+    var onEdit: (AgentAnnotation) -> Void = { _ in }
     var onSelectionChanged: () -> Void = {}
     /// Whether an annotation's file is open on screen now.
     var isOpen: (AgentAnnotation) -> Bool = { _ in false }
@@ -41,7 +42,9 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         collection.delegate = self
         collection.isSelectable = true
         collection.allowsMultipleSelection = true
-        collection.backgroundColors = [.clear]
+        // The theme's own background, as a document's: the cards' washes
+        // read on it as they do over the dump.
+        collection.backgroundColors = [.textBackgroundColor]
         collection.register(AnnotationCardItem.self, forItemWithIdentifier: AnnotationCardItem.identifier)
         collection.onDelete = { [weak self] in
             guard let self, !self.selectedIDs.isEmpty else { return }
@@ -59,23 +62,12 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         scroll.drawsBackground = true
         scroll.backgroundColor = .textBackgroundColor
 
-        empty.stringValue = L("The agent has not annotated anything yet.")
-        empty.font = ToolPanelFont.body()
-        empty.textColor = .secondaryLabelColor
-        empty.alignment = .center
-        empty.translatesAutoresizingMaskIntoConstraints = false
-        scroll.addSubview(empty)
-        NSLayoutConstraint.activate([
-            empty.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
-            empty.centerYAnchor.constraint(equalTo: scroll.centerYAnchor)
-        ])
     }
 
     /// The annotations as cards; the selection stays with the ones it was on.
     func show(_ annotations: [AgentAnnotation]) {
         let chosen = Set(selectedIDs)
         rows = annotations
-        empty.isHidden = !rows.isEmpty
         layout.invalidateLayout()
         collection.reloadData()
         let kept = Set(rows.indices.filter { chosen.contains(rows[$0].id) }.map { IndexPath(item: $0, section: 0) })
@@ -84,7 +76,6 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
 
     /// The text grew or shrank with the panels' zoom.
     func zoomChanged() {
-        empty.font = ToolPanelFont.body()
         layout.invalidateLayout()
         collection.reloadData()
     }
@@ -118,6 +109,7 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         card.card.onSite = { [weak self] in self?.onOpenSite(annotation) }
         card.card.onRelated = { [weak self] id in self?.select(id) }
         card.card.onRemove = { [weak self] in self?.onRemove([annotation.id]) }
+        card.card.onEdit = { [weak self] in self?.onEdit(annotation) }
         return card
     }
 
@@ -147,10 +139,11 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         }
         return AnnotationCardView.Content(
             id: annotation.id, title: annotation.title, isOpen: isOpen(annotation),
-            file: fileName, codecs: annotation.decoded?.codecs ?? [], address: address,
+            file: fileName, codecs: annotation.decoded?.codecs.map(\.text) ?? [], address: address,
             path: annotation.file.url?.path,
             site: annotation.site?.label, note: annotation.note,
-            related: annotation.relatedTo.map { ($0, titles[$0] ?? "") })
+            related: annotation.relatedTo.map { ($0, titles[$0] ?? "") },
+            byAgent: annotation.author == .agent)
     }
 
     private func height(of index: Int, width: CGFloat) -> CGFloat {
@@ -275,6 +268,9 @@ final class AnnotationCardView: NSView {
         var site: String?
         var note: String
         var related: [(id: String, title: String)]
+        /// Made by the agent — its hue and its picture before the title — or
+        /// by the person, in the person's hue.
+        var byAgent = true
     }
 
     var isSelected = false { didSet { needsDisplay = true } }
@@ -282,19 +278,33 @@ final class AnnotationCardView: NSView {
     var onSite: () -> Void = {}
     var onRelated: (String) -> Void = { _ in }
     var onRemove: () -> Void = {}
+    /// The pencil on a note the person made: opens it for editing.
+    var onEdit: () -> Void = {}
 
     /// The lines under the header, top to bottom; a wrapping line takes the
     /// card's whole width, a link only its own.
     private var lines: [(view: NSView, wraps: Bool)] = []
-    private var header: (number: NSTextField, title: NSTextField, dot: NSTextField, remove: NSButton)?
+    private var header: (title: NSTextField, remove: NSButton)?
+    /// The picture before the title: the agent's on a note it made, the
+    /// pencil that edits a note the person made.
+    private var headerIcon: NSView?
+    /// The card's hue: the agent's or the person's.
+    private(set) var hue = ZoneColors.agent
+    /// Whether the card wears the agent's picture, for tests.
+    var showsAgentIcon: Bool { headerIcon is NSImageView }
+    /// The pencil, for tests.
+    var editButton: NSButton? { headerIcon as? NSButton }
     static let padding: CGFloat = 10
     static let spacing: CGFloat = 4
-    private static let cornerInset: CGFloat = 5
+    /// How far the ✕ stands out of the card's corner, as the badge on an
+    /// iPhone app being deleted does.
+    static let removeOverhang: CGFloat = 8
     private static let headerSpacing: CGFloat = 6
     private(set) var texts: [String] = []
 
     override init(frame: NSRect) {
         super.init(frame: frame)
+        clipsToBounds = false
     }
 
     @available(*, unavailable)
@@ -302,29 +312,83 @@ final class AnnotationCardView: NSView {
 
     override var isFlipped: Bool { true }
 
+    /// The ✕ standing out of the corner answers a click outside the card too.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if let remove = header?.remove, !remove.isHidden,
+           remove.frame.contains(convert(point, from: superview)) {
+            return remove
+        }
+        return super.hitTest(point)
+    }
+
     func show(_ content: Content) {
         subviews.forEach { $0.removeFromSuperview() }
         lines = []
         texts = []
-        let number = label(content.id, font: ToolPanelFont.monospacedDigits(), color: .secondaryLabelColor)
         let title = label(content.title, font: ToolPanelFont.title(), wraps: true)
-        let dot = label(content.isOpen ? "●" : "○", font: ToolPanelFont.body(), color: ZoneColors.agent)
-        dot.toolTip = content.isOpen ? L("The file is open") : L("The file is not open")
-        // help: window.agent.annotations
+        // help: window.notes
         let remove = AnnotationRemoveBadge { [weak self] in self?.onRemove() }
-        [number, title, dot, remove].forEach(addSubview)
-        header = (number, title, dot, remove)
-        texts += [content.id, content.title]
+        [title, remove].forEach(addSubview)
+        header = (title, remove)
+        hue = content.byAgent ? ZoneColors.agent : ZoneColors.person
+        remove.hue = hue
+        headerIcon = nil
+        let symbolSize = NSImage.SymbolConfiguration(pointSize: ToolPanelFont.title().pointSize, weight: .regular)
+        if !content.byAgent {
+            // help: window.notes.edit
+            let pencil = CardEditButton { [weak self] in self?.onEdit() }
+            pencil.image = (NSImage(systemSymbolName: "long.text.page.and.pencil", accessibilityDescription: nil)
+                ?? NSImage(systemSymbolName: "square.and.pencil", accessibilityDescription: nil))?
+                .withSymbolConfiguration(symbolSize)
+            pencil.contentTintColor = hue
+            ControlHelp.describe(pencil, name: L("Edit Annotation"), tooltip: L("Edit this annotation"))
+            addSubview(pencil)
+            headerIcon = pencil
+        }
+        if content.byAgent {
+            let icon = NSImageView()
+            icon.image = NSImage(systemSymbolName: AgentService.symbolName(connected: true),
+                                 accessibilityDescription: L("Agent"))
+            icon.symbolConfiguration = symbolSize
+            icon.contentTintColor = hue
+            icon.toolTip = L("Made by the agent")
+            addSubview(icon)
+            headerIcon = icon
+        }
+        texts.append(content.title)
 
-        let place = AnnotationPlaceLine(file: content.file, codecs: content.codecs, address: content.address)
-        place.toolTip = content.path
-        add(place, wraps: true)
-        texts.append(place.text)
+        // The file, after the dot that says whether it is open: one text, so
+        // a name that wraps leaves the dot on its first line.
+        let dot = content.isOpen ? "●" : "○"
+        let file = label("", font: ToolPanelFont.monospacedDigits(), color: .secondaryLabelColor, wraps: true)
+        let line = NSMutableAttributedString(string: dot + " ", attributes: [
+            .font: ToolPanelFont.body(), .foregroundColor: hue
+        ])
+        line.append(NSAttributedString(string: content.file, attributes: [
+            .font: ToolPanelFont.monospacedDigits(), .foregroundColor: NSColor.secondaryLabelColor
+        ]))
+        file.attributedStringValue = line
+        file.toolTip = [content.isOpen ? L("The file is open") : L("The file is not open"), content.path]
+            .compactMap { $0 }.joined(separator: "\n")
+        add(file, wraps: true)
+        texts.append(dot + " " + content.file)
+        // The place: the node, which the bytes selected in the dump do not
+        // say — or, with no tree to name it, the addresses.
+        let place: AnnotationPlaceLine?
         if let site = content.site {
-            let link = linkButton(site) { [weak self] in self?.onSite() }
+            let link = CardLinkField(text: site) { [weak self] in self?.onSite() }
             link.toolTip = L("Show in UEFI Structure")
-            add(link, wraps: false)
-            texts.append(site)
+            place = AnnotationPlaceLine(codecs: content.codecs, place: link, text: site)
+        } else if let address = content.address {
+            let field = label(address, font: ToolPanelFont.monospacedDigits(), color: .secondaryLabelColor)
+            field.lineBreakMode = .byTruncatingTail
+            place = AnnotationPlaceLine(codecs: content.codecs, place: field, text: address)
+        } else {
+            place = nil
+        }
+        if let place {
+            add(place, wraps: true)
+            texts.append(place.text)
         }
         if !content.note.isEmpty {
             add(label(content.note, font: ToolPanelFont.body(), wraps: true), wraps: true)
@@ -360,24 +424,27 @@ final class AnnotationCardView: NSView {
     private func place(width: CGFloat) -> CGFloat {
         let inner = max(0, width - 2 * Self.padding)
         var bottom = Self.padding
-        if let (number, title, dot, remove) = header {
-            let numberSize = fitted(number, width: inner)
-            let dotSize = fitted(dot, width: inner)
+        if let (title, remove) = header {
             let removeSize = remove.intrinsicContentSize
-            // The ✕ sits in the corner, over the padding; the dot before it.
-            remove.frame = NSRect(x: bounds.width - removeSize.width - Self.cornerInset, y: Self.cornerInset,
+            // The ✕ sits on the corner, standing out of the card; the title
+            // keeps clear of the part of it inside.
+            remove.frame = NSRect(x: width - removeSize.width + Self.removeOverhang, y: -Self.removeOverhang,
                                   width: removeSize.width, height: removeSize.height)
-            let trailing = removeSize.width + Self.cornerInset - Self.padding + Self.headerSpacing
-            let titleWidth = max(0, inner - numberSize.width - dotSize.width - trailing - 2 * Self.headerSpacing)
-            title.frame = NSRect(x: Self.padding + numberSize.width + Self.headerSpacing, y: bottom,
+            let inside = max(0, removeSize.width - Self.removeOverhang - Self.padding)
+            var left = Self.padding
+            if let icon = headerIcon,
+               let image = (icon as? NSImageView)?.image ?? (icon as? NSButton)?.image {
+                // Sized from the image, not the view: an image view reports
+                // a configured symbol's size wrongly.
+                let lineHeight = fitted(title, width: .greatestFiniteMagnitude).height
+                icon.frame = NSRect(x: left, y: bottom + floor((lineHeight - image.size.height) / 2),
+                                    width: image.size.width, height: image.size.height)
+                left = icon.frame.maxX + Self.headerSpacing
+            }
+            let titleWidth = max(0, inner - (left - Self.padding) - inside - Self.headerSpacing)
+            title.frame = NSRect(x: left, y: bottom,
                                  width: titleWidth, height: fitted(title, width: titleWidth).height)
-            // The number and the dot sit on the title's first line.
-            let baseline = bottom + title.firstBaselineOffsetFromTop
-            number.frame = NSRect(origin: NSPoint(x: Self.padding, y: 0), size: numberSize)
-            number.frame.origin.y = baseline - number.firstBaselineOffsetFromTop
-            dot.frame = NSRect(origin: NSPoint(x: Self.padding + inner - trailing - dotSize.width, y: 0), size: dotSize)
-            dot.frame.origin.y = baseline - dot.firstBaselineOffsetFromTop
-            bottom = [title, number, dot].map(\.frame.maxY).max() ?? bottom
+            bottom = title.frame.maxY
         }
         for line in lines {
             bottom += Self.spacing
@@ -394,6 +461,11 @@ final class AnnotationCardView: NSView {
     private func fitted(_ view: NSView, width: CGFloat) -> NSSize {
         if let line = view as? AnnotationPlaceLine { return line.size(forWidth: width) }
         guard let control = view as? NSControl, let cell = control.cell else { return view.fittingSize }
+        // A button's cell answers nothing for a bounded size: a link is
+        // measured on its one line and gives way at the card's edge.
+        if control is NSButton {
+            return NSSize(width: min(ceil(cell.cellSize.width), width), height: ceil(cell.cellSize.height))
+        }
         let size = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude))
         return NSSize(width: ceil(size.width), height: ceil(size.height))
     }
@@ -421,9 +493,9 @@ final class AnnotationCardView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
-        ZoneColors.agent.withAlphaComponent(isSelected ? 0.18 : 0.10).setFill()
+        hue.withAlphaComponent(isSelected ? 0.18 : 0.10).setFill()
         path.fill()
-        ZoneColors.agent.withAlphaComponent(0.9).setStroke()
+        hue.withAlphaComponent(0.9).setStroke()
         path.lineWidth = isSelected ? 2 : 1.5
         if !isSelected {
             let dash: [CGFloat] = [4, 3]
@@ -435,6 +507,30 @@ final class AnnotationCardView: NSView {
     override func mouseDown(with event: NSEvent) {
         super.mouseDown(with: event)
         if event.clickCount == 2 { onDoubleClick() }
+    }
+}
+
+/// The pencil before the title of a note the person made.
+private final class CardEditButton: NSButton {
+    private let run: () -> Void
+
+    init(action: @escaping () -> Void) {
+        run = action
+        super.init(frame: .zero)
+        isBordered = false
+        imagePosition = .imageOnly
+        title = ""
+        target = self
+        self.action = #selector(clicked)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    @objc private func clicked() { run() }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
     }
 }
 
@@ -464,39 +560,62 @@ private final class CardLinkButton: NSButton {
     }
 }
 
-/// The line of a card that says where the annotation is: the file, then the
-/// badges of the codecs a place in decoded bytes came through — as the
-/// fragment panel's header wears them — then the addresses. The file's name
-/// gives way first when the card is narrow.
+/// A link that wraps: a node's name in the place line, which may take more
+/// than one line of a narrow card. A click runs `action`.
+private final class CardLinkField: NSTextField {
+    private let run: () -> Void
+
+    init(text: String, action: @escaping () -> Void) {
+        run = action
+        super.init(frame: .zero)
+        isEditable = false
+        isSelectable = false
+        isBordered = false
+        drawsBackground = false
+        cell?.wraps = true
+        cell?.isScrollable = false
+        lineBreakMode = .byWordWrapping
+        font = ToolPanelFont.body()
+        textColor = .linkColor
+        stringValue = text
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func mouseDown(with event: NSEvent) {}
+
+    override func mouseUp(with event: NSEvent) {
+        if bounds.contains(convert(event.locationInWindow, from: nil)) { run() }
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+}
+
+/// The line of a card under the file's name that says where in it the
+/// annotation is: the badges of the codecs a place in decoded bytes came
+/// through — as the fragment panel's header wears them — then the place.
+/// A node's name too long for the line wraps under its own start, not under
+/// the badges; an address stays on one line and gives way at its end.
 final class AnnotationPlaceLine: NSView {
-    private let file: NSTextField
     private let badges: [PartBadgeView]
-    private let address: NSTextField?
+    private let address: NSControl
     private static let gap: CGFloat = 4
     /// What the line says, as one string, for tests.
     let text: String
 
-    init(file name: String, codecs: [String], address text: String?) {
-        let font = ToolPanelFont.monospacedDigits()
-        file = NSTextField(labelWithString: text == nil ? name : name + " ·")
-        file.font = font
-        file.textColor = .secondaryLabelColor
-        file.lineBreakMode = .byTruncatingMiddle
-        file.cell?.truncatesLastVisibleLine = true
+    init(codecs: [String], place: NSControl, text: String) {
         badges = codecs.map { codec in
             let badge = PartBadgeView()
             badge.text = codec
             return badge
         }
-        address = text.map { text in
-            let field = NSTextField(labelWithString: text)
-            field.font = font
-            field.textColor = .secondaryLabelColor
-            return field
-        }
-        self.text = ([text == nil ? name : name + " ·"] + codecs + [text].compactMap { $0 }).joined(separator: " ")
+        address = place
+        self.text = (codecs + [text]).joined(separator: " ")
         super.init(frame: .zero)
-        ([file] + badges + [address].compactMap { $0 }).forEach { view in
+        (badges + [address]).forEach { view in
             view.translatesAutoresizingMaskIntoConstraints = true
             addSubview(view)
         }
@@ -507,47 +626,68 @@ final class AnnotationPlaceLine: NSView {
 
     override var isFlipped: Bool { true }
 
-    /// The line's size at most `width` wide: one line, whatever the width.
+    /// What `view` takes at most `width` wide. A field is measured by its
+    /// cell, as the card's other lines are: its intrinsic size came out a few
+    /// points short of the text, and the last digit of the addresses was cut.
+    private static func measure(_ view: NSView, width: CGFloat = .greatestFiniteMagnitude) -> NSSize {
+        guard let cell = (view as? NSControl)?.cell else {
+            let size = view.intrinsicContentSize
+            return NSSize(width: ceil(size.width), height: ceil(size.height))
+        }
+        let size = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude))
+        return NSSize(width: ceil(min(size.width, width)), height: ceil(size.height))
+    }
+
+    /// The frames of the badges and of the place for a line `width` wide.
+    /// The badges stand on the place's first line.
+    private func frames(width: CGFloat) -> [NSRect] {
+        var x: CGFloat = 0
+        let badgeSizes = badges.map { Self.measure($0) }
+        for size in badgeSizes { x += size.width + Self.gap }
+        let room = max(0, width - x)
+        let place = Self.measure(address, width: room)
+        let firstLine = Self.measure(address).height
+        let rowHeight = max(firstLine, badgeSizes.map(\.height).max() ?? 0)
+        var frames: [NSRect] = []
+        var left: CGFloat = 0
+        for size in badgeSizes {
+            frames.append(NSRect(x: left, y: floor((rowHeight - size.height) / 2),
+                                 width: size.width, height: size.height))
+            left += size.width + Self.gap
+        }
+        frames.append(NSRect(x: x, y: floor((rowHeight - firstLine) / 2), width: place.width, height: place.height))
+        return frames
+    }
+
+    /// The line's size at most `width` wide.
     func size(forWidth width: CGFloat) -> NSSize {
-        let heights = ([file] + badges + [address].compactMap { $0 }).map { ceil($0.intrinsicContentSize.height) }
-        let wanted = ([file] + badges + [address].compactMap { $0 }).map { ceil($0.intrinsicContentSize.width) }
-        let total = wanted.reduce(0, +) + Self.gap * CGFloat(max(0, wanted.count - 1))
-        return NSSize(width: min(width, total), height: heights.max() ?? 0)
+        let all = frames(width: width)
+        return NSSize(width: min(width, all.map(\.maxX).max() ?? 0), height: all.map(\.maxY).max() ?? 0)
     }
 
     override func layout() {
         super.layout()
-        let height = bounds.height
-        let tail = badges.map { ceil($0.intrinsicContentSize.width) + Self.gap }.reduce(0, +)
-            + (address.map { ceil($0.intrinsicContentSize.width) + Self.gap } ?? 0)
-        let fileWidth = max(0, min(ceil(file.intrinsicContentSize.width), bounds.width - tail))
-        var x: CGFloat = 0
-        func put(_ view: NSView, width: CGFloat) {
-            let size = view.intrinsicContentSize
-            view.frame = NSRect(x: x, y: floor((height - size.height) / 2), width: width, height: ceil(size.height))
-            x += width + Self.gap
+        for (view, frame) in zip(badges + [address], frames(width: bounds.width)) {
+            view.frame = frame
         }
-        put(file, width: fileWidth)
-        badges.forEach { put($0, width: ceil($0.intrinsicContentSize.width)) }
-        if let address { put(address, width: ceil(address.intrinsicContentSize.width)) }
     }
 }
 
 /// The ✕ in a card's corner: removes that one annotation.
+/// Opaque — white, outlined and crossed in the card's own hue — so the card
+/// does not show through it.
 final class AnnotationRemoveBadge: NSButton {
     private let run: () -> Void
-    private static let side: CGFloat = 16
+    private static let side: CGFloat = 20
+    /// The card's hue, which it is outlined and crossed in.
+    var hue = ZoneColors.agent { didSet { needsDisplay = true } }
 
     init(action: @escaping () -> Void) {
         run = action
         super.init(frame: .zero)
         isBordered = false
         title = ""
-        imagePosition = .imageOnly
-        let configuration = NSImage.SymbolConfiguration(pointSize: 8, weight: .bold)
-        image = NSImage(systemSymbolName: "xmark", accessibilityDescription: nil)?
-            .withSymbolConfiguration(configuration)
-        contentTintColor = .secondaryLabelColor
+        imagePosition = .noImage
         target = self
         self.action = #selector(clicked)
         ControlHelp.describe(self, name: L("Remove Annotation"), tooltip: L("Remove this annotation"))
@@ -564,9 +704,26 @@ final class AnnotationRemoveBadge: NSButton {
     func click() { run() }
 
     override func draw(_ dirtyRect: NSRect) {
-        let circle = NSBezierPath(ovalIn: bounds.insetBy(dx: 0.5, dy: 0.5))
-        (isHighlighted ? NSColor.tertiaryLabelColor : NSColor.quaternaryLabelColor).setFill()
+        let hue = self.hue.withAlphaComponent(0.9)
+        let circle = NSBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1))
+        NSColor.white.setFill()
         circle.fill()
-        super.draw(dirtyRect)
+        // Pressed, it takes the card's wash, as the card does when selected.
+        if isHighlighted {
+            self.hue.withAlphaComponent(0.18).setFill()
+            circle.fill()
+        }
+        hue.setStroke()
+        circle.lineWidth = 1.5
+        circle.stroke()
+        let arm = bounds.width * 0.17
+        let cross = NSBezierPath()
+        cross.move(to: NSPoint(x: bounds.midX - arm, y: bounds.midY - arm))
+        cross.line(to: NSPoint(x: bounds.midX + arm, y: bounds.midY + arm))
+        cross.move(to: NSPoint(x: bounds.midX - arm, y: bounds.midY + arm))
+        cross.line(to: NSPoint(x: bounds.midX + arm, y: bounds.midY - arm))
+        cross.lineWidth = 1.8
+        cross.lineCapStyle = .round
+        cross.stroke()
     }
 }

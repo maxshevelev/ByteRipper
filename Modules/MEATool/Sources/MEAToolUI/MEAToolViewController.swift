@@ -580,7 +580,7 @@ import ToolModuleKit
                     .paragraphStyle: rowStyle,
                 ]))
                 // The words and the weight the panel gives the row.
-                let value = row.value.text
+                let value = row.value.text(in: Localization.appLanguage)
                 let emphasized = row.isEmphasized
                 text.append(NSAttributedString(string: value + "\n", attributes: [
                     .font: value.hasPrefix("0x")
@@ -736,12 +736,12 @@ import ToolModuleKit
         label.translatesAutoresizingMaskIntoConstraints = false
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
-        let value = ToolWrappingLabel(string: row.value.text)
+        let value = ToolWrappingLabel(string: row.value.text(in: Localization.appLanguage))
         if row.value.isValue {
             // A status-toned value is bold as well as coloured, and a passed
             // check carries its tick — all of it from the tone, which is the
             // same rendering the tree's detail and the UEFI Structure's use.
-            row.tone.draw(value, value: row.value.text)
+            row.tone.draw(value, value: row.value.text(in: Localization.appLanguage))
             value.isSelectable = true
         } else {
             // "Coming soon" and "Loading…" alike: grey, and nothing to select.

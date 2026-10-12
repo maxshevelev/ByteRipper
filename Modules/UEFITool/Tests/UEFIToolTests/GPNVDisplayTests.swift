@@ -40,10 +40,10 @@ final class GPNVDisplayTests: XCTestCase {
     func testARecordsRowSaysWhatItHolds() throws {
         let (_, store) = try parsed()
         let reader = ImageReader(Self.bytes)
-        let names = store.children.map { UEFITreeDisplay.name(for: $0, catalogue: .empty, reader: reader) }
+        let names = store.children.map { UEFITreeDisplay.name(for: $0, catalogue: .empty, reader: reader, language: .english) }
         XCTAssertEqual(names, ["MFG0 = M8NRKD00311031C", "OA30 = \(Self.key)",
                                "MFG0 = M8NRKD00311031C, 90NR0551-M04320, LR17MC00WI, …"])
-        XCTAssertEqual(store.children.map(UEFITreeDisplay.subtypeText), ["Superseded", "Current", "Current"])
+        XCTAssertEqual(store.children.map { UEFITreeDisplay.subtypeText(for: $0, in: .english) }, ["Superseded", "Current", "Current"])
         XCTAssertEqual(UEFITreeDisplay.typeText(for: store), "Padding", "padding to UEFITool")
         XCTAssertEqual(UEFIHelpTerms.term(for: store.children[0]), HelpTermID("gpnv"))
     }
@@ -51,7 +51,7 @@ final class GPNVDisplayTests: XCTestCase {
     func testARecordsDetailsListItsTextAndItsCopies() throws {
         let (image, store) = try parsed()
         let reader = ImageReader(Self.bytes)
-        let detail = UEFIDetail.build(for: store.children[2], image: image, reader: reader)
+        let detail = UEFIDetail.build(for: store.children[2], image: image, reader: reader, in: .english)
         let fields = Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
         XCTAssertEqual(fields["Kind"], "GPNV record")
         XCTAssertEqual(fields["State"], "Current")
@@ -62,13 +62,13 @@ final class GPNVDisplayTests: XCTestCase {
         let history = try XCTUnwrap(detail.tables.first { $0.title == "Variable history" })
         XCTAssertEqual(history.rows.count, 2, "the record it replaced, and itself")
 
-        let key = UEFIDetail.build(for: store.children[1], image: image, reader: reader)
+        let key = UEFIDetail.build(for: store.children[1], image: image, reader: reader, in: .english)
         XCTAssertTrue(key.fields.contains { $0.label == "Windows product key" && $0.value == Self.key })
     }
 
     func testTheStoreListsTheRecordsInForce() throws {
         let (image, store) = try parsed()
-        let detail = UEFIDetail.build(for: store, image: image, reader: ImageReader(Self.bytes))
+        let detail = UEFIDetail.build(for: store, image: image, reader: ImageReader(Self.bytes), in: .english)
         let fields = Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
         XCTAssertEqual(fields["Current entries"], "2")
         XCTAssertEqual(fields["Superseded entries"], "1")

@@ -58,6 +58,7 @@ extension HelpTopicID {
     public static let bookmarks = HelpTopicID("bookmarks")
     public static let segments = HelpTopicID("segments")
     public static let fragments = HelpTopicID("fragments")
+    public static let notes = HelpTopicID("notes")
 
     // Changing a dump
     public static let editing = HelpTopicID("editing")

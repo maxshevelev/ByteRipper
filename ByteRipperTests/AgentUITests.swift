@@ -356,8 +356,6 @@ final class AgentUITests: XCTestCase {
         defer { window.close() }
         controller.focusList()
         XCTAssertTrue(window.firstResponder === controller.shownList)
-        controller.showAnnotations()
-        XCTAssertTrue(window.firstResponder === controller.annotationsList.collection)
         controller.showTools()
         XCTAssertTrue(window.firstResponder === controller.toolsPage.table)
     }

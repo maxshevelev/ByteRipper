@@ -21,26 +21,26 @@ final class UEFITreeDisplayTests: XCTestCase {
     /// A file and a section are named from the FFS and section type tables the
     /// parser already uses — the generated table has no answer for them.
     func testAFileAndSectionSubtypeComeFromTheParserTables() {
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.file(type: 0x07).node), "Driver")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.file(type: 0x07).node, in: .english), "Driver")
         // An unknown file type keeps its number.
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.file(type: 0x7F).node), "File type 0x7F")
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.section(type: 0x19).node), "Raw")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.file(type: 0x7F).node, in: .english), "File type 0x7F")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.section(type: 0x19).node, in: .english), "Raw")
     }
 
     /// Every other type reads from the generated `UEFITypes` tables.
     func testOtherSubtypesComeFromTheGeneratedTables() {
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.volume().node), "FFSv2")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.volume().node, in: .english), "FFSv2")
         let capsule = UEFINode(
             kind: .capsule, name: "",
             guid: EFIGUID("4A3CA68B-7723-48FB-803D-578CC1FEC44D"),
             header: 0..<0, body: 0..<0x100
         )
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.intelImage().node), "Intel")
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: capsule), "Aptio signed")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.intelImage().node, in: .english), "Intel")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: capsule, in: .english), "Aptio signed")
         let region = UEFINode(kind: .region, subtype: 7, name: "", header: 0..<0, body: 0..<0x100)
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: region), "Microcode")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: region, in: .english), "Microcode")
         let padding = UEFINode(kind: .padding, name: "", range: 0..<0x100, isErased: true)
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: padding), "Empty (FFh)")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: padding, in: .english), "Empty (FFh)")
     }
 
     /// Erased padding and free space are room, not content, and read grey;
@@ -64,7 +64,7 @@ final class UEFITreeDisplayTests: XCTestCase {
     func testAnErasedMapRegionIsGreyLikeErasedPadding() {
         let unused = UEFINode(kind: .flashDeviceMapRegion, name: "Unused", range: 0..<0x1000, isErased: true)
         let written = UEFINode(kind: .flashDeviceMapRegion, name: "Unknown", range: 0..<0x1000)
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: unused), "Empty (FFh)")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: unused, in: .english), "Empty (FFh)")
         XCTAssertTrue(UEFITreeDisplay.isEmptySpace(unused))
         XCTAssertFalse(UEFITreeDisplay.isEmptySpace(written))
         var holding = unused
@@ -74,9 +74,9 @@ final class UEFITreeDisplayTests: XCTestCase {
 
     /// A node with no subtype says nothing in the column — not a guess.
     func testANodeWithNoSubtypeLeavesTheColumnEmpty() {
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.microcode().node), "")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: TestUEFI.microcode().node, in: .english), "")
         let freeSpace = UEFINode(kind: .freeSpace, name: "", range: 0..<0x100)
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: freeSpace), "")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: freeSpace, in: .english), "")
     }
 
     // MARK: - The title
@@ -84,24 +84,24 @@ final class UEFITreeDisplayTests: XCTestCase {
     /// The title leads with what the image is: the top of the tree, type and
     /// subtype. A capsule file leads with its capsule, a dump with its first root.
     func testTheTitleLeadsWithTheImageType() {
-        XCTAssertEqual(UEFITreeDisplay.imageType(of: TestUEFI.volume().image), "Volume · FFSv2")
-        XCTAssertEqual(UEFITreeDisplay.imageType(of: TestUEFI.intelImage().image), "Image · Intel")
-        XCTAssertEqual(UEFITreeDisplay.imageType(of: TestUEFI.file().image), "File · Driver")
+        XCTAssertEqual(UEFITreeDisplay.imageType(of: TestUEFI.volume().image, in: .english), "Volume · FFSv2")
+        XCTAssertEqual(UEFITreeDisplay.imageType(of: TestUEFI.intelImage().image, in: .english), "Image · Intel")
+        XCTAssertEqual(UEFITreeDisplay.imageType(of: TestUEFI.file().image, in: .english), "File · Driver")
         let capsule = UEFINode(
             kind: .capsule, name: "",
             guid: EFIGUID("4A3CA68B-7723-48FB-803D-578CC1FEC44D"),
             header: 0..<0, body: 0..<0x100
         )
-        XCTAssertEqual(UEFITreeDisplay.imageType(of: UEFIImage(size: 0x100, roots: [capsule])), "Capsule · Aptio signed")
+        XCTAssertEqual(UEFITreeDisplay.imageType(of: UEFIImage(size: 0x100, roots: [capsule]), in: .english), "Capsule · Aptio signed")
     }
 
     /// A top with no subtype leads with the type alone.
     func testATitleWithNoSubtypeIsJustTheType() {
-        XCTAssertEqual(UEFITreeDisplay.imageType(of: TestUEFI.microcode().image), "Intel microcode")
+        XCTAssertEqual(UEFITreeDisplay.imageType(of: TestUEFI.microcode().image, in: .english), "Intel microcode")
     }
 
     func testAnEmptyImageHasNoTypeToLeadWith() {
-        XCTAssertEqual(UEFITreeDisplay.imageType(of: UEFIImage(size: 0, roots: [])), "")
+        XCTAssertEqual(UEFITreeDisplay.imageType(of: UEFIImage(size: 0, roots: []), in: .english), "")
     }
 
     // MARK: - The name
@@ -113,9 +113,9 @@ final class UEFITreeDisplayTests: XCTestCase {
         let volume = TestUEFI.volume().node
         let ffsV2 = KnownGUIDs.ffsV2
 
-        XCTAssertEqual(UEFITreeDisplay.name(for: volume, catalogue: .empty), ffsV2.description)
+        XCTAssertEqual(UEFITreeDisplay.name(for: volume, catalogue: .empty, language: .english), ffsV2.description)
         let named = GuidsCatalogue(names: [ffsV2: "Firmware File System 2"])
-        XCTAssertEqual(UEFITreeDisplay.name(for: volume, catalogue: named), "Firmware File System 2")
+        XCTAssertEqual(UEFITreeDisplay.name(for: volume, catalogue: named, language: .english), "Firmware File System 2")
     }
 
     /// A file with a GUID shows its GUID until the catalogue names it — the
@@ -124,14 +124,14 @@ final class UEFITreeDisplayTests: XCTestCase {
         let file = TestUEFI.file().node
         let guid = KnownGUIDs.volumeTopFile
 
-        XCTAssertEqual(UEFITreeDisplay.name(for: file, catalogue: .empty), guid.description)
+        XCTAssertEqual(UEFITreeDisplay.name(for: file, catalogue: .empty, language: .english), guid.description)
         let named = GuidsCatalogue(names: [guid: "Volume Top File"])
-        XCTAssertEqual(UEFITreeDisplay.name(for: file, catalogue: named), "Volume Top File")
+        XCTAssertEqual(UEFITreeDisplay.name(for: file, catalogue: named, language: .english), "Volume Top File")
 
         let pad = UEFINode(kind: .file, subtype: 0xF0, name: "Padding file",
                            guid: EFIGUID(bytes: [UInt8](repeating: 0xFF, count: 16)),
                            header: 0..<0x18, body: 0x18..<0x40)
-        XCTAssertEqual(UEFITreeDisplay.name(for: pad, catalogue: named), "Padding file",
+        XCTAssertEqual(UEFITreeDisplay.name(for: pad, catalogue: named, language: .english), "Padding file",
                        "a pad file's GUID is filler, and names nothing")
     }
 
@@ -143,14 +143,14 @@ final class UEFITreeDisplayTests: XCTestCase {
         let built = TestUEFI.nvramVssVariable()
         let guid = built.node.guid!
         let named = GuidsCatalogue(names: [guid: "Something else"])
-        XCTAssertEqual(UEFITreeDisplay.name(for: built.node, catalogue: named), "BootOrder")
+        XCTAssertEqual(UEFITreeDisplay.name(for: built.node, catalogue: named, language: .english), "BootOrder")
     }
 
     /// With the image and its bytes, a live VSS row gives the value after
     /// the name, as its type reads; a value it cannot read by its size.
     func testAVssRowSaysItsValue() {
         func row(_ built: TestUEFI.Built) -> String {
-            UEFITreeDisplay.name(for: built.image.roots[0], catalogue: .empty, in: built.image, reader: built.reader)
+            UEFITreeDisplay.name(for: built.image.roots[0], catalogue: .empty, in: built.image, reader: built.reader, language: .english)
         }
         XCTAssertEqual(row(TestUEFI.nvramVssVariable(data: [0x03, 0x00, 0x01, 0x20])), "BootOrder = 0003, 2001")
         XCTAssertEqual(row(TestUEFI.nvramVssVariable(name: "Lang", data: Array("eng".utf8) + [0])), "Lang = \"eng\"")
@@ -159,7 +159,7 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertEqual(row(TestUEFI.nvramVssVariable(name: "Setup", data: [UInt8](repeating: 0, count: 40))),
                        "Setup (40 bytes)")
         XCTAssertEqual(row(TestUEFI.nvramVssVariable(name: "Empty", data: [])), "Empty")
-        XCTAssertEqual(UEFITreeDisplay.name(for: TestUEFI.nvramVssVariable().node, catalogue: .empty), "BootOrder",
+        XCTAssertEqual(UEFITreeDisplay.name(for: TestUEFI.nvramVssVariable().node, catalogue: .empty, language: .english), "BootOrder",
                        "without the bytes, the name alone")
     }
 
@@ -176,7 +176,7 @@ final class UEFITreeDisplayTests: XCTestCase {
     func testAVssRowIsReadByTheStoreItIsGiven() {
         let built = TestUEFI.nvramVssVariable(data: [0x03, 0x00])
         XCTAssertEqual(UEFITreeDisplay.name(for: built.image.roots[0], catalogue: .empty, reader: built.reader,
-                                            store: TestUEFI.nvramVss2Store().node),
+                                            store: TestUEFI.nvramVss2Store().node, language: .english),
                        "BootOrder = 0003")
     }
 
@@ -184,7 +184,7 @@ final class UEFITreeDisplayTests: XCTestCase {
     func testAnNvarRowSaysItsValue() {
         let built = TestUEFI.nvarEntry(next: 0xFF_FFFF, data: [0x2C, 0x01])
         XCTAssertEqual(UEFITreeDisplay.name(for: built.image.roots[0], catalogue: .empty, in: built.image,
-                                            reader: built.reader),
+                                            reader: built.reader, language: .english),
                        "Setup = 300 (0x12C)")
     }
 
@@ -192,7 +192,7 @@ final class UEFITreeDisplayTests: XCTestCase {
     func testALongVssValueIsCutOffInTheRow() {
         let text = String(repeating: "a", count: 100)
         let built = TestUEFI.nvramVssVariable(name: "Long", data: Array(text.utf8) + [0])
-        let row = UEFITreeDisplay.name(for: built.image.roots[0], catalogue: .empty, in: built.image, reader: built.reader)
+        let row = UEFITreeDisplay.name(for: built.image.roots[0], catalogue: .empty, in: built.image, reader: built.reader, language: .english)
         XCTAssertEqual(row, "Long = \"" + String(repeating: "a", count: NvramValueText.rowLimit - 1) + "…")
     }
 
@@ -200,7 +200,7 @@ final class UEFITreeDisplayTests: XCTestCase {
     func testAnNvarVariableIsNamedByItsNameNotItsGuid() {
         let built = TestUEFI.nvarEntry()
         let named = GuidsCatalogue(names: [built.node.guid!: "Something else"])
-        XCTAssertEqual(UEFITreeDisplay.name(for: built.node, catalogue: named), "Setup")
+        XCTAssertEqual(UEFITreeDisplay.name(for: built.node, catalogue: named, language: .english), "Setup")
     }
 
     /// A flash device map entry's GUID is a region type, and the row says
@@ -213,7 +213,7 @@ final class UEFITreeDisplayTests: XCTestCase {
             header: 0..<0x54, body: 0x54..<0x54
         )
         let named = GuidsCatalogue(names: [guid: "Something else"])
-        XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: named), "Variable Defaults")
+        XCTAssertEqual(UEFITreeDisplay.name(for: entry, catalogue: named, language: .english), "Variable Defaults")
     }
 
     /// The region an entry names is called the same, and reads as padding in
@@ -224,17 +224,17 @@ final class UEFITreeDisplayTests: XCTestCase {
             header: 0..<0, body: 0..<0x40000
         )
         let named = GuidsCatalogue(names: [FlashDeviceMap.ecFirmware: "Something else"])
-        XCTAssertEqual(UEFITreeDisplay.name(for: region, catalogue: named), "EC Firmware")
+        XCTAssertEqual(UEFITreeDisplay.name(for: region, catalogue: named, language: .english), "EC Firmware")
         XCTAssertEqual(UEFITreeDisplay.typeText(for: region), "Padding")
 
         // What the parser read inside goes into the name it gave.
         var ec = region
         ec.name = "EC Firmware (ITE8380-EC-V1.43)"
-        XCTAssertEqual(UEFITreeDisplay.name(for: ec, catalogue: named), "EC Firmware (ITE8380-EC-V1.43)")
+        XCTAssertEqual(UEFITreeDisplay.name(for: ec, catalogue: named, language: .english), "EC Firmware (ITE8380-EC-V1.43)")
 
         // With the image's length, its size in KiB goes beside it.
         ec.namedImageLength = 0x30000
-        XCTAssertEqual(UEFITreeDisplay.name(for: ec, catalogue: named), "EC Firmware (ITE8380-EC-V1.43, 192 KB)")
+        XCTAssertEqual(UEFITreeDisplay.name(for: ec, catalogue: named, language: .english), "EC Firmware (ITE8380-EC-V1.43, 192 KB)")
     }
 
     /// A pad file is named by what its body turned out to hold, the way
@@ -248,9 +248,9 @@ final class UEFITreeDisplayTests: XCTestCase {
         let data = UEFINode(kind: .padding, name: "Non-UEFI data", range: 0x40..<0x100)
         let free = UEFINode(kind: .freeSpace, name: "Free space", range: 0x18..<0x40, isErased: true)
 
-        XCTAssertEqual(UEFITreeDisplay.name(for: pad([]), catalogue: .empty), "Padding file")
-        XCTAssertEqual(UEFITreeDisplay.name(for: pad([free, startup]), catalogue: .empty), "Startup AP data padding file")
-        XCTAssertEqual(UEFITreeDisplay.name(for: pad([free, data]), catalogue: .empty), "Non-empty padding file")
+        XCTAssertEqual(UEFITreeDisplay.name(for: pad([]), catalogue: .empty, language: .english), "Padding file")
+        XCTAssertEqual(UEFITreeDisplay.name(for: pad([free, startup]), catalogue: .empty, language: .english), "Startup AP data padding file")
+        XCTAssertEqual(UEFITreeDisplay.name(for: pad([free, data]), catalogue: .empty, language: .english), "Non-empty padding file")
     }
 
     /// An erased pad file is room and reads grey; one that holds data does not,
@@ -270,13 +270,13 @@ final class UEFITreeDisplayTests: XCTestCase {
     /// A node without a GUID keeps the name the parser gave it.
     func testANodeWithoutAGuidKeepsItsParserName() {
         let freeSpace = UEFINode(kind: .freeSpace, name: "Tail", range: 0..<0x100)
-        XCTAssertEqual(UEFITreeDisplay.name(for: freeSpace, catalogue: .empty), "Tail")
+        XCTAssertEqual(UEFITreeDisplay.name(for: freeSpace, catalogue: .empty, language: .english), "Tail")
     }
 
     /// A node without a GUID and without a name falls back to its kind.
     func testANodeWithoutAGuidOrNameFallsBackToItsKind() {
         let padding = UEFINode(kind: .padding, name: "", range: 0..<0x100)
-        XCTAssertEqual(UEFITreeDisplay.name(for: padding, catalogue: .empty), "Padding")
+        XCTAssertEqual(UEFITreeDisplay.name(for: padding, catalogue: .empty, language: .english), "Padding")
     }
 
     // MARK: - The hidden top row
@@ -342,7 +342,7 @@ final class UEFITreeDisplayTests: XCTestCase {
 
         XCTAssertNil(presented.title)
         XCTAssertEqual(presented.rows.map(\.kind), [.volume])
-        XCTAssertEqual(UEFITreeDisplay.summary(of: image), "Volume · FFSv2")
+        XCTAssertEqual(UEFITreeDisplay.summary(of: image, in: .english), "Volume · FFSv2")
     }
 
     /// A wrapper with nothing under it has no children to put in the tree's
@@ -355,7 +355,7 @@ final class UEFITreeDisplayTests: XCTestCase {
 
         XCTAssertNil(presented.title)
         XCTAssertEqual(presented.rows.map(\.kind), [.volume])
-        XCTAssertEqual(UEFITreeDisplay.summary(of: image), "Volume · FFSv2")
+        XCTAssertEqual(UEFITreeDisplay.summary(of: image, in: .english), "Volume · FFSv2")
     }
 
     /// A file with several roots has no single top to stand for — each row earns
@@ -372,7 +372,7 @@ final class UEFITreeDisplayTests: XCTestCase {
 
         XCTAssertNil(presented.title)
         XCTAssertEqual(presented.rows.map(\.kind), [.capsule, .padding])
-        XCTAssertEqual(UEFITreeDisplay.summary(of: image), "Capsule")
+        XCTAssertEqual(UEFITreeDisplay.summary(of: image, in: .english), "Capsule")
     }
 
     /// A single wrapper-shaped root with nothing under it is the leaf case above
@@ -384,14 +384,14 @@ final class UEFITreeDisplayTests: XCTestCase {
 
         XCTAssertNil(presented.title)
         XCTAssertEqual(presented.rows.count, 1)
-        XCTAssertEqual(UEFITreeDisplay.summary(of: image), "Image · UEFI")
+        XCTAssertEqual(UEFITreeDisplay.summary(of: image, in: .english), "Image · UEFI")
     }
 
     /// An image with nothing in it at all is not an image, and the summary
     /// says so rather than leaving the line blank.
     func testAnEmptyImageSummarySaysNothingLooksLikeFirmware() {
-        XCTAssertEqual(UEFITreeDisplay.summary(of: UEFIImage(size: 0, roots: [])), "Nothing here looks like a firmware image.")
-        XCTAssertEqual(UEFITreeDisplay.summary(of: nil), "")
+        XCTAssertEqual(UEFITreeDisplay.summary(of: UEFIImage(size: 0, roots: []), in: .english), "Nothing here looks like a firmware image.")
+        XCTAssertEqual(UEFITreeDisplay.summary(of: nil, in: .english), "")
     }
 
     /// The summary is the folded root's name and nothing else. It counts no
@@ -399,7 +399,7 @@ final class UEFITreeDisplayTests: XCTestCase {
     /// as the reader opens it, so any count would be a count of clicks.
     func testASummaryIsTheRootNameAlone() {
         XCTAssertEqual(
-            UEFITreeDisplay.summary(of: wrapperImage([volumeNode()])),
+            UEFITreeDisplay.summary(of: wrapperImage([volumeNode()]), in: .english),
             "UEFI image"
         )
     }
@@ -417,8 +417,8 @@ final class UEFITreeDisplayTests: XCTestCase {
         )
 
         XCTAssertEqual(UEFITreeDisplay.typeText(for: node), "Image")
-        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: node), "UEFI")
-        XCTAssertEqual(UEFITreeDisplay.name(for: node, catalogue: .empty), "UEFI image")
+        XCTAssertEqual(UEFITreeDisplay.subtypeText(for: node, in: .english), "UEFI")
+        XCTAssertEqual(UEFITreeDisplay.name(for: node, catalogue: .empty, language: .english), "UEFI image")
     }
 
     /// A file that names itself is called that in the tree and in its detail,
@@ -432,10 +432,10 @@ final class UEFITreeDisplayTests: XCTestCase {
                             header: 0..<0x18, body: 0x18..<0x40, children: [name])
         let catalogue = GuidsCatalogue(names: [guid: "PeiTbtInit"])
 
-        XCTAssertEqual(UEFITreeDisplay.name(for: file, catalogue: catalogue), "PeiPciePhyFwLoadingInit")
+        XCTAssertEqual(UEFITreeDisplay.name(for: file, catalogue: catalogue, language: .english), "PeiPciePhyFwLoadingInit")
         let image = UEFIImage(size: 0x40, roots: [file])
         let detail = UEFIDetail.build(for: file, image: image, reader: ImageReader([UInt8](repeating: 0, count: 0x40)),
-                                      catalogue: catalogue)
+                                      catalogue: catalogue, in: .english)
         XCTAssertEqual(detail.title, "PeiPciePhyFwLoadingInit")
         let labels = detail.fields.map(\.label)
         let at = try XCTUnwrap(labels.firstIndex(of: "Name in the catalogue"))
@@ -443,7 +443,7 @@ final class UEFITreeDisplayTests: XCTestCase {
         XCTAssertEqual(detail.fields[at].value, "PeiTbtInit")
 
         let unnamed = UEFINode(kind: .file, subtype: 0x06, name: "x", guid: guid, header: 0..<0x18, body: 0x18..<0x40)
-        XCTAssertEqual(UEFITreeDisplay.name(for: unnamed, catalogue: catalogue), "PeiTbtInit",
+        XCTAssertEqual(UEFITreeDisplay.name(for: unnamed, catalogue: catalogue, language: .english), "PeiTbtInit",
                        "without a Name section the catalogue names it")
     }
 }

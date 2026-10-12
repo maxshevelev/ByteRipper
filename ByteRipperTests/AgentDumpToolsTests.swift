@@ -196,6 +196,24 @@ final class AgentDumpToolsTests: XCTestCase {
         XCTAssertEqual(byValue["2"]?["files"], ["one.rom", "two.bin"])
     }
 
+    /// The DMI area across a folder: grouped by how many were found, the
+    /// dump the parser knows the layout of apart from the one it does not.
+    func testASurveyOfTheDMIAreaSetsTheKnownLayoutsApart() async throws {
+        try openWindow()
+        try write(LenovoTestImage.make(), "lenovo.bin")
+        try write(UEFITestImage.make(), "plain.rom")
+        let survey = try await client.answer("survey", [
+            "paths": .array([.string(folder.appendingPathComponent("lenovo.bin").path),
+                             .string(folder.appendingPathComponent("plain.rom").path)]),
+            "tool": "uefi_dmi", "group_by": "areas.0.layout"
+        ])
+        let groups = try XCTUnwrap(survey["groups"]?.arrayValue)
+        let byValue = Dictionary(uniqueKeysWithValues: groups.map { ($0["value"]?.jsonText ?? "", $0) })
+        XCTAssertEqual(byValue[#""Lenovo DMI store""#]?["files"], ["lenovo.bin"], "\(groups)")
+        XCTAssertEqual(byValue["null"]?["files"], ["plain.rom"], "\(groups)")
+        XCTAssertNil(survey["failed"], "a dump with no area found is an answer, not a refusal")
+    }
+
     /// A survey's groups in pages: the second page is cut from the same run,
     /// and a cursor of another survey is refused.
     func testASurveysGroupsArePaged() async throws {
@@ -269,19 +287,14 @@ final class AgentDumpToolsTests: XCTestCase {
         let listed = try await client.answer("annotations")["annotations"]?.arrayValue
         XCTAssertEqual(listed?.first?["note"], "A stray byte.")
 
-        let agentWindow = AgentWindowController(service: service)
-        _ = agentWindow.window
-        agentWindow.refresh()
-        agentWindow.showAnnotations()
-        XCTAssertTrue(agentWindow.annotationsList.shownTexts(of: "a1").contains("front.bin · 0x8000–0x8008"),
-                      "\(agentWindow.annotationsList.shownTexts(of: "a1"))")
+        let cards = try XCTUnwrap(controller.fragments.notesPanel?.cards, "listed in the Notes panel")
+        XCTAssertTrue(cards.shownTexts(of: "a1").contains("0x8000–0x8008"), "\(cards.shownTexts(of: "a1"))")
 
         service.annotationTools.show("a1")
         let selection = controller.windowModel.pane1.hexSelection()
         XCTAssertEqual(selection.start..<selection.end, 0x8000..<0x8008)
 
         service.annotationTools.remove { _ in true }
-        agentWindow.refresh()
-        XCTAssertTrue(agentWindow.annotationsList.isEmpty)
+        XCTAssertNil(controller.fragments.notesPanel)
     }
 }

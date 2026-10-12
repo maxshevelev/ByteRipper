@@ -18,19 +18,19 @@ public enum NvramValueText {
 
     /// The row: `BootOrder = 0003, 2001`, `Lang = "eng"`, `WRDD = 00 50 41`,
     /// `Setup (1686 bytes)`. Just the name for an empty value.
-    public static func row(_ name: String, _ value: NvramValue, bytes: [UInt8]) -> String {
+    public static func row(_ name: String, _ value: NvramValue, bytes: [UInt8], in language: AppLanguage) -> String {
         if value.content == .bytes, bytes.count <= rowByteLimit {
-            return "\(name) = \(hexBytes(bytes))"
+            return "\(name) = \(hexBytes(bytes, in: language))"
         }
-        guard let text = short(value) else {
-            return value.content == .empty ? name : L("%1$@ (%2$@ bytes)", name, "\(bytes.count)")
+        guard let text = short(value, in: language) else {
+            return value.content == .empty ? name : L("%1$@ (%2$@ bytes)", in: language, name, "\(bytes.count)")
         }
         return "\(name) = \(text.count > rowLimit ? text.prefix(rowLimit) + "…" : text)"
     }
 
     /// The value in a row's words; nil where it is only bytes too many to
     /// spell, or nothing at all.
-    static func short(_ value: NvramValue) -> String? {
+    static func short(_ value: NvramValue, in language: AppLanguage) -> String? {
         switch value.content {
         case .empty:
             return nil
@@ -50,7 +50,7 @@ public enum NvramValueText {
         case .signatures(let lists):
             return signaturesText(lists)
         case .hardwareErrorRecord:
-            return L("Hardware error record")
+            return L("Hardware error record", in: language)
         case .bytes:
             return nil
         }
@@ -58,52 +58,52 @@ public enum NvramValueText {
 
     /// The fields the detail list gives the value: the value whole, what it
     /// was read as and by what, and the parts of a load option.
-    public static func fields(_ value: NvramValue, bytes: [UInt8]) -> [UEFIDetailField] {
+    public static func fields(_ value: NvramValue, bytes: [UInt8], in language: AppLanguage) -> [UEFIDetailField] {
         var fields: [UEFIDetailField] = []
         switch value.content {
         case .empty:
-            fields.append(.init(L("Value"), L("Empty")))
+            fields.append(.init(L("Value", in: language), L("Empty", in: language)))
         case .optionList(let numbers):
-            fields.append(.init(L("Value"), numbers.map { String(format: "Boot%04X", $0) }.joined(separator: ", ")))
+            fields.append(.init(L("Value", in: language), numbers.map { String(format: "Boot%04X", $0) }.joined(separator: ", ")))
         case .text(let text, _):
-            fields.append(.init(L("Value"), text))
+            fields.append(.init(L("Value", in: language), text))
         case .loadOption(let option):
-            fields.append(.init(L("Value"), option.description))
+            fields.append(.init(L("Value", in: language), option.description))
             fields.append(.init("Load option attributes", bits(option.attributes)))
-            fields.append(.init(L("Device path"), option.devicePath ?? L("Not readable")))
+            fields.append(.init(L("Device path", in: language), option.devicePath ?? L("Not readable", in: language)))
             if option.optionalDataSize > 0 {
-                fields.append(.init(L("Optional data"), L("%1$@ bytes", "\(option.optionalDataSize)")))
+                fields.append(.init(L("Optional data", in: language), L("%1$@ bytes", in: language, "\(option.optionalDataSize)")))
             }
         case .bytes, .hardwareErrorRecord:
-            fields.append(.init(L("Value"), hexBytes(bytes)))
+            fields.append(.init(L("Value", in: language), hexBytes(bytes, in: language)))
         case .number, .optionNumber, .devicePath, .signatures:
-            fields.append(.init(L("Value"), short(value) ?? ""))
+            fields.append(.init(L("Value", in: language), short(value, in: language) ?? ""))
         }
-        fields.append(.init(L("Read as"), L("%1$@ — %2$@", kindText(value), basisText(value.basis))))
+        fields.append(.init(L("Read as", in: language), L("%1$@ — %2$@", in: language, kindText(value, in: language), basisText(value.basis, in: language))))
         return fields
     }
 
     /// The signatures of a database one row each — a certificate by its
     /// subject — except hashes, which are counted per list: a `dbx` holds
     /// hundreds, and none of them reads as anything.
-    public static func signaturesTable(_ value: NvramValue) -> UEFIDetailTable? {
+    public static func signaturesTable(_ value: NvramValue, in language: AppLanguage) -> UEFIDetailTable? {
         guard case .signatures(let lists) = value.content else { return nil }
         var rows: [[UEFIDetailTable.Cell]] = []
         for list in lists {
             let type = list.typeName ?? list.type.description
             if list.isCertificates {
                 for signature in list.signatures {
-                    rows.append([.init(type), .init(signature.subject ?? L("No name")),
+                    rows.append([.init(type), .init(signature.subject ?? L("No name", in: language)),
                                  .init(signature.owner.description)])
                 }
             } else {
                 let owners = Set(list.signatures.map(\.owner))
-                rows.append([.init(type), .init(L("Entries: %1$@", "\(list.signatures.count)")),
-                             .init(owners.count == 1 ? owners.first!.description : L("Several"))])
+                rows.append([.init(type), .init(L("Entries: %1$@", in: language, "\(list.signatures.count)")),
+                             .init(owners.count == 1 ? owners.first!.description : L("Several", in: language))])
             }
         }
-        return UEFIDetailTable(title: L("Signatures"), symbol: "checkmark.seal",
-                               columns: [L("Type"), L("Subject"), L("Owner")], rows: rows)
+        return UEFIDetailTable(title: L("Signatures", in: language), symbol: "checkmark.seal",
+                               columns: [L("Type", in: language), L("Subject", in: language), L("Owner", in: language)], rows: rows)
     }
 
     // MARK: - Words
@@ -134,28 +134,28 @@ public enum NvramValueText {
         return counts.map { "\($0.0): \($0.1)" }.joined(separator: ", ")
     }
 
-    private static func kindText(_ value: NvramValue) -> String {
+    private static func kindText(_ value: NvramValue, in language: AppLanguage) -> String {
         switch value.content {
-        case .empty: return L("No value")
-        case .number(_, let size): return L("%1$@-bit number", "\(size * 8)")
-        case .optionList: return L("List of boot entries")
-        case .optionNumber: return L("Boot entry number")
-        case .text(_, .ascii): return L("ASCII text")
-        case .text(_, .ucs2): return L("UCS-2 text")
-        case .devicePath: return L("Device path")
-        case .loadOption: return L("Boot entry")
-        case .signatures: return L("Signature database")
-        case .hardwareErrorRecord: return L("Hardware error record")
-        case .bytes: return L("Bytes")
+        case .empty: return L("No value", in: language)
+        case .number(_, let size): return L("%1$@-bit number", in: language, "\(size * 8)")
+        case .optionList: return L("List of boot entries", in: language)
+        case .optionNumber: return L("Boot entry number", in: language)
+        case .text(_, .ascii): return L("ASCII text", in: language)
+        case .text(_, .ucs2): return L("UCS-2 text", in: language)
+        case .devicePath: return L("Device path", in: language)
+        case .loadOption: return L("Boot entry", in: language)
+        case .signatures: return L("Signature database", in: language)
+        case .hardwareErrorRecord: return L("Hardware error record", in: language)
+        case .bytes: return L("Bytes", in: language)
         }
     }
 
-    private static func basisText(_ basis: NvramValue.Basis) -> String {
+    private static func basisText(_ basis: NvramValue.Basis, in language: AppLanguage) -> String {
         switch basis {
-        case .specification: return L("as the UEFI specification defines the variable")
-        case .name: return L("by its name, which the UEFI specification defines; the GUID is a vendor's")
-        case .attributes: return L("by its attributes")
-        case .content: return L("guessed from the bytes")
+        case .specification: return L("as the UEFI specification defines the variable", in: language)
+        case .name: return L("by its name, which the UEFI specification defines; the GUID is a vendor's", in: language)
+        case .attributes: return L("by its attributes", in: language)
+        case .content: return L("guessed from the bytes", in: language)
         }
     }
 
@@ -171,9 +171,9 @@ public enum NvramValueText {
     }
 
     /// Bytes as a dump prints them, up to `detailByteLimit`.
-    static func hexBytes(_ bytes: [UInt8]) -> String {
+    static func hexBytes(_ bytes: [UInt8], in language: AppLanguage) -> String {
         let shown = bytes.prefix(detailByteLimit).map { String(format: "%02X", $0) }.joined(separator: " ")
         guard bytes.count > detailByteLimit else { return shown }
-        return L("%1$@ … (%2$@ bytes in all)", shown, "\(bytes.count)")
+        return L("%1$@ … (%2$@ bytes in all)", in: language, shown, "\(bytes.count)")
     }
 }

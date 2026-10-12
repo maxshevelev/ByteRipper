@@ -113,6 +113,10 @@ import UEFITool
     /// opening an image that is never instant. The outline shows one
     /// "Loading…" row for the duration.
     private var isBuilding = false
+    /// A search asked for while the tree was still being read — the panel
+    /// just switched on, the file just opened — run as soon as the tree is
+    /// shown, not dropped. The bar says it is searching meanwhile.
+    private var pendingSearch: (() -> Void)?
     /// The tree as it is shown: the outline's top level and the root node the
     /// summary stands for, decided in the pure target. Kept from one show to
     /// the next so the data source reads the same top level the last show laid
@@ -778,17 +782,22 @@ import UEFITool
 
         presented = image.map(UEFITreeDisplay.present)
             ?? UEFITreeDisplay.PresentedImage(title: nil, rows: [])
-        summaryLabel.stringValue = UEFITreeDisplay.summary(of: image)
+        summaryLabel.stringValue = UEFITreeDisplay.summary(of: image, in: Localization.appLanguage)
         searchBar.showsMENote = presented.rows.contains(where: isMERegion)
         updateSummaryEmphasis()
         // What the protected ranges in the summary cannot say (§8).
         if let ranges = image?.protectedRanges, !ranges.ranges.isEmpty {
-            summaryLabel.toolTip = [summaryLabel.toolTip, UEFIDetail.protectionCaveat]
+            summaryLabel.toolTip = [summaryLabel.toolTip, UEFIDetail.protectionCaveat.text]
                 .compactMap { $0 }.joined(separator: "\n\n")
         }
         detailTerm = helpTerm
         renderDetail(detail, subject: focus?.description ?? "")
         queueRefresh(rowsChanged: rowsChanged)
+        // After the refresh just queued: the search walks the rows it lays out.
+        if let search = pendingSearch, tree != nil, !isBuilding {
+            pendingSearch = nil
+            DispatchQueue.main.async(execute: search)
+        }
     }
 
     /// A new focus, and nothing else: the detail is drawn for it and the
@@ -1388,7 +1397,7 @@ import UEFITool
         }
         let menu = NSMenu()
         for (index, store) in dmiStores.enumerated() {
-            let item = NSMenuItem(title: UEFITreeDisplay.dmiStoreTitle(store),
+            let item = NSMenuItem(title: UEFITreeDisplay.dmiStoreTitle(store, in: Localization.appLanguage),
                                   action: #selector(dmiStoreChosen(_:)), keyEquivalent: "")
             item.target = self
             item.tag = index
@@ -1484,7 +1493,12 @@ import UEFITool
 
     private func search(_ direction: UEFITreeSearch.Direction) {
         let query = UEFISearchSettings.query
-        guard let tree, !isBuilding, !query.isEmpty else { return }
+        guard !query.isEmpty, let tree else { return }
+        guard !isBuilding else {
+            waitForTree { [weak self] in self?.search(direction) }
+            searchBar.status = .searching
+            return
+        }
         cancelSearch()
         searchBar.status = .none
         searchRun += 1
@@ -1544,9 +1558,16 @@ import UEFITool
     /// that finds anything is the answer, as in the dump's Smart Search, and
     /// the controls are told which.
     func findAllContents() {
-        guard let tree, !isBuilding else { return }
+        guard let tree else { return }
         let content = UEFISearchSettings.content
         guard let attempts = contentAttempts(), !attempts.isEmpty else { return }  // said by the controls
+        guard !isBuilding else {
+            waitForTree { [weak self] in self?.findAllContents() }
+            contentMatches = []
+            contentResults.showSearching(0)
+            showContentResults(true)
+            return
+        }
         let start = content.wholeTree ? .root : (selectedNode() ?? .root)
         cancelSearch()
         searchBar.status = .none
@@ -1574,7 +1595,7 @@ import UEFITool
                 return
             }
             let scope = start == .root ? nil : tree.node(start).map {
-                UEFITreeDisplay.name(for: $0, catalogue: self.catalogue, in: self.image)
+                UEFITreeDisplay.name(for: $0, catalogue: self.catalogue, in: self.image, language: Localization.appLanguage)
             }
             self.showContentMatches(result.matches, total: result.total, scope: scope, in: tree)
             self.onContentSearchDone?()
@@ -1623,28 +1644,19 @@ import UEFITool
             return
         }
         let hex = { (value: UInt64) in String(format: "0x%llX", value) }
-        // The node, after its parent — unless the parent is called only by a
-        // word for the bytes it covers (Padding, Raw, Free space…). A store
-        // named by its kind, `VSS store`, is a parent worth naming: it says
-        // which of the variables this is.
         let label = { [catalogue, image] (id: NodeID?) -> String in
-            guard let id, let node = tree.node(id) else { return "—" }
-            let own = UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image)
-            guard id.path.count > 1, let parent = tree.node(NodeID(Array(id.path.dropLast()))) else { return own }
-            let above = UEFITreeDisplay.name(for: parent, catalogue: catalogue, in: image)
-            guard !UEFIAgentQueries.placeholderNames.contains(above.lowercased()) else { return own }
-            return L("%1$@: %2$@", above, own)
+            id.flatMap { UEFITreeDisplay.nameAfterParent(of: $0, in: tree, catalogue: catalogue, image: image, in: Localization.appLanguage) } ?? "—"
         }
         // The codecs a space's bytes came through, outermost first — the
         // compressions of the sections on its chain, each looked up once.
         var compressions: [ByteSpace: String] = [:]
         let codecs = { [image] (match: UEFIContentSearch.Match) -> [String] in
-            var names = image.map { UEFIPresenter.codecNames(of: match.space, in: $0, known: &compressions) } ?? []
+            var names = image.map { UEFIPresenter.codecNames(of: match.space, in: $0, known: &compressions, in: Localization.appLanguage) } ?? []
             if let key = match.decodedXORKey { names.append(String(format: "XOR %02X", key)) }
             return names
         }
         let name = { [catalogue, image] (id: NodeID?) -> String? in
-            id.flatMap(tree.node).map { UEFITreeDisplay.name(for: $0, catalogue: catalogue, in: image) }
+            id.flatMap(tree.node).map { UEFITreeDisplay.name(for: $0, catalogue: catalogue, in: image, language: Localization.appLanguage) }
         }
         contentResults.show(matches.map { match in
             let address: String
@@ -1673,8 +1685,14 @@ import UEFITool
     /// section in the file they came out of. The dump never keeps standing on
     /// the match before.
     func goToContentMatch(_ index: Int) {
-        guard contentMatches.indices.contains(index), let tree, tree === contentMatchesTree else { return }
-        let match = contentMatches[index]
+        guard contentMatches.indices.contains(index), tree != nil, tree === contentMatchesTree else { return }
+        goTo(contentMatches[index])
+    }
+
+    /// Goes to `match` as a click on its row does — for a row, and for a
+    /// place named from outside the results, an agent's annotation.
+    func goTo(_ match: UEFIContentSearch.Match) {
+        guard let tree else { return }
         let inFile = match.fileRange ?? UEFIContentSearch.fileRange(of: match.node.flatMap(tree.node), in: tree)
         let reveal = { [weak self] in
             if let range = inFile { self?.onRevealMatch?(range) }
@@ -1711,10 +1729,20 @@ import UEFITool
         cancelSearch()
     }
 
-    /// Ends the search in hand, if there is one.
+    /// Holds `search` until the tree is shown, in place of any search
+    /// already waiting.
+    private func waitForTree(_ search: @escaping () -> Void) {
+        cancelSearch()
+        pendingSearch = search
+    }
+
+    /// Ends the search in hand, if there is one — or the one waiting for the
+    /// tree.
     private func cancelSearch() {
         searchRun += 1
-        if contentSearch != nil, case .searching = contentResults.state { contentResults.clear() }
+        let waited = pendingSearch != nil
+        pendingSearch = nil
+        if contentSearch != nil || waited, case .searching = contentResults.state { contentResults.clear() }
         contentSearch?.cancel()
         contentSearch = nil
         if searchBar.status == .searching { searchBar.status = .none }
@@ -1752,7 +1780,7 @@ import UEFITool
 
     private func matches(_ id: NodeID, _ query: UEFITreeQuery) -> Bool {
         guard let node = tree?.node(id) else { return false }
-        return query.matches(node, name: UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image))
+        return query.matches(node, name: UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image, language: Localization.appLanguage))
     }
 
     /// Walks on until a row matches, a branch has to be read, or every row has
@@ -2526,7 +2554,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // The bytes, only for a row whose marks are read off them.
         let reader = node.kind == .lenvBlock ? tree?.spaceReaders.reader(for: node.space) : nil
         return UEFITreeMarks.marks(for: node, in: image, badChecksums: badChecksums[node.id] ?? [],
-                                   isOpen: outline.isItemExpanded(row(node.id)), reader: reader)
+                                   isOpen: outline.isItemExpanded(row(node.id)), reader: reader, in: Localization.appLanguage)
     }
 
     /// One row's marks again, on its row view and its Name cell — what a row
@@ -2575,7 +2603,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         case Column.type:
             return UEFITreeDisplay.typeText(for: node)
         case Column.subtype:
-            return UEFITreeDisplay.subtypeText(for: node)
+            return UEFITreeDisplay.subtypeText(for: node, in: Localization.appLanguage)
         default:
             // A variable's row says its value, which is bytes in the node's
             // space; a VSS one is read by its store's format, and the store
@@ -2584,7 +2612,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             let store = (node.kind == .vssEntry || node.kind == .lenvEntry || node.kind == .ldbgEntry)
                 && !node.id.path.isEmpty
                 ? tree?.node(NodeID(Array(node.id.path.dropLast()))) : nil
-            return UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image, reader: reader, store: store)
+            return UEFITreeDisplay.name(for: node, catalogue: catalogue, in: image, reader: reader, store: store, language: Localization.appLanguage)
         }
     }
 
@@ -2709,7 +2737,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             guard let title = UEFIPresenter.nodeOpenTitle(for: node, body: body),
                   !body || !node.header.isEmpty
             else { continue }
-            let item = NSMenuItem(title: title, action: #selector(openNodeClicked(_:)),
+            let item = NSMenuItem(title: title.text, action: #selector(openNodeClicked(_:)),
                                   keyEquivalent: "")
             item.target = self
             item.representedObject = NodeOpenTarget(id: node.id, body: body)
@@ -2720,7 +2748,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             guard let title = UEFIPresenter.nodeSaveTitle(for: node, body: body),
                   !body || !node.header.isEmpty
             else { continue }
-            let item = NSMenuItem(title: title, action: #selector(saveNodeClicked(_:)), keyEquivalent: "")
+            let item = NSMenuItem(title: title.text, action: #selector(saveNodeClicked(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = NodeOpenTarget(id: node.id, body: body)
             items.append(item)
@@ -2729,7 +2757,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         // the reader sees which copy of a volume or file stands for which.
         if let image, let counterpart = UEFITopSwap.counterpart(of: node, in: image) {
             let item = NSMenuItem(
-                title: counterpart.menuTitle,
+                title: counterpart.menuTitle.text,
                 action: #selector(goToTopSwapCounterpartClicked(_:)),
                 keyEquivalent: ""
             )
@@ -2739,7 +2767,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         }
         if let decompressed = UEFIPresenter.decompressedBody(for: node) {
             let open = NSMenuItem(
-                title: decompressed.openTitle,
+                title: decompressed.openTitle.text,
                 action: #selector(openDecompressedClicked(_:)),
                 keyEquivalent: ""
             )
@@ -2747,7 +2775,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
             open.representedObject = node.id
             items.append(open)
             let item = NSMenuItem(
-                title: decompressed.saveTitle,
+                title: decompressed.saveTitle.text,
                 action: #selector(saveDecompressedClicked(_:)),
                 keyEquivalent: ""
             )
@@ -2872,7 +2900,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     func outlineViewSelectionDidChange(_ notification: Notification) {
         // Where the Contents search would start, whoever moved the selection.
         searchBar.selectedNodeName = selectedNode().flatMap { id in
-            tree?.node(id).map { UEFITreeDisplay.name(for: $0, catalogue: catalogue, in: image) }
+            tree?.node(id).map { UEFITreeDisplay.name(for: $0, catalogue: catalogue, in: image, language: Localization.appLanguage) }
         }
         guard !isShowingState else { return }
         // The reader went somewhere else: what the search opened stays as it is.

@@ -192,7 +192,7 @@ final class EFSFileNamesTests: XCTestCase {
     func testANamedRowCarriesBothTablesFacts() throws {
         let volume = try volume()
         let roots = MEACurator.present(try analysis(with: volume),
-                                       efsNames: try names(volume))
+                                       efsNames: try names(volume), in: .english)
         let rows = try fileRows(roots)
         XCTAssertEqual(rows.children.map(\.title),
                        ["ICC_MPHYTBL", "BUP_MBP", "POLICY_CPU_SID"])
@@ -211,7 +211,7 @@ final class EFSFileNamesTests: XCTestCase {
     func testASplitRowShowsBothSizesAndTheTable() throws {
         let volume = try volume()
         let roots = MEACurator.present(try analysis(with: volume),
-                                       efsNames: try names(volume))
+                                       efsNames: try names(volume), in: .english)
         let mbp = try XCTUnwrap(try fileRows(roots).children
             .first { $0.title == "BUP_MBP" })
         XCTAssertEqual(field("Size", in: mbp), "0xD8 (216 bytes)")
@@ -226,7 +226,7 @@ final class EFSFileNamesTests: XCTestCase {
     func testAnUnsplitRowSaysOneSize() throws {
         let volume = try volume()
         let roots = MEACurator.present(try analysis(with: volume),
-                                       efsNames: try names(volume))
+                                       efsNames: try names(volume), in: .english)
         let icc = try XCTUnwrap(try fileRows(roots).children
             .first { $0.title == "ICC_MPHYTBL" })
         XCTAssertEqual(field("Size", in: icc), "0x100 (256 bytes)")
@@ -237,7 +237,7 @@ final class EFSFileNamesTests: XCTestCase {
     /// Before the names arrive the rows are the files the engine found, under
     /// the number both tables key them by — the volume's own answer, not a gap.
     func testWithoutNamesTheRowsAreNumbered() throws {
-        let roots = MEACurator.present(try analysis(with: try volume()))
+        let roots = MEACurator.present(try analysis(with: try volume()), in: .english)
         let rows = try fileRows(roots)
         XCTAssertEqual(rows.children.map(\.title), ["File 6", "File 5", "File 4"])
         XCTAssertEqual(rows.subtitle, "3 files")
@@ -249,7 +249,7 @@ final class EFSFileNamesTests: XCTestCase {
     func testTheVolumeRowNamesTheTableAndDropsTheReflectedList() throws {
         let volume = try volume()
         let roots = MEACurator.present(try analysis(with: volume),
-                                       efsNames: try names(volume))
+                                       efsNames: try names(volume), in: .english)
         let efs = try XCTUnwrap(roots.first(where: { $0.title == "EFS Volume" }))
         XCTAssertEqual(field("File Table", in: efs), "04 / 0B rev 01")
         XCTAssertNil(field("files", in: efs), "the list is children, not a field")
@@ -262,7 +262,7 @@ final class EFSFileNamesTests: XCTestCase {
     func testAFileNoFTBLRowClaimsKeepsItsName() throws {
         let volume = try volume(files: [(6, 0), (70, 0x4000)], split: [])
         let names = try names(volume)
-        let roots = MEACurator.present(try analysis(with: volume), efsNames: names)
+        let roots = MEACurator.present(try analysis(with: volume), efsNames: names, in: .english)
         let rows = try fileRows(roots)
         let orphan = try XCTUnwrap(rows.children.last)
         XCTAssertEqual(orphan.title, "File 70", "no EFST entry either, so no name")

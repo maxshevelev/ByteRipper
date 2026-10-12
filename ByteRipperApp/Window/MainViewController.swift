@@ -788,6 +788,8 @@ final class MainViewController: NSViewController {
     private let fragmentHost = FragmentPanelHost()
     /// The dock along the bottom: one pill per fragment panel this tab holds.
     private let fragmentDockStrip = FragmentDockStrip()
+    /// The dock, for tests.
+    var fragmentDockStripForTesting: FragmentDockStrip { fragmentDockStrip }
     private var fragmentDockHeight: NSLayoutConstraint?
 
     /// The fragment panels this tab has open, and the dock they fold into.
@@ -1167,6 +1169,8 @@ final class MainViewController: NSViewController {
             return self.activeFilePane.map { [$0] } ?? []
         }
         apply(mode: .empty)
+        // A tab opened while there are notes has the Notes panel too.
+        fragments.syncNotes()
     }
 
     /// Swaps the content area for the given window mode (§3 of REQUIREMENTS.md).
@@ -2034,6 +2038,11 @@ final class MainViewController: NSViewController {
         }), let part = fragments.pane(open) {
             fragments.expand(open)
             revealForTool(selection, in: part, select: true)
+            // A tool asked for that the panel is not showing is put up first.
+            if let tool, let tools = fragments.surface(open)?.tools, tools.activeIdentifier != tool {
+                part.uefiState.opensTopLevelUEFIRows = true
+                tools.activate(tool, animated: false)
+            }
             fragments.surface(open)?.tools.session?.showItem(at: selection.lowerBound)
             return nil
         }
@@ -2276,6 +2285,8 @@ final class MainViewController: NSViewController {
     func fragmentFocusChanged() {
         if let up = fragments.expanded, let pane = fragments.pane(up) {
             paneView(for: pane).focusHexView()
+        } else if let notes = fragments.notesPanel, fragments.notesAreUp {
+            view.window?.makeFirstResponder(notes.cards.collection)
         } else {
             activeFilePane?.focusHexView()
         }
@@ -4363,7 +4374,8 @@ final class MainViewController: NSViewController {
         // the same step-at-a-time rule the panes and the tab already follow
         // (`Design/FRAGMENT_PANELS_PLAN.md`).
         if let up = fragments.expanded {
-            closeFragment(up)
+            // The Notes panel is not closed, only folded.
+            if fragments.notesAreUp { fragments.collapse() } else { closeFragment(up) }
             return
         }
         guard windowModel.hasOpenFile else {
@@ -4848,6 +4860,15 @@ final class MainViewController: NSViewController {
                                   keyEquivalent: "")
         delete.target = self
         delete.representedObject = target
+        // A note of the person's own on the selected bytes.
+        if AgentAnnotationTools.current != nil, pane.document != nil {
+            menu.addItem(.separator())
+            let note = menu.addItem(withTitle: L("Add Annotation…"),
+                                    action: #selector(addNoteToSelection(_:)),
+                                    keyEquivalent: "")
+            note.target = self
+            note.representedObject = pane
+        }
     }
 
     /// The pane carried by a context-menu item (`representedObject`), or nil for

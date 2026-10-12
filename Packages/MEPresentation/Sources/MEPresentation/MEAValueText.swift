@@ -51,19 +51,19 @@ public enum MEAText {
              table, partition
     }
 
-    public static func count(_ n: Int, _ noun: CountedNoun) -> String {
+    public static func count(_ n: Int, _ noun: CountedNoun, in language: AppLanguage) -> String {
         switch noun {
-        case .entry: return n == 1 ? L("1 entry") : L("%1$@ entries", n)
-        case .row: return n == 1 ? L("1 row") : L("%1$@ rows", n)
-        case .block: return n == 1 ? L("1 block") : L("%1$@ blocks", n)
-        case .module: return n == 1 ? L("1 module") : L("%1$@ modules", n)
-        case .file: return n == 1 ? L("1 file") : L("%1$@ files", n)
-        case .image: return n == 1 ? L("1 image") : L("%1$@ images", n)
-        case .issue: return n == 1 ? L("1 issue") : L("%1$@ issues", n)
-        case .record: return n == 1 ? L("1 record") : L("%1$@ records", n)
-        case .region: return n == 1 ? L("1 region") : L("%1$@ regions", n)
-        case .table: return n == 1 ? L("1 table") : L("%1$@ tables", n)
-        case .partition: return n == 1 ? L("1 partition") : L("%1$@ partitions", n)
+        case .entry: return n == 1 ? L("1 entry", in: language) : L("%1$@ entries", in: language, n)
+        case .row: return n == 1 ? L("1 row", in: language) : L("%1$@ rows", in: language, n)
+        case .block: return n == 1 ? L("1 block", in: language) : L("%1$@ blocks", in: language, n)
+        case .module: return n == 1 ? L("1 module", in: language) : L("%1$@ modules", in: language, n)
+        case .file: return n == 1 ? L("1 file", in: language) : L("%1$@ files", in: language, n)
+        case .image: return n == 1 ? L("1 image", in: language) : L("%1$@ images", in: language, n)
+        case .issue: return n == 1 ? L("1 issue", in: language) : L("%1$@ issues", in: language, n)
+        case .record: return n == 1 ? L("1 record", in: language) : L("%1$@ records", in: language, n)
+        case .region: return n == 1 ? L("1 region", in: language) : L("%1$@ regions", in: language, n)
+        case .table: return n == 1 ? L("1 table", in: language) : L("%1$@ tables", in: language, n)
+        case .partition: return n == 1 ? L("1 partition", in: language) : L("%1$@ partitions", in: language, n)
         }
     }
 

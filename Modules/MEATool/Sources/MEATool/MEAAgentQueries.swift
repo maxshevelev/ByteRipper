@@ -40,7 +40,7 @@ public enum MEAAgentQueries {
             """
     ) { host, _ in
         let analysis = try await analysis(host)
-        let blocks = MEASummary.build(analysis)
+        let blocks = MEASummary.build(analysis, in: .english)
         return .json(["blocks": .array(blocks.map { block in
             var members: [String: JSONValue] = ["rows": .array(block.rows.map { summaryRow in
                 var entry = row(summaryRow)
@@ -166,14 +166,14 @@ public enum MEAAgentQueries {
     /// The panel's tree, with the files named from the firmware database's
     /// file table when the dump needs it and it can be had.
     static func present(_ analysis: FirmwareAnalysis) async -> [MEANode] {
-        guard MEReads.fileTableWanted(analysis) else { return MEACurator.present(analysis) }
+        guard MEReads.fileTableWanted(analysis) else { return MEACurator.present(analysis, in: .english) }
         let volume = analysis.mfsVolume
         let names = await MEReads.fileNames(
             mfs: volume?.usesFTBL == true ? volume : nil, efs: analysis.efsVolume,
             configIDs: MEReads.configurationIDs(analysis),
             platform: volume?.ftblPlatform ?? -1, dictionary: volume?.ftblDictionary ?? -1)
         return MEACurator.present(analysis, mfsNames: names?.mfs ?? .none, efsNames: names?.efs ?? .none,
-                                  configPaths: names?.config ?? .none)
+                                  configPaths: names?.config ?? .none, in: .english)
     }
 
     // MARK: - The File System State's basis
@@ -231,7 +231,7 @@ public enum MEAAgentQueries {
     /// panel's own words (`MEAText.fileSystemStateBasis`), in the English
     /// every agent call is answered in.
     static func explanation(state: MFSState, basis: MFSStateBasis) -> String {
-        MEAText.fileSystemStateBasis(state, basis)
+        MEAText.fileSystemStateBasis(state, basis, in: .english)
     }
 
     private nonisolated static func list(_ indices: [Int]) -> String {
@@ -241,7 +241,7 @@ public enum MEAAgentQueries {
     // MARK: - Shapes
 
     private static func row(_ row: MEASummaryRow) -> JSONValue {
-        var members: [String: JSONValue] = ["label": .string(row.label), "value": .string(row.value.text)]
+        var members: [String: JSONValue] = ["label": .string(row.label), "value": .string(row.value.text(in: .english))]
         if row.value.isValue, row.tone.isStatus { members["tone"] = .string(toneName(row.tone)) }
         return .object(members)
     }

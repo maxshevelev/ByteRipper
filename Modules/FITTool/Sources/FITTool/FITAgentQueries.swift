@@ -35,7 +35,7 @@ public enum FITAgentQueries {
         let entry = try arguments.has("entry") ? Int(arguments.integer("entry")) : nil
         let tree = try await readyTree(host)
         let report = await read(tree)
-        let display = FITPresenter.display(report)
+        let display = FITPresenter.display(report, in: .english)
 
         var answer: [String: JSONValue] = [
             "summary": .string(display.summary),
@@ -68,7 +68,7 @@ public enum FITAgentQueries {
             guard let chosen = main.first(where: { $0.index == entry }) else {
                 throw AgentToolError("The table has no row \(entry); its rows are 0 to \(max(0, main.count - 1)).")
             }
-            let detail = FITPresenter.detail(for: chosen, problems: report.problems)
+            let detail = FITPresenter.detail(for: chosen, problems: report.problems, in: .english)
             answer["entry"] = [
                 "title": .string(detail.title),
                 "fields": .array(detail.fields.map { field in
@@ -102,7 +102,7 @@ public enum FITAgentQueries {
         guard table.checksumIsChecked else {
             throw AgentToolError("The table's ChecksumValid bit is clear: its checksum is not checked, and nothing needs writing.")
         }
-        guard let fix = FITPresenter.display(report).checksumFix else {
+        guard let fix = FITPresenter.display(report, in: .english).checksumFix else {
             throw AgentToolError("The FIT checksum is already correct; nothing to write.")
         }
         return fix
@@ -174,7 +174,7 @@ public enum FITAgentQueries {
 
     private static func problem(_ problem: FITProblem) -> JSONValue {
         var members: [String: JSONValue] = [
-            "message": .string(problem.message),
+            "message": .string(problem.message.text(in: .english)),
             "severity": .string(problem.severity == .error ? "error" : "warning")
         ]
         if let index = problem.entryIndex { members["entry"] = .count(index) }

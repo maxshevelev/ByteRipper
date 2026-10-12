@@ -293,18 +293,29 @@ seven lines the person can check.
 
 ## Language
 
-`L()` reads one process-wide catalogue, and `UEFINodeDetail` alone has 157
-calls. A query has to answer in English while the window speaks Russian, so
-`Localization` gains a task-local override:
+An agent is answered in English while the window speaks the person's
+language. Nothing switches the language for a call: a window built during
+one came out in the wrong language (the Annotations pill read "Annotations"
+in a Russian window until a click redrew it), and a reader of the code could
+not see which words were whose. Every word says whose it is where it is made:
 
-```swift
-public enum Localization {
-    @TaskLocal public static var override: AppLanguage?
-}
-```
-
-`current` uses the override's catalogue when one is set. `AgentService` runs
-every call with `.english`. The window is not affected.
+- `L(_:in:)` gives a key in a named language — `.english` in an agent's
+  answer, `Localization.appLanguage` in a panel.
+- A presenter shared by a panel and an agent (`UEFIDetail`, `UEFITreeDisplay`,
+  `FITPresenter`, `MEACurator`…) takes `in language: AppLanguage` and passes
+  it on; a panel asks with the app's language, an agent query with `.english`.
+- A word made where nobody reads it yet — a parser naming a node it made up
+  ("Free space", "LENV block 2"), a finding, a codec's badge — is a
+  `LocalizedText`, put into words by whoever shows it (`text(in:)`). A node
+  keeps its made-up name in English in `name`, and in words in `nameText`
+  (`displayName(in:)`).
+- The pure targets the agent reads from (`UEFIImage`, `LenovoDMI`,
+  `PartCodec`, `UEFIContentSource`, `MEPresentation`, `MEATool`, `FITTool`,
+  `UEFITool`) declare the app's-language `L()` unavailable
+  (`WordsInALanguage.swift`), so the compiler finds a word that slips in.
+- `AgentModuleToolsTests.testNoAnswerSpeaksTheWindowsLanguage` walks every
+  node of six images with the window in Russian and finds no Cyrillic in any
+  answer.
 
 The agent's tool names and descriptions are read by the model, not by the
 person, and stay in English without `L()`; `Design/LOCALIZATION.md` says so,
@@ -355,7 +366,7 @@ Each ends in something that works and is committed.
    protocol document waits for stage 3, when module tools give it something
    beyond four host tools to fix.)*
 3. **UEFI queries and actions.** `ToolReadHost`; `agentQueries` and
-   `agentActions` on the seam; the language override; `uefi_tree`,
+   `agentActions` on the seam; answers in English (see "Language"); `uefi_tree`,
    `uefi_node`, `uefi_find`, `uefi_at`; `uefi_select`, `uefi_selection`;
    `open_panel`. Done when, with the FIT panel open, "find the Setup variable
    store and show it to me" ends with the UEFI tree open on it. *(Done, checked
@@ -396,8 +407,8 @@ Each ends in something that works and is committed.
    `ToolAgentEdit`, computed by the module with its panel closed and applied
    only by the app, so no module can write by another door: `uefi_fix_checksum`
    and `fit_fix_checksum`. `write` takes an `expect` so a patch lands only on
-   the bytes the agent read. The undo step is named in the app's language,
-   outside the English override, from the agent's own label. Checked in a
+   the bytes the agent read. The undo step is named in the app's language
+   (`L(_:in: Localization.appLanguage)`), from the agent's own label. Checked in a
    Russian UI on a copy of `CSME 12.BIN`: the FIT checksum broken by `write`,
    reported by `fit_table`, put right by `fit_fix_checksum`; two undo steps,
    the file on disk untouched.)*

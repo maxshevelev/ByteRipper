@@ -145,7 +145,7 @@ final class ConfigRecordPathsTests: XCTestCase {
     /// and stands for the bytes it points at — the payload's position plus the
     /// record's own offset.
     func testANamedRowCarriesTheRecordsFactsAndItsBytes() throws {
-        let roots = MEACurator.present(try analysis(), configPaths: try paths())
+        let roots = MEACurator.present(try analysis(), configPaths: try paths(), in: .english)
         let rows = try recordRows(roots)
         XCTAssertEqual(rows.subtitle, "3 records")
         let first = try XCTUnwrap(rows.children.first)
@@ -165,7 +165,7 @@ final class ConfigRecordPathsTests: XCTestCase {
     /// The row the table could not name still reads as a record, under the name
     /// upstream gives it.
     func testAnUnnamedRowKeepsItsFallbackName() throws {
-        let roots = MEACurator.present(try analysis(), configPaths: try paths())
+        let roots = MEACurator.present(try analysis(), configPaths: try paths(), in: .english)
         let last = try XCTUnwrap(try recordRows(roots).children.last)
         XCTAssertEqual(last.title, "/Unknown/DEADBEEF.bin")
         XCTAssertEqual(field("Path", in: last), "/Unknown/DEADBEEF.bin")
@@ -175,7 +175,7 @@ final class ConfigRecordPathsTests: XCTestCase {
     /// Before the table arrives the rows are the records the engine decoded,
     /// under the ID the stream keys them by — and they still point at bytes.
     func testWithoutTheTableTheRowsAreTheirFileIDs() throws {
-        let roots = MEACurator.present(try analysis())
+        let roots = MEACurator.present(try analysis(), in: .english)
         let rows = try recordRows(roots)
         XCTAssertEqual(rows.children.map(\.title),
                        ["Record 0x10080A00", "Record 0x10080700", "Record 0xDEADBEEF"])
@@ -187,7 +187,7 @@ final class ConfigRecordPathsTests: XCTestCase {
     /// than pointing them at an offset that means nothing in the image.
     func testWithoutAPayloadOffsetTheRowsPointAtNothing() throws {
         let roots = MEACurator.present(try analysis(payloadOffset: nil),
-                                       configPaths: try paths())
+                                       configPaths: try paths(), in: .english)
         for row in try recordRows(roots).children {
             XCTAssertNil(row.range)
         }
@@ -196,7 +196,7 @@ final class ConfigRecordPathsTests: XCTestCase {
     /// The group says which table the paths came from, and the record list is
     /// rows rather than the reflected "N entries" a field would be.
     func testTheGroupNamesTheTableAndDropsTheReflectedList() throws {
-        let roots = MEACurator.present(try analysis(), configPaths: try paths())
+        let roots = MEACurator.present(try analysis(), configPaths: try paths(), in: .english)
         let oem = try XCTUnwrap(roots.first(where: { $0.title == "OEM Configuration" }))
         XCTAssertEqual(field("File Table", in: oem), "04 / 0B")
         XCTAssertNil(field("recordsByID", in: oem))
@@ -209,7 +209,7 @@ final class ConfigRecordPathsTests: XCTestCase {
     /// those records live in a FAT chain, not at one place in the image.
     func testAVolumesOwnStreamIsARowUnderTheVolume() throws {
         let roots = MEACurator.present(try analysis(streamOnVolume: true),
-                                       configPaths: try paths())
+                                       configPaths: try paths(), in: .english)
         let mfs = try XCTUnwrap(roots.first(where: { $0.title == "File System (MFS)" }))
         let stream = try XCTUnwrap(mfs.children.first(where: {
             $0.title == "OEM Configuration"

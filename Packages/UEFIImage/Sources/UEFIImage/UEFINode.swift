@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 
 /// One element of a firmware image: a volume, a file, a section, a stretch of
 /// padding (`Design/UEFI/UEFI_IMAGE_FORMAT.md`, "Рекомендуемая модель данных").
@@ -40,6 +41,10 @@ public struct UEFINode: Identifiable, Hashable, Sendable {
     /// What to call it on screen. The parser fills in the best it has: a
     /// user-interface section's string, a known GUID's name, or the type.
     public var name: String
+    /// The name in words, for a name the parser made up rather than read —
+    /// "Free space", "LENV block 2": put into words in the language of
+    /// whoever shows it, while `name` keeps it in English.
+    public var nameText: LocalizedText?
     /// A volume's file system, a file's name, a section's definition GUID.
     public var guid: EFIGUID?
 
@@ -115,6 +120,42 @@ public struct UEFINode: Identifiable, Hashable, Sendable {
         self.isExpandable = isExpandable
         self.childDepth = childDepth
         self.children = children
+    }
+
+    /// A node with a name the parser made up: `name` is it in English.
+    public init(
+        id: NodeID = .root,
+        kind: UEFINodeKind,
+        subtype: UInt8? = nil,
+        named text: LocalizedText,
+        guid: EFIGUID? = nil,
+        header: Range<UInt64>,
+        body: Range<UInt64>,
+        tail: Range<UInt64>? = nil,
+        isFixed: Bool = false,
+        space: ByteSpace = .file,
+        compression: SectionCompression? = nil,
+        isErased: Bool = false,
+        isExpandable: Bool = false,
+        childDepth: Int = 0,
+        children: [UEFINode] = []
+    ) {
+        self.init(id: id, kind: kind, subtype: subtype, name: text.text(in: .english), guid: guid,
+                  header: header, body: body, tail: tail, isFixed: isFixed, space: space,
+                  compression: compression, isErased: isErased, isExpandable: isExpandable,
+                  childDepth: childDepth, children: children)
+        nameText = text
+    }
+
+    /// The same, with no header of its own.
+    public init(kind: UEFINodeKind, named text: LocalizedText, range: Range<UInt64>, isErased: Bool = false) {
+        self.init(kind: kind, named: text, header: range.lowerBound..<range.lowerBound, body: range,
+                  isErased: isErased)
+    }
+
+    /// The name in `language`.
+    public func displayName(in language: AppLanguage) -> String {
+        nameText?.text(in: language) ?? name
     }
 
     /// A node with no header of its own — padding, free space, data nobody

@@ -157,7 +157,7 @@ extension Parser {
         }
         return UEFINode(
             kind: .padding,
-            name: L("Non-UEFI data"),
+            named: L("Non-UEFI data"),
             header: start..<start,
             body: start..<end,
             children: children

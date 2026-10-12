@@ -1694,8 +1694,8 @@ final class FilePaneView: NSView {
     // help: pane.header.codec-badge
     private func updateCodecBadge() {
         let badge = viewModel.origin?.codec.badge
-        codecBadge.text = badge?.text ?? ""
-        ControlHelp.describe(codecBadge, name: badge?.text ?? "", tooltip: badge?.explanation)
+        codecBadge.text = badge?.text.text ?? ""
+        ControlHelp.describe(codecBadge, name: badge?.text.text ?? "", tooltip: badge?.explanation.text)
         codecBadge.isHidden = badge == nil || bounds.width < Self.trailingChromeMinWidth && !isHeaderHoisted
         badgeCollapsed?.isActive = badge == nil
         badgeGap?.constant = badge == nil ? 0 : 6

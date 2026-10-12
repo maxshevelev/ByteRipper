@@ -41,14 +41,14 @@ final class FITComponentDisplayTests: XCTestCase {
     private func fields(_ index: Int) -> [String: String] {
         let (image, reader) = built()
         let node = image.roots[0].children[index]
-        let detail = UEFIDetail.build(for: node, image: image, reader: reader)
+        let detail = UEFIDetail.build(for: node, image: image, reader: reader, in: .english)
         return Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
     }
 
     func testARowIsNamedByWhatItIs() {
         let (image, _) = built()
         let names = image.roots[0].children.dropFirst()
-            .map { UEFITreeDisplay.name(for: $0, catalogue: GuidsCatalogue(names: [:]), in: image) }
+            .map { UEFITreeDisplay.name(for: $0, catalogue: GuidsCatalogue(names: [:]), in: image, language: .english) }
         XCTAssertEqual(names, ["Startup ACM", "Boot Guard Key Manifest", "FIT"])
     }
 

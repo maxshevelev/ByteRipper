@@ -39,7 +39,8 @@ public enum HelpContents {
             .minimap,
             .bookmarks,
             .segments,
-            .fragments
+            .fragments,
+            .notes
         ]),
         ("changing", [
             .editing,

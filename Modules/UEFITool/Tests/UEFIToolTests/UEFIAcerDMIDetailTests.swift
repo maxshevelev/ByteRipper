@@ -66,7 +66,7 @@ final class UEFIAcerDMIDetailTests: XCTestCase {
     /// a factory block has no problems and no notes.
     func testTheAreaSaysWhatItHolds() throws {
         let parsed = try parsed()
-        let detail = UEFIDetail.build(for: parsed.node, image: parsed.image, reader: parsed.reader)
+        let detail = UEFIDetail.build(for: parsed.node, image: parsed.image, reader: parsed.reader, in: .english)
         XCTAssertEqual(value("Kind", in: detail), "Acer DMI")
         XCTAssertEqual(value("System serial", in: detail), Self.serial)
         XCTAssertEqual(value("MB Serial", in: detail), Self.motherboardSerial)
@@ -86,7 +86,7 @@ final class UEFIAcerDMIDetailTests: XCTestCase {
         Self.put(&block, "Asset0001", at: 0xA0)
         Self.put(&block, "12345678", at: 0x6A0)
         let parsed = try parsed(Self.image(block: block))
-        let detail = UEFIDetail.build(for: parsed.node, image: parsed.image, reader: parsed.reader)
+        let detail = UEFIDetail.build(for: parsed.node, image: parsed.image, reader: parsed.reader, in: .english)
         XCTAssertEqual(value("Asset tag", in: detail), "Asset0001")
         XCTAssertEqual(value("Manufacturing code", in: detail), "12345678")
     }
@@ -94,7 +94,7 @@ final class UEFIAcerDMIDetailTests: XCTestCase {
     /// The row answers what a bench opens the area for: the serial.
     func testTheRowSaysWhatItHolds() throws {
         let parsed = try parsed()
-        let name = UEFITreeDisplay.name(for: parsed.node, catalogue: .empty, reader: parsed.reader)
+        let name = UEFITreeDisplay.name(for: parsed.node, catalogue: .empty, reader: parsed.reader, language: .english)
         XCTAssertEqual(name, "Acer DMI · \(Self.serial)")
         XCTAssertEqual(UEFITreeDisplay.typeText(for: parsed.node), "Padding", "padding to UEFITool")
         XCTAssertEqual(UEFIHelpTerms.term(for: parsed.node), HelpTermID("acer-dmi"))
@@ -108,7 +108,7 @@ final class UEFIAcerDMIDetailTests: XCTestCase {
         block[0xF3] = 0x00 // the constant is not 02
         block.replaceSubrange(0x130..<(0x130 + 6), with: [UInt8](repeating: 0xAA, count: 6)) // the copy went stale
         let parsed = try parsed(Self.image(block: block))
-        let detail = UEFIDetail.build(for: parsed.node, image: parsed.image, reader: parsed.reader)
+        let detail = UEFIDetail.build(for: parsed.node, image: parsed.image, reader: parsed.reader, in: .english)
         let problems = detail.fields.filter { $0.label == "Problem" }
         XCTAssertEqual(problems.count, 3)
         XCTAssertTrue(problems.allSatisfy(\.isProblem))
@@ -121,7 +121,7 @@ final class UEFIAcerDMIDetailTests: XCTestCase {
         var block = Self.block()
         block.replaceSubrange(0x130..<(0x130 + 6), with: [UInt8](repeating: 0xFF, count: 6))
         let parsed = try parsed(Self.image(block: block))
-        let detail = UEFIDetail.build(for: parsed.node, image: parsed.image, reader: parsed.reader)
+        let detail = UEFIDetail.build(for: parsed.node, image: parsed.image, reader: parsed.reader, in: .english)
         let notes = detail.fields.filter { $0.label == "Note" }
         XCTAssertEqual(notes.count, 1)
         XCTAssertTrue(notes.allSatisfy { !$0.isProblem })

@@ -9,33 +9,33 @@ import MEFirmware
 /// state left standing by a step that could not be taken is not read as one
 /// the flash shows (`MFSStateBasis`).
 extension MEAText {
-    public static func fileSystemStateBasis(_ state: MFSState, _ basis: MFSStateBasis) -> String {
+    public static func fileSystemStateBasis(_ state: MFSState, _ basis: MFSStateBasis, in language: AppLanguage) -> String {
         let name = title(state.rawValue)
         var sentences: [String] = []
         switch basis.decidedBy {
         case .reservedFiles:
-            sentences.append(L("%1$@, from the reserved MFS files present.", name))
+            sentences.append(L("%1$@, from the reserved MFS files present.", in: language, name))
         case .efs:
-            sentences.append(L("%1$@, because the EFS volume holds file content: the engine has run and written its files.", name))
+            sentences.append(L("%1$@, because the EFS volume holds file content: the engine has run and written its files.", in: language, name))
         case .configuration:
-            sentences.append(L("%1$@, from the configuration found (%2$@), not from files the engine wrote.",
+            sentences.append(L("%1$@, from the configuration found (%2$@), not from files the engine wrote.", in: language,
                                name, basis.configuration.joined(separator: ", ")))
         case .nothing:
-            sentences.append(L("%1$@: no reserved MFS file, no EFS content and no configuration partition.", name))
+            sentences.append(L("%1$@: no reserved MFS file, no EFS content and no configuration partition.", in: language, name))
         }
         if basis.isIncomplete {
             switch basis.efs {
             case .unreadable(let offset):
-                sentences.append(L("The EFS partition at %1$@ could not be read, so whether it holds files — which would make the state Initialized — is unknown. Check its system page before relying on this state.",
+                sentences.append(L("The EFS partition at %1$@ could not be read, so whether it holds files — which would make the state Initialized — is unknown. Check its system page before relying on this state.", in: language,
                                    offsetText(offset)))
             case .filesNotNamed:
-                sentences.append(L("The EFS volume's files cannot be told without the firmware database's file table, so whether it holds files — which would make the state Initialized — is unknown."))
+                sentences.append(L("The EFS volume's files cannot be told without the firmware database's file table, so whether it holds files — which would make the state Initialized — is unknown.", in: language))
             default:
                 break
             }
         }
         if basis.reservedFiles == .notRead, basis.decidedBy != .efs {
-            sentences.append(L("This volume does not name its reserved files by index, so only the EFS and the configuration decide."))
+            sentences.append(L("This volume does not name its reserved files by index, so only the EFS and the configuration decide.", in: language))
         }
         return sentences.joined(separator: " ")
     }

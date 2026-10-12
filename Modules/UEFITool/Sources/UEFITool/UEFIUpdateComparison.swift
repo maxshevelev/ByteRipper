@@ -60,7 +60,7 @@ public struct UEFIUpdateComparison: Equatable, Sendable {
         /// The update carries a region of `update` bytes; the dump's is `region`.
         case sizeMismatch(update: UInt64, region: UInt64)
 
-        public var message: String {
+        public var message: LocalizedText {
             switch self {
             case .notAnUpdate:
                 return L("This is not an AMI BIOS Guard update file.")
@@ -123,7 +123,7 @@ public struct UEFIUpdateComparison: Equatable, Sendable {
 
     /// The writes that put the update's bytes into the rows at `chosen` —
     /// only where they differ. Nil when there is nothing to write.
-    public func transaction(writing chosen: Set<Int>, from update: BIOSGuardUpdate) -> ToolTransaction? {
+    public func transaction(writing chosen: Set<Int>, from update: BIOSGuardUpdate, in language: AppLanguage) -> ToolTransaction? {
         let writes = chosen.sorted().filter { rows.indices.contains($0) }.flatMap { index in
             rows[index].differences.map { run in
                 let from = Int(run.lowerBound - region.lowerBound)
@@ -132,7 +132,7 @@ public struct UEFIUpdateComparison: Equatable, Sendable {
             }
         }
         guard !writes.isEmpty else { return nil }
-        return ToolTransaction(name: L("Write from Update File"), writes: writes)
+        return ToolTransaction(name: L("Write from Update File", in: language), writes: writes)
     }
 
     /// The flasher's own switches for NVRAM, its copy and the OA key, and the
@@ -184,7 +184,7 @@ public struct UEFIUpdateComparison: Equatable, Sendable {
 
 extension UEFIUpdateComparison.Row {
     /// The State column.
-    public var stateText: String {
+    public var stateText: LocalizedText {
         if isIdentical { return L("Identical") }
         if isBoardData {
             return isErasedInUpdate
@@ -196,19 +196,19 @@ extension UEFIUpdateComparison.Row {
 
     /// The Name column: the name, and which of its blocks where there are
     /// several.
-    public var nameText: String {
-        blockCount > 1 ? L("%1$@ (%2$@ blocks)", name, blockCount) : name
+    public var nameText: LocalizedText {
+        blockCount > 1 ? L("%1$@ (%2$@ blocks)", name, blockCount) : .verbatim(name)
     }
 }
 
 extension UEFIUpdateComparison {
     /// The line under the table: how the parts stand, and what pressing Write
     /// would write.
-    public func summary(writing chosen: Set<Int>) -> String {
+    public func summary(writing chosen: Set<Int>, in language: AppLanguage) -> String {
         let identical = rows.filter(\.isIdentical).count
         let bytes = chosen.filter { rows.indices.contains($0) }.reduce(UInt64(0)) { $0 + rows[$1].differingBytes }
         let kept = rows.indices.filter { !rows[$0].isIdentical && !chosen.contains($0) }.count
-        return L("%1$@ of %2$@ parts identical. To write: %3$@ parts, %4$@ bytes. Kept as they are: %5$@.",
+        return L("%1$@ of %2$@ parts identical. To write: %3$@ parts, %4$@ bytes. Kept as they are: %5$@.", in: language,
                  identical, rows.count, chosen.count, bytes, kept)
     }
 }

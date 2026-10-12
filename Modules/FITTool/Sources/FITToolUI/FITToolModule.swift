@@ -166,7 +166,7 @@ struct FITParkedState: ToolSessionState {
         if let cached = tableProvider?.cachedFITTable() {
             lastReport = cached.report
             readRanges = cached.ranges
-            show(FITPresenter.display(cached.report, focus: focus)
+            show(FITPresenter.display(cached.report, focus: focus, in: Localization.appLanguage)
                 .ratingLatest(against: catalogue))
             controller.say(FITToolSession.advice(for: cached.report))
             // On the next turn, as a reading's end is: whoever started the
@@ -261,9 +261,9 @@ struct FITParkedState: ToolSessionState {
         focusZone = mark.zone
         if let index = mark.focus, let row = display.rows.first(where: { $0.key == index }),
            mark.zone == row.zoneToFocus, mark.zone != FITPresenter.rowZoneID(index) {
-            show(display.focusingTarget(of: index))
+            show(display.focusingTarget(of: index, in: Localization.appLanguage))
         } else {
-            show(display.focusing(mark.focus))
+            show(display.focusing(mark.focus, in: Localization.appLanguage))
         }
     }
 
@@ -318,7 +318,7 @@ struct FITParkedState: ToolSessionState {
             // that lands later is applied by `catalogueReady`, which re-shows
             // this display with the verdicts filled in.
             self.show(
-                FITPresenter.display(report, focus: self.focus)
+                FITPresenter.display(report, focus: self.focus, in: Localization.appLanguage)
                     .ratingLatest(against: self.catalogue)
             )
             if self.noticeAnswersTheUser {
@@ -353,7 +353,7 @@ struct FITParkedState: ToolSessionState {
             // `.notRated` — so leaving it unrated here is the verdict icons
             // appearing when the table is first drawn and going again the
             // moment the names land.
-            self.show(FITPresenter.display(named, focus: self.focus)
+            self.show(FITPresenter.display(named, focus: self.focus, in: Localization.appLanguage)
                 .ratingLatest(against: self.catalogue))
             self.lastReport = named
             self.keepTable()
@@ -524,9 +524,9 @@ struct FITParkedState: ToolSessionState {
     private func outline(of display: FITDisplay) -> FITDisplay {
         guard let zone = focusZone else { return display }
         guard display.zones.zones.contains(where: { $0.id == zone }) else {
-            return display.focusing(zoneID: nil)
+            return display.focusing(zoneID: nil, in: Localization.appLanguage)
         }
-        return display.focusing(zoneID: zone)
+        return display.focusing(zoneID: zone, in: Localization.appLanguage)
     }
 
     // MARK: - What the panel asks for
@@ -536,7 +536,7 @@ struct FITParkedState: ToolSessionState {
         focusZone = index.map(FITPresenter.rowZoneID)
         // Publishing again is what moves the outline in the dump, and the host
         // brings a newly focused zone on screen by itself.
-        show(display.focusing(index))
+        show(display.focusing(index, in: Localization.appLanguage))
     }
 
     /// Where the row leads: what it points at, or — for the header and for an
@@ -555,7 +555,7 @@ struct FITParkedState: ToolSessionState {
         host.noteNavigationStep()
         focus = index
         focusZone = row.zoneToFocus
-        show(display.focusingTarget(of: index))
+        show(display.focusingTarget(of: index, in: Localization.appLanguage))
         host.reveal(row.offsetToGoTo..<(row.offsetToGoTo + 1), select: false)
     }
 
@@ -570,7 +570,7 @@ struct FITParkedState: ToolSessionState {
         else { return }
         host.noteNavigationStep()
         focusZone = FITPresenter.tableZoneID
-        show(display.focusing(zoneID: FITPresenter.tableZoneID))
+        show(display.focusing(zoneID: FITPresenter.tableZoneID, in: Localization.appLanguage))
         host.reveal(range, select: false)
     }
 
@@ -580,7 +580,7 @@ struct FITParkedState: ToolSessionState {
     public func zoneSelected(_ id: Zone.ID) {
         focus = FITPresenter.rowIndex(ofZone: id)
         focusZone = id
-        show(display.focusing(zoneID: id))
+        show(display.focusing(zoneID: id, in: Localization.appLanguage))
     }
 
     /// How a refusal asks for attention. The panel is a narrow strip beside a
@@ -869,7 +869,7 @@ struct FITParkedState: ToolSessionState {
             guard !Task.isCancelled else { return }
             switch prepared {
             case .failure(let problem):
-                self.refuse(couldNot, problem.message)
+                self.refuse(couldNot, problem.message.text)
             case .success(let (transaction, title, note)):
                 self.apply(transaction, title: title, note: note, couldNot: couldNot)
             }
@@ -906,7 +906,7 @@ struct FITParkedState: ToolSessionState {
         return await Task.detached(priority: .userInitiated) {
             FITEditor.addOrReplaceMicrocode(
                 component, in: table, image: image, reader: reader,
-                addressDiff: addressDiff, protected: ranges
+                addressDiff: addressDiff, protected: ranges, in: Localization.appLanguage
             )
         }.value
     }
@@ -926,7 +926,7 @@ struct FITParkedState: ToolSessionState {
         return await Task.detached(priority: .userInitiated) {
             FITEditor.replaceMicrocode(
                 at: index, component, in: table, image: image, reader: reader,
-                addressDiff: addressDiff, protected: ranges
+                addressDiff: addressDiff, protected: ranges, in: Localization.appLanguage
             )
         }.value
     }
@@ -1001,7 +1001,7 @@ struct FITParkedState: ToolSessionState {
         return await Task.detached(priority: .userInitiated) {
             FITEditor.removeMicrocode(
                 index, from: table, image: image, in: reader, addressDiff: addressDiff,
-                protected: ranges
+                protected: ranges, in: Localization.appLanguage
             )
         }.value
     }

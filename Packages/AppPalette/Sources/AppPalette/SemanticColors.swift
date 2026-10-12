@@ -78,6 +78,10 @@ public enum ZoneColors {
     /// own hue, drawn dashed, so what the agent is pointing at is never taken
     /// for a tool's map or for a difference.
     public static let agent = Sets.agent.color
+
+    /// A note the person put on the dump: drawn as an agent's is, in a hue of
+    /// its own, so whose a note is reads at a glance.
+    public static let person = Sets.person.color
 }
 
 /// The tints a partition's pieces are drawn in, cycled by label (§21.3): S0,

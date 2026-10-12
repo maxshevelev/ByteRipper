@@ -36,10 +36,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     /// on the log or the button in the list's corner, as a tool panel's do.
     private let detailPane = ToolDetailPane()
     private var details: ToolDetailScroll { detailPane.detail }
-    private let annotations = AgentAnnotationCards()
     /// The log's rows, for tests.
     var shownRows: [AgentCallRecord] { rows }
-    private var annotationsScroll: NSScrollView { annotations.scroll }
     private let tools = AgentToolsPage()
     private let clearButton = NSButton(title: "", target: nil, action: nil)
     private let settingsButton = NSButton(title: "", target: nil, action: nil)
@@ -107,7 +105,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     private func zoomChanged() {
         let ratio = ToolPanelFont.size / drawnSize
         drawnSize = ToolPanelFont.size
-        annotations.zoomChanged()
         for table in [table, tools.table] {
             ToolPanelTable.scaleColumnWidths(of: table, by: ratio)
             AgentTableStyle.apply(to: table)
@@ -160,13 +157,13 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         statusLabel.font = .systemFont(ofSize: 12)
         statusLabel.lineBreakMode = .byTruncatingTail
 
-        // The two things the window lists: what the agent asked, and what it
-        // marked. One at a time, the way Activity Monitor's tabs are — both
-        // are long lists that want the whole height.
-        pages.segmentCount = 3
+        // The two things the window lists: what the agent asked, and the
+        // tools it can ask. One at a time, the way Activity Monitor's tabs
+        // are — both are long lists that want the whole height. Its notes are
+        // in each tab's Notes panel.
+        pages.segmentCount = 2
         pages.setLabel(L("Log"), forSegment: 0)
-        pages.setLabel(L("Annotations"), forSegment: 1)
-        pages.setLabel(L("Tools"), forSegment: 2)
+        pages.setLabel(L("Tools"), forSegment: 1)
         pages.trackingMode = .selectOne
         pages.selectedSegment = 0
         pages.target = self
@@ -205,19 +202,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         logSplit.setPaneLayout(.fill, at: 0)
         logSplit.setPaneLayout(.fixed(170), at: 1)
 
-        annotations.build()
-        annotations.onShow = { [weak self] id in self?.showAnnotation(id) }
-        annotations.onSelectionChanged = { [weak self] in self?.refreshButtons() }
-        annotations.onRemove = { [weak self] ids in
-            let chosen = Set(ids)
-            self?.service?.annotationTools.remove { chosen.contains($0.id) }
-        }
-        annotations.onOpenSite = { [weak self] annotation in
-            guard let service = self?.service, let file = annotation.file.url, let site = annotation.site else { return }
-            Task { @MainActor in await service.openNode(file: file, id: site.node) }
-        }
-        annotations.isOpen = { [weak self] annotation in self?.service?.annotationTools.place(of: annotation) != nil }
-        annotationsScroll.isHidden = true
 
         tools.build()
         tools.onSelectionChanged = { [weak self] in self?.refreshButtons() }
@@ -242,7 +226,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
         let help = HelpButton.standard(for: .topic(.agent))
 
-        for view in [statusLabel, pages, logSplit, annotationsScroll, tools.split, clearButton,
+        for view in [statusLabel, pages, logSplit, tools.split, clearButton,
                      followButton, settingsButton, help] {
             view.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(view)
@@ -261,11 +245,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             logSplit.topAnchor.constraint(equalTo: pages.bottomAnchor, constant: 8),
             logSplit.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             logSplit.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16),
-
-            annotationsScroll.topAnchor.constraint(equalTo: logSplit.topAnchor),
-            annotationsScroll.leadingAnchor.constraint(equalTo: logSplit.leadingAnchor),
-            annotationsScroll.trailingAnchor.constraint(equalTo: logSplit.trailingAnchor),
-            annotationsScroll.bottomAnchor.constraint(equalTo: logSplit.bottomAnchor),
 
             tools.split.topAnchor.constraint(equalTo: logSplit.topAnchor),
             tools.split.leadingAnchor.constraint(equalTo: logSplit.leadingAnchor),
@@ -331,12 +310,11 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             logScroll.reflectScrolledClipView(logScroll.contentView)
         }
         showDetails()
-        annotations.show(service?.annotationTools.all() ?? [])
         tools.show(service?.catalogue ?? [], stats: service?.toolStats ?? [:])
         refreshButtons()
     }
 
-    private enum Page: Int { case log, annotations, tools }
+    private enum Page: Int { case log, tools }
     private var page: Page { Page(rawValue: pages.selectedSegment) ?? .log }
 
     private func refreshButtons() {
@@ -345,10 +323,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             clearButton.title = L("Clear Log")
             clearButton.isEnabled = !rows.isEmpty
             followButton.isHidden = false
-        case .annotations:
-            clearButton.title = L("Clear Annotations")
-            clearButton.isEnabled = !annotations.isEmpty
-            followButton.isHidden = true
         case .tools:
             clearButton.title = L("Reset Statistics")
             clearButton.isEnabled = tools.hasStats
@@ -358,7 +332,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
     @objc private func pageChanged() {
         logSplit.isHidden = page != .log
-        annotationsScroll.isHidden = page != .annotations
         tools.split.isHidden = page != .tools
         refreshButtons()
         focusList()
@@ -368,7 +341,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     var shownList: NSView {
         switch page {
         case .log: return table
-        case .annotations: return annotations.collection
         case .tools: return tools.table
         }
     }
@@ -382,12 +354,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
     /// Shows the Tools list, for tests.
     func showTools() {
-        pages.selectedSegment = 2
-        pageChanged()
-    }
-
-    /// Shows the Annotations list, for tests.
-    func showAnnotations() {
         pages.selectedSegment = 1
         pageChanged()
     }
@@ -528,26 +494,8 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     @objc private func clearPage() {
         switch page {
         case .log: service?.clearLog()
-        case .annotations: service?.annotationTools.remove { _ in true }
         case .tools: service?.resetToolStats()
         }
-    }
-
-    /// Brings an annotation's file forward, or opens it, and selects its
-    /// place; a file moved or deleted since is said so.
-    // help: window.agent.annotations
-    private func showAnnotation(_ id: String) {
-        guard let tools = service?.annotationTools,
-              let annotation = tools.all().first(where: { $0.id == id }) else { return }
-        if tools.place(of: annotation) == nil, let url = annotation.file.url,
-           !FileManager.default.fileExists(atPath: url.path) {
-            let alert = NSAlert()
-            alert.messageText = L("The file is not there")
-            alert.informativeText = L("“%1$@” has been moved or deleted since the agent annotated it.", url.path)
-            if let window { alert.beginSheetModal(for: window) } else { alert.runModal() }
-            return
-        }
-        tools.show(id)
     }
 
     @objc private func openSettings() {
@@ -612,9 +560,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
     /// The Tools page, for tests.
     var toolsPage: AgentToolsPage { tools }
-
-    /// The annotations' cards, for tests.
-    var annotationsList: AgentAnnotationCards { annotations }
 }
 
 /// The Agent window's tables drawn as the tool panels' are

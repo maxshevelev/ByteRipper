@@ -21,7 +21,7 @@ final class ProtectionMarksTests: XCTestCase {
     }
 
     private func marks(_ image: UEFIImage, _ name: String) -> ToolRowMarks {
-        UEFITreeMarks.marks(for: node(image, name), in: image)
+        UEFITreeMarks.marks(for: node(image, name), in: image, in: .english)
     }
 
     func testANodeInsideTheIBBIsTintedAndAVolumePartlyInsideWearsTheBadge() {
@@ -72,7 +72,7 @@ final class ProtectionMarksTests: XCTestCase {
         )])
 
         let detail = UEFIDetail.build(for: node(image, "Driver"), image: image,
-                                      reader: ImageReader([UInt8](repeating: 0, count: 0x1000)))
+                                      reader: ImageReader([UInt8](repeating: 0, count: 0x1000)), in: .english)
         let table = try XCTUnwrap(detail.tables.first { $0.title == "Protected by" })
         let row = try XCTUnwrap(table.rows.first).map(\.text)
         XCTAssertEqual(row[1], "Boot Guard IBB segment")
@@ -80,14 +80,14 @@ final class ProtectionMarksTests: XCTestCase {
         XCTAssertTrue(detail.fields.contains { $0.label == "Protection" })
 
         let untouched = UEFIDetail.build(for: node(image, "Hashes"), image: image,
-                                         reader: ImageReader([UInt8](repeating: 0, count: 0x1000)))
+                                         reader: ImageReader([UInt8](repeating: 0, count: 0x1000)), in: .english)
         XCTAssertFalse(untouched.tables.contains { $0.title == "Protected by" })
     }
 
     func testTheSummarySaysTheImageNamesProtectedRanges() {
         let image = image([.init(kind: .ibb, range: 0x48..<0x200, source: 0x900..<0x940)])
 
-        XCTAssertTrue(UEFITreeDisplay.summary(of: image).hasSuffix(" · 1 protected range"),
-                      UEFITreeDisplay.summary(of: image))
+        XCTAssertTrue(UEFITreeDisplay.summary(of: image, in: .english).hasSuffix(" · 1 protected range"),
+                      UEFITreeDisplay.summary(of: image, in: .english))
     }
 }

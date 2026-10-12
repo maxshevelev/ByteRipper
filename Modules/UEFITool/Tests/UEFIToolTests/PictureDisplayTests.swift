@@ -24,7 +24,7 @@ final class PictureDisplayTests: XCTestCase {
 
     func testTheDetailsSayWhatThePictureIs() {
         let (image, reader) = built()
-        let detail = UEFIDetail.build(for: image.roots[0].children[0], image: image, reader: reader)
+        let detail = UEFIDetail.build(for: image.roots[0].children[0], image: image, reader: reader, in: .english)
         let fields = Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
         XCTAssertEqual(fields["Kind"], "Picture")
         XCTAssertEqual(fields["Format"], "JPEG (Exif)")
@@ -35,8 +35,8 @@ final class PictureDisplayTests: XCTestCase {
     func testThePictureIsHandedToThePanel() {
         let (image, reader) = built()
         let picture = image.roots[0].children[0]
-        XCTAssertEqual(UEFIDetail.build(for: picture, image: image, reader: reader).picture, Self.jpeg)
-        XCTAssertNil(UEFIDetail.build(for: image.roots[0], image: image, reader: reader).picture)
+        XCTAssertEqual(UEFIDetail.build(for: picture, image: image, reader: reader, in: .english).picture, Self.jpeg)
+        XCTAssertNil(UEFIDetail.build(for: image.roots[0], image: image, reader: reader, in: .english).picture)
     }
 
     func testItOpensItsEntryAndSavesAsAJPEG() {
@@ -57,12 +57,12 @@ final class PictureDisplayTests: XCTestCase {
         let picture = UEFINode(kind: .picture, subtype: Picture.Format.gif.rawValue, name: "GIF 2×1",
                                header: 0..<0, body: 0..<UInt64(gif.count))
         let image = UEFIImage(size: UInt64(gif.count), roots: [picture])
-        let detail = UEFIDetail.build(for: image.roots[0], image: image, reader: ImageReader(gif))
+        let detail = UEFIDetail.build(for: image.roots[0], image: image, reader: ImageReader(gif), in: .english)
         let fields = Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
         XCTAssertEqual(fields["Frames"], "3")
 
         let (still, reader) = built()
-        XCTAssertFalse(UEFIDetail.build(for: still.roots[0].children[0], image: still, reader: reader)
+        XCTAssertFalse(UEFIDetail.build(for: still.roots[0].children[0], image: still, reader: reader, in: .english)
             .fields.contains { $0.label == "Frames" })
     }
 
@@ -77,7 +77,7 @@ final class PictureDisplayTests: XCTestCase {
         let section = UEFINode(kind: .section, subtype: 0x19, name: "Raw section", header: 0..<0,
                                body: 0..<UInt64(bmp.count), children: [picture])
         let image = UEFIImage(size: UInt64(bmp.count), roots: [section])
-        let detail = UEFIDetail.build(for: image.roots[0].children[0], image: image, reader: ImageReader(bmp))
+        let detail = UEFIDetail.build(for: image.roots[0].children[0], image: image, reader: ImageReader(bmp), in: .english)
         let fields = Dictionary(detail.fields.map { ($0.label, $0) }, uniquingKeysWith: { first, _ in first })
         XCTAssertEqual(fields["Format"]?.value, "BMP (24-bit)")
         XCTAssertEqual(fields["Declared size"]?.value, "0x4E (78) — the section ends earlier")

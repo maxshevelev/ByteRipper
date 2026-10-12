@@ -62,10 +62,10 @@ final class UEFIUpdateComparisonTests: XCTestCase {
 
     func testTheStateColumnSaysWhatThePartIs() throws {
         let rows = try compare(dump(changingCodeAt: [0x3000])).rows
-        XCTAssertEqual(rows.map(\.stateText), [
+        XCTAssertEqual(rows.map { $0.stateText.text(in: .english) }, [
             "Identical", "Board data; 16 bytes differ", "Board data; empty in the update", "1 bytes differ"
         ])
-        XCTAssertEqual(rows.map(\.nameText), ["FV_BB", "NVRAM", "PEGA_GPNV", "FV_MAIN_WRAPPER (3 blocks)"])
+        XCTAssertEqual(rows.map { $0.nameText.text(in: .english) }, ["FV_BB", "NVRAM", "PEGA_GPNV", "FV_MAIN_WRAPPER (3 blocks)"])
     }
 
     func testDifferencesCloseTogetherAreOneWriteAndFarApartAreTwo() throws {
@@ -76,7 +76,7 @@ final class UEFIUpdateComparisonTests: XCTestCase {
 
     func testTheTransactionWritesTheUpdatesBytesOnlyWhereTheDumpDiffers() throws {
         let comparison = try compare(dump(changingCodeAt: [0x3000, 0x3008]))
-        let transaction = try XCTUnwrap(comparison.transaction(writing: [1, 3], from: update))
+        let transaction = try XCTUnwrap(comparison.transaction(writing: [1, 3], from: update, in: .english))
         XCTAssertEqual(transaction.name, "Write from Update File")
         XCTAssertEqual(transaction.writes, [
             .init(offset: base + 0x1000, bytes: [UInt8](repeating: 0x22, count: 0x10)),
@@ -87,16 +87,16 @@ final class UEFIUpdateComparisonTests: XCTestCase {
 
     func testWritingAPartThatIsTheSameWritesNothing() throws {
         let comparison = try compare(dump())
-        XCTAssertNil(comparison.transaction(writing: [0, 3], from: update))
-        XCTAssertNil(comparison.transaction(writing: [], from: update))
+        XCTAssertNil(comparison.transaction(writing: [0, 3], from: update, in: .english))
+        XCTAssertNil(comparison.transaction(writing: [], from: update, in: .english))
     }
 
     func testARegionOfAnotherSizeIsNotThisBoardsUpdate() {
         let result = UEFIUpdateComparison.compare(update, with: [UInt8](repeating: 0, count: 0x4000), at: base)
         XCTAssertEqual(result, .failure(.sizeMismatch(update: 0x5000, region: 0x4000)))
         if case .failure(let problem) = result {
-            XCTAssertTrue(problem.message.contains("0x5000"))
-            XCTAssertTrue(problem.message.contains("0x4000"))
+            XCTAssertTrue(problem.message.text(in: .english).contains("0x5000"))
+            XCTAssertTrue(problem.message.text(in: .english).contains("0x4000"))
         }
     }
 
@@ -105,7 +105,7 @@ final class UEFIUpdateComparisonTests: XCTestCase {
                                                   with: dump(), at: base)
         guard case .failure(let problem) = result else { return XCTFail("compared a file that is not an update") }
         XCTAssertEqual(problem, .notAnUpdate)
-        XCTAssertEqual(problem.message, "This is not an AMI BIOS Guard update file.")
+        XCTAssertEqual(problem.message.text(in: .english), "This is not an AMI BIOS Guard update file.")
     }
 
     func testBoardDataIsToldByTheFlashersSwitchOrByTheVendorsName() {
@@ -121,7 +121,7 @@ final class UEFIUpdateComparisonTests: XCTestCase {
 
     func testTheSummaryCountsThePartsAndTheBytes() throws {
         let comparison = try compare(dump(changingCodeAt: [0x3000]))
-        XCTAssertEqual(comparison.summary(writing: [3]),
+        XCTAssertEqual(comparison.summary(writing: [3], in: .english),
                        "1 of 4 parts identical. To write: 1 parts, 1 bytes. Kept as they are: 2.")
     }
 }

@@ -122,7 +122,7 @@ public enum UEFIAgentRegions {
             below += await collect(child, kinds: kinds, minSize: minSize, in: tree)
         }
         let matches = kinds.contains(UEFITreeDisplay.typeText(for: node).lowercased())
-            || kinds.contains(UEFITreeDisplay.subtypeText(for: node).lowercased())
+            || kinds.contains(UEFITreeDisplay.subtypeText(for: node, in: .english).lowercased())
         guard matches, UInt64(range.count) >= minSize else { return below }
         let whole = children.count == 1 && children[0].range == node.range
         if !below.isEmpty, !whole { return below }
@@ -130,7 +130,7 @@ public enum UEFIAgentRegions {
     }
 
     nonisolated static func isBIOSRegion(_ node: UEFINode) -> Bool {
-        UEFITreeDisplay.typeText(for: node) == "Region" && UEFITreeDisplay.subtypeText(for: node) == "BIOS"
+        UEFITreeDisplay.typeText(for: node) == "Region" && UEFITreeDisplay.subtypeText(for: node, in: .english) == "BIOS"
     }
 
     /// Whether the node or an area holding it is named for a secret in the

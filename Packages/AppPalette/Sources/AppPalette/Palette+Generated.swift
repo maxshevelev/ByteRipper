@@ -44,8 +44,13 @@ public extension ZoneColors.Sets {
         light: (0.855, 0.835, 0.329, 1.000),
         dark: (0.855, 0.835, 0.329, 1.000))
 
+    static let person = PaletteColor(
+        name: "ZonePerson",
+        light: (0.180, 0.620, 0.330, 1.000),
+        dark: (0.420, 0.820, 0.520, 1.000))
+
     /// Every zone colour set in the catalogue, in its own order.
-    static let all = [agent, focused, other]
+    static let all = [agent, focused, other, person]
 }
 
 public extension SegmentTints.Sets {

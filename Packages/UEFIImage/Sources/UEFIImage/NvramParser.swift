@@ -218,9 +218,9 @@ extension Parser {
         guard start < end else { return [] }
         let range = start..<end
         if reader.isFilled(range, with: emptyByte) {
-            return [UEFINode(kind: .freeSpace, name: L("Free space"), range: range, isErased: true)]
+            return [UEFINode(kind: .freeSpace, named: L("Free space"), range: range, isErased: true)]
         }
-        return [UEFINode(kind: .padding, name: L("Padding"), range: range, isErased: false)]
+        return [UEFINode(kind: .padding, named: L("Padding"), range: range, isErased: false)]
     }
 
     /// A VSS variable store, or nil when the bytes at `offset` are not one.
@@ -452,7 +452,7 @@ extension Parser {
                 let padEnd = min(offset + aligned, storeEnd)
                 entries.append(UEFINode(
                     kind: .padding,
-                    name: L("Padding"),
+                    named: L("Padding"),
                     range: entry.range.upperBound..<padEnd,
                     isErased: reader.isFilled(entry.range.upperBound..<padEnd, with: emptyByte)
                 ))
@@ -706,9 +706,9 @@ extension Parser {
         if cursor < storeEnd {
             let checkEnd = max(cursor, storeEnd - NVRAM.sysfStoreCrcSize)
             if reader.isFilled(cursor..<checkEnd, with: 0) {
-                entries.append(UEFINode(kind: .freeSpace, name: L("Free space"), range: cursor..<storeEnd))
+                entries.append(UEFINode(kind: .freeSpace, named: L("Free space"), range: cursor..<storeEnd))
             } else {
-                entries.append(UEFINode(kind: .padding, name: L("Padding"), range: cursor..<storeEnd))
+                entries.append(UEFINode(kind: .padding, named: L("Padding"), range: cursor..<storeEnd))
             }
         }
 

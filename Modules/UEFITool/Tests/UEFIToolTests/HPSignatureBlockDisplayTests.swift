@@ -32,7 +32,7 @@ final class HPSignatureBlockDisplayTests: XCTestCase {
             ProtectedRange(kind: .hp, range: 0x1000..<0x5000, source: range)
         ]))
         let block = image.roots[0].children[0]
-        let detail = UEFIDetail.build(for: block, image: image, reader: ImageReader(bytes))
+        let detail = UEFIDetail.build(for: block, image: image, reader: ImageReader(bytes), in: .english)
         let fields = Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
 
         XCTAssertEqual(fields["Kind"], "HP signature block")

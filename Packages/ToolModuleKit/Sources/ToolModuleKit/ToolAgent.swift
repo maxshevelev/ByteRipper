@@ -13,9 +13,10 @@ import Localization
 ///
 /// The name, the description and every word of the answer are read by a
 /// model and stay in English without `L()` (`Design/LOCALIZATION.md`). Words
-/// the answer borrows from the panel — field labels the panel builds with
-/// `L()` — come out in English too: the app runs every query under
-/// `Localization.override`.
+/// the answer borrows from the panel — field labels the panel builds — are
+/// asked for in English where the query asks for them: the presenters take
+/// the language, and a query passes `.english` (`Design/AGENT_PLAN.md`,
+/// "Language").
 public struct ToolAgentQuery: Sendable {
     public let name: String
     public let title: String

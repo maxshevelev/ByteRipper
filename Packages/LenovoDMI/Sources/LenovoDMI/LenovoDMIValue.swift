@@ -113,7 +113,7 @@ public enum LenovoDMIValue {
 
     /// What the panel calls an entry: its known name, or its type for one
     /// nobody has named.
-    public static func name(of key: LenovoDMIKey) -> String {
+    public static func name(of key: LenovoDMIKey) -> LocalizedText {
         if let known = LenovoDMIKnownType(key) { return known.name }
         return key.isSMBIOS
             ? L("Unknown SMBIOS entry %1$@", key.typeText)
@@ -260,7 +260,7 @@ public struct LenovoDMIBlockCodec: PartCodec {
             return PartBadge(L("Plain", context: "part badge"),
                              explanation: L("A LENV block stored in the clear. Update in Parent recomputes its checksum."))
         }
-        return PartBadge("XOR " + String(format: "%02X", key),
+        return PartBadge(.verbatim("XOR " + String(format: "%02X", key)),
                          explanation: L("Decoded from the file. Update in Parent encodes it again with the key in its header and recomputes the checksum."))
     }
 }

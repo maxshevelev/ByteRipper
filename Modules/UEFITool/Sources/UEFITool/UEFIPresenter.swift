@@ -42,7 +42,7 @@ public enum UEFIPresenter {
     /// which is all the file can say (`COMPRESSED_SECTIONS.md` §5.3). `image`
     /// is where that section is found; without it such a node publishes
     /// nothing.
-    public static func zones(for node: UEFINode?, in image: UEFIImage? = nil) -> ZoneMap {
+    public static func zones(for node: UEFINode?, in image: UEFIImage? = nil, language: AppLanguage) -> ZoneMap {
         guard let node else { return .empty }
         guard let outermost = node.space.outermostSection else {
             return zones(of: node, named: node.name)
@@ -52,7 +52,7 @@ public enum UEFIPresenter {
               section.space == .file, section.header.lowerBound == outermost
         else { return .empty }
         let name = node.name.isEmpty ? "Compressed" : node.name
-        return zones(of: section, named: L("%1$@ (in %2$@)", name, section.name))
+        return zones(of: section, named: L("%1$@ (in %2$@)", in: language, name, section.name))
     }
 
     private static func zones(of node: UEFINode, named name: String) -> ZoneMap {
@@ -87,8 +87,8 @@ public enum UEFIPresenter {
         /// image the AMD PSP inflates.
         public var layout: UEFIRootLayout
         public var suggestedName: String
-        public var saveTitle: String
-        public var openTitle: String
+        public var saveTitle: LocalizedText
+        public var openTitle: LocalizedText
 
         /// The new tab's name: the dump it came out of, then what it is —
         /// `bios_LZMA compressed section.bin` — the way a zone's tab is named.
@@ -123,7 +123,7 @@ public enum UEFIPresenter {
         /// again (`Design/UEFI/UPDATE_IN_PARENT.md` §6).
         public var rebuild: UEFIRebuild.Target?
         public var suggestedName: String
-        public var menuTitle: String
+        public var menuTitle: LocalizedText
 
         /// The panel's name: the dump it came out of, then what it is — the way
         /// a zone's and a decompressed body's are named.
@@ -147,7 +147,7 @@ public enum UEFIPresenter {
     /// A node inside a compressed section is read from the buffer the section
     /// decoded to, and its titles say so: there is no second item for "the
     /// bytes it decompressed to" — they are what opening it opens.
-    public static func nodeOpenTitle(for node: UEFINode, body: Bool) -> String? {
+    public static func nodeOpenTitle(for node: UEFINode, body: Bool) -> LocalizedText? {
         let range = body ? node.body : node.range
         guard !range.isEmpty, !(body && range == node.range) else { return nil }
         let decompressed = node.space != .file
@@ -171,7 +171,7 @@ public enum UEFIPresenter {
 
     /// What the tree's menu calls saving `node` — or its body alone — to a
     /// file: offered wherever opening it is, since it is the same bytes.
-    public static func nodeSaveTitle(for node: UEFINode, body: Bool) -> String? {
+    public static func nodeSaveTitle(for node: UEFINode, body: Bool) -> LocalizedText? {
         guard nodeOpenTitle(for: node, body: body) != nil else { return nil }
         let decompressed = node.space != .file
         guard !node.name.isEmpty else {
@@ -285,16 +285,26 @@ public enum UEFIPresenter {
         })
     }
 
+    /// The same, as sentences: put into words by whoever shows them — the
+    /// card of a note in the person's language, an agent in English.
+    public static func codecTexts(of space: ByteSpace, in image: UEFIImage) -> [LocalizedText] {
+        guard case .decompressed(let chain) = space, !chain.isEmpty else { return [] }
+        return (1...chain.count).map { length in
+            compressionName(of: ByteSpace.decompressed(chain: Array(chain.prefix(length))), in: image)
+                .map(LocalizedText.verbatim) ?? L("Decompressed", context: "part badge")
+        }
+    }
+
     /// The codecs the bytes of `space` came through, outermost first — the
     /// badges a fragment panel's header wears, one for each compressed
     /// section on the chain. Empty for the file.
     public static func codecNames(of space: ByteSpace, in image: UEFIImage,
-                                  known: inout [ByteSpace: String]) -> [String] {
+                                  known: inout [ByteSpace: String], in language: AppLanguage) -> [String] {
         guard case .decompressed(let chain) = space, !chain.isEmpty else { return [] }
         return (1...chain.count).map { length in
             let space = ByteSpace.decompressed(chain: Array(chain.prefix(length)))
             if let name = known[space] { return name }
-            let name = compressionName(of: space, in: image) ?? L("Decompressed", context: "part badge")
+            let name = compressionName(of: space, in: image) ?? L("Decompressed", context: "part badge", in: language)
             known[space] = name
             return name
         }

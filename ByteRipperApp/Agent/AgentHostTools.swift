@@ -77,7 +77,7 @@ final class AgentHostTools {
             if let origin = pane.origin, let parent = origin.parent?.document {
                 entry["part_of"] = .string(desk.id(of: parent))
                 entry["source"] = Self.range(origin.sourceRange)
-                if let badge = origin.codec.badge { entry["decoded"] = .string(badge.text) }
+                if let badge = origin.codec.badge { entry["decoded"] = .string(badge.text.text(in: .english)) }
                 entry["keeps_offsets"] = .bool(origin.codec.keepsOffsets)
             }
             if let focused, focused.pane === pane { entry["focused"] = true }

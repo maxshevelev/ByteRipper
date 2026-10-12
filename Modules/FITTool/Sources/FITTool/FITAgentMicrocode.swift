@@ -48,7 +48,7 @@ public enum FITAgentMicrocode {
         let ground = try await ground(FITAgentQueries.readyTree(host))
         let result = await Task.detached(priority: .userInitiated) {
             FITEditor.addOrReplaceMicrocode(component, in: ground.table, image: ground.image, reader: ground.reader,
-                                            addressDiff: ground.addressDiff, protected: ground.protected)
+                                            addressDiff: ground.addressDiff, protected: ground.protected, in: .english)
         }.value
         let (transaction, outcome) = try result.get(orRefuse: ())
         return ToolAgentEdit.Change(transaction, undoDetail: cpuidText(component), report: report(outcome))
@@ -63,7 +63,7 @@ public enum FITAgentMicrocode {
         let result = await Task.detached(priority: .userInitiated) {
             FITEditor.replaceMicrocode(at: entry, component, in: ground.table, image: ground.image,
                                        reader: ground.reader, addressDiff: ground.addressDiff,
-                                       protected: ground.protected)
+                                       protected: ground.protected, in: .english)
         }.value
         let (transaction, outcome) = try result.get(orRefuse: ())
         return ToolAgentEdit.Change(transaction, undoDetail: cpuidText(component), report: report(outcome))
@@ -77,7 +77,7 @@ public enum FITAgentMicrocode {
         let removed = ground.table.rows[entry]
         let result = await Task.detached(priority: .userInitiated) {
             FITEditor.removeMicrocode(entry, from: ground.table, image: ground.image, in: ground.reader,
-                                      addressDiff: ground.addressDiff, protected: ground.protected)
+                                      addressDiff: ground.addressDiff, protected: ground.protected, in: .english)
         }.value
         let (transaction, outcome) = try result.get(orRefuse: ())
         var detail = ""
@@ -279,9 +279,9 @@ extension Result where Failure == FITEditProblem {
             // agent knows a row by its `entry` in `fit_table`, from 0.
             switch problem {
             case .alreadyInTheTable(let entry), .servedByAnotherRow(let entry, _):
-                throw AgentToolError(problem.message + " In `fit_table` that row is entry \(entry).")
+                throw AgentToolError(problem.message.text(in: .english) + " In `fit_table` that row is entry \(entry).")
             default:
-                throw AgentToolError(problem.message)
+                throw AgentToolError(problem.message.text(in: .english))
             }
         }
     }

@@ -55,8 +55,8 @@ public struct UEFIDetailTable: Equatable, Sendable {
         }
 
         /// A permission, as the word and the colour that go with it.
-        public static func permission(_ allowed: Bool) -> Cell {
-            Cell(allowed ? L("Yes") : L("No"), tone: allowed ? .yes : .no)
+        public static func permission(_ allowed: Bool, in language: AppLanguage) -> Cell {
+            Cell(allowed ? L("Yes", in: language) : L("No", in: language), tone: allowed ? .yes : .no)
         }
     }
 
@@ -154,56 +154,56 @@ public enum UEFIDetail {
         reader: ImageReader,
         repairs: [ChecksumRepair] = [],
         catalogue: GuidsCatalogue = .empty,
-        lenovoDMIReaders: LenovoDMIFirmwareReaders? = nil
+        lenovoDMIReaders: LenovoDMIFirmwareReaders? = nil, in language: AppLanguage
     ) -> UEFINodeDetail {
-        var fields = commonFields(for: node, image: image)
+        var fields = commonFields(for: node, image: image, in: language)
         fields += headerFields(
             for: node, reader: reader, repairs: repairs,
             volumeErasePolarity: node.kind == .file
-                ? UEFIChecksumCheck.volumeErasePolarity(of: node, in: image, reader: reader) : nil)
+                ? UEFIChecksumCheck.volumeErasePolarity(of: node, in: image, reader: reader) : nil, in: language)
         if node.kind == .ecImage {
-            fields += ecImageFields(node, image: image, reader: reader)
+            fields += ecImageFields(node, image: image, reader: reader, in: language)
         }
         var tables: [UEFIDetailTable] = []
         // The variable history of a GPNV record, kept for the end of the card.
         var gpnvHistory: UEFIDetailTable?
         if node.kind == .vssEntry, let variable = VSSVariable.read(node, in: image, reader: reader) {
-            fields += vssFields(variable, reader: reader)
+            fields += vssFields(variable, reader: reader, in: language)
             // The value, read as its type — by the name the entry carries,
             // so a superseded copy reads as the variable it was.
             if let bytes = reader.bytes(variable.data) {
                 let value = NvramValue.read(name: variable.decodedName(reader: reader) ?? "",
                                             guid: variable.vendorGuid, attributes: variable.attributes, value: bytes)
-                fields += NvramValueText.fields(value, bytes: bytes)
-                if let signatures = NvramValueText.signaturesTable(value) { tables.append(signatures) }
+                fields += NvramValueText.fields(value, bytes: bytes, in: language)
+                if let signatures = NvramValueText.signaturesTable(value, in: language) { tables.append(signatures) }
             }
         }
         // An NVAR entry's body is its value; a link's is one a later entry
         // replaced, and it reads as what it was.
         if node.kind == .nvarEntry, !node.name.isEmpty, let bytes = reader.bytes(node.body) {
-            let value = NvramValue.read(name: node.name, guid: node.guid,
+            let value = NvramValue.read(name: node.displayName(in: language), guid: node.guid,
                                         attributes: UEFITreeDisplay.nvarAttributes(node, reader: reader), value: bytes)
-            fields += NvramValueText.fields(value, bytes: bytes)
-            if let signatures = NvramValueText.signaturesTable(value) { tables.append(signatures) }
+            fields += NvramValueText.fields(value, bytes: bytes, in: language)
+            if let signatures = NvramValueText.signaturesTable(value, in: language) { tables.append(signatures) }
         }
-        if let topSwap = UEFITopSwap.detail(for: node, in: image) {
-            fields.append(.init(L("Top Swap"), topSwap))
+        if let topSwap = UEFITopSwap.detail(for: node, in: image, in: language) {
+            fields.append(.init(L("Top Swap", in: language), topSwap))
         }
         if let fill = NvramStoreFill.of(node, reader: reader) {
-            fields += fillFields(fill)
+            fields += fillFields(fill, in: language)
         }
-        let title = UEFITreeDisplay.ownName(of: node) ?? (node.name.isEmpty ? kindLabel(node.kind) : node.name)
+        let title = UEFITreeDisplay.ownName(of: node) ?? (node.name.isEmpty ? kindLabel(node.kind, in: language) : node.displayName(in: language))
         // The catalogue's name for the GUID, where the file calls itself
         // something else: the tree shows the file's own.
         if node.kind == .file, let guid = node.guid, let listed = catalogue.name(of: guid), listed != title {
             let at = (fields.firstIndex { $0.label == "GUID" }).map { $0 + 1 } ?? fields.endIndex
-            fields.insert(.init(L("Name in the catalogue"), listed), at: at)
+            fields.insert(.init(L("Name in the catalogue", in: language), listed), at: at)
         }
 
         // What the BVDT's `$BME$` record lists, placed in the file.
         if node.kind == .flashDeviceMapRegion, node.guid == FlashDeviceMap.biosVersionDataTable,
            let table = InsydeBVDT.read(node.body, in: reader), !table.listedRanges.isEmpty {
-            tables.append(listedRangesTable(table.listedRanges, near: node, in: image))
+            tables.append(listedRangesTable(table.listedRanges, near: node, in: image, in: language))
         }
 
         // Where the regions an Insyde map names lie in the file — the whole
@@ -221,7 +221,7 @@ public enum UEFIDetail {
                 let addressDiff = image.addressDiff
                     ?? (store.space == .file ? FlashDeviceMap.addressDiff(of: store, reader: reader) : nil)
                 if !entries.isEmpty {
-                    tables.append(mapRegionsTable(entries, addressDiff: addressDiff, in: image))
+                    tables.append(mapRegionsTable(entries, addressDiff: addressDiff, in: image, in: language))
                 }
             }
         }
@@ -233,19 +233,19 @@ public enum UEFIDetail {
             let history = NvramVariableHistory.of(node, in: store, reader: reader)
             let variable = history.map { ($0.name, $0.guid) }
                 ?? NvramVariableHistory.variable(of: node, in: store, reader: reader)
-            if let variable, variable.0 != node.name {
+            if let variable, variable.0 != node.displayName(in: language) {
                 // A Dell variable is a number, and only its namespace says whose.
                 let text = node.kind == .dvarEntry
                     ? variable.1.map { "\($0) · \(variable.0)" } ?? variable.0
                     : variable.0
-                fields.append(.init(L("Variable"), text))
+                fields.append(.init(L("Variable", in: language), text))
             }
             if node.kind == .dvarEntry, let namespace = variable?.1, let nameId = variable?.0,
                let setting = image.dvarSettings?.setting(namespace: namespace, nameId: nameId) {
-                fields += settingFields(setting, value: reader.bytes(node.body) ?? [])
+                fields += settingFields(setting, value: reader.bytes(node.body) ?? [], in: language)
             }
             if let history {
-                let table = historyTable(history, focus: node.id, reader: reader)
+                let table = historyTable(history, focus: node.id, reader: reader, in: language)
                 // A GPNV record's text is what the reader came for, so the
                 // history comes after it, at the very end of the card.
                 if node.kind == .gpnvRecord {
@@ -260,13 +260,13 @@ public enum UEFIDetail {
         // it, so that a bench sees what the board is told it has.
         if node.kind == .sysFEntry, node.name == AppleOverrides.variableName,
            let overrides = AppleOverrides.read(reader.bytes(node.body) ?? []) {
-            fields.append(.init(L("Rules"), "\(overrides.rules.count)"))
+            fields.append(.init(L("Rules", in: language), "\(overrides.rules.count)"))
             tables.append(UEFIDetailTable(
-                title: L("Device overrides"),
+                title: L("Device overrides", in: language),
                 symbol: "list.bullet.rectangle",
-                columns: [L("Action"), L("Applies to"), L("Device or properties")],
+                columns: [L("Action", in: language), L("Applies to", in: language), L("Device or properties", in: language)],
                 rows: overrides.rules.map {
-                    [.init($0.action), .init($0.appliesTo.isEmpty ? L("Every device") : $0.appliesTo), .init($0.detail)]
+                    [.init($0.action), .init($0.appliesTo.isEmpty ? L("Every device", in: language) : $0.appliesTo), .init($0.detail)]
                 }
             ))
         }
@@ -274,13 +274,13 @@ public enum UEFIDetail {
         // The BIOS ID string, taken apart where it follows Intel's layout.
         if isRawSection(node), node.body.count <= AppleROMInformation.searchLimit,
            let id = BIOSIdentifier.read(reader.bytes(node.body) ?? []) {
-            var rows: [[UEFIDetailTable.Cell]] = [[.init(L("BIOS ID")), .init(id.text)]]
-            for (label, value) in [(L("Board"), id.board), (L("OEM"), id.oem), (L("Major version"), id.majorVersion),
-                                   (L("Minor version"), id.minorVersion), (L("Build date"), id.buildDate)] {
+            var rows: [[UEFIDetailTable.Cell]] = [[.init(L("BIOS ID", in: language)), .init(id.text)]]
+            for (label, value) in [(L("Board", in: language), id.board), (L("OEM", in: language), id.oem), (L("Major version", in: language), id.majorVersion),
+                                   (L("Minor version", in: language), id.minorVersion), (L("Build date", in: language), id.buildDate)] {
                 if let value { rows.append([.init(label), .init(value)]) }
             }
             tables.append(UEFIDetailTable(
-                title: L("BIOS ID"), symbol: "number", columns: [L("Field"), L("Value")], rows: rows))
+                title: L("BIOS ID", in: language), symbol: "number", columns: [L("Field", in: language), L("Value", in: language)], rows: rows))
         }
 
         // The text block Apple's firmware carries about its own build, whether
@@ -289,9 +289,9 @@ public enum UEFIDetail {
         if isRawSection(node) || node.kind == .padding, node.body.count <= AppleROMInformation.searchLimit,
            let info = AppleROMInformation.read(reader.bytes(node.body) ?? []) {
             tables.append(UEFIDetailTable(
-                title: L("Apple ROM information"),
+                title: L("Apple ROM information", in: language),
                 symbol: "info.circle",
-                columns: [L("Field"), L("Value")],
+                columns: [L("Field", in: language), L("Value", in: language)],
                 rows: info.entries.map { [.init($0.key), .init($0.value)] }
             ))
         }
@@ -300,8 +300,8 @@ public enum UEFIDetail {
         // and two of the things it says are grids.
         if node.kind == .flashDescriptor,
            let descriptor = DescriptorInfo.read(at: node.header.lowerBound, in: reader) {
-            fields += descriptorFields(descriptor, imageSize: image.size)
-            tables += descriptorTables(descriptor, imageSize: image.size)
+            fields += descriptorFields(descriptor, imageSize: image.size, in: language)
+            tables += descriptorTables(descriptor, imageSize: image.size, in: language)
         }
 
         // An update for more than one processor lists the others in a table
@@ -310,9 +310,9 @@ public enum UEFIDetail {
            let extended = MicrocodeHeader.read(at: node.header.lowerBound, in: reader)?.extendedTable,
            !extended.signatures.isEmpty {
             tables.append(UEFIDetailTable(
-                title: L("Extended signatures"),
+                title: L("Extended signatures", in: language),
                 symbol: "cpu",
-                columns: [L("CPUID"), L("Processor"), L("Platforms"), L("Checksum")],
+                columns: [L("CPUID", in: language), L("Processor", in: language), L("Platforms", in: language), L("Checksum", in: language)],
                 rows: extended.signatures.map { signature in
                     [
                         .init(MicrocodeHeader.cpuid(signature.processorSignature)),
@@ -327,34 +327,34 @@ public enum UEFIDetail {
         // An HP signature block lists what it signs, and what hashing found.
         if node.kind == .hpSignatureBlock, let ranges = image.protectedRanges {
             let listed = ranges.ranges.filter { $0.kind == .hp && $0.source == node.range }
-            if !listed.isEmpty { tables.append(protectedByTable(listed, title: L("Signed ranges"))) }
+            if !listed.isEmpty { tables.append(protectedByTable(listed, title: L("Signed ranges", in: language), in: language)) }
         }
 
         if let ranges = image.protectedRanges {
             let touching = ranges.ranges(touching: node, in: image)
             if !touching.isEmpty {
-                fields.append(.init(L("Protection"), protectionCaveat))
-                tables.append(protectedByTable(touching))
+                fields.append(.init(L("Protection", in: language), protectionCaveat.text(in: language)))
+                tables.append(protectedByTable(touching, in: language))
             }
         }
         // The PSP's map: what the EFS points at, what a directory lists, and
         // which entries list a blob — each a way to the row it names.
         if node.kind == .amdEFS || node.kind == .amdDirectory || node.kind == .amdFirmwareEntry {
-            let amd = UEFIAMDFirmwareDetail.build(for: node, image: image, reader: reader, repairs: repairs)
+            let amd = UEFIAMDFirmwareDetail.build(for: node, image: image, reader: reader, repairs: repairs, in: language)
             fields += amd.fields
             tables += amd.tables
         }
         // Lenovo's DMI store, read as a whole: the store's row sums it up.
         if UEFILenovoDMIDetail.reads(node.kind) {
             let lenovo = UEFILenovoDMIDetail.build(for: node, image: image, reader: reader,
-                                                   firmwareReaders: lenovoDMIReaders)
+                                                   firmwareReaders: lenovoDMIReaders, in: language)
             fields += lenovo.fields
             tables += lenovo.tables
         }
         // Acer's DMI area, read off the block as a whole: the identity
         // fields, and what the integrity checks found in them.
         if UEFIAcerDMIDetail.reads(node.kind) {
-            let acer = UEFIAcerDMIDetail.build(for: node, image: image, reader: reader)
+            let acer = UEFIAcerDMIDetail.build(for: node, image: image, reader: reader, in: language)
             fields += acer.fields
             tables += acer.tables
         }
@@ -364,9 +364,9 @@ public enum UEFIDetail {
             let texts = GPNVRecord.texts(in: body)
             if !texts.isEmpty {
                 tables.append(UEFIDetailTable(
-                    title: L("Text in the record"),
+                    title: L("Text in the record", in: language),
                     symbol: "text.alignleft",
-                    columns: [L("Offset"), L("Text")],
+                    columns: [L("Offset", in: language), L("Text", in: language)],
                     rows: texts.map { [.init("+" + hex($0.offset)), .init($0.text)] }
                 ))
             }
@@ -377,9 +377,9 @@ public enum UEFIDetail {
         if node.kind == .biosGuardUpdate,
            case .success(let layout) = BIOSGuardUpdate.layout(in: reader, at: node.header.lowerBound) {
             tables.append(UEFIDetailTable(
-                title: L("Update table"),
+                title: L("Update table", in: language),
                 symbol: "list.bullet.rectangle",
-                columns: [L("Name"), L("Switch"), L("Blocks"), L("Offset in the region"), L("Size")],
+                columns: [L("Name", in: language), L("Switch", in: language), L("Blocks", in: language), L("Offset in the region", in: language), L("Size", in: language)],
                 rows: layout.entries.map { entry in
                     [.init(entry.name), .init(entry.key), .init("\(entry.blockCount)"),
                      .init(hex(entry.range.lowerBound)), .init(hex(UInt64(entry.range.count)))]
@@ -391,9 +391,9 @@ public enum UEFIDetail {
             let current = node.children.filter { $0.kind == .gpnvRecord && $0.subtype == 1 }
             if !current.isEmpty {
                 tables.append(UEFIDetailTable(
-                    title: L("Current entries"),
+                    title: L("Current entries", in: language),
                     symbol: "list.bullet.rectangle",
-                    columns: [L("Name"), L("Offset"), L("Contents")],
+                    columns: [L("Name", in: language), L("Offset", in: language), L("Contents", in: language)],
                     rows: current.map { record in
                         let row = UEFITreeDisplay.gpnvRow(record, reader: reader)
                         let contents = row.hasPrefix(record.name + " = ") ? String(row.dropFirst(record.name.count + 3)) : ""
@@ -417,17 +417,17 @@ public enum UEFIDetail {
     /// What Setup says the variable is (`DellSetup`): the option as its page
     /// words it, its keyword, the page, what this copy's value means there,
     /// and the page's help for it. All the firmware's own English.
-    private static func settingFields(_ setting: DellSetup.Setting, value: [UInt8]) -> [UEFIDetailField] {
-        var fields: [UEFIDetailField] = [.init(L("Setup option"), setting.prompt)]
-        if let keyword = setting.keyword { fields.append(.init(L("Keyword"), keyword)) }
-        if let form = setting.form, form != setting.prompt { fields.append(.init(L("Setup page"), form)) }
+    private static func settingFields(_ setting: DellSetup.Setting, value: [UInt8], in language: AppLanguage) -> [UEFIDetailField] {
+        var fields: [UEFIDetailField] = [.init(L("Setup option", in: language), setting.prompt)]
+        if let keyword = setting.keyword { fields.append(.init(L("Keyword", in: language), keyword)) }
+        if let form = setting.form, form != setting.prompt { fields.append(.init(L("Setup page", in: language), form)) }
         if !value.isEmpty, value.count <= 8 {
             let number = value.reversed().reduce(UInt64(0)) { $0 << 8 | UInt64($1) }
-            if let meaning = UEFITreeDisplay.dvarMeaning(number, setting: setting) {
-                fields.append(.init(L("Value in Setup"), "\(meaning) (\(hex(number)))"))
+            if let meaning = UEFITreeDisplay.dvarMeaning(number, setting: setting, in: language) {
+                fields.append(.init(L("Value in Setup", in: language), "\(meaning) (\(hex(number)))"))
             }
         }
-        if let help = setting.help { fields.append(.init(L("Setup help"), help)) }
+        if let help = setting.help { fields.append(.init(L("Setup help", in: language), help)) }
         return fields
     }
 
@@ -468,7 +468,7 @@ public enum UEFIDetail {
     /// its name, the attributes, the sizes, and what the form adds — the
     /// authenticated form's count, time stamp and key index, Apple's data
     /// CRC, Intel's total size. The vendor GUID is the common "GUID" field.
-    private static func vssFields(_ variable: VSSVariable, reader: ImageReader) -> [UEFIDetailField] {
+    private static func vssFields(_ variable: VSSVariable, reader: ImageReader, in language: AppLanguage) -> [UEFIDetailField] {
         let states: [UInt8: String] = variable.form == .intelLegacy
             ? [0xFC: "Valid", 0xF8: "Invalid"]
             : [0x7F: "Header valid", 0x3F: "Added", 0x3E: "Added, in deleted transition",
@@ -481,7 +481,7 @@ public enum UEFIDetail {
         if let total = variable.totalSize { fields.append(.init("Total size", sizeText(total))) }
         if let count = variable.monotonicCount { fields.append(.init("Monotonic count", "\(count)")) }
         if let timestamp = variable.timestamp {
-            fields.append(.init("Timestamp", timestamp.isZero ? L("Not set") : timestamp.text ?? L("Not a date")))
+            fields.append(.init("Timestamp", timestamp.isZero ? L("Not set", in: language) : timestamp.text ?? L("Not a date", in: language)))
         }
         if let index = variable.publicKeyIndex { fields.append(.init("Public key index", "\(index)")) }
         if let size = variable.nameSize { fields.append(.init("Name size", sizeText(size))) }
@@ -490,7 +490,7 @@ public enum UEFIDetail {
             let computed = Checksums.crc32(data)
             fields.append(UEFIDetailField(
                 "Data CRC32",
-                Checksums.text(stored, valid: computed == stored, expected: UInt64(computed), digits: 8),
+                Checksums.text(stored, valid: computed == stored, expected: UInt64(computed), digits: 8).text(in: language),
                 isProblem: computed != stored))
         }
         return fields
@@ -503,7 +503,7 @@ public enum UEFIDetail {
     /// a volume — where one is. What the list is for is not known, so the
     /// table says where and not why. A click on a range in the file outlines
     /// it in the dump, named by what is there, as the map's table does.
-    private static func listedRangesTable(_ ranges: [Range<UInt64>], near node: UEFINode, in image: UEFIImage) -> UEFIDetailTable {
+    private static func listedRangesTable(_ ranges: [Range<UInt64>], near node: UEFINode, in image: UEFIImage, in language: AppLanguage) -> UEFIDetailTable {
         // A dump of the BIOS region alone starts with it.
         let bios = image.nodes(containing: node.range.lowerBound).first {
             $0.kind == .region && $0.subtype == UInt8(FlashRegionType.bios.rawValue)
@@ -514,16 +514,16 @@ public enum UEFIDetail {
             let placed = (bios + range.lowerBound)..<(bios + range.upperBound)
             let holder = image.allNodes.first { $0.space == .file && $0.range == placed && $0.kind != .region }
             rows.append([.init(hex(placed.lowerBound)), .init(sizeText(UInt64(range.count))),
-                         .init(holder.map(holderText) ?? "—")])
+                         .init(holder.map { holderText($0, in: language) } ?? "—")])
             // An empty slot — `SPI_EF6018`'s second is a size of zero — and a
             // range past the end have nothing to outline.
             targets.append(!placed.isEmpty && placed.upperBound <= image.size
-                ? .range(placed, name: holder.map(holderText) ?? "$BME$") : nil)
+                ? .range(placed, name: holder.map { holderText($0, in: language) } ?? "$BME$") : nil)
         }
         return UEFIDetailTable(
-            title: L("Ranges listed in $BME$"),
+            title: L("Ranges listed in $BME$", in: language),
             symbol: "list.bullet.rectangle",
-            columns: [L("Start"), L("Size"), L("Holds")],
+            columns: [L("Start", in: language), L("Size", in: language), L("Holds", in: language)],
             rows: rows,
             rowTargets: targets,
             linkColumn: 0
@@ -536,7 +536,7 @@ public enum UEFIDetail {
     /// it, with the node that is exactly that range where there is one. With
     /// no mapping known, only the address can be given.
     private static func mapRegionsTable(
-        _ entries: [FlashDeviceMap.Entry], addressDiff: UInt64?, in image: UEFIImage
+        _ entries: [FlashDeviceMap.Entry], addressDiff: UInt64?, in image: UEFIImage, in language: AppLanguage
     ) -> UEFIDetailTable {
         var rows: [[UEFIDetailTable.Cell]] = []
         var targets: [UEFIDetailTable.Target?] = []
@@ -551,7 +551,7 @@ public enum UEFIDetail {
                 .init(hex(entry.address)),
                 .init(placed.map { hex($0.lowerBound) } ?? "—"),
                 .init(sizeText(entry.size)),
-                .init(holder.map(holderText) ?? "—"),
+                .init(holder.map { holderText($0, in: language) } ?? "—"),
             ])
             // Only what lies in the file can be shown in it.
             targets.append(placed.flatMap {
@@ -561,9 +561,9 @@ public enum UEFIDetail {
         // A click on a region outlines its bytes in the dump: the way to see
         // where a region the tree does not cut out lies.
         return UEFIDetailTable(
-            title: L("Regions of the flash device map"),
+            title: L("Regions of the flash device map", in: language),
             symbol: "list.bullet.rectangle",
-            columns: [L("Type"), L("Address"), L("Start"), L("Size"), L("Holds")],
+            columns: [L("Type", in: language), L("Address", in: language), L("Start", in: language), L("Size", in: language), L("Holds", in: language)],
             rows: rows,
             rowTargets: targets,
             linkColumn: 2
@@ -572,9 +572,9 @@ public enum UEFIDetail {
 
     /// A volume's name is its file system, which alone does not say it is
     /// one; anything else is named by what it is.
-    private static func holderText(_ node: UEFINode) -> String {
-        if node.kind == .volume { return kindLabel(.volume) + " " + node.name }
-        return node.name.isEmpty ? kindLabel(node.kind) : node.name
+    private static func holderText(_ node: UEFINode, in language: AppLanguage) -> String {
+        if node.kind == .volume { return kindLabel(.volume, in: language) + " " + node.displayName(in: language) }
+        return node.name.isEmpty ? kindLabel(node.kind, in: language) : node.displayName(in: language)
     }
 
     /// Microsoft's compiler version, and the Visual Studio it shipped with.
@@ -605,50 +605,50 @@ public enum UEFIDetail {
     /// what it is now, how long its value is, and what it changed against the
     /// copy before. The entry in focus is marked. Past `historyRows` the
     /// earliest copies are left out, except the one in focus.
-    static func historyTable(_ history: NvramVariableHistory, focus: NodeID, reader: ImageReader) -> UEFIDetailTable {
+    static func historyTable(_ history: NvramVariableHistory, focus: NodeID, reader: ImageReader, in language: AppLanguage) -> UEFIDetailTable {
         let versions = history.versions
         let firstShown = max(0, versions.count - historyRows)
         var rows: [[UEFIDetailTable.Cell]] = []
         var targets: [UEFIDetailTable.Target?] = []
         if firstShown > 0 {
             if let focused = versions.firstIndex(where: { $0.entry == focus }), focused < firstShown {
-                rows.append(historyRow(versions, focused, focus: focus, reader: reader))
+                rows.append(historyRow(versions, focused, focus: focus, reader: reader, in: language))
                 targets.append(.node(versions[focused].entry))
             }
-            rows.append([.init("…"), .init(L("%1$@ earlier copies not shown", firstShown)),
+            rows.append([.init("…"), .init(L("%1$@ earlier copies not shown", in: language, firstShown)),
                          .init(""), .init(""), .init("")])
             targets.append(nil)
         }
         for index in firstShown..<versions.count {
-            rows.append(historyRow(versions, index, focus: focus, reader: reader))
+            rows.append(historyRow(versions, index, focus: focus, reader: reader, in: language))
             targets.append(.node(versions[index].entry))
         }
         // A click on a copy puts it in focus: its detail, and its bytes in the
         // dump — the way to a copy the tree leaves out.
         return UEFIDetailTable(
-            title: L("Variable history"),
+            title: L("Variable history", in: language),
             symbol: "clock.arrow.circlepath",
-            columns: [L("Copy", context: "variable"), L("Address", context: "variable"), L("State"),
-                      L("Size"), L("Change")],
+            columns: [L("Copy", context: "variable", in: language), L("Address", context: "variable", in: language), L("State", in: language),
+                      L("Size", in: language), L("Change", in: language)],
             rows: rows,
             rowTargets: targets
         )
     }
 
     private static func historyRow(
-        _ versions: [NvramVariableHistory.Version], _ index: Int, focus: NodeID, reader: ImageReader
+        _ versions: [NvramVariableHistory.Version], _ index: Int, focus: NodeID, reader: ImageReader, in language: AppLanguage
     ) -> [UEFIDetailTable.Cell] {
         let version = versions[index]
         let number = "\(index + 1)"
         let state: String
         switch version.state {
-        case .current: state = L("Current")
-        case .superseded: state = L("Superseded")
-        case .deleted: state = L("Deleted", context: "variable")
+        case .current: state = L("Current", in: language)
+        case .superseded: state = L("Superseded", in: language)
+        case .deleted: state = L("Deleted", context: "variable", in: language)
         }
         let change = index == 0 ? "—"
             : NvramVariableHistory.change(from: versions[index - 1], to: version, reader: reader)
-                .map(changeText) ?? "—"
+                .map { changeText($0, in: language) } ?? "—"
         return [.init(version.entry == focus ? "▸ " + number : number),
                 .init(hex(version.offset)), .init(state),
                 .init("\(version.value.count)"), .init(change)]
@@ -656,18 +656,18 @@ public enum UEFIDetail {
 
     /// What a copy changed: its size, if that moved, and where its bytes
     /// differ — offsets into the value, the first few runs of them.
-    private static func changeText(_ change: NvramVariableHistory.Change) -> String {
-        guard !change.isNone else { return L("No change") }
+    private static func changeText(_ change: NvramVariableHistory.Change, in language: AppLanguage) -> String {
+        guard !change.isNone else { return L("No change", in: language) }
         var parts: [String] = []
         if change.oldSize != change.newSize {
-            parts.append(L("size %1$@ → %2$@", change.oldSize, change.newSize))
+            parts.append(L("size %1$@ → %2$@", in: language, change.oldSize, change.newSize))
         }
         if !change.changed.isEmpty {
             var runs = change.changed.prefix(4).map { run in
                 run.count == 1 ? "+" + hex(run.lowerBound) : "+" + hex(run.lowerBound) + "–" + hex(run.upperBound - 1)
             }
             if change.changed.count > 4 { runs.append("…") }
-            parts.append(L("changed bytes: %1$@, at %2$@", change.changedBytes, runs.joined(separator: ", ")))
+            parts.append(L("changed bytes: %1$@, at %2$@", in: language, change.changedBytes, runs.joined(separator: ", ")))
         }
         return parts.joined(separator: "; ")
     }
@@ -676,13 +676,13 @@ public enum UEFIDetail {
 
     /// The panel's own reading of a store, so it translates: how much of it
     /// is written, how much is left, and what its entries still count for.
-    static func fillFields(_ fill: NvramStoreFill) -> [UEFIDetailField] {
+    static func fillFields(_ fill: NvramStoreFill, in language: AppLanguage) -> [UEFIDetailField] {
         [
-            .init(L("In use"), "\(sizeText(fill.used)) · \(fill.percentUsed)\u{00A0}%"),
-            .init(L("Free space"), sizeText(fill.free)),
-            .init(L("Current entries"), "\(fill.current)"),
-            .init(L("Superseded entries"), "\(fill.superseded)"),
-            .init(L("Deleted entries"), "\(fill.deleted)"),
+            .init(L("In use", in: language), "\(sizeText(fill.used)) · \(fill.percentUsed)\u{00A0}%"),
+            .init(L("Free space", in: language), sizeText(fill.free)),
+            .init(L("Current entries", in: language), "\(fill.current)"),
+            .init(L("Superseded entries", in: language), "\(fill.superseded)"),
+            .init(L("Deleted entries", in: language), "\(fill.deleted)"),
         ]
     }
 
@@ -690,57 +690,57 @@ public enum UEFIDetail {
 
     /// What the image cannot say (`BOOT_GUARD_PROTECTED_RANGES.md` §8): the
     /// Boot Guard profile is in the PCH's fuses, not in the BIOS region.
-    public static let protectionCaveat =
+    public static let protectionCaveat: LocalizedText =
         L("Whether Boot Guard is enforced is set in the chipset's fuses, not in this image: the marks say what an edit would break if it is. Vendor hashes are checked by the firmware itself.")
 
     /// Every range that shares a byte with the node: what it is, where it is,
     /// where the list naming it is, and what hashing it found (§9.3).
-    static func protectedByTable(_ ranges: [ProtectedRange], title: String = L("Protected by")) -> UEFIDetailTable {
+    static func protectedByTable(_ ranges: [ProtectedRange], title: String? = nil, in language: AppLanguage) -> UEFIDetailTable {
         UEFIDetailTable(
-            title: title,
+            title: title ?? L("Protected by", in: language),
             symbol: "lock.shield",
-            columns: [L("Range"), L("Kind"), L("Listed at"), L("Hash")],
+            columns: [L("Range", in: language), L("Kind", in: language), L("Listed at", in: language), L("Hash", in: language)],
             rows: ranges.map { range in
                 [
-                    .init(range.range.map { "\(hex($0.lowerBound))–\(hex($0.upperBound))" } ?? L("Not placed")),
+                    .init(range.range.map { "\(hex($0.lowerBound))–\(hex($0.upperBound))" } ?? L("Not placed", in: language)),
                     .init(range.kind.name),
                     .init(hex(range.source.lowerBound)),
-                    verdictCell(range)
+                    verdictCell(range, in: language)
                 ]
             }
         )
     }
 
-    private static func verdictCell(_ range: ProtectedRange) -> UEFIDetailTable.Cell {
+    private static func verdictCell(_ range: ProtectedRange, in language: AppLanguage) -> UEFIDetailTable.Cell {
         let algorithms = range.digests.map(\.algorithmName).joined(separator: ", ")
         switch range.verdict {
         case .matches:
-            return .init(L("%1$@ matches", algorithms), tone: .yes)
+            return .init(L("%1$@ matches", in: language, algorithms), tone: .yes)
         case .mismatch:
             // An IBB mismatch is not a verdict yet (§6.1).
-            return .init(range.kind.isIBB ? L("%1$@ differs (unconfirmed)", algorithms)
-                                          : L("%1$@ differs", algorithms),
+            return .init(range.kind.isIBB ? L("%1$@ differs (unconfirmed)", in: language, algorithms)
+                                          : L("%1$@ differs", in: language, algorithms),
                          tone: .no)
         case .unsupported(let algorithm):
-            return .init(L("%1$@ not computed", TCGHash.name(algorithm)))
+            return .init(L("%1$@ not computed", in: language, TCGHash.name(algorithm)))
         case .unchecked:
-            return .init(L("Not checked"))
+            return .init(L("Not checked", in: language))
         }
     }
 
     // MARK: - The fields every node has
 
-    private static func commonFields(for node: UEFINode, image: UEFIImage) -> [UEFIDetailField] {
+    private static func commonFields(for node: UEFINode, image: UEFIImage, in language: AppLanguage) -> [UEFIDetailField] {
         var fields: [UEFIDetailField] = []
         // These are this panel's own words for a node — how it is laid out and
         // what it is — and not fields of anything on disk, so they translate.
         // Everything `headerFields` adds below is read out of a structure and
         // keeps the spec's own name: a bench reads those beside the PI spec or
         // beside UEFITool, and a translated `Signature` cannot be looked up.
-        fields.append(.init(L("Kind"), kindLabel(node.kind)))
+        fields.append(.init(L("Kind", in: language), kindLabel(node.kind, in: language)))
         // A PSP blob's type is said with the directory's name for it, below.
         if node.subtype != nil, node.kind != .amdFirmwareEntry {
-            fields.append(.init(L("Type"), typeText(node)))
+            fields.append(.init(L("Type", in: language), typeText(node, in: language)))
         }
         if let guid = node.guid {
             fields.append(.init("GUID", guidText(guid)))
@@ -750,31 +750,31 @@ public enum UEFIDetail {
         if case .decompressed(let chain) = node.space, let outermost = chain.first {
             let section = image.innermostNode(containing: outermost)
                 .flatMap { $0.header.lowerBound == outermost ? $0.name : nil }
-                ?? L("Compressed section")
-            var text = L("%1$@ at %2$@", section, hex(outermost))
-            if chain.count > 1 { text = L("%1$@, %2$@ compressed sections deep", text, chain.count) }
-            fields.append(.init(L("Decompressed from"), text))
+                ?? L("Compressed section", in: language)
+            var text = L("%1$@ at %2$@", in: language, section, hex(outermost))
+            if chain.count > 1 { text = L("%1$@, %2$@ compressed sections deep", in: language, text, chain.count) }
+            fields.append(.init(L("Decompressed from", in: language), text))
         }
-        fields.append(.init(L("Header"), rangeText(node.header)))
-        fields.append(.init(L("Body"), rangeText(node.body)))
+        fields.append(.init(L("Header", in: language), rangeText(node.header)))
+        fields.append(.init(L("Body", in: language), rangeText(node.body)))
         if !node.tail.isEmpty {
-            fields.append(.init(L("Tail"), rangeText(node.tail)))
+            fields.append(.init(L("Tail", in: language), rangeText(node.tail)))
         }
-        fields.append(.init(L("Total"), rangeText(node.range)))
+        fields.append(.init(L("Total", in: language), rangeText(node.range)))
 
         var flags: [String] = []
-        if node.isFixed { flags.append(L("fixed")) }
-        if node.isCompressed { flags.append(L("compressed")) }
-        if node.isErased { flags.append(L("erased")) }
+        if node.isFixed { flags.append(L("fixed", in: language)) }
+        if node.isCompressed { flags.append(L("compressed", in: language)) }
+        if node.isErased { flags.append(L("erased", in: language)) }
         if !flags.isEmpty {
-            fields.append(.init(L("Flags"), flags.joined(separator: ", ")))
+            fields.append(.init(L("Flags", in: language), flags.joined(separator: ", ")))
         }
 
         // A compressed node's address means nothing — the decompressor puts it
         // wherever it likes — so the one thing worth showing is skipped there.
         if !node.isCompressed,
            let address = image.address(forOffset: node.range.lowerBound) {
-            fields.append(.init(L("Address"), hex(address)))
+            fields.append(.init(L("Address", in: language), hex(address)))
         }
         return fields
     }
@@ -785,7 +785,7 @@ public enum UEFIDetail {
         for node: UEFINode,
         reader: ImageReader,
         repairs: [ChecksumRepair],
-        volumeErasePolarity: Bool?
+        volumeErasePolarity: Bool?, in language: AppLanguage
     ) -> [UEFIDetailField] {
         let h = node.header.lowerBound
         var fields: [UEFIDetailField] = []
@@ -799,7 +799,7 @@ public enum UEFIDetail {
             if let headerLength = reader.uint16(at: h + 0x30) { fields.append(.init("Header length", sizeText(headerLength))) }
             let checksumOffset = h + 0x32
             if let checksum = reader.uint16(at: checksumOffset) {
-                fields.append(checksumRow("Checksum", checksum, digits: 4, repairs: repairs, checksumOffset: checksumOffset))
+                fields.append(checksumRow("Checksum", checksum, digits: 4, repairs: repairs, checksumOffset: checksumOffset, in: language))
             }
             if let extOffset = reader.uint16(at: h + 0x34) { fields.append(.init("Ext. header", hex(extOffset))) }
             if let revision = reader.uint8(at: h + 0x37) { fields.append(.init("Revision", "\(revision)")) }
@@ -829,18 +829,18 @@ public enum UEFIDetail {
             if let state {
                 let text = bits(state, [(0x80, "Erase polarity")])
                 fields.append(markedInvalid
-                    ? .init("State", L("%1$@ — header marked invalid", text), tone: .caution)
+                    ? .init("State", L("%1$@ — header marked invalid", in: language, text), tone: .caution)
                     : .init("State", text))
             }
             if let headerChecksum = reader.uint8(at: h + 0x10) {
                 fields.append(markedInvalid
-                    ? .init("Header checksum", L("%1$@ (not checked)", hex(headerChecksum)))
-                    : checksumRow("Header checksum", headerChecksum, digits: 2, repairs: repairs, checksumOffset: h + 0x10))
+                    ? .init("Header checksum", L("%1$@ (not checked)", in: language, hex(headerChecksum)))
+                    : checksumRow("Header checksum", headerChecksum, digits: 2, repairs: repairs, checksumOffset: h + 0x10, in: language))
             }
             if let bodyChecksum = reader.uint8(at: h + 0x11) {
                 fields.append(markedInvalid
-                    ? .init("Body checksum", L("%1$@ (not checked)", hex(bodyChecksum)))
-                    : checksumRow("Body checksum", bodyChecksum, digits: 2, repairs: repairs, checksumOffset: h + 0x11))
+                    ? .init("Body checksum", L("%1$@ (not checked)", in: language, hex(bodyChecksum)))
+                    : checksumRow("Body checksum", bodyChecksum, digits: 2, repairs: repairs, checksumOffset: h + 0x11, in: language))
             }
 
         case .section:
@@ -970,7 +970,7 @@ public enum UEFIDetail {
                 let computed = Checksums.crc32(bytes)
                 fields.append(.init(
                     "CRC32",
-                    Checksums.text(stored, valid: computed == stored, expected: UInt64(computed), digits: 8)
+                    Checksums.text(stored, valid: computed == stored, expected: UInt64(computed), digits: 8).text(in: language)
                 ))
             }
 
@@ -1028,7 +1028,7 @@ public enum UEFIDetail {
             if let checksum = evsaChecksum(storedAt: h + 1, covering: node.header.upperBound, reader: reader) {
                 fields.append(.init(
                     "Checksum",
-                    Checksums.text(checksum.value, valid: checksum.valid, expected: checksum.expected.map(UInt64.init))
+                    Checksums.text(checksum.value, valid: checksum.valid, expected: checksum.expected.map(UInt64.init)).text(in: language)
                 ))
             }
 
@@ -1057,7 +1057,7 @@ public enum UEFIDetail {
             if let checksum = evsaChecksum(storedAt: h + 1, covering: node.range.upperBound, reader: reader) {
                 fields.append(.init(
                     "Checksum",
-                    Checksums.text(checksum.value, valid: checksum.valid, expected: checksum.expected.map(UInt64.init))
+                    Checksums.text(checksum.value, valid: checksum.valid, expected: checksum.expected.map(UInt64.init)).text(in: language)
                 ))
             }
 
@@ -1087,7 +1087,7 @@ public enum UEFIDetail {
             }
 
         case .nvarEntry:
-            fields += nvarFields(node, reader: reader)
+            fields += nvarFields(node, reader: reader, in: language)
 
         case .nvarGuidStore:
             fields.append(.init("GUIDs", "\(node.body.count / 16)"))
@@ -1141,12 +1141,12 @@ public enum UEFIDetail {
             guard let block = HPSignatureBlock.read(at: node.range.lowerBound, limit: reader.count, in: reader)
             else { break }
             fields.append(.init("Version", "\(block.version)"))
-            fields.append(.init(L("Signature"), "\(block.signatureName) (\(hex(block.signatureLength)))"))
-            fields.append(.init(L("BIOS version"), block.biosVersion))
-            fields.append(.init(L("Date"), block.date))
+            fields.append(.init(L("Signature", in: language), "\(block.signatureName) (\(hex(block.signatureLength)))"))
+            fields.append(.init(L("BIOS version", in: language), block.biosVersion))
+            fields.append(.init(L("Date", in: language), block.date))
             if let identifier = block.identifier { fields.append(.init("ID", identifier)) }
             if let digest = block.digest {
-                fields.append(.init(L("Digest"), digest.map { String(format: "%02X", $0) }.joined()))
+                fields.append(.init(L("Digest", in: language), digest.map { String(format: "%02X", $0) }.joined()))
             }
 
         // What UEFITool's FIT tab says of the structure, in the header's own
@@ -1162,7 +1162,7 @@ public enum UEFIDetail {
                 fields.append(.init("Module subtype", FITComponentHeader.acmSubtypeName(subtype) ?? hex(subtype)))
                 fields.append(.init("Header version", hex(headerVersion)))
                 fields.append(.init("Chipset ID", hex(chipsetID)))
-                fields.append(.init(L("Date"), date))
+                fields.append(.init(L("Date", in: language), date))
                 fields.append(.init("ACM SVN", "\(svn)"))
             case .keyManifest(let version, let kmVersion, let svn, let id):
                 fields.append(.init("Version", hex(version)))
@@ -1180,17 +1180,17 @@ public enum UEFIDetail {
         case .picture:
             if let picture = Picture.read(at: node.body.lowerBound, limit: node.body.upperBound, in: reader,
                                           allowingTruncation: true) {
-                fields.append(.init(L("Format"), picture.variant.map { "\(picture.format.name) (\($0))" }
+                fields.append(.init(L("Format", in: language), picture.variant.map { "\(picture.format.name) (\($0))" }
                                     ?? picture.format.name))
-                fields.append(.init(L("Picture size"), "\(picture.width) × \(picture.height)"))
+                fields.append(.init(L("Picture size", in: language), "\(picture.width) × \(picture.height)"))
                 // An animation says how long it is; the panel plays it.
                 if let frames = picture.frames, frames > 1 {
-                    fields.append(.init(L("Frames"), "\(frames)"))
+                    fields.append(.init(L("Frames", in: language), "\(frames)"))
                 }
                 // A BMP whose header asks for more than its section holds:
                 // the rows past the end are missing from the image.
                 if let declared = picture.declaredLength {
-                    fields.append(.init(L("Declared size"), L("%1$@ — the section ends earlier", sizeText(declared)),
+                    fields.append(.init(L("Declared size", in: language), L("%1$@ — the section ends earlier", in: language, sizeText(declared)),
                                         isProblem: true))
                 }
             }
@@ -1198,15 +1198,15 @@ public enum UEFIDetail {
         // Read again, as a picture is.
         case .sound:
             if let sound = Sound.read(at: node.body.lowerBound, limit: node.body.upperBound, in: reader) {
-                fields.append(.init(L("Format"), "WAV (\(sound.encodingName))"))
-                fields.append(.init(L("Sample rate"), L("%1$@ Hz", "\(sound.sampleRate)")))
-                fields.append(.init(L("Bits per sample"), "\(sound.bitsPerSample)"))
-                fields.append(.init(L("Channels"), "\(sound.channels)"))
+                fields.append(.init(L("Format", in: language), "WAV (\(sound.encodingName))"))
+                fields.append(.init(L("Sample rate", in: language), L("%1$@ Hz", in: language, "\(sound.sampleRate)")))
+                fields.append(.init(L("Bits per sample", in: language), "\(sound.bitsPerSample)"))
+                fields.append(.init(L("Channels", in: language), "\(sound.channels)"))
                 if let duration = sound.duration {
                     // Tenths, with the separator the language writes: the
                     // translation, not the Mac's region, decides it.
                     let tenths = Int((duration * 10).rounded())
-                    fields.append(.init(L("Duration"), L("%1$@.%2$@ s", tenths / 10, tenths % 10)))
+                    fields.append(.init(L("Duration", in: language), L("%1$@.%2$@ s", in: language, tenths / 10, tenths % 10)))
                 }
             }
 
@@ -1215,13 +1215,13 @@ public enum UEFIDetail {
         case .gpnvStore:
             let records = node.children.filter { $0.kind == .gpnvRecord }
             let current = records.filter { $0.subtype == 1 }.count
-            fields.append(.init(L("Current entries"), "\(current)"))
-            fields.append(.init(L("Superseded entries"), "\(records.count - current)"))
+            fields.append(.init(L("Current entries", in: language), "\(current)"))
+            fields.append(.init(L("Superseded entries", in: language), "\(records.count - current)"))
 
         case .gpnvRecord:
-            fields.append(.init(L("State"), node.subtype == 1 ? L("Current") : L("Superseded")))
+            fields.append(.init(L("State", in: language), node.subtype == 1 ? L("Current", in: language) : L("Superseded", in: language)))
             if node.name == "OA30", let body = reader.bytes(node.body), let key = GPNVRecord.productKey(of: body) {
-                fields.append(.init(L("Windows product key"), key))
+                fields.append(.init(L("Windows product key", in: language), key))
             }
 
         // Read in `build`, which has the whole map (`UEFIAMDFirmwareDetail`).
@@ -1242,9 +1242,9 @@ public enum UEFIDetail {
         // blocks say of themselves. The table itself is read in `build`.
         case .biosGuardUpdate:
             if case .success(let layout) = BIOSGuardUpdate.layout(in: reader, at: h) {
-                fields.append(.init(L("Platform"), layout.platform))
-                fields.append(.init(L("Blocks"), "\(layout.blocks.count)"))
-                fields.append(.init(L("BIOS region"), sizeText(layout.regionSize)))
+                fields.append(.init(L("Platform", in: language), layout.platform))
+                fields.append(.init(L("Blocks", in: language), "\(layout.blocks.count)"))
+                fields.append(.init(L("BIOS region", in: language), sizeText(layout.regionSize)))
             }
 
         // A stretch of the assembled region, with no header of its own.
@@ -1263,7 +1263,7 @@ public enum UEFIDetail {
     /// it is, and which earlier image in the block it copies. Read again from
     /// the block the image sits in, since a copy is told by the images before
     /// it.
-    private static func ecImageFields(_ node: UEFINode, image: UEFIImage, reader: ImageReader) -> [UEFIDetailField] {
+    private static func ecImageFields(_ node: UEFINode, image: UEFIImage, reader: ImageReader, in language: AppLanguage) -> [UEFIDetailField] {
         let block = node.id.path.isEmpty ? nil : image.node(NodeID(Array(node.id.path.dropLast())))
         guard let block,
               let found = ECImage.all(in: block.body, reader: reader).first(where: { $0.start == node.range.lowerBound })
@@ -1271,16 +1271,16 @@ public enum UEFIDetail {
         var fields: [UEFIDetailField] = []
         switch found.vendor {
         case .ite(let identification):
-            fields.append(.init(L("Vendor"), "ITE"))
+            fields.append(.init(L("Vendor", in: language), "ITE"))
             fields.append(.init("ITE identification", identification))
         case .phcm:
             // Microchip's format, which says nothing of whose chip it is:
             // the format is named, the vendor is not.
-            fields.append(.init(L("Format"), "PHCM (Microchip MEC)"))
+            fields.append(.init(L("Format", in: language), "PHCM (Microchip MEC)"))
         }
-        fields.append(.init(L("Written"), sizeText(found.written)))
+        fields.append(.init(L("Written", in: language), sizeText(found.written)))
         if let original = found.copyOf {
-            fields.append(.init(L("Copy of"), hex(original)))
+            fields.append(.init(L("Copy of", in: language), hex(original)))
         }
         return fields
     }
@@ -1302,7 +1302,7 @@ public enum UEFIDetail {
     /// the chips — how large, how fast, and which opcodes the chipset will not
     /// send them. Where the regions lie, and what the masters may touch, are
     /// grids, and are in `descriptorTables`.
-    private static func descriptorFields(_ descriptor: DescriptorInfo, imageSize: UInt64) -> [UEFIDetailField] {
+    private static func descriptorFields(_ descriptor: DescriptorInfo, imageSize: UInt64, in language: AppLanguage) -> [UEFIDetailField] {
         var fields: [UEFIDetailField] = []
         if !descriptor.reservedVector.isEmpty {
             fields.append(.init("Reserved vector", hexBytes(descriptor.reservedVector)))
@@ -1310,82 +1310,82 @@ public enum UEFIDetail {
         // Told from the layout, not stated; a layout the rules do not know is
         // read as the nearest one, and says so.
         let generation = descriptor.generation
-        var chipset = generation.series.map { L("%1$@ (%2$@ series)", generation.codeName, $0) }
+        var chipset = generation.series.map { L("%1$@ (%2$@ series)", in: language, generation.codeName, $0) }
             ?? generation.codeName
-        if !descriptor.isGenerationCertain { chipset = L("%1$@, assumed", chipset) }
-        fields.append(.init(L("Chipset"), chipset))
+        if !descriptor.isGenerationCertain { chipset = L("%1$@, assumed", in: language, chipset) }
+        fields.append(.init(L("Chipset", in: language), chipset))
         // The one strap bit with a settled meaning. Set, it is the reason an
         // ME that is otherwise whole does not run, so it reads as a state.
         if let meDisable = descriptor.straps?.meDisable {
-            fields.append(.init(L("%1$@ bit", meDisable.name),
-                                meDisable.isSet ? L("Set — the ME is soft-disabled") : L("Not set", context: "bit"),
+            fields.append(.init(L("%1$@ bit", in: language, meDisable.name),
+                                meDisable.isSet ? L("Set — the ME is soft-disabled", in: language) : L("Not set", context: "bit", in: language),
                                 tone: meDisable.isSet ? .caution : .standard))
         }
         // A range the chipset keeps the host from writing — coreboot puts
         // the ME region under it — is the other reason a region the masks
         // open cannot be written from the OS.
         if let range = descriptor.straps?.gpr0 {
-            fields.append(.init("GPR0", gpr0Text(range), tone: range.isOn ? .caution : .standard))
+            fields.append(.init("GPR0", gpr0Text(range, in: language), tone: range.isOn ? .caution : .standard))
         }
 
         if let component = descriptor.component {
-            fields += componentFields(component, imageSize: imageSize)
+            fields += componentFields(component, imageSize: imageSize, in: language)
         }
         if let espi = descriptor.straps?.espiClock {
-            fields.append(.init(L("eSPI clock"), espi.clock.megahertz.map {
-                L("%1$@ MHz", $0.map(String.init).joined(separator: "/"))
-            } ?? L("Unknown (code %1$@)", espi.clock.code)))
+            fields.append(.init(L("eSPI clock", in: language), espi.clock.megahertz.map {
+                L("%1$@ MHz", in: language, $0.map(String.init).joined(separator: "/"))
+            } ?? L("Unknown (code %1$@)", in: language, espi.clock.code)))
         }
         return fields
     }
 
     /// What the component section says about the chips.
     private static func componentFields(
-        _ component: DescriptorInfo.Component, imageSize: UInt64
+        _ component: DescriptorInfo.Component, imageSize: UInt64, in language: AppLanguage
     ) -> [UEFIDetailField] {
         var fields: [UEFIDetailField] = []
         // The chips the image was laid out across, end to end. A dump of
         // another length is one chip of two, or a read of the wrong size.
-        let sizes = component.chipSizes.map { $0.map(capacityText) ?? L("Reserved") }
+        let sizes = component.chipSizes.map { $0.map { capacityText($0, in: language) } ?? L("Reserved", in: language) }
             .joined(separator: " + ")
         let total = component.chipSizes.reduce(UInt64(0)) { $0 + ($1 ?? 0) }
         let mismatch = !component.chipSizes.contains(nil) && total != imageSize
-        fields.append(.init(L("Flash chip sizes"),
-                            mismatch ? L("%1$@ — the dump is %2$@", sizes, capacityText(imageSize)) : sizes,
+        fields.append(.init(L("Flash chip sizes", in: language),
+                            mismatch ? L("%1$@ — the dump is %2$@", in: language, sizes, capacityText(imageSize, in: language)) : sizes,
                             isProblem: mismatch))
         if component.chipSizes.count == 2, let first = component.chipSizes[0] {
-            fields.append(.init(L("Second chip starts at"), hex(first)))
+            fields.append(.init(L("Second chip starts at", in: language), hex(first)))
         }
-        fields.append(.init(L("Read ID and status clock"), clockText(component.readIDClock)))
-        fields.append(.init(L("Write and erase clock"), clockText(component.writeEraseClock)))
-        fields.append(.init(L("Fast read clock"), component.fastReadClock.map(clockText) ?? L("Off")))
-        fields.append(.init(L("Forbidden opcodes"), component.invalidInstructions.isEmpty
-                            ? L("None") : hexBytes(component.invalidInstructions)))
+        fields.append(.init(L("Read ID and status clock", in: language), clockText(component.readIDClock, in: language)))
+        fields.append(.init(L("Write and erase clock", in: language), clockText(component.writeEraseClock, in: language)))
+        fields.append(.init(L("Fast read clock", in: language), component.fastReadClock.map { clockText($0, in: language) } ?? L("Off", in: language)))
+        fields.append(.init(L("Forbidden opcodes", in: language), component.invalidInstructions.isEmpty
+                            ? L("None", in: language) : hexBytes(component.invalidInstructions)))
         return fields
     }
 
     /// A protected range as where it runs and what it refuses.
-    private static func gpr0Text(_ range: DescriptorInfo.ProtectedRange) -> String {
+    private static func gpr0Text(_ range: DescriptorInfo.ProtectedRange, in language: AppLanguage) -> String {
         let span = "\(hex(range.start)) – \(hex(range.end))"
         switch (range.readProtected, range.writeProtected) {
-        case (true, true): return L("%1$@: reads and writes refused", span)
-        case (false, true): return L("%1$@: writes refused", span)
-        case (true, false): return L("%1$@: reads refused", span)
-        case (false, false): return L("Off")
+        case (true, true): return L("%1$@: reads and writes refused", in: language, span)
+        case (false, true): return L("%1$@: writes refused", in: language, span)
+        case (true, false): return L("%1$@: reads refused", in: language, span)
+        case (false, false): return L("Off", in: language)
         }
     }
 
     /// A clock as the bench says it, or the code when the generation reserves
     /// it.
-    private static func clockText(_ clock: DescriptorInfo.Clock) -> String {
-        guard let megahertz = clock.megahertz else { return L("Reserved (code %1$@)", clock.code) }
-        return L("%1$@ MHz", megahertz.map(String.init).joined(separator: "/"))
+    private static func clockText(_ clock: DescriptorInfo.Clock, in language: AppLanguage) -> String {
+        guard let megahertz = clock.megahertz else { return L("Reserved (code %1$@)", in: language, clock.code) }
+        return L("%1$@ MHz", in: language, megahertz.map(String.init).joined(separator: "/"))
     }
 
     /// A chip's size in the unit it is sold by.
-    private static func capacityText(_ bytes: UInt64) -> String {
-        if bytes > 0, bytes % 0x10_0000 == 0 { return L("%1$@ MB", bytes >> 20) }
-        if bytes > 0, bytes % 0x400 == 0 { return L("%1$@ KB", bytes >> 10) }
+    private static func capacityText(_ bytes: UInt64, in language: AppLanguage) -> String {
+        if bytes > 0, bytes % 0x10_0000 == 0 { return L("%1$@ MB", in: language, bytes >> 20) }
+        if bytes > 0, bytes % 0x400 == 0 { return L("%1$@ KB", in: language, bytes >> 10) }
         return sizeText(bytes)
     }
 
@@ -1396,23 +1396,23 @@ public enum UEFIDetail {
     /// The regions are in the tree as well, as this node's siblings — but the
     /// tree shows where a region *is*, and this shows what the descriptor
     /// *says*, which is the thing being checked when the two disagree.
-    private static func descriptorTables(_ descriptor: DescriptorInfo, imageSize: UInt64) -> [UEFIDetailTable] {
+    private static func descriptorTables(_ descriptor: DescriptorInfo, imageSize: UInt64, in language: AppLanguage) -> [UEFIDetailTable] {
         var tables: [UEFIDetailTable] = []
         // Its own region is this node.
         let regions = descriptor.regions.filter { $0.type != .descriptor }
         if !regions.isEmpty {
             tables.append(UEFIDetailTable(
-                title: L("Region table"),
+                title: L("Region table", in: language),
                 symbol: "square.split.2x2",
-                columns: [L("Region"), L("Base"), L("Limit")],
+                columns: [L("Region", in: language), L("Base", in: language), L("Limit", in: language)],
                 rows: regions.map { [.init($0.type.label), .init(hex($0.base)), .init(hex($0.limit))] }
             ))
         }
         if !descriptor.masters.isEmpty {
             tables.append(UEFIDetailTable(
-                title: L("Region access settings"),
+                title: L("Region access settings", in: language),
                 symbol: "key",
-                columns: [L("Master"), L("Read"), L("Write")],
+                columns: [L("Master", in: language), L("Read", in: language), L("Write", in: language)],
                 rows: descriptor.masters.map { master in
                     [.init(master.name),
                      .init(mask(master.read, digits: descriptor.maskDigits)),
@@ -1422,23 +1422,23 @@ public enum UEFIDetail {
         }
         if !descriptor.biosAccess.isEmpty {
             tables.append(UEFIDetailTable(
-                title: L("BIOS access table"),
+                title: L("BIOS access table", in: language),
                 symbol: "lock.shield",
-                columns: [L("Region"), L("Read"), L("Write")],
+                columns: [L("Region", in: language), L("Read", in: language), L("Write", in: language)],
                 rows: descriptor.biosAccess.map { access in
                     [.init(access.region),
-                     .permission(access.read),
-                     .permission(access.write)]
+                     .permission(access.read, in: language),
+                     .permission(access.write, in: language)]
                 }
             ))
         }
         if !descriptor.chips.isEmpty {
             tables.append(UEFIDetailTable(
-                title: L("Flash chips in VSCC table"),
+                title: L("Flash chips in VSCC table", in: language),
                 // The square chip the ME panel waits under, so the two panels
                 // draw the same thing for the same idea.
                 symbol: "cpu",
-                columns: [L("JEDEC ID"), L("Chip"), L("Size"), L("Source")],
+                columns: [L("JEDEC ID", in: language), L("Chip", in: language), L("Size", in: language), L("Source", in: language)],
                 rows: descriptor.chips.map { chip in
                     // With one chip the dump is that chip's, so a smaller chip
                     // cannot be the one it came from. With several the split is
@@ -1451,8 +1451,8 @@ public enum UEFIDetail {
                     var invalid = false
                     if let bytes, let smallest { invalid = bytes < smallest }
                     return [.init(String(format: "%06X", chip.jedecID)),
-                     .init(chip.name ?? chip.vendor.map { L("Unknown (%1$@)", $0) } ?? L("Unknown")),
-                     .init(bytes.map(capacityText) ?? "", tone: invalid ? .no : .plain),
+                     .init(chip.name ?? chip.vendor.map { L("Unknown (%1$@)", in: language, $0) } ?? L("Unknown", in: language)),
+                     .init(bytes.map { capacityText($0, in: language) } ?? "", tone: invalid ? .no : .plain),
                      // Names of the projects the table was read from, as they
                      // call themselves, in every language.
                      .init(chip.source.map { source in
@@ -1473,22 +1473,22 @@ public enum UEFIDetail {
             let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
                 let name = "PCHSTRP\(index)"
                 let address = straps.base + UInt64(index) * 4
-                var meaning = L("Unknown")
+                var meaning = L("Unknown", in: language)
                 if let bit = straps.meDisable, bit.word == index {
-                    meaning = L("%1$@ in bit %2$@; the other bits unknown", bit.name, bit.bit)
+                    meaning = L("%1$@ in bit %2$@; the other bits unknown", in: language, bit.name, bit.bit)
                 } else if straps.espiClock?.word == index {
-                    meaning = L("eSPI clock in bits 3–5; the other bits unknown")
+                    meaning = L("eSPI clock in bits 3–5; the other bits unknown", in: language)
                 } else if straps.gpr0?.word == index {
-                    meaning = L("GPR0, the whole word")
+                    meaning = L("GPR0, the whole word", in: language)
                 }
                 return ([.init(name), .init(hex(address)),
                          .init(String(format: "0x%08X", straps.words[index])), .init(meaning)],
                         .range(address..<address + 4, name: name))
             }
             tables.append(UEFIDetailTable(
-                title: L("PCH straps"),
+                title: L("PCH straps", in: language),
                 symbol: "slider.horizontal.3",
-                columns: [L("Strap"), L("Offset"), L("Value"), L("Meaning")],
+                columns: [L("Strap", in: language), L("Offset", in: language), L("Value", in: language), L("Meaning", in: language)],
                 rows: rows.map(\.cells),
                 rowTargets: rows.map(\.target),
                 linkColumn: 1,
@@ -1531,7 +1531,7 @@ public enum UEFIDetail {
     /// What an NVAR entry's header and extended header say (§9). The GUID is
     /// the common "GUID" field — the parser found it, in the entry or in the
     /// store's table, or took it from the chain for a later link.
-    private static func nvarFields(_ node: UEFINode, reader: ImageReader) -> [UEFIDetailField] {
+    private static func nvarFields(_ node: UEFINode, reader: ImageReader, in language: AppLanguage) -> [UEFIDetailField] {
         let h = node.header.lowerBound
         var fields: [UEFIDetailField] = []
         guard let attributes = reader.uint8(at: h + 9) else { return fields }
@@ -1564,7 +1564,7 @@ public enum UEFIDetail {
         if let checksum = NvarChecksum.read(node, in: reader) {
             fields.append(.init(
                 "Checksum",
-                Checksums.text(checksum.stored, valid: checksum.valid, expected: UInt64(checksum.expected))
+                Checksums.text(checksum.stored, valid: checksum.valid, expected: UInt64(checksum.expected)).text(in: language)
             ))
         }
         return fields
@@ -1642,7 +1642,7 @@ public enum UEFIDetail {
         _ stored: some BinaryInteger,
         digits: Int,
         repairs: [ChecksumRepair],
-        checksumOffset: UInt64
+        checksumOffset: UInt64, in language: AppLanguage
     ) -> UEFIDetailField {
         let repair = repairs.first { $0.offset == checksumOffset }
         let isProblem = repair != nil
@@ -1653,7 +1653,7 @@ public enum UEFIDetail {
                 valid: !isProblem,
                 expected: repair.map { littleEndian($0.bytes) },
                 digits: digits
-            ),
+            ).text(in: language),
             isProblem: isProblem
         )
     }
@@ -1678,7 +1678,7 @@ public enum UEFIDetail {
         return value == 0 ? "Empty" : "\(hex(bytes)) (\(value))"
     }
 
-    private static func kindLabel(_ kind: UEFINodeKind) -> String {
+    private static func kindLabel(_ kind: UEFINodeKind, in language: AppLanguage) -> String {
         switch kind {
         case .capsule: return "Capsule"
         case .intelImage: return "Intel image"
@@ -1712,28 +1712,28 @@ public enum UEFIDetail {
         case .dvarStore: return UEFITypes.typeName(UEFITypes.Item.dellDvarStore.rawValue)
         case .dvarEntry: return UEFITypes.typeName(UEFITypes.Item.dellDvarEntry.rawValue)
         case .startupApData: return UEFITypes.typeName(UEFITypes.Item.startupApDataEntry.rawValue)
-        case .padding: return L("Padding")
-        case .freeSpace: return L("Free space")
-        case .nonUEFIData: return L("Non-UEFI data")
-        case .flashDeviceMapRegion: return L("Flash device map region")
-        case .ecImage: return L("EC firmware image")
-        case .fitComponent: return L("FIT component")
-        case .hpSignatureBlock: return L("HP signature block")
-        case .gpnvStore: return L("GPNV store")
-        case .gpnvRecord: return L("GPNV record")
-        case .lenovoDMIStore: return L("Lenovo DMI store")
-        case .ldbgLog: return L("LDBG change log")
-        case .ldbgEntry: return L("LDBG entry")
-        case .lenvBlock: return L("LENV block")
-        case .lenvEntry: return L("LENV entry")
-        case .acerDMIStore: return L("Acer DMI")
-        case .amdEFS: return L("Embedded Firmware Structure")
-        case .amdDirectory: return L("AMD firmware directory")
-        case .amdFirmwareEntry: return L("AMD firmware entry")
-        case .biosGuardUpdate: return L("BIOS Guard update")
-        case .biosGuardEntry: return L("BIOS Guard entry")
-        case .picture: return L("Picture")
-        case .sound: return L("Sound")
+        case .padding: return L("Padding", in: language)
+        case .freeSpace: return L("Free space", in: language)
+        case .nonUEFIData: return L("Non-UEFI data", in: language)
+        case .flashDeviceMapRegion: return L("Flash device map region", in: language)
+        case .ecImage: return L("EC firmware image", in: language)
+        case .fitComponent: return L("FIT component", in: language)
+        case .hpSignatureBlock: return L("HP signature block", in: language)
+        case .gpnvStore: return L("GPNV store", in: language)
+        case .gpnvRecord: return L("GPNV record", in: language)
+        case .lenovoDMIStore: return L("Lenovo DMI store", in: language)
+        case .ldbgLog: return L("LDBG change log", in: language)
+        case .ldbgEntry: return L("LDBG entry", in: language)
+        case .lenvBlock: return L("LENV block", in: language)
+        case .lenvEntry: return L("LENV entry", in: language)
+        case .acerDMIStore: return L("Acer DMI", in: language)
+        case .amdEFS: return L("Embedded Firmware Structure", in: language)
+        case .amdDirectory: return L("AMD firmware directory", in: language)
+        case .amdFirmwareEntry: return L("AMD firmware entry", in: language)
+        case .biosGuardUpdate: return L("BIOS Guard update", in: language)
+        case .biosGuardEntry: return L("BIOS Guard entry", in: language)
+        case .picture: return L("Picture", in: language)
+        case .sound: return L("Sound", in: language)
         }
     }
 
@@ -1741,15 +1741,15 @@ public enum UEFIDetail {
     /// carries the code when there is no name — `FFS.typeName` and
     /// `Section.typeName` fall back to `File type 0xNN` / `Section type 0xNN` —
     /// so a known type is a word and an unknown one is its number.
-    private static func typeText(_ node: UEFINode) -> String {
+    private static func typeText(_ node: UEFINode, in language: AppLanguage) -> String {
         guard let subtype = node.subtype else { return "" }
         switch node.kind {
         case .file: return UEFITypeNames.file(subtype)
         case .section: return UEFITypeNames.section(subtype)
         case .volume: return "Revision \(subtype)"
-        case .lenvBlock: return subtype == 1 ? L("In use", context: "LENV block") : L("Not in use")
+        case .lenvBlock: return subtype == 1 ? L("In use", context: "LENV block", in: language) : L("Not in use", in: language)
         case .amdDirectory:
-            return AMDFirmware.DirectoryKind(rawValue: subtype).map(AMDFirmware.kindName) ?? hex(subtype)
+            return AMDFirmware.DirectoryKind(rawValue: subtype).map { AMDFirmware.kindName($0).text(in: language) } ?? hex(subtype)
         case .region:
             // The region label has no number in it, so the code goes with it.
             return FlashRegionType(rawValue: Int(subtype)).map { "\($0.label) · \(hex(subtype))" } ?? hex(subtype)

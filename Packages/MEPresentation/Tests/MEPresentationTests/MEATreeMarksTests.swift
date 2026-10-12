@@ -72,7 +72,7 @@ final class MEATreeMarksTests: XCTestCase {
                 module(5, "plain"),
             ]),
             "rbePmMetadata": [metadataRow],
-        ]))
+        ]), in: .english)
         let rows = try modules(in: roots)
         func roles(_ name: String) -> [ToolRowMarks.Role] {
             rows.first { $0.title == name }?.marks.roles ?? []
@@ -99,7 +99,7 @@ final class MEATreeMarksTests: XCTestCase {
                  "module": "kernel"],
                 ["id": 3, "severity": "note", "message": "This firmware is not in the database."],
             ],
-        ]))
+        ]), in: .english)
         let rows = try modules(in: roots)
         let kernel = try XCTUnwrap(rows.first { $0.title == "kernel" })
 
@@ -116,7 +116,7 @@ final class MEATreeMarksTests: XCTestCase {
         let compressed = MEACurator.present(try analysis([
             "codePartition": cpd([module(0, "pm", huffman: true)]),
             "rbePmMetadata": [metadataRow],
-        ]))
+        ]), in: .english)
         let group = try root("RBE/PM Metadata", in: compressed)
         XCTAssertTrue(group.marks.hasRail)
         XCTAssertTrue(group.children.allSatisfy(\.marks.hasRail))
@@ -125,7 +125,7 @@ final class MEATreeMarksTests: XCTestCase {
         let plain = MEACurator.present(try analysis([
             "codePartition": cpd([module(0, "pm")]),
             "rbePmMetadata": [metadataRow],
-        ]))
+        ]), in: .english)
         XCTAssertFalse(try root("RBE/PM Metadata", in: plain).marks.hasRail)
     }
 
@@ -136,7 +136,7 @@ final class MEATreeMarksTests: XCTestCase {
         let left = MEACurator.present(try analysis([
             "rbePmMetadata": [metadataRow],
             "unmatchedMetadataHashes": ["ABCDEF0123456789ABCDEF"],
-        ]))
+        ]), in: .english)
         let group = try root("RBE/PM Metadata", in: left)
         XCTAssertEqual(group.fields.first { $0.label == "Unmatched Hashes" }?.value, "1")
         XCTAssertEqual(group.fields.first { $0.label == "Unmatched Hashes" }?.tone, .standard,
@@ -147,7 +147,7 @@ final class MEATreeMarksTests: XCTestCase {
 
         let none = MEACurator.present(try analysis([
             "rbePmMetadata": [metadataRow], "unmatchedMetadataHashes": [],
-        ]))
+        ]), in: .english)
         let accounted = try root("RBE/PM Metadata", in: none)
         XCTAssertEqual(accounted.fields.first { $0.label == "Unmatched Hashes" }?.value, "None")
         XCTAssertEqual(accounted.fields.first { $0.label == "Unmatched Hashes" }?.tone, .good,
@@ -158,12 +158,12 @@ final class MEATreeMarksTests: XCTestCase {
     /// The manifest holds the hashes the modules are checked against, and says
     /// so when its own signature does not check out.
     func testTheManifestHoldsChecksAndSaysWhenItsSignatureFails() throws {
-        let good = MEACurator.present(try analysis(["manifest": manifest, "rsaSignatureValid": true]))
+        let good = MEACurator.present(try analysis(["manifest": manifest, "rsaSignatureValid": true]), in: .english)
         let row = try root("Manifest", in: good)
         guard case .holdsChecks? = row.marks.roles.first else { return XCTFail("the badge") }
         XCTAssertNil(row.marks.problem)
 
-        let bad = MEACurator.present(try analysis(["manifest": manifest, "rsaSignatureValid": false]))
+        let bad = MEACurator.present(try analysis(["manifest": manifest, "rsaSignatureValid": false]), in: .english)
         XCTAssertEqual(try root("Manifest", in: bad).marks.problem?.isError, true)
     }
 
@@ -176,7 +176,7 @@ final class MEATreeMarksTests: XCTestCase {
                                "checksumValid": false, "partitions": []],
             "bootPartitions": [["offset": 0x100, "partitionName": "Boot 1", "version": 1,
                                 "redundancy": false, "entries": []]],
-        ]))
+        ]), in: .english)
         XCTAssertEqual(try root("Code Partition ($CPD)", in: roots).marks.problem,
                        .error(["Invalid $CPD CRC-32 checksum"]))
         XCTAssertEqual(try root("CSE Layout Table", in: roots).marks.problem,

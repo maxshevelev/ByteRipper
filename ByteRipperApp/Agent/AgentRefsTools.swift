@@ -262,8 +262,8 @@ final class AgentRefsTools {
             var entry: [String: JSONValue] = [
                 "name": .string(UEFITreeDisplay.ownName(of: owner) ?? owner.name),
                 "label": .string(UEFIAgentQueries.label(of: owner, in: tree)),
-                "type": .string(UEFITreeDisplay.subtypeText(for: owner).isEmpty
-                                ? UEFITreeDisplay.typeText(for: owner) : UEFITreeDisplay.subtypeText(for: owner)),
+                "type": .string(UEFITreeDisplay.subtypeText(for: owner, in: .english).isEmpty
+                                ? UEFITreeDisplay.typeText(for: owner) : UEFITreeDisplay.subtypeText(for: owner, in: .english)),
                 "in_compressed": .bool(owner.space != .file)
             ]
             entry[file == nil ? "node" : "file"] = .string(key)
@@ -297,7 +297,7 @@ final class AgentRefsTools {
     static func biosRegion(in image: UEFIImage) -> Range<UInt64>? {
         image.allNodes.first { node in
             node.space == .file && UEFITreeDisplay.typeText(for: node) == "Region"
-                && UEFITreeDisplay.subtypeText(for: node) == "BIOS"
+                && UEFITreeDisplay.subtypeText(for: node, in: .english) == "BIOS"
         }?.range
     }
 }

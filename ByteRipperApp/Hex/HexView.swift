@@ -31,6 +31,8 @@ struct HexZoneSpan: Equatable {
     let range: Range<UInt64>
     let name: String
     let isFocused: Bool
+    /// For a note: the person's rather than the agent's, drawn in its hue.
+    var byPerson = false
 }
 
 /// Supplies the bytes and selection the hex view renders (§6).
@@ -2216,13 +2218,13 @@ final class HexView: NSView, NSViewToolTipOwner {
 
     // MARK: - Agent marks
 
-    /// An agent's annotations (`AgentAnnotation`): the zone's own rounded outline, dashed
-    /// and in the agent's hue, so they are told from a tool's map at a glance
+    /// Notes (`AgentAnnotation`): the zone's own rounded outline, dashed and
+    /// in the agent's hue or the person's, so they are told from a tool's map at a glance
     /// and never taken for a difference or a selection.
     private func drawAgentMarkContours(layout: HexLayout, fileSize: UInt64, rows: Range<Int>) {
         let dash: [CGFloat] = [4, 3]
-        for path in agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows) {
-            HexTheme.agentMark.withAlphaComponent(Self.zoneFocusedAlpha).setStroke()
+        for (path, byPerson) in agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows) {
+            (byPerson ? HexTheme.personMark : HexTheme.agentMark).withAlphaComponent(Self.zoneFocusedAlpha).setStroke()
             path.lineWidth = Self.mirrorContourLineWidth
             path.setLineDash(dash, count: dash.count, phase: 0)
             path.stroke()
@@ -2231,13 +2233,14 @@ final class HexView: NSView, NSViewToolTipOwner {
 
     /// And a wash as light as a focused zone's, under the bytes.
     private func drawAgentMarkFills(layout: HexLayout, fileSize: UInt64, rows: Range<Int>) {
-        for path in agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows) {
-            HexTheme.agentMark.withAlphaComponent(Self.zoneFillAlpha).setFill()
+        for (path, byPerson) in agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows) {
+            (byPerson ? HexTheme.personMark : HexTheme.agentMark).withAlphaComponent(Self.zoneFillAlpha).setFill()
             path.fill()
         }
     }
 
-    private func agentMarkShapes(layout: HexLayout, fileSize: UInt64, rows: Range<Int>) -> [NSBezierPath] {
+    private func agentMarkShapes(layout: HexLayout, fileSize: UInt64,
+                                 rows: Range<Int>) -> [(path: NSBezierPath, byPerson: Bool)] {
         guard let dataSource, !rows.isEmpty, fileSize > 0 else { return [] }
         let lower = UInt64(rows.lowerBound) * UInt64(HexLayout.bytesPerRow)
         let upper = UInt64(rows.upperBound) * UInt64(HexLayout.bytesPerRow)
@@ -2247,7 +2250,7 @@ final class HexView: NSView, NSViewToolTipOwner {
             let span = SelectionModel(start: mark.range.lowerBound, end: end, fileSize: fileSize)
             let loops = contour(of: span, layout: layout, region: .hex)
                 + contour(of: span, layout: layout, region: .ascii)
-            return loops.isEmpty ? nil : roundedContourPath(loops: loops, radius: Self.mirrorContourRadius)
+            return loops.isEmpty ? nil : (roundedContourPath(loops: loops, radius: Self.mirrorContourRadius), mark.byPerson)
         }
     }
 
@@ -3605,6 +3608,7 @@ enum HexTheme {
     static let zoneFrameInactive = ZoneColors.other
     /// An agent's annotation (`AgentAnnotation`).
     static let agentMark = ZoneColors.agent
+    static let personMark = ZoneColors.person
 
     /// The segment tints, cycled by label (§21.3) — the palette's own, so the
     /// dump's rows, the minimap's strip and the Segments form all tint S1 the

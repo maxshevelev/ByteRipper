@@ -239,7 +239,7 @@ public enum AcerDMIFinding: Equatable, Sendable {
         self != .tailCopyErased
     }
 
-    public var text: String {
+    public var text: LocalizedText {
         switch self {
         case .serialPattern:
             return L("The serial does not hold the factory pattern: the factory ones read 00 at offset 7 and 3400 at the end.")
@@ -292,7 +292,7 @@ extension Parser {
             var claimed = body.lowerBound
             for start in found {
                 rows += padding(from: claimed, to: start, emptyByte: emptyByte)
-                var row = UEFINode(kind: .acerDMIStore, name: L("Acer DMI"), range: start..<(start + AcerDMIArea.size))
+                var row = UEFINode(kind: .acerDMIStore, named: L("Acer DMI"), range: start..<(start + AcerDMIArea.size))
                 row.isFixed = true
                 rows.append(row)
                 claimed = start + AcerDMIArea.size

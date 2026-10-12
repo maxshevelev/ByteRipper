@@ -49,17 +49,17 @@ public enum FITDetail {
     /// row, and the value the header's Checksum field is coloured by and quotes
     /// when it reads wrong. Nil when the checksum checks out (or is not
     /// checked): the byte is valid then, not a problem.
-    public static func build(for row: FITRow, checksumShouldBe: UInt8? = nil, inBackup: Bool = false) -> FITRowDetail {
+    public static func build(for row: FITRow, checksumShouldBe: UInt8? = nil, inBackup: Bool = false, in language: AppLanguage) -> FITRowDetail {
         let entry = row.entry
-        var fields = entryFields(of: entry, checksumShouldBe: checksumShouldBe)
-        fields += targetFields(of: row)
+        var fields = entryFields(of: entry, checksumShouldBe: checksumShouldBe, in: language)
+        fields += targetFields(of: row, in: language)
         return FITRowDetail(
             // The number the panel shows for the row, counting from one the way
             // the table and the zones do — not the header's zero, which is its
             // place, not its number.
             title: inBackup
-                ? L("Backup #%1$@ %2$@", entry.index + 1, FIT.typeName(entry.type))
-                : L("#%1$@ %2$@", entry.index + 1, FIT.typeName(entry.type)),
+                ? L("Backup #%1$@ %2$@", in: language, entry.index + 1, FIT.typeName(entry.type))
+                : L("#%1$@ %2$@", in: language, entry.index + 1, FIT.typeName(entry.type)),
             fields: fields
         )
     }
@@ -67,7 +67,7 @@ public enum FITDetail {
     // MARK: - The sixteen bytes of the row itself
 
     private static func entryFields(
-        of entry: FITEntry, checksumShouldBe: UInt8?
+        of entry: FITEntry, checksumShouldBe: UInt8?, in language: AppLanguage
     ) -> [FITDetailField] {
         // The row's labels read in the reader's language. Every one of them —
         // type, address, size, version, checksum — is a thing the trade has a
@@ -82,16 +82,16 @@ public enum FITDetail {
         // The type leads: it is what the row is, and the title already says it,
         // so the fields open with it rather than with where it sits.
         var fields: [FITDetailField] = [
-            .init(L("Type"), "\(FIT.typeName(entry.type)) · \(hex(entry.type, digits: 2))")
+            .init(L("Type", in: language), "\(FIT.typeName(entry.type)) · \(hex(entry.type, digits: 2))")
         ]
         // Two addresses, side by side: where the entry sits in the dump, and
         // the address its own `Address` field holds. English tells them apart
         // by the two words; a language that has one word for both says which
         // is which, which is why the file one carries a context of its own.
-        fields.append(.init(L("Offset", context: "fit"), hex(entry.offset, digits: 8)))
-        fields.append(.init(L("Address"), entry.isHeader ? "_FIT_" : hex(entry.address, digits: 8)))
-        fields.append(.init(L("Size"), sizeText(entry)))
-        fields.append(.init(L("Version"), entry.versionText))
+        fields.append(.init(L("Offset", context: "fit", in: language), hex(entry.offset, digits: 8)))
+        fields.append(.init(L("Address", in: language), entry.isHeader ? "_FIT_" : hex(entry.address, digits: 8)))
+        fields.append(.init(L("Size", in: language), sizeText(entry, in: language)))
+        fields.append(.init(L("Version", in: language), entry.versionText))
         // The checksum byte is the header's (§5), so it is shown on the header
         // row and on no other — a row that is not the header does not carry it.
         if entry.isHeader {
@@ -107,32 +107,32 @@ public enum FITDetail {
             // A wrong byte says what it should be: the `computed` half of the
             // mismatch, which is the value a fix would write back (§8.6).
             fields.append(entry.checksumValid
-                ? .init(L("Checksum"),
+                ? .init(L("Checksum", in: language),
                         Checksums.text(entry.checksum, valid: checksumShouldBe == nil,
-                                       expected: checksumShouldBe.map(UInt64.init)),
+                                       expected: checksumShouldBe.map(UInt64.init)).text(in: language),
                         isProblem: checksumShouldBe != nil)
-                : .init(L("Checksum"),
-                        L("%1$@ (Not checked)", hex(entry.checksum, digits: 2))))
+                : .init(L("Checksum", in: language),
+                        L("%1$@ (Not checked)", in: language, hex(entry.checksum, digits: 2))))
         }
         return fields
     }
 
-    private static func sizeText(_ entry: FITEntry) -> String {
+    private static func sizeText(_ entry: FITEntry, in language: AppLanguage) -> String {
         // The header's `Size` counts entries, not bytes — the field everyone
         // reads wrong (§4). For the rows that use it, the field is in 16-byte
         // units; what a reader wants is the byte count.
         if entry.isHeader {
-            return L("%1$@ rows", entry.size)
+            return L("%1$@ rows", in: language, entry.size)
         }
         // A row with no size of its own says so in the same word every empty
         // area does.
-        if entry.size == 0 { return L("Empty") }
-        return size(entry.sizeInBytes)
+        if entry.size == 0 { return L("Empty", in: language) }
+        return size(entry.sizeInBytes, in: language)
     }
 
     // MARK: - What the row points at
 
-    private static func targetFields(of row: FITRow) -> [FITDetailField] {
+    private static func targetFields(of row: FITRow, in language: AppLanguage) -> [FITDetailField] {
         switch row.target {
         case .nothing:
             // The header and an empty slot point nowhere by design; the entry
@@ -144,23 +144,23 @@ public enum FITDetail {
             // (§7.3). A register, a width and a bit position are all things
             // the trade names in its own language, so these read in it.
             return [
-                .init(L("Index register"), hex(d.indexRegister, digits: 4)),
-                .init(L("Data register"), hex(d.dataRegister, digits: 4)),
-                .init(L("Access width"), d.accessWidth == 1
-                    ? L("1 byte") : L("%1$@ bytes", d.accessWidth)),
-                .init(L("Bit position"), "\(d.bitPosition)"),
-                .init(L("Index"), hex(d.index, digits: 4))
+                .init(L("Index register", in: language), hex(d.indexRegister, digits: 4)),
+                .init(L("Data register", in: language), hex(d.dataRegister, digits: 4)),
+                .init(L("Access width", in: language), d.accessWidth == 1
+                    ? L("1 byte", in: language) : L("%1$@ bytes", in: language, d.accessWidth)),
+                .init(L("Bit position", in: language), "\(d.bitPosition)"),
+                .init(L("Index", in: language), hex(d.index, digits: 4))
             ]
         case .outsideTheImage:
-            return [.init(L("Points at"), L("outside this image"))]
+            return [.init(L("Points at", in: language), L("outside this image", in: language))]
         case .microcode(let header):
             // The same reading the UEFI panel gives a microcode node
             // (`MicrocodeHeader.fields`), so the two say it in the same words.
             return header.fields.map { .init($0.label, $0.value, isProblem: $0.isProblem) }
         case .emptyMicrocodeSlot(let offset):
             return [
-                .init(L("Points at"), L("empty slot (FF FF FF FF)")),
-                .init(L("Component"), hex(offset, digits: 8))
+                .init(L("Points at", in: language), L("empty slot (FF FF FF FF)", in: language)),
+                .init(L("Component", in: language), hex(offset, digits: 8))
             ]
         case .bytes(let offset, let description):
             // "Points at" only once something has read there — see
@@ -168,11 +168,11 @@ public enum FITDetail {
             // is either way.
             var fields: [FITDetailField] = []
             if let description {
-                fields.append(.init(L("Points at"), description))
+                fields.append(.init(L("Points at", in: language), description))
             }
-            fields.append(.init(L("Component"), hex(offset, digits: 8)))
+            fields.append(.init(L("Component", in: language), hex(offset, digits: 8)))
             if let length = row.effectiveSize {
-                fields.append(.init(L("Length"), size(length)))
+                fields.append(.init(L("Length", in: language), size(length, in: language)))
             }
             return fields
         }
@@ -183,9 +183,9 @@ public enum FITDetail {
     /// A size in bytes, said both ways: hex for the dump, decimal for the mind.
     /// Zero is not worth two spellings — the area holds nothing, and the row
     /// says so.
-    private static func size<T: BinaryInteger>(_ bytes: T) -> String {
+    private static func size<T: BinaryInteger>(_ bytes: T, in language: AppLanguage) -> String {
         let value = UInt64(truncatingIfNeeded: bytes)
-        return value == 0 ? L("Empty") : "\(hex(value)) (\(value))"
+        return value == 0 ? L("Empty", in: language) : "\(hex(value)) (\(value))"
     }
 
     private static func hex<T: BinaryInteger>(_ value: T, digits: Int = 0) -> String {

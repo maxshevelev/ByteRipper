@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 import ToolModuleKit
 
 /// The tab's fragment panels: the dock's model, the surfaces behind the pills,
@@ -57,6 +58,8 @@ import ToolModuleKit
     /// jump out of the middle of the animation.
     private var flying: Set<FragmentDock.PanelID> = []
     private var entries: [FragmentDock.PanelID: Entry] = [:]
+    /// The Notes panel, while there is a note to list (`NotesPanel`).
+    private var notes: NotesPanel?
 
     private weak var host: MainViewController?
     private let container: FragmentPanelHost
@@ -86,7 +89,41 @@ import ToolModuleKit
     /// act on, and what the suite reads.
     func pane(_ id: FragmentDock.PanelID) -> PaneViewModel? { entries[id]?.pane }
     func surface(_ id: FragmentDock.PanelID) -> DocumentSurface? { entries[id]?.surface }
-    func panelView(_ id: FragmentDock.PanelID) -> FragmentPanelView? { entries[id]?.view }
+    func panelView(_ id: FragmentDock.PanelID) -> FragmentPanelView? {
+        entries[id]?.view ?? (notes?.id == id ? notes?.view : nil)
+    }
+
+    // MARK: - The Notes panel
+
+    /// The Notes panel, while there is one.
+    var notesPanel: NotesPanel? { notes }
+
+    /// Whether the Notes panel is the one up.
+    var notesAreUp: Bool { notes.map { dock.expanded == $0.id } ?? false }
+
+    /// Brings the Notes panel in line with the notes: made, folded, with the
+    /// first; gone with the last; its cards and its pill's count read again.
+    func syncNotes() {
+        let all = AgentAnnotationTools.current?.all() ?? []
+        if all.isEmpty {
+            if let notes { apply(dock.remove(notes.id), animated: false) }
+            return
+        }
+        if notes == nil {
+            let panel = NotesPanel(id: dock.addFolded())
+            panel.header.onCollapse = { [weak self] in self?.collapse() }
+            panel.header.onPulledDown = { [weak self] event in self?.beginPullDown(panel.id, from: event) }
+            notes = panel
+        }
+        notes?.refresh(all)
+        refreshDock()
+    }
+
+    /// Raises the Notes panel, if there is one.
+    func showNotes(animated: Bool = true) {
+        guard let notes else { return }
+        expand(notes.id, animated: animated)
+    }
 
     /// The panel `pane` belongs to, or nil for one of the tab's own panes.
     func panel(holding pane: PaneViewModel) -> FragmentDock.PanelID? {
@@ -280,8 +317,7 @@ import ToolModuleKit
     /// because the gesture belongs to the panel while it lasts: the header it
     /// started on is scrolling away under the hand.
     func beginPullDown(_ id: FragmentDock.PanelID, from event: NSEvent) {
-        guard dock.expanded == id, let entry = entries[id],
-              let window = entry.view.window else { return }
+        guard dock.expanded == id, let window = panelView(id)?.window else { return }
         let start = event.locationInWindow.y
         // Where the hand last was, when it was there, and what it did on the
         // way — measured over the movement itself rather than over a window of
@@ -321,29 +357,29 @@ import ToolModuleKit
     /// cannot enter: driving the pull through these two is how the suite gets
     /// at it.
     func pullPanel(_ id: FragmentDock.PanelID, by offset: CGFloat) {
-        guard dock.expanded == id, let entry = entries[id] else { return }
+        guard dock.expanded == id, let view = panelView(id) else { return }
         pulling = id
         var frame = FragmentPanelView.restingFrame(in: container)
         frame.origin.y = PullDown.position(restingY: frame.origin.y, offset: offset)
-        entry.view.frame = frame
+        view.frame = frame
     }
 
     /// Lets the pull go, `movement` being what the hand last did.
     func endPull(_ id: FragmentDock.PanelID, movement: PullDown.Movement) {
-        guard pulling == id, let entry = entries[id] else { return }
+        guard pulling == id, let view = panelView(id) else { return }
         pulling = nil
         let resting = FragmentPanelView.restingFrame(in: container)
-        finishPullDown(id, entry: entry, resting: resting,
-                       travelled: resting.origin.y - entry.view.frame.origin.y,
+        finishPullDown(id, view: view, resting: resting,
+                       travelled: resting.origin.y - view.frame.origin.y,
                        movement: movement)
     }
 
-    private func finishPullDown(_ id: FragmentDock.PanelID, entry: Entry, resting: NSRect,
+    private func finishPullDown(_ id: FragmentDock.PanelID, view: FragmentPanelView, resting: NSRect,
                                 travelled: CGFloat, movement: PullDown.Movement) {
         switch PullDown.outcome(travelled: travelled, height: resting.height,
                                 movement: movement) {
         case .springBack:
-            move(entry.view, to: resting, animated: true, duration: Self.springBackDuration)
+            move(view, to: resting, animated: true, duration: Self.springBackDuration)
         case .collapse:
             // From wherever the hand left it, so the rest of the way takes the
             // rest of the time: a panel already most of the way down must not
@@ -376,29 +412,31 @@ import ToolModuleKit
 
         let raise: () -> Void = { [weak self] in
             guard let self, let raising = transition.raising,
-                  let entry = self.entries[raising], self.dock.expanded == raising else { return }
+                  let view = self.panelView(raising), self.dock.expanded == raising else { return }
             self.container.isHidden = false
             let resting = FragmentPanelView.restingFrame(in: self.container)
-            if entry.view.superview !== self.container { self.container.addSubview(entry.view) }
-            entry.view.frame = resting
+            if view.superview !== self.container { self.container.addSubview(view) }
+            view.frame = resting
+            // Raised, the notes are looked at: the count on the pill goes.
+            if raising == self.notes?.id { AgentAnnotationTools.current?.markSeen() }
             guard animated, let pill = self.pillRect(for: raising) else { return }
             self.flying.insert(raising)
-            self.fly(entry.view, to: pill, duration: span, out: false) { [weak self] in
+            self.fly(view, to: pill, duration: span, out: false) { [weak self] in
                 self?.flying.remove(raising)
             }
         }
 
-        if let folding = transition.folding, let entry = entries[folding] {
+        if let folding = transition.folding, let view = panelView(folding) {
             let land: () -> Void = { [weak self] in
                 guard let self else { return }
                 // Unless it has been raised again in the meantime: a pill
                 // clicked twice while the flight was still running must not
                 // take the panel it just brought back off the stage.
                 if self.dock.expanded != folding {
-                    entry.view.removeFromSuperview()
+                    view.removeFromSuperview()
                     self.hideContainerIfClear()
                 }
-                if transition.removed == folding { self.tearDown(entry, closesDocument: closesDocument) }
+                if transition.removed == folding { self.tearDown(folding, closesDocument: closesDocument) }
                 // One at a time: the panel that is leaving finishes leaving
                 // before the next one starts arriving, or the two flights read
                 // as one muddle.
@@ -406,19 +444,17 @@ import ToolModuleKit
             }
             if animated, let pill = foldTarget {
                 flying.insert(folding)
-                fly(entry.view, to: pill, duration: span, out: true) { [weak self] in
+                fly(view, to: pill, duration: span, out: true) { [weak self] in
                     self?.flying.remove(folding)
                     land()
                 }
             } else {
-                move(entry.view, to: FragmentPanelView.foldedFrame(in: container),
+                move(view, to: FragmentPanelView.foldedFrame(in: container),
                      animated: animated, duration: duration, completion: land)
             }
         } else {
             raise()
-            if let removed = transition.removed, let entry = entries.removeValue(forKey: removed) {
-                tearDown(entry, closesDocument: closesDocument)
-            }
+            if let removed = transition.removed { tearDown(removed, closesDocument: closesDocument) }
         }
 
         invalidateCursors()
@@ -428,6 +464,18 @@ import ToolModuleKit
     }
 
     /// Lets go of everything behind a panel that has left the dock.
+    private func tearDown(_ id: FragmentDock.PanelID, closesDocument: Bool) {
+        if let notes, notes.id == id {
+            notes.view.removeFromSuperview()
+            self.notes = nil
+            refreshDock()
+            hideContainerIfClear()
+            return
+        }
+        guard let entry = entries[id] else { return }
+        tearDown(entry, closesDocument: closesDocument)
+    }
+
     private func tearDown(_ entry: Entry, closesDocument: Bool) {
         entries.removeValue(forKey: entry.id)
         entry.view.removeFromSuperview()
@@ -570,18 +618,19 @@ import ToolModuleKit
     /// one that is up sits at rest; the folded ones wait below, where a window
     /// resize must not leave them showing.
     private func layoutPanels() {
-        for (id, entry) in entries where entry.view.superview === container {
+        for id in dock.panels {
+            guard let view = panelView(id), view.superview === container else { continue }
             // Not the one in the hand: a pull sets the panel's frame on every
             // mouse move, and a layout pass that put it back to rest was the
             // panel shaking instead of following.
             guard !flying.contains(id) else { continue }
             guard id != pulling else {
                 var frame = FragmentPanelView.restingFrame(in: container)
-                frame.origin.y = entry.view.frame.origin.y
-                entry.view.frame = frame
+                frame.origin.y = view.frame.origin.y
+                view.frame = frame
                 continue
             }
-            entry.view.frame = dock.expanded == id
+            view.frame = dock.expanded == id
                 ? FragmentPanelView.restingFrame(in: container)
                 : FragmentPanelView.foldedFrame(in: container)
         }
@@ -593,6 +642,11 @@ import ToolModuleKit
     /// is up, and which of them have bytes the parent has not got back.
     func refreshDock() {
         strip.setItems(dock.panels.compactMap { id in
+            if let notes, notes.id == id {
+                return FragmentDockStrip.Item(
+                    id: id, title: L("Annotations"), isUp: dock.expanded == id, hasChanges: false,
+                    canTearOff: false, kind: .notes(unseen: AgentAnnotationTools.current?.unseen.count ?? 0))
+            }
             guard let entry = entries[id] else { return nil }
             return FragmentDockStrip.Item(
                 id: id,

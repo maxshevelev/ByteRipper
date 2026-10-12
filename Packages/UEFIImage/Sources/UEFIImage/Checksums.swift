@@ -111,7 +111,7 @@ public enum Checksums {
         valid: Bool,
         expected: UInt64? = nil,
         digits: Int = 2
-    ) -> String {
+    ) -> LocalizedText {
         let padded = hex(UInt64(truncatingIfNeeded: value), digits: digits)
         if valid { return L("%1$@ (Valid)", padded) }
         if let expected {

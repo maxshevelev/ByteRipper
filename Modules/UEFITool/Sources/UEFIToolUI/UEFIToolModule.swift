@@ -45,7 +45,7 @@ public enum UEFIToolModule: ToolModule {
     /// The tree, a node, a search, an address — answered with the panel
     /// open or not (`UEFIAgentQueries`, `Design/AGENT_PLAN.md`).
     public static var agentQueries: [ToolAgentQuery] {
-        UEFIAgentQueries.all(catalogue: agentCatalogue) + UEFIAgentChecksums.all + UEFIAgentRegions.all
+        UEFIAgentQueries.all(catalogue: agentCatalogue) + UEFIAgentChecksums.all + UEFIAgentRegions.all + UEFIAgentDMI.all
             + UEFIAgentVariables.queries
             + UEFIAgentNodeData.all
     }
@@ -53,7 +53,7 @@ public enum UEFIToolModule: ToolModule {
     /// The GUID catalogue for an agent's `uefi_node`: the one the panel holds,
     /// or the download — waited for a few seconds at most, so a bench with no
     /// network answers without the catalogue's names rather than late.
-    @Sendable static func agentCatalogue() async -> GuidsCatalogue {
+    @Sendable public static func agentCatalogue() async -> GuidsCatalogue {
         let source = await MainActor.run { UEFIToolSession.guidsSource }
         return await withTaskGroup(of: GuidsCatalogue?.self) { group in
             group.addTask { try? await source.guids() }
@@ -647,9 +647,9 @@ private struct ChecksumPass: Sendable {
                 self.show(publish: self.republishes, rowsChanged: true)
                 self.isRereadingAfterEdit = false
                 self.isAwaitingFirstShow = false
-                if let offset = self.pendingReveal {
-                    self.pendingReveal = nil
-                    self.revealNode(at: offset)
+                if let pending = self.pendingShow {
+                    self.pendingShow = nil
+                    pending()
                 }
                 self.onDisplay?(self.currentImage)
             }
@@ -907,7 +907,7 @@ private struct ChecksumPass: Sendable {
                     reader: readers.reader(for: $0.space) ?? ImageReader([UInt8]()),
                     repairs: nodeRepairs[$0.id] ?? [],
                     catalogue: guids,
-                    lenovoDMIReaders: tree.lenovoDMIReaders
+                    lenovoDMIReaders: tree.lenovoDMIReaders, in: Localization.appLanguage
                 )
             } ?? .empty
         }
@@ -931,7 +931,7 @@ private struct ChecksumPass: Sendable {
             // Analyzer does; a UEFI focus zones the node as before. The two are
             // kept apart, so at most one is published.
             host.publish(meNode.map(MEAZones.build)
-                         ?? UEFIPresenter.zones(for: node, in: image))
+                         ?? UEFIPresenter.zones(for: node, in: image, language: Localization.appLanguage))
             dumpShowsFocus = true
         }
     }
@@ -1011,7 +1011,7 @@ private struct ChecksumPass: Sendable {
         let node = focus.flatMap { currentImage?.node($0) }
         host.publish(UEFIPresenter.zones(
             outlining: range, named: name,
-            over: UEFIPresenter.zones(for: node, in: currentImage)
+            over: UEFIPresenter.zones(for: node, in: currentImage, language: Localization.appLanguage)
         ))
     }
 
@@ -1224,7 +1224,7 @@ private struct ChecksumPass: Sendable {
         // come back with nothing in them, and it used to keep its row anyway.
         let rowsBefore = Self.meRowPaths(meRoots)
         meRoots = MEACurator.present(analysis, mfsNames: meMfsNames, efsNames: meEfsNames,
-                                     configPaths: meConfigPaths, pending: mePending)
+                                     configPaths: meConfigPaths, pending: mePending, in: Localization.appLanguage)
         if let path = meFocus, MEATree.node(at: path, in: meRoots) == nil {
             meFocus = nil
         }
@@ -1424,9 +1424,10 @@ private struct ChecksumPass: Sendable {
         }]
     }
 
-    /// A byte to show in the tree once the tree is shown: asked for before
-    /// the panel had read the file — a part opened on a search match.
-    private var pendingReveal: UInt64?
+    /// What to show once the tree is shown: asked for before the panel had
+    /// read the file — a part opened on a search match, a place an agent
+    /// annotated in a file whose panel has just come up.
+    private var pendingShow: (() -> Void)?
     /// True until the panel has shown its file for the first time: a reveal
     /// before then would land in rows about to be laid out again.
     private var isAwaitingFirstShow = true
@@ -1434,11 +1435,25 @@ private struct ChecksumPass: Sendable {
     /// The node holding the byte at `offset`, shown as soon as the tree is
     /// there — now, or once the panel has shown the file.
     public func showItem(at offset: UInt64) {
+        whenShown { [weak self] in self?.revealNode(at: offset) }
+    }
+
+    /// Goes to `match` as a click on its row in the Contents search results
+    /// does: the tree opened to its node, the node selected, and its bytes —
+    /// or the compressed section they came out of — selected in the dump.
+    /// For a place named from outside the results too: an agent's
+    /// annotation. Once the tree is shown.
+    public func goTo(_ match: UEFIContentSearch.Match) {
+        whenShown { [weak self] in self?.controller.goTo(match) }
+    }
+
+    /// `show` now, when the tree is shown, or as soon as it is.
+    private func whenShown(_ show: @escaping () -> Void) {
         guard let tree, tree.isReady, currentImage != nil, !isAwaitingFirstShow else {
-            pendingReveal = offset
+            pendingShow = show
             return
         }
-        revealNode(at: offset)
+        show()
     }
 
     /// Shows in the tree the innermost node holding the byte at `offset`,
@@ -1752,11 +1767,15 @@ private struct ChecksumPass: Sendable {
     /// bytes: the panel those bytes are read in — what the compressed section
     /// it is in decompresses to, or its LENV block decoded — with the match
     /// selected. A match in the file is already selected in the dump by a
-    /// click.
+    /// click. What an agent's annotation in such bytes opens as well.
     ///
     /// Public for the same reason as `openNodeInPanel(for:body:)`.
     // help: panel.uefi.content-search
     public func openContentMatch(_ match: UEFIContentSearch.Match) {
+        whenShown { [weak self] in self?.openMatchShown(match) }
+    }
+
+    private func openMatchShown(_ match: UEFIContentSearch.Match) {
         guard let tree, tree.isReady else { return }
         let image = tree.image()
         if match.decodedXORKey != nil, let id = match.node, let node = image.node(id),
@@ -1981,7 +2000,7 @@ private struct ChecksumPass: Sendable {
             case .none:
                 self.refuseComparison(L("Could not read the file."))
             case .failure(let problem):
-                self.refuseComparison(problem.message)
+                self.refuseComparison(problem.message.text)
             case .success(let (comparison, update)):
                 self.presentUpdateSheet(comparison, update, fileName: file.name)
             }
@@ -2011,7 +2030,7 @@ private struct ChecksumPass: Sendable {
     /// one in focus and brought into view.
     private func showUpdatePart(_ row: Int?, of comparison: UEFIUpdateComparison) {
         let zones = comparison.rows.enumerated().map { index, part in
-            Zone(id: "update.\(index)", name: part.nameText, range: part.range)
+            Zone(id: "update.\(index)", name: part.nameText.text, range: part.range)
         }
         let focus = row.map { "update.\($0)" }
         host.publish(ZoneMap(zones: zones, focus: focus))
@@ -2031,7 +2050,7 @@ private struct ChecksumPass: Sendable {
 
     private func writeFromUpdate(_ chosen: Set<Int>, _ comparison: UEFIUpdateComparison,
                                  _ update: BIOSGuardUpdate) {
-        guard let transaction = comparison.transaction(writing: chosen, from: update) else { return }
+        guard let transaction = comparison.transaction(writing: chosen, from: update, in: Localization.appLanguage) else { return }
         // The bytes that differed, as the sheet counted them — not the length
         // of the writes, which take a short gap between two differences along.
         let bytes = chosen.reduce(UInt64(0)) { $0 + comparison.rows[$1].differingBytes }

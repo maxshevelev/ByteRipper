@@ -26,7 +26,7 @@ final class FITProtectionTests: XCTestCase {
             image: nil,
             reader: ImageReader(bytes),
             addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count)),
-            protected: protected
+            protected: protected, in: .english
         )
     }
 
@@ -48,7 +48,7 @@ final class FITProtectionTests: XCTestCase {
 
         guard case .failure(let problem) = result else { return XCTFail("written into the IBB") }
         XCTAssertEqual(problem, .insideProtectedRange(name: ProtectedRange.Kind.ibb.name, at: 0x2180))
-        XCTAssertTrue(problem.message.contains("Nothing was changed"), problem.message)
+        XCTAssertTrue(problem.message.text(in: .english).contains("Nothing was changed"), problem.message.text(in: .english))
     }
 
     /// A range the firmware checks is the firmware's call: the edit is made,
@@ -92,7 +92,7 @@ final class FITProtectionTests: XCTestCase {
             image: nil,
             in: ImageReader(bytes),
             addressDiff: TestFIT.addressDiff(of: UInt64(bytes.count)),
-            protected: ranges(.ibb, 0x2000..<0x2100)
+            protected: ranges(.ibb, 0x2000..<0x2100), in: .english
         )
 
         guard case .failure(.insideProtectedRange) = result else {

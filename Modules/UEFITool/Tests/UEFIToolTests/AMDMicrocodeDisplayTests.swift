@@ -18,7 +18,7 @@ final class AMDMicrocodeDisplayTests: XCTestCase {
     func testTheDetailsSayWhatThePatchIs() throws {
         let (image, reader) = parsed()
         let patch = try XCTUnwrap(image.allNodes.first { $0.kind == .amdMicrocode })
-        let detail = UEFIDetail.build(for: patch, image: image, reader: reader)
+        let detail = UEFIDetail.build(for: patch, image: image, reader: reader, in: .english)
         let fields = Dictionary(detail.fields.map { ($0.label, $0.value) }, uniquingKeysWith: { first, _ in first })
 
         XCTAssertEqual(fields["Kind"], "AMD microcode")
