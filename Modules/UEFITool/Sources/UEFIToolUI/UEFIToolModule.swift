@@ -47,7 +47,7 @@ public enum UEFIToolModule: ToolModule {
     public static var agentQueries: [ToolAgentQuery] {
         UEFIAgentQueries.all(catalogue: agentCatalogue) + UEFIAgentChecksums.all + UEFIAgentRegions.all
             + UEFIAgentVariables.queries
-            + UEFIAgentNodeData.all + UEFIAgentContentSearch.all
+            + UEFIAgentNodeData.all
     }
 
     /// The GUID catalogue for an agent's `uefi_node`: the one the panel holds,

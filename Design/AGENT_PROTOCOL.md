@@ -152,7 +152,6 @@ Queries — answered with the panel open or not, from the pane's shared tree:
 | `uefi_find` | any of `name` (part, any case), `exact`, `guid`, `type` (the Type column); `limit` (50, ≤ 200); `after` | `matches[]` (node summary + `path`), `total`. Opens and decompresses everything once. Paged (`next`, `after`). |
 | `uefi_at` | `offset` | `offset`, `chain[]`, outermost first. |
 | `uefi_node_data` | `node`; `part` (`body`, `header`, `all`, `decompressed` — a compressed section's buffer); `offset` (0); `length` (256, ≤ 4096); `format`, `endian` as `read` | as `read`, at addresses inside the part; `node`, `part`, `size` (the whole part), `in_compressed`, `file_start` for a node of the file, `source` (`section`, `start`, `end`, `algorithm`, `nested`) for bytes a compressed section decompressed to, `cut_at_end_of_part`. |
-| `uefi_find_bytes` | `text` or `hex` (`??` for any byte); `encoding` (`ascii`, `utf16le`, `both`); `ignore_case`; `node` (default: the whole image); `limit` (100, ≤ 1000); `after` | `total`, `searched` (bytes, decompressed ones included), `buffers`, `unread[]` (compressed sections that would not open), `matches[]` in tree order: `encoding`, `node` (summary of the deepest node holding the match whole), `node_offset`, `volume` (`id`, `label`), `volume_offset`, `start`/`end` in the file — or `in_compressed`, `section`, `buffer_start`/`buffer_end` in what it decompresses to — and `decoded` (`XOR 77`) in a LENV block decoded. Opens every container under `node`; the panel's Contents search. Paged. |
 
 A node summary: `id`, `type`, `subtype`, `name`, `guid`, `start`/`end` — or
 `in_compressed: true` and `size` for a node inside a decompressed section —
@@ -276,17 +275,18 @@ refused.
 
 | Tool | Arguments | Answer |
 |---|---|---|
-| `find_bytes` | `text` (with `encoding` `ascii`·`utf16le`·`both`, default both; `ignore_case`) or `hex` (pairs, `??` for any byte); `overlapping`; `offset`, `end`; `node`; `context` (≤ 64); `limit` (100, ≤ 1000); `after` | `document`, `range`, `total`, `matches[]` (`start`, `end` — or `node_start`, `node_end` in a decompressed buffer — `encoding`, `where[]`, `preview` with `hex`, `text`, `before`), `next`, `truncated`. With `node`: `node`, `node_size`, `in_compressed`, `decompressed` (a compressed section searched in its buffer), `source`. Reads only. |
+| `find_bytes` | `text` (with `encoding` `ascii`·`utf16le`·`both`, default both; `ignore_case`) or `hex` (pairs, `??` for any byte); `overlapping`; `offset`, `end` (not with `node`); `node` (an id, or `root`); `context` (≤ 64); `limit` (100, ≤ 1000); `after` | Without `node`, the document as stored: `document`, `range`, `total`, `matches[]` (`start`, `end`, `encoding`, `where[]`, `preview` with `hex`, `text`, `before`), `next`, `truncated`. With `node`, what the tree holds at and under it — every compressed section decompressed (nested too), a BIOS Guard update assembled, an encoded LENV block decoded; compressed streams and encoded blocks as stored and an ME region not searched: `node` (summary, or `root`), `total`, `searched`, `buffers`, `unread[]`, `matches[]` in tree order (`encoding`, `node`, `node_offset`, `volume`, `volume_offset`, `start`/`end` — or `in_compressed`, `section`, `buffer_start`/`buffer_end` — `decoded`, `preview`). The UEFI panel's Contents search; the same search again is answered from the last. Reads only. |
 | `refs` | `guid`, or `address` (with `relative_to` `file`·`region`, `forms` of `bus`·`file`·`region`, default all); `scope` `all`·`raw`·`compressed`; `limit` (50, ≤ 200, on files); `after` | `document`, `scope`, `guid` or `forms` (each form's bytes; `bus64` too), `skipped_forms`, `total` (hits), `files` (groups), `refs[]`: `file` (or `node` for a hit in no FFS file), `name`, `guid`, `type`, `in_compressed`, `hits[]` (`form`, `section`, `section_offset`, `file_start` or `node_start` + `in_compressed`, `node` when deeper), `hits_total` past 20. Bus form: the BIOS region's end at 0x100000000. A hit inside a longer form's hit is left out; a form under 0x100 is skipped. |
 | `region_scan` | `node` (default: the BIOS region); `kinds` (Type or Subtype, default `Padding`, `Raw`); `min_size` (0x100); `limit` (50, ≤ 200); `after` | `total`, `under`, `nodes[]`: as `uefi_tree` (`node` for `id`), `size`, `inner` (a child covering it whole), `class` (`empty` ≥ 99 % 0x00/0xFF, `text` ≥ 50 % of the rest in strings, `code` by x86-64 markers or `MZ`, else `data`), `fill`, `first_nonfill`, `last_nonfill`, `strings[]` (≤ 5: `at`, `text` ≤ 64, `encoding`), `redacted` — no strings for an area named MSDM, Password or Key. A node its children divide gives way to them. |
 | `open_part` | `offset`, `length` — or `node` with `part` (`all`, `body`, `decompressed` — what a compressed section decompresses to, `decoded` — a Lenovo LENV block or one of its entries with the XOR removed); `name` | `document` (the part's id), `parent`, `name`, `source` (the parent's bytes it is linked to), `size`; with `node`, `node` and `in_compressed`. |
 
 `find_bytes` is the find bar's engine (`SearchEngine.matches`), given holes
 and overlapping matches; a match across two reads is found once. The file is
-searched as stored: a node inside a compressed section, or a compressed
-section itself, is searched in what the tree decompressed it to, never
-decompressed again. `where` is placed by the locators as `diff` places a run; a match in an area named MSDM, Password or Key gets `redacted: true` instead of a `preview`;
-in a buffer, it is the deepest node under the one searched. `open_part` opens
+searched as stored. With `node` it is the UEFI panel's Contents search
+(`UEFIContentSearch`), over the buffers the tree already decompressed, never
+decompressed again. `where` is placed by the locators as `diff` places a run;
+a match in an area named MSDM, Password or Key gets `redacted: true` instead
+of a `preview`. `open_part` opens
 as Open Zone (a range) and the UEFI panel's Open (a node) do: a fragment
 panel over the parent's tab, linked, its edits going back with Update in
 Parent — a decompressed node's compressed again. It is the route to look

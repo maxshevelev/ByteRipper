@@ -90,8 +90,9 @@ public enum UEFIContentSearch {
         var isOwn = false
     }
 
-    /// How many bytes an excerpt shows either side of a match — as many as
-    /// the dump's own search results show.
+    /// How many bytes an excerpt shows either side of a match by default — as
+    /// many as the dump's own search results show; `run(padding:)` asks for
+    /// another number.
     nonisolated public static let excerptPadding: UInt64 = 8
 
     /// The most matches a search keeps; it goes on counting past them.
@@ -105,12 +106,14 @@ public enum UEFIContentSearch {
         var patterns: [MaskedPattern]
         var overlapping: Bool
         var keep: Int
+        var padding: UInt64
         var result: Result
 
         func answers(_ tree: LazyUEFITree, _ start: NodeID, _ patterns: [MaskedPattern],
-                     _ overlapping: Bool, _ keep: Int) -> Bool {
+                     _ overlapping: Bool, _ keep: Int, _ padding: UInt64) -> Bool {
             self.tree === tree && generation == tree.generation && self.start == start
                 && self.patterns == patterns && self.overlapping == overlapping && self.keep >= keep
+                && self.padding == padding
         }
     }
 
@@ -119,8 +122,9 @@ public enum UEFIContentSearch {
     /// Whether a search of these is answered from the last one, without
     /// reading anything — for a test.
     static func isRemembered(_ patterns: [MaskedPattern], from start: NodeID, in tree: LazyUEFITree,
-                             overlapping: Bool = false, keep: Int = defaultKeep) -> Bool {
-        last?.answers(tree, start, patterns, overlapping, keep) == true
+                             overlapping: Bool = false, keep: Int = defaultKeep,
+                             padding: UInt64 = excerptPadding) -> Bool {
+        last?.answers(tree, start, patterns, overlapping, keep, padding) == true
     }
 
     /// Whether `node` is an ME region, which the search leaves out.
@@ -139,9 +143,10 @@ public enum UEFIContentSearch {
         in tree: LazyUEFITree,
         overlapping: Bool = false,
         keep: Int = defaultKeep,
+        padding: UInt64 = excerptPadding,
         progress: @escaping @MainActor (Double) -> Void = { _ in }
     ) async throws -> Result {
-        if let last, last.answers(tree, start, patterns, overlapping, keep) {
+        if let last, last.answers(tree, start, patterns, overlapping, keep, padding) {
             progress(1)
             var result = last.result
             result.matches = Array(result.matches.prefix(keep))
@@ -171,7 +176,6 @@ public enum UEFIContentSearch {
             Task { @MainActor in progress(0.5 + share / 2) }
         }
         typealias Found = (scope: Int, pattern: Int, range: Range<UInt64>, excerpt: [UInt8], at: Range<Int>)
-        let padding = excerptPadding
         let scan = Task.detached(priority: .userInitiated) { () throws -> (found: [Found], count: Int) in
             var found: [Found] = []
             var count = 0
@@ -233,7 +237,7 @@ public enum UEFIContentSearch {
         // Remembered only when the bytes did not move under the search.
         if tree.generation == generation {
             last = Asked(tree: tree, generation: generation, start: start, patterns: patterns,
-                         overlapping: overlapping, keep: keep, result: result)
+                         overlapping: overlapping, keep: keep, padding: padding, result: result)
         }
         return result
     }

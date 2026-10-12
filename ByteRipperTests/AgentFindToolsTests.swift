@@ -141,38 +141,18 @@ final class AgentFindToolsTests: XCTestCase {
 
     // MARK: - Inside a compressed section
 
-    /// Text only the decompressed bytes hold: not found in the file, found in
-    /// the section — and in the node inside it — at offsets inside, and read
-    /// there by `uefi_node_data`.
-    func testACompressedSectionIsSearchedInWhatItDecompressesTo() async throws {
+    /// Text only the decompressed bytes hold: not found in the file's bytes,
+    /// found with `node` — from the section, from the file above it, from the
+    /// whole image — at its place in what the section decompresses to, and
+    /// read there by `uefi_node_data`.
+    func testANodeIsSearchedInWhatItHoldsDecompressed() async throws {
         try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
         let inFile = try await client.answer("find_bytes", ["text": "GH51G"])
         XCTAssertEqual(inFile["total"], 0, "the file holds it compressed")
 
-        let tree = try await client.answer("uefi_find", ["type": "Section", "limit": 50])
-        let section = try XCTUnwrap(tree["matches"]?.arrayValue?.first { $0["subtype"] == "Compressed section" }?["id"]?.stringValue,
-                                    "\(tree)")
-        let found = try await client.answer("find_bytes", ["node": .string(section), "text": "GH51G"])
-        XCTAssertEqual(found["decompressed"], true)
-        XCTAssertEqual(found["total"], 1)
-        let match = try XCTUnwrap(found["matches"]?.arrayValue?.first)
-        XCTAssertNil(match["start"], "no file address")
-        let at = try XCTUnwrap(match["node_start"]?.stringValue)
-        XCTAssertEqual(match["where"]?.arrayValue?.first?["name"], "Raw")
-        XCTAssertNotNil(found["source"]?["start"])
-
-        let read = try await client.answer("uefi_node_data", ["node": .string(section), "part": "decompressed",
-                                                             "offset": .string(at), "length": 5, "format": "ascii"])
-        XCTAssertEqual(read["text"], "GH51G")
-        XCTAssertEqual(read["in_compressed"], true)
-    }
-
-    /// The whole tree searched at once: the text only a compressed section
-    /// holds is found without naming the section, placed at the node inside
-    /// it and in its volume, and read there by `uefi_node_data`.
-    func testTheTreesContentsAreSearchedWithoutNamingTheSection() async throws {
-        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
-        let found = try await client.answer("uefi_find_bytes", ["text": "gh51g", "ignore_case": true])
+        let found = try await client.answer("find_bytes", ["node": "root", "text": "gh51g", "ignore_case": true,
+                                                           "context": 4])
+        XCTAssertEqual(found["node"], "root")
         XCTAssertEqual(found["total"], 1, "\(found)")
         XCTAssertEqual(found["buffers"], 1)
         let match = try XCTUnwrap(found["matches"]?.arrayValue?.first)
@@ -181,17 +161,29 @@ final class AgentFindToolsTests: XCTestCase {
         XCTAssertNil(match["start"], "no file address")
         XCTAssertEqual(match["node"]?["name"], "Raw")
         XCTAssertNotNil(match["volume"]?["id"])
+        XCTAssertEqual(match["preview"]?["before"], 4, "\(match)")
+        XCTAssertEqual(match["preview"]?["text"], "DEL-GH51G....", "\(match)")
         let section = try XCTUnwrap(match["section"]?.stringValue)
         let at = try XCTUnwrap(match["buffer_start"]?.stringValue)
         let read = try await client.answer("uefi_node_data", ["node": .string(section), "part": "decompressed",
                                                              "offset": .string(at), "length": 5, "format": "ascii"])
         XCTAssertEqual(read["text"], "GH51G")
+        XCTAssertEqual(read["in_compressed"], true)
 
-        let underFile = try await client.answer("uefi_find_bytes", ["hex": "47 48 35 31 47", "node": "0.0"])
+        let fromSection = try await client.answer("find_bytes", ["node": .string(section), "hex": "47 48 35 31 47"])
+        XCTAssertEqual(fromSection["total"], 1, "from the section")
+        let underFile = try await client.answer("find_bytes", ["node": "0.0", "hex": "47 48 ?? 31 47"])
         XCTAssertEqual(underFile["node"]?["type"], "File", "says which node it searched: \(underFile)")
         XCTAssertEqual(underFile["total"], 1, "the section under the file is searched too")
-        let bad = try await client.call("uefi_find_bytes", ["text": "x", "node": "9.9"])
+
+        let bad = try await client.call("find_bytes", ["text": "x", "node": "9.9"])
         XCTAssertTrue(bad.answer.stringValue?.hasPrefix("No node 9.9") == true, "\(bad.answer)")
+        let ranged = try await client.call("find_bytes", ["text": "x", "node": "root", "offset": "0x10"])
+        XCTAssertTrue(ranged.isError, "a range is the document's, not the tree's")
+    }
+
+    func testTheOldTreeSearchToolIsGone() {
+        XCTAssertFalse(service.server.tools.map(\.name).contains("uefi_find_bytes"), "find_bytes with node does it")
     }
 
     /// A node of the file reads as `read` reads the same bytes.

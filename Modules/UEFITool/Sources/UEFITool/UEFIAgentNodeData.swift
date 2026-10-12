@@ -133,7 +133,7 @@ public enum UEFIAgentNodeData {
             part `decompressed` is what it decompresses to — the buffer its children are in. `size` is the whole part's, to read \
             on by `offset`; at most 4096 bytes at a time. A node of the file gives `file_start` as well: \
             its bytes are the document's at that address, unsaved edits included, and `read`, `reveal` \
-            and `write` work there. `find_bytes` with `node` searches the same bytes.
+            and `write` work there. `find_bytes` with `node` searches the node and everything decompressed or decoded under it.
             """,
         properties: [
             "node": AgentSchema.string("The node's id, e.g. \"0.2.5.0.0.1.0.530.2\"."),

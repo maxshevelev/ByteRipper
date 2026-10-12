@@ -200,8 +200,8 @@ this one can.
   click on a match behind a codec opens its buffer (or its LENV block decoded)
   as a fragment panel with the match selected, raising one already open
   (`MainViewController.openPart(…, selecting:)`).
-- **For an agent** the same search is `uefi_find_bytes`
-  (`UEFIAgentContentSearch`).
+- **For an agent** the same search is `find_bytes` with `node` (`root` for
+  the whole image); without it, `find_bytes` searches the file as stored.
 
 ## Where the decisions live
 

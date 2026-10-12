@@ -135,7 +135,7 @@ public enum UEFIAgentRegions {
 
     /// Whether the node or an area holding it is named for a secret in the
     /// flash map: its strings are never answered.
-    static func isSecret(_ node: UEFINode, in tree: LazyUEFITree) -> Bool {
+    public static func isSecret(_ node: UEFINode, in tree: LazyUEFITree) -> Bool {
         (1...max(1, node.id.path.count)).contains { length in
             guard let holder = tree.node(NodeID(Array(node.id.path.prefix(length)))) else { return false }
             return isSecretName(UEFITreeDisplay.ownName(of: holder) ?? holder.name)
