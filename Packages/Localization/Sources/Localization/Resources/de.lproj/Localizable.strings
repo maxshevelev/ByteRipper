@@ -1450,6 +1450,9 @@
 "Open Decoded Block" = "Dekodierten Block öffnen";
 "The two LENV blocks hold different values for: %1$@. The firmware reads the block in use." = "Die beiden LENV-Blöcke enthalten abweichende Werte für: %1$@. Die Firmware liest den aktiven Block.";
 "These bytes were worked out of the file and cannot be put back into it." = "Diese Bytes wurden aus der Datei umgeformt und lassen sich nicht zurückschreiben.";
+"The PSP may not accept “%1$@” after the change" = "Das geänderte Image „%1$@“ wird vom PSP möglicherweise nicht angenommen";
+"“%1$@” is the BIOS image the PSP decompresses itself at start-up. ByteRipper can compress it again, but the properties of the PSP's decompressor and the way the PSP checks the integrity of the original zlib block are not known. It is therefore not known whether the PSP will accept the changed image. If it does not, the board may not start.\n\nUpdate Anyway compresses the image again and writes it in place of the original. Keep a copy of the original dump." = "„%1$@“ ist das BIOS-Image, das der PSP beim Einschalten selbst entpackt. Es lässt sich erneut komprimieren; wie sich der Dekompressor des PSP verhält und auf welche Weise der PSP die Integrität des ursprünglichen zlib-Blocks prüft, ist jedoch nicht bekannt. Ob der PSP das geänderte Image annimmt, lässt sich daher nicht sicher sagen. Nimmt er es nicht an, startet die Platine unter Umständen nicht mehr.\n\n„Trotzdem aktualisieren“ komprimiert das Image erneut und schreibt es an die Stelle des ursprünglichen. Sichern Sie vorher eine Kopie des Original-Dumps.";
+"Update Anyway" = "Trotzdem aktualisieren";
 "This is the text the variable unpacks to, and nothing here packs it again." = "Dies ist der Text, zu dem sich die Variable entpackt; das Programm kann ihn nicht wieder packen.";
 "part badge|Decompressed" = "Entpackt";
 "part badge|Read-only" = "Nur lesbar";

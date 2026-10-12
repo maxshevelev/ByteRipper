@@ -98,15 +98,20 @@ public struct PartParent: Sendable {
     public var partName: String
     /// Says what a slow `encode` is doing now, and how far it has got.
     public var progress: (@Sendable (_ phase: String?, _ fraction: Double?) -> Void)?
+    /// The overrides the reader has chosen (`PartOverride.token`): each one a
+    /// refusal the codec goes on past this time.
+    public var overrides: Set<String>
 
     public init(
         content: any PartReader, source: Range<UInt64>, name: String, partName: String = "",
+        overrides: Set<String> = [],
         progress: (@Sendable (_ phase: String?, _ fraction: Double?) -> Void)? = nil
     ) {
         self.content = content
         self.source = source
         self.name = name
         self.partName = partName
+        self.overrides = overrides
         self.progress = progress
     }
 
@@ -153,10 +158,14 @@ public struct PartUpdate: Equatable, Sendable {
 public struct PartRefusal: Error, Equatable, Sendable {
     public var title: LocalizedText
     public var message: LocalizedText
+    /// Set when the refusal is the codec's caution rather than an
+    /// impossibility: the reader may weigh the risk and go on.
+    public var override: PartOverride?
 
-    public init(title: LocalizedText, message: LocalizedText) {
+    public init(title: LocalizedText, message: LocalizedText, override: PartOverride? = nil) {
         self.title = title
         self.message = message
+        self.override = override
     }
 
     /// The part is not the source's length, and its bytes go back only at
@@ -170,6 +179,19 @@ public struct PartRefusal: Error, Equatable, Sendable {
                        partName, "0x" + String(source, radix: 16, uppercase: true), parentName,
                        "0x" + String(now, radix: 16, uppercase: true))
         )
+    }
+}
+
+/// What going on past a cautious refusal takes: the button that offers it,
+/// and the token that, in `PartParent.overrides`, tells the codec it was
+/// chosen.
+public struct PartOverride: Equatable, Sendable {
+    public var button: LocalizedText
+    public var token: String
+
+    public init(button: LocalizedText, token: String) {
+        self.button = button
+        self.token = token
     }
 }
 

@@ -1,4 +1,4 @@
-@source-sha c601b2953acf53df887dd1ec23a0e2f243e51417404c240c1beb64e027562f1e
+@source-sha 4e03289f3d6b503e7980c006ae00969d553639b906edfd0adbf542fdb9bb00a2
 @term flash-descriptor
 @name Flash Descriptor
 @short Die ersten `0x1000` Bytes eines Intel-Flash-Images: die Karte des Chips.
@@ -259,7 +259,7 @@ Auf einer AMD-Platine gehört der erste Teil des Flash-Speichers dem Platform Se
 
 Das [[topic:tool-uefi|UEFI-Werkzeug]] zeigt die EFS, jedes Verzeichnis und jedes Stück Firmware, das ein Verzeichnis aufführt, als eigene Zeile, benannt nach den Typnamen von AMD, wie PSPTool und coreboot sie verwenden — `PSP_FW_BOOT_LOADER`, `APCB`, `PMU_CODE`, `MICROCODE_PATCH` —, mit der Instanz, wo es einen Typ mehrfach gibt. Die Details eines Verzeichnisses führen seine Einträge auf: Typ, Größe, Adresse und Merkmale; ein Klick auf einen Eintrag führt zu seiner Zeile. Die Details eines Firmware-Stücks nennen die Verzeichnisse, die es aufführen. Ein Verzeichnis trägt eine Fletcher-32-Prüfsumme, die das Werkzeug prüft wie die eines Volumes; eine falsche wird markiert, und **Fix Checksum** schreibt den richtigen Wert.
 
-Manche Platinen legen das BIOS-Image in der eigenen Form des PSP komprimiert ab: ein zlib-Datenstrom hinter einem 256 Byte langen Header, ohne FFS-Struktur darum. Seine Zeile lässt sich wie eine komprimierte Sektion aufklappen und zeigt das Volume, zu dem es sich entpackt. Der Inhalt lässt sich lesen und als Bereich öffnen, aber nicht mit **Update in Parent** zurückschreiben: Was der PSP anstelle des ursprünglichen Datenstroms annimmt, ist nicht bekannt.
+Manche Platinen legen das BIOS-Image in der eigenen Form des PSP komprimiert ab: ein zlib-Datenstrom hinter einem 256 Byte langen Header, ohne FFS-Struktur darum. Seine Zeile lässt sich wie eine komprimierte Sektion aufklappen und zeigt das Volume, zu dem es sich entpackt. Der Inhalt lässt sich lesen, als Bereich öffnen und mit **In der Quelle aktualisieren** zurückschreiben; das Image wird dabei erneut komprimiert. Ob der PSP das Ergebnis annimmt, lässt sich nicht sicher sagen: Das Verhalten seines Dekompressors und die Art, wie er die Integrität des ursprünglichen zlib-Blocks prüft, sind nicht dokumentiert. Das Programm warnt deshalb zuerst und schreibt erst nach **Trotzdem aktualisieren**.
 
 Nicht geprüft werden die Signaturen der PSP-Firmware — die Schlüssel gehören AMD — und der Inhalt der einzelnen Stücke über Typ und Größe hinaus. AMD dokumentiert die Typnummern nur zum Teil; einen Typ, den das Werkzeug nicht kennt, zeigt es mit seiner Nummer. Firmware, die in einem FFS-Volume oder über dessen Grenze hinweg liegt, behält die Zeilen des Volumes; ihr Eintrag im Verzeichnis führt dorthin. Für UEFITool ist all das Padding, und die Spalte „Typ“ weist es so aus.
 

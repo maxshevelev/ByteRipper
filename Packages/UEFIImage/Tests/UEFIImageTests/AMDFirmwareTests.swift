@@ -238,15 +238,50 @@ final class AMDFirmwareTests: XCTestCase {
         XCTAssertEqual(reader.bytes(reader.all), fixture.volume)
     }
 
-    /// Nothing compresses it again the way the PSP reads it, so a change
-    /// inside is refused, by name.
-    func testAChangeInsideTheInflatedImageIsRefused() throws {
+    /// Whether the PSP takes a new stream is not known, so a change inside is
+    /// refused by name — as a caution the reader can go on past.
+    func testAChangeInsideTheInflatedImageIsACaution() throws {
         let fixture = try fixture()
         let space = ByteSpace.file.inside(sectionAt: 0x5_0000)
         guard case .failure(let refusal) = UEFIRebuild.plan(fixture.volume, at: .init(space: space),
                                                              in: fixture.bytes) else {
-            return XCTFail("a change inside the PSP's BIOS image went through")
+            return XCTFail("a change inside the PSP's BIOS image went through unasked")
         }
-        XCTAssertTrue(refusal.message.contains("the PSP inflates"), refusal.message)
+        XCTAssertEqual(refusal.caution, .pspBIOSImage(name: "BIOS"))
+        XCTAssertTrue(refusal.message.contains("the PSP decompresses itself"), refusal.message)
+    }
+
+    /// Gone on past, the image is compressed again behind AMD's header, which
+    /// gives the new stream's length, and reads back as the bytes put in.
+    func testAChangeInsideTheInflatedImageGoesBackWhenAccepted() throws {
+        let fixture = try fixture()
+        let space = ByteSpace.file.inside(sectionAt: 0x5_0000)
+        var volume = fixture.volume
+        let at = try XCTUnwrap(volume.lastIndex(of: 0x5A))
+        volume[at] = 0xA5
+        let plan = try UEFIRebuild.plan(volume, at: .init(space: space), in: fixture.bytes,
+                                        accepting: [.pspBIOSImage(name: "BIOS")]).get()
+        XCTAssertTrue(plan.warnings.contains { $0.contains("Whether the PSP accepts it is not known") }, "\(plan.warnings)")
+        var file = fixture.bytes
+        file.replaceSubrange(Int(plan.offset)..<(Int(plan.offset) + plan.bytes.count), with: plan.bytes)
+        let reader = try XCTUnwrap(SpaceReaders(file: ImageReader(file)).reader(for: space))
+        XCTAssertEqual(reader.bytes(reader.all), volume)
+        let bios = try XCTUnwrap(UEFIParser.parse(file).allNodes.first { $0.kind == .amdFirmwareEntry && $0.name == "BIOS" })
+        let stream = Int(file[0x5_0014]) | Int(file[0x5_0015]) << 8 | Int(file[0x5_0016]) << 16 | Int(file[0x5_0017]) << 24
+        XCTAssertEqual(bios.range, 0x5_0000..<UInt64(0x5_0100 + stream))
+    }
+
+    /// The directory gives the size the image inflates to and is not
+    /// rewritten: another size is refused outright, not offered.
+    func testAnInflatedImageOfAnotherSizeIsRefused() throws {
+        let fixture = try fixture()
+        let space = ByteSpace.file.inside(sectionAt: 0x5_0000)
+        guard case .failure(let refusal) = UEFIRebuild.plan(fixture.volume + [0xFF], at: .init(space: space),
+                                                             in: fixture.bytes,
+                                                             accepting: [.pspBIOSImage(name: "BIOS")]) else {
+            return XCTFail("an image of another size went back")
+        }
+        XCTAssertNil(refusal.caution)
+        XCTAssertTrue(refusal.message.contains("has to keep its size"), refusal.message)
     }
 }

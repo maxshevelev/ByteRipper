@@ -2372,8 +2372,11 @@ final class MainViewController: NSViewController {
     /// laid out around it. A quick codec is written on the spot; a slow one
     /// works off the main actor behind a sheet, and the task is handed back for
     /// whoever has to wait on it.
+    ///
+    /// A refusal that is the codec's caution (`PartRefusal.override`) offers
+    /// to go on; chosen, the update runs again with `overrides` holding it.
     @discardableResult
-    func performUpdateInParent(of pane: PaneViewModel) -> Task<Void, Never>? {
+    func performUpdateInParent(of pane: PaneViewModel, overrides: Set<String> = []) -> Task<Void, Never>? {
         guard let origin = pane.origin, origin.hasChanges(in: pane) else { return nil }
         let stepName = Self.updateStepName(of: pane)
         switch origin.planUpdate(from: pane) {
@@ -2387,7 +2390,11 @@ final class MainViewController: NSViewController {
             else { return nil }
             if confirm, !confirmOverwritingChangedSource(of: origin) { return nil }
             let partParent = PartParent(content: content, source: origin.sourceRange,
-                                        name: origin.parentName, partName: origin.partName)
+                                        name: origin.parentName, partName: origin.partName, overrides: overrides)
+            let retry: @MainActor (String) -> Void = { [weak self, weak pane] token in
+                guard let self, let pane else { return }
+                self.performUpdateInParent(of: pane, overrides: overrides.union([token]))
+            }
 
             guard !codec.isImmediate else {
                 do {
@@ -2395,7 +2402,7 @@ final class MainViewController: NSViewController {
                     finishUpdate(update, from: pane, into: parent, for: origin, content: content,
                                  tabBytes: bytes, named: stepName, on: nil)
                 } catch {
-                    presentRefusal(error, of: origin, on: nil)
+                    presentRefusal(error, of: origin, on: nil, retry: retry)
                 }
                 return nil
             }
@@ -2404,7 +2411,8 @@ final class MainViewController: NSViewController {
             let handle = UpdateHandle()
             let operation = beginUpdateOperation(in: parent, for: origin, handle: handle)
             let progressing = PartParent(content: content, source: origin.sourceRange,
-                                         name: origin.parentName, partName: origin.partName) { phase, fraction in
+                                         name: origin.parentName, partName: origin.partName,
+                                         overrides: overrides) { phase, fraction in
                 if let phase { operation.rename(phase) }
                 if let fraction { operation.report(fraction) }
             }
@@ -2423,7 +2431,7 @@ final class MainViewController: NSViewController {
                     ?? self).view.window
                 switch result {
                 case .failure(let error):
-                    self.presentRefusal(error, of: origin, on: sheetWindow)
+                    self.presentRefusal(error, of: origin, on: sheetWindow, retry: retry)
                 case .success(let update):
                     // Worked out over the bytes as they were when asked.
                     guard parent.contentGeneration == generation, parent.document === document else {
@@ -2513,8 +2521,13 @@ final class MainViewController: NSViewController {
     /// does, the answers handed back instead of shown. `overwritingChangedSource`
     /// is the answer to the one question the command asks. The parent's tab is
     /// brought forward to show where the bytes landed, as the command does.
+    ///
+    /// `updatingAnyway` is the answer to the codec's caution, when it has one
+    /// (`PartRefusal.override`): the update goes on past it, as Update Anyway
+    /// does. Without it the caution comes back as a refusal that offers it.
     func updateInParentQuietly(of pane: PaneViewModel,
-                               overwritingChangedSource: Bool) async -> QuietUpdateOutcome {
+                               overwritingChangedSource: Bool,
+                               updatingAnyway: Bool = false) async -> QuietUpdateOutcome {
         guard let origin = pane.origin, origin.hasChanges(in: pane) else { return .unchanged }
         switch origin.planUpdate(from: pane) {
         case .refused(let refusal):
@@ -2528,17 +2541,27 @@ final class MainViewController: NSViewController {
                                origin.parentName, origin.partName)))
             }
             if confirm, !overwritingChangedSource { return .sourceChanged }
-            let partParent = PartParent(content: content, source: origin.sourceRange,
-                                        name: origin.parentName, partName: origin.partName)
             let generation = parent.contentGeneration
-            let result: Result<PartUpdate, Error>
-            if codec.isImmediate {
-                result = Result { try codec.encode(bytes, into: partParent) }
-            } else {
-                result = await Task.detached(priority: .userInitiated) {
-                    Result { try codec.encode(bytes, into: partParent) }
-                }.value
-            }
+            var overrides: Set<String> = []
+            var result: Result<PartUpdate, Error>
+            repeat {
+                let partParent = PartParent(content: content, source: origin.sourceRange,
+                                            name: origin.parentName, partName: origin.partName,
+                                            overrides: overrides)
+                if codec.isImmediate {
+                    result = Result { try codec.encode(bytes, into: partParent) }
+                } else {
+                    result = await Task.detached(priority: .userInitiated) {
+                        Result { try codec.encode(bytes, into: partParent) }
+                    }.value
+                }
+                // Each caution the codec raises is gone past once, as Update
+                // Anyway goes past it; one it raises again is its refusal.
+                guard updatingAnyway, case .failure(let error) = result,
+                      let token = (error as? PartRefusal)?.override?.token, !overrides.contains(token)
+                else { break }
+                overrides.insert(token)
+            } while true
             switch result {
             case .failure(let error):
                 return .refused(error as? PartRefusal ?? PartRefusal(
@@ -2568,9 +2591,39 @@ final class MainViewController: NSViewController {
         L("Update from %1$@", in: Localization.appLanguage, pane.status.fileName)
     }
 
-    /// Why a part did not go back, in the codec's words.
-    private func presentRefusal(_ error: Error, of origin: DocumentOrigin, on window: NSWindow?) {
+    /// Why a part did not go back, in the codec's words — and, when it is the
+    /// codec's caution rather than an impossibility, the choice to go on,
+    /// which `retry` makes with the override's token.
+    private func presentRefusal(_ error: Error, of origin: DocumentOrigin, on window: NSWindow?,
+                                retry: @escaping @MainActor (String) -> Void = { _ in }) {
         let refusal = error as? PartRefusal
+        if let refusal, let override = refusal.override {
+            lastAlertTitle = refusal.title.text
+            lastAlertMessage = refusal.message.text
+            lastAlertOutcome = .problem
+            let alert = NSAlert()
+            alert.messageText = refusal.title.text
+            alert.informativeText = refusal.message.text
+            alert.alertStyle = .warning
+            alert.icon = AlertOutcome.problem.icon
+            alert.addButton(withTitle: L("Cancel"))
+            alert.addButton(withTitle: override.button.text)
+            // Going on is the risk, so it is not the default.
+            alert.buttons[1].hasDestructiveAction = true
+            let answer: (NSApplication.ModalResponse) -> Void = { response in
+                guard response == .alertSecondButtonReturn else { return }
+                MainActor.assumeIsolated { retry(override.token) }
+            }
+            if let updateConfirm {
+                answer(updateConfirm(alert))
+            } else if !Self.isRunningTests, let window = window ?? view.window {
+                alert.beginSheetModal(for: window, completionHandler: answer)
+            } else {
+                // Cancel in tests.
+                answer(Self.presentModal(alert, defaultInTest: .alertFirstButtonReturn))
+            }
+            return
+        }
         presentSheetAlert(title: refusal?.title.text ?? L("“%1$@” cannot be put back", origin.partName),
                           message: refusal?.message.text ?? "\(error)", on: window ?? view.window,
                           outcome: .problem)

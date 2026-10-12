@@ -54,10 +54,22 @@ public enum UEFIRebuild {
     }
 
     public struct Refusal: Error, Equatable, Sendable {
-        public var message: String
+        /// A refusal that is the planner's caution, not a fact about the
+        /// bytes: the change can be made, and what it risks is the reader's
+        /// to weigh. A plan asked again with the matching `accepting` goes on.
+        public enum Caution: Hashable, Sendable {
+            /// The BIOS image the PSP inflates itself, put back as a new zlib
+            /// stream the PSP's decompressor and checks have not been shown to
+            /// take. The name is the entry's.
+            case pspBIOSImage(name: String)
+        }
 
-        public init(_ message: String) {
+        public var message: String
+        public var caution: Caution?
+
+        public init(_ message: String, caution: Caution? = nil) {
             self.message = message
+            self.caution = caution
         }
     }
 
@@ -101,6 +113,8 @@ public enum UEFIRebuild {
     ///     fit, it is done again at the maximum level before it is refused.
     ///     Off, the normal level is all there is — for a test that has to see
     ///     where the normal level stops.
+    ///   - accepting: the cautions the reader has weighed and goes on past
+    ///     (`Refusal.caution`). Empty, each one is a refusal that names itself.
     ///   - progress: called on the planning thread with what is being done and
     ///     how far the whole plan has got — for a status bar, since compressing
     ///     a DXE volume again takes seconds.
@@ -112,6 +126,7 @@ public enum UEFIRebuild {
         protected given: [ProtectedRange]? = nil,
         readsProtectedRanges: Bool = false,
         maximumCompressionFallback: Bool = true,
+        accepting: Set<Refusal.Caution> = [],
         progress: (@Sendable (Progress) -> Void)? = nil
     ) -> Result<Plan, Refusal> {
         let report = Reporter(progress)
@@ -127,19 +142,22 @@ public enum UEFIRebuild {
         var compressions = 0
         if case .decompressed(let chain) = target.space { compressions = chain.count }
         var context = Context(file: file, image: image, limits: limits,
-                              report: report, compressions: compressions, effort: .normal)
+                              report: report, compressions: compressions, effort: .normal,
+                              accepting: accepting)
         do {
             let rebuilt: [UInt8]
             do {
                 rebuilt = try context.put(replacement, at: target)
-            } catch let refusal as Refusal where compressions > 0 && maximumCompressionFallback {
+            } catch let refusal as Refusal where compressions > 0 && maximumCompressionFallback
+                && refusal.caution == nil {
                 // Compressed at the normal level, the part did not go back —
                 // most often because the stream is longer than the room it had.
                 // Only then is it worth the time the maximum level takes: the
                 // whole layout again, every section on the way compressed as
                 // small as the encoder can make it.
                 context = Context(file: file, image: image, limits: limits,
-                                  report: report, compressions: compressions, effort: .maximum)
+                                  report: report, compressions: compressions, effort: .maximum,
+                                  accepting: accepting)
                 do {
                     rebuilt = try context.put(replacement, at: target)
                 } catch {
@@ -332,9 +350,12 @@ public enum UEFIRebuild {
         private var compressed = 0
         /// How hard every section on the way is compressed.
         let effort: FirmwareCompression.Effort
+        /// The cautions the caller has weighed and goes on past.
+        let accepting: Set<Refusal.Caution>
 
         init(file: [UInt8], image: UEFIImage, limits: UEFIParser.Limits, report: Reporter, compressions: Int,
-             effort: FirmwareCompression.Effort) {
+             effort: FirmwareCompression.Effort, accepting: Set<Refusal.Caution> = []) {
+            self.accepting = accepting
             self.file = file
             self.image = image
             self.limits = limits
@@ -374,7 +395,20 @@ public enum UEFIRebuild {
                 throw Refusal("“\(section.name)” is a BIOS region assembled from signed blocks. It is read here, and not written back: the blocks are the vendor's, and their signatures cannot be made again.")
             }
             if section.kind == .amdFirmwareEntry {
-                throw Refusal("“\(section.name)” is the BIOS image the PSP inflates. It is read here, and not compressed again: what the PSP accepts in its place is not known.")
+                // The BIOS directory gives the size the image inflates to, and
+                // nothing here rewrites the directory.
+                guard newSpace.count == original.count else {
+                    throw Refusal(
+                        "“\(section.name)” would inflate to 0x\(hex(UInt64(newSpace.count))) bytes, and the BIOS directory gives 0x\(hex(UInt64(original.count))). The directory is not rewritten, so the image has to keep its size."
+                    )
+                }
+                let caution = Refusal.Caution.pspBIOSImage(name: section.name)
+                guard accepting.contains(caution) else {
+                    throw Refusal(
+                        "“\(section.name)” is the BIOS image the PSP decompresses itself. It can be compressed again, but the properties of the PSP's decompressor and the way the PSP checks the integrity of the original zlib block are not known, so it is not known for certain whether the PSP will accept the changed image.",
+                        caution: caution)
+                }
+                warnings.append("“\(section.name)” was compressed again as a new zlib stream. Whether the PSP accepts it is not known: its decompressor and the check it makes of the original block are not documented.")
             }
             let parentBytes = try bytes(of: section.space)
             let rebuilt = try recompressed(section, holding: newSpace, parentBytes: parentBytes)
@@ -883,7 +917,7 @@ public enum UEFIRebuild {
                 throw Refusal("“\(section.name)” could not be compressed again: \(error).")
             }
             var header = Array(parentBytes[Int(section.header.lowerBound)..<Int(located.body.lowerBound)])
-            if section.subtype == Section.compression {
+            if section.kind == .section, section.subtype == Section.compression {
                 let common = Bytes.u24(header, 0) == Section.extendedSizeMarker ? 8 : 4
                 Bytes.put32(UInt32(buffer.count), at: common, in: &header)
             }
@@ -893,6 +927,11 @@ public enum UEFIRebuild {
                 let amdHeader = header.count - Int(CompressedSection.amdZlibHeaderSize)
                 Bytes.put32(UInt32(stream.count),
                             at: amdHeader + Int(CompressedSection.amdZlibCompressedSizeOffset), in: &header)
+            }
+            if section.kind == .amdFirmwareEntry {
+                // AMD's header, put right above, gives the stream's length; a
+                // longer one takes the empty bytes after it, as any node does.
+                return header + stream
             }
             noteSigned(section)
             return try Bytes.sized(header + stream, name: section.name)

@@ -197,13 +197,20 @@ final class AgentEditTools {
                 gives the codec's reason); when the parent changed while the update was worked out (call \
                 again); and when the bytes the part came from have changed in the parent since it was \
                 opened — then ask the person, and call again with `overwrite_changed_source: true` only if \
-                they agree. Needs the person's permission — Settings ▸ Agent, "Let agents edit open files". \
+                they agree. A refusal that is a caution rather than an impossibility — a part of the BIOS \
+                image an AMD PSP decompresses itself, which the PSP may not accept once compressed again — \
+                says so: then explain the risk to the person, and call again with `update_anyway: true` only \
+                if they agree. Needs the person's permission — Settings ▸ Agent, "Let agents edit open files". \
                 Never saves.
                 """,
             inputSchema: AgentSchema.object([
                 "document": AgentSchema.string("The part's id from `documents`. Default: the focused one."),
                 "overwrite_changed_source": AgentSchema.boolean(
                     "Overwrite the parent's bytes even though they changed since the part was opened. "
+                    + "Only after the person said so. Default false."),
+                "update_anyway": AgentSchema.boolean(
+                    "Go on past the codec's caution, as the dialog's Update Anyway does — the PSP's BIOS image "
+                    + "compressed again although it is not known whether the PSP accepts it. "
                     + "Only after the person said so. Default false.")
             ]),
             annotations: .edit
@@ -229,14 +236,20 @@ final class AgentEditTools {
             throw AgentToolError("A dialog is open in that window. Ask the person to finish it first. Nothing was written.")
         }
         let overwrite = try arguments.bool("overwrite_changed_source", default: false)
+        let anyway = try arguments.bool("update_anyway", default: false)
         let sourceBefore = origin.sourceRange
         var answer: [String: JSONValue] = ["document": .string(place.id)]
         if let parentID { answer["parent"] = .string(parentID) }
-        switch await controller.updateInParentQuietly(of: place.pane, overwritingChangedSource: overwrite) {
+        switch await controller.updateInParentQuietly(of: place.pane, overwritingChangedSource: overwrite,
+                                                        updatingAnyway: anyway) {
         case .unchanged:
             answer["updated"] = false
             answer["note"] = .string("The part holds nothing \(parentName) has not got back already; nothing was written.")
             return .json(.object(answer))
+        case .refused(let refusal) where refusal.override != nil:
+            throw AgentToolError("\(refusal.title.text(in: .english)). \(refusal.message.text(in: .english)) "
+                + "Nothing was written. This is a caution, not an impossibility: explain the risk to the person; "
+                + "call again with `update_anyway: true` only if they agree.")
         case .refused(let refusal):
             throw AgentToolError("\(refusal.title.text(in: .english)). \(refusal.message.text(in: .english)) Nothing was written.")
         case .sourceChanged:

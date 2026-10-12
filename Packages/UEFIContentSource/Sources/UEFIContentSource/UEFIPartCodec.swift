@@ -71,11 +71,14 @@ public struct UEFIPartCodec: PartCodec {
     public func encode(_ part: [UInt8], into parent: PartParent) throws -> PartUpdate {
         let file = try parent.allBytes()
         let progress = parent.progress
-        let result = UEFIRebuild.plan(part, at: target, in: file, readsProtectedRanges: true) {
+        let accepting = Set(parent.overrides.compactMap(Self.caution(token:)))
+        let result = UEFIRebuild.plan(part, at: target, in: file, readsProtectedRanges: true,
+                                      accepting: accepting) {
             progress?($0.phase, $0.fraction)
         }
         switch result {
         case .failure(let refusal):
+            if let caution = refusal.caution { throw Self.refusal(for: caution) }
             throw PartRefusal(title: L("“%1$@” cannot be put back", parent.partName), message: .verbatim(refusal.message))
         case .success(let plan):
             return PartUpdate(
@@ -85,6 +88,33 @@ public struct UEFIPartCodec: PartCodec {
                     : plan.warnings.map(LocalizedText.verbatim)
             )
         }
+    }
+}
+
+extension UEFIPartCodec {
+    /// A caution of the planner, in the reader's language, with the choice
+    /// to go on past it.
+    // help: pane.header.update-in-parent.psp-bios
+    static func refusal(for caution: UEFIRebuild.Refusal.Caution) -> PartRefusal {
+        switch caution {
+        case .pspBIOSImage(let name):
+            return PartRefusal(
+                title: L("The PSP may not accept “%1$@” after the change", name),
+                message: L("“%1$@” is the BIOS image the PSP decompresses itself at start-up. ByteRipper can compress it again, but the properties of the PSP's decompressor and the way the PSP checks the integrity of the original zlib block are not known. It is therefore not known whether the PSP will accept the changed image. If it does not, the board may not start.\n\nUpdate Anyway compresses the image again and writes it in place of the original. Keep a copy of the original dump.", name),
+                override: PartOverride(button: L("Update Anyway"), token: token(for: caution)))
+        }
+    }
+
+    static func token(for caution: UEFIRebuild.Refusal.Caution) -> String {
+        switch caution {
+        case .pspBIOSImage(let name): return "psp-bios-image:" + name
+        }
+    }
+
+    static func caution(token: String) -> UEFIRebuild.Refusal.Caution? {
+        let prefix = "psp-bios-image:"
+        guard token.hasPrefix(prefix) else { return nil }
+        return .pspBIOSImage(name: String(token.dropFirst(prefix.count)))
     }
 }
 
