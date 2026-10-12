@@ -19,6 +19,43 @@ public enum UEFIRootLayout: Hashable, Sendable {
     /// A run of sections from offset 0: a file's body, one section, or what a
     /// compressed section decompressed to.
     case sections(ffsVersion: Int)
+    /// NVRAM stores from offset 0 — a VSS store, an FTW block, an FDC: what
+    /// an NVRAM volume's body is walked as. A store opened on its own has no
+    /// volume around it, and the signature scan an image gets does not look
+    /// for stores, so without this its variables read as padding.
+    case nvramStores
+    /// One node from offset 0, as the parent's tree knew it: what a part is
+    /// that the bytes alone do not say — a region the descriptor laid out, a
+    /// range the flash device map names (`SMBIOS Update`), a structure the
+    /// FIT points at, an NVAR variable. Read by the bytes' own reader where
+    /// one finds it; otherwise the node is the root it was in the parent,
+    /// over what the bytes hold.
+    case node(Node)
+
+    /// What the parent's tree knew of a node: enough to stand it up again as
+    /// a root over the same bytes.
+    public struct Node: Hashable, Sendable {
+        public var kind: UEFINodeKind
+        public var subtype: UInt8?
+        public var name: String
+        public var guid: EFIGUID?
+        /// How long its header is; the body is the rest.
+        public var headerLength: UInt64
+        public var isFixed: Bool
+        /// Nothing under it in the parent, and nothing to open: an ME region
+        /// is a format of its own, which a scan would only misread.
+        public var isLeaf: Bool
+
+        public init(_ node: UEFINode) {
+            kind = node.kind
+            subtype = node.subtype
+            name = node.name
+            guid = node.guid
+            headerLength = UInt64(node.header.count)
+            isFixed = node.isFixed
+            isLeaf = node.children.isEmpty && !node.isExpandable
+        }
+    }
 
     /// What a compressed section decompresses to: sections, by the FFSv3 rules
     /// every buffer is read with (`COMPRESSED_SECTIONS.md` §6.1).
@@ -37,8 +74,13 @@ public enum UEFIRootLayout: Hashable, Sendable {
             )
         case .section:
             return .sections(ffsVersion: ffsVersion(of: node, volume: enclosingVolume(of: node, in: image)))
-        default:
+        case .vssStore, .vss2Store, .ftwStore, .fdcStore, .sysFStore, .flashMapStore, .evsaStore, .cmdbStore:
+            return .nvramStores
+        case .padding, .freeSpace:
+            // Bytes nobody claimed: whatever they announce is all there is.
             return .image
+        default:
+            return .node(Node(node))
         }
     }
 

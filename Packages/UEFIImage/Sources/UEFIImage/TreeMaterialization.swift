@@ -72,6 +72,17 @@ enum TreeMaterialization {
                 reader.all, ffsVersion: ffsVersion, emptyByte: empty, depth: 0
             )
             return Result(nodes: nodes, diagnostics: parser.diagnostics)
+        case .nvramStores:
+            // Erased flash reads 0xFF: a volume of the other polarity holding
+            // an NVRAM area is not one any vendor ships.
+            let nodes = parser.walkNvramVolumeBody(reader.all, emptyByte: empty, depth: 0)
+            // Bytes that hold no store are not what the layout promised; the
+            // image's own reading of them is the honest one.
+            if nodes.contains(where: { $0.kind != .padding && $0.kind != .freeSpace }) {
+                return Result(nodes: nodes, diagnostics: parser.diagnostics)
+            }
+        case .node(let node):
+            return Result(nodes: [parser.root(as: node)], diagnostics: parser.diagnostics)
         }
         let image = layout == .image
             ? parser
