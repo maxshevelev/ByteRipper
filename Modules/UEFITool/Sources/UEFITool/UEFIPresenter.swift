@@ -264,19 +264,40 @@ public enum UEFIPresenter {
     /// the panel's bytes came straight out of. `BIOS Guard` for a region a
     /// BIOS Guard update assembles. Nil for the file.
     public static func compressionName(of space: ByteSpace, in image: UEFIImage) -> String? {
+        guard let holder = holder(of: space, in: image) else { return nil }
+        // A BIOS Guard update's region is assembled from its blocks, not
+        // decompressed, and its badge says what it is.
+        if holder.kind == .biosGuardUpdate { return "BIOS Guard" }
+        return holder.compression?.algorithm
+    }
+
+    /// The node whose decompressed body the buffer `space` is — the innermost
+    /// compressed section on its chain. Nil for the file.
+    public static func holder(of space: ByteSpace, in image: UEFIImage) -> UEFINode? {
         guard case .decompressed(let chain) = space, let last = chain.last else { return nil }
         let parent: ByteSpace = chain.count == 1 ? .file : .decompressed(chain: Array(chain.dropLast()))
         // Several nodes can start where the section does — an AMD firmware
         // entry is the first thing in the Boot Firmware Volume that holds it —
         // so the holder is the one that opens into this space, not merely the
         // first one found at its address.
-        guard let holder = image.allNodes.first(where: {
+        return image.allNodes.first(where: {
             $0.space == parent && $0.header.lowerBound == last && decompressedBody(for: $0)?.space == space
-        }) else { return nil }
-        // A BIOS Guard update's region is assembled from its blocks, not
-        // decompressed, and its badge says what it is.
-        if holder.kind == .biosGuardUpdate { return "BIOS Guard" }
-        return holder.compression?.algorithm
+        })
+    }
+
+    /// The codecs the bytes of `space` came through, outermost first — the
+    /// badges a fragment panel's header wears, one for each compressed
+    /// section on the chain. Empty for the file.
+    public static func codecNames(of space: ByteSpace, in image: UEFIImage,
+                                  known: inout [ByteSpace: String]) -> [String] {
+        guard case .decompressed(let chain) = space, !chain.isEmpty else { return [] }
+        return (1...chain.count).map { length in
+            let space = ByteSpace.decompressed(chain: Array(chain.prefix(length)))
+            if let name = known[space] { return name }
+            let name = compressionName(of: space, in: image) ?? L("Decompressed", context: "part badge")
+            known[space] = name
+            return name
+        }
     }
 
     /// A compressed section offers everything it decompresses to — one that

@@ -1351,6 +1351,7 @@
 "Dumps" = "Dumps";
 "Related Annotations: %1$@" = "Zugehörige Anmerkungen: %1$@";
 "Remove Annotation" = "Anmerkung entfernen";
+"Remove this annotation" = "Diese Anmerkung entfernen";
 "The file is not there" = "Die Datei ist nicht vorhanden";
 "The node is not there" = "Der Knoten ist nicht vorhanden";
 "“%1$@” has been moved or deleted since the agent named it." = "„%1$@“ wurde verschoben oder gelöscht, nachdem der Agent darauf verwiesen hat.";

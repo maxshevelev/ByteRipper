@@ -42,7 +42,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
     private var annotationsScroll: NSScrollView { annotations.scroll }
     private let tools = AgentToolsPage()
     private let clearButton = NSButton(title: "", target: nil, action: nil)
-    private let removeButton = NSButton(title: "", target: nil, action: nil)
     private let settingsButton = NSButton(title: "", target: nil, action: nil)
     /// Whether the log scrolls to each new request as it comes in.
     private let followButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
@@ -228,12 +227,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         clearButton.target = self
         clearButton.action = #selector(clearPage)
 
-        removeButton.title = L("Remove Annotation")
-        removeButton.bezelStyle = .rounded
-        removeButton.target = self
-        removeButton.action = #selector(removeAnnotations)
-        removeButton.isHidden = true
-
         // help: window.agent.follow
         followButton.title = L("Follow New Requests")
         ControlHelp.describe(followButton, name: L("Follow New Requests"),
@@ -249,7 +242,7 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
 
         let help = HelpButton.standard(for: .topic(.agent))
 
-        for view in [statusLabel, pages, logSplit, annotationsScroll, tools.split, clearButton, removeButton,
+        for view in [statusLabel, pages, logSplit, annotationsScroll, tools.split, clearButton,
                      followButton, settingsButton, help] {
             view.translatesAutoresizingMaskIntoConstraints = false
             content.addSubview(view)
@@ -278,9 +271,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
             tools.split.leadingAnchor.constraint(equalTo: logSplit.leadingAnchor),
             tools.split.trailingAnchor.constraint(equalTo: logSplit.trailingAnchor),
             tools.split.bottomAnchor.constraint(equalTo: logSplit.bottomAnchor),
-
-            removeButton.centerYAnchor.constraint(equalTo: clearButton.centerYAnchor),
-            removeButton.leadingAnchor.constraint(equalTo: clearButton.trailingAnchor, constant: 8),
 
             followButton.centerYAnchor.constraint(equalTo: clearButton.centerYAnchor),
             followButton.leadingAnchor.constraint(equalTo: clearButton.trailingAnchor, constant: 12),
@@ -354,19 +344,14 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         case .log:
             clearButton.title = L("Clear Log")
             clearButton.isEnabled = !rows.isEmpty
-            removeButton.isHidden = true
             followButton.isHidden = false
         case .annotations:
             clearButton.title = L("Clear Annotations")
             clearButton.isEnabled = !annotations.isEmpty
-            removeButton.title = L("Remove Annotation")
-            removeButton.isHidden = false
-            removeButton.isEnabled = !annotations.selectedIDs.isEmpty
             followButton.isHidden = true
         case .tools:
             clearButton.title = L("Reset Statistics")
             clearButton.isEnabled = tools.hasStats
-            removeButton.isHidden = true
             followButton.isHidden = true
         }
     }
@@ -546,11 +531,6 @@ final class AgentWindowController: NSWindowController, NSTableViewDataSource, NS
         case .annotations: service?.annotationTools.remove { _ in true }
         case .tools: service?.resetToolStats()
         }
-    }
-
-    @objc private func removeAnnotations() {
-        let chosen = Set(annotations.selectedIDs)
-        service?.annotationTools.remove { chosen.contains($0.id) }
     }
 
     /// Brings an annotation's file forward, or opens it, and selects its

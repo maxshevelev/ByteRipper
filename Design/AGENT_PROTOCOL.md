@@ -74,7 +74,7 @@ Recorded against: Claude Code 2.1.292 (modern; `RecordedClientTests`).
 
 | Tool | Arguments | Answer |
 |---|---|---|
-| `annotate` | `title` (≤ 80 characters); `note` (≤ 600); `document` or `path`; `offset` + `length` (default 1) or `node`; `related_to` (annotation ids); `reveal` | `id` (`a1`, `a2`… one counter for the app), `path` (a file on disk), `document` (while the file is open), `range`, `node`, `title`, `note`, `related_to`; `from_part` (`document`, `range`, `exact`) for one made in a part. |
+| `annotate` | `title` (≤ 80 characters); `note` (≤ 600); `document` or `path`; `offset` + `length` (default 1), or `node` — whole, or with `offset` + `length` from its first byte (`find_bytes`'s `node_offset`); `related_to` (annotation ids); `reveal` | `id` (`a1`, `a2`… one counter for the app), `path` (a file on disk), `document` (while the file is open), `range`, `node`, `title`, `note`, `related_to`; `decoded` (`node` — the compressed section or LENV block —, `range` in its decompressed or decoded bytes, `codecs`) for a place there, which has no `range` when it is no bytes of the file and opens in a fragment panel of those bytes; `from_part` (`document`, `range`, `exact`, `decoded`) for one made in a part. |
 | `annotations` | `document` or `path` (default: every file); `limit` (50, ≤ 200); `after` | `annotations[]`, each as `annotate` answers, oldest first; `total`. Paged (`next`, `after`). |
 | `remove_annotations` | `ids`, or `document`, or `path`, or `all: true` | `removed[]`; `not_found[]` for ids there were not. Relations to a removed annotation go with it. |
 

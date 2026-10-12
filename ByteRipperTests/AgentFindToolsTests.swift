@@ -416,12 +416,12 @@ final class AgentFindToolsTests: XCTestCase {
         let selected = try await client.answer("uefi_select", ["document": part, "node": "0"])
         XCTAssertEqual(selected["selected"]?["name"], "Raw")
 
-        // An annotation on bytes the file holds only compressed leads to the
-        // section they came out of.
+        // An annotation on bytes the file holds only compressed stays in
+        // the decompressed bytes, not on the whole section they came out of.
         let finding = try await client.answer("annotate", ["document": part, "offset": "0x4", "length": 4, "title": "t"])
         XCTAssertEqual(finding["from_part"]?["exact"], false)
-        XCTAssertEqual(finding["range"]?["start"], opened["source"]?["start"])
-        XCTAssertEqual(finding["range"]?["end"], opened["source"]?["end"])
+        XCTAssertNil(finding["range"], "\(finding)")
+        XCTAssertEqual(finding["decoded"]?["codecs"], ["LZMA"])
     }
 
     /// An annotation in a part that keeps the file's addresses lands on the

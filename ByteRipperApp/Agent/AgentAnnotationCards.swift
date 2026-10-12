@@ -1,5 +1,6 @@
 import Cocoa
 import AppPalette
+import HelpUI
 import Localization
 import ToolModuleKit
 
@@ -10,8 +11,11 @@ import ToolModuleKit
 /// A card: the number and the title, a dot filled while the file is open;
 /// the file and the place; the node it is on, as a link that opens it in
 /// UEFI Structure; the note whole; the annotations it is about, as links to
-/// their cards. A click selects, ⌘ and ⇧ add; a double-click or Return goes to
-/// the place; Delete removes the selected; the arrows move between cards.
+/// their cards. A place in decompressed or decoded bytes wears the badges of
+/// the codecs before its addresses, and goes to a fragment panel of those
+/// bytes. A click selects, ⌘ and ⇧ add; a double-click or Return goes to the
+/// place; the ✕ in the corner removes the card, Delete the selected ones; the
+/// arrows move between cards.
 // help: window.agent.annotations
 @MainActor
 final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollectionViewDelegate {
@@ -113,6 +117,7 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         card.card.onDoubleClick = { [weak self] in self?.onShow(annotation.id) }
         card.card.onSite = { [weak self] in self?.onOpenSite(annotation) }
         card.card.onRelated = { [weak self] id in self?.select(id) }
+        card.card.onRemove = { [weak self] in self?.onRemove([annotation.id]) }
         return card
     }
 
@@ -133,14 +138,17 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         case .disk(let url, _): fileName = url.lastPathComponent
         case .document(let held): fileName = held.document?.url.lastPathComponent ?? ""
         }
-        var place: [String] = [fileName]
-        if let range = annotation.range {
-            place.append(range.count <= 1 ? String(format: "0x%llX", range.lowerBound)
-                         : String(format: "0x%llX–0x%llX", range.lowerBound, range.upperBound))
+        // A place in decoded bytes is told in their addresses, after the
+        // badges of the codecs they came through.
+        let shown = annotation.decoded?.range ?? annotation.range
+        let address = shown.map { range in
+            range.count <= 1 ? String(format: "0x%llX", range.lowerBound)
+                : String(format: "0x%llX–0x%llX", range.lowerBound, range.upperBound)
         }
         return AnnotationCardView.Content(
             id: annotation.id, title: annotation.title, isOpen: isOpen(annotation),
-            place: place.joined(separator: " · "), path: annotation.file.url?.path,
+            file: fileName, codecs: annotation.decoded?.codecs ?? [], address: address,
+            path: annotation.file.url?.path,
             site: annotation.site?.label, note: annotation.note,
             related: annotation.relatedTo.map { ($0, titles[$0] ?? "") })
     }
@@ -259,7 +267,10 @@ final class AnnotationCardView: NSView {
         var id: String
         var title: String
         var isOpen: Bool
-        var place: String
+        var file: String
+        /// The badges before the address: the codecs of decoded bytes.
+        var codecs: [String] = []
+        var address: String?
         var path: String?
         var site: String?
         var note: String
@@ -270,13 +281,15 @@ final class AnnotationCardView: NSView {
     var onDoubleClick: () -> Void = {}
     var onSite: () -> Void = {}
     var onRelated: (String) -> Void = { _ in }
+    var onRemove: () -> Void = {}
 
     /// The lines under the header, top to bottom; a wrapping line takes the
     /// card's whole width, a link only its own.
     private var lines: [(view: NSView, wraps: Bool)] = []
-    private var header: (number: NSTextField, title: NSTextField, dot: NSTextField)?
+    private var header: (number: NSTextField, title: NSTextField, dot: NSTextField, remove: NSButton)?
     static let padding: CGFloat = 10
     static let spacing: CGFloat = 4
+    private static let cornerInset: CGFloat = 5
     private static let headerSpacing: CGFloat = 6
     private(set) var texts: [String] = []
 
@@ -297,14 +310,16 @@ final class AnnotationCardView: NSView {
         let title = label(content.title, font: ToolPanelFont.title(), wraps: true)
         let dot = label(content.isOpen ? "●" : "○", font: ToolPanelFont.body(), color: ZoneColors.agent)
         dot.toolTip = content.isOpen ? L("The file is open") : L("The file is not open")
-        [number, title, dot].forEach(addSubview)
-        header = (number, title, dot)
+        // help: window.agent.annotations
+        let remove = AnnotationRemoveBadge { [weak self] in self?.onRemove() }
+        [number, title, dot, remove].forEach(addSubview)
+        header = (number, title, dot, remove)
         texts += [content.id, content.title]
 
-        let place = label(content.place, font: ToolPanelFont.monospacedDigits(), color: .secondaryLabelColor, wraps: true)
+        let place = AnnotationPlaceLine(file: content.file, codecs: content.codecs, address: content.address)
         place.toolTip = content.path
         add(place, wraps: true)
-        texts.append(content.place)
+        texts.append(place.text)
         if let site = content.site {
             let link = linkButton(site) { [weak self] in self?.onSite() }
             link.toolTip = L("Show in UEFI Structure")
@@ -345,17 +360,22 @@ final class AnnotationCardView: NSView {
     private func place(width: CGFloat) -> CGFloat {
         let inner = max(0, width - 2 * Self.padding)
         var bottom = Self.padding
-        if let (number, title, dot) = header {
+        if let (number, title, dot, remove) = header {
             let numberSize = fitted(number, width: inner)
             let dotSize = fitted(dot, width: inner)
-            let titleWidth = max(0, inner - numberSize.width - dotSize.width - 2 * Self.headerSpacing)
+            let removeSize = remove.intrinsicContentSize
+            // The ✕ sits in the corner, over the padding; the dot before it.
+            remove.frame = NSRect(x: bounds.width - removeSize.width - Self.cornerInset, y: Self.cornerInset,
+                                  width: removeSize.width, height: removeSize.height)
+            let trailing = removeSize.width + Self.cornerInset - Self.padding + Self.headerSpacing
+            let titleWidth = max(0, inner - numberSize.width - dotSize.width - trailing - 2 * Self.headerSpacing)
             title.frame = NSRect(x: Self.padding + numberSize.width + Self.headerSpacing, y: bottom,
                                  width: titleWidth, height: fitted(title, width: titleWidth).height)
             // The number and the dot sit on the title's first line.
             let baseline = bottom + title.firstBaselineOffsetFromTop
             number.frame = NSRect(origin: NSPoint(x: Self.padding, y: 0), size: numberSize)
             number.frame.origin.y = baseline - number.firstBaselineOffsetFromTop
-            dot.frame = NSRect(origin: NSPoint(x: Self.padding + inner - dotSize.width, y: 0), size: dotSize)
+            dot.frame = NSRect(origin: NSPoint(x: Self.padding + inner - trailing - dotSize.width, y: 0), size: dotSize)
             dot.frame.origin.y = baseline - dot.firstBaselineOffsetFromTop
             bottom = [title, number, dot].map(\.frame.maxY).max() ?? bottom
         }
@@ -372,6 +392,7 @@ final class AnnotationCardView: NSView {
     /// What `view` takes at most `width` wide: a field's text wrapped at
     /// that width, a link on one line.
     private func fitted(_ view: NSView, width: CGFloat) -> NSSize {
+        if let line = view as? AnnotationPlaceLine { return line.size(forWidth: width) }
         guard let control = view as? NSControl, let cell = control.cell else { return view.fittingSize }
         let size = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude))
         return NSSize(width: ceil(size.width), height: ceil(size.height))
@@ -440,5 +461,112 @@ private final class CardLinkButton: NSButton {
 
     override func resetCursorRects() {
         addCursorRect(bounds, cursor: .pointingHand)
+    }
+}
+
+/// The line of a card that says where the annotation is: the file, then the
+/// badges of the codecs a place in decoded bytes came through — as the
+/// fragment panel's header wears them — then the addresses. The file's name
+/// gives way first when the card is narrow.
+final class AnnotationPlaceLine: NSView {
+    private let file: NSTextField
+    private let badges: [PartBadgeView]
+    private let address: NSTextField?
+    private static let gap: CGFloat = 4
+    /// What the line says, as one string, for tests.
+    let text: String
+
+    init(file name: String, codecs: [String], address text: String?) {
+        let font = ToolPanelFont.monospacedDigits()
+        file = NSTextField(labelWithString: text == nil ? name : name + " ·")
+        file.font = font
+        file.textColor = .secondaryLabelColor
+        file.lineBreakMode = .byTruncatingMiddle
+        file.cell?.truncatesLastVisibleLine = true
+        badges = codecs.map { codec in
+            let badge = PartBadgeView()
+            badge.text = codec
+            return badge
+        }
+        address = text.map { text in
+            let field = NSTextField(labelWithString: text)
+            field.font = font
+            field.textColor = .secondaryLabelColor
+            return field
+        }
+        self.text = ([text == nil ? name : name + " ·"] + codecs + [text].compactMap { $0 }).joined(separator: " ")
+        super.init(frame: .zero)
+        ([file] + badges + [address].compactMap { $0 }).forEach { view in
+            view.translatesAutoresizingMaskIntoConstraints = true
+            addSubview(view)
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override var isFlipped: Bool { true }
+
+    /// The line's size at most `width` wide: one line, whatever the width.
+    func size(forWidth width: CGFloat) -> NSSize {
+        let heights = ([file] + badges + [address].compactMap { $0 }).map { ceil($0.intrinsicContentSize.height) }
+        let wanted = ([file] + badges + [address].compactMap { $0 }).map { ceil($0.intrinsicContentSize.width) }
+        let total = wanted.reduce(0, +) + Self.gap * CGFloat(max(0, wanted.count - 1))
+        return NSSize(width: min(width, total), height: heights.max() ?? 0)
+    }
+
+    override func layout() {
+        super.layout()
+        let height = bounds.height
+        let tail = badges.map { ceil($0.intrinsicContentSize.width) + Self.gap }.reduce(0, +)
+            + (address.map { ceil($0.intrinsicContentSize.width) + Self.gap } ?? 0)
+        let fileWidth = max(0, min(ceil(file.intrinsicContentSize.width), bounds.width - tail))
+        var x: CGFloat = 0
+        func put(_ view: NSView, width: CGFloat) {
+            let size = view.intrinsicContentSize
+            view.frame = NSRect(x: x, y: floor((height - size.height) / 2), width: width, height: ceil(size.height))
+            x += width + Self.gap
+        }
+        put(file, width: fileWidth)
+        badges.forEach { put($0, width: ceil($0.intrinsicContentSize.width)) }
+        if let address { put(address, width: ceil(address.intrinsicContentSize.width)) }
+    }
+}
+
+/// The ✕ in a card's corner: removes that one annotation.
+final class AnnotationRemoveBadge: NSButton {
+    private let run: () -> Void
+    private static let side: CGFloat = 16
+
+    init(action: @escaping () -> Void) {
+        run = action
+        super.init(frame: .zero)
+        isBordered = false
+        title = ""
+        imagePosition = .imageOnly
+        let configuration = NSImage.SymbolConfiguration(pointSize: 8, weight: .bold)
+        image = NSImage(systemSymbolName: "xmark", accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration)
+        contentTintColor = .secondaryLabelColor
+        target = self
+        self.action = #selector(clicked)
+        ControlHelp.describe(self, name: L("Remove Annotation"), tooltip: L("Remove this annotation"))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override var intrinsicContentSize: NSSize { NSSize(width: Self.side, height: Self.side) }
+
+    @objc private func clicked() { run() }
+
+    /// A click for tests.
+    func click() { run() }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let circle = NSBezierPath(ovalIn: bounds.insetBy(dx: 0.5, dy: 0.5))
+        (isHighlighted ? NSColor.tertiaryLabelColor : NSColor.quaternaryLabelColor).setFill()
+        circle.fill()
+        super.draw(dirtyRect)
     }
 }

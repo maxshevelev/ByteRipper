@@ -1,6 +1,9 @@
 import Cocoa
 import AgentKit
 import ByteRipperCore
+import LenovoDMI
+import UEFIContentSource
+import UEFIImage
 import UEFITool
 
 /// `annotate`, `annotations` and `remove_annotations`: an agent's statements
@@ -57,6 +60,22 @@ final class AgentAnnotationTools {
             if case .document(let held) = annotation.file { return held.holds(document) }
             return false
         }
+        // A body decompressed from a file, opened from the file's own tab,
+        // shows the annotations found in it at its own addresses.
+        if let origin = pane.origin, !origin.codec.keepsOffsets, let parent = origin.parent, parent.origin == nil,
+           !parent.isUntitled, let root = parent.document,
+           let codec = origin.codec as? UEFIPartCodec, codec.target.space != .file {
+            let start = codec.target.range?.lowerBound ?? 0
+            let end = start + pane.fileSize
+            for annotation in all() {
+                guard case .disk(_, let identity) = annotation.file, identity == root.identity,
+                      let decoded = annotation.decoded, decoded.space == codec.target.space,
+                      decoded.source == origin.sourceRange,
+                      decoded.range.lowerBound >= start, decoded.range.upperBound <= end else { continue }
+                drawn.append(annotation.at((decoded.range.lowerBound - start)..<(decoded.range.upperBound - start)))
+            }
+            return drawn
+        }
         // Out through the parts to a file on disk, adding up where each one
         // starts in the next.
         var shift: UInt64 = 0
@@ -95,7 +114,8 @@ final class AgentAnnotationTools {
             description: """
                 Puts an annotation on a place in a file: a short `title` (what the bytes are), an optional \
                 `note` (why they matter, or what you found there), and the place — a `document` or a file \
-                `path`, with `offset` and `length` or a UEFI `node`. It is listed in the Agent window and \
+                `path`, with `offset` and `length`, or a UEFI `node` — whole, or with `offset` and `length` counted \
+                from the node's first byte: a `find_bytes` match with `node` is `node` and `node_offset`. It is listed in the Agent window and \
                 drawn over the bytes — a dashed outline, the note when the person rests the pointer on them — \
                 whenever the file is on screen, now or after it is opened later; it is kept when the file \
                 closes. Use it both to show what bytes are while you explain them and to leave a result for \
@@ -106,16 +126,20 @@ final class AgentAnnotationTools {
                 the place on screen, opening the file in a tab if it is not. In a part — a fragment panel — \
                 it goes to the file the part came out of, at the same bytes where the part keeps the file's \
                 addresses, otherwise at the bytes the part was decoded from; `from_part` says where it was in \
-                the part. Annotations go with `remove_annotations` or when the person clears them.
+                the part. A place in bytes that are not the file's own — what a compressed section decompresses \
+                to, a LENV block decoded, given as a node there or as a part of them — is kept there: the \
+                annotation answers `decoded` (the section or block, the range in its bytes, the `codecs`), the \
+                person's double-click opens those bytes in a fragment panel at the place, and the card shows the \
+                codecs as badges, so the title need not name them. Annotations go with `remove_annotations` or when the person clears them.
                 """,
             inputSchema: AgentSchema.object([
                 "title": AgentSchema.string("A few words: what the bytes are. At most \(Self.maxTitle) characters."),
                 "note": AgentSchema.string("A sentence or two: why they matter, or what was found. At most \(Self.maxNote) characters."),
                 "document": AgentSchema.string("The document it is in. Default: the focused one."),
                 "path": AgentSchema.string("Or the file it is in, by path, open or not."),
-                "offset": AgentSchema.offset("The first byte."),
+                "offset": AgentSchema.offset("The first byte: in the document, or with `node` from the node's first byte."),
                 "length": AgentSchema.offset("How many bytes. Default 1."),
-                "node": AgentSchema.string("Or the UEFI node it is about, e.g. \"0.2.5\"."),
+                "node": AgentSchema.string("Or the UEFI node it is about, e.g. \"0.2.5\" — inside a compressed section too."),
                 "related_to": AgentSchema.strings(
                     "Ids of annotations this one is about, e.g. [\"a1\"] for the target of a pointer. Give it "
                     + "whenever there is such an annotation."),
@@ -140,14 +164,17 @@ final class AgentAnnotationTools {
         if let missing = related.first(where: { !known.contains($0) }) {
             throw AgentToolError("No annotation \(missing). Call `annotations` for the ones there are.")
         }
-        var range: Range<UInt64>?
-        if let offset = try arguments.optionalOffset("offset") {
-            let length = try arguments.optionalOffset("length") ?? 1
-            guard length > 0 else { throw AgentToolError("Argument `length` must be at least 1.") }
-            range = offset..<(offset + length)
-        }
+        let offset = try arguments.optionalOffset("offset")
+        let length = try arguments.optionalOffset("length") ?? 1
+        guard length > 0 else { throw AgentToolError("Argument `length` must be at least 1.") }
         var node = try arguments.optionalString("node")
-        guard range == nil || node == nil else { throw AgentToolError("Give `offset` or `node`, not both.") }
+        // Without `node`, `offset` is in the document; with it, in the node.
+        var range = node == nil ? offset.map { $0..<($0 + length) } : nil
+        let within = node == nil ? nil : offset.map { $0..<($0 + length) }
+        if node == nil, arguments.has("length"), offset == nil {
+            throw AgentToolError("Give `offset` with `length`.")
+        }
+        var decoded: AgentAnnotation.Decoded?
 
         let file: AgentAnnotation.File
         var fromPart: JSONValue?
@@ -165,15 +192,24 @@ final class AgentAnnotationTools {
             if let id = node, let place = desk.places().first(where: { place in
                 !place.pane.isUntitled && place.pane.origin == nil && place.pane.document?.identity == FileIdentity(url: url)
             }) {
-                range = try await nodeRange(id, in: place)
+                (range, decoded) = try await nodePlace(id, within: within, in: place)
+            } else if node != nil, within != nil {
+                throw AgentToolError("A node's bytes are placed by the file's tree: open \(url.lastPathComponent) "
+                    + "first, or give the node alone.")
             }
         } else {
             let place = try resolve(arguments.optionalString("document"))
             if let id = node {
-                range = try await nodeRange(id, in: place)
-                // A part's node is named by the part's own tree: it goes as
-                // its bytes, which mean something in the file.
-                if place.pane.origin != nil { node = nil }
+                (range, decoded) = try await nodePlace(id, within: within, in: place)
+                if place.pane.origin != nil {
+                    guard decoded == nil else {
+                        throw AgentToolError("Node \(id) is in a compressed section of \(place.named). Annotate it on "
+                            + "the document that part was opened from, or open that section as a part of its own.")
+                    }
+                    // A part's node is named by the part's own tree: it goes
+                    // as its bytes, which mean something in the file.
+                    node = nil
+                }
             }
             var pane = place.pane
             size = pane.fileSize
@@ -184,6 +220,13 @@ final class AgentAnnotationTools {
             if pane.origin != nil {
                 var answer: [String: JSONValue] = ["document": .string(place.id)]
                 if let range { answer["range"] = AgentHostTools.range(range) }
+                // A part decoded from the file — a decompressed body, a LENV
+                // block decoded — keeps the place in its own bytes, where the
+                // annotation is shown.
+                if let range, let found = await partPlace(range, of: place) {
+                    decoded = found
+                    answer["decoded"] = .bool(true)
+                }
                 // Out through every part to the file: byte for byte where the
                 // codec keeps the addresses, otherwise the bytes the part was
                 // decoded from.
@@ -202,12 +245,15 @@ final class AgentAnnotationTools {
                     pane = parent
                 }
                 if reachesFile, !pane.isUntitled, pane.document != nil {
-                    range = mapped
+                    // Bytes that are no bytes of the file are not drawn over
+                    // the whole section they came out of.
+                    range = exact || decoded == nil ? mapped : nil
                     answer["exact"] = .bool(exact)
                     fromPart = .object(answer)
                 } else {
                     // A part of something never saved stays on the part.
                     pane = place.pane
+                    decoded = nil
                 }
             }
             guard let document = pane.document else { throw AgentToolError("\(place.named) holds no bytes.") }
@@ -218,13 +264,13 @@ final class AgentAnnotationTools {
             throw AgentToolError("The range \(AgentHostTools.hexText(range.lowerBound))–\(AgentHostTools.hexText(range.upperBound)) "
                 + "runs past the end of the file, which is \(AgentHostTools.hexText(size)) bytes long.")
         }
-        guard range != nil || node != nil || file.url != nil else {
+        guard range != nil || node != nil || decoded != nil || file.url != nil else {
             throw AgentToolError("Give the place: `offset`, or `node`.")
         }
 
-        let site = await self.site(of: file, range: range, node: node)
+        let site = await self.site(of: file, range: range, node: node ?? decoded?.holder)
         let annotation = AgentAnnotation(id: "a\(nextID)", file: file, range: range, node: node, title: title,
-                                         note: note, relatedTo: related, site: site)
+                                         note: note, decoded: decoded, relatedTo: related, site: site)
         nextID += 1
         items.append(annotation)
         changed()
@@ -253,14 +299,71 @@ final class AgentAnnotationTools {
         return AgentAnnotation.Site(label: label, node: id)
     }
 
-    /// Where a UEFI node of `place` is in its bytes.
-    private func nodeRange(_ id: String, in place: AgentDesk.Place) async throws -> Range<UInt64> {
+    /// Where node `id` of `place` is — or the stretch `within` of its
+    /// bytes, from its first: in the file, or, for a node inside a
+    /// compressed section, in what the section decompresses to. A node of a
+    /// LENV block that is stored encoded is in the file and also decoded.
+    private func nodePlace(_ id: String, within: Range<UInt64>?,
+                           in place: AgentDesk.Place) async throws -> (Range<UInt64>?, AgentAnnotation.Decoded?) {
         let host = PaneToolHost(pane: place.pane, owner: place.controller, tools: nil)
         let found = try await UEFIAgentNodeData.bytes(host, node: id, part: .all)
-        guard let range = found.fileRange ?? UEFIPresenter.fileSource(of: found.node, in: found.tree.image()) else {
-            throw AgentToolError("Node \(id) has no place in the file to annotate.")
+        var range = found.range
+        if let within {
+            guard within.upperBound <= UInt64(found.range.count) else {
+                throw AgentToolError("\(AgentHostTools.hexText(within.lowerBound))–\(AgentHostTools.hexText(within.upperBound)) "
+                    + "runs past the end of node \(id), which is \(AgentHostTools.hexText(UInt64(found.range.count))) bytes long.")
+            }
+            range = (found.range.lowerBound + within.lowerBound)..<(found.range.lowerBound + within.upperBound)
         }
-        return range
+        let image = found.tree.image()
+        guard found.space == .file else {
+            guard let holder = UEFIPresenter.holder(of: found.space, in: image),
+                  let source = UEFIPresenter.fileSource(of: holder, in: image) else {
+                throw AgentToolError("Node \(id) has no place in the file to annotate.")
+            }
+            var known: [ByteSpace: String] = [:]
+            return (nil, AgentAnnotation.Decoded(
+                holder: holder.id.description, source: source, space: found.space, range: range,
+                codecs: UEFIPresenter.codecNames(of: found.space, in: image, known: &known)))
+        }
+        guard let reader = found.tree.spaceReaders.reader(for: .file),
+              let block = UEFILenovoDMIDetail.decodableBlock(for: found.node, image: image, reader: reader),
+              let badge = LenovoDMIBlockCodec(block: block.block).badge,
+              LenovoDMIBlockCodec(block: block.block).encodes else { return (range, nil) }
+        let source = block.block.range
+        return (range, AgentAnnotation.Decoded(
+            holder: id, source: source, space: nil,
+            range: (range.lowerBound - source.lowerBound)..<(range.upperBound - source.lowerBound),
+            codecs: [badge.text]))
+    }
+
+    /// The place `range` of part `place` is in its own bytes, when the part
+    /// is bytes of a file decoded — a compressed section's body, a LENV
+    /// block — opened from the file's own tab: what reopens it there.
+    private func partPlace(_ range: Range<UInt64>, of place: AgentDesk.Place) async -> AgentAnnotation.Decoded? {
+        guard let origin = place.pane.origin, let parent = origin.parent, parent.origin == nil,
+              !parent.isUntitled else { return nil }
+        let holderPlace = desk.places().first { $0.pane === parent }
+        let host = PaneToolHost(pane: parent, owner: holderPlace?.controller ?? place.controller, tools: nil)
+        guard let tree = try? await UEFIAgentQueries.readyTree(host) else { return nil }
+        let image = tree.image()
+        if let codec = origin.codec as? UEFIPartCodec, codec.target.space != .file {
+            guard let holder = UEFIPresenter.holder(of: codec.target.space, in: image) else { return nil }
+            let start = codec.target.range?.lowerBound ?? 0
+            var known: [ByteSpace: String] = [:]
+            return AgentAnnotation.Decoded(
+                holder: holder.id.description, source: origin.sourceRange, space: codec.target.space,
+                range: (start + range.lowerBound)..<(start + range.upperBound),
+                codecs: UEFIPresenter.codecNames(of: codec.target.space, in: image, known: &known))
+        }
+        guard let codec = origin.codec as? LenovoDMIBlockCodec, codec.encodes, let badge = codec.badge else { return nil }
+        let source = origin.sourceRange
+        let chain = await withCheckedContinuation { continuation in
+            tree.materialize(containing: source.lowerBound) { continuation.resume(returning: $0) }
+        }
+        guard let block = chain.last(where: { $0.fileRange == source }) else { return nil }
+        return AgentAnnotation.Decoded(holder: block.id.description, source: source, space: nil,
+                                       range: range, codecs: [badge.text])
     }
 
     // MARK: - remove_annotations
@@ -318,20 +421,50 @@ final class AgentAnnotationTools {
     /// Brings the annotation's file forward — the tab that has it, or a new
     /// one — and selects its place: what a double-click on its row in the
     /// Agent window does, and `reveal`. A step of the navigation history.
-    func show(_ id: String) {
-        guard let annotation = all().first(where: { $0.id == id }) else { return }
+    /// Answers the task opening the panel of a place in decoded bytes, for
+    /// whoever waits on it.
+    @discardableResult
+    func show(_ id: String) -> Task<Void, Never>? {
+        guard let annotation = all().first(where: { $0.id == id }) else { return nil }
         var place = self.place(of: annotation)
         if place == nil, let url = annotation.file.url {
             openInNewTab(url)
             place = self.place(of: annotation)
         }
-        guard let place, let controller = place.controller else { return }
+        guard let place, let controller = place.controller else { return nil }
         desk.bringForward(place)
         controller.view.window?.makeKeyAndOrderFront(nil)
-        guard let range = annotation.range, range.lowerBound <= place.pane.fileSize else { return }
+        if let decoded = annotation.decoded {
+            return Task { await self.openDecoded(decoded, of: place, controller: controller) }
+        }
+        guard let range = annotation.range, range.lowerBound <= place.pane.fileSize else { return nil }
         controller.recordJump(in: place.pane)
         let end = min(range.upperBound, place.pane.fileSize)
         controller.revealForTool(range.lowerBound..<end, in: place.pane, select: end > range.lowerBound)
+        return nil
+    }
+
+    /// Opens the bytes a decoded place is in as a fragment panel over the
+    /// file's tab — the compressed section's body, the LENV block decoded,
+    /// as the panel's Open does — with the place selected; a panel already
+    /// open on them is raised and selected in.
+    private func openDecoded(_ decoded: AgentAnnotation.Decoded, of place: AgentDesk.Place,
+                             controller: MainViewController) async {
+        let host = PaneToolHost(pane: place.pane, owner: controller, tools: nil)
+        guard let found = try? await UEFIAgentNodeData.bytes(
+                host, node: decoded.holder, part: decoded.space != nil ? .decompressed : .all) else { return }
+        let image = found.tree.image()
+        let plan = decoded.space != nil
+            ? try? AgentFindTools.decompressedPart(found, in: image, fileName: place.pane.status.fileName)
+            : try? AgentFindTools.decodedPart(found, in: image)
+        // The tree read since may number its nodes otherwise: the bytes the
+        // panel is opened from must be the ones the place was found in.
+        guard let plan, plan.source == decoded.source,
+              decoded.space == nil || found.space == decoded.space else { return }
+        controller.recordJump(in: place.pane)
+        await controller.openPart(named: plan.name, from: place.pane, source: plan.source, layout: plan.layout,
+                                  codec: plan.codec, tool: controller.tools.activeIdentifier,
+                                  selecting: decoded.range)?.value
     }
 
     /// The pane on screen that shows the annotation's file as a whole.
@@ -354,7 +487,7 @@ final class AgentAnnotationTools {
             description: """
                 The annotations made so far, oldest first — on every file, or on a `document` or a file \
                 `path`: id, the file's `path` (and its `document` id while it is open), `range` and/or `node`, \
-                `title`, `note`, `related_to`. Pages: `limit` is a ceiling — a page also stops before the \
+                `decoded` for a place in decompressed or decoded bytes, `title`, `note`, `related_to`. Pages: `limit` is a ceiling — a page also stops before the \
                 answer passes the size bound and then says `truncated: "size"`; pass `next` back as `after` \
                 until it is null. A page asked for after the list changed is refused.
                 """,
@@ -409,6 +542,10 @@ final class AgentAnnotationTools {
         if let place = place(of: annotation) { entry["document"] = .string(place.id) }
         if let range = annotation.range { entry["range"] = AgentHostTools.range(range) }
         if let node = annotation.node { entry["node"] = .string(node) }
+        if let decoded = annotation.decoded {
+            entry["decoded"] = ["node": .string(decoded.holder), "range": AgentHostTools.range(decoded.range),
+                                "codecs": .array(decoded.codecs.map { .string($0) })]
+        }
         if let site = annotation.site { entry["label"] = .string(site.label) }
         if !annotation.note.isEmpty { entry["note"] = .string(annotation.note) }
         if !annotation.relatedTo.isEmpty { entry["related_to"] = .array(annotation.relatedTo.map { .string($0) }) }

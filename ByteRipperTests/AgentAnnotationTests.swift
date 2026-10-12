@@ -37,6 +37,11 @@ final class AgentAnnotationTests: XCTestCase {
 
     @discardableResult
     private func open(_ size: Int = 0x1000) throws -> MainViewController {
+        try open(bytes: (0..<size).map { UInt8(truncatingIfNeeded: $0) })
+    }
+
+    @discardableResult
+    private func open(bytes: [UInt8]) throws -> MainViewController {
         let controller = MainViewController()
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600),
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
@@ -45,7 +50,7 @@ final class AgentAnnotationTests: XCTestCase {
         window.makeKeyAndOrderFront(nil)
         self.controller = controller
         self.window = window
-        try controller.windowModel.pane1.open(url: tempFile((0..<size).map { UInt8(truncatingIfNeeded: $0) }, "agent-annotation"))
+        try controller.windowModel.pane1.open(url: tempFile(bytes, "agent-annotation"))
         controller.apply(mode: .singleFile)
         for _ in 0..<4 {
             window.displayIfNeeded()
@@ -102,8 +107,8 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertTrue(empty.isError)
         let zero = try await client.call("annotate", ["offset": 0, "length": 0, "title": "Nothing"])
         XCTAssertTrue(zero.isError)
-        let both = try await client.call("annotate", ["offset": 0, "node": "0", "title": "Both"])
-        XCTAssertTrue(both.isError)
+        let root = try await client.call("annotate", ["offset": 0, "node": "root", "title": "Root"])
+        XCTAssertTrue(root.isError, "the top of the tree is no node")
         XCTAssertTrue(pane.agentAnnotations.isEmpty)
     }
 
@@ -240,7 +245,7 @@ final class AgentAnnotationTests: XCTestCase {
     func testACardHoldsAllOfItsWrappedText() throws {
         let content = AnnotationCardView.Content(
             id: "a2", title: "LBLDESP: панель 2560×1600", isOpen: true,
-            place: "SPI_C86018_128Mbit.03022026.orig.bin · 0xEACFFB–0xEAD005", path: nil,
+            file: "SPI_C86018_128Mbit.03022026.orig.bin", codecs: ["LZMA"], address: "0xEACFFB–0xEAD005", path: nil,
             site: "LBLDESP",
             note: "Lenovo Panel descriptor: здесь width=0x0A00 (2560), height=0x0640 (1600). "
                 + "В другом дампе 1920×1080 — другая модель экрана.",
@@ -310,5 +315,91 @@ final class AgentAnnotationTests: XCTestCase {
         _ = try await client.answer("annotate", ["offset": "0x9000", "length": 2, "title": "Here", "reveal": true])
         let selection = pane.hexSelection()
         XCTAssertEqual(selection.start..<selection.end, 0x9000..<0x9002)
+    }
+
+    // MARK: - Decoded bytes
+
+    /// A match `find_bytes` found in what a compressed section decompresses
+    /// to is annotated as `node` and `node_offset`: the place is kept in those
+    /// bytes, not drawn over the whole section; the card wears the codec's
+    /// badge before the addresses; showing it opens the decompressed bytes in
+    /// a fragment panel, with the place selected and drawn there.
+    func testAPlaceInDecompressedBytesIsShownInAPanelOfThem() async throws {
+        let controller = try open(bytes: try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let found = try await client.answer("find_bytes", ["node": "root", "text": "GH51G"])
+        let match = try XCTUnwrap(found["matches"]?.arrayValue?.first)
+        let node = try XCTUnwrap(match["node"]?["id"]?.stringValue)
+        let made = try await client.answer("annotate", [
+            "node": .string(node), "offset": try XCTUnwrap(match["node_offset"]), "length": 5, "title": "Model"])
+        XCTAssertNil(made["range"], "no bytes of the file: \(made)")
+        let decoded = try XCTUnwrap(made["decoded"])
+        XCTAssertEqual(decoded["codecs"], ["LZMA"])
+        XCTAssertEqual(decoded["node"], match["section"], "the section the panel opens")
+        XCTAssertEqual(decoded["range"]?["start"], match["buffer_start"])
+        XCTAssertEqual(decoded["range"]?["end"], match["buffer_end"])
+        XCTAssertTrue(pane.agentAnnotations.isEmpty, "the compressed section is not outlined")
+
+        let agentWindow = AgentWindowController(service: service)
+        _ = agentWindow.window
+        agentWindow.refresh()
+        agentWindow.showAnnotations()
+        let name = try XCTUnwrap(pane.document?.url.lastPathComponent)
+        let start = try XCTUnwrap(match["buffer_start"]?.stringValue)
+        let end = try XCTUnwrap(match["buffer_end"]?.stringValue)
+        XCTAssertEqual(agentWindow.annotationsList.shownTexts(of: "a1").dropFirst(2).first,
+                       "\(name) · LZMA \(start)–\(end)", "the badge before the addresses")
+
+        await service.annotationTools.show("a1")?.value
+        XCTAssertTrue(pumpUntil(5) { controller.fragments.panelsLinked(to: self.pane).count == 1 }, "a panel opens")
+        let part = try XCTUnwrap(controller.fragments.panelsLinked(to: pane).first.flatMap(controller.fragments.pane))
+        XCTAssertTrue(pumpUntil(5) { part.hexSelection().start != 0 })
+        let selection = part.hexSelection()
+        XCTAssertEqual(try part.byteStorage?.read(at: selection.start, length: Int(selection.end - selection.start)),
+                       Array("GH51G".utf8), "the place is selected")
+        XCTAssertEqual(part.agentAnnotations.map(\.title), ["Model"], "and drawn in the panel")
+        XCTAssertEqual(part.hexAgentMarkSpans(in: 0..<part.fileSize).map(\.range), [selection.start..<selection.end])
+
+        await service.annotationTools.show("a1")?.value
+        XCTAssertEqual(controller.fragments.panelsLinked(to: pane).count, 1, "the open panel is used again")
+    }
+
+    /// Annotated in a part of the decompressed bytes, the place stays in them.
+    func testAPlaceInAPartOfDecompressedBytesStaysThere() async throws {
+        try open(bytes: try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let found = try await client.answer("find_bytes", ["node": "root", "text": "GH51G"])
+        let match = try XCTUnwrap(found["matches"]?.arrayValue?.first)
+        let opened = try await client.answer("open_part", ["node": try XCTUnwrap(match["section"]),
+                                                          "part": "decompressed"])
+        let made = try await client.answer("annotate", [
+            "document": try XCTUnwrap(opened["document"]), "offset": try XCTUnwrap(match["buffer_start"]),
+            "length": 5, "title": "Model"])
+        XCTAssertEqual(made["from_part"]?["decoded"], true, "\(made)")
+        XCTAssertNil(made["range"], "not the whole section in the file")
+        XCTAssertEqual(made["decoded"]?["range"]?["start"], match["buffer_start"])
+        XCTAssertEqual(made["decoded"]?["codecs"], ["LZMA"])
+        XCTAssertNotNil(made["path"], "the file's annotation")
+    }
+
+    /// The ✕ in a card's corner removes that annotation alone; there is no
+    /// Remove Annotation button under the cards.
+    func testTheCrossOnACardRemovesIt() async throws {
+        try open()
+        _ = try await client.answer("annotate", ["offset": 0, "title": "A"])
+        _ = try await client.answer("annotate", ["offset": 2, "title": "B"])
+        let agentWindow = AgentWindowController(service: service)
+        let window = try XCTUnwrap(agentWindow.window)
+        agentWindow.refresh()
+        agentWindow.showAnnotations()
+        window.layoutIfNeeded()
+        let cards = agentWindow.annotationsList
+        cards.collection.layoutSubtreeIfNeeded()
+        let buttons = descendants(of: try XCTUnwrap(window.contentView), NSButton.self)
+        XCTAssertFalse(buttons.contains { $0.title == "Remove Annotation" && !$0.isHiddenOrHasHiddenAncestor })
+        let card = try XCTUnwrap(cards.collection.item(at: IndexPath(item: 1, section: 0))?.view)
+        let cross = try XCTUnwrap(descendants(of: card, AnnotationRemoveBadge.self).first)
+        XCTAssertEqual(cross.frame.maxX, card.bounds.maxX - 5, accuracy: 0.5, "in the top right corner")
+        XCTAssertLessThan(cross.frame.minY, 8)
+        cross.click()
+        XCTAssertEqual(service.annotationTools.all().map(\.title), ["A"])
     }
 }

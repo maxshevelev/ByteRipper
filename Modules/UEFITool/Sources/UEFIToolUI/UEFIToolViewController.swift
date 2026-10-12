@@ -1639,17 +1639,7 @@ import UEFITool
         // compressions of the sections on its chain, each looked up once.
         var compressions: [ByteSpace: String] = [:]
         let codecs = { [image] (match: UEFIContentSearch.Match) -> [String] in
-            var names: [String] = []
-            if case .decompressed(let chain) = match.space, let image {
-                for length in 1...chain.count {
-                    let space = ByteSpace.decompressed(chain: Array(chain.prefix(length)))
-                    if compressions[space] == nil {
-                        compressions[space] = UEFIPresenter.compressionName(of: space, in: image)
-                            ?? L("Decompressed", context: "part badge")
-                    }
-                    names.append(compressions[space]!)
-                }
-            }
+            var names = image.map { UEFIPresenter.codecNames(of: match.space, in: $0, known: &compressions) } ?? []
             if let key = match.decodedXORKey { names.append(String(format: "XOR %02X", key)) }
             return names
         }

@@ -1,6 +1,7 @@
 import ByteRipperCore
 import Foundation
 import Localization
+import UEFIImage
 
 /// A short statement an agent made about a place in a file
 /// (`Design/AGENT_PLAN.md`, "Annotations"; issue #37): what the bytes are,
@@ -25,6 +26,10 @@ struct AgentAnnotation: Equatable {
     let title: String
     /// A sentence or two: why they matter, or what was found.
     let note: String
+    /// Where the bytes are read decoded: the place is in what a compressed
+    /// section decompresses to, or in a LENV block with its XOR removed, and
+    /// is shown there — in a fragment panel of those bytes — not in the file.
+    var decoded: Decoded? = nil
     /// The annotations this one is about — a pointer and what it points at,
     /// a checksum and what it covers.
     let relatedTo: [String]
@@ -37,6 +42,25 @@ struct AgentAnnotation: Equatable {
     struct Site: Equatable {
         let label: String
         let node: String
+    }
+
+    /// A place in bytes that are not the file's own, as a fragment panel
+    /// opens them.
+    struct Decoded: Equatable {
+        /// The node the panel is opened from, in the file's tree: the
+        /// compressed section, or the LENV block.
+        let holder: String
+        /// What the panel is linked to in the file: the bytes it is decoded
+        /// from.
+        let source: Range<UInt64>
+        /// The buffer the panel shows; nil for a LENV block, whose bytes are
+        /// the block's own, decoded.
+        let space: ByteSpace?
+        /// Half-open, in the panel's own addresses.
+        let range: Range<UInt64>
+        /// The badges of the codecs the bytes came through, outermost first —
+        /// `LZMA`, `XOR C0` — as the panel's header shows them.
+        let codecs: [String]
     }
 
     /// The file an annotation belongs to.
@@ -55,13 +79,13 @@ struct AgentAnnotation: Equatable {
 
     /// The same annotation at another range: the place as a pane shows it.
     func at(_ range: Range<UInt64>?) -> AgentAnnotation {
-        AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, relatedTo: relatedTo,
-                        site: site)
+        AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, decoded: decoded,
+                        relatedTo: relatedTo, site: site)
     }
 
     /// Without the relations to the ones `gone` names.
     func dropping(_ gone: Set<String>) -> AgentAnnotation {
-        AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note,
+        AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, decoded: decoded,
                         relatedTo: relatedTo.filter { !gone.contains($0) }, site: site)
     }
 
