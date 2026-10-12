@@ -1484,3 +1484,31 @@
 "The copy of the UUID's last six bytes does not read as the UUID's last six. It is a copy, not a checksum: it went stale when the UUID was changed after." = "Копия последних шести байтов UUID не читается как последние шесть байтов UUID. Это копия, а не контрольная сумма: она устарела, когда UUID был изменён позже.";
 "The copy of the UUID's last six bytes is erased. It is a copy, not a checksum, so nothing checks wrong because of it." = "Копия последних шести байтов UUID стёрта. Это копия, а не контрольная сумма, поэтому из-за неё ни одна проверка не показывает сбой.";
 "Product name" = "Название продукта";
+
+/* UEFI Structure: the Contents search. */
+"Names" = "Имена";
+"What to search" = "Где искать";
+"Search the nodes' names and GUIDs, or the bytes the nodes hold" = "Искать по именам и GUID узлов или в байтах, которые узлы содержат";
+"List every place the pattern occurs in the selected node, compressed sections included" = "Показать все вхождения шаблона в выбранном узле, включая сжатые секции";
+"Hex" = "Hex";
+"Text is found in ASCII and in UTF-16, in any case; hex is bytes, ?? for any byte" = "Текст ищется в ASCII и в UTF-16 без учёта регистра; hex — это байты, ?? означает любой байт";
+"Search the contents" = "Поиск по содержимому";
+"A text, or hex bytes such as 24 ?? 4D 49" = "Текст или байты hex, например 24 ?? 4D 49";
+"Text to find" = "Искомый текст";
+"The ME region is searched as it is stored: its modules are not unpacked." = "ME-регион просматривается в том виде, в каком он хранится: его модули не распаковываются.";
+"Not a hex pattern" = "Это не шаблон hex";
+"%1$@, decoded" = "%1$@, раскодировано";
+"Volume" = "Том";
+"In volume" = "В томе";
+"Node" = "Узел";
+"The volume the match is in" = "Том, в котором находится вхождение";
+"Where the match is, from the volume's first byte" = "Положение вхождения от первого байта тома";
+"The deepest node that holds the match whole" = "Самый глубокий узел, целиком содержащий вхождение";
+"The match's address in the file, or in what a compressed section decompresses to" = "Адрес вхождения в файле или в распакованном содержимом сжатой секции";
+"Only in the selected node" = "Только в выбранном узле";
+"Search the selected node and what is under it; unticked, the whole tree" = "Искать в выбранном узле и во всём, что под ним; без отметки — во всём дереве";
+"Nothing selected: the whole tree" = "Ничего не выбрано: всё дерево";
+"The whole tree" = "Всё дерево";
+"Stop the search through the contents" = "Остановить поиск по содержимому";
+"%1$@, the first %2$@ listed" = "%1$@, в списке первые %2$@";
+"Search results in %1$@ (%2$@)" = "Результаты поиска в %1$@ (%2$@)";

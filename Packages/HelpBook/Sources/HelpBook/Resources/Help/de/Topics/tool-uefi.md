@@ -1,4 +1,4 @@
-@source-sha 8cd69761ffb96fda94d32994e2c9f6b4f1bd07095d58ef95e93de506c0f40762
+@source-sha f37378a03de2c22edbbb82d942273210eb4cd861036b866c870df9a98562a006
 # UEFI-Struktur
 
 > Die Karte eines Firmware-Images: welche Region, welches Volume, welche Datei und wo.
@@ -30,6 +30,14 @@ Die Pfeile — ebenso Return und Umschalt-Return im Textfeld — springen zum n�
 Der Treffer wird so ausgewählt, wie ein Klick darauf ihn auswählt: Details und Dump folgen. Die Suche öffnet die Zweige auf dem Weg zum Treffer und den Treffer selbst eine Ebene tief. Beim Weitergehen zum nächsten Treffer schließt sie wieder, was sie geöffnet hat und der neue Treffer nicht braucht, sodass der Baum in den Zustand vor der Suche zurückkehrt. Zweige, die der Benutzer geöffnet hat, bleiben unberührt. Öffnet oder schließt der Benutzer einen Zweig, während die Suche darauf steht, klickt er eine andere Zeile an, ändert er die Bedingung oder schließt er die Leiste, bleibt alles, wie es ist.
 
 Der Inhalt einer ME-Region wird nicht durchsucht: Der Unterbaum hat einen anderen Aufbau, den Name, GUID und Typ nicht beschreiben. Die Zeile der ME-Region selbst wird gefunden. Die Suchbedingungen sind in beiden Panels dieselben und bleiben beim erneuten Einlesen der Datei, beim Dateiwechsel und beim Neustart des Programms erhalten.
+
+## Suche im Inhalt
+
+Der Umschalter am Anfang der Suchleiste wählt, was durchsucht wird: **Namen** ist die oben beschriebene Suche, **Inhalt** sucht ein Muster in den Bytes, die die Knoten enthalten. Im Modus **Inhalt** nimmt das Feld einen Text oder Hex-Bytes auf, wie es das Einblendmenü daneben angibt. Ein Text wird in ASCII und in UTF-16 ohne Beachtung der Groß- und Kleinschreibung gesucht; Hex sind Bytes in derselben Form wie bei der Suche im Dump, `??` steht für ein beliebiges Byte: `24 ?? 4D 49`. **Alle suchen** oder Return im Feld startet die Suche.
+
+Ist **Nur im ausgewählten Knoten** angekreuzt, umfasst die Suche den im Baum ausgewählten Knoten und alles darunter; die Zeile neben dem Kästchen nennt diesen Knoten. Ohne Häkchen oder wenn nichts ausgewählt ist, umfasst sie den ganzen Baum. Unterwegs öffnet die Suche jeden Zweig, daher dauert die erste Suche in einem großen Image einige Sekunden. Jede komprimierte Section, auch eine verschachtelte, wird in ihrem entpackten Inhalt durchsucht, ein BIOS-Guard-Update in der Region, die es zusammensetzt, und ein XOR-kodiert gespeicherter Lenovo-LENV-Block dekodiert. So findet sie, was die Suche im Dump nicht finden kann: Ein Text in einer LZMA- oder Tiano-Section steht nicht in den Bytes der Datei. Der Inhalt einer ME-Region wird so durchsucht, wie er gespeichert ist; ihre Module werden nicht entpackt.
+
+Die Ergebnisse öffnen sich in einem Bereich unter dem Baum, so wie sich die **Suchergebnisse** unter dem Dump öffnen. Während die Suche läuft, zeigt die Kopfzeile des Bereichs ihren Fortschritt und eine Taste, die sie abbricht. Jede Zeile ist eine Fundstelle: das **Volume**, in dem sie liegt, ihre Lage **Im Volume** ab dem ersten Byte des Volumes, ihre **Adresse**, die Bytes um sie herum mit der Fundstelle in Fettschrift und der **Knoten** — der tiefste Knoten, der die Fundstelle vollständig enthält. Die **Adresse** ist die Adresse der Fundstelle in der Datei; bei einer Fundstelle in einer komprimierten Section ist es die Adresse in deren entpacktem Inhalt mit dem Namen der Section, und **Im Volume** bleibt leer, wenn das Volume in der Datei liegt und die Fundstelle nicht. Eine Fundstelle in einem dekodierten LENV-Block steht mit ihrer Dateiadresse und dem Vermerk, dass sie dekodiert ist: In der Datei sind diese Bytes kodiert gespeichert. Die Zeilen folgen der Reihenfolge des Baums. Ein Klick auf eine Zeile wählt ihren Knoten im Baum aus und öffnet die Zweige auf dem Weg dorthin; bei einer Fundstelle in der Datei wählt er zudem ihre Bytes im Dump aus. Das × schließt den Bereich und bricht eine noch laufende Suche ab.
 
 ## Was das Werkzeug prüft
 

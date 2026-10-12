@@ -30,6 +30,10 @@ fileGroups:
 packages:
   ByteRipperCore:
     path: Packages/ByteRipperCore
+  # The masked byte pattern and its scan: the find bar's, through
+  # ByteRipperCore, and the UEFI Structure's Contents search's.
+  BytePattern:
+    path: Packages/BytePattern
   ALSplitView:
     path: Packages/ALSplitView
   ToolModuleKit:
@@ -116,6 +120,9 @@ targets:
       - path: ByteRipperApp
     dependencies:
       - package: ByteRipperCore
+      # The masked pattern the find bar and `find_bytes` build, which
+      # ByteRipperCore re-exports.
+      - package: BytePattern
       - package: ALSplitView
       # What a tool-module and the app agree on (Design/TOOL_MODULES_PLAN.md).
       # The app links it; each tool-module package links it too, and that is the
@@ -337,6 +344,7 @@ targets:
     dependencies:
       - target: ByteRipper
       - package: ByteRipperCore
+      - package: BytePattern
       - package: ALSplitView
       - package: ToolModuleKit
       - package: AppPalette

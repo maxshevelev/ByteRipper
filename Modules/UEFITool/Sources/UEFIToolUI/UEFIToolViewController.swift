@@ -1,5 +1,6 @@
 import ALSplitView
 import AppKit
+import BytePattern
 import HelpBook
 import AppPalette
 import HelpUI
@@ -83,6 +84,9 @@ import UEFITool
     /// A search came round to the other end — going forward, when true. The
     /// session shows the same sign the hex view's find shows.
     var onSearchWrapped: ((Bool) -> Void)?
+    /// The reader went to a match of the Contents search that is in the file:
+    /// the dump selects its bytes.
+    var onRevealMatch: ((Range<UInt64>) -> Void)?
 
     /// The tree as one value, for everything that reads it rather than walks
     /// it: the summary line, the title fold, the detail panel. It is the
@@ -297,6 +301,16 @@ import UEFITool
     /// The query the panel last saw, so a change is told from a repeat.
     private var shownQuery = UEFISearchSettings.query
     private var searchObserver: NSObjectProtocol?
+    /// The Contents search running, if one is.
+    private var contentSearch: Task<Void, Never>?
+    /// What the Contents search last found, row for row with its list, and
+    /// the tree it was found in.
+    private var contentMatches: [UEFIContentSearch.Match] = []
+    private weak var contentMatchesTree: LazyUEFITree?
+    /// The Contents search's results panel, under the tree — as the dump's
+    /// Search Results are under the dump — and the split that holds the two.
+    let contentResults = UEFIContentResultsView()
+    private let treeSplit = ALSplitView()
     private var splitterBelowSummary: NSLayoutConstraint?
     private var splitterBelowBar: NSLayoutConstraint?
     private let paddingItem = NSMenuItem(title: L("Show Empty Padding"), action: nil, keyEquivalent: "")
@@ -428,6 +442,10 @@ import UEFITool
         searchButton.translatesAutoresizingMaskIntoConstraints = false
         searchBar.onSearch = { [weak self] direction in self?.search(direction) }
         searchBar.onStop = { [weak self] in self?.stopSearching() }
+        searchBar.onFindAll = { [weak self] in self?.findAllContents() }
+        contentResults.onChoose = { [weak self] index in self?.goToContentMatch(index) }
+        contentResults.onStop = { [weak self] in self?.stopSearching() }
+        contentResults.onClose = { [weak self] in self?.closeContentResults() }
 
         paddingItem.target = self
         paddingItem.action = #selector(paddingItemClicked)
@@ -468,7 +486,15 @@ import UEFITool
         // a pane that is still zero-sized while the panel opens.
         legend.install(below: outlineScroll, in: treePane)
         legend.onShowMarkingsChanged = { [weak self] _ in self?.updateRowMarks() }
-        splitter.addPane(treePane)
+        // The tree over the Contents search's results, shut to nothing until
+        // a search opens them.
+        treeSplit.isVertical = false
+        treeSplit.dividerThickness = 1
+        treeSplit.addPane(treePane)
+        treeSplit.addPane(contentResults)
+        treeSplit.setPaneLayout(.fill, at: 0)
+        treeSplit.setPaneLayout(.fixed(0), at: 1)
+        splitter.addPane(treeSplit)
         splitter.addPane(detailPane)
         detailPane.attach(to: outline)
         splitter.setPaneLayout(.fill, at: 0)
@@ -582,6 +608,7 @@ import UEFITool
         summaryLabel.font = ToolPanelFont.body(weight: .medium)
         noticeLabel.font = ToolPanelFont.body()
         searchBar.applyFont()
+        contentResults.applyFont()
         ToolPanelTable.apply(to: outline)
         applyColumnWidths()
         outline.reloadData()
@@ -723,6 +750,7 @@ import UEFITool
             cancelSearch()
             searchOpenings.release()
             searchCursor = nil
+            showContentMatches([], total: 0, scope: nil, in: nil)
         }
         self.image = image
         self.tree = tree
@@ -1463,6 +1491,150 @@ import UEFITool
         drive(run, in: tree)
     }
 
+    // MARK: - The Contents search
+
+    /// The node the reader has selected — or, in the ME sub-tree, the ME
+    /// region it hangs from; nil for none, or the title.
+    private func selectedNode() -> NodeID? {
+        var item = outline.selectedRow >= 0 ? outline.item(atRow: outline.selectedRow) : nil
+        while let current = item {
+            if let row = current as? UEFITreeRow, !row.isLoading { return row.id }
+            item = outline.parent(forItem: current)
+        }
+        return nil
+    }
+
+    /// The patterns the stored Contents search asks for: hex bytes, or a text
+    /// in ASCII and in UTF-16, any case. Nil for a hex string that is not one.
+    static func contentPatterns(_ content: UEFISearchSettings.Content) -> [MaskedPattern]? {
+        let text = content.text.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return nil }
+        if content.isHex { return (try? MaskedPattern.hex(text)).map { [$0] } }
+        return [try? MaskedPattern.ascii(text, ignoringCase: true),
+                try? MaskedPattern.utf16LE(text, ignoringCase: true)].compactMap { $0 }
+    }
+
+    /// Find All: every match of the pattern in the node selected and under
+    /// it while the bar's box is ticked — the whole tree when it is not, or
+    /// nothing is selected — in the results panel under the tree, which shows
+    /// the search's progress while it runs and lists the matches once the
+    /// walk is over.
+    func findAllContents() {
+        guard let tree, !isBuilding else { return }
+        let content = UEFISearchSettings.content
+        guard !content.text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        guard let patterns = Self.contentPatterns(content) else {
+            searchBar.status = .badPattern
+            return
+        }
+        let start = content.fromSelection ? (selectedNode() ?? .root) : .root
+        cancelSearch()
+        searchBar.status = .none
+        contentMatches = []
+        contentResults.showSearching(0)
+        showContentResults(true)
+        let token = searchRun
+        contentSearch = Task { @MainActor [weak self] in
+            let result = try? await UEFIContentSearch.run(patterns, from: start, in: tree) { share in
+                guard let self, self.searchRun == token else { return }
+                self.contentResults.showSearching(share)
+            }
+            guard let self, self.searchRun == token, tree === self.tree else { return }
+            self.contentSearch = nil
+            self.searchRun += 1
+            guard let result else {
+                self.contentResults.clear()
+                return
+            }
+            let scope = start == .root ? nil : tree.node(start).map {
+                UEFITreeDisplay.name(for: $0, catalogue: self.catalogue, in: self.image)
+            }
+            self.showContentMatches(result.matches, total: result.total, scope: scope, in: tree)
+            self.onContentSearchDone?()
+        }
+    }
+
+    /// Called when a Contents search has put its list on screen — the seam a
+    /// test waits on.
+    var onContentSearchDone: (() -> Void)?
+
+    /// Opens or shuts the results panel under the tree.
+    private func showContentResults(_ shown: Bool) {
+        let height = shown ? min(UEFIContentResultsView.panelHeight, max(80, treeSplit.bounds.height / 2)) : 0
+        if case .fixed(let now) = treeSplit.paneLayouts[1], (now > 0) == shown { return }
+        treeSplit.setPaneLayout(.fixed(height), at: 1)
+    }
+
+    /// Whether the results panel is open.
+    var showsContentResults: Bool {
+        if case .fixed(let height) = treeSplit.paneLayouts[1] { return height > 0 }
+        return true
+    }
+
+    /// The reader shut the results panel: the search, if one runs, ends.
+    private func closeContentResults() {
+        cancelSearch()
+        contentMatches = []
+        contentResults.clear()
+        showContentResults(false)
+    }
+
+    private func showContentMatches(_ matches: [UEFIContentSearch.Match], total: Int, scope: String?,
+                                    in tree: LazyUEFITree?) {
+        contentMatches = matches
+        contentMatchesTree = tree
+        guard let tree else {
+            contentResults.clear()
+            showContentResults(false)
+            return
+        }
+        let hex = { (value: UInt64) in String(format: "0x%llX", value) }
+        let name = { [catalogue, image] (id: NodeID?) -> String? in
+            id.flatMap(tree.node).map { UEFITreeDisplay.name(for: $0, catalogue: catalogue, in: image) }
+        }
+        contentResults.show(matches.map { match in
+            let address: String
+            if let range = match.fileRange {
+                address = match.decodedXORKey == nil ? hex(range.lowerBound) : L("%1$@, decoded", hex(range.lowerBound))
+            } else {
+                address = L("%1$@ in %2$@", hex(match.range.lowerBound), name(match.section) ?? "—")
+            }
+            return UEFIContentResultsView.Row(
+                volume: name(match.volume) ?? "—",
+                volumeOffset: match.volumeOffset.map(hex) ?? "—",
+                address: address,
+                node: name(match.node) ?? "—",
+                path: match.node.map { UEFIAgentQueries.path(to: $0, in: tree).joined(separator: " ▸ ") } ?? "",
+                excerpt: match.excerpt,
+                excerptMatch: match.excerptMatch)
+        }, total: total, scope: scope)
+    }
+
+    /// Goes to the match on row `index`: its node in the tree, opened the way
+    /// there as a search opens it, and — for a match in the file — its bytes
+    /// in the dump.
+    func goToContentMatch(_ index: Int) {
+        guard contentMatches.indices.contains(index), let tree, tree === contentMatchesTree else { return }
+        let match = contentMatches[index]
+        let reveal = { [weak self] in
+            if let range = match.fileRange { self?.onRevealMatch?(range) }
+        }
+        guard let id = match.node, tree.node(id) != nil else {
+            reveal()
+            return
+        }
+        searchCursor = id
+        var way = (0..<id.path.count).map { NodeID(Array(id.path.prefix($0 + 1))) }
+        if let node = tree.node(id), isMERegion(node) { way.removeLast() }
+        openForSearch(way, from: 0) { [weak self] in
+            guard let self, self.tree?.node(id) != nil else { return }
+            self.onWillChoose?()
+            self.selectSearchMatch(id)
+            self.closeForSearch(self.searchOpenings.closings(whenLandingOn: id), keepingInView: id)
+            reveal()
+        }
+    }
+
     /// The reader stopped a search that was reading branches.
     private func stopSearching() {
         cancelSearch()
@@ -1471,6 +1643,9 @@ import UEFITool
     /// Ends the search in hand, if there is one.
     private func cancelSearch() {
         searchRun += 1
+        if contentSearch != nil, case .searching = contentResults.state { contentResults.clear() }
+        contentSearch?.cancel()
+        contentSearch = nil
         if searchBar.status == .searching { searchBar.status = .none }
     }
 
@@ -2624,6 +2799,10 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
     }
 
     func outlineViewSelectionDidChange(_ notification: Notification) {
+        // Where the Contents search would start, whoever moved the selection.
+        searchBar.selectedNodeName = selectedNode().flatMap { id in
+            tree?.node(id).map { UEFITreeDisplay.name(for: $0, catalogue: catalogue, in: image) }
+        }
         guard !isShowingState else { return }
         // The reader went somewhere else: what the search opened stays as it is.
         searchOpenings.release()

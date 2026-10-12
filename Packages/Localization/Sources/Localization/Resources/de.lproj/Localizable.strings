@@ -1484,3 +1484,31 @@
 "The copy of the UUID's last six bytes does not read as the UUID's last six. It is a copy, not a checksum: it went stale when the UUID was changed after." = "Die Kopie der letzten sechs Bytes der UUID liest sich nicht wie die letzten sechs Bytes der UUID. Es ist eine Kopie, keine Prüfsumme: sie ist veraltet, weil die UUID später geändert wurde.";
 "The copy of the UUID's last six bytes is erased. It is a copy, not a checksum, so nothing checks wrong because of it." = "Die Kopie der letzten sechs Bytes der UUID ist gelöscht. Es ist eine Kopie, keine Prüfsumme, deshalb meldet keine Prüfung wegen ihr einen Fehler.";
 "Product name" = "Produktname";
+
+/* UEFI Structure: the Contents search. */
+"Names" = "Namen";
+"What to search" = "Was durchsucht wird";
+"Search the nodes' names and GUIDs, or the bytes the nodes hold" = "Die Namen und GUIDs der Knoten durchsuchen oder die Bytes, die die Knoten enthalten";
+"List every place the pattern occurs in the selected node, compressed sections included" = "Alle Fundstellen des Musters im ausgewählten Knoten auflisten, komprimierte Sections eingeschlossen";
+"Hex" = "Hex";
+"Text is found in ASCII and in UTF-16, in any case; hex is bytes, ?? for any byte" = "Text wird in ASCII und in UTF-16 ohne Beachtung der Groß- und Kleinschreibung gesucht; Hex sind Bytes, ?? steht für ein beliebiges Byte";
+"Search the contents" = "Inhalt durchsuchen";
+"A text, or hex bytes such as 24 ?? 4D 49" = "Ein Text oder Hex-Bytes wie 24 ?? 4D 49";
+"Text to find" = "Gesuchter Text";
+"The ME region is searched as it is stored: its modules are not unpacked." = "Die ME-Region wird so durchsucht, wie sie gespeichert ist: Ihre Module werden nicht entpackt.";
+"Not a hex pattern" = "Kein Hex-Muster";
+"%1$@, decoded" = "%1$@, dekodiert";
+"Volume" = "Volume";
+"In volume" = "Im Volume";
+"Node" = "Knoten";
+"The volume the match is in" = "Das Volume, in dem die Fundstelle liegt";
+"Where the match is, from the volume's first byte" = "Lage der Fundstelle ab dem ersten Byte des Volumes";
+"The deepest node that holds the match whole" = "Der tiefste Knoten, der die Fundstelle vollständig enthält";
+"The match's address in the file, or in what a compressed section decompresses to" = "Die Adresse der Fundstelle in der Datei oder im entpackten Inhalt einer komprimierten Section";
+"Only in the selected node" = "Nur im ausgewählten Knoten";
+"Search the selected node and what is under it; unticked, the whole tree" = "Den ausgewählten Knoten und alles darunter durchsuchen; ohne Häkchen den ganzen Baum";
+"Nothing selected: the whole tree" = "Nichts ausgewählt: der ganze Baum";
+"The whole tree" = "Der ganze Baum";
+"Stop the search through the contents" = "Die Suche im Inhalt beenden";
+"%1$@, the first %2$@ listed" = "%1$@, die ersten %2$@ aufgelistet";
+"Search results in %1$@ (%2$@)" = "Suchergebnisse in %1$@ (%2$@)";

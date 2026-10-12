@@ -148,6 +148,42 @@ rows above it — shut first, the old match's volume would be opened again
 behind the search. A row the reader opens or shuts, a click on another row, a
 changed query or a closed bar ends the search's claim on what it opened.
 
+## Searching the contents
+
+The search bar's second mode, **Contents**, looks for a pattern in what the
+nodes hold rather than for a node by what it is called. It is not a walk from
+match to match: Find All runs to the end and lists every match. A search of
+the dump cannot find a driver's text, which is in the file only compressed;
+this one can.
+
+- **What is searched.** The node selected — with **Only in the selected
+  node** ticked, the default — or the whole tree. Every container under it is
+  opened first (`UEFIContentSearch.openEverything`, depth first so the
+  progress moves one way). Then the node's own bytes are scanned, and every
+  buffer under it: what each compressed section decompresses to, a BIOS Guard
+  update's assembled region (both `UEFIPresenter.decompressedBody`), and each
+  LENV block stored XOR-encoded, decoded at the same addresses. Each byte is
+  in exactly one scan, so no match is counted twice; a compressed section's
+  own stored bytes are scanned too, as the file's.
+- **The scan** is the find bar's (`PatternScan`, in `Packages/BytePattern`,
+  which `ByteRipperCore` re-exports and the tool-module links directly): holes,
+  ASCII and UTF-16 case folding. A text is looked for as both, any case; hex
+  as given.
+- **Where a match is.** The deepest node in the match's own bytes that holds
+  it whole, the volume that node is in, and the offset from the volume's first
+  byte when the volume is in the same bytes. A match in decompressed bytes has
+  no file address; it says which section's buffer it is in and where.
+- **The order** is the tree's, by node path and then by address. A search
+  keeps the first ten thousand matches and counts the rest.
+- **The panel.** The results open in a panel under the tree, the counterpart
+  of the dump's Search Results under the dump: the header carries the count,
+  the progress while the search runs, a stop button and a ×; a row carries the
+  volume, the offset in it, the address, an excerpt with the match in bold and
+  the node. A click opens the way to the node and selects it, and for a match
+  in the file selects its bytes in the dump.
+- **For an agent** the same search is `uefi_find_bytes`
+  (`UEFIAgentContentSearch`).
+
 ## Where the decisions live
 
 As with the FIT tool-module, the panel is thin and the pure target is where the

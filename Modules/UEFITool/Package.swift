@@ -56,6 +56,9 @@ let package = Package(
         // Lenovo's DMI store, read in the format's own terms for the rows the
         // parser makes of it.
         .package(path: "../../Packages/LenovoDMI"),
+        // The byte pattern and its scan the find bar runs, for the search
+        // through what the volumes and their compressed sections hold.
+        .package(path: "../../Packages/BytePattern"),
         // Only for the tests, to build a compressed section byte by byte.
         .package(path: "../../Packages/FirmwareCompression")
     ],
@@ -66,7 +69,8 @@ let package = Package(
             .product(name: "ToolModuleKit", package: "ToolModuleKit"),
             .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "AgentKit", package: "AgentKit"),
-            .product(name: "LenovoDMI", package: "LenovoDMI")
+            .product(name: "LenovoDMI", package: "LenovoDMI"),
+            .product(name: "BytePattern", package: "BytePattern")
         ]),
         .target(name: "UEFIToolUI", dependencies: [
             .product(name: "HelpUI", package: "HelpUI"),
@@ -84,7 +88,8 @@ let package = Package(
             .product(name: "MEPresentation", package: "MEPresentation"),
             .product(name: "MEReads", package: "MEReads"),
             .product(name: "AgentKit", package: "AgentKit"),
-            .product(name: "LenovoDMI", package: "LenovoDMI")
+            .product(name: "LenovoDMI", package: "LenovoDMI"),
+            .product(name: "BytePattern", package: "BytePattern")
         ]),
         .testTarget(name: "UEFIToolTests", dependencies: [
             "UEFITool",
@@ -93,7 +98,8 @@ let package = Package(
             .product(name: "UEFIImage", package: "UEFIImage"),
             .product(name: "FirmwareCompressionTestSupport", package: "FirmwareCompression"),
             .product(name: "AgentKit", package: "AgentKit"),
-            .product(name: "LenovoDMI", package: "LenovoDMI")
+            .product(name: "LenovoDMI", package: "LenovoDMI"),
+            .product(name: "BytePattern", package: "BytePattern")
         ])
     ]
 )

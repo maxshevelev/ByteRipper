@@ -167,6 +167,33 @@ final class AgentFindToolsTests: XCTestCase {
         XCTAssertEqual(read["in_compressed"], true)
     }
 
+    /// The whole tree searched at once: the text only a compressed section
+    /// holds is found without naming the section, placed at the node inside
+    /// it and in its volume, and read there by `uefi_node_data`.
+    func testTheTreesContentsAreSearchedWithoutNamingTheSection() async throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let found = try await client.answer("uefi_find_bytes", ["text": "gh51g", "ignore_case": true])
+        XCTAssertEqual(found["total"], 1, "\(found)")
+        XCTAssertEqual(found["buffers"], 1)
+        let match = try XCTUnwrap(found["matches"]?.arrayValue?.first)
+        XCTAssertEqual(match["encoding"], "ascii")
+        XCTAssertEqual(match["in_compressed"], true)
+        XCTAssertNil(match["start"], "no file address")
+        XCTAssertEqual(match["node"]?["name"], "Raw")
+        XCTAssertNotNil(match["volume"]?["id"])
+        let section = try XCTUnwrap(match["section"]?.stringValue)
+        let at = try XCTUnwrap(match["buffer_start"]?.stringValue)
+        let read = try await client.answer("uefi_node_data", ["node": .string(section), "part": "decompressed",
+                                                             "offset": .string(at), "length": 5, "format": "ascii"])
+        XCTAssertEqual(read["text"], "GH51G")
+
+        let underFile = try await client.answer("uefi_find_bytes", ["hex": "47 48 35 31 47", "node": "0.0"])
+        XCTAssertEqual(underFile["node"]?["type"], "File", "says which node it searched: \(underFile)")
+        XCTAssertEqual(underFile["total"], 1, "the section under the file is searched too")
+        let bad = try await client.call("uefi_find_bytes", ["text": "x", "node": "9.9"])
+        XCTAssertTrue(bad.answer.stringValue?.hasPrefix("No node 9.9") == true, "\(bad.answer)")
+    }
+
     /// A node of the file reads as `read` reads the same bytes.
     func testANodeOfTheFileReadsAsReadDoes() async throws {
         try open(UEFITestImage.make())

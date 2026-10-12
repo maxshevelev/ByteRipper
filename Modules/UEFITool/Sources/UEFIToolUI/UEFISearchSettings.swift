@@ -14,6 +14,10 @@ import UEFITool
     static let typeKey = "UEFIStructure.Search.Type"
     static let subtypeKey = "UEFIStructure.Search.Subtype"
     static let isOpenKey = "UEFIStructure.Search.IsOpen"
+    static let modeKey = "UEFIStructure.Search.Mode"
+    static let contentTextKey = "UEFIStructure.Search.ContentText"
+    static let contentIsHexKey = "UEFIStructure.Search.ContentIsHex"
+    static let contentWholeTreeKey = "UEFIStructure.Search.ContentWholeTree"
 
     /// Posted when the query or whether the bar is open changed.
     static let didChange = Notification.Name("UEFIStructureSearchDidChange")
@@ -46,6 +50,49 @@ import UEFITool
             defaults.set(newValue, forKey: isOpenKey)
             NotificationCenter.default.post(name: didChange, object: nil)
         }
+    }
+
+    /// What the bar looks for: a node by what it is called, or a pattern in
+    /// what the nodes hold.
+    enum Mode: String {
+        case names, contents
+    }
+
+    static var mode: Mode {
+        get { defaults.string(forKey: modeKey).flatMap(Mode.init) ?? .names }
+        set { store(newValue.rawValue, forKey: modeKey, was: mode.rawValue) }
+    }
+
+    /// What the Contents search asks for: a text — in ASCII and in UTF-16,
+    /// any case — or hex bytes with `??` holes; in the node selected when
+    /// the search starts, or in the whole tree.
+    struct Content: Equatable {
+        var text = ""
+        var isHex = false
+        var fromSelection = true
+    }
+
+    static var content: Content {
+        get {
+            // Stored as "the whole tree", so a bench that never touched the
+            // box starts from the selected node.
+            Content(text: defaults.string(forKey: contentTextKey) ?? "",
+                    isHex: defaults.bool(forKey: contentIsHexKey),
+                    fromSelection: !defaults.bool(forKey: contentWholeTreeKey))
+        }
+        set {
+            guard newValue != content else { return }
+            defaults.set(newValue.text, forKey: contentTextKey)
+            defaults.set(newValue.isHex, forKey: contentIsHexKey)
+            defaults.set(!newValue.fromSelection, forKey: contentWholeTreeKey)
+            NotificationCenter.default.post(name: didChange, object: nil)
+        }
+    }
+
+    private static func store(_ value: String, forKey key: String, was old: String) {
+        guard value != old else { return }
+        defaults.set(value, forKey: key)
+        NotificationCenter.default.post(name: didChange, object: nil)
     }
 
     /// A code is stored as a number, and "none" as no number at all.

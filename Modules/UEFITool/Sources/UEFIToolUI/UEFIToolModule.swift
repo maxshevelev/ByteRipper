@@ -47,7 +47,7 @@ public enum UEFIToolModule: ToolModule {
     public static var agentQueries: [ToolAgentQuery] {
         UEFIAgentQueries.all(catalogue: agentCatalogue) + UEFIAgentChecksums.all + UEFIAgentRegions.all
             + UEFIAgentVariables.queries
-            + UEFIAgentNodeData.all
+            + UEFIAgentNodeData.all + UEFIAgentContentSearch.all
     }
 
     /// The GUID catalogue for an agent's `uefi_node`: the one the panel holds,
@@ -362,6 +362,7 @@ private struct ChecksumPass: Sendable {
         controller.onSearchWrapped = { [weak self] forward in
             self?.host.showNotice(symbol: SearchWrapSigns.sign(forward: forward), lines: [])
         }
+        controller.onRevealMatch = { [weak self] range in self?.host.reveal(range, select: true) }
         controller.onSelectME = { [weak self] path in self?.selectME(path) }
         controller.onOpenMERegion = { [weak self] id in self?.openMERegion(id) }
         controller.onMERegionLoading = { [weak self] id, loading in

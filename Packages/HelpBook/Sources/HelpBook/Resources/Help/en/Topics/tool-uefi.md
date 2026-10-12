@@ -13,6 +13,7 @@
 @covers panel.uefi.superseded-entries
 @covers panel.uefi.filter
 @covers panel.uefi.search
+@covers panel.uefi.content-search
 @covers panel.uefi.variable-history
 @covers panel.uefi.folding-table
 @covers panel.uefi.table-copy
@@ -51,6 +52,14 @@ The arrows go to the next and the previous match — as do Return and Shift-Retu
 The match is selected as a click on it would select it: the details and the dump follow. The search opens the branches on the way to the match, and the match itself one level down. When it goes on to the next match it shuts again what it opened and the new match does not need, so that the tree returns to the state it had before the search. A branch the reader opened is not touched. A branch the reader opens or shuts while the search stands on it, a click on another row, a changed query or a closed bar leave everything as it is.
 
 The contents of an ME region are not searched: the sub-tree has another structure, which a name, a GUID and a type do not describe. The row of the ME region itself is found. What is asked for is the same in both panels, and it is kept through a re-read of the file, a change of file and a restart of the app.
+
+## Searching the contents
+
+The switch at the start of the search bar chooses what is searched: **Names** is the search above, **Contents** looks for a pattern in the bytes the nodes hold. In **Contents** the field takes a text or hex bytes, as the pop-up beside it says. A text is looked for in ASCII and in UTF-16, whatever the case; hex is bytes as the dump's find takes them, with `??` for a byte that may be anything: `24 ?? 4D 49`. **Find All**, or Return in the field, starts the search.
+
+With **Only in the selected node** ticked, the search covers the node selected in the tree and everything under it; the line beside the box names that node. With the box clear, or with nothing selected, it covers the whole tree. The search opens every branch on the way, so the first search of a large image takes a few seconds. It reads every compressed section in what it decompresses to, nested ones too, a BIOS Guard update in the region it assembles, and a Lenovo LENV block stored XOR-encoded, decoded. That is where it finds what a search of the dump cannot: a text inside an LZMA or Tiano section is not in the file's bytes. The contents of an ME region are searched as they are stored; its modules are not unpacked.
+
+The results open in a panel under the tree, as the dump's **Search results** open under the dump. While the search runs, the panel's header shows its progress, with a button that stops it. Each row is one match: the **Volume** it is in, where it is **In volume**, counted from the volume's first byte, its **Location**, the bytes around it with the match in bold, and the **Node** — the deepest node that holds the match whole. **Location** is the match's address in the file; for a match inside a compressed section it is the address in what that section decompresses to, with the section's name, and **In volume** is empty when the volume is in the file and the match is not. A match in a decoded LENV block has its file address, marked as decoded: the file holds those bytes encoded. The rows come in the order of the tree. A click on a row selects its node in the tree, opening the branches on the way, and, for a match in the file, selects its bytes in the dump. The × closes the panel and stops a search still running.
 
 ## What the tool checks
 
