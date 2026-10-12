@@ -407,6 +407,54 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         controls.caseToggled()
     }
 
+    /// What is typed stays when the box is ticked or cleared — in the tab's
+    /// panel and in a fragment panel's.
+    func testTheBoxLeavesTheTypedPatternAlone() throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        UEFISearchSettings.content = .init(text: "OLD", wholeTree: true)
+        let results = try findAll("GH51G")
+        results.open(0)
+        let controller = try XCTUnwrap(controller)
+        XCTAssertTrue(pumpUntil(5) { controller.fragments.panelsLinked(to: controller.windowModel.pane1).count == 1 })
+        let id = try XCTUnwrap(controller.fragments.panelsLinked(to: controller.windowModel.pane1).first)
+        let surface = try XCTUnwrap(controller.fragments.surface(id))
+        XCTAssertTrue(pumpUntil(5) { !self.descendants(of: surface.tools.panel, UEFISearchBar.self).isEmpty })
+
+        for bar in [try bar(), try XCTUnwrap(descendants(of: surface.tools.panel, UEFISearchBar.self).first)] {
+            let controls = try XCTUnwrap((bar.query as? ToolPatternQueryControls)?.controls)
+            let window = try XCTUnwrap(bar.window)
+            window.makeFirstResponder(controls.patternField)
+            let editor = try XCTUnwrap(controls.patternField.currentEditor() as? NSTextView)
+            editor.selectAll(nil)
+            editor.insertText("TYPED-\(ObjectIdentifier(bar).hashValue)", replacementRange: editor.selectedRange())
+            let typed = controls.text
+            let box = try XCTUnwrap(descendants(of: bar, NSButton.self).first { $0.title == "The whole tree" })
+            box.performClick(nil)
+            XCTAssertEqual(controls.text, typed, "cleared: the pattern stays")
+            box.performClick(nil)
+            XCTAssertEqual(controls.text, typed, "ticked: the pattern stays")
+        }
+    }
+
+    /// A pattern that came into the field without typing — picked from the
+    /// menu — stays too when the box is used.
+    func testTheBoxLeavesAPickedPatternAlone() throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        UEFISearchSettings.content = .init(text: "OLD", wholeTree: true)
+        FindHistoryStore.record(pattern: "GH51G", encoding: .ascii, caseSensitive: false)
+        let controls = try controls()
+        controls.rebuildPatternMenu()
+        let item = try XCTUnwrap(controls.patternField.searchMenuTemplate?.items.first {
+            $0.representedObject != nil && ($0.attributedTitle?.string ?? $0.title).contains("GH51G")
+        })
+        let results = try results()
+        NSApp.sendAction(try XCTUnwrap(item.action), to: item.target, from: item)
+        XCTAssertTrue(pumpUntil(5) { if case .done = results.state { return true }; return false })
+        let box = try XCTUnwrap(descendants(of: try bar(), NSButton.self).first { $0.title == "The whole tree" })
+        box.performClick(nil)
+        XCTAssertEqual(controls.text, "GH51G", "the picked pattern stays")
+    }
+
     func testTheCrossShutsTheResults() throws {
         try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
         let results = try findAll("GH51G")

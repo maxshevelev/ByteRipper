@@ -435,7 +435,7 @@ import UEFITool
     func install(_ query: any ToolPatternQuery) {
         self.query = query
         query.applyFont(ToolPanelFont.body())
-        query.onSubmit = { [weak self] in self?.onFindAll?() }
+        query.onSubmit = { [weak self] in self?.runFindAll() }
         query.onEdited = { [weak self, weak query] in
             guard let self, let query else { return }
             self.status = .none
@@ -452,6 +452,11 @@ import UEFITool
 
     private func storeContent(_ change: (inout UEFISearchSettings.Content) -> Void) {
         var content = UEFISearchSettings.content
+        // The field as it is, however its text got there: a pattern picked
+        // from its menu, or rewritten by a search (`deadbeef` read as bytes),
+        // was never typed, and storing the box without it put the last typed
+        // text back in the field.
+        if mode == .contents, let query { content.text = query.text }
         change(&content)
         if status != .searching { status = .none }
         UEFISearchSettings.content = content
@@ -503,7 +508,14 @@ import UEFITool
         storeContent { $0.wholeTree = wholeTree }
     }
 
-    @objc private func findAllClicked() { onFindAll?() }
+    @objc private func findAllClicked() { runFindAll() }
+
+    /// Find All, with the field's text kept first — the search may rewrite
+    /// it, and the other panels' bars show it.
+    private func runFindAll() {
+        if mode == .contents, query != nil { storeContent { _ in } }
+        onFindAll?()
+    }
 
     @objc private func typeChosen() {
         let tag = typePopUp.selectedItem?.tag ?? -1
