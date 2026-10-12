@@ -320,6 +320,11 @@ private struct ChecksumPass: Sendable {
     public init(host: any ToolHost) {
         self.host = host
         self.analyzer = MEFirmwareAnalyzer(data: Self.dataSource)
+        // The Contents search asks the way the dump's Find bar does, with its
+        // recent queries and its pattern library, when the host has them.
+        if let query = host.makePatternQuery() {
+            controller.installPatternQuery(query)
+        }
         controller.onSelect = { [weak self] nodeID in self?.select(nodeID) }
         controller.onWillChoose = { [weak self] in self?.host.noteNavigationStep() }
         controller.onSelectTop = { [weak self] in self?.showTopNode() }

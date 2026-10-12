@@ -16,7 +16,6 @@ import UEFITool
     static let isOpenKey = "UEFIStructure.Search.IsOpen"
     static let modeKey = "UEFIStructure.Search.Mode"
     static let contentTextKey = "UEFIStructure.Search.ContentText"
-    static let contentIsHexKey = "UEFIStructure.Search.ContentIsHex"
     static let contentFromSelectionKey = "UEFIStructure.Search.ContentFromSelection"
 
     /// Posted when the query or whether the bar is open changed.
@@ -63,12 +62,11 @@ import UEFITool
         set { store(newValue.rawValue, forKey: modeKey, was: mode.rawValue) }
     }
 
-    /// What the Contents search asks for: a text — in ASCII and in UTF-16,
-    /// any case — or hex bytes with `??` holes; in the whole tree, or in the
-    /// node selected when the search starts.
+    /// What the Contents search asks for: the text in its field — how it is
+    /// read is the pattern controls' to say, as in the dump's Find bar — and
+    /// whether in the whole tree or in the node selected when it starts.
     struct Content: Equatable {
         var text = ""
-        var isHex = false
         var wholeTree = true
     }
 
@@ -77,13 +75,11 @@ import UEFITool
             // Stored as "from the selection", so a bench that never touched
             // the box searches the whole tree.
             Content(text: defaults.string(forKey: contentTextKey) ?? "",
-                    isHex: defaults.bool(forKey: contentIsHexKey),
                     wholeTree: !defaults.bool(forKey: contentFromSelectionKey))
         }
         set {
             guard newValue != content else { return }
             defaults.set(newValue.text, forKey: contentTextKey)
-            defaults.set(newValue.isHex, forKey: contentIsHexKey)
             defaults.set(!newValue.wholeTree, forKey: contentFromSelectionKey)
             NotificationCenter.default.post(name: didChange, object: nil)
         }

@@ -1514,29 +1514,39 @@ import UEFITool
         return nil
     }
 
-    /// The patterns the stored Contents search asks for: hex bytes, or a text
-    /// in ASCII and in UTF-16, any case. Nil for a hex string that is not one.
-    static func contentPatterns(_ content: UEFISearchSettings.Content) -> [MaskedPattern]? {
-        let text = content.text.trimmingCharacters(in: .whitespaces)
+    /// What the Contents search asks for, in the order to look: the app's
+    /// pattern controls' attempts — the encoding chosen, or Smart Search's one
+    /// encoding after another — or, without them, hex bytes when the text
+    /// reads as bytes and then the text in ASCII and in UTF-16, any case.
+    private func contentAttempts() -> [ToolPatternAttempt]? {
+        if let query = searchBar.query { return query.attempts() }
+        let text = UEFISearchSettings.content.text.trimmingCharacters(in: .whitespaces)
         guard !text.isEmpty else { return nil }
-        if content.isHex { return (try? MaskedPattern.hex(text)).map { [$0] } }
-        return [try? MaskedPattern.ascii(text, ignoringCase: true),
-                try? MaskedPattern.utf16LE(text, ignoringCase: true)].compactMap { $0 }
+        var attempts: [ToolPatternAttempt] = []
+        let hexLike = text.split(separator: " ").allSatisfy { $0.count == 2 || $0.count % 2 == 0 }
+        if hexLike, let hex = try? MaskedPattern.hex(text) {
+            attempts.append(ToolPatternAttempt(pattern: hex, encoding: "hex", encodingName: "Hex"))
+        }
+        if let ascii = try? MaskedPattern.ascii(text, ignoringCase: true) {
+            attempts.append(ToolPatternAttempt(pattern: ascii, encoding: "ascii", encodingName: "ASCII"))
+        }
+        if let wide = try? MaskedPattern.utf16LE(text, ignoringCase: true) {
+            attempts.append(ToolPatternAttempt(pattern: wide, encoding: "utf16LE", encodingName: "UTF-16 LE"))
+        }
+        return attempts.isEmpty ? nil : attempts
     }
 
     /// Find All: every match of the pattern in the whole tree while the bar's
     /// box is ticked — in the node selected and under it when it is not, the
-    /// whole tree again with nothing selected — in the results panel under the tree, which shows
-    /// the search's progress while it runs and lists the matches once the
-    /// walk is over.
+    /// whole tree again with nothing selected — in the results panel under the
+    /// tree, which shows the search's progress while it runs and lists the
+    /// matches once the walk is over. With more than one attempt the first
+    /// that finds anything is the answer, as in the dump's Smart Search, and
+    /// the controls are told which.
     func findAllContents() {
         guard let tree, !isBuilding else { return }
         let content = UEFISearchSettings.content
-        guard !content.text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        guard let patterns = Self.contentPatterns(content) else {
-            searchBar.status = .badPattern
-            return
-        }
+        guard let attempts = contentAttempts(), !attempts.isEmpty else { return }  // said by the controls
         let start = content.wholeTree ? .root : (selectedNode() ?? .root)
         cancelSearch()
         searchBar.status = .none
@@ -1545,9 +1555,16 @@ import UEFITool
         showContentResults(true)
         let token = searchRun
         contentSearch = Task { @MainActor [weak self] in
-            let result = try? await UEFIContentSearch.run(patterns, from: start, in: tree) { share in
-                guard let self, self.searchRun == token else { return }
-                self.contentResults.showSearching(share)
+            var result: UEFIContentSearch.Result?
+            for (index, attempt) in attempts.enumerated() {
+                result = try? await UEFIContentSearch.run([attempt.pattern], from: start, in: tree) { share in
+                    guard let self, self.searchRun == token else { return }
+                    self.contentResults.showSearching((Double(index) + share) / Double(attempts.count))
+                }
+                guard let found = result, found.total == 0 else {
+                    if result != nil, let self, self.searchRun == token { self.searchBar.query?.found(encoding: attempt.encoding) }
+                    break
+                }
             }
             guard let self, self.searchRun == token, tree === self.tree else { return }
             self.contentSearch = nil
@@ -1567,6 +1584,12 @@ import UEFITool
     /// Called when a Contents search has put its list on screen — the seam a
     /// test waits on.
     var onContentSearchDone: (() -> Void)?
+
+    /// The app's pattern controls for the Contents search, in the bar's field's
+    /// place: the Find bar's own, with its history and library.
+    func installPatternQuery(_ query: any ToolPatternQuery) {
+        searchBar.install(query)
+    }
 
     /// Opens or shuts the results panel under the tree.
     private func showContentResults(_ shown: Bool) {

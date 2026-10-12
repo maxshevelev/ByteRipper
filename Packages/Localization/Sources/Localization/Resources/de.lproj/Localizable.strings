@@ -1488,12 +1488,8 @@
 "Names" = "Namen";
 "What to search" = "Was durchsucht wird";
 "Search the nodes' names and GUIDs, or the bytes the nodes hold" = "Die Namen und GUIDs der Knoten durchsuchen oder die Bytes, die die Knoten enthalten";
-"Hex" = "Hex";
-"Text is found in ASCII and in UTF-16, in any case; hex is bytes, ?? for any byte" = "Text wird in ASCII und in UTF-16 ohne Beachtung der Groß- und Kleinschreibung gesucht; Hex sind Bytes, ?? steht für ein beliebiges Byte";
 "Search the contents" = "Inhalt durchsuchen";
 "A text, or hex bytes such as 24 ?? 4D 49" = "Ein Text oder Hex-Bytes wie 24 ?? 4D 49";
-"Text to find" = "Gesuchter Text";
-"Not a hex pattern" = "Kein Hex-Muster";
 "%1$@, decoded" = "%1$@, dekodiert";
 "Node" = "Knoten";
 "Nothing selected: the whole tree" = "Nichts ausgewählt: der ganze Baum";
@@ -1508,3 +1504,4 @@
 "%1$@: %2$@" = "%1$@: %2$@";
 "The node that holds the match, after the node above it and the codecs its bytes came through" = "Der Knoten, der die Fundstelle enthält; davor der Knoten darüber und die Codecs, durch die ihre Bytes gegangen sind";
 "Open the bytes this match is in as a panel, the match selected" = "Die Bytes, in denen die Fundstelle liegt, als Bereich mit ausgewählter Fundstelle öffnen";
+"Text or hex bytes" = "Text oder Hex-Bytes";

@@ -48,7 +48,11 @@ let package = Package(
         .package(path: "../AgentKit"),
         // What a part panel's bytes are to the file's: the seam hands a
         // codec over when a tool-module opens a part.
-        .package(path: "../PartCodec")
+        .package(path: "../PartCodec"),
+        // The pattern a search the host asks for comes back as
+        // (`ToolPatternQuery`): the scan's own type, so a tool-module runs it
+        // without knowing how the host parsed the field.
+        .package(path: "../BytePattern")
     ],
     targets: [
         .target(name: "ToolModuleKit",
@@ -59,7 +63,8 @@ let package = Package(
                     .product(name: "HelpUI", package: "HelpUI"),
                     .product(name: "ALSplitView", package: "ALSplitView"),
                     .product(name: "AgentKit", package: "AgentKit"),
-                    .product(name: "PartCodec", package: "PartCodec")
+                    .product(name: "PartCodec", package: "PartCodec"),
+                    .product(name: "BytePattern", package: "BytePattern")
                 ]),
         .testTarget(
             name: "ToolModuleKitTests",
@@ -74,7 +79,8 @@ let package = Package(
                 .product(name: "Localization", package: "Localization"),
                 .product(name: "ALSplitView", package: "ALSplitView"),
                 .product(name: "AgentKit", package: "AgentKit"),
-                .product(name: "PartCodec", package: "PartCodec")
+                .product(name: "PartCodec", package: "PartCodec"),
+                .product(name: "BytePattern", package: "BytePattern")
             ]
         )
     ]

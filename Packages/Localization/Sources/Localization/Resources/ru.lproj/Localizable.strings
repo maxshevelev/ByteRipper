@@ -1488,12 +1488,8 @@
 "Names" = "Имена";
 "What to search" = "Где искать";
 "Search the nodes' names and GUIDs, or the bytes the nodes hold" = "Искать по именам и GUID узлов или в байтах, которые узлы содержат";
-"Hex" = "Hex";
-"Text is found in ASCII and in UTF-16, in any case; hex is bytes, ?? for any byte" = "Текст ищется в ASCII и в UTF-16 без учёта регистра; hex — это байты, ?? означает любой байт";
 "Search the contents" = "Поиск по содержимому";
 "A text, or hex bytes such as 24 ?? 4D 49" = "Текст или байты hex, например 24 ?? 4D 49";
-"Text to find" = "Искомый текст";
-"Not a hex pattern" = "Это не шаблон hex";
 "%1$@, decoded" = "%1$@, раскодировано";
 "Node" = "Узел";
 "Nothing selected: the whole tree" = "Ничего не выбрано: всё дерево";
@@ -1508,3 +1504,4 @@
 "%1$@: %2$@" = "%1$@: %2$@";
 "The node that holds the match, after the node above it and the codecs its bytes came through" = "Узел, содержащий вхождение; перед ним — узел над ним и кодеки, через которые прошли байты";
 "Open the bytes this match is in as a panel, the match selected" = "Открыть байты, в которых лежит вхождение, панелью с выделенным вхождением";
+"Text or hex bytes" = "Текст или байты hex";

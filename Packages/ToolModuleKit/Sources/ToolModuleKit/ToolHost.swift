@@ -110,11 +110,21 @@ import PartCodec
     /// Called before the choice changes. An arrow key walking the rows is not
     /// such a choice.
     func noteNavigationStep()
+
+    /// The app's own controls for asking what to look for — the pattern field
+    /// with its menu of recent queries and of the pattern library, the
+    /// encoding, Smart Search and the case toggle — for a panel that searches
+    /// bytes, so it asks the way the dump's Find bar does and shares its
+    /// history and library (`ToolPatternQuery`). A new set each call.
+    func makePatternQuery() -> (any ToolPatternQuery)?
 }
 
 public extension ToolHost {
     /// A host with no history to keep — a test double — keeps nothing.
     func noteNavigationStep() {}
+    /// A host with no pattern controls of its own — a test double — has none
+    /// to hand over, and the panel asks with its own field.
+    func makePatternQuery() -> (any ToolPatternQuery)? { nil }
 }
 
 /// The part of a host that reading needs: the file's name and size, its bytes,

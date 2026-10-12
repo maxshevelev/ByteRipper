@@ -7142,7 +7142,7 @@ final class MainViewController: NSViewController {
     /// that matters, the same search kept twice — so what is left here is the
     /// keeping itself and saying it happened, in the same plate the searches
     /// answer in.
-    private func askToKeepPattern(_ entry: SearchPatternEntry) {
+    func askToKeepPattern(_ entry: SearchPatternEntry) {
         let sheet = NamePatternSheetController(entry: entry) { [weak self] kept in
             guard FavoritePatternStore.add(kept) else { return }
             self?.showNotice(symbol: "star.fill", lines: [L("Added to Favorites"), kept.name])

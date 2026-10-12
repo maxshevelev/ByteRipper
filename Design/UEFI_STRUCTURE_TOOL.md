@@ -169,10 +169,17 @@ this one can.
   an encoded LENV block, as they are stored, are cut out of every scan —
   nothing a technician looks for is in a compressed stream. Each byte is in
   exactly one scan, so no match is counted twice.
+- **The pattern** is asked for with the Find bar's own controls
+  (`PatternQueryControls`, handed over as `ToolPatternQuery` by
+  `ToolHost.makePatternQuery()`): the field with its menu of recent queries and
+  of the pattern library, the encoding, Smart Search and the case toggle. The
+  recents and the library are the app's one history and one library. The
+  controls give the attempts to make, in order — the encoding chosen, or Smart
+  Search's — and the panel runs them until one finds anything, then tells the
+  controls which, so the encoding shows and the search is kept. Hex with `??`
+  holes is taken here as well.
 - **The scan** is the find bar's (`PatternScan`, in `Packages/BytePattern`,
-  which `ByteRipperCore` re-exports and the tool-module links directly): holes,
-  ASCII and UTF-16 case folding. A text is looked for as both, any case; hex
-  as given.
+  which `ByteRipperCore` re-exports and the tool-module links directly).
 - **Where a match is.** The deepest node in the match's own bytes that holds
   it whole, the volume that node is in, and the offset from the volume's first
   byte when the volume is in the same bytes. A match in decompressed bytes has

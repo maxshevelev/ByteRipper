@@ -27,6 +27,8 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         defaultsName = isolated.name
         ToolController.defaults = isolated.store
         ToolController.changeDelay = 0
+        FindHistoryStore.defaults = isolated.store
+        FindBarView.defaults = isolated.store
         Self.keys.forEach { ToolPanelFont.defaults.removeObject(forKey: $0) }
     }
 
@@ -36,6 +38,8 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         for file in files { try? FileManager.default.removeItem(at: file) }
         if let defaultsName { discardIsolatedDefaults(defaultsName, ToolController.defaults) }
         ToolController.defaults = .standard
+        FindHistoryStore.defaults = .standard
+        FindBarView.defaults = .standard
         ToolController.changeDelay = 0.15
         controller = nil
         window = nil
@@ -89,7 +93,7 @@ final class UEFIContentSearchFlowTests: XCTestCase {
     /// Clicks Find All for `text` and waits for the search to be over: the
     /// results panel opens under the tree, with its progress while it runs.
     private func findAll(_ text: String, hex: Bool = false, wholeTree: Bool = true) throws -> UEFIContentResultsView {
-        UEFISearchSettings.content = .init(text: text, isHex: hex, wholeTree: wholeTree)
+        UEFISearchSettings.content = .init(text: text, wholeTree: wholeTree)
         let bar = try bar()
         let button = try XCTUnwrap(descendants(of: bar, NSButton.self).first { $0.title == "Find All" })
         XCTAssertFalse(button.isHiddenOrHasHiddenAncestor, "Find All is on screen in Contents mode")
@@ -222,9 +226,9 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         try open(UEFITestImage.intelImageWithME())
         let bar = try bar()
         let note = { self.descendants(of: bar, NSTextField.self).first { $0.stringValue == "ME Region is not searched" } }
-        UEFISearchSettings.content = .init(text: "", isHex: false, wholeTree: true)
+        UEFISearchSettings.content = .init(text: "", wholeTree: true)
         XCTAssertEqual(note()?.isHidden, false, "the whole tree: said")
-        UEFISearchSettings.content = .init(text: "", isHex: false, wholeTree: false)
+        UEFISearchSettings.content = .init(text: "", wholeTree: false)
         XCTAssertEqual(note()?.isHidden, true, "from the selected node: not said")
         UEFISearchSettings.mode = .names
         XCTAssertEqual(note()?.isHidden, false, "the name search says it whatever the box")
@@ -328,6 +332,79 @@ final class UEFIContentSearchFlowTests: XCTestCase {
         XCTAssertEqual(part.hexSelection().start, at + 1, "the caret moved on past the byte typed")
         XCTAssertEqual(part.hexSelection().end, part.hexSelection().start, "nothing selected")
         XCTAssertEqual(clip.bounds.origin.y, scrolled, accuracy: 1, "the view stayed")
+    }
+
+    // MARK: - The Find bar's controls
+
+    private func controls() throws -> PatternQueryControls {
+        try XCTUnwrap((try bar().query as? ToolPatternQueryControls)?.controls, "the host's controls are installed")
+    }
+
+    /// The pattern is asked for with the dump's own controls — field, encoding,
+    /// Smart Search, case — in the bar's field's place.
+    func testTheContentsSearchAsksWithTheFindBarsControls() throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let bar = try bar()
+        let controls = try controls()
+        XCTAssertTrue(controls.patternField.isDescendant(of: bar))
+        XCTAssertFalse(controls.patternField.isHiddenOrHasHiddenAncestor, "on screen in Contents mode")
+        XCTAssertFalse(controls.smartButton.isHiddenOrHasHiddenAncestor)
+        XCTAssertNotNil(controls.patternField.searchMenuTemplate, "with the menu of recents and the library")
+        UEFISearchSettings.mode = .names
+        XCTAssertFalse(controls.patternField.isDescendant(of: bar), "the name search has its own field")
+        UEFISearchSettings.mode = .contents
+        XCTAssertTrue(controls.patternField.isDescendant(of: bar), "and back in Contents mode")
+    }
+
+    /// A search that found something goes into the Find bar's recent queries,
+    /// with the encoding it was found in; one that found nothing does not.
+    func testAFoundSearchJoinsTheFindBarsRecents() throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        _ = try findAll("NOT-IN-THERE")
+        XCTAssertNil(FindHistoryStore.mostRecent, "nothing found, nothing kept")
+        _ = try findAll("GH51G")
+        XCTAssertEqual(FindHistoryStore.mostRecent?.pattern, "GH51G")
+        XCTAssertEqual(FindHistoryStore.mostRecent?.encoding, .ascii)
+    }
+
+    /// A pattern picked out of the field's menu is searched at once — and, a
+    /// pick, is not written into the recents a second time.
+    func testAPatternPickedFromTheMenuIsSearched() throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        FindHistoryStore.record(pattern: "GH51G", encoding: .ascii, caseSensitive: false)
+        let controls = try controls()
+        controls.rebuildPatternMenu()
+        let item = try XCTUnwrap(controls.patternField.searchMenuTemplate?.items.first {
+            $0.representedObject != nil && ($0.attributedTitle?.string ?? $0.title).contains("GH51G")
+        })
+        let results = try results()
+        NSApp.sendAction(try XCTUnwrap(item.action), to: item.target, from: item)
+        XCTAssertTrue(pumpUntil(5) { if case .done = results.state { return true }; return false })
+        XCTAssertEqual(results.state, .done(total: 1, scope: nil))
+        XCTAssertEqual(controls.text, "GH51G")
+    }
+
+    /// Smart Search tries one encoding after another and shows the one that
+    /// found the match: a variable's name is UTF-16.
+    func testSmartSearchShowsTheEncodingThatFound() throws {
+        try open(NvramTestImage.vss([NvramTestImage.Variable("SetupMode", [0x01])]))
+        let controls = try controls()
+        XCTAssertTrue(controls.isSmartSearchEnabled, "on unless turned off")
+        let results = try findAll("SetupMode")
+        XCTAssertGreaterThan(results.rows.count, 0)
+        XCTAssertEqual(controls.currentEncoding(), .utf16LE)
+    }
+
+    /// The case toggle is the Find bar's: on, letters match exactly.
+    func testTheCaseToggleMatchesExactly() throws {
+        try open(try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let controls = try controls()
+        controls.caseButton.state = .on
+        controls.caseToggled()
+        XCTAssertEqual(try findAll("gh51g").state, .done(total: 0, scope: nil))
+        XCTAssertEqual(try findAll("GH51G").state, .done(total: 1, scope: nil))
+        controls.caseButton.state = .off
+        controls.caseToggled()
     }
 
     func testTheCrossShutsTheResults() throws {

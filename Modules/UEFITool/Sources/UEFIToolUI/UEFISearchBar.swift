@@ -35,7 +35,11 @@ import UEFITool
     private let field = NSSearchField()
     private let modeControl = NSSegmentedControl()
     private let findAllButton = NSButton()
-    private let encodingPopUp = NSPopUpButton(frame: .zero, pullsDown: false)
+    /// The app's pattern controls for the Contents search — the Find bar's
+    /// field, menu, encoding, Smart Search and case toggle — when the host
+    /// has them; without, the bar's own field asks for a text.
+    private(set) var query: (any ToolPatternQuery)?
+    private var topRow: NSStackView?
     private let scopeCheck = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let scopeLabel = NSTextField(labelWithString: "")
     private let previousButton = NSButton()
@@ -54,7 +58,9 @@ import UEFITool
         case notFound
         case searching
         /// A hex pattern the Contents search cannot read.
-        case badPattern
+        /// What the Contents search was asked is not a pattern: the verdict,
+        /// and the sentence behind it.
+        case problem(String, detail: String?)
     }
 
     var status: Status = .none {
@@ -136,15 +142,6 @@ import UEFITool
         ControlHelp.describe(findAllButton, name: L("Find All"),
                              tooltip: L("List every place the pattern occurs, compressed sections included"))
 
-        encodingPopUp.controlSize = .regular
-        encodingPopUp.font = ToolPanelFont.body()
-        encodingPopUp.target = self
-        encodingPopUp.setContentHuggingPriority(.defaultHigh, for: .horizontal)
-        encodingPopUp.addItems(withTitles: [L("Text"), L("Hex")])
-        encodingPopUp.action = #selector(encodingChosen)
-        ControlHelp.describe(encodingPopUp, name: L("Pattern"),
-                             tooltip: L("Text is found in ASCII and in UTF-16, in any case; hex is bytes, ?? for any byte"))
-
         scopeCheck.title = L("The whole tree")
         scopeCheck.font = ToolPanelFont.body()
         scopeCheck.target = self
@@ -214,7 +211,8 @@ import UEFITool
         head.alignment = .centerY
         head.setCustomSpacing(4, after: scopeCheck)
 
-        let top = NSStackView(views: [field, previousButton, nextButton, encodingPopUp, findAllButton])
+        let top = NSStackView(views: [field, previousButton, nextButton, findAllButton])
+        topRow = top
         top.orientation = .horizontal
         top.spacing = 8
         top.alignment = .centerY
@@ -271,7 +269,7 @@ import UEFITool
         field.font = ToolPanelFont.body()
         modeControl.font = ToolPanelFont.body()
         findAllButton.font = ToolPanelFont.body()
-        encodingPopUp.font = ToolPanelFont.body()
+        query?.applyFont(ToolPanelFont.body())
         scopeCheck.font = ToolPanelFont.body()
         scopeLabel.font = ToolPanelFont.body()
         typePopUp.font = ToolPanelFont.body()
@@ -292,18 +290,26 @@ import UEFITool
         let contents = mode == .contents
         modeControl.selectedSegment = contents ? 1 : 0
         for view in [previousButton, nextButton, typePopUp, subtypePopUp] as [NSView] { view.isHidden = contents }
-        for view in [findAllButton, encodingPopUp, scopeCheck] as [NSView] { view.isHidden = !contents }
+        for view in [findAllButton, scopeCheck] as [NSView] { view.isHidden = !contents }
+        // The app's controls stand in for the field in Contents mode, and
+        // leave the bar outside it: hidden in it, their row had no width to
+        // lay its controls out in.
+        field.isHidden = contents && query != nil
+        placeQuery(shown: contents)
         updateMENote()
         updateBottomRow()
         if contents {
             let content = UEFISearchSettings.content
-            if field.stringValue != content.text, field.currentEditor() == nil || field.placeholderString != contentPlaceholder {
-                field.stringValue = content.text
+            if let query {
+                if query.text != content.text { query.text = content.text }
+            } else {
+                if field.stringValue != content.text, field.currentEditor() == nil || field.placeholderString != contentPlaceholder {
+                    field.stringValue = content.text
+                }
+                field.placeholderString = contentPlaceholder
+                ControlHelp.describe(field, name: L("Search the contents"),
+                                     tooltip: L("A text, or hex bytes such as 24 ?? 4D 49"))
             }
-            field.placeholderString = contentPlaceholder
-            ControlHelp.describe(field, name: L("Search the contents"),
-                                 tooltip: L("A text, or hex bytes such as 24 ?? 4D 49"))
-            encodingPopUp.selectItem(at: content.isHex ? 1 : 0)
             scopeCheck.state = content.wholeTree ? .on : .off
             updateScope()
             findAllButton.isEnabled = !content.text.trimmingCharacters(in: .whitespaces).isEmpty
@@ -329,7 +335,9 @@ import UEFITool
     private var bottomRow: NSStackView?
 
     private func updateBottomRow() {
-        bottomRow?.isHidden = mode == .contents && status != .badPattern
+        let saysProblem: Bool
+        if case .problem = status { saysProblem = true } else { saysProblem = false }
+        bottomRow?.isHidden = mode == .contents && !saysProblem
     }
 
     /// The words after the box, while it is clear: the node Find All will
@@ -343,9 +351,7 @@ import UEFITool
     }
 
     private var namesPlaceholder: String { L("Name or GUID") }
-    private var contentPlaceholder: String {
-        UEFISearchSettings.content.isHex ? L("Hex bytes") : L("Text to find")
-    }
+    private var contentPlaceholder: String { L("Text or hex bytes") }
 
     /// The note on the ME region, which neither search goes into, while the
     /// image has one — but not for a Contents search from the selected node,
@@ -381,13 +387,15 @@ import UEFITool
 
     private func updateStatus() {
         switch status {
-        case .badPattern:
-            statusLabel.stringValue = L("Not a hex pattern")
+        case .problem(let label, let detail):
+            statusLabel.stringValue = label
+            statusLabel.toolTip = detail
             statusLabel.isHidden = false
             progressBar.isHidden = true
             stopButton.isHidden = true
         case .none, .notFound:
             statusLabel.stringValue = status == .notFound ? L("Not found") : ""
+            statusLabel.toolTip = nil
             statusLabel.isHidden = false
             progressBar.isHidden = true
             stopButton.isHidden = true
@@ -400,7 +408,44 @@ import UEFITool
 
     /// The text field takes the keyboard: the bar has just been opened.
     func focusField() {
-        window?.makeFirstResponder(field)
+        if mode == .contents, let query {
+            query.focus()
+        } else {
+            window?.makeFirstResponder(field)
+        }
+    }
+
+    /// Puts the app's controls in the top row before the field, or takes them
+    /// out of it.
+    private func placeQuery(shown: Bool) {
+        guard let query, let topRow else { return }
+        let placed = query.view.superview === topRow
+        if shown, !placed, let index = topRow.arrangedSubviews.firstIndex(of: field) {
+            topRow.insertArrangedSubview(query.view, at: index)
+        } else if !shown, placed {
+            topRow.removeArrangedSubview(query.view)
+            query.view.removeFromSuperview()
+        }
+    }
+
+    /// Takes the app's pattern controls for the Contents search: in the
+    /// field's place while the bar is in Contents mode. Return or a row of
+    /// their menu runs Find All; an edit clears what the bar said, and the
+    /// text is kept as the bar's own was.
+    func install(_ query: any ToolPatternQuery) {
+        self.query = query
+        query.applyFont(ToolPanelFont.body())
+        query.onSubmit = { [weak self] in self?.onFindAll?() }
+        query.onEdited = { [weak self, weak query] in
+            guard let self, let query else { return }
+            self.status = .none
+            let text = query.text
+            self.storeContent { $0.text = text }
+        }
+        query.onProblem = { [weak self] label, detail in
+            self?.status = label.map { .problem($0, detail: detail) } ?? .none
+        }
+        reload()
     }
 
     // MARK: - What the reader does
@@ -451,11 +496,6 @@ import UEFITool
 
     @objc private func modeChosen() {
         UEFISearchSettings.mode = modeControl.selectedSegment == 1 ? .contents : .names
-    }
-
-    @objc private func encodingChosen() {
-        let isHex = encodingPopUp.indexOfSelectedItem == 1
-        storeContent { $0.isHex = isHex }
     }
 
     @objc private func scopeChosen() {

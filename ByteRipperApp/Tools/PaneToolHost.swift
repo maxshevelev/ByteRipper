@@ -111,6 +111,10 @@ import MEFirmware
         owner.revealForTool(range, in: pane, select: select)
     }
 
+    func makePatternQuery() -> (any ToolPatternQuery)? {
+        ToolPatternQueryControls(owner: owner)
+    }
+
     func noteNavigationStep() {
         guard let pane, let owner else { return }
         owner.recordJump(in: pane, byTool: true)

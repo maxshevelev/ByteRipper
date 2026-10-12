@@ -246,15 +246,15 @@ final class PatternMenuTests: XCTestCase {
         let item = try XCTUnwrap(try menu().items.first { $0.title == "Save Search Pattern" })
 
         bar.setPatternForTests("   ")
-        XCTAssertFalse(bar.validateMenuItem(item), "whitespace is not a pattern")
+        XCTAssertFalse(bar.query.validateMenuItem(item), "whitespace is not a pattern")
 
         bar.setPatternForTests("DE AD")
-        XCTAssertTrue(bar.validateMenuItem(item))
+        XCTAssertTrue(bar.query.validateMenuItem(item))
 
         // And the commands that work on nothing are unaffected.
         let manage = try XCTUnwrap(try menu().items.first { $0.title == "Manage Search Patterns…" })
         bar.setPatternForTests("")
-        XCTAssertTrue(bar.validateMenuItem(manage))
+        XCTAssertTrue(bar.query.validateMenuItem(manage))
     }
 
     func testManageFavoritesAsksTheOwnerToOpenTheForm() throws {
