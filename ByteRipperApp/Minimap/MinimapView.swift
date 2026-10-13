@@ -2231,10 +2231,8 @@ final class MinimapView: NSView, NSViewToolTipOwner {
             let rowEnd = extent * UInt64(row + 1) / UInt64(summary.rowCount)
             let span = rowEnd - rowStart
 
-            let wholeRow: NSColor? = modified != 0
-                ? modifiedInk
-                : (different == .max ? differenceInk : nil)
-            if let colour = wholeRow, lastColumnInFile(rowStart: rowStart, span: span) == columns - 1 {
+            if modified != 0, lastColumnInFile(rowStart: rowStart, span: span) == columns - 1 {
+                let colour = modifiedInk
                 if runColour === colour, runLastRow == row - 1 {
                     runLastRow = row
                 } else {
@@ -2251,21 +2249,12 @@ final class MinimapView: NSView, NSViewToolTipOwner {
             // (§19.4). Per cell the mark was drawn and unfindable: one edited
             // byte is one cell of sixteen in one row of a thousand, and at this
             // scale the column it happened in says almost nothing — a column of
-            // a 16 MB dump's row is a kilobyte. Differences keep their per-cell
-            // shading, which is what makes the shape of a run legible, except
-            // when they cover the row whole and there is no shape to show.
-            //
-            // Both cases are also one fill instead of sixteen, which is what
-            // keeps typing smooth: an insert leaves the whole tail modified and,
-            // in a comparison, differing, so nearly every row is one of these —
-            // and a full repaint of two maps' worth of cells took 138 ms on the
-            // main thread, once per rebuild (§19.9).
+            // a 16 MB dump's row is a kilobyte. A run of such rows is one fill,
+            // which is what keeps typing smooth: an insert leaves the whole tail
+            // modified, and a full repaint of two maps' worth of cells took
+            // 138 ms on the main thread, once per rebuild (§19.9).
             if modified != 0 {
                 fillRow(modifiedInk, y: y, rowStart: rowStart, span: span)
-                continue
-            }
-            if different == .max {
-                fillRow(differenceInk, y: y, rowStart: rowStart, span: span)
                 continue
             }
 
@@ -2274,9 +2263,9 @@ final class MinimapView: NSView, NSViewToolTipOwner {
             // of dense content — so this is the difference between 40 000 fills
             // for two maps and a couple of thousand (§19.9).
             var cellColour: NSColor?
-            var cellEvent = false
             var cellFrom = 0
             var cellTo = -1
+            var cellHeight = rowHeight
             func flushCells() {
                 guard let colour = cellColour, cellTo >= cellFrom else {
                     cellColour = nil
@@ -2285,34 +2274,50 @@ final class MinimapView: NSView, NSViewToolTipOwner {
                 colour.setFill()
                 NSRect(x: cells[cellFrom].x, y: y,
                        width: cells[cellTo].x + cells[cellTo].width - cells[cellFrom].x,
-                       height: cellEvent ? rowHeight * 2 : rowHeight).fill()
+                       height: cellHeight).fill()
                 cellColour = nil
             }
-
-            for column in 0..<columns {
-                let bit = UInt16(1) << UInt16(column)
-                let densityIndex = row * columns + column
-                let density = summary.density.indices.contains(densityIndex)
-                    ? summary.density[densityIndex] : 0
-                let sliceStart = rowStart + span * UInt64(column) / UInt64(columns)
-                // Past this file's end there is nothing of it to draw — not a
-                // fill, not an event. That is what leaves the shorter file's
-                // tail empty (§9).
-                guard sliceStart < fileSize else { break }
-                // An event is one cell of a one-pixel row, invisible inside a
-                // dense region, so it is drawn two pixels tall — it spills into
-                // the next row rather than disappearing.
-                let isEvent = different & bit != 0
-                let colour = isEvent ? differenceInk : tones[Int(density)]
-                if cellColour === colour, cellEvent == isEvent, cellTo == column - 1 {
+            func add(_ colour: NSColor, at column: Int) {
+                if cellColour === colour, cellTo == column - 1 {
                     cellTo = column
                 } else {
                     flushCells()
                     cellColour = colour
-                    cellEvent = isEvent
                     cellFrom = column
                     cellTo = column
                 }
+            }
+
+            // Past this file's end there is nothing of it to draw — not a fill,
+            // not a difference. That is what leaves the shorter file's tail
+            // empty (§9).
+            guard let lastColumn = (0..<columns).last(where: {
+                rowStart + span * UInt64($0) / UInt64(columns) < fileSize
+            }) else { continue }
+
+            // A difference is the cells' background, as it is in the dump and
+            // on the detail map: the file's own content is drawn over it. Filled
+            // instead of the content, the longer file's tail past the shorter
+            // one's end — every byte of it a difference — came out a blank
+            // orange band, and a byte typed into the other file seemed to bring
+            // this map's content back exactly where it landed.
+            //
+            // Drawn two pixels tall: one cell of a one-pixel row is invisible
+            // inside a dense region, so it spills into the next row rather than
+            // disappearing. That row's content is drawn over the spill.
+            if different != 0 {
+                cellHeight = rowHeight * 2
+                for column in 0...lastColumn where different & (UInt16(1) << UInt16(column)) != 0 {
+                    add(differenceInk, at: column)
+                }
+                flushCells()
+                cellHeight = rowHeight
+            }
+            for column in 0...lastColumn {
+                let densityIndex = row * columns + column
+                let density = summary.density.indices.contains(densityIndex)
+                    ? summary.density[densityIndex] : 0
+                add(tones[Int(density)], at: column)
             }
             flushCells()
         }

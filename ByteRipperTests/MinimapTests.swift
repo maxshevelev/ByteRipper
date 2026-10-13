@@ -2355,6 +2355,55 @@ final class MinimapTests: XCTestCase {
                              "while the longer file's tail is marked as one: \(longMax)")
     }
 
+    /// A difference is drawn behind the overview's content, not instead of it.
+    /// The longer file's tail past the shorter one's end differs whole, and
+    /// painted as a plain fill it came out a blank orange band: erased padding
+    /// and dense code looked the same there.
+    func testOverviewDrawsContentOverTheDifference() throws {
+        // The longer file's tail: a stretch of erased padding, then content.
+        let content = (0..<(128 * 1024)).map { UInt8(0x20 + ($0 % 90)) }
+        let long = content + [UInt8](repeating: 0xFF, count: 64 * 1024)
+            + [UInt8](content[0..<(64 * 1024)])
+        let url1 = try tempFile(long), url2 = try tempFile(content)
+        let (controller, window) = try makeController()
+        try controller.windowModel.pane1.open(url: url1)
+        try controller.windowModel.pane2.open(url: url2)
+        LayoutSettings.set(isVertical: true)
+        controller.apply(mode: .comparison)
+        window.layoutIfNeeded()
+        let (split, panel) = try minimapViews(window)
+        split.surface.minimap.setPanelVisible(true, animated: false)
+        window.layoutIfNeeded()
+        XCTAssertTrue(pumpUntil(10.0) {
+            controller.diffNavigationState.nextDifference
+        }, "the comparison index is built")
+        let rebuildsBefore = controller.overviewRebuildsCompleted
+        controller.surface.minimap.rebuildForTesting()
+        XCTAssertTrue(pumpUntil(10.0) {
+            controller.overviewRebuildsCompleted > rebuildsBefore
+        }, "the pass over the built index lands")
+        let summary = try XCTUnwrap(panel.overviewSummaries.first)
+        XCTAssertEqual(summary.different[summary.rowCount * 5 / 8], .max, "the padding differs")
+        XCTAssertEqual(summary.different[summary.rowCount * 7 / 8], .max, "the content differs")
+
+        // Both stretches are orange; the content is darker ink over it.
+        func sample(at fraction: CGFloat) throws -> [NSColor] {
+            try sampleRowColours(panel, y: panel.bounds.height * fraction,
+                                 from: MinimapView.contentPadding + 2,
+                                 to: panel.bounds.width * 0.45)
+        }
+        func brightness(_ colours: [NSColor]) -> CGFloat {
+            colours.map { $0.redComponent + $0.greenComponent + $0.blueComponent }
+                .reduce(0, +) / CGFloat(max(colours.count, 1))
+        }
+        let padding = try sample(at: 0.625), code = try sample(at: 0.875)
+        XCTAssertGreaterThan(padding.count, 20, "enough pixels to judge")
+        XCTAssertGreaterThan(padding.map(orangeness).max() ?? 0, 0.05, "the padding is marked")
+        XCTAssertGreaterThan(code.map(orangeness).max() ?? 0, 0.05, "the content is marked")
+        XCTAssertLessThan(brightness(code), brightness(padding) - 0.1,
+                          "and the content reads darker than the padding under the same mark")
+    }
+
     // MARK: - Overview tone and overlays (§19.4.2, §19.6)
 
     /// The shading stays inside the tonal band the dump itself occupies: a slice
