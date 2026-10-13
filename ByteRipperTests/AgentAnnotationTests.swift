@@ -940,6 +940,54 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(moving, plain)
     }
 
+    /// ⌘A — Edit ▸ Select All, whose action selects every byte in a dump —
+    /// selects every card; Delete then removes them all.
+    func testSelectAllSelectsEveryCard() async throws {
+        try open()
+        for offset in [0, 2, 4] {
+            _ = try await client.answer("annotate", ["offset": .int(Int64(offset)), "title": "N"])
+        }
+        _ = try notes()
+        let notesWindow = try XCTUnwrap(NotesWindowController.shared)
+        let item = NSMenuItem(title: "Select All", action: #selector(MainViewController.selectAllBytes), keyEquivalent: "a")
+        XCTAssertTrue(NSApp.target(forAction: item.action!, to: nil, from: item) as AnyObject? === notesWindow
+                      || notesWindow.responds(to: item.action!))
+        XCTAssertTrue(notesWindow.validateMenuItem(item))
+        notesWindow.selectAllBytes()
+        XCTAssertEqual(Set(notesWindow.cards.selectedIDs), ["a1", "a2", "a3"])
+    }
+
+    /// A card removed fades out and the others move up to close the gap,
+    /// animated; a card that named it is said again without it.
+    func testRemovingACardClosesTheGapAnimated() async throws {
+        try open()
+        _ = try await client.answer("annotate", ["offset": 0, "title": "A"])
+        _ = try await client.answer("annotate", ["offset": 2, "title": "B", "related_to": ["a1"]])
+        _ = try await client.answer("annotate", ["offset": 4, "title": "C"])
+        let cards = try notes()
+        let layout = try XCTUnwrap(cards.collection.collectionViewLayout as? AnnotationMasonryLayout)
+        XCTAssertEqual(cards.rows.map(\.id), ["a3", "a2", "a1"])
+        let first = layout.itemFrames[0]
+        cards.select("a3")
+        cards.onRemove(["a3"])
+        XCTAssertEqual(cards.rows.map(\.id), ["a2", "a1"])
+        XCTAssertEqual(layout.itemFrames.first?.origin, first.origin, "the next card takes the first place")
+        func drawn(_ title: String) -> Bool {
+            descendants(of: cards.collection, AnnotationCardView.self).contains { $0.texts.first == title && !$0.isHidden }
+        }
+        XCTAssertTrue(drawn("C"), "the removed card fades out rather than vanishing")
+        _ = await settle(AgentAnnotationCards.moveDuration + 0.3)
+        XCTAssertFalse(drawn("C"))
+        XCTAssertEqual(cards.collection.item(at: IndexPath(item: 0, section: 0))?.view.frame.origin, first.origin)
+
+        service.annotationTools.remove { $0.id == "a1" }
+        _ = await settle(AgentAnnotationCards.moveDuration + 0.3)
+        XCTAssertEqual(cards.rows.map(\.id), ["a2"])
+        XCTAssertEqual(cards.shownTexts(of: "a2").last?.hasPrefix("→"), false, "the relation went with it")
+        let shown = try XCTUnwrap(card("B", in: cards))
+        XCTAssertFalse(shown.texts.contains { $0.hasPrefix("→") }, "and the card on screen says so")
+    }
+
     private func treeState(_ tools: ToolController) -> String {
         guard let outline = descendants(of: tools.panel, NSOutlineView.self).first else { return "no outline" }
         let rows = (0..<outline.numberOfRows).compactMap { (outline.item(atRow: $0) as? UEFITreeRow).flatMap { pane.uefiState.tree?.node($0.id) }.map { "\($0.kind)" } }

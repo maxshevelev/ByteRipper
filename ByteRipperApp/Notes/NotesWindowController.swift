@@ -185,6 +185,18 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         (NSApp.delegate as? AppDelegate)?.newWindowForTab(sender)
     }
 
+    /// Edit ▸ Select All (⌘A): every card. The menu sends the dump's own
+    /// action, which selects every byte there; here it selects every note.
+    @objc func selectAllBytes() {
+        cards.selectAll()
+        window?.makeFirstResponder(cards.collection)
+    }
+
+    @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(selectAllBytes) { return !cards.isEmpty }
+        return true
+    }
+
     /// File ▸ Close (⌘W): the tab goes; the notes stay.
     @objc func closeDocument() {
         window?.performClose(nil)

@@ -81,14 +81,57 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
     }
 
     /// The annotations as cards; the selection stays with the ones it was on.
+    /// Cards removed and nothing else — the others as they stood — fade out
+    /// while the rest move up to close the gaps, animated.
     func show(_ annotations: [AgentAnnotation]) {
         let chosen = Set(selectedIDs)
+        let staying = Set(annotations.map(\.id))
+        let gone = rows.indices.filter { !staying.contains(rows[$0].id) }
+        if !gone.isEmpty, carry == nil, collection.window?.isVisible == true,
+           rows.filter({ staying.contains($0.id) }).map(\.id) == annotations.map(\.id) {
+            remove(gone, leaving: annotations, selected: chosen)
+            return
+        }
         rows = annotations
         heights = [:]
         layout.invalidateLayout()
         collection.reloadData()
         let kept = Set(rows.indices.filter { chosen.contains(rows[$0].id) }.map { IndexPath(item: $0, section: 0) })
         collection.selectionIndexPaths = kept
+    }
+
+    /// Takes the cards at `gone` out, the others moving up to close the gaps;
+    /// a card that named a removed one among its relations is said again
+    /// without it once they have.
+    private func remove(_ gone: [Int], leaving annotations: [AgentAnnotation], selected chosen: Set<String>) {
+        let before = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        rows = annotations
+        heights = [:]
+        let paths = Set(gone.map { IndexPath(item: $0, section: 0) })
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.moveDuration
+            collection.animator().performBatchUpdates({
+                layout.invalidateLayout()
+                collection.animator().deleteItems(at: paths)
+            }, completionHandler: { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    let changed = self.rows.indices.filter { before[self.rows[$0].id] != self.rows[$0] }
+                    if !changed.isEmpty {
+                        self.collection.reloadItems(at: Set(changed.map { IndexPath(item: $0, section: 0) }))
+                    }
+                }
+            })
+        }
+        collection.selectionIndexPaths = Set(rows.indices.filter { chosen.contains(rows[$0].id) }
+            .map { IndexPath(item: $0, section: 0) })
+        onSelectionChanged()
+    }
+
+    /// Edit ▸ Select All (⌘A): every card.
+    func selectAll() {
+        collection.selectionIndexPaths = Set(rows.indices.map { IndexPath(item: $0, section: 0) })
+        onSelectionChanged()
     }
 
     /// The text grew or shrank with the panels' zoom.
