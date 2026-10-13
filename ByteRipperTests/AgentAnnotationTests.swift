@@ -862,10 +862,15 @@ final class AgentAnnotationTests: XCTestCase {
 
         XCTAssertTrue(cards.beginCarry("a1", at: NSPoint(x: before[2].midX, y: before[2].midY)))
         XCTAssertTrue(cards.isCarrying)
-        XCTAssertEqual(cards.collection.item(at: IndexPath(item: 2, section: 0))?.view.alphaValue, 0,
-                       "its place stands empty while it is carried")
+        let place = try XCTUnwrap(cards.collection.item(at: IndexPath(item: 2, section: 0))?.view)
+        XCTAssertTrue(place.isHidden || place.alphaValue == 0, "its place stands empty while it is carried")
         cards.moveCarry(to: NSPoint(x: before[0].midX, y: before[0].midY))
         XCTAssertEqual(cards.rows.map(\.id), ["a1", "a3", "a2"], "the others moved aside")
+        _ = await settle(AgentAnnotationCards.moveDuration + 0.2)
+        cards.collection.layoutSubtreeIfNeeded()
+        let landing = try XCTUnwrap(cards.collection.item(at: IndexPath(item: 0, section: 0))?.view)
+        XCTAssertTrue(landing.isHidden || landing.alphaValue == 0,
+                      "where it will land stands empty while it is carried, not drawn there too")
         cards.moveCarry(to: NSPoint(x: before[0].midX + 2, y: before[0].midY + 2))
         XCTAssertEqual(cards.rows.map(\.id), ["a1", "a3", "a2"], "a pointer resting does not trade places")
         cards.endCarry()
@@ -873,7 +878,8 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(service.annotationTools.ordered().map(\.id), ["a1", "a3", "a2"])
         _ = await settle(AgentAnnotationCards.moveDuration + 0.3)
         XCTAssertEqual(layout.itemFrames.map(\.origin), before.map(\.origin), "closed up, aligned as before")
-        XCTAssertEqual(cards.collection.item(at: IndexPath(item: 0, section: 0))?.view.alphaValue, 1)
+        let landed = try XCTUnwrap(cards.collection.item(at: IndexPath(item: 0, section: 0))?.view)
+        XCTAssertTrue(!landed.isHidden && landed.alphaValue == 1, "let go, it is drawn in its place")
 
         _ = try await client.answer("annotate", ["offset": 6, "title": "D"])
         XCTAssertEqual(service.annotationTools.ordered().map(\.id), ["a4", "a1", "a3", "a2"])

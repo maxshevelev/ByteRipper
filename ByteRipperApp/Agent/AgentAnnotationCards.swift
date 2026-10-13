@@ -129,9 +129,6 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         card.card.onRemove = { [weak self] in self?.onRemove([annotation.id]) }
         card.card.onEdit = { [weak self] in self?.onEdit(annotation) }
         card.card.onPress = { [weak self] event in self?.dragIfDragged(annotation.id, from: event) ?? false }
-        // The card being carried leaves its place empty, however often the
-        // collection makes its view again.
-        card.view.alphaValue = carry?.id == annotation.id ? 0 : 1
         return card
     }
 
@@ -232,7 +229,11 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         ghost.shadow = shadow
         ghost.frame = collection.convert(card.frame.insetBy(dx: -reach, dy: -reach), to: container)
         container.addSubview(ghost)
-        card.alphaValue = 0
+        // The place stays empty: said by the layout, which the collection
+        // applies to the card's view every time it lays them out — a view
+        // hidden by hand is shown again by the first move.
+        layout.emptyIndex = index
+        card.isHidden = true
         carry = Carry(id: id, index: index,
                       grip: NSPoint(x: point.x - card.frame.minX, y: point.y - card.frame.minY), ghost: ghost)
         return true
@@ -266,6 +267,7 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         carried.index = target
         carried.settledAt = point
         carry = carried
+        layout.emptyIndex = target
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Self.moveDuration
             collection.animator().performBatchUpdates({
@@ -283,7 +285,10 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         let path = IndexPath(item: min(carried.index, max(rows.count - 1, 0)), section: 0)
         let land = { [weak self] in
             ghost.removeFromSuperview()
-            self?.collection.item(at: path)?.view.alphaValue = 1
+            guard let self else { return }
+            self.layout.emptyIndex = nil
+            self.layout.invalidateLayout()
+            self.collection.item(at: path)?.view.isHidden = false
         }
         if let frame = layout.layoutAttributesForItem(at: path)?.frame, let container = scroll.superview,
            rows.indices.contains(carried.index), rows[carried.index].id == carried.id {
@@ -384,6 +389,8 @@ final class AnnotationMasonryLayout: NSCollectionViewLayout {
     private var frames: [NSRect] = []
     private var contentHeight: CGFloat = 0
     private var laidOutWidth: CGFloat = -1
+    /// The place of the card being dragged: kept, and drawn empty.
+    var emptyIndex: Int?
 
     static func columns(forWidth width: CGFloat) -> Int {
         width < 640 ? 1 : width < 980 ? 2 : 3
@@ -425,6 +432,7 @@ final class AnnotationMasonryLayout: NSCollectionViewLayout {
         guard indexPath.item < frames.count else { return nil }
         let attributes = NSCollectionViewLayoutAttributes(forItemWith: indexPath)
         attributes.frame = frames[indexPath.item]
+        attributes.isHidden = indexPath.item == emptyIndex
         return attributes
     }
 
