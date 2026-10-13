@@ -33,7 +33,7 @@ The window shows every annotation, in every file, open or not, as cards in as ma
 - the whole note;
 - the annotations it is about — a pointer and its target, a checksum and what it covers — each a link to its card. Over the dump they are listed after the note, under **Related Annotations:**.
 
-The newest card comes first. A card made since the window was last in view wears a **New** tag on its top edge; the tag goes the next time the window comes into view.
+The newest card comes first and wears a **New** tag on its top edge — a card made while the window is open at once, one made while it is closed or behind another tab when the window is shown. The tags go when the window is left for another tab, closed or minimised.
 
 A card can be dragged to another place with the mouse. While it is carried, the cards around it move aside to make room for it; when it is let go, the cards close up in order, with no gaps. The order is kept, and a new card still comes first.
 

@@ -18,8 +18,8 @@ import ToolModuleKit
 /// place; the ✕ in the corner removes the card, Delete the selected ones; the
 /// arrows move between cards.
 ///
-/// The newest card comes first. A card made since the window was last in
-/// view wears a **New** tag on its top edge. A card is dragged to another
+/// The newest card comes first, and wears a **New** tag on its top edge
+/// until the person turns from the window to another tab. A card is dragged to another
 /// place: it lifts, follows the pointer, and the cards around it move aside
 /// to make room — animated, as apps on an iPhone's home screen do — then it
 /// settles in, the cards closed up behind it, and stays there.
@@ -45,10 +45,9 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
     private(set) var rows: [AgentAnnotation] = []
     /// One card laid out off screen, to measure the others by.
     private let sizer = AnnotationCardView()
-    /// Each card's height at the width it was last measured at. Measured
-    /// while the cards move aside, inside the collection's animated update, a
-    /// card came out ten points tall; measured before it, it is right, and
-    /// the cards do not change while one is carried.
+    /// Each card's height at the width it was last measured at: while a card
+    /// is carried, every move lays all of them out again, and none of them
+    /// has changed.
     private var heights: [String: (width: CGFloat, height: CGFloat)] = [:]
     /// The card being dragged, while it is.
     private var carry: Carry?
@@ -473,7 +472,7 @@ final class AnnotationCardView: NSView {
         /// Made by the agent — its hue and its picture before the title — or
         /// by the person, in the person's hue.
         var byAgent = true
-        /// Made since the window was last in view: the New tag.
+        /// Not yet turned away from: the New tag.
         var isNew = false
     }
 
@@ -637,6 +636,12 @@ final class AnnotationCardView: NSView {
     }
 
     /// Frames every line for a card `width` wide; answers the card's height.
+    ///
+    /// The height adds up the rectangles worked out here, never a frame read
+    /// back: inside the collection's animated update — the cards moving aside
+    /// for one being dragged — setting a frame starts an animation, a frame
+    /// read back is still the old one, and every card came out ten points
+    /// tall, its lines drawn over each other.
     @discardableResult
     private func place(width: CGFloat) -> CGFloat {
         let inner = max(0, width - 2 * Self.padding)
@@ -654,14 +659,16 @@ final class AnnotationCardView: NSView {
                 // Sized from the image, not the view: an image view reports
                 // a configured symbol's size wrongly.
                 let lineHeight = fitted(title, width: .greatestFiniteMagnitude).height
-                icon.frame = NSRect(x: left, y: bottom + floor((lineHeight - image.size.height) / 2),
-                                    width: image.size.width, height: image.size.height)
-                left = icon.frame.maxX + Self.headerSpacing
+                let iconFrame = NSRect(x: left, y: bottom + floor((lineHeight - image.size.height) / 2),
+                                       width: image.size.width, height: image.size.height)
+                icon.frame = iconFrame
+                left = iconFrame.maxX + Self.headerSpacing
             }
             let titleWidth = max(0, inner - (left - Self.padding) - inside - Self.headerSpacing)
-            title.frame = NSRect(x: left, y: bottom,
-                                 width: titleWidth, height: fitted(title, width: titleWidth).height)
-            bottom = title.frame.maxY
+            let titleFrame = NSRect(x: left, y: bottom,
+                                    width: titleWidth, height: fitted(title, width: titleWidth).height)
+            title.frame = titleFrame
+            bottom = titleFrame.maxY
         }
         if let tag = newTag {
             // On the top edge, half out of the card, as the ✕ stands out of
@@ -672,9 +679,10 @@ final class AnnotationCardView: NSView {
         for line in lines {
             bottom += Self.spacing
             let size = fitted(line.view, width: inner)
-            line.view.frame = NSRect(x: Self.padding, y: bottom,
-                                     width: line.wraps ? inner : min(size.width, inner), height: size.height)
-            bottom = line.view.frame.maxY
+            let frame = NSRect(x: Self.padding, y: bottom,
+                               width: line.wraps ? inner : min(size.width, inner), height: size.height)
+            line.view.frame = frame
+            bottom = frame.maxY
         }
         return ceil(bottom + Self.padding)
     }
@@ -734,10 +742,10 @@ final class AnnotationCardView: NSView {
     }
 }
 
-/// The tag on the top edge of a card made since the Annotations window was
-/// last in view: **New**, white on the card's hue, as an app installed since
-/// the home screen was last looked at wears a mark beside its name. It goes
-/// the next time the window comes into view.
+/// The tag on the top edge of a card the person has not yet turned away
+/// from: **New**, white on the card's hue, as an app just installed wears a
+/// mark beside its name. It goes when the window goes out of view — another
+/// tab chosen, the window closed or put in the Dock.
 final class AnnotationNewTag: NSView {
     var hue = ZoneColors.agent { didSet { needsDisplay = true } }
     let text = L("New", context: "annotation tag")

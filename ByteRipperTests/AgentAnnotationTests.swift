@@ -822,10 +822,10 @@ final class AgentAnnotationTests: XCTestCase {
         cards.collection.visibleItems().compactMap { $0.view as? AnnotationCardView }.first { $0.texts.first == title }
     }
 
-    /// A note made while the window is away is New the first time the
-    /// window is in view, and not the time after; one made while it is in
-    /// view never is.
-    func testANoteMadeWhileTheWindowWasAwayIsNewOnce() async throws {
+    /// A note is New: made while the window is away, from when it comes into
+    /// view; made while it is in view, at once. The marks go when the window
+    /// goes out of view, and do not come back.
+    func testANoteIsNewUntilTheWindowGoesOutOfView() async throws {
         let main = try openInAppWindow()
         _ = try await client.answer("annotate", ["offset": 0, "title": "Away"])
         main.mainViewController.showNotesWindow(nil)
@@ -837,11 +837,13 @@ final class AgentAnnotationTests: XCTestCase {
         _ = try await client.answer("annotate", ["offset": 2, "title": "Watched"])
         cards.collection.layoutSubtreeIfNeeded()
         XCTAssertEqual(cards.rows.map(\.id), ["a2", "a1"], "the newest card first")
-        XCTAssertNil(card("Watched", in: cards)?.newTag, "made in view: not new")
+        XCTAssertEqual(cards.newIDs, ["a1", "a2"])
+        XCTAssertNotNil(card("Watched", in: cards)?.newTag, "made in view: new at once")
 
         NotesWindowController.shared?.closeDocument()
+        XCTAssertEqual(cards.newIDs, [], "out of view, the marks go")
         main.mainViewController.showNotesWindow(nil)
-        XCTAssertEqual(cards.newIDs, [], "new only the first time")
+        XCTAssertEqual(cards.newIDs, [], "and do not come back")
         cards.collection.layoutSubtreeIfNeeded()
         XCTAssertNil(card("Away", in: cards)?.newTag)
     }
@@ -908,6 +910,28 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(later.unseen, service.annotationTools.unseen)
         XCTAssertEqual(later.all()[1].decoded?.codecs.map(\.text), ["LZMA"])
         XCTAssertEqual(AnnotationsFile.read(url)?.nextID, 4, "the next one is a4")
+    }
+
+    /// A card is as tall measured inside the collection's animated update —
+    /// the cards moving aside for one being dragged — as outside it: there,
+    /// setting a frame animates it, and a height read back from the frames
+    /// came out ten points, the cards' lines drawn over each other.
+    func testACardMeasuredWhileTheCardsMoveIsAsTallAsEver() async throws {
+        try open()
+        _ = try await client.answer("annotate", ["offset": 0, "title": "A", "note": "Under the title."])
+        let cards = try notes()
+        let layout = try XCTUnwrap(cards.collection.collectionViewLayout as? AnnotationMasonryLayout)
+        cards.zoomChanged()
+        let plain = layout.heightFor(0, 432)
+        cards.zoomChanged()
+        var moving: CGFloat = 0
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = AgentAnnotationCards.moveDuration
+            cards.collection.animator().performBatchUpdates({ moving = layout.heightFor(0, 432) },
+                                                            completionHandler: nil)
+        }, completionHandler: nil)
+        XCTAssertGreaterThan(plain, 40)
+        XCTAssertEqual(moving, plain)
     }
 
     private func treeState(_ tools: ToolController) -> String {

@@ -35,8 +35,9 @@ final class AgentAnnotationTools {
     /// The agent's notes made while no Notes panel was in view, counted on
     /// the panel's pill until one is.
     private(set) var unseen: Set<String> = []
-    /// Notes — the agent's or the person's — made while the Annotations
-    /// window was not in view: marked new the next time it is.
+    /// Notes — the agent's or the person's — not yet marked new in the
+    /// Annotations window: it takes them at once while it is in view, and
+    /// the next time it comes into view otherwise.
     private(set) var fresh: Set<String> = []
     /// The cards' order in the Annotations window, first card first: a new
     /// one goes in front, and a card dragged stays where it was put.
@@ -169,15 +170,15 @@ final class AgentAnnotationTools {
         scheduleSave()
     }
 
-    /// Adds `annotation`, its card first, and tells everyone. A note made
-    /// while the Annotations window is not in view is new there the next
-    /// time it is; an agent's also waits on the toolbar's button as unseen.
+    /// Adds `annotation`, its card first and marked new, and tells everyone.
+    /// An agent's note made while the Annotations window is not in view also
+    /// waits on the toolbar's button as unseen.
     private func add(_ annotation: AgentAnnotation) {
         items.append(annotation)
         order.insert(annotation.id, at: 0)
-        if !NotesWindowController.isInView {
-            fresh.insert(annotation.id)
-            if annotation.author == .agent { unseen.insert(annotation.id) }
+        fresh.insert(annotation.id)
+        if annotation.author == .agent, !NotesWindowController.isInView {
+            unseen.insert(annotation.id)
         }
         changed()
     }

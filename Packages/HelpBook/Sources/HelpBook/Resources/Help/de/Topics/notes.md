@@ -1,4 +1,4 @@
-@source-sha 80ee158714d76f00a3ef24c9c28c9a74361bd2689f9df227cab68e417307fdfb
+@source-sha 7a3eb9350cd374da637b7df301df694f00b1d0abb0021367e934fb7a1e4b5730
 # Anmerkungen
 
 > Kurze Vermerke zu Stellen in einer Datei, angelegt von Hand oder von einem verbundenen Agenten. Eine Anmerkung wird über den Bytes gezeigt und in einem eigenen Fenster aufgeführt.
@@ -27,7 +27,7 @@ Das Fenster zeigt alle Anmerkungen in allen Dateien, geöffnet oder nicht, als K
 - die ganze Erläuterung;
 - die zugehörigen Anmerkungen — etwa ein Zeiger und sein Ziel oder eine Prüfsumme und die Daten, über die sie gebildet wird —, jede als Link auf ihre Karte. Über dem Dump folgen sie auf die Erläuterung, nach **Zugehörige Anmerkungen:**.
 
-Die Karte der zuletzt angelegten Anmerkung steht an erster Stelle. Eine Karte, die angelegt wurde, seit das Fenster zuletzt sichtbar war, trägt am oberen Rand die Marke **Neu**; die Marke verschwindet, sobald das Fenster das nächste Mal angezeigt wird.
+Die Karte der zuletzt angelegten Anmerkung steht an erster Stelle und trägt am oberen Rand die Marke **Neu**. Ist das Fenster geöffnet, erscheint die Marke sofort; ist es geschlossen oder liegt ein anderer Tab vorn, beim nächsten Anzeigen des Fensters. Die Marken verschwinden, sobald zu einem anderen Tab gewechselt, das Fenster geschlossen oder im Dock abgelegt wird.
 
 Eine Karte lässt sich mit der Maus an eine andere Stelle ziehen. Während sie bewegt wird, weichen die übrigen Karten aus und geben ihr Platz frei; nach dem Loslassen reihen sich die Karten lückenlos aneinander. Die gewählte Reihenfolge bleibt erhalten, und die Karte einer neuen Anmerkung erscheint weiterhin an erster Stelle.
 

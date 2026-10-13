@@ -34,8 +34,8 @@ enum AnnotationsFile {
         var annotations: [Stored]
         /// The cards' order in the window, first card first.
         var order: [String]
-        /// Made while the window was not in view: marked new the next time
-        /// it is.
+        /// Not yet marked new in the window: marked the next time it is in
+        /// view.
         var fresh: [String]
         /// The agent's among them, counted on the toolbar's button.
         var unseen: [String]

@@ -46,8 +46,8 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
 
     let cards = AgentAnnotationCards()
     let emptyView = NotesEmptyView()
-    /// Whether the window was in view when last asked: coming into view is
-    /// what marks the notes made meanwhile new.
+    /// Whether the window was in view when last asked: coming into view
+    /// marks the notes made meanwhile new, going out of it takes the marks off.
     private var wasInView = false
 
     private init() {
@@ -105,8 +105,11 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     }
 
     /// The notes there are now, the newest first, or the empty screen when
-    /// there are none.
+    /// there are none. A note made while the window is in view is new at once.
     func refresh() {
+        if Self.isInView, let fresh = AgentAnnotationTools.current?.takeFresh(), !fresh.isEmpty {
+            cards.newIDs.formUnion(fresh)
+        }
         let all = AgentAnnotationTools.current?.ordered() ?? []
         cards.show(all)
         cards.scroll.isHidden = all.isEmpty
@@ -114,15 +117,27 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     }
 
     /// The window has perhaps come into view, or gone out of it. Coming in,
-    /// the notes made since it was last in view are marked new — until it
-    /// next comes into view — and the count on the toolbar's button goes.
+    /// the notes made since it was last in view are marked new, and the count
+    /// on the toolbar's button goes; the marks stay while the window is in
+    /// view — another app in front does not take it out of view — and go when
+    /// the person turns to another tab, closes the window or puts it in the Dock.
     private func noteLookedAt() {
         let inView = Self.isInView
         defer { wasInView = inView }
-        guard inView else { return }
+        guard inView else {
+            if wasInView { leftView() }
+            return
+        }
         AgentAnnotationTools.current?.markSeen()
         guard !wasInView else { return }
         cards.newIDs = AgentAnnotationTools.current?.takeFresh() ?? []
+    }
+
+    /// Out of view: the cards are no longer new.
+    private func leftView() {
+        guard !cards.newIDs.isEmpty else { return }
+        cards.newIDs = []
+        refresh()
     }
 
     // MARK: - The cards
@@ -201,10 +216,12 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
 
     func windowWillClose(_ notification: Notification) {
         wasInView = false
+        leftView()
     }
 
     func windowDidMiniaturize(_ notification: Notification) {
         wasInView = false
+        leftView()
     }
 }
 
