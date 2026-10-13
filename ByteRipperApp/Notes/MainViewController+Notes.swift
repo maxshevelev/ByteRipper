@@ -16,22 +16,23 @@ extension MainViewController {
         NotesWindowController.instance.show(tabbedWith: view.window)
     }
 
-    /// The annotations block of the offset menu: *Open Annotation “title”* for
-    /// every annotation whose place holds the clicked byte, the innermost —
-    /// the shortest — first. None where no annotation is there.
+    /// The offset menu's *Open Annotation “title”* for every annotation whose
+    /// place holds the clicked byte, the innermost — the shortest — first,
+    /// under Add Annotation… where that is. Whether there were any.
     // help: menu.offset.open-note
-    func addNoteMenuItems(to menu: NSMenu, for pane: PaneViewModel, offset: UInt64) {
+    @discardableResult
+    func addNoteMenuItems(to menu: NSMenu, for pane: PaneViewModel, offset: UInt64) -> Bool {
         let here = pane.agentAnnotations
             .filter { $0.range?.contains(offset) == true }
             .sorted { ($0.range?.count ?? 0) < ($1.range?.count ?? 0) }
-        guard !here.isEmpty else { return }
-        menu.addItem(.separator())
+        guard !here.isEmpty else { return false }
         for annotation in here {
             let item = menu.addItem(withTitle: L("Open Annotation “%1$@”", annotation.title),
                                     action: #selector(openNoteFromMenu(_:)), keyEquivalent: "")
             item.target = self
             item.representedObject = NoteMenuTarget(pane: pane, id: annotation.id)
         }
+        return true
     }
 
     /// Offset menu ▸ Open Annotation “title”: the Annotations window, its card

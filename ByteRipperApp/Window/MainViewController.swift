@@ -4530,8 +4530,14 @@ final class MainViewController: NSViewController {
     func makeOffsetMenu(for pane: PaneViewModel, offset: UInt64) -> NSMenu {
         let menu = NSMenu(title: L("Offset"))
         let selection = pane.hexSelection()
+        // The annotations' items stand with Add Annotation…, at the end of
+        // the selection's block — or, with no selection under the pointer,
+        // where that block would be.
         if !selection.isEmpty, offset >= selection.start, offset < selection.end {
             addSelectionMenuItems(to: menu, for: pane, offset: offset)
+            addNoteMenuItems(to: menu, for: pane, offset: offset)
+            menu.addItem(.separator())
+        } else if addNoteMenuItems(to: menu, for: pane, offset: offset) {
             menu.addItem(.separator())
         }
         let copy = menu.addItem(withTitle: L("Copy offset"),
@@ -4559,7 +4565,6 @@ final class MainViewController: NSViewController {
             menu.addItem(.separator())
             addBookmarkMenuItems(to: menu, for: pane, offset: offset)
         }
-        addNoteMenuItems(to: menu, for: pane, offset: offset)
         return menu
     }
 

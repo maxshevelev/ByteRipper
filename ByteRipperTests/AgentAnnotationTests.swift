@@ -39,6 +39,11 @@ final class AgentAnnotationTests: XCTestCase {
         window = nil
         controller = nil
         discardIsolatedDefaults(defaultsName, defaults)
+        // XCTest keeps every test case of a class until the run ends: a
+        // service held here would leave the app's annotation store alive,
+        // and a dump's menu in a later class would offer Add Annotation….
+        client = nil
+        service = nil
         super.tearDown()
     }
 
@@ -223,6 +228,8 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertTrue(notesWindow.cards.scroll.isHidden)
         _ = try await client.answer("annotate", ["offset": "0x100", "length": 0x40, "title": "Table"])
         _ = try await client.answer("annotate", ["offset": "0x20", "length": 4, "title": "Pointer", "related_to": ["a1"]])
+        // The second card fades in while the first moves aside.
+        _ = await settle(AgentAnnotationCards.moveDuration + 0.2)
         let list = try notes()
         let name = try XCTUnwrap(pane.document?.url.lastPathComponent)
         // A card: the title, the file and the place, the note,
@@ -1025,6 +1032,16 @@ final class AgentAnnotationTests: XCTestCase {
         let opening = controller.makeOffsetMenu(for: pane, offset: 0x12).items
             .filter { $0.action == #selector(MainViewController.openNoteFromMenu(_:)) }
         XCTAssertEqual(opening.map(\.title), ["Open Annotation “Signature”", "Open Annotation “Table”"])
+        // Under Add Annotation…, with the selection; first, without one.
+        pane.select(range: 0x10..<0x14)
+        let items = controller.makeOffsetMenu(for: pane, offset: 0x12).items
+        let add = try XCTUnwrap(items.firstIndex { $0.action == #selector(MainViewController.addNoteToSelection(_:)) })
+        XCTAssertEqual(items[add + 1].title, "Open Annotation “Signature”")
+        XCTAssertEqual(items[add + 2].title, "Open Annotation “Table”")
+        XCTAssertTrue(items[add + 3].isSeparatorItem)
+        pane.select(range: 0x30..<0x31)
+        let plain = controller.makeOffsetMenu(for: pane, offset: 0x12).items
+        XCTAssertEqual(plain.prefix(3).map(\.title), ["Open Annotation “Signature”", "Open Annotation “Table”", ""])
         XCTAssertTrue(controller.makeOffsetMenu(for: pane, offset: 0x40).items
             .allSatisfy { $0.action != #selector(MainViewController.openNoteFromMenu(_:)) }, "none off the notes")
 
