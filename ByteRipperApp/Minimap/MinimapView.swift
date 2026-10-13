@@ -195,6 +195,12 @@ final class MinimapView: NSView, NSViewToolTipOwner {
     /// Lifts the low end so a sparse slice separates from an empty one instead of
     /// vanishing into the floor.
     static let overviewToneGamma: CGFloat = 0.75
+    /// The same ramp for a row holding modified bytes, in the modified ink and
+    /// set much higher: an edited row is a mark the user has to find on the map,
+    /// so even a row of erased padding stays plainly red, while the content in
+    /// it still reads as denser or sparser (§19.4).
+    static let overviewModifiedMinTone: CGFloat = 0.45
+    static let overviewModifiedMaxTone: CGFloat = 1
 
     /// The render scale, fixed by design: a byte cell is `byteHeight` tall with
     /// `rowGap` between rows, so one hex row costs `rowStep` no matter how large
@@ -1878,14 +1884,10 @@ final class MinimapView: NSView, NSViewToolTipOwner {
     }
 
     /// Draws one map's overview: a row per device pixel, each row's 16 cells
-    /// shaded by how much real content their slice of bytes holds, with the rare
-    /// and actionable states painted over the shading.
-    ///
-    /// Priority is density, then difference, then modified. A cell that is both
-    /// differing and modified shows as modified: at hundreds of bytes per cell
-    /// the two overlap often, and the red is the signal the user just created —
-    /// the difference is still legible in the neighbouring cells of the same
-    /// region. In detail mode both show at once, which is where that matters.
+    /// shaded by how much real content their slice of bytes holds, the way the
+    /// dump draws its bytes: a difference is the cells' background, and a
+    /// modified row is drawn in red ink. A cell that is both shows both — the
+    /// content in red over orange — and neither ever hides the content.
     /// The search's marks on the **detail** map (§11), in the same language the
     /// overview uses: a stroke of solid ink over each match's cells, and the
     /// current match as a horizontal plate — the find indicator's yellow inside
@@ -2183,45 +2185,12 @@ final class MinimapView: NSView, NSViewToolTipOwner {
             resolved(ink.withAlphaComponent(Self.overviewTone(density: UInt8($0))))
         }
         let differenceInk = resolved(HexTheme.differenceFill)
-        let modifiedInk = resolved(HexTheme.modifiedText)
+        let modifiedInk = HexTheme.modifiedText
+        let modifiedTones = (0...255).map {
+            resolved(modifiedInk.withAlphaComponent(Self.overviewModifiedTone(density: UInt8($0))))
+        }
         let columns = Int(Self.bytesPerRow)
         let extent = max(summary.extent, 1)
-        func lastColumnInFile(rowStart: UInt64, span: UInt64) -> Int {
-            Self.lastColumnInFile(rowStart: rowStart, span: span, fileSize: fileSize)
-        }
-
-        /// One fill across a row, up to where the file ends: what a row draws
-        /// when a single colour covers all of it.
-        func fillRow(_ colour: NSColor, y: CGFloat, rowStart: UInt64, span: UInt64) {
-            let last = lastColumnInFile(rowStart: rowStart, span: span)
-            guard last >= 0, let first = cells.first, cells.indices.contains(last) else { return }
-            colour.setFill()
-            NSRect(x: first.x, y: y,
-                   width: cells[last].x + cells[last].width - first.x,
-                   height: rowHeight * 2).fill()
-        }
-
-        // Consecutive rows that are one colour across their whole width are
-        // filled together: an edited file's tail is a thousand red rows, and a
-        // thousand fills of one pixel each cost the same as the picture they
-        // replace. Only rows entirely inside the file join a run — the one or
-        // two rows the file's end falls in are drawn on their own.
-        var runColour: NSColor?
-        var runFirstRow = 0
-        var runLastRow = -1
-        func flushRun() {
-            guard let colour = runColour, runLastRow >= runFirstRow,
-                  let first = cells.first, let last = cells.last else {
-                runColour = nil
-                return
-            }
-            colour.setFill()
-            let y = top + CGFloat(runFirstRow) * rowHeight
-            let height = CGFloat(runLastRow - runFirstRow) * rowHeight + rowHeight * 2
-            NSRect(x: first.x, y: y,
-                   width: last.x + last.width - first.x, height: height).fill()
-            runColour = nil
-        }
 
         for row in rows {
             let y = top + CGFloat(row) * rowHeight
@@ -2230,33 +2199,6 @@ final class MinimapView: NSView, NSViewToolTipOwner {
             let rowStart = extent * UInt64(row) / UInt64(summary.rowCount)
             let rowEnd = extent * UInt64(row + 1) / UInt64(summary.rowCount)
             let span = rowEnd - rowStart
-
-            if modified != 0, lastColumnInFile(rowStart: rowStart, span: span) == columns - 1 {
-                let colour = modifiedInk
-                if runColour === colour, runLastRow == row - 1 {
-                    runLastRow = row
-                } else {
-                    flushRun()
-                    runColour = colour
-                    runFirstRow = row
-                    runLastRow = row
-                }
-                continue
-            }
-            flushRun()
-
-            // A row holding bytes the user changed is red across its whole width
-            // (§19.4). Per cell the mark was drawn and unfindable: one edited
-            // byte is one cell of sixteen in one row of a thousand, and at this
-            // scale the column it happened in says almost nothing — a column of
-            // a 16 MB dump's row is a kilobyte. A run of such rows is one fill,
-            // which is what keeps typing smooth: an insert leaves the whole tail
-            // modified, and a full repaint of two maps' worth of cells took
-            // 138 ms on the main thread, once per rebuild (§19.9).
-            if modified != 0 {
-                fillRow(modifiedInk, y: y, rowStart: rowStart, span: span)
-                continue
-            }
 
             // Neighbouring cells that draw the same thing are one fill. A dump's
             // rows are mostly uniform — sixteen cells of erased padding, sixteen
@@ -2313,32 +2255,27 @@ final class MinimapView: NSView, NSViewToolTipOwner {
                 flushCells()
                 cellHeight = rowHeight
             }
+            // A row holding bytes the user changed is drawn in the modified
+            // ink across its whole width (§19.4), the way the dump draws such a
+            // byte: red foreground, the content still legible in it. Across the
+            // whole width because per cell the mark was unfindable — one edited
+            // byte is one cell of sixteen in one row of a thousand, and a column
+            // of a 16 MB dump's row is a kilobyte that says almost nothing.
+            // Filling such a row solid instead hid the content: an insert near
+            // the start leaves the whole tail modified, and the map below it
+            // became one red band. Two pixels tall, so one edited row of a
+            // thousand is not a hairline lost in the picture; the next row's
+            // content is drawn over the spill.
+            let ramp = modified != 0 ? modifiedTones : tones
+            if modified != 0 { cellHeight = rowHeight * 2 }
             for column in 0...lastColumn {
                 let densityIndex = row * columns + column
                 let density = summary.density.indices.contains(densityIndex)
                     ? summary.density[densityIndex] : 0
-                add(tones[Int(density)], at: column)
+                add(ramp[Int(density)], at: column)
             }
             flushCells()
         }
-        flushRun()
-    }
-
-    /// The last column of a row that still belongs to a file of `fileSize`, for a
-    /// row covering `span` bytes from `rowStart` — where a row-wide fill has to
-    /// stop, because a map draws nothing of its file past its end (§9). Returns
-    /// -1 for a row that begins past the end, and the last column for a row
-    /// entirely inside the file.
-    ///
-    /// Internal so the rule can be tested directly: it decides a couple of cells
-    /// in the single row a file's end falls in, which is not something pixel
-    /// sampling catches reliably.
-    static func lastColumnInFile(rowStart: UInt64, span: UInt64, fileSize: UInt64) -> Int {
-        let columns = Int(bytesPerRow)
-        guard fileSize > rowStart else { return -1 }
-        let bytes = fileSize - rowStart
-        guard bytes < span else { return columns - 1 }
-        return min(columns - 1, Int(bytes * UInt64(columns) / max(span, 1)))
     }
 
     // MARK: - The stand-in picture across a resize (§19.9)
@@ -2456,6 +2393,13 @@ final class MinimapView: NSView, NSViewToolTipOwner {
         let fraction = CGFloat(density) / 255
         let shaped = fraction > 0 ? pow(fraction, overviewToneGamma) : 0
         return overviewMinTone + (overviewMaxTone - overviewMinTone) * shaped
+    }
+
+    /// The ink alpha for a modified row's cell holding `density` content.
+    static func overviewModifiedTone(density: UInt8) -> CGFloat {
+        let fraction = CGFloat(density) / 255
+        let shaped = fraction > 0 ? pow(fraction, overviewToneGamma) : 0
+        return overviewModifiedMinTone + (overviewModifiedMaxTone - overviewModifiedMinTone) * shaped
     }
 
     // MARK: - Overlays

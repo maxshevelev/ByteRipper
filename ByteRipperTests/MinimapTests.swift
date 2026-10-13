@@ -3213,40 +3213,53 @@ final class MinimapTests: XCTestCase {
         XCTAssertLessThan(ink.y.count, 8, "the mark is a hairline, not a band")
     }
 
-    /// Where a row-wide fill stops: a map draws nothing of its file past the
-    /// file's end (§9), and after an edit whole rows are filled in one go, so the
-    /// row the end falls in has to be cut at the right cell. It decides a couple
-    /// of cells in one row of a thousand — too little for pixel sampling to be
-    /// trusted with, which is why the rule is a function.
-    func testARowWideFillStopsWhereTheFileEnds() {
-        let columns = Int(MinimapView.bytesPerRow)   // 16
+    /// A modified row is drawn in red ink, not filled red: an insert near the
+    /// start leaves the whole tail modified, and filled solid it turned the map
+    /// below the edit into one red band with no content left in it.
+    func testModifiedRowsKeepTheirContentInTheOverview() throws {
+        // A sparse stretch — one byte in sixteen, the rest erased — then a
+        // dense one. Both change when shifted by a byte; uniform padding would
+        // not, and would rightly stay unmarked.
+        let dense = (0..<(64 * 1024)).map { UInt8(0x20 + ($0 % 90)) }
+        let sparse: [UInt8] = (0..<(96 * 1024)).map { index -> UInt8 in
+            let letter = UInt8(truncatingIfNeeded: 0x41 + (index / 16) % 20)
+            return index % 16 == 0 ? letter : 0x00
+        }
+        var bytes: [UInt8] = dense
+        bytes += sparse
+        bytes += dense
+        bytes += dense
+        bytes += dense[0..<(32 * 1024)]
+        let (controller, window, panel) = try makeOverviewWindow(bytes)
+        controller.windowModel.pane1.isInsertMode = true
+        controller.windowModel.pane1.moveCaret(to: 1024)
+        controller.windowModel.pane1.typeASCII(0x5A)
+        let rebuildsBefore = controller.overviewRebuildsCompleted
+        controller.surface.minimap.rebuildForTesting()
+        XCTAssertTrue(pumpUntil(10.0) {
+            controller.overviewRebuildsCompleted > rebuildsBefore
+        }, "the pass over the edited file lands")
+        window.layoutIfNeeded()
+        let summary = try XCTUnwrap(panel.overviewSummaries.first)
+        XCTAssertNotEqual(summary.modified[summary.rowCount * 7 / 16], 0, "the sparse stretch moved")
+        XCTAssertNotEqual(summary.modified[summary.rowCount * 13 / 16], 0, "the dense stretch moved")
 
-        // A row entirely inside the file: every column belongs to it.
-        XCTAssertEqual(MinimapView.lastColumnInFile(rowStart: 0, span: 1024, fileSize: 4096),
-                       columns - 1)
-        XCTAssertEqual(MinimapView.lastColumnInFile(rowStart: 3072, span: 1024, fileSize: 4096),
-                       columns - 1)
-
-        // A row that begins past the end: nothing of it is drawn.
-        XCTAssertEqual(MinimapView.lastColumnInFile(rowStart: 4096, span: 1024, fileSize: 4096), -1)
-        XCTAssertEqual(MinimapView.lastColumnInFile(rowStart: 9000, span: 1024, fileSize: 4096), -1)
-
-        // The row the end falls in, at a few fractions of the way across.
-        XCTAssertEqual(MinimapView.lastColumnInFile(rowStart: 4096, span: 1024, fileSize: 4096 + 512),
-                       columns / 2, "half way across the row")
-        XCTAssertEqual(MinimapView.lastColumnInFile(rowStart: 4096, span: 1024, fileSize: 4096 + 64),
-                       1, "one cell in")
-        XCTAssertEqual(MinimapView.lastColumnInFile(rowStart: 4096, span: 1024, fileSize: 4096 + 1),
-                       0, "a single byte of the row")
-        XCTAssertEqual(MinimapView.lastColumnInFile(rowStart: 4096, span: 1024, fileSize: 4096 + 1023),
-                       columns - 1, "all but the last byte still reaches the last cell")
-
-        // Rows thinner than their 16 cells (a file smaller than the panel's
-        // rows): the arithmetic must not run past the last column.
-        XCTAssertEqual(MinimapView.lastColumnInFile(rowStart: 0, span: 1, fileSize: 1), columns - 1)
-        XCTAssertEqual(MinimapView.lastColumnInFile(rowStart: 5, span: 1, fileSize: 5), -1)
-        XCTAssertEqual(MinimapView.lastColumnInFile(rowStart: 0, span: 4, fileSize: 2),
-                       columns / 2, "two of the row's four bytes")
+        func sample(at fraction: CGFloat) throws -> [NSColor] {
+            try sampleRowColours(panel, y: panel.bounds.height * fraction,
+                                 from: MinimapView.contentPadding + 2,
+                                 to: panel.bounds.width - MinimapView.contentPadding - 2)
+        }
+        func mean(_ colours: [NSColor], _ part: (NSColor) -> CGFloat) -> CGFloat {
+            colours.map(part).reduce(0, +) / CGFloat(max(colours.count, 1))
+        }
+        let padding = try sample(at: 7.0 / 16), code = try sample(at: 13.0 / 16)  // sparse, dense
+        XCTAssertGreaterThan(padding.count, 20, "enough pixels to judge")
+        XCTAssertGreaterThan(mean(padding, { $0.redComponent - $0.blueComponent }), 0.25,
+                             "the moved sparse stretch is red")
+        XCTAssertGreaterThan(mean(code, { $0.redComponent - $0.blueComponent }), 0.25,
+                             "the moved dense stretch is red")
+        XCTAssertLessThan(mean(code, \.greenComponent), mean(padding, \.greenComponent) - 0.1,
+                          "and the dense stretch reads denser than the sparse one in the same red")
     }
 
     /// A typed byte grows the file by one, which moves the overview's extent by
