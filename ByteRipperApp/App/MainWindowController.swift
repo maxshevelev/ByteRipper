@@ -489,7 +489,8 @@ final class MainWindowController: NSWindowController {
     /// is open already. The icon is the Agent tab's in Settings, filled while
     /// an agent is connected (`MainViewController.syncAgentToolbarItem`).
     // help: toolbar.agent
-    private func makeAgentWindowItem() -> NSToolbarItem {
+    /// Also the Annotations window's (`NotesWindowController`).
+    static func makeAgentWindowItem() -> NSToolbarItem {
         let item = NSToolbarItem(itemIdentifier: .agentWindow)
         item.image = NSImage(systemSymbolName: AgentService.symbolName(connected: false),
                              accessibilityDescription: L("Agent"))
@@ -547,8 +548,9 @@ final class MainWindowController: NSWindowController {
         return find(frame)
     }
 
+    /// Also the Annotations window's (`NotesWindowController`).
     // help: toolbar.help
-    private func makeHelpItem() -> NSToolbarItem {
+    static func makeHelpItem() -> NSToolbarItem {
         let item = NSMenuToolbarItem(itemIdentifier: .help)
         item.image = NSImage(systemSymbolName: "questionmark.circle",
                              accessibilityDescription: L("Help", context: "menu"))
@@ -713,12 +715,12 @@ extension MainWindowController: NSToolbarDelegate {
             return paneLayoutItem
         case .help:
             if helpItem == nil {
-                helpItem = makeHelpItem()
+                helpItem = Self.makeHelpItem()
             }
             return helpItem
         case .agentWindow:
             if agentWindowItem == nil {
-                agentWindowItem = makeAgentWindowItem()
+                agentWindowItem = Self.makeAgentWindowItem()
             }
             return agentWindowItem
         case .toggleMinimap:

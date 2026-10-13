@@ -109,6 +109,12 @@ struct AgentAnnotation: Equatable {
                         relatedTo: relatedTo.filter { !gone.contains($0) }, site: site, author: author)
     }
 
+    /// With `ids` as the annotations it is about: its relations given back.
+    func relating(_ ids: [String]) -> AgentAnnotation {
+        AgentAnnotation(id: id, file: file, range: range, node: node, title: title, note: note, decoded: decoded,
+                        relatedTo: ids, site: site, author: author)
+    }
+
     /// What the pointer resting on the bytes shows: the title, the note and
     /// the annotations this one is about, named by `titles` where it knows them.
     func tooltip(titles: [String: String]) -> String {

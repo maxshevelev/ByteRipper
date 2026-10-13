@@ -844,8 +844,12 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(cards.newIDs, [], "out of view, the marks go")
         main.mainViewController.showNotesWindow(nil)
         XCTAssertEqual(cards.newIDs, [], "and do not come back")
+        // Turned away from while the new card was still fading in: once it
+        // is in, no card keeps the tag.
+        _ = await settle(AgentAnnotationCards.moveDuration + 0.2)
         cards.collection.layoutSubtreeIfNeeded()
         XCTAssertNil(card("Away", in: cards)?.newTag)
+        XCTAssertNil(card("Watched", in: cards)?.newTag)
     }
 
     /// A card carried onto another takes its place, the others moving
@@ -909,6 +913,106 @@ final class AgentAnnotationTests: XCTestCase {
         _ = await settle(AgentAnnotationCards.moveDuration + 0.3)
         XCTAssertEqual(service.annotationTools.ordered().map(\.id), ["a2", "a1", "a3"])
         XCTAssertEqual(layout.itemFrames.map(\.origin), frames.map(\.origin), "closed up")
+    }
+
+    /// A press with ⌘ or ⇧ only selects: on the node's link, a relation or
+    /// the ✕ it lands on the card, not on them.
+    func testAPressWithCommandOrShiftOnlySelects() async throws {
+        try open()
+        _ = try await client.answer("annotate", ["offset": 0, "title": "A"])
+        _ = try await client.answer("annotate", ["offset": 2, "title": "B", "related_to": ["a1"]])
+        let cards = try notes()
+        let view = try XCTUnwrap(card("B", in: cards))
+        let link = try XCTUnwrap(view.subviews.compactMap { $0 as? NSButton }.first { $0.title == "→ a1 A" })
+        let cross = try XCTUnwrap(descendants(of: view, AnnotationRemoveBadge.self).first)
+        func press(_ flags: NSEvent.ModifierFlags) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero, modifierFlags: flags,
+                                             timestamp: 0, windowNumber: 0, context: nil, eventNumber: 0,
+                                             clickCount: 1, pressure: 1))
+        }
+        for (target, name) in [(link as NSView, "the relation"), (cross, "the ✕")] {
+            let point = view.convert(NSPoint(x: target.frame.midX, y: target.frame.midY), to: view.superview)
+            XCTAssertTrue(view.target(at: point, for: try press([])) === target, "a plain press reaches \(name)")
+            XCTAssertTrue(view.target(at: point, for: try press(.command)) === view, "⌘: \(name) is the card")
+            XCTAssertTrue(view.target(at: point, for: try press(.shift)) === view, "⇧: \(name) is the card")
+        }
+    }
+
+    /// The Annotations window's toolbar has the help book at its right, and
+    /// the Agent button beside it while the agent service is on.
+    func testTheWindowsToolbarHasHelpAndTheAgentButton() async throws {
+        try open()
+        _ = try notes()
+        let notesWindow = try XCTUnwrap(NotesWindowController.shared)
+        let toolbar = try XCTUnwrap(notesWindow.window?.toolbar)
+        XCTAssertEqual(toolbar.items.map(\.itemIdentifier), [.flexibleSpace, .help])
+        XCTAssertNotNil((toolbar.items.last as? NSMenuToolbarItem)?.menu, "the help book's menu")
+        notesWindow.syncAgentItem(enabled: true, connected: true)
+        XCTAssertEqual(toolbar.items.map(\.itemIdentifier), [.flexibleSpace, .help, .space, .agentWindow])
+        let agent = try XCTUnwrap(toolbar.items.last)
+        XCTAssertEqual(agent.action, #selector(AppDelegate.showAgentWindow(_:)))
+        notesWindow.syncAgentItem(enabled: false)
+        XCTAssertEqual(toolbar.items.map(\.itemIdentifier), [.flexibleSpace, .help])
+    }
+
+    /// ⇧-click selects the cards from the one last clicked to the one
+    /// clicked; ⌘-click adds one card, or takes it out again.
+    func testShiftSelectsARunAndCommandOneCard() async throws {
+        try open()
+        for offset in [0, 2, 4, 6] {
+            _ = try await client.answer("annotate", ["offset": .int(Int64(offset)), "title": "N"])
+        }
+        let cards = try notes()
+        XCTAssertEqual(cards.rows.map(\.id), ["a4", "a3", "a2", "a1"])
+        cards.select("a3")
+        cards.click("a1", with: .shift)
+        XCTAssertEqual(cards.selectedIDs, ["a3", "a2", "a1"], "a run, in the cards' order")
+        cards.click("a4", with: .command)
+        XCTAssertEqual(cards.selectedIDs, ["a4", "a3", "a2", "a1"], "one more")
+        cards.click("a2", with: .command)
+        XCTAssertEqual(cards.selectedIDs, ["a4", "a3", "a1"], "one taken out")
+        cards.click("a3", with: .shift)
+        XCTAssertEqual(cards.selectedIDs, ["a4", "a3"], "from the card last ⌘-clicked")
+    }
+
+    /// ⌘Z in the Annotations window undoes the removals made there, the last
+    /// first: each card back where it stood, with the relations the others
+    /// lost; ⇧⌘Z removes it again.
+    func testUndoPutsRemovedCardsBackWhereTheyStood() async throws {
+        try open()
+        _ = try await client.answer("annotate", ["offset": 0, "title": "A"])
+        _ = try await client.answer("annotate", ["offset": 2, "title": "B"])
+        _ = try await client.answer("annotate", ["offset": 4, "title": "C", "related_to": ["a1"]])
+        let cards = try notes()
+        let notesWindow = try XCTUnwrap(NotesWindowController.shared)
+        let store = try XCTUnwrap(service.annotationTools)
+        store.arrange(["a2", "a3", "a1"])
+        let original = store.all()
+        let undo = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit), keyEquivalent: "z")
+        let redo = NSMenuItem(title: "Redo", action: #selector(MainViewController.redoEdit), keyEquivalent: "Z")
+        XCTAssertFalse(notesWindow.validateMenuItem(undo), "nothing to undo yet")
+
+        cards.onRemove(["a3"])
+        cards.onRemove(["a1"])
+        XCTAssertEqual(store.ordered().map(\.id), ["a2"])
+        XCTAssertTrue(notesWindow.validateMenuItem(undo))
+
+        notesWindow.undoEdit()
+        XCTAssertEqual(store.ordered().map(\.id), ["a2", "a1"], "the last removal first, in its place")
+        XCTAssertEqual(cards.selectedIDs, ["a1"], "and selected")
+        notesWindow.undoEdit()
+        XCTAssertEqual(store.ordered().map(\.id), ["a2", "a3", "a1"])
+        XCTAssertEqual(store.all(), original, "as they were, the relation to A too")
+        XCTAssertFalse(notesWindow.validateMenuItem(undo))
+        _ = await settle(AgentAnnotationCards.moveDuration + 0.3)
+        XCTAssertEqual(cards.rows.map(\.id), ["a2", "a3", "a1"])
+        XCTAssertEqual(cards.shownTexts(of: "a3").last, "→ a1 A", "the card says the relation again")
+
+        XCTAssertTrue(notesWindow.validateMenuItem(redo))
+        notesWindow.redoEdit()
+        XCTAssertEqual(store.ordered().map(\.id), ["a2", "a1"])
+        notesWindow.undoEdit()
+        XCTAssertEqual(store.ordered().map(\.id), ["a2", "a3", "a1"])
     }
 
     /// Everything an annotation holds — a place in decompressed bytes with

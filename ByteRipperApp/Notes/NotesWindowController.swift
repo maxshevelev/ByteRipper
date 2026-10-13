@@ -49,6 +49,12 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     /// Whether the window was in view when last asked: coming into view
     /// marks the notes made meanwhile new, going out of it takes the marks off.
     private var wasInView = false
+    /// The removals made here, the last last: ⌘Z puts the cards back where
+    /// they stood, ⇧⌘Z removes them again. Kept while the app runs, not
+    /// from one launch to the next.
+    private var undoable: [AgentAnnotationTools.Removal] = []
+    private var agentObserver: NSObjectProtocol?
+    private var redoable: [AgentAnnotationTools.Removal] = []
 
     private init() {
         let window = NSWindow(
@@ -64,12 +70,20 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         window.delegate = self
         // A toolbar as the dumps' tabs have, so the tab bar and the content
-        // do not jump between the tabs; it holds nothing but the title.
+        // do not jump between the tabs. It holds what is not about a dump:
+        // the help book, and the Agent button while the agent service is on,
+        // where the dumps' toolbars have them, at the right.
         let toolbar = NSToolbar(identifier: "NotesToolbar")
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
+        toolbar.delegate = self
         window.toolbar = toolbar
         window.toolbarStyle = .unified
+        agentObserver = NotificationCenter.default.addObserver(
+            forName: AgentService.didChange, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.syncAgentItem() }
+        }
 
         cards.build()
         cards.scroll.borderType = .noBorder
@@ -102,6 +116,27 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         window.makeKeyAndOrderFront(nil)
         noteLookedAt()
         refresh()
+        syncAgentItem()
+    }
+
+    /// The Agent button there while the agent service is on, and filled
+    /// while an agent is connected — as on the dumps' toolbars.
+    func syncAgentItem(enabled: Bool? = nil, connected: Bool? = nil) {
+        guard let toolbar = window?.toolbar else { return }
+        let wanted = enabled ?? (AgentService.shared?.isEnabled == true)
+        let shown = toolbar.items.firstIndex { $0.itemIdentifier == .agentWindow }
+        if wanted, shown == nil, let help = toolbar.items.firstIndex(where: { $0.itemIdentifier == .help }) {
+            toolbar.insertItem(withItemIdentifier: .agentWindow, at: help + 1)
+            toolbar.insertItem(withItemIdentifier: .space, at: help + 1)
+        } else if !wanted, let shown {
+            toolbar.removeItem(at: shown)
+            if shown > 0, toolbar.items[shown - 1].itemIdentifier == .space { toolbar.removeItem(at: shown - 1) }
+        }
+        let isConnected = connected ?? ((AgentService.shared?.connectionCount ?? 0) > 0)
+        for item in toolbar.items where item.itemIdentifier == .agentWindow {
+            item.image = NSImage(systemSymbolName: AgentService.symbolName(connected: isConnected),
+                                 accessibilityDescription: L("Agent"))
+        }
     }
 
     /// The notes there are now, the newest first, or the empty screen when
@@ -145,9 +180,11 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     private func wireCards() {
         cards.onShow = { [weak self] id in self?.show(id) }
         cards.onOpenSite = { [weak self] annotation in self?.show(annotation.id) }
-        cards.onRemove = { ids in
+        cards.onRemove = { [weak self] ids in
             let chosen = Set(ids)
-            AgentAnnotationTools.current?.remove { chosen.contains($0.id) }
+            guard let removal = AgentAnnotationTools.current?.removal(where: { chosen.contains($0.id) }) else { return }
+            self?.undoable.append(removal)
+            self?.redoable = []
         }
         cards.onArrange = { ids in AgentAnnotationTools.current?.arrange(ids) }
         // help: window.notes.edit
@@ -192,9 +229,29 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         window?.makeFirstResponder(cards.collection)
     }
 
+    /// Edit ▸ Undo (⌘Z): the last removal made here undone — the cards back
+    /// where they stood, selected.
+    @objc func undoEdit() {
+        guard let removal = undoable.popLast(), let store = AgentAnnotationTools.current else { return }
+        store.restore(removal)
+        redoable.append(removal)
+        cards.select(removal.ids)
+    }
+
+    /// Edit ▸ Redo (⇧⌘Z): the removal undone made again.
+    @objc func redoEdit() {
+        guard let undone = redoable.popLast(), let store = AgentAnnotationTools.current else { return }
+        let ids = Set(undone.ids)
+        if let removal = store.removal(where: { ids.contains($0.id) }) { undoable.append(removal) }
+    }
+
     @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
-        if item.action == #selector(selectAllBytes) { return !cards.isEmpty }
-        return true
+        switch item.action {
+        case #selector(selectAllBytes): return !cards.isEmpty
+        case #selector(undoEdit): return !undoable.isEmpty
+        case #selector(redoEdit): return !redoable.isEmpty
+        default: return true
+        }
     }
 
     /// File ▸ Close (⌘W): the tab goes; the notes stay.
@@ -234,6 +291,25 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     func windowDidMiniaturize(_ notification: Notification) {
         wasInView = false
         leftView()
+    }
+}
+
+extension NotesWindowController: NSToolbarDelegate {
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.flexibleSpace, .space, .help, .agentWindow]
+    }
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
+        [.flexibleSpace, .help]
+    }
+
+    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
+                 willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        switch itemIdentifier {
+        case .help: return MainWindowController.makeHelpItem()
+        case .agentWindow: return MainWindowController.makeAgentWindowItem()
+        default: return nil
+        }
     }
 }
 

@@ -37,6 +37,8 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
     /// A card was dragged: the cards' order now, first first.
     var onArrange: ([String]) -> Void = { _ in }
     var onSelectionChanged: () -> Void = {}
+    /// The card a ⇧-click selects from: the one last clicked.
+    private var anchor: String?
     /// The cards that wear the New tag.
     var newIDs: Set<String> = []
     /// Whether an annotation's file is open on screen now.
@@ -51,6 +53,12 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
     private var heights: [String: (width: CGFloat, height: CGFloat)] = [:]
     /// The card being dragged, while it is.
     private var carry: Carry?
+    /// Animated updates under way — cards moving aside, fading in or out.
+    private var animating = 0
+    /// The cards were said again while an update was under way: the
+    /// collection lays out the views it is animating as they were, so they
+    /// are said once more when it is done.
+    private var reloadWhenSettled = false
 
     func build() {
         collection.collectionViewLayout = layout
@@ -82,20 +90,34 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
 
     /// The annotations as cards; the selection stays with the ones it was on.
     /// Cards removed and nothing else — the others as they stood — fade out
-    /// while the rest move up to close the gaps, animated.
+    /// while the rest move up to close the gaps; cards added and nothing else
+    /// — a removal undone, a new note — fade in while the rest move aside.
+    /// Both animated.
     func show(_ annotations: [AgentAnnotation]) {
         let chosen = Set(selectedIDs)
         let staying = Set(annotations.map(\.id))
+        let before = Set(rows.map(\.id))
         let gone = rows.indices.filter { !staying.contains(rows[$0].id) }
-        if !gone.isEmpty, carry == nil, collection.window?.isVisible == true,
-           rows.filter({ staying.contains($0.id) }).map(\.id) == annotations.map(\.id) {
-            remove(gone, leaving: annotations, selected: chosen)
-            return
+        let added = annotations.indices.filter { !before.contains(annotations[$0].id) }
+        // Animated only on the cards the collection has: a reload it has not
+        // taken in yet counts its cards anew, the update's sums do not add
+        // up, and AppKit stops the app (`_endItemAnimations…`).
+        if carry == nil, collection.window?.isVisible == true, !rows.isEmpty,
+           collection.numberOfSections == 1, collection.numberOfItems(inSection: 0) == rows.count {
+            if !gone.isEmpty, added.isEmpty, rows.filter({ staying.contains($0.id) }).map(\.id) == annotations.map(\.id) {
+                remove(gone, leaving: annotations, selected: chosen)
+                return
+            }
+            if !added.isEmpty, gone.isEmpty, annotations.filter({ before.contains($0.id) }).map(\.id) == rows.map(\.id) {
+                insert(added, into: annotations, selected: chosen)
+                return
+            }
         }
         rows = annotations
         heights = [:]
         layout.invalidateLayout()
         collection.reloadData()
+        if animating > 0 { reloadWhenSettled = true }
         let kept = Set(rows.indices.filter { chosen.contains(rows[$0].id) }.map { IndexPath(item: $0, section: 0) })
         collection.selectionIndexPaths = kept
     }
@@ -110,12 +132,13 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         let paths = Set(gone.map { IndexPath(item: $0, section: 0) })
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Self.moveDuration
+            animating += 1
             collection.animator().performBatchUpdates({
                 layout.invalidateLayout()
                 collection.animator().deleteItems(at: paths)
             }, completionHandler: { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let self else { return }
+                    guard let self, self.settled() else { return }
                     let changed = self.rows.indices.filter { before[self.rows[$0].id] != self.rows[$0] }
                     if !changed.isEmpty {
                         self.collection.reloadItems(at: Set(changed.map { IndexPath(item: $0, section: 0) }))
@@ -125,6 +148,58 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         }
         collection.selectionIndexPaths = Set(rows.indices.filter { chosen.contains(rows[$0].id) }
             .map { IndexPath(item: $0, section: 0) })
+        onSelectionChanged()
+    }
+
+    /// Puts in the cards at `added`, the others moving aside to make room; a
+    /// card whose relations changed with them is said again once they have.
+    private func insert(_ added: [Int], into annotations: [AgentAnnotation], selected chosen: Set<String>) {
+        let before = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        rows = annotations
+        heights = [:]
+        let paths = Set(added.map { IndexPath(item: $0, section: 0) })
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.moveDuration
+            animating += 1
+            collection.animator().performBatchUpdates({
+                layout.invalidateLayout()
+                collection.animator().insertItems(at: paths)
+            }, completionHandler: { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self, self.settled() else { return }
+                    let changed = self.rows.indices.filter { index in
+                        before[self.rows[index].id].map { $0 != self.rows[index] } ?? false
+                    }
+                    if !changed.isEmpty {
+                        self.collection.reloadItems(at: Set(changed.map { IndexPath(item: $0, section: 0) }))
+                    }
+                }
+            })
+        }
+        collection.selectionIndexPaths = Set(rows.indices.filter { chosen.contains(rows[$0].id) }
+            .map { IndexPath(item: $0, section: 0) })
+    }
+
+    /// An animated update is done. False when the cards were said again
+    /// meanwhile — said once more now, every view with them — so the caller
+    /// has nothing left to say.
+    private func settled() -> Bool {
+        animating = max(0, animating - 1)
+        guard animating == 0, reloadWhenSettled else { return true }
+        reloadWhenSettled = false
+        let chosen = collection.selectionIndexPaths
+        collection.reloadData()
+        collection.selectionIndexPaths = chosen
+        return false
+    }
+
+    /// Selects the cards of `ids`, and nothing else, and scrolls to the first.
+    func select(_ ids: [String]) {
+        let wanted = Set(ids)
+        let paths = Set(rows.indices.filter { wanted.contains(rows[$0].id) }.map { IndexPath(item: $0, section: 0) })
+        guard !paths.isEmpty else { return }
+        collection.selectionIndexPaths = paths
+        if let first = paths.min() { collection.scrollToItems(at: [first], scrollPosition: .nearestHorizontalEdge) }
         onSelectionChanged()
     }
 
@@ -151,6 +226,7 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
         let path = IndexPath(item: index, section: 0)
         collection.selectionIndexPaths = [path]
+        anchor = id
         collection.scrollToItems(at: [path], scrollPosition: .nearestHorizontalEdge)
         onSelectionChanged()
     }
@@ -172,10 +248,35 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         card.card.onRemove = { [weak self] in self?.onRemove([annotation.id]) }
         card.card.onEdit = { [weak self] in self?.onEdit(annotation) }
         card.card.onPress = { [weak self] event in self?.dragIfDragged(annotation.id, from: event) ?? false }
+        card.card.onSelectClick = { [weak self] flags in self?.click(annotation.id, with: flags) }
         return card
     }
 
     func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt indexPaths: Set<IndexPath>) {
+        if collectionView.selectionIndexPaths.count == 1, let only = collectionView.selectionIndexPaths.first,
+           only.item < rows.count {
+            anchor = rows[only.item].id
+        }
+        onSelectionChanged()
+    }
+
+    /// A click on card `id` with ⌘ or ⇧, which selects and does nothing
+    /// else: ⇧ selects the cards from the one last clicked to this one, in
+    /// the cards' order; ⌘ adds this one to the selection, or takes it out.
+    func click(_ id: String, with flags: NSEvent.ModifierFlags) {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return }
+        let path = IndexPath(item: index, section: 0)
+        var selected = collection.selectionIndexPaths
+        if flags.contains(.shift), let anchor, let from = rows.firstIndex(where: { $0.id == anchor }) {
+            selected = Set((min(from, index)...max(from, index)).map { IndexPath(item: $0, section: 0) })
+        } else if selected.contains(path) {
+            selected.remove(path)
+        } else {
+            selected.insert(path)
+            anchor = id
+        }
+        collection.selectionIndexPaths = selected
+        collection.window?.makeFirstResponder(collection)
         onSelectionChanged()
     }
 
@@ -547,6 +648,8 @@ final class AnnotationCardView: NSView {
     /// A press on the card: true when it turned into a drag and was carried
     /// to its end, false when it is a click for the collection to select by.
     var onPress: (NSEvent) -> Bool = { _ in false }
+    /// A click with ⌘ or ⇧: selection, and nothing else.
+    var onSelectClick: (NSEvent.ModifierFlags) -> Void = { _ in }
 
     /// The lines under the header, top to bottom; a wrapping line takes the
     /// card's whole width, a link only its own.
@@ -582,12 +685,23 @@ final class AnnotationCardView: NSView {
 
     override var isFlipped: Bool { true }
 
-    /// The ✕ standing out of the corner answers a click outside the card too.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        if let remove = header?.remove, !remove.isHidden,
-           remove.frame.contains(convert(point, from: superview)) {
-            return remove
+        target(at: point, for: NSApp.currentEvent)
+    }
+
+    /// What a press at `point`, in the superview's coordinates, lands on.
+    /// With ⌘ or ⇧ held the press selects, and nothing else: it lands on the
+    /// card, never on the node's link, a relation, the pencil or the ✕. The
+    /// ✕ standing out of the corner answers a click outside the card too.
+    func target(at point: NSPoint, for event: NSEvent?) -> NSView? {
+        let inside = convert(point, from: superview)
+        let onRemove = header.map { !$0.remove.isHidden && $0.remove.frame.contains(inside) } ?? false
+        if let event, event.type == .leftMouseDown,
+           !event.modifierFlags.intersection([.command, .shift]).isEmpty,
+           onRemove || bounds.contains(inside) {
+            return self
         }
+        if onRemove, let remove = header?.remove { return remove }
         return super.hitTest(point)
     }
 
@@ -696,6 +810,15 @@ final class AnnotationCardView: NSView {
         place(width: bounds.width)
     }
 
+    /// A card faded in starts with no size and gets it from the animation;
+    /// with no constraints to say so, nothing else would lay its lines out
+    /// again at the width it ends up with.
+    override func setFrameSize(_ newSize: NSSize) {
+        let resized = newSize != frame.size
+        super.setFrameSize(newSize)
+        if resized { needsLayout = true }
+    }
+
     /// Frames every line for a card `width` wide; answers the card's height.
     ///
     /// The height adds up the rectangles worked out here, never a frame read
@@ -797,6 +920,11 @@ final class AnnotationCardView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        let flags = event.modifierFlags.intersection([.command, .shift])
+        if !flags.isEmpty {
+            onSelectClick(flags)
+            return
+        }
         if onPress(event) { return }
         super.mouseDown(with: event)
         if event.clickCount == 2 { onDoubleClick() }

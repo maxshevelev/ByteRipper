@@ -626,18 +626,73 @@ final class AgentAnnotationTools {
     }
 
     /// Removes the annotations `doomed` picks, drops relations to them, and
-    /// returns their ids. What the Annotations window calls as well.
+    /// returns their ids.
     @discardableResult
     func remove(where doomed: (AgentAnnotation) -> Bool) -> [String] {
-        let removed = all().filter(doomed).map(\.id)
-        guard !removed.isEmpty else { return [] }
-        let gone = Set(removed)
+        removal(where: doomed)?.ids ?? []
+    }
+
+    /// Annotations removed, kept so the removal can be undone: each with
+    /// where it stood — among the annotations as they were made, and among
+    /// the cards — and the relations the others lost with them.
+    struct Removal {
+        struct Removed {
+            let annotation: AgentAnnotation
+            let made: Int
+            let card: Int?
+        }
+        /// In the order they stood, first first.
+        let removed: [Removed]
+        /// The relations of the annotations that named a removed one, as
+        /// they were.
+        let relations: [String: [String]]
+
+        var ids: [String] { removed.map(\.annotation.id) }
+    }
+
+    /// Removes the annotations `doomed` picks, as `remove(where:)` does, and
+    /// returns what puts them back: the Annotations window's ✕ and Delete,
+    /// which ⌘Z undoes.
+    @discardableResult
+    func removal(where doomed: (AgentAnnotation) -> Bool) -> Removal? {
+        let all = all()
+        let gone = Set(all.filter(doomed).map(\.id))
+        guard !gone.isEmpty else { return nil }
+        let cards = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        let removed = all.enumerated().filter { gone.contains($1.id) }.map { made, annotation in
+            Removal.Removed(annotation: annotation, made: made, card: cards[annotation.id])
+        }
+        var relations: [String: [String]] = [:]
+        for annotation in all where !gone.contains(annotation.id) && annotation.relatedTo.contains(where: gone.contains) {
+            relations[annotation.id] = annotation.relatedTo
+        }
         items = items.filter { !gone.contains($0.id) }.map { $0.dropping(gone) }
         order.removeAll { gone.contains($0) }
         unseen.subtract(gone)
         fresh.subtract(gone)
         changed()
-        return removed
+        return Removal(removed: removed, relations: relations)
+    }
+
+    /// Puts back what `removal` removed: each annotation where it stood, its
+    /// card in its place among the cards, and the relations as they were —
+    /// to the annotations there still are. Ones put back already are left.
+    func restore(_ removal: Removal) {
+        let present = Set(all().map(\.id))
+        let returning = removal.removed.filter { !present.contains($0.annotation.id) }
+        guard !returning.isEmpty else { return }
+        for entry in returning.sorted(by: { $0.made < $1.made }) {
+            items.insert(entry.annotation, at: min(entry.made, items.count))
+        }
+        for entry in returning.sorted(by: { ($0.card ?? .max) < ($1.card ?? .max) }) {
+            order.insert(entry.annotation.id, at: min(entry.card ?? order.count, order.count))
+        }
+        let known = Set(items.map(\.id))
+        items = items.map { annotation in
+            let relations = removal.relations[annotation.id] ?? annotation.relatedTo
+            return annotation.relating(relations.filter(known.contains))
+        }
+        changed()
     }
 
     /// Brings the annotation's file forward — the tab that has it, or a new
