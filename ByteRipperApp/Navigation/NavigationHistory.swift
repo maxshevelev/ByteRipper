@@ -58,6 +58,14 @@ struct NavigationHistory<Place: Equatable> {
         return place
     }
 
+    /// Forward from here is `place`: a step taken back into it from
+    /// somewhere this history does not hold — the Annotations window's Back
+    /// returning to the dump a note was made in.
+    mutating func pushForward(_ place: Place) {
+        guard forwardStack.last != place else { return }
+        forwardStack.append(place)
+    }
+
     mutating func removeAll() {
         backStack.removeAll()
         forwardStack.removeAll()

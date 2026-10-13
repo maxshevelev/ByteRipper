@@ -53,6 +53,16 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     /// they stood, ⇧⌘Z removes them again. Kept while the app runs, not
     /// from one launch to the next.
     private var undoable: [AgentAnnotationTools.Removal] = []
+    /// A place in a tab the window was come to from, or goes on to.
+    struct Stop {
+        weak var controller: MainViewController?
+        let place: NavigationPlace
+    }
+    /// Back: the places in the tabs the window was come to from, the last
+    /// last — a note made there, the tab's own Forward. Forward: the places
+    /// its Back left — the tab's own Back came here from them.
+    private(set) var backStops: [Stop] = []
+    private(set) var forwardStops: [Stop] = []
     private var agentObserver: NSObjectProtocol?
     private var redoable: [AgentAnnotationTools.Removal] = []
 
@@ -62,6 +72,10 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
         window.title = L("Annotations")
+        // The tab says what it is with the notes' picture before the name;
+        // the toolbar has Back and Forward where a title would be.
+        window.titleVisibility = .hidden
+        window.tab.attributedTitle = Self.tabTitle()
         window.tabbingIdentifier = MainWindowController.tabbingIdentifier
         if MainViewController.isRunningTests { window.tabbingMode = .disallowed }
         // Closed, it is kept, and opening it again is showing it again.
@@ -118,6 +132,65 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         refresh()
         syncAgentItem()
     }
+
+    /// The tab's title: the notes' picture, then the name.
+    private static func tabTitle() -> NSAttributedString {
+        let title = NSMutableAttributedString()
+        if let symbol = NSImage(systemSymbolName: NotesSymbol.name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: NSFont.smallSystemFontSize, weight: .regular)) {
+            let attachment = NSTextAttachment()
+            attachment.image = symbol
+            attachment.bounds = NSRect(x: 0, y: -2, width: symbol.size.width, height: symbol.size.height)
+            title.append(NSAttributedString(attachment: attachment))
+            title.append(NSAttributedString(string: " "))
+        }
+        title.append(NSAttributedString(string: L("Annotations")))
+        return title
+    }
+
+    // MARK: - Back and Forward
+
+    /// The window comes after `place` in `controller`'s tab — a note made
+    /// there, or the tab's Forward: its Back returns there.
+    func cameForward(from controller: MainViewController, leaving place: NavigationPlace) {
+        backStops.append(Stop(controller: controller, place: place))
+        forwardStops = []
+        show(tabbedWith: controller.view.window)
+    }
+
+    /// The tab's Back has come here from `place`: the window's Forward goes
+    /// there again.
+    func cameBack(from controller: MainViewController, leaving place: NavigationPlace) {
+        forwardStops.append(Stop(controller: controller, place: place))
+        show(tabbedWith: controller.view.window)
+    }
+
+    /// View ▸ Back (⌘[), and the toolbar's: to where the window was come to
+    /// from.
+    @objc func navigateBack() {
+        guard let stop = Self.pop(&backStops) else { return }
+        stop.controller?.arriveFromNotes(at: stop.place, back: true)
+        window?.toolbar?.validateVisibleItems()
+    }
+
+    /// View ▸ Forward (⌘]), and the toolbar's: to where the window's Back
+    /// came from.
+    @objc func navigateForward() {
+        guard let stop = Self.pop(&forwardStops) else { return }
+        stop.controller?.arriveFromNotes(at: stop.place, back: false)
+        window?.toolbar?.validateVisibleItems()
+    }
+
+    /// The last stop whose tab is still there; ones closed since are passed.
+    private static func pop(_ stops: inout [Stop]) -> Stop? {
+        while let stop = stops.popLast() {
+            if stop.controller?.view.window != nil { return stop }
+        }
+        return nil
+    }
+
+    var canNavigateBack: Bool { backStops.contains { $0.controller?.view.window != nil } }
+    var canNavigateForward: Bool { forwardStops.contains { $0.controller?.view.window != nil } }
 
     /// The Agent button there while the agent service is on, and filled
     /// while an agent is connected — as on the dumps' toolbars.
@@ -212,6 +285,8 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
             return
         }
         store.show(id)
+        // A step out of the window: Back in that tab comes here again.
+        store.place(of: note)?.controller?.recordStepFromNotes()
     }
 
     // MARK: - A tab among the dumps' tabs
@@ -250,6 +325,8 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         case #selector(selectAllBytes): return !cards.isEmpty
         case #selector(undoEdit): return !undoable.isEmpty
         case #selector(redoEdit): return !redoable.isEmpty
+        case #selector(navigateBack): return canNavigateBack
+        case #selector(navigateForward): return canNavigateForward
         default: return true
         }
     }
@@ -294,18 +371,29 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     }
 }
 
-extension NotesWindowController: NSToolbarDelegate {
+extension NotesWindowController: NSToolbarDelegate, NSToolbarItemValidation {
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, .space, .help, .agentWindow]
+        [.flexibleSpace, .space, .historyNavigation, .help, .agentWindow]
     }
 
+    /// Back and Forward at the left, where the dumps' tabs have them; the
+    /// help book and the Agent button at the right.
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, .help]
+        [.historyNavigation, .flexibleSpace, .help]
+    }
+
+    func validateToolbarItem(_ item: NSToolbarItem) -> Bool {
+        switch item.action {
+        case #selector(navigateBack): return canNavigateBack
+        case #selector(navigateForward): return canNavigateForward
+        default: return true
+        }
     }
 
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         switch itemIdentifier {
+        case .historyNavigation: return MainWindowController.makeHistoryNavigationGroup(target: self)
         case .help: return MainWindowController.makeHelpItem()
         case .agentWindow: return MainWindowController.makeAgentWindowItem()
         default: return nil

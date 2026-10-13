@@ -286,13 +286,15 @@ final class MainWindowController: NSWindowController {
     /// Back and Forward through the tab's navigation history (§10.6): the
     /// chevrons Finder has for the same two commands, joined in one block.
     // help: toolbar.history
-    private func makeHistoryNavigationGroup() -> NSToolbarItemGroup {
+    /// Back and Forward, sent to `target`: the tab's controller here, the
+    /// Annotations window's own in its toolbar (`NotesWindowController`).
+    static func makeHistoryNavigationGroup(target: AnyObject?) -> NSToolbarItemGroup {
         func navItem(_ identifier: NSToolbarItem.Identifier, _ symbol: String,
                      _ label: String, _ phrase: String, _ action: Selector) -> NSToolbarItem {
             let item = NSToolbarItem(itemIdentifier: identifier)
             item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: label)
             item.label = label
-            item.target = mainViewController
+            item.target = target
             item.action = action
             ControlHelp.describe(item, name: label, tooltip: phrase)
             return item
@@ -658,7 +660,7 @@ extension MainWindowController: NSToolbarDelegate {
             return diffNavigationGroup
         case .historyNavigation:
             if historyNavigationGroup == nil {
-                historyNavigationGroup = makeHistoryNavigationGroup()
+                historyNavigationGroup = Self.makeHistoryNavigationGroup(target: mainViewController)
             }
             return historyNavigationGroup
         case .filesIdentical:

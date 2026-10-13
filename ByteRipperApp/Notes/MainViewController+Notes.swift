@@ -27,8 +27,12 @@ extension MainViewController {
         NoteForm.ask(L("Add Annotation"),
                      L("The annotation is drawn over the selected bytes and listed in the Annotations window."),
                      button: L("Add"), in: view.window) { title, note in
-            Task { @MainActor in
-                _ = try? await AgentAnnotationTools.current?.addNote(title: title, note: note, on: range, of: pane)
+            Task { @MainActor [weak self] in
+                guard (try? await AgentAnnotationTools.current?.addNote(title: title, note: note, on: range,
+                                                                       of: pane)) != nil else { return }
+                // The note is seen made: the Annotations window comes up, a
+                // step its Back returns from to the bytes it was made on.
+                self?.showNotesWindow(leaving: pane)
             }
         }
     }

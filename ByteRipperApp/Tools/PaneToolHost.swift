@@ -177,6 +177,9 @@ import MEFirmware
             Task { @MainActor in
                 do {
                     _ = try await AgentAnnotationTools.current?.addNote(title: title, note: note, node: id, of: pane)
+                    // Seen made, as on the bytes: the Annotations window, a
+                    // step Back returns from to the tree's row.
+                    owner.showNotesWindow(leaving: pane)
                 } catch {
                     // What refuses a node is worded for an agent, in English:
                     // the person is told what to do instead, in their words.

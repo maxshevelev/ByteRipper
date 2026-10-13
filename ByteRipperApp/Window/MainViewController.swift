@@ -8133,6 +8133,10 @@ extension MainViewController {
         current.isToolStep = windowModel.arrivedByToolStep
         guard let place = windowModel.navigationHistory.goBack(
             from: current, isReachable: isReachable) else { return }
+        if place.isNotes {
+            NotesWindowController.instance.cameBack(from: self, leaving: current)
+            return
+        }
         go(to: place)
     }
 
@@ -8142,7 +8146,42 @@ extension MainViewController {
         current.isToolStep = windowModel.arrivedByToolStep
         guard let place = windowModel.navigationHistory.goForward(
             from: current, isReachable: isReachable) else { return }
+        if place.isNotes {
+            NotesWindowController.instance.cameForward(from: self, leaving: current)
+            return
+        }
         go(to: place)
+    }
+
+    /// The Annotations window shown after a step out of this tab — a note
+    /// made on `pane`: the place left is where its Back returns to.
+    func showNotesWindow(leaving pane: PaneViewModel) {
+        guard pane.isOpen else {
+            NotesWindowController.instance.show(tabbedWith: view.window)
+            return
+        }
+        NotesWindowController.instance.cameForward(from: self, leaving: navigationPlace(of: pane))
+    }
+
+    /// The Annotations window's Back or Forward come to this tab at `place`:
+    /// the tab brought forward and put on it. Back came — so this tab's
+    /// Forward goes to the window again; or Forward came — so its Back does.
+    func arriveFromNotes(at place: NavigationPlace, back: Bool) {
+        view.window?.makeKeyAndOrderFront(nil)
+        if back {
+            windowModel.navigationHistory.pushForward(.notes)
+        } else {
+            windowModel.navigationHistory.record(leaving: .notes)
+        }
+        if isReachable(place) { go(to: place) }
+        revalidateToolbar()
+    }
+
+    /// A card of the Annotations window took this tab to its place: Back
+    /// goes to the window again.
+    func recordStepFromNotes() {
+        windowModel.navigationHistory.record(leaving: .notes)
+        revalidateToolbar()
     }
 
     var canNavigateBack: Bool {
@@ -8210,7 +8249,8 @@ extension MainViewController {
     /// A place can be gone back to while every pane it names is still in this
     /// tab and still holds the document it was in.
     private func isReachable(_ place: NavigationPlace) -> Bool {
-        !place.spots.isEmpty && place.spots.allSatisfy { spot in
+        if place.isNotes { return NotesWindowController.shared != nil }
+        return !place.spots.isEmpty && place.spots.allSatisfy { spot in
             guard let pane = spot.pane, pane.isOpen,
                   pane.document.map(ObjectIdentifier.init) == spot.documentID else { return false }
             if pane === windowModel.pane1 || pane === windowModel.pane2 { return true }

@@ -47,8 +47,14 @@ struct NavigationPlace: Equatable {
     /// rather than to the dump. Not part of what makes two places the same:
     /// how a place was reached does not make another place of it.
     var isToolStep = false
+    /// The Annotations window: a step out of the tab into it — a note made,
+    /// a card double-clicked — is one Back and Forward take too.
+    var isNotes = false
+
+    /// The Annotations window as a place in a tab's history.
+    static let notes = NavigationPlace(spots: [], top: 0, isNotes: true)
 
     static func == (lhs: NavigationPlace, rhs: NavigationPlace) -> Bool {
-        lhs.spots == rhs.spots && lhs.top == rhs.top && lhs.tool == rhs.tool
+        lhs.spots == rhs.spots && lhs.top == rhs.top && lhs.tool == rhs.tool && lhs.isNotes == rhs.isNotes
     }
 }

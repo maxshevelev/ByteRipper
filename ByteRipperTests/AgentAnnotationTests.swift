@@ -938,21 +938,32 @@ final class AgentAnnotationTests: XCTestCase {
         }
     }
 
-    /// The Annotations window's toolbar has the help book at its right, and
-    /// the Agent button beside it while the agent service is on.
-    func testTheWindowsToolbarHasHelpAndTheAgentButton() async throws {
+    /// The Annotations window's toolbar has Back and Forward at its left, in
+    /// place of the title, the help book at its right, and the Agent button
+    /// beside it while the agent service is on; its tab wears the notes'
+    /// picture.
+    func testTheWindowsToolbarHasBackForwardHelpAndTheAgentButton() async throws {
         try open()
         _ = try notes()
         let notesWindow = try XCTUnwrap(NotesWindowController.shared)
         let toolbar = try XCTUnwrap(notesWindow.window?.toolbar)
-        XCTAssertEqual(toolbar.items.map(\.itemIdentifier), [.flexibleSpace, .help])
+        XCTAssertEqual(toolbar.items.map(\.itemIdentifier), [.historyNavigation, .flexibleSpace, .help])
+        XCTAssertEqual(notesWindow.window?.titleVisibility, .hidden, "Back and Forward where the title was")
+        let history = try XCTUnwrap(toolbar.items.first as? NSToolbarItemGroup)
+        XCTAssertEqual(history.subitems.map(\.action), [#selector(MainViewController.navigateBack),
+                                                         #selector(MainViewController.navigateForward)])
+        XCTAssertTrue(history.subitems.allSatisfy { $0.target === notesWindow })
         XCTAssertNotNil((toolbar.items.last as? NSMenuToolbarItem)?.menu, "the help book's menu")
+        let tabTitle = try XCTUnwrap(notesWindow.window?.tab.attributedTitle)
+        XCTAssertNotNil(tabTitle.attribute(.attachment, at: 0, effectiveRange: nil), "the notes' picture first")
+        XCTAssertTrue(tabTitle.string.hasSuffix("Annotations"))
         notesWindow.syncAgentItem(enabled: true, connected: true)
-        XCTAssertEqual(toolbar.items.map(\.itemIdentifier), [.flexibleSpace, .help, .space, .agentWindow])
+        XCTAssertEqual(toolbar.items.map(\.itemIdentifier),
+                       [.historyNavigation, .flexibleSpace, .help, .space, .agentWindow])
         let agent = try XCTUnwrap(toolbar.items.last)
         XCTAssertEqual(agent.action, #selector(AppDelegate.showAgentWindow(_:)))
         notesWindow.syncAgentItem(enabled: false)
-        XCTAssertEqual(toolbar.items.map(\.itemIdentifier), [.flexibleSpace, .help])
+        XCTAssertEqual(toolbar.items.map(\.itemIdentifier), [.historyNavigation, .flexibleSpace, .help])
     }
 
     /// ⇧-click selects the cards from the one last clicked to the one
@@ -973,6 +984,35 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(cards.selectedIDs, ["a4", "a3", "a1"], "one taken out")
         cards.click("a3", with: .shift)
         XCTAssertEqual(cards.selectedIDs, ["a4", "a3"], "from the card last ⌘-clicked")
+    }
+
+    /// A note made by hand brings up the Annotations window, a step of the
+    /// history: its Back returns to the bytes it was made on, and the tab's
+    /// Forward comes to the window again.
+    func testANoteMadeShowsTheWindowAndBackReturnsToItsPlace() async throws {
+        let controller = try open()
+        pane.select(range: 0x30..<0x38)
+        try await service.annotationTools.addNote(title: "Board ID", note: "", on: 0x30..<0x38, of: pane)
+        controller.showNotesWindow(leaving: pane)
+        let notesWindow = try XCTUnwrap(NotesWindowController.shared)
+        XCTAssertTrue(notesWindow.window?.isVisible == true, "the window comes up")
+        XCTAssertTrue(notesWindow.canNavigateBack)
+        XCTAssertFalse(notesWindow.canNavigateForward)
+
+        pane.select(range: 0..<1)
+        notesWindow.navigateBack()
+        let selection = pane.hexSelection()
+        XCTAssertEqual(selection.start..<selection.end, 0x30..<0x38, "back where the note was made")
+        XCTAssertTrue(controller.canNavigateForward, "the tab's Forward goes to the window again")
+        XCTAssertTrue(notesWindow.canNavigateForward == false && !notesWindow.canNavigateBack)
+
+        controller.navigateForward()
+        XCTAssertTrue(NotesWindowController.isInView || notesWindow.window?.isVisible == true)
+        XCTAssertTrue(notesWindow.canNavigateBack, "and its Back to the tab once more")
+        notesWindow.navigateBack()
+        XCTAssertTrue(controller.canNavigateForward)
+        controller.navigateForward()
+        XCTAssertTrue(notesWindow.canNavigateBack)
     }
 
     /// ⌘Z in the Annotations window undoes the removals made there, the last
