@@ -17,7 +17,7 @@ An annotation belongs to the file, not to the window. It is kept when the file c
 
 Select the bytes, right-click inside the selection and choose **Add Annotation…**. Enter a title — a few words saying what the bytes are — and, if needed, a note under it, then click **Add**. In a fragment panel the annotation goes to the file the part came out of: at the same bytes where the part keeps the file's addresses, otherwise in the part's own bytes, where it is shown when that part is opened again.
 
-A node of **UEFI Structure** is annotated the same way: right-click its row and choose **Add Annotation…**; the title starts as the node's name. The annotation is about the node, not only about its bytes: a node inside a compressed section, or an entry of a Lenovo LENV block stored encoded, is kept in the bytes it decompresses or decodes to, and its card shows the codecs as badges. In a fragment panel's tree, a node inside a compressed section of the part has no place in the file to keep it: annotate it from the tree of the file the part came out of.
+A node of **UEFI Structure** is annotated the same way: right-click its row and choose **Add Annotation…**; the title starts as the node's name. The annotation is about the node, not only about its bytes: a node inside a compressed section, or an entry of a Lenovo LENV block stored encoded, is kept in the bytes it decompresses or decodes to, and its card shows the codecs as badges.
 
 ## The Annotations window
 

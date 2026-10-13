@@ -1,4 +1,4 @@
-@source-sha 6f52559078bfa6600ee85655c7ead853e4c5b98cb2b926ca653f779d9a7e901c
+@source-sha a1bbbee5f0ec5733ad3ca545426bf22ae20bcb6fe7abee5936ac9d3660c98a7c
 # Anmerkungen
 
 > Kurze Vermerke zu Stellen in einer Datei, angelegt von Hand oder von einem verbundenen Agenten. Eine Anmerkung wird über den Bytes gezeigt und in einem eigenen Fenster aufgeführt.
@@ -11,7 +11,7 @@ Eine Anmerkung gehört zur Datei, nicht zum Fenster. Sie bleibt erhalten, wenn d
 
 Die Bytes auswählen, innerhalb der Auswahl mit der rechten Maustaste klicken und **Anmerkung hinzufügen…** wählen. Einen Titel eingeben — einige Worte dazu, was die Bytes sind —, bei Bedarf darunter eine Erläuterung, und **Hinzufügen** klicken. In einem Fragment-Bereich angelegt, gehört die Anmerkung zu der Datei, aus der das Fragment stammt: zu denselben Bytes, wenn das Fragment die Adressen der Datei beibehält, sonst zu den Bytes des Fragments selbst; dort erscheint sie, wenn dieses Fragment wieder geöffnet wird.
 
-Ein Knoten der **UEFI-Struktur** wird ebenso annotiert: mit der rechten Maustaste auf seine Zeile klicken und **Anmerkung hinzufügen…** wählen; als Titel ist der Name des Knotens vorgegeben. Die Anmerkung gilt dem Knoten selbst, nicht nur seinen Bytes: Bei einem Knoten in einem komprimierten Abschnitt oder einem Eintrag eines kodiert gespeicherten Lenovo-LENV-Blocks wird die Stelle in den entpackten bzw. dekodierten Bytes festgehalten, und die Karte zeigt die Codecs als Plaketten. Im Baum eines Fragment-Bereichs hat ein Knoten in einem komprimierten Abschnitt des Fragments keine Stelle in der Datei, an der die Anmerkung haften könnte: Ein solcher Knoten wird aus dem Baum der Datei annotiert, aus der das Fragment stammt.
+Ein Knoten der **UEFI-Struktur** wird ebenso annotiert: mit der rechten Maustaste auf seine Zeile klicken und **Anmerkung hinzufügen…** wählen; als Titel ist der Name des Knotens vorgegeben. Die Anmerkung gilt dem Knoten selbst, nicht nur seinen Bytes: Bei einem Knoten in einem komprimierten Abschnitt oder einem Eintrag eines kodiert gespeicherten Lenovo-LENV-Blocks wird die Stelle in den entpackten bzw. dekodierten Bytes festgehalten, und die Karte zeigt die Codecs als Plaketten.
 
 ## Das Fenster „Anmerkungen“
 
