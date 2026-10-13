@@ -417,6 +417,12 @@ final class AgentAnnotationTests: XCTestCase {
 
         window?.setContentSize(NSSize(width: 820, height: 600))
         let cards = try notes()
+        XCTAssertEqual(cards.rows.map(\.id), ["a3", "a2", "a1"], "the newest first")
+        // Long last: the two short cards side by side, the long one under the
+        // first of them, which ends higher than nothing does.
+        service.annotationTools.arrange(["a1", "a2", "a3"])
+        NotesWindowController.shared?.refresh()
+        cards.collection.layoutSubtreeIfNeeded()
         let frames = try XCTUnwrap(cards.collection.collectionViewLayout as? AnnotationMasonryLayout).itemFrames
         XCTAssertEqual(frames.count, 3)
         XCTAssertGreaterThan(frames[0].height, frames[1].height, "the long note makes a taller card")
@@ -744,7 +750,7 @@ final class AgentAnnotationTests: XCTestCase {
         let outside = NSPoint(x: card.frame.maxX + 3, y: card.frame.minY - 3)
         XCTAssertTrue(cards.collection.hitTest(outside) === cross, "a click beyond the card's edge reaches it")
         cross.click()
-        XCTAssertEqual(service.annotationTools.all().map(\.title), ["A"])
+        XCTAssertEqual(service.annotationTools.all().map(\.title), ["B"], "the second card is the older one")
     }
 
     /// The ✕'s disc is the paper the cards lie on, in either theme — a white
@@ -808,6 +814,100 @@ final class AgentAnnotationTests: XCTestCase {
         _ = await settle(0.3)
         let selection = pane.hexSelection()
         XCTAssertEqual(selection.start..<selection.end, 0x28..<0x2C, "the bytes stay selected")
+    }
+
+    // MARK: - The cards' order, New, dragging, and the next launch
+
+    private func card(_ title: String, in cards: AgentAnnotationCards) -> AnnotationCardView? {
+        cards.collection.visibleItems().compactMap { $0.view as? AnnotationCardView }.first { $0.texts.first == title }
+    }
+
+    /// A note made while the window is away is New the first time the
+    /// window is in view, and not the time after; one made while it is in
+    /// view never is.
+    func testANoteMadeWhileTheWindowWasAwayIsNewOnce() async throws {
+        let main = try openInAppWindow()
+        _ = try await client.answer("annotate", ["offset": 0, "title": "Away"])
+        main.mainViewController.showNotesWindow(nil)
+        let cards = try notes(raised: false)
+        XCTAssertEqual(cards.newIDs, ["a1"])
+        XCTAssertNotNil(card("Away", in: cards)?.newTag, "the card wears the tag")
+        XCTAssertEqual(card("Away", in: cards)?.newTag?.text, "New")
+
+        _ = try await client.answer("annotate", ["offset": 2, "title": "Watched"])
+        cards.collection.layoutSubtreeIfNeeded()
+        XCTAssertEqual(cards.rows.map(\.id), ["a2", "a1"], "the newest card first")
+        XCTAssertNil(card("Watched", in: cards)?.newTag, "made in view: not new")
+
+        NotesWindowController.shared?.closeDocument()
+        main.mainViewController.showNotesWindow(nil)
+        XCTAssertEqual(cards.newIDs, [], "new only the first time")
+        cards.collection.layoutSubtreeIfNeeded()
+        XCTAssertNil(card("Away", in: cards)?.newTag)
+    }
+
+    /// A card carried onto another takes its place, the others moving
+    /// aside; let go, it stays there, and a new card still comes first.
+    func testACardDraggedOntoAnotherTakesItsPlace() async throws {
+        try open()
+        for (offset, title) in [(0, "A"), (2, "B"), (4, "C")] {
+            _ = try await client.answer("annotate", ["offset": .int(Int64(offset)), "title": .string(title)])
+        }
+        let cards = try notes()
+        XCTAssertEqual(cards.rows.map(\.id), ["a3", "a2", "a1"])
+        let layout = try XCTUnwrap(cards.collection.collectionViewLayout as? AnnotationMasonryLayout)
+        let before = layout.itemFrames
+
+        XCTAssertTrue(cards.beginCarry("a1", at: NSPoint(x: before[2].midX, y: before[2].midY)))
+        XCTAssertTrue(cards.isCarrying)
+        XCTAssertEqual(cards.collection.item(at: IndexPath(item: 2, section: 0))?.view.alphaValue, 0,
+                       "its place stands empty while it is carried")
+        cards.moveCarry(to: NSPoint(x: before[0].midX, y: before[0].midY))
+        XCTAssertEqual(cards.rows.map(\.id), ["a1", "a3", "a2"], "the others moved aside")
+        cards.moveCarry(to: NSPoint(x: before[0].midX + 2, y: before[0].midY + 2))
+        XCTAssertEqual(cards.rows.map(\.id), ["a1", "a3", "a2"], "a pointer resting does not trade places")
+        cards.endCarry()
+        XCTAssertFalse(cards.isCarrying)
+        XCTAssertEqual(service.annotationTools.ordered().map(\.id), ["a1", "a3", "a2"])
+        _ = await settle(AgentAnnotationCards.moveDuration + 0.3)
+        XCTAssertEqual(layout.itemFrames.map(\.origin), before.map(\.origin), "closed up, aligned as before")
+        XCTAssertEqual(cards.collection.item(at: IndexPath(item: 0, section: 0))?.view.alphaValue, 1)
+
+        _ = try await client.answer("annotate", ["offset": 6, "title": "D"])
+        XCTAssertEqual(service.annotationTools.ordered().map(\.id), ["a4", "a1", "a3", "a2"])
+        XCTAssertEqual(service.annotationTools.all().map(\.id), ["a1", "a2", "a3", "a4"],
+                       "the agent still lists them oldest first")
+    }
+
+    /// Everything an annotation holds — a place in decompressed bytes with
+    /// its codecs, a node and its name, a relation, the author — and the
+    /// cards' order and which are new come back on the next launch; the ids
+    /// go on from where they were.
+    func testTheAnnotationsAreKeptForTheNextLaunch() async throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("annotations-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let url = folder.appendingPathComponent("Annotations.json")
+        service.annotationTools.keep(in: url)
+        try open(bytes: try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        _ = try await client.answer("annotate", ["offset": "0x28", "length": 4, "title": "Signature", "note": "Magic."])
+        let found = try await client.answer("find_bytes", ["node": "root", "text": "GH51G"])
+        let node = try XCTUnwrap(found["matches"]?.arrayValue?.first?["node"]?["id"]?.stringValue, "\(found)")
+        try await service.annotationTools.addNote(title: "Model", note: "By hand.", node: node, of: pane)
+        _ = try await client.answer("annotate", ["offset": 0, "title": "Pointer", "related_to": ["a1"]])
+        service.annotationTools.arrange(["a1", "a3", "a2"])
+        _ = await settle(0.1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), "written without being asked")
+
+        let before = service.annotationTools.all()
+        XCTAssertNotNil(before[1].decoded)
+        let later = AgentAnnotationTools(desk: service.annotationTools.desk)
+        later.keep(in: url)
+        XCTAssertEqual(later.all(), before)
+        XCTAssertEqual(later.ordered().map(\.id), ["a1", "a3", "a2"])
+        XCTAssertEqual(later.fresh, service.annotationTools.fresh)
+        XCTAssertEqual(later.unseen, service.annotationTools.unseen)
+        XCTAssertEqual(later.all()[1].decoded?.codecs.map(\.text), ["LZMA"])
+        XCTAssertEqual(AnnotationsFile.read(url)?.nextID, 4, "the next one is a4")
     }
 
     private func treeState(_ tools: ToolController) -> String {

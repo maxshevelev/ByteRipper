@@ -97,8 +97,9 @@ public func L(_ key: String, _ arguments: Any...) -> LocalizedText {
 
 /// A sentence kept as its key and what goes into it, put into words when it is
 /// shown and in the language of whoever shows it (`L(_:in:)`). `verbatim` for
-/// words that have no key — a parser's own English.
-public struct LocalizedText: Hashable, Sendable, CustomStringConvertible {
+/// words that have no key — a parser's own English. `Codable`, so a text kept
+/// between launches is still put into words in the language of the day.
+public struct LocalizedText: Hashable, Sendable, Codable, CustomStringConvertible {
     let key: String
     let context: String?
     /// What goes into it: a sentence of its own put into words in the same

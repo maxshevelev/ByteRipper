@@ -106,6 +106,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
             // never in the test host: a suite has no business taking the
             // socket a running copy of the app is serving its agent on.
             AgentService.shared = agentService
+            // The annotations of the last run, kept on this Mac; the test
+            // host keeps none, as it keeps no library.
+            agentService.annotationTools.keep(in: AnnotationsFile.url)
             agentService.apply()
             agentStatusItem = AgentStatusItem(
                 service: agentService,
@@ -385,6 +388,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // Removes the socket file, so a relay started later finds nothing
         // there rather than a file nobody answers on.
         agentService.stop()
+        // A change made a moment ago is written now, not on a turn of the run
+        // loop that will not come.
+        agentService.annotationTools.saveNow()
         if let themeObserver {
             NotificationCenter.default.removeObserver(themeObserver)
         }

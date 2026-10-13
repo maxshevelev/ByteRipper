@@ -17,6 +17,12 @@ import ToolModuleKit
 /// bytes. A click selects, ⌘ and ⇧ add; a double-click or Return goes to the
 /// place; the ✕ in the corner removes the card, Delete the selected ones; the
 /// arrows move between cards.
+///
+/// The newest card comes first. A card made since the window was last in
+/// view wears a **New** tag on its top edge. A card is dragged to another
+/// place: it lifts, follows the pointer, and the cards around it move aside
+/// to make room — animated, as apps on an iPhone's home screen do — then it
+/// settles in, the cards closed up behind it, and stays there.
 // help: window.notes
 @MainActor
 final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollectionViewDelegate {
@@ -28,13 +34,24 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
     var onOpenSite: (AgentAnnotation) -> Void = { _ in }
     var onRemove: ([String]) -> Void = { _ in }
     var onEdit: (AgentAnnotation) -> Void = { _ in }
+    /// A card was dragged: the cards' order now, first first.
+    var onArrange: ([String]) -> Void = { _ in }
     var onSelectionChanged: () -> Void = {}
+    /// The cards that wear the New tag.
+    var newIDs: Set<String> = []
     /// Whether an annotation's file is open on screen now.
     var isOpen: (AgentAnnotation) -> Bool = { _ in false }
 
     private(set) var rows: [AgentAnnotation] = []
     /// One card laid out off screen, to measure the others by.
     private let sizer = AnnotationCardView()
+    /// Each card's height at the width it was last measured at. Measured
+    /// while the cards move aside, inside the collection's animated update, a
+    /// card came out ten points tall; measured before it, it is right, and
+    /// the cards do not change while one is carried.
+    private var heights: [String: (width: CGFloat, height: CGFloat)] = [:]
+    /// The card being dragged, while it is.
+    private var carry: Carry?
 
     func build() {
         collection.collectionViewLayout = layout
@@ -68,6 +85,7 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
     func show(_ annotations: [AgentAnnotation]) {
         let chosen = Set(selectedIDs)
         rows = annotations
+        heights = [:]
         layout.invalidateLayout()
         collection.reloadData()
         let kept = Set(rows.indices.filter { chosen.contains(rows[$0].id) }.map { IndexPath(item: $0, section: 0) })
@@ -76,6 +94,7 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
 
     /// The text grew or shrank with the panels' zoom.
     func zoomChanged() {
+        heights = [:]
         layout.invalidateLayout()
         collection.reloadData()
     }
@@ -110,6 +129,10 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         card.card.onRelated = { [weak self] id in self?.select(id) }
         card.card.onRemove = { [weak self] in self?.onRemove([annotation.id]) }
         card.card.onEdit = { [weak self] in self?.onEdit(annotation) }
+        card.card.onPress = { [weak self] event in self?.dragIfDragged(annotation.id, from: event) ?? false }
+        // The card being carried leaves its place empty, however often the
+        // collection makes its view again.
+        card.view.alphaValue = carry?.id == annotation.id ? 0 : 1
         return card
     }
 
@@ -120,6 +143,165 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
     func collectionView(_ collectionView: NSCollectionView, didDeselectItemsAt indexPaths: Set<IndexPath>) {
         onSelectionChanged()
     }
+
+    // MARK: - Dragging a card
+
+    /// A card on its way to another place.
+    private struct Carry {
+        let id: String
+        /// Where it is in `rows` now.
+        var index: Int
+        /// Where the pointer took hold of it, from the card's corner.
+        let grip: NSPoint
+        /// The card as it was picked up, following the pointer.
+        let ghost: NSImageView
+        /// Where the pointer was when the cards last moved aside: they move
+        /// again only once it has gone on, or two cards of unlike heights
+        /// would trade places for as long as the pointer rests between them.
+        var settledAt: NSPoint?
+    }
+
+    /// How far the pointer goes before a press is a drag, not a click.
+    static let dragThreshold: CGFloat = 4
+    /// How long the cards take to move aside, and the card to settle in.
+    static let moveDuration: TimeInterval = 0.25
+
+    /// A press on card `id`: a drag, carried to its end here — true — or a
+    /// click, left to the collection — false — with the release still waiting
+    /// for it.
+    private func dragIfDragged(_ id: String, from press: NSEvent) -> Bool {
+        guard let window = collection.window, press.clickCount == 1,
+              press.modifierFlags.intersection([.command, .shift]).isEmpty else { return false }
+        let start = press.locationInWindow
+        while true {
+            guard let next = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp], until: .distantFuture,
+                                              inMode: .eventTracking, dequeue: false) else { return false }
+            if next.type == .leftMouseUp { return false }
+            _ = window.nextEvent(matching: .leftMouseDragged)
+            if hypot(next.locationInWindow.x - start.x, next.locationInWindow.y - start.y) >= Self.dragThreshold { break }
+        }
+        guard beginCarry(id, at: collection.convert(start, from: nil)) else { return false }
+        var last = press
+        NSEvent.startPeriodicEvents(afterDelay: 0.05, withPeriod: 0.05)
+        defer { NSEvent.stopPeriodicEvents() }
+        tracking: while let event = window.nextEvent(matching: [.leftMouseDragged, .leftMouseUp, .periodic]) {
+            switch event.type {
+            case .leftMouseUp:
+                break tracking
+            case .periodic:
+                // The pointer held still near an edge goes on scrolling.
+                collection.autoscroll(with: last)
+            default:
+                last = event
+                collection.autoscroll(with: event)
+            }
+            moveCarry(to: collection.convert(last.locationInWindow, from: nil))
+        }
+        endCarry()
+        return true
+    }
+
+    /// Lifts card `id`, held at `point`: its place stays, empty, and a
+    /// picture of it follows the pointer above the others.
+    @discardableResult
+    func beginCarry(_ id: String, at point: NSPoint) -> Bool {
+        guard carry == nil, let index = rows.firstIndex(where: { $0.id == id }),
+              let card = collection.item(at: IndexPath(item: index, section: 0))?.view,
+              let container = scroll.superview else { return false }
+        let path = IndexPath(item: index, section: 0)
+        if !collection.selectionIndexPaths.contains(path) {
+            collection.selectionIndexPaths = [path]
+            onSelectionChanged()
+        }
+        // The picture takes in what stands out of the card's corners — the ✕
+        // and the New tag.
+        let reach = AnnotationCardView.removeOverhang
+        let area = card.bounds.insetBy(dx: -reach, dy: -reach)
+        let ghost = NSImageView(frame: .zero)
+        if let picture = card.bitmapImageRepForCachingDisplay(in: area) {
+            card.cacheDisplay(in: area, to: picture)
+            let image = NSImage(size: area.size)
+            image.addRepresentation(picture)
+            ghost.image = image
+        }
+        ghost.imageScaling = .scaleNone
+        ghost.wantsLayer = true
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.3)
+        shadow.shadowBlurRadius = 12
+        shadow.shadowOffset = NSSize(width: 0, height: -4)
+        ghost.shadow = shadow
+        ghost.frame = collection.convert(card.frame.insetBy(dx: -reach, dy: -reach), to: container)
+        container.addSubview(ghost)
+        card.alphaValue = 0
+        carry = Carry(id: id, index: index,
+                      grip: NSPoint(x: point.x - card.frame.minX, y: point.y - card.frame.minY), ghost: ghost)
+        return true
+    }
+
+    /// The pointer, carrying a card, is at `point`: the picture follows it,
+    /// and over another card the carried one takes that card's place, the
+    /// others moving aside.
+    func moveCarry(to point: NSPoint) {
+        guard var carried = carry, let container = scroll.superview else { return }
+        guard carried.index < rows.count, rows[carried.index].id == carried.id else {
+            // The card went while it was carried — removed by the agent.
+            endCarry()
+            return
+        }
+        let reach = AnnotationCardView.removeOverhang
+        let corner = NSPoint(x: point.x - carried.grip.x - reach, y: point.y - carried.grip.y - reach)
+        carried.ghost.frame.origin = collection.convert(
+            NSRect(origin: corner, size: carried.ghost.frame.size), to: container).origin
+        if let settled = carried.settledAt, hypot(point.x - settled.x, point.y - settled.y) < 8 {
+            carry = carried
+            return
+        }
+        guard let target = layout.target(at: point, carrying: carried.index), target != carried.index else {
+            carry = carried
+            return
+        }
+        rows.insert(rows.remove(at: carried.index), at: target)
+        let from = IndexPath(item: carried.index, section: 0)
+        let to = IndexPath(item: target, section: 0)
+        carried.index = target
+        carried.settledAt = point
+        carry = carried
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.moveDuration
+            collection.animator().performBatchUpdates({
+                layout.invalidateLayout()
+                collection.animator().moveItem(at: from, to: to)
+            })
+        }
+    }
+
+    /// The card is let go: it settles into its place, and the order is kept.
+    func endCarry() {
+        guard let carried = carry else { return }
+        carry = nil
+        let ghost = carried.ghost
+        let path = IndexPath(item: min(carried.index, max(rows.count - 1, 0)), section: 0)
+        let land = { [weak self] in
+            ghost.removeFromSuperview()
+            self?.collection.item(at: path)?.view.alphaValue = 1
+        }
+        if let frame = layout.layoutAttributesForItem(at: path)?.frame, let container = scroll.superview,
+           rows.indices.contains(carried.index), rows[carried.index].id == carried.id {
+            let reach = AnnotationCardView.removeOverhang
+            let place = collection.convert(frame.insetBy(dx: -reach, dy: -reach), to: container)
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = Self.moveDuration
+                ghost.animator().frame = place
+            }, completionHandler: { MainActor.assumeIsolated { land() } })
+            onArrange(rows.map(\.id))
+        } else {
+            land()
+        }
+    }
+
+    /// Whether a card is being carried, for tests.
+    var isCarrying: Bool { carry != nil }
 
     // MARK: - What a card says
 
@@ -143,13 +325,17 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
             path: annotation.file.url?.path,
             site: annotation.site?.label, note: annotation.note,
             related: annotation.relatedTo.map { ($0, titles[$0] ?? "") },
-            byAgent: annotation.author == .agent)
+            byAgent: annotation.author == .agent, isNew: newIDs.contains(annotation.id))
     }
 
     private func height(of index: Int, width: CGFloat) -> CGFloat {
         guard index < rows.count else { return 0 }
+        let id = rows[index].id
+        if let known = heights[id], known.width == width { return known.height }
         sizer.show(content(of: rows[index]))
-        return sizer.height(forWidth: width)
+        let height = sizer.height(forWidth: width)
+        heights[id] = (width, height)
+        return height
     }
 
     /// What card `id` shows, line by line, for tests.
@@ -249,6 +435,22 @@ final class AnnotationMasonryLayout: NSCollectionViewLayout {
 
     /// The frames, for tests.
     var itemFrames: [NSRect] { frames }
+
+    /// Where a card carried from `carrying` goes with the pointer at
+    /// `point`: the place of the card under it — well inside it, not on its
+    /// rim, so a card is not taken by a pointer only passing its edge — or
+    /// the last place, below every card. Nil over the gaps, and over the
+    /// carried card's own empty place.
+    func target(at point: NSPoint, carrying: Int) -> Int? {
+        if let hit = frames.indices.first(where: { index in
+            index != carrying && frames[index]
+                .insetBy(dx: frames[index].width * 0.15, dy: min(frames[index].height * 0.15, 24)).contains(point)
+        }) {
+            return hit
+        }
+        if !frames.isEmpty, point.y > (frames.map(\.maxY).max() ?? 0) { return frames.count - 1 }
+        return nil
+    }
 }
 
 // MARK: - The card
@@ -271,6 +473,8 @@ final class AnnotationCardView: NSView {
         /// Made by the agent — its hue and its picture before the title — or
         /// by the person, in the person's hue.
         var byAgent = true
+        /// Made since the window was last in view: the New tag.
+        var isNew = false
     }
 
     var isSelected = false { didSet { needsDisplay = true } }
@@ -280,6 +484,9 @@ final class AnnotationCardView: NSView {
     var onRemove: () -> Void = {}
     /// The pencil on a note the person made: opens it for editing.
     var onEdit: () -> Void = {}
+    /// A press on the card: true when it turned into a drag and was carried
+    /// to its end, false when it is a click for the collection to select by.
+    var onPress: (NSEvent) -> Bool = { _ in false }
 
     /// The lines under the header, top to bottom; a wrapping line takes the
     /// card's whole width, a link only its own.
@@ -288,6 +495,9 @@ final class AnnotationCardView: NSView {
     /// The picture before the title: the agent's on a note it made, the
     /// pencil that edits a note the person made.
     private var headerIcon: NSView?
+    /// The New tag on the top edge, on a card made since the window was last
+    /// in view.
+    private(set) var newTag: AnnotationNewTag?
     /// The card's hue: the agent's or the person's.
     private(set) var hue = ZoneColors.agent
     /// Whether the card wears the agent's picture, for tests.
@@ -356,6 +566,13 @@ final class AnnotationCardView: NSView {
             headerIcon = icon
         }
         texts.append(content.title)
+        newTag = nil
+        if content.isNew {
+            let tag = AnnotationNewTag()
+            tag.hue = hue
+            addSubview(tag)
+            newTag = tag
+        }
 
         // The file, after the dot that says whether it is open: one text, so
         // a name that wraps leaves the dot on its first line.
@@ -446,6 +663,12 @@ final class AnnotationCardView: NSView {
                                  width: titleWidth, height: fitted(title, width: titleWidth).height)
             bottom = title.frame.maxY
         }
+        if let tag = newTag {
+            // On the top edge, half out of the card, as the ✕ stands out of
+            // its corner: the title is not pushed down for it.
+            let size = tag.intrinsicContentSize
+            tag.frame = NSRect(x: Self.padding, y: -floor(size.height / 2), width: size.width, height: size.height)
+        }
         for line in lines {
             bottom += Self.spacing
             let size = fitted(line.view, width: inner)
@@ -505,8 +728,50 @@ final class AnnotationCardView: NSView {
     }
 
     override func mouseDown(with event: NSEvent) {
+        if onPress(event) { return }
         super.mouseDown(with: event)
         if event.clickCount == 2 { onDoubleClick() }
+    }
+}
+
+/// The tag on the top edge of a card made since the Annotations window was
+/// last in view: **New**, white on the card's hue, as an app installed since
+/// the home screen was last looked at wears a mark beside its name. It goes
+/// the next time the window comes into view.
+final class AnnotationNewTag: NSView {
+    var hue = ZoneColors.agent { didSet { needsDisplay = true } }
+    let text = L("New", context: "annotation tag")
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityLabel(text)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    private var title: NSAttributedString {
+        NSAttributedString(string: text.uppercased(), attributes: [
+            .font: NSFont.systemFont(ofSize: 9, weight: .bold), .foregroundColor: NSColor.white,
+            .kern: 0.4
+        ])
+    }
+
+    override var intrinsicContentSize: NSSize {
+        let size = title.size()
+        return NSSize(width: ceil(size.width) + 12, height: 15)
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let shape = NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2)
+        hue.setFill()
+        shape.fill()
+        let size = title.size()
+        title.draw(at: NSPoint(x: (bounds.width - size.width) / 2, y: (bounds.height - size.height) / 2))
     }
 }
 

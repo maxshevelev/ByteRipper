@@ -14,9 +14,10 @@ import UEFIToolUI
 ///
 /// One kind where there were two: a mark, drawn but gone with its document,
 /// and a finding, kept but drawn nowhere. An annotation is kept here, for the
-/// whole app and for as long as it runs, and a pane draws the ones for its
-/// file whenever it shows it (`annotations(for:)`). The Annotations window
-/// lists them (`NotesWindowController`).
+/// whole app, and in `AnnotationsFile` from one launch to the next; a pane
+/// draws the ones for its file whenever it shows it (`annotations(for:)`).
+/// The Annotations window lists them (`NotesWindowController`) in an order of
+/// its own — the newest first, then wherever the person drags a card.
 @MainActor
 final class AgentAnnotationTools {
     let desk: AgentDesk
@@ -34,6 +35,16 @@ final class AgentAnnotationTools {
     /// The agent's notes made while no Notes panel was in view, counted on
     /// the panel's pill until one is.
     private(set) var unseen: Set<String> = []
+    /// Notes — the agent's or the person's — made while the Annotations
+    /// window was not in view: marked new the next time it is.
+    private(set) var fresh: Set<String> = []
+    /// The cards' order in the Annotations window, first card first: a new
+    /// one goes in front, and a card dragged stays where it was put.
+    private(set) var order: [String] = []
+    /// Where the annotations are kept between launches; nil keeps them for
+    /// this run alone (`AnnotationsFile`).
+    private var storage: URL?
+    private var saveScheduled = false
     /// Bumped by every change, so a pane knows its drawn list is stale.
     private(set) var generation = 0
 
@@ -57,7 +68,39 @@ final class AgentAnnotationTools {
             if case .document(let held) = annotation.file { return held.document == nil }
             return false
         }
+        if order.count != items.count {
+            let kept = Set(items.map(\.id))
+            order.removeAll { !kept.contains($0) }
+        }
         return items
+    }
+
+    /// Every annotation in the cards' order: the newest first, then as the
+    /// person arranged them.
+    func ordered() -> [AgentAnnotation] {
+        let all = all()
+        let rank = Dictionary(order.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        return all.sorted { (rank[$0.id] ?? -1) < (rank[$1.id] ?? -1) }
+    }
+
+    /// The person has dragged a card: the cards now stand as `ids` says.
+    func arrange(_ ids: [String]) {
+        let known = Set(order)
+        let arranged = ids.filter { known.contains($0) }
+        let rest = order.filter { !Set(arranged).contains($0) }
+        guard arranged + rest != order else { return }
+        order = arranged + rest
+        scheduleSave()
+    }
+
+    /// The notes made since the window was last in view, which it marks new
+    /// now that it is; from here on they are not new.
+    func takeFresh() -> Set<String> {
+        let taken = fresh
+        guard !taken.isEmpty else { return [] }
+        fresh = []
+        scheduleSave()
+        return taken
     }
 
     /// The annotations `pane` draws, at its own addresses: those of its file,
@@ -115,6 +158,7 @@ final class AgentAnnotationTools {
         onChange()
         for tab in desk.tabs { tab.notesChanged() }
         NotesWindowController.shared?.refresh()
+        scheduleSave()
     }
 
     /// The notes have been looked at: the count on the toolbar's button goes.
@@ -122,17 +166,65 @@ final class AgentAnnotationTools {
         guard !unseen.isEmpty else { return }
         unseen = []
         for tab in desk.tabs { tab.notesChanged() }
+        scheduleSave()
     }
 
-    /// Adds `annotation` and tells everyone. An agent's note made while the
-    /// Annotations window is not in view waits on the toolbar's button as
-    /// unseen.
+    /// Adds `annotation`, its card first, and tells everyone. A note made
+    /// while the Annotations window is not in view is new there the next
+    /// time it is; an agent's also waits on the toolbar's button as unseen.
     private func add(_ annotation: AgentAnnotation) {
         items.append(annotation)
-        if annotation.author == .agent, !NotesWindowController.isInView {
-            unseen.insert(annotation.id)
+        order.insert(annotation.id, at: 0)
+        if !NotesWindowController.isInView {
+            fresh.insert(annotation.id)
+            if annotation.author == .agent { unseen.insert(annotation.id) }
         }
         changed()
+    }
+
+    // MARK: - Kept between launches
+
+    /// Reads what `url` keeps, from now on writes there after every change.
+    /// No file — the first launch — is no annotations.
+    func keep(in url: URL?) {
+        storage = url
+        guard let url, let kept = AnnotationsFile.read(url) else { return }
+        items = kept.annotations.map(\.annotation)
+        let ids = Set(items.map(\.id))
+        order = kept.order.filter { ids.contains($0) }
+        order += items.map(\.id).filter { !Set(order).contains($0) }.reversed()
+        fresh = Set(kept.fresh).intersection(ids)
+        unseen = Set(kept.unseen).intersection(ids)
+        nextID = max(kept.nextID, (items.compactMap { Int($0.id.dropFirst()) }.max() ?? 0) + 1)
+        changed()
+    }
+
+    /// Writes the annotations once the change in hand is done: a survey that
+    /// makes fifty writes the file once, not fifty times.
+    private func scheduleSave() {
+        guard storage != nil, !saveScheduled else { return }
+        saveScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.saveNow() }
+        }
+    }
+
+    /// Writes the annotations now. Ones on a document never saved are left
+    /// out: they go with the document.
+    func saveNow() {
+        saveScheduled = false
+        guard let storage else { return }
+        let stored = all().compactMap(AnnotationsFile.Stored.init)
+        let ids = Set(stored.map(\.id))
+        let contents = AnnotationsFile.Contents(
+            annotations: stored, order: order.filter { ids.contains($0) },
+            fresh: fresh.filter { ids.contains($0) }.sorted(), unseen: unseen.filter { ids.contains($0) }.sorted(),
+            nextID: nextID)
+        do {
+            try AnnotationsFile.write(contents, to: storage)
+        } catch {
+            NSLog("ByteRipper: the annotations could not be written to %@: %@", storage.path, "\(error)")
+        }
     }
 
     // MARK: - The person's notes
@@ -540,7 +632,9 @@ final class AgentAnnotationTools {
         guard !removed.isEmpty else { return [] }
         let gone = Set(removed)
         items = items.filter { !gone.contains($0.id) }.map { $0.dropping(gone) }
+        order.removeAll { gone.contains($0) }
         unseen.subtract(gone)
+        fresh.subtract(gone)
         changed()
         return removed
     }

@@ -7,10 +7,10 @@ import UEFIImage
 /// (`Design/AGENT_PLAN.md`, "Annotations"; issue #37) or by the person: what
 /// the bytes are, or what was found there.
 ///
-/// It belongs to the file, not to a window: it is kept while the app runs,
-/// whether the file is open or not, and drawn over the bytes — a dashed
-/// outline, the note on hover — whenever the file is on screen, in a tab or
-/// in a part that keeps the file's addresses. It goes when the agent or the
+/// It belongs to the file, not to a window: it is kept whether the file is
+/// open or not, and from one launch to the next (`AnnotationsFile`), and
+/// drawn over the bytes — a dashed outline, the note on hover — whenever the
+/// file is on screen, in a tab or in a part that keeps the file's addresses. It goes when the agent or the
 /// person removes it; one on a document that was never saved goes with that
 /// document.
 struct AgentAnnotation: Equatable {
@@ -43,12 +43,12 @@ struct AgentAnnotation: Equatable {
     /// menu. The two are drawn in hues of their own.
     var author: Author = .agent
 
-    enum Author: Equatable {
+    enum Author: String, Codable, Equatable {
         case agent
         case person
     }
 
-    struct Site: Equatable {
+    struct Site: Codable, Equatable {
         /// In the person's language, for the card.
         let label: String
         /// In English, for an agent.
@@ -58,7 +58,7 @@ struct AgentAnnotation: Equatable {
 
     /// A place in bytes that are not the file's own, as a fragment panel
     /// opens them.
-    struct Decoded: Equatable {
+    struct Decoded: Codable, Equatable {
         /// The node the panel is opened from, in the file's tree: the
         /// compressed section, or the LENV block.
         let holder: String

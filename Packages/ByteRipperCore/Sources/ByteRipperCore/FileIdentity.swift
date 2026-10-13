@@ -10,7 +10,10 @@ import Foundation
 ///
 /// Equality is deliberately about the underlying file, not the spelling of the
 /// path.
-public struct FileIdentity: Equatable, Sendable, CustomStringConvertible {
+///
+/// `Codable` so what is kept about a file between launches — an annotation —
+/// finds the same file again, renamed or not.
+public struct FileIdentity: Equatable, Sendable, Codable, CustomStringConvertible {
     /// Device number (`st_dev`) when `stat` succeeded.
     public let deviceID: Int32?
     /// Inode number (`st_ino`) when `stat` succeeded.

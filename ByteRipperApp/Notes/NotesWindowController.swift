@@ -46,6 +46,9 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
 
     let cards = AgentAnnotationCards()
     let emptyView = NotesEmptyView()
+    /// Whether the window was in view when last asked: coming into view is
+    /// what marks the notes made meanwhile new.
+    private var wasInView = false
 
     private init() {
         let window = NSWindow(
@@ -97,20 +100,29 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
             anchor.addTabbedWindow(window, ordered: .above)
         }
         window.makeKeyAndOrderFront(nil)
-        refresh()
         noteLookedAt()
+        refresh()
     }
 
-    /// The notes there are now, or the empty screen when there are none.
+    /// The notes there are now, the newest first, or the empty screen when
+    /// there are none.
     func refresh() {
-        let all = AgentAnnotationTools.current?.all() ?? []
+        let all = AgentAnnotationTools.current?.ordered() ?? []
         cards.show(all)
         cards.scroll.isHidden = all.isEmpty
         emptyView.isHidden = !all.isEmpty
     }
 
+    /// The window has perhaps come into view, or gone out of it. Coming in,
+    /// the notes made since it was last in view are marked new — until it
+    /// next comes into view — and the count on the toolbar's button goes.
     private func noteLookedAt() {
-        if Self.isInView { AgentAnnotationTools.current?.markSeen() }
+        let inView = Self.isInView
+        defer { wasInView = inView }
+        guard inView else { return }
+        AgentAnnotationTools.current?.markSeen()
+        guard !wasInView else { return }
+        cards.newIDs = AgentAnnotationTools.current?.takeFresh() ?? []
     }
 
     // MARK: - The cards
@@ -122,6 +134,7 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
             let chosen = Set(ids)
             AgentAnnotationTools.current?.remove { chosen.contains($0.id) }
         }
+        cards.onArrange = { ids in AgentAnnotationTools.current?.arrange(ids) }
         // help: window.notes.edit
         cards.onEdit = { [weak self] annotation in
             NoteForm.ask(L("Edit Annotation"), L("The title and the note change; the place stays."),
@@ -169,12 +182,29 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
-        refresh()
         noteLookedAt()
+        refresh()
     }
 
     func windowDidDeminiaturize(_ notification: Notification) {
         noteLookedAt()
+        refresh()
+    }
+
+    /// Another tab chosen, the window closed or put in the Dock: it is out of
+    /// view once AppKit has done so. Another app in front is not out of view.
+    func windowDidResignKey(_ notification: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.noteLookedAt() }
+        }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        wasInView = false
+    }
+
+    func windowDidMiniaturize(_ notification: Notification) {
+        wasInView = false
     }
 }
 

@@ -11,7 +11,7 @@
 
 An annotation is a title and a note about a place in a file: what the bytes are, or what was found there. It is drawn over the bytes whenever its file is on screen — in a tab, or in a part that keeps the file's addresses — as a dashed outline with a light wash; when the pointer rests on the bytes, the title and the note are shown. Annotations made by hand are drawn in green, those made by an agent ([[topic:agent|Working with an Agent]]) in violet.
 
-An annotation belongs to the file, not to the window. It is kept when the file closes and drawn again when the file is opened. An annotation on a document that was never saved goes with that document. All annotations are kept until they are removed or the program quits.
+An annotation belongs to the file, not to the window. It is kept when the file closes and drawn again when the file is opened. An annotation on a document that was never saved goes with that document. Every other annotation is kept until it is removed, from one launch of ByteRipper to the next; annotations are stored on this Mac only.
 
 ## Making an annotation
 
@@ -32,6 +32,10 @@ The window shows every annotation, in every file, open or not, as cards in as ma
 - the node of **UEFI Structure** the place lies in, after its parent, as the Contents search results name it — a link that shows the place. A place in decompressed or decoded bytes has badges with the codecs the bytes came through — `LZMA`, `XOR C0` — before it, as the header of a fragment panel shows them. A node name too long for the line continues on the next one, under its own start. In a file with no firmware tree the addresses are shown instead;
 - the whole note;
 - the annotations it is about — a pointer and its target, a checksum and what it covers — each a link to its card. Over the dump they are listed after the note, under **Related Annotations:**.
+
+The newest card comes first. A card made since the window was last in view wears a **New** tag on its top edge; the tag goes the next time the window comes into view.
+
+A card can be dragged to another place with the mouse. While it is carried, the cards around it move aside to make room for it; when it is let go, the cards close up in order, with no gaps. The order is kept, and a new card still comes first.
 
 A click selects a card, with **⌘** or **⇧** more than one, and the arrow keys move between them. A double-click on a card, or **Return**, brings its file forward — or opens it in a new tab — and selects the place, as a step of the navigation history ([[topic:navigation|Moving Around]]). In a firmware image **UEFI Structure** opens beside the dump at the node the place is in, as a click on a Contents search result does. A place in decompressed or decoded bytes opens in a fragment panel of those bytes, with the place selected and **UEFI Structure** in that panel open to the node that holds it. A file opened for the purpose has its structure read first, and the sections on the way to the place decompressed — seconds on a large image — under a sheet with a progress bar; **Cancel** leaves the file open and goes nowhere. If the file has been moved or deleted since, the program says so.
 

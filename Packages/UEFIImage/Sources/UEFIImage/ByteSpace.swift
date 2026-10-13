@@ -9,7 +9,10 @@ import Foundation
 /// buffer offset happens to match the caret; a zone would draw over unrelated
 /// bytes of the dump. So every node says which space its ranges are in, and
 /// ranges are only ever compared within one space.
-public enum ByteSpace: Hashable, Sendable {
+///
+/// `Codable`: an annotation on decompressed bytes is kept between launches
+/// with the space its place is in.
+public enum ByteSpace: Hashable, Sendable, Codable {
     /// The open file.
     case file
 
