@@ -75,7 +75,6 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         // The tab says what it is with the notes' picture before the name;
         // the toolbar has Back and Forward where a title would be.
         window.titleVisibility = .hidden
-        window.tab.attributedTitle = Self.tabTitle()
         window.tabbingIdentifier = MainWindowController.tabbingIdentifier
         if MainViewController.isRunningTests { window.tabbingMode = .disallowed }
         // Closed, it is kept, and opening it again is showing it again.
@@ -128,9 +127,19 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
             anchor.addTabbedWindow(window, ordered: .above)
         }
         window.makeKeyAndOrderFront(nil)
+        dressTab()
         noteLookedAt()
         refresh()
         syncAgentItem()
+    }
+
+    /// The tab's title with the notes' picture. Given before the window is
+    /// in a tab group it is dropped when the window joins one (measured: the
+    /// tab came out with the bare name), so it is given each time the window
+    /// is shown or made key.
+    private func dressTab() {
+        guard let window, window.tab.attributedTitle?.containsAttachments != true else { return }
+        window.tab.attributedTitle = Self.tabTitle()
     }
 
     /// The tab's title: the notes' picture, then the name.
@@ -145,6 +154,10 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
             title.append(NSAttributedString(string: " "))
         }
         title.append(NSAttributedString(string: L("Annotations")))
+        // The tab's own size: without one the name came out larger than the
+        // other tabs' (measured).
+        title.addAttribute(.font, value: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
+                           range: NSRange(location: 0, length: title.length))
         return title
     }
 
@@ -343,6 +356,7 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     }
 
     func windowDidBecomeKey(_ notification: Notification) {
+        dressTab()
         noteLookedAt()
         refresh()
     }
