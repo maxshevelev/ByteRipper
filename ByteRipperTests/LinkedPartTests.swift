@@ -270,8 +270,12 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertEqual(view.updateButton.accessibilityLabel(), "Update in Parent")
         XCTAssertEqual(view.updateButton.title, "Modified")
         XCTAssertTrue(view.updateButton.isBordered, "a button with a border, not a bare glyph")
-        XCTAssertEqual(view.updateButton.frame.minX - view.linkButton.frame.maxX, 6, accuracy: 0.5,
-                       "right after the parent's name")
+        // Measured on what the layout places — the alignment rects — not on
+        // the frames: a bordered button's frame takes in the room its bezel
+        // draws in, a few points either side of what is seen.
+        let update = view.updateButton.alignmentRect(forFrame: view.updateButton.frame)
+        let link = view.linkButton.alignmentRect(forFrame: view.linkButton.frame)
+        XCTAssertEqual(update.minX - link.maxX, 6, accuracy: 0.5, "right after the parent's name")
 
         view.updateButton.performClick(nil)
 

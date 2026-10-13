@@ -69,9 +69,16 @@ final class UEFIToolFlowTests: XCTestCase {
         // tree lists it here, as a reader who turned it on would see it. The
         // default is tested on its own.
         ToolPanelFont.defaults.set(true, forKey: Self.showsEmptyPaddingKey)
+        // The panel as a first launch shows it: no search bar left open, on
+        // no query, by a class that ran before.
+        for key in Self.searchKeys { ToolPanelFont.defaults.removeObject(forKey: key) }
     }
 
     private static let showsEmptyPaddingKey = "UEFIStructure.ShowsEmptyPadding"
+    private static let searchKeys = [UEFISearchSettings.isOpenKey, UEFISearchSettings.modeKey,
+                                     UEFISearchSettings.textKey, UEFISearchSettings.typeKey,
+                                     UEFISearchSettings.subtypeKey, UEFISearchSettings.contentTextKey,
+                                     UEFISearchSettings.contentFromSelectionKey]
 
     override func tearDown() {
         ToolPanelFont.defaults.removeObject(forKey: Self.showsEmptyPaddingKey)

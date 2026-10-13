@@ -111,12 +111,18 @@ final class SettingsWindowTests: XCTestCase {
         walk(content.view)
         XCTAssertEqual(grids.count, 3, "Appearance, Layout and Language")
 
+        // Where the grid places each view is its alignment rect: a pop-up's
+        // frame reaches a few points past the bezel it draws, a checkbox's
+        // does not, and the frames of controls that line up do not.
+        func placed(_ view: NSView) -> NSRect {
+            view.superview?.convert(view.alignmentRect(forFrame: view.frame), to: nil) ?? .zero
+        }
         let labelEnds = grids.flatMap { grid in
             (0..<grid.numberOfRows).compactMap { grid.cell(atColumnIndex: 0, rowIndex: $0).contentView }
-        }.map { $0.convert($0.bounds, to: nil).maxX }
+        }.map { placed($0).maxX }
         let controlStarts = grids.flatMap { grid in
             (0..<grid.numberOfRows).compactMap { grid.cell(atColumnIndex: 1, rowIndex: $0).contentView }
-        }.map { $0.convert($0.bounds, to: nil).minX }
+        }.map { placed($0).minX }
         for end in labelEnds { XCTAssertEqual(end, labelEnds[0], accuracy: 1, "labels end at one edge") }
         for start in controlStarts { XCTAssertEqual(start, controlStarts[0], accuracy: 1, "controls start at one edge") }
     }

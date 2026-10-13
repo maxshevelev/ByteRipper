@@ -17,9 +17,12 @@ final class UEFIContentSearchFlowTests: XCTestCase {
     private var window: NSWindow?
     private var defaultsName: String?
 
+    // The Names query too: a test here sets one, and left behind it opened
+    // the next class's search bar on Volume.
     private static let keys = ["UEFIStructure.Search.IsOpen", "UEFIStructure.Search.Mode",
                                "UEFIStructure.Search.ContentText", "UEFIStructure.Search.ContentIsHex",
-                               "UEFIStructure.Search.ContentFromSelection"]
+                               "UEFIStructure.Search.ContentFromSelection", "UEFIStructure.Search.Text",
+                               "UEFIStructure.Search.Type", "UEFIStructure.Search.Subtype"]
 
     override func setUp() {
         super.setUp()
