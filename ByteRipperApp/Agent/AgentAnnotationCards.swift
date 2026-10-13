@@ -434,6 +434,9 @@ final class AnnotationMasonryLayout: NSCollectionViewLayout {
     private var laidOutWidth: CGFloat = -1
     /// The place of the card being dragged: kept, and drawn empty.
     var emptyIndex: Int?
+    /// Each column's left and right edges, widened by half the gap on each
+    /// side so the columns meet.
+    private var columnSpans: [ClosedRange<CGFloat>] = []
 
     static func columns(forWidth width: CGFloat) -> Int {
         width < 640 ? 1 : width < 980 ? 2 : 3
@@ -448,6 +451,10 @@ final class AnnotationMasonryLayout: NSCollectionViewLayout {
         let columns = Self.columns(forWidth: width)
         let columnWidth = max(120, (width - 2 * Self.inset - CGFloat(columns - 1) * Self.gap) / CGFloat(columns))
         var tops = [CGFloat](repeating: Self.inset, count: columns)
+        columnSpans = (0..<columns).map { column in
+            let left = Self.inset + CGFloat(column) * (columnWidth + Self.gap)
+            return (left - Self.gap / 2)...(left + columnWidth + Self.gap / 2)
+        }
         frames = (0..<count).map { index in
             let column = tops.indices.min { tops[$0] < tops[$1] } ?? 0
             let height = ceil(heightFor(index, columnWidth))
@@ -489,8 +496,10 @@ final class AnnotationMasonryLayout: NSCollectionViewLayout {
     /// Where a card carried from `carrying` goes with the pointer at
     /// `point`: the place of the card under it — well inside it, not on its
     /// rim, so a card is not taken by a pointer only passing its edge — or
-    /// the last place, below every card. Nil over the gaps, and over the
-    /// carried card's own empty place.
+    /// the last place, below the last card of the column under it: the
+    /// empty end of a column shorter than its neighbour, where the last card
+    /// goes. Nil over the gaps between cards, and over the carried card's own
+    /// empty place.
     func target(at point: NSPoint, carrying: Int) -> Int? {
         if let hit = frames.indices.first(where: { index in
             index != carrying && frames[index]
@@ -498,8 +507,9 @@ final class AnnotationMasonryLayout: NSCollectionViewLayout {
         }) {
             return hit
         }
-        if !frames.isEmpty, point.y > (frames.map(\.maxY).max() ?? 0) { return frames.count - 1 }
-        return nil
+        guard !frames.isEmpty, let column = columnSpans.first(where: { $0.contains(point.x) }) else { return nil }
+        let bottom = frames.filter { column.contains($0.midX) }.map(\.maxY).max() ?? 0
+        return point.y > bottom ? frames.count - 1 : nil
     }
 }
 

@@ -887,6 +887,30 @@ final class AgentAnnotationTests: XCTestCase {
                        "the agent still lists them oldest first")
     }
 
+    /// Two columns, three cards: the end of the shorter column is empty, and
+    /// a card carried there takes the last place — the others closing up
+    /// behind it, its own place filled.
+    func testACardCarriedBelowTheShorterColumnGoesLast() async throws {
+        try open()
+        for (offset, title) in [(0, "A"), (2, "B"), (4, "C")] {
+            _ = try await client.answer("annotate", ["offset": .int(Int64(offset)), "title": .string(title)])
+        }
+        let cards = try notes()
+        let layout = try XCTUnwrap(cards.collection.collectionViewLayout as? AnnotationMasonryLayout)
+        let frames = layout.itemFrames
+        XCTAssertEqual(frames[2].minX, frames[0].minX, "C, B side by side; A under C")
+        let below = NSPoint(x: frames[1].midX, y: frames[1].maxY + 40)
+        XCTAssertLessThan(below.y, frames[2].maxY, "beside A, not below every card")
+
+        XCTAssertTrue(cards.beginCarry("a3", at: NSPoint(x: frames[0].midX, y: frames[0].midY)))
+        cards.moveCarry(to: below)
+        XCTAssertEqual(cards.rows.map(\.id), ["a2", "a1", "a3"], "the last place")
+        cards.endCarry()
+        _ = await settle(AgentAnnotationCards.moveDuration + 0.3)
+        XCTAssertEqual(service.annotationTools.ordered().map(\.id), ["a2", "a1", "a3"])
+        XCTAssertEqual(layout.itemFrames.map(\.origin), frames.map(\.origin), "closed up")
+    }
+
     /// Everything an annotation holds — a place in decompressed bytes with
     /// its codecs, a node and its name, a relation, the author — and the
     /// cards' order and which are new come back on the next launch; the ids

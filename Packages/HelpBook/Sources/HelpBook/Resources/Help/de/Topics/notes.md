@@ -1,4 +1,4 @@
-@source-sha 7d02b105939b3054ac90260923e96f381d42eed2fe2c67ef2fc7e10f3a3204fc
+@source-sha b478fb507c965740f71d5f1ae1468e58f1f3e969d6edb872d264f6c93cde999a
 # Anmerkungen
 
 > Kurze Vermerke zu Stellen in einer Datei, angelegt von Hand oder von einem verbundenen Agenten. Eine Anmerkung wird über den Bytes gezeigt und in einem eigenen Fenster aufgeführt.
@@ -29,7 +29,7 @@ Das Fenster zeigt alle Anmerkungen in allen Dateien, geöffnet oder nicht, als K
 
 Die Karte der zuletzt angelegten Anmerkung steht an erster Stelle und trägt am oberen Rand die Marke **Neu**. Ist das Fenster geöffnet, erscheint die Marke sofort; ist es geschlossen oder liegt ein anderer Tab vorn, beim nächsten Anzeigen des Fensters. Die Marken verschwinden, sobald zu einem anderen Tab gewechselt, das Fenster geschlossen oder im Dock abgelegt wird.
 
-Eine Karte lässt sich mit der Maus an eine andere Stelle ziehen. Während sie bewegt wird, weichen die übrigen Karten aus und geben ihr Platz frei; nach dem Loslassen reihen sich die Karten lückenlos aneinander. Die gewählte Reihenfolge bleibt erhalten, und die Karte einer neuen Anmerkung erscheint weiterhin an erster Stelle.
+Eine Karte lässt sich mit der Maus an eine andere Stelle ziehen. Während sie bewegt wird, weichen die übrigen Karten aus und geben ihr Platz frei; nach dem Loslassen reihen sich die Karten lückenlos aneinander. Eine Karte, die auf den freien Platz unter der letzten Karte einer Spalte gezogen wird, rückt an die letzte Stelle. Die gewählte Reihenfolge bleibt erhalten, und die Karte einer neuen Anmerkung erscheint weiterhin an erster Stelle.
 
 Ein Klick wählt eine Karte aus, mit **⌘** oder **⇧** mehrere, **⌘A** alle; die Pfeiltasten bewegen die Auswahl. Ein Doppelklick auf eine Karte oder **Return** holt die Datei nach vorn oder öffnet sie in einem neuen Tab und wählt die Stelle aus; dieser Sprung wird im Verlauf festgehalten ([[topic:navigation|Sich bewegen]]). In einem Firmware-Image öffnet sich neben dem Dump die **UEFI-Struktur** an dem Knoten, in dem die Stelle liegt, wie bei einem Klick auf ein Ergebnis der Inhaltssuche. Eine Stelle in entpackten oder dekodierten Bytes öffnet sich in einem Fragment-Bereich mit diesen Bytes: Dort ist sie ausgewählt, und die **UEFI-Struktur** dieses Bereichs ist bis zu dem Knoten aufgeklappt, in dem sie liegt. Muss die Datei dafür erst geöffnet werden, wird zunächst ihre Struktur gelesen, und die Abschnitte auf dem Weg zur Stelle werden entpackt — bei einem großen Image einige Sekunden; währenddessen zeigt ein Blatt über dem Fenster den Fortschritt. **Abbrechen** lässt die Datei geöffnet, springt aber nicht zur Stelle. Wurde die Datei inzwischen verschoben oder gelöscht, meldet das Programm dies.
 
