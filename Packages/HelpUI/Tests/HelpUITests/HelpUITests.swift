@@ -150,6 +150,30 @@ final class HelpWindowTests: XCTestCase {
     }
 }
 
+/// The prose: a selected passage can be copied.
+@MainActor
+final class HelpBodyViewTests: XCTestCase {
+    /// ⌘C is the app's `copySelection`, not `copy(_:)`: the text has to answer
+    /// it, enable it only with a selection, and put the selection on the
+    /// pasteboard.
+    func testTheAppsCopyCopiesTheSelectedText() throws {
+        let body = HelpBodyView()
+        body.show(NSAttributedString(string: "Partition table"))
+        let text = try XCTUnwrap(body.documentView as? NSTextView)
+        let copy = Selector(("copySelection"))
+        let item = NSMenuItem(title: "Copy", action: copy, keyEquivalent: "c")
+
+        XCTAssertTrue(text.responds(to: copy))
+        XCTAssertFalse(text.validateMenuItem(item), "nothing selected, nothing to copy")
+
+        text.setSelectedRange(NSRange(location: 0, length: 9))
+        XCTAssertTrue(text.validateMenuItem(item))
+        NSPasteboard.general.clearContents()
+        text.perform(copy)
+        XCTAssertEqual(NSPasteboard.general.string(forType: .string), "Partition")
+    }
+}
+
 /// The popover a panel shows for one row's term.
 @MainActor
 final class HelpTermPopoverTests: XCTestCase {

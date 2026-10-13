@@ -78,4 +78,17 @@ private final class HelpTextView: NSTextView {
         }
         onFollow?(destination)
     }
+
+    /// The app's **Edit ▸ Copy** sends `copySelection` rather than `copy(_:)`,
+    /// because in a dump it copies bytes. The help window's chain never reaches
+    /// the dump's controller, so the text answers it itself — or ⌘C on a
+    /// selected passage of the help would do nothing at all.
+    @objc func copySelection() {
+        copy(nil)
+    }
+
+    override func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(copySelection) { return selectedRange().length > 0 }
+        return super.validateMenuItem(item)
+    }
 }
