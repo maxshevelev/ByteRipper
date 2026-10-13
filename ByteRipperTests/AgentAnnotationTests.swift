@@ -747,6 +747,28 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(service.annotationTools.all().map(\.title), ["A"])
     }
 
+    /// The ✕'s disc is the paper the cards lie on, in either theme — a white
+    /// disc was the brightest thing in a dark panel.
+    @MainActor
+    func testTheCrossIsFilledWithTheThemesBackground() throws {
+        for (name, dark) in [(NSAppearance.Name.aqua, false), (.darkAqua, true)] {
+            let badge = AnnotationRemoveBadge { }
+            badge.frame = NSRect(x: 0, y: 0, width: 20, height: 20)
+            badge.appearance = NSAppearance(named: name)
+            let rep = try XCTUnwrap(badge.bitmapImageRepForCachingDisplay(in: badge.bounds))
+            badge.cacheDisplay(in: badge.bounds, to: rep)
+            // Inside the disc, clear of the outline and of the cross's arms.
+            let scale = CGFloat(rep.pixelsWide) / badge.bounds.width
+            let fill = try XCTUnwrap(rep.colorAt(x: Int(10 * scale), y: Int(5 * scale))?
+                .usingColorSpace(.deviceRGB))
+            if dark {
+                XCTAssertLessThan(fill.brightnessComponent, 0.4, "a dark disc in a dark theme: \(fill)")
+            } else {
+                XCTAssertGreaterThan(fill.brightnessComponent, 0.9, "a light disc in a light theme: \(fill)")
+            }
+        }
+    }
+
     /// A place in the tab's own panes folds a fragment panel standing over
     /// them, so the selection is not behind it.
     func testShowingAPlaceInTheDumpFoldsAFragmentPanel() async throws {

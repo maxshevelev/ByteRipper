@@ -674,8 +674,10 @@ final class AnnotationPlaceLine: NSView {
 }
 
 /// The ✕ in a card's corner: removes that one annotation.
-/// Opaque — white, outlined and crossed in the card's own hue — so the card
-/// does not show through it.
+/// Opaque — the theme's document background, the paper the cards lie on,
+/// outlined and crossed in the card's own hue — so the card does not show
+/// through it. Not white: in a dark theme a white disc is the brightest thing
+/// in the panel.
 final class AnnotationRemoveBadge: NSButton {
     private let run: () -> Void
     private static let side: CGFloat = 20
@@ -706,7 +708,7 @@ final class AnnotationRemoveBadge: NSButton {
     override func draw(_ dirtyRect: NSRect) {
         let hue = self.hue.withAlphaComponent(0.9)
         let circle = NSBezierPath(ovalIn: bounds.insetBy(dx: 1, dy: 1))
-        NSColor.white.setFill()
+        NSColor.textBackgroundColor.setFill()
         circle.fill()
         // Pressed, it takes the card's wash, as the card does when selected.
         if isHighlighted {
