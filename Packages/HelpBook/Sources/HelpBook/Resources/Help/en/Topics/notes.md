@@ -4,12 +4,13 @@
 
 @covers window.notes
 @covers menu.offset.note
+@covers menu.offset.open-note
 @covers window.notes.edit
 @covers panel.uefi.annotate-node
 @covers menu.window.notes
 @covers toolbar.notes
 
-An annotation is a title and a note about a place in a file: what the bytes are, or what was found there. It is drawn over the bytes whenever its file is on screen — in a tab, or in a part that keeps the file's addresses — as a dashed outline with a light wash; when the pointer rests on the bytes, the title and the note are shown. Annotations made by hand are drawn in green, those made by an agent ([[topic:agent|Working with an Agent]]) in violet.
+An annotation is a title and a note about a place in a file: what the bytes are, or what was found there. It is drawn over the bytes whenever its file is on screen — in a tab, or in a part that keeps the file's addresses — as a dashed outline with a light wash; when the pointer rests on the bytes, the title and the note are shown. Right-clicking a byte that lies in annotations offers **Open Annotation “…”** for each of them, the innermost first: the **Annotations** window comes up with that card selected, and **Back** in its toolbar returns to the dump. Annotations made by hand are drawn in green, those made by an agent ([[topic:agent|Working with an Agent]]) in violet.
 
 An annotation belongs to the file, not to the window. It is kept when the file closes and drawn again when the file is opened. An annotation on a document that was never saved goes with that document. Every other annotation is kept until it is removed, from one launch of ByteRipper to the next; annotations are stored on this Mac only.
 

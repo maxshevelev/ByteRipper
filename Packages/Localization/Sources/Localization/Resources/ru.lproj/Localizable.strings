@@ -1354,6 +1354,7 @@
 "Remove Annotation" = "Удалить заметку";
 "Remove this annotation" = "Удалить эту заметку";
 "annotation tag|New" = "Новая";
+"Open Annotation “%1$@”" = "Открыть заметку «%1$@»";
 "The file is not there" = "Файл не найден";
 "The node is not there" = "Узел не найден";
 "“%1$@” has been moved or deleted since the agent named it." = "Файл «%1$@» перемещён или удалён после того, как агент на него сослался.";

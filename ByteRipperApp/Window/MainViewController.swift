@@ -4559,6 +4559,7 @@ final class MainViewController: NSViewController {
             menu.addItem(.separator())
             addBookmarkMenuItems(to: menu, for: pane, offset: offset)
         }
+        addNoteMenuItems(to: menu, for: pane, offset: offset)
         return menu
     }
 

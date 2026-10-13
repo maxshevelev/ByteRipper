@@ -1,9 +1,9 @@
-@source-sha f111608264050dac939ff28d32a4421f13b6b0a99cd86fc18dc66a5b0a428dd0
+@source-sha f8eedab8db915935d7013a99a86e285e9b7d8c9801ef7eeb0a93b15d14303384
 # Anmerkungen
 
 > Kurze Vermerke zu Stellen in einer Datei, angelegt von Hand oder von einem verbundenen Agenten. Eine Anmerkung wird über den Bytes gezeigt und in einem eigenen Fenster aufgeführt.
 
-Eine Anmerkung besteht aus einem Titel und einer Erläuterung zu einer Stelle in einer Datei: was die Bytes sind oder was dort gefunden wurde. Solange ihre Datei auf dem Bildschirm ist — in einem Tab oder in einem Teil, der die Adressen der Datei beibehält —, wird die Anmerkung über den Bytes mit einem gestrichelten Rahmen und einer leichten Tönung gezeigt. Verweilt der Zeiger auf diesen Bytes, erscheinen Titel und Erläuterung. Von Hand angelegte Anmerkungen sind grün, die des Agenten ([[topic:agent|Mit einem Agenten arbeiten]]) violett.
+Eine Anmerkung besteht aus einem Titel und einer Erläuterung zu einer Stelle in einer Datei: was die Bytes sind oder was dort gefunden wurde. Solange ihre Datei auf dem Bildschirm ist — in einem Tab oder in einem Teil, der die Adressen der Datei beibehält —, wird die Anmerkung über den Bytes mit einem gestrichelten Rahmen und einer leichten Tönung gezeigt. Verweilt der Zeiger auf diesen Bytes, erscheinen Titel und Erläuterung. Ein Rechtsklick auf ein Byte, das in Anmerkungen liegt, bietet für jede von ihnen **Anmerkung „…“ öffnen** an, die innerste zuerst: Das Fenster **Anmerkungen** öffnet sich mit der ausgewählten Karte, und **Zurück** in seiner Symbolleiste führt zum Dump zurück. Von Hand angelegte Anmerkungen sind grün, die des Agenten ([[topic:agent|Mit einem Agenten arbeiten]]) violett.
 
 Eine Anmerkung gehört zur Datei, nicht zum Fenster. Sie bleibt erhalten, wenn die Datei geschlossen wird, und erscheint wieder, sobald die Datei geöffnet wird. Eine Anmerkung in einem nie gesicherten Dokument verschwindet mit diesem. Alle übrigen Anmerkungen bleiben erhalten, bis sie entfernt werden, auch über einen Neustart des Programms hinweg; gespeichert werden sie nur auf diesem Mac.
 

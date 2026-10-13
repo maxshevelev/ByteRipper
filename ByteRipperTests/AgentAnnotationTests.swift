@@ -1015,6 +1015,26 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertTrue(notesWindow.canNavigateBack)
     }
 
+    /// The dump's right-click menu on a byte inside annotations offers to
+    /// open each of them, the innermost first: the Annotations window comes
+    /// up with its card selected, a step Back returns from.
+    func testTheOffsetMenuOpensTheAnnotationsOnTheByte() async throws {
+        let controller = try open()
+        _ = try await client.answer("annotate", ["offset": "0x10", "length": 0x20, "title": "Table"])
+        _ = try await client.answer("annotate", ["offset": "0x10", "length": 4, "title": "Signature"])
+        let opening = controller.makeOffsetMenu(for: pane, offset: 0x12).items
+            .filter { $0.action == #selector(MainViewController.openNoteFromMenu(_:)) }
+        XCTAssertEqual(opening.map(\.title), ["Open Annotation “Signature”", "Open Annotation “Table”"])
+        XCTAssertTrue(controller.makeOffsetMenu(for: pane, offset: 0x40).items
+            .allSatisfy { $0.action != #selector(MainViewController.openNoteFromMenu(_:)) }, "none off the notes")
+
+        controller.openNoteFromMenu(try XCTUnwrap(opening.last))
+        let notesWindow = try XCTUnwrap(NotesWindowController.shared)
+        XCTAssertTrue(notesWindow.window?.isVisible == true)
+        XCTAssertEqual(notesWindow.cards.selectedIDs, ["a1"])
+        XCTAssertTrue(notesWindow.canNavigateBack)
+    }
+
     /// ⌘Z in the Annotations window undoes the removals made there, the last
     /// first: each card back where it stood, with the relations the others
     /// lost; ⇧⌘Z removes it again.
