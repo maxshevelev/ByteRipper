@@ -2,6 +2,7 @@ import AppPalette
 import Cocoa
 import HelpUI
 import Localization
+import ToolModuleKit
 
 /// The Annotations window: every note made on the files — by an agent or by
 /// the person — as cards (`AgentAnnotationTools`).
@@ -64,6 +65,9 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     private(set) var backStops: [Stop] = []
     private(set) var forwardStops: [Stop] = []
     private var agentObserver: NSObjectProtocol?
+    /// The zoom, so the cards re-measure and re-draw while the window is open
+    /// rather than on the next open.
+    private var zoomObserver: NSObjectProtocol?
     private var redoable: [AgentAnnotationTools.Removal] = []
 
     private init() {
@@ -99,6 +103,10 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         }
 
         cards.build()
+        // The cards are drawn as the tool panels' are, and follow the same
+        // zoom: a change re-measures and re-draws them while the window is
+        // open, not on the next open.
+        zoomObserver = ToolPanelFont.observeZoom { [weak self] in self?.cards.zoomChanged() }
         cards.scroll.borderType = .noBorder
         let content = NSView()
         for view in [cards.scroll, emptyView] as [NSView] {
@@ -118,6 +126,11 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    deinit {
+        if let agentObserver { NotificationCenter.default.removeObserver(agentObserver) }
+        if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
+    }
 
     /// Shows the window: brought forward where it is, or — closed — as a tab
     /// beside `anchor`'s, the window it was asked for from.

@@ -526,6 +526,34 @@ final class AgentAnnotationTests: XCTestCase {
         }
     }
 
+    /// View ▸ Zoom while the Annotations window is in front: the cards are
+    /// re-measured and re-drawn at the new size at once — no closing the
+    /// window and opening it again.
+    func testTheCardsFollowTheZoomWhileTheWindowIsOpen() async throws {
+        try open()
+        _ = try await client.answer("annotate", ["offset": 0, "title": "A", "note": "Under the title."])
+        let cards = try notes()
+        let layout = try XCTUnwrap(cards.collection.collectionViewLayout as? AnnotationMasonryLayout)
+        let saved = ToolPanelFont.defaults.object(forKey: ToolPanelFont.zoomSizeKey)
+        defer { ToolPanelFont.defaults.set(saved, forKey: ToolPanelFont.zoomSizeKey) }
+        func titleFontSize(_ cards: AgentAnnotationCards) -> CGFloat? {
+            card("A", in: cards)?.subviews.compactMap { $0 as? NSTextField }
+                .first { $0.stringValue == "A" }?.font?.pointSize
+        }
+        guard let frameBefore = layout.itemFrames.first, let sizeBefore = titleFontSize(cards) else { return }
+        ToolPanelFont.defaults.set(17, forKey: ToolPanelFont.zoomSizeKey)
+        NotificationCenter.default.post(name: ToolPanelFont.zoomDidChangeNotification, object: nil)
+        _ = await settle(until: {
+            cards.collection.layoutSubtreeIfNeeded()
+            return titleFontSize(cards) == ToolPanelFont.titleSize
+        })
+        let sizeAfter = try XCTUnwrap(titleFontSize(cards))
+        XCTAssertEqual(sizeAfter, ToolPanelFont.titleSize, "the card is re-drawn at the new size")
+        XCTAssertNotEqual(sizeAfter, sizeBefore)
+        let frameAfter = try XCTUnwrap(layout.itemFrames.first)
+        XCTAssertGreaterThan(frameAfter.height, frameBefore.height, "the card is re-measured, the layout follows")
+    }
+
     /// A double-click on a row goes to its bytes, and Back comes back.
     func testShowingAnAnnotationSelectsItsBytesAsAStep() async throws {
         let controller = try open(0x10000)
