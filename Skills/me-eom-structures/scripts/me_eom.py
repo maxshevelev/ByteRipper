@@ -14,16 +14,23 @@ Understood well enough to claim (see reference/structures.md):
     {fileID u32, offset u32, flags u32}; a record's value bytes sit at
     count-address + offset. File IDs known from the panel: eom 0x10020000,
     eom_config 0x1001EE00, manuf_lock 0x10020100. Located by shape, not by the
-    partition table, whose IFWI layout this script does not parse.
+    partition table, whose IFWI layout this script does not parse. What it prints
+    for those files is the *defaults* page — the one a clean image carries too;
+    what is in force now is in the MFS file system, which the app's engine reads.
   * the UEP area opens with the ASCII "$UEPC" and mirrors the OEM key hashes.
-  * a 48-byte value that repeats across the ME region and is not periodic is key
-    material — the OEM public key hash is a SHA-384 (48 bytes). Heuristic.
+  * a 48-byte value the UEP holds and the ME region repeats is key material — the
+    OEM public key hash is a SHA-384 (48 bytes). Heuristic.
+  * the Boot Guard profile is a JSON record in the CDMD partition, under the
+    ASCII signature "FIT AS A FIDDLE": {"BtGuardProfileConfig": <index>}, where
+    the index picks MFIT's list 0 - No_FVME, 1 -> 3 - VM, 2 -> 4 - FVE,
+    3 -> 5 - FVME. Verified against the owner's ground truth on five dumps.
 
-Not understood yet (do not guess in a report): which field carries the Boot
-Guard level (MFIT prints "BG0 … BG5"), and what the UEP entry fields mean (a
-window in the BIOS region, a 0x4FE/0xFE field, a 32-bit sum).
+Not understood yet (do not guess in a report): what the UEP entry fields mean
+(a window in the BIOS region, a 0x4FE/0xFE field, a 32-bit sum), and what the
+rest of the CDMD configuration's records are.
 """
 
+import json
 import struct
 import sys
 
@@ -35,6 +42,9 @@ REGION_NAMES = {0: "Descriptor", 1: "BIOS", 2: "ME", 3: "GbE", 4: "PDR",
 EOM_FILES = {0x10020000: ("/home/mca/eom", 1),
              0x1001EE00: ("/home/mca/eom_config", 2),
              0x10020100: ("/home/mca/manuf_lock", 1)}
+
+# MFIT's Boot Guard Profile list, as its own settings database spells it.
+BOOT_GUARD_PROFILES = {0: "0 - No_FVME", 1: "3 - VM", 2: "4 - FVE", 3: "5 - FVME"}
 
 
 def u16(d, o):
@@ -111,15 +121,69 @@ def key_like(block):
     return True
 
 
-def repeated_48(me):
-    seen, hits = {}, {}
-    for off in range(0, len(me) - 48, 4):
-        block = bytes(me[off:off + 48])
-        if not key_like(block):
+def repeated_48(me, uep_at):
+    """The 48-byte values the UEP area holds, and every copy of each in the ME
+    region. The candidates come from the UEP — that is where the OEM key hash
+    lives, and the report is about what repeats *there* — and each is counted over
+    the whole region with bytes.count, which is C-speed; sliding a window over
+    megabytes of Python is not."""
+    out = {}
+    for off in range(uep_at, min(uep_at + 0x2000, len(me)) - 48, 4):
+        block = me[off:off + 48]
+        if block in out or not key_like(block) or me.count(block) < 2:
             continue
-        seen[block] = seen.get(block, 0) + 1
-        hits.setdefault(block, []).append(off)
-    return {b: a for b, a in hits.items() if seen[b] > 1}
+        places, at = [], me.find(block)
+        while at >= 0:
+            places.append(at)
+            at = me.find(block, at + 1)
+        out[block] = places
+    return out
+
+
+def unshifted(values):
+    """One value per piece of key material. The ME region pads key material with
+    zeros, so a 48-byte window slid by 4 bytes matches the same copies — or a
+    subset of them — and would be reported as a second value. Of the windows that
+    overlap, keep the one with the most copies; it holds the whole key."""
+    kept = {}
+    cores = {block: block.strip(b"\x00") for block in values}
+    # Most copies first; a tie goes to the window whose bytes hold the most of the
+    # key, so the shorter shifts are then dropped as substrings of it.
+    for block in sorted(values, key=lambda b: (-len(values[b]), -len(cores[b]))):
+        core = cores[block]
+        if not core or any(core in cores[other] for other in kept):
+            continue
+        kept[block] = values[block]
+    return kept
+
+
+def cdmd_records(me, window=None):
+    """The JSON records of the CDMD configuration: one {"key": value} object per
+    setting, short and printable. The block opens with the ASCII signature
+    "FIT AS A FIDDLE"; the records are found by shape, so a dump whose block sits
+    elsewhere is still read."""
+    start, end = window if window else (0, len(me))
+    out, at = [], start
+    while at < end:
+        open_at = me.find(b'{"', at, end)
+        if open_at < 0:
+            break
+        at = open_at + 2
+        close_at = me.find(b"}", open_at, min(open_at + 256, end))
+        if close_at < 0:
+            continue
+        try:
+            record = json.loads(me[open_at:close_at + 1].decode("ascii"))
+        except (UnicodeDecodeError, ValueError):
+            continue
+        if not isinstance(record, dict) or not record:
+            continue
+        # The harness block in the same area is XML carrying a bare {"length": n};
+        # it is metadata of the block, not a setting, and would drown the report.
+        if set(record) <= {"length", "Length"}:
+            continue
+        out.append((open_at, record))
+    return out
 
 
 def report(path):
@@ -175,20 +239,36 @@ def report(path):
             print("  %-26s default %s  (offset 0x%X, flags 0x%08X)"
                   % (name, value.hex(" ").upper(), off, flags))
 
-    keys = repeated_48(me)
-    # Only values with a copy inside the UEP: that area holds the OEM key hash and
-    # its neighbours, and it is what keeps the compressed-data repeats out.
-    keys = {b: o for b, o in keys.items()
-            if uep_at >= 0 and any(uep_at <= x < uep_at + 0x2000 for x in o)}
+    keys = unshifted(repeated_48(me, uep_at)) if uep_at >= 0 else {}
     if not keys:
-        print("repeated 48-byte values with a copy in the UEP: none")
-    for block, offsets in sorted(keys.items(), key=lambda kv: -len(kv[1]))[:8]:
+        print("48-byte values repeated in the ME region from the UEP: none")
+    for block, offsets in sorted(keys.items(), key=lambda kv: -len(kv[1]))[:4]:
         where = "UEP" if 0 <= uep_at <= offsets[0] < uep_at + 0x2000 \
             else "ME region at 0x%X" % (me_start + offsets[0])
-        print("repeated 48-byte value, %d copies (%s): %s"
+        print("48-byte value, %d copies (%s): %s"
               % (len(offsets), where, block.hex()))
         print("  at " + ", ".join("0x%X" % (me_start + o) for o in offsets[:12])
               + (" …" if len(offsets) > 12 else ""))
+
+    signature_at = me.find(b"FIT AS A FIDDLE")
+    window = (signature_at, signature_at + 0x8000) if signature_at >= 0 else None
+    records = cdmd_records(me, window)
+    if signature_at < 0:
+        print("CDMD configuration: no \"FIT AS A FIDDLE\" signature in the ME region")
+    else:
+        print("CDMD configuration: signature at 0x%X, %d JSON records"
+              % (me_start + signature_at, len(records)))
+    for off, record in records:
+        print("  at 0x%X: %s" % (me_start + off, json.dumps(record)))
+    profile = None
+    for off, record in records:
+        if "BtGuardProfileConfig" in record:
+            profile = record["BtGuardProfileConfig"]
+    if profile is None:
+        print("Boot Guard profile: no BtGuardProfileConfig in this image")
+    else:
+        print("Boot Guard profile: %s (index %s of the CDMD JSON)"
+              % (BOOT_GUARD_PROFILES.get(profile, "unknown: %r" % profile), profile))
 
 
 if __name__ == "__main__":
