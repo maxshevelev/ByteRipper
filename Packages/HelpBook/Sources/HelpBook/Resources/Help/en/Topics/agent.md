@@ -14,7 +14,7 @@
 @covers settings.agent.edits
 @covers settings.agent.launch
 
-The agent works on the same windows as the person at the bench. When it is asked about "this" byte, it reads the position of the caret and the selection; when it refers to a place in the dump, it moves the view there and selects it. The two therefore point at the same bytes rather than describing addresses to each other in words.
+The agent works on the same windows as the user. When it is asked about "this" byte, it reads the position of the caret and the selection; when it refers to a place in the dump, it moves the view there and selects it. The two therefore point at the same bytes rather than describing addresses to each other in words.
 
 ## Switching the service on
 
