@@ -224,7 +224,7 @@ final class AcerDMIStoreTests: XCTestCase {
         func findings(_ mutate: (inout [UInt8]) -> Void) -> [AcerDMIFinding] {
             var bytes = Self.block()
             mutate(&bytes)
-            return try! AcerDMIArea.found(stored: bytes, offset: 0x8000)!.findings
+            return AcerDMIArea.found(stored: bytes, offset: 0x8000)!.findings
         }
         XCTAssertEqual(findings { $0[7] = 0x35 }, [.serialPattern], "the serial's pattern is gone")
         XCTAssertEqual(findings { $0[0x50 + 5] = 0x32 }, [.motherboardSerialPattern], "the motherboard serial's pattern is gone")

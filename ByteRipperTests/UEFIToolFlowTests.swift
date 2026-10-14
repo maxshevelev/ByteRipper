@@ -2122,7 +2122,7 @@ final class UEFIToolFlowTests: XCTestCase {
         // the sub-tree it presents.
         let vc = try XCTUnwrap(session().viewController as? UEFIToolViewController)
         let item = outline.item(atRow: meRow)
-        vc.outlineView(outline, shouldExpandItem: item)
+        _ = vc.outlineView(outline, shouldExpandItem: item as Any)
         let open = pumpUntil(5) { outline.numberOfRows >= 5 }
         XCTAssertTrue(open,
                       "the ME region opened onto its roots: \(outline.numberOfRows) rows")
@@ -2494,7 +2494,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let analysis = try meAnalysisFixture()
         let reads = Tally()
 
-        @MainActor func ask() async -> Result<FirmwareAnalysis, Error> {
+        @Sendable @MainActor func ask() async -> Result<FirmwareAnalysis, Error> {
             await state.meAnalysis(for: 0x1000..<0x2000) {
                 reads.count += 1
                 // Long enough that the second ask arrives while this one runs,
@@ -2522,7 +2522,7 @@ final class UEFIToolFlowTests: XCTestCase {
         let analysis = try meAnalysisFixture()
         let reads = Tally()
 
-        @MainActor func ask() async -> Result<FirmwareAnalysis, Error> {
+        @Sendable @MainActor func ask() async -> Result<FirmwareAnalysis, Error> {
             await state.meAnalysis(for: 0x1000..<0x2000) {
                 reads.count += 1
                 try? await Task.sleep(nanoseconds: 50_000_000)

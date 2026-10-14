@@ -63,9 +63,7 @@ final class MEAToolFlowTests: XCTestCase {
         }
 
         func database() async throws -> MEADatabase {
-            lock.lock()
-            count += 1
-            lock.unlock()
+            lock.withLock { count += 1 }
             return MEADatabase(revision: 378)
         }
 

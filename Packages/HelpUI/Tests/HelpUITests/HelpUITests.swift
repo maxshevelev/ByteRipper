@@ -151,6 +151,11 @@ final class HelpWindowTests: XCTestCase {
 }
 
 /// The prose: a selected passage can be copied.
+/// The app's Edit ▸ Copy action, named the way the app's menu names it.
+@objc private protocol AppCopying {
+    func copySelection()
+}
+
 @MainActor
 final class HelpBodyViewTests: XCTestCase {
     /// ⌘C is the app's `copySelection`, not `copy(_:)`: the text has to answer
@@ -160,7 +165,7 @@ final class HelpBodyViewTests: XCTestCase {
         let body = HelpBodyView()
         body.show(NSAttributedString(string: "Partition table"))
         let text = try XCTUnwrap(body.documentView as? NSTextView)
-        let copy = Selector(("copySelection"))
+        let copy = #selector(AppCopying.copySelection)
         let item = NSMenuItem(title: "Copy", action: copy, keyEquivalent: "c")
 
         XCTAssertTrue(text.responds(to: copy))

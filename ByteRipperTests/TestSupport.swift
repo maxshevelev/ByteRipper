@@ -106,9 +106,9 @@ extension XCTestCase {
     /// The words shown below `view`: every text field's, and every detail
     /// row's name and value — a detail list draws its rows itself rather than
     /// in fields (`ToolFieldList`).
-    func shownTexts(_ view: NSView) -> [String] {
+    @MainActor func shownTexts(_ view: NSView) -> [String] {
         descendants(of: view, NSTextField.self).map(\.stringValue)
-            + descendants(of: view, ToolFieldRow.self).flatMap(\.texts)
+            + descendants(of: view, ToolFieldRow.self).flatMap { $0.texts }
     }
 
     /// The first view of type `T` below `view`, or a failure naming what was

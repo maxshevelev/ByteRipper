@@ -1203,11 +1203,13 @@ final class AgentAnnotationTests: XCTestCase {
     /// loop pumped inside an async test does not, and the tree announces
     /// itself ready through it.
     private func settle(_ timeout: TimeInterval = 5, until condition: () -> Bool = { false }) async -> Bool {
+        // A turn of the run loop is not to be had from async code directly.
+        func turn() { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005)) }
         let end = Date(timeIntervalSinceNow: timeout)
         while Date() < end {
             if condition() { return true }
             try? await Task.sleep(nanoseconds: 20_000_000)
-            RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.005))
+            turn()
         }
         return condition()
     }

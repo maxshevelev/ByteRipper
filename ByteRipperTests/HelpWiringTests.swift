@@ -45,7 +45,7 @@ final class HelpMenuTests: XCTestCase {
         for item in MainMenu.makeHelpMenu(target: target).items where !item.isSeparatorItem {
             XCTAssertEqual(item.action, #selector(AppDelegate.showHelpBook(_:)),
                            "“\(item.title)” is wired to something else")
-            XCTAssertNotEqual(item.action, Selector(("showHelp:")),
+            XCTAssertNotEqual(item.action, #selector(NSApplication.showHelp(_:)),
                               "“\(item.title)” is wired to NSApplication's own action")
             XCTAssertTrue(item.target === target,
                           "“\(item.title)” has no target, so AppKit answers for it")

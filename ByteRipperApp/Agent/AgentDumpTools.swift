@@ -204,7 +204,7 @@ final class AgentDumpTools {
               tool.inputSchema["properties"]?["document"] != nil, toolName != "survey" else {
             throw AgentToolError("`\(toolName)` is not a tool that answers about one document.")
         }
-        var toolArguments = arguments["arguments"]?.objectValue ?? [:]
+        let toolArguments = arguments["arguments"]?.objectValue ?? [:]
         if arguments["arguments"] != nil, arguments["arguments"]?.objectValue == nil {
             throw AgentToolError("Argument `arguments` must be an object.")
         }

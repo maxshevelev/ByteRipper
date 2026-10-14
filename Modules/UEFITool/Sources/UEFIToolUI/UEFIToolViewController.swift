@@ -119,7 +119,7 @@ import UEFITool
     /// A search asked for while the tree was still being read — the panel
     /// just switched on, the file just opened — run as soon as the tree is
     /// shown, not dropped. The bar says it is searching meanwhile.
-    private var pendingSearch: (() -> Void)?
+    private var pendingSearch: (@MainActor () -> Void)?
     /// The tree as it is shown: the outline's top level and the root node the
     /// summary stands for, decided in the pure target. Kept from one show to
     /// the next so the data source reads the same top level the last show laid
@@ -799,7 +799,7 @@ import UEFITool
         // After the refresh just queued: the search walks the rows it lays out.
         if let search = pendingSearch, tree != nil, !isBuilding {
             pendingSearch = nil
-            DispatchQueue.main.async(execute: search)
+            DispatchQueue.main.async { search() }
         }
     }
 
@@ -939,7 +939,7 @@ import UEFITool
     /// through the UEFI path; the sub-tree it opens onto is the ME half, and the
     /// selection that follows it is a ME reveal.
     func openMERegion(_ id: NodeID, settlingOn preferred: [Int]? = nil) {
-        expandRow(id) { [weak self] in
+        expandRow(id, then: { [weak self] in
             guard let self else { return }
             let settled = [preferred, self.meFocus].compactMap { $0 }
                 .first { self.meNode(of: self.meRow($0)) != nil }
@@ -953,7 +953,7 @@ import UEFITool
             // `revealME` now does — would leave the row highlighted with no
             // detail and no zones behind it.
             self.onSelectME?(settled)
-        }
+        })
     }
 
     // MARK: - One change to the table at a time
@@ -1085,12 +1085,12 @@ import UEFITool
             return
         }
         guard node.children.isEmpty, node.isExpandable else {
-            expandRow(id) { [weak self] in self?.openInTurn(rows, from: index + 1) }
+            expandRow(id, then: { [weak self] in self?.openInTurn(rows, from: index + 1) })
             return
         }
         tree.expand(id) { [weak self] _ in
             guard let self else { return }
-            self.expandRow(id) { [weak self] in self?.openInTurn(rows, from: index + 1) }
+            self.expandRow(id, then: { [weak self] in self?.openInTurn(rows, from: index + 1) })
         }
     }
 
@@ -2123,7 +2123,7 @@ extension UEFIToolViewController: NSOutlineViewDataSource, NSOutlineViewDelegate
         let resolve = { @MainActor [weak self] () -> Any? in self?.outlineItem(for: id) }
         guard showingPlaceholder.remove(id) != nil else {
             if openedByReader.contains(id) { makeRoom(for: resolve) }
-            expandRow(id) { [weak self] in self?.showBranchIfAsked(id) }
+            expandRow(id, then: { [weak self] in self?.showBranchIfAsked(id) })
             return
         }
         if openedByReader.contains(id) { makeRoom(for: resolve) }

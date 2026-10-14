@@ -45,7 +45,7 @@ final class AgentHostTools {
                 `focused`. Ids last as long as the file stays open.
                 """
         ) { _ in
-            try await MainActor.run { [self] in try answer { documents() } }
+            try await MainActor.run { [self] in try self.answer { self.documents() } }
         }
     }
 
@@ -99,7 +99,7 @@ final class AgentHostTools {
                 it also names the other one, which scrolls with this one.
                 """
         ) { _ in
-            try await MainActor.run { [self] in try answer { try focus() } }
+            try await MainActor.run { [self] in try self.answer { try self.focus() } }
         }
     }
 
@@ -148,7 +148,7 @@ final class AgentHostTools {
                 "endian": AgentSchema.choice(["little", "big"], "For u16, u32 and u64. Default \"little\".")
             ], required: ["offset"])
         ) { call in
-            try await MainActor.run { [self] in try answer { try read(call.arguments) } }
+            try await MainActor.run { [self] in try self.answer { try self.read(call.arguments) } }
         }
     }
 
@@ -200,7 +200,7 @@ final class AgentHostTools {
             ], required: ["offset"]),
             annotations: .view
         ) { call in
-            try await MainActor.run { [self] in try answer { try reveal(call.arguments) } }
+            try await MainActor.run { [self] in try self.answer { try self.reveal(call.arguments) } }
         }
     }
 

@@ -49,8 +49,9 @@ final class AgentAnnotationTools {
     /// Bumped by every change, so a pane knows its drawn list is stale.
     private(set) var generation = 0
 
-    static let maxTitle = 80
-    static let maxNote = 600
+    // Constants, read by the tools' definitions off the main actor too.
+    nonisolated static let maxTitle = 80
+    nonisolated static let maxNote = 600
 
     init(desk: AgentDesk) {
         self.desk = desk
