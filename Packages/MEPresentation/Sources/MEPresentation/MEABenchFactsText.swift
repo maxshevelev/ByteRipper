@@ -17,8 +17,6 @@ extension MEAText {
             return L("Will close on first boot", in: language)
         case .willNotClose:
             return L("Will not close", in: language)
-        case .closed:
-            return L("Already closed", in: language)
         case .unexpectedCombination:
             return L("Close on first boot, with the descriptor open", in: language)
         case .unknown:
@@ -28,40 +26,29 @@ extension MEAText {
         }
     }
 
-    /// What the Manufacturing verdict was read from, in one paragraph — the
-    /// same idea as the File System State's basis, and shown the same way under
-    /// its row.
+    /// What the Manufacturing verdict was read from, in one short paragraph —
+    /// the same idea as the File System State's basis, and shown the same way
+    /// under its row. Kept to what the verdict rests on: the flag, where it was
+    /// read, what End of Manufacturing commits, and a descriptor that is open,
+    /// which is the one descriptor state worth naming.
     public static func manufacturingBasis(_ basis: ManufacturingBasis, in language: AppLanguage) -> String {
-        var sentences: [String] = []
-        if let eom = basis.eom {
-            if eom == 0 {
-                sentences.append(L("The file %1$@ in the file system reads 0: Manufacturing has not been closed on this board.", in: language, "/home/mca/eom"))
-            } else {
-                sentences.append(L("The file %1$@ in the file system reads %2$d: Manufacturing has been closed on this board already, whatever this image is set to do.", in: language, "/home/mca/eom", eom))
-            }
-        } else if basis.liveFilesResolved {
-            sentences.append(L("The file system carries no %1$@ record, so the board has not closed Manufacturing itself.", in: language, "/home/mca/eom"))
+        guard let flag = basis.flag, let page = basis.page else {
+            return L("No End of Manufacturing record in this image.", in: language)
         }
-        switch (basis.flag, basis.page) {
-        case (let flag?, let page?):
-            let setting = (flag ? L("set", in: language) : L("clear", in: language))
-            let source = page == .liveMFS
-                ? L("the file system's own %1$@", in: language, "/home/mca/eom_config")
-                : L("the image's OEM Configuration (the record the platform applies when it enters End of Manufacturing)", in: language)
-            sentences.append(L("The End of Manufacturing setting is %1$@ in %2$@.", in: language, setting, source))
-            if let flexible = basis.flexible {
-                sentences.append(flexibleText(flexible, in: language))
-            }
-        default:
-            sentences.append(L("Neither the image's OEM Configuration nor the file system carries the setting, so what this image will do cannot be read from it.", in: language))
+        // German wants the dative here, so the two sources are whole phrases
+        // rather than a noun glued onto a preposition.
+        let source = page == .liveMFS
+            ? L("the file system", in: language)
+            : L("the image's OEM Configuration", in: language)
+        var sentences = [L("The End of Manufacturing flag is %1$@ in %2$@.",
+                           in: language,
+                           flag ? L("set", in: language) : L("clear", in: language),
+                           source)]
+        if flag, let flexible = basis.flexible {
+            sentences.append(flexibleText(flexible, in: language))
         }
         if basis.descriptorOpen == true {
-            sentences.append(L("The descriptor's BIOS master is open — it may read and write the whole flash — which is the state a service dump is handed out in.", in: language))
-        } else if basis.descriptorOpen == false {
-            sentences.append(L("The descriptor's BIOS master is locked.", in: language))
-        }
-        if !basis.liveFilesResolved {
-            sentences.append(L("The file system's files could not be resolved to File IDs without the firmware database, so only the image's own records were read.", in: language))
+            sentences.append(L("The descriptor is open.", in: language))
         }
         return sentences.joined(separator: " ")
     }

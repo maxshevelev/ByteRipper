@@ -211,7 +211,6 @@ public enum MEAAgentQueries {
     /// record that said so and not a reading of the image's setting.
     static func manufacturingBasisJSON(_ basis: ManufacturingBasis) -> JSONValue {
         var members: [String: JSONValue] = [
-            "eom_record": basis.eom.map { .count($0) } ?? .null,
             "flag": basis.flag.map { .bool($0) } ?? .null,
             "flexible_eom_settings": basis.flexible.map { .count($0) } ?? .null,
             "flag_page": .string(basis.page?.rawValue ?? "none"),

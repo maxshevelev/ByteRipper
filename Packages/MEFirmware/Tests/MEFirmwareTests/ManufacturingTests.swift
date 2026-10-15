@@ -11,12 +11,12 @@ import Foundation
 /// four dumps whose answers are known.
 final class ManufacturingTests: XCTestCase {
 
-    private func decide(eom: Int? = nil, image: Int? = nil, live: Int? = nil,
+    private func decide(image: Int? = nil, live: Int? = nil,
                         descriptorOpen: Bool? = nil, hasSwitch: Bool = true,
                         liveFilesResolved: Bool = true)
     -> (state: ManufacturingState, basis: ManufacturingBasis) {
         ManufacturingDecoder.decide(ManufacturingDecoder.Inputs(
-            eom: eom, imageEOMConfig: image, liveEOMConfig: live,
+            imageEOMConfig: image, liveEOMConfig: live,
             descriptorOpen: descriptorOpen, hasSwitch: hasSwitch,
             liveFilesResolved: liveFilesResolved))
     }
@@ -39,22 +39,15 @@ final class ManufacturingTests: XCTestCase {
         XCTAssertEqual(basis.flag, true)
     }
 
-    /// The factory Z Flow dump: the image's own record reads 0, and the live
-    /// `/home/mca/eom` file reads 1 — the board has closed Manufacturing, and
-    /// what the image now says no longer decides anything.
-    func testALiveEOMRecordOutranksTheSetting() {
-        let (state, basis) = decide(eom: 1, image: 0x00, descriptorOpen: false)
-        XCTAssertEqual(state, .closed)
-        XCTAssertEqual(basis.eom, 1)
-        XCTAssertEqual(basis.flag, false)
-    }
-
-    /// A live record of 0 is the other half of the same fact: this board has
-    /// not closed Manufacturing, so the setting is what will happen.
-    func testALiveZeroRecordLeavesTheSettingToDecide() {
-        let (state, basis) = decide(eom: 0, image: 0x01, descriptorOpen: false)
+    /// What the board the dump came from has already done is not asked and not
+    /// reported: `/home/mca/eom` in the live file system says Manufacturing was
+    /// closed there, and that says nothing about the machine this image is
+    /// about to be written to. The setting decides.
+    func testTheBoardsOwnHistoryIsNotAVerdict() {
+        let (state, basis) = decide(image: 0x01, live: 0x00, descriptorOpen: false)
         XCTAssertEqual(state, .willClose)
-        XCTAssertEqual(basis.eom, 0)
+        XCTAssertEqual(basis.flag, true)
+        XCTAssertEqual(basis.page, .imageConfiguration)
     }
 
     /// FlexibleEomSettings is the record's bits 1–2 (0 = lock the descriptor
@@ -118,9 +111,9 @@ final class ManufacturingTests: XCTestCase {
         XCTAssertEqual(basis.page, .imageConfiguration)
     }
 
-    /// The three File IDs are `FileTable.dat`'s own keys, the ones the panel's
-    /// tree prints beside `/home/mca/eom` — a record with another ID is some
-    /// other setting and must not be read as this one.
+    /// The File IDs are `FileTable.dat`'s own keys, the ones the panel's tree
+    /// prints beside `/home/mca/eom` — a record with another ID is some other
+    /// setting and must not be read as this one.
     func testTheFileIDsAreTheFTBLKeys() {
         XCTAssertEqual(ManufacturingDecoder.FileID.eom, 0x1002_0000)
         XCTAssertEqual(ManufacturingDecoder.FileID.eomConfig, 0x1001_EE00)

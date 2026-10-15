@@ -167,8 +167,7 @@ struct MEFirmwareCLI {
         // are known (Skills/me-eom-structures/reference/structures.md).
         print("manufacturing: \(result.manufacturingState?.rawValue ?? "-")"
               + (result.manufacturingBasis.map { basis -> String in
-                  "  (eom: \(basis.eom.map(String.init) ?? "-")"
-                      + ", flag: \(basis.flag.map { $0 ? "1" : "0" } ?? "-")"
+                  "  (flag: \(basis.flag.map { $0 ? "1" : "0" } ?? "-")"
                       + ", flexible: \(basis.flexible.map(String.init) ?? "-")"
                       + ", page: \(basis.page?.rawValue ?? "-")"
                       + ", descriptor: \(basis.descriptorOpen.map { $0 ? "open" : "locked" } ?? "-")"
