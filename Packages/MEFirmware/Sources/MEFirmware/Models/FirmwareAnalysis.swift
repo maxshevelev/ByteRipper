@@ -401,25 +401,28 @@ public struct MFSStateBasis: Codable, Sendable, Equatable {
 /// chip, not into a dump, and no dump can say what they hold. What this says is
 /// what the *image* will make the platform do.
 public enum ManufacturingState: String, Codable, Sendable, CaseIterable {
-    /// The flag is set: the first boot of this image closes Manufacturing.
+    /// The first boot of this image closes Manufacturing — either because the
+    /// descriptor carries the factory rights that close it, or because the
+    /// flag orders it explicitly.
     case willClose
-    /// The flag is clear: the platform boots on with Manufacturing open, which
-    /// is the state a bench must not ship a machine in.
+    /// Neither mechanism is at work: the flag is clear and the descriptor's
+    /// access rights are open, which is what an image a bench prepares for
+    /// itself looks like. The machine boots on and stays workable.
     case willNotClose
     /// The flag is set while the descriptor's BIOS master is open (its read and
-    /// write masks are all ones). MFIT refuses to build such an image —
-    /// `CsePlugin:EomNvar` answers *"When 'Host CPU / BIOS' Read and Write
-    /// Master Access are set to 0xFFFF, End of manufacturing on first boot and
-    /// locking descriptor is not allowed"* — so the two settings together mean
-    /// the image was edited outside MFIT, or predates that rule.
+    /// write masks are all ones, the service-image state). MFIT refuses to
+    /// build such an image — `CsePlugin:EomNvar` answers *"When 'Host CPU /
+    /// BIOS' Read and Write Master Access are set to 0xFFFF, End of
+    /// manufacturing on first boot and locking descriptor is not allowed"* —
+    /// so the two together mean the image was edited outside MFIT, or predates
+    /// that rule.
     case unexpectedCombination
-    /// The generation has the switch, but neither page could be read: the
-    /// firmware's file table is not in hand, so the MFS files carry no File IDs
-    /// to find them by, and no OEM Configuration partition holds the record.
+    /// The generation decides this, but its bytes do not: the flag is clear or
+    /// absent and no descriptor was read with the region, so what the access
+    /// rights would say is unknown.
     case unknown
-    /// This firmware has no such switch: End of Manufacturing is not something
-    /// it decides on a first boot (pre-CSME 15, or a layout whose MFS volume
-    /// has no ID-keyed configuration records).
+    /// This firmware does not decide it at all: before CSME 11, whose
+    /// descriptors are the ones the rights are read from.
     case noSwitch
 }
 

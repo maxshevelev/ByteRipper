@@ -9,34 +9,50 @@
 
 import Foundation
 
-/// The End of Manufacturing switch of CSME 15/16 — `CsePlugin:EomNvar` in
-/// MFIT — as the record that carries it can be read from an image.
+/// Whether an image closes Manufacturing on the first boot of a board, and what
+/// says so.
 ///
-/// **One setting, two places it may be written.** The setting is the MFS file
-/// `/home/mca/eom_config` (2 bytes: bit 0 `EomFirstBootEnabled`, bits 1–2
-/// `FlexibleEomSettings`), and it appears in an image twice:
+/// **Two mechanisms, and the descriptor's is the one that is usually at work.**
 ///
-///   * the **OEM Configuration** partition (`FITC`, an FPT region) holds the
-///     record the build wrote — what the platform will apply when it enters
-///     End of Manufacturing. This is the page MFIT writes and the one the
-///     firmware reads, so it is the page the verdict is taken from;
-///   * the **MFS volume's own files** hold the record as the file system
-///     carries it. An extracted region may be handed over without its OEM
-///     Configuration partition, and then this is the only copy there is.
+///   * The **access rights in the flash descriptor** are what a manufacturer
+///     normally relies on. A serial image leaves the host CPU / BIOS master
+///     with the factory rights (`0x00F` / `0x00A` in these dumps, not the
+///     `0xFFF` / `0xFFF` of a service image that lets the host rewrite the
+///     whole flash), and the platform closes Manufacturing on its first boot.
+///     That is how End of Manufacturing was done before the flag existed, and
+///     it is still how the serial images that carry no flag are done.
+///   * The **`CsePlugin:EomNvar` flag** — bit 0 of the MFS file
+///     `/home/mca/eom_config` — is an explicit order on top of that, which only
+///     MFIT sets. It appears in an image twice: in the **OEM Configuration**
+///     partition (`FITC`, an FPT region), which holds the record the build
+///     wrote, and in the **MFS volume's own files**, which is the only copy in
+///     a region handed over without its OEM Configuration partition. The page
+///     the verdict is taken from is the image's own; the file system's is the
+///     fallback. Bits 1–2 of the record are `FlexibleEomSettings` — what EOM
+///     commits.
+///
+/// So a flag reading **0 does not mean Manufacturing stays open**: what a serial
+/// image with the flag clear does is exactly what its descriptor rights say.
+/// `false` is therefore read as "the flag is not the reason", and the
+/// descriptor answers — the one case where nothing closes Manufacturing is an
+/// image with the flag clear *and* the descriptor open, which is the service
+/// image a bench prepares for itself. The flag set with the descriptor open is
+/// the combination MFIT refuses to build.
 ///
 /// What the *board* has already done is deliberately not read. The live file
 /// system also holds `/home/mca/eom`, which is 1 once Manufacturing has been
-/// closed on the board the dump came from — but the question the row answers is
-/// about the machine the image is about to be written to, whose chipset is
-/// fresh, and a record of some other board's history does not bear on it.
+/// closed on the board the dump came from — but the question is about the
+/// machine the image is about to be written to, whose chipset is fresh, and a
+/// record of some other board's history does not bear on it.
 ///
 /// The engine reads no fuses — those are burned into the chip and no dump
-/// carries them — and it never guesses: a firmware whose generation has no such
-/// switch is answered `noSwitch`, and an image whose records cannot be read is
-/// answered `unknown` rather than by an assumption about what a vendor does.
+/// carries them — and it never guesses: a firmware of a generation that does
+/// not decide this (before CSME 11, whose era is the one whose descriptor
+/// rights this reads) is answered `noSwitch`, and an image whose bytes cannot
+/// be read — the flag clear with no descriptor in hand — is answered `unknown`.
 enum ManufacturingDecoder {
 
-    /// The `FTBL` keys that name the two files this switch is about
+    /// The `FTBL` keys that name the record this switch is about
     /// (`FileTable.dat`'s own IDs, the ones the panel's tree prints beside
     /// `/home/mca/eom`). They are stable across CSME 15/16 images; a record
     /// with another ID is some other setting and is ignored.
@@ -61,10 +77,10 @@ enum ManufacturingDecoder {
         /// Whether the descriptor's BIOS master is open (`0xFFFF` in both
         /// masks). nil when no descriptor was handed to the analyzer.
         var descriptorOpen: Bool? = nil
-        /// Whether the image carries a switch of this kind at all: an OEM
-        /// Configuration partition holding such a record, or an MFS volume
-        /// whose files could be resolved to File IDs. False for a firmware
-        /// that predates the setting.
+        /// Whether this generation decides End of Manufacturing at all: CSME
+        /// 11 and later, whose descriptors carry the v2 access rights the
+        /// verdict is read from (`FlashDescriptor.biosMaster`). False for a
+        /// family or a generation that does not — those answer `noSwitch`.
         var hasSwitch: Bool = false
         /// Whether the live file system could be looked in: false when the
         /// image has an MFS volume but `FileTable.dat` is not in hand, so its
@@ -88,14 +104,23 @@ enum ManufacturingDecoder {
             descriptorOpen: inputs.descriptorOpen,
             liveFilesResolved: inputs.liveFilesResolved)
 
-        // No switch in this firmware.
+        // No End of Manufacturing machinery in this firmware.
         guard inputs.hasSwitch else { return (.noSwitch, basis) }
-        // The switch is there but its bytes are not: say so rather than
-        // assume the vendor left it off.
-        guard let flag = basis.flag else { return (.unknown, basis) }
-        // The flag set with the descriptor open is a combination MFIT
-        // refuses to build (CsePlugin:EomNvar) — worth its own verdict.
-        if flag, inputs.descriptorOpen == true { return (.unexpectedCombination, basis) }
-        return (flag ? .willClose : .willNotClose, basis)
+        // The flag set is an explicit order, MFIT's own: it closes
+        // Manufacturing whatever the descriptor says, which is why the pair
+        // with an open descriptor is a combination MFIT refuses to build.
+        if basis.flag == true {
+            return inputs.descriptorOpen == true ? (.unexpectedCombination, basis) : (.willClose, basis)
+        }
+        // The flag is clear, or the image carries no such record at all — a
+        // serial image that relies on its descriptor rights, which is how
+        // manufacturers make them. So it is the descriptor that answers here:
+        // open rights are the one state in which nothing closes Manufacturing,
+        // and an unreadable descriptor leaves the question open.
+        switch inputs.descriptorOpen {
+        case false: return (.willClose, basis)
+        case true: return (.willNotClose, basis)
+        case nil: return (.unknown, basis)
+        }
     }
 }

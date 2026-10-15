@@ -951,24 +951,39 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(tone("Manufacturing", in: tableRows(willNotClose)), .good)
     }
 
-    /// The Manufacturing row is the generation's that has the switch (CSME 15,
-    /// where MFIT grew `CsePlugin:EomNvar`), so a CSME 12 image reads no such
-    /// row; Boot Guard and its key hash belong to every CSE generation that has
-    /// Boot Guard at all, and so are read there too.
-    func testTheManufacturingRowIsCSME15sAlone() throws {
+    /// The three rows belong to CSME 11 and later. Manufacturing is decided
+    /// there by the descriptor's access rights — which is how it was done
+    /// before MFIT grew the flag, and CSME 12 is such a generation: it reads a
+    /// verdict of its own, not `noSwitch`.
+    func testTheBenchRowsBelongToCSME11AndLater() throws {
         let a = try analysis([
             "family": "csme", "manifest": manifestJSON(),
             "version": ["major": 12, "minor": 0, "hotfix": 3, "build": 1091],
-            "manufacturingState": "noSwitch",
+            "manufacturingState": "willClose",
+            "manufacturingBasis": ["descriptorOpen": false,
+                                   "liveFilesResolved": false],
             "bootGuardProfile": "4",
             "oemPublicKeyHash": String(repeating: "12", count: 48),
         ])
         let rows = tableRows(a)
-        XCTAssertNil(value("Manufacturing", in: rows))
+        XCTAssertEqual(value("Manufacturing", in: rows),
+                       .value("Will close on first boot"))
+        XCTAssertEqual(tone("Manufacturing", in: rows), .caution)
+        // No flag in this image: the descriptor is what the basis names.
+        XCTAssertEqual(value("Manufacturing basis", in: rows)?.text(in: .english),
+                       "The descriptor's access rights are what close Manufacturing.")
         XCTAssertEqual(value("Boot Guard", in: rows), .value("4 - FVE"))
         XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
         XCTAssertEqual(value("OEM Public Key Hash", in: rows),
                        .value(String(repeating: "12", count: 48)))
+
+        // ME 7 has none of this machinery.
+        let me7 = try analysis([
+            "family": "me", "manifest": manifestJSON(),
+            "version": ["major": 7, "minor": 1, "hotfix": 70, "build": 2264],
+            "manufacturingState": "noSwitch",
+        ])
+        XCTAssertNil(value("Manufacturing", in: tableRows(me7)))
     }
 
     // MARK: - The messages block

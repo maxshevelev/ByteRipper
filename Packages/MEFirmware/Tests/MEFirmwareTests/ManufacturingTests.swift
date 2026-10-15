@@ -2,13 +2,14 @@ import XCTest
 import Foundation
 @testable import MEFirmware
 
-/// `ManufacturingDecoder` — the End of Manufacturing verdict a bench reads off
-/// a dump: the live `/home/mca/eom` record first (it says what the board has
-/// done), then the setting (it says what the image will do on its first boot),
-/// with the descriptor's state deciding whether the pair is one MFIT would ever
-/// have built. The records' addresses and values are the ones in
-/// `Skills/me-eom-structures/reference/structures.md`; the cases here are the
-/// four dumps whose answers are known.
+/// `ManufacturingDecoder` — whether an image closes Manufacturing on the first
+/// boot of a board. Two mechanisms decide it, and the descriptor's is the one
+/// at work in a serial image: the flag `CsePlugin:EomNvar` is an explicit order
+/// only MFIT sets, so a flag of 0 says nothing by itself. The cases here are the
+/// dumps whose answers are known (`Skills/me-eom-structures/reference/
+/// structures.md`), including the live records that confirm them: every dump
+/// whose own file system reads `/home/mca/eom` = 1 — the board was closed —
+/// is one this decoder answers `willClose`.
 final class ManufacturingTests: XCTestCase {
 
     private func decide(image: Int? = nil, live: Int? = nil,
@@ -21,33 +22,74 @@ final class ManufacturingTests: XCTestCase {
             liveFilesResolved: liveFilesResolved))
     }
 
-    /// Clean ME / no-EOM: the setting is clear, so the platform boots on with
-    /// Manufacturing open. The dump that prompted the row.
-    func testAClearSettingWillNotClose() {
+    /// A serial image: the flag is clear, the descriptor carries the factory
+    /// rights, and the platform closes Manufacturing on its first boot. This is
+    /// the case the row exists for — a clear flag is not "nothing will happen".
+    func testAFactoryRightsImageClosesWithoutTheFlag() {
         let (state, basis) = decide(image: 0x00, descriptorOpen: false)
-        XCTAssertEqual(state, .willNotClose)
+        XCTAssertEqual(state, .willClose)
         XCTAssertEqual(basis.flag, false)
         XCTAssertEqual(basis.flexible, 0)
         XCTAssertEqual(basis.page, .imageConfiguration)
     }
 
-    /// The same image built with MFIT's "EOM on first boot = Yes": byte 0 of
-    /// the record is 1, which is the flag and nothing else.
-    func testASetSettingWillClose() {
+    /// The same image before its flag exists — a generation where only the
+    /// descriptor decided, which is how End of Manufacturing was done before
+    /// MFIT grew the setting.
+    func testAGenerationWithoutTheFlagIsDecidedByTheDescriptor() {
+        XCTAssertEqual(decide(descriptorOpen: false).state, .willClose)
+    }
+
+    /// A service image: the flag is clear *and* the descriptor is open, which is
+    /// the one state in which nothing closes Manufacturing — the image a bench
+    /// prepares for itself, and the one its own build of the clean ME is.
+    func testAnOpenDescriptorWithAClearFlagClosesNothing() {
+        let (state, basis) = decide(image: 0x00, descriptorOpen: true)
+        XCTAssertEqual(state, .willNotClose)
+        XCTAssertEqual(basis.flag, false)
+    }
+
+    /// The flag set is MFIT's explicit order: it closes Manufacturing whatever
+    /// the descriptor says.
+    func testASetFlagClosesEvenWithAFactoryDescriptor() {
         let (state, basis) = decide(image: 0x01, descriptorOpen: false)
         XCTAssertEqual(state, .willClose)
         XCTAssertEqual(basis.flag, true)
     }
 
-    /// What the board the dump came from has already done is not asked and not
-    /// reported: `/home/mca/eom` in the live file system says Manufacturing was
-    /// closed there, and that says nothing about the machine this image is
-    /// about to be written to. The setting decides.
-    func testTheBoardsOwnHistoryIsNotAVerdict() {
+    /// An image built by MFIT with the flag set and never booted: the file
+    /// system carries no record, so the image's own page is the answer.
+    func testTheImagePageIsTheFlagSourceWhenTheFileSystemIsEmpty() {
+        let (state, basis) = decide(image: 0x01)
+        XCTAssertEqual(state, .willClose)
+        XCTAssertEqual(basis.page, .imageConfiguration)
+    }
+
+    /// An extracted region may be handed over without its OEM Configuration
+    /// partition: the live record is then the only copy of the flag there is.
+    func testTheLivePageIsTheFallbackForTheFlag() {
+        let (state, basis) = decide(live: 0x01, descriptorOpen: false)
+        XCTAssertEqual(state, .willClose)
+        XCTAssertEqual(basis.page, .liveMFS)
+    }
+
+    /// The image's own page wins over the live one: it is the record the
+    /// platform applies when it enters End of Manufacturing, while the file
+    /// system's copy is a leftover of a previous run.
+    func testTheImagePageOutranksTheLiveOne() {
         let (state, basis) = decide(image: 0x01, live: 0x00, descriptorOpen: false)
         XCTAssertEqual(state, .willClose)
-        XCTAssertEqual(basis.flag, true)
+        XCTAssertTrue(basis.flag == true)
         XCTAssertEqual(basis.page, .imageConfiguration)
+    }
+
+    /// The flag set with the descriptor open is the combination MFIT refuses
+    /// to build ("not allowed"), and gets its own verdict rather than being
+    /// read as an ordinary "will close".
+    func testTheFlagWithAnOpenDescriptorIsItsOwnVerdict() {
+        let (state, basis) = decide(image: 0x01, descriptorOpen: true)
+        XCTAssertEqual(state, .unexpectedCombination)
+        XCTAssertEqual(basis.descriptorOpen, true)
     }
 
     /// FlexibleEomSettings is the record's bits 1–2 (0 = lock the descriptor
@@ -59,56 +101,21 @@ final class ManufacturingTests: XCTestCase {
         XCTAssertEqual(decide(image: 0x07).basis.flag, true)
     }
 
-    /// The flag set while the descriptor's BIOS master is open is the
-    /// combination MFIT refuses to build, and gets its own verdict rather than
-    /// being read as an ordinary "will close".
-    func testTheFlagWithAnOpenDescriptorIsItsOwnVerdict() {
-        let (state, basis) = decide(image: 0x01, descriptorOpen: true)
-        XCTAssertEqual(state, .unexpectedCombination)
-        XCTAssertEqual(basis.descriptorOpen, true)
-    }
-
-    /// Without a descriptor — an extracted ME region, which is how the engine
-    /// is most often handed one — the check is left out and the setting decides.
-    func testNoDescriptorLeavesTheCombinationCheckOut() {
-        let (state, basis) = decide(image: 0x01, descriptorOpen: nil)
-        XCTAssertEqual(state, .willClose)
-        XCTAssertNil(basis.descriptorOpen)
-    }
-
-    /// A firmware of a generation without the switch: pre-CSME 15, or a layout
-    /// whose records are not ID-keyed. Nothing is claimed from it.
-    func testAFirmwareWithoutTheSwitch() {
-        let (state, _) = decide(hasSwitch: false, liveFilesResolved: false)
+    /// A firmware of a generation that does not decide this: nothing is
+    /// claimed, whatever the descriptor says.
+    func testAFirmwareWithoutTheMachinery() {
+        let (state, _) = decide(descriptorOpen: false, hasSwitch: false,
+                                liveFilesResolved: false)
         XCTAssertEqual(state, .noSwitch)
     }
 
-    /// The switch exists but neither page could be read — an image whose file
-    /// table is not in hand and whose OEM Configuration carries no such record.
-    /// The honest answer is that nothing can be said, not that the vendor left
-    /// it off.
-    func testNoReadablePageIsUnknownNotAFlag() {
-        let (state, basis) = decide(hasSwitch: true, liveFilesResolved: false)
+    /// A region handed to the engine with no descriptor — a bare ME dump — and
+    /// no flag: the question cannot be answered, and it is not guessed.
+    func testNoDescriptorAndNoFlagIsUnknown() {
+        let (state, basis) = decide(image: 0x00, descriptorOpen: nil)
         XCTAssertEqual(state, .unknown)
-        XCTAssertNil(basis.flag)
-        XCTAssertNil(basis.page)
-    }
-
-    /// An extracted region may carry the live records with no OEM Configuration
-    /// partition beside them: the live page decides then, and says so.
-    func testTheLivePageDecidesWhenTheImageCarriesNoRecord() {
-        let (state, basis) = decide(live: 0x01)
-        XCTAssertEqual(state, .willClose)
-        XCTAssertEqual(basis.page, .liveMFS)
-    }
-
-    /// The image's own page wins over the live one for the setting: it is the
-    /// record the platform applies when it enters End of Manufacturing, while
-    /// the file system's copy is a leftover of a previous run.
-    func testTheImagePageOutranksTheLiveOne() {
-        let (state, basis) = decide(image: 0x01, live: 0x00)
-        XCTAssertEqual(state, .willClose)
-        XCTAssertEqual(basis.page, .imageConfiguration)
+        XCTAssertEqual(basis.flag, false)
+        XCTAssertNil(basis.descriptorOpen)
     }
 
     /// The File IDs are `FileTable.dat`'s own keys, the ones the panel's tree

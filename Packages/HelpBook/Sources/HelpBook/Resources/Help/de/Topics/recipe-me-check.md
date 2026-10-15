@@ -1,4 +1,4 @@
-@source-sha 8a9a8a9f5bd82322b0bfe6ff439474df17dd0a48cfeb4e32b533c5b0fdc21959
+@source-sha e8e63da75cb0e87d48ecd07c864ca8739681e4ab325317255e1e80838107d49a
 # Den ME-Bericht lesen
 
 > Was die beiden Registerkarten des ME Analyzer enthalten und wie die einzelnen Zeilen der Übersicht zu lesen sind.
@@ -54,17 +54,22 @@ Unmittelbar unter dem Zustand — auf der Registerkarte **Übersicht** ebenso wi
 
 Drei weitere Zeilen beantworten allein aus dem Dump, was vor dem Schreiben eines Images auf eine Platine gefragt wird. Keine davon stammt aus dem Ursprungsprojekt; ihre Bezeichnungen sind eigene und werden übersetzt.
 
-**Manufacturing** — ob die Plattform Manufacturing beim ersten Start dieses Images abschließt. Die Einstellung gibt es ab CSME 15 und 16, wo das Flash Image Tool sie *EOM on first boot* nennt; ältere Generationen haben keinen solchen Schalter, und für sie wird die Zeile nicht gezeigt. Werte:
+**Manufacturing** — ob die Plattform Manufacturing beim ersten Start einer Platine mit diesem Image abschließt. Zwei Dinge entscheiden das, und auf das zweite verlassen sich die Hersteller normalerweise:
 
-- **Schließt Manufacturing beim ersten Start ab** — die Einstellung ist gesetzt: Der erste Start nach dem Schreiben dieses Images schließt Manufacturing ab, sperrt also den Flash-Descriptor und, je nach der danebenstehenden Einstellung, die OEM-Konfiguration. Was gesperrt ist, lässt sich im Image danach nicht mehr öffnen.
-- **Schließt nicht ab** — die Einstellung ist nicht gesetzt. In diesem Zustand bleibt eine Platine, die noch eingerichtet werden soll; bei einem Image, das überarbeitet werden soll, ist genau das zu prüfen.
-- **Schließt beim ersten Start ab, aber der Descriptor ist offen** — die Einstellung ist gesetzt, während der Flash-Descriptor dem Prozessor und dem BIOS weiterhin das Lesen und Schreiben aller Bereiche erlaubt. Das Flash Image Tool weigert sich, ein solches Image zu bauen; beide Einstellungen wurden also von einem anderen Werkzeug oder von Hand gesetzt.
-- **Aus diesem Image nicht lesbar** — den Schalter gibt es in der Generation des Dumps, doch weder die eigene Konfiguration des Images noch sein Dateisystem enthält die Einstellung. Es wird nichts behauptet; das Fehlen eines Urteils ist selbst die Antwort.
-- **Diese Firmware hat keinen solchen Schalter** — die Firmware kennt diese Einstellung nicht. Als eigenes Urteil erscheint das in der Übersicht nicht: Für diese Generationen entfällt die Zeile ganz.
+- die **Zugriffsrechte im Flash-Descriptor**. Ein Serien-Image lässt dem Master „Host-CPU / BIOS“ die Werksrechte statt der lauter Einsen eines Service-Images, das dem Host das Überschreiben aller Bereiche erlaubt, und die Plattform schließt Manufacturing beim ersten Start ab. So wurde End of Manufacturing gehandhabt, bevor das Flash Image Tool die Einstellung unten bekam, und so werden Serien-Images ohne jede Einstellung noch heute gebaut;
+- die **Einstellung `EOM on first boot`** — `CsePlugin:EomNvar`, Bit 0 der MFS-Datei `/home/mca/eom_config` — eine ausdrückliche Anweisung darüber hinaus. Hersteller setzen sie nicht; sie wird bewusst im Flash Image Tool gesetzt.
 
-**Grundlage der Manufacturing-Entscheidung** folgt ihr, wie **Grundlage des Zustands** dem Dateisystemzustand folgt, und nennt, woher das Flag gelesen wurde — aus der OEM-Konfiguration des Images oder, wenn das Image keinen solchen Eintrag trägt, aus dem Dateisystem —, was End of Manufacturing sperrt und ob der Descriptor offen ist.
+Eine nicht gesetzte Einstellung heißt also nicht, dass Manufacturing offen bleibt: sie heißt, dass der Descriptor antwortet. Die Zeile nimmt diese Werte:
 
-Die drei Zeilen sind farbig. Eine Platine, die Manufacturing **nicht** abschließt, startet weiter und bleibt bearbeitbar: grün. Eine, die abschließt, und der Fall, in dem das Flag bei offenem Descriptor gesetzt ist, tragen denselben Ton, den der Dateisystemzustand für **Initialized** trägt — das Image legt sich fest, und was danach geschrieben wird, ist endgültig. Eine Zeile, die nur meldet, dass das Image keinen Eintrag trägt, bleibt im gewöhnlichen Ton.
+- **Schließt Manufacturing beim ersten Start ab** — die Einstellung ist gesetzt, oder sie ist nicht gesetzt und der Descriptor trägt die Werksrechte. Der erste Start nach dem Schreiben dieses Images schließt Manufacturing ab: gesperrt werden der Flash-Descriptor und, je nach `Flexible EOM settings` daneben, die OEM-Konfiguration. Was gesperrt ist, lässt sich im Image danach nicht mehr öffnen.
+- **Schließt nicht ab** — die Einstellung ist nicht gesetzt und die Zugriffsrechte im Descriptor sind offen. Das ist das Image, das eine Werkstatt sich selbst bereitet, wenn die Platine starten und bearbeitbar bleiben soll.
+- **Schließt beim ersten Start ab, aber der Descriptor ist offen** — die Einstellung ist gesetzt, während die Zugriffsrechte offen sind. Das Flash Image Tool weigert sich, ein solches Image zu bauen; beides wurde also von einem anderen Werkzeug oder von Hand gesetzt.
+- **Aus diesem Image nicht lesbar** — die Einstellung ist nicht gesetzt oder fehlt, und es wurde kein Flash-Descriptor mit der Region gelesen: so sieht eine einzeln herausgelöste ME-Region aus. Was ihre Zugriffsrechte sagen würden, ist dann unbekannt.
+- **Diese Firmware hat keinen solchen Schalter** — eine Generation, die das gar nicht entscheidet: vor CSME 11, deren Descriptoren die Rechte entnommen werden. Für sie entfällt die Zeile in der Übersicht ganz.
+
+**Grundlage der Manufacturing-Entscheidung** folgt ihr, wie **Grundlage des Zustands** dem Dateisystemzustand folgt. Sie nennt die Einstellung und woher sie gelesen wurde — aus der OEM-Konfiguration des Images oder, wenn das Image keinen solchen Eintrag trägt, aus dem Dateisystem — sowie das, was End of Manufacturing sperrt. Ist die Einstellung nicht gesetzt, sagt sie, welcher der beiden Mechanismen stattdessen wirkt: dass Manufacturing durch die Zugriffsrechte im Descriptor abgeschlossen wird, oder dass bei offenem Descriptor nichts abgeschlossen wird.
+
+Die drei Zeilen sind farbig. Eine Platine, die Manufacturing **nicht** abschließt, startet und bleibt bearbeitbar: grün. Eine, die abschließt, und der Fall, in dem die Einstellung bei offenem Descriptor gesetzt ist, tragen denselben Ton, den der Dateisystemzustand für **Initialized** trägt — das Image legt sich fest, und was danach geschrieben wird, ist endgültig. Eine Zeile, die nur meldet, dass das Image keinen Eintrag trägt, bleibt im gewöhnlichen Ton.
 
 Was die **Platine, von der der Dump stammt**, bereits getan hat, wird nicht gemeldet. Das Dateisystem einer Region von einer Platine im Betrieb verzeichnet, dass Manufacturing dort abgeschlossen wurde; für die Platine, auf die dieses Image erst geschrieben wird, besagt das nichts — die Zeile antwortet für den nächsten ersten Start.
 
