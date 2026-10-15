@@ -204,15 +204,15 @@ final class MEAToolFlowTests: XCTestCase {
     }
 
     /// The tab switch — the same control a person clicks. The tree lives on the
-    /// second segment, so a test that wants the outline asks for it here.
+    /// last segment, so a test that wants the outline asks for it here.
     private func showFullTree() throws {
         let panel = try panel()
         let tabs = try XCTUnwrap(
             descendants(of: panel, NSSegmentedControl.self).first {
-                $0.segmentCount == 2 && $0.label(forSegment: 1) == "Full Info"
+                $0.label(forSegment: 2) == "Full Info"
             },
-            "the panel's own Summary / Full Tree switch")
-        tabs.selectedSegment = 1
+            "the panel's own Summary / Configuration / Full Info switch")
+        tabs.selectedSegment = 2
         tabs.sendAction(tabs.action, to: tabs.target)
         window?.layoutIfNeeded()
     }
@@ -237,10 +237,11 @@ final class MEAToolFlowTests: XCTestCase {
         let panel = try panel()
         let tabs = try XCTUnwrap(
             descendants(of: panel, NSSegmentedControl.self).first {
-                $0.segmentCount == 2
+                $0.segmentCount == 3
             })
         XCTAssertEqual(tabs.label(forSegment: 0), "Summary")
-        XCTAssertEqual(tabs.label(forSegment: 1), "Full Info")
+        XCTAssertEqual(tabs.label(forSegment: 1), "Configuration")
+        XCTAssertEqual(tabs.label(forSegment: 2), "Full Info")
         XCTAssertEqual(tabs.selectedSegment, 0)
 
         let rows = try shownRows(of: panel)
@@ -303,7 +304,7 @@ final class MEAToolFlowTests: XCTestCase {
         let copy = try button(named: "Copy Summary", in: panel)
         let picture = try button(named: "Copy Screenshot", in: panel)
         let tabs = try XCTUnwrap(
-            descendants(of: panel, NSSegmentedControl.self).first { $0.segmentCount == 2 })
+            descendants(of: panel, NSSegmentedControl.self).first { $0.segmentCount == 3 })
         XCTAssertTrue(isOnScreen(copy, under: panel), "both are up on the Summary tab")
         XCTAssertTrue(isOnScreen(picture, under: panel))
         let inPanel = { (view: NSView) in view.convert(view.bounds, to: panel) }
@@ -867,9 +868,9 @@ final class MEAToolFlowTests: XCTestCase {
         // and its ancestors opened.
         let panel = try panel()
         let tabs = try XCTUnwrap(descendants(of: panel, NSSegmentedControl.self).first {
-            $0.segmentCount == 2 && $0.label(forSegment: 1) == "Full Info"
+            $0.label(forSegment: 2) == "Full Info"
         })
-        XCTAssertEqual(tabs.selectedSegment, 1, "the parked tab comes back")
+        XCTAssertEqual(tabs.selectedSegment, 2, "the parked tab comes back")
         let outlineAfter = try outline()
         let row = outlineAfter.selectedRow
         XCTAssertGreaterThanOrEqual(row, 0, "the parked row comes back selected")
