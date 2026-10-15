@@ -1119,9 +1119,12 @@ public actor MEFirmwareAnalyzer {
         let bootGuardProfile = Self.regionBytes("CDMD", regions: regions,
                                                 region: region, baseOffset: baseOffset)
             .flatMap(BootGuardReader.profile(in:))
-        let oemPublicKeyHash = Self.regionBytes("UEP", regions: regions,
-                                                region: region, baseOffset: baseOffset)
-            .flatMap(BootGuardReader.oemPublicKeyHash(in:))
+        // An image with no UEP area at all is not a missing reading: it is the
+        // finding that this layout has none where the key would be
+        // (`OEMKeyHash.unrecognized`), which is what CSME 11 answers.
+        let oemPublicKeyHash = BootGuardReader.oemPublicKeyHash(
+            in: Self.regionBytes("UEP", regions: regions,
+                                 region: region, baseOffset: baseOffset) ?? Data())
         let oemCustomized = OEMDetector.oemCustomized(
             fpt: fpt, bootPartitions: bootPartitions, codePartition: codePartition,
             in: region, baseOffset: baseOffset)

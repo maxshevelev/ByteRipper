@@ -122,9 +122,9 @@ public enum MEACurator {
                                    a.bootGuardProfile.map(MEAText.bootGuardProfile)
                                        ?? L("No profile record in this image", in: language),
                                    tone: MEATones.bootGuardProfile(a.bootGuardProfile)))
-            if let hash = a.oemPublicKeyHash {
+            if let key = a.oemPublicKeyHash {
                 fields.append(MEAField(L("OEM Public Key Hash", in: language),
-                                       MEAText.oemPublicKeyHash(hash)))
+                                       MEAText.oemPublicKeyHash(key, in: language)))
             } else if a.manifest != nil {
                 fields.append(MEAField(L("OEM Public Key Hash", in: language),
                                        L("No key material in this image", in: language)))

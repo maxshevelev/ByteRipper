@@ -176,62 +176,86 @@ final class BootGuardReaderTests: XCTestCase {
 
     // MARK: - The OEM public key hash
 
-    /// The Z Flow dump's own hash: a SHA-384 the UEP area holds six copies of,
-    /// in two groups of three.
+    /// The Z Flow dump's own hash: a SHA-384 that sits 0xA0 bytes into the UEP
+    /// area's entry, and again 0x10A0 in where the area has its second half.
     private static let oemHash = "05C697663A75E912B7C4B553E885E1E4EF9AA04276C26A6630320A755AC90B1E0981C11D051A8C90D202D2E6FD3E8452"
 
-    private func uep(holding hashHex: String, copies: Int,
-                     filler: UInt8 = 0xFF) -> Data {
-        var hash: [UInt8] = []
-        var digits = Substring(hashHex)
-        while digits.count >= 2 {
-            let pair = digits.prefix(2)
-            digits = digits.dropFirst(2)
-            hash.append(UInt8(pair, radix: 16) ?? 0)
-        }
-        // One copy every 0x100 bytes, the spacing the real area's entries have,
-        // inside a page big enough to hold them all.
-        var area = Data(repeating: filler, count: 0x2000)
-        for copy in 0..<copies {
-            let at = 0x40 + copy * 0x100
-            area.replaceSubrange(at..<(at + hash.count), with: Data(hash))
+    /// An area with one entry: a container at 0x20, the key field of each half
+    /// at its established offset, everything else erased — which is what a UEP
+    /// area looks like (`/home/mca` aside, nothing else of it).
+    private func uep(first: Data?, second: Data?,
+                     container: String = "$UEPC") -> Data {
+        var area = Data(repeating: 0xFF, count: 0x2000)
+        let signature = Data(container.utf8)
+        area.replaceSubrange(0x20..<(0x20 + signature.count), with: signature)
+        for (half, field) in [(0, first), (0x1000, second)] {
+            guard let field else { continue }
+            let at = 0x20 + 0xA0 + half
+            area.replaceSubrange(at..<(at + field.count), with: field)
         }
         return area
     }
 
-    func testTheHashIsFoundAndPrintedAsMFITPrintsIt() {
-        let area = uep(holding: Self.oemHash, copies: 6)
-        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: area), Self.oemHash)
+    private func hashBytes(_ hex: String) -> Data {
+        var bytes: [UInt8] = []
+        var digits = Substring(hex)
+        while digits.count >= 2 {
+            bytes.append(UInt8(digits.prefix(2), radix: 16) ?? 0)
+            digits = digits.dropFirst(2)
+        }
+        return Data(bytes)
     }
 
-    /// One copy is not the hash the area repeats: a value that appears once is
-    /// as likely to be a pointer or a record's own bytes.
-    func testASingleCopyIsNotAKey() {
-        XCTAssertNil(BootGuardReader.oemPublicKeyHash(in: uep(holding: Self.oemHash, copies: 1)))
+    func testTheKeyIsReadOutOfTheEntrysField() {
+        let key = hashBytes(Self.oemHash)
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: key, second: key)),
+                       .hash(Self.oemHash))
+        // The older generations write one half only — the second is erased, and
+        // the key is still there.
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: key, second: nil)),
+                       .hash(Self.oemHash))
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: key, second: Data(repeating: 0xFF, count: 48))),
+                       .hash(Self.oemHash))
+        // An area whose first half was never written but whose second was.
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: Data(repeating: 0xFF, count: 48), second: key)),
+                       .hash(Self.oemHash))
     }
 
-    /// Two copies are not it either, and that is the case CSME 18 put in front
-    /// of this reader: a value once per half of the area, which the established
-    /// layouts never show (they carry three per half, in the half that has
-    /// them). The entry layout is unknown, so a value that does not have the
-    /// established shape is left alone rather than printed as a key.
-    func testTwoCopiesDoNotMakeTheEstablishedShape() {
-        XCTAssertNil(BootGuardReader.oemPublicKeyHash(in: uep(holding: Self.oemHash, copies: 2)))
-        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(holding: Self.oemHash, copies: 3)),
-                       Self.oemHash)
+    /// A field of zeros is MFIT's own "OEM signing is disabled" — a finding, not
+    /// a missing reading. CSME 12 and a cleaned CSME 16.1 image answer this.
+    func testAZeroedFieldSaysSigningIsDisabled() {
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(
+            in: uep(first: Data(repeating: 0x00, count: 48), second: nil)), .allZeros)
     }
 
-    /// An erased area holds nothing, and must not be read as a key of zeroes.
-    func testAnErasedAreaHasNoKey() {
-        XCTAssertNil(BootGuardReader.oemPublicKeyHash(in: Data(repeating: 0xFF, count: 0x2000)))
+    /// An erased field is an area never written.
+    func testAnErasedFieldIsItsOwnFinding() {
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: nil, second: nil)), .erased)
     }
 
-    /// A 48-byte run of zeroes — MFIT's "OEM signing is disabled" setting — is
-    /// not claimed as a key: an unwritten area is full of them, and a 48-byte
-    /// window of zeros repeats wherever the area is padding. The row says the
-    /// image carries no key instead, and the help says what the two cases mean.
-    func testAnAllZeroHashIsNotClaimed() {
-        XCTAssertNil(BootGuardReader.oemPublicKeyHash(
-            in: uep(holding: String(repeating: "0", count: 96), copies: 3, filler: 0x00)))
+    /// A field holding something that is not a key — a pointer, a length, a
+    /// record header — is a layout this reader does not walk, and says so
+    /// rather than printing those bytes as a key. The CSME 14 dump at hand is
+    /// this case.
+    func testAFieldThatIsNotAKeyIsNotReadAsOne() {
+        var pointer = Data(repeating: 0x00, count: 48)
+        pointer[0] = 0x02; pointer[1] = 0x40; pointer[2] = 0x3E; pointer[3] = 0x86
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: pointer, second: nil)),
+                       .unrecognized)
+    }
+
+    /// Two halves carrying different keys mean the offsets are not this image's
+    /// layout: a key is per vendor, and an image has one.
+    func testDisagreeingHalvesAreNotAKey() {
+        let other = hashBytes(String(Self.oemHash.dropFirst(2)) + "05")
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(
+            in: uep(first: hashBytes(Self.oemHash), second: other)), .unrecognized)
+    }
+
+    /// No container, no entry to read — CSME 11 has no such area at all.
+    func testNoContainerIsNoLayout() {
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: Data(repeating: 0xFF, count: 0x2000)),
+                       .unrecognized)
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: Data()), .unrecognized)
     }
 }
