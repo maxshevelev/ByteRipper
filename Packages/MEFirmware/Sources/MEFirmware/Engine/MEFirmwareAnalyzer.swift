@@ -1046,15 +1046,20 @@ public actor MEFirmwareAnalyzer {
         // hash it carries. Ours; the addresses, the values and the ground truth
         // behind each are in Skills/me-eom-structures/reference/structures.md.
         //
-        // The Manufacturing switch has two pages, and they answer different
-        // questions. The OEM Configuration (FITC) partition holds the records
-        // the build wrote — the setting the platform applies when it enters End
-        // of Manufacturing. The MFS volume's own `/home/mca/eom` file holds
-        // what the file system has now, which is the only evidence a dump can
-        // carry that the board has closed Manufacturing already. Both are found
-        // by the FTBL File IDs `FileTable.dat` gives those files, which is why
-        // the live page needs the database: without it a built image's files
-        // carry no IDs, and the page is left unread rather than guessed at.
+        // The Manufacturing switch is one setting written in two places. The
+        // OEM Configuration (FITC) partition holds the record the build wrote —
+        // the setting the platform applies when it enters End of Manufacturing
+        // — and the MFS volume's own files hold the record as the file system
+        // carries it, which is the only copy in a region handed over without
+        // its OEM Configuration partition. Both are found by the FTBL File IDs
+        // `FileTable.dat` gives those files, which is why the live page needs
+        // the database: without it a built image's files carry no IDs, and the
+        // page is left unread rather than guessed at.
+        //
+        // What the *board* has already done — `/home/mca/eom` in the live file
+        // system — is read for nothing but the sake of knowing the file system
+        // was read: the row answers for the next first boot, not for the
+        // machine the dump came from (`ManufacturingState`).
         var liveFileIDs: [Int: Int] = [:]
         var liveFilesResolved = false
         if let info = mfsInfo, let table = fileTable, !info.files.isEmpty,
@@ -1096,7 +1101,6 @@ public actor MEFirmwareAnalyzer {
         let fitcHasSwitch = (oemConfiguration?.recordsByID ?? [])
             .contains { $0.fileID == ManufacturingDecoder.FileID.eomConfig }
         let manufacturing = ManufacturingDecoder.decide(ManufacturingDecoder.Inputs(
-            eom: liveFileIDs[ManufacturingDecoder.FileID.eom],
             imageEOMConfig: imageEOMConfig,
             liveEOMConfig: liveFileIDs[ManufacturingDecoder.FileID.eomConfig],
             // The descriptor's BIOS master: all ones in both masks is a

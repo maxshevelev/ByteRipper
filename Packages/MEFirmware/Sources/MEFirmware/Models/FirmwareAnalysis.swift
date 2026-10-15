@@ -377,18 +377,25 @@ public struct MFSStateBasis: Codable, Sendable, Equatable {
 }
 
 /// What the platform will do with End of Manufacturing — the question a bench
-/// asks of a dump it is about to flash ("will this one close Manufacturing on
-/// the first boot?"). Ours: MEAnalyzer has no such row.
+/// asks of a dump it is about to write to a board whose chipset is fresh: will
+/// the first boot of *this image* close Manufacturing? Ours: MEAnalyzer has no
+/// such row.
 ///
 /// The switch is CSME 15/16's `CsePlugin:EomNvar:EOM#EomFirstBootEnabled`, which
 /// MFIT writes into the image's **OEM Configuration** partition as a record of
 /// the MFS file `/home/mca/eom_config`: bit 0 is the flag, bits 1–2 are
 /// `FlexibleEomSettings` (what EOM commits — `Lock Descriptor and OEM Configs`,
-/// `Lock OEM Configs Only`, `Lock Descriptor Only`, `Do not lock…`). The
-/// *live* file system carries the same two records once the platform has run,
-/// and the `/home/mca/eom` record beside them is the result: 1 means
-/// Manufacturing has been closed on this board already. Working out both pages
-/// and what each says is `ManufacturingDecoder` in `FileSystem/Manufacturing.swift`.
+/// `Lock OEM Configs Only`, `Lock Descriptor Only`, `Do not lock…`). The record
+/// is read from the image's own configuration first — that is the page the
+/// platform applies when it enters End of Manufacturing — and from the live
+/// file system only when the image carries none, which is what an extracted
+/// region without its OEM Configuration partition looks like. Deciding it is
+/// `ManufacturingDecoder` in `FileSystem/Manufacturing.swift`.
+///
+/// What the *board* has already done is not reported: `/home/mca/eom` in the
+/// live file system records that Manufacturing was closed on the board the dump
+/// was taken from, and that says nothing about the machine the image is about
+/// to be written to. The row answers for the next first boot only.
 ///
 /// The engine never reads the PCH fuses themselves — those are burned into the
 /// chip, not into a dump, and no dump can say what they hold. What this says is
@@ -399,9 +406,6 @@ public enum ManufacturingState: String, Codable, Sendable, CaseIterable {
     /// The flag is clear: the platform boots on with Manufacturing open, which
     /// is the state a bench must not ship a machine in.
     case willNotClose
-    /// The live record `/home/mca/eom` reads 1: this board has closed
-    /// Manufacturing already, whatever the image now says.
-    case closed
     /// The flag is set while the descriptor's BIOS master is open (its read and
     /// write masks are all ones). MFIT refuses to build such an image —
     /// `CsePlugin:EomNvar` answers *"When 'Host CPU / BIOS' Read and Write
@@ -425,18 +429,14 @@ public enum ManufacturingState: String, Codable, Sendable, CaseIterable {
 public struct ManufacturingBasis: Codable, Sendable, Equatable {
     /// Which page the flag was read from.
     public enum Page: String, Codable, Sendable {
-        /// The live MFS file `/home/mca/eom_config` — what the platform has in
-        /// its file system now.
+        /// The live MFS file `/home/mca/eom_config` — what the file system
+        /// holds now.
         case liveMFS
         /// The OEM Configuration partition's record for that file — what the
         /// build wrote into the image, which the platform applies at EOM.
         case imageConfiguration
     }
 
-    /// The live `/home/mca/eom` record: 1 = Manufacturing closed, 0 = not.
-    /// nil when the volume carries no such file (a built image the platform
-    /// has never run) or its File IDs could not be resolved.
-    public var eom: Int? = nil
     /// The flag: **bit 0** of `/home/mca/eom_config`.
     public var flag: Bool? = nil
     /// **Bits 1–2** of the same record: `FlexibleEomSettings`.
@@ -453,10 +453,9 @@ public struct ManufacturingBasis: Codable, Sendable, Equatable {
     /// is a missing database rather than a fact about the firmware.
     public var liveFilesResolved: Bool = false
 
-    public init(eom: Int? = nil, flag: Bool? = nil, flexible: Int? = nil,
+    public init(flag: Bool? = nil, flexible: Int? = nil,
                 page: Page? = nil, descriptorOpen: Bool? = nil,
                 liveFilesResolved: Bool = false) {
-        self.eom = eom
         self.flag = flag
         self.flexible = flexible
         self.page = page
@@ -2436,13 +2435,16 @@ public enum EngineModelRevision {
     /// None of them is upstream's; the sync comparison leaves them out.
     ///
     /// 41 adds the three facts a repair bench asks of a dump it is about to
-    /// flash, none of them upstream's: `manufacturingState` with
+    /// write to a board, none of them upstream's: `manufacturingState` with
     /// `manufacturingBasis` (whether the platform closes End of Manufacturing
-    /// on the image's first boot, and the two pages of records plus the
-    /// descriptor that decided it), `bootGuardProfile` (the profile the image is
-    /// built for, out of the CDMD configuration's JSON) and `oemPublicKeyHash`
-    /// (the SHA-384 the UEP area carries). `analyze` gained the optional
-    /// `descriptorBytes` they need for the descriptor's BIOS master — an
-    /// extracted ME region has no descriptor of its own, and the basis says so.
+    /// on the image's first boot, from the `/home/mca/eom_config` record of
+    /// the image's own OEM Configuration — and of the live file system where
+    /// the image carries none — plus the descriptor that makes the
+    /// flag-with-an-open-descriptor combination its own verdict),
+    /// `bootGuardProfile` (the profile the image is built for, out of the CDMD
+    /// configuration's JSON) and `oemPublicKeyHash` (the SHA-384 the UEP area
+    /// carries). `analyze` gained the optional `descriptorBytes` they need for
+    /// the descriptor's BIOS master — an extracted ME region has no descriptor
+    /// of its own, and the basis says so.
     public static let current = 41
 }
