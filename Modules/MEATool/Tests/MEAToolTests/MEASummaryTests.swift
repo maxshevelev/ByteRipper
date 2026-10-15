@@ -919,6 +919,12 @@ final class MEASummaryTests: XCTestCase {
         // short: the flag, where it was read, what EOM commits.
         let basis = value("Manufacturing basis", in: rows)?.text(in: .english)
         XCTAssertEqual(basis, "The End of Manufacturing flag is set in the image's OEM Configuration. End of Manufacturing will lock the descriptor and the OEM configuration.")
+        // The basis is evidence, not a verdict: it is drawn as an ordinary
+        // value, like the File System State's basis, while the verdict above it
+        // carries the colour (`Design/ME_STRUCTURES.md`, the tones).
+        XCTAssertEqual(tone("Manufacturing basis", in: rows), .standard)
+        XCTAssertFalse(rows.first { $0.label == "Manufacturing basis" }?.isEmphasized == true)
+        XCTAssertTrue(rows.first { $0.label == "Manufacturing" }?.isEmphasized == true)
 
         let willClose = try analysis([
             "family": "csme", "manifest": manifestJSON(),

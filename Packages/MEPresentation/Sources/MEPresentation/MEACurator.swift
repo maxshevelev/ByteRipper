@@ -114,8 +114,7 @@ public enum MEACurator {
                                    tone: MEATones.manufacturingState(state)))
             if let basis = a.manufacturingBasis {
                 fields.append(MEAField(L("Manufacturing basis", in: language),
-                                       MEAText.manufacturingBasis(basis, in: language),
-                                       tone: MEATones.manufacturingBasis(basis)))
+                                       MEAText.manufacturingBasis(basis, in: language)))
             }
         }
         if a.family == .csme, a.version.major >= 11 {

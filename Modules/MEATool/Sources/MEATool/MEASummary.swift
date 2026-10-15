@@ -293,8 +293,7 @@ public enum MEASummary {
                                           tone: MEATones.manufacturingState(state)))
                 if let basis = analysis.manufacturingBasis {
                     rows.append(MEASummaryRow(L("Manufacturing basis", in: language),
-                                              .value(MEAText.manufacturingBasis(basis, in: language)),
-                                              tone: MEATones.manufacturingBasis(basis)))
+                                              .value(MEAText.manufacturingBasis(basis, in: language))))
                 }
             } else if identified {
                 rows.append(MEASummaryRow(L("Manufacturing", in: language), .comingSoon))
