@@ -908,7 +908,7 @@ final class MEASummaryTests: XCTestCase {
             "oemPublicKeyHash": String(repeating: "05", count: 48),
         ])
         let rows = tableRows(protected)
-        XCTAssertEqual(value("Manufacturing", in: rows), .value("Will close on first boot"))
+        XCTAssertEqual(value("Manufacturing", in: rows), .value("Will close on the EOM flag"))
         // It will close: the tone the File System State draws for Initialized.
         XCTAssertEqual(tone("Manufacturing", in: rows), .caution)
         XCTAssertEqual(value("Boot Guard", in: rows), .value("5 - FVME"))
@@ -931,7 +931,7 @@ final class MEASummaryTests: XCTestCase {
             "bootGuardProfile": "0",
         ])
         XCTAssertEqual(value("Manufacturing", in: tableRows(willClose)),
-                       .value("Will close on first boot"))
+                       .value("Will close on the EOM flag"))
         XCTAssertEqual(tone("Manufacturing", in: tableRows(willClose)), .caution)
         // Profile 0 is Boot Guard switched off — the board boots unverified,
         // which is a state a bench works with: green.
@@ -967,7 +967,7 @@ final class MEASummaryTests: XCTestCase {
         ])
         let rows = tableRows(a)
         XCTAssertEqual(value("Manufacturing", in: rows),
-                       .value("Will close on first boot"))
+                       .value("Will close on the descriptor's rights"))
         XCTAssertEqual(tone("Manufacturing", in: rows), .caution)
         // No flag in this image: the descriptor is what the basis names.
         XCTAssertEqual(value("Manufacturing basis", in: rows)?.text(in: .english),

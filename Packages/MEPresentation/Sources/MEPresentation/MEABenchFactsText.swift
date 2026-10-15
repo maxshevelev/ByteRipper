@@ -10,15 +10,23 @@ import MEFirmware
 /// and each of them says what the *dump* shows rather than what a vendor
 /// usually does.
 extension MEAText {
-    /// The Manufacturing verdict as one phrase.
-    public static func manufacturingState(_ state: ManufacturingState, in language: AppLanguage) -> String {
+    /// The Manufacturing verdict as one phrase, naming the mechanism that
+    /// decided it: two of them do, and which one is at work is the difference
+    /// between an image the workshop built to stay open and one straight from a
+    /// manufacturer (`ManufacturingBasis.flag` is the one it turns on).
+    public static func manufacturingState(_ state: ManufacturingState,
+                                          basis: ManufacturingBasis?,
+                                          in language: AppLanguage) -> String {
+        let byFlag = basis?.flag == true
         switch state {
         case .willClose:
-            return L("Will close on first boot", in: language)
+            return byFlag
+                ? L("Will close on the EOM flag", in: language)
+                : L("Will close on the descriptor's rights", in: language)
         case .willNotClose:
             return L("Will not close", in: language)
         case .unexpectedCombination:
-            return L("Close on first boot, with the descriptor open", in: language)
+            return L("Will close on the EOM flag, with the descriptor open", in: language)
         case .unknown:
             return L("Not readable from this image", in: language)
         case .noSwitch:
