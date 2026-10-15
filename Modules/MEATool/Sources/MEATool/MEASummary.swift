@@ -316,13 +316,13 @@ public enum MEASummary {
                     .value(L("No profile record in this image", in: language)),
                     tone: MEATones.bootGuardProfile(nil)))
             }
-            // A key the region carries is a fact about the bytes and shows
-            // wherever it was read; "there is no key" is a claim about a file
-            // the engine had to name first, so it waits for identification —
-            // the same rule every other absence on this table follows.
-            if let hash = analysis.oemPublicKeyHash {
+            // The reading says which of the four findings it is, so the row
+            // shows wherever the engine has one; nil means a reading taken
+            // before the model carried the field at all, and waits for
+            // identification like every other absence on this table.
+            if let key = analysis.oemPublicKeyHash {
                 rows.append(MEASummaryRow(L("OEM Public Key Hash", in: language),
-                                          .value(MEAText.oemPublicKeyHash(hash)),
+                                          .value(MEAText.oemPublicKeyHash(key, in: language)),
                                           tone: .standard))
             } else if identified {
                 rows.append(MEASummaryRow(

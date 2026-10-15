@@ -1684,3 +1684,6 @@
 "Will close on the EOM flag" = "Schließt über das EOM-Flag ab";
 "Will close on the descriptor's rights" = "Schließt über die Zugriffsrechte im Descriptor ab";
 "Will close on the EOM flag, with the descriptor open" = "Schließt über das EOM-Flag ab, Descriptor offen";
+"Not set (all zeros)" = "Nicht gesetzt (nur Nullen)";
+"Not set (the area is erased)" = "Nicht gesetzt (Bereich gelöscht)";
+"Layout not recognized" = "Aufbau nicht erkannt";

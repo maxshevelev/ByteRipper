@@ -64,15 +64,22 @@ Manufacturing was closed on the machine the dump came from. That is a fact about
 the source board, not about the image, and the row does not report it.
 
 **The UEP area** — an FPT region named `UEP` (0x2A0000 in the Z Flow dump,
-8 KiB), opened by the ASCII container `$UEPC`. It holds entries that carry a
+8 KiB), opened by the ASCII container `$UEPC`. It holds an entry that carries a
 window into the BIOS region (an address and a size), a 32-bit sum, a Key
-Manifest ID, and the **OEM public key hash** — a SHA-384, 48 bytes — which
-appears six times in the area in two groups of three, and six more times in the
-MFS key table. The entry layout is not documented anywhere that could be found,
-so the hash is found by shape: the 48-byte value the area repeats that carries
-key material rather than fill, with a window slid into the padding losing to the
-alignment that is all key. That heuristic is what to replace when the entry
-layout is worked out.
+Manifest ID, and the **OEM public key hash** — a SHA-384, 48 bytes — which sits
+**0xA0 bytes into the entry**, and again 0x10A0 in where the area's second half
+is written. The area's own layout is not documented anywhere that could be
+found; that one offset was measured off the container and then checked against
+every dump at hand, across CSME 12 to 18, where it holds the same value the
+repeated-window search this replaced used to find (and reads two images that
+search could not).
+
+The field is what the row reads, and what it holds is the finding:
+**all zeros** is MFIT's own "OEM signing is disabled", **all `FF`** an area never
+written, and **anything else** a layout this reader does not walk — CSME 14's
+entry holds a pointer-like value there, CSME 11 has no area at all. The row says
+which, because they are three states of a boot chain, not one silence. The rest
+of the entry — the window, the sum, the `0x4FE` word — is still unknown.
 
 **The CDMD partition** — an FPT region named `CDMD` (0x29D000 in the Z Flow
 dump, 0x3000) whose configuration opens with `FIT AS A FIDDLE` and carries small
@@ -94,20 +101,29 @@ not that the fact is absent from the platform.
 
 | generation (dumps at hand) | descriptor rights | EOM flag | Boot Guard profile | OEM key hash |
 |---|---|---|---|---|
-| CSME 18 (EliteBook 630 G11) | v2 ✓ — the row's gate | **not found**: the FITC partition is there, the `eom_config` record is not | **not found** — CDMD present, no `BtGuardProfileConfig` | **not found** — the only repeated value sits once per half of the UEP area, which is not the established shape |
+| CSME 18 (EliteBook 630 G11) | v2 ✓ — the row's gate | **not found**: the FITC partition is there, the `eom_config` record is not | **not found** — CDMD present, no `BtGuardProfileConfig` | ✓ read — `0D7C0D45…`, the same key as its sibling at CSME 16.1.30 |
 | CSME 16.1 (Z Flow, Legion, Asus, Dell) | v2 ✓ | ✓ FITC record and the live one | ✓ CDMD JSON — 5 and 0 seen | ✓ UEP, 6 + 6 copies — **verified** for the Z Flow family |
 | CSME 16.0 (Legion) | v2 ✓ | ✓ | ✓ (5, 0) | ✓ |
 | CSME 15 (Lenovo 1.bin, 2.rom, corporate) | v2 ✓ | ✓ records present; the live page is absent on a never-booted build | **not found** — no CDMD record in any of them | ✓ UEP — **unverified** |
-| CSME 14 (Lenovo) | v2 ✓ | **no such setting**: the configuration records are the named (0x1C) layout and hold no `eom_config` | **not found** — no CDMD partition at all in that image | **not found** — the UEP's repeated 48-byte values are pointers, not a key |
-| CSME 12 (Dell, Lenovo, HP) | v2 ✓ | no such setting | **not found** | **not found** — no repeated 48-byte value in the region |
-| CSME 11 (corporate) | v2 ✓ | no such setting | **not found** — no CDMD and no `$UEP` container at all | **not found** |
+| CSME 14 (Lenovo) | v2 ✓ | **no such setting**: the configuration records are the named (0x1C) layout and hold no `eom_config` | **not found** — no CDMD partition at all in that image | **layout not recognized** — the field holds a pointer-like value, not a key |
+| CSME 12 (Dell, Lenovo, HP) | v2 ✓ | no such setting | **not found** | **all zeros** — the field is there and reads zeros: signing disabled |
+| CSME 11 (corporate) | v2 ✓ | no such setting | **not found** — no CDMD and no `$UEP` container at all | **layout not recognized** — no area to read the field from |
 | ME 6, 7, 10 (Apple) | v1 — not read | — | — | — |
 
 Two things this table is not. It is not a claim about the generation — one dump
 of a generation is one dump — and the key hash column is not a claim about the
 *value* unless it says verified: the Z Flow family's hash is the one a field
-tool's report confirms byte for byte, and every other value is what the shape
-rule picked, unconfirmed by any tool.
+tool's report confirms byte for byte, and every other value is read off the
+entry's field but unconfirmed by a tool.
+
+**The cross-check to make.** The owner has MFIT's build report and ECFinder's
+capture for other generations; those name the profile and print the OEM public
+key hash as text. Matching them against this reader is the test: the key the
+reader prints has to be the key the tool prints, byte for byte, on the same
+dump — and where the tool prints one and the reader says "not set" or "layout
+not recognized", the reader's offsets are wrong for that generation and the
+entry has to be read properly. Bring the two together, dump by dump
+(`Skills/me-eom-structures` holds the oracle that prints the same facts).
 
 **A key is per vendor, and the shapes are what tell them apart.** Two vendors'
 images cannot carry the same hash, so a value that turns up under two of them is
@@ -164,12 +180,12 @@ FITC holds it under another File ID, or the setting is not CSME 15's any more.
 The same MFIT experiment answers it: build two images differing only in `EOM on
 first boot` and diff.
 
-**The UEP entry layout, which would end the shape rule.** Today a value is
-claimed only where it occurs at least three times in the area, once per entry
-group — the least the established layouts show. The layout itself is not
-documented, so a region laid out differently is answered "no key material"
-rather than by a guess at which of its 48-byte values is the key: CSME 18 is
-that case. Reading the entries by their fields is what would read it.
+**The rest of the UEP entry.** One field of it is measured — the key hash at
++0xA0 — and the window, the 32-bit sum and the `0x4FE` word beside it are not.
+CSME 14's entry holds something else where CSME 12 to 18 hold the key, which is
+either a different layout at that generation or a field this reader mistakes for
+the key's; its own MFIT report and ECFinder capture would say which, since
+ECFinder prints an OEM key hash for the images it understands.
 `mfit.exe` carries its settings database as
 zlib-embedded XML that gives a *field map*: for each setting, the structure and
 the bit offset it is written at. For the FPF/UEP word it is

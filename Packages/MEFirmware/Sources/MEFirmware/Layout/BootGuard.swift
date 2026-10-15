@@ -57,63 +57,86 @@ enum BootGuardReader {
         return nil
     }
 
-    /// The OEM public key hash the UEP area carries, as uppercase hex — or nil
-    /// when the area holds no such value, or none it can vouch for: an image
-    /// whose UEP was wiped, a generation whose UEP is laid out differently, or
-    /// one whose key is simply not there.
+    /// The OEM public key hash the UEP area holds, and what its entry says
+    /// where there is no key to read.
     ///
-    /// The hash is a SHA-384 the area repeats — six copies in the images this
-    /// was established on, in two groups of three, one group per half of the
-    /// 8 KiB area, each group a set of entries of the same record length. The
-    /// **three per half is what makes it readable**: the layout is not
-    /// documented anywhere, so the value is found by shape, and a value that
-    /// occurs once or twice in the area is some other 48 bytes of the same
-    /// entry — a second key, a manifest hash, a neighbour. Claiming one of
-    /// those would put a wrong key in front of a technician, and the rule here
-    /// is that the row says nothing it cannot substantiate.
+    /// The key is a 48-byte SHA-384 and it sits **inside the area's entry**, at
+    /// a fixed offset from the container that opens the area (`$UEPC`, or the
+    /// `$UEP` this project's earlier note saw): 0xA0 bytes in, and again 0x10A0
+    /// in where the area carries its second half. That is the field, not a
+    /// shape: reading it gives the same value the repeated-window search this
+    /// replaced found on every image at hand — and it reads images that search
+    /// could not, because the offsets are the entry's own rather than a count
+    /// of how often a value happens to appear.
     ///
-    /// So the candidate is the most repeated 48-byte value that looks like key
-    /// material rather than a fill pattern or a pointer (`isKeyMaterial`) and
-    /// that **occurs at least three times** in the area. That is the same
-    /// reading the research oracle makes over a dump
-    /// (`Skills/me-eom-structures`), so the panel and the oracle agree.
-    static func oemPublicKeyHash(in uep: Data) -> String? {
-        guard uep.count >= 48 else { return nil }
-        var best: (hash: Data, keyBytes: Int, count: Int)? = nil
-        var seen = Set<Data>()
-        var offset = 0
-        while offset + 48 <= uep.count {
-            let candidate = uep.subdata(in: (uep.startIndex + offset)..<(uep.startIndex + offset + 48))
-            offset += 4
-            guard !seen.contains(candidate), isKeyMaterial(candidate) else { continue }
-            seen.insert(candidate)
-            // How much of the window is not the area's own fill: the key is the
-            // alignment that is *all* key, while a window slid into the padding
-            // — the same bytes at the same places, as often — holds fill at one
-            // end. Ranked before the copy count, because a shift matches every
-            // copy the true alignment does.
-            let keyBytes = candidate.filter { $0 != 0x00 && $0 != 0xFF }.count
-            guard keyBytes >= 40 else { continue }
-            let count = occurrences(of: candidate, in: uep)
-            // Three: the least the established layouts show, one group in the
-            // half of the area that carries them. Two is a different field.
-            guard count >= 3 else { continue }
-            if best == nil || (keyBytes, count) > (best!.keyBytes, best!.count) {
-                best = (candidate, keyBytes, count)
-            }
+    /// Where the field holds no key, what it holds is the finding:
+    ///
+    ///   * all zeros — the setting MFIT calls "OEM signing is disabled";
+    ///   * all `0xFF` — an area never written, so no key was ever put there;
+    ///   * anything else, or no container to find the entry from, or two halves
+    ///     that disagree — an area this reader does not know how to walk
+    ///     (CSME 14's entry holds something else, CSME 11 has no area at all).
+    ///
+    /// The row says which of those it is rather than "no key", because they are
+    /// three different states of a boot chain. What it never does is print a
+    /// neighbouring field as if it were the key: a key is per vendor, and two
+    /// vendors' images cannot carry the same one.
+    static func oemPublicKeyHash(in uep: Data) -> OEMKeyHash {
+        guard let container = uepContainerOffset(in: uep) else { return .unrecognized }
+        // The entry's own key field, in each half the area has. The first
+        // decides; the second corroborates, and a disagreement means the
+        // offsets above are not this image's layout.
+        let halves = [container + keyFieldOffset, container + 0x1000 + keyFieldOffset]
+        let fields = halves.compactMap { at -> OEMKeyHash? in
+            guard at >= 0, at + 48 <= uep.count else { return nil }
+            let start = uep.startIndex + at
+            let block = uep.subdata(in: start..<(start + 48))
+            if block.allSatisfy({ $0 == 0x00 }) { return .allZeros }
+            if block.allSatisfy({ $0 == 0xFF }) { return .erased }
+            return isKeyMaterial(block) ? .hash(hex(block)) : .unrecognized
         }
-        return best.map { hex($0.hash) }
+        guard let first = fields.first else { return .unrecognized }
+        // A key wherever it is: an area whose second half alone was written
+        // still holds one. Two halves that carry *different* keys mean the
+        // offsets above are not this image's layout, and nothing is claimed.
+        let keys = fields.compactMap { field -> String? in
+            if case .hash(let hex) = field { return hex }
+            return nil
+        }
+        if Set(keys).count > 1 { return .unrecognized }
+        if let hex = keys.first { return .hash(hex) }
+        return first
     }
 
-    /// High-entropy and not periodic: key material rather than a fill pattern
-    /// (an erased area is all `0xFF`) or a pointer padded with zeros.
+    /// How far into the UEP area's entry its key field sits — measured off the
+    /// container, which is also where the entry starts.
+    private static let keyFieldOffset = 0xA0
+
+    /// The ASCII container that opens the UEP area: `$UEPC`, or the `$UEP`
+    /// inside one of those (`$UEPC` is `$UEP` plus its revision letter). Nil
+    /// when the image has no such area in the bytes it handed over.
+    private static func uepContainerOffset(in uep: Data) -> Int? {
+        if let at = uep.range(of: Data("$UEPC".utf8))?.lowerBound { return at }
+        var from = uep.startIndex
+        while let at = uep.range(of: Data("$UEP".utf8), options: [], in: from..<uep.endIndex) {
+            let after = at.upperBound
+            if after >= uep.endIndex || uep[after] != UInt8(ascii: "C") {
+                return at.lowerBound
+            }
+            from = after
+        }
+        return nil
+    }
+
+    /// High-entropy and not periodic: a key rather than a fill pattern (an
+    /// erased field is all `0xFF`), a pointer padded with zeros, or a record's
+    /// own header. A real SHA-384 has forty-eight distinct-ish bytes; a pointer
+    /// or a length field has a handful and a lot of padding.
     ///
-    /// Neither end may be a run of one byte either. The area this reads is
-    /// padded with `0x00` or `0xFF`, so a window that starts or ends inside
-    /// such a run is a *shifted view* of the same key — it occurs at the same
-    /// places, as often, and would be printed as padding with the key's head or
-    /// tail on it. A real SHA-384 has eight equal bytes at one end with
-    /// probability 2⁻⁵⁶.
+    /// Neither end may be a run of one byte either: an entry's field is
+    /// surrounded by the area's `0x00`/`0xFF` padding, so a field that begins
+    /// or ends in such a run is not the key at that offset. A real SHA-384 has
+    /// eight equal bytes at one end with probability 2⁻⁵⁶.
     private static func isKeyMaterial(_ block: Data) -> Bool {
         guard Set(block).count >= 16 else { return false }
         let half = block.count / 2
@@ -121,20 +144,6 @@ enum BootGuardReader {
         let rest = block.suffix(from: block.startIndex + half)
         guard first != rest else { return false }
         return Set(block.prefix(8)).count > 1 && Set(block.suffix(8)).count > 1
-    }
-
-    /// How many times a value occurs in an area, overlaps included: the copies
-    /// of a UEP hash sit in records of the same length, so they never overlap,
-    /// and counting them by stepping one byte at a time is the cheap way to be
-    /// sure none is missed.
-    private static func occurrences(of block: Data, in area: Data) -> Int {
-        var count = 0
-        var from = area.startIndex
-        while let found = area.range(of: block, options: [], in: from..<area.endIndex) {
-            count += 1
-            from = found.lowerBound + 1
-        }
-        return count
     }
 
     private static func hex(_ data: Data) -> String {
