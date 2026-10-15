@@ -194,6 +194,7 @@ import ToolModuleKit
         contentBox.translatesAutoresizingMaskIntoConstraints = false
         contentBox.addSubview(placeholder)
         contentBox.addSubview(summaryScroll)
+        contentBox.addSubview(configurationScroll)
         contentBox.addSubview(splitter)
         // The empty tab's own margins are breakable: a collapsed panel is not
         // 32 points wide, and a required pair there is one AppKit strikes out
@@ -209,9 +210,10 @@ import ToolModuleKit
         NSLayoutConstraint.activate(placeholderInsets + [
             placeholder.centerXAnchor.constraint(equalTo: contentBox.centerXAnchor),
             placeholder.centerYAnchor.constraint(equalTo: contentBox.centerYAnchor),
-            // The summary and the tree both fill the box to its edges; only one
-            // is visible at a time, so overlapping edge-pinned siblings are
-            // fine — visibility is the switch, not geometry.
+            // The summary, the configuration rows and the tree all fill the box
+            // to its edges; only one is visible at a time, so overlapping
+            // edge-pinned siblings are fine — visibility is the switch, not
+            // geometry.
             summaryScroll.topAnchor.constraint(equalTo: contentBox.topAnchor),
             summaryScroll.leadingAnchor.constraint(equalTo: contentBox.leadingAnchor),
             summaryScroll.trailingAnchor.constraint(equalTo: contentBox.trailingAnchor),
