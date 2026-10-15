@@ -58,15 +58,25 @@ enum BootGuardReader {
     }
 
     /// The OEM public key hash the UEP area carries, as uppercase hex — or nil
-    /// when the area holds no such value: an image whose UEP was wiped, or a
-    /// generation whose UEP is elsewhere.
+    /// when the area holds no such value, or none it can vouch for: an image
+    /// whose UEP was wiped, a generation whose UEP is laid out differently, or
+    /// one whose key is simply not there.
     ///
-    /// The hash is a SHA-384 the area repeats (six copies in the images this
-    /// was established on, in two groups of three, each group an entry of the
-    /// same record layout). It is found as the most repeated 48-byte value that
-    /// looks like key material rather than a fill pattern or a pointer —
-    /// `ManufacturingDecoder`'s sibling heuristic, and the one the research
-    /// oracle uses, so the panel and the oracle answer the same dump alike.
+    /// The hash is a SHA-384 the area repeats — six copies in the images this
+    /// was established on, in two groups of three, one group per half of the
+    /// 8 KiB area, each group a set of entries of the same record length. The
+    /// **three per half is what makes it readable**: the layout is not
+    /// documented anywhere, so the value is found by shape, and a value that
+    /// occurs once or twice in the area is some other 48 bytes of the same
+    /// entry — a second key, a manifest hash, a neighbour. Claiming one of
+    /// those would put a wrong key in front of a technician, and the rule here
+    /// is that the row says nothing it cannot substantiate.
+    ///
+    /// So the candidate is the most repeated 48-byte value that looks like key
+    /// material rather than a fill pattern or a pointer (`isKeyMaterial`) and
+    /// that **occurs at least three times** in the area. That is the same
+    /// reading the research oracle makes over a dump
+    /// (`Skills/me-eom-structures`), so the panel and the oracle agree.
     static func oemPublicKeyHash(in uep: Data) -> String? {
         guard uep.count >= 48 else { return nil }
         var best: (hash: Data, keyBytes: Int, count: Int)? = nil
@@ -85,7 +95,9 @@ enum BootGuardReader {
             let keyBytes = candidate.filter { $0 != 0x00 && $0 != 0xFF }.count
             guard keyBytes >= 40 else { continue }
             let count = occurrences(of: candidate, in: uep)
-            guard count > 1 else { continue }
+            // Three: the least the established layouts show, one group in the
+            // half of the area that carries them. Two is a different field.
+            guard count >= 3 else { continue }
             if best == nil || (keyBytes, count) > (best!.keyBytes, best!.count) {
                 best = (candidate, keyBytes, count)
             }

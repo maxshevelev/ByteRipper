@@ -94,7 +94,7 @@ not that the fact is absent from the platform.
 
 | generation (dumps at hand) | descriptor rights | EOM flag | Boot Guard profile | OEM key hash |
 |---|---|---|---|---|
-| CSME 18 (EliteBook 630 G11) | v2 ✓ — the row's gate | **not found**: the FITC partition is there, the `eom_config` record is not | **not found** — CDMD present, no `BtGuardProfileConfig` | a value found, **unverified** |
+| CSME 18 (EliteBook 630 G11) | v2 ✓ — the row's gate | **not found**: the FITC partition is there, the `eom_config` record is not | **not found** — CDMD present, no `BtGuardProfileConfig` | **not found** — the only repeated value sits once per half of the UEP area, which is not the established shape |
 | CSME 16.1 (Z Flow, Legion, Asus, Dell) | v2 ✓ | ✓ FITC record and the live one | ✓ CDMD JSON — 5 and 0 seen | ✓ UEP, 6 + 6 copies — **verified** for the Z Flow family |
 | CSME 16.0 (Legion) | v2 ✓ | ✓ | ✓ (5, 0) | ✓ |
 | CSME 15 (Lenovo 1.bin, 2.rom, corporate) | v2 ✓ | ✓ records present; the live page is absent on a never-booted build | **not found** — no CDMD record in any of them | ✓ UEP — **unverified** |
@@ -106,12 +106,24 @@ not that the fact is absent from the platform.
 Two things this table is not. It is not a claim about the generation — one dump
 of a generation is one dump — and the key hash column is not a claim about the
 *value* unless it says verified: the Z Flow family's hash is the one a field
-tool's report confirms byte for byte, and everything else is what the shape
-heuristic picked, unconfirmed. A value the table shows twice under two vendors —
-one Dell image at CSME 16.1.30 and one HP image at CSME 18 carry the same 48
-bytes — is a reason to take it to a field tool before relying on it: either the
-two builds genuinely share a signing key or the heuristic picked a neighbouring
-field, and only a report settles which.
+tool's report confirms byte for byte, and every other value is what the shape
+rule picked, unconfirmed by any tool.
+
+**A key is per vendor, and the shapes are what tell them apart.** Two vendors'
+images cannot carry the same hash, so a value that turns up under two of them is
+a wrong reading by definition. One did: the CSME 18 row above reports no key now
+because its candidate sits **once per half** of the UEP area, where every
+established layout has **three**, and the rule reads a value only where it has
+that shape (`BootGuardReader.oemPublicKeyHash`). Its 48 bytes turned up on a
+CSME 16.1.30 image as well — which the dump's own strings show to be an image of
+the *same* vendor, whatever its folder is called, so that pair proved nothing
+about vendors and everything about shapes.
+
+What that leaves open is the other reading of those bytes: the image carrying
+them six times in the UEP has exactly the established shape, so the rule reports
+it, and no field tool has confirmed it. It is the first value to take to
+ECFinder or MFIT's report, and until then the table says unverified rather than
+verified.
 
 What the panel says where a fact is absent, and the wording is deliberate:
 **No profile record in this image** and **No key material in this image**. A
@@ -152,7 +164,13 @@ FITC holds it under another File ID, or the setting is not CSME 15's any more.
 The same MFIT experiment answers it: build two images differing only in `EOM on
 first boot` and diff.
 
-**The UEP entry layout.** `mfit.exe` carries its settings database as
+**The UEP entry layout, which would end the shape rule.** Today a value is
+claimed only where it occurs at least three times in the area, once per entry
+group — the least the established layouts show. The layout itself is not
+documented, so a region laid out differently is answered "no key material"
+rather than by a guess at which of its 48-byte values is the key: CSME 18 is
+that case. Reading the entries by their fields is what would read it.
+`mfit.exe` carries its settings database as
 zlib-embedded XML that gives a *field map*: for each setting, the structure and
 the bit offset it is written at. For the FPF/UEP word it is
 `OEM_ID` 0–15, `KM_ID` 23–26, `FW_TYPE` 27–29, **`BTG_PROFILE` 30–32**, with

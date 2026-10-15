@@ -22,7 +22,7 @@ undetermined on the older ones — the reason to come back here — is
 | what EOM commits | `CsePlugin:EomNvar:EOM_Config#FlexibleEomSettings` | bits 1–2 of the same record |
 | what the board the dump came from already did | — | MFS `/home/mca/eom` (1 byte, 1 = closed) — read as evidence that the file system was read, **not** reported: the row answers for the next first boot |
 | Boot Guard level | `CsePlugin:UEP:BtGuardProfileConfig` (`0 - No_FVME`, `3 - VM`, `4 - FVE`, `5 - FVME`) | the JSON record in the **CDMD** partition's configuration — the number is an index into that list, not the level itself |
-| OEM public key hash | `CsePlugin:UEP:OemPublicKeyHash` (SHA-384, 48 bytes; all zeros = signing disabled) | the UEP, mirrored in the MFS key table |
+| OEM public key hash | `CsePlugin:UEP:OemPublicKeyHash` (SHA-384, 48 bytes; all zeros = signing disabled) | the UEP, mirrored in the MFS key table — read by shape, and claimed only where the value occurs at least three times in the area, which is the established entry layout's own repetition |
 
 The BIOS side carries its own, different key hash — the Boot Guard Key Manifest the
 FIT table points at — and that one is *not* the OEM public key hash MFIT reports.
