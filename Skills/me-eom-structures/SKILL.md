@@ -44,6 +44,19 @@ Note what it does *not* say: the values it prints for `eom` / `eom_config` are t
 OEM configuration's defaults — the page a clean image carries too. What is in
 force now is in the MFS file system, and that is what the app's engine decodes.
 
+## Emitting a generation's configuration map
+
+```bash
+python3 Skills/me-eom-structures/scripts/mfit_map.py <mfit.exe> > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME16.swift
+```
+
+MFIT's settings database, unpacked and turned into the map the panel reads: the
+files, the settings in each, their offsets, bits, MFIT's own option labels and
+its `Auto`/`Generic` marks. It merges the platform lists and reports what it
+could not merge rather than guessing — a setting two lists lay out differently is
+dropped and named. Same rules as above: read the diff, don't paste blind.
+
 ## Checking against MFIT
 
 MFIT prints the same facts in its build report:

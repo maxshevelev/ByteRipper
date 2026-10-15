@@ -52,20 +52,34 @@ public struct MEConfigurationMap: Sendable, Equatable {
         /// is read as a number or a bit, and nothing is claimed about what the
         /// numbers mean.
         public var options: [Int: String]?
-        /// True where MFIT marks the setting `Auto`: the platform writes it
-        /// (a version, a strap read off the board), so a build carries only a
-        /// placeholder for it.
+        /// True where MFIT marks the setting `Auto`: the value is not the
+        /// builder's to enter — the tool works it out and writes it into the
+        /// image's own `AutoNvars` container — so a file carries only what the
+        /// tool put there. False is MFIT's `Generic`: a setting a build is
+        /// given, in the file it lives in.
         public var auto: Bool
+        /// True where the field is a number MFIT writes in hex (`byte`, `word`,
+        /// `dword`, `qword` — every one of them: its own default for a byte is
+        /// `0x02`, not `2`). False on an enumerated setting, which reads as its
+        /// label, and on the few that are text.
+        public var hex: Bool
+        /// True where the field is text rather than a number — a PKI suffix, a
+        /// domain name. The bytes are decoded as characters rather than printed
+        /// as hex.
+        public var text: Bool
 
         public init(name: String, offset: Int, length: Int,
                     bits: ClosedRange<Int>? = nil,
-                    options: [Int: String]? = nil, auto: Bool = false) {
+                    options: [Int: String]? = nil, auto: Bool = false,
+                    hex: Bool = false, text: Bool = false) {
             self.name = name
             self.offset = offset
             self.length = length
             self.bits = bits
             self.options = options
             self.auto = auto
+            self.hex = hex
+            self.text = text
         }
     }
 

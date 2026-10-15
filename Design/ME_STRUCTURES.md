@@ -192,11 +192,28 @@ parameters live in *which* files, and what they may say:
 | the kind of the field | `Data` (a value), `Bitwise` (bits in a word), `Binary`, `String` |
 | the values it may take, with their numbers | the four EOM options, numbered from zero |
 | the default, and MFIT's own help text | `Lock Descriptor and OEM Configs` |
-| who writes it | `process_type`: `Generic`, or `Auto` for what the platform writes |
+| who fills it in | `process_type`: `Generic` or `Auto` (see below) |
 
-The 16.0.15 build's database holds **72 files and 137 settings** for its largest
-platform list (ADL-S 66/128, MTL-M 73/136), and the useful part is that **those
-file paths are MFS paths**: `/home/mca/eom_config`, `/home/policy/cfgmgr/cfg_rules`,
+**`Generic` and `Auto` are the whole of it, and they are not a suggestion.**
+Every one of the 134 settings the 16.0.15 build lists carries the attribute, and
+its value is one of those two words — MFIT's own enum is
+`NvarProcessType { Auto, Generic }`, beside `NvarPhysicalType { Data, Binary,
+String, Bitwise }` in the tool's own code. What they mean is in that code too:
+the reading path is written `if nvar.nvar_process_type == NvarProcessType.Generic
+and nvar_bucket.file_name == …: read_nvar_bucket(…)` — a **Generic** setting is
+read out of the file it is listed under, which is what a build is given. An
+**Auto** setting is handled elsewhere: it is written into the image's own
+`AutoNvars` container, a class whose own words are *"Container reads / writes
+auto NVARs to CSC fitc partition"*, and whose settings are referred to as
+`CsePlugin:AutoNvars:<File>#<Setting>` rather than as a file. So `Auto` is not
+"the platform writes it after boot" — it is "**the tool works it out and writes
+it, not the builder**", and 67 of the 137 settings have no place in a file at
+all (`length="0"`): they are computed, not stored.
+
+The 16.0.15 build's database holds **74 files and 137 settings** across its
+eight platform lists (four ADL-S of 63–72 files, three MTL, one ELG); of those,
+**67 settings in 26 files have a place in the bytes** and the rest do not. The
+useful part is that **those file paths are MFS paths**: `/home/mca/eom_config`, `/home/policy/cfgmgr/cfg_rules`,
 `/home/iunit/iunit_oem_cfg`, `/home/pavp/hdcp_ports`, `/home/ish_srv/INTC_pdt` …
 So every setting in the database is a setting the app can read out of a dump the
 same way it reads the EOM one — the MFS file by its File ID through
@@ -211,16 +228,32 @@ partition, and the file the platform copied into the ME file system on its first
 boot. Which of the two is *the* configuration is not a question with one answer
 — a setting the platform rewrote and a setting the build chose are different
 facts about one machine — so the panel gives each a column and marks the pairs
-that disagree. An image that has never been through a first boot has only the
-build's copy (verified: `image.bin` and `image1.bin` read all seven files from
-the image, `image.after.bin` and `image1.after.bin` from the file system), and on
-a booted dump both are still there and agree on every setting of all seven.
+that disagree, in bold and in no colour of its own: a rewritten setting is not a
+fault, and the palette's colours are verdicts. An image that has never been
+through a first boot has only the build's copy (verified: on `image.bin` and
+`image1.bin` every file reads from the image and the file system's column is
+empty, and the panel then draws that column as its heading and nothing else; on
+`image.after.bin` and `image1.after.bin` both copies are there — 17 of the
+mapped files on a Lenovo Legion board — and they agree on every setting).
+
+**The map the panel reads is emitted from that database, not typed out.**
+`Skills/me-eom-structures/scripts/mfit_map.py <mfit.exe>` prints
+`MEConfigurationMap+CSME16.swift`: every file with a readable setting, its
+offset, length, bits, MFIT's option labels and its `Auto` marks, straight from
+the XML. It merges the platform lists into one — the four ADL-S lists agree on
+every offset of every setting we map, so one map serves them — and **reports what
+it cannot merge**: `/home/mca/icps`'s `icpsSwSkuing` is 8 bytes in one list and
+32 in another, so the script drops it and says so rather than read one platform's
+length on another's board. A new generation is a rerun against its own
+`mfit.exe`.
 
 Two things the database is not. It is **per platform**: the lists are
 `ADL-S`, `ELG`, `MTL-M`, `MTL-S` in that build, so a dump of another platform
-needs the list for it (the entries we care about repeat across them, the EOM trio
-identically, but the file lists differ in length). And from **MFIT 18** the same
-file changes shape — 18.0.10.2285's `Files.xml` holds 107 file paths and no
+needs the list for it (the offsets we read repeat across them — verified: the
+four ADL-S lists differ in no offset — but the file lists differ in length, and a
+Corporate-only setting like `ProcMissingDetect` is simply absent from a Consumer
+list). And from **MFIT 18** the same file changes shape — 18.0.10.2285's
+`Files.xml` holds 107 file paths and no
 layouts at all — so the layouts for a newer generation are somewhere else in that
 binary, to be found when that generation's structures are.
 
