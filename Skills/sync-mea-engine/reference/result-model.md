@@ -47,7 +47,14 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   CDMD configuration's JSON) and `oemPublicKeyHash` (the SHA-384 the UEP area
   repeats). The addresses, the values and the ground truth behind each are in
   `Skills/me-eom-structures/reference/structures.md`; `analyze` gained
-  `descriptorBytes` for the descriptor fact alone.
+  `descriptorBytes` for the descriptor fact alone. Revision 42 adds
+  `configuration`, the ME configuration file by file as Flash Image Tool's own
+  settings database lays the files out; revision 43 changes its shape, so a
+  `ConfigurationFile` carries **both** copies a dump has of it — `fitc`, the OEM
+  Configuration partition's record, which is what the build wrote, and `mfs`,
+  the file system's own file, which is what the platform holds now — because one
+  column could not tell a setting the platform rewrote from one the build
+  chose. `Design/ME_STRUCTURES.md` is where that database is described.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct

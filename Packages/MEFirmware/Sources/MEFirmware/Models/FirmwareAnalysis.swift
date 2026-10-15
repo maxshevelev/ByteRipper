@@ -476,42 +476,54 @@ public struct ManufacturingBasis: Codable, Sendable, Equatable {
 }
 
 /// One configuration file of an image (ours): a file the ME configuration keeps
-/// settings in, with the values read out of it.
+/// settings in, and the two copies of it a dump carries.
 ///
-/// Where those values come from is `source`: the image's own **OEM
-/// Configuration** partition, which holds what the build wrote, or the **live
-/// file system** of the MFS volume, which holds what the platform has in it now.
-/// The live one wins where both exist, because it is the state in force.
+/// An image keeps each of these files twice, and the two copies are different
+/// things to know. The build wrote one into the **OEM Configuration** (FITC)
+/// partition — `fitc` — and the platform copies it into the ME file system on
+/// its first boot, which is where the engine reads it now — `mfs`. A setting
+/// the platform rewrote and a setting the build chose look the same in one
+/// column, so neither copy is dropped here: the panel shows them side by side
+/// and marks the pairs that disagree. An image that has never been through a
+/// first boot carries `fitc` alone; one whose MFS volume could not be read
+/// carries `mfs` alone.
 ///
 /// `settings` carries numbers and hex, not words: what a number *means* — that
 /// `2` in `FlexibleEomSettings` is "Lock Descriptor Only" — is MFIT's own
-/// naming, which lives in `MEConfigurationCatalogue` and is read by the panel.
+/// naming, which lives in the generation's `MEConfigurationMap` and is read by
+/// the panel.
 public struct ConfigurationFile: Codable, Sendable, Equatable, Identifiable {
+    /// One of the two copies: how many bytes of it there are, and the settings
+    /// they hold.
+    public struct Page: Codable, Sendable, Equatable {
+        /// How many bytes of it there are.
+        public var size: Int
+        public var settings: [ConfigurationSetting]
+
+        public init(size: Int, settings: [ConfigurationSetting]) {
+            self.size = size
+            self.settings = settings
+        }
+    }
+
     public var id: String { path }
     /// The MFS path, as the panel's tree prints it (`/home/mca/eom_config`).
     public var path: String
     /// MFIT's own name for the file, as its panel's file list shows it.
     public var alias: String
-    /// Which page the bytes were read from.
-    public var source: Source
-    /// How many bytes of it there are.
-    public var size: Int
-    public var settings: [ConfigurationSetting]
+    /// The build's copy: the OEM Configuration partition's record for this
+    /// file. Nil where the image has no such partition, the partition no such
+    /// record, or the record is shorter than the map's first field.
+    public var fitc: Page?
+    /// The file system's copy: the state in force. Nil where the volume holds
+    /// no such file, or its File IDs could not be resolved.
+    public var mfs: Page?
 
-    public enum Source: String, Codable, Sendable {
-        /// The OEM Configuration (FITC) partition's record — what the build wrote.
-        case image
-        /// The MFS volume's own file — what the file system holds now.
-        case fileSystem
-    }
-
-    public init(path: String, alias: String, source: Source, size: Int,
-                settings: [ConfigurationSetting]) {
+    public init(path: String, alias: String, fitc: Page? = nil, mfs: Page? = nil) {
         self.path = path
         self.alias = alias
-        self.source = source
-        self.size = size
-        self.settings = settings
+        self.fitc = fitc
+        self.mfs = mfs
     }
 }
 
@@ -2542,6 +2554,13 @@ public enum EngineModelRevision {
     /// Configuration partition or its live file system. Ours; the catalogue it
     /// is read through is `MEConfigurationCatalogue`.
     ///
+    /// 43 changes `configuration`'s shape: `ConfigurationFile` carries **both**
+    /// copies of a file — `fitc` (the OEM Configuration partition's record,
+    /// what the build wrote) and `mfs` (the file system's, the state in force)
+    /// — where 42 kept one and let the live copy win. A setting the platform
+    /// rewrote and one the build chose are different answers to the same
+    /// question, and one column could not tell them apart.
+    ///
     /// 41 adds the three facts a repair bench asks of a dump it is about to
     /// write to a board, none of them upstream's: `manufacturingState` with
     /// `manufacturingBasis` (whether the platform closes End of Manufacturing
@@ -2554,5 +2573,5 @@ public enum EngineModelRevision {
     /// area's entry holds — a value, or the read that says why there is none). `analyze` gained the optional `descriptorBytes` they need for
     /// the descriptor's BIOS master — an extracted ME region has no descriptor
     /// of its own, and the basis says so.
-    public static let current = 42
+    public static let current = 43
 }

@@ -47,7 +47,7 @@ import ToolModuleKit
     /// analysis neither rebuilds the rows nor loses the user's scroll.
     private var summaryBlocks: [MEASummaryBlock] = []
     /// The configuration as it was last built, the same way.
-    private var configurationBlocks: [MEASummaryBlock] = []
+    private var configurationBlocks: [MEAConfigurationBlock] = []
     /// The tab on screen.
     private var tabIndex = 0
     /// True while state is being shown — a selection the code made is not news,
@@ -428,6 +428,10 @@ import ToolModuleKit
         applyColumnWidths()
         outline.reloadData()
         renderSummary()
+        // The configuration tab's rows are built per field too, so they are
+        // rebuilt at the new size the same way — and not at all where there are
+        // none, which would take the empty tab's own words away.
+        if !configurationBlocks.isEmpty { renderConfiguration() }
         renderDetail(focusPath.flatMap { MEATree.node(at: $0, in: roots) })
     }
 
@@ -692,10 +696,10 @@ import ToolModuleKit
     }
 
     /// The Configuration tab's blocks, fed and kept the way the summary's are.
-    func showConfiguration(_ blocks: [MEASummaryBlock]) {
+    func showConfiguration(_ blocks: [MEAConfigurationBlock]) {
         guard blocks != configurationBlocks else { return }
         configurationBlocks = blocks
-        render(configurationBlocks, into: configurationScroll)
+        renderConfiguration()
         selectTab(tabIndex)
         if !blocks.isEmpty, tabIndex == 1 {
             configurationScroll.documentView?.scroll(.zero)
@@ -703,26 +707,14 @@ import ToolModuleKit
     }
 
     /// Rebuilds the summary's rows — the blocks `showSummary` last accepted,
-    /// at the current zoom. Only label and value texts: the values come
+    /// at the current zoom. Only label and value views: the values come
     /// pre-formatted from `MEASummary`, so nothing is decided here.
-    ///
-    /// A block is one `ToolFieldList` — the same rows the UEFI Structure and
-    /// this panel's own detail are drawn with — under the block's heading. The
-    /// list is what gives a reader the selection: a drag down the rows takes a
-    /// band of them, ⌘A the block, and ⌘C copies it with a tab between a name
-    /// and its value, which a summary pasted into a report wants.
     private func renderSummary() {
-        render(summaryBlocks, into: summaryScroll)
-    }
-
-    /// One list of blocks into one scrolling column — the Summary tab's shape,
-    /// which the Configuration tab reads in as well. Only label and value
-    /// views: every value arrives pre-formatted, so nothing is decided here.
-    private func render(_ blocks: [MEASummaryBlock], into scroll: ToolDetailScroll) {
-        let stack = scroll.content
+        let stack = summaryScroll.content
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        scroll.placeholder.isHidden = true
+        summaryScroll.placeholder.isHidden = true
 
+        let labelWidth = ToolPanelFont.scaled(Self.summaryLabelWidth)
         for (index, block) in summaryBlocks.enumerated() {
             // A real gap before each block after the first (the table needs no
             // title, the messages block does — and both read better apart).
@@ -735,51 +727,224 @@ import ToolModuleKit
                 heading.translatesAutoresizingMaskIntoConstraints = false
                 stack.addArrangedSubview(heading)
             }
-            guard !block.rows.isEmpty else { continue }
-            let rows = ToolFieldList(
-                fields: block.rows.map(Self.summaryField),
-                nameWidth: ToolPanelFont.scaled(Self.summaryLabelWidth))
-            stack.addArrangedSubview(rows)
-            // As wide as the list itself, so a long value has a column to wrap
-            // inside rather than a line to run off the side of.
-            rows.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+            for row in block.rows {
+                let (line, label) = Self.summaryRowView(row)
+                stack.addArrangedSubview(line)
+                // As wide as the list itself, so a long value has a column to
+                // wrap inside rather than a line to run off the side of.
+                line.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+                // The label column, breakable, and capped at half the list.
+                // Required, this width was a floor under the whole panel — at
+                // a large zoom the panel could not be dragged narrower than
+                // one summary label, and what gave way instead was the
+                // panel's own edge pins.
+                let column = label.widthAnchor.constraint(equalToConstant: labelWidth)
+                column.priority = .defaultHigh
+                column.isActive = true
+                label.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor,
+                                             multiplier: 0.5).isActive = true
+            }
         }
     }
 
-    /// One Summary row as a field of the shared detail list: the label, and the
-    /// value drawn as the row's tone asks. A verdict is the answer in the row's
-    /// tone and what it was read from in brackets in the ordinary font and
-    /// colour — the tone is the verdict's, and the evidence beside it must not
-    /// borrow it; a status value is bold and coloured, with the tick a passed
-    /// check carries, all of it from the tone, which is the same rendering the
-    /// tree's detail and the UEFI Structure's use; a `.comingSoon` value is
-    /// drawn grey, the shape of a row the engine will answer once the bridge
-    /// reaches it, and so is a `.pending` one, which the reading under way will
-    /// answer.
-    private static func summaryField(_ row: MEASummaryRow) -> ToolFieldList.Field {
-        let text = row.value.text(in: Localization.appLanguage)
-        switch row.value {
-        case .verdict(let verdict, let evidence):
+    /// Rebuilds the Configuration tab's rows: one block per configuration
+    /// file, each setting with the two copies of the file it lives in side by
+    /// side.
+    ///
+    /// A table rather than a list of label-and-value rows, because the two
+    /// columns are what the tab is for: what the build wrote into the image and
+    /// what the platform holds now are one question apart, and they have to
+    /// line up down the page to be read against each other. Three cells to a
+    /// row — the setting, the build's copy, the file system's — under one
+    /// heading row that names the two value columns, since "FITC beside MFS" is
+    /// the whole of what a reader is being asked to compare.
+    ///
+    /// A pair that disagrees is drawn in the caution tone: it is the row a
+    /// bench is looking for, and the one thing on the tab that wants a second
+    /// look. A value one copy does not carry is not a disagreement — an image
+    /// nobody has booted has one column and no argument — and is drawn as the
+    /// quiet dash it is.
+    private func renderConfiguration() {
+        let stack = configurationScroll.content
+        stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        configurationScroll.placeholder.isHidden = true
+
+        let labelWidth = ToolPanelFont.scaled(Self.summaryLabelWidth)
+        let heading = Self.configurationHeadingRow()
+        place(heading.line, firstCell: heading.label, in: stack, labelWidth: labelWidth)
+        for (index, block) in configurationBlocks.enumerated() {
+            // The first block sits right under the column names, which is a
+            // nearer relation than the next block is to the one before it.
+            if let last = stack.arrangedSubviews.last {
+                stack.setCustomSpacing(index == 0 ? 12 : 14, after: last)
+            }
+            let title = NSTextField(labelWithString: block.title)
+            title.font = ToolPanelFont.title()
+            title.translatesAutoresizingMaskIntoConstraints = false
+            stack.addArrangedSubview(title)
+            for row in block.rows {
+                let line = Self.configurationRowView(row)
+                place(line.line, firstCell: line.label, in: stack, labelWidth: labelWidth)
+            }
+        }
+    }
+
+    /// One table row into the list: as wide as the list itself, so a long
+    /// value has a column to wrap inside, with its first cell the label column
+    /// — the same width in every row, which is what makes the two value columns
+    /// line up. The width is breakable and capped at half the list for the same
+    /// reason the summary's is: required, one long setting name became a floor
+    /// under the whole panel.
+    private func place(_ line: NSStackView, firstCell: NSView?, in stack: NSStackView,
+                       labelWidth: CGFloat) {
+        stack.addArrangedSubview(line)
+        line.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        guard let firstCell else { return }
+        let column = firstCell.widthAnchor.constraint(equalToConstant: labelWidth)
+        column.priority = .defaultHigh
+        column.isActive = true
+        firstCell.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor,
+                                         multiplier: 0.5).isActive = true
+    }
+
+    /// The tab's column names, once at the top: the setting, the build's copy
+    /// of the file and the file system's. An empty first cell rather than none,
+    /// so the two names sit over the columns they name.
+    private static func configurationHeadingRow() -> (line: NSStackView, label: NSTextField) {
+        let label = NSTextField(labelWithString: "")
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let language = Localization.appLanguage
+        let fitc = configurationHeading(MEAText.configurationFITC(in: language))
+        let mfs = configurationHeading(MEAText.configurationMFS(in: language))
+        // In the line first, then tied to each other: two views with no
+        // ancestor yet cannot carry a constraint between them.
+        let line = headingLine(first: label, cells: (fitc, mfs))
+        Self.equallyWide(fitc, mfs)
+        return (line, label)
+    }
+
+    /// One column heading: the quiet weight a table's header carries, so it is
+    /// read as a name for the column rather than as a row of its own.
+    private static func configurationHeading(_ text: String) -> NSTextField {
+        let label = NSTextField(labelWithString: text)
+        label.font = ToolPanelFont.body(weight: .semibold)
+        label.textColor = .secondaryLabelColor
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }
+
+    /// One Configuration row: the setting, the build's value, the file
+    /// system's — the two values the same width as each other, so they line up
+    /// down the page.
+    private static func configurationRowView(
+        _ row: MEAConfigurationRow
+    ) -> (line: NSStackView, label: NSTextField) {
+        let label = NSTextField(labelWithString: row.name)
+        label.font = ToolPanelFont.body()
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byTruncatingTail
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let fitc = configurationCell(row.fitc, differs: row.differs)
+        let mfs = configurationCell(row.mfs, differs: row.differs)
+        let line = headingLine(first: label, cells: (fitc, mfs))
+        Self.equallyWide(fitc, mfs)
+        return (line, label)
+    }
+
+    /// Two cells of the tab's table, the same width as each other — which is
+    /// what makes the two value columns line up from one row to the next. Both
+    /// have to be in the line already: a constraint between two views that
+    /// share no ancestor is a crash at activation, not a wrong width.
+    private static func equallyWide(_ left: NSView, _ right: NSView) {
+        left.widthAnchor.constraint(equalTo: right.widthAnchor).isActive = true
+    }
+
+    /// One value cell. A pair that disagrees is drawn in the caution tone —
+    /// bold and coloured, which is what the tone gives a value that wants a
+    /// second look. A value one copy does not carry is the quiet dash, in the
+    /// colour of a thing that is not there.
+    private static func configurationCell(_ text: String?, differs: Bool) -> NSTextField {
+        let value = ToolWrappingLabel(string: "")
+        value.translatesAutoresizingMaskIntoConstraints = false
+        value.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        value.isSelectable = true
+        guard let text else {
+            value.attributedStringValue = NSAttributedString(
+                string: MEAText.configurationAbsent,
+                attributes: [.font: ToolPanelFont.body(), .foregroundColor: NSColor.tertiaryLabelColor])
+            return value
+        }
+        value.attributedStringValue = differs
+            ? ToolValueTone.caution.attributedValue(text)
+            : NSAttributedString(string: text, attributes: [.font: ToolPanelFont.body(),
+                                                            .foregroundColor: NSColor.labelColor])
+        return value
+    }
+
+    /// The three cells of a table row, laid out as one line.
+    private static func headingLine(first: NSView, cells: (NSView, NSView)) -> NSStackView {
+        let line = NSStackView(views: [first, cells.0, cells.1])
+        line.orientation = .horizontal
+        line.alignment = .firstBaseline
+        line.spacing = 6
+        line.translatesAutoresizingMaskIntoConstraints = false
+        return line
+    }
+
+    /// One Field/Value line: a label column — wider than the detail list's,
+    /// because summary labels run long ("TCB Security Version Number") — and a
+    /// value that wraps inside what is left of the width. The column's width is
+    /// the caller's to constrain, since only it knows the list the row is in. A
+    /// `.comingSoon` value is drawn grey and unselectable, the shape of a row
+    /// the engine will answer once the bridge reaches it; so is a `.pending`
+    /// one, which the reading under way will answer.
+    private static func summaryRowView(
+        _ row: MEASummaryRow
+    ) -> (line: NSStackView, label: NSTextField) {
+        let label = NSTextField(labelWithString: row.label)
+        label.font = ToolPanelFont.body()
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byTruncatingTail
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let value = ToolWrappingLabel(string: row.value.text(in: Localization.appLanguage))
+        if case .verdict(let verdict, let evidence) = row.value {
+            // The answer in the row's tone, what it was read from in brackets in
+            // the ordinary font and colour: the tone is the verdict's, and the
+            // evidence beside it must not borrow it.
+            value.font = ToolPanelFont.body()
+            value.textColor = .labelColor
             let drawn = NSMutableAttributedString(
                 attributedString: row.tone.attributedValue(verdict))
             if !evidence.isEmpty {
                 drawn.append(ToolValueTone.standard.attributedValue(" (\(evidence))"))
             }
-            return .init(label: row.label, value: drawn)
-        case .value:
-            return .init(label: row.label, value: row.tone.attributedValue(text))
-        case .comingSoon, .pending:
-            return .init(label: row.label, value: NSAttributedString(
-                string: text,
-                attributes: [.font: ToolPanelFont.body(),
-                             .foregroundColor: NSColor.secondaryLabelColor]))
+            value.attributedStringValue = drawn
+            value.isSelectable = true
+        } else if row.value.isValue {
+            // A status-toned value is bold as well as coloured, and a passed
+            // check carries its tick — all of it from the tone, which is the
+            // same rendering the tree's detail and the UEFI Structure's use.
+            row.tone.draw(value, value: row.value.text(in: Localization.appLanguage))
+            value.isSelectable = true
+        } else {
+            // "Coming soon" and "Loading…" alike: grey, and nothing to select.
+            value.font = ToolPanelFont.body()
+            value.textColor = .secondaryLabelColor
         }
+
+        let line = NSStackView(views: [label, value])
+        line.orientation = .horizontal
+        line.alignment = .firstBaseline
+        line.spacing = 6
+        line.translatesAutoresizingMaskIntoConstraints = false
+        return (line, label)
     }
 
     /// Rebuilds the detail list from the focused row's own fields.
-    ///
-    /// One `ToolFieldList` — the rows the UEFI Structure's detail is drawn
-    /// with — so a bench selects and copies them here as it does there.
     private func renderDetail(_ focus: MEANode?) {
         // What the `?` in the list's corner explains: the glossary entry the
         // curator gave this row. Set before the early return as well, so a row
@@ -806,21 +971,51 @@ import ToolModuleKit
         // list of short names reads exactly as it did; and never wider than
         // half the list, where a name that still does not fit wraps rather
         // than crowding the value out.
-        let fields = ToolFieldList(
-            fields: focus.fields.map {
-                // One rendering for a value that carries a status, wherever it
-                // is drawn — bold, in the tone's colour, and led by the tick
-                // when the status is a passed check. This is the same call the
-                // UEFI Structure's detail makes for the same field, and the
-                // Summary's row asks the tone for the same string, so the
-                // three cannot come apart.
-                .init(label: $0.label, value: $0.tone.attributedValue($0.value))
-            },
-            nameWidth: ToolFieldList.nameWidth(for: focus.fields.map(\.label)))
-        detail.content.addArrangedSubview(fields)
-        // As wide as the list, so a value too long for the column — a hash, a
-        // GUID — wraps inside it instead of running off the side.
-        fields.widthAnchor.constraint(equalTo: detail.content.widthAnchor).isActive = true
+        let labels = focus.fields.map { field -> ToolWrappingLabel in
+            let label = ToolWrappingLabel(string: field.label)
+            label.font = ToolPanelFont.body()
+            label.textColor = .secondaryLabelColor
+            return label
+        }
+        // Measured before they are in the hierarchy, where a wrapping label
+        // still reports what it needs on one line.
+        let nameColumn = max(ToolPanelFont.detailLabelWidth,
+                             labels.map(\.intrinsicContentSize.width).max() ?? 0)
+
+        for (field, label) in zip(focus.fields, labels) {
+            let value = ToolWrappingLabel(string: field.value)
+            // One rendering for a value that carries a status, wherever it is
+            // drawn — bold, in the tone's colour, and led by the tick when the
+            // status is a passed check. This is the same call the UEFI
+            // Structure's detail makes for the same field, and the Summary's
+            // row asks the tone for the same string, so the three cannot come
+            // apart.
+            field.tone.draw(value, value: field.value)
+            value.isSelectable = true
+
+            let row = NSStackView(views: [label, value])
+            row.orientation = .horizontal
+            row.alignment = .firstBaseline
+            row.spacing = 6
+            row.translatesAutoresizingMaskIntoConstraints = false
+            detail.content.addArrangedSubview(row)
+            // Anchored to the list only once the row is in it — a constraint
+            // across two hierarchies is not one the engine will take.
+            //
+            // The value column is what is left of the list's width, and a
+            // hash or a GUID wraps inside it.
+            row.widthAnchor.constraint(
+                equalTo: detail.content.widthAnchor
+            ).isActive = true
+            // The name column, breakable, and the cap is the one thing that
+            // breaks it: past half the list the name wraps instead of taking
+            // more.
+            let column = label.widthAnchor.constraint(equalToConstant: nameColumn)
+            column.priority = .defaultHigh
+            column.isActive = true
+            label.widthAnchor.constraint(lessThanOrEqualTo: detail.content.widthAnchor,
+                                         multiplier: 0.5).isActive = true
+        }
     }
 }
 

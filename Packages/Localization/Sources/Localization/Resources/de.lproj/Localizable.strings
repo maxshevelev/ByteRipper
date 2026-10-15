@@ -1682,6 +1682,6 @@
 "reserved files: %1$@" = "reservierte Dateien: %1$@";
 "nothing found" = "nichts gefunden";
 "Configuration" = "Konfiguration";
-"image" = "Image";
-"file system" = "Dateisystem";
+"FITC" = "FITC";
+"MFS" = "MFS";
 "auto" = "auto";
