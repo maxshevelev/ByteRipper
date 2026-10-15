@@ -4095,6 +4095,17 @@ final class MainViewController: NSViewController {
         presentSaveAs(for: pane)
     }
 
+    /// The name Save As suggests: the pane's own, with `.bin` after it for a
+    /// document never saved that has no extension of its own. A fragment's
+    /// name is a node's or a zone's and never a file's — `Intel ME v11.8.50`
+    /// is not a file with the extension `50` — so it always gets one.
+    static func saveAsName(for pane: PaneViewModel) -> String {
+        let name = pane.status.fileName
+        guard pane.isUntitled else { return name }
+        if pane.origin == nil, !(name as NSString).pathExtension.isEmpty { return name }
+        return name + ".bin"
+    }
+
     /// Runs a Save As sheet for the given pane (active pane, or a specific pane
     /// from an external-change conflict or a deferred untitled save, §5.5).
     /// `onSaved` fires after a successful save — it continues a flow that had
@@ -4111,7 +4122,7 @@ final class MainViewController: NSViewController {
             return
         }
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = pane.status.fileName
+        panel.nameFieldStringValue = Self.saveAsName(for: pane)
         panel.allowedContentTypes = []
         panel.canCreateDirectories = true
         panel.beginSheetModal(for: view.window ?? NSWindow()) { [weak self] response in

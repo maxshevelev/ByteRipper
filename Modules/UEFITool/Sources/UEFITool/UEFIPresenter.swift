@@ -233,7 +233,9 @@ public enum UEFIPresenter {
         // node and the node of the same name in the file do not land as one
         // file. A panel says so with the codec's badge on its pill.
         let decompressed = node.space != .file ? " decompressed" : ""
-        let suffix = body ? " body" : ""
+        // `body` as a panel's name says it: only where there is a header the
+        // body is less than the node.
+        let suffix = body && !node.header.isEmpty ? " body" : ""
         return NodeOpen(
             space: node.space,
             range: range,
@@ -248,7 +250,7 @@ public enum UEFIPresenter {
             // A picture or a sound saves as what it is, so the file opens in
             // a viewer or a player.
             suggestedName: base + decompressed + suffix + "." + fileExtension(of: node),
-            partName: partName(of: node),
+            partName: partName(of: node, body: body),
             menuTitle: title
         )
     }
@@ -334,7 +336,7 @@ public enum UEFIPresenter {
                 space: node.space.inside(sectionAt: node.header.lowerBound),
                 layout: .image,
                 suggestedName: "BIOS region.bin",
-                partName: partName(of: node),
+                partName: partName(of: node, body: true),
                 saveTitle: L("Save Assembled BIOS Region as…"),
                 openTitle: L("Open Assembled BIOS Region")
             )
@@ -345,14 +347,16 @@ public enum UEFIPresenter {
         // and the two hold entirely different bytes. A node with no name is
         // already called `decompressed`, so it says it once. A panel says it
         // with the codec's badge on its pill, and its name is the section's.
+        // Both say `body` after the section's name where it has a header.
         let base = String((node.name.isEmpty ? "decompressed" : node.name)
             .map { "/:".contains($0) ? "_" : $0 })
-        let marked = node.name.isEmpty ? base : base + " decompressed"
+        let marked = (node.name.isEmpty ? base : base + " decompressed")
+            + (node.header.isEmpty ? "" : " body")
         return DecompressedBody(
             space: node.space.inside(sectionAt: node.header.lowerBound),
             layout: node.kind == .section ? .decompressedBody : .image,
             suggestedName: marked + ".bin",
-            partName: partName(of: node),
+            partName: partName(of: node, body: true),
             saveTitle: L("Save Decompressed Body as…"),
             openTitle: L("Open Decompressed Body")
         )
@@ -373,12 +377,19 @@ public enum UEFIPresenter {
 
     /// What a fragment panel opened from `node` is called — the node, its
     /// body, what it decompresses or unpacks to, its LENV block decoded: the
-    /// node's name as the tree shows it, and nothing else. Not the dump's
-    /// name, which the panel's link names, and not what was done to the
-    /// bytes, which the codec's badge on the pill says.
-    public static func partName(of node: UEFINode, in language: AppLanguage = Localization.appLanguage) -> String {
-        let name = node.displayName(in: language)
-        return name.isEmpty ? L("Node", in: language) : name
+    /// node's name as the tree shows it, and `body` after it for the body of
+    /// a node that has a header, since the node and its body are two
+    /// different stretches of bytes. Nothing else: not the dump's name, which
+    /// the panel's link names, and not what was done to the bytes, which the
+    /// codec's badge on the pill says.
+    ///
+    /// `body` is English in every language, as it is in a saved file's name:
+    /// the name is the file's, and a file's name is not translated.
+    public static func partName(of node: UEFINode, body: Bool = false,
+                                in language: AppLanguage = Localization.appLanguage) -> String {
+        let shown = node.displayName(in: language)
+        let name = shown.isEmpty ? L("Node", in: language) : shown
+        return body && !node.header.isEmpty ? name + " body" : name
     }
 
     /// Where a node's bytes are held in the file: its own range, or — for a

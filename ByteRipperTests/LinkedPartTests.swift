@@ -293,6 +293,7 @@ final class LinkedPartTests: XCTestCase {
         let (controller, part) = try openZonePanel()
         XCTAssertEqual(part.status.fileName, "FFSv2")
         XCTAssertEqual(part.origin?.partName, "FFSv2")
+        XCTAssertEqual(MainViewController.saveAsName(for: part), "FFSv2.bin", "saved, it is a file of bytes")
         XCTAssertEqual(try XCTUnwrap(descendants(of: controller.view, FragmentDockStrip.self).first).pillsForTesting.map(\.title), ["FFSv2"])
     }
 

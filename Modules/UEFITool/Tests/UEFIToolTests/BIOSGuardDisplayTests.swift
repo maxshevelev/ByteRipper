@@ -61,7 +61,7 @@ final class BIOSGuardDisplayTests: XCTestCase {
         XCTAssertEqual(body.openTitle.text(in: .english), "Open Assembled BIOS Region")
         XCTAssertEqual(body.saveTitle.text(in: .english), "Save Assembled BIOS Region as…")
         XCTAssertEqual(body.suggestedName, "BIOS region.bin", "a saved file is named by what it is")
-        XCTAssertEqual(body.partName, UEFIPresenter.partName(of: update), "a panel by the node it was opened from")
+        XCTAssertEqual(body.partName, "AMI BIOS Guard update body", "a panel by the node it was opened from, then body")
         XCTAssertEqual(UEFIPresenter.content(of: update), .decompressedBody)
     }
 

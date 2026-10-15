@@ -1834,7 +1834,7 @@ private struct ChecksumPass: Sendable {
         let readers = tree.spaceReaders
         let body = node.body
         let space = node.space
-        let name = UEFIPresenter.partName(of: node)
+        let name = UEFIPresenter.partName(of: node, body: true)
         controller.showBusy()
         Task { [weak self] in
             let text = await Task.detached(priority: .userInitiated) {

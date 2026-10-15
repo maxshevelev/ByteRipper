@@ -104,7 +104,7 @@ final class CompressedNodeTests: XCTestCase {
         XCTAssertEqual(body.space, .decompressed(chain: [0]))
         XCTAssertEqual(body.saveTitle.text(in: .english), "Save Decompressed Body as…")
         XCTAssertEqual(body.openTitle.text(in: .english), "Open Decompressed Body")
-        XCTAssertEqual(body.suggestedName, "LZMA compressed section decompressed.bin")
+        XCTAssertEqual(body.suggestedName, "LZMA compressed section decompressed body.bin")
         let sectionAsNode = try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.section, in: built.image, body: false))
         XCTAssertEqual(sectionAsNode.suggestedName, "LZMA compressed section.bin",
                        "the section itself keeps its plain name; only what it opens to is marked")
@@ -132,12 +132,16 @@ final class CompressedNodeTests: XCTestCase {
         XCTAssertEqual(asNode.range, 0..<0x100)
         XCTAssertEqual(asNode.suggestedName, "Inner decompressed.bin")
         XCTAssertEqual(asNode.partName, "Inner", "a panel is the node's name alone; the pill's badge says decompressed")
+        let inner = try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.inner, in: built.image, body: true))
+        XCTAssertEqual(inner.partName, "Inner body", "a body of a node with a header says so, in English")
+        let headerless = UEFINode(kind: .padding, name: "Pad", header: 0..<0, body: 0..<0x10, space: .file)
+        XCTAssertEqual(UEFIPresenter.partName(of: headerless, body: true), "Pad", "with no header the body is the node")
         XCTAssertEqual(asNode.saveName(fileName: "bios.rom"), "bios_Inner decompressed.bin",
                        "a saved file is named after the dump it came out of, then what it is")
         XCTAssertEqual(try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.inner, in: built.image, body: true)).suggestedName,
                        "Inner decompressed body.bin")
-        XCTAssertEqual(body.partName, "LZMA compressed section",
-                       "a saved file says decompressed; a panel's pill says it with the codec's badge")
+        XCTAssertEqual(body.partName, "LZMA compressed section body",
+                       "a saved file says decompressed; a panel's pill says it with the codec's badge; both say body")
         XCTAssertEqual(UEFIPresenter.fileSource(of: built.inner, in: built.image),
                        built.section.fileRange,
                        "a panel from inside is linked to the compressed section holding it")
