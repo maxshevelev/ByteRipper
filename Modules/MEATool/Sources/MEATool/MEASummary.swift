@@ -12,6 +12,12 @@ import ToolModuleKit
 public enum MEASummaryValue: Sendable, Equatable {
     /// A real, selectable value (formatted with `MEAText`).
     case value(String)
+    /// A verdict with the evidence it was read from: the panel draws the
+    /// verdict in the row's tone and the evidence in brackets in the ordinary
+    /// font and colour, so the answer and what stands behind it cannot be
+    /// mistaken for one another. `text(in:)` is what a copy of the row shows —
+    /// one line, brackets and all.
+    case verdict(String, evidence: String)
     /// The engine has nothing for this row yet.
     case comingSoon
     /// The analysis on screen was read without a database this row depends
@@ -23,6 +29,8 @@ public enum MEASummaryValue: Sendable, Equatable {
     public func text(in language: AppLanguage) -> String {
         switch self {
         case .value(let shown): return shown
+        case .verdict(let verdict, let evidence):
+            return evidence.isEmpty ? verdict : "\(verdict) (\(evidence))"
         case .comingSoon: return L("Coming soon", in: language)
         case .pending: return L("Loading…", in: language)
         }
@@ -30,8 +38,10 @@ public enum MEASummaryValue: Sendable, Equatable {
 
     /// Whether the value is a real one, which can be selected and copied.
     public var isValue: Bool {
-        if case .value = self { return true }
-        return false
+        switch self {
+        case .value, .verdict: return true
+        case .comingSoon, .pending: return false
+        }
     }
 }
 
@@ -288,19 +298,18 @@ public enum MEASummary {
         // applicable" is noise.
         if analysis.family == .csme, analysis.version.major >= 11 {
             if let state = analysis.manufacturingState {
-                rows.append(MEASummaryRow(L("Manufacturing", in: language),
-                                          .value(MEAText.manufacturingState(state, basis: analysis.manufacturingBasis, in: language)),
-                                          tone: MEATones.manufacturingState(state)))
-                if let basis = analysis.manufacturingBasis {
-                    rows.append(MEASummaryRow(L("Manufacturing basis", in: language),
-                                              .value(MEAText.manufacturingBasis(basis, in: language))))
-                    // What End of Manufacturing commits — MFIT's own
-                    // `FlexibleEomSettings`, stored whether or not the flag is
-                    // set, so it says what an image would lock if it ever ran.
-                    if let flexible = basis.flexible {
-                        rows.append(MEASummaryRow(L("Flexible EOM Settings", in: language),
-                                                  .value(MEAText.flexibleEOMSettings(flexible, in: language))))
-                    }
+                let basis = analysis.manufacturingBasis
+                rows.append(MEASummaryRow(
+                    L("Manufacturing", in: language),
+                    .verdict(MEAText.manufacturingState(state, basis: basis, in: language),
+                             evidence: MEAText.manufacturingEvidence(state, basis: basis, in: language)),
+                    tone: MEATones.manufacturingState(state)))
+                // What End of Manufacturing commits — MFIT's own
+                // `FlexibleEomSettings`, stored whether or not the flag is
+                // set, so it says what an image would lock if it ever ran.
+                if let flexible = basis?.flexible {
+                    rows.append(MEASummaryRow(L("Flexible EOM Settings", in: language),
+                                              .value(MEAText.flexibleEOMSettings(flexible, in: language))))
                 }
             } else if identified {
                 rows.append(MEASummaryRow(L("Manufacturing", in: language), .comingSoon))

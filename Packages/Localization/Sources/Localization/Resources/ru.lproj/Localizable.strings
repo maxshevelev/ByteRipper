@@ -1530,16 +1530,7 @@
 "Will not close" = "Не закроет";
 "Not readable from this image" = "Из этого дампа не читается";
 "No such switch in this firmware" = "В этой прошивке такого переключателя нет";
-"set" = "включён";
-"clear" = "выключен";
-"the image's OEM Configuration" = "OEM-конфигурации образа";
-"the file system" = "файловой системе";
-"The End of Manufacturing flag is %1$@ in %2$@." = "Флаг EOM %1$@ в %2$@.";
-"No End of Manufacturing record in this image." = "Записи о EOM в этом дампе нет.";
-"The descriptor's access rights are what close Manufacturing." = "Manufacturing закрывают права доступа в дескрипторе.";
-"The descriptor is open, so nothing closes it." = "Дескриптор открыт, поэтому ничего не закрывается.";
 "Manufacturing" = "Manufacturing";
-"Manufacturing basis" = "Основание Manufacturing";
 "Boot Guard" = "Boot Guard";
 "No profile record in this image" = "В этом дампе записи о профиле нет";
 "OEM Public Key Hash" = "OEM Public Key Hash (SHA-384)";
@@ -1555,3 +1546,7 @@
 "Lock OEM Configs Only" = "Только OEM-конфигурацию";
 "Lock Descriptor Only" = "Только дескриптор";
 "Do not lock Descriptor and OEM Configs" = "Не фиксировать ничего";
+"EOM: on" = "EOM включён";
+"EOM: off" = "EOM выключен";
+"descriptor: open" = "дескриптор открыт";
+"descriptor: locked" = "дескриптор закрыт";

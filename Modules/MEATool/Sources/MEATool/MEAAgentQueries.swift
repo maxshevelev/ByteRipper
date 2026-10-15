@@ -70,8 +70,9 @@ public enum MEAAgentQueries {
                 if summaryRow.label == "Manufacturing",
                    summaryRow.value.isValue,
                    let basis = analysis.manufacturingBasis,
+                   let state = analysis.manufacturingState,
                    case .object(var fields) = entry {
-                    fields["basis"] = manufacturingBasisJSON(basis)
+                    fields["basis"] = manufacturingBasisJSON(state, basis)
                     entry = .object(fields)
                 }
                 if summaryRow.label == "Boot Guard",
@@ -212,7 +213,8 @@ public enum MEAAgentQueries {
     /// File System State carries its own: the row says "Already closed", and an
     /// agent that acts on it needs to see that it was the live `/home/mca/eom`
     /// record that said so and not a reading of the image's setting.
-    static func manufacturingBasisJSON(_ basis: ManufacturingBasis) -> JSONValue {
+    static func manufacturingBasisJSON(_ state: ManufacturingState,
+                                       _ basis: ManufacturingBasis) -> JSONValue {
         var members: [String: JSONValue] = [
             "flag": basis.flag.map { .bool($0) } ?? .null,
             "flexible_eom_settings": basis.flexible.map { .count($0) } ?? .null,
@@ -220,8 +222,11 @@ public enum MEAAgentQueries {
             "descriptor": .string(basis.descriptorOpen.map { $0 ? "open" : "locked" } ?? "not read"),
             "live_files": .string(basis.liveFilesResolved ? "read" : "not read")
         ]
+        // What the row itself reads, brackets and all.
+        let verdict = MEAText.manufacturingState(state, basis: basis, in: .english)
+        let evidence = MEAText.manufacturingEvidence(state, basis: basis, in: .english)
         members["explanation"] = .string(
-            MEAText.manufacturingBasis(basis, in: .english))
+            evidence.isEmpty ? verdict : "\(verdict) (\(evidence))")
         return .object(members)
     }
 
