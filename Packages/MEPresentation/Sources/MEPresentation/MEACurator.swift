@@ -108,7 +108,7 @@ public enum MEACurator {
         // them — the two panels are one reading of one dump, and a field that
         // is in one and not the other sends the reader looking for a second
         // dump. Shown on the same gates as the Summary rows.
-        if a.family == .csme, a.version.major >= 15, let state = a.manufacturingState {
+        if a.family == .csme, a.version.major >= 11, let state = a.manufacturingState {
             fields.append(MEAField(L("Manufacturing", in: language),
                                    MEAText.manufacturingState(state, in: language),
                                    tone: MEATones.manufacturingState(state)))

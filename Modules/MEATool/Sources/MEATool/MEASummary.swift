@@ -280,11 +280,12 @@ public enum MEASummary {
         // where each fact lives and how it was established); the labels are
         // ours, so unlike upstream's row names they go through `L`.
         //
-        // Manufacturing is gated on the generation that has the switch at all
-        // (CSME 15, where MFIT grew `CsePlugin:EomNvar`): an older firmware
-        // would only ever answer `noSwitch`, and a row that can only say "not
+        // Manufacturing is gated on the generations that decide it at all:
+        // CSME 11 and later, whose descriptor access rights say it, and where
+        // from CSME 15 an MFIT flag may order it too. An older firmware would
+        // only ever answer `noSwitch`, and a row that can only say "not
         // applicable" is noise.
-        if analysis.family == .csme, analysis.version.major >= 15 {
+        if analysis.family == .csme, analysis.version.major >= 11 {
             if let state = analysis.manufacturingState {
                 rows.append(MEASummaryRow(L("Manufacturing", in: language),
                                           .value(MEAText.manufacturingState(state, in: language)),
