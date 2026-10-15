@@ -11,9 +11,10 @@
 //     several copies of, beside the key manifest it belongs to.
 //
 // Both were established on real dumps with known Boot Guard levels; the
-// addresses, values and the five-way correlation behind the index mapping are
-// in Skills/me-eom-structures/reference/structures.md. A skill of its own would
-// be one enum and two scans: this is MEFirmware's, beside the layout readers it
+// structures are described in `Design/ME_STRUCTURES.md`, and the addresses,
+// values and the five-way correlation behind the index mapping are in
+// Skills/me-eom-structures/reference/structures.md. A skill of its own would be
+// one enum and two scans: this is MEFirmware's, beside the layout readers it
 // works over.
 
 import Foundation

@@ -10,6 +10,10 @@ and for the flash structures that carry them. Everything here was established on
 real dumps and cross-checked against MFIT's own configuration and build report
 (see `reference/structures.md` for the addresses, values and sources).
 
+What the app makes of them, which generation each is read for, and what is still
+undetermined on the older ones — the reason to come back here — is
+`Design/ME_STRUCTURES.md`.
+
 ## The three facts and where they live
 
 | fact | MFIT setting | flash |
