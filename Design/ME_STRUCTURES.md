@@ -139,6 +139,13 @@ the engine had certainly run, and both bytes of the board's own record —
 control the earlier reading lacked: those two read 1 on a board whose
 Manufacturing was closed, not on a board that has merely run.
 
+The other half of that pair — the same board flashed with the flag enabled — is
+**not** to be produced on a working machine: closing Manufacturing burns the
+key hashes into the chipset's fuses and cannot be undone, which is exactly why
+the Manufacturing row exists. The closed side of the comparison is available
+from the factory dumps instead (Z Flow, Legion, the Lenovo service images), and
+it is the side that matters for reading an image.
+
 **The cross-check to make.** The owner has MFIT's build report and ECFinder's
 capture for other generations; those name the profile and print the OEM public
 key hash as text. Matching them against this reader is the test: the key the
