@@ -41,10 +41,12 @@ import Foundation
 /// the combination MFIT refuses to build.
 ///
 /// What the *board* has already done is deliberately not read. The live file
-/// system also holds `/home/mca/eom`, which is 1 once Manufacturing has been
-/// closed on the board the dump came from — but the question is about the
-/// machine the image is about to be written to, whose chipset is fresh, and a
-/// record of some other board's history does not bear on it.
+/// system carries `/home/mca/eom` — MFIT's flag again, as a raw byte — and
+/// `/home/mca/manuf_lock`, which no MFIT settings database names; both read 1
+/// on a board whose engine has run and 0 in the image's own records, and what
+/// the platform meant by writing them is not documented (`Design/
+/// ME_STRUCTURES.md`). The question is about the machine the image is about to
+/// be written to, whose chipset is fresh, and neither byte bears on it.
 ///
 /// The engine reads no fuses — those are burned into the chip and no dump
 /// carries them — and it never guesses: a firmware of a generation that does

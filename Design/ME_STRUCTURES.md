@@ -59,9 +59,17 @@ holding files the volume names either by index (before CSME 15) or, on CSME
 `/home/mca/eom` = `0x10020000` (1 byte), `/home/mca/eom_config` = `0x1001EE00`
 (2 bytes), `/home/mca/manuf_lock` = `0x10020100` (1 byte), and the key table
 `/home/mca/3LVLSCD.dat` (0x900 bytes). These files are the **live page** — what
-the file system of *that board* holds now — so `/home/mca/eom` = 1 there means
-Manufacturing was closed on the machine the dump came from. That is a fact about
-the source board, not about the image, and the row does not report it.
+the file system of *that board* holds now — so MFIT's own database gives two of the File IDs a setting each — and it names the
+same setting twice, which is where a common misreading starts:
+`/home/mca/eom_config` carries `EomFirstBootEnabled` in **bit 0** and
+`FlexibleEomSettings` in **bits 1–2** (its `config_params` are 0-based:
+`Lock Descriptor and OEM Configs` = 0 … `Do not lock` = 3), and `/home/mca/eom`
+carries `EomFirstBootEnabled` again as a **raw byte**. Two further bytes on that
+row of the file system are **not** in any MFIT database: `/home/mca/manuf_lock`,
+and `/home/mca/eom`'s live value, which is 1 on every dump taken from a machine
+whose engine has run while the image's own record of the same byte reads 0. What
+the platform meant by writing them is not documented anywhere at hand, so the
+row reports neither — and neither is evidence of anything on its own.
 
 **The UEP area** — an FPT region named `UEP` (0x2A0000 in the Z Flow dump,
 8 KiB), opened by the ASCII container `$UEPC`. It holds an entry that carries a

@@ -1,4 +1,4 @@
-@source-sha 09878f7efd50afca9d5a482cbec30e56f064587887acadc67d3f046593c74425
+@source-sha 564191402657758e8a274b74b4c53c5176c641526da7af28a27d0524a3f2a0e2
 # Den ME-Bericht lesen
 
 > Was die beiden Registerkarten des ME Analyzer enthalten und wie die einzelnen Zeilen der Übersicht zu lesen sind.
@@ -72,7 +72,7 @@ Eine nicht gesetzte Einstellung heißt also nicht, dass Manufacturing offen blei
 
 Die drei Zeilen sind farbig. Eine Platine, die Manufacturing **nicht** abschließt, startet und bleibt bearbeitbar: grün. Eine, die abschließt, und der Fall, in dem die Einstellung bei offenem Descriptor gesetzt ist, tragen denselben Ton, den der Dateisystemzustand für **Initialized** trägt — das Image legt sich fest, und was danach geschrieben wird, ist endgültig. Eine Zeile, die nur meldet, dass das Image keinen Eintrag trägt, bleibt im gewöhnlichen Ton.
 
-Was die **Platine, von der der Dump stammt**, bereits getan hat, wird nicht gemeldet. Das Dateisystem einer Region von einer Platine im Betrieb verzeichnet, dass Manufacturing dort abgeschlossen wurde; für die Platine, auf die dieses Image erst geschrieben wird, besagt das nichts — die Zeile antwortet für den nächsten ersten Start.
+Was die **Platine, von der der Dump stammt**, bereits getan hat, wird nicht gemeldet. Eine Region von einer Platine im Betrieb trägt zwei Bytes, die ein Build unberührt lässt — das Flag noch einmal als einzelnes Byte und eine Fertigungssperre —, und beide lesen dort 1; was die Plattform damit gemeint hat, ist jedoch nirgends beschrieben, und für die Platine, auf die dieses Image erst geschrieben wird, besagen sie nichts. Die Zeile antwortet für den nächsten ersten Start.
 
 **Boot Guard** — das Profil, für das das Image gebaut ist, so wie es das Flash Image Tool, MEInfo und die Reparaturwerkzeuge ausgeben: `0 - No_FVME`, `3 - VM`, `4 - FVE` oder `5 - FVME`; die Kürzel stehen für verifizierten und gemessenen Start. Das Profil brennt die Plattform beim Abschluss von Manufacturing in die Fuses des Chipsatzes, und Fuses lassen sich nicht zurücknehmen; deshalb lohnt es sich, es vor dem Schreiben eines Images zu lesen. Profil 0 ist grün — die Platine startet ungeprüft, und damit lässt sich arbeiten —, ein Profil mit einer Stufe denselben Ton, den der Dateisystemzustand für **Initialized** trägt. Die Zeile meldet das Profil, das das Image trägt; trägt ein Image keinen solchen Eintrag — weil Boot Guard mit einem anderen Werkzeug eingerichtet wurde oder die Generation die Einstellung anderswo führt —, steht dort **Kein Profil-Eintrag in diesem Image**, und das Profil ist mit MEInfo von der Platine selbst zu nehmen. Keine Zeile sagt, was eine Platine bei einem Widerspruch zwischen Image und Fuses tut, denn was in den Fuses steht, sagt der Dump nicht.
 

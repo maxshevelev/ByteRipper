@@ -390,10 +390,13 @@ public struct MFSStateBasis: Codable, Sendable, Equatable {
 /// region without its OEM Configuration partition looks like. Deciding it is
 /// `ManufacturingDecoder` in `FileSystem/Manufacturing.swift`.
 ///
-/// What the *board* has already done is not reported: `/home/mca/eom` in the
-/// live file system records that Manufacturing was closed on the board the dump
-/// was taken from, and that says nothing about the machine the image is about
-/// to be written to. The row answers for the next first boot only.
+/// What the *board* has already done is not reported. The live file system
+/// holds two bytes a build never writes the way they read on a board in
+/// service — `/home/mca/eom`, which is MFIT's own flag written as a raw byte,
+/// and `/home/mca/manuf_lock`, which is in no MFIT settings database at all —
+/// and both read 1 on every dump taken from a machine whose engine has run,
+/// with 0 in the image's own records. What the platform meant by writing them
+/// is not documented; what the *image* will do is, and that is what this says.
 ///
 /// The engine never reads the PCH fuses themselves — those are burned into the
 /// chip, not into a dump, and no dump can say what they hold. What this says is
