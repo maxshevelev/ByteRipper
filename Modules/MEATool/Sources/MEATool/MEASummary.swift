@@ -277,8 +277,9 @@ public enum MEASummary {
         // what state the firmware is in, what it is built for, and which key it
         // carries. MEAnalyzer prints none of them (the model's
         // `ManufacturingState`, `BootGuardProfile` and `oemPublicKeyHash` say
-        // where each fact lives and how it was established); the labels are
-        // ours, so unlike upstream's row names they go through `L`.
+        // where each fact lives and how it was established, and
+        // `Design/ME_STRUCTURES.md` describes the structures behind them); the
+        // labels are ours, so unlike upstream's row names they go through `L`.
         //
         // Manufacturing is gated on the generations that decide it at all:
         // CSME 11 and later, whose descriptor access rights say it, and where

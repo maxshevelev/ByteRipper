@@ -5,6 +5,9 @@
 самого MFIT (`orig.cleanME_NO_EOM_info.txt`). Фьюзы PCH здесь не рассматриваются:
 из дампа они не читаются.
 
+Это журнал исследования с адресами и значениями; описание структур и того, что
+ещё не разобрано у других версий ME, — в `Design/ME_STRUCTURES.md`.
+
 ## Первоисточники: как MFIT называет эти настройки
 
 Из `Untitled.xml` (проект MFIT, layout `Intel(R) AlderLake P Chipset - Consumer - SPI`):

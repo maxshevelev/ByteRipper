@@ -399,7 +399,8 @@ public struct MFSStateBasis: Codable, Sendable, Equatable {
 ///
 /// The engine never reads the PCH fuses themselves — those are burned into the
 /// chip, not into a dump, and no dump can say what they hold. What this says is
-/// what the *image* will make the platform do.
+/// what the *image* will make the platform do. The structures behind it, and
+/// what is still undetermined on older generations, are `Design/ME_STRUCTURES.md`.
 public enum ManufacturingState: String, Codable, Sendable, CaseIterable {
     /// The first boot of this image closes Manufacturing — either because the
     /// descriptor carries the factory rights that close it, or because the
