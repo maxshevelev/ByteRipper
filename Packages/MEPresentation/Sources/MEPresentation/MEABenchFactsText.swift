@@ -54,9 +54,6 @@ extension MEAText {
                                in: language,
                                flag ? L("set", in: language) : L("clear", in: language),
                                source))
-            if flag, let flexible = basis.flexible {
-                sentences.append(flexibleText(flexible, in: language))
-            }
         }
         // With the flag set the descriptor decides nothing, and with it clear
         // the descriptor is the whole answer.
@@ -115,12 +112,18 @@ extension MEAText {
         }
     }
 
-    private static func flexibleText(_ flexible: Int, in language: AppLanguage) -> String {
-        switch flexible {
-        case 0: return L("End of Manufacturing will lock the descriptor and the OEM configuration.", in: language)
-        case 1: return L("End of Manufacturing will lock the OEM configuration only.", in: language)
-        case 2: return L("End of Manufacturing will lock the descriptor only.", in: language)
-        default: return L("End of Manufacturing will lock neither the descriptor nor the OEM configuration.", in: language)
+    /// `FlexibleEomSettings` — bits 1–2 of the same `/home/mca/eom_config`
+    /// record the flag lives in — as MFIT's own setting spells its four values
+    /// (`config_params` of `FlexibleEomSettings` in its settings database, and
+    /// the labels its own panel shows). It is what End of Manufacturing
+    /// commits, and it is stored whether or not the flag is set: an image whose
+    /// flag is clear still says what would be locked if it ever ran.
+    public static func flexibleEOMSettings(_ value: Int, in language: AppLanguage) -> String {
+        switch value {
+        case 0: return L("Lock Descriptor and OEM Configs", in: language)
+        case 1: return L("Lock OEM Configs Only", in: language)
+        case 2: return L("Lock Descriptor Only", in: language)
+        default: return L("Do not lock Descriptor and OEM Configs", in: language)
         }
     }
 }

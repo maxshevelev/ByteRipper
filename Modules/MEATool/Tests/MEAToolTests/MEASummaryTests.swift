@@ -919,7 +919,12 @@ final class MEASummaryTests: XCTestCase {
         // The basis follows its row, as the File System State's does, and is
         // short: the flag, where it was read, what EOM commits.
         let basis = value("Manufacturing basis", in: rows)?.text(in: .english)
-        XCTAssertEqual(basis, "The End of Manufacturing flag is set in the image's OEM Configuration. End of Manufacturing will lock the descriptor and the OEM configuration.")
+        XCTAssertEqual(basis, "The End of Manufacturing flag is set in the image's OEM Configuration.")
+        // What End of Manufacturing commits is its own row, in MFIT's own words
+        // for the four values of `FlexibleEomSettings` (numbered from zero).
+        XCTAssertEqual(value("Flexible EOM Settings", in: rows),
+                       .value("Lock Descriptor and OEM Configs"))
+        XCTAssertEqual(tone("Flexible EOM Settings", in: rows), .standard)
         // The basis is evidence, not a verdict: it is drawn as an ordinary
         // value, like the File System State's basis, while the verdict above it
         // carries the colour (`Design/ME_STRUCTURES.md`, the tones).
@@ -976,9 +981,12 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(value("Manufacturing", in: rows),
                        .value("Will close on the descriptor's rights"))
         XCTAssertEqual(tone("Manufacturing", in: rows), .caution)
-        // No flag in this image: the descriptor is what the basis names.
+        // No flag in this image: the descriptor is what the basis names. The
+        // setting row is absent, because the image carries no such record —
+        // CSME 12 knows nothing of `FlexibleEomSettings`.
         XCTAssertEqual(value("Manufacturing basis", in: rows)?.text(in: .english),
                        "The descriptor's access rights are what close Manufacturing.")
+        XCTAssertNil(value("Flexible EOM Settings", in: rows))
         XCTAssertEqual(value("Boot Guard", in: rows), .value("4 - FVE"))
         XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
         // CSME 12 with a zeroed key field: a finding of its own, not silence.

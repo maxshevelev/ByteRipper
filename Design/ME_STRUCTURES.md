@@ -64,7 +64,10 @@ same setting twice, which is where a common misreading starts:
 `/home/mca/eom_config` carries `EomFirstBootEnabled` in **bit 0** and
 `FlexibleEomSettings` in **bits 1–2** (its `config_params` are 0-based:
 `Lock Descriptor and OEM Configs` = 0 … `Do not lock` = 3), and `/home/mca/eom`
-carries `EomFirstBootEnabled` again as a **raw byte**. Two further bytes on that
+carries `EomFirstBootEnabled` again as a **raw byte**. The panel prints both:
+the flag decides the Manufacturing row, and the flexible setting has a row of its
+own beside it, in those four values — it is stored whether or not the flag is
+set, so it says what an image would lock if it ever ran. Two further bytes on that
 row of the file system are **not** in any MFIT database: `/home/mca/manuf_lock`,
 and `/home/mca/eom`'s live value, which is 1 on every dump taken from a machine
 whose engine has run while the image's own record of the same byte reads 0. What

@@ -115,6 +115,10 @@ public enum MEACurator {
             if let basis = a.manufacturingBasis {
                 fields.append(MEAField(L("Manufacturing basis", in: language),
                                        MEAText.manufacturingBasis(basis, in: language)))
+                if let flexible = basis.flexible {
+                    fields.append(MEAField(L("Flexible EOM Settings", in: language),
+                                           MEAText.flexibleEOMSettings(flexible, in: language)))
+                }
             }
         }
         if a.family == .csme, a.version.major >= 11 {

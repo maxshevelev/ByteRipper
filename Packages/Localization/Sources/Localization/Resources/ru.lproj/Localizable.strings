@@ -1538,10 +1538,6 @@
 "No End of Manufacturing record in this image." = "Записи о EOM в этом дампе нет.";
 "The descriptor's access rights are what close Manufacturing." = "Manufacturing закрывают права доступа в дескрипторе.";
 "The descriptor is open, so nothing closes it." = "Дескриптор открыт, поэтому ничего не закрывается.";
-"End of Manufacturing will lock the descriptor and the OEM configuration." = "При EOM фиксируются дескриптор и OEM-конфигурация.";
-"End of Manufacturing will lock the OEM configuration only." = "При EOM фиксируется только OEM-конфигурация.";
-"End of Manufacturing will lock the descriptor only." = "При EOM фиксируется только дескриптор.";
-"End of Manufacturing will lock neither the descriptor nor the OEM configuration." = "При EOM не фиксируется ни дескриптор, ни OEM-конфигурация.";
 "Manufacturing" = "Manufacturing";
 "Manufacturing basis" = "Основание Manufacturing";
 "Boot Guard" = "Boot Guard";
@@ -1554,3 +1550,8 @@
 "Not set (all zeros)" = "Не задан (все нули)";
 "Not set (the area is erased)" = "Не задан (область стёрта)";
 "Layout not recognized" = "Структура не распознана";
+"Flexible EOM Settings" = "Настройка Flexible EOM";
+"Lock Descriptor and OEM Configs" = "Зафиксировать дескриптор и OEM-конфигурацию";
+"Lock OEM Configs Only" = "Только OEM-конфигурацию";
+"Lock Descriptor Only" = "Только дескриптор";
+"Do not lock Descriptor and OEM Configs" = "Не фиксировать ничего";

@@ -1,4 +1,4 @@
-@source-sha 564191402657758e8a274b74b4c53c5176c641526da7af28a27d0524a3f2a0e2
+@source-sha 2ccf1d4775a06e4e2c11c8a651188fc728fced8a4278cc98e4e2bb7a9fe01bf6
 # Den ME-Bericht lesen
 
 > Was die beiden Registerkarten des ME Analyzer enthalten und wie die einzelnen Zeilen der Übersicht zu lesen sind.
@@ -61,14 +61,16 @@ Drei weitere Zeilen beantworten allein aus dem Dump, was vor dem Schreiben eines
 
 Eine nicht gesetzte Einstellung heißt also nicht, dass Manufacturing offen bleibt: sie heißt, dass der Descriptor antwortet. Die Zeile nimmt diese Werte:
 
-- **Schließt über das EOM-Flag ab** — die Einstellung ist gesetzt: Das Flash Image Tool wurde angewiesen, Manufacturing beim ersten Start nach dem Schreiben dieses Images abzuschließen.
+- **Schließt über das EOM-Flag ab** — die Einstellung ist gesetzt: Das Flash Image Tool wurde angewiesen, Manufacturing beim ersten Start nach dem Schreiben dieses Images abzuschließen, und die Zeile darunter nennt, was das sperrt.
 - **Schließt über die Zugriffsrechte im Descriptor ab** — die Einstellung ist nicht gesetzt oder fehlt, und der Descriptor trägt die Werksrechte: Die Plattform schließt Manufacturing beim ersten Start von selbst ab. Das ist das Serien-Image, und das, was ein Hersteller-Dump trägt.
 - **Schließt nicht ab** — die Einstellung ist nicht gesetzt und die Zugriffsrechte im Descriptor sind offen. Das ist das Image, das eine Werkstatt sich selbst bereitet, wenn die Platine starten und bearbeitbar bleiben soll.
 - **Schließt über das EOM-Flag ab, Descriptor offen** — die Einstellung ist gesetzt, während die Zugriffsrechte offen sind. Das Flash Image Tool weigert sich, ein solches Image zu bauen; beides wurde also von einem anderen Werkzeug oder von Hand gesetzt.
 - **Aus diesem Image nicht lesbar** — die Einstellung ist nicht gesetzt oder fehlt, und es wurde kein Flash-Descriptor mit der Region gelesen: so sieht eine einzeln herausgelöste ME-Region aus. Was ihre Zugriffsrechte sagen würden, ist dann unbekannt.
 - **Diese Firmware hat keinen solchen Schalter** — eine Generation, die das gar nicht entscheidet: vor CSME 11, deren Descriptoren die Rechte entnommen werden. Für sie entfällt die Zeile in der Übersicht ganz.
 
-**Grundlage der Manufacturing-Entscheidung** folgt ihr, wie **Grundlage des Zustands** dem Dateisystemzustand folgt. Sie nennt die Einstellung und woher sie gelesen wurde — aus der OEM-Konfiguration des Images oder, wenn das Image keinen solchen Eintrag trägt, aus dem Dateisystem — sowie das, was End of Manufacturing sperrt. Ist die Einstellung nicht gesetzt, sagt sie, welcher der beiden Mechanismen stattdessen wirkt: dass Manufacturing durch die Zugriffsrechte im Descriptor abgeschlossen wird, oder dass bei offenem Descriptor nichts abgeschlossen wird.
+**Grundlage der Manufacturing-Entscheidung** folgt ihr, wie **Grundlage des Zustands** dem Dateisystemzustand folgt. Sie nennt die Einstellung und woher sie gelesen wurde — aus der OEM-Konfiguration des Images oder, wenn das Image keinen solchen Eintrag trägt, aus dem Dateisystem — und, wenn die Einstellung nicht gesetzt ist, welcher der beiden Mechanismen stattdessen wirkt: dass Manufacturing durch die Zugriffsrechte im Descriptor abgeschlossen wird, oder dass bei offenem Descriptor nichts abgeschlossen wird.
+
+**Flexible EOM Settings** folgt ihr und ist das, was End of Manufacturing sperrt — in den vier Werten des Flash Image Tool: „Descriptor und OEM-Konfiguration sperren", „Nur die OEM-Konfiguration sperren", „Nur den Descriptor sperren", „Nichts sperren". Der Wert steht unabhängig vom Flag im Image, ein Image, das nichts abschließt, sagt also trotzdem, was es sperren würde, wenn es abschlösse; entschieden wird das von der Einstellung neben dem Flag, und sie ist es wert, vor dem Setzen des Flags in einem Service-Image gelesen zu werden.
 
 Die drei Zeilen sind farbig. Eine Platine, die Manufacturing **nicht** abschließt, startet und bleibt bearbeitbar: grün. Eine, die abschließt, und der Fall, in dem die Einstellung bei offenem Descriptor gesetzt ist, tragen denselben Ton, den der Dateisystemzustand für **Initialized** trägt — das Image legt sich fest, und was danach geschrieben wird, ist endgültig. Eine Zeile, die nur meldet, dass das Image keinen Eintrag trägt, bleibt im gewöhnlichen Ton.
 
