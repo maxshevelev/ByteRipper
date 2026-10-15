@@ -288,6 +288,7 @@ struct MEAParkedState: PersistableToolSessionState {
             roots = []
             focusPath = nil
             controller.showSummary([])
+            controller.showConfiguration([])
             controller.setPlaceholder(.failed)
             controller.say(L("Could not read the file: %1$@", error), asProblem: true)
             show()
@@ -313,6 +314,7 @@ struct MEAParkedState: PersistableToolSessionState {
             roots = []
             focusPath = nil
             controller.showSummary([])
+            controller.showConfiguration([])
             controller.showRetry(false)
         }
         // Named, not just "Reading…": three panels can be the one on screen and
@@ -360,6 +362,7 @@ struct MEAParkedState: PersistableToolSessionState {
                 self.roots = []
                 self.focusPath = nil
                 self.controller.showSummary([])
+                self.controller.showConfiguration([])
                 self.controller.setPlaceholder(.failed)
                 self.controller.say(
                     MEReads.describe(error), asProblem: true)
@@ -397,6 +400,7 @@ struct MEAParkedState: PersistableToolSessionState {
         // file has no ME firmware, which is what the empty tab now says.
         controller.setPlaceholder(.empty)
         controller.showSummary(MEASummary.build(analysis, pending: pending, in: Localization.appLanguage))
+        controller.showConfiguration(MEAConfiguration.build(analysis, in: Localization.appLanguage))
         show()
         loadFileNames()
     }

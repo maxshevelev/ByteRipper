@@ -1113,6 +1113,76 @@ public actor MEFirmwareAnalyzer {
             hasSwitch: identity.family == .csme && identity.major >= 11,
             liveFilesResolved: liveFilesResolved))
 
+        // The ME configuration, file by file: the map's paths, and for each
+        // one the bytes an image carries — the OEM Configuration (FITC)
+        // partition's own record of it, or the MFS volume's live file, which
+        // wins where both exist because it is the state in force. A setting
+        // the map knows and the file does not carry is left out
+        // (`ConfigurationDecoder`); the paths are the ones `FileTable.dat`
+        // gives, so this reads on any generation whose files carry File IDs.
+        //
+        // The map is the one this generation has: a generation nobody has
+        // mapped yet reads no configuration at all rather than another
+        // generation's offsets (`MEConfigurationMap.forME(major:)`).
+        let configurationMap = MEConfigurationMap.forME(major: identity.major)
+        var imageConfigurationBytes: [String: Data] = [:]
+        var liveConfigurationBytes: [String: Data] = [:]
+        if let map = configurationMap, let info = mfsInfo, let table = fileTable,
+           !info.files.isEmpty {
+            let resolution = table.resolve(platform: info.ftblPlatform,
+                                           dictionary: info.ftblDictionary)
+            let naming = table.records(namingFileIndices: Set(info.files.map(\.index)),
+                                       platform: resolution.platform,
+                                       dictionary: resolution.dictionary)
+            // How long each file's content is, where the Integrity split said:
+            // the raw chain carries the trailer and the table after it, and a
+            // setting is never read out of those.
+            var contentSizes: [Int: Int] = [:]
+            for recorded in mfsVolume?.files ?? [] {
+                if let size = recorded.contentSize { contentSizes[recorded.index] = size }
+            }
+            for file in info.files {
+                guard let entry = naming[file.index],
+                      let fileID = Int(entry.fileID, radix: 16),
+                      let path = table.record(withFileID: fileID,
+                                              platform: resolution.platform,
+                                              dictionary: resolution.dictionary)?.path,
+                      map.file(at: path) != nil else { continue }
+                if let size = contentSizes[file.index] {
+                    liveConfigurationBytes[path] = Data(file.content.prefix(size))
+                } else {
+                    liveConfigurationBytes[path] = file.content
+                }
+            }
+        }
+        if let map = configurationMap, let fitc = oemConfiguration,
+           let payload = fitc.payloadOffset,
+           let records = fitc.recordsByID, let table = fileTable {
+            let resolution = table.resolve(platform: mfsInfo?.ftblPlatform ?? -1,
+                                           dictionary: mfsInfo?.ftblDictionary ?? -1)
+            for record in records {
+                guard let path = table.record(withFileID: record.fileID,
+                                              platform: resolution.platform,
+                                              dictionary: resolution.dictionary)?.path,
+                      map.file(at: path) != nil else { continue }
+                let at = payload - baseOffset + record.offset
+                guard at >= 0, record.size > 0, at + record.size <= region.count else { continue }
+                let start = region.startIndex + at
+                imageConfigurationBytes[path] = region.subdata(in: start..<(start + record.size))
+            }
+        }
+        let configuration = configurationMap.map { map in
+            map.files.compactMap { layout -> ConfigurationFile? in
+                if let live = liveConfigurationBytes[layout.path] {
+                    return ConfigurationDecoder.file(layout, from: .fileSystem, bytes: live)
+                }
+                if let image = imageConfigurationBytes[layout.path] {
+                    return ConfigurationDecoder.file(layout, from: .image, bytes: image)
+                }
+                return nil
+            }
+        } ?? []
+
         // Boot Guard: the profile is a JSON record of the CDMD configuration
         // partition, the key hash a value the UEP area repeats. Neither is in
         // any specification, both are read by shape — see `BootGuardReader`.
@@ -1263,6 +1333,7 @@ public actor MEFirmwareAnalyzer {
             // them.
             manufacturingState: manufacturing.state,
             manufacturingBasis: manufacturing.basis,
+            configuration: configuration.isEmpty ? nil : configuration,
             bootGuardProfile: bootGuardProfile,
             oemPublicKeyHash: oemPublicKeyHash,
             // Row 12a is CSME 11's alone, the way upstream gates it, so the
