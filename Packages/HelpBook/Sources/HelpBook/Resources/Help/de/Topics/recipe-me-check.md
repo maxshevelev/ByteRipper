@@ -1,4 +1,4 @@
-@source-sha 2bf4d33baa60d776871bd5800072f540016016e6171319ac27eab930ed5a2a19
+@source-sha 09878f7efd50afca9d5a482cbec30e56f064587887acadc67d3f046593c74425
 # Den ME-Bericht lesen
 
 > Was die beiden Registerkarten des ME Analyzer enthalten und wie die einzelnen Zeilen der Übersicht zu lesen sind.
@@ -76,7 +76,13 @@ Was die **Platine, von der der Dump stammt**, bereits getan hat, wird nicht geme
 
 **Boot Guard** — das Profil, für das das Image gebaut ist, so wie es das Flash Image Tool, MEInfo und die Reparaturwerkzeuge ausgeben: `0 - No_FVME`, `3 - VM`, `4 - FVE` oder `5 - FVME`; die Kürzel stehen für verifizierten und gemessenen Start. Das Profil brennt die Plattform beim Abschluss von Manufacturing in die Fuses des Chipsatzes, und Fuses lassen sich nicht zurücknehmen; deshalb lohnt es sich, es vor dem Schreiben eines Images zu lesen. Profil 0 ist grün — die Platine startet ungeprüft, und damit lässt sich arbeiten —, ein Profil mit einer Stufe denselben Ton, den der Dateisystemzustand für **Initialized** trägt. Die Zeile meldet das Profil, das das Image trägt; trägt ein Image keinen solchen Eintrag — weil Boot Guard mit einem anderen Werkzeug eingerichtet wurde oder die Generation die Einstellung anderswo führt —, steht dort **Kein Profil-Eintrag in diesem Image**, und das Profil ist mit MEInfo von der Platine selbst zu nehmen. Keine Zeile sagt, was eine Platine bei einem Widerspruch zwischen Image und Fuses tut, denn was in den Fuses steht, sagt der Dump nicht.
 
-**OEM Public Key Hash (SHA-384)** — der Hash des öffentlichen Schlüssels, mit dem das Schlüsselmanifest des Herstellers signiert ist, in der ME-Region, als 96 Hexadezimalzeichen. Er ist der Wert der Einstellung *OEM Public Key Hash* des Flash Image Tool und die Zeile, die die Reparaturwerkzeuge ausgeben; zwei Dumps derselben Platine tragen denselben Hash, und gegen ihn wird ein Schlüsselmanifest geprüft. Nur Nullen in dieser Einstellung deaktivieren die Signatur des Hersteller-Schlüsselmanifests. Die Zeile meldet **Kein Schlüsselmaterial in diesem Image**, wenn die Region keinen Wert enthält, für den sie einstehen kann: Der Aufbau des Bereichs, in dem er liegt, ist nirgends beschrieben, daher wird ein Wert nur dort gemeldet, wo er sich so wiederholt wie in den untersuchten Images. Das ist die Antwort für eine Region mit gelöschtem Bereich, für eine, deren Einstellung nur Nullen enthält, und für eine Generation, die den Bereich anders aufbaut: Eine Folge von Nullen ist von einem unbeschriebenen Bereich nicht zu unterscheiden, daher wird ein Hash nur behauptet, wenn die Bytes vorhanden sind.
+**OEM Public Key Hash (SHA-384)** — der Hash des öffentlichen Schlüssels, mit dem das Schlüsselmanifest des Herstellers signiert ist, in der ME-Region, als 96 Hexadezimalzeichen. Er ist der Wert der Einstellung *OEM Public Key Hash* des Flash Image Tool und die Zeile, die die Reparaturwerkzeuge ausgeben; zwei Dumps derselben Platine tragen denselben Hash, und gegen ihn wird ein Schlüsselmanifest geprüft. Ein Schlüssel gehört einem Hersteller, ein Wert also, den zwei Hersteller zu teilen scheinen, ist per Definition falsch gelesen; die Zeile liest das Feld des Eintrags, statt die Region nach passenden Bytes zu durchsuchen.
+
+Enthält dieses Feld keinen Schlüssel, sagt die Zeile, welcher der drei Befunde es ist — drei verschiedene Zustände einer Startkette:
+
+- **Nicht gesetzt (nur Nullen)** — die Einstellung ist da und ist die Null-Einstellung: das „OEM signing is disabled when this hash is set to all 0s" des Flash Image Tool. Die Signatur des Schlüsselmanifests ist abgeschaltet.
+- **Nicht gesetzt (Bereich gelöscht)** — das Feld ist `FF`: dorthin wurde nie geschrieben. So sieht eine Region aus, die nie eingerichtet wurde.
+- **Aufbau nicht erkannt** — das Feld enthält etwas anderes, oder der Bereich hat dort keinen Eintrag: Der Aufbau des Images ist keiner, den dieses Werkzeug liest, und über seinen Schlüssel wird nichts behauptet. So antwortet eine ältere Generation mit anders aufgebautem Bereich, und ebenso eine Region ohne einen solchen Bereich.
 
 ## Eine Region auf eine andere Platine übertragen
 

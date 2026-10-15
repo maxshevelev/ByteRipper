@@ -124,12 +124,10 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// and the vendor images whose Boot Guard was never configured from the
     /// ME side.
     public var bootGuardProfile: BootGuardProfile? = nil
-    /// The OEM public key hash the UEP area carries (ours), as 96 uppercase hex
-    /// characters — a SHA-384, the value MFIT calls `OemPublicKeyHash` and
-    /// ECFinder prints as "OEM Public Key Hash (SHA-384)". All zeros is the
-    /// setting that disables OEM signing. nil when the UEP area carries no
-    /// key material (an extracted image whose UEP was wiped).
-    public var oemPublicKeyHash: String? = nil
+    /// The OEM public key hash the UEP area carries, and why it is not a value
+    /// where it is not one (ours). `OEMKeyHash` says what each answer means;
+    /// `BootGuardReader.oemPublicKeyHash` reads it out of the image's record.
+    public var oemPublicKeyHash: OEMKeyHash? = nil
     /// Power Down Mitigation (row 12a, upstream `pdm_status`): whether a
     /// CSME 11 firmware carries the power-down mitigation, as its database row
     /// records it. nil for every other family and major — the row upstream
@@ -466,6 +464,33 @@ public struct ManufacturingBasis: Codable, Sendable, Equatable {
         self.descriptorOpen = descriptorOpen
         self.liveFilesResolved = liveFilesResolved
     }
+}
+
+/// The OEM public key hash an image carries — the SHA-384 of the manufacturer's
+/// public key, which MFIT calls `OemPublicKeyHash` and the field tools print as
+/// "OEM Public Key Hash (SHA-384)". Ours: MEAnalyzer reads nothing of the kind.
+///
+/// The value lives in the UEP area's entry, at a fixed offset inside it, and
+/// that area is described nowhere — so the four answers below are four
+/// *findings*, not four ways of saying nothing. The distinction matters at a
+/// bench: an image whose key field reads zeros has signing switched off by the
+/// manufacturer's own setting, one whose field is erased was never configured
+/// there, and one whose field holds something else is an area this reader does
+/// not know how to walk — three different things to do about a boot chain, and
+/// the tools print them as one line each rather than as silence.
+public enum OEMKeyHash: Codable, Sendable, Equatable {
+    /// The 48 bytes the entry's key field holds, as 96 uppercase hex.
+    case hash(String)
+    /// The field reads all zeros: MFIT's own "OEM signing is disabled when this
+    /// hash is set to all 0s".
+    case allZeros
+    /// The field reads all `0xFF`: the area was never written, so no key was
+    /// ever put there.
+    case erased
+    /// The field holds something that is not a key, or the area has no entry
+    /// where this one expects it: the image's layout is not one this reads, and
+    /// nothing is claimed about its key.
+    case unrecognized
 }
 
 /// The Boot Guard profile an image is built for. Ours: MEAnalyzer prints no such
@@ -2446,8 +2471,8 @@ public enum EngineModelRevision {
     /// the image carries none — plus the descriptor that makes the
     /// flag-with-an-open-descriptor combination its own verdict),
     /// `bootGuardProfile` (the profile the image is built for, out of the CDMD
-    /// configuration's JSON) and `oemPublicKeyHash` (the SHA-384 the UEP area
-    /// carries). `analyze` gained the optional `descriptorBytes` they need for
+    /// configuration's JSON) and `oemPublicKeyHash` (the `OEMKeyHash` the UEP
+    /// area's entry holds — a value, or the read that says why there is none). `analyze` gained the optional `descriptorBytes` they need for
     /// the descriptor's BIOS master — an extracted ME region has no descriptor
     /// of its own, and the basis says so.
     public static let current = 41

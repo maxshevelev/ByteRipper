@@ -905,9 +905,10 @@ final class MEASummaryTests: XCTestCase {
                                    "descriptorOpen": false,
                                    "liveFilesResolved": true],
             "bootGuardProfile": "5",
-            "oemPublicKeyHash": String(repeating: "05", count: 48),
         ])
-        let rows = tableRows(protected)
+        var protectedKey = protected
+        protectedKey.oemPublicKeyHash = .hash(String(repeating: "05", count: 48))
+        let rows = tableRows(protectedKey)
         XCTAssertEqual(value("Manufacturing", in: rows), .value("Will close on the EOM flag"))
         // It will close: the tone the File System State draws for Initialized.
         XCTAssertEqual(tone("Manufacturing", in: rows), .caution)
@@ -962,15 +963,15 @@ final class MEASummaryTests: XCTestCase {
     /// before MFIT grew the flag, and CSME 12 is such a generation: it reads a
     /// verdict of its own, not `noSwitch`.
     func testTheBenchRowsBelongToCSME11AndLater() throws {
-        let a = try analysis([
+        var a = try analysis([
             "family": "csme", "manifest": manifestJSON(),
             "version": ["major": 12, "minor": 0, "hotfix": 3, "build": 1091],
             "manufacturingState": "willClose",
             "manufacturingBasis": ["descriptorOpen": false,
                                    "liveFilesResolved": false],
             "bootGuardProfile": "4",
-            "oemPublicKeyHash": String(repeating: "12", count: 48),
         ])
+        a.oemPublicKeyHash = .allZeros
         let rows = tableRows(a)
         XCTAssertEqual(value("Manufacturing", in: rows),
                        .value("Will close on the descriptor's rights"))
@@ -980,8 +981,8 @@ final class MEASummaryTests: XCTestCase {
                        "The descriptor's access rights are what close Manufacturing.")
         XCTAssertEqual(value("Boot Guard", in: rows), .value("4 - FVE"))
         XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
-        XCTAssertEqual(value("OEM Public Key Hash", in: rows),
-                       .value(String(repeating: "12", count: 48)))
+        // CSME 12 with a zeroed key field: a finding of its own, not silence.
+        XCTAssertEqual(value("OEM Public Key Hash", in: rows), .value("Not set (all zeros)"))
 
         // ME 7 has none of this machinery.
         let me7 = try analysis([

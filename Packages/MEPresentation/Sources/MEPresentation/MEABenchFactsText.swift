@@ -97,13 +97,22 @@ extension MEAText {
     /// MFIT's own build report and ECFinder print it — a technician comparing
     /// two of them compares them as text.
     ///
-    /// There is no wording for "the hash is all zeros, so OEM signing is off":
-    /// a 48-byte run of zeros is what an unwritten area looks like too, so the
-    /// reader claims a hash only where the area repeats a value that carries
-    /// key material at all, and the row's absence is the honest answer for both
-    /// (`BootGuardReader.oemPublicKeyHash`). The help says so.
-    public static func oemPublicKeyHash(_ hash: String) -> String {
-        hash
+    /// The three findings that are not a value say which they are rather than
+    /// "no key" (`OEMKeyHash`): a key field reading zeros is the manufacturer's
+    /// own "signing disabled", an erased one was never written, and one this
+    /// reader cannot walk is a layout it does not know. Three different states
+    /// of a boot chain, and the help explains what to do about each.
+    public static func oemPublicKeyHash(_ value: OEMKeyHash, in language: AppLanguage) -> String {
+        switch value {
+        case .hash(let hex):
+            return hex
+        case .allZeros:
+            return L("Not set (all zeros)", in: language)
+        case .erased:
+            return L("Not set (the area is erased)", in: language)
+        case .unrecognized:
+            return L("Layout not recognized", in: language)
+        }
     }
 
     private static func flexibleText(_ flexible: Int, in language: AppLanguage) -> String {

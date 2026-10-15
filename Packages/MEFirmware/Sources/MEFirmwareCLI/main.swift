@@ -174,7 +174,7 @@ struct MEFirmwareCLI {
                       + ", live files: \(basis.liveFilesResolved ? "read" : "not read")" + ")"
               } ?? ""))
         print("boot guard:    \(result.bootGuardProfile.map { "\($0.rawValue) - \($0.rawValue)" } ?? "no profile record in this image")")
-        print("oem key hash:  \(result.oemPublicKeyHash ?? "none in this image")")
+        print("oem key hash:  \(result.oemPublicKeyHash.map(describeKeyHash) ?? "not read")")
         if result.regions.isEmpty {
             print("FPT regions: none found")
         } else {
@@ -184,6 +184,17 @@ struct MEFirmwareCLI {
                 print(String(format: "  [%2d] %@ 0x%08X 0x%08X 0x%08X",
                              region.id, label as NSString, region.offset, region.size, region.flags))
             }
+        }
+    }
+
+    /// The harness's own words for the four findings — the panel's are in
+    /// `MEAText`, which the harness does not link.
+    static func describeKeyHash(_ value: OEMKeyHash) -> String {
+        switch value {
+        case .hash(let hex): return hex
+        case .allZeros: return "not set (all zeros)"
+        case .erased: return "not set (the area is erased)"
+        case .unrecognized: return "layout not recognized"
         }
     }
 
