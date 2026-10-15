@@ -1,5 +1,6 @@
-// The End of Manufacturing switch: which records the platform reads to decide
-// whether its first boot closes Manufacturing, and what their bytes mean.
+// How a dump answers whether the platform closes Manufacturing on the first
+// boot of a board: the descriptor's access rights, which is what a serial image
+// relies on, and the MFIT flag on top of them (`Design/ME_STRUCTURES.md`).
 //
 // A package of its own would be a package with one enum in it: this belongs to
 // MEFirmware, beside the MFS decoders whose records it interprets, and the
