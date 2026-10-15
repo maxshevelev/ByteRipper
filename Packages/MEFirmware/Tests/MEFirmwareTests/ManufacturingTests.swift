@@ -210,6 +210,17 @@ final class BootGuardReaderTests: XCTestCase {
         XCTAssertNil(BootGuardReader.oemPublicKeyHash(in: uep(holding: Self.oemHash, copies: 1)))
     }
 
+    /// Two copies are not it either, and that is the case CSME 18 put in front
+    /// of this reader: a value once per half of the area, which the established
+    /// layouts never show (they carry three per half, in the half that has
+    /// them). The entry layout is unknown, so a value that does not have the
+    /// established shape is left alone rather than printed as a key.
+    func testTwoCopiesDoNotMakeTheEstablishedShape() {
+        XCTAssertNil(BootGuardReader.oemPublicKeyHash(in: uep(holding: Self.oemHash, copies: 2)))
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(holding: Self.oemHash, copies: 3)),
+                       Self.oemHash)
+    }
+
     /// An erased area holds nothing, and must not be read as a key of zeroes.
     func testAnErasedAreaHasNoKey() {
         XCTAssertNil(BootGuardReader.oemPublicKeyHash(in: Data(repeating: 0xFF, count: 0x2000)))
