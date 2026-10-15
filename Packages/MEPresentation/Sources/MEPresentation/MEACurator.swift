@@ -110,7 +110,7 @@ public enum MEACurator {
         // dump. Shown on the same gates as the Summary rows.
         if a.family == .csme, a.version.major >= 11, let state = a.manufacturingState {
             fields.append(MEAField(L("Manufacturing", in: language),
-                                   MEAText.manufacturingState(state, in: language),
+                                   MEAText.manufacturingState(state, basis: a.manufacturingBasis, in: language),
                                    tone: MEATones.manufacturingState(state)))
             if let basis = a.manufacturingBasis {
                 fields.append(MEAField(L("Manufacturing basis", in: language),

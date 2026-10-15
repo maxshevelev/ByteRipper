@@ -63,9 +63,10 @@ Three further rows answer, from the dump alone, what is asked before an image is
 
 A clear setting therefore does not mean Manufacturing stays open: it means the descriptor answers. The row takes these values:
 
-- **Will close on first boot** — the setting is enabled, or it is clear and the descriptor carries the factory rights. The first power-on after this image is written closes Manufacturing, which locks the flash descriptor and, depending on the `Flexible EOM settings` beside it, the OEM configuration. What is locked cannot be unlocked in the image afterwards.
+- **Will close on the EOM flag** — the setting is enabled. Flash Image Tool was told to close Manufacturing on the first power-on after this image is written.
+- **Will close on the descriptor's rights** — the setting is clear or absent, and the descriptor carries the factory rights: the platform closes Manufacturing on its first boot by itself. This is the serial image, and the one a manufacturer's dump carries.
 - **Will not close** — the setting is clear and the descriptor's access rights are open. This is the image a bench prepares for itself when it wants the machine to boot on and stay workable.
-- **Close on first boot, with the descriptor open** — the setting is enabled while the descriptor's access rights are open. Flash Image Tool refuses to build such an image, so the two were put there by another tool or by hand.
+- **Will close on the EOM flag, with the descriptor open** — the setting is enabled while the descriptor's access rights are open. Flash Image Tool refuses to build such an image, so the two were put there by another tool or by hand.
 - **Not readable from this image** — the setting is clear or absent and no flash descriptor was read with the region, which is what an ME region extracted on its own looks like. What its access rights would say is then unknown.
 - **No such switch in this firmware** — a generation that does not decide this at all: before CSME 11, whose descriptors are the ones the rights are read from. The Summary tab omits the row entirely for those.
 
