@@ -119,6 +119,12 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// two pages of the setting, and the descriptor's state. Ours; nil where
     /// `manufacturingState` is.
     public var manufacturingBasis: ManufacturingBasis? = nil
+    /// The ME configuration, file by file (ours): what MFIT's own settings
+    /// database says lives in each MFS file of this image, read out of its
+    /// bytes. `ConfigurationFile` says which page each file's bytes came from.
+    /// nil where the analysis read no configuration at all — an image whose
+    /// files carry no File IDs and whose OEM Configuration holds no records.
+    public var configuration: [ConfigurationFile]? = nil
     /// The Boot Guard profile this image is built for (ours). `nil` when the
     /// image carries no CDMD configuration record for it — the older layouts
     /// and the vendor images whose Boot Guard was never configured from the
@@ -466,6 +472,71 @@ public struct ManufacturingBasis: Codable, Sendable, Equatable {
         self.page = page
         self.descriptorOpen = descriptorOpen
         self.liveFilesResolved = liveFilesResolved
+    }
+}
+
+/// One configuration file of an image (ours): a file the ME configuration keeps
+/// settings in, with the values read out of it.
+///
+/// Where those values come from is `source`: the image's own **OEM
+/// Configuration** partition, which holds what the build wrote, or the **live
+/// file system** of the MFS volume, which holds what the platform has in it now.
+/// The live one wins where both exist, because it is the state in force.
+///
+/// `settings` carries numbers and hex, not words: what a number *means* — that
+/// `2` in `FlexibleEomSettings` is "Lock Descriptor Only" — is MFIT's own
+/// naming, which lives in `MEConfigurationCatalogue` and is read by the panel.
+public struct ConfigurationFile: Codable, Sendable, Equatable, Identifiable {
+    public var id: String { path }
+    /// The MFS path, as the panel's tree prints it (`/home/mca/eom_config`).
+    public var path: String
+    /// MFIT's own name for the file, as its panel's file list shows it.
+    public var alias: String
+    /// Which page the bytes were read from.
+    public var source: Source
+    /// How many bytes of it there are.
+    public var size: Int
+    public var settings: [ConfigurationSetting]
+
+    public enum Source: String, Codable, Sendable {
+        /// The OEM Configuration (FITC) partition's record — what the build wrote.
+        case image
+        /// The MFS volume's own file — what the file system holds now.
+        case fileSystem
+    }
+
+    public init(path: String, alias: String, source: Source, size: Int,
+                settings: [ConfigurationSetting]) {
+        self.path = path
+        self.alias = alias
+        self.source = source
+        self.size = size
+        self.settings = settings
+    }
+}
+
+/// One setting of one configuration file, as the bytes gave it: MFIT's name for
+/// the setting, and the value. A setting the file is too short to hold is left
+/// out rather than guessed at.
+public struct ConfigurationSetting: Codable, Sendable, Equatable, Identifiable {
+    public var id: String { name }
+    /// MFIT's name, which is the same word in every language.
+    public var name: String
+    /// The value as a number: the bits of a bitfield where the catalogue gives
+    /// bits, the field's own value — little-endian, as every one of these files
+    /// is — otherwise, up to eight bytes.
+    public var number: Int?
+    /// The value as hex where the field is wider than eight bytes.
+    public var bytes: String?
+    /// Whether MFIT marks the setting `Auto`: the platform writes it, and a
+    /// build carries only a placeholder.
+    public var auto: Bool
+
+    public init(name: String, number: Int?, bytes: String? = nil, auto: Bool = false) {
+        self.name = name
+        self.number = number
+        self.bytes = bytes
+        self.auto = auto
     }
 }
 
@@ -2466,6 +2537,11 @@ public enum EngineModelRevision {
     /// dumps' files can be compared by content wherever the volume put them.
     /// None of them is upstream's; the sync comparison leaves them out.
     ///
+    /// 42 adds `configuration`: the ME configuration file by file — MFIT's own
+    /// layout of the MFS files, with the values read out of the image's OEM
+    /// Configuration partition or its live file system. Ours; the catalogue it
+    /// is read through is `MEConfigurationCatalogue`.
+    ///
     /// 41 adds the three facts a repair bench asks of a dump it is about to
     /// write to a board, none of them upstream's: `manufacturingState` with
     /// `manufacturingBasis` (whether the platform closes End of Manufacturing
@@ -2478,5 +2554,5 @@ public enum EngineModelRevision {
     /// area's entry holds — a value, or the read that says why there is none). `analyze` gained the optional `descriptorBytes` they need for
     /// the descriptor's BIOS master — an extracted ME region has no descriptor
     /// of its own, and the basis says so.
-    public static let current = 41
+    public static let current = 42
 }

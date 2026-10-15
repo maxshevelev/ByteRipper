@@ -188,6 +188,18 @@ struct MEFirmwareCLI {
         for (name, value) in liveEOMRecords(result, bytes: bytes, fileTable: fileTable) {
             print("live record:   \(name) = \(value)")
         }
+        // The configuration tab's own content, file by file.
+        let configurationMap = MEConfigurationMap.forME(major: result.version.major)
+        for file in result.configuration ?? [] {
+            print("configuration: \(file.path)  [\(file.alias), \(file.source.rawValue), \(file.size) bytes]")
+            for setting in file.settings {
+                let value = setting.number.map { String($0) } ?? setting.bytes ?? "?"
+                let label = configurationMap?.file(at: file.path)?
+                    .settings.first { $0.name == setting.name }?
+                    .options?[setting.number ?? -1].map { " (\($0))" } ?? ""
+                print("    \(setting.name) = \(value)\(label)\(setting.auto ? "  [auto]" : "")")
+            }
+        }
         if result.regions.isEmpty {
             print("FPT regions: none found")
         } else {
