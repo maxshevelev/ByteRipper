@@ -1004,6 +1004,43 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertNil(value("Manufacturing", in: tableRows(me7)))
     }
 
+    // MARK: - The Configuration tab
+
+    /// The tab's blocks: one per configuration file, MFIT's own words for the
+    /// file and for the values it enumerates, and no tab at all where the
+    /// image's generation has no map — a generation nobody has mapped reads
+    /// nothing rather than another generation's offsets.
+    func testTheConfigurationTabReadsAFileSettingBySetting() throws {
+        var a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+        ])
+        a.configuration = [
+            ConfigurationFile(path: "/home/mca/eom_config", alias: "EOM_Config",
+                              source: .fileSystem, size: 2, settings: [
+                                  ConfigurationSetting(name: "EomFirstBootEnabled", number: 0),
+                                  ConfigurationSetting(name: "FlexibleEomSettings", number: 2),
+                              ]),
+        ]
+        let blocks = MEAConfiguration.build(a, in: .english)
+        XCTAssertEqual(blocks.count, 1)
+        XCTAssertEqual(blocks[0].title,
+                       "/home/mca/eom_config — EOM_Config, 0x2 (2 bytes), file system")
+        XCTAssertEqual(blocks[0].rows.map(\.label),
+                       ["EomFirstBootEnabled", "FlexibleEomSettings"])
+        XCTAssertEqual(blocks[0].rows.map { $0.value.text(in: .english) },
+                       ["0", "Lock Descriptor Only"])
+
+        // No map for this generation: the tab has nothing rather than a guess,
+        // even with the same files in hand.
+        var older = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 15, "minor": 0, "hotfix": 30, "build": 1716],
+        ])
+        older.configuration = a.configuration
+        XCTAssertTrue(MEAConfiguration.build(older, in: .english).isEmpty)
+    }
+
     // MARK: - The messages block
 
     func testIssuesBecomeAMessagesBlockAfterTheTable() throws {

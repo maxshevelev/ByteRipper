@@ -1633,3 +1633,7 @@
 "configuration: %1$@" = "Konfiguration: %1$@";
 "reserved files: %1$@" = "reservierte Dateien: %1$@";
 "nothing found" = "nichts gefunden";
+"Configuration" = "Konfiguration";
+"image" = "Image";
+"file system" = "Dateisystem";
+"auto" = "auto";

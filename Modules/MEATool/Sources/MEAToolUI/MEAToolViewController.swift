@@ -46,6 +46,8 @@ import ToolModuleKit
     /// The summary as it was last built — kept so a re-show with the same
     /// analysis neither rebuilds the rows nor loses the user's scroll.
     private var summaryBlocks: [MEASummaryBlock] = []
+    /// The configuration as it was last built, the same way.
+    private var configurationBlocks: [MEASummaryBlock] = []
     /// The tab on screen.
     private var tabIndex = 0
     /// True while state is being shown — a selection the code made is not news,
@@ -53,7 +55,7 @@ import ToolModuleKit
     /// again until the stack ran out.
     private var isShowingState = false
 
-    private let tabs = NSSegmentedControl(labels: [L("Summary"), L("Full Info")],
+    private let tabs = NSSegmentedControl(labels: [L("Summary"), L("Configuration"), L("Full Info")],
                                           trackingMode: .selectOne,
                                           target: nil, action: nil)
     /// Taking the summary somewhere else: as text to paste into a note or a
@@ -85,6 +87,8 @@ import ToolModuleKit
     let detailPane = ToolDetailPane()
     private var detail: ToolDetailScroll { detailPane.detail }
     private let summaryScroll = ToolDetailScroll()
+    /// The Configuration tab: the same rows, one block per configuration file.
+    private let configurationScroll = ToolDetailScroll()
     private let splitter = ALSplitView()
     private let noticeLabel = NSTextField(labelWithString: "")
     private let retryButton = NSButton(title: L("Try Again"), target: nil, action: nil)
@@ -212,6 +216,10 @@ import ToolModuleKit
             summaryScroll.leadingAnchor.constraint(equalTo: contentBox.leadingAnchor),
             summaryScroll.trailingAnchor.constraint(equalTo: contentBox.trailingAnchor),
             summaryScroll.bottomAnchor.constraint(equalTo: contentBox.bottomAnchor),
+            configurationScroll.topAnchor.constraint(equalTo: contentBox.topAnchor),
+            configurationScroll.leadingAnchor.constraint(equalTo: contentBox.leadingAnchor),
+            configurationScroll.trailingAnchor.constraint(equalTo: contentBox.trailingAnchor),
+            configurationScroll.bottomAnchor.constraint(equalTo: contentBox.bottomAnchor),
             splitter.topAnchor.constraint(equalTo: contentBox.topAnchor),
             splitter.leadingAnchor.constraint(equalTo: contentBox.leadingAnchor),
             splitter.trailingAnchor.constraint(equalTo: contentBox.trailingAnchor),
@@ -457,19 +465,22 @@ import ToolModuleKit
         applyColumnWidths()
     }
 
-    /// Which content the selected tab shows: the summary for Summary, the tree
-    /// (with its detail below) for Full Info — and, for either of them with
-    /// nothing in it yet, the placeholder saying why. A tab is empty for the
-    /// same three reasons on both sides, and while the ME region is being read
-    /// an empty tree is a wait, not an answer; an empty outline with a spinner
-    /// under it said nothing about which.
+    /// Which content the selected tab shows: the summary for Summary, the
+    /// configuration rows for Configuration, the tree (with its detail below)
+    /// for Full Info — and, for any of them with nothing in it yet, the
+    /// placeholder saying why. A tab is empty for the same reasons on every
+    /// side, and while the ME region is being read an empty tree is a wait, not
+    /// an answer; an empty outline with a spinner under it said nothing about
+    /// which.
     private func selectTab(_ index: Int) {
         tabIndex = index
-        let showTree = index == 1 && !roots.isEmpty
+        let showTree = index == 2 && !roots.isEmpty
         let showSummary = index == 0 && !summaryBlocks.isEmpty
+        let showConfiguration = index == 1 && !configurationBlocks.isEmpty
         splitter.isHidden = !showTree
         summaryScroll.isHidden = !showSummary
-        placeholder.isHidden = showSummary || showTree
+        configurationScroll.isHidden = !showConfiguration
+        placeholder.isHidden = showSummary || showTree || showConfiguration
         // Nothing to copy and nothing to picture until the summary is up.
         summaryActions.isHidden = !showSummary
         tabs.selectedSegment = index
@@ -678,6 +689,17 @@ import ToolModuleKit
         }
     }
 
+    /// The Configuration tab's blocks, fed and kept the way the summary's are.
+    func showConfiguration(_ blocks: [MEASummaryBlock]) {
+        guard blocks != configurationBlocks else { return }
+        configurationBlocks = blocks
+        render(configurationBlocks, into: configurationScroll)
+        selectTab(tabIndex)
+        if !blocks.isEmpty, tabIndex == 1 {
+            configurationScroll.documentView?.scroll(.zero)
+        }
+    }
+
     /// Rebuilds the summary's rows — the blocks `showSummary` last accepted,
     /// at the current zoom. Only label and value texts: the values come
     /// pre-formatted from `MEASummary`, so nothing is decided here.
@@ -688,9 +710,16 @@ import ToolModuleKit
     /// band of them, ⌘A the block, and ⌘C copies it with a tab between a name
     /// and its value, which a summary pasted into a report wants.
     private func renderSummary() {
-        let stack = summaryScroll.content
+        render(summaryBlocks, into: summaryScroll)
+    }
+
+    /// One list of blocks into one scrolling column — the Summary tab's shape,
+    /// which the Configuration tab reads in as well. Only label and value
+    /// views: every value arrives pre-formatted, so nothing is decided here.
+    private func render(_ blocks: [MEASummaryBlock], into scroll: ToolDetailScroll) {
+        let stack = scroll.content
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
-        summaryScroll.placeholder.isHidden = true
+        scroll.placeholder.isHidden = true
 
         for (index, block) in summaryBlocks.enumerated() {
             // A real gap before each block after the first (the table needs no
