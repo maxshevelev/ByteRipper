@@ -55,13 +55,10 @@ public enum MEATones {
         }
     }
 
-    /// The Manufacturing basis row: a caution wherever the verdict rests on
-    /// something less than the image's own record — an open descriptor, or a
-    /// file system that could not be looked in. Plain when the answer is
-    /// settled.
-    public static func manufacturingBasis(_ basis: ManufacturingBasis) -> ToolValueTone {
-        basis.descriptorOpen == true ? .caution : .standard
-    }
+    // The Manufacturing basis row has no tone of its own: it states the flag,
+    // where it was read and what the descriptor says, and none of that is a
+    // verdict — so it is drawn as an ordinary value, exactly as the File System
+    // State's basis is. The verdict's own colour sits on the row above it.
 
     /// The Boot Guard profile's tone. Profile 0 has Boot Guard switched off —
     /// the machine boots unverified, and that is a state a bench works with
