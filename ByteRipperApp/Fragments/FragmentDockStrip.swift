@@ -57,8 +57,8 @@ final class FragmentPillView: NSView {
     /// A hidden badge still has its insets' width: without a part's codec it
     /// takes none, so the dot and the ✕ sit where they did.
     private lazy var badgeCollapsed = badge.widthAnchor.constraint(equalToConstant: 0)
-    private let dot = NSTextField(labelWithString: "•")
-    /// A hidden dot, like a hidden badge, still has its glyph's width: without
+    private let dot = ChangeDotView()
+    /// A hidden dot, like a hidden badge, still has its width: without
     /// changes it takes none, so the ✕ sits right after the name or the badge.
     private lazy var dotGap = dot.leadingAnchor.constraint(equalTo: badge.trailingAnchor)
     private lazy var dotCollapsed = dot.widthAnchor.constraint(equalToConstant: 0)
@@ -83,8 +83,6 @@ final class FragmentPillView: NSView {
         badge.setContentHuggingPriority(.required, for: .horizontal)
         badge.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
 
-        dot.font = .systemFont(ofSize: 13, weight: .bold)
-        dot.textColor = .secondaryLabelColor
         dot.isHidden = true
         dot.setContentHuggingPriority(.required, for: .horizontal)
 
@@ -178,9 +176,31 @@ final class FragmentPillView: NSView {
         let ink: NSColor = isUp ? .alternateSelectedControlTextColor : .labelColor
         label.textColor = ink
         icon.contentTintColor = isUp ? ink : .secondaryLabelColor
-        dot.textColor = isUp ? ink : .secondaryLabelColor
+        dot.color = isUp ? ink : .secondaryLabelColor
         closeButton.contentTintColor = isUp ? ink : .secondaryLabelColor
         badge.ink = isUp ? ink : nil
+    }
+}
+
+/// The pill's mark for a part with changes the parent has not got back: a
+/// disc drawn on the pill's centre line. A `•` in a text field sits where
+/// the font puts it — below the middle of the line, so below the name's
+/// middle too.
+final class ChangeDotView: NSView {
+    static let diameter: CGFloat = 5
+
+    var color: NSColor = .secondaryLabelColor {
+        didSet { if color != oldValue { needsDisplay = true } }
+    }
+
+    override var intrinsicContentSize: NSSize { NSSize(width: Self.diameter, height: Self.diameter) }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let side = min(bounds.width, bounds.height, Self.diameter)
+        guard side > 0 else { return }
+        let disc = NSRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
+        color.setFill()
+        NSBezierPath(ovalIn: disc).fill()
     }
 }
 
