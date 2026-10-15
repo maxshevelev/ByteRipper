@@ -213,6 +213,24 @@ file changes shape — 18.0.10.2285's `Files.xml` holds 107 file paths and no
 layouts at all — so the layouts for a newer generation are somewhere else in that
 binary, to be found when that generation's structures are.
 
+**What else the same binary documents.** The settings database is not the only
+structure MFIT carries in its XMLs, and the others cover ground this project had
+to work out by hand:
+
+| XML (16.0.15.1662) | what it holds |
+|---|---|
+| `<platform>_Files.xml` | the ME file system settings — 66 files, **all** of them MFS files (`FileTable.dat` knows every one) |
+| `StrapsDetails.xml` (967 KB) | the descriptor's straps, by name: `CPU_Strap_BIST`, `CPU_Strap_FIAx16_LOSL…`, the device-disabled bits, their CRC |
+| `straps_projects.xml` | which strap project each platform type takes — `Intel(R) AlderLake P Chipset - Consumer - SPI` → `adp_p_straps.xml`, which is the string the Z Flow dump's own CDMD record carries |
+| `DescConfFields.xml` | the descriptor's regions as fields: GbE (enable, length, binary), EC, PDR, IDLM, the OEM section, DMUP, PUNIT, the BIOS region |
+| `pch_fuses.xml` | the fuses by project, platform and SKU — `ADL` → `S` → `Q670`/`W680` → the seven fuse names each |
+| `AdditionalSMLinkConfFields.xml` | the SMLink fields |
+
+So the descriptor's straps and the fuse landscape are documented in the same
+place, in Intel's own naming — which is where a *descriptor* tool would read
+them, not an ME one. The master-access masks this project reads by hand
+(`FlashDescriptor.biosMaster`) are not in that list: those fields are still ours.
+
 Where the databases are, on this machine: `mfit.exe` per tool version, and the
 binary is the file to unpack
 (`/Volumes/HDD 10Tb/.../Modular Flash Image Tool <version>/mfit.exe`, with
