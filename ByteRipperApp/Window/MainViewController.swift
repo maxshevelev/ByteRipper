@@ -7773,8 +7773,9 @@ extension MainViewController: MinimapHost {
     }
 
     /// Makes `pane` the active one when it is one of the tab's own two in
-    /// comparison mode — what going to an annotation in it does, so the keys,
-    /// the header and a tool opened next all go to the file the note is on.
+    /// comparison mode — what bringing a place in it forward does
+    /// (`AgentDesk.bringForward`), so the keys, the header and a tool opened
+    /// next all go to the file shown.
     func activateOwnPane(_ pane: PaneViewModel) {
         guard mode == .comparison, pane === windowModel.pane1 || pane === windowModel.pane2 else { return }
         activatePane(showingMapAt: paneIndex(pane))

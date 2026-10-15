@@ -715,7 +715,6 @@ final class AgentAnnotationTools {
         guard let place, let controller = place.controller else { return }
         desk.bringForward(place)
         controller.view.window?.makeKeyAndOrderFront(nil)
-        controller.activateOwnPane(place.pane)
         if let range = annotation.range, range.upperBound > place.pane.fileSize { return }
         controller.recordJump(in: place.pane)
         // A file just opened has its tree still to read, and whether the

@@ -323,6 +323,24 @@ final class AgentDiffToolsTests: XCTestCase {
         XCTAssertEqual(back["start"], "0x100")
     }
 
+    /// Walked in the inactive pane, the walk makes it the active one and goes
+    /// on from its caret, not the other pane's.
+    func testRevealDiffInTheInactivePaneActivatesItAndGoesFromItsCaret() async throws {
+        var bytes = [UInt8](repeating: 0, count: 0x400)
+        let controller = try open(bytes)
+        bytes[0x100] = 1
+        bytes[0x300] = 1
+        let other = try await background(bytes)
+        let shown = try await client.answer("compare", ["against": .string(other)])
+        controller.activatePaneForTesting(0)
+        controller.windowModel.pane1.moveCaret(to: 0, center: false)
+        controller.windowModel.pane2.moveCaret(to: 0x200, center: false)
+
+        let found = try await client.answer("reveal_diff", ["document": shown["b"] ?? .null])
+        XCTAssertEqual(controller.windowModel.activePaneIndex, 1)
+        XCTAssertEqual(found["start"], "0x300", "from B's caret")
+    }
+
     func testRevealDiffNeedsAPair() async throws {
         try open([0, 1])
         let refused = try await client.call("reveal_diff")

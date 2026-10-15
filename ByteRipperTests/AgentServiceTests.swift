@@ -224,6 +224,17 @@ final class AgentServiceTests: XCTestCase {
         XCTAssertEqual(pane.caretOffset, 0x40)
     }
 
+    /// A place in the comparison's other pane makes that pane the active one.
+    func testRevealInTheInactivePaneOfAComparisonActivatesIt() async throws {
+        let controller = try open(Self.image, Self.image)
+        controller.activatePaneForTesting(0)
+        let shown = try await answer("reveal", ["document": "d2", "offset": "0x100", "length": 4])
+        XCTAssertEqual(shown["document"], "d2")
+        XCTAssertEqual(controller.windowModel.activePaneIndex, 1)
+        let selection = controller.windowModel.pane2.hexSelection()
+        XCTAssertEqual(selection.start..<selection.end, 0x100..<0x104)
+    }
+
     func testRevealWithoutALengthMovesTheCaretOnly() async throws {
         let controller = try open(Self.image)
         let shown = try await answer("reveal", ["offset": "0x100"])

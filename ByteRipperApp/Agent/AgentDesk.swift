@@ -198,10 +198,12 @@ final class AgentDesk {
 
     // MARK: - Moving the view
 
-    /// Brings the tab holding `place` to the front of its window, and raises
-    /// its fragment panel when it is in one — without taking the keyboard
+    /// Brings the tab holding `place` to the front of its window, raises its
+    /// fragment panel when it is in one, and makes its pane the active one
+    /// when it is one of a comparison's two — without taking the keyboard
     /// from whatever app the person is typing in. The agent shows; it does
-    /// not grab.
+    /// not grab. The one way every tool and a note's card bring a place
+    /// forward.
     func bringForward(_ place: Place) {
         guard let controller = place.controller else { return }
         if let window = controller.view.window {
@@ -213,6 +215,12 @@ final class AgentDesk {
         if place.slot == "part", let panel = controller.fragments.panel(holding: place.pane),
            controller.fragments.expanded != panel {
             controller.fragments.expand(panel, animated: false)
+        }
+        // One of a comparison's two panes becomes the active one, so the keys,
+        // the caret a difference is looked for from, and a tool opened next
+        // all go to the file the agent is showing.
+        if place.slot == "A" || place.slot == "B" {
+            controller.activateOwnPane(place.pane)
         }
     }
 }
