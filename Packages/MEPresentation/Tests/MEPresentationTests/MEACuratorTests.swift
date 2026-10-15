@@ -68,26 +68,26 @@ final class MEACuratorTests: XCTestCase {
     /// While `Huffman.dat` is on the way, the Issues group ends with a row
     /// that says the module checks are still to come — a group of its own
     /// when nothing else was raised, and none at all once they are done.
-    /// The state's basis follows it on the Firmware row: drawn as a caution
-    /// when the EFS step could not be taken, plain when it could.
-    func testTheStateIsFollowedByWhatItRestsOn() throws {
+    /// The state's own field carries what it rests on in brackets, as the
+    /// Manufacturing row does: a caution when the EFS step could not be taken,
+    /// green and plainly worded when it could.
+    func testTheStateFieldCarriesWhatItRestsOn() throws {
         var a = try analysis(["mfsState": "configured"])
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .unreadable(offset: 0x267000),
                                         configuration: ["FITC"], decidedBy: .configuration)
         let firmware = try XCTUnwrap(find("Firmware", in: MEACurator.present(a, in: .english)))
-        let basis = try XCTUnwrap(firmware.fields.first { $0.label == "State basis" })
-        XCTAssertEqual(basis.tone, .caution)
-        XCTAssertTrue(basis.value.contains("The EFS partition at 0x267000 could not be read"), basis.value)
-        let labels = firmware.fields.map(\.label)
-        XCTAssertEqual(labels.firstIndex(of: "State basis"), labels.firstIndex(of: "File System State").map { $0 + 1 })
+        let state = try XCTUnwrap(firmware.fields.first { $0.label == "File System State" })
         // A state the unread EFS left standing is not drawn as settled.
-        XCTAssertEqual(firmware.fields.first { $0.label == "File System State" }?.tone, .caution)
+        XCTAssertEqual(state.tone, .caution)
+        XCTAssertEqual(state.value, "Configured (configuration: FITC; EFS: unreadable)")
+        XCTAssertNil(firmware.fields.first { $0.label == "State basis" })
 
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .noFileContent,
                                         configuration: ["FITC"], decidedBy: .configuration)
         let settled = try XCTUnwrap(find("Firmware", in: MEACurator.present(a, in: .english)))
-        XCTAssertEqual(settled.fields.first { $0.label == "State basis" }?.tone, .standard)
-        XCTAssertEqual(settled.fields.first { $0.label == "File System State" }?.tone, .good)
+        let settledState = try XCTUnwrap(settled.fields.first { $0.label == "File System State" })
+        XCTAssertEqual(settledState.tone, .good)
+        XCTAssertEqual(settledState.value, "Configured (configuration: FITC)")
     }
 
     func testIssuesSayTheModuleChecksAreToCome() throws {

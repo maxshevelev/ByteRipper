@@ -352,27 +352,27 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(tone("Family", in: try state("configured")), .standard)
     }
 
-    /// The Summary says what the File System State rests on, directly under
-    /// it, in the same words as Full Info — and a state an unread EFS left
-    /// standing is neither green nor its basis plain. The case is a CSME 15
-    /// dump whose EFS system page was erased: Configured from the FITC alone.
-    func testTheStateBasisFollowsTheStateInTheSummary() throws {
+    /// The Summary states what the File System State rests on in brackets on
+    /// its own row — one line, in the same words as Full Info — and a state an
+    /// unread EFS left standing is not green. The case is a dump whose EFS
+    /// system page was erased: Configured from the FITC alone.
+    func testTheStateCarriesWhatItRestsOn() throws {
         var a = try analysis(["manifest": manifestJSON(), "mfsState": "configured"])
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .unreadable(offset: 0x267000),
                                         configuration: ["FITC"], decidedBy: .configuration)
         let rows = tableRows(a)
-        let labels = rows.map(\.label)
-        let state = try XCTUnwrap(labels.firstIndex(of: "File System State"))
-        XCTAssertEqual(labels[state + 1], "State basis")
-        XCTAssertEqual(value("State basis", in: rows),
-                       .value(MEAText.fileSystemStateBasis(.configured, try XCTUnwrap(a.mfsStateBasis), in: .english)))
-        XCTAssertEqual(tone("State basis", in: rows), .caution)
+        XCTAssertEqual(value("File System State", in: rows),
+                       .verdict("Configured", evidence: "configuration: FITC; EFS: unreadable"))
+        XCTAssertEqual(value("File System State", in: rows)?.text(in: .english),
+                       "Configured (configuration: FITC; EFS: unreadable)")
         XCTAssertEqual(tone("File System State", in: rows), .caution, "an incomplete state is not green")
+        XCTAssertNil(value("State basis", in: rows), "the basis is in the brackets now")
 
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .noFileContent,
                                         configuration: ["FITC"], decidedBy: .configuration)
         let settled = tableRows(a)
-        XCTAssertEqual(tone("State basis", in: settled), .standard)
+        XCTAssertEqual(value("File System State", in: settled),
+                       .verdict("Configured", evidence: "configuration: FITC"))
         XCTAssertEqual(tone("File System State", in: settled), .good)
     }
 
