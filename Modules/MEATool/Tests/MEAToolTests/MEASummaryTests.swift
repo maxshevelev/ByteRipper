@@ -1007,29 +1007,50 @@ final class MEASummaryTests: XCTestCase {
     // MARK: - The Configuration tab
 
     /// The tab's blocks: one per configuration file, MFIT's own words for the
-    /// file and for the values it enumerates, and no tab at all where the
-    /// image's generation has no map — a generation nobody has mapped reads
-    /// nothing rather than another generation's offsets.
-    func testTheConfigurationTabReadsAFileSettingBySetting() throws {
+    /// file and for the values it enumerates, both copies of a file read side
+    /// by side, and no tab at all where the image's generation has no map — a
+    /// generation nobody has mapped reads nothing rather than another
+    /// generation's offsets.
+    func testTheConfigurationTabReadsBothCopiesOfAFileSettingBySetting() throws {
         var a = try analysis([
             "family": "csme", "manifest": manifestJSON(),
             "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
         ])
         a.configuration = [
-            ConfigurationFile(path: "/home/mca/eom_config", alias: "EOM_Config",
-                              source: .fileSystem, size: 2, settings: [
-                                  ConfigurationSetting(name: "EomFirstBootEnabled", number: 0),
-                                  ConfigurationSetting(name: "FlexibleEomSettings", number: 2),
-                              ]),
+            ConfigurationFile(
+                path: "/home/mca/eom_config", alias: "EOM_Config",
+                fitc: .init(size: 2, settings: [
+                    ConfigurationSetting(name: "EomFirstBootEnabled", number: 0),
+                    ConfigurationSetting(name: "FlexibleEomSettings", number: 0),
+                ]),
+                mfs: .init(size: 2, settings: [
+                    ConfigurationSetting(name: "EomFirstBootEnabled", number: 0),
+                    ConfigurationSetting(name: "FlexibleEomSettings", number: 2),
+                ])),
         ]
         let blocks = MEAConfiguration.build(a, in: .english)
         XCTAssertEqual(blocks.count, 1)
-        XCTAssertEqual(blocks[0].title,
-                       "/home/mca/eom_config — EOM_Config, 0x2 (2 bytes), file system")
-        XCTAssertEqual(blocks[0].rows.map(\.label),
+        XCTAssertEqual(blocks[0].title, "/home/mca/eom_config — EOM_Config (2)")
+        XCTAssertEqual(blocks[0].rows.map(\.name),
                        ["EomFirstBootEnabled", "FlexibleEomSettings"])
-        XCTAssertEqual(blocks[0].rows.map { $0.value.text(in: .english) },
-                       ["0", "Lock Descriptor Only"])
+        // Each row carries the build's value and the file system's, and the
+        // pair that disagrees is the one the view marks.
+        XCTAssertEqual(blocks[0].rows.map(\.fitc), ["0", "Lock Descriptor and OEM Configs"])
+        XCTAssertEqual(blocks[0].rows.map(\.mfs), ["0", "Lock Descriptor Only"])
+        XCTAssertEqual(blocks[0].rows.map(\.differs), [false, true])
+
+        // A copy that is not there at all is an absent value, not a
+        // disagreement: an image nobody has booted has one column and no
+        // argument — and the tab still shows the setting.
+        var unbooted = a
+        unbooted.configuration = [
+            ConfigurationFile(path: "/home/mca/eom_config", alias: "EOM_Config",
+                              fitc: a.configuration?[0].fitc),
+        ]
+        let unbootedRows = MEAConfiguration.build(unbooted, in: .english)[0].rows
+        XCTAssertEqual(unbootedRows.map(\.mfs), [nil, nil])
+        XCTAssertEqual(unbootedRows.map(\.differs), [false, false])
+        XCTAssertEqual(unbootedRows.map(\.fitc), ["0", "Lock Descriptor and OEM Configs"])
 
         // No map for this generation: the tab has nothing rather than a guess,
         // even with the same files in hand.

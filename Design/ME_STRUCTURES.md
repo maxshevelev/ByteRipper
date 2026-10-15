@@ -205,6 +205,17 @@ whose values are enumerated (`FlexibleEomSettings`, `ProcEmulation`,
 `MewlanPowerWell`, `Hdcp5kedisp1`, … twelve of them) can be printed by name
 rather than as a number.
 
+**Both copies are read, and shown side by side.** A dump carries each of these
+files twice: the record the build wrote into the OEM Configuration (FITC)
+partition, and the file the platform copied into the ME file system on its first
+boot. Which of the two is *the* configuration is not a question with one answer
+— a setting the platform rewrote and a setting the build chose are different
+facts about one machine — so the panel gives each a column and marks the pairs
+that disagree. An image that has never been through a first boot has only the
+build's copy (verified: `image.bin` and `image1.bin` read all seven files from
+the image, `image.after.bin` and `image1.after.bin` from the file system), and on
+a booted dump both are still there and agree on every setting of all seven.
+
 Two things the database is not. It is **per platform**: the lists are
 `ADL-S`, `ELG`, `MTL-M`, `MTL-S` in that build, so a dump of another platform
 needs the list for it (the entries we care about repeat across them, the EOM trio

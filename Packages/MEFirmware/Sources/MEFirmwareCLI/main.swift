@@ -191,13 +191,27 @@ struct MEFirmwareCLI {
         // The configuration tab's own content, file by file.
         let configurationMap = MEConfigurationMap.forME(major: result.version.major)
         for file in result.configuration ?? [] {
-            print("configuration: \(file.path)  [\(file.alias), \(file.source.rawValue), \(file.size) bytes]")
-            for setting in file.settings {
-                let value = setting.number.map { String($0) } ?? setting.bytes ?? "?"
-                let label = configurationMap?.file(at: file.path)?
-                    .settings.first { $0.name == setting.name }?
-                    .options?[setting.number ?? -1].map { " (\($0))" } ?? ""
-                print("    \(setting.name) = \(value)\(label)\(setting.auto ? "  [auto]" : "")")
+            let sizes = [file.fitc.map { "FITC \($0.size)" }, file.mfs.map { "MFS \($0.size)" }]
+                .compactMap { $0 }.joined(separator: ", ")
+            print("configuration: \(file.path)  [\(file.alias): \(sizes)]")
+            let layout = configurationMap?.file(at: file.path)
+            var names = layout?.settings.map(\.name) ?? []
+            for name in ((file.fitc?.settings ?? []) + (file.mfs?.settings ?? [])).map(\.name)
+            where !names.contains(name) {
+                names.append(name)
+            }
+            for name in names {
+                let setting = layout?.settings.first { $0.name == name }
+                func cell(_ page: ConfigurationFile.Page?) -> String {
+                    guard let value = page?.settings.first(where: { $0.name == name }) else {
+                        return "—"
+                    }
+                    let number = value.number.map { String($0) } ?? value.bytes ?? "?"
+                    let label = setting?.options?[value.number ?? -1].map { " (\($0))" } ?? ""
+                    return "\(number)\(label)"
+                }
+                let auto = setting?.auto == true ? "  [auto]" : ""
+                print("    \(name)\(auto): FITC = \(cell(file.fitc))   MFS = \(cell(file.mfs))")
             }
         }
         if result.regions.isEmpty {

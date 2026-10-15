@@ -1114,10 +1114,13 @@ public actor MEFirmwareAnalyzer {
             liveFilesResolved: liveFilesResolved))
 
         // The ME configuration, file by file: the map's paths, and for each
-        // one the bytes an image carries — the OEM Configuration (FITC)
-        // partition's own record of it, or the MFS volume's live file, which
-        // wins where both exist because it is the state in force. A setting
-        // the map knows and the file does not carry is left out
+        // one both copies an image carries of it — the OEM Configuration
+        // (FITC) partition's record of the file, which is what the build
+        // wrote, and the MFS volume's own file, which is what the platform
+        // holds now. Neither is dropped in favour of the other: the panel
+        // shows them side by side, because a setting the platform rewrote and
+        // one the build chose answer different questions. A setting the map
+        // knows and the file does not carry is left out
         // (`ConfigurationDecoder`); the paths are the ones `FileTable.dat`
         // gives, so this reads on any generation whose files carry File IDs.
         //
@@ -1173,13 +1176,13 @@ public actor MEFirmwareAnalyzer {
         }
         let configuration = configurationMap.map { map in
             map.files.compactMap { layout -> ConfigurationFile? in
-                if let live = liveConfigurationBytes[layout.path] {
-                    return ConfigurationDecoder.file(layout, from: .fileSystem, bytes: live)
-                }
-                if let image = imageConfigurationBytes[layout.path] {
-                    return ConfigurationDecoder.file(layout, from: .image, bytes: image)
-                }
-                return nil
+                let fitc = imageConfigurationBytes[layout.path]
+                    .flatMap { ConfigurationDecoder.page(of: layout, bytes: $0) }
+                let mfs = liveConfigurationBytes[layout.path]
+                    .flatMap { ConfigurationDecoder.page(of: layout, bytes: $0) }
+                guard fitc != nil || mfs != nil else { return nil }
+                return ConfigurationFile(path: layout.path, alias: layout.alias,
+                                         fitc: fitc, mfs: mfs)
             }
         } ?? []
 
