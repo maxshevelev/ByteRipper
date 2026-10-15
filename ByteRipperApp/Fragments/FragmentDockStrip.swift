@@ -21,7 +21,13 @@ final class FragmentPillView: NSView {
     var isUp = false { didSet { needsDisplay = true } }
     /// Whether the part holds bytes the parent has not got back yet. A dot, not
     /// a word: the pill has room for a name and a codec's word and no more.
-    var hasChanges = false { didSet { dot.isHidden = !hasChanges } }
+    var hasChanges = false {
+        didSet {
+            dot.isHidden = !hasChanges
+            dotCollapsed.isActive = !hasChanges
+            dotGap.constant = hasChanges ? 3 : 0
+        }
+    }
     /// The codec the part's bytes went through — `LZMA`, `XOR 77` — in a
     /// capsule after the name, and the sentence under the pointer; nil for a
     /// part that holds the file's own bytes. What the name used to say with
@@ -52,6 +58,10 @@ final class FragmentPillView: NSView {
     /// takes none, so the dot and the ✕ sit where they did.
     private lazy var badgeCollapsed = badge.widthAnchor.constraint(equalToConstant: 0)
     private let dot = NSTextField(labelWithString: "•")
+    /// A hidden dot, like a hidden badge, still has its glyph's width: without
+    /// changes it takes none, so the ✕ sits right after the name or the badge.
+    private lazy var dotGap = dot.leadingAnchor.constraint(equalTo: badge.trailingAnchor)
+    private lazy var dotCollapsed = dot.widthAnchor.constraint(equalToConstant: 0)
     private let closeButton = NSButton()
 
     init(id: FragmentDock.PanelID, title: String) {
@@ -101,7 +111,8 @@ final class FragmentPillView: NSView {
             badgeGap,
             badgeCollapsed,
             badge.centerYAnchor.constraint(equalTo: centerYAnchor),
-            dot.leadingAnchor.constraint(equalTo: badge.trailingAnchor, constant: 3),
+            dotGap,
+            dotCollapsed,
             dot.centerYAnchor.constraint(equalTo: centerYAnchor),
             closeButton.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 4),
             closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
