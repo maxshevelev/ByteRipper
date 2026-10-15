@@ -1038,8 +1038,10 @@ final class MEASummaryTests: XCTestCase {
                        ["EomFirstBootEnabled", "FlexibleEomSettings"])
         // Each row carries the build's value and the file system's, and the
         // pair that disagrees is the one the view marks.
-        XCTAssertEqual(blocks[0].rows.map(\.fitc), ["0", "Lock Descriptor and OEM Configs"])
-        XCTAssertEqual(blocks[0].rows.map(\.mfs), ["0", "Lock Descriptor Only"])
+        // MFIT's own words for the flag, which its database calls a Yes/No
+        // setting rather than a bit that reads 0 or 1.
+        XCTAssertEqual(blocks[0].rows.map(\.fitc), ["No", "Lock Descriptor and OEM Configs"])
+        XCTAssertEqual(blocks[0].rows.map(\.mfs), ["No", "Lock Descriptor Only"])
         XCTAssertEqual(blocks[0].rows.map(\.differs), [false, true])
 
         // A copy that is not there at all is an absent value, not a
@@ -1053,7 +1055,7 @@ final class MEASummaryTests: XCTestCase {
         let unbootedRows = MEAConfiguration.build(unbooted, in: .english)[0].rows
         XCTAssertEqual(unbootedRows.map(\.mfs), [nil, nil])
         XCTAssertEqual(unbootedRows.map(\.differs), [false, false])
-        XCTAssertEqual(unbootedRows.map(\.fitc), ["0", "Lock Descriptor and OEM Configs"])
+        XCTAssertEqual(unbootedRows.map(\.fitc), ["No", "Lock Descriptor and OEM Configs"])
 
         // No map for this generation: the tab has nothing rather than a guess,
         // even with the same files in hand.

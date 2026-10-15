@@ -41,13 +41,37 @@ extension MEAText {
                                           layout: MEConfigurationMap.Setting?,
                                           in language: AppLanguage) -> String? {
         guard let setting else { return nil }
+        if layout?.text == true, let text = text(of: setting) { return text }
         guard let number = setting.number else {
             // Wider than eight bytes: the bytes themselves, in hex.
             return setting.bytes
         }
         if let label = layout?.options?[number] { return label }
-        let wide = (layout?.bits == nil) && (layout?.length ?? 1) > 1
-        return wide ? String(format: "0x%X", number) : String(number)
+        // Written the way MFIT writes it: a number of its own in hex (`0x02` is
+        // how its byte fields read in its own panel), everything else as it is.
+        let hex = layout?.hex ?? (setting.bytes != nil)
+        return hex ? String(format: "0x%X", number) : String(number)
+    }
+
+    /// A text field's characters: the bytes as they stand, cut at the first
+    /// null. MFIT stores these as a null-terminated `String`, and what follows
+    /// the terminator is the rest of the field, not text.
+    ///
+    /// Nil where the value did not come as bytes at all — a field of eight
+    /// bytes or fewer, which no text setting of any of these platforms is —
+    /// which leaves the number to be read as one.
+    private static func text(of setting: ConfigurationSetting) -> String? {
+        guard let hex = setting.bytes else { return nil }
+        var characters: [UInt8] = []
+        var index = hex.startIndex
+        while index < hex.endIndex {
+            guard let next = hex.index(index, offsetBy: 2, limitedBy: hex.endIndex),
+                  let byte = UInt8(hex[index..<next], radix: 16) else { return nil }
+            if byte == 0 { break }
+            characters.append(byte)
+            index = next
+        }
+        return String(decoding: characters, as: UTF8.self)
     }
 
     /// The quiet half of a configuration file's heading: where the file lives,

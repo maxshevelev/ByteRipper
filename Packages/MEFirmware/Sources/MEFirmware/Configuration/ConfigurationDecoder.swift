@@ -23,9 +23,21 @@ enum ConfigurationDecoder {
     static func settings(of file: MEConfigurationMap.File,
                          in bytes: Data) -> [ConfigurationSetting] {
         file.settings.compactMap { setting in
-            guard setting.length > 0, setting.length <= 8,
+            guard setting.length > 0,
                   setting.offset >= 0, setting.offset + setting.length <= bytes.count else {
                 return nil
+            }
+            // Wider than a machine word: carried as the bytes themselves, which
+            // is all a 256-byte PKI suffix or a SHA-384 hash is. A bitfield is
+            // never one of these — there are no bits to take out of 16 bytes.
+            guard setting.length <= 8 else {
+                guard setting.bits == nil else { return nil }
+                let field = bytes[bytes.startIndex + setting.offset
+                                  ..< bytes.startIndex + setting.offset + setting.length]
+                return ConfigurationSetting(name: setting.name, number: nil,
+                                            bytes: field.map { String(format: "%02X", $0) }
+                                                .joined(),
+                                            auto: setting.auto)
             }
             var word = 0
             for index in 0..<setting.length {
