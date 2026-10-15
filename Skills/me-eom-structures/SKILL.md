@@ -57,6 +57,7 @@ Report it there rather than bending the script.
 
 `reference/structures.md` ends with what is *not* known: what the fields of a UEP
 entry mean (the window in the BIOS region, the `0x4FE`/`0xFE` word, the 32-bit
-sum), what the CDMD configuration's other records are, and how a dump whose image
-carries no CDMD configuration at all (`1.bin`, `2.rom`) can be told apart from one
-whose Boot Guard is switched off.
+sum), what the CDMD configuration's other records are, and where a CSME 15
+image keeps the Boot Guard profile — its CDMD carries no such record at all, so
+the panel answers "no profile record in this image" for those boards while
+ECFinder calls them profile 0.
