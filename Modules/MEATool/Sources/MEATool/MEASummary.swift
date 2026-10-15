@@ -271,14 +271,14 @@ public enum MEASummary {
             if pending.fileTable, analysis.efsVolume != nil, analysis.mfsState != nil {
                 add("File System State", .pending)
             } else if let state = analysis.mfsState {
-                rows.append(MEASummaryRow("File System State",
-                                          .value(MEAText.title(state.rawValue)),
-                                          tone: MEATones.fileSystemState(state, basis: analysis.mfsStateBasis)))
-                if let basis = analysis.mfsStateBasis {
-                    rows.append(MEASummaryRow(L("State basis", in: language),
-                                              .value(MEAText.fileSystemStateBasis(state, basis, in: language)),
-                                              tone: MEATones.stateBasis(basis)))
-                }
+                let name = MEAText.title(state.rawValue)
+                let evidence = analysis.mfsStateBasis.map {
+                    MEAText.fileSystemStateEvidence(state, $0, in: language)
+                } ?? ""
+                rows.append(MEASummaryRow(
+                    "File System State",
+                    evidence.isEmpty ? .value(name) : .verdict(name, evidence: evidence),
+                    tone: MEATones.fileSystemState(state, basis: analysis.mfsStateBasis)))
             } else if identified {
                 add("File System State", .comingSoon)
             }
@@ -299,10 +299,11 @@ public enum MEASummary {
         if analysis.family == .csme, analysis.version.major >= 11 {
             if let state = analysis.manufacturingState {
                 let basis = analysis.manufacturingBasis
+                let verdict = MEAText.manufacturingState(state, basis: basis, in: language)
+                let evidence = MEAText.manufacturingEvidence(state, basis: basis, in: language)
                 rows.append(MEASummaryRow(
                     L("Manufacturing", in: language),
-                    .verdict(MEAText.manufacturingState(state, basis: basis, in: language),
-                             evidence: MEAText.manufacturingEvidence(state, basis: basis, in: language)),
+                    evidence.isEmpty ? .value(verdict) : .verdict(verdict, evidence: evidence),
                     tone: MEATones.manufacturingState(state)))
                 // What End of Manufacturing commits — MFIT's own
                 // `FlexibleEomSettings`, stored whether or not the flag is

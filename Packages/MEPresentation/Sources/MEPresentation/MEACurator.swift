@@ -95,14 +95,13 @@ public enum MEACurator {
         if a.mfsState != nil, pending.fileTable, a.efsVolume != nil {
             fields.append(MEAField("File System State", pendingValue))
         } else if let state = a.mfsState {
-            fields.append(MEAField("File System State", MEAText.title(state.rawValue),
+            // The state, and in brackets what it rests on — drawn as an
+            // ordinary value under the state's colour, the same way the
+            // Manufacturing row carries its own evidence.
+            fields.append(MEAField("File System State",
+                                   MEAText.fileSystemState(state, basis: a.mfsStateBasis,
+                                                           in: language),
                                    tone: MEATones.fileSystemState(state, basis: a.mfsStateBasis)))
-            // What the state rests on, and — a caution — when a step that
-            // could have raised it could not be taken.
-            if let basis = a.mfsStateBasis {
-                fields.append(MEAField(L("State basis", in: language), MEAText.fileSystemStateBasis(state, basis, in: language),
-                                       tone: MEATones.stateBasis(basis)))
-            }
         }
         // The bench's own facts, under the same names the Summary tab gives
         // them — the two panels are one reading of one dump, and a field that

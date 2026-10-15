@@ -8,10 +8,11 @@ final class MEAAgentQueriesTests: XCTestCase {
     func testAConfiguredStateWithAnUnreadableEFSSaysWhatIsUnknown() {
         let basis = MFSStateBasis(reservedFiles: .notRead, efs: .unreadable(offset: 0x267000),
                                   configuration: ["FITC"], decidedBy: .configuration)
+        // The explanation is what the row reads: the state, then the evidence
+        // in brackets. The address of the EFS partition it could not read is in
+        // the structured fields beside it, where the panel has room for it.
         let text = MEAAgentQueries.explanation(state: .configured, basis: basis)
-        XCTAssertTrue(text.hasPrefix("Configured, from the configuration found (FITC), not from files"), text)
-        XCTAssertTrue(text.contains("The EFS partition at 0x267000 could not be read"), text)
-        XCTAssertTrue(text.contains("is unknown"), text)
+        XCTAssertEqual(text, "Configured (configuration: FITC; EFS: unreadable)")
         XCTAssertEqual(MEAAgentQueries.efsText(basis.efs),
                        "unreadable: the partition table lists an EFS partition at 0x267000, but no EFS volume could be read there")
     }
@@ -20,7 +21,7 @@ final class MEAAgentQueriesTests: XCTestCase {
         let basis = MFSStateBasis(reservedFiles: .notRead, efs: .holdsFiles,
                                   configuration: ["FITC"], decidedBy: .efs)
         let text = MEAAgentQueries.explanation(state: .initialized, basis: basis)
-        XCTAssertEqual(text, "Initialized, because the EFS volume holds file content: the engine has run and written its files.")
+        XCTAssertEqual(text, "Initialized (EFS: holds files)")
         XCTAssertEqual(MEAAgentQueries.reservedText(.initializing([2, 8])), "present: file 2, file 8, which mean Initialized")
     }
 

@@ -33,7 +33,8 @@ public enum MEAAgentQueries {
             The File System State row carries `basis`: what each of the three steps that decide it found \
             (the reserved MFS files, whether the EFS volume holds files, the configuration partitions), \
             which step decided it, `complete: false` when a step that could have raised the state could \
-            not be taken — an EFS partition that could not be read — and an `explanation`. Say the basis \
+            not be taken — an EFS partition that could not be read — and an `explanation`, which is the \
+            row's own line: the state and, in brackets, the evidence it was read from. Say the evidence \
             when you report the state: Configured with an unreadable EFS is not the same fact as \
             Configured with an empty one. Three rows of our own answer what a bench asks of a dump it \
             is about to flash: "Manufacturing" (whether the platform closes End of Manufacturing on \
@@ -280,12 +281,10 @@ public enum MEAAgentQueries {
         }
     }
 
-    /// One paragraph: the state, the step that set it, and — when a step
-    /// that could have raised it was not taken — what is not known. The
-    /// panel's own words (`MEAText.fileSystemStateBasis`), in the English
-    /// every agent call is answered in.
+    /// What the row itself reads: the state, then its evidence in brackets —
+    /// the panel's own words in the English every agent call is answered in.
     static func explanation(state: MFSState, basis: MFSStateBasis) -> String {
-        MEAText.fileSystemStateBasis(state, basis, in: .english)
+        MEAText.fileSystemState(state, basis: basis, in: .english)
     }
 
     private nonisolated static func list(_ indices: [Int]) -> String {
