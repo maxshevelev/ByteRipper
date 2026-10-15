@@ -273,6 +273,63 @@ public enum MEASummary {
                 add("File System State", .comingSoon)
             }
         }
+        // Our own three rows, in the order a technician reads a machine in:
+        // what state the firmware is in, what it is built for, and which key it
+        // carries. MEAnalyzer prints none of them (the model's
+        // `ManufacturingState`, `BootGuardProfile` and `oemPublicKeyHash` say
+        // where each fact lives and how it was established); the labels are
+        // ours, so unlike upstream's row names they go through `L`.
+        //
+        // Manufacturing is gated on the generation that has the switch at all
+        // (CSME 15, where MFIT grew `CsePlugin:EomNvar`): an older firmware
+        // would only ever answer `noSwitch`, and a row that can only say "not
+        // applicable" is noise.
+        if analysis.family == .csme, analysis.version.major >= 15 {
+            if let state = analysis.manufacturingState {
+                rows.append(MEASummaryRow(L("Manufacturing", in: language),
+                                          .value(MEAText.manufacturingState(state, in: language)),
+                                          tone: MEATones.manufacturingState(state)))
+                if let basis = analysis.manufacturingBasis {
+                    rows.append(MEASummaryRow(L("Manufacturing basis", in: language),
+                                              .value(MEAText.manufacturingBasis(basis, in: language)),
+                                              tone: MEATones.manufacturingBasis(basis)))
+                }
+            } else if identified {
+                rows.append(MEASummaryRow(L("Manufacturing", in: language), .comingSoon))
+            }
+        }
+        // Boot Guard and the OEM public key hash — the two facts a dump carries
+        // about the boot chain, shown from CSME 11 on (Boot Guard's own
+        // generation). The profile is a record the image either has or has not
+        // got: an image without one answers "no profile record" rather than a
+        // number, because a number would have to be a guess at what a vendor
+        // configured on some other machine.
+        if analysis.family == .csme, analysis.version.major >= 11 {
+            if let profile = analysis.bootGuardProfile {
+                rows.append(MEASummaryRow(L("Boot Guard", in: language),
+                                          .value(MEAText.bootGuardProfile(profile)),
+                                          tone: MEATones.bootGuardProfile(profile)))
+            } else if identified {
+                rows.append(MEASummaryRow(
+                    L("Boot Guard", in: language),
+                    .value(L("No profile record in this image", in: language)),
+                    tone: MEATones.bootGuardProfile(nil)))
+            }
+            // A key the region carries is a fact about the bytes and shows
+            // wherever it was read; "there is no key" is a claim about a file
+            // the engine had to name first, so it waits for identification —
+            // the same rule every other absence on this table follows.
+            if let hash = analysis.oemPublicKeyHash {
+                rows.append(MEASummaryRow(L("OEM Public Key Hash", in: language),
+                                          .value(MEAText.oemPublicKeyHash(hash)),
+                                          tone: .standard))
+            } else if identified {
+                rows.append(MEASummaryRow(
+                    L("OEM Public Key Hash", in: language),
+                    .value(L("No key material in this image", in: language)),
+                    tone: .standard))
+            }
+        }
         // 18 · Size — how far the firmware itself reaches from its `$FPT`,
         // which is the number the console prints and not the size of what was
         // handed to the engine (0x27C000 of firmware inside a 16 MiB dump).

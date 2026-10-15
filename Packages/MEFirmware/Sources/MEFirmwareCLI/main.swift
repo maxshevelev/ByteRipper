@@ -65,7 +65,8 @@ struct MEFirmwareCLI {
             let source: any MEADataSource = datDirectory.map { local(dat: $0) }
                 ?? MEAGitHubDataRepository()
             result = try await MEFirmwareAnalyzer(data: source)
-                .analyze(region: data, baseOffset: baseOffset)
+                .analyze(region: data, baseOffset: baseOffset,
+                         descriptorBytes: data.count >= 0x1000 ? data : nil)
         } catch {
             fail("analysis failed: \(error.localizedDescription)")
         }
@@ -161,6 +162,20 @@ struct MEFirmwareCLI {
         print("file:       \(path) (\(size) bytes)")
         print("family:     \(result.family.rawValue)  release: \(result.release.rawValue)  type: \(result.type.rawValue)")
         print("variant:    '\(result.variant)'  version: \(result.version.text)  sku: '\(result.sku)'")
+        // The three facts that are ours rather than MEAnalyzer's, on one line
+        // each: the harness is how they are checked against dumps whose answers
+        // are known (Skills/me-eom-structures/reference/structures.md).
+        print("manufacturing: \(result.manufacturingState?.rawValue ?? "-")"
+              + (result.manufacturingBasis.map { basis -> String in
+                  "  (eom: \(basis.eom.map(String.init) ?? "-")"
+                      + ", flag: \(basis.flag.map { $0 ? "1" : "0" } ?? "-")"
+                      + ", flexible: \(basis.flexible.map(String.init) ?? "-")"
+                      + ", page: \(basis.page?.rawValue ?? "-")"
+                      + ", descriptor: \(basis.descriptorOpen.map { $0 ? "open" : "locked" } ?? "-")"
+                      + ", live files: \(basis.liveFilesResolved ? "read" : "not read")" + ")"
+              } ?? ""))
+        print("boot guard:    \(result.bootGuardProfile.map { "\($0.rawValue) - \($0.rawValue)" } ?? "no profile record in this image")")
+        print("oem key hash:  \(result.oemPublicKeyHash ?? "none in this image")")
         if result.regions.isEmpty {
             print("FPT regions: none found")
         } else {

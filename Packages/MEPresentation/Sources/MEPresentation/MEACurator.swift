@@ -104,6 +104,33 @@ public enum MEACurator {
                                        tone: MEATones.stateBasis(basis)))
             }
         }
+        // The bench's own facts, under the same names the Summary tab gives
+        // them — the two panels are one reading of one dump, and a field that
+        // is in one and not the other sends the reader looking for a second
+        // dump. Shown on the same gates as the Summary rows.
+        if a.family == .csme, a.version.major >= 15, let state = a.manufacturingState {
+            fields.append(MEAField(L("Manufacturing", in: language),
+                                   MEAText.manufacturingState(state, in: language),
+                                   tone: MEATones.manufacturingState(state)))
+            if let basis = a.manufacturingBasis {
+                fields.append(MEAField(L("Manufacturing basis", in: language),
+                                       MEAText.manufacturingBasis(basis, in: language),
+                                       tone: MEATones.manufacturingBasis(basis)))
+            }
+        }
+        if a.family == .csme, a.version.major >= 11 {
+            fields.append(MEAField(L("Boot Guard", in: language),
+                                   a.bootGuardProfile.map(MEAText.bootGuardProfile)
+                                       ?? L("No profile record in this image", in: language),
+                                   tone: MEATones.bootGuardProfile(a.bootGuardProfile)))
+            if let hash = a.oemPublicKeyHash {
+                fields.append(MEAField(L("OEM Public Key Hash", in: language),
+                                       MEAText.oemPublicKeyHash(hash)))
+            } else if a.manifest != nil {
+                fields.append(MEAField(L("OEM Public Key Hash", in: language),
+                                       L("No key material in this image", in: language)))
+            }
+        }
         // Row 19 for a non-IFWI image: the $FPT header's FIT (an IFWI image's
         // FIT sits on each boot BPDT, surfaced under "Boot Partitions (BPDT)").
         if let fit = a.fptHeaderFIT {

@@ -1,4 +1,4 @@
-@source-sha 0ec53d17473aa4c5c296c64f8c6864c2dfa38f8b66e5f79ef64ff441211c383f
+@source-sha 193cdfb56fa05a30505efbd79904856902574f13f5a6fd3d359c056f2c0053ba
 # Den ME-Bericht lesen
 
 > Was die beiden Registerkarten des ME Analyzer enthalten und wie die einzelnen Zeilen der Übersicht zu lesen sind.
@@ -27,6 +27,7 @@ Die Meldung, dass nichts in der Datei sich als Intel-ME-Firmware lesen lässt, d
 - **Size** — wie weit die Firmware von ihrer `$FPT`-Tabelle aus reicht. Das ist eine Eigenschaft der Firmware, nicht die Länge der Region oder der Datei.
 - **Flash Image Tool** — die Version von Intels Flash Image Tool, mit dem das Image gebaut wurde, soweit das Image sie festhält.
 - **File System State** — siehe den nächsten Abschnitt.
+- **Manufacturing**, **Manufacturing basis**, **Boot Guard**, **OEM Public Key Hash** — siehe den Abschnitt „Manufacturing, Boot Guard und der öffentliche OEM-Schlüssel“.
 
 Zeilen, die für die jeweilige Familie nicht beantwortet werden konnten, bleiben grau, statt mit einer Vermutung gefüllt zu werden.
 
@@ -48,6 +49,25 @@ Zu diesen Merkmalen gehören zwei Einschränkungen:
 - Im zugrunde liegenden Projekt gibt es einen vierten Wert, **Error**, für den Abbruch der Analyse. Die hier verwendeten Decoder setzen ihn nicht.
 
 Unmittelbar unter dem Zustand — auf der Registerkarte **Übersicht** ebenso wie in der Zeile **Firmware** der Registerkarte **Vollständige Angaben** — steht die **Grundlage des Zustands**: welches der drei Kriterien den Zustand bestimmt hat und was die übrigen ergeben haben. Der Wert des Zustands ist der des zugrunde liegenden Projekts; die Grundlage fügt dieses Werkzeug hinzu. Sie wird als Warnung dargestellt, und der Zustand selbst erscheint dann nie grün, wenn ein Kriterium, das den Zustand hätte anheben können, nicht geprüft werden konnte — meist eine in der Partitionstabelle eingetragene EFS-Partition, deren Volume sich nicht lesen ließ, etwa weil ihre Systemseite gelöscht ist. **Configured** bedeutet dann nur, dass eine Konfiguration gefunden wurde. Ob das EFS von der Engine geschriebene Dateien enthält — dann wäre der Zustand **Initialized** —, ist unbekannt, und die EFS-Partition ist zu prüfen, bevor man sich auf den Zustand verlässt.
+
+## Manufacturing, Boot Guard und der öffentliche OEM-Schlüssel
+
+Drei weitere Zeilen beantworten allein aus dem Dump, was vor dem Schreiben eines Images auf eine Platine gefragt wird. Keine davon stammt aus dem Ursprungsprojekt; ihre Bezeichnungen sind eigene und werden übersetzt.
+
+**Manufacturing** — ob die Plattform Manufacturing beim ersten Start dieses Images abschließt. Die Einstellung gibt es ab CSME 15 und 16, wo das Flash Image Tool sie *EOM on first boot* nennt; ältere Generationen haben keinen solchen Schalter, und für sie wird die Zeile nicht gezeigt. Werte:
+
+- **Schließt Manufacturing beim ersten Start ab** — die Einstellung ist gesetzt: Der erste Start nach dem Schreiben dieses Images schließt Manufacturing ab, sperrt also den Flash-Descriptor und, je nach der danebenstehenden Einstellung, die OEM-Konfiguration. Was gesperrt ist, lässt sich im Image danach nicht mehr öffnen.
+- **Schließt nicht ab** — die Einstellung ist nicht gesetzt. In diesem Zustand bleibt eine Platine, die noch eingerichtet werden soll; bei einem Image, das überarbeitet werden soll, ist genau das zu prüfen.
+- **Bereits abgeschlossen** — das Dateisystem der Region enthält einen Eintrag, dem zufolge Manufacturing auf dieser Platine bereits abgeschlossen ist. Das ist ein Dump von einer Platine im Betrieb; was das Image tun soll, entscheidet nichts mehr.
+- **Schließt beim ersten Start ab, aber der Descriptor ist offen** — die Einstellung ist gesetzt, während der Flash-Descriptor dem Prozessor und dem BIOS weiterhin das Lesen und Schreiben aller Bereiche erlaubt. Das Flash Image Tool weigert sich, ein solches Image zu bauen; beide Einstellungen wurden also von einem anderen Werkzeug oder von Hand gesetzt.
+- **Aus diesem Image nicht lesbar** — den Schalter gibt es in der Generation des Dumps, doch weder die eigene Konfiguration des Images noch sein Dateisystem enthält die Einstellung. Es wird nichts behauptet; das Fehlen eines Urteils ist selbst die Antwort.
+- **Diese Firmware hat keinen solchen Schalter** — die Firmware kennt diese Einstellung nicht. Als eigenes Urteil erscheint das in der Übersicht nicht: Für diese Generationen entfällt die Zeile ganz.
+
+**Grundlage der Manufacturing-Entscheidung** folgt ihr, wie **Grundlage des Zustands** dem Dateisystemzustand folgt, und nennt, woher das Urteil gelesen wurde: aus dem Eintrag des Dateisystems, der sagt, was die Platine getan hat, oder aus dem Eintrag der OEM-Konfiguration des Images, der sagt, was die Plattform anwenden wird. Ebenso steht dort der Descriptor — offen, wie ein Service-Dump abgegeben wird, oder gesperrt — und, wenn das Dateisystem nicht gelesen werden konnte, auch das: Ohne die Firmware-Datenbank lassen sich die Dateien des Dateisystems keinen File IDs zuordnen, und es werden nur die Einträge des Images selbst gelesen.
+
+**Boot Guard** — das Profil, für das das Image gebaut ist, so wie es das Flash Image Tool, MEInfo und die Reparaturwerkzeuge ausgeben: `0 - No_FVME`, `3 - VM`, `4 - FVE` oder `5 - FVME`; die Kürzel stehen für verifizierten und gemessenen Start. Das Profil brennt die Plattform beim Abschluss von Manufacturing in die Fuses des Chipsatzes, und Fuses lassen sich nicht zurücknehmen; deshalb lohnt es sich, es vor dem Schreiben eines Images zu lesen. Die Zeile meldet das Profil, das das Image trägt; trägt ein Image keinen solchen Eintrag — weil Boot Guard mit einem anderen Werkzeug eingerichtet wurde oder die Generation die Einstellung anderswo führt —, steht dort **Kein Profil-Eintrag in diesem Image**, und das Profil ist mit MEInfo von der Platine selbst zu nehmen. Keine Zeile sagt, was eine Platine bei einem Widerspruch zwischen Image und Fuses tut, denn was in den Fuses steht, sagt der Dump nicht.
+
+**OEM Public Key Hash (SHA-384)** — der Hash des öffentlichen Schlüssels, mit dem das Schlüsselmanifest des Herstellers signiert ist, in der ME-Region, als 96 Hexadezimalzeichen. Er ist der Wert der Einstellung *OEM Public Key Hash* des Flash Image Tool und die Zeile, die die Reparaturwerkzeuge ausgeben; zwei Dumps derselben Platine tragen denselben Hash, und gegen ihn wird ein Schlüsselmanifest geprüft. Nur Nullen in dieser Einstellung deaktivieren die Signatur des Hersteller-Schlüsselmanifests. Die Zeile meldet **Kein Schlüsselmaterial in diesem Image**, wenn die Region keinen solchen Wert enthält; das ist die Antwort sowohl für eine Region mit gelöschtem Bereich als auch für eine, deren Einstellung nur Nullen enthält: Eine Folge von Nullen ist von einem unbeschriebenen Bereich nicht zu unterscheiden, daher wird ein Hash nur behauptet, wenn die Bytes vorhanden sind.
 
 ## Eine Region auf eine andere Platine übertragen
 

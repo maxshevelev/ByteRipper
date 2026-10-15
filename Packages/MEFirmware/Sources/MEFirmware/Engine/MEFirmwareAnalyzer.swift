@@ -21,15 +21,25 @@ public actor MEFirmwareAnalyzer {
     /// the ME partition extracted from a dump). `baseOffset` is the region's
     /// position inside the caller's larger file; reported partition offsets are
     /// shifted by it.
-    public func analyze(region: Data, baseOffset: Int = 0) async throws -> FirmwareAnalysis {
+    ///
+    /// `descriptorBytes` is the whole-flash image's descriptor page, when the
+    /// caller has one: the End of Manufacturing row needs the flash
+    /// descriptor's BIOS master masks to tell a locked descriptor from one the
+    /// host may still rewrite, and an extracted ME region carries no
+    /// descriptor of its own. Passing nothing leaves that one check out
+    /// (`ManufacturingBasis.descriptorOpen` stays nil); every other fact is
+    /// read from the region alone.
+    public func analyze(region: Data, baseOffset: Int = 0,
+                        descriptorBytes: Data? = nil) async throws -> FirmwareAnalysis {
         try await analyze(region: region, baseOffset: baseOffset,
+                          descriptorBytes: descriptorBytes,
                           findsIndependentFirmware: true)
     }
 
     /// The analysis proper. `findsIndependentFirmware` is false for the nested
     /// runs over the IUP partitions this one finds, so an image cannot send the
     /// analyzer looking inside its own sub-firmware forever.
-    private func analyze(region: Data, baseOffset: Int,
+    private func analyze(region: Data, baseOffset: Int, descriptorBytes: Data?,
                          findsIndependentFirmware: Bool) async throws -> FirmwareAnalysis {
         // ——— Stage 1: container decode that needs no database. ———
         // FPT and the $MN2/$MAN manifest are the ported links of the spine
@@ -920,6 +930,13 @@ public actor MEFirmwareAnalyzer {
             } else if let records = MFSParser.decodeConfigRecords(payload) {
                 oem.records = records.map(Self.configRecord)
             }
+            // Where the records' own bytes are: the partition's address plus
+            // its header, which is 0x10 on the revision-1 layout and 0x04 on
+            // the alpha one whose first u32 is the length. A record's `offset`
+            // is relative to this, so the two together are its bytes in the
+            // dump — the read the Manufacturing row and the panel's Full Info
+            // both do.
+            oem.payloadOffset = fitcRegion.offset + (oem.headerRevision == 1 ? 0x10 : 0x04)
             oemConfiguration = oem
         }
 
@@ -1022,6 +1039,87 @@ public actor MEFirmwareAnalyzer {
                 .map(\.index) ?? [],
             efs: efsEvidence,
             configuration: configurationFound)
+
+        // ——— The three facts a repair bench asks that MEAnalyzer does not
+        // print: whether this image closes Manufacturing on its first boot,
+        // which Boot Guard profile it is built for, and which OEM public key
+        // hash it carries. Ours; the addresses, the values and the ground truth
+        // behind each are in Skills/me-eom-structures/reference/structures.md.
+        //
+        // The Manufacturing switch has two pages, and they answer different
+        // questions. The OEM Configuration (FITC) partition holds the records
+        // the build wrote — the setting the platform applies when it enters End
+        // of Manufacturing. The MFS volume's own `/home/mca/eom` file holds
+        // what the file system has now, which is the only evidence a dump can
+        // carry that the board has closed Manufacturing already. Both are found
+        // by the FTBL File IDs `FileTable.dat` gives those files, which is why
+        // the live page needs the database: without it a built image's files
+        // carry no IDs, and the page is left unread rather than guessed at.
+        var liveFileIDs: [Int: Int] = [:]
+        var liveFilesResolved = false
+        if let info = mfsInfo, let table = fileTable, !info.files.isEmpty,
+           info.usesFTBL {
+            // Only an FTBL volume's files carry File IDs: an older volume names
+            // its records the other way (`MFSConfigurationByID`'s doc comment),
+            // and the switch does not exist there at all.
+            let resolution = table.resolve(platform: info.ftblPlatform,
+                                           dictionary: info.ftblDictionary)
+            let naming = table.records(namingFileIndices: Set(info.files.map(\.index)),
+                                       platform: resolution.platform,
+                                       dictionary: resolution.dictionary)
+            liveFilesResolved = !naming.isEmpty
+            let wanted = [ManufacturingDecoder.FileID.eom,
+                          ManufacturingDecoder.FileID.eomConfig,
+                          ManufacturingDecoder.FileID.manufLock]
+            for file in info.files {
+                guard let entry = naming[file.index],
+                      let fileID = Int(entry.fileID, radix: 16),
+                      wanted.contains(fileID),
+                      let first = file.content.first else { continue }
+                // The records are 1 and 2 bytes long, and the value is
+                // little-endian: the flag is byte 0's bit 0, `FlexibleEomSettings`
+                // its bits 1–2, so the first byte is the whole of it.
+                liveFileIDs[fileID] = Int(first)
+            }
+        }
+        var imageEOMConfig: Int? = nil
+        if let fitc = oemConfiguration, let payload = fitc.payloadOffset,
+           let records = fitc.recordsByID {
+            for record in records
+            where record.fileID == ManufacturingDecoder.FileID.eomConfig {
+                let at = payload - baseOffset + record.offset
+                if at >= 0, at < region.count {
+                    imageEOMConfig = Int(region[region.startIndex + at])
+                }
+            }
+        }
+        let fitcHasSwitch = (oemConfiguration?.recordsByID ?? [])
+            .contains { $0.fileID == ManufacturingDecoder.FileID.eomConfig }
+        let manufacturing = ManufacturingDecoder.decide(ManufacturingDecoder.Inputs(
+            eom: liveFileIDs[ManufacturingDecoder.FileID.eom],
+            imageEOMConfig: imageEOMConfig,
+            liveEOMConfig: liveFileIDs[ManufacturingDecoder.FileID.eomConfig],
+            // The descriptor's BIOS master: all ones in both masks is a
+            // descriptor the host may still rewrite, which is the state the
+            // factory ships and the one MFIT's own rule about the flag is
+            // about. No descriptor (an extracted region) leaves the check out.
+            descriptorOpen: descriptorBytes
+                .flatMap { FlashDescriptor.biosMaster(in: $0) }
+                .map { $0.read == 0xFFF && $0.write == 0xFFF },
+            hasSwitch: fitcHasSwitch
+                || liveFileIDs[ManufacturingDecoder.FileID.eom] != nil
+                || liveFileIDs[ManufacturingDecoder.FileID.eomConfig] != nil,
+            liveFilesResolved: liveFilesResolved))
+
+        // Boot Guard: the profile is a JSON record of the CDMD configuration
+        // partition, the key hash a value the UEP area repeats. Neither is in
+        // any specification, both are read by shape — see `BootGuardReader`.
+        let bootGuardProfile = Self.regionBytes("CDMD", regions: regions,
+                                                region: region, baseOffset: baseOffset)
+            .flatMap(BootGuardReader.profile(in:))
+        let oemPublicKeyHash = Self.regionBytes("UEP", regions: regions,
+                                                region: region, baseOffset: baseOffset)
+            .flatMap(BootGuardReader.oemPublicKeyHash(in:))
         let oemCustomized = OEMDetector.oemCustomized(
             fpt: fpt, bootPartitions: bootPartitions, codePartition: codePartition,
             in: region, baseOffset: baseOffset)
@@ -1082,6 +1180,7 @@ public actor MEFirmwareAnalyzer {
                 // for what its own analysis could read.
                 guard var analysis = try? await analyze(
                     region: slice, baseOffset: baseOffset + slot.lowerBound,
+                    descriptorBytes: descriptorBytes,
                     findsIndependentFirmware: false),
                     analysis.manifest != nil
                 else { continue }
@@ -1153,6 +1252,14 @@ public actor MEFirmwareAnalyzer {
             // upstream's own variable is; the row's family gate is the panel's.
             mfsState: fileSystemState.state,
             mfsStateBasis: fileSystemState.basis,
+            // Ours: the three facts a bench asks of a dump it is about to
+            // flash. The model's own doc comments say what each means and where
+            // it lives; `ManufacturingDecoder` and `BootGuardReader` decide
+            // them.
+            manufacturingState: manufacturing.state,
+            manufacturingBasis: manufacturing.basis,
+            bootGuardProfile: bootGuardProfile,
+            oemPublicKeyHash: oemPublicKeyHash,
             // Row 12a is CSME 11's alone, the way upstream gates it, so the
             // token is read only there — a later family's row cell 4 means
             // something else.
@@ -1290,6 +1397,21 @@ public actor MEFirmwareAnalyzer {
         MFSConfigIDRecord(fileID: r.fileID, offset: r.offset, size: r.size,
                           oemConfigurable: r.oemConfigurable,
                           unknownFlags: r.unknownFlags)
+    }
+
+    /// The bytes of one FPT region, by its name — what the Boot Guard facts are
+    /// read out of (the profile from the CDMD partition, the OEM public key
+    /// hash from the UEP area). nil when the image has no such region, or its
+    /// declared range runs past the bytes the analyser was handed.
+    private static func regionBytes(_ name: String, regions: [FPTRegion],
+                                    region: Data, baseOffset: Int) -> Data? {
+        guard let part = regions.first(where: { $0.name == name && $0.size > 0 }) else {
+            return nil
+        }
+        let start = part.offset - baseOffset
+        guard start >= 0, start + part.size <= region.count else { return nil }
+        let from = region.startIndex + start
+        return region.subdata(in: from..<(from + part.size))
     }
 
     private static func downgradeBlacklist(

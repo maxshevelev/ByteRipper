@@ -110,6 +110,26 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// What `mfsState` was decided from (`MFSStateBasis`). Ours; nil where
     /// `mfsState` is.
     public var mfsStateBasis: MFSStateBasis? = nil
+    /// What the platform will do with End of Manufacturing (ours; MEAnalyzer
+    /// prints no such row). nil for a firmware whose generation has no such
+    /// switch at all — see `ManufacturingState.noSwitch`, which is that same
+    /// fact stated as a value where a row states one.
+    public var manufacturingState: ManufacturingState? = nil
+    /// What `manufacturingState` was decided from (`ManufacturingBasis`): the
+    /// two pages of the setting, and the descriptor's state. Ours; nil where
+    /// `manufacturingState` is.
+    public var manufacturingBasis: ManufacturingBasis? = nil
+    /// The Boot Guard profile this image is built for (ours). `nil` when the
+    /// image carries no CDMD configuration record for it — the older layouts
+    /// and the vendor images whose Boot Guard was never configured from the
+    /// ME side.
+    public var bootGuardProfile: BootGuardProfile? = nil
+    /// The OEM public key hash the UEP area carries (ours), as 96 uppercase hex
+    /// characters — a SHA-384, the value MFIT calls `OemPublicKeyHash` and
+    /// ECFinder prints as "OEM Public Key Hash (SHA-384)". All zeros is the
+    /// setting that disables OEM signing. nil when the UEP area carries no
+    /// key material (an extracted image whose UEP was wiped).
+    public var oemPublicKeyHash: String? = nil
     /// Power Down Mitigation (row 12a, upstream `pdm_status`): whether a
     /// CSME 11 firmware carries the power-down mitigation, as its database row
     /// records it. nil for every other family and major — the row upstream
@@ -352,6 +372,138 @@ public struct MFSStateBasis: Codable, Sendable, Equatable {
         switch efs {
         case .unreadable, .filesNotNamed: return decidedBy != .efs && decidedBy != .reservedFiles
         case .holdsFiles, .noFileContent, .noPartition: return false
+        }
+    }
+}
+
+/// What the platform will do with End of Manufacturing — the question a bench
+/// asks of a dump it is about to flash ("will this one close Manufacturing on
+/// the first boot?"). Ours: MEAnalyzer has no such row.
+///
+/// The switch is CSME 15/16's `CsePlugin:EomNvar:EOM#EomFirstBootEnabled`, which
+/// MFIT writes into the image's **OEM Configuration** partition as a record of
+/// the MFS file `/home/mca/eom_config`: bit 0 is the flag, bits 1–2 are
+/// `FlexibleEomSettings` (what EOM commits — `Lock Descriptor and OEM Configs`,
+/// `Lock OEM Configs Only`, `Lock Descriptor Only`, `Do not lock…`). The
+/// *live* file system carries the same two records once the platform has run,
+/// and the `/home/mca/eom` record beside them is the result: 1 means
+/// Manufacturing has been closed on this board already. Working out both pages
+/// and what each says is `ManufacturingDecoder` in `FileSystem/Manufacturing.swift`.
+///
+/// The engine never reads the PCH fuses themselves — those are burned into the
+/// chip, not into a dump, and no dump can say what they hold. What this says is
+/// what the *image* will make the platform do.
+public enum ManufacturingState: String, Codable, Sendable, CaseIterable {
+    /// The flag is set: the first boot of this image closes Manufacturing.
+    case willClose
+    /// The flag is clear: the platform boots on with Manufacturing open, which
+    /// is the state a bench must not ship a machine in.
+    case willNotClose
+    /// The live record `/home/mca/eom` reads 1: this board has closed
+    /// Manufacturing already, whatever the image now says.
+    case closed
+    /// The flag is set while the descriptor's BIOS master is open (its read and
+    /// write masks are all ones). MFIT refuses to build such an image —
+    /// `CsePlugin:EomNvar` answers *"When 'Host CPU / BIOS' Read and Write
+    /// Master Access are set to 0xFFFF, End of manufacturing on first boot and
+    /// locking descriptor is not allowed"* — so the two settings together mean
+    /// the image was edited outside MFIT, or predates that rule.
+    case unexpectedCombination
+    /// The generation has the switch, but neither page could be read: the
+    /// firmware's file table is not in hand, so the MFS files carry no File IDs
+    /// to find them by, and no OEM Configuration partition holds the record.
+    case unknown
+    /// This firmware has no such switch: End of Manufacturing is not something
+    /// it decides on a first boot (pre-CSME 15, or a layout whose MFS volume
+    /// has no ID-keyed configuration records).
+    case noSwitch
+}
+
+/// What the Manufacturing row was decided from. Ours, not upstream's — the same
+/// idea as `MFSStateBasis`: a reader must be able to tell a verdict the image
+/// states from one that only a page that could not be read left standing.
+public struct ManufacturingBasis: Codable, Sendable, Equatable {
+    /// Which page the flag was read from.
+    public enum Page: String, Codable, Sendable {
+        /// The live MFS file `/home/mca/eom_config` — what the platform has in
+        /// its file system now.
+        case liveMFS
+        /// The OEM Configuration partition's record for that file — what the
+        /// build wrote into the image, which the platform applies at EOM.
+        case imageConfiguration
+    }
+
+    /// The live `/home/mca/eom` record: 1 = Manufacturing closed, 0 = not.
+    /// nil when the volume carries no such file (a built image the platform
+    /// has never run) or its File IDs could not be resolved.
+    public var eom: Int? = nil
+    /// The flag: **bit 0** of `/home/mca/eom_config`.
+    public var flag: Bool? = nil
+    /// **Bits 1–2** of the same record: `FlexibleEomSettings`.
+    public var flexible: Int? = nil
+    /// Which page `flag` and `flexible` came from.
+    public var page: Page? = nil
+    /// Whether the descriptor's BIOS master is open — its read *and* write
+    /// masks all ones, which is what the factory leaves and what MFIT's rule
+    /// above is about. nil when no descriptor was handed to the analyser
+    /// (`analyze(descriptorBytes:)`) or it does not read as one.
+    public var descriptorOpen: Bool? = nil
+    /// Whether the live file system could be looked in at all: false when the
+    /// image has an MFS volume but the File IDs of its files are unknown, which
+    /// is a missing database rather than a fact about the firmware.
+    public var liveFilesResolved: Bool = false
+
+    public init(eom: Int? = nil, flag: Bool? = nil, flexible: Int? = nil,
+                page: Page? = nil, descriptorOpen: Bool? = nil,
+                liveFilesResolved: Bool = false) {
+        self.eom = eom
+        self.flag = flag
+        self.flexible = flexible
+        self.page = page
+        self.descriptorOpen = descriptorOpen
+        self.liveFilesResolved = liveFilesResolved
+    }
+}
+
+/// The Boot Guard profile an image is built for. Ours: MEAnalyzer prints no such
+/// row, and ECFinder — the tool the field practice uses — answers only "Boot
+/// Guard enabled / disabled".
+///
+/// The four settings MFIT offers are a list, and what a dump carries is the
+/// **index into it**, in a JSON record of the CDMD partition's configuration:
+/// `{"BtGuardProfileConfig": <index>}` under the partition's `FIT AS A FIDDLE`
+/// signature. Index 0 → `0 - No_FVME`, 1 → `3 - VM`, 2 → `4 - FVE`, 3 →
+/// `5 - FVME` — hence the raw values, which are what MFIT, ECFinder and MEInfo
+/// all print. The chain of names is MFIT's own: VM = verified and measured
+/// boot, FVE = firmware verified, FVME = both.
+///
+/// The profile is the one the platform burns into the PCH's fuses when
+/// Manufacturing closes, which is why it is worth reading *before* flashing a
+/// dump: the fuses cannot be taken back.
+public enum BootGuardProfile: String, Codable, Sendable, CaseIterable {
+    case noFVME = "0"
+    case vm = "3"
+    case fve = "4"
+    case fvme = "5"
+
+    /// The profile a CDMD JSON index names.
+    public init?(index: Int) {
+        switch index {
+        case 0: self = .noFVME
+        case 1: self = .vm
+        case 2: self = .fve
+        case 3: self = .fvme
+        default: return nil
+        }
+    }
+
+    /// The index this profile is written as.
+    public var index: Int {
+        switch self {
+        case .noFVME: return 0
+        case .vm: return 1
+        case .fve: return 2
+        case .fvme: return 3
         }
     }
 }
@@ -2282,5 +2434,15 @@ public enum EngineModelRevision {
     /// is stored, in its own order, and a digest of what it holds, so two
     /// dumps' files can be compared by content wherever the volume put them.
     /// None of them is upstream's; the sync comparison leaves them out.
-    public static let current = 40
+    ///
+    /// 41 adds the three facts a repair bench asks of a dump it is about to
+    /// flash, none of them upstream's: `manufacturingState` with
+    /// `manufacturingBasis` (whether the platform closes End of Manufacturing
+    /// on the image's first boot, and the two pages of records plus the
+    /// descriptor that decided it), `bootGuardProfile` (the profile the image is
+    /// built for, out of the CDMD configuration's JSON) and `oemPublicKeyHash`
+    /// (the SHA-384 the UEP area carries). `analyze` gained the optional
+    /// `descriptorBytes` they need for the descriptor's BIOS master — an
+    /// extracted ME region has no descriptor of its own, and the basis says so.
+    public static let current = 41
 }
