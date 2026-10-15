@@ -178,6 +178,47 @@ machine, and the two absences are not the same case: CSME 15's boards are Boot
 Guard 0 by the field tools' verdict, which the dump does not state, while a
 region whose UEP was wiped carries no key at all.
 
+## MFIT's settings database: what lives where, and with what values
+
+`mfit.exe` carries its settings database as zlib-compressed XML inside the
+binary. Unpacked, it answers the question the panel keeps asking — *which*
+parameters live in *which* files, and what they may say:
+
+| what the database gives, per setting | example (`mca/eom_config`) |
+|---|---|
+| the file it lives in, and the file's alias | `mca/eom_config`, alias `EOM_Config` |
+| where in that file: byte offset and length | offset 0, length 2 |
+| for a bitfield, the bits | `EomFirstBootEnabled` bits 0–0, `FlexibleEomSettings` bits 1–2 |
+| the kind of the field | `Data` (a value), `Bitwise` (bits in a word), `Binary`, `String` |
+| the values it may take, with their numbers | the four EOM options, numbered from zero |
+| the default, and MFIT's own help text | `Lock Descriptor and OEM Configs` |
+| who writes it | `process_type`: `Generic`, or `Auto` for what the platform writes |
+
+The 16.0.15 build's database holds **72 files and 137 settings** for its largest
+platform list (ADL-S 66/128, MTL-M 73/136), and the useful part is that **those
+file paths are MFS paths**: `/home/mca/eom_config`, `/home/policy/cfgmgr/cfg_rules`,
+`/home/iunit/iunit_oem_cfg`, `/home/pavp/hdcp_ports`, `/home/ish_srv/INTC_pdt` …
+So every setting in the database is a setting the app can read out of a dump the
+same way it reads the EOM one — the MFS file by its File ID through
+`FileTable.dat`, and the image's own record in the FITC partition — and a setting
+whose values are enumerated (`FlexibleEomSettings`, `ProcEmulation`,
+`MewlanPowerWell`, `Hdcp5kedisp1`, … twelve of them) can be printed by name
+rather than as a number.
+
+Two things the database is not. It is **per platform**: the lists are
+`ADL-S`, `ELG`, `MTL-M`, `MTL-S` in that build, so a dump of another platform
+needs the list for it (the entries we care about repeat across them, the EOM trio
+identically, but the file lists differ in length). And from **MFIT 18** the same
+file changes shape — 18.0.10.2285's `Files.xml` holds 107 file paths and no
+layouts at all — so the layouts for a newer generation are somewhere else in that
+binary, to be found when that generation's structures are.
+
+Where the databases are, on this machine: `mfit.exe` per tool version, and the
+binary is the file to unpack
+(`/Volumes/HDD 10Tb/.../Modular Flash Image Tool <version>/mfit.exe`, with
+16.0.15.1662, 16.50.0.1186, 18.0.10.2285, 20.0.0.1482 and 21.0.2.1482 at hand —
+one per generation the other-version work will reach for).
+
 ## What to work out next
 
 **Where CSME 15 keeps the Boot Guard profile.** MFIT offers the setting for
