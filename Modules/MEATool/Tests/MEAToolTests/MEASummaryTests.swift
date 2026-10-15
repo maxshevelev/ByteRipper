@@ -909,28 +909,26 @@ final class MEASummaryTests: XCTestCase {
         var protectedKey = protected
         protectedKey.oemPublicKeyHash = .hash(String(repeating: "05", count: 48))
         let rows = tableRows(protectedKey)
-        XCTAssertEqual(value("Manufacturing", in: rows), .value("Will close on the EOM flag"))
+        XCTAssertEqual(value("Manufacturing", in: rows),
+                       .verdict("Will close on the EOM flag",
+                                evidence: "EOM: on, descriptor: locked"))
         // It will close: the tone the File System State draws for Initialized.
         XCTAssertEqual(tone("Manufacturing", in: rows), .caution)
         XCTAssertEqual(value("Boot Guard", in: rows), .value("5 - FVME"))
         XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
         XCTAssertEqual(value("OEM Public Key Hash", in: rows),
                        .value(String(repeating: "05", count: 48)))
-        // The basis follows its row, as the File System State's does, and is
-        // short: the flag, where it was read, what EOM commits.
-        let basis = value("Manufacturing basis", in: rows)?.text(in: .english)
-        XCTAssertEqual(basis, "The End of Manufacturing flag is set in the image's OEM Configuration.")
+        // One line for a copy: the verdict, then what it was read from in
+        // brackets — and only the verdict is emphasised.
+        XCTAssertEqual(value("Manufacturing", in: rows)?.text(in: .english),
+                       "Will close on the EOM flag (EOM: on, descriptor: locked)")
+        XCTAssertTrue(rows.first { $0.label == "Manufacturing" }?.isEmphasized == true)
         // What End of Manufacturing commits is its own row, in MFIT's own words
         // for the four values of `FlexibleEomSettings` (numbered from zero).
         XCTAssertEqual(value("Flexible EOM Settings", in: rows),
                        .value("Lock Descriptor and OEM Configs"))
         XCTAssertEqual(tone("Flexible EOM Settings", in: rows), .standard)
-        // The basis is evidence, not a verdict: it is drawn as an ordinary
-        // value, like the File System State's basis, while the verdict above it
-        // carries the colour (`Design/ME_STRUCTURES.md`, the tones).
-        XCTAssertEqual(tone("Manufacturing basis", in: rows), .standard)
-        XCTAssertFalse(rows.first { $0.label == "Manufacturing basis" }?.isEmphasized == true)
-        XCTAssertTrue(rows.first { $0.label == "Manufacturing" }?.isEmphasized == true)
+        XCTAssertNil(value("Manufacturing basis", in: rows))
 
         let willClose = try analysis([
             "family": "csme", "manifest": manifestJSON(),
@@ -943,7 +941,8 @@ final class MEASummaryTests: XCTestCase {
             "bootGuardProfile": "0",
         ])
         XCTAssertEqual(value("Manufacturing", in: tableRows(willClose)),
-                       .value("Will close on the EOM flag"))
+                       .verdict("Will close on the EOM flag",
+                                evidence: "EOM: on, descriptor: locked"))
         XCTAssertEqual(tone("Manufacturing", in: tableRows(willClose)), .caution)
         // Profile 0 is Boot Guard switched off — the board boots unverified,
         // which is a state a bench works with: green.
@@ -959,7 +958,10 @@ final class MEASummaryTests: XCTestCase {
                                    "liveFilesResolved": false],
         ])
         XCTAssertEqual(value("Manufacturing", in: tableRows(willNotClose)),
-                       .value("Will not close"))
+                       .verdict("Will not close",
+                                evidence: "EOM: off, descriptor: open"))
+        XCTAssertEqual(value("Manufacturing", in: tableRows(willNotClose))?.text(in: .english),
+                       "Will not close (EOM: off, descriptor: open)")
         XCTAssertEqual(tone("Manufacturing", in: tableRows(willNotClose)), .good)
     }
 
@@ -979,13 +981,14 @@ final class MEASummaryTests: XCTestCase {
         a.oemPublicKeyHash = .allZeros
         let rows = tableRows(a)
         XCTAssertEqual(value("Manufacturing", in: rows),
-                       .value("Will close on the descriptor's rights"))
+                       .verdict("Will close on the descriptor's rights",
+                                evidence: "descriptor: locked"))
         XCTAssertEqual(tone("Manufacturing", in: rows), .caution)
-        // No flag in this image: the descriptor is what the basis names. The
-        // setting row is absent, because the image carries no such record —
-        // CSME 12 knows nothing of `FlexibleEomSettings`.
-        XCTAssertEqual(value("Manufacturing basis", in: rows)?.text(in: .english),
-                       "The descriptor's access rights are what close Manufacturing.")
+        // No flag in this image, so the evidence names the descriptor alone —
+        // and the setting row is absent, because the image carries no such
+        // record: CSME 12 knows nothing of `FlexibleEomSettings`.
+        XCTAssertEqual(value("Manufacturing", in: rows)?.text(in: .english),
+                       "Will close on the descriptor's rights (descriptor: locked)")
         XCTAssertNil(value("Flexible EOM Settings", in: rows))
         XCTAssertEqual(value("Boot Guard", in: rows), .value("4 - FVE"))
         XCTAssertEqual(tone("Boot Guard", in: rows), .caution)

@@ -716,21 +716,33 @@ import ToolModuleKit
     }
 
     /// One Summary row as a field of the shared detail list: the label, and the
-    /// value drawn as the row's tone asks. A status value is bold and coloured,
-    /// with the tick a passed check carries, all of it from the tone, which is
-    /// the same rendering the tree's detail and the UEFI Structure's use; a
-    /// `.comingSoon` value is drawn grey, the shape of a row the engine will
-    /// answer once the bridge reaches it, and so is a `.pending` one, which the
-    /// reading under way will answer.
+    /// value drawn as the row's tone asks. A verdict is the answer in the row's
+    /// tone and what it was read from in brackets in the ordinary font and
+    /// colour — the tone is the verdict's, and the evidence beside it must not
+    /// borrow it; a status value is bold and coloured, with the tick a passed
+    /// check carries, all of it from the tone, which is the same rendering the
+    /// tree's detail and the UEFI Structure's use; a `.comingSoon` value is
+    /// drawn grey, the shape of a row the engine will answer once the bridge
+    /// reaches it, and so is a `.pending` one, which the reading under way will
+    /// answer.
     private static func summaryField(_ row: MEASummaryRow) -> ToolFieldList.Field {
         let text = row.value.text(in: Localization.appLanguage)
-        guard row.value.isValue else {
+        switch row.value {
+        case .verdict(let verdict, let evidence):
+            let drawn = NSMutableAttributedString(
+                attributedString: row.tone.attributedValue(verdict))
+            if !evidence.isEmpty {
+                drawn.append(ToolValueTone.standard.attributedValue(" (\(evidence))"))
+            }
+            return .init(label: row.label, value: drawn)
+        case .value:
+            return .init(label: row.label, value: row.tone.attributedValue(text))
+        case .comingSoon, .pending:
             return .init(label: row.label, value: NSAttributedString(
                 string: text,
                 attributes: [.font: ToolPanelFont.body(),
                              .foregroundColor: NSColor.secondaryLabelColor]))
         }
-        return .init(label: row.label, value: row.tone.attributedValue(text))
     }
 
     /// Rebuilds the detail list from the focused row's own fields.

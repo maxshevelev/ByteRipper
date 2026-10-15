@@ -32,7 +32,7 @@ final class MEAAgentQueriesTests: XCTestCase {
         let basis = ManufacturingBasis(
             flag: true, flexible: 0, page: .imageConfiguration,
             descriptorOpen: false, liveFilesResolved: true)
-        let json = MEAAgentQueries.manufacturingBasisJSON(basis)
+        let json = MEAAgentQueries.manufacturingBasisJSON(.willClose, basis)
         guard case .object(let members) = json else { return XCTFail("not an object") }
         XCTAssertEqual(members["flag"], .bool(true))
         XCTAssertEqual(members["flexible_eom_settings"], .count(0))
@@ -42,11 +42,12 @@ final class MEAAgentQueriesTests: XCTestCase {
         guard case .string(let explanation)? = members["explanation"] else {
             return XCTFail("no explanation")
         }
-        XCTAssertTrue(explanation.hasPrefix("The End of Manufacturing flag is set in the image's OEM Configuration."), explanation)
+        // What the row itself reads, brackets and all.
+        XCTAssertEqual(explanation, "Will close on the EOM flag (EOM: on, descriptor: locked)")
 
         // A region read without a descriptor, and with a file system the
         // database could not name: both are said rather than left out.
-        let unread = MEAAgentQueries.manufacturingBasisJSON(ManufacturingBasis(
+        let unread = MEAAgentQueries.manufacturingBasisJSON(.willClose, ManufacturingBasis(
             flag: true, flexible: 1, page: .liveMFS, liveFilesResolved: false))
         guard case .object(let sparse) = unread else { return XCTFail("not an object") }
         XCTAssertEqual(sparse["descriptor"], .string("not read"))
