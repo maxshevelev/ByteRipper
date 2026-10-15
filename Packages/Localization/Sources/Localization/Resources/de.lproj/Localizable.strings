@@ -1671,10 +1671,6 @@
 "No End of Manufacturing record in this image." = "Kein EOM-Eintrag in diesem Image.";
 "The descriptor's access rights are what close Manufacturing." = "Manufacturing wird hier durch die Zugriffsrechte im Descriptor abgeschlossen.";
 "The descriptor is open, so nothing closes it." = "Der Descriptor ist offen, es wird also nichts abgeschlossen.";
-"End of Manufacturing will lock the descriptor and the OEM configuration." = "End of Manufacturing sperrt den Descriptor und die OEM-Konfiguration.";
-"End of Manufacturing will lock the OEM configuration only." = "End of Manufacturing sperrt nur die OEM-Konfiguration.";
-"End of Manufacturing will lock the descriptor only." = "End of Manufacturing sperrt nur den Descriptor.";
-"End of Manufacturing will lock neither the descriptor nor the OEM configuration." = "End of Manufacturing sperrt weder den Descriptor noch die OEM-Konfiguration.";
 "Manufacturing" = "Manufacturing";
 "Manufacturing basis" = "Grundlage der Manufacturing-Entscheidung";
 "Boot Guard" = "Boot Guard";
@@ -1687,3 +1683,8 @@
 "Not set (all zeros)" = "Nicht gesetzt (nur Nullen)";
 "Not set (the area is erased)" = "Nicht gesetzt (Bereich gelöscht)";
 "Layout not recognized" = "Aufbau nicht erkannt";
+"Flexible EOM Settings" = "Flexible EOM-Einstellung";
+"Lock Descriptor and OEM Configs" = "Descriptor und OEM-Konfiguration sperren";
+"Lock OEM Configs Only" = "Nur die OEM-Konfiguration sperren";
+"Lock Descriptor Only" = "Nur den Descriptor sperren";
+"Do not lock Descriptor and OEM Configs" = "Nichts sperren";
