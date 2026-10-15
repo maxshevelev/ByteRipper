@@ -257,7 +257,7 @@ console strings — texts are display-only, no 1:1 text requirement.
 
 Consolidated status of every row for a future renderer. Grouped by what must be
 done in the engine/model (additive-only `Codable` model; every additive change
-bumps `EngineModelRevision`, currently **30** — see `result-model.md`).
+bumps `EngineModelRevision`, currently **41** — see `result-model.md`).
 
 | Status | Row(s) | Detail |
 |---|---|---|
@@ -268,6 +268,13 @@ bumps `EngineModelRevision`, currently **30** — see `result-model.md`).
 | **DEFERRED** | — | Nothing of the default output is left: rows 1–22 and the independent tables (§4) all read, and the message list is `issues`. What remains open is elsewhere — the EFS leg of row 17 (needs `FileTable.dat`'s EFST), the CSME-11 SKU composition, and the deep structural tables `upstream-map.md` tracks. |
 | **PARKED — DB/UI display text** | the three export-only DB rows | `name_db`/support-status/RSA-hash rows never reach the console (`databaseName`/`signatureHash` exist in the model for other reasons). |
 | **≈ `issues`** | Message list (§5) | Severity classes align; texts are display-only. |
+
+Rows that are **not** upstream's are not in this table — the summary prints them
+above the size row, and `result-model.md` lists them with the revisions they
+arrived in: the File System State's **State basis** (revision 40), and
+**Manufacturing** with its basis, **Boot Guard** and **OEM Public Key Hash**
+(revision 41, `Skills/me-eom-structures/reference/structures.md`). A sync leaves
+all of them alone.
 
 ## Cross-references
 

@@ -3,6 +3,7 @@
 > What the two tabs of the ME Analyzer panel report, and how the individual rows of the summary are to be read.
 
 @covers panel.me.state-basis
+@covers panel.me.manufacturing
 
 **Tools ▸ ME Analyzer** analyses the [[term:me-region|ME region]] of the image in its pane and reports the result on two tabs, **Summary** and **Full Info**. The tool itself is described in [[topic:tool-me|ME Analyzer]]; this page covers the content of the report.
 
@@ -28,6 +29,7 @@ The tool reports that nothing in the file reads as Intel ME firmware in three di
 - **Size** — how far the firmware reaches from its `$FPT`. This is a property of the firmware, not the length of the region or of the file.
 - **Flash Image Tool** — the version of Intel's Flash Image Tool that the image was built with, where the image records it.
 - **File System State** — described in the next section.
+- **Manufacturing**, **Manufacturing basis**, **Boot Guard**, **OEM Public Key Hash** — described in the section after it: what a dump says about closing Manufacturing, about the Boot Guard profile the image is built for, and about the manufacturer's key.
 
 Rows the analysis cannot answer for the family in question are left grey rather than filled with a guess.
 
@@ -49,6 +51,25 @@ Two qualifications apply to the criteria:
 - A fourth value, **Error**, exists in the upstream project for the case of the analysis failing outright. The decoders used here do not raise it.
 
 Directly under the state, on the **Summary** tab and in the **Firmware** row of the **Full Info** tab alike, **State basis** says which of the three criteria decided it and what the others found. The value of the state is the upstream project's; the basis is this tool's own. The basis is drawn as a warning, and the state itself is then never drawn in green, when a criterion that could have raised the state could not be checked — most often an EFS partition listed in the partition table whose volume could not be read, for instance because its system page has been erased. **Configured** then means only that the configuration was found: whether the EFS holds files written by the engine, which would make the state **Initialized**, is unknown, and the EFS partition is to be examined before the state is relied upon.
+
+## Manufacturing, Boot Guard and the OEM public key hash
+
+Three further rows answer, from the dump alone, what is asked before an image is written to a board. None of them is the upstream project's; the labels are this tool's own and are translated.
+
+**Manufacturing** — whether the platform closes End of Manufacturing on the first boot of this image. The setting exists on CSME 15 and 16, where Flash Image Tool calls it *EOM on first boot*; earlier generations have no such switch and the row is not shown for them. It takes these values:
+
+- **Will close on first boot** — the setting is enabled: the first power-on after this image is written closes Manufacturing, which locks the flash descriptor and, depending on the setting beside it, the OEM configuration. What is locked cannot be unlocked in the image afterwards.
+- **Will not close** — the setting is disabled. This is the state a board that is to be configured further is left in, and the one to check for on an image that is meant to be reworked.
+- **Already closed** — the file system of the region holds a record that says the board has closed Manufacturing already. This is a dump taken from a board in service; what the image is set to do no longer decides anything.
+- **Close on first boot, with the descriptor open** — the setting is enabled while the flash descriptor still lets the host processor and the BIOS read and write every region. Flash Image Tool refuses to build such an image, so the two settings were put there by another tool or by hand.
+- **Not readable from this image** — the switch is present in the dump's generation, but neither the image's own configuration nor its file system carries the setting. Nothing is claimed, and the row's absence of a verdict is itself the answer.
+- **No such switch in this firmware** — the firmware has no such setting. Not shown as a verdict of its own on the Summary tab, which omits the row entirely for those generations.
+
+**Manufacturing basis** follows it, as **State basis** follows the file system state, and says where the verdict was read from: the record of the file system, which says what the board has done, or the record of the image's OEM configuration, which says what the platform will apply. It also names the descriptor's state — open, as a manufacturer's service dump is handed out, or locked — and, where the file system could not be read, says so: without the firmware database the file system's files cannot be identified, and only the image's own records are read.
+
+**Boot Guard** — the profile the image is built for, as Flash Image Tool, MEInfo and the repair tools print it: `0 - No_FVME`, `3 - VM`, `4 - FVE` or `5 - FVME`, the abbreviations standing for verified and for measured boot. The profile is the one the platform burns into the chipset's fuses when Manufacturing closes, and the fuses cannot be taken back, which is why it is worth reading before an image is written. The row reports the profile the image carries; an image that carries no such record — an image whose Boot Guard was configured by another tool, or a generation that records the setting elsewhere — is reported as **No profile record in this image**, and the profile has to be taken from the board itself with MEInfo. No row reports what a board will do when the image and the fuses disagree, because nothing in the dump says what the fuses hold.
+
+**OEM Public Key Hash** — the SHA-384 hash of the public key the manufacturer's signing key manifest is signed with, in the ME region, as 96 hexadecimal digits. It is the value Flash Image Tool's *OEM Public Key Hash* setting carries and the repair tools print in their reports; two dumps of the same board carry the same hash, and it is what a key manifest is checked against. All zeros in that setting disables signing of the manufacturer's key manifest. The row reports **No key material in this image** when the region carries no such value, which is the answer both for a region whose area was erased and for one whose setting is all zeros: a run of zeros cannot be told from an unwritten area, so the tool claims a hash only where the bytes are there.
 
 ## Moving a region to another board
 

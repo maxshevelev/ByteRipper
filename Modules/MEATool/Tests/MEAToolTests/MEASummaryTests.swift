@@ -149,9 +149,20 @@ final class MEASummaryTests: XCTestCase {
             "NVM Compatibility",
             "TCB Security Version Number", "ARB Security Version Number",
             "Version Control Number", "Production Ready", "OEM Configuration",
-            "FWUpdate Support", "Date", "File System State", "Size",
+            "FWUpdate Support", "Date", "File System State",
+            // Our three rows, between the file system state they are read
+            // beside and the size: a CSME 15 image with a manifest that
+            // carries none of the three facts answers each of them honestly —
+            // a promise for the Manufacturing row, and the two Boot Guard
+            // facts as "this image has none".
+            "Manufacturing", "Boot Guard", "OEM Public Key Hash", "Size",
             "Flash Image Tool", "Manifest Extension Utility",
         ])
+        XCTAssertEqual(value("Manufacturing", in: rows), .comingSoon)
+        XCTAssertEqual(value("Boot Guard", in: rows),
+                       .value("No profile record in this image"))
+        XCTAssertEqual(value("OEM Public Key Hash", in: rows),
+                       .value("No key material in this image"))
         XCTAssertEqual(value("NVM Compatibility", in: rows), .value("SPI"))
         XCTAssertEqual(value("Manifest Extension Utility", in: rows),
                        .value("1.4.0.0014"))
@@ -876,6 +887,84 @@ final class MEASummaryTests: XCTestCase {
         let unread = try rows(platform: "TGP", stepping: nil)
         XCTAssertEqual(value("Chipset Stepping", in: unread), .value("Unknown"))
         XCTAssertEqual(value("Chipset SKU", in: unread), .value("H"))
+    }
+
+    // MARK: - Our three rows (End of Manufacturing, Boot Guard, OEM key hash)
+
+    /// The four dumps whose answers are known, as the rows read them: the
+    /// factory dump that closed Manufacturing already, the same image built
+    /// with MFIT's flag set, the one built without it, and the pair of Boot
+    /// Guard facts under them.
+    func testTheBenchRowsReadTheFourKnownDumps() throws {
+        let closed = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+            "manufacturingState": "closed",
+            "manufacturingBasis": ["eom": 1, "flag": false, "flexible": 0,
+                                   "page": "imageConfiguration",
+                                   "descriptorOpen": false,
+                                   "liveFilesResolved": true],
+            "bootGuardProfile": "5",
+            "oemPublicKeyHash": String(repeating: "05", count: 48),
+        ])
+        let rows = tableRows(closed)
+        XCTAssertEqual(value("Manufacturing", in: rows), .value("Already closed"))
+        XCTAssertEqual(tone("Manufacturing", in: rows), .good)
+        XCTAssertEqual(value("Boot Guard", in: rows), .value("5 - FVME"))
+        XCTAssertEqual(tone("Boot Guard", in: rows), .good)
+        XCTAssertEqual(value("OEM Public Key Hash", in: rows),
+                       .value(String(repeating: "05", count: 48)))
+        // The basis follows its row, as the File System State's does.
+        let basis = value("Manufacturing basis", in: rows)
+        XCTAssertEqual(basis.map { $0.text(in: .english) }.map { $0.contains("Manufacturing has been closed on this board already") }, true)
+
+        let willClose = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+            "manufacturingState": "willClose",
+            "manufacturingBasis": ["flag": true, "flexible": 0,
+                                   "page": "imageConfiguration",
+                                   "descriptorOpen": false,
+                                   "liveFilesResolved": false],
+            "bootGuardProfile": "0",
+        ])
+        XCTAssertEqual(value("Manufacturing", in: tableRows(willClose)),
+                       .value("Will close on first boot"))
+        XCTAssertEqual(tone("Manufacturing", in: tableRows(willClose)), .caution)
+        // Profile 0 is Boot Guard off, which a bench should notice.
+        XCTAssertEqual(tone("Boot Guard", in: tableRows(willClose)), .caution)
+
+        let willNotClose = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+            "manufacturingState": "willNotClose",
+            "manufacturingBasis": ["flag": false, "flexible": 0,
+                                   "page": "imageConfiguration",
+                                   "descriptorOpen": true,
+                                   "liveFilesResolved": false],
+        ])
+        XCTAssertEqual(value("Manufacturing", in: tableRows(willNotClose)),
+                       .value("Will not close"))
+        XCTAssertEqual(tone("Manufacturing", in: tableRows(willNotClose)), .bad)
+    }
+
+    /// The Manufacturing row is the generation's that has the switch (CSME 15,
+    /// where MFIT grew `CsePlugin:EomNvar`), so a CSME 12 image reads no such
+    /// row; Boot Guard and its key hash belong to every CSE generation that has
+    /// Boot Guard at all, and so are read there too.
+    func testTheManufacturingRowIsCSME15sAlone() throws {
+        let a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 12, "minor": 0, "hotfix": 3, "build": 1091],
+            "manufacturingState": "noSwitch",
+            "bootGuardProfile": "4",
+            "oemPublicKeyHash": String(repeating: "12", count: 48),
+        ])
+        let rows = tableRows(a)
+        XCTAssertNil(value("Manufacturing", in: rows))
+        XCTAssertEqual(value("Boot Guard", in: rows), .value("4 - FVE"))
+        XCTAssertEqual(value("OEM Public Key Hash", in: rows),
+                       .value(String(repeating: "12", count: 48)))
     }
 
     // MARK: - The messages block

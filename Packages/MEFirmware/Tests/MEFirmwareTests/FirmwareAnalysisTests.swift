@@ -110,7 +110,7 @@ final class FirmwareAnalysisModelTests: XCTestCase {
     }
 
     func testEngineModelRevisionBumpsWithAdditiveChanges() {
-        XCTAssertEqual(EngineModelRevision.current, 40)
+        XCTAssertEqual(EngineModelRevision.current, 41)
     }
 
     /// The additive contract reaches *inside* the model too, and a Swift
@@ -148,6 +148,13 @@ final class FirmwareAnalysisModelTests: XCTestCase {
         XCTAssertNil(decoded.mfsVolume?.configurationsByID)
         XCTAssertNil(decoded.oemConfiguration?.records)
         XCTAssertNil(decoded.oemConfiguration?.recordsByID)
+        // Revision 41's four facts are optional too: a payload written before
+        // them decodes with each of them absent, which is what the panels read
+        // as "this engine's answer is not in this reading".
+        XCTAssertNil(decoded.manufacturingState)
+        XCTAssertNil(decoded.manufacturingBasis)
+        XCTAssertNil(decoded.bootGuardProfile)
+        XCTAssertNil(decoded.oemPublicKeyHash)
         XCTAssertNil(decoded.oemConfiguration?.payloadOffset)
         XCTAssertEqual(decoded.mfsVolume?.configurations, [],
                        "and what was always there still reads as it did")

@@ -35,7 +35,16 @@ public enum MEAAgentQueries {
             which step decided it, `complete: false` when a step that could have raised the state could \
             not be taken — an EFS partition that could not be read — and an `explanation`. Say the basis \
             when you report the state: Configured with an unreadable EFS is not the same fact as \
-            Configured with an empty one. The first call on a dump analyses its ME region, which takes a \
+            Configured with an empty one. Three rows of our own answer what a bench asks of a dump it \
+            is about to flash: "Manufacturing" (whether the platform closes End of Manufacturing on \
+            the first boot of this image — "Will close on first boot", "Will not close", "Already \
+            closed", "Close on first boot, with the descriptor open", "Not readable from this image" \
+            or "No such switch in this firmware"), which carries a `basis` of its own (the live \
+            /home/mca/eom record, the setting and which page it was read from, the descriptor's state); \
+            "Boot Guard", the profile the image is built for (0 - No_FVME, 3 - VM, 4 - FVE, 5 - FVME, \
+            with `profile` and `profile_index` beside it, or "No profile record in this image"); and \
+            "OEM Public Key Hash", the 48-byte SHA-384 the ME region carries, all zeros meaning OEM \
+            signing is disabled. The first call on a dump analyses its ME region, which takes a \
             second or two.
             """
     ) { host, _ in
@@ -50,6 +59,24 @@ public enum MEAAgentQueries {
                    let state = analysis.mfsState, let basis = analysis.mfsStateBasis,
                    case .object(var fields) = entry {
                     fields["basis"] = basisJSON(state: state, basis: basis)
+                    entry = .object(fields)
+                }
+                // The Manufacturing verdict's evidence likewise: the two pages
+                // of the setting, and the descriptor's state — which a reader
+                // (or an agent) must see before acting on "already closed".
+                if summaryRow.label == "Manufacturing",
+                   summaryRow.value.isValue,
+                   let basis = analysis.manufacturingBasis,
+                   case .object(var fields) = entry {
+                    fields["basis"] = manufacturingBasisJSON(basis)
+                    entry = .object(fields)
+                }
+                if summaryRow.label == "Boot Guard",
+                   summaryRow.value.isValue,
+                   let profile = analysis.bootGuardProfile,
+                   case .object(var fields) = entry {
+                    fields["profile"] = .string(profile.rawValue)
+                    fields["profile_index"] = .count(profile.index)
                     entry = .object(fields)
                 }
                 return entry
@@ -174,6 +201,26 @@ public enum MEAAgentQueries {
             platform: volume?.ftblPlatform ?? -1, dictionary: volume?.ftblDictionary ?? -1)
         return MEACurator.present(analysis, mfsNames: names?.mfs ?? .none, efsNames: names?.efs ?? .none,
                                   configPaths: names?.config ?? .none, in: .english)
+    }
+
+    // MARK: - The Manufacturing verdict's basis
+
+    /// The End of Manufacturing verdict's evidence, for the same reason the
+    /// File System State carries its own: the row says "Already closed", and an
+    /// agent that acts on it needs to see that it was the live `/home/mca/eom`
+    /// record that said so and not a reading of the image's setting.
+    static func manufacturingBasisJSON(_ basis: ManufacturingBasis) -> JSONValue {
+        var members: [String: JSONValue] = [
+            "eom_record": basis.eom.map { .count($0) } ?? .null,
+            "flag": basis.flag.map { .bool($0) } ?? .null,
+            "flexible_eom_settings": basis.flexible.map { .count($0) } ?? .null,
+            "flag_page": .string(basis.page?.rawValue ?? "none"),
+            "descriptor": .string(basis.descriptorOpen.map { $0 ? "open" : "locked" } ?? "not read"),
+            "live_files": .string(basis.liveFilesResolved ? "read" : "not read")
+        ]
+        members["explanation"] = .string(
+            MEAText.manufacturingBasis(basis, in: .english))
+        return .object(members)
     }
 
     // MARK: - The File System State's basis

@@ -38,4 +38,39 @@ public enum MEATones {
     public static func stateBasis(_ basis: MFSStateBasis) -> ToolValueTone {
         basis.isIncomplete ? .caution : .standard
     }
+
+    /// The Manufacturing row's tone. "Already closed" is the settled state of a
+    /// board in service and reads green; a machine that will close on its next
+    /// boot is about to be committed but intact, so brown; one that will *not*
+    /// close is a machine about to be shipped with Manufacturing open — red,
+    /// the same red the warnings use. The flag set with an open descriptor is
+    /// the combination MFIT refuses to build: also red.
+    public static func manufacturingState(_ state: ManufacturingState) -> ToolValueTone {
+        switch state {
+        case .closed: return .good
+        case .willClose: return .caution
+        case .willNotClose, .unexpectedCombination: return .bad
+        case .unknown, .noSwitch: return .standard
+        }
+    }
+
+    /// The Manufacturing basis row: a caution wherever the verdict rests on
+    /// something less than both pages — an open descriptor, or a file system
+    /// that could not be looked in. Plain when the answer is settled.
+    public static func manufacturingBasis(_ basis: ManufacturingBasis) -> ToolValueTone {
+        switch basis.descriptorOpen {
+        case true: return .caution
+        case false: return basis.liveFilesResolved ? .standard : .caution
+        case nil: return basis.liveFilesResolved ? .standard : .caution
+        }
+    }
+
+    /// The Boot Guard profile's tone. Profile 0 has Boot Guard switched off —
+    /// the machine boots unverified, which a bench should notice; a profile
+    /// with a name is a protected board. `standard` where the row is only
+    /// saying that the image carries no profile record at all.
+    public static func bootGuardProfile(_ profile: BootGuardProfile?) -> ToolValueTone {
+        guard let profile else { return .standard }
+        return profile == .noFVME ? .caution : .good
+    }
 }
