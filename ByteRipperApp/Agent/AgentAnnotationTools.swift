@@ -715,6 +715,7 @@ final class AgentAnnotationTools {
         guard let place, let controller = place.controller else { return }
         desk.bringForward(place)
         controller.view.window?.makeKeyAndOrderFront(nil)
+        controller.activateOwnPane(place.pane)
         if let range = annotation.range, range.upperBound > place.pane.fileSize { return }
         controller.recordJump(in: place.pane)
         // A file just opened has its tree still to read, and whether the
@@ -755,6 +756,12 @@ final class AgentAnnotationTools {
             let tools = controller.tools(reading: place.pane)
             if tools.activeIdentifier != ToolRegistry.uefiStructure {
                 tools.activate(ToolRegistry.uefiStructure, animated: false)
+            }
+            // A tool open on the other pane of a comparison is reading the
+            // other file: it moves to the annotation's, as a pane dropped on
+            // the panel moves it.
+            if tools.boundPane !== place.pane {
+                tools.rebind(to: place.pane)
             }
             if let session = tools.session as? UEFIToolSession {
                 if annotation.decoded != nil {

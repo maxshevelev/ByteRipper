@@ -851,6 +851,38 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(selection.start..<selection.end, 0x28..<0x2C, "the bytes stay selected")
     }
 
+    /// In a comparison whose other pane is the active one, going to a note
+    /// on a file makes that file's pane active and takes UEFI Structure,
+    /// open on the other file, to the note's file.
+    func testAPlaceInTheInactivePaneOfAComparisonActivatesItAndMovesUEFIStructure() async throws {
+        let controller = try open(bytes: try CompressedTestImage.make(holding: "SECRET-MODEL-GH51G"))
+        let other = controller.windowModel.pane2
+        defer { other.close() }
+        try other.open(url: tempFile(try CompressedTestImage.make(holding: "OTHER-MODEL-XY12Z"), "agent-annotation-b"))
+        controller.apply(mode: .comparison)
+        controller.activatePaneForTesting(0)
+        let tools = controller.surface.tools
+        tools.activate(ToolRegistry.uefiStructure, animated: false)
+        XCTAssertTrue(tools.boundPane === pane)
+        _ = try await client.answer("annotate", ["document": "d2", "offset": "0x28", "length": 4, "title": "Signature"])
+
+        service.annotationTools.show("a1")
+        XCTAssertEqual(controller.windowModel.activePaneIndex, 1, "the note's pane is the active one")
+        XCTAssertEqual(tools.activeIdentifier, ToolRegistry.uefiStructure)
+        XCTAssertTrue(tools.boundPane === other, "UEFI Structure reads the note's file")
+        let shown = await settle {
+            guard let outline = self.descendants(of: tools.panel, NSOutlineView.self).first,
+                  outline.selectedRow >= 0,
+                  let row = outline.item(atRow: outline.selectedRow) as? UEFITreeRow,
+                  let node = other.uefiState.tree?.node(row.id) else { return false }
+            return node.kind == .volume
+        }
+        XCTAssertTrue(shown, "the volume is selected in the note's file's tree: \(treeState(tools))")
+        _ = await settle(0.3)
+        let selection = other.hexSelection()
+        XCTAssertEqual(selection.start..<selection.end, 0x28..<0x2C)
+    }
+
     // MARK: - The cards' order, New, dragging, and the next launch
 
     private func card(_ title: String, in cards: AgentAnnotationCards) -> AnnotationCardView? {

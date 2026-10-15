@@ -7772,6 +7772,14 @@ extension MainViewController: MinimapHost {
         activatePane(at: index)
     }
 
+    /// Makes `pane` the active one when it is one of the tab's own two in
+    /// comparison mode — what going to an annotation in it does, so the keys,
+    /// the header and a tool opened next all go to the file the note is on.
+    func activateOwnPane(_ pane: PaneViewModel) {
+        guard mode == .comparison, pane === windowModel.pane1 || pane === windowModel.pane2 else { return }
+        activatePane(showingMapAt: paneIndex(pane))
+    }
+
     func minimapSegmentMenu(on surface: DocumentSurface, mapIndex: Int,
                             pieceIndex: Int, point: NSPoint) -> NSMenu? {
         makeMinimapSegmentMenu(on: surface, mapIndex: mapIndex, pieceIndex: pieceIndex, point: point)
