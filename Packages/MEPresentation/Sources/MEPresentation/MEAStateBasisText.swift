@@ -3,44 +3,62 @@ import Localization
 import MEFirmware
 
 // help: panel.me.state-basis
-/// What the File System State was decided from, in one paragraph — the
-/// Firmware row's detail in the panels, and the agent's `explanation`, which
-/// reads it in English. The state is upstream's; the paragraph is ours, so a
-/// state left standing by a step that could not be taken is not read as one
-/// the flash shows (`MFSStateBasis`).
+/// What the File System State was decided from, as short as it can be put: the
+/// state is the row's answer, and this is what stands behind it, in brackets
+/// after it — "Initialized (EFS: holds files)", «Initialized (EFS: в нём есть
+/// файлы)». The panel draws it in the ordinary font and colour, because it is
+/// evidence and not a second answer.
+///
+/// The long explanation lives in the help, where there is room for what each
+/// clause means: the three criteria, the reserved indices, and what an EFS
+/// volume that could not be read leaves unknown. The state itself is
+/// upstream's; the brackets are ours (`MFSStateBasis`).
 extension MEAText {
-    public static func fileSystemStateBasis(_ state: MFSState, _ basis: MFSStateBasis, in language: AppLanguage) -> String {
-        let name = title(state.rawValue)
-        var sentences: [String] = []
+    /// The evidence, as clauses joined by "; " — the deciding fact first, then
+    /// the caveat a step that could not be taken leaves. Returns "" when there
+    /// is nothing to say.
+    public static func fileSystemStateEvidence(_ state: MFSState,
+                                               _ basis: MFSStateBasis,
+                                               in language: AppLanguage) -> String {
+        var clauses: [String] = []
         switch basis.decidedBy {
         case .reservedFiles:
-            sentences.append(L("%1$@, from the reserved MFS files present.", in: language, name))
-        case .efs:
-            sentences.append(L("%1$@, because the EFS volume holds file content: the engine has run and written its files.", in: language, name))
-        case .configuration:
-            sentences.append(L("%1$@, from the configuration found (%2$@), not from files the engine wrote.", in: language,
-                               name, basis.configuration.joined(separator: ", ")))
-        case .nothing:
-            sentences.append(L("%1$@: no reserved MFS file, no EFS content and no configuration partition.", in: language, name))
-        }
-        if basis.isIncomplete {
-            switch basis.efs {
-            case .unreadable(let offset):
-                sentences.append(L("The EFS partition at %1$@ could not be read, so whether it holds files — which would make the state Initialized — is unknown. Check its system page before relying on this state.", in: language,
-                                   offsetText(offset)))
-            case .filesNotNamed:
-                sentences.append(L("The EFS volume's files cannot be told without the firmware database's file table, so whether it holds files — which would make the state Initialized — is unknown.", in: language))
-            default:
+            switch basis.reservedFiles {
+            case .initializing(let indices), .configuring(let indices):
+                clauses.append(L("reserved files: %1$@", in: language,
+                                 indices.map(String.init).joined(separator: ", ")))
+            case .none, .notRead:
                 break
             }
+        case .efs:
+            clauses.append(L("EFS: holds files", in: language))
+        case .configuration:
+            clauses.append(L("configuration: %1$@", in: language,
+                             basis.configuration.joined(separator: ", ")))
+        case .nothing:
+            clauses.append(L("nothing found", in: language))
         }
-        if basis.reservedFiles == .notRead, basis.decidedBy != .efs {
-            sentences.append(L("This volume does not name its reserved files by index, so only the EFS and the configuration decide.", in: language))
+        // A step that could have raised the state and was not taken: the row's
+        // tone turns to a caution for it, and the clause says which step.
+        switch basis.efs {
+        case .unreadable where basis.isIncomplete:
+            clauses.append(L("EFS: unreadable", in: language))
+        case .filesNotNamed where basis.isIncomplete:
+            clauses.append(L("EFS: files not named", in: language))
+        default:
+            break
         }
-        return sentences.joined(separator: " ")
+        return clauses.joined(separator: "; ")
     }
 
-    private static func offsetText(_ offset: Int) -> String {
-        String(format: "0x%llX", UInt64(max(0, offset)))
+    /// The row as one line for a copy of it: the state, then its evidence in
+    /// brackets where there is any.
+    public static func fileSystemState(_ state: MFSState,
+                                       basis: MFSStateBasis?,
+                                       in language: AppLanguage) -> String {
+        let name = title(state.rawValue)
+        guard let basis else { return name }
+        let evidence = fileSystemStateEvidence(state, basis, in: language)
+        return evidence.isEmpty ? name : "\(name) (\(evidence))"
     }
 }

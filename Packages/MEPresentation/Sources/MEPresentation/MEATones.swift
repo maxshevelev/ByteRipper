@@ -32,12 +32,10 @@ public enum MEATones {
         return own == .bad ? .bad : .caution
     }
 
-    /// The State basis row's tone: a caution when the basis is incomplete,
-    /// so the row that says why the state cannot be relied on is not passed
-    /// over; plain otherwise.
-    public static func stateBasis(_ basis: MFSStateBasis) -> ToolValueTone {
-        basis.isIncomplete ? .caution : .standard
-    }
+    // The State basis row has no tone of its own any more: it is drawn in
+    // brackets on the state's row, in the ordinary font and colour, and the
+    // caution for a step that could not be taken sits on the state itself
+    // (`fileSystemState(_:basis:)`).
 
     /// The Manufacturing row's tone. A machine that will **not** close
     /// Manufacturing boots on and can still be worked on, which is the state a
