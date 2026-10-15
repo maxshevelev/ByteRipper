@@ -4,10 +4,11 @@
 // The decoder is generation-agnostic — it takes whichever `MEConfigurationMap`
 // belongs to the image being read — so a new generation adds a map and no code.
 //
-// One decoder serves both pages an image keeps: the OEM Configuration (FITC)
+// One decoder serves both copies an image keeps: the OEM Configuration (FITC)
 // partition's record of a file, which is what the build wrote, and the MFS
-// volume's own file, which is what the platform has in it now. Which one a value
-// came from is recorded on the file (`ConfigurationFile.source`), not hidden: a
+// volume's own file, which is what the platform has in it now. It is the same
+// read either way — the same map, the same offsets, the same bytes — so the
+// caller runs it twice and keeps both (`ConfigurationFile.fitc` / `.mfs`): a
 // setting edited in the file system and one a build wrote are different states
 // of the same machine.
 
@@ -45,16 +46,14 @@ enum ConfigurationDecoder {
         }
     }
 
-    /// The report's entry for one file of a map: the bytes an image carries and
-    /// the settings they hold. Nil where the bytes are shorter than the map's
-    /// first field, which is a file of another shape rather than an empty one.
-    static func file(_ layout: MEConfigurationMap.File,
-                     from source: ConfigurationFile.Source,
-                     bytes: Data) -> ConfigurationFile? {
+    /// One of a file's two copies, as the bytes an image carries give it. Nil
+    /// where the bytes hold none of the map's settings — a file of another
+    /// shape rather than an empty one — which is what leaves the copy out of
+    /// `ConfigurationFile` rather than reporting it as zeroes.
+    static func page(of layout: MEConfigurationMap.File,
+                     bytes: Data) -> ConfigurationFile.Page? {
         let settings = settings(of: layout, in: bytes)
         guard !settings.isEmpty else { return nil }
-        return ConfigurationFile(path: layout.path, alias: layout.alias,
-                                 source: source, size: bytes.count,
-                                 settings: settings)
+        return ConfigurationFile.Page(size: bytes.count, settings: settings)
     }
 }
