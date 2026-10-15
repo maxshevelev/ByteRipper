@@ -34,43 +34,31 @@ extension MEAText {
         }
     }
 
-    /// What the Manufacturing verdict was read from, in one short paragraph —
-    /// the same idea as the File System State's basis, and shown the same way
-    /// under its row.
+    /// What the Manufacturing verdict was read from, as short as it can be
+    /// said: "EOM: off, descriptor: open" / «EOM выключен, дескриптор открыт».
+    /// The row puts it in brackets after the verdict, and draws it in the
+    /// ordinary font and colour — it is evidence, not a second verdict, and the
+    /// colour belongs to the answer alone.
     ///
-    /// The flag is named only when the image carries one, because a clear flag
-    /// is not an answer by itself: what a serial image does is what its
-    /// descriptor rights say, and the second sentence is the one that carries
-    /// the verdict in that case.
-    public static func manufacturingBasis(_ basis: ManufacturingBasis, in language: AppLanguage) -> String {
-        var sentences: [String] = []
-        if let flag = basis.flag, let page = basis.page {
-            // German wants the dative here, so the two sources are whole
-            // phrases rather than a noun glued onto a preposition.
-            let source = page == .liveMFS
-                ? L("the file system", in: language)
-                : L("the image's OEM Configuration", in: language)
-            sentences.append(L("The End of Manufacturing flag is %1$@ in %2$@.",
-                               in: language,
-                               flag ? L("set", in: language) : L("clear", in: language),
-                               source))
+    /// A fact the image could not supply is left out rather than filled with a
+    /// dash: an image with no such record says so in the verdict itself
+    /// (`Not readable from this image`) and needs no "EOM: unknown" beside it.
+    /// Returns "" when there is nothing to say.
+    public static func manufacturingEvidence(_ state: ManufacturingState,
+                                             basis: ManufacturingBasis?,
+                                             in language: AppLanguage) -> String {
+        guard let basis else { return "" }
+        var clauses: [String] = []
+        if let flag = basis.flag {
+            clauses.append(flag ? L("EOM: on", in: language) : L("EOM: off", in: language))
         }
-        // With the flag set the descriptor decides nothing, and with it clear
-        // the descriptor is the whole answer.
-        if basis.flag != true {
-            switch basis.descriptorOpen {
-            case .some(false):
-                sentences.append(L("The descriptor's access rights are what close Manufacturing.",
-                                   in: language))
-            case .some(true):
-                sentences.append(L("The descriptor is open, so nothing closes it.", in: language))
-            case nil:
-                break
-            }
+        // The verdict names the open descriptor in its own words, so the clause
+        // would only repeat it.
+        if state != .unexpectedCombination, let open = basis.descriptorOpen {
+            clauses.append(open ? L("descriptor: open", in: language)
+                                : L("descriptor: locked", in: language))
         }
-        return sentences.isEmpty
-            ? L("No End of Manufacturing record in this image.", in: language)
-            : sentences.joined(separator: " ")
+        return clauses.joined(separator: ", ")
     }
 
     /// The Boot Guard profile as MFIT and MEInfo print it: the number first,

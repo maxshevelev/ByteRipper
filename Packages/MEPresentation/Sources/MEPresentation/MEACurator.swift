@@ -109,16 +109,16 @@ public enum MEACurator {
         // is in one and not the other sends the reader looking for a second
         // dump. Shown on the same gates as the Summary rows.
         if a.family == .csme, a.version.major >= 11, let state = a.manufacturingState {
+            let evidence = MEAText.manufacturingEvidence(state, basis: a.manufacturingBasis,
+                                                          in: language)
+            let verdict = MEAText.manufacturingState(state, basis: a.manufacturingBasis,
+                                                     in: language)
             fields.append(MEAField(L("Manufacturing", in: language),
-                                   MEAText.manufacturingState(state, basis: a.manufacturingBasis, in: language),
+                                   evidence.isEmpty ? verdict : "\(verdict) (\(evidence))",
                                    tone: MEATones.manufacturingState(state)))
-            if let basis = a.manufacturingBasis {
-                fields.append(MEAField(L("Manufacturing basis", in: language),
-                                       MEAText.manufacturingBasis(basis, in: language)))
-                if let flexible = basis.flexible {
-                    fields.append(MEAField(L("Flexible EOM Settings", in: language),
-                                           MEAText.flexibleEOMSettings(flexible, in: language)))
-                }
+            if let flexible = a.manufacturingBasis?.flexible {
+                fields.append(MEAField(L("Flexible EOM Settings", in: language),
+                                       MEAText.flexibleEOMSettings(flexible, in: language)))
             }
         }
         if a.family == .csme, a.version.major >= 11 {
