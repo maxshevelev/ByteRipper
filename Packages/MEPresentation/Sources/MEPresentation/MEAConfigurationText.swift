@@ -50,14 +50,20 @@ extension MEAText {
         return wide ? String(format: "0x%X", number) : String(number)
     }
 
-    /// A configuration file's heading: the path the file system knows it by,
-    /// MFIT's own name for it, and how long it is. The length in brackets and
-    /// in decimal only — the bytes themselves are not what the row is read for,
-    /// and two copies of a file are the same length in every dump that has both.
-    public static func configurationFileTitle(_ file: ConfigurationFile,
-                                              in language: AppLanguage) -> String {
+    /// The quiet half of a configuration file's heading: where the file lives,
+    /// without the `/home` every one of these paths begins with, and how long
+    /// it is. The length is the number alone, in decimal — two copies of a file
+    /// are the same length, and the bytes are not what the row is read for.
+    ///
+    /// The other half is the file's own name (`ConfigurationFile.alias`), which
+    /// the tab draws in bold against this.
+    public static func configurationFileDetail(_ file: ConfigurationFile,
+                                               in language: AppLanguage) -> String {
+        let path = file.path.hasPrefix("/home/")
+            ? String(file.path.dropFirst("/home".count))
+            : file.path
         let size = file.mfs?.size ?? file.fitc?.size ?? 0
-        return "\(file.path) — \(file.alias) (\(size))"
+        return L("%1$@, %2$@ bytes", in: language, path, size)
     }
 
     /// The mark MFIT puts on a setting it fills in itself rather than taking

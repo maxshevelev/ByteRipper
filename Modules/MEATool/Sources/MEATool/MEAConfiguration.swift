@@ -47,7 +47,9 @@ public enum MEAConfiguration {
                                                     layout: setting, in: language))
             }
             return MEAConfigurationBlock(
-                title: MEAText.configurationFileTitle(file, in: language), rows: rows)
+                alias: file.alias,
+                detail: MEAText.configurationFileDetail(file, in: language),
+                rows: rows)
         }
     }
 }
@@ -86,12 +88,20 @@ public struct MEAConfigurationRow: Sendable, Equatable {
 }
 
 /// One configuration file's rows, under the heading that names the file.
+///
+/// The heading is in two parts because it is drawn in two weights: MFIT's own
+/// name for the file (`alias`) — what Intel calls it, which is the word a bench
+/// looks for — in bold, and where the file lives and how long it is (`detail`)
+/// in the ordinary one. Kept apart here rather than composed, so the view does
+/// the styling and this does the words.
 public struct MEAConfigurationBlock: Sendable, Equatable {
-    public let title: String
+    public let alias: String
+    public let detail: String
     public let rows: [MEAConfigurationRow]
 
-    public init(title: String, rows: [MEAConfigurationRow]) {
-        self.title = title
+    public init(alias: String, detail: String, rows: [MEAConfigurationRow]) {
+        self.alias = alias
+        self.detail = detail
         self.rows = rows
     }
 }
