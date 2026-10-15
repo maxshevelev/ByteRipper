@@ -39,38 +39,43 @@ public enum MEATones {
         basis.isIncomplete ? .caution : .standard
     }
 
-    /// The Manufacturing row's tone. "Already closed" is the settled state of a
-    /// board in service and reads green; a machine that will close on its next
-    /// boot is about to be committed but intact, so brown; one that will *not*
-    /// close is a machine about to be shipped with Manufacturing open — red,
-    /// the same red the warnings use. The flag set with an open descriptor is
-    /// the combination MFIT refuses to build: also red.
+    /// The Manufacturing row's tone. A machine that will **not** close
+    /// Manufacturing boots on and can still be worked on, which is the state a
+    /// bench wants to see: green. One that **will** close on its next boot is
+    /// committing itself — the same tone the File System State draws for
+    /// `Initialized`, since both say "this has run, or is about to, and what is
+    /// written after that is final". The flag set with an open descriptor is
+    /// the combination MFIT refuses to build and reads the same way: it will
+    /// close, and the descriptor it locks is not the one a build would leave.
     public static func manufacturingState(_ state: ManufacturingState) -> ToolValueTone {
         switch state {
-        case .closed: return .good
-        case .willClose: return .caution
-        case .willNotClose, .unexpectedCombination: return .bad
+        case .willNotClose: return .good
+        case .willClose, .unexpectedCombination: return .caution
         case .unknown, .noSwitch: return .standard
         }
     }
 
     /// The Manufacturing basis row: a caution wherever the verdict rests on
-    /// something less than both pages — an open descriptor, or a file system
-    /// that could not be looked in. Plain when the answer is settled.
+    /// something less than the image's own record — an open descriptor, or a
+    /// file system that could not be looked in. Plain when the answer is
+    /// settled.
     public static func manufacturingBasis(_ basis: ManufacturingBasis) -> ToolValueTone {
-        switch basis.descriptorOpen {
-        case true: return .caution
-        case false: return basis.liveFilesResolved ? .standard : .caution
-        case nil: return basis.liveFilesResolved ? .standard : .caution
-        }
+        basis.descriptorOpen == true ? .caution : .standard
     }
 
     /// The Boot Guard profile's tone. Profile 0 has Boot Guard switched off —
-    /// the machine boots unverified, which a bench should notice; a profile
-    /// with a name is a protected board. `standard` where the row is only
-    /// saying that the image carries no profile record at all.
+    /// the machine boots unverified, and that is a state a bench works with
+    /// rather than against: green, the tone a known-good state gets. A profile
+    /// that names a level is the same tone as `Initialized`: the platform is
+    /// protected, and what the protection means for an edit has to be read in
+    /// the help rather than guessed from a colour. `standard` where the row is
+    /// only saying that the image carries no profile record — nothing is known
+    /// either way.
     public static func bootGuardProfile(_ profile: BootGuardProfile?) -> ToolValueTone {
-        guard let profile else { return .standard }
-        return profile == .noFVME ? .caution : .good
+        switch profile {
+        case .some(.noFVME): return .good
+        case .some: return .caution
+        case nil: return .standard
+        }
     }
 }

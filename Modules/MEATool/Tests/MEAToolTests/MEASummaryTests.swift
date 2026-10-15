@@ -896,27 +896,29 @@ final class MEASummaryTests: XCTestCase {
     /// with MFIT's flag set, the one built without it, and the pair of Boot
     /// Guard facts under them.
     func testTheBenchRowsReadTheFourKnownDumps() throws {
-        let closed = try analysis([
+        let protected = try analysis([
             "family": "csme", "manifest": manifestJSON(),
             "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
-            "manufacturingState": "closed",
-            "manufacturingBasis": ["eom": 1, "flag": false, "flexible": 0,
+            "manufacturingState": "willClose",
+            "manufacturingBasis": ["flag": true, "flexible": 0,
                                    "page": "imageConfiguration",
                                    "descriptorOpen": false,
                                    "liveFilesResolved": true],
             "bootGuardProfile": "5",
             "oemPublicKeyHash": String(repeating: "05", count: 48),
         ])
-        let rows = tableRows(closed)
-        XCTAssertEqual(value("Manufacturing", in: rows), .value("Already closed"))
-        XCTAssertEqual(tone("Manufacturing", in: rows), .good)
+        let rows = tableRows(protected)
+        XCTAssertEqual(value("Manufacturing", in: rows), .value("Will close on first boot"))
+        // It will close: the tone the File System State draws for Initialized.
+        XCTAssertEqual(tone("Manufacturing", in: rows), .caution)
         XCTAssertEqual(value("Boot Guard", in: rows), .value("5 - FVME"))
-        XCTAssertEqual(tone("Boot Guard", in: rows), .good)
+        XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
         XCTAssertEqual(value("OEM Public Key Hash", in: rows),
                        .value(String(repeating: "05", count: 48)))
-        // The basis follows its row, as the File System State's does.
-        let basis = value("Manufacturing basis", in: rows)
-        XCTAssertEqual(basis.map { $0.text(in: .english) }.map { $0.contains("Manufacturing has been closed on this board already") }, true)
+        // The basis follows its row, as the File System State's does, and is
+        // short: the flag, where it was read, what EOM commits.
+        let basis = value("Manufacturing basis", in: rows)?.text(in: .english)
+        XCTAssertEqual(basis, "The End of Manufacturing flag is set in the image's OEM Configuration. End of Manufacturing will lock the descriptor and the OEM configuration.")
 
         let willClose = try analysis([
             "family": "csme", "manifest": manifestJSON(),
@@ -931,8 +933,9 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(value("Manufacturing", in: tableRows(willClose)),
                        .value("Will close on first boot"))
         XCTAssertEqual(tone("Manufacturing", in: tableRows(willClose)), .caution)
-        // Profile 0 is Boot Guard off, which a bench should notice.
-        XCTAssertEqual(tone("Boot Guard", in: tableRows(willClose)), .caution)
+        // Profile 0 is Boot Guard switched off — the board boots unverified,
+        // which is a state a bench works with: green.
+        XCTAssertEqual(tone("Boot Guard", in: tableRows(willClose)), .good)
 
         let willNotClose = try analysis([
             "family": "csme", "manifest": manifestJSON(),
@@ -945,7 +948,7 @@ final class MEASummaryTests: XCTestCase {
         ])
         XCTAssertEqual(value("Manufacturing", in: tableRows(willNotClose)),
                        .value("Will not close"))
-        XCTAssertEqual(tone("Manufacturing", in: tableRows(willNotClose)), .bad)
+        XCTAssertEqual(tone("Manufacturing", in: tableRows(willNotClose)), .good)
     }
 
     /// The Manufacturing row is the generation's that has the switch (CSME 15,
@@ -963,6 +966,7 @@ final class MEASummaryTests: XCTestCase {
         let rows = tableRows(a)
         XCTAssertNil(value("Manufacturing", in: rows))
         XCTAssertEqual(value("Boot Guard", in: rows), .value("4 - FVE"))
+        XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
         XCTAssertEqual(value("OEM Public Key Hash", in: rows),
                        .value(String(repeating: "12", count: 48)))
     }
