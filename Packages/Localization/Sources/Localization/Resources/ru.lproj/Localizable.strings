@@ -1627,7 +1627,7 @@
 "EOM: off" = "EOM выключен";
 "descriptor: open" = "дескриптор открыт";
 "descriptor: locked" = "дескриптор закрыт";
-"EFS: holds files" = "EFS: в нём есть файлы";
+"EFS: holds files" = "EFS: есть файлы";
 "EFS: unreadable" = "EFS: прочитать не удалось";
 "EFS: files not named" = "EFS: файлы не опознаны (нет базы)";
 "configuration: %1$@" = "конфигурация: %1$@";
