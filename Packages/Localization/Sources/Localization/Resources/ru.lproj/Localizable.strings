@@ -1660,9 +1660,7 @@
 "Writing the project" = "Запись проекта";
 "Writing the workspace" = "Запись рабочей сессии";
 /* ME Analyzer: конец производства, Boot Guard и ключ OEM (Skills/me-eom-structures). */
-"Will close on first boot" = "Закроет Manufacturing при первой загрузке";
 "Will not close" = "Не закроет";
-"Close on first boot, with the descriptor open" = "Закроет при первой загрузке, но дескриптор открыт";
 "Not readable from this image" = "Из этого дампа не читается";
 "No such switch in this firmware" = "В этой прошивке такого переключателя нет";
 "set" = "включён";
@@ -1683,3 +1681,6 @@
 "No profile record in this image" = "В этом дампе записи о профиле нет";
 "OEM Public Key Hash" = "OEM Public Key Hash (SHA-384)";
 "No key material in this image" = "В этом дампе материала ключа нет";
+"Will close on the EOM flag" = "Закроет по флагу EOM";
+"Will close on the descriptor's rights" = "Закроет правами дескриптора";
+"Will close on the EOM flag, with the descriptor open" = "Закроет по флагу EOM, дескриптор открыт";

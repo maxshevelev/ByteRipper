@@ -1660,9 +1660,7 @@
 "Writing the project" = "Projekt wird geschrieben";
 "Writing the workspace" = "Arbeitsbereich wird geschrieben";
 /* ME Analyzer: End of Manufacturing, Boot Guard und der OEM-Schlüssel (Skills/me-eom-structures). */
-"Will close on first boot" = "Schließt Manufacturing beim ersten Start ab";
 "Will not close" = "Schließt nicht ab";
-"Close on first boot, with the descriptor open" = "Schließt beim ersten Start ab, aber der Descriptor ist offen";
 "Not readable from this image" = "Aus diesem Image nicht lesbar";
 "No such switch in this firmware" = "Diese Firmware hat keinen solchen Schalter";
 "set" = "gesetzt";
@@ -1683,3 +1681,6 @@
 "No profile record in this image" = "Kein Profil-Eintrag in diesem Image";
 "OEM Public Key Hash" = "OEM Public Key Hash (SHA-384)";
 "No key material in this image" = "Kein Schlüsselmaterial in diesem Image";
+"Will close on the EOM flag" = "Schließt über das EOM-Flag ab";
+"Will close on the descriptor's rights" = "Schließt über die Zugriffsrechte im Descriptor ab";
+"Will close on the EOM flag, with the descriptor open" = "Schließt über das EOM-Flag ab, Descriptor offen";

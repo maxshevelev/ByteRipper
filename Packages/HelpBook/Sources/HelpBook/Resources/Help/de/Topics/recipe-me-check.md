@@ -1,4 +1,4 @@
-@source-sha e8e63da75cb0e87d48ecd07c864ca8739681e4ab325317255e1e80838107d49a
+@source-sha fadf69d34d5fafc19697fb76e9273edd4aebb3a1c98a874b181e3068f1c19cc2
 # Den ME-Bericht lesen
 
 > Was die beiden Registerkarten des ME Analyzer enthalten und wie die einzelnen Zeilen der Übersicht zu lesen sind.
@@ -61,9 +61,10 @@ Drei weitere Zeilen beantworten allein aus dem Dump, was vor dem Schreiben eines
 
 Eine nicht gesetzte Einstellung heißt also nicht, dass Manufacturing offen bleibt: sie heißt, dass der Descriptor antwortet. Die Zeile nimmt diese Werte:
 
-- **Schließt Manufacturing beim ersten Start ab** — die Einstellung ist gesetzt, oder sie ist nicht gesetzt und der Descriptor trägt die Werksrechte. Der erste Start nach dem Schreiben dieses Images schließt Manufacturing ab: gesperrt werden der Flash-Descriptor und, je nach `Flexible EOM settings` daneben, die OEM-Konfiguration. Was gesperrt ist, lässt sich im Image danach nicht mehr öffnen.
+- **Schließt über das EOM-Flag ab** — die Einstellung ist gesetzt: Das Flash Image Tool wurde angewiesen, Manufacturing beim ersten Start nach dem Schreiben dieses Images abzuschließen.
+- **Schließt über die Zugriffsrechte im Descriptor ab** — die Einstellung ist nicht gesetzt oder fehlt, und der Descriptor trägt die Werksrechte: Die Plattform schließt Manufacturing beim ersten Start von selbst ab. Das ist das Serien-Image, und das, was ein Hersteller-Dump trägt.
 - **Schließt nicht ab** — die Einstellung ist nicht gesetzt und die Zugriffsrechte im Descriptor sind offen. Das ist das Image, das eine Werkstatt sich selbst bereitet, wenn die Platine starten und bearbeitbar bleiben soll.
-- **Schließt beim ersten Start ab, aber der Descriptor ist offen** — die Einstellung ist gesetzt, während die Zugriffsrechte offen sind. Das Flash Image Tool weigert sich, ein solches Image zu bauen; beides wurde also von einem anderen Werkzeug oder von Hand gesetzt.
+- **Schließt über das EOM-Flag ab, Descriptor offen** — die Einstellung ist gesetzt, während die Zugriffsrechte offen sind. Das Flash Image Tool weigert sich, ein solches Image zu bauen; beides wurde also von einem anderen Werkzeug oder von Hand gesetzt.
 - **Aus diesem Image nicht lesbar** — die Einstellung ist nicht gesetzt oder fehlt, und es wurde kein Flash-Descriptor mit der Region gelesen: so sieht eine einzeln herausgelöste ME-Region aus. Was ihre Zugriffsrechte sagen würden, ist dann unbekannt.
 - **Diese Firmware hat keinen solchen Schalter** — eine Generation, die das gar nicht entscheidet: vor CSME 11, deren Descriptoren die Rechte entnommen werden. Für sie entfällt die Zeile in der Übersicht ganz.
 

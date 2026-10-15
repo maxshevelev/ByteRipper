@@ -288,7 +288,7 @@ public enum MEASummary {
         if analysis.family == .csme, analysis.version.major >= 11 {
             if let state = analysis.manufacturingState {
                 rows.append(MEASummaryRow(L("Manufacturing", in: language),
-                                          .value(MEAText.manufacturingState(state, in: language)),
+                                          .value(MEAText.manufacturingState(state, basis: analysis.manufacturingBasis, in: language)),
                                           tone: MEATones.manufacturingState(state)))
                 if let basis = analysis.manufacturingBasis {
                     rows.append(MEASummaryRow(L("Manufacturing basis", in: language),
