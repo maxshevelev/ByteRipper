@@ -28,29 +28,44 @@ extension MEAText {
 
     /// What the Manufacturing verdict was read from, in one short paragraph —
     /// the same idea as the File System State's basis, and shown the same way
-    /// under its row. Kept to what the verdict rests on: the flag, where it was
-    /// read, what End of Manufacturing commits, and a descriptor that is open,
-    /// which is the one descriptor state worth naming.
+    /// under its row.
+    ///
+    /// The flag is named only when the image carries one, because a clear flag
+    /// is not an answer by itself: what a serial image does is what its
+    /// descriptor rights say, and the second sentence is the one that carries
+    /// the verdict in that case.
     public static func manufacturingBasis(_ basis: ManufacturingBasis, in language: AppLanguage) -> String {
-        guard let flag = basis.flag, let page = basis.page else {
-            return L("No End of Manufacturing record in this image.", in: language)
+        var sentences: [String] = []
+        if let flag = basis.flag, let page = basis.page {
+            // German wants the dative here, so the two sources are whole
+            // phrases rather than a noun glued onto a preposition.
+            let source = page == .liveMFS
+                ? L("the file system", in: language)
+                : L("the image's OEM Configuration", in: language)
+            sentences.append(L("The End of Manufacturing flag is %1$@ in %2$@.",
+                               in: language,
+                               flag ? L("set", in: language) : L("clear", in: language),
+                               source))
+            if flag, let flexible = basis.flexible {
+                sentences.append(flexibleText(flexible, in: language))
+            }
         }
-        // German wants the dative here, so the two sources are whole phrases
-        // rather than a noun glued onto a preposition.
-        let source = page == .liveMFS
-            ? L("the file system", in: language)
-            : L("the image's OEM Configuration", in: language)
-        var sentences = [L("The End of Manufacturing flag is %1$@ in %2$@.",
-                           in: language,
-                           flag ? L("set", in: language) : L("clear", in: language),
-                           source)]
-        if flag, let flexible = basis.flexible {
-            sentences.append(flexibleText(flexible, in: language))
+        // With the flag set the descriptor decides nothing, and with it clear
+        // the descriptor is the whole answer.
+        if basis.flag != true {
+            switch basis.descriptorOpen {
+            case .some(false):
+                sentences.append(L("The descriptor's access rights are what close Manufacturing.",
+                                   in: language))
+            case .some(true):
+                sentences.append(L("The descriptor is open, so nothing closes it.", in: language))
+            case nil:
+                break
+            }
         }
-        if basis.descriptorOpen == true {
-            sentences.append(L("The descriptor is open.", in: language))
-        }
-        return sentences.joined(separator: " ")
+        return sentences.isEmpty
+            ? L("No End of Manufacturing record in this image.", in: language)
+            : sentences.joined(separator: " ")
     }
 
     /// The Boot Guard profile as MFIT and MEInfo print it: the number first,

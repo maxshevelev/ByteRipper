@@ -56,17 +56,22 @@ Directly under the state, on the **Summary** tab and in the **Firmware** row of 
 
 Three further rows answer, from the dump alone, what is asked before an image is written to a board. None of them is the upstream project's; the labels are this tool's own and are translated.
 
-**Manufacturing** — whether the platform closes End of Manufacturing on the first boot of this image. The setting exists on CSME 15 and 16, where Flash Image Tool calls it *EOM on first boot*; earlier generations have no such switch and the row is not shown for them. It takes these values:
+**Manufacturing** — whether the platform closes End of Manufacturing on the first boot of a board carrying this image. Two things decide it, and the second is the one manufacturers normally rely on:
 
-- **Will close on first boot** — the setting is enabled: the first power-on after this image is written closes Manufacturing, which locks the flash descriptor and, depending on the setting beside it, the OEM configuration. What is locked cannot be unlocked in the image afterwards.
-- **Will not close** — the setting is disabled. This is the state a board that is to be configured further is left in, and the one to check for on an image that is meant to be reworked.
-- **Close on first boot, with the descriptor open** — the setting is enabled while the flash descriptor still lets the host processor and the BIOS read and write every region. Flash Image Tool refuses to build such an image, so the two settings were put there by another tool or by hand.
-- **Not readable from this image** — the switch is present in the dump's generation, but neither the image's own configuration nor its file system carries the setting. Nothing is claimed, and the row's absence of a verdict is itself the answer.
-- **No such switch in this firmware** — the firmware has no such setting. Not shown as a verdict of its own on the Summary tab, which omits the row entirely for those generations.
+- the **access rights in the flash descriptor**. A serial image leaves the host CPU / BIOS master with the factory rights rather than the all-ones of a service image that lets the host rewrite every region, and the platform closes Manufacturing on its first boot. This is how End of Manufacturing was done before Flash Image Tool grew the setting below, and it is still how serial images that carry no setting are done;
+- the **`EOM on first boot` setting** — `CsePlugin:EomNvar`, bit 0 of the MFS file `/home/mca/eom_config` — an explicit order on top of that. Manufacturers do not set it; it is set deliberately in Flash Image Tool.
 
-**Manufacturing basis** follows it, as **State basis** follows the file system state, and says where the flag was read from — the image's OEM configuration, or the file system where the image carries no such record — what End of Manufacturing will commit, and whether the descriptor is open.
+A clear setting therefore does not mean Manufacturing stays open: it means the descriptor answers. The row takes these values:
 
-The three rows are drawn in colour. A machine that will **not** close Manufacturing boots on and can still be worked on: green. One that **will** close, and one whose flag is set with the descriptor open, are drawn in the same tone the file system state is drawn in for **Initialized** — the image is committing itself, and what is written after that is final. A row that only says the image carries no record is drawn plain.
+- **Will close on first boot** — the setting is enabled, or it is clear and the descriptor carries the factory rights. The first power-on after this image is written closes Manufacturing, which locks the flash descriptor and, depending on the `Flexible EOM settings` beside it, the OEM configuration. What is locked cannot be unlocked in the image afterwards.
+- **Will not close** — the setting is clear and the descriptor's access rights are open. This is the image a bench prepares for itself when it wants the machine to boot on and stay workable.
+- **Close on first boot, with the descriptor open** — the setting is enabled while the descriptor's access rights are open. Flash Image Tool refuses to build such an image, so the two were put there by another tool or by hand.
+- **Not readable from this image** — the setting is clear or absent and no flash descriptor was read with the region, which is what an ME region extracted on its own looks like. What its access rights would say is then unknown.
+- **No such switch in this firmware** — a generation that does not decide this at all: before CSME 11, whose descriptors are the ones the rights are read from. The Summary tab omits the row entirely for those.
+
+**Manufacturing basis** follows it, as **State basis** follows the file system state. It names the setting and where it was read from — the image's OEM configuration, or the file system where the image carries no such record — and what End of Manufacturing will commit. Where the setting is clear, it says which of the two mechanisms is at work instead: that the descriptor's access rights are what close Manufacturing, or that with the descriptor open nothing does.
+
+The three rows are drawn in colour. A machine that will **not** close Manufacturing boots on and can still be worked on: green. One that **will** close, and one whose setting is enabled with the descriptor open, are drawn in the same tone the file system state is drawn in for **Initialized** — the image is committing itself, and what is written after that is final. A row that only says the image carries no record is drawn plain.
 
 What the *board the dump was taken from* has already done is not reported. The file system of a region taken from a machine in service records that Manufacturing was closed there, but that says nothing about the machine the image is about to be written to; the row answers for the next first boot.
 

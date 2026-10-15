@@ -1073,17 +1073,15 @@ public actor MEFirmwareAnalyzer {
                                        platform: resolution.platform,
                                        dictionary: resolution.dictionary)
             liveFilesResolved = !naming.isEmpty
-            let wanted = [ManufacturingDecoder.FileID.eom,
-                          ManufacturingDecoder.FileID.eomConfig,
-                          ManufacturingDecoder.FileID.manufLock]
+            let wanted = [ManufacturingDecoder.FileID.eomConfig]
             for file in info.files {
                 guard let entry = naming[file.index],
                       let fileID = Int(entry.fileID, radix: 16),
                       wanted.contains(fileID),
                       let first = file.content.first else { continue }
-                // The records are 1 and 2 bytes long, and the value is
-                // little-endian: the flag is byte 0's bit 0, `FlexibleEomSettings`
-                // its bits 1–2, so the first byte is the whole of it.
+                // The record is 2 bytes and little-endian: the flag is byte 0's
+                // bit 0, `FlexibleEomSettings` its bits 1–2, so the first byte
+                // is the whole of what the verdict needs.
                 liveFileIDs[fileID] = Int(first)
             }
         }
@@ -1098,8 +1096,6 @@ public actor MEFirmwareAnalyzer {
                 }
             }
         }
-        let fitcHasSwitch = (oemConfiguration?.recordsByID ?? [])
-            .contains { $0.fileID == ManufacturingDecoder.FileID.eomConfig }
         let manufacturing = ManufacturingDecoder.decide(ManufacturingDecoder.Inputs(
             imageEOMConfig: imageEOMConfig,
             liveEOMConfig: liveFileIDs[ManufacturingDecoder.FileID.eomConfig],
@@ -1110,9 +1106,11 @@ public actor MEFirmwareAnalyzer {
             descriptorOpen: descriptorBytes
                 .flatMap { FlashDescriptor.biosMaster(in: $0) }
                 .map { $0.read == 0xFFF && $0.write == 0xFFF },
-            hasSwitch: fitcHasSwitch
-                || liveFileIDs[ManufacturingDecoder.FileID.eom] != nil
-                || liveFileIDs[ManufacturingDecoder.FileID.eomConfig] != nil,
+            // CSME 11 and later decide this: their descriptors carry the v2
+            // access rights the verdict is read from, and from CSME 15 a flag
+            // may order it as well. An older family has neither, and answers
+            // `noSwitch`.
+            hasSwitch: identity.family == .csme && identity.major >= 11,
             liveFilesResolved: liveFilesResolved))
 
         // Boot Guard: the profile is a JSON record of the CDMD configuration

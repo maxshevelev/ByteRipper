@@ -1623,7 +1623,8 @@
 "the file system" = "файловой системе";
 "The End of Manufacturing flag is %1$@ in %2$@." = "Флаг EOM %1$@ в %2$@.";
 "No End of Manufacturing record in this image." = "Записи о EOM в этом дампе нет.";
-"The descriptor is open." = "Дескриптор открыт.";
+"The descriptor's access rights are what close Manufacturing." = "Manufacturing закрывают права доступа в дескрипторе.";
+"The descriptor is open, so nothing closes it." = "Дескриптор открыт, поэтому ничего не закрывается.";
 "End of Manufacturing will lock the descriptor and the OEM configuration." = "При EOM фиксируются дескриптор и OEM-конфигурация.";
 "End of Manufacturing will lock the OEM configuration only." = "При EOM фиксируется только OEM-конфигурация.";
 "End of Manufacturing will lock the descriptor only." = "При EOM фиксируется только дескриптор.";
