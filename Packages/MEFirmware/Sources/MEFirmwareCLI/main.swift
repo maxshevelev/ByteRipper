@@ -60,10 +60,10 @@ struct MEFirmwareCLI {
             fail("cannot read \(path)")
         }
 
+        var source: any MEADataSource = datDirectory.map { local(dat: $0) }
+            ?? MEAGitHubDataRepository()
         let result: FirmwareAnalysis
         do {
-            let source: any MEADataSource = datDirectory.map { local(dat: $0) }
-                ?? MEAGitHubDataRepository()
             result = try await MEFirmwareAnalyzer(data: source)
                 .analyze(region: data, baseOffset: baseOffset,
                          descriptorBytes: data.count >= 0x1000 ? data : nil)
@@ -71,7 +71,9 @@ struct MEFirmwareCLI {
             fail("analysis failed: \(error.localizedDescription)")
         }
 
-        printSummary(result, path: path, size: data.count)
+        printSummary(result, path: path, size: data.count,
+                     bytes: data,
+                     fileTable: try? await source.fileTable())
         if !result.issues.isEmpty {
             for issue in result.issues {
                 print("issue[\(issue.severity.rawValue)]: \(issue.message)")
@@ -156,7 +158,8 @@ struct MEFirmwareCLI {
         }
     }
 
-    static func printSummary(_ result: FirmwareAnalysis, path: String, size: Int) {
+    static func printSummary(_ result: FirmwareAnalysis, path: String, size: Int,
+                             bytes: Data, fileTable: FileTable?) {
         let base = result.regions.isEmpty ? 0 : result.regions[0].offset
         _ = base
         print("file:       \(path) (\(size) bytes)")
@@ -175,6 +178,16 @@ struct MEFirmwareCLI {
               } ?? ""))
         print("boot guard:    \(result.bootGuardProfile.map { "\($0.rawValue) - \($0.rawValue)" } ?? "no profile record in this image")")
         print("oem key hash:  \(result.oemPublicKeyHash.map(describeKeyHash) ?? "not read")")
+        // What the *file system* says about End of Manufacturing, which the
+        // panel's row deliberately does not report — it answers for the next
+        // first boot, not for the board the dump came from. A harness reading a
+        // dump wants both: `/home/mca/eom` = 1 is that board's own record that
+        // Manufacturing was closed, and `eom_config` is the flag as the file
+        // system has it. Read from the extents the analysis recorded, so the
+        // bytes come from the same places the panel's own reading did.
+        for (name, value) in liveEOMRecords(result, bytes: bytes, fileTable: fileTable) {
+            print("live record:   \(name) = \(value)")
+        }
         if result.regions.isEmpty {
             print("FPT regions: none found")
         } else {
@@ -185,6 +198,40 @@ struct MEFirmwareCLI {
                              region.id, label as NSString, region.offset, region.size, region.flags))
             }
         }
+    }
+
+    /// The live file system's Manufacturing records — `/home/mca/eom`,
+    /// `/home/mca/eom_config` and `/home/mca/manuf_lock` — as their first byte,
+    /// found by the File IDs `FileTable.dat` gives the volume's files and read
+    /// out of the stretches the analysis recorded for each of them.
+    static func liveEOMRecords(_ result: FirmwareAnalysis, bytes: Data,
+                               fileTable: FileTable?) -> [(String, String)] {
+        // An FTBL volume is the only one whose files carry File IDs — an older
+        // volume's records are named the other way, and matching its files by
+        // ID picks whichever file happens to share the index (CSME 12 answered
+        // with a 41-byte "eom" and a 124-byte "manuf_lock" before this gate).
+        guard let volume = result.mfsVolume, volume.usesFTBL,
+              let table = fileTable else { return [] }
+        let resolution = table.resolve(platform: volume.ftblPlatform,
+                                       dictionary: volume.ftblDictionary)
+        let naming = table.records(namingFileIndices: Set(volume.files.map(\.index)),
+                                   platform: resolution.platform,
+                                   dictionary: resolution.dictionary)
+        let wanted: [String: UInt32] = ["/home/mca/eom": 0x1002_0000,
+                                        "/home/mca/eom_config": 0x1001_EE00,
+                                        "/home/mca/manuf_lock": 0x1002_0100]
+        var out: [(String, String)] = []
+        for file in volume.files {
+            guard let entry = naming[file.index],
+                  let fileID = UInt32(entry.fileID, radix: 16),
+                  let name = wanted.first(where: { $0.value == fileID })?.key,
+                  let extent = file.extents?.first,
+                  extent.lowerBound >= 0, extent.lowerBound < bytes.count else { continue }
+            let first = bytes[bytes.startIndex + extent.lowerBound]
+            out.append((name, String(format: "0x%02X (%d byte(s) at 0x%X)",
+                                     first, file.contentSize ?? file.size, extent.lowerBound)))
+        }
+        return out.sorted { $0.0 < $1.0 }
     }
 
     /// The harness's own words for the four findings — the panel's are in
