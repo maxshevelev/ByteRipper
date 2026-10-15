@@ -38,7 +38,16 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   (revision 40) are facts the engine read out of the same bytes for the app's
   own use — the file comparison and, later, outlining a file's chunks. A sync
   keeps them, fills them, and leaves them out of any comparison with upstream's
-  output.
+  output. Revision 41 adds three more of the same kind, all read for the repair
+  bench and none of them in upstream: `manufacturingState` with
+  `manufacturingBasis` (what the platform will do with End of Manufacturing on
+  the first boot of this image, from the `/home/mca/eom` and
+  `/home/mca/eom_config` records of both pages, plus the flash descriptor's BIOS
+  master), `bootGuardProfile` (the profile the image is built for, out of the
+  CDMD configuration's JSON) and `oemPublicKeyHash` (the SHA-384 the UEP area
+  repeats). The addresses, the values and the ground truth behind each are in
+  `Skills/me-eom-structures/reference/structures.md`; `analyze` gained
+  `descriptorBytes` for the descriptor fact alone.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct
