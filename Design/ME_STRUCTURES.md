@@ -127,6 +127,18 @@ of a generation is one dump — and the key hash column is not a claim about the
 tool's report confirms byte for byte, and every other value is read off the
 entry's field but unconfirmed by a tool.
 
+**A first boot, measured.** The owner flashed an image with the flag clear and the
+descriptor's rights open (`image.bin`), booted the board, and dumped it again
+(`image.after.bin`, a Legion 5 Pro 16IAH7H / CSME 16.0.15.1662). The descriptor
+region is byte-identical between the two — nothing was locked, which is what the
+row had said would happen — and the only bytes the platform wrote are the MFS
+volume and its neighbours (180,566 bytes over 59 runs), with the FITC, CDMD and
+UEP untouched. The file system moved from **Configured** to **Initialized**, so
+the engine had certainly run, and both bytes of the board's own record —
+`/home/mca/eom` and `/home/mca/manuf_lock` — are **0** after it. That is the
+control the earlier reading lacked: those two read 1 on a board whose
+Manufacturing was closed, not on a board that has merely run.
+
 **The cross-check to make.** The owner has MFIT's build report and ECFinder's
 capture for other generations; those name the profile and print the OEM public
 key hash as text. Matching them against this reader is the test: the key the
