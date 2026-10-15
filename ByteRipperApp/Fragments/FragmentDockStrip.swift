@@ -20,8 +20,21 @@ final class FragmentPillView: NSView {
     /// dock says at a glance which pill the panel in front belongs to.
     var isUp = false { didSet { needsDisplay = true } }
     /// Whether the part holds bytes the parent has not got back yet. A dot, not
-    /// a word: the pill has room for a name and no more.
+    /// a word: the pill has room for a name and a codec's word and no more.
     var hasChanges = false { didSet { dot.isHidden = !hasChanges } }
+    /// The codec the part's bytes went through — `LZMA`, `XOR 77` — in a
+    /// capsule after the name, and the sentence under the pointer; nil for a
+    /// part that holds the file's own bytes. What the name used to say with
+    /// `decompressed` or `(decoded)`, said once for every kind of part.
+    var transform: (text: String, explanation: String?)? {
+        didSet {
+            badge.text = transform?.text ?? ""
+            ControlHelp.describe(badge, name: transform?.text ?? "", tooltip: transform?.explanation)
+            badge.isHidden = transform == nil
+            badgeCollapsed.isActive = transform == nil
+            badgeGap.constant = transform == nil ? 0 : Self.iconGap
+        }
+    }
 
     var onSelect: (() -> Void)?
     var onClose: (() -> Void)?
@@ -33,6 +46,11 @@ final class FragmentPillView: NSView {
 
     private let icon = NSImageView()
     private let label = NSTextField(labelWithString: "")
+    private let badge = PartBadgeView()
+    private lazy var badgeGap = badge.leadingAnchor.constraint(equalTo: label.trailingAnchor)
+    /// A hidden badge still has its insets' width: without a part's codec it
+    /// takes none, so the dot and the ✕ sit where they did.
+    private lazy var badgeCollapsed = badge.widthAnchor.constraint(equalToConstant: 0)
     private let dot = NSTextField(labelWithString: "•")
     private let closeButton = NSButton()
 
@@ -50,6 +68,11 @@ final class FragmentPillView: NSView {
         label.stringValue = title
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
+        // The badge keeps its word whole; the name gives way to it.
+        badge.isHidden = true
+        badge.setContentHuggingPriority(.required, for: .horizontal)
+        badge.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
+
         dot.font = .systemFont(ofSize: 13, weight: .bold)
         dot.textColor = .secondaryLabelColor
         dot.isHidden = true
@@ -64,7 +87,7 @@ final class FragmentPillView: NSView {
         closeButton.action = #selector(closeTapped)
         ControlHelp.describe(closeButton, L("Close “%1$@”", title))
 
-        for subview in [icon, label, dot, closeButton] as [NSView] {
+        for subview in [icon, label, badge, dot, closeButton] as [NSView] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             addSubview(subview)
         }
@@ -75,7 +98,10 @@ final class FragmentPillView: NSView {
             icon.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: Self.iconGap),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            dot.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 3),
+            badgeGap,
+            badgeCollapsed,
+            badge.centerYAnchor.constraint(equalTo: centerYAnchor),
+            dot.leadingAnchor.constraint(equalTo: badge.trailingAnchor, constant: 3),
             dot.centerYAnchor.constraint(equalTo: centerYAnchor),
             closeButton.leadingAnchor.constraint(equalTo: dot.trailingAnchor, constant: 4),
             closeButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
@@ -143,6 +169,7 @@ final class FragmentPillView: NSView {
         icon.contentTintColor = isUp ? ink : .secondaryLabelColor
         dot.textColor = isUp ? ink : .secondaryLabelColor
         closeButton.contentTintColor = isUp ? ink : .secondaryLabelColor
+        badge.ink = isUp ? ink : nil
     }
 }
 
@@ -163,6 +190,10 @@ final class FragmentDockStrip: NSView {
         var isUp: Bool
         var hasChanges: Bool
         var canTearOff: Bool
+        /// The codec's word for what the bytes went through, and its badge's
+        /// sentence; nil for the file's own bytes.
+        var transform: String? = nil
+        var transformExplanation: String? = nil
     }
 
     var onSelect: ((FragmentDock.PanelID) -> Void)?
@@ -234,6 +265,10 @@ final class FragmentDockStrip: NSView {
             pill.title = item.title
             pill.isUp = item.isUp
             pill.hasChanges = item.hasChanges
+            let transform = item.transform.map { (text: $0, explanation: item.transformExplanation) }
+            if pill.transform?.text != transform?.text || pill.transform?.explanation != transform?.explanation {
+                pill.transform = transform
+            }
             pill.canTearOff = item.canTearOff
             if row.arrangedSubviews.firstIndex(of: pill) != index {
                 row.insertArrangedSubview(pill, at: index)

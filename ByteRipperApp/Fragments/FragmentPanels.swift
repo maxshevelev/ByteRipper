@@ -1,4 +1,5 @@
 import Cocoa
+import Localization
 import ToolModuleKit
 
 /// The tab's fragment panels: the dock's model, the surfaces behind the pills,
@@ -594,18 +595,43 @@ import ToolModuleKit
     func refreshDock() {
         strip.setItems(dock.panels.compactMap { id in
             guard let entry = entries[id] else { return nil }
+            let transform = Self.transform(of: entry.pane)
             return FragmentDockStrip.Item(
                 id: id,
                 title: entry.pane.status.fileName,
                 isUp: dock.expanded == id,
                 hasChanges: entry.pane.origin?.hasChanges(in: entry.pane)
                     ?? entry.pane.status.isDirty,
-                canTearOff: host?.canTearOffFragment ?? false
+                canTearOff: host?.canTearOffFragment ?? false,
+                transform: transform?.text,
+                transformExplanation: transform?.explanation
             )
         })
         host?.setFragmentDockVisible(!dock.isEmpty)
         // The Tools popup names the tool-module of whatever is in front, so
         // raising or folding a panel changes what it should read.
         host?.revalidateToolbar()
+    }
+
+    /// The codec `pane`'s bytes went through on their way out of the file,
+    /// for its pill: its own codec's, or — for a part taken out of a part
+    /// that was decompressed or decoded, whose own codec only copies — the
+    /// nearest such part's. A node opened out of a decompressed body holds
+    /// decompressed bytes as much as the body does.
+    static func transform(of pane: PaneViewModel) -> (text: String, explanation: String?)? {
+        guard let origin = pane.origin else { return nil }
+        if let own = origin.codec.transform {
+            return (own.text, origin.codec.badge?.explanation.text)
+        }
+        var holder = origin.parent
+        while let part = holder, let outer = part.origin {
+            if let inherited = outer.codec.transform {
+                return (inherited.text,
+                        L("Part of “%1$@”, whose bytes were converted with %2$@ when taken out of the file.",
+                          part.status.fileName, inherited.text))
+            }
+            holder = outer.parent
+        }
+        return nil
     }
 }

@@ -15,6 +15,17 @@ final class PartBadgeView: NSView {
         }
     }
 
+    /// The colour to draw in on a filled background — a selected pill's —
+    /// where the secondary grey on a quaternary capsule does not read: the
+    /// word in it, the capsule a wash of it. Nil for the ordinary greys.
+    var ink: NSColor? {
+        didSet {
+            guard ink != oldValue else { return }
+            label.textColor = ink ?? .secondaryLabelColor
+            needsDisplay = true
+        }
+    }
+
     private let label = NSTextField(labelWithString: "")
     private static let inset = NSSize(width: 6, height: 1)
 
@@ -48,7 +59,7 @@ final class PartBadgeView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2)
-        NSColor.quaternaryLabelColor.setFill()
+        (ink?.withAlphaComponent(0.25) ?? NSColor.quaternaryLabelColor).setFill()
         path.fill()
     }
 }

@@ -263,4 +263,9 @@ public struct LenovoDMIBlockCodec: PartCodec {
         return PartBadge(.verbatim("XOR " + String(format: "%02X", key)),
                          explanation: L("Decoded from the file. Update in Parent encodes it again with the key in its header and recomputes the checksum."))
     }
+
+    /// A block stored in the clear is the file's bytes: nothing to name.
+    public var transform: LocalizedText? {
+        encodes ? .verbatim("XOR " + String(format: "%02X", key)) : nil
+    }
 }

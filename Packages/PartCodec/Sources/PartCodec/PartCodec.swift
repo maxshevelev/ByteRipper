@@ -63,6 +63,12 @@ public protocol PartCodec: Sendable {
     /// knows the file holds it otherwise. Nil for a copy: the bytes are the
     /// file's, and there is nothing to say.
     var badge: PartBadge? { get }
+
+    /// The codec the bytes went through on their way out of the file —
+    /// `LZMA`, `XOR 77`, `bzip2` — for the dock's pill, which has room for
+    /// that word and no more. Nil when the panel holds the file's own bytes,
+    /// whatever else its header's badge says about them.
+    var transform: LocalizedText? { get }
 }
 
 extension PartCodec {
@@ -70,6 +76,7 @@ extension PartCodec {
     public var decodesImmediately: Bool { true }
     public var keepsOffsets: Bool { true }
     public var badge: PartBadge? { nil }
+    public var transform: LocalizedText? { nil }
 }
 
 /// The badge a part panel's header carries for its codec.
@@ -220,11 +227,14 @@ public struct ReadOnlyPartCodec: PartCodec {
     public var bytes: [UInt8]
     public var title: LocalizedText
     public var reason: LocalizedText
+    /// What the bytes were unpacked with, when they were.
+    public var transform: LocalizedText?
 
-    public init(_ bytes: [UInt8], title: LocalizedText, reason: LocalizedText) {
+    public init(_ bytes: [UInt8], title: LocalizedText, reason: LocalizedText, transform: LocalizedText? = nil) {
         self.bytes = bytes
         self.title = title
         self.reason = reason
+        self.transform = transform
     }
 
     public func decode(_ parent: PartParent) throws -> [UInt8] { bytes }

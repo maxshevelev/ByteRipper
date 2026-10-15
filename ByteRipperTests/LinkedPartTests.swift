@@ -287,10 +287,13 @@ final class LinkedPartTests: XCTestCase {
         XCTAssertTrue(view.updateButton.isHiddenOrHasHiddenAncestor, "and gone once it is back")
     }
 
-    func testAToolTabsPartIsNamedWithoutTheDumpAroundIt() {
-        XCTAssertEqual(MainViewController.partName(ofTab: "bios_LZMA section.bin", parent: "bios.rom"),
-                       "LZMA section")
-        XCTAssertEqual(MainViewController.partName(ofTab: "Body.bin", parent: "bios.rom"), "Body")
+    /// A fragment is named by what was opened, without the dump around it:
+    /// the panel, its pill and its link all say the zone's name.
+    func testAFragmentIsNamedByWhatWasOpenedAlone() throws {
+        let (controller, part) = try openZonePanel()
+        XCTAssertEqual(part.status.fileName, "FFSv2")
+        XCTAssertEqual(part.origin?.partName, "FFSv2")
+        XCTAssertEqual(try XCTUnwrap(descendants(of: controller.view, FragmentDockStrip.self).first).pillsForTesting.map(\.title), ["FFSv2"])
     }
 
     /// A part torn off into a tab of its own keeps the link: the origin is the
@@ -537,7 +540,7 @@ final class LinkedPartTests: XCTestCase {
     /// nothing is written.
     func testADecompressedBodyWhoseSectionIsGoneIsRefused() async throws {
         let controller = try makeController(opening: [UInt8](repeating: 0xFF, count: 0x100))
-        try host(controller).openPart([UInt8](repeating: 0, count: 0x60), named: "body.bin",
+        try host(controller).openPart([UInt8](repeating: 0, count: 0x60), named: "body",
                                       linkedTo: 0x20..<0x80, layout: .decompressedBody,
                                       part: .init(space: .decompressed(chain: [0x20])))
         let part = try openedPart(in: controller)

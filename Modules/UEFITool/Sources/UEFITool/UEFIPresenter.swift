@@ -86,16 +86,13 @@ public enum UEFIPresenter {
         /// out of a compressed section, a stretch of flash out of the BIOS
         /// image the AMD PSP inflates.
         public var layout: UEFIRootLayout
+        /// What a saved file is called: on disk nothing but the name tells
+        /// the body from the section it came out of.
         public var suggestedName: String
+        /// What the panel is called (`partName(of:)`).
+        public var partName: String
         public var saveTitle: LocalizedText
         public var openTitle: LocalizedText
-
-        /// The new tab's name: the dump it came out of, then what it is —
-        /// `bios_LZMA compressed section.bin` — the way a zone's tab is named.
-        public func tabName(fileName: String) -> String {
-            let stem = (fileName as NSString).deletingPathExtension
-            return stem.isEmpty ? suggestedName : "\(stem)_\(suggestedName)"
-        }
     }
 
     /// What opening a node — or its body alone — as a panel of its own means
@@ -122,12 +119,16 @@ public enum UEFIPresenter {
         /// part is something the image's structure can be laid out around
         /// again (`Design/UEFI/UPDATE_IN_PARENT.md` §6).
         public var rebuild: UEFIRebuild.Target?
+        /// What a saved file is called after: what it is.
         public var suggestedName: String
+        /// What the panel is called (`partName(of:)`).
+        public var partName: String
         public var menuTitle: LocalizedText
 
-        /// The panel's name: the dump it came out of, then what it is — the way
-        /// a zone's and a decompressed body's are named.
-        public func partName(fileName: String) -> String {
+        /// A saved file's name: the dump it came out of, then what it is —
+        /// `bios_Inner decompressed.bin` — so files saved from two dumps do
+        /// not land under one name.
+        public func saveName(fileName: String) -> String {
             let stem = (fileName as NSString).deletingPathExtension
             return stem.isEmpty ? suggestedName : "\(stem)_\(suggestedName)"
         }
@@ -228,9 +229,11 @@ public enum UEFIPresenter {
 
         let base = String((node.name.isEmpty ? "node" : node.name)
             .map { "/:".contains($0) ? "_" : $0 })
-        // Bytes of a decoded buffer say so in the name, so that a node and the
-        // node of the same name in the file do not arrive as one file.
-        let suffix = (node.space != .file ? " decompressed" : "") + (body ? " body" : "")
+        // Bytes of a decoded buffer say so in a saved file's name, so that a
+        // node and the node of the same name in the file do not land as one
+        // file. A panel says so with the codec's badge on its pill.
+        let decompressed = node.space != .file ? " decompressed" : ""
+        let suffix = body ? " body" : ""
         return NodeOpen(
             space: node.space,
             range: range,
@@ -244,7 +247,8 @@ public enum UEFIPresenter {
                 : UEFIRebuild.Target(space: node.space, range: range),
             // A picture or a sound saves as what it is, so the file opens in
             // a viewer or a player.
-            suggestedName: base + suffix + "." + fileExtension(of: node),
+            suggestedName: base + decompressed + suffix + "." + fileExtension(of: node),
+            partName: partName(of: node),
             menuTitle: title
         )
     }
@@ -330,15 +334,17 @@ public enum UEFIPresenter {
                 space: node.space.inside(sectionAt: node.header.lowerBound),
                 layout: .image,
                 suggestedName: "BIOS region.bin",
+                partName: partName(of: node),
                 saveTitle: L("Save Assembled BIOS Region as…"),
                 openTitle: L("Open Assembled BIOS Region")
             )
         }
-        // What came *out* of a section says so in its name. Without it the
-        // section opened as a node and the same section's decompressed body
-        // arrive under one name — `bios_LZMA Section.bin` twice — and the two
-        // hold entirely different bytes. A node with no name is already called
-        // `decompressed`, so it says it once.
+        // A saved file that came *out* of a section says so in its name.
+        // Without it the section saved as a node and the same section's
+        // decompressed body land under one name — `LZMA Section.bin` twice —
+        // and the two hold entirely different bytes. A node with no name is
+        // already called `decompressed`, so it says it once. A panel says it
+        // with the codec's badge on its pill, and its name is the section's.
         let base = String((node.name.isEmpty ? "decompressed" : node.name)
             .map { "/:".contains($0) ? "_" : $0 })
         let marked = node.name.isEmpty ? base : base + " decompressed"
@@ -346,6 +352,7 @@ public enum UEFIPresenter {
             space: node.space.inside(sectionAt: node.header.lowerBound),
             layout: node.kind == .section ? .decompressedBody : .image,
             suggestedName: marked + ".bin",
+            partName: partName(of: node),
             saveTitle: L("Save Decompressed Body as…"),
             openTitle: L("Open Decompressed Body")
         )
@@ -364,12 +371,14 @@ public enum UEFIPresenter {
         node.kind == .region && node.subtype == 0x01 && node.space == .file
     }
 
-    /// The name of the tab the unpacked text opens in, as a decompressed
-    /// body's is: the dump it came out of, then what it is.
-    public static func unpackedTabName(of node: UEFINode, fileName: String) -> String {
-        let stem = (fileName as NSString).deletingPathExtension
-        let what = "\(node.name) decompressed.txt"
-        return stem.isEmpty ? what : "\(stem)_\(what)"
+    /// What a fragment panel opened from `node` is called — the node, its
+    /// body, what it decompresses or unpacks to, its LENV block decoded: the
+    /// node's name as the tree shows it, and nothing else. Not the dump's
+    /// name, which the panel's link names, and not what was done to the
+    /// bytes, which the codec's badge on the pill says.
+    public static func partName(of node: UEFINode, in language: AppLanguage = Localization.appLanguage) -> String {
+        let name = node.displayName(in: language)
+        return name.isEmpty ? L("Node", in: language) : name
     }
 
     /// Where a node's bytes are held in the file: its own range, or — for a

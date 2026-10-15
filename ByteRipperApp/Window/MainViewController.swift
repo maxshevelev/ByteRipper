@@ -2002,6 +2002,11 @@ final class MainViewController: NSViewController {
     /// opens, whoever asks: a zone, a selection, a tool-module
     /// (`Design/FRAGMENT_PANELS_PLAN.md`, `Design/UEFI/UPDATE_IN_PARENT.md`).
     ///
+    /// `name` is what the panel, its pill and its link call the part: what
+    /// was opened — the node, the zone — and nothing else. Not the dump's
+    /// name, which the link names, and not what was done to the bytes, which
+    /// the codec's badge says.
+    ///
     /// `codec` is the whole of what the part is: the panel shows what it
     /// decodes from `source`, and Update in Parent writes back what it
     /// encodes. A codec that decodes on the spot opens the panel now; one that
@@ -2023,14 +2028,13 @@ final class MainViewController: NSViewController {
     @discardableResult
     func openPart(
         named name: String, from pane: PaneViewModel, source: Range<UInt64>,
-        partName: String? = nil, layout: UEFIRootLayout = .image, codec: any PartCodec,
+        layout: UEFIRootLayout = .image, codec: any PartCodec,
         tool: String? = nil, selecting selection: Range<UInt64>? = nil
     ) -> Task<Void, Never>? {
-        let ownName = partName ?? Self.partName(ofTab: name, parent: pane.status.fileName)
         if let selection, let open = fragments.panelsLinked(to: pane).first(where: { id in
             guard let origin = fragments.pane(id)?.origin else { return false }
             return origin.sourceRange == source && origin.layout == layout
-                && type(of: origin.codec) == type(of: codec) && origin.partName == ownName
+                && type(of: origin.codec) == type(of: codec) && origin.partName == name
         }), let part = fragments.pane(open) {
             fragments.expand(open)
             revealForTool(selection, in: part, select: true)
@@ -2046,7 +2050,7 @@ final class MainViewController: NSViewController {
               let content = try? DocumentPartReader(document: document)
         else { return nil }
         let parent = PartParent(content: content, source: source, name: pane.status.fileName,
-                                partName: partName ?? name)
+                                partName: name)
         let open: @MainActor ([UInt8]) -> Void = { [weak self, weak pane] bytes in
             guard let self, let pane else { return }
             let id = self.openFragment(
@@ -2054,7 +2058,7 @@ final class MainViewController: NSViewController {
                 named: name,
                 origin: DocumentOrigin(
                     parent: pane, source: source,
-                    partName: partName ?? Self.partName(ofTab: name, parent: pane.status.fileName),
+                    partName: name,
                     layout: layout, codec: codec, content: bytes
                 )
             )
@@ -2714,16 +2718,6 @@ final class MainViewController: NSViewController {
         }
         item.title = L("Update in “%1$@”", origin.parentName)
         return pane.isOpen && origin.state != .parentClosed && origin.hasChanges(in: pane)
-    }
-
-    /// What a tool-module's tab is a part of, for the link's tooltip: its name
-    /// without the dump's stem in front and the extension behind —
-    /// `bios_LZMA section.bin` from `bios.rom` is "LZMA section".
-    static func partName(ofTab name: String, parent: String) -> String {
-        var part = (name as NSString).deletingPathExtension
-        let stem = (parent as NSString).deletingPathExtension + "_"
-        if part.hasPrefix(stem), part.count > stem.count { part.removeFirst(stem.count) }
-        return part
     }
 
     /// The link in a tab's header was clicked: the parent's window comes to the
@@ -5185,9 +5179,11 @@ final class MainViewController: NSViewController {
             .flatMap { UEFIRebuild.target(forFileRange: zone.range, in: $0) }
             .map { UEFIPartCodec(target: $0) }
             ?? CopyPartCodec()
-        openPart(named: zoneExportName(fileName: pane.status.fileName,
-                                       zoneName: zone.name, range: zone.range),
-                 from: pane, source: zone.range, partName: zone.name, layout: layout, codec: codec)
+        // Named as every fragment is: what was opened, not the dump it is in.
+        let name = zone.name.isEmpty
+            ? "\(zone.range.lowerBound.bareAddress)-\(zone.range.upperBound.bareAddress)"
+            : zone.name
+        openPart(named: name, from: pane, source: zone.range, layout: layout, codec: codec)
     }
 
     /// The tail shared by Save Selection as… and Save Zone as…: reads `range`

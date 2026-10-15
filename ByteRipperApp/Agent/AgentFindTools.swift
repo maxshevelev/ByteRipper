@@ -349,7 +349,7 @@ final class AgentFindTools {
             let image = found.tree.image()
             if which == "decompressed" || which == "decoded" {
                 let name = which == "decompressed"
-                    ? try Self.decompressedPart(found, in: image, fileName: place.pane.status.fileName)
+                    ? try Self.decompressedPart(found, in: image)
                     : try Self.decodedPart(found, in: image)
                 answer["node"] = .string(found.node.id.description)
                 answer["part"] = .string(which)
@@ -380,7 +380,7 @@ final class AgentFindTools {
                     compression: UEFIPresenter.compressionName(of: open.space, in: image),
                     readers: found.tree.spaceReaders)
             }
-            let defaultName = open.partName(fileName: place.pane.status.fileName)
+            let defaultName = open.partName
             answer["node"] = .string(found.node.id.description)
             answer["part"] = .string(which)
             answer["in_compressed"] = .bool(open.space != .file)
@@ -411,8 +411,8 @@ final class AgentFindTools {
                     + "do not fit in \(place.named), which is \(AgentHostTools.hexText(size)) bytes long.")
             }
             let source = offset..<(offset + length)
-            let stem = (place.pane.status.fileName as NSString).deletingPathExtension
-            let name = named ?? "\(stem)_\(AgentHostTools.hexText(offset))-\(AgentHostTools.hexText(source.upperBound))"
+            let defaultName = "\(AgentHostTools.hexText(offset))-\(AgentHostTools.hexText(source.upperBound))"
+            let name = named ?? defaultName
             // As Open Zone: a stretch that is a structure of the image goes
             // back through the rebuild planner, any other as it is.
             let image = place.pane.uefiState.tree?.image()
@@ -423,7 +423,6 @@ final class AgentFindTools {
                 ?? CopyPartCodec()
             answer["source"] = AgentHostTools.range(source)
             answer["size"] = AgentHostTools.hex(length)
-            let defaultName = "\(stem)_\(AgentHostTools.hexText(offset))-\(AgentHostTools.hexText(source.upperBound))"
             if let reused = reusedPart(controller, place, source: source, layout: layout,
                                        codec: codec, defaultName: defaultName) {
                 return reuse(reused, controller: controller, answer: answer)
@@ -441,11 +440,10 @@ final class AgentFindTools {
     private func reusedPart(_ controller: MainViewController, _ place: AgentDesk.Place, source: Range<UInt64>,
                             layout: UEFIRootLayout, codec: any PartCodec, defaultName: String)
         -> (id: FragmentDock.PanelID, pane: PaneViewModel)? {
-        let partName = MainViewController.partName(ofTab: defaultName, parent: place.pane.status.fileName)
         for id in controller.fragments.panelsLinked(to: place.pane) {
             guard let pane = controller.fragments.pane(id), let origin = pane.origin,
                   origin.sourceRange == source, origin.layout == layout,
-                  type(of: origin.codec) == type(of: codec), origin.partName == partName
+                  type(of: origin.codec) == type(of: codec), origin.partName == defaultName
             else { continue }
             return (id, pane)
         }
@@ -492,8 +490,7 @@ final class AgentFindTools {
     /// As the UEFI panel's Open Decompressed Body: the buffer a compressed
     /// section opens to, linked to the section and compressed again on the way
     /// back.
-    private static func decompressedPart(_ found: UEFIAgentNodeData.Bytes, in image: UEFIImage,
-                                         fileName: String) throws -> PartPlan {
+    private static func decompressedPart(_ found: UEFIAgentNodeData.Bytes, in image: UEFIImage) throws -> PartPlan {
         guard let body = UEFIPresenter.decompressedBody(for: found.node),
               let source = UEFIPresenter.fileSource(of: found.node, in: image) else {
             throw AgentToolError("Node \(found.node.id) is not a compressed section; part \"decompressed\" is a compressed section's.")
@@ -502,7 +499,7 @@ final class AgentFindTools {
             target: UEFIRebuild.Target(space: body.space),
             compression: UEFIPresenter.compressionName(of: body.space, in: image),
             readers: found.tree.spaceReaders)
-        return PartPlan(name: body.tabName(fileName: fileName), source: source, layout: body.layout,
+        return PartPlan(name: body.partName, source: source, layout: body.layout,
                         codec: codec, size: UInt64(found.reader.count))
     }
 
@@ -514,9 +511,9 @@ final class AgentFindTools {
               let block = UEFILenovoDMIDetail.decodableBlock(for: found.node, image: image, reader: reader) else {
             throw AgentToolError("Node \(found.node.id) is not a LENV block, or in one, that has anything to decode.")
         }
-        // The panel's name, which the person reads: in the app's language,
-        // as the panel the person opens on the same block is named.
-        return PartPlan(name: L("%1$@ (decoded)", in: Localization.appLanguage, block.name),
+        // The panel's name is the block's, as the panel the person opens on
+        // the same block is named: the pill's badge says it is decoded.
+        return PartPlan(name: block.name.text,
                         source: block.block.range, layout: .image,
                         codec: LenovoDMIBlockCodec(block: block.block), size: block.block.range.upperBound - block.block.range.lowerBound)
     }

@@ -47,8 +47,15 @@ public struct UEFIPartCodec: PartCodec {
             return PartBadge(L("Structure", context: "part badge"),
                              explanation: L("A structure of the image. Update in Parent lays the image out again around it, so its length may change."))
         }
-        let name = compression.map(LocalizedText.verbatim) ?? L("Decompressed", context: "part badge")
-        return PartBadge(name, explanation: L("Decompressed from the file. Update in Parent compresses it again the way the section was compressed."))
+        return PartBadge(transform ?? L("Decompressed", context: "part badge"),
+                         explanation: L("Decompressed from the file. Update in Parent compresses it again the way the section was compressed."))
+    }
+
+    /// What a decompressed buffer was compressed with; a node of the file is
+    /// the file's bytes.
+    public var transform: LocalizedText? {
+        guard target.space != .file else { return nil }
+        return compression.map(LocalizedText.verbatim) ?? L("Decompressed", context: "part badge")
     }
 
     public func decode(_ parent: PartParent) throws -> [UInt8] {

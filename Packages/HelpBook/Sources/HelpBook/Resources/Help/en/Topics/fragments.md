@@ -11,6 +11,8 @@ A part of an image supplied by a [[topic:tools-overview|tool panel]] — a regio
 
 The parent remains visible above it. Folded down, the fragment becomes a pill in the dock along the bottom edge of the window. One dock serves the tab: it holds the parts extracted from both open images.
 
+A fragment is named after what was opened — the node or the zone — and nothing else: neither the name of the dump nor what was done to the bytes is added. Where the bytes went through a codec, the pill carries the codec's name after the fragment's name — **LZMA**, **XOR** with its key, **bzip2** — and the pointer over it gives the same sentence as the badge in the panel's header (see below). A fragment opened out of such a fragment — a node of a decompressed section, say — carries the same codec name, since its bytes are no more the file's own than those of the fragment it came from. A pill without the codec name holds the file's own bytes.
+
 ## What a fragment supports
 
 - Reading and searching as an ordinary file, with its own addresses beginning at zero rather than at the address it occupies in the parent.

@@ -1458,7 +1458,7 @@
 "log operation|Set" = "Запись";
 "log operation|Protect" = "Защита";
 "log operation|Unprotect" = "Снятие защиты";
-"%1$@ (decoded)" = "%1$@ (декодирован)";
+"Part of “%1$@”, whose bytes were converted with %2$@ when taken out of the file." = "Часть фрагмента «%1$@», байты которого при извлечении из файла преобразованы с помощью %2$@.";
 "A LENV block is %1$@ bytes, and goes back only at that length." = "Блок LENV занимает %1$@ байт и записывается обратно только с этой длиной.";
 "A LENV block stored in the clear. Update in Parent recomputes its checksum." = "Блок LENV, который хранится без кодирования. При записи в исходный файл пересчитывается его контрольная сумма.";
 "A compressed section on the way to the part no longer decompresses." = "Одна из сжатых секций на пути к этой части больше не распаковывается.";

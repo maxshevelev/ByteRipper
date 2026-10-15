@@ -1,4 +1,4 @@
-@source-sha 0204c70403e86cf8dac6e5b3693f056b759d293a97520bbdbc5f28763cf662b0
+@source-sha 32f9f42c33e1eb12d85177c149546d4012e645f6e6b9e975e4b79d5c151a5ca2
 # Fragment-Bereiche: ein Stück eines Dumps als eigene Datei
 
 > Einen Teil eines Images entnehmen, als eigene Datei bearbeiten und zurückschreiben.
@@ -6,6 +6,8 @@
 Ein Teil eines Images, den ein [[topic:tools-overview|Werkzeug]] bereitstellt — eine Region, ein Volume, ein Modul, der entpackte Rumpf einer Sektion —, öffnet sich als **Fragment-Bereich**: ein Bereich, der von unten über den Dump fährt, aus dem der Teil stammt.
 
 Die Quelle bleibt darüber sichtbar. Eingeklappt wird das Fragment zu einer Pille im Dock am unteren Fensterrand. Ein Dock dient dem ganzen Tab: Es fasst die Teile, die aus beiden geöffneten Images entnommen wurden.
+
+Ein Fragment trägt den Namen dessen, was geöffnet wurde – des Knotens oder der Zone –, und sonst nichts: Weder der Name des Dumps noch die Art, wie die Bytes umgewandelt wurden, wird angehängt. Haben die Bytes einen Codec durchlaufen, zeigt die Pille hinter dem Namen des Fragments den Namen dieses Codecs – **LZMA**, **XOR** mit Schlüssel, **bzip2** –; unter dem Mauszeiger erscheint dieselbe Erläuterung wie beim Abzeichen in der Kopfzeile des Bereichs (siehe unten). Ein Fragment, das aus einem solchen Fragment geöffnet wird – etwa ein Knoten einer entpackten Sektion –, trägt denselben Codec-Namen, denn seine Bytes sind ebenso wenig die der Datei selbst wie die des Fragments, aus dem es stammt. Eine Pille ohne dieses Abzeichen enthält die Bytes der Datei selbst.
 
 ## Was ein Fragment unterstützt
 

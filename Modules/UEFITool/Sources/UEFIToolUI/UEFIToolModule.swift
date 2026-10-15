@@ -1747,7 +1747,7 @@ private struct ChecksumPass: Sendable {
             compression: UEFIPresenter.compressionName(of: decompressed.space, in: tree.image()),
             readers: tree.spaceReaders
         )
-        openPart(named: decompressed.tabName(fileName: host.fileName), linkedTo: source,
+        openPart(named: decompressed.partName, linkedTo: source,
                  layout: decompressed.layout, codec: codec)
     }
 
@@ -1798,7 +1798,7 @@ private struct ChecksumPass: Sendable {
            let reader = tree.spaceReaders.reader(for: .file),
            let found = UEFILenovoDMIDetail.decodableBlock(for: node, image: image, reader: reader) {
             let start = found.block.range.lowerBound
-            openPart(named: L("%1$@ (decoded)", found.name), linkedTo: found.block.range,
+            openPart(named: found.name.text, linkedTo: found.block.range,
                      layout: .image, codec: LenovoDMIBlockCodec(block: found.block),
                      selecting: (match.range.lowerBound - start)..<(match.range.upperBound - start))
             return
@@ -1812,7 +1812,7 @@ private struct ChecksumPass: Sendable {
             compression: UEFIPresenter.compressionName(of: decompressed.space, in: image),
             readers: tree.spaceReaders
         )
-        openPart(named: decompressed.tabName(fileName: host.fileName), linkedTo: source,
+        openPart(named: decompressed.partName, linkedTo: source,
                  layout: decompressed.layout, codec: codec, selecting: match.range)
     }
 
@@ -1834,7 +1834,7 @@ private struct ChecksumPass: Sendable {
         let readers = tree.spaceReaders
         let body = node.body
         let space = node.space
-        let name = UEFIPresenter.unpackedTabName(of: node, fileName: host.fileName)
+        let name = UEFIPresenter.partName(of: node)
         controller.showBusy()
         Task { [weak self] in
             let text = await Task.detached(priority: .userInitiated) {
@@ -1849,7 +1849,8 @@ private struct ChecksumPass: Sendable {
             self.host.openPart(named: name, linkedTo: source, codec: ReadOnlyPartCodec(
                 text,
                 title: L("This cannot be put back"),
-                reason: L("This is the text the variable unpacks to, and nothing here packs it again.")
+                reason: L("This is the text the variable unpacks to, and nothing here packs it again."),
+                transform: .verbatim("bzip2")
             ))
         }
     }
@@ -1877,7 +1878,7 @@ private struct ChecksumPass: Sendable {
             fail(L("There is no LENV block to decode here."))
             return
         }
-        openPart(named: L("%1$@ (decoded)", found.name), linkedTo: found.block.range,
+        openPart(named: found.name.text, linkedTo: found.block.range,
                  layout: .image, codec: LenovoDMIBlockCodec(block: found.block))
     }
 
@@ -1937,13 +1938,13 @@ private struct ChecksumPass: Sendable {
                 readers: tree.spaceReaders
             )
         }
-        openPart(named: open.partName(fileName: host.fileName), linkedTo: open.source,
+        openPart(named: open.partName, linkedTo: open.source,
                  layout: open.layout, codec: codec)
     }
 
     /// Saves a node of the tree — or its body alone — to a file: the bytes
-    /// opening it would show, wherever the node lives, under the name its
-    /// panel would have.
+    /// opening it would show, wherever the node lives, named after the dump
+    /// and the node.
     ///
     /// Public because a right-click cannot be simulated — the level the app's
     /// tests drive, like `openNodeInPanel(for:body:)`.
@@ -1956,7 +1957,7 @@ private struct ChecksumPass: Sendable {
             return
         }
         let readers = tree.spaceReaders
-        let name = open.partName(fileName: host.fileName)
+        let name = open.saveName(fileName: host.fileName)
         controller.showBusy()
         Task { [weak self] in
             let bytes = await UEFIToolSession.bytes(of: open, readers: readers)

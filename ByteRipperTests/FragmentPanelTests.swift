@@ -1,4 +1,6 @@
 import AppPalette
+import Localization
+import PartCodec
 import XCTest
 @testable import ByteRipper
 
@@ -86,6 +88,59 @@ final class FragmentPanelTests: XCTestCase {
         let pills = try strip(of: controller).pillsForTesting
         XCTAssertEqual(pills.map(\.title), ["NVRAM"])
         XCTAssertTrue(pills[0].isUp, "the pill of the panel in front is the filled one")
+    }
+
+    /// A part whose bytes went through a codec wears the codec's word on its
+    /// pill, after the name — which no longer says it; one that is the
+    /// file's own bytes wears none.
+    func testAPillWearsTheCodecItsBytesWentThrough() throws {
+        let (controller, window) = try makeControllerWithAPart(at: 0x100, length: 0x20)
+        defer { cleanup(controller) }
+        let bytes = Array("text".utf8)
+        let codec = ReadOnlyPartCodec(bytes, title: .verbatim("No"), reason: .verbatim("Nothing packs it again."),
+                                      transform: .verbatim("bzip2"))
+        let origin = try XCTUnwrap(DocumentOrigin(parent: controller.windowModel.pane1, source: 0x200..<0x220,
+                                                  partName: "Overrides", layout: .image, codec: codec,
+                                                  content: bytes))
+        _ = controller.openFragment(bytes, named: "Overrides", origin: origin, animated: false)
+        window.layoutIfNeeded()
+
+        let pills = try strip(of: controller).pillsForTesting
+        XCTAssertEqual(pills.map(\.title), ["part", "Overrides"])
+        XCTAssertNil(pills[0].transform, "a copy of the file's bytes says nothing")
+        XCTAssertEqual(pills[1].transform?.text, "bzip2")
+        XCTAssertEqual(pills[1].transform?.explanation, codec.badge?.explanation.text)
+    }
+
+    /// A node opened out of a decompressed part holds decompressed bytes as
+    /// much as the part does: its pill wears the part's codec, though its own
+    /// only copies, and the pointer says where the codec was.
+    func testAPartOfADecompressedPartWearsItsCodec() throws {
+        let (controller, window) = try makeControllerWithAPart(at: 0x100, length: 0x20)
+        defer { cleanup(controller) }
+        let bytes = [UInt8](repeating: 0x11, count: 0x40)
+        let codec = ReadOnlyPartCodec(bytes, title: .verbatim("No"), reason: .verbatim("A test body."),
+                                      transform: .verbatim("LZMA"))
+        let outerOrigin = try XCTUnwrap(DocumentOrigin(parent: controller.windowModel.pane1, source: 0x200..<0x220,
+                                                       partName: "Section", layout: .image, codec: codec,
+                                                       content: bytes))
+        let outer = try XCTUnwrap(controller.openFragment(bytes, named: "Section", origin: outerOrigin,
+                                                          animated: false))
+        let outerPane = try XCTUnwrap(controller.fragments.pane(outer))
+        let inner = [UInt8](repeating: 0x11, count: 0x10)
+        let innerOrigin = try XCTUnwrap(DocumentOrigin(parent: outerPane, source: 0x10..<0x20,
+                                                       partName: "Driver", layout: .image,
+                                                       codec: CopyPartCodec(), content: inner))
+        _ = controller.openFragment(inner, named: "Driver", origin: innerOrigin, animated: false)
+        window.layoutIfNeeded()
+
+        let pills = try strip(of: controller).pillsForTesting
+        XCTAssertEqual(pills.map(\.title), ["part", "Section", "Driver"])
+        XCTAssertNil(pills[0].transform)
+        XCTAssertEqual(pills[1].transform?.text, "LZMA")
+        XCTAssertEqual(pills[2].transform?.text, "LZMA", "the node is as decompressed as the body it came out of")
+        XCTAssertEqual(pills[2].transform?.explanation,
+                       "Part of “Section”, whose bytes were converted with LZMA when taken out of the file.")
     }
 
     /// The panel is an ordinary hex panel: the header with the name is the

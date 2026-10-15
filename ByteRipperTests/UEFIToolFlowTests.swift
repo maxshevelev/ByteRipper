@@ -1925,7 +1925,7 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(part.fileSize, UInt64(node.body.count))
         XCTAssertEqual(try XCTUnwrap(part.origin).sourceRange, node.body,
                        "the body's own bytes, not the node's")
-        XCTAssertTrue(part.status.fileName.hasSuffix(" body.bin"), part.status.fileName)
+        XCTAssertEqual(part.status.fileName, UEFIPresenter.partName(of: node), "named after the node alone")
         controller.fragments.close(id, animated: false)
     }
 

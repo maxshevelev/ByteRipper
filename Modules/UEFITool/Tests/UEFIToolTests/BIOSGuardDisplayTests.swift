@@ -60,7 +60,8 @@ final class BIOSGuardDisplayTests: XCTestCase {
         XCTAssertEqual(body.space, .decompressed(chain: [0]))
         XCTAssertEqual(body.openTitle.text(in: .english), "Open Assembled BIOS Region")
         XCTAssertEqual(body.saveTitle.text(in: .english), "Save Assembled BIOS Region as…")
-        XCTAssertEqual(body.tabName(fileName: "X1704VAPF.306"), "X1704VAPF_BIOS region.bin")
+        XCTAssertEqual(body.suggestedName, "BIOS region.bin", "a saved file is named by what it is")
+        XCTAssertEqual(body.partName, UEFIPresenter.partName(of: update), "a panel by the node it was opened from")
         XCTAssertEqual(UEFIPresenter.content(of: update), .decompressedBody)
     }
 

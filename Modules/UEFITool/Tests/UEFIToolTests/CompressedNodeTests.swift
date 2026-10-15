@@ -131,11 +131,13 @@ final class CompressedNodeTests: XCTestCase {
         let asNode = try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.inner, in: built.image, body: false))
         XCTAssertEqual(asNode.range, 0..<0x100)
         XCTAssertEqual(asNode.suggestedName, "Inner decompressed.bin")
-        XCTAssertEqual(asNode.partName(fileName: "bios.rom"), "bios_Inner decompressed.bin",
-                       "named after the dump it came out of, then what it is")
+        XCTAssertEqual(asNode.partName, "Inner", "a panel is the node's name alone; the pill's badge says decompressed")
+        XCTAssertEqual(asNode.saveName(fileName: "bios.rom"), "bios_Inner decompressed.bin",
+                       "a saved file is named after the dump it came out of, then what it is")
         XCTAssertEqual(try XCTUnwrap(UEFIPresenter.nodeOpen(for: built.inner, in: built.image, body: true)).suggestedName,
                        "Inner decompressed body.bin")
-        XCTAssertEqual(body.tabName(fileName: "bios.rom"), "bios_LZMA compressed section decompressed.bin")
+        XCTAssertEqual(body.partName, "LZMA compressed section",
+                       "a saved file says decompressed; a panel's pill says it with the codec's badge")
         XCTAssertEqual(UEFIPresenter.fileSource(of: built.inner, in: built.image),
                        built.section.fileRange,
                        "a panel from inside is linked to the compressed section holding it")

@@ -1,4 +1,5 @@
 import Foundation
+import Localization
 import PartCodec
 import ToolModuleKit
 import UEFIContentSource
@@ -20,6 +21,7 @@ struct GivenBytesCodec: PartCodec {
     var isImmediate: Bool { back.isImmediate }
     var keepsOffsets: Bool { back.keepsOffsets }
     var badge: PartBadge? { back.badge }
+    var transform: LocalizedText? { back.transform }
 }
 
 /// A body that is not the file's bytes: what a decompressed body is to the

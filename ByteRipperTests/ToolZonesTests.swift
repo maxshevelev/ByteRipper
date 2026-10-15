@@ -288,9 +288,7 @@ final class ToolZonesTests: XCTestCase {
         XCTAssertEqual(part.fileSize, 0x80, "the zone's bytes, and only those")
         XCTAssertTrue(part.isUntitled,
                       "a copy, so editing it cannot reach back into the dump")
-        XCTAssertTrue(part.status.fileName.hasSuffix("_FFSv2.bin"),
-                      "named after the file it came out of and the zone it is: "
-                      + part.status.fileName)
+        XCTAssertEqual(part.status.fileName, "FFSv2", "named after the zone it is, and nothing else")
         controller.fragments.close(id, animated: false)
     }
 
