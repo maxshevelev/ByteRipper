@@ -234,11 +234,14 @@ absent is not known.
 
 **ECFinder as an external cross-check.** The field tools print a Boot Guard
 verdict and the key hash in a text report, and the owner's captures of them are
-what confirmed CSME 16's reading. Its verdict is two-valued — `BG0` or `BG5` —
-and it tracks the vendor manifests and the engine's state rather than the
-profile number, so it can confirm that a profile is *configured* and not which
-one; its EOM line was seen to read "Enabled" on an image whose own MFIT report
-says Disabled, so it is not usable as ground truth for that row.
+what confirmed CSME 16's reading of the key. Two limits, one now from its author:
+on version 16 ECFinder looks at the **EOM flag alone** and builds its report from
+that, so it says nothing about the descriptor's rights — an image that will close
+Manufacturing by them reads there as if it would not. And its Boot Guard verdict
+is two-valued — `BG0` or `BG5` — tracking the vendor manifests and the engine's
+state rather than the profile number, so it can confirm that a profile is
+*configured* and not which one. What it is good for is the key hash, where its
+report matched the entry's field byte for byte on the image that was checked.
 
 ## The method that works on this material
 
