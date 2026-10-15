@@ -1030,7 +1030,10 @@ final class MEASummaryTests: XCTestCase {
         ]
         let blocks = MEAConfiguration.build(a, in: .english)
         XCTAssertEqual(blocks.count, 1)
-        XCTAssertEqual(blocks[0].title, "/home/mca/eom_config — EOM_Config (2)")
+        // The heading is two parts: Intel's own name for the file, which the
+        // tab draws bold, and the path without its `/home` with the length.
+        XCTAssertEqual(blocks[0].alias, "EOM_Config")
+        XCTAssertEqual(blocks[0].detail, "/mca/eom_config, 2 bytes")
         XCTAssertEqual(blocks[0].rows.map(\.name),
                        ["EomFirstBootEnabled", "FlexibleEomSettings"])
         // Each row carries the build's value and the file system's, and the

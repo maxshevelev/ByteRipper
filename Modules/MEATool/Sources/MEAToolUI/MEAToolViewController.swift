@@ -769,58 +769,53 @@ import ToolModuleKit
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         configurationScroll.placeholder.isHidden = true
 
-        let labelWidth = ToolPanelFont.scaled(Self.summaryLabelWidth)
-        let heading = Self.configurationHeadingRow()
-        place(heading.line, firstCell: heading.label, in: stack, labelWidth: labelWidth)
+        place(Self.configurationHeadingRow(), in: stack)
         for (index, block) in configurationBlocks.enumerated() {
             // The first block sits right under the column names, which is a
             // nearer relation than the next block is to the one before it.
             if let last = stack.arrangedSubviews.last {
                 stack.setCustomSpacing(index == 0 ? 12 : 14, after: last)
             }
-            let title = NSTextField(labelWithString: block.title)
-            title.font = ToolPanelFont.title()
-            title.translatesAutoresizingMaskIntoConstraints = false
-            stack.addArrangedSubview(title)
+            stack.addArrangedSubview(Self.configurationFileHeading(block))
             for row in block.rows {
-                let line = Self.configurationRowView(row)
-                place(line.line, firstCell: line.label, in: stack, labelWidth: labelWidth)
+                place(Self.configurationRowView(row), in: stack)
             }
         }
     }
 
-    /// One table row into the list: as wide as the list itself, so a long
-    /// value has a column to wrap inside, with its first cell the label column
-    /// — the same width in every row, which is what makes the two value columns
-    /// line up. The width is breakable and capped at half the list for the same
-    /// reason the summary's is: required, one long setting name became a floor
-    /// under the whole panel.
-    private func place(_ line: NSStackView, firstCell: NSView?, in stack: NSStackView,
-                       labelWidth: CGFloat) {
+    /// One table row into the list, as wide as the list itself — which is what
+    /// gives the three cells of the row their width, since the row divides them
+    /// equally. Every row is built the same way, so the columns can only line
+    /// up: nothing about a row's own content has a say in how wide a cell is.
+    private func place(_ line: NSStackView, in stack: NSStackView) {
         stack.addArrangedSubview(line)
         line.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        guard let firstCell else { return }
-        let column = firstCell.widthAnchor.constraint(equalToConstant: labelWidth)
-        column.priority = .defaultHigh
-        column.isActive = true
-        firstCell.widthAnchor.constraint(lessThanOrEqualTo: stack.widthAnchor,
-                                         multiplier: 0.5).isActive = true
     }
 
-    /// The tab's column names, once at the top: the setting, the build's copy
-    /// of the file and the file system's. An empty first cell rather than none,
-    /// so the two names sit over the columns they name.
-    private static func configurationHeadingRow() -> (line: NSStackView, label: NSTextField) {
-        let label = NSTextField(labelWithString: "")
-        label.translatesAutoresizingMaskIntoConstraints = false
+    /// A file's heading: MFIT's own name for it in bold, and where it lives and
+    /// how long it is in the ordinary weight — one line, so the two read as one
+    /// heading rather than as a title with a subtitle under it.
+    private static func configurationFileHeading(_ block: MEAConfigurationBlock) -> NSTextField {
+        let heading = NSTextField(labelWithString: "")
+        let text = NSMutableAttributedString(
+            string: block.alias, attributes: [.font: ToolPanelFont.title()])
+        text.append(NSAttributedString(
+            string: " " + block.detail,
+            attributes: [.font: ToolPanelFont.body(), .foregroundColor: NSColor.secondaryLabelColor]))
+        heading.attributedStringValue = text
+        heading.lineBreakMode = .byTruncatingTail
+        heading.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        heading.translatesAutoresizingMaskIntoConstraints = false
+        return heading
+    }
+
+    /// The tab's column names, once at the top: an empty first cell rather than
+    /// none, so the two names sit over the columns they name.
+    private static func configurationHeadingRow() -> NSStackView {
         let language = Localization.appLanguage
-        let fitc = configurationHeading(MEAText.configurationFITC(in: language))
-        let mfs = configurationHeading(MEAText.configurationMFS(in: language))
-        // In the line first, then tied to each other: two views with no
-        // ancestor yet cannot carry a constraint between them.
-        let line = headingLine(first: label, cells: (fitc, mfs))
-        Self.equallyWide(fitc, mfs)
-        return (line, label)
+        return tableLine([configurationHeading(""),
+                          configurationHeading(MEAText.configurationFITC(in: language)),
+                          configurationHeading(MEAText.configurationMFS(in: language))])
     }
 
     /// One column heading: the quiet weight a table's header carries, so it is
@@ -834,31 +829,17 @@ import ToolModuleKit
     }
 
     /// One Configuration row: the setting, the build's value, the file
-    /// system's — the two values the same width as each other, so they line up
-    /// down the page.
-    private static func configurationRowView(
-        _ row: MEAConfigurationRow
-    ) -> (line: NSStackView, label: NSTextField) {
+    /// system's.
+    private static func configurationRowView(_ row: MEAConfigurationRow) -> NSStackView {
         let label = NSTextField(labelWithString: row.name)
         label.font = ToolPanelFont.body()
         label.textColor = .secondaryLabelColor
         label.lineBreakMode = .byTruncatingTail
-        label.translatesAutoresizingMaskIntoConstraints = false
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-
-        let fitc = configurationCell(row.fitc, differs: row.differs)
-        let mfs = configurationCell(row.mfs, differs: row.differs)
-        let line = headingLine(first: label, cells: (fitc, mfs))
-        Self.equallyWide(fitc, mfs)
-        return (line, label)
-    }
-
-    /// Two cells of the tab's table, the same width as each other — which is
-    /// what makes the two value columns line up from one row to the next. Both
-    /// have to be in the line already: a constraint between two views that
-    /// share no ancestor is a crash at activation, not a wrong width.
-    private static func equallyWide(_ left: NSView, _ right: NSView) {
-        left.widthAnchor.constraint(equalTo: right.widthAnchor).isActive = true
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return tableLine([label,
+                          configurationCell(row.fitc, differs: row.differs),
+                          configurationCell(row.mfs, differs: row.differs)])
     }
 
     /// One value cell. A pair that disagrees is drawn in the caution tone —
@@ -883,12 +864,19 @@ import ToolModuleKit
         return value
     }
 
-    /// The three cells of a table row, laid out as one line.
-    private static func headingLine(first: NSView, cells: (NSView, NSView)) -> NSStackView {
-        let line = NSStackView(views: [first, cells.0, cells.1])
+    /// The three cells of a table row, laid out as one line — **equally wide**,
+    /// which is what makes the columns line up from the header down: the
+    /// column boundaries are the same in every row because the same division is
+    /// made in every row, and no cell's own content has a say in it. (A width
+    /// taken from the content — a constant on the first cell, or the two values
+    /// tied to each other — leaves the columns as wide as whatever happens to
+    /// be longest in the row above.)
+    private static func tableLine(_ cells: [NSView]) -> NSStackView {
+        let line = NSStackView(views: cells)
         line.orientation = .horizontal
         line.alignment = .firstBaseline
-        line.spacing = 6
+        line.distribution = .fillEqually
+        line.spacing = 8
         line.translatesAutoresizingMaskIntoConstraints = false
         return line
     }
