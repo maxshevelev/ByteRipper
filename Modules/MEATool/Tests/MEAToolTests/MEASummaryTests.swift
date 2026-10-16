@@ -1036,9 +1036,10 @@ final class MEASummaryTests: XCTestCase {
         // tab draws bold, and the path without its `/home` with the length.
         XCTAssertEqual(blocks[0].alias, "EOM_Config")
         XCTAssertEqual(blocks[0].detail, "/mca/eom_config, 2 bytes")
+        // The row reads as the tool's panel does: its own name for the setting
+        // where it states one, the identifier where it shows that instead.
         XCTAssertEqual(blocks[0].rows.map(\.name),
-                       ["EOM on First Boot Enabled (EomFirstBootEnabled)",
-                        "Flexible EOM setting options (FlexibleEomSettings)"])
+                       ["EOM on First Boot Enabled", "Flexible EOM setting options"])
         // Each row carries the build's value and the file system's, and the
         // pair that disagrees is the one the view marks.
         // MFIT's own words for the flag, which its database calls a Yes/No
@@ -1084,8 +1085,7 @@ final class MEASummaryTests: XCTestCase {
         ]
         let unknownRows = MEAConfiguration.build(unknown, in: .english)[0].rows
         XCTAssertEqual(unknownRows.map(\.name),
-                       ["EOM on First Boot Enabled (EomFirstBootEnabled)",
-                        "Flexible EOM setting options (FlexibleEomSettings)",
+                       ["EOM on First Boot Enabled", "Flexible EOM setting options",
                         "NotInTheMap"])
         XCTAssertEqual(unknownRows.map(\.mfs), ["Yes", nil, "1"])
     }

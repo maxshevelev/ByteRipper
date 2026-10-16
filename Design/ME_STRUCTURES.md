@@ -356,8 +356,9 @@ tools' own layouts, reports and Intel's documents spell (`MELanPowerWell`); the
 identifier in the same declaration — FIT's `<CfgOpt … label="LAN Power Well">`,
 MFIT's `<UI name="MELanPowerWell" label="LAN Power Well" section="…">`. The
 generators copy it where it differs from the identifier, so the panel can draw
-"LAN Power Well (MELanPowerWell)" — the words an engineer reads on the tool's
-screen with the word a report calls it. FIT 15 is the case worth knowing: it
+"LAN Power Well" — the words an engineer reads on the tool's screen, with the
+identifier (`MELanPowerWell`) the map's and a report's own. FIT 15 is the case
+worth knowing: it
 states no label at all for `FID_PAV`, `FID_ISH` and the other `FID_` settings,
 because its panel shows those identifiers, and the map carries none rather than
 repeating one. MFIT's `<UI>` element names a **panel section** the same way
