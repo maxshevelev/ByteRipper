@@ -365,6 +365,24 @@ repeating one. MFIT's `<UI>` element names a **panel section** the same way
 (`section="WiredLanConfiguration"`); the maps do not carry it — nothing on the
 panel groups by it yet.
 
+**The UEP arrays carry 155 settings and the images write one of them** — checked
+2026-10-17, over the FIT 15 layout of the TGL LP family and two CSME 15 dumps
+(`1.bin`, profile 0, and `CSME 15.bin`, profile 5). Every documented placement of
+every other setting reads zero in both, including ones that *must* be set on a
+Board built for profile 5: `$PlatformIntegrity/OemManifestSet` is 0 at all six of
+its array-0 placements on the image whose Boot Guard is configured and whose BIOS
+region carries the manifests, and so are `sb_acm_svn`, `sb_km_svn`,
+`idlm_m_svn`, `cse_bootstrap_m_svn`, `ftpm_ek` and `RpmcSupported`. What is
+written is the family's own Boot Guard word: `FBGAcmEn` reads 0 on one dump and 1
+on the other, at **one** of its placements — the document merges every family's
+placements for the one setting, and only the image's own family is live. So these
+bits are the tool's *intent* for the fuses, not the image's record of them: what
+the platform burns at End of Manufacturing is computed there, which is also why
+`OemManifestSet` can read 0 while the manifests it is about are in the BIOS
+region. Reading more of them from a dump is therefore not the next step; four
+bytes at array 0 +0x70 that differ between the two dumps match no documented
+placement and are the one thing here still unnamed.
+
 ### The same material in FIT's own shape (ME 15)
 
 The older FIT — `fit-15.0.exe` and its neighbours — carries the layout per
