@@ -73,6 +73,28 @@ UEP_FLAGS_OFFSET = 0x6E
 UEP_WORD_OFFSET = 0x68
 
 
+# Which record a generation keeps its OEM key hash in, and how long the hash
+# is: CSME 12 to 14 write a 32-byte SHA-256 at +0x90 (with 16 bytes of
+# assignment bits behind it), CSME 15 and later a 48-byte SHA-384 at +0xA0 and
+# again at +0x10A0. Read on the boards at hand — five CSME 14 images, and every
+# CSME 15/16 one.
+OEM_KEY_RECORDS = {"earlier": (0x90, 32, (0,)), "later": (0xA0, 48, (0, 0x1000))}
+
+
+def oem_key_field(me, uep_at, major):
+    """The key hash field of the generation, or None where the area is too
+    short. Which record is read follows the generation, not a guess: reading
+    the wrong one lands half inside the other field."""
+    if uep_at < 0:
+        return None
+    offset, length, copies = OEM_KEY_RECORDS["earlier" if 12 <= major <= 14 else "later"]
+    for copy in copies:
+        at = uep_at + copy + offset
+        if at + length <= len(me):
+            return me[at:at + length]
+    return None
+
+
 def uep_boot_guard_flags(me, uep_at):
     """The profile's four settings out of the UEP area, or None where the area
     carries no such bits: never written (all zeros, all 0xFF), too short, or
@@ -301,6 +323,20 @@ def report(path):
               % (len(offsets), where, block.hex()))
         print("  at " + ", ".join("0x%X" % (me_start + o) for o in offsets[:12])
               + (" …" if len(offsets) > 12 else ""))
+
+    # The key hash in the record the *generation* keeps. The script does not
+    # identify the generation — the app does, and picks one record with it — so
+    # both are printed: the 32-byte SHA-256 of CSME 12 to 14 at +0x90, the
+    # 48-byte SHA-384 of 15 and later at +0xA0 (+0x10A0 for the second copy).
+    for name, kind in (("CSME 12–14", "earlier"), ("CSME 15+", "later")):
+        field = oem_key_field(me, uep_at, 14 if kind == "earlier" else 15)
+        if field is None:
+            print("OEM key hash (%s): no field — the area is shorter than it" % name)
+            continue
+        state = ("not set (all zeros)" if not any(field) else
+                 "never written (all 0xFF)" if all(b == 0xFF for b in field) else
+                 field.hex().upper())
+        print("OEM key hash (%s, %d bytes): %s" % (name, len(field), state))
 
     signature_at = me.find(b"FIT AS A FIDDLE")
     window = (signature_at, signature_at + 0x8000) if signature_at >= 0 else None

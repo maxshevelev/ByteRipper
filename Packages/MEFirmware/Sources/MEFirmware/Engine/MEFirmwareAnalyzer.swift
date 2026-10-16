@@ -1210,7 +1210,11 @@ public actor MEFirmwareAnalyzer {
         // An image with no UEP area at all is not a missing reading: it is the
         // finding that this layout has none where the key would be
         // (`OEMKeyHash.unrecognized`), which is what CSME 11 answers.
-        let oemPublicKeyHash = BootGuardReader.oemPublicKeyHash(in: uepArea ?? Data())
+        // Which record holds the key depends on the generation — a 32-byte
+        // SHA-256 on CSME 12 to 14, a 48-byte SHA-384 on 15 and later — so the
+        // reading needs the identity the engine already worked out.
+        let oemPublicKeyHash = BootGuardReader.oemPublicKeyHash(in: uepArea ?? Data(),
+                                                                major: identity.major)
         let oemCustomized = OEMDetector.oemCustomized(
             fpt: fpt, bootPartitions: bootPartitions, codePartition: codePartition,
             in: region, baseOffset: baseOffset)
