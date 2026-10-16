@@ -3,6 +3,13 @@ import AppKit
 /// A detail's name/value rows, **one view per row**, with text selected across
 /// them the way a text view's is (`ToolSelectableRows`).
 ///
+/// The rows every panel of this app draws a named value with: the UEFI
+/// Structure's detail under its tree, the ME Analyzer's Summary tab and the
+/// detail under its own tree, and a record in the agent window. One row shape
+/// means one selection: a drag across rows takes a band of them, a double
+/// click a word, a triple click a row, ⌘A the whole list, and ⌘C copies what
+/// is selected with a tab between a name and its value — in each of them.
+///
 /// A row was a name label, a wrapping value label and a stack between them,
 /// with the constraints that tie the three together — three views and a field
 /// editor's worth of machinery per field, and a selection that stopped at the
@@ -27,6 +34,27 @@ import AppKit
 
     public private(set) var rows: [ToolFieldRow] = []
     private var laidOutWidth: CGFloat = 0
+
+    /// The name column a list of rows named `names` wants: wide enough for the
+    /// widest of them, and never narrower than `atLeast`.
+    ///
+    /// Here rather than at the panel that asks, because it is the measurement
+    /// the rows themselves make — a name's width, laid out by the same engine
+    /// that draws it (`TextBlock`) — and two panels asking for it must ask the
+    /// same way. The engine's field names run long
+    /// (`systemHeaderCRCValid`), and the shared default cut them off mid-word
+    /// there; a summary's run longer still. A name that comes to exactly the
+    /// column is a name that wraps to a second line, so measuring it with
+    /// anything but that engine leaves a column that is a point too narrow.
+    public static func nameWidth(
+        for names: [String], atLeast: CGFloat = ToolPanelFont.detailLabelWidth
+    ) -> CGFloat {
+        let widest = names.map { name in
+            TextBlock.width(of: NSAttributedString(
+                string: name, attributes: [.font: ToolPanelFont.body()]))
+        }.max() ?? 0
+        return max(atLeast, widest)
+    }
 
     /// The gap between two rows — the one the detail list keeps between its
     /// own lines.
@@ -87,8 +115,20 @@ import AppKit
     private var fittedWidth: CGFloat = -1
     private var fittedHeight: CGFloat = 0
 
-    /// Between the name column and the value.
-    static let columnSpacing: CGFloat = 6
+    /// The width the name is drawn in at the row's laid-out width: the column
+    /// the list asked for, or half the row when the row is narrower than that.
+    /// Where a name too long for it wraps, this is what it wraps in.
+    public private(set) var nameColumnWidth: CGFloat = 0
+
+    /// How tall the row's own text is at the width it was last fitted to — its
+    /// name and its value, whichever of the two is the taller. The row's frame
+    /// is taller than this by the spacing the list leaves under it.
+    public private(set) var textHeight: CGFloat = 0
+
+    /// Between the name column and the value. Public with the row's geometry:
+    /// what a name wraps in, and where the value begins, are one measurement
+    /// apart, and a reader of either has the other to hand.
+    public static let columnSpacing: CGFloat = 6
 
     init(label: String, value: NSAttributedString, nameWidth: CGFloat) {
         self.label = label
@@ -133,6 +173,8 @@ import AppKit
                     width: max(1, width - column - Self.columnSpacing))
         fittedWidth = width
         fittedHeight = max(name.height, value.height)
+        nameColumnWidth = column
+        textHeight = fittedHeight
         needsDisplay = true
         return fittedHeight
     }
@@ -222,6 +264,20 @@ import AppKit
     /// the space after it.
     static func plain(_ text: String) -> String {
         text.replacingOccurrences(of: "\u{FFFC} ", with: "").replacingOccurrences(of: "\u{FFFC}", with: "")
+    }
+
+    /// The width a text needs on one line, as the engine that draws it lays it
+    /// out — what a name column has to hold for the name not to wrap.
+    static func width(of string: NSAttributedString) -> CGFloat {
+        let block = TextBlock(string)
+        block.place(x: 0, width: 100_000)
+        return block.lineWidth
+    }
+
+    /// One line's width, at the width the text was placed in.
+    private var lineWidth: CGFloat {
+        layout.ensureLayout(for: container)
+        return ceil(layout.usedRect(for: container).width)
     }
 
     func place(x: CGFloat, width: CGFloat) {

@@ -243,10 +243,11 @@ final class MEAToolFlowTests: XCTestCase {
         XCTAssertEqual(tabs.label(forSegment: 1), "Full Info")
         XCTAssertEqual(tabs.selectedSegment, 0)
 
-        let text = descendants(of: panel, NSTextField.self).map(\.stringValue)
-        XCTAssertTrue(text.contains("Family"), "\(text)")
-        XCTAssertTrue(text.contains("Size"), "\(text)")
-        XCTAssertTrue(text.contains("0x4000 (16384 bytes)"), "\(text)")
+        let rows = try shownRows(of: panel)
+        XCTAssertTrue(rows.map(\.label).contains("Family"), "\(rows.map(\.texts))")
+        XCTAssertTrue(rows.map(\.label).contains("Size"), "\(rows.map(\.texts))")
+        XCTAssertTrue(rows.map(\.valueText).contains("0x4000 (16384 bytes)"),
+                      "\(rows.map(\.texts))")
     }
 
     /// The Full Tree explains its marks: a legend under the tree, listing the
@@ -560,9 +561,13 @@ final class MEAToolFlowTests: XCTestCase {
                        "the selection survives the re-show the selection itself causes")
 
         // The detail list says the row's own things: its offset and its size.
-        let text = descendants(of: try panel(), NSTextField.self).map(\.stringValue)
-        XCTAssertTrue(text.contains("FTUE"), "\(text)")
-        XCTAssertTrue(text.contains("0x800 (2048 bytes)"), "\(text)")
+        // The row's name is the detail's title, and its fields are the rows
+        // under it.
+        XCTAssertTrue(descendants(of: try panel(), NSTextField.self).map(\.stringValue)
+            .contains("FTUE"), "the row's name heads the detail")
+        let rows = try shownRows(of: try panel())
+        XCTAssertTrue(rows.map(\.valueText).contains("0x800 (2048 bytes)"),
+                      "\(rows.map(\.texts))")
     }
 
     /// The region's SHA-256/SHA-384/CRC-32 are three passes over the whole
@@ -586,11 +591,11 @@ final class MEAToolFlowTests: XCTestCase {
 
         // Spelled out rather than read off the curator: this is the panel's
         // own text, and the pure target is not linked here.
-        let text = descendants(of: try panel(), NSTextField.self).map(\.stringValue)
-        XCTAssertFalse(text.contains("Loading…"),
-                       "the placeholders are gone once the numbers are in: \(text)")
+        let values = try shownRows(of: try panel()).map(\.valueText)
+        XCTAssertFalse(values.contains("Loading…"),
+                       "the placeholders are gone once the numbers are in: \(values)")
         let crc = try XCTUnwrap(filled?.checksums?.crc32)
-        XCTAssertTrue(text.contains(String(format: "0x%08X", crc)), "\(text)")
+        XCTAssertTrue(values.contains(String(format: "0x%08X", crc)), "\(values)")
     }
 
     /// A revert replaces the bytes wholesale, so the analysis cached against
@@ -635,32 +640,31 @@ final class MEAToolFlowTests: XCTestCase {
         window?.layoutIfNeeded()
 
         let panel = try panel()
-        let fields = descendants(of: panel, NSTextField.self)
+        let rows = try shownRows(of: panel)
         // The hash is the longest thing the detail shows.
         let hash = try XCTUnwrap(
-            fields.first { $0.stringValue.count == 64
-                && $0.stringValue.allSatisfy(\.isHexDigit) },
+            rows.first { $0.valueText.count == 64
+                && $0.valueText.allSatisfy(\.isHexDigit) },
             "the manifest's SHA-256 is one of the rows: "
-                + "\(fields.map(\.stringValue))"
+                + "\(rows.map(\.texts))"
         )
         let oneLine = ToolPanelFont.body().boundingRectForFont.height
 
-        XCTAssertGreaterThan(hash.frame.height, oneLine,
+        XCTAssertGreaterThan(hash.textHeight, oneLine,
                              "64 characters do not fit one line of this column")
-        XCTAssertEqual(hash.lineBreakMode, .byWordWrapping)
-        XCTAssertEqual(hash.maximumNumberOfLines, 0)
         // And it stays inside the panel rather than reaching past its edge.
         let inPanel = hash.convert(hash.bounds, to: panel)
         XCTAssertLessThanOrEqual(inPanel.maxX, panel.bounds.maxX,
                                  "the value runs off the side of the panel")
     }
 
-    /// The engine's field names run long, and the shared default column cut
-    /// them off mid-word ("systemHeaderCRCVa…"). The name column takes the
-    /// width its longest name needs — and when the panel is too narrow for
-    /// that, it stops at half the list and the name wraps instead of being
-    /// cut.
-    func testTheNameColumnWidensForLongFieldNamesAndWrapsAtHalfTheList() throws {
+    /// The engine's field names run long, and a column narrower than one of
+    /// them cuts it off mid-word ("systemHeaderCRCVa…"). The name column is
+    /// one width for every row — never narrower than the shared default, and
+    /// never narrower than the longest name in the list — and when the panel
+    /// is too narrow for even that, it stops at half the list and the name
+    /// wraps instead of being cut.
+    func testTheNameColumnFitsTheLongestNameAndStopsAtHalfTheList() throws {
         _ = try open(METestImage.manifestFile())
 
         try showFullTree()
@@ -669,23 +673,21 @@ final class MEAToolFlowTests: XCTestCase {
         tree.selectRowIndexes(IndexSet(integer: manifestRow), byExtendingSelection: false)
         window?.layoutIfNeeded()
 
-        let names = try detailNameLabels()
-        let longest = try XCTUnwrap(names.max { textWidth($0) < textWidth($1) },
+        let rows = try shownRows(of: try panel())
+        let longest = try XCTUnwrap(rows.max { textWidth($0.label) < textWidth($1.label) },
                                     "the manifest's detail has named rows")
-        let oneLine = ToolPanelFont.body().boundingRectForFont.height
 
-        // Wide enough for it: the column took the room its longest name needs,
-        // past the default it used to be pinned to, and every row shares that
-        // one width so the values still line up.
-        let widths = Set(names.map { $0.frame.width.rounded() })
+        // One column for every row, so the values line up: as wide as the
+        // longest name the list carries, and at least the shared default —
+        // which is a floor under it rather than a cap, the rule
+        // `ToolFieldListTests` holds with a name of its own.
+        let widths = Set(rows.map { $0.nameColumnWidth.rounded() })
         XCTAssertEqual(widths.count, 1, "one column for every row: \(widths)")
         let column = try XCTUnwrap(widths.first)
-        XCTAssertGreaterThan(column, ToolPanelFont.detailLabelWidth,
-                             "\"\(longest.stringValue)\" widened the column past the default")
-        XCTAssertGreaterThanOrEqual(column, textWidth(longest),
-                                    "\"\(longest.stringValue)\" is shown whole")
-        XCTAssertLessThan(longest.frame.height, oneLine * 2,
-                          "on one line — there is room for it")
+        XCTAssertGreaterThanOrEqual(column, ToolPanelFont.detailLabelWidth,
+                                    "never narrower than the shared default")
+        XCTAssertGreaterThanOrEqual(column, textWidth(longest.label),
+                                    "\"\(longest.label)\" is shown whole")
 
         // Squeezed — the narrowest panel the split allows, zoomed to the
         // largest type the app offers — and the name no longer fits in half
@@ -695,20 +697,18 @@ final class MEAToolFlowTests: XCTestCase {
         zoom(to: ToolPanelFont.sizeRange.upperBound)
         window?.layoutIfNeeded()
 
-        let squeezed = try detailNameLabels()
-        let widest = try XCTUnwrap(squeezed.first { $0.stringValue == longest.stringValue })
-        let half = try detailContent().frame.width / 2
+        let squeezed = try shownRows(of: try panel())
+        let widest = try XCTUnwrap(squeezed.first { $0.label == longest.label })
+        // The column gives up the gap between the two blocks of a row, so half
+        // the list is where it stops and half the gap is where it lands.
+        let half = (try detailContent().frame.width - ToolFieldRow.columnSpacing) / 2
         let zoomedLine = ToolPanelFont.body().boundingRectForFont.height
-        XCTAssertLessThan(half, textWidth(widest),
+        XCTAssertLessThan(half, textWidth(widest.label),
                           "the premise: half the list no longer holds the name")
-        // Auto Layout sizes a text field's alignment rect, which is inset from
-        // its frame by a point or two — so that is what the cap is read from.
-        XCTAssertEqual(widest.alignmentRect(forFrame: widest.frame).width, half, accuracy: 1,
+        XCTAssertEqual(widest.nameColumnWidth, half, accuracy: 1,
                        "the column stops at half the list")
-        XCTAssertGreaterThan(widest.frame.height, zoomedLine,
+        XCTAssertGreaterThan(widest.textHeight, zoomedLine,
                              "and the name wraps rather than being cut")
-        XCTAssertEqual(widest.lineBreakMode, .byWordWrapping)
-        XCTAssertEqual(widest.maximumNumberOfLines, 0)
     }
 
     /// Zooms to `size` the way the View menu does.
@@ -719,24 +719,26 @@ final class MEAToolFlowTests: XCTestCase {
         window?.layoutIfNeeded()
     }
 
-    /// The detail list's name column: the leading label of each row. Found by
-    /// the row's shape — a horizontal pair of name and value — rather than by
-    /// its colour, which the list's own placeholder shares.
-    private func detailNameLabels() throws -> [NSTextField] {
+    /// The list in front on the current tab: the Summary tab's, or the detail
+    /// under the tree on the Full Info tab. A hidden list keeps its rows in the
+    /// hierarchy — `descendants(of:)` finds them all — so what is on screen is
+    /// what tells the two apart. A tab with nothing to show yet has no list in
+    /// front at all.
+    private func shownList() throws -> ToolDetailScroll {
         let panel = try panel()
-        let scroll = try XCTUnwrap(
-            descendants(of: panel, ToolDetailScroll.self).first { !$0.isHidden },
-            "the detail list under the tree")
-        return descendants(of: scroll, NSStackView.self)
-            .filter { $0.orientation == .horizontal && $0.arrangedSubviews.count == 2 }
-            .compactMap { $0.arrangedSubviews.first as? NSTextField }
+        return try XCTUnwrap(
+            descendants(of: panel, ToolDetailScroll.self).first { isOnScreen($0, under: panel) },
+            "a list in front on this tab")
+    }
+
+    /// That list's rows — the shape the panel's summary and the detail under
+    /// its tree are both drawn in (`ToolFieldList`), one row per field.
+    private func shownRows(of panel: NSView) throws -> [ToolFieldRow] {
+        descendants(of: try shownList(), ToolFieldRow.self)
     }
 
     private func detailContent() throws -> NSStackView {
-        let panel = try panel()
-        let scroll = try XCTUnwrap(
-            descendants(of: panel, ToolDetailScroll.self).first { !$0.isHidden })
-        return scroll.content
+        try shownList().content
     }
 
     /// Whether `view` is actually shown: a view stays in the hierarchy — and in
@@ -751,9 +753,10 @@ final class MEAToolFlowTests: XCTestCase {
         return true
     }
 
-    /// What a label's own text needs on one line, in the font it is drawn in.
-    private func textWidth(_ label: NSTextField) -> CGFloat {
-        label.attributedStringValue.size().width
+    /// What a row's own name needs on one line, in the font the rows are drawn
+    /// in.
+    private func textWidth(_ name: String) -> CGFloat {
+        (name as NSString).size(withAttributes: [.font: ToolPanelFont.body()]).width
     }
 
     /// A section that holds nothing reads grey across the whole row — name and
@@ -810,7 +813,7 @@ final class MEAToolFlowTests: XCTestCase {
     func testAnotherFileShowsTheWaitNotTheLastFilesAnalysis() throws {
         let controller = try open(METestImage.fptFile())
         let panel = try panel()
-        XCTAssertTrue(descendants(of: panel, NSTextField.self).map(\.stringValue).contains("Family"),
+        XCTAssertTrue(try shownRows(of: panel).map(\.label).contains("Family"),
                       "the premise: the first file's summary is up")
 
         let other = try tempFile(METestImage.fptFile())
@@ -822,14 +825,18 @@ final class MEAToolFlowTests: XCTestCase {
         window?.layoutIfNeeded()
 
         let waiting = descendants(of: panel, NSTextField.self).map(\.stringValue)
-        XCTAssertFalse(waiting.contains("Family"), "no summary of the last file: \(waiting)")
+        // The empty tab shows the placeholder rather than a list, so the rows
+        // are asked of the panel itself: none of them may be left over.
+        let stillThere = descendants(of: panel, ToolFieldRow.self).map(\.label)
+        XCTAssertFalse(stillThere.contains("Family"),
+                       "no summary of the last file: \(stillThere)")
         XCTAssertTrue(waiting.contains("Analyzing the ME firmware…"), "the wait, as on a first open: \(waiting)")
         XCTAssertEqual(try outline().numberOfRows, 0, "and no tree")
 
         wait(for: [landed], timeout: 5)
         session.onDisplay = nil
         window?.layoutIfNeeded()
-        XCTAssertTrue(descendants(of: panel, NSTextField.self).map(\.stringValue).contains("Family"),
+        XCTAssertTrue(try shownRows(of: panel).map(\.label).contains("Family"),
                       "the new file's summary takes its place")
     }
 
@@ -972,21 +979,23 @@ final class MEAToolFlowTests: XCTestCase {
 
         /// The rows reading exactly `value` behind its tick — the whole string,
         /// so a row drawn without the mark is a failure to find rather than a
-        /// quietly passing assertion.
+        /// quietly passing assertion. Every list in the panel is searched, the
+        /// hidden one included: the summary and the detail behind the tree are
+        /// drawn from the same call, and a reader switching tabs must not find
+        /// two colours.
         func assertDrawn(_ value: String, under rowTitle: String) throws {
             let index = try XCTUnwrap(row(ofTitle: rowTitle, in: tree),
                                       "the \(rowTitle) row")
             tree.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
             window?.layoutIfNeeded()
 
-            let shown = descendants(of: panel, NSTextField.self).filter {
-                $0.attributedStringValue.string == "\u{FFFC} " + value
-            }
+            let all = descendants(of: panel, ToolFieldRow.self)
+            let shown = all.filter { $0.attributedValue.string == "\u{FFFC} " + value }
             XCTAssertFalse(shown.isEmpty,
                            "“\(value)” is on screen behind its tick: "
-                           + "\(descendants(of: panel, NSTextField.self).map(\.stringValue))")
-            for field in shown {
-                let text = field.attributedStringValue
+                           + "\(all.map(\.texts))")
+            for row in shown {
+                let text = row.attributedValue
                 let at = (text.string as NSString).range(of: value).location
                 XCTAssertEqual(
                     text.attribute(.foregroundColor, at: at, effectiveRange: nil) as? NSColor,

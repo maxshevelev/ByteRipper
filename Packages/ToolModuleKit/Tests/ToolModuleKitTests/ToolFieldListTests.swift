@@ -71,6 +71,39 @@ final class ToolFieldListTests: XCTestCase {
         XCTAssertLessThanOrEqual(narrow.rows[0].frame.maxX, 240)
     }
 
+    /// The name column a list of names wants: as wide as its widest name when
+    /// that is wider than the shared default, and the default when it is not.
+    func testAColumnIsAsWideAsItsWidestName() {
+        let long = "checksumsVerificationOfTheWholeRegion"
+        XCTAssertEqual(ToolFieldList.nameWidth(for: ["Kind", "Size"]),
+                       ToolPanelFont.detailLabelWidth,
+                       "short names leave the column at the shared default")
+
+        let wanted = (long as NSString)
+            .size(withAttributes: [.font: ToolPanelFont.body()]).width
+        let column = ToolFieldList.nameWidth(for: ["Kind", long])
+        XCTAssertGreaterThan(column, ToolPanelFont.detailLabelWidth)
+        XCTAssertGreaterThanOrEqual(column, wanted, "the longest name is shown whole")
+
+        // And a list built with it draws every row in that one column.
+        let drawn = list([("Kind", plain("File")), (long, plain("yes"))],
+                         width: 600, nameWidth: column)
+        XCTAssertEqual(drawn.rows.map(\.nameColumnWidth), [column, column])
+    }
+
+    /// A name that does not fit half the row wraps inside that half rather than
+    /// taking more of the row from the value — the cap every panel's rows are
+    /// held to, whatever column the panel asked for.
+    func testANameThatDoesNotFitHalfTheRowWraps() {
+        let long = "systemHeaderCRCValidAndSomethingElseEntirely"
+        let drawn = list([(long, plain("yes"))], width: 240, nameWidth: 1_000)
+        let row = drawn.rows[0]
+        XCTAssertEqual(row.nameColumnWidth, (240 - ToolFieldRow.columnSpacing) / 2,
+                       "the column stops at half the row")
+        XCTAssertGreaterThan(row.textHeight, ToolPanelFont.body().boundingRectForFont.height,
+                             "and the name takes a second line")
+    }
+
     /// A drag from the first row into the value of the last selects both, the
     /// name and value of a row a tab apart and each row on its line.
     func testADragSelectsAcrossRows() {
