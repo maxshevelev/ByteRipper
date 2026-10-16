@@ -1,9 +1,9 @@
 // The CSME 15 map of the ME configuration — emitted by
 // `Skills/me-eom-structures/scripts/fit_map.py` from Flash Image Tool 15.0's
-// own layout documents (the tgp_lp platform, which is ME 15's own).
+// own layout documents (the tgp_lp platform of ME 15).
 // Offsets, bits, option labels and file paths are FIT's, copied out of its
 // `ProcessNvar` bindings and value dictionaries; nothing here is read out of a
-// dump. FIT 15 marks no setting `Auto` — it has no such attribute — so no
+// dump. FIT 15.0 marks no setting `Auto` — it has no such attribute — so no
 // setting here carries that mark.
 //
 // A generation's map lives in a file of its own: see `MEConfigurationMap.swift`
@@ -12,7 +12,7 @@
 import Foundation
 
 extension MEConfigurationMap {
-    /// The ME 15 configuration, as FIT 15 lays it out. The files stand in the
+    /// The ME 15 configuration, as FIT 15.0 lays it out. The files stand in the
     /// order a bench reads them, and the rest in the tool's own order.
     public static let csme15 = MEConfigurationMap(
         name: "CSME 15 (Flash Image Tool 15.0)",

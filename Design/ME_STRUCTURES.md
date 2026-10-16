@@ -132,7 +132,7 @@ not that the fact is absent from the platform.
 | CSME 16.1 (Z Flow, Legion, Asus, Dell) | v2 ✓ | ✓ FITC record and the live one | ✓ CDMD JSON — 5 and 0 seen, and the **UEP bits agree on every dump that carries both** (three MFIT builds of one image, differing only in the profile, moved the bits with it) | ✓ UEP, 6 + 6 copies — **verified** for the Z Flow family |
 | CSME 16.0 (Legion) | v2 ✓ | ✓ | ✓ (5, 0) | ✓ |
 | CSME 15 (Lenovo 1.bin, 2.rom, corporate) | v2 ✓ | ✓ records present; the live page is absent on a never-booted build | ✓ **UEP bits** — 0 on the three boards, and 3/4/5 on the owner's three builds, each matching the `.xml` FIT itself wrote for that build | ✓ UEP — **unverified** |
-| CSME 14 (Lenovo) | v2 ✓ | **no such setting**: the configuration records are the named (0x1C) layout and hold no `eom_config` | **not found** — no CDMD partition at all in that image | **layout not recognized** — the field holds a pointer-like value, not a key |
+| CSME 14 (Lenovo Comet Lake) | v2 ✓ | **no such setting**, and FIT 14's own map binds none either (see "ME 14" above) | **not found** — no CDMD partition, and the UEP area keeps the bits in a **different place** than 15's and 16's (FIT 14 lays them out per platform family; this dump reads the same under every candidate placement, so nothing decides) | **the field is a 32-byte SHA-256 at `$UEP`+0x90 with 16 bytes of zeroes behind it**, not the 48-byte hash of the newer generations — a layout the reader does not walk |
 | CSME 12 (Dell, Lenovo, HP) | v2 ✓ | no such setting | **not found** | **all zeros** — the field is there and reads zeros: signing disabled |
 | CSME 11 (corporate) | v2 ✓ | no such setting | **not found** — no CDMD and no `$UEP` container at all | **layout not recognized** — no area to read the field from |
 | ME 6, 7, 10 (Apple) | v1 — not read | — | — | — |
@@ -295,6 +295,36 @@ Three things that came out of reading the two databases against each other:
   The bytes are the same in every generation (bit 0 of a 2-byte record, and the
   single byte of `mca/eom`), which is what makes borrowing them honest.
 
+### ME 14: the same shape, one family at a time
+
+`fit-14.0.exe` carries the same kind of resources for its own platforms —
+`cml_lp`, `cml_h`, `icl_lp`, `icl_h`, `ehl`, `jsl`, `lkf`, `dg1` and the TGL
+ones it shares with 15 — and the generator reads one family the same way:
+
+```bash
+python3 Skills/me-eom-structures/scripts/fit_map.py fit-14.0.exe \
+    --straps cml_lp --generation 14 --tool 14.0 > MEConfigurationMap+CSME14.swift
+```
+
+Which family is *the dump's* was the first question, and the **microcode in the
+BIOS region answers it**: `SPI_EF4018_128Mbit.orig.bin` (14.0.33.1125, SKU
+Consumer LP) carries CPUIDs `0x806EA`, `0x806EB` and `0x806EC` — Comet Lake U —
+and `0xA0660` — Comet Lake S — so its family is `cml_lp`, not one of Ice Lake's
+or Jasper Lake's. Reading it through that map gives **10 files and 31 settings**,
+and five of them are in the dump itself: `mca/eom` (`EOM = 1`, which is what the
+engine's own live-record read of the same file says), `cfg_rules`, `si_features`,
+`mctp/smt2_devices` and `amt/skip_rtfd/ncsi` — the five every one of the three
+maps lays out, so a bench reads the same things first on any generation.
+
+Two differences from the newer maps hold for the family:
+
+- **No End of Manufacturing record.** FIT 14 binds `/home/mca/eom` and no
+  `eom_config`, which is why the panel's Manufacturing row for an image of this
+  generation leans on the descriptor's rights instead of on the flag.
+- **Its own iunit files.** `iunit/port_cfg`, `iunit/sec_ctl`, `iunit/sec_touch`
+  and `iunit/camera_mask` are in the 14 map and in neither of the newer two,
+  where `iunit_oem_cfg` and `iunit_privacy_mode` stand instead.
+
 Two things the database is not. It is **per platform**: the lists are
 `ADL-S`, `ELG`, `MTL-M`, `MTL-S` in that build, so a dump of another platform
 needs the list for it (the offsets we read repeat across them — verified: the
@@ -398,6 +428,17 @@ report), then read the same bits; today the reading is deliberately limited to
 the generations it was verified on, and a CSME 12 or 18 image answers "no record"
 rather than a number taken from bits that mean something else. CSME 18 needs the
 key's other spelling, which MFIT's settings database is the place to find.
+
+For **CSME 14** the reading is blocked on one thing only: *where* its UEP area
+keeps the bits. FIT 14 lays the four settings out **per platform family** —
+seven different placements are in its resources, from `UepBitsArray0` offset
+0x60 bit 16 (the one 15 and 16 use) to `UepBitsArray1` offset 0, and which is
+`cml_lp`'s cannot be read out of the executable (its resource names are not in
+it in plain form). The dump itself does not decide either: every candidate
+placement reads 0x00 there, which is "profile 0" and also what an area with no
+bits gives. One FIT 14 build at a known profile settles it, the way three builds
+settled 15 and 16 — and the tool refuses a non-zero profile without an OEM key
+hash in the project, so a key has to be put in first.
 
 **Where CSME 15 and 18 keep the EOM flag.** The flag was found in the FITC
 partition on CSME 15 and 16 and *not* on CSME 18, whose MFS volume also could
