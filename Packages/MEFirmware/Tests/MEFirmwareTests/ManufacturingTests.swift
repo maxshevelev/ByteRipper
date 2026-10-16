@@ -281,16 +281,18 @@ final class BootGuardReaderTests: XCTestCase {
 
     func testTheKeyIsReadOutOfTheEntrysField() {
         let key = hashBytes(Self.oemHash)
-        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: key, second: key)),
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: key, second: key), major: 15),
                        .hash(Self.oemHash))
         // The older generations write one half only — the second is erased, and
         // the key is still there.
-        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: key, second: nil)),
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: key, second: nil), major: 15),
                        .hash(Self.oemHash))
-        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: key, second: Data(repeating: 0xFF, count: 48))),
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(
+            in: uep(first: key, second: Data(repeating: 0xFF, count: 48)), major: 15),
                        .hash(Self.oemHash))
         // An area whose first half was never written but whose second was.
-        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: Data(repeating: 0xFF, count: 48), second: key)),
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(
+            in: uep(first: Data(repeating: 0xFF, count: 48), second: key), major: 15),
                        .hash(Self.oemHash))
     }
 
@@ -298,22 +300,22 @@ final class BootGuardReaderTests: XCTestCase {
     /// a missing reading. CSME 12 and a cleaned CSME 16.1 image answer this.
     func testAZeroedFieldSaysSigningIsDisabled() {
         XCTAssertEqual(BootGuardReader.oemPublicKeyHash(
-            in: uep(first: Data(repeating: 0x00, count: 48), second: nil)), .allZeros)
+            in: uep(first: Data(repeating: 0x00, count: 48), second: nil), major: 15), .allZeros)
     }
 
     /// An erased field is an area never written.
     func testAnErasedFieldIsItsOwnFinding() {
-        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: nil, second: nil)), .erased)
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: nil, second: nil), major: 15),
+                       .erased)
     }
 
     /// A field holding something that is not a key — a pointer, a length, a
     /// record header — is a layout this reader does not walk, and says so
-    /// rather than printing those bytes as a key. The CSME 14 dump at hand is
-    /// this case.
+    /// rather than printing those bytes as a key.
     func testAFieldThatIsNotAKeyIsNotReadAsOne() {
         var pointer = Data(repeating: 0x00, count: 48)
         pointer[0] = 0x02; pointer[1] = 0x40; pointer[2] = 0x3E; pointer[3] = 0x86
-        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: pointer, second: nil)),
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: uep(first: pointer, second: nil), major: 15),
                        .unrecognized)
     }
 
@@ -322,13 +324,73 @@ final class BootGuardReaderTests: XCTestCase {
     func testDisagreeingHalvesAreNotAKey() {
         let other = hashBytes(String(Self.oemHash.dropFirst(2)) + "05")
         XCTAssertEqual(BootGuardReader.oemPublicKeyHash(
-            in: uep(first: hashBytes(Self.oemHash), second: other)), .unrecognized)
+            in: uep(first: hashBytes(Self.oemHash), second: other), major: 15), .unrecognized)
+    }
+
+    // MARK: - The key of the older generations (CSME 12 to 14)
+
+    /// A CSME 12 to 14 area as the dumps carry one: the container, the policy
+    /// bytes the family keeps ahead of everything else, a 32-byte hash 0x90 in
+    /// and the 16 bytes of assignment bits behind it.
+    private func olderUEP(_ hash: Data?, assigned: UInt8 = 0x00) -> Data {
+        var area = Data(repeating: 0xFF, count: 0x2000)
+        let signature = Data("$UEP".utf8)
+        area.replaceSubrange(0x20..<(0x20 + signature.count), with: signature)
+        area.replaceSubrange(0x28..<0x30,
+                             with: Data([0xFF, 0xFF, 0xCF, 0x0C, 0xFF, 0xCC, 0xCC, 0x00]))
+        if let hash {
+            area.replaceSubrange((0x20 + 0x90)..<(0x20 + 0x90 + hash.count), with: hash)
+        }
+        if assigned != 0x00 {
+            area.replaceSubrange((0x20 + 0xB0)..<(0x20 + 0xC0),
+                                 with: Data(repeating: assigned, count: 16))
+        }
+        return area
+    }
+
+    /// The reading the five CSME 14 boards settled: a 32-byte SHA-256 at +0x90.
+    /// The known 48-byte hash's first 32 bytes stand in for one.
+    private static let olderHash = String(oemHash.prefix(64))
+
+    func testTheOlderGenerationsKeyIsThirtyTwoBytesAtNinety() {
+        let hash = hashBytes(Self.olderHash)
+        for major in [12, 13, 14] {
+            XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: olderUEP(hash), major: major),
+                           .hash(Self.olderHash))
+        }
+    }
+
+    /// The 16 bytes behind the hash are the assignment bits, not part of it: the
+    /// same key with them set reads as the same key.
+    func testTheAssignmentBitsBehindTheHashAreNotPartOfIt() {
+        let hash = hashBytes(Self.olderHash)
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: olderUEP(hash, assigned: 0xFF), major: 14),
+                       .hash(Self.olderHash))
+    }
+
+    /// And a zeroed or erased field is the same finding it is on the newer
+    /// layouts: signing disabled, or an area never written.
+    func testTheOlderLayoutSaysWhatABlankFieldHolds() {
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(
+            in: olderUEP(Data(repeating: 0x00, count: 32)), major: 14), .allZeros)
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: olderUEP(nil), major: 14), .erased)
+    }
+
+    /// The generation decides which record is read, and reading the wrong one
+    /// gives nothing rather than half a key: a CSME 14 area read as a 15 starts
+    /// on the second half of the hash and runs into its trailing bytes, and a
+    /// CSME 15 area read as a 14 starts on the zeroes ahead of the key.
+    func testEachGenerationIsReadWithItsOwnRecord() {
+        let older = olderUEP(hashBytes(Self.olderHash))
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: older, major: 15), .unrecognized)
+        let newer = uep(first: hashBytes(Self.oemHash), second: nil)
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: newer, major: 14), .unrecognized)
     }
 
     /// No container, no entry to read — CSME 11 has no such area at all.
     func testNoContainerIsNoLayout() {
-        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: Data(repeating: 0xFF, count: 0x2000)),
-                       .unrecognized)
-        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: Data()), .unrecognized)
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(
+            in: Data(repeating: 0xFF, count: 0x2000), major: 15), .unrecognized)
+        XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: Data(), major: 15), .unrecognized)
     }
 }
