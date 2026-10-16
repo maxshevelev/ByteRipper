@@ -1057,14 +1057,14 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(unbootedRows.map(\.differs), [false, false])
         XCTAssertEqual(unbootedRows.map(\.fitc), ["No", "Lock Descriptor and OEM Configs"])
 
-        // No map for this generation: the tab has nothing rather than a guess,
-        // even with the same files in hand.
-        var older = try analysis([
+        // A generation whose map has not been emitted yet reads nothing rather
+        // than a guess, even with the same files in hand.
+        var unmapped = try analysis([
             "family": "csme", "manifest": manifestJSON(),
-            "version": ["major": 15, "minor": 0, "hotfix": 30, "build": 1716],
+            "version": ["major": 18, "minor": 0, "hotfix": 10, "build": 2285],
         ])
-        older.configuration = a.configuration
-        XCTAssertTrue(MEAConfiguration.build(older, in: .english).isEmpty)
+        unmapped.configuration = a.configuration
+        XCTAssertTrue(MEAConfiguration.build(unmapped, in: .english).isEmpty)
     }
 
     // MARK: - The messages block
