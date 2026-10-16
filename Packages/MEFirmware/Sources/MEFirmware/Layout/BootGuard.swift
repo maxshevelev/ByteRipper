@@ -131,50 +131,51 @@ enum BootGuardReader {
         return profile(ofFlags: flags)
     }
 
-    /// The same four settings on CSME 12 to 14, whose UEP container keeps them
-    /// in its own record rather than in a bit array.
+    /// The profile a generation's UEP **record** names, or nil where this is not
+    /// that generation's layout — the two shapes measured so far, chosen by
+    /// `major` as the key record's offsets are.
     ///
-    /// Measured on **four FIT 14.0 builds of one CSME 14 image**, one per
+    /// **CSME 12 and 14**: four FIT 14.0 builds of one CSME 14 image, one per
     /// profile, whose `.xml` readings differ in `BtGuardProfileConfig` and
-    /// nothing else and whose bytes differ in five of sixteen million: the
-    /// checksum behind `$UEP`, the mask at +0x34, and the flags byte +0x4C —
-    /// once in each of the record's three copies (also at +0xE8 and +0x178, the
-    /// three of them always equal). The four settings sit in the same bits as
-    /// the later generations' array — FBG ACM 0, `ProtectBiosEnvironment` 3,
-    /// `MeasuredBoot` 4, `VerifiedBoot` 5 — and the same table names the
-    /// profile: the image's own bits at 0x46 with 0x38 on for 3, 0x29 for 4 and
-    /// 0x39 for 5, which is 0x46, 0x7E, 0x6F and 0x7F.
+    /// nothing else and whose bytes differ in five of sixteen million — the
+    /// checksum behind `$UEP`, the mask at +0x34, and the flags byte at +0x4C,
+    /// once in each of the record's three copies (+0xE8 and +0x178). The four
+    /// settings sit in the same bits as the later generations' array — FBG ACM
+    /// 0, `ProtectBiosEnvironment` 3, `MeasuredBoot` 4, `VerifiedBoot` 5 — and
+    /// the same table names the profile: the image's own bits at 0x46 with 0x38
+    /// on for 3, 0x29 for 4 and 0x39 for 5, which is 0x46, 0x7E, 0x6F and 0x7F.
     ///
-    /// **The mask at +0x34 is what says the container is this layout**: 0xCC
-    /// where the ACM is not forced and 0xFF where it is, over the eleven dumps
-    /// and builds at hand (CSME 12 and 14 images, vendor and factory, profiles
-    /// 0, 3, 4 and 5 alike). It is zero in the later generations' container, so
-    /// a 15/16 image read here answers nothing, and a blank body leaves it zero
-    /// too — which is what keeps an area never written from reading as profile 5
-    /// on the all-ones flags such a body carries. That the mask and the ACM bit
-    /// agree is checked as well: a disagreement means these offsets are not this
-    /// image's layout, and nothing is claimed.
+    /// **CSME 13** is the same experiment run on the two Lenovo NM-C711 dumps
+    /// (13.0.21.1319 and 13.0.32.1478, Ice Lake-U) with FIT 13.0: four builds
+    /// whose readings differ in that one setting and whose bytes differ in six of
+    /// sixteen million — the container's checksum, the mask at +0x40, and the
+    /// flags byte of each of the record's three copies, which read 0x40, 0x78,
+    /// 0x69 and 0x79 for profiles 0, 3, 4 and 5. XOR against the image's own 0x40
+    /// is 0x38, 0x29 and 0x39 — the same three constants as every other
+    /// generation — so Intel's table names the profile here too. Both factory
+    /// dumps then read 0x40, profile 0, which matches the absence of any
+    /// `__KEYM__` or `__BPM__` in their BIOS regions.
     ///
-    /// **CSME 13 is not read, and the reason is in its bytes**: two Lenovo
-    /// NM-C711 dumps (13.0.21.1319 and 13.0.32.1478, Ice Lake-U) keep the four
-    /// settings in a **third shape** — the policy words sit 0x0C later than this
-    /// container's (0xFF FF CF 0C at +0x34), the record's source pointer at
-    /// +0x64 rather than +0x48, one record rather than three, and the word
-    /// behind the pointer 0x40, where a CSME 12–14 build carries the image's own
-    /// bits with the flags in the low byte (0x46 on the image those builds were
-    /// made from). The guard below therefore rejects it and the row answers "no
-    /// profile record", which is the honest answer: what that word says is not
-    /// settled. Both dumps are profile 0 by every other sign — no `__KEYM__` or
-    /// `__BPM__` in their BIOS regions, and 0x40 with none of the four bits —
-    /// though a key in the field is not a counter-sign on its own: the CSME 14
-    /// dump the builds above were made from carries one and is built for 0.
+    /// The tool's own UEP document agrees on the *bits and their meaning* — it
+    /// places the four settings at bits 16 to 21 of the first bit array
+    /// (`$BootGuardProfileSettings/FBGAcmEn` … `VerifiedBoot` in
+    /// `fit-13.0.exe`), the same four in the same order — but the byte the
+    /// builds move is the record's, and no byte of any array moved on them: what
+    /// the document describes is a placement this tool did not write, and what
+    /// the reader reads is the byte that does move.
     ///
-    /// The same two dumps *do* confirm the key record for this generation: the
-    /// 32-byte hash sits at +0x90, where the generation rule looks for it, and
-    /// it is the same hash on both. What the profile's shape needs is what
-    /// settled 14 — a FIT build with a known profile — and no Flash Image Tool
-    /// of that generation is at hand.
-    static func profile(inEarlierUEPArea uep: Data) -> BootGuardProfile? {
+    /// **The mask is what says the container is this layout**, `0xCC` where the
+    /// ACM is not forced and `0xFF` where it is — the low byte of a dword whose
+    /// other bytes are the same on every image at hand, and are what makes the
+    /// two shapes tell each other apart: a CSME 12–14 container read as 13, or
+    /// the reverse, fails on the mask rather than answering. It is zero in the
+    /// later generations' container, and a blank body leaves it zero too — which
+    /// is what keeps an area never written from reading as profile 5 on the
+    /// all-ones flags such a body carries. That the mask and the ACM bit agree is
+    /// checked as well: a disagreement means these offsets are not this image's
+    /// layout, and nothing is claimed.
+    static func profile(inRecordUEPArea uep: Data, major: Int) -> BootGuardProfile? {
+        let layout = major == 13 ? iceLakeRecordLayout : earlierRecordLayout
         guard let container = uepContainerOffset(in: uep), container >= 0 else { return nil }
         func block(at offset: Int, length: Int) -> Data? {
             let start = container + offset
@@ -189,18 +190,18 @@ enum BootGuardReader {
             }
         }
         // The container's word for the ACM: 0xCC without it, 0xFF with it.
-        guard let mask = word(at: earlierMaskOffset),
-              mask == earlierMaskWithoutACM || mask == earlierMaskWithACM else { return nil }
+        guard let mask = word(at: layout.maskOffset),
+              mask == layout.maskWithoutACM || mask == layout.maskWithACM else { return nil }
         // A record never written points nowhere: a zero body and an erased one
         // both answer here, before the flags — whose all-ones an erased body
         // would otherwise read as profile 5.
-        guard let source = word(at: earlierRecordOffset), source != 0,
+        guard let source = word(at: layout.sourceOffset), source != 0,
               source != UInt32.max else { return nil }
-        let copies = earlierFlagOffsets.compactMap { block(at: $0, length: 1)?.first }
-        guard copies.count == earlierFlagOffsets.count,
+        let copies = layout.flagOffsets.compactMap { block(at: $0, length: 1)?.first }
+        guard copies.count == layout.flagOffsets.count,
               Set(copies).count == 1 else { return nil }
         let flags = copies[0]
-        guard (mask == earlierMaskWithACM) == (flags & 0x01 != 0) else { return nil }
+        guard (mask == layout.maskWithACM) == (flags & 0x01 != 0) else { return nil }
         return profile(ofFlags: flags)
     }
 
@@ -219,14 +220,30 @@ enum BootGuardReader {
         }
     }
 
-    /// Where the CSME 12 to 14 container keeps its mask, the record's source
-    /// pointer, and the flags byte of each of the record's three copies —
-    /// measured off the container's signature on the dumps and builds at hand.
-    private static let earlierMaskOffset = 0x34
-    private static let earlierRecordOffset = 0x48
-    private static let earlierFlagOffsets = [0x4C, 0xE8, 0x178]
-    private static let earlierMaskWithoutACM: UInt32 = 0xCC
-    private static let earlierMaskWithACM: UInt32 = 0xFF
+    /// Where a generation keeps the four settings in its UEP container's record:
+    /// the mask that guards the layout, the record's source pointer, and the
+    /// flags byte of each copy the record is kept in. Measured off the
+    /// container's signature on the dumps and builds at hand.
+    private struct RecordLayout {
+        let maskOffset: Int
+        let maskWithoutACM: UInt32
+        let maskWithACM: UInt32
+        let sourceOffset: Int
+        let flagOffsets: [Int]
+    }
+
+    /// CSME 12 and 14: mask 0xCC/0xFF at +0x34 with zeroes above it, the
+    /// record's source at +0x48, the flags byte at +0x4C, +0xE8 and +0x178.
+    private static let earlierRecordLayout = RecordLayout(
+        maskOffset: 0x34, maskWithoutACM: 0xCC, maskWithACM: 0xFF,
+        sourceOffset: 0x48, flagOffsets: [0x4C, 0xE8, 0x178])
+
+    /// CSME 13: the same facts 0x18 further in — the mask at +0x40, whose ACM
+    /// byte keeps 0xC0 above it, the record's source at +0x60, and the flags
+    /// byte at +0x64, +0x150 and +0x22C, a copy every 0xDC.
+    private static let iceLakeRecordLayout = RecordLayout(
+        maskOffset: 0x40, maskWithoutACM: 0xC0CC, maskWithACM: 0xC0FF,
+        sourceOffset: 0x60, flagOffsets: [0x64, 0x150, 0x22C])
 
     /// How far into the `$UEP` container the first bit array's flags byte sits,
     /// and the word the same array keeps just ahead of it — both measured off

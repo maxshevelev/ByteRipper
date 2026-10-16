@@ -1207,18 +1207,19 @@ public actor MEFirmwareAnalyzer {
         // Where an image has no CDMD record, the profile is the UEP area's Boot
         // Guard bits — and which shape of container they sit in is the
         // generation's, as the key record's offsets are: the first bit array of
-        // CSME 15 and 16 (0x6E), the area's record on CSME 12 to 14 (0x4C).
-        // Each shape was settled by builds of one image whose `.xml` readings
-        // differ in this field and nothing else — three FIT 15 builds of a CSME
-        // 15 image, four FIT 14.0 builds of a CSME 14 one — and each reader's
-        // guards reject the other shape, so a container whose layout is not the
-        // expected one answers nothing rather than a profile. CSME 11 has no
-        // area at all; 18 and later are not read until a dump whose profile is
-        // known says what their containers hold.
+        // CSME 15 and 16 (0x6E), the area's own record on CSME 12, 13 and 14
+        // (its flags byte at 0x4C, or at 0x64 on Ice Lake's layout). Each shape
+        // was settled by builds of one image whose `.xml` readings differ in this
+        // field and nothing else — three FIT 15 builds of a CSME 15 image, four
+        // FIT 14.0 builds of a CSME 14 one, four FIT 13.0 builds of a CSME 13 one
+        // — and each layout's guards reject the others, so a container whose
+        // layout is not the expected one answers nothing rather than a profile.
+        // CSME 11 has no area at all; 18 and later are not read until a dump
+        // whose profile is known says what their containers hold.
         func profileFromUEP(_ area: Data) -> BootGuardProfile? {
             guard identity.family == .csme else { return nil }
             if (12...14).contains(identity.major) {
-                return BootGuardReader.profile(inEarlierUEPArea: area)
+                return BootGuardReader.profile(inRecordUEPArea: area, major: identity.major)
             }
             if (15...16).contains(identity.major) {
                 return BootGuardReader.profile(inUEPArea: area)

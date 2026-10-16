@@ -170,25 +170,37 @@ of the two images that read 5 — the same two that carry a key — holds the
 vendor's **`__KEYM__` and `__BPM__` manifests** once each, and the four that read
 0 hold neither, so the flags agree with an independent sign of a configured boot
 chain on all six. They are still readings no field tool has confirmed — ECFinder
-runs on Windows — and CSME 13's shape is not read at all. What the four builds
+runs on Windows — and CSME 13's is read by its own record (below). What the four builds
 show about the BIOS side is worth keeping
 too: their BIOS regions are **byte-identical**, so the profile reaches the ME
 region's own record and nothing else in an image built this way.
 
-**CSME 13 turned out to be a third container, and two dumps of it are now at
-hand** — `Lenovo NM-C711` (13.0.21.1319 and 13.0.32.1478, both Ice Lake-U, both
-in the schematic collection on Google Drive). Its `$UEP` is the same signature
-with its words somewhere else: the policy pair `FF FF CF 0C` / `FF C0 0C 00` at
-+0x34, `CC C0 00 00` at +0x40, then — 0x1C further along than this container's —
-a **single** record: source pointer `80 E0 5A 00` at +0x64 and the word `40 00 00
-00` behind it, where a CSME 12–14 image carries its own bits with the four
-settings in the low byte. Nothing in it says which profile the image is built
-for, and no Flash Image Tool of that generation is at hand to build one whose
-profile is known, so the row answers "no profile record" — the two dumps are
-profile 0 by the signs a dump *does* give (no manifests, none of the four bits),
-but "no four bits set" is also what a container this reader does not know would
-show. The key record is confirmed for the generation: the same 32-byte hash sits
-at +0x90 on both dumps, where the 12–14 rule looks for it.
+**CSME 13 turned out to be a third container, and the tool's own build settled
+it.** The two `Lenovo NM-C711` dumps (13.0.21.1319 and 13.0.32.1478, both Ice
+Lake-U, in the schematic collection on Google Drive) keep the four settings in
+the container's record as CSME 12 and 14 do, at their own offsets: the policy
+words `FF FF CF 0C` / `FF C0 0C 00` at +0x34, the ACM mask at **+0x40** (its low
+byte 0xCC or 0xFF, with 0xC0 above it — where the 12–14 container keeps the same
+byte with zeroes above), the record's source pointer at **+0x60**, and its flags
+byte at **+0x64**, in three copies 0xDC apart (+0x150, +0x22C) where 12–14 has
+three 0x9C apart.
+
+Four FIT 13.0 builds of one of those dumps — profiles 0, 3, 4 and 5, the `.xml`
+readings differing in `BtGuardProfileConfig` and nothing else — differ in **six
+bytes of sixteen million**: the container's checksum, the mask, and the flags
+byte of each copy, which read 0x40, 0x78, 0x69 and 0x79. XOR against the image's
+own 0x40 is 0x38, 0x29 and 0x39 — the same three constants every other
+generation turns on — so Intel's table names the profile here too, and both
+factory dumps (0x40, i.e. profile 0) agree with the absence of any `__KEYM__` or
+`__BPM__` in their BIOS regions.
+
+The tool's own UEP document says the same about the *bits*: `fit-13.0.exe` places
+`$BootGuardProfileSettings/FBGAcmEn`, `ProtectBiosEnvironment`, `MeasuredBoot` and
+`VerifiedBoot` at bits 16 to 21 of the first bit array. What it does not say, and
+what the builds do, is where they land: no byte of any array moved on the four
+builds, and the byte that did is the record's. The key record is confirmed for
+the generation as well: the same 32-byte hash sits at +0x90 on both dumps, where
+the 12–14 rule looks for it.
 
 A profile is what the platform burns into the chipset's fuses when Manufacturing
 closes, and the fuses cannot be taken back — which is why the profile is worth
@@ -208,7 +220,7 @@ not that the fact is absent from the platform.
 | CSME 15 (Lenovo 1.bin, 2.rom, corporate) | v2 ✓ | ✓ records present; the live page is absent on a never-booted build | ✓ **UEP bits** — 0 on the three boards, and 3/4/5 on the owner's three builds, each matching the `.xml` FIT itself wrote for that build | ✓ UEP — **unverified** |
 | CSME 14 (Lenovo Comet Lake, and five more boards) | v2 ✓ | **no such setting**, and FIT 14's own map binds none either (see "ME 14" above) | ✓ **the UEP record's flags byte** at +0x4C — 0 on the factory dump, and 0, 3, 4 and 5 on the owner's four FIT 14.0 builds of it, each matching the `.xml` FIT wrote for that build | ✓ **the 32-byte SHA-256 at `$UEP`+0x90**, read by generation — the same Acer board's second image carries the same hash |
 | CSME 12 (Dell, Lenovo, HP) | v2 ✓ | no such setting | ✓ **the same record** — 5 on the two images whose key field holds a hash, 0 on the four whose field is zeros, the container's mask agreeing with the flags' ACM bit on all six | **all zeros** on four of the six: signing disabled. The Dell Optiplex dump and `W25Q256JV.orig.bin` carry `69602F34…`, the same hash on both |
-| CSME 13 (Lenovo NM-C711, Ice Lake-U) | v2 ✓ | no such setting | **not read** — the container is a **third shape** (its policy words at +0x34, one record whose source pointer is at +0x64, not this container's +0x48), so the reader answers nothing rather than a profile. Both dumps read profile 0 on every other sign: 0x40 in the word that would hold the flags, and no `__KEYM__`/`__BPM__` in their BIOS regions | ✓ the 32-byte SHA-256 at `$UEP`+0x90 — where the generation rule looks for it, and the same hash on both dumps |
+| CSME 13 (Lenovo NM-C711, Ice Lake-U) | v2 ✓ | no such setting | ✓ **the UEP record's flags byte** at +0x64, with its own mask at +0x40 and three copies 0xDC apart — 0 on both factory dumps, and 0, 3, 4 and 5 on the owner's four FIT 13.0 builds, each matching the `.xml` FIT wrote for that build | ✓ the 32-byte SHA-256 at `$UEP`+0x90 — where the generation rule looks for it, and the same hash on both dumps |
 | CSME 11 (corporate) | v2 ✓ | no such setting | **not found** — no CDMD and no `$UEP` container at all | **layout not recognized** — no area to read the field from |
 | ME 6, 7, 10 (Apple) | v1 — not read | — | — | — |
 
