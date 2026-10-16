@@ -1049,14 +1049,16 @@ final class MFSTests: XCTestCase {
 
 /// `MFSStateDecoder.state` — the default-output row 17 File System State,
 /// computed from a volume's present file-index set exactly as upstream decides
-/// on `mfs_parsed_idx` (MEA.py 7489–7493). `usesFTBL` mirrors the
-/// `mfs_found and not param.cse_unpack` gate on a *non*-legacy volume.
+/// on `mfs_parsed_idx` (MEA.py 7489–7493). `vfsStartsAtZero` is the identity
+/// selector (`get_vfs_start_0`) that gates the reserved-file step — the one
+/// upstream breaks its walk on — and *not* the volume header's FTBL triple:
+/// the two disagree on a CSME 14 volume that names its files through FTBL.
 final class MFSStateDecoderTests: XCTestCase {
     /// What each step found, and which decided: an EFS partition that could
     /// not be read leaves a CSME 15 image Configured from its configuration,
     /// and the basis says the EFS step was not taken.
     func testTheBasisSaysAnUnreadableEFSLeftTheStateToTheConfiguration() {
-        let (state, basis) = MFSStateDecoder.decide(usesFTBL: true, presentFileIndices: [],
+        let (state, basis) = MFSStateDecoder.decide(vfsStartsAtZero: true, presentFileIndices: [],
                                                     efs: .unreadable(offset: 0x267000),
                                                     configuration: ["FITC"])
         XCTAssertEqual(state, .configured)
@@ -1064,20 +1066,20 @@ final class MFSStateDecoderTests: XCTestCase {
         XCTAssertEqual(basis.reservedFiles, .notRead)
         XCTAssertTrue(basis.isIncomplete)
 
-        let (read, readBasis) = MFSStateDecoder.decide(usesFTBL: true, presentFileIndices: [],
+        let (read, readBasis) = MFSStateDecoder.decide(vfsStartsAtZero: true, presentFileIndices: [],
                                                        efs: .holdsFiles, configuration: ["FITC"])
         XCTAssertEqual(read, .initialized)
         XCTAssertEqual(readBasis.decidedBy, .efs)
         XCTAssertFalse(readBasis.isIncomplete)
 
-        let (empty, emptyBasis) = MFSStateDecoder.decide(usesFTBL: true, presentFileIndices: [],
+        let (empty, emptyBasis) = MFSStateDecoder.decide(vfsStartsAtZero: true, presentFileIndices: [],
                                                          efs: .noFileContent, configuration: ["FITC"])
         XCTAssertEqual(empty, .configured)
         XCTAssertFalse(emptyBasis.isIncomplete, "an EFS read and found empty is a fact, not a gap")
     }
 
     func testTheBasisNamesTheReservedFilesThatDecided() {
-        let (state, basis) = MFSStateDecoder.decide(usesFTBL: false, presentFileIndices: [9, 2, 7],
+        let (state, basis) = MFSStateDecoder.decide(vfsStartsAtZero: false, presentFileIndices: [9, 2, 7],
                                                     efs: .unreadable(offset: 0x1000), configuration: [])
         XCTAssertEqual(state, .initialized)
         XCTAssertEqual(basis.reservedFiles, .initializing([2]))
@@ -1089,7 +1091,7 @@ final class MFSStateDecoderTests: XCTestCase {
         // Any present file in {0,1,2,3,4,5,8} marks a legacy volume Initialized —
         // the reserved directories exist on it (typical CSME 11–14).
         for index in [0, 1, 2, 3, 4, 5, 8] {
-            XCTAssertEqual(MFSStateDecoder.state(usesFTBL: false,
+            XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
                                                  presentFileIndices: [index],
                                                  efsHoldsFiles: false,
                                                  hasConfiguration: false),
@@ -1100,12 +1102,12 @@ final class MFSStateDecoderTests: XCTestCase {
     func testConfiguredWhenOnlyFaultOrBackupPresent() {
         // {7,9} alone (faults log / backup) means the volume is provisioned but
         // carries none of the Initialized reserved files yet.
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: false,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
                                              presentFileIndices: [7],
                                              efsHoldsFiles: false,
                                              hasConfiguration: false),
                        .configured)
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: false,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
                                              presentFileIndices: [9],
                                              efsHoldsFiles: false,
                                              hasConfiguration: false),
@@ -1115,7 +1117,7 @@ final class MFSStateDecoderTests: XCTestCase {
     func testInitializedWinsOverConfigured() {
         // Upstream checks the Initialized set first; a volume with both sorts
         // as Initialized.
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: false,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
                                              presentFileIndices: [8, 9],
                                              efsHoldsFiles: false,
                                              hasConfiguration: false),
@@ -1124,12 +1126,12 @@ final class MFSStateDecoderTests: XCTestCase {
 
     func testEmptyVolumeStaysUnconfigured() {
         // A decodable legacy volume with no matching reserved file — no state.
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: false,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
                                              presentFileIndices: [],
                                              efsHoldsFiles: false,
                                              hasConfiguration: false),
                        .unconfigured)
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: false,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
                                              presentFileIndices: [10],
                                              efsHoldsFiles: false,
                                              hasConfiguration: false),
@@ -1141,36 +1143,56 @@ final class MFSStateDecoderTests: XCTestCase {
     /// partition means the firmware has been configured. It never overrides
     /// what the file system did say.
     func testAConfigurationPartitionRaisesAnUnconfiguredVolume() {
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: false,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
                                              presentFileIndices: [],
                                              efsHoldsFiles: false,
                                              hasConfiguration: true),
                        .configured)
         // This is how a CSME 15/16 image gets an answer at all: its files
         // start at offset 0, so no index means anything on it.
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: true,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: true,
                                              presentFileIndices: [0, 1, 2],
                                              efsHoldsFiles: false,
                                              hasConfiguration: true),
                        .configured)
         // An initialised volume stays initialised — the raise only lifts
         // Unconfigured.
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: false,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
                                              presentFileIndices: [8],
                                              efsHoldsFiles: false,
                                              hasConfiguration: true),
                        .initialized)
     }
 
-    func testFTBLVolumeWithoutConfigurationStaysUnconfigured() {
-        // A vfs_starts_at_0 / FileTable.dat-named volume never maps its raw FAT
-        // indices to the legacy semantic set — the row stays Unconfigured.
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: true,
+    /// A CSME 14 volume may carry an FTBL triple while its files do **not**
+    /// start at offset 0, and upstream reads its reserved indices all the
+    /// same: `get_vfs_start_0` gates that step, the triple only gates naming.
+    /// Keying the step on the triple — the CSME 15/16 case — reported such a
+    /// dump (the CSME 14.0 one with files 2–5 present) as Unconfigured, where
+    /// MEAnalyzer prints Initialized.
+    func testAnFTBLNamedVolumeWhoseFilesDoNotStartAtZeroMapsItsIndices() {
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
+                                             presentFileIndices: [2, 3, 4, 5],
+                                             efsHoldsFiles: false,
+                                             hasConfiguration: false),
+                       .initialized)
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
+                                             presentFileIndices: [7],
+                                             efsHoldsFiles: false,
+                                             hasConfiguration: false),
+                       .configured)
+    }
+
+    func testAVolumeWhoseFilesStartAtZeroClaimsNothingFromIndices() {
+        // CSME 15/16 (and CSME 13.30): the reserved walk breaks before reading
+        // a file, so an index set that would otherwise mean something says
+        // nothing — the volume is answered by the EFS or the configuration.
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: true,
                                              presentFileIndices: [8],
                                              efsHoldsFiles: false,
                                              hasConfiguration: false),
                        .unconfigured)
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: true,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: true,
                                              presentFileIndices: [7, 9],
                                              efsHoldsFiles: false,
                                              hasConfiguration: false),
@@ -1181,20 +1203,20 @@ final class MFSStateDecoderTests: XCTestCase {
     /// (`efs_init`, MEA.py 13050) — which is how a CSME 15/16 image reaches
     /// Initialized at all, its own FAT indices saying nothing.
     func testAWrittenEFSRaisesTheStateToInitialized() {
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: true,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: true,
                                              presentFileIndices: [0, 1, 2],
                                              efsHoldsFiles: true,
                                              hasConfiguration: true),
                        .initialized)
         // With no configuration partition either, the EFS is the whole answer.
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: true,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: true,
                                              presentFileIndices: [],
                                              efsHoldsFiles: true,
                                              hasConfiguration: false),
                        .initialized)
         // An empty EFS leaves the configuration raise to answer, which is the
         // CSME 16 oracle: a volume with files, an EFS with none, Configured.
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: true,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: true,
                                              presentFileIndices: [0, 1, 2],
                                              efsHoldsFiles: false,
                                              hasConfiguration: true),
@@ -1205,12 +1227,12 @@ final class MFSStateDecoderTests: XCTestCase {
     /// the EFS already lifted never sees it — and a legacy volume that was
     /// Initialized by its own indices is not lifted twice.
     func testTheEFSRaiseTakesPrecedenceOverTheConfigurationOne() {
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: false,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
                                              presentFileIndices: [7],
                                              efsHoldsFiles: true,
                                              hasConfiguration: true),
                        .initialized)
-        XCTAssertEqual(MFSStateDecoder.state(usesFTBL: false,
+        XCTAssertEqual(MFSStateDecoder.state(vfsStartsAtZero: false,
                                              presentFileIndices: [8],
                                              efsHoldsFiles: true,
                                              hasConfiguration: false),

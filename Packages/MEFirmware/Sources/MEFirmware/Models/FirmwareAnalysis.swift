@@ -328,8 +328,9 @@ public enum MFSState: String, Codable, Sendable {
 public struct MFSStateBasis: Codable, Sendable, Equatable {
     /// Step 1: the reserved low-level files.
     public enum ReservedFiles: Codable, Sendable, Equatable {
-        /// The volume names its files through its tables (CSME 15/16), so
-        /// nothing is claimed from indices.
+        /// The volume's files start at offset 0 (CSME 15/16, CSME 13.30), so
+        /// there are no reserved files by index: upstream breaks its walk
+        /// before reading one and nothing is claimed from indices.
         case notRead
         /// None of the reserved indices is present.
         case none

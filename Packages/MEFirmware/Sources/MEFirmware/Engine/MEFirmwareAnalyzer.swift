@@ -745,13 +745,16 @@ public actor MEFirmwareAnalyzer {
         // (CSME 11–14 + SPS/TXE analogues), mirroring upstream `mfs_home_anl` and
         // the reserved walk (get_sec_hdr_size / get_vfs_start_0). Both selectors
         // need variant/major/minor, so this decode is deferred past identity; a
-        // no-manifest region (guard above) or a volume whose files start at 0 /
-        // that uses the FTBL naming keeps nil. The decode is best-effort and adds
-        // no Issues — a dirty file-8 simply yields no Home Directory.
+        // no-manifest region (guard above) or a volume whose files start at 0
+        // keeps nil. The gate is the identity selector alone: upstream runs this
+        // walk whatever the FTBL triple says, and then hands the files it did
+        // not take to the FTBL naming below (`if mfs_file[0] not in
+        // mfs_parsed_idx`, MEA.py 8134) — a CSME 14 volume with an FTBL triple
+        // gets both. The decode is best-effort and adds no Issues — a dirty
+        // file-8 simply yields no Home Directory.
         if !MFSHomeDecoder.vfsStartsAtZero(variant: identity.variant,
                                            major: identity.major,
                                            minor: identity.minor),
-           mfsVolume?.usesFTBL == false,
            let info = mfsInfo {
             mfsVolume?.homeDirectory = MFSHomeDecoder.homeDirectory(
                 files: info.files, variant: identity.variant,
@@ -1032,8 +1035,16 @@ public actor MEFirmwareAnalyzer {
             }
             return .noPartition
         }()
+        // Step 1 of row 17 asks the *identity* selector, not the volume
+        // header's FTBL triple: upstream reads the reserved files by index
+        // whenever the volume's files do not start at 0 (`get_vfs_start_0`,
+        // MEA.py 7465/7888), and names them through FTBL separately. The two
+        // disagree on a CSME 14 volume whose triple says FTBL — `usesFTBL`
+        // there would claim nothing from indices and report Unconfigured.
         let fileSystemState = MFSStateDecoder.decide(
-            usesFTBL: mfsInfo?.usesFTBL ?? false,
+            vfsStartsAtZero: MFSHomeDecoder.vfsStartsAtZero(variant: identity.variant,
+                                                            major: identity.major,
+                                                            minor: identity.minor),
             presentFileIndices: mfsInfo?.files
                 .filter { !$0.content.isEmpty }
                 .map(\.index) ?? [],
