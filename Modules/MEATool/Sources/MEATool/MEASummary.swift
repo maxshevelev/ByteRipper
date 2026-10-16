@@ -305,13 +305,6 @@ public enum MEASummary {
                     L("Manufacturing", in: language),
                     evidence.isEmpty ? .value(verdict) : .verdict(verdict, evidence: evidence),
                     tone: MEATones.manufacturingState(state)))
-                // What End of Manufacturing commits — MFIT's own
-                // `FlexibleEomSettings`, stored whether or not the flag is
-                // set, so it says what an image would lock if it ever ran.
-                if let flexible = basis?.flexible {
-                    rows.append(MEASummaryRow(L("Flexible EOM Settings", in: language),
-                                              .value(MEAText.flexibleEOMSettings(flexible, in: language))))
-                }
             } else if identified {
                 rows.append(MEASummaryRow(L("Manufacturing", in: language), .comingSoon))
             }

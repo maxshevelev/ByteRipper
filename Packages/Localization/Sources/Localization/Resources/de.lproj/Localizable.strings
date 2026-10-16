@@ -1533,11 +1533,6 @@
 "Not set (all zeros)" = "Nicht gesetzt (nur Nullen)";
 "Not set (the area is erased)" = "Nicht gesetzt (Bereich gelöscht)";
 "Layout not recognized" = "Aufbau nicht erkannt";
-"Flexible EOM Settings" = "Flexible EOM-Einstellung";
-"Lock Descriptor and OEM Configs" = "Descriptor und OEM-Konfiguration sperren";
-"Lock OEM Configs Only" = "Nur die OEM-Konfiguration sperren";
-"Lock Descriptor Only" = "Nur den Descriptor sperren";
-"Do not lock Descriptor and OEM Configs" = "Nichts sperren";
 "EOM: on" = "EOM: ein";
 "EOM: off" = "EOM: aus";
 "descriptor: open" = "Descriptor: offen";
