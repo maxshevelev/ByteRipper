@@ -40,6 +40,39 @@ import AppKit
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
+    /// The value's own drawing, taken over by the field as well as kept in the
+    /// string.
+    ///
+    /// A selectable field keeps *two* drawings of one value: the cell's font
+    /// and colour, and the attributes of the string. A click hands the text to
+    /// the field editor, which draws the cell's pair — and a value whose tone
+    /// lives only in the string (a verdict in its status colour with the
+    /// evidence beside it in the ordinary one, a configuration cell whose two
+    /// copies differ) went plain the moment it was clicked, then came back when
+    /// the selection ended. Adopting the string's own first attributes into the
+    /// cell makes the two drawings one, so what is clicked is what was read.
+    ///
+    /// The first attributes and not a per-run copy: the cell carries one font
+    /// and one colour, so a two-colour string — verdict then evidence — is
+    /// edited in the verdict's tone, which is the half that carries the answer.
+    /// The idle drawing is untouched: it is still the string's own.
+    public override var attributedStringValue: NSAttributedString {
+        get { super.attributedStringValue }
+        set {
+            super.attributedStringValue = newValue
+            guard newValue.length > 0 else { return }
+            let whole = NSRange(location: 0, length: newValue.length)
+            if let drawn = newValue.attribute(.font, at: 0, longestEffectiveRange: nil,
+                                              in: whole) as? NSFont {
+                font = drawn
+            }
+            if let colour = newValue.attribute(.foregroundColor, at: 0, longestEffectiveRange: nil,
+                                               in: whole) as? NSColor {
+                textColor = colour
+            }
+        }
+    }
+
     /// The height its cell draws the text in at the width it is laid out at.
     ///
     /// `NSTextField` works its own out as if the whole width were the

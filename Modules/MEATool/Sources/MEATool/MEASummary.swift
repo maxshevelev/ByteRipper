@@ -325,13 +325,11 @@ public enum MEASummary {
         if analysis.family == .csme, analysis.version.major >= 11 {
             if let profile = analysis.bootGuardProfile {
                 rows.append(MEASummaryRow(L("Boot Guard", in: language),
-                                          .value(MEAText.bootGuardProfile(profile)),
-                                          tone: MEATones.bootGuardProfile(profile)))
+                                          .value(MEAText.bootGuardProfile(profile))))
             } else if identified {
                 rows.append(MEASummaryRow(
                     L("Boot Guard", in: language),
-                    .value(L("No profile record in this image", in: language)),
-                    tone: MEATones.bootGuardProfile(nil)))
+                    .value(L("No profile record in this image", in: language))))
             }
             // The reading says which of the four findings it is, so the row
             // shows wherever the engine has one; nil means a reading taken

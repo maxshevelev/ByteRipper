@@ -915,7 +915,9 @@ final class MEASummaryTests: XCTestCase {
         // It will close: the tone the File System State draws for Initialized.
         XCTAssertEqual(tone("Manufacturing", in: rows), .caution)
         XCTAssertEqual(value("Boot Guard", in: rows), .value("5 - FVME"))
-        XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
+        // The row carries no tone: a profile is a number the image holds, not a
+        // state the platform is in.
+        XCTAssertEqual(tone("Boot Guard", in: rows), .standard)
         XCTAssertEqual(value("OEM Public Key Hash", in: rows),
                        .value(String(repeating: "05", count: 48)))
         // One line for a copy: the verdict, then what it was read from in
@@ -944,9 +946,9 @@ final class MEASummaryTests: XCTestCase {
                        .verdict("Will close on the EOM flag",
                                 evidence: "EOM: on, descriptor: locked"))
         XCTAssertEqual(tone("Manufacturing", in: tableRows(willClose)), .caution)
-        // Profile 0 is Boot Guard switched off — the board boots unverified,
-        // which is a state a bench works with: green.
-        XCTAssertEqual(tone("Boot Guard", in: tableRows(willClose)), .good)
+        // Profile 0 and profile 5 read alike: the row is the image's setting,
+        // not a verdict about the board.
+        XCTAssertEqual(tone("Boot Guard", in: tableRows(willClose)), .standard)
 
         let willNotClose = try analysis([
             "family": "csme", "manifest": manifestJSON(),
@@ -991,7 +993,7 @@ final class MEASummaryTests: XCTestCase {
                        "Will close on the descriptor's rights (descriptor: locked)")
         XCTAssertNil(value("Flexible EOM Settings", in: rows))
         XCTAssertEqual(value("Boot Guard", in: rows), .value("4 - FVE"))
-        XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
+        XCTAssertEqual(tone("Boot Guard", in: rows), .standard)
         // CSME 12 with a zeroed key field: a finding of its own, not silence.
         XCTAssertEqual(value("OEM Public Key Hash", in: rows), .value("Not set (all zeros)"))
 
