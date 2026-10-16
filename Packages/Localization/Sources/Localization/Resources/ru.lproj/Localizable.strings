@@ -1071,10 +1071,8 @@
 "%1$@: reads refused" = "%1$@: чтение запрещено";
 "eSPI clock in bits 3–5; the other bits unknown" = "Частота eSPI — биты 3–5; остальные биты неизвестны";
 "GPR0, the whole word" = "GPR0, всё слово";
-"%1$@ in bit %2$@" = "%1$@ — бит %2$@";
-"Fields: %1$@, all at Flash Image Tool's default" = "Полей: %1$@, все на значении по умолчанию Flash Image Tool";
-"%1$@ of %2$@ fields not at Flash Image Tool's default: %3$@" = "%1$@ из %2$@ полей не на значении по умолчанию Flash Image Tool: %3$@";
-"and %1$@ more" = "и ещё %1$@";
+"Bits" = "Биты";
+"Default" = "По умолчанию";
 "Unknown (code %1$@)" = "Неизвестно (код %1$@)";
 "%1$@ — header marked invalid" = "%1$@ — заголовок помечен недействительным";
 "%1$@ (not checked)" = "%1$@ (не проверяется)";
