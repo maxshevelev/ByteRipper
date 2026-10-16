@@ -448,19 +448,36 @@ enum MFSParser {
 /// here — upstream raises it only when `mfs_anl` throws, which the engine's
 /// decoders do not.
 ///
-/// Deliberately scoped to the *legacy* membership rule: an FTBL-mode volume
-/// (CSME 15/16) names its files through the FileTable.dat tables, so its raw
-/// FAT indices do not map to upstream's semantic set and nothing is claimed
-/// from them. Such a volume is answered by the two raises that follow instead. Both decisions are recorded in the increment plan.
+/// Which predicate gates that first step is the whole subtlety, because the
+/// format has two that usually agree and sometimes do not, and they answer
+/// different questions:
+///
+/// - `vfsStartsAtZero` (`get_vfs_start_0`, MEA.py 7465) — an *identity* fact,
+///   "the volume's files begin at System offset 0". Upstream breaks the
+///   reserved-file walk on it (`if vfs_starts_at_0 or not mfs_has_files:
+///   break`, MEA.py 7888), so it decides whether the indices mean anything;
+/// - `usesFTBL` (`vol_has_ftbl`, MEA.py 7832 — the volume header's
+///   dictionary/platform/reserved triple not being 1/0/0) — a *byte* fact
+///   about how files are **named**, read by the FTBL home-directory walk
+///   (MEA.py 8100) and by nothing else.
+///
+/// They agree on CSME 12 (both false) and on CSME 15/16 (both true), which is
+/// why keying step 1 on `usesFTBL` reads as right until a CSME 14 volume turns
+/// up whose triple says FTBL while its files do not start at 0. There upstream
+/// still reads the reserved indices — a CSME 14.0 dump with files 2–5 present
+/// is Initialized — and asking `usesFTBL` instead left that dump Unconfigured
+/// against the oracle (`SPI_EF4018_128Mbit.orig.bin`, and the CSME 14 case in
+/// `MFSStateDecoderTests`).
 enum MFSStateDecoder {
     /// The File System State (row 17), in upstream's three steps:
     ///
     /// 1. the reserved low-level files the volume holds — indices 0–5/8 mean
     ///    the file system has been initialised, 7/9 that it has been
     ///    configured (`get_mfs_anl`, MEA.py 7489–7490). A volume whose files
-    ///    start at offset 0 (CSME 15/16, `usesFTBL`) has no reserved files by
+    ///    start at offset 0 (CSME 15/16, CSME 13.30) has no reserved files by
     ///    index at all: upstream's own loop breaks out on `vfs_starts_at_0`
-    ///    before reading one, so nothing is claimed from indices there;
+    ///    before reading one, so nothing is claimed from indices there. That is
+    ///    the identity selector, not the FTBL triple — see the type's doc;
     /// 2. an EFS volume that holds file contents raises the state to
     ///    Initialized from wherever it stood (`efs_init`, 13050) — which bytes
     ///    of an EFS are a file is a question only the `FileTable.dat` EFST
@@ -472,9 +489,9 @@ enum MFSStateDecoder {
     ///    module, a FITC / CDMD / MFSB partition — means the firmware has at
     ///    least been configured (13051). Upstream reaches this one through an
     ///    `elif`, so a volume raised by step 2 never sees it.
-    static func state(usesFTBL: Bool, presentFileIndices: [Int],
+    static func state(vfsStartsAtZero: Bool, presentFileIndices: [Int],
                       efsHoldsFiles: Bool, hasConfiguration: Bool) -> MFSState {
-        decide(usesFTBL: usesFTBL, presentFileIndices: presentFileIndices,
+        decide(vfsStartsAtZero: vfsStartsAtZero, presentFileIndices: presentFileIndices,
                efs: efsHoldsFiles ? .holdsFiles : .noPartition,
                configuration: hasConfiguration ? ["configuration"] : []).state
     }
@@ -482,12 +499,12 @@ enum MFSStateDecoder {
     /// The state, with what each step found and which one decided it. The
     /// state is upstream's exactly: `efs` raises it only when it is
     /// `.holdsFiles`, and any configuration at all is step 3's evidence.
-    static func decide(usesFTBL: Bool, presentFileIndices: [Int],
+    static func decide(vfsStartsAtZero: Bool, presentFileIndices: [Int],
                        efs: MFSStateBasis.EFS, configuration: [String]) -> (state: MFSState, basis: MFSStateBasis) {
         var state = MFSState.unconfigured
         var step = MFSStateBasis.Step.nothing
         let reserved: MFSStateBasis.ReservedFiles
-        if usesFTBL {
+        if vfsStartsAtZero {
             reserved = .notRead
         } else {
             let initializing = presentFileIndices.filter { [0, 1, 2, 3, 4, 5, 8].contains($0) }.sorted()

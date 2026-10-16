@@ -1,4 +1,4 @@
-@source-sha 506ac11784819fbe7984495b5e093fe0d1ef19569b3fd97092d0b1e5ea118611
+@source-sha 90750512b634435658e18ab61df65b14a596141e98dc37cdd714d04512d6761b
 # Den ME-Bericht lesen
 
 > Was die beiden Registerkarten des ME Analyzer enthalten und wie die einzelnen Zeilen der Übersicht zu lesen sind.
@@ -45,7 +45,7 @@ Ein Übergang verbindet die Zustände. Das erste Einschalten einer Platine mit e
 
 Zu diesen Merkmalen gehören zwei Einschränkungen:
 
-- Auf CSME 15 und 16 benennt das Volume seine Dateien über eigene Tabellen statt über den Index, weshalb der Parser dort aus den Dateiindizes nichts ableitet. Ein solches Volume wird allein über die beiden übrigen Regeln bestimmt.
+- Bei CSME 15, CSME 16 und CSME 13.30 beginnen die Dateien des Volumes am Offset 0 des Systembereichs, die Dateiindizes besagen dort also nichts, und der Parser leitet aus ihnen nichts ab. Ein solches Volume wird allein über die beiden übrigen Regeln bestimmt. Ein Volume, das seine Dateien über eigene Tabellen benennt, sie aber nicht am Offset 0 beginnen lässt — so ist ein CSME-14-Image gebaut —, wird wie jedes andere über die Indizes gelesen; die Tabellen benennen darin nur die Dateien.
 - Im zugrunde liegenden Projekt gibt es einen vierten Wert, **Error**, für den Abbruch der Analyse. Die hier verwendeten Decoder setzen ihn nicht.
 
 Auf der Registerkarte **Übersicht** ebenso wie in der Zeile **Firmware** der Registerkarte **Vollständige Angaben** trägt der Zustand das, woraus er gelesen wurde, **in Klammern hinter sich** — wie die Zeile Manufacturing das ihrige: „Configured (Konfiguration: FITC, CDMD)“ oder „Initialized (EFS: enthält Dateien)“. Die Klammern nennen das entscheidende Kriterium — „reservierte Dateien: 2, 8“, „EFS: enthält Dateien“, „Konfiguration: …“, „nichts gefunden“ — und danach jedes Kriterium, das nicht geprüft werden konnte. Der Zustand selbst steht in seiner Farbe, die Klammern im gewöhnlichen Ton: sie sind Beleg und keine zweite Antwort. Konnte ein Kriterium, das den Zustand hätte anheben können, nicht geprüft werden — meist eine in der Partitionstabelle eingetragene EFS-Partition, deren Volume sich nicht lesen ließ, etwa weil ihre Systemseite gelöscht ist —, steht in den Klammern „EFS: nicht lesbar“, und der Zustand erscheint dann nie grün. **Configured** bedeutet dann nur, dass eine Konfiguration gefunden wurde. Ob das EFS von der Engine geschriebene Dateien enthält — dann wäre der Zustand **Initialized** —, ist unbekannt, und die EFS-Partition ist zu prüfen, bevor man sich auf den Zustand verlässt.
