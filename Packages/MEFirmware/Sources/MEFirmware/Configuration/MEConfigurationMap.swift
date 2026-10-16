@@ -35,10 +35,17 @@ public struct MEConfigurationMap: Sendable, Equatable {
 
     /// One setting of one file, as MFIT lays it out.
     public struct Setting: Sendable, Equatable {
-        /// MFIT's name for the setting (`EomFirstBootEnabled`), which is also
-        /// what an engineer sees in its panel and in Intel's own documents — so
-        /// it stays untranslated, like `FlexibleEomSettings`' own option labels.
+        /// The setting's identifier (`MELanPowerWell`), as the tool's own
+        /// layouts and Intel's documents spell it — so it stays untranslated,
+        /// like `FlexibleEomSettings`' own option labels.
         public var name: String
+        /// What the tool's panel shows for the setting where that is not the
+        /// identifier — `"LAN Power Well"`, `"Intel(R) PTT Supported"`, the
+        /// `label` of FIT's `CfgOpt` or of MFIT's `<UI>` element. Nil where the
+        /// tool states none, or states the identifier itself, and an engineer
+        /// then sees the name; the two are both what a bench compares its
+        /// screen against, and `name` is what a document or a report calls it.
+        public var label: String?
         /// Byte offset into the file's content.
         public var offset: Int
         /// The field's length in bytes — of the word the bits below are counted
@@ -68,11 +75,12 @@ public struct MEConfigurationMap: Sendable, Equatable {
         /// as hex.
         public var text: Bool
 
-        public init(name: String, offset: Int, length: Int,
+        public init(name: String, offset: Int, length: Int, label: String? = nil,
                     bits: ClosedRange<Int>? = nil,
                     options: [Int: String]? = nil, auto: Bool = false,
                     hex: Bool = false, text: Bool = false) {
             self.name = name
+            self.label = label
             self.offset = offset
             self.length = length
             self.bits = bits

@@ -36,6 +36,31 @@ final class ConfigurationMapTests: XCTestCase {
                       "MFIT's map is the one with the mark")
     }
 
+    /// The tool's own name for a setting travels with it: the identifier is what
+    /// a report and Intel's documents call it (`MELanPowerWell`), the label is
+    /// what the tool's panel shows ("LAN Power Well"), and a setting whose tool
+    /// states no label of its own carries none — repeating the identifier would
+    /// say a panel shows something it does not.
+    func testTheToolsOwnNamesForSettingsTravelWithThem() throws {
+        for map in [MEConfigurationMap.csme13, .csme14, .csme15, .csme16] {
+            let setting = try XCTUnwrap(map.files.flatMap(\.settings)
+                .first { $0.name == "MELanPowerWell" }, map.name)
+            XCTAssertEqual(setting.label, "LAN Power Well", map.name)
+        }
+        // The End of Manufacturing flag carries its label on every map that lays
+        // the file out — all but the 14 one, which has no `eom_config` at all.
+        for map in [MEConfigurationMap.csme13, .csme15, .csme16] {
+            let setting = try XCTUnwrap(map.file(at: "/home/mca/eom_config")?
+                .settings.first { $0.name == "EomFirstBootEnabled" }, map.name)
+            XCTAssertEqual(setting.label, "EOM on First Boot Enabled", map.name)
+        }
+        // FIT 15 states no label for these: its panel shows the identifiers.
+        for identifier in ["FID_PAV", "FID_ISH"] {
+            XCTAssertNil(MEConfigurationMap.csme15.files.flatMap(\.settings)
+                .first { $0.name == identifier }?.label, identifier)
+        }
+    }
+
     /// The End of Manufacturing record: the one thing the newer layouts do not
     /// bind (the tool writes it through its own `EomNvar`), and the one record
     /// whose place every generation agrees on — bit 0 of the two bytes of

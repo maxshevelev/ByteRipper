@@ -350,6 +350,20 @@ it cannot merge**: `/home/mca/icps`'s `icpsSwSkuing` is 8 bytes in one list and
 length on another's board. A new generation is a rerun against its own
 `mfit.exe`.
 
+**A setting has two names and the map carries both.** The identifier is what the
+tools' own layouts, reports and Intel's documents spell (`MELanPowerWell`); the
+*label* is what the tool's panel shows ("LAN Power Well"), and it sits beside the
+identifier in the same declaration — FIT's `<CfgOpt … label="LAN Power Well">`,
+MFIT's `<UI name="MELanPowerWell" label="LAN Power Well" section="…">`. The
+generators copy it where it differs from the identifier, so the panel can draw
+"LAN Power Well (MELanPowerWell)" — the words an engineer reads on the tool's
+screen with the word a report calls it. FIT 15 is the case worth knowing: it
+states no label at all for `FID_PAV`, `FID_ISH` and the other `FID_` settings,
+because its panel shows those identifiers, and the map carries none rather than
+repeating one. MFIT's `<UI>` element names a **panel section** the same way
+(`section="WiredLanConfiguration"`); the maps do not carry it — nothing on the
+panel groups by it yet.
+
 ### The same material in FIT's own shape (ME 15)
 
 The older FIT — `fit-15.0.exe` and its neighbours — carries the layout per

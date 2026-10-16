@@ -536,7 +536,9 @@ public struct ConfigurationFile: Codable, Sendable, Equatable, Identifiable {
 /// out rather than guessed at.
 public struct ConfigurationSetting: Codable, Sendable, Equatable, Identifiable {
     public var id: String { name }
-    /// MFIT's name, which is the same word in every language.
+    /// The setting's identifier, which is the same word in every language; what
+    /// a tool's panel shows for it, where that is not the identifier, is the
+    /// map's own `label` (`MEConfigurationMap.Setting.label`).
     public var name: String
     /// The value as a number: the bits of a bitfield where the catalogue gives
     /// bits, the field's own value — little-endian, as every one of these files

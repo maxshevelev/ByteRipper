@@ -226,7 +226,13 @@ def place(fields, warnings):
 
 
 def setting_of(name, fields, declarations_, classes, warnings):
-    """One setting of one file, as the map lays it out."""
+    """One setting of one file, as the map lays it out.
+
+    `label` is the tool's own name for the setting — what its panel shows —
+    where the declaration states one, which is where the two differ: the
+    identifier is `name` (`MELanPowerWell`, `PttSupported`), the interface text
+    is `label` ("LAN Power Well", "Intel(R) PTT Supported").
+    """
     where = place(fields, warnings)
     if where is None:
         return None
@@ -236,6 +242,7 @@ def setting_of(name, fields, declarations_, classes, warnings):
     options = classes.get(kind.split(":", 1)[1]) if kind.startswith("class:") else None
     return {
         "name": name,
+        "label": declaration.get("label"),
         "offset": offset,
         "length": length,
         "bits": bits,
@@ -261,6 +268,11 @@ def swift(files):
             args = ["name: %s" % swift_literal(s["name"]),
                     "offset: %d" % s["offset"],
                     "length: %d" % s["length"]]
+            # The tool's own name for the setting, where it differs from the
+            # identifier: a map that repeats the identifier says the tool shows
+            # nothing else.
+            if s.get("label") and s["label"] != s["name"]:
+                args.append("label: %s" % swift_literal(s["label"]))
             if s["bits"]:
                 args.append("bits: %d...%d" % s["bits"])
             if s["options"]:
@@ -349,7 +361,8 @@ def main():
     print("// The CSME %s map of the ME configuration — emitted by" % generation)
     print("// `Skills/me-eom-structures/scripts/fit_map.py` from Flash Image Tool %s's" % tool)
     print("// own layout documents (the %s platform of ME %s)." % (straps, generation))
-    print("// Offsets, bits, option labels and file paths are FIT's, copied out of its")
+    print("// Offsets, bits, the tool's own name for each setting (`label`), its option")
+    print("// labels and the file paths are FIT's, copied out of its")
     print("// `ProcessNvar` bindings and value dictionaries; nothing here is read out of a")
     print("// dump. FIT %s marks no setting `Auto` — it has no such attribute — so no" % tool)
     print("// setting here carries that mark.")
