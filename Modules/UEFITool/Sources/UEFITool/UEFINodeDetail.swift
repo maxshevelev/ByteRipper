@@ -1364,6 +1364,31 @@ public enum UEFIDetail {
         return fields
     }
 
+    /// What one strap word is where the chipset's layout of the section is not
+    /// at hand — a length no tool at hand carries, or a section from before the
+    /// layout was written down. The bit that soft-disables the ME, and the two
+    /// fields the engine reads by word, are all there is to say.
+    private static func strapMeaning(
+        _ index: Int, of straps: DescriptorInfo.Straps, in language: AppLanguage
+    ) -> String {
+        if let bit = straps.meDisable, bit.word == index {
+            return L("%1$@ in bit %2$@; the other bits unknown", in: language, bit.name, bit.bit)
+        }
+        if straps.espiClock?.word == index {
+            return L("eSPI clock in bits 3–5; the other bits unknown", in: language)
+        }
+        if straps.gpr0?.word == index { return L("GPR0, the whole word", in: language) }
+        return L("Unknown", in: language)
+    }
+
+    /// The tool's identifier for a strap field without the namespace every one
+    /// of them opens with: the table the name is in already says which section
+    /// the fields belong to.
+    private static func strapFieldName(_ name: String) -> String {
+        guard let range = name.range(of: "_Strap_") else { return name }
+        return String(name[range.upperBound...])
+    }
+
     /// A protected range as where it runs and what it refuses.
     private static func gpr0Text(_ range: DescriptorInfo.ProtectedRange, in language: AppLanguage) -> String {
         let span = "\(hex(range.start)) – \(hex(range.end))"
@@ -1466,26 +1491,31 @@ public enum UEFIDetail {
             ))
         }
         if let straps = descriptor.straps {
-            // Numbers, not fields: the layout is the chipset's and next to
-            // none of it is published (`UEFI_IMAGE_FORMAT.md` §2.6). Each row
-            // outlines its four bytes in the dump, which is where two boards'
-            // straps are compared.
+            tables.append(strapTable(straps, in: language))
+        }
+        return tables
+    }
+
+    /// The strap section, one row per field where the chipset's layout of the
+    /// section is at hand — the tool's name for the field, the word and bits it
+    /// takes, what this image holds there and what the tool builds it with —
+    /// and one row per word where it is not, the words then standing as the
+    /// numbers they are.
+    ///
+    /// Each row outlines its four bytes in the dump, which is where two boards'
+    /// straps are compared; on the layout's rows that outline is the word the
+    /// field belongs to, so several rows share it.
+    private static func strapTable(_ straps: DescriptorInfo.Straps, in language: AppLanguage) -> UEFIDetailTable {
+        guard let readings = straps.fields else {
             let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
                 let name = "PCHSTRP\(index)"
                 let address = straps.base + UInt64(index) * 4
-                var meaning = L("Unknown", in: language)
-                if let bit = straps.meDisable, bit.word == index {
-                    meaning = L("%1$@ in bit %2$@; the other bits unknown", in: language, bit.name, bit.bit)
-                } else if straps.espiClock?.word == index {
-                    meaning = L("eSPI clock in bits 3–5; the other bits unknown", in: language)
-                } else if straps.gpr0?.word == index {
-                    meaning = L("GPR0, the whole word", in: language)
-                }
                 return ([.init(name), .init(hex(address)),
-                         .init(String(format: "0x%08X", straps.words[index])), .init(meaning)],
+                         .init(String(format: "0x%08X", straps.words[index])),
+                         .init(strapMeaning(index, of: straps, in: language))],
                         .range(address..<address + 4, name: name))
             }
-            tables.append(UEFIDetailTable(
+            return UEFIDetailTable(
                 title: L("PCH straps", in: language),
                 symbol: "slider.horizontal.3",
                 columns: [L("Strap", in: language), L("Offset", in: language), L("Value", in: language), L("Meaning", in: language)],
@@ -1496,9 +1526,49 @@ public enum UEFIDetail {
                 // already said what is known: folded, it leaves the rest of
                 // the detail in view.
                 startsFolded: true
-            ))
+            )
         }
-        return tables
+        // The bit that soft-disables the ME is not one of the layout's fields —
+        // the tool calls the bits around it spare or reserved — so its row is
+        // added here, under the name ifdtool and me_cleaner give it, and it has
+        // no default of the tool's to compare against.
+        struct Row { let word: Int; let bit: Int; let cells: [UEFIDetailTable.Cell]; let target: UEFIDetailTable.Target }
+        var rows: [Row] = readings.map { reading in
+            let word = reading.field.word
+            let name = "PCHSTRP\(word)"
+            let address = straps.base + UInt64(word) * 4
+            let range = reading.field.bits
+            return Row(word: word, bit: range.lowerBound,
+                       cells: [.init(strapFieldName(reading.field.name)),
+                               .init(name),
+                               .init(range.lowerBound == range.upperBound
+                                     ? "\(range.lowerBound)"
+                                     : "\(range.lowerBound)–\(range.upperBound)"),
+                               .init(hex(reading.value)),
+                               .init(hex(reading.field.defaultValue))],
+                       target: .range(address..<address + 4, name: name))
+        }
+        if let bit = straps.meDisable, bit.word < straps.words.count {
+            let word = bit.word
+            let name = "PCHSTRP\(word)"
+            let address = straps.base + UInt64(word) * 4
+            rows.append(Row(
+                word: word, bit: bit.bit,
+                cells: [.init(bit.name), .init(name), .init("\(bit.bit)"),
+                        .init(bit.isSet ? "0x1" : "0x0"), .init("")],
+                target: .range(address..<address + 4, name: name)))
+        }
+        rows.sort { ($0.word, $0.bit) < ($1.word, $1.bit) }
+        return UEFIDetailTable(
+            title: L("PCH straps", in: language),
+            symbol: "slider.horizontal.3",
+            columns: [L("Field", in: language), L("Strap", in: language), L("Bits", in: language),
+                      L("Value", in: language), L("Default", in: language)],
+            rows: rows.map(\.cells),
+            rowTargets: rows.map(\.target),
+            linkColumn: 1,
+            startsFolded: true
+        )
     }
 
     /// A mask as the descriptor writes it: a byte on an old one, twelve bits on

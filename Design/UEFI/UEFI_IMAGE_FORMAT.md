@@ -370,10 +370,39 @@ and the chip densities with the dump's length — `SPI_ALL_192Mbit` is
 
 At `PchStrapsBase << 4`, `NumberOfPchStraps` `UINT32`s (`PCHSTRP0`,
 `PCHSTRP1`, …): settings the chipset reads for itself at power-on, before any
-firmware runs. Their layout is the chipset's and is not published past the
-oldest generations. It is not even one layout per generation: the mobile and
-desktop parts of one generation make the section different lengths, and put
-the same field in different words —
+firmware runs.
+
+**The layout is inside Flash Image Tool.** Every FIT executable carries the
+chipset's own layout of this section as documents of entries
+
+```xml
+<LayoutEntry name="PCH_Strap_SPI_ec_max_freq" type="bitfield32" value="0x4"
+             offset="0x50" bitfield_high="5" bitfield_low="3" />
+```
+
+— the tool's identifier for the field, the byte offset of the word it sits in,
+the bits it takes, and the value the tool writes into it when the configuration
+does not override it (`value` is the field's own value, not the word's), which
+is what the panel calls Flash Image Tool's default. The 70-word section has 759
+such fields, the 101-word one 901; no two fields of a table claim the same bits
+except where the tool documents both a whole address field and the fields
+inside it (`CSME_SMT1_AUDIDB118` over the bits under it), and every word of a
+section is named by at least one field.
+
+Which platform a document belongs to is not written into it — the build has no
+Qt resource tree, and only some documents say `File Name: cnp_h_rvp.xml` in
+their XML comment — so **a table is keyed by the length of the section it
+describes**, which is what an image states about itself and what the panel can
+ask by. The key holds: the 69-word and the 74-word sections are the same field
+for field in every tool that carries them (FIT 13.0, 14.0, 15.0), and FIT 15's
+three 70-word tables differ only in 50 fields' default values and in two
+spellings. Where one length has several documents, the one that names itself
+wins: FIT 15 carries the 90-word section as `cnp_h_rvp.xml` (755 fields) *and*
+as a nameless document whose 417 fields sit at other offsets entirely.
+
+It is not even one layout per generation: the mobile and desktop parts of one
+generation make the section different lengths, and put the same field in
+different words —
 
 | generation | mobile (LP/P) | desktop (H/S) |
 |---|---|---|
@@ -381,11 +410,19 @@ the same field in different words —
 | Tiger Point | 70 | 101 |
 | Alder Point | 70 | 115 |
 
-— so a layout would have to be keyed by generation *and* length.
+— which is why no rule can name a strap field from the descriptor's generation
+alone.
 
-ByteRipper reads the words as numbers, and as what they mean only where the
-meaning is checked: the bit that soft-disables the ME, where ifdtool and
-me_cleaner agree on it, and on one layout the eSPI clock and GPR0 (below).
+ByteRipper carries the layouts of the lengths its dumps showed and checked —
+69, 70, 74, 90 and 101 words — emitted into
+`Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH.swift` by
+`Skills/me-eom-structures/scripts/strap_map.py` (the tool's names, offsets,
+bits and defaults copied, nothing added). The panel gives every field a row of
+its own — its name, the word it sits in, its bits, the value the image holds
+and the value the tool builds — so a row whose two values differ is a field the
+board's own build set; the bit that soft-disables the ME is a row there too,
+being no field of the layout. A section of a length that is not among them is
+listed as numbers, and nothing about its bits is claimed.
 
 | generations | name | word | bit |
 |---|---|---|---|
@@ -397,18 +434,25 @@ Bay Trail (TXE) and Emmitsburg have none: neither tool names one. On ICH8 –
 ICH10 ifdtool also sets two bits in the processor straps; the PCH one is the
 one shown.
 
-Two more fields are read on the one layout ifdtool's offsets were checked
-against — Tiger and Alder Point mobile, 70 words:
+Two further fields are read wherever the layout names them, found in the table
+by the tool's own name rather than by an offset kept by hand:
 
-- **The eSPI clock**, bits 3–5 of `PCHSTRP22`: the clock of the eSPI bus to the
-  EC. ifdtool's 500-series table: 0 = 20, 1 = 24, 2 = 25, 3 = 48, 4 = 60 MHz;
-  any other code is shown as unknown.
-- **GPR0**, the whole of `PCHSTRP21`: the GPRD value the SPI controller loads
-  its global protected range from — `start : 15, read enable : 1, end : 15,
-  write enable : 1`, start and end in 4 KiB units of the flash's linear
-  addresses, the end inclusive. With neither enable bit the range is off. A
-  range refuses the host whatever the masters' masks allow; coreboot sets it
-  over the ME region up to the end of its FITC (`ifdtool --gpr0-enable`).
+- **The eSPI clock**, bits 3–5 of `PCH_Strap_SPI_ec_max_freq`: the clock of the
+  eSPI bus to the EC — word 22 of the 70-word section and word 20 of the
+  101-word one, which is the word ifdtool's offsets had it at. The 69-, 74- and
+  90-word sections (Cannon Point) have no such field at all, and none is read
+  there. ifdtool's 500-series table: 0 = 20, 1 = 24, 2 = 25, 3 = 48, 4 = 60
+  MHz; any other code is shown as unknown.
+- **GPR0**, the whole of `PCH_Strap_SPI_GLOBAL_PROTECTED_RNG_DEF`: the GPRD
+  value the SPI controller loads its global protected range from —
+  `start : 15, read enable : 1, end : 15, write enable : 1`, start and end in
+  4 KiB units of the flash's linear addresses, the end inclusive. With neither
+  enable bit the range is off. A range refuses the host whatever the masters'
+  masks allow; coreboot sets it over the ME region up to the end of its FITC
+  (`ifdtool --gpr0-enable`). The field is word 21 on 70 words and 19 on 101 —
+  both checked against the dumps and against ifdtool — and 16 on 69, 18 on 74
+  and 16 on 90, where only the tool's own table says so. On all of the dumps at
+  hand the range is off whatever word is read.
 
 ifdtool also places GPR0 in word `0x12` on Jasper Lake, `0x40` on Meteor Lake,
 `0x76` on Panther Lake and `0x3C` on Nova Lake, with the eSPI clock in words 65
@@ -416,10 +460,14 @@ and 119 on Meteor and Panther Lake. No dump at hand checks any of them, so
 none is read. On Cannon Point GPR0 is not in the descriptor at all but in the
 ME region's FITC.
 
-On the desktop layouts the same words are other fields. On a Tiger Point H dump
-(`1.bin`, length 101) word 22 gives an eSPI clock code nobody defines, and on an
-Alder Point S one (`SPI_EF4019`, length 115) word 21 gives a "GPR0" of
-`0x22222222`. Neither field is shown there until the desktop layouts are known.
+Before the tables were at hand the desktop layouts were read with the mobile
+one's offsets, which is why a Tiger Point H dump (`1.bin`, 101 words) used to
+give an eSPI clock code nobody defines from word 22 and an Alder Point S one
+(`SPI_EF4019`, 115 words) a "GPR0" of `0x22222222` from word 21. The 101-word
+section now has a table of its own: the clock is word 20 there — code 2 on
+`1.bin`, 25 MHz — and GPR0 word 19, off. Alder Point S's 115 words are a length
+no tool carries a document for, so on such a dump neither field is read, and
+that is the state of every length but the five.
 
 On the seven mobile dumps the clock and GPR0 (off on all of them) agree with
 ifdtool, and so do the two copies `ifdtool --gpr0-enable` was run on

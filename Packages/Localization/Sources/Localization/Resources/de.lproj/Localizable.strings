@@ -1071,6 +1071,10 @@
 "%1$@: reads refused" = "%1$@: Lesen gesperrt";
 "eSPI clock in bits 3–5; the other bits unknown" = "eSPI-Takt in Bit 3–5; die übrigen Bits unbekannt";
 "GPR0, the whole word" = "GPR0, das ganze Wort";
+"Bits" = "Bits";
+"Setting help" = "Hilfe zur Einstellung";
+"Show what Flash Image Tool says about this setting" = "Zeigt, was Flash Image Tool zu dieser Einstellung sagt";
+"Default" = "Standard";
 "Unknown (code %1$@)" = "Unbekannt (Code %1$@)";
 "%1$@ — header marked invalid" = "%1$@ — Header als ungültig markiert";
 "%1$@ (not checked)" = "%1$@ (nicht geprüft)";

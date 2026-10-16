@@ -46,6 +46,10 @@ public enum MEAConfiguration {
                 if !auto.isEmpty { label += " · " + auto }
                 return MEAConfigurationRow(
                     name: label,
+                    identifier: name,
+                    // Where the tool says nothing about a setting, there is no
+                    // button to press and no popover to open.
+                    help: setting?.help,
                     fitc: MEAText.configurationValue(fitc.first { $0.name == name },
                                                      layout: setting, in: language),
                     mfs: MEAText.configurationValue(mfs.first { $0.name == name },
@@ -71,6 +75,13 @@ public struct MEAConfigurationRow: Sendable, Equatable {
     /// The setting's name in MFIT's own words, with its `Auto` mark where the
     /// database gives it one.
     public let name: String
+    /// What the setting is called where it is written down — the identifier
+    /// the map lays it out by (`MELanPowerWell`). The row shows the tool's
+    /// name for the setting, so this is what the row's help is headed with.
+    public let identifier: String
+    /// What the tool's panel says about the setting, where it says anything;
+    /// nil there is no `?` beside the row at all.
+    public let help: String?
     /// The build's copy — the OEM Configuration partition's record.
     public let fitc: String?
     /// The file system's copy — the state in force.
@@ -85,8 +96,11 @@ public struct MEAConfigurationRow: Sendable, Equatable {
         return fitc != mfs
     }
 
-    public init(name: String, fitc: String?, mfs: String?) {
+    public init(name: String, identifier: String, help: String? = nil,
+                fitc: String?, mfs: String?) {
         self.name = name
+        self.identifier = identifier
+        self.help = help
         self.fitc = fitc
         self.mfs = mfs
     }

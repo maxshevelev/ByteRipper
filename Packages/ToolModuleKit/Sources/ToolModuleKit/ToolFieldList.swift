@@ -1,4 +1,24 @@
 import AppKit
+import HelpUI
+import Localization
+
+/// What a row's `?` opens: the identifier the row is about, and the words the
+/// tool it came from has for it.
+///
+/// The identifier is here because the row does not show it. A panel shows the
+/// tool's own name for a setting — "LAN Power Well" — while the identifier
+/// (`MELanPowerWell`) is what a document, a report or another tool calls it: as
+/// the help's heading it is where a reader looks for it, and in the row's first
+/// column it read as the name.
+public struct FieldHelp: Sendable, Equatable {
+    public var identifier: String
+    public var text: String
+
+    public init(identifier: String, text: String) {
+        self.identifier = identifier
+        self.text = text
+    }
+}
 
 /// A detail's name/value rows, **one view per row**, with text selected across
 /// them the way a text view's is (`ToolSelectableRows`).
@@ -36,17 +56,32 @@ import AppKit
         public var label: String
         public var value: NSAttributedString
         public var second: NSAttributedString?
+        /// What the row's `?` offers, where the tool the row came from has
+        /// something to say about it. Nil on a row with no such button.
+        public var help: FieldHelp?
 
         public init(label: String, value: NSAttributedString,
-                    second: NSAttributedString? = nil) {
+                    second: NSAttributedString? = nil, help: FieldHelp? = nil) {
             self.label = label
             self.value = value
             self.second = second
+            self.help = help
         }
     }
 
+    /// The reader asked for the help of a row: the words, and the button to
+    /// hang a popover off. Set by the panel that laid the list out; a list
+    /// nobody set it on shows the buttons and does nothing when they are
+    /// pressed.
+    public var onHelp: ((FieldHelp, NSView) -> Void)?
+
     public private(set) var rows: [ToolFieldRow] = []
     private var laidOutWidth: CGFloat = 0
+
+    /// The width the name column has to keep back for a row's `?`, where the
+    /// row has one: the glyph and the gap before it. A column measured without
+    /// it would wrap the very names that carry the button.
+    static let helpButtonReserve: CGFloat = 18
 
     /// The name column a list of rows named `names` wants: wide enough for the
     /// widest of them, and never narrower than `atLeast`.
@@ -69,6 +104,16 @@ import AppKit
         return max(atLeast, widest)
     }
 
+    /// The same, for a list whose rows carry a `?`: every name then has to fit
+    /// beside the button, so the column keeps its width back.
+    public static func nameWidth(
+        for names: [String], reservingHelp: Bool,
+        atLeast: CGFloat = ToolPanelFont.detailLabelWidth
+    ) -> CGFloat {
+        let width = nameWidth(for: names, atLeast: atLeast)
+        return reservingHelp ? width + helpButtonReserve : width
+    }
+
     /// The gap between two rows — the one the detail list keeps between its
     /// own lines.
     static let rowSpacing: CGFloat = 3
@@ -81,7 +126,7 @@ import AppKit
         translatesAutoresizingMaskIntoConstraints = false
         rows = fields.map {
             ToolFieldRow(label: $0.label, value: $0.value, second: $0.second,
-                         nameWidth: nameWidth)
+                         help: $0.help, nameWidth: nameWidth)
         }
         rows.forEach(addSubview)
         setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -135,10 +180,18 @@ import AppKit
     private var fittedWidth: CGFloat = -1
     private var fittedHeight: CGFloat = 0
 
+    /// What this row's `?` opens, where it has one, and the button itself.
+    public let fieldHelp: FieldHelp?
+    private let infoButton: NSButton?
+
     /// The width the name is drawn in at the row's laid-out width: the column
     /// the list asked for, or half the row when the row is narrower than that.
     /// Where a name too long for it wraps, this is what it wraps in.
     public private(set) var nameColumnWidth: CGFloat = 0
+
+    /// What is left of that column for the name itself — the same, less the
+    /// room a `?` takes on a row that has one.
+    public private(set) var nameLayoutWidth: CGFloat = 0
 
     /// The width each value is drawn in on a comparing row — the two columns
     /// under the name are the same width, which is what makes them read as
@@ -156,17 +209,48 @@ import AppKit
     public static let columnSpacing: CGFloat = 6
 
     init(label: String, value: NSAttributedString, second: NSAttributedString? = nil,
-         nameWidth: CGFloat) {
+         help: FieldHelp? = nil, nameWidth: CGFloat) {
         self.label = label
         self.nameWidth = nameWidth
+        fieldHelp = help
         name = TextBlock(NSAttributedString(string: label, attributes: [
             .font: ToolPanelFont.body(), .foregroundColor: NSColor.secondaryLabelColor,
         ]))
         self.value = TextBlock(value)
         self.second = second.map(TextBlock.init)
+        infoButton = help.map { _ in ToolFieldRow.makeInfoButton() }
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = true
         autoresizingMask = []
+        if let infoButton {
+            infoButton.target = self
+            infoButton.action = #selector(showHelp)
+            addSubview(infoButton)
+        }
+    }
+
+    /// The `?` at the end of the name column: the same quiet glyph the panels'
+    /// own help buttons carry, and named by `ControlHelp` where it is created,
+    /// so the panel that knows what the words are sets them.
+    public static func makeInfoButton() -> NSButton {
+        let button = NSButton()
+        button.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
+        button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
+        button.isBordered = false
+        button.imagePosition = .imageOnly
+        button.contentTintColor = .secondaryLabelColor
+        button.translatesAutoresizingMaskIntoConstraints = true
+        ControlHelp.describe(button, name: L("Setting help"),
+                             tooltip: L("Show what Flash Image Tool says about this setting"))
+        return button
+    }
+
+    /// The button this row carries, for a test that wants to press it.
+    public var helpButton: NSButton? { infoButton }
+
+    @objc private func showHelp() {
+        guard let fieldHelp, let infoButton else { return }
+        (superview as? ToolFieldList)?.onHelp?(fieldHelp, infoButton)
     }
 
     @available(*, unavailable)
@@ -206,7 +290,17 @@ import AppKit
     func fit(width: CGFloat) -> CGFloat {
         guard width != fittedWidth else { return fittedHeight }
         let column = max(0, min(nameWidth, (width - Self.columnSpacing) / 2))
-        name.place(x: 0, width: column)
+        // The `?` sits at the end of the name column, and the name is laid out
+        // in what is left of it: the button is drawn where the name ends, not
+        // where a reader has to look for it.
+        let nameBox = infoButton == nil ? column
+                                       : max(0, column - ToolFieldList.helpButtonReserve)
+        name.place(x: 0, width: nameBox)
+        if let infoButton {
+            let reserve = ToolFieldList.helpButtonReserve
+            let side = min(reserve - 4, column)
+            infoButton.frame = NSRect(x: max(0, column - side), y: 1, width: side, height: side)
+        }
         let rest = max(1, width - column - Self.columnSpacing)
         if let second {
             let each = max(1, (rest - Self.columnSpacing) / 2)
@@ -214,18 +308,23 @@ import AppKit
             second.place(x: column + Self.columnSpacing + each + Self.columnSpacing,
                          width: max(1, rest - each - Self.columnSpacing))
             valueColumnWidth = each
-            fittedHeight = max(name.height, value.height, second.height)
+            fittedHeight = max(name.height, value.height, second.height, buttonHeight)
         } else {
             value.place(x: column + Self.columnSpacing, width: rest)
             valueColumnWidth = 0
-            fittedHeight = max(name.height, value.height)
+            fittedHeight = max(name.height, value.height, buttonHeight)
         }
         fittedWidth = width
         nameColumnWidth = column
+        nameLayoutWidth = nameBox
         textHeight = fittedHeight
         needsDisplay = true
         return fittedHeight
     }
+
+    /// How much room the `?` asks for on its first line: its own height, and
+    /// nothing on a row that has none.
+    private var buttonHeight: CGFloat { infoButton.map { $0.frame.height + $0.frame.minY } ?? 0 }
 
     public override func draw(_ dirtyRect: NSRect) {
         if let selectedRange {
