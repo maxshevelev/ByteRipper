@@ -328,6 +328,21 @@ answer. CSME 16's were a JSON digit in CDMD and the CRC of that block.
 > drawn from it — that the profile is not in the image — was wrong. Compare the
 > two artifacts before trusting a null diff, and change one setting at a time.
 
+FIT 15's own `_uep.xml` documents answer the *shape* of it: the UEP area is
+`$UEP`, a CRC and eight 0x80-byte blocks, and the Boot Guard block is at 0x60 of
+the first one (`FBGAcmEn` 16, CPU debug 17, BSP init 18, `ProtectBiosEnvironment`
+19, `MeasuredBoot` 20, `VerifiedBoot` 21, key manifest id 22–25), with Intel's
+own `BootGuardProfiles` class tying each of the four profiles to one combination
+of those bits — the profile is *not* in the image as a number, which is why the
+tool's layouts have no field for it. What is missing is where a **vendor** dump
+puts those blocks: the flags at that offset read zero on every image at hand,
+including two whose CDMD states profile 5, so a reader that trusted the offset
+would answer "0 - No_FVME" to every image whose key field is not empty. The
+anchor that *is* verified is the OEM key hash at 0x98 of the second block — the
+same byte the engine already reads through the entry, on all four CSME 15 dumps.
+The two-build diff above is still the way to find the blocks themselves; the
+scripts and the field map are in `Skills/me-eom-structures/reference/structures.md`.
+
 **Whether an older generation carries the profile in another place.** The
 survey above is the first half of the answer, and it splits the generations in
 two: CSME 15, 14, 12 and 11 carry **no CDMD configuration at all** (no `FIT AS A
