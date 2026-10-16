@@ -125,10 +125,11 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// nil where the analysis read no configuration at all — an image whose
     /// files carry no File IDs and whose OEM Configuration holds no records.
     public var configuration: [ConfigurationFile]? = nil
-    /// The Boot Guard profile this image is built for (ours). `nil` when the
-    /// image carries no CDMD configuration record for it — the older layouts
-    /// and the vendor images whose Boot Guard was never configured from the
-    /// ME side.
+    /// The Boot Guard profile this image is built for (ours), out of the CDMD
+    /// configuration's JSON record where the image has one and the UEP area's
+    /// Boot Guard bits where it does not. `nil` when neither says a combination
+    /// of the four settings — an area never written, or a layout this does not
+    /// read.
     public var bootGuardProfile: BootGuardProfile? = nil
     /// The OEM public key hash the UEP area carries, and why it is not a value
     /// where it is not one (ours). `OEMKeyHash` says what each answer means;
@@ -583,13 +584,16 @@ public enum OEMKeyHash: Codable, Sendable, Equatable {
 /// row, and ECFinder — the tool the field practice uses — answers only "Boot
 /// Guard enabled / disabled".
 ///
-/// The four settings MFIT offers are a list, and what a dump carries is the
-/// **index into it**, in a JSON record of the CDMD partition's configuration:
-/// `{"BtGuardProfileConfig": <index>}` under the partition's `FIT AS A FIDDLE`
-/// signature. Index 0 → `0 - No_FVME`, 1 → `3 - VM`, 2 → `4 - FVE`, 3 →
-/// `5 - FVME` — hence the raw values, which are what MFIT, ECFinder and MEInfo
-/// all print. The chain of names is MFIT's own: VM = verified and measured
-/// boot, FVE = firmware verified, FVME = both.
+/// The four settings MFIT offers are a list, and a dump carries the profile in
+/// one of two keepings: MFIT writes the **index into that list** as a JSON
+/// record of the CDMD partition's configuration
+/// (`{"BtGuardProfileConfig": <index>}` under the partition's `FIT AS A FIDDLE`
+/// signature; index 0 → `0 - No_FVME`, 1 → `3 - VM`, 2 → `4 - FVE`, 3 →
+/// `5 - FVME`), while the older FIT — whose images have no such record — writes
+/// the four settings themselves as bits of the UEP area (see
+/// `BootGuardReader.profile(inUEPArea:)`). The raw values are what MFIT,
+/// ECFinder and MEInfo all print. The chain of names is MFIT's own: VM =
+/// verified and measured boot, FVE = firmware verified, FVME = both.
 ///
 /// The profile is the one the platform burns into the PCH's fuses when
 /// Manufacturing closes, which is why it is worth reading *before* flashing a
@@ -2573,5 +2577,12 @@ public enum EngineModelRevision {
     /// area's entry holds — a value, or the read that says why there is none). `analyze` gained the optional `descriptorBytes` they need for
     /// the descriptor's BIOS master — an extracted ME region has no descriptor
     /// of its own, and the basis says so.
-    public static let current = 43
+    ///
+    /// 44 does not grow the shape and changes one field's answer:
+    /// `bootGuardProfile` is now read from **two** keepings of the one fact —
+    /// the CDMD configuration's JSON where the image has it, and the UEP area's
+    /// Boot Guard bits where it does not. Every CSME 15 image, which carries no
+    /// CDMD record, now answers the profile instead of "no profile record in
+    /// this image"; an image that answers nothing still does.
+    public static let current = 44
 }

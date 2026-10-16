@@ -95,11 +95,12 @@ OEM Public Key Hash (SHA-384): 05c697663a75e912…d2e6fd3e8452
   CRC-32 по первым 12 байтам с обнулённым полем.
 - **MFS-файл**: содержимое = первые `size` байт цепочки, далее 16 служебных байт,
   в конце 40-байтная таблица Integrity.
-- **UEP** (0x2A0000, 8 КБ в этих образах): контейнер `$UEPC`, u32 размер по +4;
-  записи вида `{…, 0x4FE | 0xFE, <адрес окна в BIOS-регионе>, <размер>, <сумма>,
-  <Key Manifest ID>, <48-байтный хеш>, …}`; вторая часть области начинается по
-  0x2A1000. В заводском дампе полезная часть записана, у образов MFIT —
-  стёрта/иная (13 мелких различий в шапке и суммах).
+- **UEP** (0x2A0000, 8 КБ в этих образах): контейнер `$UEPC`, по +4 — **16-битная
+  сумма CRC и два зарезервированных байта** (не размер: так устроен класс `Uep`
+  у FIT, см. ниже); записи вида `{…, 0x4FE | 0xFE, <адрес окна в BIOS-регионе>,
+  <размер>, <сумма>, <Key Manifest ID>, <48-байтный хеш>, …}`; вторая часть
+  области начинается по 0x2A1000. В заводском дампе полезная часть записана, у
+  образов MFIT — стёрта/иная (13 мелких различий в шапке и суммах).
 
 ## Профиль Boot Guard читается из JSON в CDMD
 
@@ -766,3 +767,88 @@ CSME 15. Но **флаги по 0x60 первого массива нулевы�
 профиле нет» — и это не пробел в разборе, а свойство формата: уровень Boot Guard
 платы живёт на стороне BIOS (манифест политики загрузки, который читает ECFinder),
 а не в регионе ME.
+
+## Профиль у CSME 15 всё-таки читается — битами в UEP
+
+**Вывод выше («у CSME 15 профиль из дампа не читается») неверен**, и ошибка была в
+поиске, а не в образе: я искал **число** (одно из 0/3/4/5) и байт, который
+различает все четыре профиля сразу. Профиля в образе числом и нет — FIT хранит
+**четыре настройки, из которых профиль состоит**, и уже из их сочетания выводит
+номер. Ни один байт при этом не различает все четыре профиля, поэтому поиск
+«значение-метка» и не мог ничего найти.
+
+**Это написано в самих документах FIT.** В `fit-15.0.exe` (zlib-документы внутри
+`.exe`) есть классы и действия:
+
+```xml
+<Class name="BootGuardProfileSettings">
+  <CfgOpt name="FBGAcmEn"               value="false" type="class:BooleanValues"/>  <!-- true=0x1, false=0x0 -->
+  <CfgOpt name="VerifiedBoot"           value="false" type="class:BooleanValues"/>
+  <CfgOpt name="MeasuredBoot"           value="false" type="class:BooleanValues"/>
+  <CfgOpt name="ProtectBiosEnvironment" value="false" type="class:BooleanValues"/>
+  <CfgOpt name="ErrorEnforcement_0"     value="0xC"   type="byte"/>
+  <CfgOpt name="ErrorEnforcement_1"     value="0xC"   type="byte"/>
+</Class>
+<Class name="BootGuardProfiles">
+  <LayoutEntry name="Boot Guard Profile 0 - No_FVME" value="0" init="FBGAcmEn=false Verified=false Measured=false Protect=false"/>
+  <LayoutEntry name="Boot Guard Profile 3 - VM"      value="3" init="FBGAcmEn=false Verified=true  Measured=true  Protect=true "/>
+  <LayoutEntry name="Boot Guard Profile 4 - FVE"     value="4" init="FBGAcmEn=true  Verified=true  Measured=false Protect=true "/>
+  <LayoutEntry name="Boot Guard Profile 5 - FVME"    value="5" init="FBGAcmEn=true  Verified=true  Measured=true  Protect=true "/>
+</Class>
+```
+
+Место — класс `Uep` (та самая область `$UEP`): `Signature` dword, `Crc` word,
+`Reserved` word, `data` BLOB, а внутри `data` — `IntelArrays` из восьми
+`UepBitsArray0…7` по 0x80 байт. Профиль в первой из них, и это записано
+действиями (по три адресата на каждую настройку — три копии в трёх массивах):
+
+```xml
+<Action name="GetBitArrayValue" source="$BootGuardProfileSettings/FBGAcmEn"
+        target="UepBitsArray0" params="{'offset':'0x60','startBit':16,'bitCount':1}"/>
+   …  ProtectBiosEnvironment → startBit 19,  MeasuredBoot → 20,  VerifiedBoot → 21
+   …  BtGuardCpuDebugEnable → 17,  BtGuardBspInitEnable → 18,  BtGuardKeyManifestId → 22, bitCount 4
+```
+
+**Измеренное место в образе.** Байты массива начинаются на **0x0C** от сигнатуры
+`$UEP` (в классе этого нет — там `data` идёт сразу за восемью байтами шапки, а в
+образе между ними ещё четыре; поэтому место измерено, а не выведено), значит
+байт флагов — **`$UEP`+0x6E**, биты: 0 `FBGAcmEn`, 3 `ProtectBiosEnvironment`,
+4 `MeasuredBoot`, 5 `VerifiedBoot`. Рядом — другая настройка того же массива
+(слово по `$UEP`+0x68), а *достоверность привязки* проверяется тем же байтом:
+`BtGuardKeyManifestId` из него (биты 22–25, младшим вперёд) даёт 0x1 — ровно то,
+что FIT пишет в своём `.xml` для тех же образов.
+
+**Проверка — по `.xml`, которые сохранил владелец.** Три образа одной сборки,
+у которых FIT показывает разные профили, различаются **ровно этим одним полем**
+(полный diff `csme15-bg3.xml` / `csme15-bg5.xml`: 16 отличий, из них 15 — пути
+`C:\Users\Maksim Shevelev\Desktop\fit-15.0\csme15-bgN\…`, шестнадцатое —
+`BtGuardProfileConfig`):
+
+| образ | FIT `.xml` | байт `$UEP`+0x6E | биты (ACM/Prot/Meas/Ver) | наш ответ |
+|---|---|---|---|---|
+| `1.bin` (плата) | `0 - No_FVME` | 0x40 | 0 0 0 0 | `0 - No_FVME` |
+| `csme15-bg0/00.bin` | (сборка профиля 0) | 0x42 | 0 0 0 0 | `0 - No_FVME` |
+| `csme15-bg3.bin` | `3 - VM` | 0x7A | 0 1 1 1 | `3 - VM` |
+| `csme15-bg4.bin` | (сборка профиля 4) | 0x6B | 1 1 0 1 | `4 - FVE` |
+| `csme15-bg5.bin` | `5 - FVME` | 0x7B | 1 1 1 1 | `5 - FVME` |
+| `CSME 15.bin` (вход сборок) | — | 0x7B | 1 1 1 1 | `5 - FVME` |
+| `2.rom`, `1.bin_S0.bin` (платы) | — | 0x40 | 0 0 0 0 | `0 - No_FVME` |
+
+И то же читается там, где **есть CDMD** — два независимых механизма на одном
+образе: `orig_30072026.BIN` (CSME 16.1) — CDMD `5`, биты 0x79 → `5 - FVME`;
+`LENV_CSME 16.bin` — CDMD `5`, биты 0x79 → `5`; `Asus/CSME 16.1.bin` — CDMD `0`,
+биты 0x00 → `0`.
+
+**Где ответа нет и почему.** У `CSME 12.BIN` и `W25Q256JV.orig.bin` (CSME 12)
+контейнер `$UEP` есть, но на месте массива нули (там своя структура — её байты по
++0x28), у `HP EliteBook 630 …G11` (CSME 18) область пустая целиком: все три
+отвечают «записи нет», а не «профиль 0». Поэтому чтение ограничено CSME 15 и 16 —
+поколениями, на которых оно проверено; вслепую применять его к 12/14/18 нельзя.
+
+**Что осталось непонятным (и не читается).** Два бита в том же байте — `CpuDebug`
+(bit 17) и `BspInit` (bit 18) — с показаниями FIT не сходятся: у `1.bin` они 0, а
+FIT пишет `Enabled`; у сборок 1 и 0, а FIT пишет `Disabled`/`Enabled`. Значит эти
+две настройки FIT берёт не отсюда (или не только отсюда) — их не читаю.
+Третья копия флагов видна по `$UEP`+0x1E2 и +0x2EE и всегда равна первой, но
+откуда именно берётся 0x0C (смещение массива) и что за поле перед массивом — не
+выведено, а измерено.

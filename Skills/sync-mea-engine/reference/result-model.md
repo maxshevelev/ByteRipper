@@ -55,6 +55,11 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   the file system's own file, which is what the platform holds now — because one
   column could not tell a setting the platform rewrote from one the build
   chose. `Design/ME_STRUCTURES.md` is where that database is described.
+  Revision 44 adds no field and changes one field's answer: `bootGuardProfile`
+  is read out of **two** keepings of the one fact — the CDMD configuration's
+  JSON, which MFIT-built images carry, and the UEP area's Boot Guard bits, which
+  every CSME 15 image carries instead — so images that used to answer "no
+  profile record" now answer a profile. Upstream has no such row either way.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct

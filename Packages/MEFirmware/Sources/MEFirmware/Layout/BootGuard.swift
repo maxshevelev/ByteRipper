@@ -1,20 +1,26 @@
 // Boot Guard, as much of it as a dump can carry: the profile the image is built
 // for, and the OEM public key hash the ME region holds.
 //
-// Two different places, both read by shape rather than through a table, because
-// neither is described by any specification this project has:
+// Three different places, all read by shape rather than through a table,
+// because none is described by any specification this project has:
 //
-//   * the **profile** is a JSON record of the CDMD partition's configuration,
-//     under that partition's `FIT AS A FIDDLE` signature — MFIT writes the
-//     setting there as an index into its own list of four profiles;
+//   * the **profile**, first source — a JSON record of the CDMD partition's
+//     configuration, under that partition's `FIT AS A FIDDLE` signature: MFIT
+//     writes the setting there as an index into its own list of four profiles;
+//   * the **profile**, second source — the four flags FIT builds a profile from,
+//     as bits of the UEP area's first `UepBitsArray`. CSME 15 images carry no
+//     CDMD record at all, which is why the older tool's own keeping of the
+//     setting had to be found;
 //   * the **OEM public key hash** is a 48-byte SHA-384 the UEP area holds
 //     several copies of, beside the key manifest it belongs to.
 //
-// Both were established on real dumps with known Boot Guard levels; the
-// structures are described in `Design/ME_STRUCTURES.md`, and the addresses,
-// values and the five-way correlation behind the index mapping are in
+// All were established on real dumps with known Boot Guard levels — for the
+// second source, on three builds of one image whose FIT `.xml` readings differ
+// in this one field and nothing else; the structures are described in
+// `Design/ME_STRUCTURES.md`, and the addresses, values and the five-way
+// correlation behind the index mapping are in
 // Skills/me-eom-structures/reference/structures.md. A skill of its own would be
-// one enum and two scans: this is MEFirmware's, beside the layout readers it
+// one enum and three scans: this is MEFirmware's, beside the layout readers it
 // works over.
 
 import Foundation
@@ -56,6 +62,80 @@ enum BootGuardReader {
         }
         return nil
     }
+
+    /// The profile the UEP area's Boot Guard bits name, or nil when the area is
+    /// erased or its bits are no combination of the four settings.
+    ///
+    /// Where an image has no CDMD record — every CSME 15 image, and the older
+    /// CSME 16 ones — this is where the profile lives: FIT keeps the four
+    /// settings a profile is made of as **bits of the UEP area's first
+    /// `UepBitsArray`**, and reads the combination back out of the image the
+    /// same way. The tool's own layout document names each bit and where it
+    /// goes (`GetBitArrayValue … source="$BootGuardProfileSettings/FBGAcmEn"
+    /// target="UepBitsArray0" params="{'offset':'0x60','startBit':16…}"`, and
+    /// the same for the other three at 19, 20 and 21), and its
+    /// `BootGuardProfiles` class is the table from combination to profile.
+    ///
+    /// The bytes are measured rather than derived: the array's first byte is
+    /// 0x0C into the container, so the four flags are the byte at **+0x6E** —
+    /// bit 0 `FBGAcmEn`, 3 `ProtectBiosEnvironment`, 4 `MeasuredBoot`, 5
+    /// `VerifiedBoot`. The neighbouring bits are the two debug switches and the
+    /// key manifest id, and that the same byte answers MFIT's
+    /// `BtGuardKeyManifestId` correctly is what says the reading is aligned
+    /// rather than merely nearby.
+    ///
+    /// Read on the five images at hand whose profile is known independently —
+    /// three builds of one image at profiles 3, 4 and 5, whose FIT `.xml`
+    /// readings differ in this field and nothing else, and two boards at
+    /// profile 0 — and it agrees with the CDMD record wherever an image carries
+    /// both. What it never does is turn a combination the table does not name
+    /// into the nearest profile: four settings are one profile or they are a
+    /// layout this does not read.
+    static func profile(inUEPArea uep: Data) -> BootGuardProfile? {
+        guard let signature = uep.range(of: Data("$UEP".utf8))?.lowerBound,
+              let flagsAt = uep.index(signature, offsetBy: flagsOffset,
+                                      limitedBy: uep.endIndex),
+              flagsAt < uep.endIndex else { return nil }
+        // An area never written is not a profile: as bits, all zeros answer
+        // No_FVME and all ones answer FVME, and neither was chosen for the
+        // image. The signature alone does not say the area is written — a
+        // CSME 12 image's UEP partition carries it over a blank body — so what
+        // is looked at is the body behind it.
+        let bodyStart = uep.index(signature, offsetBy: min(8, uep.distance(from: signature,
+                                                                          to: uep.endIndex)))
+        let bodyEnd = uep.index(signature, offsetBy: min(0x80, uep.distance(from: signature,
+                                                                            to: uep.endIndex)))
+        let body = uep[bodyStart..<bodyEnd]
+        if body.isEmpty || body.allSatisfy({ $0 == 0x00 }) || body.allSatisfy({ $0 == 0xFF }) {
+            return nil
+        }
+        // And an array that is blank is not an array whose four flags are all
+        // false. The word just ahead of the flags is another setting's bits,
+        // and every image this reads has it written; a container with zeroes
+        // there is another structure behind the same signature — a CSME 12
+        // image's UEP partition is one, whose own bytes sit elsewhere — and
+        // answers nothing rather than No_FVME.
+        guard let wordAt = uep.index(signature, offsetBy: wordOffset,
+                                     limitedBy: uep.endIndex),
+              uep.distance(from: wordAt, to: uep.endIndex) >= 2 else { return nil }
+        let word = UInt16(uep[wordAt]) | UInt16(uep[uep.index(after: wordAt)]) << 8
+        if word == 0 || word == 0xFFFF { return nil }
+        let flags = uep[flagsAt]
+        switch (flags & 0x01 != 0, flags & 0x20 != 0,
+                flags & 0x10 != 0, flags & 0x08 != 0) {
+        case (false, false, false, false): return .noFVME   // FBG ACM off, nothing verified
+        case (false, true, true, true): return .vm          // verified and measured
+        case (true, true, false, true): return .fve         // firmware verified
+        case (true, true, true, true): return .fvme         // verified and measured, ACM forced
+        default: return nil
+        }
+    }
+
+    /// How far into the `$UEP` container the first bit array's flags byte sits,
+    /// and the word the same array keeps just ahead of it — both measured off
+    /// the container's signature on the images at hand.
+    private static let flagsOffset = 0x6E
+    private static let wordOffset = 0x68
 
     /// The OEM public key hash the UEP area holds, and what its entry says
     /// where there is no key to read.

@@ -21,7 +21,7 @@ undetermined on the older ones — the reason to come back here — is
 | will the platform close Manufacturing at first boot | `CsePlugin:EomNvar:EOM#EomFirstBootEnabled` | the **descriptor's access rights** decide it (the host CPU / BIOS master: factory rights close it, all-ones does not); the flag is an explicit order on top — bit 0 of the MFS file `/home/mca/eom_config` (2 bytes), written both into the image's OEM Configuration partition and into the live file system, and **only MFIT sets it**. A flag of 0 means the descriptor answers, not that Manufacturing stays open |
 | what EOM commits | `CsePlugin:EomNvar:EOM_Config#FlexibleEomSettings` | bits 1–2 of the same record |
 | what the board the dump came from already did | — | MFS `/home/mca/eom` (1 byte, 1 = closed) — read as evidence that the file system was read, **not** reported: the row answers for the next first boot |
-| Boot Guard level | `CsePlugin:UEP:BtGuardProfileConfig` (`0 - No_FVME`, `3 - VM`, `4 - FVE`, `5 - FVME`) | the JSON record in the **CDMD** partition's configuration — the number is an index into that list, not the level itself |
+| Boot Guard level | `CsePlugin:UEP:BtGuardProfileConfig` (`0 - No_FVME`, `3 - VM`, `4 - FVE`, `5 - FVME`) | the JSON record in the **CDMD** partition's configuration, where the number is an index into that list; and, where the image has no such record (every CSME 15 image), the four settings a profile is made of, as bits of the UEP area's first `UepBitsArray` — `$UEP`+0x6E, bits 0 FBG ACM, 3 protect, 4 measured, 5 verified, with Intel's `BootGuardProfiles` table naming the combinations. Read on CSME 15 and 16 only, the generations it was verified on |
 | OEM public key hash | `CsePlugin:UEP:OemPublicKeyHash` (SHA-384, 48 bytes; all zeros = signing disabled) | the field 0xA0 bytes into the UEP area's entry (and 0x10A0 in for the second half), mirrored in the MFS key table. What the field holds is the finding: zeros = signing disabled, `FF` = never written, anything else = a layout the reader does not walk |
 
 The BIOS side carries its own, different key hash — the Boot Guard Key Manifest the
@@ -34,11 +34,12 @@ python3 Skills/me-eom-structures/scripts/me_eom.py <dump> [<dump>…]
 ```
 
 It prints, per dump: whether the descriptor's BIOS master is open or locked, the
-UEP container's address and how much of the area is erased, the OEM
+UEP container's address, its header and how much of the area is erased, the OEM
 configuration's records for `eom` / `eom_config` / `manuf_lock`, the 48-byte
-values the UEP holds copies of (key hashes), and the Boot Guard profile from the
-CDMD configuration's JSON. Stdlib only, read-only, no network: a run is a diff to
-review.
+values the UEP holds copies of (key hashes), and the Boot Guard profile — from
+the CDMD configuration's JSON where the image has one, and from the UEP area's
+Boot Guard bits where it does not, saying which of the two answered. Stdlib only,
+read-only, no network: a run is a diff to review.
 
 Note what it does *not* say: the values it prints for `eom` / `eom_config` are the
 OEM configuration's defaults — the page a clean image carries too. What is in
@@ -89,9 +90,10 @@ Report it there rather than bending the script.
 
 ## Open questions
 
-`reference/structures.md` ends with what is *not* known: what the fields of a UEP
-entry mean (the window in the BIOS region, the `0x4FE`/`0xFE` word, the 32-bit
-sum), what the CDMD configuration's other records are, and where a CSME 15
-image keeps the Boot Guard profile — its CDMD carries no such record at all, so
-the panel answers "no profile record in this image" for those boards while
-ECFinder calls them profile 0.
+`reference/structures.md` ends with what is *not* known: what the other fields of
+a UEP entry mean (the bits beside the four Boot Guard ones, the window in the
+BIOS region, the `0x4FE`/`0xFE` word, the range the checksum covers), what the
+CDMD configuration's other records are, and how CSME 14, 12, 11 and 18 keep the
+profile — 18 has a CDMD block without the key, the older three have no block at
+all, and a reading of their bits waits for a dump whose profile is known
+independently, the way CSME 15's was settled.
