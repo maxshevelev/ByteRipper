@@ -54,6 +54,12 @@ public struct MEConfigurationMap: Sendable, Equatable {
         /// Which bits of that word the setting is, where it is a bitfield; nil
         /// where the setting is the whole field.
         public var bits: ClosedRange<Int>?
+        /// What the tool's panel says about the setting, where it says
+        /// anything — FIT's `help` on the `<CfgOpt>` declaration, MFIT's on the
+        /// `<UI>` element of the same setting. Its own words, in English, as
+        /// its labels are: a reader who wants them is reading the tool's
+        /// documentation at the row. Nil where the tool has nothing to say.
+        public var help: String?
         /// The values the setting may take, by their number, in MFIT's words —
         /// where MFIT itself says (its `config_params`). A setting without them
         /// is read as a number or a bit, and nothing is claimed about what the
@@ -76,11 +82,13 @@ public struct MEConfigurationMap: Sendable, Equatable {
         public var text: Bool
 
         public init(name: String, offset: Int, length: Int, label: String? = nil,
+                    help: String? = nil,
                     bits: ClosedRange<Int>? = nil,
                     options: [Int: String]? = nil, auto: Bool = false,
                     hex: Bool = false, text: Bool = false) {
             self.name = name
             self.label = label
+            self.help = help
             self.offset = offset
             self.length = length
             self.bits = bits

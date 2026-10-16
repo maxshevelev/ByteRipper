@@ -243,6 +243,7 @@ def setting_of(name, fields, declarations_, classes, warnings):
     return {
         "name": name,
         "label": declaration.get("label"),
+        "help": unescaped(declaration.get("help")),
         "offset": offset,
         "length": length,
         "bits": bits,
@@ -252,8 +253,35 @@ def setting_of(name, fields, declarations_, classes, warnings):
     }
 
 
+def unescaped(text):
+    """An attribute as a reader reads it.
+
+    The XML entities resolved, named and numeric both — MFIT writes its line
+    breaks as `&#13;&#10;` and FIT its paragraph breaks as `&#60;br /&#62;` —
+    and a break turned into the line break it stands for: the words are the
+    tool's, and what the tool wrote as markup is a line, not text.
+    """
+    if not text:
+        return text
+    for entity, character in (("&lt;", "<"), ("&gt;", ">"), ("&quot;", '"'),
+                              ("&apos;", "'"), ("&amp;", "&")):
+        text = text.replace(entity, character)
+    def number(match):
+        digits = match.group(1)
+        return chr(int(digits[1:], 16) if digits[:1] in "xX" else int(digits))
+    text = re.sub(r"&#(x?[0-9a-fA-F]+);", number, text)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    return re.sub(r"\r\n?", "\n", text)
+
+
 def swift_literal(text):
-    return '"%s"' % text.replace("\\", "\\\\").replace('"', '\\"')
+    """A Swift string literal: the backslash, the quote, and the breaks a
+    tool's own help text carries — a literal line break in a Swift string is a
+    compile error, an escaped one is the line the reader sees."""
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    for character, escape in (("\n", "\\n"), ("\r", "\\r"), ("\t", "\\t")):
+        escaped = escaped.replace(character, escape)
+    return '"%s"' % escaped
 
 
 def swift(files):
@@ -273,6 +301,8 @@ def swift(files):
             # nothing else.
             if s.get("label") and s["label"] != s["name"]:
                 args.append("label: %s" % swift_literal(s["label"]))
+            if s.get("help"):
+                args.append("help: %s" % swift_literal(s["help"]))
             if s["bits"]:
                 args.append("bits: %d...%d" % s["bits"])
             if s["options"]:

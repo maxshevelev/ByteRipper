@@ -794,7 +794,12 @@ import ToolModuleKit
 
         let columns = configurationColumns
         let nameWidth = ToolFieldList.nameWidth(
-            for: configurationBlocks.flatMap { $0.rows.map(\.name) })
+            for: configurationBlocks.flatMap { $0.rows.map(\.name) },
+            // Every name has to fit beside the `?` on the rows that carry one,
+            // which is what keeps the column of buttons straight down the tab.
+            reservingHelp: configurationBlocks.contains { block in
+                block.rows.contains { $0.help != nil }
+            })
         place(Self.configurationHeadingRow(columns, nameWidth: nameWidth), in: stack)
         for (index, block) in configurationBlocks.enumerated() {
             // The first block sits right under the column names, which is a
@@ -810,12 +815,27 @@ import ToolModuleKit
                                                         differs: row.differs),
                           second: columns.compares
                               ? Self.configurationCell(row.mfs, differs: row.differs)
-                              : nil)
+                              : nil,
+                          // The tool's own words about the setting, where it
+                          // has them: the `?` beside the name opens them, with
+                          // the identifier the row does not show at the top.
+                          help: row.help.map {
+                              FieldHelp(identifier: row.identifier, text: $0)
+                          })
                 },
                 nameWidth: nameWidth)
+            rows.onHelp = { [weak self] help, anchor in
+                self?.settingHelpPopover?.close()
+                self?.settingHelpPopover = MEASettingHelpPopover.show(help, from: anchor)
+            }
             place(rows, in: stack)
         }
     }
+
+    /// The popover a setting's `?` opened, kept so the next one can close it —
+    /// a transient popover closes itself on a click elsewhere, and one left
+    /// open behind the next is two popovers over one tab.
+    private var settingHelpPopover: MEASettingHelpPopover?
 
     /// Which of the tab's two value columns carry anything at all in this
     /// render. A copy the image does not carry in *any* file — no OEM

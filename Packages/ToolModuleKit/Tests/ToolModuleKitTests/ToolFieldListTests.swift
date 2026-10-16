@@ -41,6 +41,79 @@ final class ToolFieldListTests: XCTestCase {
         return list
     }
 
+    /// A list whose first row carries help, laid out the same way.
+    private func helpList(_ fields: [(String, NSAttributedString, FieldHelp?)],
+                          width: CGFloat = 360, nameWidth: CGFloat = 80) -> ToolFieldList {
+        let list = ToolFieldList(
+            fields: fields.map { .init(label: $0.0, value: $0.1, help: $0.2) },
+            nameWidth: nameWidth)
+        let root = window.contentView!
+        root.addSubview(list)
+        NSLayoutConstraint.activate([
+            list.topAnchor.constraint(equalTo: root.topAnchor),
+            list.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            list.widthAnchor.constraint(equalToConstant: width),
+        ])
+        root.layoutSubtreeIfNeeded()
+        root.layoutSubtreeIfNeeded()
+        return list
+    }
+
+    /// The `?` a row carries where the tool it came from has something to say
+    /// about it, and no button at all where it has nothing: a control that
+    /// opens an empty popover is worse than no control.
+    func testOnlyARowWithHelpCarriesAButton() {
+        let help = FieldHelp(identifier: "MELanPowerWell", text: "LAN Power Well.")
+        let list = helpList([("LAN Power Well", plain("Enabled"), help),
+                             ("Auto", plain("No"), nil)])
+
+        XCTAssertNotNil(list.rows[0].helpButton)
+        XCTAssertNil(list.rows[1].helpButton)
+        XCTAssertEqual(list.rows[0].fieldHelp, help)
+        XCTAssertEqual(list.subviews.count, 2, "the rows, and no button on the list itself")
+        XCTAssertEqual(list.rows[0].subviews.count, 1, "the button is the row's own")
+        XCTAssertEqual(list.rows[0].helpButton?.toolTip,
+                       "Show what Flash Image Tool says about this setting")
+        XCTAssertEqual(list.rows[0].helpButton?.accessibilityLabel(), "Setting help")
+    }
+
+    /// The button sits at the end of the name column, and the name is drawn in
+    /// what is left of the column rather than under it.
+    func testTheButtonTakesTheEndOfTheNameColumn() throws {
+        let help = FieldHelp(identifier: "MELanPowerWell", text: "LAN Power Well.")
+        let name = "LAN Power Well and then some more of it"
+        let list = helpList([(name, plain("Enabled"), help)], nameWidth: 300)
+        let row = list.rows[0]
+        let button = try XCTUnwrap(row.helpButton)
+
+        XCTAssertGreaterThan(row.nameColumnWidth, ToolFieldList.helpButtonReserve)
+        XCTAssertEqual(button.frame.maxX, row.nameColumnWidth, accuracy: 0.5,
+                       "the button sits at the end of the name column")
+        XCTAssertEqual(row.nameLayoutWidth, row.nameColumnWidth - ToolFieldList.helpButtonReserve,
+                       accuracy: 0.5, "and the name is laid out in what the button leaves")
+        // A column measured for rows with buttons keeps their width back.
+        XCTAssertEqual(ToolFieldList.nameWidth(for: [name], reservingHelp: true),
+                       ToolFieldList.nameWidth(for: [name]) + ToolFieldList.helpButtonReserve)
+        XCTAssertEqual(ToolFieldList.nameWidth(for: [name], reservingHelp: false),
+                       ToolFieldList.nameWidth(for: [name]))
+    }
+
+    /// Pressing the button hands the panel the words and the button to hang a
+    /// popover off.
+    func testPressingTheButtonAsksThePanelForTheHelp() throws {
+        let help = FieldHelp(identifier: "MELanPowerWell", text: "LAN Power Well.")
+        let list = helpList([("LAN Power Well", plain("Enabled"), help)])
+        var asked: [(FieldHelp, NSView)] = []
+        list.onHelp = { asked.append(($0, $1)) }
+
+        let button = try XCTUnwrap(list.rows[0].helpButton)
+        button.performClick(nil)
+
+        XCTAssertEqual(asked.count, 1)
+        XCTAssertEqual(asked.first?.0, help)
+        XCTAssertTrue(asked.first?.1 === button, "the popover hangs off the button that was pressed")
+    }
+
     func testAViewPerRowAndNothingElse() {
         let list = list([("Kind", plain("File")), ("Size", plain("0x10")), ("GUID", plain("8C8CE578"))])
         XCTAssertEqual(list.subviews.count, 3)
