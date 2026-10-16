@@ -90,7 +90,7 @@ extension MEAText {
     public static func oemPublicKeyHash(_ value: OEMKeyHash, in language: AppLanguage) -> String {
         switch value {
         case .hash(let hex):
-            return hex
+            return spacedBytes(hex)
         case .allZeros:
             return L("Not set (all zeros)", in: language)
         case .erased:
@@ -98,6 +98,19 @@ extension MEAText {
         case .unrecognized:
             return L("Layout not recognized", in: language)
         }
+    }
+
+    /// A key's hex as a row shows it: **byte by byte, a space between them**, so
+    /// a bench can hold it against a repair tool's report without counting
+    /// characters. The model keeps the hash unspaced — a value is not a layout,
+    /// and two dumps' hashes are compared as they are stored — so the grouping
+    /// is this function's, and it is the one every row and answer goes through.
+    static func spacedBytes(_ hex: String) -> String {
+        stride(from: 0, to: hex.count, by: 2).map { offset -> String in
+            let from = hex.index(hex.startIndex, offsetBy: offset)
+            let to = hex.index(from, offsetBy: min(2, hex.count - offset))
+            return String(hex[from..<to])
+        }.joined(separator: " ")
     }
 
     /// `FlexibleEomSettings` — bits 1–2 of the same `/home/mca/eom_config`

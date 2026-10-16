@@ -409,7 +409,10 @@ def report(path):
             continue
         state = ("not set (all zeros)" if not any(field) else
                  "never written (all 0xFF)" if all(b == 0xFF for b in field) else
-                 field.hex().upper())
+                 # Byte by byte, as the panel's row shows it — a bench holds the
+                 # value against a repair tool's report, and counting characters
+                 # is what a run of digits makes you do.
+                 " ".join("%02X" % b for b in field))
         print("OEM key hash (%s, %d bytes): %s" % (name, len(field), state))
 
     signature_at = me.find(b"FIT AS A FIDDLE")
