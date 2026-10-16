@@ -747,13 +747,17 @@ import ToolModuleKit
     /// file, each setting with the two copies of the file it lives in side by
     /// side.
     ///
-    /// A table rather than a list of label-and-value rows, because the two
-    /// columns are what the tab is for: what the build wrote into the image and
-    /// what the platform holds now are one question apart, and they have to
-    /// line up down the page to be read against each other. Three cells to a
-    /// row — the setting, the build's copy, the file system's — under one
-    /// heading row that names the two value columns, since "FITC beside MFS" is
-    /// the whole of what a reader is being asked to compare.
+    /// The rows are the shared detail list's (`ToolFieldList`), as the Summary
+    /// tab's are — a row that draws its own texts, selected the way a text
+    /// view's is, copied with a tab between the setting and each of its two
+    /// copies — with a row's *second value* being the column the detail list
+    /// does not otherwise carry. So the tab reads as a table and behaves as a
+    /// list: the two columns line up down the page, and a drag across the rows
+    /// takes a band of them.
+    ///
+    /// The name column is one width for every list in the tab, and so are the
+    /// two value columns — which is what makes the columns of one file line up
+    /// with the columns of the next, and with the heading row above them.
     ///
     /// A pair that disagrees is drawn bold — the one emphasis the tab uses, and
     /// no colour: a setting the platform rewrote is not a fault, and the
@@ -767,7 +771,9 @@ import ToolModuleKit
         configurationScroll.placeholder.isHidden = true
 
         let columns = configurationColumns
-        place(Self.configurationHeadingRow(columns), in: stack)
+        let nameWidth = ToolFieldList.nameWidth(
+            for: configurationBlocks.flatMap { $0.rows.map(\.name) })
+        place(Self.configurationHeadingRow(columns, nameWidth: nameWidth), in: stack)
         for (index, block) in configurationBlocks.enumerated() {
             // The first block sits right under the column names, which is a
             // nearer relation than the next block is to the one before it.
@@ -775,17 +781,25 @@ import ToolModuleKit
                 stack.setCustomSpacing(index == 0 ? 12 : 14, after: last)
             }
             stack.addArrangedSubview(Self.configurationFileHeading(block))
-            for row in block.rows {
-                place(Self.configurationRowView(row, columns: columns), in: stack)
-            }
+            let rows = ToolFieldList(
+                fields: block.rows.map { row in
+                    .init(label: row.name,
+                          value: Self.configurationCell(columns.first(row),
+                                                        differs: row.differs),
+                          second: columns.compares
+                              ? Self.configurationCell(row.mfs, differs: row.differs)
+                              : nil)
+                },
+                nameWidth: nameWidth)
+            place(rows, in: stack)
         }
     }
 
     /// Which of the tab's two value columns carry anything at all in this
-    /// render. A column with no value anywhere in it — the file system's, on an
-    /// image nobody has booted — is drawn as its heading and nothing else: the
-    /// width of a column of dashes is the width of the values that are not
-    /// there, and the file's own values deserve it instead.
+    /// render. A copy the image does not carry in *any* file — no OEM
+    /// Configuration partition at all, or a file system nobody could read — is
+    /// not a column of dashes: the tab then names the one copy it has, in the
+    /// one value column the rows have.
     private var configurationColumns: ConfigurationColumns {
         ConfigurationColumns(
             fitc: configurationBlocks.contains { block in
@@ -796,20 +810,31 @@ import ToolModuleKit
             })
     }
 
-    /// Which of the two value columns carry values.
+    /// Which of the two value columns carry values, and what the first of them
+    /// is.
     private struct ConfigurationColumns {
         let fitc: Bool
         let mfs: Bool
+
+        /// Whether the tab shows the two copies side by side — both of them
+        /// present somewhere in this image.
+        var compares: Bool { fitc && mfs }
+
+        /// What the first value column shows: the build's copy where the image
+        /// carries one, the file system's where it is the only one there is.
+        func first(_ row: MEAConfigurationRow) -> String? { fitc ? row.fitc : row.mfs }
+
+        /// What the first value column is called.
+        var firstName: String { fitc ? MEAText.configurationFITC(in: Localization.appLanguage)
+                                     : MEAText.configurationMFS(in: Localization.appLanguage) }
     }
 
-    /// One table row into the list, as wide as the list itself — which is what
-    /// gives the three cells of the row their width, since the row is what
-    /// divides them. Every row is built the same way, so the columns can only
-    /// line up: nothing about a row's own content has a say in how wide a cell
-    /// is.
-    private func place(_ line: NSStackView, in stack: NSStackView) {
-        stack.addArrangedSubview(line)
-        line.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    /// A block of the tab — a file's heading or its rows — into the list, as
+    /// wide as the list itself, which is what gives the rows their width to
+    /// divide into columns.
+    private func place(_ row: NSView, in stack: NSStackView) {
+        stack.addArrangedSubview(row)
+        row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
 
     /// A file's heading: MFIT's own name for it in bold, and where it lives and
@@ -829,93 +854,45 @@ import ToolModuleKit
         return heading
     }
 
-    /// The tab's column names, once at the top: an empty first cell rather than
-    /// none, so the two names sit over the columns they name.
-    private static func configurationHeadingRow(_ columns: ConfigurationColumns) -> NSStackView {
-        let language = Localization.appLanguage
-        return tableLine([configurationHeading(""),
-                          configurationHeading(MEAText.configurationFITC(in: language)),
-                          configurationHeading(MEAText.configurationMFS(in: language))],
-                         columns: columns)
+    /// The tab's column names, once at the top: the rows' own component with an
+    /// empty name, so the two names sit over the columns they name — the same
+    /// widths, by construction, and no second set of column arithmetic to keep
+    /// in step with the rows'.
+    private static func configurationHeadingRow(_ columns: ConfigurationColumns,
+                                                nameWidth: CGFloat) -> ToolFieldList {
+        return ToolFieldList(
+            fields: [.init(label: "",
+                           value: configurationHeading(columns.firstName),
+                           second: columns.compares
+                               ? configurationHeading(MEAText.configurationMFS(
+                                   in: Localization.appLanguage))
+                               : nil)],
+            nameWidth: nameWidth)
     }
 
     /// One column heading: the quiet weight a table's header carries, so it is
     /// read as a name for the column rather than as a row of its own.
-    private static func configurationHeading(_ text: String) -> NSTextField {
-        let label = NSTextField(labelWithString: text)
-        label.font = ToolPanelFont.body(weight: .semibold)
-        label.textColor = .secondaryLabelColor
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return label
+    private static func configurationHeading(_ text: String) -> NSAttributedString {
+        NSAttributedString(string: text, attributes: [
+            .font: ToolPanelFont.body(weight: .semibold),
+            .foregroundColor: NSColor.secondaryLabelColor,
+        ])
     }
 
-    /// One Configuration row: the setting, the build's value, the file
-    /// system's.
-    private static func configurationRowView(_ row: MEAConfigurationRow,
-                                             columns: ConfigurationColumns) -> NSStackView {
-        let label = NSTextField(labelWithString: row.name)
-        label.font = ToolPanelFont.body()
-        label.textColor = .secondaryLabelColor
-        label.lineBreakMode = .byTruncatingTail
-        // The name gives way rather than pushing the value columns about: it is
-        // the one cell whose width is not pinned, so the room a long setting
-        // name wants comes out of its own column.
-        label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        label.translatesAutoresizingMaskIntoConstraints = false
-        return tableLine([label,
-                          configurationCell(row.fitc, differs: row.differs),
-                          configurationCell(row.mfs, differs: row.differs)],
-                         columns: columns)
-    }
-
-    /// One value cell. A pair that disagrees is drawn bold, in the ordinary
-    /// colour: the emphasis, without a verdict. A value one copy does not carry
-    /// is the quiet dash, in the colour of a thing that is not there.
-    private static func configurationCell(_ text: String?, differs: Bool) -> NSTextField {
-        let value = ToolWrappingLabel(string: "")
-        value.translatesAutoresizingMaskIntoConstraints = false
-        value.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        value.isSelectable = true
+    /// One value cell of a row. A pair that disagrees is drawn bold, in the
+    /// ordinary colour: the emphasis, without a verdict. A value one copy does
+    /// not carry is the quiet dash, in the colour of a thing that is not there.
+    private static func configurationCell(_ text: String?, differs: Bool) -> NSAttributedString {
         guard let text else {
-            value.attributedStringValue = NSAttributedString(
+            return NSAttributedString(
                 string: MEAText.configurationAbsent,
                 attributes: [.font: ToolPanelFont.body(),
                              .foregroundColor: NSColor.tertiaryLabelColor])
-            return value
         }
-        value.attributedStringValue = NSAttributedString(
+        return NSAttributedString(
             string: text,
             attributes: [.font: ToolPanelFont.body(weight: differs ? .semibold : .regular),
                          .foregroundColor: NSColor.labelColor])
-        return value
-    }
-
-    /// The three cells of a table row, laid out as one line, the two value
-    /// columns a set width and the setting's name taking what is left.
-    ///
-    /// The value columns are a *fraction of the row* rather than a width of
-    /// their own, and the same fraction is used in every row — which is what
-    /// lines them up under their headings from the first row to the last. A
-    /// column with nothing in it anywhere is as wide as its heading and no
-    /// more.
-    private static func tableLine(_ cells: [NSView],
-                                  columns: ConfigurationColumns) -> NSStackView {
-        let line = NSStackView(views: cells)
-        line.orientation = .horizontal
-        line.alignment = .firstBaseline
-        line.distribution = .fill
-        line.spacing = 8
-        line.translatesAutoresizingMaskIntoConstraints = false
-        for (cell, carriesValues) in zip(cells.dropFirst(), [columns.fitc, columns.mfs]) {
-            if carriesValues {
-                cell.widthAnchor.constraint(equalTo: line.widthAnchor, multiplier: 0.22)
-                    .isActive = true
-            } else {
-                cell.widthAnchor.constraint(equalToConstant: ToolPanelFont.scaled(46))
-                    .isActive = true
-            }
-        }
-        return line
     }
 
     /// One Summary row as a field of the shared detail list: the label, and the

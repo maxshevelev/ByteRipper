@@ -23,13 +23,25 @@ import AppKit
 /// laid-out width back and asks for the height the rows need at it.
 // help: panel.detail-select
 @MainActor public final class ToolFieldList: ToolSelectableRows {
+    /// One row: its name, its value, and — where the row is a comparison — the
+    /// second value beside the first.
+    ///
+    /// The second value is a *column*, not a suffix: a tab between the three in
+    /// what ⌘C copies, and its own width down the list. It is what the ME
+    /// Analyzer's Configuration tab is: one setting of a file, what the build
+    /// wrote into the image and what the platform holds now, read against each
+    /// other. A row without one is the plain name/value row of every other
+    /// panel.
     public struct Field {
         public var label: String
         public var value: NSAttributedString
+        public var second: NSAttributedString?
 
-        public init(label: String, value: NSAttributedString) {
+        public init(label: String, value: NSAttributedString,
+                    second: NSAttributedString? = nil) {
             self.label = label
             self.value = value
+            self.second = second
         }
     }
 
@@ -67,7 +79,10 @@ import AppKit
     public init(fields: [Field], nameWidth: CGFloat = ToolPanelFont.detailLabelWidth) {
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        rows = fields.map { ToolFieldRow(label: $0.label, value: $0.value, nameWidth: nameWidth) }
+        rows = fields.map {
+            ToolFieldRow(label: $0.label, value: $0.value, second: $0.second,
+                         nameWidth: nameWidth)
+        }
         rows.forEach(addSubview)
         setContentHuggingPriority(.defaultLow, for: .horizontal)
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -106,12 +121,16 @@ import AppKit
     }
 }
 
-/// One name/value line of a `ToolFieldList`. Part 0 is the name, part 1 the
-/// value.
+/// One line of a `ToolFieldList`: a name and a value, or — where the row
+/// compares two copies of one thing — a name, a value and a second value in a
+/// column of its own. Part 0 is the name, part 1 the value, part 2 the second
+/// value when there is one.
 @MainActor public final class ToolFieldRow: NSView, ToolSelectableRow {
     public let label: String
     private let name: TextBlock
     private let value: TextBlock
+    /// The second value's column: nil on a row that has none.
+    private let second: TextBlock?
     private let nameWidth: CGFloat
     private var fittedWidth: CGFloat = -1
     private var fittedHeight: CGFloat = 0
@@ -120,6 +139,11 @@ import AppKit
     /// the list asked for, or half the row when the row is narrower than that.
     /// Where a name too long for it wraps, this is what it wraps in.
     public private(set) var nameColumnWidth: CGFloat = 0
+
+    /// The width each value is drawn in on a comparing row — the two columns
+    /// under the name are the same width, which is what makes them read as
+    /// columns. Zero on a row with one value, whose value takes the rest.
+    public private(set) var valueColumnWidth: CGFloat = 0
 
     /// How tall the row's own text is at the width it was last fitted to — its
     /// name and its value, whichever of the two is the taller. The row's frame
@@ -131,13 +155,15 @@ import AppKit
     /// apart, and a reader of either has the other to hand.
     public static let columnSpacing: CGFloat = 6
 
-    init(label: String, value: NSAttributedString, nameWidth: CGFloat) {
+    init(label: String, value: NSAttributedString, second: NSAttributedString? = nil,
+         nameWidth: CGFloat) {
         self.label = label
         self.nameWidth = nameWidth
         name = TextBlock(NSAttributedString(string: label, attributes: [
             .font: ToolPanelFont.body(), .foregroundColor: NSColor.secondaryLabelColor,
         ]))
         self.value = TextBlock(value)
+        self.second = second.map(TextBlock.init)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = true
         autoresizingMask = []
@@ -152,8 +178,14 @@ import AppKit
     /// stands in for a passed check's tick.
     public var valueText: String { TextBlock.plain(value.storage.string) }
 
+    /// The second value's text the same way. Nil on a row that has none.
+    public var secondText: String? { second.map { TextBlock.plain($0.storage.string) } }
+
     /// The value as it is drawn: its fonts, colours and a passed check's tick.
     public var attributedValue: NSAttributedString { value.storage }
+
+    /// The second value as it is drawn. Nil on a row that has none.
+    public var attributedSecond: NSAttributedString? { second?.storage }
 
     /// The font the name is drawn in.
     public var nameFont: NSFont? {
@@ -161,19 +193,34 @@ import AppKit
     }
 
     /// The name and the value — what VoiceOver and the tests read.
-    public var texts: [String] { [label, valueText] }
+    public var texts: [String] { [label, valueText] + (secondText.map { [$0] } ?? []) }
 
-    private var blocks: [TextBlock] { [name, value] }
+    private var blocks: [TextBlock] { [name, value] + (second.map { [$0] } ?? []) }
 
-    /// How tall the row is at `width`, its two texts set for it.
+    /// How tall the row is at `width`, its texts set for it.
+    ///
+    /// A row with one value gives it everything the name column leaves; a row
+    /// comparing two gives each of them the *same* width, so the two columns
+    /// line up down the list — and the name column stops at half the row, which
+    /// is what a squeezed panel leaves the two of them room in.
     func fit(width: CGFloat) -> CGFloat {
         guard width != fittedWidth else { return fittedHeight }
         let column = max(0, min(nameWidth, (width - Self.columnSpacing) / 2))
         name.place(x: 0, width: column)
-        value.place(x: column + Self.columnSpacing,
-                    width: max(1, width - column - Self.columnSpacing))
+        let rest = max(1, width - column - Self.columnSpacing)
+        if let second {
+            let each = max(1, (rest - Self.columnSpacing) / 2)
+            value.place(x: column + Self.columnSpacing, width: each)
+            second.place(x: column + Self.columnSpacing + each + Self.columnSpacing,
+                         width: max(1, rest - each - Self.columnSpacing))
+            valueColumnWidth = each
+            fittedHeight = max(name.height, value.height, second.height)
+        } else {
+            value.place(x: column + Self.columnSpacing, width: rest)
+            valueColumnWidth = 0
+            fittedHeight = max(name.height, value.height)
+        }
         fittedWidth = width
-        fittedHeight = max(name.height, value.height)
         nameColumnWidth = column
         textHeight = fittedHeight
         needsDisplay = true
@@ -183,14 +230,14 @@ import AppKit
     public override func draw(_ dirtyRect: NSRect) {
         if let selectedRange {
             NSColor.selectedTextBackgroundColor.setFill()
-            for part in selectedRange.lowerBound.part...min(selectedRange.upperBound.part, 1) {
+            let last = blocks.count - 1
+            for part in selectedRange.lowerBound.part...min(selectedRange.upperBound.part, last) {
                 let from = part == selectedRange.lowerBound.part ? selectedRange.lowerBound.index : 0
                 let to = part == selectedRange.upperBound.part ? selectedRange.upperBound.index : blocks[part].length
                 blocks[part].rects(from: from, to: to).forEach { $0.fill() }
             }
         }
-        name.draw()
-        value.draw()
+        blocks.forEach { $0.draw() }
     }
 
     // MARK: - Selecting
@@ -200,12 +247,16 @@ import AppKit
     }
 
     public var startMark: ToolTextMark { ToolTextMark(part: 0, index: 0) }
-    public var endMark: ToolTextMark { ToolTextMark(part: 1, index: value.length) }
+    public var endMark: ToolTextMark {
+        ToolTextMark(part: blocks.count - 1, index: blocks[blocks.count - 1].length)
+    }
 
-    /// The name's, left of the middle of the gap between the two; the value's
-    /// right of it.
+    /// The part the point falls in: the name's left of the middle of the gap
+    /// after it, and each value's left of the middle of the gap after *it*.
     public func mark(at point: NSPoint) -> ToolTextMark {
-        let part = point.x < value.origin.x - Self.columnSpacing / 2 ? 0 : 1
+        let part = blocks.indices.last {
+            $0 > 0 && point.x >= blocks[$0].origin.x - Self.columnSpacing / 2
+        } ?? 0
         return ToolTextMark(part: part, index: blocks[part].index(at: point))
     }
 
@@ -216,7 +267,8 @@ import AppKit
     }
 
     public func text(in range: Range<ToolTextMark>) -> String {
-        (range.lowerBound.part...min(range.upperBound.part, 1)).map { part in
+        let last = blocks.count - 1
+        return (range.lowerBound.part...min(range.upperBound.part, last)).map { part in
             let from = part == range.lowerBound.part ? range.lowerBound.index : 0
             let to = part == range.upperBound.part ? range.upperBound.index : blocks[part].length
             return blocks[part].text(from: from, to: to)
@@ -231,8 +283,9 @@ import AppKit
     public override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)
         let part = mark(at: point).part
+        let under = part == 0 ? label : blocks[part] === second ? secondText : valueText
         return NSMenu.copyMenu(selection: (superview as? ToolSelectableRows)?.selectedText,
-                               fallback: part == 0 ? label : valueText)
+                               fallback: under)
     }
 
     // MARK: - Accessibility
@@ -240,7 +293,9 @@ import AppKit
     public override func isAccessibilityElement() -> Bool { true }
     public override func accessibilityRole() -> NSAccessibility.Role? { .staticText }
     public override func accessibilityLabel() -> String? { label }
-    public override func accessibilityValue() -> Any? { valueText }
+    public override func accessibilityValue() -> Any? {
+        secondText.map { "\(valueText), \($0)" } ?? valueText
+    }
 }
 
 /// One wrapping text of a row, laid out by TextKit — which is what draws a
