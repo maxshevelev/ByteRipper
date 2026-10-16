@@ -1666,11 +1666,6 @@
 "Not set (all zeros)" = "Не задан (все нули)";
 "Not set (the area is erased)" = "Не задан (область стёрта)";
 "Layout not recognized" = "Структура не распознана";
-"Flexible EOM Settings" = "Настройка Flexible EOM";
-"Lock Descriptor and OEM Configs" = "Зафиксировать дескриптор и OEM-конфигурацию";
-"Lock OEM Configs Only" = "Только OEM-конфигурацию";
-"Lock Descriptor Only" = "Только дескриптор";
-"Do not lock Descriptor and OEM Configs" = "Не фиксировать ничего";
 "EOM: on" = "EOM включён";
 "EOM: off" = "EOM выключен";
 "descriptor: open" = "дескриптор открыт";

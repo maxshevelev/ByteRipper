@@ -925,11 +925,8 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(value("Manufacturing", in: rows)?.text(in: .english),
                        "Will close on the EOM flag (EOM: on, descriptor: locked)")
         XCTAssertTrue(rows.first { $0.label == "Manufacturing" }?.isEmphasized == true)
-        // What End of Manufacturing commits is its own row, in MFIT's own words
-        // for the four values of `FlexibleEomSettings` (numbered from zero).
-        XCTAssertEqual(value("Flexible EOM Settings", in: rows),
-                       .value("Lock Descriptor and OEM Configs"))
-        XCTAssertEqual(tone("Flexible EOM Settings", in: rows), .standard)
+        XCTAssertNil(value("Flexible EOM Settings", in: rows))
+        XCTAssertEqual(protected.manufacturingBasis?.flexible, 0)
         XCTAssertNil(value("Manufacturing basis", in: rows))
 
         let willClose = try analysis([
@@ -986,12 +983,10 @@ final class MEASummaryTests: XCTestCase {
                        .verdict("Will close on the descriptor's rights",
                                 evidence: "descriptor: locked"))
         XCTAssertEqual(tone("Manufacturing", in: rows), .caution)
-        // No flag in this image, so the evidence names the descriptor alone —
-        // and the setting row is absent, because the image carries no such
-        // record: CSME 12 knows nothing of `FlexibleEomSettings`.
+        // No flag in this image, so the evidence names the descriptor alone.
         XCTAssertEqual(value("Manufacturing", in: rows)?.text(in: .english),
                        "Will close on the descriptor's rights (descriptor: locked)")
-        XCTAssertNil(value("Flexible EOM Settings", in: rows))
+        XCTAssertNil(a.manufacturingBasis?.flexible)
         XCTAssertEqual(value("Boot Guard", in: rows), .value("4 - FVE"))
         XCTAssertEqual(tone("Boot Guard", in: rows), .standard)
         // CSME 12 with a zeroed key field: a finding of its own, not silence.
