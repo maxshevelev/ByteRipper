@@ -10,10 +10,38 @@ public enum AgentEndpoint {
     /// `~/Library/Application Support/ByteRipper/agent.sock`, unless the
     /// environment names another path.
     public static func socketPath(environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
-        if let path = environment[environmentKey], !path.isEmpty { return path }
+        folder(environment: environment).appendingPathComponent("agent.sock").path
+    }
+
+    /// The name the relay is installed under, beside the socket.
+    public static let relayName = "byteripper-mcp"
+
+    /// The relay a client's configuration names: **a copy of the app's helper
+    /// kept beside the socket**, not the helper inside whichever bundle happens
+    /// to be running.
+    ///
+    /// A path inside a bundle is not one to put in a client's configuration.
+    /// The app under Xcode lives in DerivedData, whose folder is named after the
+    /// *project's path* — so running the app from a second copy of the
+    /// repository, or from a build an agent made in its own scratch folder,
+    /// hands out a different path, and the configuration copied yesterday names
+    /// a file that copy will never rebuild. This path is the same for every copy
+    /// of the app on the account, and the app keeps the file itself at each
+    /// launch (`AgentRelayInstall`), so it is also the current app's relay
+    /// whatever the app was launched from.
+    public static func relayPath(environment: [String: String] = ProcessInfo.processInfo.environment) -> String {
+        folder(environment: environment).appendingPathComponent(relayName).path
+    }
+
+    /// The folder the two live in — taken from the socket's own path, so a
+    /// test's or a second build's socket carries its relay with it.
+    public static func folder(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
+        if let path = environment[environmentKey], !path.isEmpty {
+            return URL(fileURLWithPath: path).deletingLastPathComponent()
+        }
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
-        return support.appendingPathComponent("ByteRipper/agent.sock").path
+        return support.appendingPathComponent("ByteRipper")
     }
 
     /// The variable that lets the relay start the app. Without it the relay
