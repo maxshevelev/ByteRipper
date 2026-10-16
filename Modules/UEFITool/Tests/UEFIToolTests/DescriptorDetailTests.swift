@@ -17,6 +17,12 @@ final class DescriptorDetailTests: XCTestCase {
         detail.tables.first { $0.title == title }
     }
 
+    /// The row of a table whose first cell reads `name` — a strap field is a
+    /// row among hundreds, and this is how one of them is picked out.
+    private func row(_ table: UEFIDetailTable, _ name: String) -> [UEFIDetailTable.Cell]? {
+        table.rows.first { $0.first?.text == name }
+    }
+
     /// The sixteen bytes the descriptor opens with, printed the way a dump
     /// prints them — this is a vector a bench compares against another board's.
     func testTheReservedVectorIsShownAsBytes() {
@@ -182,9 +188,11 @@ final class DescriptorDetailTests: XCTestCase {
                        "red where the chip (4 MB) is below the smallest declared (8 MB)")
     }
 
-    /// The strap words as a grid of numbers, each row outlining its four bytes
-    /// in the dump; only the ME-disable word says anything about its bits.
-    func testTheStrapsAreAGridOfWords() throws {
+    /// Where the section's length is one no table of the chipset's layout is at
+    /// hand for, the words stand as the numbers they are, each row outlining
+    /// its four bytes in the dump; only the ME-disable word says anything about
+    /// its bits.
+    func testTheStrapsAreAGridOfWordsWhereNoLayoutIsAtHand() throws {
         var words = [UInt32](repeating: 0, count: 11)
         words[1] = 0x1234_5678
         let shown = detail(TestUEFI.flashDescriptor(straps: words))
@@ -226,32 +234,33 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(gpr0.tone, .caution)
         XCTAssertEqual(field(shown, "eSPI clock"), "60 MHz")
 
+        // Every field of the layout is a row of its own — 759 of them for this
+        // section — with the ME-disable bit among them.
         let table = try XCTUnwrap(table(shown, "PCH straps"))
-        XCTAssertEqual(table.rows.count, 70)
-        XCTAssertEqual(table.rows[21][3].text,
-                       "1 of 1 fields not at Flash Image Tool's default: "
-                       + "SPI_GLOBAL_PROTECTED_RNG_DEF = 0x829B0001")
-        XCTAssertEqual(table.rows[22][3].text,
-                       "2 of 20 fields not at Flash Image Tool's default: SPI_ec_max_freq = 0x4, "
-                       + "SPI_ec_max_io_mode = 0x3")
+        XCTAssertEqual(table.columns, ["Field", "Strap", "Bits", "Value", "Default"])
+        XCTAssertEqual(table.rows.count, 760)
+        XCTAssertEqual(try XCTUnwrap(row(table, "SPI_GLOBAL_PROTECTED_RNG_DEF")).map(\.text),
+                       ["SPI_GLOBAL_PROTECTED_RNG_DEF", "PCHSTRP21", "0–31", "0x829B0001", "0x0"])
+        XCTAssertEqual(try XCTUnwrap(row(table, "SPI_ec_max_freq")).map(\.text),
+                       ["SPI_ec_max_freq", "PCHSTRP22", "3–5", "0x4", "0x0"])
+        let clock = try XCTUnwrap(table.rows.firstIndex { $0[0].text == "SPI_ec_max_freq" })
+        XCTAssertEqual(table.rowTargets[clock], .range(0x258..<0x25C, name: "PCHSTRP22"),
+                       "a field's row outlines the word it belongs to")
     }
 
-    /// A word the image leaves alone is named as such against the tool's
-    /// default, and the bit that soft-disables the ME is named whatever the
-    /// layout says — the layouts do not name that bit.
-    func testAWordAtTheToolsDefaultSaysSo() throws {
-        var words = [UInt32](repeating: 0, count: 70)
-        words[1] = 0x1234_5678
-        let shown = detail(TestUEFI.flashDescriptor(version1: false, straps: words, strapCount: 70))
-        let table = try XCTUnwrap(table(shown, "PCH straps"))
+    /// The bit that soft-disables the ME is a row among the fields — the chipset
+    /// layout does not name it, so it has no default of the tool's to stand
+    /// against — and its value is the bit.
+    func testTheMEDisableBitIsARowOfTheLayoutsTable() throws {
+        func hap(_ words: [UInt32]) throws -> [UEFIDetailTable.Cell] {
+            let shown = detail(TestUEFI.flashDescriptor(version1: false, straps: words,
+                                                        strapCount: 70))
+            return try XCTUnwrap(row(XCTUnwrap(self.table(shown, "PCH straps")), "HAP"))
+        }
 
-        XCTAssertEqual(table.rows[0][3].text,
-                       "Fields: 4, all at Flash Image Tool's default; HAP in bit 16")
-        XCTAssertEqual(table.rows[1][3].text,
-                       "5 of 6 fields not at Flash Image Tool's default: "
-                       + "GPCOM5_gpio_sstrap_vccio_gpp_r_select = 0x0, "
-                       + "GPCOM5_gpio_sstrap_com5_spare0 = 0x3C, "
-                       + "GPCOM5_gpio_sstrap_pmmode_def_gpcom5 = 0x1, and 2 more")
+        XCTAssertEqual(try hap([0]).map(\.text), ["HAP", "PCHSTRP0", "16", "0x0", ""])
+        XCTAssertEqual(try hap([0x0001_0000]).map(\.text), ["HAP", "PCHSTRP0", "16", "0x1", ""])
+        XCTAssertEqual(try hap([0]).count, 5)
     }
 
     /// A zero GPRD is off, and a clock code nobody defines shows the code.
