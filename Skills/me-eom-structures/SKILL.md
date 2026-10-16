@@ -105,6 +105,36 @@ platform: the End of Manufacturing record, which the newer layouts do not bind
 at all (the tool writes it through `EomNvar`), so it is filled in from whichever
 document binds `EOM_Config` and marked as such in the file's header.
 
+## Emitting the descriptor's strap layout
+
+The same executables carry the chipset's own layout of the descriptor's PCH
+strap section — a `<LayoutEntry>` per field, with the tool's identifier, the
+word and bits it takes and the value the tool builds it with — which is what
+names the words in the UEFI Structure panel:
+
+```bash
+python3 Skills/me-eom-structures/scripts/strap_map.py \
+    <fit-15.0.exe> <fit-14.0.exe> --words 69,70,74,90,101 > \
+    Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH.swift
+```
+
+A table is asked for by the **length of the section it describes** — the words
+the descriptor's own `FLMAP1` states — because the documents carry no reliable
+platform name of their own (only some say `File Name: cnp_h_rvp.xml` in an XML
+comment, and one of those names is on two different documents). The length is a
+good key: 69 and 74 words are the same field for field in every tool that
+carries them, FIT 15's three 70-word tables differ only in 50 defaults and two
+spellings, and where a length has several differently-laid-out documents the
+one that names itself wins — for 90 words that is `cnp_h_rvp.xml`, which FIT 13
+carries as well, over a nameless document of the same length whose 417 fields
+sit at other offsets. On stderr the script says which document each table came
+from and where the two fields the engine reads by name — `SPI_ec_max_freq` and
+`SPI_GLOBAL_PROTECTED_RNG_DEF` — sit in it, which is the check that the table is
+the section's own: they move with the length, and the 69- and 74-word sections
+carry no clock field at all. A length is added by naming it in `--words` and running the script
+again; whatever the app does not carry stays a list of numbers in the panel.
+`--kind cpu` emits the processor strap section's table instead.
+
 ## Checking against MFIT
 
 MFIT prints the same facts in its build report:

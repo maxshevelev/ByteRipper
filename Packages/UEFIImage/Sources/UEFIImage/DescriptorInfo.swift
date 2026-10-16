@@ -122,10 +122,12 @@ public struct DescriptorInfo: Equatable, Sendable {
     /// before any firmware runs. Nil when its base is not one or it is empty.
     public var straps: Straps?
 
-    /// The strap words as they stand. Their layout is the chipset's and
-    /// changes with every generation — and between the mobile and desktop
-    /// parts of one — and next to none of it is published, so a word is
-    /// kept as a number rather than read as fields nobody can justify.
+    /// The strap words as they stand, and where a table of the section's
+    /// length is at hand, the fields they are made of. The layout is the
+    /// chipset's and changes with every generation — and between the mobile
+    /// and desktop parts of one — and next to none of it is published, which
+    /// is what `DescriptorStrapMap` is: Intel's own layout, taken from the
+    /// Flash Image Tool that writes the section.
     public struct Straps: Equatable, Sendable {
         /// Where the first word lies, in the file's own offsets.
         public var base: UInt64
@@ -140,6 +142,10 @@ public struct DescriptorInfo: Equatable, Sendable {
         /// strap the SPI controller loads its GPR0 register from. Nil where
         /// the layout is not one whose word for it is known.
         public var gpr0: ProtectedRange?
+        /// The section read as the fields of its layout, each with what this
+        /// image holds there. Nil where no table of this length is at hand,
+        /// in which case the words above are all there is to say.
+        public var fields: [DescriptorStrapMap.Reading]?
     }
 
     /// The eSPI clock: bits 3–5 of its word.
@@ -250,17 +256,23 @@ public extension DescriptorInfo {
             return MEDisable(name: bit.name, word: bit.word, bit: bit.bit,
                              isSet: words[bit.word] >> bit.bit & 1 != 0)
         }
-        var straps = Straps(base: section, words: words, meDisable: meDisable)
-        if let fields = generation.strapFields(count: words.count) {
-            let code = UInt8(words[fields.espiClockWord] >> 3 & 0x7)
+        // The chipset's layout of this length, where one is at hand: what
+        // names the words and says which of them the two fields below are.
+        let map = DescriptorStrapMap.forSection(words: words.count)
+        var straps = Straps(base: section, words: words, meDisable: meDisable,
+                            fields: map?.readings(in: words))
+        if let field = map?.espiClockField, field.word < words.count {
+            let code = UInt8(field.value(in: words[field.word]))
             straps.espiClock = ESPIClock(
-                word: fields.espiClockWord,
+                word: field.word,
                 clock: Clock(code: code, megahertz: generation.espiClock(code)))
-            // Fifteen bits of start, a read enable, fifteen of end, a write
-            // enable — ifdtool's `union gprd`.
-            let gprd = words[fields.gpr0Word]
+        }
+        // Fifteen bits of start, a read enable, fifteen of end, a write
+        // enable — ifdtool's `union gprd`, which is the whole of the field.
+        if let field = map?.protectedRangeField, field.word < words.count {
+            let gprd = field.value(in: words[field.word])
             straps.gpr0 = ProtectedRange(
-                word: fields.gpr0Word,
+                word: field.word,
                 start: base + UInt64(gprd & 0x7FFF) << 12,
                 end: base + (UInt64(gprd >> 16 & 0x7FFF) << 12 | 0xFFF),
                 readProtected: gprd >> 15 & 1 != 0,

@@ -228,8 +228,30 @@ final class DescriptorDetailTests: XCTestCase {
 
         let table = try XCTUnwrap(table(shown, "PCH straps"))
         XCTAssertEqual(table.rows.count, 70)
-        XCTAssertEqual(table.rows[21][3].text, "GPR0, the whole word")
-        XCTAssertEqual(table.rows[22][3].text, "eSPI clock in bits 3–5; the other bits unknown")
+        XCTAssertEqual(table.rows[21][3].text,
+                       "1 of 1 fields not at Flash Image Tool's default: "
+                       + "SPI_GLOBAL_PROTECTED_RNG_DEF = 0x829B0001")
+        XCTAssertEqual(table.rows[22][3].text,
+                       "2 of 20 fields not at Flash Image Tool's default: SPI_ec_max_freq = 0x4, "
+                       + "SPI_ec_max_io_mode = 0x3")
+    }
+
+    /// A word the image leaves alone is named as such against the tool's
+    /// default, and the bit that soft-disables the ME is named whatever the
+    /// layout says — the layouts do not name that bit.
+    func testAWordAtTheToolsDefaultSaysSo() throws {
+        var words = [UInt32](repeating: 0, count: 70)
+        words[1] = 0x1234_5678
+        let shown = detail(TestUEFI.flashDescriptor(version1: false, straps: words, strapCount: 70))
+        let table = try XCTUnwrap(table(shown, "PCH straps"))
+
+        XCTAssertEqual(table.rows[0][3].text,
+                       "Fields: 4, all at Flash Image Tool's default; HAP in bit 16")
+        XCTAssertEqual(table.rows[1][3].text,
+                       "5 of 6 fields not at Flash Image Tool's default: "
+                       + "GPCOM5_gpio_sstrap_vccio_gpp_r_select = 0x0, "
+                       + "GPCOM5_gpio_sstrap_com5_spare0 = 0x3C, "
+                       + "GPCOM5_gpio_sstrap_pmmode_def_gpcom5 = 0x1, and 2 more")
     }
 
     /// A zero GPRD is off, and a clock code nobody defines shows the code.

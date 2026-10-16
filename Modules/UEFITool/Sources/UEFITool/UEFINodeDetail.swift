@@ -1378,6 +1378,67 @@ public enum UEFIDetail {
         return fields
     }
 
+    /// What one strap word is. The bit that soft-disables the ME comes first,
+    /// because it is the one bit of the section whose meaning is settled for
+    /// the trade; the rest is the chipset's own layout — the fields Flash
+    /// Image Tool puts in that word, of which the ones this image does not
+    /// leave at the value the tool builds with are named, and the count in
+    /// front of them says how many the word holds altogether.
+    private static func strapMeaning(
+        _ index: Int, of straps: DescriptorInfo.Straps, in language: AppLanguage
+    ) -> String {
+        guard let fields = straps.fields else {
+            // No layout of this length — a section no tool at hand carries,
+            // or one from before the layout was written down. The bit and the
+            // two fields the engine reads by word are all there is to say.
+            if let bit = straps.meDisable, bit.word == index {
+                return L("%1$@ in bit %2$@; the other bits unknown", in: language, bit.name, bit.bit)
+            }
+            if straps.espiClock?.word == index {
+                return L("eSPI clock in bits 3–5; the other bits unknown", in: language)
+            }
+            if straps.gpr0?.word == index { return L("GPR0, the whole word", in: language) }
+            return L("Unknown", in: language)
+        }
+        let here = fields.filter { $0.field.word == index }
+        guard !here.isEmpty else { return L("Unknown", in: language) }
+        let sentence = strapFieldSentence(here, in: language)
+        guard let bit = straps.meDisable, bit.word == index else { return sentence }
+        // The layout does not name this bit — it is a spare or a reserved
+        // field of the word there — so it is added on its own, after what the
+        // word's fields are.
+        return sentence + "; " + L("%1$@ in bit %2$@", in: language, bit.name, bit.bit)
+    }
+
+    /// The fields of one word as they stand against the tool's default: the
+    /// ones the image set, named — at most three, which is about what a cell
+    /// of the table holds — or the fact that the word is at the default whole.
+    private static func strapFieldSentence(
+        _ fields: [DescriptorStrapMap.Reading], in language: AppLanguage
+    ) -> String {
+        let set = fields.filter(\.isSet)
+        guard !set.isEmpty else {
+            return L("Fields: %1$@, all at Flash Image Tool's default", in: language, fields.count)
+        }
+        // The count comes before the names: a cell too narrow for all of them
+        // is cut at its end, and how many the word holds is what must survive.
+        var listed = set.prefix(3).map { "\(strapFieldName($0.field.name)) = \(hex($0.value))" }
+            .joined(separator: ", ")
+        if set.count > 3 {
+            listed += ", " + L("and %1$@ more", in: language, set.count - 3)
+        }
+        return L("%1$@ of %2$@ fields not at Flash Image Tool's default: %3$@",
+                 in: language, set.count, fields.count, listed)
+    }
+
+    /// The tool's identifier for a strap field without the namespace every one
+    /// of them opens with: the table the name is in already says which section
+    /// the fields belong to.
+    private static func strapFieldName(_ name: String) -> String {
+        guard let range = name.range(of: "_Strap_") else { return name }
+        return String(name[range.upperBound...])
+    }
+
     /// A protected range as where it runs and what it refuses.
     private static func gpr0Text(_ range: DescriptorInfo.ProtectedRange, in language: AppLanguage) -> String {
         let span = "\(hex(range.start)) – \(hex(range.end))"
@@ -1480,23 +1541,17 @@ public enum UEFIDetail {
             ))
         }
         if let straps = descriptor.straps {
-            // Numbers, not fields: the layout is the chipset's and next to
-            // none of it is published (`UEFI_IMAGE_FORMAT.md` §2.6). Each row
-            // outlines its four bytes in the dump, which is where two boards'
-            // straps are compared.
+            // A word each, with the fields its layout puts in it: where the
+            // layout is not known — a length no tool at hand carries — the
+            // word stands as a number, as it did before. Each row outlines its
+            // four bytes in the dump, which is where two boards' straps are
+            // compared.
             let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
                 let name = "PCHSTRP\(index)"
                 let address = straps.base + UInt64(index) * 4
-                var meaning = L("Unknown", in: language)
-                if let bit = straps.meDisable, bit.word == index {
-                    meaning = L("%1$@ in bit %2$@; the other bits unknown", in: language, bit.name, bit.bit)
-                } else if straps.espiClock?.word == index {
-                    meaning = L("eSPI clock in bits 3–5; the other bits unknown", in: language)
-                } else if straps.gpr0?.word == index {
-                    meaning = L("GPR0, the whole word", in: language)
-                }
                 return ([.init(name), .init(hex(address)),
-                         .init(String(format: "0x%08X", straps.words[index])), .init(meaning)],
+                         .init(String(format: "0x%08X", straps.words[index])),
+                         .init(strapMeaning(index, of: straps, in: language))],
                         .range(address..<address + 4, name: name))
             }
             tables.append(UEFIDetailTable(
