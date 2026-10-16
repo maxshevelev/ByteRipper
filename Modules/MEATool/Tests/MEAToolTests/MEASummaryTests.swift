@@ -919,7 +919,7 @@ final class MEASummaryTests: XCTestCase {
         // state the platform is in.
         XCTAssertEqual(tone("Boot Guard", in: rows), .standard)
         XCTAssertEqual(value("OEM Public Key Hash", in: rows),
-                       .value(String(repeating: "05", count: 48)))
+                       .value(Array(repeating: "05", count: 48).joined(separator: " ")))
         // One line for a copy: the verdict, then what it was read from in
         // brackets — and only the verdict is emphasised.
         XCTAssertEqual(value("Manufacturing", in: rows)?.text(in: .english),
