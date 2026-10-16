@@ -52,7 +52,7 @@ extension MEConfigurationMap {
             Setting(name: "HideMEBxFwUpdCtrl", offset: 88, length: 1, bits: 1...1, options: [0: "No", 1: "Yes"], auto: true),
             Setting(name: "FwUpdEnable", offset: 92, length: 4, bits: 0...0, options: [0: "No", 1: "Yes"]),
             Setting(name: "AmtSupported", offset: 344, length: 4, bits: 0...0, options: [0: "No", 1: "Yes"]),
-            Setting(name: "NetServicesSupported", offset: 344, length: 4, bits: 16...16, options: [0: "No", 1: "Yes"]),
+            Setting(name: "NetServicesSupported", offset: 344, length: 4, bits: 16...16, options: [0: "Yes", 1: "No"]),
             Setting(name: "MngAppSupported", offset: 344, length: 4, bits: 2...2, options: [0: "No", 1: "Yes"]),
             Setting(name: "MngAppPowerUpState", offset: 404, length: 4, bits: 2...2, options: [0: "Disabled", 1: "Enabled"]),
             Setting(name: "KvmSupported", offset: 344, length: 4, bits: 18...18, options: [0: "No", 1: "Yes"]),
@@ -63,7 +63,7 @@ extension MEConfigurationMap {
             Setting(name: "PttSupported", offset: 344, length: 4, bits: 29...29, options: [0: "No", 1: "Yes"]),
             Setting(name: "PttPwrUpState", offset: 404, length: 4, bits: 29...29, options: [0: "Disabled", 1: "Enabled"]),
             Setting(name: "IshPowerUpState", offset: 404, length: 4, bits: 10...10, options: [0: "Disabled", 1: "Enabled"]),
-            Setting(name: "CryptoHwSupport", offset: 344, length: 4, bits: 13...13, options: [0: "No", 1: "Yes"], auto: true),
+            Setting(name: "CryptoHwSupport", offset: 344, length: 4, bits: 13...13, options: [0: "Yes", 1: "No"], auto: true),
             Setting(name: "EnableTDS", offset: 344, length: 4, bits: 25...25, options: [0: "No", 1: "Yes"], auto: true),
             Setting(name: "OemTag", offset: 524, length: 4, auto: true, hex: true),
             Setting(name: "ProcMissingDetect", offset: 212, length: 4, bits: 0...7, options: [0: "Yes", 255: "No"], auto: true),
@@ -127,8 +127,8 @@ extension MEConfigurationMap {
             Setting(name: "FwAutoBist", offset: 0, length: 4, bits: 0...0, options: [0: "Disabled", 1: "Enabled"], auto: true),
         ]),
         File(path: "/home/ptt/ptt_smx_disable", alias: "PttSmxSupport", settings: [
-            Setting(name: "SmxSupport", offset: 0, length: 1, bits: 0...0, options: [0: "Disabled", 1: "Enabled"], auto: true),
-            Setting(name: "Rsa1KSupport", offset: 0, length: 1, bits: 1...1, options: [0: "Disabled", 1: "Enabled"], auto: true),
+            Setting(name: "SmxSupport", offset: 0, length: 1, bits: 0...0, options: [0: "Enabled", 1: "Disabled"], auto: true),
+            Setting(name: "Rsa1KSupport", offset: 0, length: 1, bits: 1...1, options: [0: "Enabled", 1: "Disabled"], auto: true),
         ]),
         File(path: "/home/upid/platform_id_support", alias: "UpidPlatformIdSupport", settings: [
             Setting(name: "UniquePlatformIdSupportedFeature", offset: 0, length: 1, bits: 0...0, options: [0: "No", 1: "Yes"], auto: true),

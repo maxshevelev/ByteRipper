@@ -247,6 +247,38 @@ it cannot merge**: `/home/mca/icps`'s `icpsSwSkuing` is 8 bytes in one list and
 length on another's board. A new generation is a rerun against its own
 `mfit.exe`.
 
+### The same material in FIT's own shape (ME 15)
+
+The older FIT — `fit-15.0.exe` and its neighbours — carries the layout per
+platform as its own resources, and
+`Skills/me-eom-structures/scripts/fit_map.py <fit-15.0.exe> --straps tgp_lp`
+prints `MEConfigurationMap+CSME15.swift` from them. A setting's place there is
+an action of the `Nvar` module — `filePath` through an alias table, and a cell
+(`cellIndex × cellSize + cellOffset`) or a plain `startOffset` with `varSize` —
+and its words are the value class its `type="class:…"` names. TGL LP gives **21
+files and 60 settings**; two of the four TGL layouts (`tgp_lp_a1`, `tgp_lp_c0`)
+agree on every binding they share, and the H ones are another SKU's, so only the
+LP pair is read.
+
+Three things that came out of reading the two databases against each other:
+
+- **A kind's name lists its members in value order.** `yes_no_options` is Yes at
+  0, `no_yes_options` No at 0, and the same for the Enabled/Disabled pair — which
+  FIT states outright in its classes (`<Class name="YesNoValues">`: `Yes` 0, `No`
+  1). Reading them as interchangeable had put "No" on every 0 of four ME 16
+  settings, two of them readable in a dump (`CryptoHwSupport`,
+  `NetServicesSupported`); the emitted map now says what the database says.
+- **15 and 16 agree on `cfg_rules` and not on everything.** `MELanPowerWell` is
+  at 188 in both, `ProcEmulation` at 488 in both; but `SecureTouch` is at byte 8
+  of `iunit_oem_cfg` in FIT 15's layout and at 18 in MFIT 16's, and the settings
+  `PavpSupported`/`IshSupported` are named `FID_PAV`/`FID_ISH` on 15 — which is
+  why a generation reads its own map and not the newer one's.
+- **The End of Manufacturing record is the one thing the newer layouts do not
+  bind** — the tool writes it through `EomNvar` — so the 15 map takes those three
+  entries from whichever document binds `EOM_Config`, and says so in its header.
+  The bytes are the same in every generation (bit 0 of a 2-byte record, and the
+  single byte of `mca/eom`), which is what makes borrowing them honest.
+
 Two things the database is not. It is **per platform**: the lists are
 `ADL-S`, `ELG`, `MTL-M`, `MTL-S` in that build, so a dump of another platform
 needs the list for it (the offsets we read repeat across them — verified: the
