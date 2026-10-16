@@ -84,13 +84,17 @@ enum BootGuardReader {
     /// `BtGuardKeyManifestId` correctly is what says the reading is aligned
     /// rather than merely nearby.
     ///
-    /// Read on the five images at hand whose profile is known independently —
-    /// three builds of one image at profiles 3, 4 and 5, whose FIT `.xml`
-    /// readings differ in this field and nothing else, and two boards at
-    /// profile 0 — and it agrees with the CDMD record wherever an image carries
-    /// both. What it never does is turn a combination the table does not name
-    /// into the nearest profile: four settings are one profile or they are a
-    /// layout this does not read.
+    /// Read on images whose profile is known independently, and *written* there
+    /// by the very tools that read it: three FIT 15 builds of one CSME 15 image
+    /// at profiles 3, 4 and 5 (their `.xml` readings differ in this field and
+    /// nothing else) and three MFIT builds of one CSME 16 image at profiles 0, 3
+    /// and 5, each moving these bits and leaving the rest of the image
+    /// byte-identical. It agrees with the CDMD record wherever an image carries
+    /// both — and since both are the tool's own writing, a disagreement would be
+    /// a finding about how the image was assembled rather than a coin toss.
+    /// What it never does is turn a combination the table does not name into the
+    /// nearest profile: four settings are one profile or they are a layout this
+    /// does not read.
     static func profile(inUEPArea uep: Data) -> BootGuardProfile? {
         guard let signature = uep.range(of: Data("$UEP".utf8))?.lowerBound,
               let flagsAt = uep.index(signature, offsetBy: flagsOffset,

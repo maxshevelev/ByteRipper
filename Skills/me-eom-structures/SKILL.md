@@ -98,8 +98,9 @@ profile — 18 has a CDMD block without the key, the older three have no block a
 all, and a reading of their bits waits for a dump whose profile is known
 independently, the way CSME 15's was settled.
 
-And the file ends with the **next experiment**, written out as a checklist before
-it is run: whether MFIT writes the same Boot Guard bits on CSME 16, or those
-images inherit them from the input they were built from. It is the one
-measurement that can falsify the engine's 15–16 gate, and it is one MFIT build
-away.
+And the file ends with the experiment that closed the last open question of the
+reading: **MFIT writes the same four bits on CSME 16 that FIT 15 does**, so the
+agreement between an image's CDMD record and its UEP bits is the tool's own
+doing rather than a leftover from the input. Three MFIT builds of one image,
+differing only in the profile, moved those bits with it — and left the rest of
+the image byte-identical, which is why the engine's 15–16 gate stands.
