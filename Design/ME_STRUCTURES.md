@@ -100,6 +100,22 @@ profile, written as an **index into MFIT's own list**: 0 → `0 - No_FVME`,
 the strap and harness the image was built from, `{"FpfSvnEnabled": 1}`,
 `{"sku": …}` and `{"ResizeNftpForFtpr": "Enabled"}`.
 
+**The profile has a second keeping, and it is the older one.** An image with no
+CDMD record — every CSME 15 image — carries not the profile's *index* but **the
+four settings the profile is made of**, as bits of the UEP area's first
+`UepBitsArray`: FBG ACM bit 0, `ProtectBiosEnvironment` 3, `MeasuredBoot` 4,
+`VerifiedBoot` 5 of the byte at `$UEP`+0x6E, and Intel's own `BootGuardProfiles`
+class is the table from that combination to the four profiles (0 = all four
+false, 3 = verified+measured+protect, 4 = ACM+verified+protect, 5 = all four
+true). FIT's layout documents write both ends of that down — the class that
+places the settings in the array (`GetBitArrayValue … offset="0x60"
+startBit="16"`) and the table that names the profiles — which is why this is a
+reader and not a guess. Both keepings are read and they agree on every image
+that carries both (a CSME 16.1 dump: CDMD 5, bits 0x79 → FVME). What is *not*
+read is the same byte's two debug bits, whose values disagree with FIT's own
+report on the images at hand; and the reading is applied to CSME 15 and 16 only,
+the generations it was verified on.
+
 A profile is what the platform burns into the chipset's fuses when Manufacturing
 closes, and the fuses cannot be taken back — which is why the profile is worth
 reading before an image is written, and why a wrong answer is worse than none.
@@ -115,7 +131,7 @@ not that the fact is absent from the platform.
 | CSME 18 (EliteBook 630 G11) | v2 ✓ — the row's gate | **not found**: the FITC partition is there, the `eom_config` record is not | **not found** — CDMD present, no `BtGuardProfileConfig` | ✓ read — `0D7C0D45…`, the same key as its sibling at CSME 16.1.30 |
 | CSME 16.1 (Z Flow, Legion, Asus, Dell) | v2 ✓ | ✓ FITC record and the live one | ✓ CDMD JSON — 5 and 0 seen | ✓ UEP, 6 + 6 copies — **verified** for the Z Flow family |
 | CSME 16.0 (Legion) | v2 ✓ | ✓ | ✓ (5, 0) | ✓ |
-| CSME 15 (Lenovo 1.bin, 2.rom, corporate) | v2 ✓ | ✓ records present; the live page is absent on a never-booted build | **not found** — no CDMD record in any of them | ✓ UEP — **unverified** |
+| CSME 15 (Lenovo 1.bin, 2.rom, corporate) | v2 ✓ | ✓ records present; the live page is absent on a never-booted build | ✓ **UEP bits** — 0 on the three boards, and 3/4/5 on the owner's three builds, each matching the `.xml` FIT itself wrote for that build | ✓ UEP — **unverified** |
 | CSME 14 (Lenovo) | v2 ✓ | **no such setting**: the configuration records are the named (0x1C) layout and hold no `eom_config` | **not found** — no CDMD partition at all in that image | **layout not recognized** — the field holds a pointer-like value, not a key |
 | CSME 12 (Dell, Lenovo, HP) | v2 ✓ | no such setting | **not found** | **all zeros** — the field is there and reads zeros: signing disabled |
 | CSME 11 (corporate) | v2 ✓ | no such setting | **not found** — no CDMD and no `$UEP` container at all | **layout not recognized** — no area to read the field from |
@@ -315,7 +331,10 @@ one per generation the other-version work will reach for).
 
 ## What to work out next
 
-**Where CSME 15 keeps the Boot Guard profile.** MFIT offers the setting for
+**Where CSME 15 keeps the Boot Guard profile — settled, see above.** The section
+is kept because the *method* is the one the next generation needs, and because
+the first answer it produced was wrong in a way worth not repeating: the search
+was for a **number**. MFIT offers the setting for
 CSME 15 projects too (`CsePlugin:UEP:BtGuardProfileConfig`, with the FPF field
 map below), so it is written somewhere. The experiment that settled CSME 16 is
 the one to repeat: two MFIT projects over the same dump differing in nothing but
@@ -344,9 +363,14 @@ The two-build diff above is still the way to find the blocks themselves; the
 scripts and the field map are in `Skills/me-eom-structures/reference/structures.md`.
 
 **That experiment has now been run** (four FIT 15 builds of one project, differing
-only in the profile). It settles the question in the negative: the profile is
-**not a number in the image** — no byte or dword holds 0, 3, 4 and 5 at the same
-offset — and the only thing that moves with it is the length of a table of
+only in the profile). It settles one half of the question: the profile is **not a
+number in the image** — no byte or dword holds 0, 3, 4 and 5 at the same
+offset — which is true and was read at the time as "the profile is not in the
+image at all". What it *is* is the four settings, as bits (see "The CDMD
+partition" above); the search that produced this paragraph was looking for a
+number, then for one byte that separates all four profiles, and neither exists.
+The builds did show one thing that moves with the profile beside the bits: the
+length of a table of
 "key-manifest hash usage" records in the ME region's EFS area (48/56/72/64
 records for profiles 0/3/4/5, strictly nested, eight records per step). That
 table describes **a build**: on real board dumps it is board-specific (30, 33, 18
@@ -355,15 +379,19 @@ including one whose CDMD states profile 5. A board's Boot Guard level is on the
 **BIOS** side, in the boot policy manifest ECFinder reads, which is outside the
 ME region this engine is given.
 
-**Whether an older generation carries the profile in another place.** The
-survey above is the first half of the answer, and it splits the generations in
-two: CSME 15, 14, 12 and 11 carry **no CDMD configuration at all** (no `FIT AS A
-FIDDLE` block anywhere in the region), while CSME 18 carries the block and no
-`BtGuardProfileConfig` key in it. The first group needs the MFIT experiment
-above — the setting exists in MFIT for those projects, so it is written
-somewhere, most likely into the UEP entries whose layout is unknown. The second
-group needs the key's other spelling, which MFIT's settings database is the
-place to find.
+**Whether an older generation carries the profile in another place.** CSME 15 is
+answered: it keeps the four settings as bits of the UEP area (see "The CDMD
+partition" above, and the correction at the end of
+`Skills/me-eom-structures/reference/structures.md` for what the earlier search
+looked for and why it could not find it). What is not answered is CSME 14, 12
+and 11 — no CDMD configuration at all (no `FIT AS A FIDDLE` block anywhere in
+the region) — and CSME 18, which carries the block and no
+`BtGuardProfileConfig` key in it. For the older three the next step is the same
+one that settled 15: a dump whose profile is known *independently* (a tool's own
+report), then read the same bits; today the reading is deliberately limited to
+the generations it was verified on, and a CSME 12 or 18 image answers "no record"
+rather than a number taken from bits that mean something else. CSME 18 needs the
+key's other spelling, which MFIT's settings database is the place to find.
 
 **Where CSME 15 and 18 keep the EOM flag.** The flag was found in the FITC
 partition on CSME 15 and 16 and *not* on CSME 18, whose MFS volume also could

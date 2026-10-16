@@ -17,17 +17,22 @@ Understood well enough to claim (see reference/structures.md):
     partition table, whose IFWI layout this script does not parse. What it prints
     for those files is the *defaults* page — the one a clean image carries too;
     what is in force now is in the MFS file system, which the app's engine reads.
-  * the UEP area opens with the ASCII "$UEPC" and mirrors the OEM key hashes.
+  * the UEP area opens with the ASCII "$UEP" (or "$UEPC"), then a 16-bit CRC and
+    two reserved bytes, then the bit arrays FIT keeps its Boot Guard settings in.
   * a 48-byte value the UEP holds and the ME region repeats is key material — the
     OEM public key hash is a SHA-384 (48 bytes). Heuristic.
   * the Boot Guard profile is a JSON record in the CDMD partition, under the
     ASCII signature "FIT AS A FIDDLE": {"BtGuardProfileConfig": <index>}, where
     the index picks MFIT's list 0 - No_FVME, 1 -> 3 - VM, 2 -> 4 - FVE,
     3 -> 5 - FVME. Verified against the owner's ground truth on five dumps.
+  * where there is no such record — every CSME 15 image — the profile is the
+    four settings themselves, as bits of the UEP area's first bit array; the
+    same four FIT 15's table names. Read on the owner's three builds of one
+    image, whose FIT readings differ in this and nothing else.
 
-Not understood yet (do not guess in a report): what the UEP entry fields mean
-(a window in the BIOS region, a 0x4FE/0xFE field, a 32-bit sum), and what the
-rest of the CDMD configuration's records are.
+Not understood yet (do not guess in a report): what the rest of the UEP entry
+fields mean (the bits beside the four, the 0x4FE/0xFE word, the checksum's
+range), and what the rest of the CDMD configuration's records are.
 """
 
 import json
@@ -43,8 +48,49 @@ EOM_FILES = {0x10020000: ("/home/mca/eom", 1),
              0x1001EE00: ("/home/mca/eom_config", 2),
              0x10020100: ("/home/mca/manuf_lock", 1)}
 
-# MFIT's Boot Guard Profile list, as its own settings database spells it.
+# MFIT's Boot Guard Profile list, as its own settings database spells it. The
+# index is MFIT's own: the level it names is not the index.
 BOOT_GUARD_PROFILES = {0: "0 - No_FVME", 1: "3 - VM", 2: "4 - FVE", 3: "5 - FVME"}
+
+# The same four profiles the older FIT keeps as the four settings a profile is
+# made of — FBG ACM, verified, measured, protect — keyed by them. This is the
+# `BootGuardProfiles` table of FIT 15's own layout, and it is what an image
+# without a CDMD record carries instead.
+BOOT_GUARD_FLAGS = {(0, 0, 0, 0): "0 - No_FVME",
+                    (0, 1, 1, 1): "3 - VM",
+                    (1, 1, 0, 1): "4 - FVE",
+                    (1, 1, 1, 1): "5 - FVME"}
+
+# Where the four bits sit in the UEP area: the first `UepBitsArray`'s flags byte
+# (FBG ACM bit 0, protect 3, measured 4, verified 5), measured off the "$UEP"
+# signature on the images at hand. FIT's layout names those bits in the array
+# (`GetBitArrayValue … offset="0x60" startBit="16"`, and 19/20/21 for the other
+# three); that the array's bytes begin 0x0C into the container is the part the
+# class does not say, so the offset is measured rather than derived.
+UEP_FLAGS_OFFSET = 0x6E
+# The word the same array keeps just ahead of the flags, written wherever this
+# layout is and blank in a container of another structure.
+UEP_WORD_OFFSET = 0x68
+
+
+def uep_boot_guard_flags(me, uep_at):
+    """The profile's four settings out of the UEP area, or None where the area
+    carries no such bits: never written (all zeros, all 0xFF), too short, or
+    their combination is no profile. The area's body, not its signature, is what
+    says it was written."""
+    if uep_at < 0 or uep_at + UEP_FLAGS_OFFSET + 1 > len(me):
+        return None
+    body = me[uep_at + 8:uep_at + 0x80]
+    if not body or len(set(body)) == 1:
+        return None
+    # The word just ahead of the flags is another setting's bits and is written
+    # wherever this layout is; zeroes there mean another structure behind the
+    # same signature — a CSME 12 image's UEP partition — not four false flags.
+    word = me[uep_at + UEP_WORD_OFFSET] | (me[uep_at + UEP_WORD_OFFSET + 1] << 8)
+    if word in (0x0000, 0xFFFF):
+        return None
+    byte = me[uep_at + UEP_FLAGS_OFFSET]
+    return (byte & 0x01 != 0, byte & 0x20 != 0, byte & 0x10 != 0, byte & 0x08 != 0)
 
 
 def u16(d, o):
@@ -217,10 +263,16 @@ def report(path):
             continue
         if signature == b"$UEP" and me[uep + 4:uep + 5] == b"C":
             continue          # the $UEPC container, already reported above
-        size = u32(me, uep + len(signature)) if uep + len(signature) + 4 <= len(me) else 0
+        # The four bytes behind the signature are the container's own header,
+        # not a length: a 16-bit CRC of the data and two reserved bytes (the
+        # `Uep` class of FIT's layout, reference/structures.md).
+        head = me[uep + 4:uep + 8]
         span = me[uep:uep + 0x2000]
-        print("UEP: %s at file 0x%X, declared size 0x%X — %.1f%% of the 8 KiB erased"
-              % (signature.decode(), me_start + uep, size,
+        print("UEP: %s at file 0x%X, header %s (CRC 0x%04X, reserved 0x%04X)"
+              " — %.1f%% of the 8 KiB erased"
+              % (signature.decode(), me_start + uep, head.hex(" ").upper(),
+                 head[0] | (head[1] << 8) if len(head) >= 2 else 0,
+                 head[2] | (head[3] << 8) if len(head) >= 4 else 0,
                  100.0 * span.count(0xFF) / 0x2000))
         uep_at = uep
 
@@ -264,11 +316,20 @@ def report(path):
     for off, record in records:
         if "BtGuardProfileConfig" in record:
             profile = record["BtGuardProfileConfig"]
-    if profile is None:
-        print("Boot Guard profile: no BtGuardProfileConfig in this image")
-    else:
+    if profile is not None:
         print("Boot Guard profile: %s (index %s of the CDMD JSON)"
               % (BOOT_GUARD_PROFILES.get(profile, "unknown: %r" % profile), profile))
+    else:
+        print("Boot Guard profile: no BtGuardProfileConfig in the CDMD JSON"
+              " — reading the UEP bits")
+        flags = uep_boot_guard_flags(me, uep_at)
+        if flags is None:
+            print("  the UEP area carries no Boot Guard bit array here")
+        else:
+            print("  UEP Boot Guard bits: FBG ACM %d, verified %d, measured %d,"
+                  " protect %d → %s"
+                  % (flags + (BOOT_GUARD_FLAGS.get(flags,
+                                                   "no profile names this combination"),)))
 
 
 if __name__ == "__main__":
