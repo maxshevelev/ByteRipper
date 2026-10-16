@@ -79,7 +79,10 @@ final class MEACuratorTests: XCTestCase {
         let state = try XCTUnwrap(firmware.fields.first { $0.label == "File System State" })
         // A state the unread EFS left standing is not drawn as settled.
         XCTAssertEqual(state.tone, .caution)
-        XCTAssertEqual(state.value, "Configured (configuration: FITC; EFS: unreadable)")
+        XCTAssertEqual(state.value, "Configured")
+        XCTAssertEqual(state.evidence, "configuration: FITC; EFS: unreadable",
+                       "the evidence is kept apart, so it is not drawn in the state's tone")
+        XCTAssertEqual(state.text, "Configured (configuration: FITC; EFS: unreadable)")
         XCTAssertNil(firmware.fields.first { $0.label == "State basis" })
 
         a.mfsStateBasis = MFSStateBasis(reservedFiles: .notRead, efs: .noFileContent,
@@ -87,7 +90,7 @@ final class MEACuratorTests: XCTestCase {
         let settled = try XCTUnwrap(find("Firmware", in: MEACurator.present(a, in: .english)))
         let settledState = try XCTUnwrap(settled.fields.first { $0.label == "File System State" })
         XCTAssertEqual(settledState.tone, .good)
-        XCTAssertEqual(settledState.value, "Configured (configuration: FITC)")
+        XCTAssertEqual(settledState.text, "Configured (configuration: FITC)")
     }
 
     func testIssuesSayTheModuleChecksAreToCome() throws {

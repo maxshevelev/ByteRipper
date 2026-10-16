@@ -133,7 +133,7 @@ public enum MEAAgentQueries {
             var detail = summaryOf(node)
             if case .object(var members) = detail {
                 members["fields"] = .array(node.fields.map { field in
-                    var entry: [String: JSONValue] = ["label": .string(field.label), "value": .string(field.value)]
+                    var entry: [String: JSONValue] = ["label": .string(field.label), "value": .string(field.text)]
                     if field.tone.isStatus { entry["tone"] = .string(toneName(field.tone)) }
                     return .object(entry)
                 })

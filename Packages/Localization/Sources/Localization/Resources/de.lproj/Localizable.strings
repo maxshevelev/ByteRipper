@@ -1548,3 +1548,5 @@
 "MFS" = "MFS";
 "auto" = "auto";
 "%1$@, %2$@ bytes" = "%1$@, %2$@ Bytes";
+"No configuration read" = "Keine Konfiguration gelesen";
+"The settings are read on CSME 13 to 16, from the configuration files the image carries." = "Die Einstellungen werden für CSME 13 bis 16 aus den Konfigurationsdateien des Abbilds gelesen.";
