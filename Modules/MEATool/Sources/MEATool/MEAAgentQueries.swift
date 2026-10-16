@@ -43,8 +43,9 @@ public enum MEAAgentQueries {
             a serial image relies on), "Will not close", "Will close on the EOM flag, with the \
             descriptor open", "Not readable from this image" or "No such switch in this firmware"), \
             which carries a `basis` of its own (the flag and which page it was read from, what End of \
-            Manufacturing commits, and the descriptor's state; the "Flexible EOM Settings" row beside \
-            it gives that last one in MFIT's four values — what End of Manufacturing locks); \
+            Manufacturing commits, and the descriptor's state — the last of those is `flexible`, \
+            MFIT's `FlexibleEomSettings` in its four values, which the Configuration tab shows on \
+            `/home/mca/eom_config`); \
             "Boot Guard", the profile the image is built for (0 - No_FVME, 3 - VM, 4 - FVE, 5 - FVME, \
             with `profile` and `profile_index` beside it, or "No profile record in this image"); and \
             "OEM Public Key Hash", the 48-byte SHA-384 the ME region carries, all zeros meaning OEM \

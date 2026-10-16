@@ -115,10 +115,6 @@ public enum MEACurator {
             fields.append(MEAField(L("Manufacturing", in: language),
                                    evidence.isEmpty ? verdict : "\(verdict) (\(evidence))",
                                    tone: MEATones.manufacturingState(state)))
-            if let flexible = a.manufacturingBasis?.flexible {
-                fields.append(MEAField(L("Flexible EOM Settings", in: language),
-                                       MEAText.flexibleEOMSettings(flexible, in: language)))
-            }
         }
         if a.family == .csme, a.version.major >= 11 {
             fields.append(MEAField(L("Boot Guard", in: language),

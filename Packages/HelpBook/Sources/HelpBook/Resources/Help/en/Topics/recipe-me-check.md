@@ -29,7 +29,7 @@ The tool reports that nothing in the file reads as Intel ME firmware in three di
 - **Size** — how far the firmware reaches from its `$FPT`. This is a property of the firmware, not the length of the region or of the file.
 - **Flash Image Tool** — the version of Intel's Flash Image Tool that the image was built with, where the image records it.
 - **File System State** — described in the next section.
-- **Manufacturing** — the verdict with, in brackets after it, the two facts it was read from, described in the section after this one. **Boot Guard** and **OEM Public Key Hash** are read there too, and **Flexible EOM Settings** stands under the verdict.
+- **Manufacturing** — the verdict with, in brackets after it, the two facts it was read from, described in the section after this one. **Boot Guard** and **OEM Public Key Hash** are read there too.
 
 Rows the analysis cannot answer for the family in question are left grey rather than filled with a guess.
 
@@ -72,7 +72,7 @@ A clear setting therefore does not mean Manufacturing stays open: it means the d
 
 The verdict carries what it was read from **in brackets after it**: `Will not close (EOM: off, descriptor: open)` — the flag as the image has it, and whether the descriptor's access rights are open or locked. The verdict itself takes the row's colour; the brackets are drawn in the ordinary font and colour, because they are evidence and not a second answer. A fact the image could not supply is left out of the brackets rather than replaced by a dash: an image with no such record says so in the verdict itself.
 
-**Flexible EOM Settings** follows it, and is what End of Manufacturing commits, in Flash Image Tool's own four values: `Lock Descriptor and OEM Configs`, `Lock OEM Configs Only`, `Lock Descriptor Only`, `Do not lock Descriptor and OEM Configs`. It is stored whether or not the flag is set, so an image that will not close still says what it would lock if it ever ran — the setting beside the flag is what decides that, and it is worth reading before the flag is set on a service image.
+What End of Manufacturing commits is the image's own `FlexibleEomSettings` — a field of the same configuration file as the flag, in Flash Image Tool's four values, and stored whether or not the flag is set: an image that will not close still says what it would lock if it ever ran.
 
 The three rows are drawn in colour. A machine that will **not** close Manufacturing boots on and can still be worked on: green. One that **will** close, and one whose setting is enabled with the descriptor open, are drawn in the same tone the file system state is drawn in for **Initialized** — the image is committing itself, and what is written after that is final. A row that only says the image carries no record is drawn plain.
 

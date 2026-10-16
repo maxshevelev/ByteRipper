@@ -1,4 +1,4 @@
-@source-sha 9a41395a12b543c9f4de586c5671cfe810c7c11b9b11acd7dfb456ac5fc7c843
+@source-sha 46c4806093e882a30c611c40a15681b89c79376caee4cace8607500d3721e9c3
 # Den ME-Bericht lesen
 
 > Was die beiden Registerkarten des ME Analyzer enthalten und wie die einzelnen Zeilen der Übersicht zu lesen sind.
@@ -27,7 +27,7 @@ Die Meldung, dass nichts in der Datei sich als Intel-ME-Firmware lesen lässt, d
 - **Size** — wie weit die Firmware von ihrer `$FPT`-Tabelle aus reicht. Das ist eine Eigenschaft der Firmware, nicht die Länge der Region oder der Datei.
 - **Flash Image Tool** — die Version von Intels Flash Image Tool, mit dem das Image gebaut wurde, soweit das Image sie festhält.
 - **File System State** — siehe den nächsten Abschnitt.
-- **Manufacturing** — das Urteil und, in Klammern dahinter, die zwei Tatsachen, aus denen es gelesen wurde; siehe den Abschnitt „Manufacturing, Boot Guard und der öffentliche OEM-Schlüssel“. Dort stehen auch **Boot Guard** und **OEM Public Key Hash**, und unter dem Urteil **Flexible EOM Settings**.
+- **Manufacturing** — das Urteil und, in Klammern dahinter, die zwei Tatsachen, aus denen es gelesen wurde; siehe den Abschnitt „Manufacturing, Boot Guard und der öffentliche OEM-Schlüssel“. Dort stehen auch **Boot Guard** und **OEM Public Key Hash**.
 
 Zeilen, die für die jeweilige Familie nicht beantwortet werden konnten, bleiben grau, statt mit einer Vermutung gefüllt zu werden.
 
@@ -70,7 +70,7 @@ Eine nicht gesetzte Einstellung heißt also nicht, dass Manufacturing offen blei
 
 Das Urteil trägt das, woraus es gelesen wurde, **in Klammern hinter sich**: „Schließt nicht ab (EOM: aus, Descriptor: offen)“ — das Flag, wie das Image es führt, und ob die Zugriffsrechte im Descriptor offen oder gesperrt sind. Die Farbe der Zeile trägt das Urteil; die Klammern stehen im gewöhnlichen Schriftbild und Ton, denn sie sind Beleg und keine zweite Antwort. Eine Tatsache, die das Image nicht hergibt, fehlt in den Klammern, statt durch einen Gedankenstrich ersetzt zu werden: ein Image ohne einen solchen Eintrag sagt das im Urteil selbst.
 
-**Flexible EOM Settings** folgt ihr und ist das, was End of Manufacturing sperrt — in den vier Werten des Flash Image Tool: „Descriptor und OEM-Konfiguration sperren", „Nur die OEM-Konfiguration sperren", „Nur den Descriptor sperren", „Nichts sperren". Der Wert steht unabhängig vom Flag im Image, ein Image, das nichts abschließt, sagt also trotzdem, was es sperren würde, wenn es abschlösse; entschieden wird das von der Einstellung neben dem Flag, und sie ist es wert, vor dem Setzen des Flags in einem Service-Image gelesen zu werden.
+Was End of Manufacturing sperrt, ist die eigene Einstellung des Images, `FlexibleEomSettings` — ein Feld derselben Konfigurationsdatei wie das Flag, in den vier Werten des Flash Image Tool, und unabhängig vom Flag gespeichert: ein Image, das nichts abschließt, sagt trotzdem, was es sperren würde, wenn es abschlösse.
 
 Die drei Zeilen sind farbig. Eine Platine, die Manufacturing **nicht** abschließt, startet und bleibt bearbeitbar: grün. Eine, die abschließt, und der Fall, in dem die Einstellung bei offenem Descriptor gesetzt ist, tragen denselben Ton, den der Dateisystemzustand für **Initialized** trägt — das Image legt sich fest, und was danach geschrieben wird, ist endgültig. Eine Zeile, die nur meldet, dass das Image keinen Eintrag trägt, bleibt im gewöhnlichen Ton.
 

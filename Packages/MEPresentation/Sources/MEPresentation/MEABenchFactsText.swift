@@ -112,19 +112,4 @@ extension MEAText {
             return String(hex[from..<to])
         }.joined(separator: " ")
     }
-
-    /// `FlexibleEomSettings` — bits 1–2 of the same `/home/mca/eom_config`
-    /// record the flag lives in — as MFIT's own setting spells its four values
-    /// (`config_params` of `FlexibleEomSettings` in its settings database, and
-    /// the labels its own panel shows). It is what End of Manufacturing
-    /// commits, and it is stored whether or not the flag is set: an image whose
-    /// flag is clear still says what would be locked if it ever ran.
-    public static func flexibleEOMSettings(_ value: Int, in language: AppLanguage) -> String {
-        switch value {
-        case 0: return L("Lock Descriptor and OEM Configs", in: language)
-        case 1: return L("Lock OEM Configs Only", in: language)
-        case 2: return L("Lock Descriptor Only", in: language)
-        default: return L("Do not lock Descriptor and OEM Configs", in: language)
-        }
-    }
 }
