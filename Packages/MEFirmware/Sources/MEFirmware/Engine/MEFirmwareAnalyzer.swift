@@ -1205,15 +1205,27 @@ public actor MEFirmwareAnalyzer {
         let uepArea = Self.regionBytes("UEP", regions: regions,
                                        region: region, baseOffset: baseOffset)
         // Where an image has no CDMD record, the profile is the UEP area's Boot
-        // Guard bits — read on the two generations whose tools were measured
-        // writing them, 15 (FIT) and 16 (MFIT), where three builds of one image
-        // moved these bits with the profile and changed nothing else. A CSME 12
-        // container is another structure whose blank bits would read as profile
-        // 0, and CSME 18's is blank where these keep their arrays; neither is
-        // read until a dump whose profile is known says its container keeps them
-        // the same way.
-        let uepProfile = identity.family == .csme && (15...16).contains(identity.major)
-            ? uepArea.flatMap(BootGuardReader.profile(inUEPArea:)) : nil
+        // Guard bits — and which shape of container they sit in is the
+        // generation's, as the key record's offsets are: the first bit array of
+        // CSME 15 and 16 (0x6E), the area's record on CSME 12 to 14 (0x4C).
+        // Each shape was settled by builds of one image whose `.xml` readings
+        // differ in this field and nothing else — three FIT 15 builds of a CSME
+        // 15 image, four FIT 14.0 builds of a CSME 14 one — and each reader's
+        // guards reject the other shape, so a container whose layout is not the
+        // expected one answers nothing rather than a profile. CSME 11 has no
+        // area at all; 18 and later are not read until a dump whose profile is
+        // known says what their containers hold.
+        func profileFromUEP(_ area: Data) -> BootGuardProfile? {
+            guard identity.family == .csme else { return nil }
+            if (12...14).contains(identity.major) {
+                return BootGuardReader.profile(inEarlierUEPArea: area)
+            }
+            if (15...16).contains(identity.major) {
+                return BootGuardReader.profile(inUEPArea: area)
+            }
+            return nil
+        }
+        let uepProfile = uepArea.flatMap(profileFromUEP)
         let bootGuardProfile = Self.regionBytes("CDMD", regions: regions,
                                                 region: region, baseOffset: baseOffset)
             .flatMap(BootGuardReader.profile(in:))

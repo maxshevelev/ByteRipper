@@ -8,15 +8,18 @@
 //     configuration, under that partition's `FIT AS A FIDDLE` signature: MFIT
 //     writes the setting there as an index into its own list of four profiles;
 //   * the **profile**, second source — the four flags FIT builds a profile from,
-//     as bits of the UEP area's first `UepBitsArray`. CSME 15 images carry no
-//     CDMD record at all, which is why the older tool's own keeping of the
-//     setting had to be found;
+//     as bits of the UEP area: the first `UepBitsArray` of CSME 15 and 16, whose
+//     images carry no CDMD record, and the area's own record on CSME 12 to 14,
+//     which has the same four bits in a differently shaped container;
 //   * the **OEM public key hash** is a 48-byte SHA-384 the UEP area holds
-//     several copies of, beside the key manifest it belongs to.
+//     several copies of, beside the key manifest it belongs to (a 32-byte
+//     SHA-256 on CSME 12 to 14).
 //
 // All were established on real dumps with known Boot Guard levels — for the
-// second source, on three builds of one image whose FIT `.xml` readings differ
-// in this one field and nothing else; the structures are described in
+// second source, on builds of one image whose FIT `.xml` readings differ in this
+// one field and nothing else (three CSME 15 builds at profiles 3, 4 and 5, four
+// CSME 14 builds at 0, 3, 4 and 5), each moving the bits and leaving the rest of
+// the image byte-identical; the structures are described in
 // `Design/ME_STRUCTURES.md`, and the addresses, values and the five-way
 // correlation behind the index mapping are in
 // Skills/me-eom-structures/reference/structures.md. A skill of its own would be
@@ -125,6 +128,72 @@ enum BootGuardReader {
         let word = UInt16(uep[wordAt]) | UInt16(uep[uep.index(after: wordAt)]) << 8
         if word == 0 || word == 0xFFFF { return nil }
         let flags = uep[flagsAt]
+        return profile(ofFlags: flags)
+    }
+
+    /// The same four settings on CSME 12 to 14, whose UEP container keeps them
+    /// in its own record rather than in a bit array.
+    ///
+    /// Measured on **four FIT 14.0 builds of one CSME 14 image**, one per
+    /// profile, whose `.xml` readings differ in `BtGuardProfileConfig` and
+    /// nothing else and whose bytes differ in five of sixteen million: the
+    /// checksum behind `$UEP`, the mask at +0x34, and the flags byte +0x4C —
+    /// once in each of the record's three copies (also at +0xE8 and +0x178, the
+    /// three of them always equal). The four settings sit in the same bits as
+    /// the later generations' array — FBG ACM 0, `ProtectBiosEnvironment` 3,
+    /// `MeasuredBoot` 4, `VerifiedBoot` 5 — and the same table names the
+    /// profile: the image's own bits at 0x46 with 0x38 on for 3, 0x29 for 4 and
+    /// 0x39 for 5, which is 0x46, 0x7E, 0x6F and 0x7F.
+    ///
+    /// **The mask at +0x34 is what says the container is this layout**: 0xCC
+    /// where the ACM is not forced and 0xFF where it is, over the eleven dumps
+    /// and builds at hand (CSME 12 and 14 images, vendor and factory, profiles
+    /// 0, 3, 4 and 5 alike). It is zero in the later generations' container, so
+    /// a 15/16 image read here answers nothing, and a blank body leaves it zero
+    /// too — which is what keeps an area never written from reading as profile 5
+    /// on the all-ones flags such a body carries. That the mask and the ACM bit
+    /// agree is checked as well: a disagreement means these offsets are not this
+    /// image's layout, and nothing is claimed.
+    ///
+    /// CSME 13 carries neither evidence nor counter-evidence — no dump of it is
+    /// at hand — so it is read by the generation rule alone, as the key record
+    /// is. What the reader never does is answer from the *other* shape: each of
+    /// the two is asked for only by the generations that keep it.
+    static func profile(inEarlierUEPArea uep: Data) -> BootGuardProfile? {
+        guard let container = uepContainerOffset(in: uep), container >= 0 else { return nil }
+        func block(at offset: Int, length: Int) -> Data? {
+            let start = container + offset
+            guard start >= 0, start + length <= uep.count else { return nil }
+            let from = uep.startIndex + start
+            return uep[from..<(from + length)]
+        }
+        func word(at offset: Int) -> UInt32? {
+            guard let bytes = block(at: offset, length: 4) else { return nil }
+            return bytes.enumerated().reduce(UInt32(0)) { value, pair in
+                value | UInt32(pair.element) << (8 * UInt32(pair.offset))
+            }
+        }
+        // The container's word for the ACM: 0xCC without it, 0xFF with it.
+        guard let mask = word(at: earlierMaskOffset),
+              mask == earlierMaskWithoutACM || mask == earlierMaskWithACM else { return nil }
+        // A record never written points nowhere: a zero body and an erased one
+        // both answer here, before the flags — whose all-ones an erased body
+        // would otherwise read as profile 5.
+        guard let source = word(at: earlierRecordOffset), source != 0,
+              source != UInt32.max else { return nil }
+        let copies = earlierFlagOffsets.compactMap { block(at: $0, length: 1)?.first }
+        guard copies.count == earlierFlagOffsets.count,
+              Set(copies).count == 1 else { return nil }
+        let flags = copies[0]
+        guard (mask == earlierMaskWithACM) == (flags & 0x01 != 0) else { return nil }
+        return profile(ofFlags: flags)
+    }
+
+    /// The four settings a profile is made of, as one byte, to the profile they
+    /// name — the combination Intel's own `BootGuardProfiles` table holds. A
+    /// combination the table does not name is a layout this does not read, and
+    /// never the nearest profile.
+    private static func profile(ofFlags flags: UInt8) -> BootGuardProfile? {
         switch (flags & 0x01 != 0, flags & 0x20 != 0,
                 flags & 0x10 != 0, flags & 0x08 != 0) {
         case (false, false, false, false): return .noFVME   // FBG ACM off, nothing verified
@@ -134,6 +203,15 @@ enum BootGuardReader {
         default: return nil
         }
     }
+
+    /// Where the CSME 12 to 14 container keeps its mask, the record's source
+    /// pointer, and the flags byte of each of the record's three copies —
+    /// measured off the container's signature on the dumps and builds at hand.
+    private static let earlierMaskOffset = 0x34
+    private static let earlierRecordOffset = 0x48
+    private static let earlierFlagOffsets = [0x4C, 0xE8, 0x178]
+    private static let earlierMaskWithoutACM: UInt32 = 0xCC
+    private static let earlierMaskWithACM: UInt32 = 0xFF
 
     /// How far into the `$UEP` container the first bit array's flags byte sits,
     /// and the word the same array keeps just ahead of it — both measured off
