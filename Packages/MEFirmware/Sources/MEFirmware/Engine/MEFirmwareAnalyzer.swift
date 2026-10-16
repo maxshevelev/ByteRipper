@@ -1186,18 +1186,29 @@ public actor MEFirmwareAnalyzer {
             }
         } ?? []
 
-        // Boot Guard: the profile is a JSON record of the CDMD configuration
-        // partition, the key hash a value the UEP area repeats. Neither is in
-        // any specification, both are read by shape — see `BootGuardReader`.
+        // Boot Guard: the profile is one fact with two keepings — the JSON
+        // record of the CDMD configuration partition where the image has one,
+        // and the UEP area's bit array where it does not (every CSME 15 image)
+        // — and the key hash a value the UEP area repeats. None is in any
+        // specification, all are read by shape — see `BootGuardReader`.
+        let uepArea = Self.regionBytes("UEP", regions: regions,
+                                       region: region, baseOffset: baseOffset)
+        // Where an image has no CDMD record, the profile is the UEP area's Boot
+        // Guard bits — read on the two generations that were verified against
+        // FIT's own readings, 15 and 16. A CSME 12 container is another
+        // structure whose blank bits would read as profile 0, and CSME 18's is
+        // blank where these keep their arrays; neither is read until a dump
+        // whose profile is known says its container keeps them the same way.
+        let uepProfile = identity.family == .csme && (15...16).contains(identity.major)
+            ? uepArea.flatMap(BootGuardReader.profile(inUEPArea:)) : nil
         let bootGuardProfile = Self.regionBytes("CDMD", regions: regions,
                                                 region: region, baseOffset: baseOffset)
             .flatMap(BootGuardReader.profile(in:))
+            ?? uepProfile
         // An image with no UEP area at all is not a missing reading: it is the
         // finding that this layout has none where the key would be
         // (`OEMKeyHash.unrecognized`), which is what CSME 11 answers.
-        let oemPublicKeyHash = BootGuardReader.oemPublicKeyHash(
-            in: Self.regionBytes("UEP", regions: regions,
-                                 region: region, baseOffset: baseOffset) ?? Data())
+        let oemPublicKeyHash = BootGuardReader.oemPublicKeyHash(in: uepArea ?? Data())
         let oemCustomized = OEMDetector.oemCustomized(
             fpt: fpt, bootPartitions: bootPartitions, codePartition: codePartition,
             in: region, baseOffset: baseOffset)

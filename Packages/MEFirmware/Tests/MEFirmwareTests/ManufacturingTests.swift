@@ -165,13 +165,86 @@ final class BootGuardReaderTests: XCTestCase {
         XCTAssertNil(BootGuardReader.profile(in: Data(#"{"BtGuardProfileConfig": 9}"#.utf8)))
     }
 
-    /// An image whose configuration has no such record — the Lenovo dumps, and
-    /// every CSME 15 one seen so far — answers nothing rather than 0.
+    /// An image whose configuration has no such record — the old CSME 16
+    /// layouts, and every CSME 15 one — answers nothing rather than 0.
     func testNoRecordIsNoAnswer() {
         XCTAssertNil(BootGuardReader.profile(in: Data(#"{"length": 0}"#.utf8)))
         XCTAssertNil(BootGuardReader.profile(in: Data()))
         XCTAssertNil(BootGuardReader.profile(in: Data(#"{"BtGuardProfileConfig"}"#.utf8)))
         XCTAssertNil(BootGuardReader.profile(in: Data(#"{"BtGuardProfileConfig": }"#.utf8)))
+    }
+
+    // MARK: - The profile out of the UEP area
+
+    /// A UEP container as the images carry it: the signature, a checksum that
+    /// is not zero, and the four Boot Guard bits of the first bit array — the
+    /// byte at +0x6E, bits 0, 3, 4 and 5 (FBG ACM, protect, measured,
+    /// verified) — with the key-manifest id of the images at hand beside them.
+    private func uepArea(flags: UInt8) -> Data {
+        var area = [UInt8](repeating: 0x00, count: 0x200)
+        let at = 0x20
+        area.replaceSubrange(at..<(at + 4), with: Array("$UEP".utf8))
+        area[at + 4] = 0x1D                       // the 16-bit CRC's low byte
+        area[at + 5] = 0x8B                       // …and its high byte
+        area[at + 0x6C - 4] = 0x72                // the array's own header word
+        area[at + 0x6E] = flags
+        return Data(area)
+    }
+
+    /// The three builds of one image — whose FIT `.xml` readings differ in this
+    /// setting and nothing else — and the byte each of them carries. Profile 0
+    /// is the two boards: 0x40 and 0x42 are both all four flags zero, and the
+    /// bit that tells them apart is the debug switch, not a profile.
+    func testTheProfileIsTheCombinationOfFourBits() {
+        XCTAssertEqual(BootGuardReader.profile(inUEPArea: uepArea(flags: 0x40)), .noFVME)
+        XCTAssertEqual(BootGuardReader.profile(inUEPArea: uepArea(flags: 0x42)), .noFVME)
+        XCTAssertEqual(BootGuardReader.profile(inUEPArea: uepArea(flags: 0x7A)), .vm)
+        XCTAssertEqual(BootGuardReader.profile(inUEPArea: uepArea(flags: 0x6B)), .fve)
+        XCTAssertEqual(BootGuardReader.profile(inUEPArea: uepArea(flags: 0x7B)), .fvme)
+    }
+
+    /// An area never written — a cleanME image, a CSME 12 image whose UEP
+    /// partition is blank — is not profile 0 or 5: as bits, all zeros answer
+    /// No_FVME and all ones answer FVME, and nothing was chosen there. What
+    /// says an area is written is its body, not its signature: the blank
+    /// CSME 12 partition carries the signature too.
+    func testAnErasedAreaAnswersNothing() {
+        var erased = uepArea(flags: 0xFF)
+        erased.replaceSubrange(erased.startIndex..<erased.endIndex,
+                               with: Data(repeating: 0xFF, count: 0x200))
+        XCTAssertNil(BootGuardReader.profile(inUEPArea: erased))
+        var blank = uepArea(flags: 0x00)
+        blank.replaceSubrange((blank.startIndex + 0x20 + 4)..<(blank.startIndex + 0x20 + 0x80),
+                              with: Data(repeating: 0x00, count: 0x7C))
+        XCTAssertNil(BootGuardReader.profile(inUEPArea: blank))
+        XCTAssertNil(BootGuardReader.profile(inUEPArea: Data(repeating: 0x00, count: 0x200)))
+    }
+
+    /// A container of another structure behind the same signature is not a
+    /// blank one: a CSME 12 image's UEP partition has its own bytes where its
+    /// own layout puts them, and nothing at all where the Boot Guard flags are.
+    /// Its four bits read zero, and zeroes are not a profile here either.
+    func testAnotherStructureBehindTheSameSignature() {
+        var area = [UInt8](repeating: 0x00, count: 0x200)
+        let at = 0x20
+        area.replaceSubrange(at..<(at + 4), with: Array("$UEP".utf8))
+        area[at + 4] = 0x16
+        area[at + 5] = 0xE2                       // the CRC the CSME 12 image carries
+        area.replaceSubrange((at + 0x28)..<(at + 0x34),
+                             with: [0xFF, 0xFF, 0xCF, 0xCC, 0x00, 0xF0,
+                                    0xFC, 0xCC, 0xC0, 0x00, 0x00, 0x00])
+        area[at + 0x48] = 0x80
+        XCTAssertNil(BootGuardReader.profile(inUEPArea: Data(area)))
+    }
+
+    /// A combination no profile names, and an area with no container at all:
+    /// neither is turned into the nearest profile.
+    func testWhatTheTableDoesNotNameIsNoAnswer() {
+        XCTAssertNil(BootGuardReader.profile(inUEPArea: uepArea(flags: 0x01)))
+        XCTAssertNil(BootGuardReader.profile(inUEPArea: uepArea(flags: 0x0B)))
+        XCTAssertNil(BootGuardReader.profile(inUEPArea: Data()))
+        XCTAssertNil(BootGuardReader.profile(inUEPArea: Data("nothing here".utf8)))
+        XCTAssertNil(BootGuardReader.profile(inUEPArea: Data("$UEP".utf8)))
     }
 
     // MARK: - The OEM public key hash
