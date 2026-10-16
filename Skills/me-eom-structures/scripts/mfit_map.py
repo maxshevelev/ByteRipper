@@ -30,15 +30,18 @@ AUTO = "Auto"
 # decimal is a value nobody reads twice.
 HEX_KINDS = {"byte", "word", "dword", "qword"}
 
-# The enumerated kinds, with the words MFIT gives their two values. A
-# `fixed_options` setting carries its own list in `config_params` instead.
-YES_NO = {0: "No", 1: "Yes"}
-DISABLED_ENABLED = {0: "Disabled", 1: "Enabled"}
+# The enumerated kinds, with the words MFIT gives their two values. **The kind's
+# own name lists its members in value order** — `yes_no_options` is Yes at 0 and
+# No at 1, `no_yes_options` the other way round — which is how FIT's value
+# classes of the same names spell themselves (`<Class name="YesNoValues">`:
+# `Yes` value 0, `No` value 1). Reading them as if the pairs were interchangeable
+# put "No" on every 0 of four ME 16 settings, two of them readable in a dump.
+# A `fixed_options` setting carries its own list in `config_params` instead.
 TWO_KINDS = {
-    "no_yes_options": YES_NO,
-    "yes_no_options": YES_NO,
-    "disabled_enabled_options": DISABLED_ENABLED,
-    "enabled_disabled_options": DISABLED_ENABLED,
+    "no_yes_options": {0: "No", 1: "Yes"},
+    "yes_no_options": {0: "Yes", 1: "No"},
+    "disabled_enabled_options": {0: "Disabled", 1: "Enabled"},
+    "enabled_disabled_options": {0: "Enabled", 1: "Disabled"},
 }
 
 # The files a bench reads first: the End of Manufacturing record, then the

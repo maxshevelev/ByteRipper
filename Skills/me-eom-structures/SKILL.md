@@ -57,6 +57,22 @@ its `Auto`/`Generic` marks. It merges the platform lists and reports what it
 could not merge rather than guessing — a setting two lists lay out differently is
 dropped and named. Same rules as above: read the diff, don't paste blind.
 
+The older FIT carries the same material in its own shape, per platform:
+
+```bash
+python3 Skills/me-eom-structures/scripts/fit_map.py <fit-15.0.exe> --straps tgp_lp > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME15.swift
+```
+
+There a setting's place is a `ProcessNvar` action — `filePath` into an alias
+table, and a cell (`cellIndex × cellSize + cellOffset`) or a plain
+`startOffset`/`varSize` — and its words come from the value class its
+`type="class:…"` names. `--straps` picks the family whose layout is wanted
+(`tgp_lp` is ME 15's own). One thing that generator cannot take from the chosen
+platform: the End of Manufacturing record, which the newer layouts do not bind
+at all (the tool writes it through `EomNvar`), so it is filled in from whichever
+document binds `EOM_Config` and marked as such in the file's header.
+
 ## Checking against MFIT
 
 MFIT prints the same facts in its build report:
