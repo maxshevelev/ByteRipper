@@ -125,8 +125,45 @@ startBit="16"`) and the table that names the profiles — which is why this is a
 reader and not a guess. Both keepings are read and they agree on every image
 that carries both (a CSME 16.1 dump: CDMD 5, bits 0x79 → FVME). What is *not*
 read is the same byte's two debug bits, whose values disagree with FIT's own
-report on the images at hand; and the reading is applied to CSME 15 and 16 only,
-the generations it was verified on.
+report on the images at hand; and the reading is applied to CSME 15 and 16 only
+by *this* layout, the generations whose array was verified to carry it.
+
+**The profile on CSME 12 to 14 sits in the same area in a different container**,
+and the shape had to be found before it could be read:
+
+| at `$UEP` | |
+|---|---|
+| +0x04 | the container's checksum (a u16, the two bytes above it zero) |
+| +0x28 … +0x37 | its policy words |
+| +0x34 | the mask: `0xCC` where the ACM is not forced, `0xFF` where it is |
+| +0x48, +0xE4, +0x174 | the record's source pointer, one per copy |
+| +0x4C, +0xE8, +0x178 | the flags byte of each copy — the four settings in the same bits as 15's |
+| +0x90 | the OEM public key hash (the 32-byte record above) |
+
+Four FIT 14.0.20 builds of one CSME 14 image — profiles 0, 3, 4 and 5, whose
+`.xml` readings differ in `BtGuardProfileConfig` and nothing else — differ in
+**five bytes of sixteen million**: the checksum, the mask, and the flags byte of
+each of the record's three copies (which are always equal). The build's own bits
+are `0x46` — `0x42` on a CSME 15 image, which is the same four settings in
+another container — and the three profiles turn on `0x38`, `0x29` and `0x39` of
+them: the same three constants the 15/16 array uses, so Intel's table from
+combination to profile holds on this generation too. The mask corroborates it on
+eleven images and builds — `0xFF` exactly where the ACM bit is set, `0xCC` where
+it is not — and is what tells this container from the later one (zeroes there, so
+a 15 image read as a 12–14 one answers nothing) and an area never written from a
+written one (its all-ones flags would otherwise read as profile 5).
+
+What the **bit-array layouts FIT 14's own database describes do not hold these
+settings**: it carries seven of them, one per platform family, and on the images
+at hand the arrays they point at are empty — which is also why the first answer
+here was that the profile is not in the image at all. The arrays are still the
+right description of where FIT *15* keeps its bits, and of the fields the tool
+places around them.
+
+Two more of the eleven are CSME 12 images that carry a key (`69602F34…`, the same
+hash on both, and both Corporate H); they read FVME. The four whose key field is
+all zeros read No_FVME, which is MFIT's "OEM signing is disabled" — the setting
+FIT refuses to move off 0 while signing is off.
 
 A profile is what the platform burns into the chipset's fuses when Manufacturing
 closes, and the fuses cannot be taken back — which is why the profile is worth
@@ -144,8 +181,8 @@ not that the fact is absent from the platform.
 | CSME 16.1 (Z Flow, Legion, Asus, Dell) | v2 ✓ | ✓ FITC record and the live one | ✓ CDMD JSON — 5 and 0 seen, and the **UEP bits agree on every dump that carries both** (three MFIT builds of one image, differing only in the profile, moved the bits with it) | ✓ UEP, 6 + 6 copies — **verified** for the Z Flow family |
 | CSME 16.0 (Legion) | v2 ✓ | ✓ | ✓ (5, 0) | ✓ |
 | CSME 15 (Lenovo 1.bin, 2.rom, corporate) | v2 ✓ | ✓ records present; the live page is absent on a never-booted build | ✓ **UEP bits** — 0 on the three boards, and 3/4/5 on the owner's three builds, each matching the `.xml` FIT itself wrote for that build | ✓ UEP — **unverified** |
-| CSME 14 (Lenovo Comet Lake, and five more boards) | v2 ✓ | **no such setting**, and FIT 14's own map binds none either (see "ME 14" above) | **not found** — no CDMD partition, and the UEP area keeps the bits in a **different place** than 15's and 16's (FIT 14 lays them out per platform family; this dump reads the same under every candidate placement, so nothing decides) | ✓ **the 32-byte SHA-256 at `$UEP`+0x90**, read by generation — the same Acer board's second image carries the same hash |
-| CSME 12 (Dell, Lenovo, HP) | v2 ✓ | no such setting | **not found** | **all zeros** on the image at hand — the record is read (32 bytes at +0x90) and it reads zeros: signing disabled |
+| CSME 14 (Lenovo Comet Lake, and five more boards) | v2 ✓ | **no such setting**, and FIT 14's own map binds none either (see "ME 14" above) | ✓ **the UEP record's flags byte** at +0x4C — 0 on the factory dump, and 0, 3, 4 and 5 on the owner's four FIT 14.0 builds of it, each matching the `.xml` FIT wrote for that build | ✓ **the 32-byte SHA-256 at `$UEP`+0x90**, read by generation — the same Acer board's second image carries the same hash |
+| CSME 12 (Dell, Lenovo, HP) | v2 ✓ | no such setting | ✓ **the same record** — 5 on the two images whose key field holds a hash, 0 on the four whose field is zeros, the container's mask agreeing with the flags' ACM bit on all six | **all zeros** on four of the six: signing disabled. The Dell Optiplex dump and `W25Q256JV.orig.bin` carry `69602F34…`, the same hash on both |
 | CSME 11 (corporate) | v2 ✓ | no such setting | **not found** — no CDMD and no `$UEP` container at all | **layout not recognized** — no area to read the field from |
 | ME 6, 7, 10 (Apple) | v1 — not read | — | — | — |
 
@@ -336,6 +373,15 @@ Two differences from the newer maps hold for the family:
 - **Its own iunit files.** `iunit/port_cfg`, `iunit/sec_ctl`, `iunit/sec_touch`
   and `iunit/camera_mask` are in the 14 map and in neither of the newer two,
   where `iunit_oem_cfg` and `iunit_privacy_mode` stand instead.
+
+**And where the profile lives is not in those layouts.** The four settings are
+written in the UEP container's own record — the flags byte at `$UEP`+0x4C, in
+three copies — and not in any `UepBitsArray`: the arrays that FIT 14's seven
+layouts name are empty on every image at hand, which is exactly why reading them
+gave 0 under every candidate placement and the first answer here was that the
+profile is not in the image. Four FIT 14.0.20 builds of this dump, one per
+profile, settled it (see "Where each fact lives" for the bytes). The layouts
+remain the answer for the *file* map and for the settings beside the bits.
 
 Two things the database is not. It is **per platform**: the lists are
 `ADL-S`, `ELG`, `MTL-M`, `MTL-S` in that build, so a dump of another platform

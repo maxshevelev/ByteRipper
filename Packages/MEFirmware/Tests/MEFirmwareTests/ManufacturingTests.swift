@@ -247,6 +247,94 @@ final class BootGuardReaderTests: XCTestCase {
         XCTAssertNil(BootGuardReader.profile(inUEPArea: Data("$UEP".utf8)))
     }
 
+    // MARK: - The profile out of the CSME 12 to 14 UEP area
+
+    private func little(_ value: UInt32) -> [UInt8] {
+        [UInt8(value & 0xFF), UInt8((value >> 8) & 0xFF),
+         UInt8((value >> 16) & 0xFF), UInt8((value >> 24) & 0xFF)]
+    }
+
+    /// A CSME 12 to 14 container as the images carry it: the signature, the
+    /// record's source pointer, the mask at +0x34 — 0xCC where the ACM is off
+    /// and 0xFF where it is on, which is what the flags' own bit 0 says unless
+    /// a test overrides it — and the flags byte in each of the record's three
+    /// copies. The image's own bits around the four settings are 0x46.
+    private func earlierUEPArea(flags: UInt8, mask: UInt32? = nil,
+                                source: UInt32 = 0x5A_C080,
+                                copies: [UInt8]? = nil) -> Data {
+        var area = [UInt8](repeating: 0x00, count: 0x200)
+        let at = 0x20
+        area.replaceSubrange(at..<(at + 4), with: Array("$UEP".utf8))
+        area[at + 4] = 0x55                       // the checksum's low byte
+        area[at + 5] = 0x09                       // …and its high byte
+        area.replaceSubrange((at + 0x28)..<(at + 0x34),
+                             with: [0xFF, 0xFF, 0xCF, 0x0C, 0xCC, 0xCC,
+                                    0xCC, 0x00, 0xC0, 0x00, 0x00, 0x00])
+        let maskValue = mask ?? (flags & 0x01 != 0 ? 0xFF : 0xCC)
+        area.replaceSubrange((at + 0x34)..<(at + 0x38), with: little(maskValue))
+        area.replaceSubrange((at + 0x48)..<(at + 0x4C), with: little(source))
+        for (index, offset) in [0x4C, 0xE8, 0x178].enumerated() {
+            area[at + offset] = copies?[index] ?? flags
+        }
+        return Data(area)
+    }
+
+    /// The four FIT 14.0 builds of one CSME 14 image — whose `.xml` readings
+    /// differ in `BtGuardProfileConfig` and nothing else, and whose bytes in
+    /// five of sixteen million: the flags byte of each of the record's three
+    /// copies, the mask whose word says the ACM is on, and the container's
+    /// checksum. The image's own bits are 0x46, and the three profiles set
+    /// 0x38, 0x29 and 0x39 of them.
+    func testTheEarlierContainerNamesTheSameFourProfiles() {
+        XCTAssertEqual(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0x46)), .noFVME)
+        XCTAssertEqual(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0x7E)), .vm)
+        XCTAssertEqual(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0x6F)), .fve)
+        XCTAssertEqual(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0x7F)), .fvme)
+        // The vendor images' own bits: the ACM bit and the debug switches sit
+        // in the same byte, and 0xF9 is the four settings with both of those.
+        XCTAssertEqual(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0xF9)), .fvme)
+    }
+
+    /// What the earlier reader refuses. None of it is a profile, and none of it
+    /// becomes the nearest one.
+    func testTheEarlierContainerIsNotGuessedAt() {
+        // An area never written. Its flags are all ones — which as a
+        // combination is profile 5 — and what says it is not one is the mask
+        // and the source pointer, both erased with the rest.
+        var erased = [UInt8](repeating: 0xFF, count: 0x200)
+        erased.replaceSubrange(0x20..<0x24, with: Array("$UEP".utf8))
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea: Data(erased)))
+        // The later generations' container: the same signature, all zero where
+        // the mask and the record are (a CSME 15 image read as if it were 12–14).
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea: uepArea(flags: 0x7B)))
+        // A mask that does not say what the flags' ACM bit says.
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
+            earlierUEPArea(flags: 0x7F, mask: 0xCC)))
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
+            earlierUEPArea(flags: 0x46, mask: 0xFF)))
+        // A mask of another shape, and one erased on its own.
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
+            earlierUEPArea(flags: 0x7F, mask: 0x0F)))
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
+            earlierUEPArea(flags: 0x7F, mask: 0xFFFF_FFFF)))
+        // A record that points nowhere: both fills, and a body written with
+        // zeroes, whose flags would read as No_FVME.
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
+            earlierUEPArea(flags: 0x7F, source: 0)))
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
+            earlierUEPArea(flags: 0x7F, source: 0xFFFF_FFFF)))
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
+            Data(repeating: 0x00, count: 0x200)))
+        // The record's copies disagreeing means these offsets are not this
+        // image's layout.
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
+            earlierUEPArea(flags: 0x7F, copies: [0x7F, 0x7F, 0x7E])))
+        // A combination no profile names, and no container at all.
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0x31)))
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea: Data()))
+        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea: Data("nothing here".utf8)))
+    }
+
     // MARK: - The OEM public key hash
 
     /// The Z Flow dump's own hash: a SHA-384 that sits 0xA0 bytes into the UEP
