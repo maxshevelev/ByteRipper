@@ -165,6 +165,16 @@ hash on both, and both Corporate H); they read FVME. The four whose key field is
 all zeros read No_FVME, which is MFIT's "OEM signing is disabled" — the setting
 FIT refuses to move off 0 while signing is off.
 
+**What corroborates the CSME 12 readings** is not only the mask: the BIOS region
+of the two images that read 5 — the same two that carry a key — holds the
+vendor's **`__KEYM__` and `__BPM__` manifests** once each, and the four that read
+0 hold neither, so the flags agree with an independent sign of a configured boot
+chain on all six. They are still readings no field tool has confirmed — ECFinder
+runs on Windows — and CSME 13 has neither evidence nor counter-evidence, only the
+generation rule. What the four builds show about the BIOS side is worth keeping
+too: their BIOS regions are **byte-identical**, so the profile reaches the ME
+region's own record and nothing else in an image built this way.
+
 A profile is what the platform burns into the chipset's fuses when Manufacturing
 closes, and the fuses cannot be taken back — which is why the profile is worth
 reading before an image is written, and why a wrong answer is worse than none.
