@@ -58,19 +58,11 @@ public enum MEATones {
     // verdict — so it is drawn as an ordinary value, exactly as the File System
     // State's basis is. The verdict's own colour sits on the row above it.
 
-    /// The Boot Guard profile's tone. Profile 0 has Boot Guard switched off —
-    /// the machine boots unverified, and that is a state a bench works with
-    /// rather than against: green, the tone a known-good state gets. A profile
-    /// that names a level is the same tone as `Initialized`: the platform is
-    /// protected, and what the protection means for an edit has to be read in
-    /// the help rather than guessed from a colour. `standard` where the row is
-    /// only saying that the image carries no profile record — nothing is known
-    /// either way.
-    public static func bootGuardProfile(_ profile: BootGuardProfile?) -> ToolValueTone {
-        switch profile {
-        case .some(.noFVME): return .good
-        case .some: return .caution
-        case nil: return .standard
-        }
-    }
+    // The Boot Guard row has no tone of its own, deliberately: a profile is a
+    // number the image carries, not a state the platform is in — and green for
+    // "Boot Guard is off" read as a verdict about the board rather than about
+    // the setting, while whatever a level means for an edit has to be read in
+    // the help rather than guessed from a colour. It is an ordinary value, and
+    // "no profile record in this image" is the same ordinary value said with
+    // other words.
 }
