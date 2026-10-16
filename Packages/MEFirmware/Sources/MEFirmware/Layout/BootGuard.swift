@@ -155,10 +155,25 @@ enum BootGuardReader {
     /// agree is checked as well: a disagreement means these offsets are not this
     /// image's layout, and nothing is claimed.
     ///
-    /// CSME 13 carries neither evidence nor counter-evidence — no dump of it is
-    /// at hand — so it is read by the generation rule alone, as the key record
-    /// is. What the reader never does is answer from the *other* shape: each of
-    /// the two is asked for only by the generations that keep it.
+    /// **CSME 13 is not read, and the reason is in its bytes**: two Lenovo
+    /// NM-C711 dumps (13.0.21.1319 and 13.0.32.1478, Ice Lake-U) keep the four
+    /// settings in a **third shape** — the policy words sit 0x0C later than this
+    /// container's (0xFF FF CF 0C at +0x34), the record's source pointer at
+    /// +0x64 rather than +0x48, one record rather than three, and the word
+    /// behind the pointer 0x40, where a CSME 12–14 build carries the image's own
+    /// bits with the flags in the low byte (0x46 on the image those builds were
+    /// made from). The guard below therefore rejects it and the row answers "no
+    /// profile record", which is the honest answer: what that word says is not
+    /// settled. Both dumps are profile 0 by every other sign — no `__KEYM__` or
+    /// `__BPM__` in their BIOS regions, and 0x40 with none of the four bits —
+    /// though a key in the field is not a counter-sign on its own: the CSME 14
+    /// dump the builds above were made from carries one and is built for 0.
+    ///
+    /// The same two dumps *do* confirm the key record for this generation: the
+    /// 32-byte hash sits at +0x90, where the generation rule looks for it, and
+    /// it is the same hash on both. What the profile's shape needs is what
+    /// settled 14 — a FIT build with a known profile — and no Flash Image Tool
+    /// of that generation is at hand.
     static func profile(inEarlierUEPArea uep: Data) -> BootGuardProfile? {
         guard let container = uepContainerOffset(in: uep), container >= 0 else { return nil }
         func block(at offset: Int, length: Int) -> Data? {
