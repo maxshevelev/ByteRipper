@@ -141,47 +141,71 @@ enum BootGuardReader {
     private static let flagsOffset = 0x6E
     private static let wordOffset = 0x68
 
+    /// Where a generation's key record sits in the area: how far into the
+    /// container the field starts, how long the hash is, and where the area
+    /// keeps the copies of it (relative to the container).
+    ///
+    /// The two are **told apart by the generation, not by trying both**: a read
+    /// of the wrong length lands half inside the other's field. Measured on the
+    /// dumps at hand — a 32-byte read of a CSME 15 key starts on the zeroes
+    /// before it, and a 48-byte read of a CSME 14 key starts on the second half
+    /// of the hash and runs into the bitmap that follows it — which is why the
+    /// caller has to say which generation the image is.
+    private struct KeyRecord {
+        let offset: Int
+        let length: Int
+        let copies: [Int]
+    }
+
+    /// CSME 15 and later: a 48-byte SHA-384, 0xA0 bytes in and again 0x10A0 in.
+    private static let laterKeyRecord = KeyRecord(offset: 0xA0, length: 48, copies: [0, 0x1000])
+    /// CSME 12 to 14: a 32-byte SHA-256, 0x90 bytes in, followed by the 16
+    /// bytes of assignment bits that are *not* part of the hash. Read once: the
+    /// second half of those areas is erased on the images at hand.
+    private static let earlierKeyRecord = KeyRecord(offset: 0x90, length: 32, copies: [0])
+
     /// The OEM public key hash the UEP area holds, and what its entry says
     /// where there is no key to read.
     ///
-    /// The key is a 48-byte SHA-384 and it sits **inside the area's entry**, at
-    /// a fixed offset from the container that opens the area (`$UEPC`, or the
-    /// `$UEP` this project's earlier note saw): 0xA0 bytes in, and again 0x10A0
-    /// in where the area carries its second half. That is the field, not a
-    /// shape: reading it gives the same value the repeated-window search this
-    /// replaced found on every image at hand — and it reads images that search
-    /// could not, because the offsets are the entry's own rather than a count
-    /// of how often a value happens to appear.
+    /// `major` is the ME generation the image was identified as, and it decides
+    /// which of the two records is read (`KeyRecord` above): the SHA-256 of
+    /// CSME 12 to 14, or the SHA-384 of 15 and later. Both sit inside the
+    /// area's entry at a fixed offset from the container that opens the area
+    /// (`$UEPC`, or the `$UEP` this project's earlier note saw).
     ///
     /// Where the field holds no key, what it holds is the finding:
     ///
     ///   * all zeros — the setting MFIT calls "OEM signing is disabled";
     ///   * all `0xFF` — an area never written, so no key was ever put there;
-    ///   * anything else, or no container to find the entry from, or two halves
+    ///   * anything else, or no container to find the entry from, or two copies
     ///     that disagree — an area this reader does not know how to walk
-    ///     (CSME 14's entry holds something else, CSME 11 has no area at all).
+    ///     (CSME 11 has no area at all).
     ///
     /// The row says which of those it is rather than "no key", because they are
     /// three different states of a boot chain. What it never does is print a
     /// neighbouring field as if it were the key: a key is per vendor, and two
     /// vendors' images cannot carry the same one.
-    static func oemPublicKeyHash(in uep: Data) -> OEMKeyHash {
+    static func oemPublicKeyHash(in uep: Data, major: Int) -> OEMKeyHash {
         guard let container = uepContainerOffset(in: uep) else { return .unrecognized }
-        // The entry's own key field, in each half the area has. The first
-        // decides; the second corroborates, and a disagreement means the
-        // offsets above are not this image's layout.
-        let halves = [container + keyFieldOffset, container + 0x1000 + keyFieldOffset]
-        let fields = halves.compactMap { at -> OEMKeyHash? in
-            guard at >= 0, at + 48 <= uep.count else { return nil }
+        // The generations between 12 and 14 keep the shorter record; everything
+        // else — including an image the engine could not name — is read as the
+        // later one, which is what the layouts at hand do.
+        let record = (12...14).contains(major) ? earlierKeyRecord : laterKeyRecord
+        // The record in each copy the area has. The first decides; the others
+        // corroborate, and a disagreement means the offsets are not this
+        // image's layout.
+        let fields = record.copies.compactMap { copy -> OEMKeyHash? in
+            let at = container + copy + record.offset
+            guard at >= 0, at + record.length <= uep.count else { return nil }
             let start = uep.startIndex + at
-            let block = uep.subdata(in: start..<(start + 48))
+            let block = uep.subdata(in: start..<(start + record.length))
             if block.allSatisfy({ $0 == 0x00 }) { return .allZeros }
             if block.allSatisfy({ $0 == 0xFF }) { return .erased }
             return isKeyMaterial(block) ? .hash(hex(block)) : .unrecognized
         }
         guard let first = fields.first else { return .unrecognized }
         // A key wherever it is: an area whose second half alone was written
-        // still holds one. Two halves that carry *different* keys mean the
+        // still holds one. Two copies that carry *different* keys mean the
         // offsets above are not this image's layout, and nothing is claimed.
         let keys = fields.compactMap { field -> String? in
             if case .hash(let hex) = field { return hex }
@@ -191,10 +215,6 @@ enum BootGuardReader {
         if let hex = keys.first { return .hash(hex) }
         return first
     }
-
-    /// How far into the UEP area's entry its key field sits — measured off the
-    /// container, which is also where the entry starts.
-    private static let keyFieldOffset = 0xA0
 
     /// The ASCII container that opens the UEP area: `$UEPC`, or the `$UEP`
     /// inside one of those (`$UEPC` is `$UEP` plus its revision letter). Nil
@@ -214,13 +234,15 @@ enum BootGuardReader {
 
     /// High-entropy and not periodic: a key rather than a fill pattern (an
     /// erased field is all `0xFF`), a pointer padded with zeros, or a record's
-    /// own header. A real SHA-384 has forty-eight distinct-ish bytes; a pointer
-    /// or a length field has a handful and a lot of padding.
+    /// own header. A real hash has almost as many distinct bytes as it is long
+    /// — forty-eight for a SHA-384, thirty-two for the SHA-256 of the older
+    /// generations — while a pointer or a length field is a handful and a lot
+    /// of padding, and neither of those reaches sixteen.
     ///
     /// Neither end may be a run of one byte either: an entry's field is
     /// surrounded by the area's `0x00`/`0xFF` padding, so a field that begins
-    /// or ends in such a run is not the key at that offset. A real SHA-384 has
-    /// eight equal bytes at one end with probability 2⁻⁵⁶.
+    /// or ends in such a run is not the key at that offset: a hash has eight
+    /// equal bytes at one end with probability 2⁻⁵⁶.
     private static func isKeyMaterial(_ block: Data) -> Bool {
         guard Set(block).count >= 16 else { return false }
         let half = block.count / 2

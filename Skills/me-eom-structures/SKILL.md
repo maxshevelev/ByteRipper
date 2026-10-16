@@ -22,7 +22,7 @@ undetermined on the older ones — the reason to come back here — is
 | what EOM commits | `CsePlugin:EomNvar:EOM_Config#FlexibleEomSettings` | bits 1–2 of the same record |
 | what the board the dump came from already did | — | MFS `/home/mca/eom` (1 byte, 1 = closed) — read as evidence that the file system was read, **not** reported: the row answers for the next first boot |
 | Boot Guard level | `CsePlugin:UEP:BtGuardProfileConfig` (`0 - No_FVME`, `3 - VM`, `4 - FVE`, `5 - FVME`) | the JSON record in the **CDMD** partition's configuration, where the number is an index into that list; and, where the image has no such record (every CSME 15 image), the four settings a profile is made of, as bits of the UEP area's first `UepBitsArray` — `$UEP`+0x6E, bits 0 FBG ACM, 3 protect, 4 measured, 5 verified, with Intel's `BootGuardProfiles` table naming the combinations. Read on CSME 15 and 16 only, the generations it was verified on |
-| OEM public key hash | `CsePlugin:UEP:OemPublicKeyHash` (SHA-384, 48 bytes; all zeros = signing disabled) | the field 0xA0 bytes into the UEP area's entry (and 0x10A0 in for the second half), mirrored in the MFS key table. What the field holds is the finding: zeros = signing disabled, `FF` = never written, anything else = a layout the reader does not walk |
+| OEM public key hash | `CsePlugin:UEP:OemPublicKeyHash` (all zeros = signing disabled) | the record the image's **generation** keeps: 0xA0 bytes into the UEP area's entry, 48 bytes (SHA-384) on CSME 15 and later — mirrored in the MFS key table — and 0x90 bytes in, 32 bytes (SHA-256) with 16 bytes of assignment bits behind it, on CSME 12 to 14. What the field holds is the finding: zeros = signing disabled, `FF` = never written, anything else = a layout the reader does not walk |
 
 The BIOS side carries its own, different key hash — the Boot Guard Key Manifest the
 FIT table points at — and that one is *not* the OEM public key hash MFIT reports.
@@ -35,8 +35,10 @@ python3 Skills/me-eom-structures/scripts/me_eom.py <dump> [<dump>…]
 
 It prints, per dump: whether the descriptor's BIOS master is open or locked, the
 UEP container's address, its header and how much of the area is erased, the OEM
-configuration's records for `eom` / `eom_config` / `manuf_lock`, the 48-byte
-values the UEP holds copies of (key hashes), and the Boot Guard profile — from
+configuration's records for `eom` / `eom_config` / `manuf_lock`, the key-hash
+record of each generation (32 bytes at +0x90 and 48 at +0xA0, so the script can
+be read on an image whose generation it does not identify), the 48-byte values
+the UEP holds copies of, and the Boot Guard profile — from
 the CDMD configuration's JSON where the image has one, and from the UEP area's
 Boot Guard bits where it does not, saying which of the two answered. Stdlib only,
 read-only, no network: a run is a diff to review.

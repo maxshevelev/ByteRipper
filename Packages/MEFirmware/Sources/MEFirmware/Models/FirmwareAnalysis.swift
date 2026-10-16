@@ -131,9 +131,11 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// of the four settings — an area never written, or a layout this does not
     /// read.
     public var bootGuardProfile: BootGuardProfile? = nil
-    /// The OEM public key hash the UEP area carries, and why it is not a value
-    /// where it is not one (ours). `OEMKeyHash` says what each answer means;
-    /// `BootGuardReader.oemPublicKeyHash` reads it out of the image's record.
+    /// The OEM public key hash the UEP area carries — 32 hex bytes on CSME 12
+    /// to 14, 48 on 15 and later — and why it is not a value where it is not one
+    /// (ours). `OEMKeyHash` says what each answer means;
+    /// `BootGuardReader.oemPublicKeyHash` reads it out of the image's record,
+    /// which record being the generation's own.
     public var oemPublicKeyHash: OEMKeyHash? = nil
     /// Power Down Mitigation (row 12a, upstream `pdm_status`): whether a
     /// CSME 11 firmware carries the power-down mitigation, as its database row
@@ -566,7 +568,10 @@ public struct ConfigurationSetting: Codable, Sendable, Equatable, Identifiable {
 /// not know how to walk — three different things to do about a boot chain, and
 /// the tools print them as one line each rather than as silence.
 public enum OEMKeyHash: Codable, Sendable, Equatable {
-    /// The 48 bytes the entry's key field holds, as 96 uppercase hex.
+    /// The bytes the entry's key field holds, as uppercase hex: **32** of them
+    /// on CSME 12 to 14, whose record is a SHA-256, and **48** on CSME 15 and
+    /// later, whose record is a SHA-384. The 16 bytes of assignment bits that
+    /// follow the shorter one are a field of their own and are not part of it.
     case hash(String)
     /// The field reads all zeros: MFIT's own "OEM signing is disabled when this
     /// hash is set to all 0s".
@@ -2584,5 +2589,12 @@ public enum EngineModelRevision {
     /// Boot Guard bits where it does not. Every CSME 15 image, which carries no
     /// CDMD record, now answers the profile instead of "no profile record in
     /// this image"; an image that answers nothing still does.
-    public static let current = 44
+    ///
+    /// 45 changes one field's answer the same way: `oemPublicKeyHash` is read
+    /// from the record the image's **generation** keeps — the 32-byte SHA-256 of
+    /// CSME 12 to 14, 0x90 bytes into the UEP container, and the 48-byte
+    /// SHA-384 of 15 and later at 0xA0. Images of the older generations, which
+    /// answered "layout not recognized" (they were being read as a newer one),
+    /// now answer their key.
+    public static let current = 45
 }

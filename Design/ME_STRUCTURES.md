@@ -77,20 +77,32 @@ row reports neither — and neither is evidence of anything on its own.
 **The UEP area** — an FPT region named `UEP` (0x2A0000 in the Z Flow dump,
 8 KiB), opened by the ASCII container `$UEPC`. It holds an entry that carries a
 window into the BIOS region (an address and a size), a 32-bit sum, a Key
-Manifest ID, and the **OEM public key hash** — a SHA-384, 48 bytes — which sits
-**0xA0 bytes into the entry**, and again 0x10A0 in where the area's second half
-is written. The area's own layout is not documented anywhere that could be
-found; that one offset was measured off the container and then checked against
-every dump at hand, across CSME 12 to 18, where it holds the same value the
-repeated-window search this replaced used to find (and reads two images that
-search could not).
+Manifest ID, and the **OEM public key hash**. The area's own layout is not
+documented anywhere that could be found, and the hash sits in **two different
+records, one per generation**:
+
+| generation | record | where |
+|---|---|---|
+| CSME 15 and later | SHA-384, 48 bytes | 0xA0 bytes into the entry, and again 0x10A0 in where the area's second half is written |
+| CSME 12 to 14 | SHA-256, **32 bytes**, with 16 bytes of assignment bits behind it | 0x90 bytes into the entry, once — the second half of those areas is erased on every image at hand |
+
+**Which record is read follows the image's generation, and not a guess**, because
+the two fields are one byte apart in kind: a 48-byte read of a CSME 14 image
+starts on the second half of its hash and runs into the bitmap behind it, and a
+32-byte read of a CSME 15 image starts on the zeroes ahead of its key. Both
+wrong reads *look* like key material at one end and padding at the other, which
+is exactly how the earlier reader printed "layout not recognized" for every
+CSME 14 image — the field it read was half a key and half a bitmap. The 32-byte
+record was measured off the container on five CSME 14 boards (Acer, Razer,
+Lenovo, HP, Dell) and a sixth image of the same Acer board whose key reads
+identically; the 48-byte one on every CSME 15 and 16 dump.
 
 The field is what the row reads, and what it holds is the finding:
 **all zeros** is MFIT's own "OEM signing is disabled", **all `FF`** an area never
-written, and **anything else** a layout this reader does not walk — CSME 14's
-entry holds a pointer-like value there, CSME 11 has no area at all. The row says
-which, because they are three states of a boot chain, not one silence. The rest
-of the entry — the window, the sum, the `0x4FE` word — is still unknown.
+written, and **anything else** a layout this reader does not walk (CSME 11 has
+no area at all). The row says which, because they are three states of a boot
+chain, not one silence. The rest of the entry — the window, the sum, the
+`0x4FE` word — is still unknown.
 
 **The CDMD partition** — an FPT region named `CDMD` (0x29D000 in the Z Flow
 dump, 0x3000) whose configuration opens with `FIT AS A FIDDLE` and carries small
@@ -132,8 +144,8 @@ not that the fact is absent from the platform.
 | CSME 16.1 (Z Flow, Legion, Asus, Dell) | v2 ✓ | ✓ FITC record and the live one | ✓ CDMD JSON — 5 and 0 seen, and the **UEP bits agree on every dump that carries both** (three MFIT builds of one image, differing only in the profile, moved the bits with it) | ✓ UEP, 6 + 6 copies — **verified** for the Z Flow family |
 | CSME 16.0 (Legion) | v2 ✓ | ✓ | ✓ (5, 0) | ✓ |
 | CSME 15 (Lenovo 1.bin, 2.rom, corporate) | v2 ✓ | ✓ records present; the live page is absent on a never-booted build | ✓ **UEP bits** — 0 on the three boards, and 3/4/5 on the owner's three builds, each matching the `.xml` FIT itself wrote for that build | ✓ UEP — **unverified** |
-| CSME 14 (Lenovo Comet Lake) | v2 ✓ | **no such setting**, and FIT 14's own map binds none either (see "ME 14" above) | **not found** — no CDMD partition, and the UEP area keeps the bits in a **different place** than 15's and 16's (FIT 14 lays them out per platform family; this dump reads the same under every candidate placement, so nothing decides) | **the field is a 32-byte SHA-256 at `$UEP`+0x90 with 16 bytes of zeroes behind it**, not the 48-byte hash of the newer generations — a layout the reader does not walk |
-| CSME 12 (Dell, Lenovo, HP) | v2 ✓ | no such setting | **not found** | **all zeros** — the field is there and reads zeros: signing disabled |
+| CSME 14 (Lenovo Comet Lake, and five more boards) | v2 ✓ | **no such setting**, and FIT 14's own map binds none either (see "ME 14" above) | **not found** — no CDMD partition, and the UEP area keeps the bits in a **different place** than 15's and 16's (FIT 14 lays them out per platform family; this dump reads the same under every candidate placement, so nothing decides) | ✓ **the 32-byte SHA-256 at `$UEP`+0x90**, read by generation — the same Acer board's second image carries the same hash |
+| CSME 12 (Dell, Lenovo, HP) | v2 ✓ | no such setting | **not found** | **all zeros** on the image at hand — the record is read (32 bytes at +0x90) and it reads zeros: signing disabled |
 | CSME 11 (corporate) | v2 ✓ | no such setting | **not found** — no CDMD and no `$UEP` container at all | **layout not recognized** — no area to read the field from |
 | ME 6, 7, 10 (Apple) | v1 — not read | — | — | — |
 
