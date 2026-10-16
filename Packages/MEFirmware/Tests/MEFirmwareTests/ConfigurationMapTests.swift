@@ -61,6 +61,33 @@ final class ConfigurationMapTests: XCTestCase {
         }
     }
 
+    /// What the tools say about a setting travels with it, in the reader's
+    /// words: prose, with the tool's own breaks and none of its markup — FIT
+    /// writes them as `&lt;br /&gt;` and MFIT as `&#13;&#10;`, and both are
+    /// lines by the time a map carries them.
+    func testTheToolsHelpAboutASettingTravelsWithIt() throws {
+        // Every generation's map carries help for most of what it lays out,
+        // and the flag every one of them has is among the settings that do.
+        for map in [MEConfigurationMap.csme13, .csme14, .csme15, .csme16] {
+            let settings = map.files.flatMap(\.settings)
+            let withHelp = settings.filter { $0.help?.isEmpty == false }
+            XCTAssertGreaterThan(withHelp.count, settings.count / 2, map.name)
+        }
+        // The flag every map but the 14 one lays out: its help is the tool's,
+        // and says what the setting does.
+        for map in [MEConfigurationMap.csme13, .csme15, .csme16] {
+            let flag = try XCTUnwrap(map.files.flatMap(\.settings)
+                .first { $0.name == "EomFirstBootEnabled" }, map.name)
+            XCTAssertEqual(flag.help?.hasPrefix("This setting det"), true, "\(map.name): \(flag.help ?? "—")")
+            XCTAssertNotNil(flag.help?.range(of: "End of Manufacturing"), map.name)
+        }
+        let help = try XCTUnwrap(MEConfigurationMap.csme15.file(at: "/home/mca/eom_config")?
+            .settings.first { $0.name == "EomFirstBootEnabled" }?.help)
+        XCTAssertTrue(help.contains("\nNote: When this setting is enabled"), help)
+        XCTAssertFalse(help.contains("<br"), help)
+        XCTAssertFalse(help.contains("&#"), help)
+    }
+
     /// The End of Manufacturing record: the one thing the newer layouts do not
     /// bind (the tool writes it through its own `EomNvar`), and the one record
     /// whose place every generation agrees on — bit 0 of the two bytes of

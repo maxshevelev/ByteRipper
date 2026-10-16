@@ -1085,6 +1085,36 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(unknownRows.map(\.mfs), ["Yes", nil, "1"])
     }
 
+    /// A row carries what the tool says about its setting, under the
+    /// identifier the row itself does not show — the heading of the `?` beside
+    /// the name. A setting the map does not list, or one MFIT has nothing to
+    /// say about, has neither.
+    func testARowCarriesTheToolsHelpAndTheIdentifier() throws {
+        var a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+        ])
+        a.configuration = [
+            ConfigurationFile(path: "/home/mca/eom_config", alias: "EOM_Config",
+                              mfs: .init(size: 2, settings: [
+                                  ConfigurationSetting(name: "EomFirstBootEnabled", number: 1),
+                                  ConfigurationSetting(name: "NotInTheMap", number: 1),
+                              ])),
+        ]
+
+        let rows = MEAConfiguration.build(a, in: .english)[0].rows
+        let flag = try XCTUnwrap(rows.first { $0.name == "EOM on First Boot Enabled" })
+
+        XCTAssertEqual(flag.identifier, "EomFirstBootEnabled",
+                       "the name a document or a report calls the setting by")
+        XCTAssertEqual(flag.help?.hasPrefix("This setting det"), true, flag.help ?? "—")
+        XCTAssertEqual(flag.help?.contains("\nNote:"), true,
+                       "the tool's paragraph break, as the line it is")
+        for row in rows where row.help != nil {
+            XCTAssertFalse(row.help?.contains("<br") ?? true, row.identifier)
+        }
+    }
+
     // MARK: - The messages block
 
     func testIssuesBecomeAMessagesBlockAfterTheTable() throws {
