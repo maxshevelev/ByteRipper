@@ -29,6 +29,11 @@ Understood well enough to claim (see reference/structures.md):
     four settings themselves, as bits of the UEP area's first bit array; the
     same four FIT 15's table names. Read on the owner's three builds of one
     image, whose FIT readings differ in this and nothing else.
+  * CSME 12 to 14 carry the same four settings in the UEP container's own record
+    rather than in a bit array (the flags byte at +0x4C, in the three copies the
+    container keeps), with the container's ACM mask at +0x34 to say the layout
+    is this one. Read on the owner's four FIT 14 builds of one image, one per
+    profile, which differ in five bytes of sixteen million.
 
 Not understood yet (do not guess in a report): what the rest of the UEP entry
 fields mean (the bits beside the four, the 0x4FE/0xFE word, the checksum's
@@ -72,6 +77,21 @@ UEP_FLAGS_OFFSET = 0x6E
 # layout is and blank in a container of another structure.
 UEP_WORD_OFFSET = 0x68
 
+# Where the same four bits sit in a CSME 12 to 14 container, which keeps them in
+# its own record instead of in a bit array: the flags byte of that record, in
+# the three copies the container keeps — the array's offset above reads zero on
+# these images, which is what sent the first search after a bit array that is
+# not there. The record's source pointer sits ahead of the flags, and the mask
+# at +0x34 is the container's own word for the ACM (0xCC off, 0xFF on), which is
+# zero in the later generations' container and so tells the two layouts apart.
+# Measured on four FIT 14.0.20 builds of one CSME 14 image, one per profile,
+# whose `.xml` readings differ in the profile and nothing else and whose bytes
+# differ in five: the mask, each copy's flags byte, and the container's checksum.
+UEP_RECORD_FLAGS_OFFSETS = (0x4C, 0xE8, 0x178)
+UEP_RECORD_MASK_OFFSET = 0x34
+UEP_RECORD_SOURCE_OFFSET = 0x48
+UEP_RECORD_MASKS = (0xCC, 0xFF)
+
 
 # Which record a generation keeps its OEM key hash in, and how long the hash
 # is: CSME 12 to 14 write a 32-byte SHA-256 at +0x90 (with 16 bytes of
@@ -112,6 +132,37 @@ def uep_boot_guard_flags(me, uep_at):
     if word in (0x0000, 0xFFFF):
         return None
     byte = me[uep_at + UEP_FLAGS_OFFSET]
+    return (byte & 0x01 != 0, byte & 0x20 != 0, byte & 0x10 != 0, byte & 0x08 != 0)
+
+
+def uep_record_boot_guard_flags(me, uep_at):
+    """The same four settings out of a CSME 12 to 14 container's record, or None
+    where the area is not that layout: the mask at +0x34 is the container's own
+    word for the ACM and is zero in the later generations' one, the record's
+    source pointer is written wherever a record is, and the three copies of the
+    flags byte agree (a disagreement means these offsets are not this image's).
+    A body never written fails all three, so its all-ones flags — which as a
+    combination are profile 5 — are not read as one."""
+    if uep_at < 0:
+        return None
+
+    def fits(offset, length=1):
+        return uep_at + offset + length <= len(me)
+
+    if not (fits(UEP_RECORD_MASK_OFFSET, 4) and fits(UEP_RECORD_SOURCE_OFFSET, 4)
+            and all(fits(offset) for offset in UEP_RECORD_FLAGS_OFFSETS)):
+        return None
+    mask = u32(me, uep_at + UEP_RECORD_MASK_OFFSET)
+    if mask not in UEP_RECORD_MASKS:
+        return None
+    if u32(me, uep_at + UEP_RECORD_SOURCE_OFFSET) in (0x00000000, 0xFFFFFFFF):
+        return None
+    copies = {me[uep_at + offset] for offset in UEP_RECORD_FLAGS_OFFSETS}
+    if len(copies) != 1:
+        return None
+    byte = copies.pop()
+    if (mask == 0xFF) != bool(byte & 0x01):
+        return None
     return (byte & 0x01 != 0, byte & 0x20 != 0, byte & 0x10 != 0, byte & 0x08 != 0)
 
 
@@ -357,7 +408,7 @@ def report(path):
               % (BOOT_GUARD_PROFILES.get(profile, "unknown: %r" % profile), profile))
     else:
         print("Boot Guard profile: no BtGuardProfileConfig in the CDMD JSON"
-              " — reading the UEP bits")
+              " — reading the UEP area")
         flags = uep_boot_guard_flags(me, uep_at)
         if flags is None:
             print("  the UEP area carries no Boot Guard bit array here")
@@ -366,6 +417,17 @@ def report(path):
                   " protect %d → %s"
                   % (flags + (BOOT_GUARD_FLAGS.get(flags,
                                                    "no profile names this combination"),)))
+        # The other shape of the one fact: a CSME 12 to 14 container keeps the
+        # same four settings in its record. Both are printed, as both key
+        # records are — each layout's guards reject the other's container.
+        earlier = uep_record_boot_guard_flags(me, uep_at)
+        if earlier is None:
+            print("  the UEP area carries no CSME 12–14 record here")
+        else:
+            print("  UEP record flags: FBG ACM %d, verified %d, measured %d,"
+                  " protect %d → %s"
+                  % (earlier + (BOOT_GUARD_FLAGS.get(earlier,
+                                                     "no profile names this combination"),)))
 
 
 if __name__ == "__main__":
