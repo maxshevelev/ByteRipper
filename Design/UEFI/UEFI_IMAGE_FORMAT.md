@@ -417,10 +417,12 @@ ByteRipper carries the layouts of the lengths its dumps showed and checked —
 69, 70, 74, 90 and 101 words — emitted into
 `Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH.swift` by
 `Skills/me-eom-structures/scripts/strap_map.py` (the tool's names, offsets,
-bits and defaults copied, nothing added). The panel names a word's fields from
-it and marks the ones the image does not leave at the tool's default; a section
-of a length that is not among them is listed as numbers, and nothing about its
-bits is claimed.
+bits and defaults copied, nothing added). The panel gives every field a row of
+its own — its name, the word it sits in, its bits, the value the image holds
+and the value the tool builds — so a row whose two values differ is a field the
+board's own build set; the bit that soft-disables the ME is a row there too,
+being no field of the layout. A section of a length that is not among them is
+listed as numbers, and nothing about its bits is claimed.
 
 | generations | name | word | bit |
 |---|---|---|---|
