@@ -1194,11 +1194,13 @@ public actor MEFirmwareAnalyzer {
         let uepArea = Self.regionBytes("UEP", regions: regions,
                                        region: region, baseOffset: baseOffset)
         // Where an image has no CDMD record, the profile is the UEP area's Boot
-        // Guard bits — read on the two generations that were verified against
-        // FIT's own readings, 15 and 16. A CSME 12 container is another
-        // structure whose blank bits would read as profile 0, and CSME 18's is
-        // blank where these keep their arrays; neither is read until a dump
-        // whose profile is known says its container keeps them the same way.
+        // Guard bits — read on the two generations whose tools were measured
+        // writing them, 15 (FIT) and 16 (MFIT), where three builds of one image
+        // moved these bits with the profile and changed nothing else. A CSME 12
+        // container is another structure whose blank bits would read as profile
+        // 0, and CSME 18's is blank where these keep their arrays; neither is
+        // read until a dump whose profile is known says its container keeps them
+        // the same way.
         let uepProfile = identity.family == .csme && (15...16).contains(identity.major)
             ? uepArea.flatMap(BootGuardReader.profile(inUEPArea:)) : nil
         let bootGuardProfile = Self.regionBytes("CDMD", regions: regions,
