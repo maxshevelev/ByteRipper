@@ -129,7 +129,7 @@ not that the fact is absent from the platform.
 | generation (dumps at hand) | descriptor rights | EOM flag | Boot Guard profile | OEM key hash |
 |---|---|---|---|---|
 | CSME 18 (EliteBook 630 G11) | v2 ✓ — the row's gate | **not found**: the FITC partition is there, the `eom_config` record is not | **not found** — CDMD present, no `BtGuardProfileConfig` | ✓ read — `0D7C0D45…`, the same key as its sibling at CSME 16.1.30 |
-| CSME 16.1 (Z Flow, Legion, Asus, Dell) | v2 ✓ | ✓ FITC record and the live one | ✓ CDMD JSON — 5 and 0 seen | ✓ UEP, 6 + 6 copies — **verified** for the Z Flow family |
+| CSME 16.1 (Z Flow, Legion, Asus, Dell) | v2 ✓ | ✓ FITC record and the live one | ✓ CDMD JSON — 5 and 0 seen, and the **UEP bits agree on every dump that carries both** (three MFIT builds of one image, differing only in the profile, moved the bits with it) | ✓ UEP, 6 + 6 copies — **verified** for the Z Flow family |
 | CSME 16.0 (Legion) | v2 ✓ | ✓ | ✓ (5, 0) | ✓ |
 | CSME 15 (Lenovo 1.bin, 2.rom, corporate) | v2 ✓ | ✓ records present; the live page is absent on a never-booted build | ✓ **UEP bits** — 0 on the three boards, and 3/4/5 on the owner's three builds, each matching the `.xml` FIT itself wrote for that build | ✓ UEP — **unverified** |
 | CSME 14 (Lenovo) | v2 ✓ | **no such setting**: the configuration records are the named (0x1C) layout and hold no `eom_config` | **not found** — no CDMD partition at all in that image | **layout not recognized** — the field holds a pointer-like value, not a key |
@@ -380,7 +380,13 @@ including one whose CDMD states profile 5. A board's Boot Guard level is on the
 ME region this engine is given.
 
 **Whether an older generation carries the profile in another place.** CSME 15 is
-answered: it keeps the four settings as bits of the UEP area (see "The CDMD
+answered, and CSME 16 with it: three MFIT builds of one 16.1 image, differing
+only in the profile, moved the UEP bits with it (`0x00`/`0x38`/`0x39` for
+profiles 0/3/5) while CDMD's JSON and MFIT's own `.xml` said the same thing —
+so on 16 the two keepings are both the tool's writing, not one inherited from
+the input (the numbers are in
+`Skills/me-eom-structures/reference/structures.md`). CSME 15 keeps the four
+settings the same way (see "The CDMD
 partition" above, and the correction at the end of
 `Skills/me-eom-structures/reference/structures.md` for what the earlier search
 looked for and why it could not find it). What is not answered is CSME 14, 12
