@@ -11,6 +11,7 @@ import XCTest
 /// places two generations *disagree* about.
 final class ConfigurationMapTests: XCTestCase {
     func testEachMappedGenerationReadsItsOwnMap() {
+        XCTAssertEqual(MEConfigurationMap.forME(major: 14)?.name, MEConfigurationMap.csme14.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 15)?.name, MEConfigurationMap.csme15.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 16)?.name, MEConfigurationMap.csme16.name)
         // A generation nobody has mapped reads nothing rather than another
@@ -39,6 +40,45 @@ final class ConfigurationMapTests: XCTestCase {
             let eom = try XCTUnwrap(map.file(at: "/home/mca/eom"),
                                     "\(map.name) has no EOM")
             XCTAssertEqual(eom.settings.first { $0.name == "EomFirstBootEnabled" }?.bits, nil)
+        }
+    }
+
+    /// What the oldest of the three maps does *not* have: ME 14 lays out no
+    /// End of Manufacturing record. FIT 14 binds `/home/mca/eom` — the byte the
+    /// board itself wrote — and no `eom_config`, which is why the panel's
+    /// Manufacturing row leans on the descriptor for an image of that
+    /// generation instead of on the flag.
+    func testTheOldestMapHasNoEOMRecord() throws {
+        let fourteen = MEConfigurationMap.csme14
+        XCTAssertNotNil(fourteen.file(at: "/home/mca/eom"))
+        XCTAssertNil(fourteen.file(at: "/home/mca/eom_config"))
+        for newer in [MEConfigurationMap.csme15, MEConfigurationMap.csme16] {
+            XCTAssertNotNil(newer.file(at: "/home/mca/eom_config"),
+                            "\(newer.name) should carry the flag the 14 map has not got")
+        }
+    }
+
+    /// The maps are the tools' own layouts, so which files a generation knows
+    /// is a fact of its own map. Five files every one of the three lays out —
+    /// that set is what a bench reads first on any of them — and the four the
+    /// oldest has and the newer two have not, which is where reading one
+    /// generation through another's map shows.
+    func testThePlatformFilesAreTheToolsOwn() {
+        for path in ["/home/mca/eom", "/home/policy/cfgmgr/cfg_rules",
+                     "/home/bup/si_features", "/home/amt/skip_rtfd/ncsi",
+                     "/home/mctp/smt2_devices"] {
+            for map in [MEConfigurationMap.csme14, .csme15, .csme16] {
+                XCTAssertNotNil(map.file(at: path), "\(map.name) has no \(path)")
+            }
+        }
+        // FIT 14's cml_lp binds the iunit files the newer families replaced
+        // with `iunit_oem_cfg` and `iunit_privacy_mode`; neither newer map
+        // knows them at all.
+        for path in ["/home/iunit/port_cfg", "/home/iunit/sec_ctl",
+                     "/home/iunit/sec_touch", "/home/iunit/camera_mask"] {
+            XCTAssertNotNil(MEConfigurationMap.csme14.file(at: path))
+            XCTAssertNil(MEConfigurationMap.csme15.file(at: path))
+            XCTAssertNil(MEConfigurationMap.csme16.file(at: path))
         }
     }
 

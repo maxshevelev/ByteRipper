@@ -69,7 +69,21 @@ There a setting's place is a `ProcessNvar` action — `filePath` into an alias
 table, and a cell (`cellIndex × cellSize + cellOffset`) or a plain
 `startOffset`/`varSize` — and its words come from the value class its
 `type="class:…"` names. `--straps` picks the family whose layout is wanted
-(`tgp_lp` is ME 15's own). One thing that generator cannot take from the chosen
+(`tgp_lp` is ME 15's own), and `--generation`/`--tool` name the map in the file
+it emits:
+
+```bash
+python3 Skills/me-eom-structures/scripts/fit_map.py <fit-14.0.exe> \
+    --straps cml_lp --generation 14 --tool 14.0 > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME14.swift
+```
+
+ME 14's own family has to be picked per dump — `cml_lp` was, for the Lenovo
+Comet Lake board, by the CPUIDs in its BIOS region (`0x806EA`/`0x806EB`/`0x806EC`
+are Comet Lake U, `0xA0660` Comet Lake S) rather than by anything in the ME
+region. The tool also lays the Boot Guard bits out **per family**, which is why
+a CSME 14 image's profile is not read yet: see the end of
+`reference/structures.md`. One thing that generator cannot take from the chosen
 platform: the End of Manufacturing record, which the newer layouts do not bind
 at all (the tool writes it through `EomNvar`), so it is filled in from whichever
 document binds `EOM_Config` and marked as such in the file's header.

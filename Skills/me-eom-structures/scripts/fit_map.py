@@ -276,15 +276,25 @@ def swift(files):
     return "\n".join(out)
 
 
+def option(args, name, default):
+    """A `--name value` option, taken out of the argument list."""
+    if name not in args:
+        return args, default
+    at = args.index(name)
+    value = args[at + 1]
+    return [a for i, a in enumerate(args) if i not in (at, at + 1)], value
+
+
 def main():
     args = sys.argv[1:]
     if not args:
         print(__doc__)
         return 2
-    straps = DEFAULT_STRAPS
-    if "--straps" in args:
-        straps = args[args.index("--straps") + 1]
-        args = [a for a in args if a != straps and a != "--straps"]
+    args, straps = option(args, "--straps", DEFAULT_STRAPS)
+    # Which generation's map this is, and which tool it was read from: the
+    # emitted file names both, and the paths inside it are the tool's own.
+    args, generation = option(args, "--generation", "15")
+    args, tool = option(args, "--tool", "15.0")
     blob = open(args[0], "rb").read()
 
     texts = list(documents(blob))
@@ -336,12 +346,12 @@ def main():
     for warning in warnings:
         print("! %s" % warning, file=sys.stderr)
 
-    print("// The CSME 15 map of the ME configuration — emitted by")
-    print("// `Skills/me-eom-structures/scripts/fit_map.py` from Flash Image Tool 15.0's")
-    print("// own layout documents (the %s platform, which is ME 15's own)." % straps)
+    print("// The CSME %s map of the ME configuration — emitted by" % generation)
+    print("// `Skills/me-eom-structures/scripts/fit_map.py` from Flash Image Tool %s's" % tool)
+    print("// own layout documents (the %s platform of ME %s)." % (straps, generation))
     print("// Offsets, bits, option labels and file paths are FIT's, copied out of its")
     print("// `ProcessNvar` bindings and value dictionaries; nothing here is read out of a")
-    print("// dump. FIT 15 marks no setting `Auto` — it has no such attribute — so no")
+    print("// dump. FIT %s marks no setting `Auto` — it has no such attribute — so no" % tool)
     print("// setting here carries that mark.")
     print("//")
     print("// A generation's map lives in a file of its own: see `MEConfigurationMap.swift`")
@@ -350,10 +360,10 @@ def main():
     print("import Foundation")
     print()
     print("extension MEConfigurationMap {")
-    print("    /// The ME 15 configuration, as FIT 15 lays it out. The files stand in the")
+    print("    /// The ME %s configuration, as FIT %s lays it out. The files stand in the" % (generation, tool))
     print("    /// order a bench reads them, and the rest in the tool's own order.")
-    print("    public static let csme15 = MEConfigurationMap(")
-    print('        name: "CSME 15 (Flash Image Tool 15.0)",')
+    print("    public static let csme%s = MEConfigurationMap(" % generation)
+    print('        name: "CSME %s (Flash Image Tool %s)",' % (generation, tool))
     print("        files: [")
     print(swift(files))
     print("        ])")
