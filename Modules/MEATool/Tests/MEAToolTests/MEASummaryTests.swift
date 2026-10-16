@@ -1037,7 +1037,8 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(blocks[0].alias, "EOM_Config")
         XCTAssertEqual(blocks[0].detail, "/mca/eom_config, 2 bytes")
         XCTAssertEqual(blocks[0].rows.map(\.name),
-                       ["EomFirstBootEnabled", "FlexibleEomSettings"])
+                       ["EOM on First Boot Enabled (EomFirstBootEnabled)",
+                        "Flexible EOM setting options (FlexibleEomSettings)"])
         // Each row carries the build's value and the file system's, and the
         // pair that disagrees is the one the view marks.
         // MFIT's own words for the flag, which its database calls a Yes/No
@@ -1067,6 +1068,26 @@ final class MEASummaryTests: XCTestCase {
         ])
         unmapped.configuration = a.configuration
         XCTAssertTrue(MEAConfiguration.build(unmapped, in: .english).isEmpty)
+
+        // A setting the map does not list has only its identifier to show: the
+        // tool's own words for a setting are the map's, and where there is no
+        // map entry there is nothing to borrow them from. The map's own order
+        // holds, so the unknown one comes last and the setting the copy has not
+        // got is still a row — with an absent value rather than a zero.
+        var unknown = a
+        unknown.configuration = [
+            ConfigurationFile(path: "/home/mca/eom_config", alias: "EOM_Config",
+                              mfs: .init(size: 2, settings: [
+                                  ConfigurationSetting(name: "EomFirstBootEnabled", number: 1),
+                                  ConfigurationSetting(name: "NotInTheMap", number: 1),
+                              ])),
+        ]
+        let unknownRows = MEAConfiguration.build(unknown, in: .english)[0].rows
+        XCTAssertEqual(unknownRows.map(\.name),
+                       ["EOM on First Boot Enabled (EomFirstBootEnabled)",
+                        "Flexible EOM setting options (FlexibleEomSettings)",
+                        "NotInTheMap"])
+        XCTAssertEqual(unknownRows.map(\.mfs), ["Yes", nil, "1"])
     }
 
     // MARK: - The messages block

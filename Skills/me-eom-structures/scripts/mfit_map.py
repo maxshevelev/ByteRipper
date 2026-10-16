@@ -100,6 +100,12 @@ def options_of(attrs, body):
 def settings_of(body):
     """The readable settings of one `<File>` block, in MFIT's order.
 
+    `label` is the tool's own name for the setting — what its panel shows —
+    taken from the `<UI>` element beside the place (`name` is the identifier:
+    `MELanPowerWell`, `PttSupported`; the label is "LAN Power Well",
+    "Intel(R) PTT Supported"). The `section` the same element names is the
+    panel's group, which the map does not carry.
+
     A setting with no place in the file (`length="0"` — most of the database:
     values the tool computes, certificates, the ICC profiles) is left out: it
     cannot be read out of bytes, and a row that is always empty is not a fact
@@ -121,8 +127,11 @@ def settings_of(body):
         kind = kind.group(1) if kind else None
         physical = re.search(r'physical_type="([^"]*)"', inner)
         physical = physical.group(1) if physical else None
+        ui = re.search(r'<UI\b[^>]*>', inner)
+        label = re.search(r'\blabel="([^"]*)"', ui.group(0)) if ui else None
         found.append({
             "name": name,
+            "label": label.group(1) if label else None,
             "offset": offset,
             "length": length,
             "bits": bits,
@@ -185,6 +194,11 @@ def swift(files):
             args = ["name: %s" % swift_literal(s["name"]),
                     "offset: %d" % s["offset"],
                     "length: %d" % s["length"]]
+            # The tool's own name for the setting, where it differs from the
+            # identifier: a map that repeats the identifier says the tool shows
+            # nothing else.
+            if s.get("label") and s["label"] != s["name"]:
+                args.append("label: %s" % swift_literal(s["label"]))
             if s["bits"]:
                 args.append("bits: %d...%d" % s["bits"])
             if s["options"]:
@@ -221,7 +235,8 @@ def main():
     print("// The CSME 16 map of the ME configuration — emitted by")
     print("// `Skills/me-eom-structures/scripts/mfit_map.py` from Flash Image Tool")
     print("// %s's own settings database, which is the build that wrote the CSME 16" % PROJECT)
-    print("// images this was verified against. Offsets, bits, option labels and the")
+    print("// images this was verified against. Offsets, bits, the tool's own name for")
+    print("// each setting (`label`), its option labels and the")
     print("// `Auto` marks are Intel's, copied; nothing here is read out of a dump.")
     print("//")
     print("// A generation's map lives in a file of its own: see `MEConfigurationMap.swift`")
