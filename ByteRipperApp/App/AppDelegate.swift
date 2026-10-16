@@ -95,6 +95,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // window after it (`Design/LOCALIZATION.md`).
         AppDefaults.startLocalization()
         AppDefaults.isolateFindPasteboard()
+        // The relay a client's configuration names lives beside the socket, not
+        // in this bundle: a path inside a bundle changes with the folder the app
+        // was built in, and a configuration is meant to be made once
+        // (`AgentRelayInstall`). Before anything can hand one out.
+        AgentRelayInstall.install()
         // Tabs are windows. Turning this on is what gives the app the system's
         // tab bar, ⌘T through `newWindowForTab(_:)`, ⌃Tab and ⌘1…⌘9, dragging a
         // tab out into its own window and dragging one back in, and the Window
