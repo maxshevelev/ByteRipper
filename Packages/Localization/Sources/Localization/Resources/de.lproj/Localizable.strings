@@ -1071,6 +1071,10 @@
 "%1$@: reads refused" = "%1$@: Lesen gesperrt";
 "eSPI clock in bits 3–5; the other bits unknown" = "eSPI-Takt in Bit 3–5; die übrigen Bits unbekannt";
 "GPR0, the whole word" = "GPR0, das ganze Wort";
+"%1$@ in bit %2$@" = "%1$@ in Bit %2$@";
+"Fields: %1$@, all at Flash Image Tool's default" = "Felder: %1$@, alle auf dem Standardwert von Flash Image Tool";
+"%1$@ of %2$@ fields not at Flash Image Tool's default: %3$@" = "%1$@ von %2$@ Feldern nicht auf dem Standardwert von Flash Image Tool: %3$@";
+"and %1$@ more" = "und %1$@ weitere";
 "Unknown (code %1$@)" = "Unbekannt (Code %1$@)";
 "%1$@ — header marked invalid" = "%1$@ — Header als ungültig markiert";
 "%1$@ (not checked)" = "%1$@ (nicht geprüft)";
