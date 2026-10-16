@@ -286,13 +286,21 @@ final class BootGuardReaderTests: XCTestCase {
     /// checksum. The image's own bits are 0x46, and the three profiles set
     /// 0x38, 0x29 and 0x39 of them.
     func testTheEarlierContainerNamesTheSameFourProfiles() {
-        XCTAssertEqual(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0x46)), .noFVME)
-        XCTAssertEqual(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0x7E)), .vm)
-        XCTAssertEqual(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0x6F)), .fve)
-        XCTAssertEqual(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0x7F)), .fvme)
+        XCTAssertEqual(BootGuardReader.profile(inRecordUEPArea: earlierUEPArea(flags: 0x46),
+                                               major: 14), .noFVME)
+        XCTAssertEqual(BootGuardReader.profile(inRecordUEPArea: earlierUEPArea(flags: 0x7E),
+                                               major: 14), .vm)
+        XCTAssertEqual(BootGuardReader.profile(inRecordUEPArea: earlierUEPArea(flags: 0x6F),
+                                               major: 14), .fve)
+        XCTAssertEqual(BootGuardReader.profile(inRecordUEPArea: earlierUEPArea(flags: 0x7F),
+                                               major: 14), .fvme)
         // The vendor images' own bits: the ACM bit and the debug switches sit
         // in the same byte, and 0xF9 is the four settings with both of those.
-        XCTAssertEqual(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0xF9)), .fvme)
+        XCTAssertEqual(BootGuardReader.profile(inRecordUEPArea: earlierUEPArea(flags: 0xF9),
+                                               major: 14), .fvme)
+        // CSME 12 is the same shape, read with the same layout.
+        XCTAssertEqual(BootGuardReader.profile(inRecordUEPArea: earlierUEPArea(flags: 0x46),
+                                               major: 12), .noFVME)
     }
 
     /// What the earlier reader refuses. None of it is a profile, and none of it
@@ -303,36 +311,116 @@ final class BootGuardReaderTests: XCTestCase {
         // and the source pointer, both erased with the rest.
         var erased = [UInt8](repeating: 0xFF, count: 0x200)
         erased.replaceSubrange(0x20..<0x24, with: Array("$UEP".utf8))
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea: Data(erased)))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea: Data(erased), major: 14))
         // The later generations' container: the same signature, all zero where
         // the mask and the record are (a CSME 15 image read as if it were 12–14).
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea: uepArea(flags: 0x7B)))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea: uepArea(flags: 0x7B), major: 14))
+        // Ice Lake's container read as CSME 12–14's: its mask is elsewhere.
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea: iceLakeUEPArea(flags: 0x79),
+                                             major: 14))
         // A mask that does not say what the flags' ACM bit says.
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
-            earlierUEPArea(flags: 0x7F, mask: 0xCC)))
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
-            earlierUEPArea(flags: 0x46, mask: 0xFF)))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            earlierUEPArea(flags: 0x7F, mask: 0xCC), major: 14))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            earlierUEPArea(flags: 0x46, mask: 0xFF), major: 14))
         // A mask of another shape, and one erased on its own.
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
-            earlierUEPArea(flags: 0x7F, mask: 0x0F)))
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
-            earlierUEPArea(flags: 0x7F, mask: 0xFFFF_FFFF)))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            earlierUEPArea(flags: 0x7F, mask: 0x0F), major: 14))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            earlierUEPArea(flags: 0x7F, mask: 0xFFFF_FFFF), major: 14))
         // A record that points nowhere: both fills, and a body written with
         // zeroes, whose flags would read as No_FVME.
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
-            earlierUEPArea(flags: 0x7F, source: 0)))
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
-            earlierUEPArea(flags: 0x7F, source: 0xFFFF_FFFF)))
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
-            Data(repeating: 0x00, count: 0x200)))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            earlierUEPArea(flags: 0x7F, source: 0), major: 14))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            earlierUEPArea(flags: 0x7F, source: 0xFFFF_FFFF), major: 14))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            Data(repeating: 0x00, count: 0x200), major: 14))
         // The record's copies disagreeing means these offsets are not this
         // image's layout.
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea:
-            earlierUEPArea(flags: 0x7F, copies: [0x7F, 0x7F, 0x7E])))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            earlierUEPArea(flags: 0x7F, copies: [0x7F, 0x7F, 0x7E]), major: 14))
         // A combination no profile names, and no container at all.
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea: earlierUEPArea(flags: 0x31)))
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea: Data()))
-        XCTAssertNil(BootGuardReader.profile(inEarlierUEPArea: Data("nothing here".utf8)))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea: earlierUEPArea(flags: 0x31),
+                                             major: 14))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea: Data(), major: 14))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea: Data("nothing here".utf8),
+                                             major: 14))
+    }
+
+    // MARK: - The profile out of the CSME 13 UEP area
+
+    /// An Ice Lake container as the NM-C711 builds carry it: the container's
+    /// policy words at +0x30, the mask at +0x40 (0xC0CC with the ACM off and
+    /// 0xC0FF with it on, which is what the flags' own bit 0 says unless a test
+    /// overrides it, and 0xC0 above it), the record's source pointer at +0x60
+    /// and the flags byte at +0x64, +0x150 and +0x22C. The image's own bits
+    /// around the four settings are 0x40, not 0x46 as on CSME 12–14.
+    private func iceLakeUEPArea(flags: UInt8, mask: UInt32? = nil,
+                                source: UInt32 = 0x5A_E080,
+                                copies: [UInt8]? = nil) -> Data {
+        var area = [UInt8](repeating: 0x00, count: 0x300)
+        let at = 0x20
+        area.replaceSubrange(at..<(at + 4), with: Array("$UEP".utf8))
+        area[at + 4] = 0xF7                       // the checksum's low byte
+        area[at + 5] = 0x2D                       // …and its high byte
+        area.replaceSubrange((at + 0x34)..<(at + 0x40),
+                             with: [0xFF, 0xFF, 0xCF, 0x0C, 0xFF, 0xC0,
+                                    0x0C, 0x00, 0xC0, 0x00, 0x00, 0x00])
+        let maskValue = mask ?? (flags & 0x01 != 0 ? 0xC0FF : 0xC0CC)
+        area.replaceSubrange((at + 0x40)..<(at + 0x44), with: little(maskValue))
+        area.replaceSubrange((at + 0x60)..<(at + 0x64), with: little(source))
+        for (index, offset) in [0x64, 0x150, 0x22C].enumerated() {
+            area[at + offset] = copies?[index] ?? flags
+        }
+        return Data(area)
+    }
+
+    /// The four FIT 13.0 builds of the NM-C711 dump — the `.xml` readings differ
+    /// in `BtGuardProfileConfig` and nothing else, and the bytes in six of
+    /// sixteen million: the container's checksum, the mask, and the flags byte of
+    /// each of the record's three copies. The image's own bits are 0x40 and the
+    /// three profiles turn on the same 0x38, 0x29 and 0x39 as every other
+    /// generation.
+    func testTheIceLakeContainerNamesTheSameFourProfiles() {
+        XCTAssertEqual(BootGuardReader.profile(inRecordUEPArea: iceLakeUEPArea(flags: 0x40),
+                                               major: 13), .noFVME)
+        XCTAssertEqual(BootGuardReader.profile(inRecordUEPArea: iceLakeUEPArea(flags: 0x78),
+                                               major: 13), .vm)
+        XCTAssertEqual(BootGuardReader.profile(inRecordUEPArea: iceLakeUEPArea(flags: 0x69),
+                                               major: 13), .fve)
+        XCTAssertEqual(BootGuardReader.profile(inRecordUEPArea: iceLakeUEPArea(flags: 0x79),
+                                               major: 13), .fvme)
+    }
+
+    /// What the Ice Lake reader refuses: the same guards, and the other
+    /// generation's containers answered with nothing rather than a profile.
+    func testTheIceLakeContainerIsNotGuessedAt() {
+        var erased = [UInt8](repeating: 0xFF, count: 0x300)
+        erased.replaceSubrange(0x20..<0x24, with: Array("$UEP".utf8))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea: Data(erased), major: 13))
+        // CSME 12–14's container and the 15/16 one behind the same signature.
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea: earlierUEPArea(flags: 0x7F),
+                                             major: 13))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea: uepArea(flags: 0x7B), major: 13))
+        // A mask that does not say what the flags' ACM bit says, and a mask of
+        // another word.
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            iceLakeUEPArea(flags: 0x79, mask: 0xC0CC), major: 13))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            iceLakeUEPArea(flags: 0x40, mask: 0xC0FF), major: 13))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            iceLakeUEPArea(flags: 0x79, mask: 0xCC), major: 13))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            iceLakeUEPArea(flags: 0x79, source: 0), major: 13))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            iceLakeUEPArea(flags: 0x79, source: 0xFFFF_FFFF), major: 13))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            Data(repeating: 0x00, count: 0x300), major: 13))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea:
+            iceLakeUEPArea(flags: 0x79, copies: [0x79, 0x79, 0x78]), major: 13))
+        XCTAssertNil(BootGuardReader.profile(inRecordUEPArea: iceLakeUEPArea(flags: 0x31),
+                                             major: 13))
     }
 
     // MARK: - The OEM public key hash

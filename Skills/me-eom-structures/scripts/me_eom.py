@@ -92,6 +92,17 @@ UEP_RECORD_MASK_OFFSET = 0x34
 UEP_RECORD_SOURCE_OFFSET = 0x48
 UEP_RECORD_MASKS = (0xCC, 0xFF)
 
+# The same record on CSME 13, 0x18 further into the container: the mask at +0x40
+# keeps 0xC0 above its 0xCC/0xFF, the source pointer is at +0x60, and the three
+# copies of the flags byte sit every 0xDC. Measured on four FIT 13.0 builds of an
+# Ice Lake-U dump (Lenovo NM-C711), whose bytes differ in six: this mask, each
+# copy's flags byte, and the container's checksum. The four settings are the same
+# bits, and the image's own are 0x40 there where they are 0x46 on 12/14.
+UEP_RECORD13_FLAGS_OFFSETS = (0x64, 0x150, 0x22C)
+UEP_RECORD13_MASK_OFFSET = 0x40
+UEP_RECORD13_SOURCE_OFFSET = 0x60
+UEP_RECORD13_MASKS = (0xC0CC, 0xC0FF)
+
 
 # Which record a generation keeps its OEM key hash in, and how long the hash
 # is: CSME 12 to 14 write a 32-byte SHA-256 at +0x90 (with 16 bytes of
@@ -135,33 +146,45 @@ def uep_boot_guard_flags(me, uep_at):
     return (byte & 0x01 != 0, byte & 0x20 != 0, byte & 0x10 != 0, byte & 0x08 != 0)
 
 
-def uep_record_boot_guard_flags(me, uep_at):
-    """The same four settings out of a CSME 12 to 14 container's record, or None
-    where the area is not that layout: the mask at +0x34 is the container's own
-    word for the ACM and is zero in the later generations' one, the record's
-    source pointer is written wherever a record is, and the three copies of the
-    flags byte agree (a disagreement means these offsets are not this image's).
-    A body never written fails all three, so its all-ones flags — which as a
-    combination are profile 5 — are not read as one."""
+def uep_record_boot_guard_flags(me, uep_at, shape="earlier"):
+    """The same four settings out of a container's record, or None where the
+    area is not that layout: the mask is the container's own word for the ACM
+    and is zero in another generation's container, the record's source pointer
+    is written wherever a record is, and the three copies of the flags byte
+    agree (a disagreement means these offsets are not this image's). A body
+    never written fails all three, so its all-ones flags — which as a
+    combination are profile 5 — are not read as one.
+
+    `shape` is "earlier" for CSME 12 and 14 or "13" for Ice Lake's, because the
+    same facts sit 0x18 further in there; the masks tell the two apart as well,
+    which is why a caller may ask either without knowing the generation."""
+    if shape == "13":
+        flags_offsets, mask_offset = UEP_RECORD13_FLAGS_OFFSETS, UEP_RECORD13_MASK_OFFSET
+        source_offset, masks, with_acm = (UEP_RECORD13_SOURCE_OFFSET,
+                                          UEP_RECORD13_MASKS, UEP_RECORD13_MASKS[1])
+    else:
+        flags_offsets, mask_offset = UEP_RECORD_FLAGS_OFFSETS, UEP_RECORD_MASK_OFFSET
+        source_offset, masks, with_acm = (UEP_RECORD_SOURCE_OFFSET,
+                                          UEP_RECORD_MASKS, UEP_RECORD_MASKS[1])
     if uep_at < 0:
         return None
 
     def fits(offset, length=1):
         return uep_at + offset + length <= len(me)
 
-    if not (fits(UEP_RECORD_MASK_OFFSET, 4) and fits(UEP_RECORD_SOURCE_OFFSET, 4)
-            and all(fits(offset) for offset in UEP_RECORD_FLAGS_OFFSETS)):
+    if not (fits(mask_offset, 4) and fits(source_offset, 4)
+            and all(fits(offset) for offset in flags_offsets)):
         return None
-    mask = u32(me, uep_at + UEP_RECORD_MASK_OFFSET)
-    if mask not in UEP_RECORD_MASKS:
+    mask = u32(me, uep_at + mask_offset)
+    if mask not in masks:
         return None
-    if u32(me, uep_at + UEP_RECORD_SOURCE_OFFSET) in (0x00000000, 0xFFFFFFFF):
+    if u32(me, uep_at + source_offset) in (0x00000000, 0xFFFFFFFF):
         return None
-    copies = {me[uep_at + offset] for offset in UEP_RECORD_FLAGS_OFFSETS}
+    copies = {me[uep_at + offset] for offset in flags_offsets}
     if len(copies) != 1:
         return None
     byte = copies.pop()
-    if (mask == 0xFF) != bool(byte & 0x01):
+    if (mask == with_acm) != bool(byte & 0x01):
         return None
     return (byte & 0x01 != 0, byte & 0x20 != 0, byte & 0x10 != 0, byte & 0x08 != 0)
 
@@ -417,17 +440,19 @@ def report(path):
                   " protect %d → %s"
                   % (flags + (BOOT_GUARD_FLAGS.get(flags,
                                                    "no profile names this combination"),)))
-        # The other shape of the one fact: a CSME 12 to 14 container keeps the
-        # same four settings in its record. Both are printed, as both key
-        # records are — each layout's guards reject the other's container.
-        earlier = uep_record_boot_guard_flags(me, uep_at)
-        if earlier is None:
-            print("  the UEP area carries no CSME 12–14 record here")
-        else:
-            print("  UEP record flags: FBG ACM %d, verified %d, measured %d,"
-                  " protect %d → %s"
-                  % (earlier + (BOOT_GUARD_FLAGS.get(earlier,
-                                                     "no profile names this combination"),)))
+        # The other shape of the one fact: a CSME 12/14 or CSME 13 container
+        # keeps the same four settings in its record. All three readings are
+        # printed, as both key records are — each layout's guards reject the
+        # others' containers, so only the image's own answers anything.
+        for kind, label in (("earlier", "CSME 12–14"), ("13", "CSME 13")):
+            earlier = uep_record_boot_guard_flags(me, uep_at, shape=kind)
+            if earlier is None:
+                print("  the UEP area carries no %s record here" % label)
+            else:
+                print("  UEP record flags (%s): FBG ACM %d, verified %d, measured %d,"
+                      " protect %d → %s"
+                      % ((label,) + earlier + (BOOT_GUARD_FLAGS.get(
+                          earlier, "no profile names this combination"),)))
 
 
 if __name__ == "__main__":
