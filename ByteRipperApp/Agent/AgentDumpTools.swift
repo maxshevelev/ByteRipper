@@ -173,8 +173,10 @@ final class AgentDumpTools {
                 file in `folder` (or in `paths`), opening each in the background, and returns the answers \
                 grouped by the value at `group_by` — a dotted path into the tool's answer, e.g. "total", \
                 "matches.0.start", "values.0", "chain.-1.name" (a negative index counts from the end). Each \
-                group: the value, how many files gave it, and up to ten of their names; the largest groups \
-                first. Files a tool refused are listed under `failed`. Takes a while on many large images; \
+                group: the value, how many files gave it, and up to ten of the files; the largest groups \
+                first. A file is named by its path from `root` — the `folder`, or the folder all the `paths` \
+                share — so files of one name in different subfolders are told apart, and `root` joined to the \
+                name is the path to open. Files a tool refused are listed under `failed`. Takes a while on many large images; \
                 reports progress. At most \(Self.maxSurveyFiles) files. Pages: `limit` is the most groups on \
                 one page, a ceiling — a page also stops before the answer passes the size bound and then says \
                 `truncated: "size"`; pass `next` back as `after`, with the same other arguments, until it is \
@@ -232,7 +234,8 @@ final class AgentDumpTools {
         }
         let paging = try AgentPage(arguments, fingerprint: run.fingerprint,
                                    changed: "That page is of another survey; ask again without `after`.")
-        var envelope: [String: JSONValue] = ["files": .count(run.files), "groups_total": .count(run.groups.count)]
+        var envelope: [String: JSONValue] = ["root": .string(run.root), "files": .count(run.files),
+                                             "groups_total": .count(run.groups.count)]
         if !run.failed.isEmpty { envelope["failed"] = .array(run.failed) }
         let items = run.groups.dropFirst(paging.first).prefix(limit).map { group -> JSONValue in
             ["value": group.value, "count": .count(group.files.count),
@@ -250,6 +253,8 @@ final class AgentDumpTools {
     /// One survey's answers, grouped: what a page of it is cut from.
     struct SurveyRun {
         var key: String
+        /// The folder the files' names are paths from.
+        var root: String
         var files: Int
         /// Largest first, then in the order the files gave them.
         var groups: [(value: JSONValue, files: [String])]
@@ -264,16 +269,17 @@ final class AgentDumpTools {
     private func surveyRun(_ call: AgentCall, key: String, tool: AgentTool, toolName: String,
                            toolArguments: [String: JSONValue], path: [String]?) async throws -> SurveyRun {
         var toolArguments = toolArguments
-        let files = try await surveyFiles(call.arguments)
+        let (files, folder) = try await surveyFiles(call.arguments)
         guard !files.isEmpty else { throw AgentToolError("No dump files to survey there.") }
+        let (root, names) = Self.surveyNames(of: files, root: folder)
 
         var groups: [String: (value: JSONValue, files: [String])] = [:]
         var order: [String] = []
         var failed: [JSONValue] = []
         for (index, url) in files.enumerated() {
             try Task.checkCancellation()
-            await call.progress(Double(index), Double(files.count), url.lastPathComponent)
-            let name = url.lastPathComponent
+            let name = names[index]
+            await call.progress(Double(index), Double(files.count), name)
             do {
                 let document: String
                 if let place = desk.onScreenPlace(of: url) {
@@ -312,17 +318,20 @@ final class AgentDumpTools {
             let (left, right) = (groups[a.element]!.files.count, groups[b.element]!.files.count)
             return left != right ? left > right : a.offset < b.offset
         }.map { groups[$0.element]! }
-        return SurveyRun(key: key, files: files.count, groups: sorted, failed: failed,
+        return SurveyRun(key: key, root: root.path, files: files.count, groups: sorted, failed: failed,
                          fingerprint: AgentPage.fingerprint([key, UUID()]))
     }
 
-    private func surveyFiles(_ arguments: AgentArguments) async throws -> [URL] {
+    /// The files to survey, and the folder asked about — nil for `paths`.
+    private func surveyFiles(_ arguments: AgentArguments) async throws -> (urls: [URL], folder: URL?) {
         var urls: [URL] = []
+        var folderURL: URL?
         let paths = try arguments.strings("paths")
         if !paths.isEmpty {
             urls = try paths.map(Self.fileURL)
         } else if let folder = try arguments.optionalString("folder") {
             let root = try Self.fileURL(folder)
+            folderURL = root
             let recursive = try arguments.bool("recursive", default: false)
             // Off the main actor: the first listing of a folder macOS guards
             // (Desktop, Documents, Downloads) waits in the kernel until the
@@ -337,7 +346,30 @@ final class AgentDumpTools {
         guard urls.count <= Self.maxSurveyFiles else {
             throw AgentToolError("\(urls.count) files; at most \(Self.maxSurveyFiles) in one survey. Narrow it with `paths`.")
         }
-        return urls
+        return (urls, folderURL)
+    }
+
+    /// What a survey calls each file: its path from `root`, or — for a list
+    /// of `paths` — from the deepest folder they all share. A file's name
+    /// alone is not enough: dumps of one board are often all `bios.bin`, one
+    /// to a folder.
+    nonisolated static func surveyNames(of urls: [URL], root: URL?) -> (root: URL, names: [String]) {
+        // Links resolved on both sides: a folder given as /tmp lists its files
+        // as /private/tmp, and a prefix of one is no prefix of the other.
+        let files = urls.map { $0.resolvingSymlinksInPath().pathComponents }
+        var base = root.map { $0.resolvingSymlinksInPath().pathComponents }
+            ?? files.first.map { Array($0.dropLast()) } ?? ["/"]
+        if root == nil {
+            for file in files.dropFirst() {
+                let folder = file.dropLast()
+                base = Array(zip(base, folder).prefix { $0 == $1 }.map(\.0))
+            }
+        }
+        let names = zip(urls, files).map { url, file -> String in
+            guard file.count > base.count, Array(file.prefix(base.count)) == base else { return url.path }
+            return file.dropFirst(base.count).joined(separator: "/")
+        }
+        return (URL(fileURLWithPath: NSString.path(withComponents: base), isDirectory: true), names)
     }
 
     // MARK: - Helpers

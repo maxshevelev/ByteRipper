@@ -253,6 +253,36 @@ final class AgentDumpToolsTests: XCTestCase {
         XCTAssertEqual(survey["failed"]?.arrayValue?.first?["file"], "short.bin")
     }
 
+    /// Dumps of one board are often all `bios.bin`, one to a folder: a file
+    /// is named by its path from the folder, or from the folder the `paths`
+    /// share, and `root` joined to it is the file.
+    func testASurveyNamesAFileByItsPathFromTheFolder() async throws {
+        try openWindow()
+        let fm = FileManager.default
+        for board in ["X1", "T14"] {
+            try fm.createDirectory(at: folder.appendingPathComponent(board), withIntermediateDirectories: true)
+            try Data(UEFITestImage.make()).write(to: folder.appendingPathComponent("\(board)/bios.bin"))
+        }
+        let survey = try await client.answer("survey", [
+            "folder": .string(folder.path), "recursive": true, "tool": "uefi_find",
+            "arguments": ["name": "MyDriver", "exact": true], "group_by": "total"
+        ])
+        let groups = try XCTUnwrap(survey["groups"]?.arrayValue)
+        let byValue = Dictionary(uniqueKeysWithValues: groups.map { ($0["value"]?.jsonText ?? "", $0) })
+        XCTAssertEqual(byValue["2"]?["files"], ["T14/bios.bin", "X1/bios.bin"], "\(groups)")
+        let root = try XCTUnwrap(survey["root"]?.stringValue)
+        XCTAssertTrue(fm.fileExists(atPath: root + "/X1/bios.bin"), root)
+
+        let listed = try await client.answer("survey", [
+            "paths": [.string(folder.appendingPathComponent("X1/bios.bin").path),
+                      .string(folder.appendingPathComponent("T14/bios.bin").path)],
+            "tool": "uefi_find", "arguments": ["name": "MyDriver", "exact": true], "group_by": "total"
+        ])
+        XCTAssertEqual(listed["groups"]?.arrayValue?.first?["files"], ["X1/bios.bin", "T14/bios.bin"],
+                       "from the folder they share, in the order given")
+        XCTAssertEqual(listed["root"], survey["root"])
+    }
+
     func testASurveyOnlyRunsToolsThatTakeADocument() async throws {
         try openWindow()
         let refused = try await client.call("survey", ["folder": .string(folder.path), "tool": "documents"])
