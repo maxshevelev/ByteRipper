@@ -524,6 +524,30 @@ final class MEAToolFlowTests: XCTestCase {
                        "a finished analysis is not still analyzing: \(landed)")
     }
 
+    /// A file that was read as ME firmware but gave no configuration — here an
+    /// unidentified $FPT image, which no generation's map covers — says so on
+    /// the Configuration tab, not "No ME firmware" beside a Summary full of it.
+    func testTheConfigurationTabOfFirmwareWithoutAMapSaysNoConfiguration() throws {
+        _ = try open(METestImage.fptFile())
+        let panel = try panel()
+        let tabs = try XCTUnwrap(
+            descendants(of: panel, NSSegmentedControl.self).first { $0.segmentCount == 3 })
+        tabs.selectedSegment = 1
+        tabs.sendAction(tabs.action, to: tabs.target)
+        window?.layoutIfNeeded()
+
+        let shown = descendants(of: panel, NSTextField.self)
+            .filter { isOnScreen($0, under: panel) }.map(\.stringValue)
+        XCTAssertTrue(shown.contains("No configuration read"), "\(shown)")
+        XCTAssertFalse(shown.contains("No ME firmware"), "\(shown)")
+
+        // Back on the Summary the firmware is there, and nothing says otherwise.
+        tabs.selectedSegment = 0
+        tabs.sendAction(tabs.action, to: tabs.target)
+        window?.layoutIfNeeded()
+        XCTAssertFalse(try shownRows(of: panel).isEmpty)
+    }
+
     /// An FPT table in a file is a reason the analysis has something to say on
     /// the tree: the regions it lists, each a row standing for real bytes. The
     /// tree opens on the Full Tree tab only.

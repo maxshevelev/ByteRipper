@@ -95,13 +95,14 @@ public enum MEACurator {
         if a.mfsState != nil, pending.fileTable, a.efsVolume != nil {
             fields.append(MEAField("File System State", pendingValue))
         } else if let state = a.mfsState {
-            // The state, and in brackets what it rests on — drawn as an
-            // ordinary value under the state's colour, the same way the
-            // Manufacturing row carries its own evidence.
-            fields.append(MEAField("File System State",
-                                   MEAText.fileSystemState(state, basis: a.mfsStateBasis,
-                                                           in: language),
-                                   tone: MEATones.fileSystemState(state, basis: a.mfsStateBasis)))
+            // The state, and in brackets what it rests on — the evidence kept
+            // apart, so it is drawn in the ordinary font and colour beside the
+            // state's, the same way the Manufacturing row carries its own.
+            fields.append(MEAField("File System State", MEAText.title(state.rawValue),
+                                   tone: MEATones.fileSystemState(state, basis: a.mfsStateBasis),
+                                   evidence: a.mfsStateBasis.map {
+                                       MEAText.fileSystemStateEvidence(state, $0, in: language)
+                                   } ?? ""))
         }
         // The bench's own facts, under the same names the Summary tab gives
         // them — the two panels are one reading of one dump, and a field that
@@ -112,9 +113,9 @@ public enum MEACurator {
                                                           in: language)
             let verdict = MEAText.manufacturingState(state, basis: a.manufacturingBasis,
                                                      in: language)
-            fields.append(MEAField(L("Manufacturing", in: language),
-                                   evidence.isEmpty ? verdict : "\(verdict) (\(evidence))",
-                                   tone: MEATones.manufacturingState(state)))
+            fields.append(MEAField(L("Manufacturing", in: language), verdict,
+                                   tone: MEATones.manufacturingState(state),
+                                   evidence: evidence))
         }
         if a.family == .csme, a.version.major >= 11 {
             fields.append(MEAField(L("Boot Guard", in: language),
