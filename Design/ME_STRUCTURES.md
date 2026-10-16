@@ -343,6 +343,18 @@ same byte the engine already reads through the entry, on all four CSME 15 dumps.
 The two-build diff above is still the way to find the blocks themselves; the
 scripts and the field map are in `Skills/me-eom-structures/reference/structures.md`.
 
+**That experiment has now been run** (four FIT 15 builds of one project, differing
+only in the profile). It settles the question in the negative: the profile is
+**not a number in the image** — no byte or dword holds 0, 3, 4 and 5 at the same
+offset — and the only thing that moves with it is the length of a table of
+"key-manifest hash usage" records in the ME region's EFS area (48/56/72/64
+records for profiles 0/3/4/5, strictly nested, eight records per step). That
+table describes **a build**: on real board dumps it is board-specific (30, 33, 18
+and 21 records on four of them), and none of them carries the profile's records —
+including one whose CDMD states profile 5. A board's Boot Guard level is on the
+**BIOS** side, in the boot policy manifest ECFinder reads, which is outside the
+ME region this engine is given.
+
 **Whether an older generation carries the profile in another place.** The
 survey above is the first half of the answer, and it splits the generations in
 two: CSME 15, 14, 12 and 11 carry **no CDMD configuration at all** (no `FIT AS A
