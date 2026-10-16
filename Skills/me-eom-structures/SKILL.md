@@ -83,9 +83,20 @@ python3 Skills/me-eom-structures/scripts/fit_map.py <fit-14.0.exe> \
 ME 14's own family has to be picked per dump — `cml_lp` was, for the Lenovo
 Comet Lake board, by the CPUIDs in its BIOS region (`0x806EA`/`0x806EB`/`0x806EC`
 are Comet Lake U, `0xA0660` Comet Lake S) rather than by anything in the ME
-region. The tool also lays the Boot Guard bits out **per family**, which is why
-a CSME 14 image's profile is not read yet: see the end of
-`reference/structures.md`. One thing that generator cannot take from the chosen
+region. ME 13's family is `icl_lp`, Ice Lake U, and that is the board's own
+chipset string (`ICP-LP`) rather than an inference:
+
+```bash
+python3 Skills/me-eom-structures/scripts/fit_map.py <fit-13.0.exe> \
+    --straps icl_lp --generation 13 --tool 13.0 > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME13.swift
+```
+
+The tool lays the Boot Guard bits out per family as well, which is a fact about
+the *tool's documents* and not about where a vendor image keeps them: on both
+generations at hand the four settings reach the image through the UEP area's
+record, not through the array those layouts name (see the end of
+`reference/structures.md`). One thing that generator cannot take from the chosen
 platform: the End of Manufacturing record, which the newer layouts do not bind
 at all (the tool writes it through `EomNvar`), so it is filled in from whichever
 document binds `EOM_Config` and marked as such in the file's header.

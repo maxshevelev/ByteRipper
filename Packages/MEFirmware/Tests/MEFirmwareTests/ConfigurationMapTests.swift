@@ -11,6 +11,7 @@ import XCTest
 /// places two generations *disagree* about.
 final class ConfigurationMapTests: XCTestCase {
     func testEachMappedGenerationReadsItsOwnMap() {
+        XCTAssertEqual(MEConfigurationMap.forME(major: 13)?.name, MEConfigurationMap.csme13.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 14)?.name, MEConfigurationMap.csme14.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 15)?.name, MEConfigurationMap.csme15.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 16)?.name, MEConfigurationMap.csme16.name)
@@ -21,13 +22,27 @@ final class ConfigurationMapTests: XCTestCase {
         XCTAssertNil(MEConfigurationMap.forME(major: 7))
     }
 
+    /// FIT 13's own map, and the mark it shares with the other FIT maps and not
+    /// with MFIT's: no setting is `Auto`, because the attribute is MFIT's — of
+    /// the four maps only the CSME 16 one, which comes from MFIT, carries it.
+    func testTheThirteenMapIsWhatFit13LaysOut() {
+        let map = MEConfigurationMap.csme13
+        XCTAssertEqual(map.files.count, 10)
+        XCTAssertEqual(map.files.flatMap(\.settings).count, 35)
+        for fit in [MEConfigurationMap.csme13, .csme14, .csme15] {
+            XCTAssertFalse(fit.files.flatMap(\.settings).contains { $0.auto }, "\(fit.name)")
+        }
+        XCTAssertTrue(MEConfigurationMap.csme16.files.flatMap(\.settings).contains { $0.auto },
+                      "MFIT's map is the one with the mark")
+    }
+
     /// The End of Manufacturing record: the one thing the newer layouts do not
     /// bind (the tool writes it through its own `EomNvar`), and the one record
     /// whose place every generation agrees on — bit 0 of the two bytes of
     /// `/home/mca/eom_config`, and the same bit of the single byte of
     /// `/home/mca/eom`.
-    func testTheEndOfManufacturingRecordIsTheSameInBothMaps() throws {
-        for map in [MEConfigurationMap.csme15, MEConfigurationMap.csme16] {
+    func testTheEndOfManufacturingRecordIsTheSameInEveryMap() throws {
+        for map in [MEConfigurationMap.csme13, MEConfigurationMap.csme15, MEConfigurationMap.csme16] {
             let config = try XCTUnwrap(map.file(at: "/home/mca/eom_config"),
                                        "\(map.name) has no EOM_Config")
             XCTAssertEqual(config.alias, "EOM_Config")
@@ -43,39 +58,46 @@ final class ConfigurationMapTests: XCTestCase {
         }
     }
 
-    /// What the oldest of the three maps does *not* have: ME 14 lays out no
-    /// End of Manufacturing record. FIT 14 binds `/home/mca/eom` — the byte the
-    /// board itself wrote — and no `eom_config`, which is why the panel's
-    /// Manufacturing row leans on the descriptor for an image of that
-    /// generation instead of on the flag.
-    func testTheOldestMapHasNoEOMRecord() throws {
+    /// What the 14 map does *not* have: ME 14 lays out no End of Manufacturing
+    /// record. FIT 14 binds `/home/mca/eom` — the byte the board itself wrote —
+    /// and no `eom_config`, which is why the panel's Manufacturing row leans on
+    /// the descriptor for an image of that generation instead of on the flag.
+    /// FIT 13, one generation older, does bind it.
+    func testTheFourteenMapHasNoEOMRecord() throws {
         let fourteen = MEConfigurationMap.csme14
         XCTAssertNotNil(fourteen.file(at: "/home/mca/eom"))
         XCTAssertNil(fourteen.file(at: "/home/mca/eom_config"))
-        for newer in [MEConfigurationMap.csme15, MEConfigurationMap.csme16] {
+        for newer in [MEConfigurationMap.csme13, MEConfigurationMap.csme15, MEConfigurationMap.csme16] {
             XCTAssertNotNil(newer.file(at: "/home/mca/eom_config"),
                             "\(newer.name) should carry the flag the 14 map has not got")
         }
     }
 
     /// The maps are the tools' own layouts, so which files a generation knows
-    /// is a fact of its own map. Five files every one of the three lays out —
-    /// that set is what a bench reads first on any of them — and the four the
-    /// oldest has and the newer two have not, which is where reading one
-    /// generation through another's map shows.
+    /// is a fact of its own map. Four files every one of them lays out — that
+    /// set is what a bench reads first on any of them — one the newest three
+    /// have and the oldest has not, and the four iunit files the two oldest
+    /// have and the newer two have not, which is where reading one generation
+    /// through another's map shows.
     func testThePlatformFilesAreTheToolsOwn() {
         for path in ["/home/mca/eom", "/home/policy/cfgmgr/cfg_rules",
-                     "/home/bup/si_features", "/home/amt/skip_rtfd/ncsi",
-                     "/home/mctp/smt2_devices"] {
-            for map in [MEConfigurationMap.csme14, .csme15, .csme16] {
+                     "/home/bup/si_features", "/home/mctp/smt2_devices"] {
+            for map in [MEConfigurationMap.csme13, .csme14, .csme15, .csme16] {
                 XCTAssertNotNil(map.file(at: path), "\(map.name) has no \(path)")
             }
         }
-        // FIT 14's cml_lp binds the iunit files the newer families replaced
-        // with `iunit_oem_cfg` and `iunit_privacy_mode`; neither newer map
-        // knows them at all.
+        // FIT 14's cml_lp lays the host-interface file out and FIT 13's icl_lp
+        // does not; every newer map has it again.
+        XCTAssertNil(MEConfigurationMap.csme13.file(at: "/home/amt/skip_rtfd/ncsi"))
+        for map in [MEConfigurationMap.csme14, .csme15, .csme16] {
+            XCTAssertNotNil(map.file(at: "/home/amt/skip_rtfd/ncsi"), "\(map.name)")
+        }
+        // FIT 13's icl_lp and FIT 14's cml_lp bind the iunit files the newer
+        // families replaced with `iunit_oem_cfg` and `iunit_privacy_mode`;
+        // neither newer map knows them at all.
         for path in ["/home/iunit/port_cfg", "/home/iunit/sec_ctl",
                      "/home/iunit/sec_touch", "/home/iunit/camera_mask"] {
+            XCTAssertNotNil(MEConfigurationMap.csme13.file(at: path))
             XCTAssertNotNil(MEConfigurationMap.csme14.file(at: path))
             XCTAssertNil(MEConfigurationMap.csme15.file(at: path))
             XCTAssertNil(MEConfigurationMap.csme16.file(at: path))

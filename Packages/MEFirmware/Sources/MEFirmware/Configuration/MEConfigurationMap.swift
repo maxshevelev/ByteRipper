@@ -106,6 +106,7 @@ public struct MEConfigurationMap: Sendable, Equatable {
     /// by (`version.major`), which is what a map is verified against.
     public static func forME(major: Int) -> MEConfigurationMap? {
         switch major {
+        case 13: return .csme13
         case 14: return .csme14
         case 15: return .csme15
         case 16: return .csme16

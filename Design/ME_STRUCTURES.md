@@ -400,8 +400,36 @@ and `0xA0660` — Comet Lake S — so its family is `cml_lp`, not one of Ice Lak
 or Jasper Lake's. Reading it through that map gives **10 files and 31 settings**,
 and five of them are in the dump itself: `mca/eom` (`EOM = 1`, which is what the
 engine's own live-record read of the same file says), `cfg_rules`, `si_features`,
-`mctp/smt2_devices` and `amt/skip_rtfd/ncsi` — the five every one of the three
-maps lays out, so a bench reads the same things first on any generation.
+`mctp/smt2_devices` and `amt/skip_rtfd/ncsi` — the five every map from 14 up lays
+out, so a bench reads the same things first on any generation.
+
+### ME 13: the same generator, its own family
+
+`fit-13.0.exe` carries the same resources, read the same way, and its family for
+the boards at hand is `icl_lp` — Ice Lake U, which is the dump's own chipset
+string (`ICP-LP`) rather than an inference:
+
+```bash
+python3 Skills/me-eom-structures/scripts/fit_map.py fit-13.0.exe \
+    --straps icl_lp --generation 13 --tool 13.0 > MEConfigurationMap+CSME13.swift
+```
+
+Ten files and 35 settings, and two things of its own beside the offsets:
+
+- **The host-interface file is not there.** `/home/amt/skip_rtfd/ncsi` is laid
+  out by 14 and every newer map and by neither the 13 one nor any other Ice
+  Lake layout — a bench reading a 13 dump sees four of the five files it sees
+  anywhere else.
+- **No `Auto` marks at all.** The attribute is MFIT's; of the four maps only the
+  CSME 16 one carries it, which is what makes a setting the builder cannot enter
+  a newer-generation fact.
+
+The NM-C711 dump reads nine of the map's ten files: `/home/mca/eom_config` is
+laid out by FIT 13 but absent from that image, which is why its Manufacturing row
+leans on the descriptor — the same state a CSME 14 image is in for a different
+reason.
+
+
 
 Two differences from the newer maps hold for the family:
 
