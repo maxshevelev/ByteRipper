@@ -123,8 +123,7 @@ public enum MEACurator {
         if a.family == .csme, a.version.major >= 11 {
             fields.append(MEAField(L("Boot Guard", in: language),
                                    a.bootGuardProfile.map(MEAText.bootGuardProfile)
-                                       ?? L("No profile record in this image", in: language),
-                                   tone: MEATones.bootGuardProfile(a.bootGuardProfile)))
+                                       ?? L("No profile record in this image", in: language)))
             if let key = a.oemPublicKeyHash {
                 fields.append(MEAField(L("OEM Public Key Hash", in: language),
                                        MEAText.oemPublicKeyHash(key, in: language)))
