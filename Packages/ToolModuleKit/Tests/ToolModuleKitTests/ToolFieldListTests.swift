@@ -104,6 +104,77 @@ final class ToolFieldListTests: XCTestCase {
                              "and the name takes a second line")
     }
 
+    /// A row that compares two copies of one thing: the second value is a
+    /// column of its own — the same width as the first, so the two line up down
+    /// the list — and the copy of a row carries the three parts, a tab apart.
+    func testASecondValueIsAColumnOfItsOwn() {
+        let list = threePartList([("EomFirstBootEnabled", "No", "Yes"),
+                                  ("FlexibleEomSettings", "Lock Descriptor Only", "Lock Descriptor Only")])
+        let row = list.rows[0]
+        XCTAssertEqual(row.texts, ["EomFirstBootEnabled", "No", "Yes"])
+        XCTAssertEqual(row.valueColumnWidth, list.rows[1].valueColumnWidth,
+                       "the two value columns are one width down the list")
+        XCTAssertEqual(list.rows[1].valueColumnWidth, (360 - row.nameColumnWidth
+                                                       - ToolFieldRow.columnSpacing * 2) / 2,
+                       accuracy: 1)
+
+        // A mark in the second value's column is a mark in part 2, and a copy
+        // from the value into it takes both.
+        let secondX = row.nameColumnWidth + ToolFieldRow.columnSpacing
+            + row.valueColumnWidth + ToolFieldRow.columnSpacing
+        XCTAssertEqual(row.mark(at: NSPoint(x: secondX + 1, y: 2)).part, 2)
+        let from = ToolTextMark(part: 1, index: 1)
+        XCTAssertEqual(row.text(in: from..<ToolTextMark(part: 2, index: 1)), "o\tY")
+
+        list.selectAll(nil)
+        XCTAssertEqual(list.selectedText,
+                       "EomFirstBootEnabled\tNo\tYes\nFlexibleEomSettings\tLock Descriptor Only\tLock Descriptor Only")
+    }
+
+    /// A row without a second value is the plain name/value row: the value has
+    /// everything the name column leaves, and there is no third part to select.
+    func testARowWithoutASecondValueIsUnchanged() {
+        let list = list([("Kind", plain("File"))])
+        let row = list.rows[0]
+        XCTAssertNil(row.secondText)
+        XCTAssertNil(row.attributedSecond)
+        XCTAssertEqual(row.valueColumnWidth, 0)
+        XCTAssertEqual(row.texts, ["Kind", "File"])
+        list.selectAll(nil)
+        XCTAssertEqual(list.selectedText, "Kind\tFile")
+    }
+
+    /// A drag selects across the second value of one row into the name of the
+    /// next, as it does across the parts of a plain row.
+    func testADragIntoTheSecondValueTakesIt() {
+        let list = threePartList([("A", "1", "2"), ("B", "3", "4")])
+        let start = list.spot(at: NSPoint(x: 0, y: list.rows[0].frame.midY))
+        let row = list.rows[1]
+        let to = NSPoint(x: row.frame.maxX - 1, y: row.frame.midY)
+        XCTAssertEqual(row.mark(at: to).part, 2, "the point is in the second value's column")
+        list.extend(start..<start, to: to)
+        XCTAssertEqual(list.selectedText, "A\t1\t2\nB\t3\t4")
+        XCTAssertNotNil(list.rows[0].selectedRange)
+    }
+
+    /// The list `width` wide, its rows each carrying a second value.
+    private func threePartList(_ fields: [(String, String, String)],
+                               width: CGFloat = 360, nameWidth: CGFloat = 80) -> ToolFieldList {
+        let list = ToolFieldList(
+            fields: fields.map { .init(label: $0.0, value: plain($0.1), second: plain($0.2)) },
+            nameWidth: nameWidth)
+        let root = window.contentView!
+        root.addSubview(list)
+        NSLayoutConstraint.activate([
+            list.topAnchor.constraint(equalTo: root.topAnchor),
+            list.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            list.widthAnchor.constraint(equalToConstant: width),
+        ])
+        root.layoutSubtreeIfNeeded()
+        root.layoutSubtreeIfNeeded()
+        return list
+    }
+
     /// A drag from the first row into the value of the last selects both, the
     /// name and value of a row a tab apart and each row on its line.
     func testADragSelectsAcrossRows() {
