@@ -92,11 +92,6 @@ final class ToolPanelZoomTests: XCTestCase {
         window?.layoutIfNeeded()
     }
 
-    /// Every text field under `root`, in the order the tree walks them.
-    private func fields(under root: NSView) -> [NSTextField] {
-        descendants(of: root, NSTextField.self)
-    }
-
     // MARK: - The tree
 
     /// A row of the tree is drawn at the zoom, in a row tall enough for it,
@@ -268,11 +263,11 @@ final class ToolPanelZoomTests: XCTestCase {
 
         let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
         let detail = try XCTUnwrap(splitter.panes.last)
-        let field = try XCTUnwrap(
-            fields(under: detail).first { $0.stringValue == "Offset" },
+        let row = try XCTUnwrap(
+            descendants(of: detail, ToolFieldRow.self).first { $0.label == "Offset" },
             "the detail lists the row's fields after a zoom"
         )
-        XCTAssertEqual(field.font?.pointSize, 20, "a zoom reaches the detail's rows")
+        XCTAssertEqual(row.nameFont?.pointSize, 20, "a zoom reaches the detail's rows")
     }
 
     /// A panel that has never been zoomed still reads bigger than the 11

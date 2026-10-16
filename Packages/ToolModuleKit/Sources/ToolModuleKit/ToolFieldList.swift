@@ -5,7 +5,8 @@ import AppKit
 ///
 /// The rows every panel of this app draws a named value with: the UEFI
 /// Structure's detail under its tree, the ME Analyzer's Summary tab and the
-/// detail under its own tree, and a record in the agent window. One row shape
+/// detail under its own tree, the FIT's detail under its table, and a record
+/// in the agent window. One row shape
 /// means one selection: a drag across rows takes a band of them, a double
 /// click a word, a triple click a row, ⌘A the whole list, and ⌘C copies what
 /// is selected with a tab between a name and its value — in each of them.

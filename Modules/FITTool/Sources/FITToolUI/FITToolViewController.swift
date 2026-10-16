@@ -336,9 +336,9 @@ import ToolModuleKit
 
     /// Re-reads the panel's type size and puts everything on screen at it: the
     /// two lines around the tables, both tables' rows and headers, and the
-    /// detail's own rows — which are views built per field, so they have to be
-    /// rebuilt rather than restyled. The problem list is as tall as its rows,
-    /// so its height is re-measured at the new row height.
+    /// detail's own rows — which are drawn in the font they were built with,
+    /// so they have to be rebuilt rather than restyled. The problem list is as
+    /// tall as its rows, so its height is re-measured at the new row height.
     private func applyPanelFont() {
         summaryLabel.font = ToolPanelFont.body(weight: .medium)
         noticeLabel.font = ToolPanelFont.body()
@@ -529,40 +529,25 @@ import ToolModuleKit
             detail.content.addArrangedSubview(title)
         }
 
-        for field in rowDetail.fields {
-            let label = NSTextField(labelWithString: field.label)
-            label.font = ToolPanelFont.body()
-            label.textColor = .secondaryLabelColor
-            label.translatesAutoresizingMaskIntoConstraints = false
-            label.widthAnchor.constraint(
-                equalToConstant: ToolPanelFont.detailLabelWidth
-            ).isActive = true
-
-            let value = ToolWrappingLabel(string: field.value)
-            value.font = field.value.hasPrefix("0x")
-                ? ToolPanelFont.monospacedDigits()
-                : ToolPanelFont.body()
-            // A checksum that does not check out is the one value in here
-            // worth colouring red: it is what Fix Checksum would write.
-            if field.isProblem {
-                value.textColor = SemanticColors.bad
-            }
-            // Selectable, not a dead label: a bench copies an offset or a CPUID
-            // out of here, and a value it cannot select is one it has to retype.
-            value.isSelectable = true
-
-            let row = NSStackView(views: [label, value])
-            row.orientation = .horizontal
-            row.alignment = .firstBaseline
-            row.spacing = 6
-            row.translatesAutoresizingMaskIntoConstraints = false
-            detail.content.addArrangedSubview(row)
-            // As wide as the list, so a value too long for the column — a
-            // GUID, a hash — wraps inside it instead of running off the side.
-            row.widthAnchor.constraint(
-                equalTo: detail.content.widthAnchor
-            ).isActive = true
-        }
+        // One `ToolFieldList` — the rows the UEFI Structure's detail and the
+        // ME panel's are drawn with — so a bench selects and copies them here
+        // as it does there: a drag takes a band of rows, ⌘A the list, and ⌘C
+        // copies with a tab between a name and its value. A value is drawn by
+        // its tone, the same call those panels make: a checksum that does not
+        // check out — what Fix Checksum would write — is the one value in here
+        // drawn red. The name column is as wide as the longest name, and never
+        // wider than half the list, where a name that still does not fit
+        // wraps.
+        let fields = ToolFieldList(
+            fields: rowDetail.fields.map {
+                .init(label: $0.label,
+                      value: ($0.isProblem ? ToolValueTone.bad : .standard).attributedValue($0.value))
+            },
+            nameWidth: ToolFieldList.nameWidth(for: rowDetail.fields.map(\.label)))
+        detail.content.addArrangedSubview(fields)
+        // As wide as the list, so a value too long for the column — a GUID, a
+        // hash — wraps inside it instead of running off the side.
+        fields.widthAnchor.constraint(equalTo: detail.content.widthAnchor).isActive = true
     }
 
     /// How tall the findings list is: exactly its rows, up to

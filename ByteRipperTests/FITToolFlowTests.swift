@@ -356,9 +356,9 @@ final class FITToolFlowTests: XCTestCase {
 
         // And it is on screen, not just in the model.
         let panel = try XCTUnwrap(controller?.tools.panel)
-        let labels = Set(descendants(of: panel, NSTextField.self).map(\.stringValue))
-        XCTAssertTrue(labels.contains("CPUID"), "the detail shows a CPUID label")
-        XCTAssertTrue(labels.contains("806EA"), "the detail shows the CPUID value")
+        let rows = descendants(of: panel, ToolFieldRow.self)
+        XCTAssertTrue(rows.contains { $0.texts == ["CPUID", "806EA"] },
+                      "the detail shows the CPUID: \(rows.map(\.texts))")
     }
 
     /// The detail is the lower pane of the splitter, at the panel's full
@@ -1228,15 +1228,14 @@ final class FITToolFlowTests: XCTestCase {
         let panel = try XCTUnwrap(controller?.tools.panel)
         let splitter = try XCTUnwrap(descendants(of: panel, ALSplitView.self).first)
         let detail = try XCTUnwrap(splitter.panes.last)
-        // Every value of the list is a wrapping label; the labels beside them
-        // keep their fixed column and truncate.
-        let wrapping = descendants(of: detail, ToolWrappingLabel.self)
-        XCTAssertFalse(wrapping.isEmpty, "the detail's values are wrapping labels")
-        for value in wrapping {
-            XCTAssertEqual(value.lineBreakMode, .byWordWrapping)
-            XCTAssertLessThanOrEqual(value.convert(value.bounds, to: panel).maxX,
-                                     panel.bounds.maxX,
-                                     "\(value.stringValue) runs off the side")
+        // Every row is as wide as the list and no wider, and its value wraps
+        // inside what the name column leaves of it.
+        let rows = descendants(of: detail, ToolFieldRow.self)
+        XCTAssertFalse(rows.isEmpty, "the detail lists the row's fields")
+        for row in rows {
+            XCTAssertLessThanOrEqual(row.convert(row.bounds, to: panel).maxX,
+                                     panel.bounds.maxX + 0.5,
+                                     "\(row.texts) runs off the side")
         }
     }
 
@@ -1477,7 +1476,8 @@ final class FITToolFlowTests: XCTestCase {
     }
 
     /// A checksum that does not check out reads red in the detail, the way the
-    /// UEFI panel's does — the value alone, not the label beside it.
+    /// UEFI panel's does — the value alone: the name is drawn by the row in
+    /// the grey every name in the list has.
     func testAnInvalidChecksumIsRedInTheDetail() throws {
         _ = try open(FITTestImage.make(checksum: 0xCC))
         let table = try entriesTable()
@@ -1487,19 +1487,18 @@ final class FITToolFlowTests: XCTestCase {
         window?.layoutIfNeeded()
 
         let panel = try XCTUnwrap(controller?.tools.panel)
-        let fields = descendants(of: panel, NSTextField.self)
-        let value = try XCTUnwrap(
-            fields.first { $0.stringValue.contains("(Invalid") },
-            "the header's checksum reads as invalid: \(fields.map(\.stringValue))"
+        let rows = descendants(of: panel, ToolFieldRow.self)
+        let row = try XCTUnwrap(
+            rows.first { $0.label == "Checksum" },
+            "the header's detail lists its checksum: \(rows.map(\.texts))"
         )
-        XCTAssertEqual(value.textColor, SemanticColors.bad)
-        XCTAssertTrue(value.stringValue.contains("should be 0x"),
+        XCTAssertTrue(row.valueText.contains("(Invalid"), row.valueText)
+        let value = row.attributedValue
+        XCTAssertEqual(value.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor,
+                       SemanticColors.bad)
+        XCTAssertTrue(row.valueText.contains("should be 0x"),
                       "and says what the byte should be, not just that it is wrong: "
-                      + value.stringValue)
-
-        let label = try XCTUnwrap(fields.first { $0.stringValue == "Checksum" })
-        XCTAssertEqual(label.textColor, .secondaryLabelColor,
-                       "the label stays as quiet as every other label")
+                      + row.valueText)
     }
 
     /// An address off by one hex digit, landing on bytes that are not
