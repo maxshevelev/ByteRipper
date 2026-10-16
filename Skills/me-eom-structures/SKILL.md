@@ -97,3 +97,9 @@ CDMD configuration's other records are, and how CSME 14, 12, 11 and 18 keep the
 profile — 18 has a CDMD block without the key, the older three have no block at
 all, and a reading of their bits waits for a dump whose profile is known
 independently, the way CSME 15's was settled.
+
+And the file ends with the **next experiment**, written out as a checklist before
+it is run: whether MFIT writes the same Boot Guard bits on CSME 16, or those
+images inherit them from the input they were built from. It is the one
+measurement that can falsify the engine's 15–16 gate, and it is one MFIT build
+away.
