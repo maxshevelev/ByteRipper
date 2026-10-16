@@ -391,10 +391,15 @@ platform as its own resources, and
 prints `MEConfigurationMap+CSME15.swift` from them. A setting's place there is
 an action of the `Nvar` module — `filePath` through an alias table, and a cell
 (`cellIndex × cellSize + cellOffset`) or a plain `startOffset` with `varSize` —
-and its words are the value class its `type="class:…"` names. TGL LP gives **21
-files and 60 settings**; two of the four TGL layouts (`tgp_lp_a1`, `tgp_lp_c0`)
-agree on every binding they share, and the H ones are another SKU's, so only the
-LP pair is read.
+and its words are the value class its `type="class:…"` names, its declaration
+(`<CfgOpt …>`) giving the tool's own name for the setting (`label`) and what its
+panel says about it (`help` — MFIT has the same words on the `<UI>` element of
+the setting, with its paragraphs as `&#13;&#10;` where FIT writes `&#60;br
+/&#62;`). Both are copied into the map and the Configuration tab shows the
+second behind the `?` beside a row, in the tool's English: it is the tool's
+documentation read where the row is. TGL LP gives **21 files and 60 settings**;
+two of the four TGL layouts (`tgp_lp_a1`, `tgp_lp_c0`) agree on every binding
+they share, and the H ones are another SKU's, so only the LP pair is read.
 
 Three things that came out of reading the two databases against each other:
 
