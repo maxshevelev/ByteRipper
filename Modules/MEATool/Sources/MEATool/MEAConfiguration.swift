@@ -36,12 +36,12 @@ public enum MEAConfiguration {
             }
             let rows = names.map { name -> MEAConfigurationRow in
                 let setting = layout?.settings.first { $0.name == name }
-                // The tool's own name for the setting where it has one that is
-                // not the identifier — "LAN Power Well" over `MELanPowerWell` —
-                // with the identifier in brackets behind it, so a row can be
-                // held against the tool's screen and against a report's field
-                // name at once.
-                var label = setting?.label.map { "\($0) (\(name))" } ?? name
+                // The tool's own name for the setting where it has one —
+                // "LAN Power Well" where the map's identifier is
+                // `MELanPowerWell` — and the identifier alone where the tool
+                // shows that instead. The row reads as the tool's panel does;
+                // the identifier is the map's, and a report's.
+                var label = setting?.label ?? name
                 let auto = MEAText.configurationAuto(setting?.auto == true, in: language)
                 if !auto.isEmpty { label += " · " + auto }
                 return MEAConfigurationRow(
