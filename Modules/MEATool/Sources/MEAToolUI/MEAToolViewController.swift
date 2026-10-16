@@ -113,6 +113,11 @@ import ToolModuleKit
         case waiting
         case empty
         case failed
+        /// The Configuration tab of an image that *was* read: the firmware is
+        /// there, and the other two tabs show it, but no configuration file was
+        /// read from it — a generation with no map, or one whose files are not
+        /// in the image. "No ME firmware" there contradicted the tab beside it.
+        case noConfiguration
 
         /// The system symbol the state wears. A running analysis is the engine
         /// the panel is about; nothing found is a question; a failure is the
@@ -122,6 +127,7 @@ import ToolModuleKit
             case .waiting: return "cpu"
             case .empty: return "questionmark.circle"
             case .failed: return "exclamationmark.octagon.fill"
+            case .noConfiguration: return "list.bullet.rectangle"
             }
         }
 
@@ -130,6 +136,7 @@ import ToolModuleKit
             case .waiting: return L("Analyzing the ME firmware…")
             case .empty: return L("No ME firmware")
             case .failed: return L("The analysis did not finish")
+            case .noConfiguration: return L("No configuration read")
             }
         }
 
@@ -141,6 +148,8 @@ import ToolModuleKit
             case .waiting: return L("Reading the region and its partitions.")
             case .empty: return L("Nothing in this file reads as Intel ME firmware.")
             case .failed: return L("The line below says what went wrong.")
+            case .noConfiguration:
+                return L("The settings are read on CSME 13 to 16, from the configuration files the image carries.")
             }
         }
     }
@@ -346,10 +355,21 @@ import ToolModuleKit
         selectTab(tabIndex)
     }
 
+    /// What the placeholder says on the tab that is open. The module's state
+    /// is about the analysis; on the Configuration tab an analysis that found
+    /// firmware but no configuration is a different answer from one that
+    /// found no firmware at all.
+    private var shownPlaceholder: Placeholder {
+        let analysed = !summaryBlocks.isEmpty || !roots.isEmpty
+        return tabIndex == 1 && placeholderState == .empty && analysed
+            ? .noConfiguration : placeholderState
+    }
+
     /// The placeholder as the state and the current zoom make it. The icon is
     /// sized off the panel's type rather than fixed, so it stays the same
     /// weight beside the words at every zoom.
     private func applyPlaceholder() {
+        let placeholderState = shownPlaceholder
         let side = (ToolPanelFont.size * 3).rounded()
         let icon = NSImage(systemSymbolName: placeholderState.symbol,
                            accessibilityDescription: placeholderState.title)?
@@ -490,6 +510,8 @@ import ToolModuleKit
         // Nothing to copy and nothing to picture until the summary is up.
         summaryActions.isHidden = !showSummary
         tabs.selectedSegment = index
+        // The words depend on the tab as well as on the state.
+        if !placeholder.isHidden { applyPlaceholder() }
     }
 
     @objc private func tabChanged(_ sender: NSSegmentedControl) {
@@ -701,7 +723,7 @@ import ToolModuleKit
         configurationBlocks = blocks
         renderConfiguration()
         selectTab(tabIndex)
-        if !blocks.isEmpty, tabIndex == 1 {
+        if !blocks.isEmpty {
             configurationScroll.documentView?.scroll(.zero)
         }
     }
@@ -909,12 +931,8 @@ import ToolModuleKit
         let text = row.value.text(in: Localization.appLanguage)
         switch row.value {
         case .verdict(let verdict, let evidence):
-            let drawn = NSMutableAttributedString(
-                attributedString: row.tone.attributedValue(verdict))
-            if !evidence.isEmpty {
-                drawn.append(ToolValueTone.standard.attributedValue(" (\(evidence))"))
-            }
-            return .init(label: row.label, value: drawn)
+            return .init(label: row.label,
+                         value: toned(verdict, tone: row.tone, evidence: evidence))
         case .value:
             return .init(label: row.label, value: row.tone.attributedValue(text))
         case .comingSoon, .pending:
@@ -923,6 +941,18 @@ import ToolModuleKit
                 attributes: [.font: ToolPanelFont.body(),
                              .foregroundColor: NSColor.secondaryLabelColor]))
         }
+    }
+
+    /// A verdict in its tone, and what it was read from in brackets after it
+    /// in the ordinary font and colour — one drawing for the Summary's rows and
+    /// the tree's detail, so the two cannot come apart.
+    private static func toned(_ verdict: String, tone: ToolValueTone,
+                              evidence: String) -> NSAttributedString {
+        let drawn = NSMutableAttributedString(attributedString: tone.attributedValue(verdict))
+        if !evidence.isEmpty {
+            drawn.append(ToolValueTone.standard.attributedValue(" (\(evidence))"))
+        }
+        return drawn
     }
 
     /// Rebuilds the detail list from the focused row's own fields.
@@ -962,8 +992,10 @@ import ToolModuleKit
                 // when the status is a passed check. This is the same call the
                 // UEFI Structure's detail makes for the same field, and the
                 // Summary's row asks the tone for the same string, so the
-                // three cannot come apart.
-                .init(label: $0.label, value: $0.tone.attributedValue($0.value))
+                // three cannot come apart. Evidence follows in brackets in the
+                // ordinary drawing, as the Summary's verdict rows carry theirs.
+                .init(label: $0.label,
+                      value: Self.toned($0.value, tone: $0.tone, evidence: $0.evidence))
             },
             nameWidth: ToolFieldList.nameWidth(for: focus.fields.map(\.label)))
         detail.content.addArrangedSubview(fields)

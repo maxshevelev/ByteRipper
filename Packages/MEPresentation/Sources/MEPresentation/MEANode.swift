@@ -11,12 +11,22 @@ public struct MEAField: Sendable, Equatable, Hashable {
     /// the colour the tone names (`ToolValueTone`). `.standard` is ordinary
     /// text, which is what most fields are.
     public var tone: ToolValueTone
+    /// What a verdict was read from, shown in brackets after it — empty for a
+    /// field with nothing to add. Kept apart from `value` so the panel draws
+    /// it in the ordinary font and colour: the tone is the verdict's, and the
+    /// evidence beside it must not borrow it (the Summary row's `.verdict`).
+    public var evidence: String
 
-    public init(_ label: String, _ value: String, tone: ToolValueTone = .standard) {
+    public init(_ label: String, _ value: String, tone: ToolValueTone = .standard,
+                evidence: String = "") {
         self.label = label
         self.value = value
         self.tone = tone
+        self.evidence = evidence
     }
+
+    /// The field as one line, brackets and all — what an agent and a copy read.
+    public var text: String { evidence.isEmpty ? value : "\(value) (\(evidence))" }
 }
 
 /// A row of the ME panel's curated tree (`Design`-less by design: this is the
