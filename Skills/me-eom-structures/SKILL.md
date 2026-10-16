@@ -56,8 +56,10 @@ python3 Skills/me-eom-structures/scripts/mfit_map.py <mfit.exe> > \
 
 MFIT's settings database, unpacked and turned into the map the panel reads: the
 files, the settings in each, their offsets, bits, MFIT's own option labels and
-its `Auto`/`Generic` marks. It merges the platform lists and reports what it
-could not merge rather than guessing — a setting two lists lay out differently is
+its `Auto`/`Generic` marks, and the tool's own name for a setting where its panel
+shows something other than the identifier (`label` — "LAN Power Well" for
+`MELanPowerWell`). It merges the platform lists and reports what
+it could not merge rather than guessing — a setting two lists lay out differently is
 dropped and named. Same rules as above: read the diff, don't paste blind.
 
 The older FIT carries the same material in its own shape, per platform:
@@ -70,7 +72,9 @@ python3 Skills/me-eom-structures/scripts/fit_map.py <fit-15.0.exe> --straps tgp_
 There a setting's place is a `ProcessNvar` action — `filePath` into an alias
 table, and a cell (`cellIndex × cellSize + cellOffset`) or a plain
 `startOffset`/`varSize` — and its words come from the value class its
-`type="class:…"` names. `--straps` picks the family whose layout is wanted
+`type="class:…"` names, its declaration (`<CfgOpt …>`) giving the tool's own name
+for it (`label`) beside the identifier. `--straps` picks the family whose layout
+is wanted
 (`tgp_lp` is ME 15's own), and `--generation`/`--tool` name the map in the file
 it emits:
 
