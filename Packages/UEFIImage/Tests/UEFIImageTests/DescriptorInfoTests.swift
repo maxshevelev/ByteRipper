@@ -131,14 +131,75 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertNil(straps.gpr0)
     }
 
-    /// Which layouts the two fields are read on: generation and length both.
-    func testTheStrapFieldsAreKeyedByGenerationAndLength() {
-        XCTAssertEqual(DescriptorGeneration.tigerPoint.strapFields(count: 70)?.gpr0Word, 21)
-        XCTAssertEqual(DescriptorGeneration.alderPoint.strapFields(count: 70)?.espiClockWord, 22)
-        XCTAssertNil(DescriptorGeneration.tigerPoint.strapFields(count: 101), "Tiger Point H")
-        XCTAssertNil(DescriptorGeneration.alderPoint.strapFields(count: 115), "Alder Point S")
-        XCTAssertNil(DescriptorGeneration.cannonPoint.strapFields(count: 69),
-                     "Cannon Point keeps GPR0 in the ME region's FITC")
+    /// Which layouts the two fields are read on: the length of the section,
+    /// which is what an image states about it. Tiger Point H's 101 words are
+    /// a layout of their own, and Alder Point S's desktop section is not one
+    /// the tools at hand carry.
+    func testTheStrapFieldsAreKeyedByTheSectionsLength() {
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 70)?.espiClockField?.word, 22)
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 70)?.protectedRangeField?.word, 21)
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 101)?.espiClockField?.word, 20)
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 101)?.protectedRangeField?.word, 19)
+        XCTAssertNil(DescriptorStrapMap.forSection(words: 115), "Alder Point S")
+        XCTAssertNil(DescriptorStrapMap.forSection(words: 6))
+    }
+
+    /// The section as its fields: every field of the layout, with what this
+    /// image holds there, in the table's order — and each saying whether the
+    /// image leaves it at the value Flash Image Tool builds with.
+    func testTheStrapsAreReadAsTheLayoutsFields() throws {
+        var words = [UInt32](repeating: 0, count: 70)
+        words[22] = 3 << 3
+        let straps = try XCTUnwrap(info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], straps: words, strapCount: 70)).straps)
+        let fields = try XCTUnwrap(straps.fields)
+
+        let clock = try XCTUnwrap(fields.first { $0.field.name == "PCH_Strap_SPI_ec_max_freq" })
+        XCTAssertEqual(clock.value, 3)
+        XCTAssertEqual(clock.field.bits, 3...5)
+        XCTAssertEqual(clock.isSet, true, "the tool builds this one at 0")
+        let protected = try XCTUnwrap(fields.first { $0.field.name == "PCH_Strap_SPI_GLOBAL_PROTECTED_RNG_DEF" })
+        XCTAssertEqual(protected.isSet, false, "zero is what the tool builds")
+        XCTAssertEqual(fields.count, DescriptorStrapMap.pch70.fields.count,
+                       "every field of the layout is read, not only the ones set")
+        XCTAssertEqual(Set(fields.map(\.field.word)), Set(0..<70),
+                       "every word of the section holds fields of the layout")
+    }
+
+    /// A section shorter than the table names the fields still inside it and
+    /// claims nothing about the words past its end.
+    func testAFieldPastTheEndOfASectionIsNotRead() {
+        let map = DescriptorStrapMap.pch70
+        let cut = [UInt32](repeating: 0x1234_5678, count: 4)
+
+        XCTAssertEqual(map.readings(in: cut).map(\.field.word).max(), 3)
+        XCTAssertEqual(map.readings(in: cut).count, map.fields.filter { $0.word < 4 }.count)
+    }
+
+    /// What the generated tables have to be: a name apiece, every field inside
+    /// the word it belongs to, and no word of the section left unnamed — which
+    /// is what makes a word's meaning a list of fields rather than a guess.
+    /// (Two fields *may* share a word's bits: the tool documents both an
+    /// address and the fields inside it, as `SMT1_AUDIDB118` and the bits
+    /// under it, and reads the same half-word two ways.)
+    func testEveryStrapWordIsNamedByItsOwnFields() {
+        XCTAssertFalse(DescriptorStrapMap.all.isEmpty)
+        for map in DescriptorStrapMap.all {
+            var names = Set<String>()
+            var words = Set<Int>()
+            for field in map.fields {
+                XCTAssertLessThan(field.word, map.words,
+                                  "\(field.name) is past the section it belongs to")
+                XCTAssertEqual(field.bits.lowerBound, max(0, field.bits.lowerBound), field.name)
+                XCTAssertLessThan(field.bits.upperBound, 32, field.name)
+                XCTAssertLessThanOrEqual(field.bits.lowerBound, field.bits.upperBound, field.name)
+                XCTAssertTrue(names.insert(field.name).inserted,
+                              "\(field.name) is in one table twice")
+                words.insert(field.word)
+            }
+            XCTAssertEqual(words.count, map.words,
+                           "every word of the \(map.words)-word section holds fields")
+        }
     }
 
     /// No strap base, no section — the bytes at offset zero are not straps.

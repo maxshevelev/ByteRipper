@@ -1,0 +1,121 @@
+import Foundation
+
+/// The chipset's own layout of a descriptor's strap section: every field the
+/// build can set, the word and bits it takes, and the value Flash Image Tool
+/// writes into it when a setting does not override it.
+///
+/// Nothing in a dump names these fields, and no published specification names
+/// them either — `UEFI_IMAGE_FORMAT.md` §2.6 has the section and the length
+/// field and stops there. The tables here are Intel's own, taken from the strap
+/// layout the Flash Image Tool executables carry
+/// (`Skills/me-eom-structures/scripts/strap_map.py`, and
+/// `Design/ME_STRUCTURES.md` for what was checked against which dump).
+///
+/// **A table belongs to a length, not to a generation.** What an image states
+/// about its section is how many words it has (`FLMAP1`), and the length is
+/// what tells the layouts apart in practice: the 69-word and 74-word sections
+/// are the same field for field in every tool that carries them, the two
+/// 70-word tables differ only in their defaults and in two spellings, and the
+/// tool's documents carry no platform name of their own. So a length that the
+/// tools do not agree on is not here at all rather than guessed at — the
+/// sections a bench meets are the ones the dumps at hand showed.
+public struct DescriptorStrapMap: Sendable {
+    /// One named field of the section: where it sits and what the tool writes
+    /// there by default. The name is the tool's own identifier —
+    /// `PCH_Strap_SPI_ec_max_freq` — in every language, as the ME Analyzer
+    /// project's labels are, so that it can be looked up in the tool.
+    public struct Field: Sendable, Equatable {
+        public var name: String
+        public var word: Int
+        public var bits: ClosedRange<Int>
+        /// What the tool builds the strap with: its default for the field, not
+        /// the chipset's reset value, which is not documented anywhere.
+        public var defaultValue: UInt32
+
+        public init(name: String, word: Int, bits: ClosedRange<Int>, defaultValue: UInt32) {
+            self.name = name
+            self.word = word
+            self.bits = bits
+            self.defaultValue = defaultValue
+        }
+
+        /// The bits of `word` this field takes, as the number they stand for.
+        public func value(in word: UInt32) -> UInt32 {
+            let width = bits.upperBound - bits.lowerBound + 1
+            let mask: UInt32 = width >= 32 ? .max : (1 << UInt32(width)) - 1
+            return word >> UInt32(bits.lowerBound) & mask
+        }
+    }
+
+    /// A field with what an image's own section holds there.
+    public struct Reading: Sendable, Equatable {
+        public var field: Field
+        public var value: UInt32
+
+        /// The image does not leave the field at the value the tool builds
+        /// with: its own build set it.
+        public var isSet: Bool { value != field.defaultValue }
+
+        public init(field: Field, value: UInt32) {
+            self.field = field
+            self.value = value
+        }
+    }
+
+    /// The name of the document the table was read from, where the tool gives
+    /// one (`cnp_h_rvp.xml`); the tool and the length otherwise. For people,
+    /// not for the screen.
+    public var name: String
+    /// How many words the section has: what picks this table.
+    public var words: Int
+    public var fields: [Field]
+
+    public init(name: String, words: Int, fields: [Field]) {
+        self.name = name
+        self.words = words
+        self.fields = fields
+    }
+
+    /// The section as its fields, in the table's order — its words, not the
+    /// table's, decide how far this reaches: a section cut short by the end of
+    /// the descriptor names only the fields still inside it.
+    public func readings(in section: [UInt32]) -> [Reading] {
+        fields.compactMap { field in
+            guard field.word < section.count else { return nil }
+            return Reading(field: field, value: field.value(in: section[field.word]))
+        }
+    }
+
+    /// The fields of one word, in the table's order.
+    public func fields(inWord word: Int) -> [Field] {
+        fields.filter { $0.word == word }
+    }
+}
+
+public extension DescriptorStrapMap {
+    /// The tables at hand, one per section length.
+    static var all: [DescriptorStrapMap] { [.pch69, .pch70, .pch74, .pch90, .pch101] }
+
+    /// The layout of a strap section of `words` words, or nil where no tool at
+    /// hand carries one: the words then stand as numbers, as they did before,
+    /// and nothing about them is claimed.
+    static func forSection(words: Int) -> DescriptorStrapMap? {
+        all.first { $0.words == words }
+    }
+
+    /// The word the SPI controller loads its GPR0 register from — the flash
+    /// range the chipset protects from the host. Its name is the tool's, and it
+    /// is the same layout word the engine reads as `ProtectedRange`. Nil on a
+    /// generation whose table does not carry it.
+    var protectedRangeField: Field? {
+        fields.first { $0.name.hasSuffix("_SPI_GLOBAL_PROTECTED_RNG_DEF") }
+    }
+
+    /// The bits of the word the chipset drives the eSPI bus to the EC at. Nil
+    /// where the section's table does not carry it: the clock is a strap of
+    /// the desktop layouts, and the 69- and 74-word mobile sections have no
+    /// such field at all.
+    var espiClockField: Field? {
+        fields.first { $0.name.hasSuffix("_SPI_ec_max_freq") }
+    }
+}
