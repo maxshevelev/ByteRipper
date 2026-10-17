@@ -225,8 +225,8 @@ public enum MEAAgentQueries {
             "live_files": .string(basis.liveFilesResolved ? "read" : "not read")
         ]
         // What the row itself reads, brackets and all.
-        let verdict = MEAText.manufacturingState(state, basis: basis, in: .english)
-        let evidence = MEAText.manufacturingEvidence(state, basis: basis, in: .english)
+        let verdict = MEAText.manufacturingState(state, basis: basis)
+        let evidence = MEAText.manufacturingEvidence(state, basis: basis)
         members["explanation"] = .string(
             evidence.isEmpty ? verdict : "\(verdict) (\(evidence))")
         return .object(members)
