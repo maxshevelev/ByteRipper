@@ -1095,9 +1095,6 @@
 "Setting help" = "Hilfe zur Einstellung";
 "%1$@ = %2$@" = "%1$@ = %2$@";
 "disabled by %1$@" = "außer Kraft bei %1$@";
-"RPMC" = "RPMC";
-"Hardware binding: %1$@" = "Hardware-Bindung: %1$@";
-"Hardware binding: unexpected value %1$@" = "Hardware-Bindung: unerwarteter Wert %1$@";
 "Not recorded in this image" = "In diesem Abbild nicht aufgezeichnet";
 "Show what Flash Image Tool says about this setting" = "Zeigt, was Flash Image Tool zu dieser Einstellung sagt";
 "Default" = "Standard";
@@ -1700,3 +1697,5 @@
 "Other" = "Sonstige";
 "Processor straps" = "Prozessor-Straps";
 "OEM section" = "OEM-Section";
+"RPMC Hardware Binding" = "RPMC Hardware Binding";
+"Unexpected value %1$@" = "Unerwarteter Wert %1$@";

@@ -123,7 +123,7 @@ public enum MEACurator {
             // without it cannot have established that the image does not
             // record one — that row says it is still loading.
             fields.append(MEAField(
-                L("RPMC", in: language),
+                L("RPMC Hardware Binding", in: language),
                 pending.fileTable && binding == .notInImage
                     ? L("Loading…", in: language)
                     : MEAText.hardwareBinding(binding, in: language)))
