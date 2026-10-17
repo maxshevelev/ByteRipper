@@ -150,6 +150,7 @@ extension MEConfigurationMap {
             Setting(name: "HwBindingEn", offset: 0, length: 1, label: "Hardware Binding Enabled", help: "This setting configures the FPF Hardware and RPMC / RPMB binding behavior for the platform image.\nIf this setting is enabled FPF Hardware and RPMC / RPMB binding behavior will occur when platform close manufacturing flow is executed with Intel(R) FPT. \nIf this setting is disabled FPF Hardware and RPMC / RPMB binding behavior will not take place when close manufacturing flow is executed.\nNote: For Revenue parts this setting will be ignored and FPF Hardware and RPMC / RPMB binding behavior will take place when close manufacturing flow is executed.", options: [0: "Disabled", 1: "Enabled"], auto: true),
         ]),
         File(path: "/home/mca/icps", alias: "icps", settings: [
+            Setting(name: "icpsSwSkuing", offset: 0, length: 8, label: "Intel(R) ICPS SW SKUing Eligible", help: "Set to enabled when Intel Connectivity Performance Suite is licensed on this platform", bits: 0...0, options: [0: "No", 1: "Yes"], auto: true),
         ]),
         File(path: "/home/policy/Bist/auto_config", alias: "BistMeAutoBistConfAndStatus", settings: [
             Setting(name: "FwAutoBist", offset: 0, length: 4, label: "Automatic Built in Self Test", help: "This setting enables the firmware Automatic Built in Self Test which is executed during first platform boot after initial image flashing.", bits: 0...0, options: [0: "Disabled", 1: "Enabled"], auto: true),

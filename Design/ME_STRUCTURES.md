@@ -345,11 +345,12 @@ mapped files on a Lenovo Legion board — and they agree on every setting).
 `MEConfigurationMap+CSME16.swift`: every file with a readable setting, its
 offset, length, bits, MFIT's option labels and its `Auto` marks, straight from
 the XML. It merges the platform lists into one — the four ADL-S lists agree on
-every offset of every setting we map, so one map serves them — and **reports what
-it cannot merge**: `/home/mca/icps`'s `icpsSwSkuing` is 8 bytes in one list and
-32 in another, so the script drops it and says so rather than read one platform's
-length on another's board. A new generation is a rerun against its own
-`mfit.exe`.
+every offset of every setting we map, so one map serves them — and reports what
+it cannot merge: a setting whose **place** differs between lists is dropped and
+named. Mere wording is not a place (below), and neither is the window around a
+bitfield: `icpsSwSkuing` is read as 8 bytes in six lists and 32 in one, all of
+them bit 0 of byte 0, so the bit is the same bit. A new generation is a rerun
+against its own `mfit.exe`.
 
 **A file that is one setting is read; a file the tool places itself is not.**
 Most `length="0"` settings are computed and are left alone. But where the tool
@@ -360,8 +361,9 @@ byte), `policy/hmrfpo_state`'s `HmrfpoEnable`, `amt/rtfd/amt.wol`'s two-byte
 `AmtIdleTimeout`, and seven more. A file with several such settings —
 certificates, the ICC profiles, `pavp/hdcp_ports`' second port — is left to
 MFIT's plugin: a guess would put one setting's byte under another's name. The
-16.0.15 map holds **77 settings in 36 files** with both rules (it had 63 in 26
-before them).
+16.0.15 map holds **78 settings in 36 files** with these rules (it had 63 in 26
+before them) — every setting the database gives a place in the bytes, whole-file
+or bitfield, and nothing else.
 
 **Two lists that word a setting differently are not a conflict.** Offset,
 width, bits and options make the setting; the label and the help text are the

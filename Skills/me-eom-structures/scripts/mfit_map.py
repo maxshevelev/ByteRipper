@@ -177,7 +177,14 @@ LAYOUT_KEYS = ("offset", "length", "bits", "options", "hex", "text", "auto")
 
 
 def layout(setting):
-    return {key: setting.get(key) for key in LAYOUT_KEYS}
+    """What makes two entries the same place. A bitfield's value is its offset
+    and bits: the lists state different windows around it (8 bytes in one,
+    32 in another for `icpsSwSkuing`, bit 0 in both), and how much is read
+    around a bit is not a different place. A plain value's width is its own.
+    """
+    keys = [key for key in LAYOUT_KEYS
+            if not (setting.get("bits") and key == "length")]
+    return {key: setting.get(key) for key in keys}
 
 
 def collect(texts):
