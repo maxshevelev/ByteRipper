@@ -91,7 +91,7 @@ public struct FieldHelp: Sendable, Equatable {
     private var laidOutWidth: CGFloat = 0
 
     /// The width the name column has to keep back for a row's `?`, where the
-    /// row has one: the glyph and the gap before it. A column measured without
+    /// row has one: the glyph and the gap before it, after the name's last word. A column measured without
     /// it would wrap the very names that carry the button.
     static let helpButtonReserve: CGFloat = 18
 
@@ -220,6 +220,9 @@ public struct FieldHelp: Sendable, Equatable {
     /// apart, and a reader of either has the other to hand.
     public static let columnSpacing: CGFloat = 6
 
+    /// Between the end of a name and the `?` after it.
+    static let helpButtonGap: CGFloat = 4
+
     init(label: String, value: NSAttributedString, second: NSAttributedString? = nil,
          help: FieldHelp? = nil, nameWidth: CGFloat) {
         self.label = label
@@ -241,7 +244,7 @@ public struct FieldHelp: Sendable, Equatable {
         }
     }
 
-    /// The `?` at the end of the name column: the same quiet glyph the panels'
+    /// The `?` after the name: the same quiet glyph the panels'
     /// own help buttons carry, named through `ControlHelp` with the words the
     /// panel put on the help — it knows whose words the button opens.
     public static func makeInfoButton(for help: FieldHelp) -> NSButton {
@@ -301,16 +304,20 @@ public struct FieldHelp: Sendable, Equatable {
     func fit(width: CGFloat) -> CGFloat {
         guard width != fittedWidth else { return fittedHeight }
         let column = max(0, min(nameWidth, (width - Self.columnSpacing) / 2))
-        // The `?` sits at the end of the name column, and the name is laid out
-        // in what is left of it: the button is drawn where the name ends, not
-        // where a reader has to look for it.
+        // The `?` follows the name, right after its last word: it belongs to
+        // the name, and one at the far end of the column reads as belonging to
+        // the value. The name is laid out in what the column has less the
+        // button's room, so its last line always has room for the button.
         let nameBox = infoButton == nil ? column
                                        : max(0, column - ToolFieldList.helpButtonReserve)
         name.place(x: 0, width: nameBox)
         if let infoButton {
             let reserve = ToolFieldList.helpButtonReserve
             let side = min(reserve - 4, column)
-            infoButton.frame = NSRect(x: max(0, column - side), y: 1, width: side, height: side)
+            let line = name.lastLine
+            let x = min(line.maxX + Self.helpButtonGap, column - side)
+            let y = line.isEmpty ? 1 : line.minY + max(0, (line.height - side) / 2)
+            infoButton.frame = NSRect(x: max(0, x), y: y, width: side, height: side)
         }
         let rest = max(1, width - column - Self.columnSpacing)
         if let second {
@@ -449,6 +456,17 @@ public struct FieldHelp: Sendable, Equatable {
     func place(x: CGFloat, width: CGFloat) {
         origin = NSPoint(x: x, y: 0)
         container.size = NSSize(width: width, height: .greatestFiniteMagnitude)
+    }
+
+    /// The last line of the text, as far as its glyphs reach, in the row's
+    /// coordinates: what a button that follows the text is placed after.
+    /// Empty at the origin when there is no text.
+    var lastLine: NSRect {
+        layout.ensureLayout(for: container)
+        let glyphs = layout.numberOfGlyphs
+        guard glyphs > 0 else { return NSRect(origin: origin, size: .zero) }
+        return layout.lineFragmentUsedRect(forGlyphAt: glyphs - 1, effectiveRange: nil)
+            .offsetBy(dx: origin.x, dy: origin.y)
     }
 
     var height: CGFloat {
