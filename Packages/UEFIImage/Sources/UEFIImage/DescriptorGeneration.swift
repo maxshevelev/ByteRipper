@@ -103,6 +103,21 @@ public enum DescriptorGeneration: Sendable, Equatable, CaseIterable {
         }
     }
 
+    /// Whether the descriptor's third map word (`FLMAP2`) still points at the
+    /// processor strap section in the flash. Up to Cannon Point it does — its
+    /// low byte is the base in 0x10 units and the next the word count. From
+    /// Tiger Point on that word names the section's place in the PMC's space
+    /// instead, and the section is no longer in the descriptor to read.
+    public var hasProcessorStrapSection: Bool {
+        switch self {
+        case .tigerPoint, .alderPoint, .elkhartLake, .jasperLake,
+             .meteorLake, .pantherLake, .wildcatLake, .novaLake:
+            return false
+        default:
+            return true
+        }
+    }
+
     /// The PCH strap bit that soft-disables the ME, as ifdtool and me_cleaner
     /// set it: `ICH_MeDisable` in the first word up to ICH10, `AltMeDisable`
     /// in the eleventh from Ibex Peak to Wildcat Point, and HAP in the first

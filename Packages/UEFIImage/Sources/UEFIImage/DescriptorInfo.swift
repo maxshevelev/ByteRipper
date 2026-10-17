@@ -148,6 +148,22 @@ public struct DescriptorInfo: Equatable, Sendable {
         public var fields: [DescriptorStrapMap.Reading]?
     }
 
+    /// The processor strap section — the words the processor reads at
+    /// power-on, in the descriptor's third map word (`FLMAP2`). Nil from Tiger
+    /// Point on, where that word names the section's place in the PMC's space
+    /// instead and the section is no longer in the descriptor to read
+    /// (`DescriptorGeneration.hasProcessorStrapSection`).
+    public struct ProcessorStraps: Equatable, Sendable {
+        /// Where the first word lies, in the file's own offsets.
+        public var base: UInt64
+        public var words: [UInt32]
+        /// The section read as the fields of its layout, each with what this
+        /// image holds there. Nil where no table of this length is at hand.
+        public var fields: [DescriptorStrapMap.Reading]?
+    }
+
+    public var processorStraps: ProcessorStraps?
+
     /// The eSPI clock: bits 3–5 of its word.
     public struct ESPIClock: Equatable, Sendable {
         public var word: Int
@@ -230,8 +246,34 @@ public extension DescriptorInfo {
             maskDigits: isVersion1 ? 2 : 3,
             biosAccess: biosAccess(at: masterBase, isVersion1: isVersion1, reader: reader),
             chips: chips(at: base, reader: reader),
-            straps: straps(at: base, map1: map1, generation: generation, reader: reader)
+            straps: straps(at: base, map1: map1, generation: generation, reader: reader),
+            processorStraps: generation.hasProcessorStrapSection
+                ? processorStraps(at: base, reader: reader) : nil
         )
+    }
+
+    /// The processor strap section, at `FLMAP2`'s base and as long as its
+    /// count — the fields the classic map word carries, which Tiger Point
+    /// stopped writing. Cut at the descriptor's end, as the PCH section is.
+    private static func processorStraps(
+        at base: UInt64, reader: ImageReader
+    ) -> ProcessorStraps? {
+        guard let map2 = reader.uint32(at: base + Descriptor.map2Offset) else { return nil }
+        let strapAt = map2 & 0xFF
+        guard strapAt > 0, strapAt <= Descriptor.maxBase else { return nil }
+        let offset = UInt64(strapAt) << 4
+        let count = min(UInt64(map2 >> 8 & 0xFF), (Descriptor.size - offset) / 4)
+        guard count > 0 else { return nil }
+        let section = base + offset
+        var words: [UInt32] = []
+        for index in 0..<count {
+            guard let word = reader.uint32(at: section + index * 4) else { break }
+            words.append(word)
+        }
+        guard !words.isEmpty else { return nil }
+        let map = DescriptorStrapMap.forProcessorSection(words: words.count)
+        return ProcessorStraps(base: section, words: words,
+                               fields: map?.readings(in: words))
     }
 
     /// The PCH strap section, at `PchStrapBase << 4`, as many words long as

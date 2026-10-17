@@ -210,7 +210,9 @@ typedef struct {
     UINT32                    : 6;
     UINT32 PchStrapsBase      : 8;
     UINT32 NumberOfPchStraps  : 8;   // one-based, in UINT32s
-    // FLMAP2
+    // FLMAP2 — up to Cannon Point. From Tiger Point on the same word is
+    // bits 0–1 reserved, 2–11 the strap message's offset in the PMC's space,
+    // 16–23 its length (§2.5, §2.7).
     UINT32 ProcStrapsBase     : 8;
     UINT32 NumberOfProcStraps : 8;
     UINT32                    : 16;
@@ -475,6 +477,39 @@ ifdtool, and so do the two copies `ifdtool --gpr0-enable` was run on
 writes refused). ifdtool also needs `-p` to read any descriptor
 from Sunrise Point on as one: without it, it takes the layout for version 1
 and reports `AltMeDisable` from the wrong word.
+
+### 2.7. The processor straps
+
+At `ProcStrapsBase << 4`, `NumberOfProcStraps` `UINT32`s (`PROCSTRP0`,
+`PROCSTRP1`, …): the processor's own straps, read before it lets the chipset
+go. The third map word carries them only up to Cannon Point. **From Tiger
+Point on the same word means something else** — `FLMAP2` bits 2–11 are the
+strap message's offset in the PMC's space (`0x68` on Tiger Point, `0x5C` on
+Alder Point) and bits 16–23 its length, which is how §2.5 tells those
+generations apart. The section is then not in the descriptor at all, and
+ByteRipper reads none of it; the panel shows no processor strap table on those
+dumps rather than a table of unrelated words.
+
+The layout is again Flash Image Tool's, `<LayoutEntry name="CPU_Strap_…">`
+entries with `offset`, `bitfield_low` and `bitfield_high`, emitted per section
+length into `StrapMap+CPU.swift` by
+`Skills/me-eom-structures/scripts/strap_map.py --kind cpu`. **The length is a
+weaker key here than for the PCH section**: the tools carry documents of one
+length that lay a field out differently — `Num_Active_Cores` is three bits in
+`cnp_lp_rvp.xml` and four in a nameless newer document of the same three
+words — and a dump says nothing about which document it was built from. The
+tables therefore keep only the fields **every document of that length states
+alike** (same name, offset and bits), with the newest self-named document's
+default, and a field they disagree about is left out. On the dumps at hand the
+section is 1 word on 23 of them (reserved bits alone — the layout's only two
+fields) and 3 words on 10; `CSME 12.BIN`'s three words read
+`0x00001000 0x00108002 0x08000210`, whose `Processor_max_frequency_boot`
+(word 0, bit 12) is the tool's own default and whose
+`SaPowerPlaneTopology` (word 1, bits 0–3) is 2.
+
+Which generations still have the section is
+`DescriptorGeneration.hasProcessorStrapSection`; the reading is
+`DescriptorInfo.processorStraps`.
 
 ---
 

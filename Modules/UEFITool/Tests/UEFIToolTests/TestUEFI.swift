@@ -243,6 +243,9 @@ enum TestUEFI {
         invalidInstructions: UInt32 = 0xAD60_4221,
         straps: [UInt32]? = nil,
         strapCount: UInt32? = nil,
+        processorStraps: [UInt32]? = nil,
+        processorStrapBase: UInt32 = 0x22,
+        map2: UInt32? = nil,
         totalSize: UInt64 = 0x1000
     ) -> Built {
         var bytes = [UInt8](repeating: 0xFF, count: Int(totalSize))
@@ -265,7 +268,17 @@ enum TestUEFI {
         let strapBase: UInt32 = 0x20
         put((strapCount ?? (version1 ? 0x12 : 0x73)) << 24 | (straps == nil ? 0 : strapBase << 16) | masterBase,
             at: 0x18)
-        put(version1 ? 0x0021_0120 : 0x0014_01B0, at: 0x1C)
+        // FLMAP2: the processor strap section's base and count up to Cannon
+        // Point, or a word the caller states. The 0x22 base keeps a section
+        // asked for here clear of the PCH straps the builder puts at 0x20.
+        let processorBase: UInt32 = processorStraps == nil
+            ? (version1 ? 0x20 : 0xB0) : processorStrapBase
+        let processorCount = UInt32(processorStraps?.count ?? 1)
+        put(map2 ?? (processorBase | processorCount << 8
+                     | (version1 ? 0x0021_0000 : 0x0014_0000)), at: 0x1C)
+        for (index, word) in (processorStraps ?? []).enumerated() {
+            put(word, at: Int(processorBase) << 4 + index * 4)
+        }
         bytes[0x0EFF] = version1 ? 0x00 : 0xC0          // FLUMAP1: MDTBA
 
         // FLCOMP: each chip's density, then the clocks — read ID 50 MHz,

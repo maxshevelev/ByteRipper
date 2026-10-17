@@ -149,6 +149,21 @@ public extension DescriptorStrapMap {
         all.first { $0.words == words }
     }
 
+    /// The processor strap section's tables, one per length the tools state.
+    /// Their layout is the weaker key — the documents of one length can
+    /// disagree, and a table carries only what they agree on (`StrapMap+CPU`)
+    /// — so they are kept apart from the PCH tables above.
+    static var processorTables: [DescriptorStrapMap] {
+        [.cpu1, .cpu3, .cpu7, .cpu10, .cpu14, .cpu15,
+         .cpu17, .cpu18, .cpu20, .cpu21, .cpu22, .cpu25]
+    }
+
+    /// The processor section's layout of `words` words, or nil where the tools
+    /// state none.
+    static func forProcessorSection(words: Int) -> DescriptorStrapMap? {
+        processorTables.first { $0.words == words }
+    }
+
     /// The word the SPI controller loads its GPR0 register from — the flash
     /// range the chipset protects from the host. Its name is the tool's, and it
     /// is the same layout word the engine reads as `ProtectedRange`. Nil on a
