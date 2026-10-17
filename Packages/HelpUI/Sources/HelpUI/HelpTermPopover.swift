@@ -35,15 +35,8 @@ import Localization
     }
 
     public override func loadView() {
-        let root = NSView()
-
-        let name = NSTextField(labelWithString: term.name)
-        name.font = .systemFont(ofSize: 13, weight: .semibold)
-        name.lineBreakMode = .byTruncatingTail
-        name.translatesAutoresizingMaskIntoConstraints = false
-
         let body = HelpBodyView()
-        body.show(HelpText.renderBrief(term))
+        body.show(HelpPopoverLayout.fitted(HelpText.renderBrief(term)))
         // Following a link inside a popover would be a second window inside a
         // window; the reader is sent to the real one instead, where Back works.
         body.onFollow = { [weak self] link in
@@ -54,29 +47,9 @@ import Localization
         let more = NSButton(title: L("Open in Help"), target: self, action: #selector(openInHelp))
         more.bezelStyle = .rounded
         more.controlSize = .small
-        more.translatesAutoresizingMaskIntoConstraints = false
 
-        for subview in [name, body, more] { root.addSubview(subview) }
-        NSLayoutConstraint.activate([
-            name.topAnchor.constraint(equalTo: root.topAnchor, constant: 12),
-            name.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 14),
-            name.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14),
-
-            body.topAnchor.constraint(equalTo: name.bottomAnchor, constant: 4),
-            body.leadingAnchor.constraint(equalTo: root.leadingAnchor),
-            body.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-
-            more.topAnchor.constraint(equalTo: body.bottomAnchor, constant: 4),
-            more.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14),
-            more.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -12),
-
-            // A fixed box rather than one sized to the entry: a popover that is
-            // a different shape for every term reads as a glitch, and a long
-            // entry scrolls inside it.
-            root.widthAnchor.constraint(equalToConstant: 340),
-            body.heightAnchor.constraint(equalToConstant: 220)
-        ])
-        view = root
+        view = HelpPopoverLayout.build(title: HelpPopoverLayout.title(term.name),
+                                       body: body, footer: more).view
     }
 
     private func present(from anchor: NSView, edge: NSRectEdge) {
