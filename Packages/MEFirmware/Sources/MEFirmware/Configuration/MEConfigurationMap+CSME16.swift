@@ -1,7 +1,7 @@
 // The CSME 16 map of the ME configuration — emitted by
-// `Skills/me-eom-structures/scripts/mfit_map.py` from Flash Image Tool
-// 16.0.15.1662's own settings database, which is the build that wrote the CSME 16
-// images this was verified against. Offsets, bits, the tool's own name for
+// `Skills/me-eom-structures/scripts/mfit_map.py` from the settings
+// databases of Flash Image Tool 16.1.42, 16.1.25.2091, 16.0.15.1662,
+// merged as one: the offsets, bits, the tool's own name for
 // each setting (`label`), its option labels and the
 // `Auto` marks are Intel's, copied; nothing here is read out of a dump.
 //
@@ -16,7 +16,7 @@ extension MEConfigurationMap {
     /// policy and the settings an edit is usually about — and the rest in
     /// MFIT's own order, which is the order to diff a new build against.
     public static let csme16 = MEConfigurationMap(
-        name: "CSME 16 (Flash Image Tool 16.0.15.1662)",
+        name: "CSME 16 (Flash Image Tool 16.1.42, 16.1.25.2091, 16.0.15.1662)",
         files: [
         File(path: "/home/mca/eom_config", alias: "EOM_Config", settings: [
             Setting(name: "EomFirstBootEnabled", offset: 0, length: 2, label: "EOM on First Boot Enabled", help: "This setting determines if End of Manufacturing will be triggered on first boot of the platform after flashing.\nNote: When this setting is enabled Intel(R) CSME will enter End of Manufacturing regardless of the descriptor settings.", bits: 0...0, options: [0: "No", 1: "Yes"]),
@@ -43,7 +43,7 @@ extension MEConfigurationMap {
             Setting(name: "PortConfigurationFor8MSBLanes", offset: 8, length: 4, label: "Port Configuration For 8 MSB Lanes", help: "When SW DRIVER CONTROLS PORT CONFIGURATION is cleared this determines the port configuration mapping between the upper 8 MIPI lanes and the CSI receiver ports the lanes can connect to.: \n\n               Bits[3:0] determine the configuration of Port A: \n\n                0x0: port is disabled \n\n                0x4: X1 \n\n                0x5: X2 \n\n                Others: reserved \n\n               Bits[8:4] determine the configuration of Port B: \n\n                0x0: port is disabled \n\n                0x9: X2 \n\n                Others: reserved \n\n               Bits[10:9] determine the configuration of Port C: \n\n                0x0: port is disabled \n\n                0x2: X1 \n\n                Others: reserved \n\n               Bits[13:11] determine the configuration of Port D: \n\n                0x0: port is disabled \n\n                0x5: X2 \n\n                0x7: X4 \n\n                Others: reserved", auto: true, hex: true),
         ]),
         File(path: "/home/iunit/iunit_privacy_mode", alias: "IunitPrivacyControl", settings: [
-            Setting(name: "PrivacyFeatureControlDisabled", offset: 0, length: 1, label: "Camera privacy feature control disabled", help: "This NVAR enables/disables the camera privacy. Enabling this NVAR means that the Camera privacy GPIO Pin value is used to mask/unmask all cameras’ data from being used", auto: true),
+            Setting(name: "PrivacyFeatureControlDisabled", offset: 0, length: 1, label: "Camera privacy feature control disabled", help: "This NVAR enables/disables the camera privacy. Enabling this NVAR means that the Camera privacy GPIO Pin value is used to mask/unmask all cameras' data from being used", auto: true),
         ]),
         File(path: "/home/policy/cfgmgr/cfg_rules", alias: "ME_CONF_WRK", settings: [
             Setting(name: "PavpSupported", offset: 344, length: 4, label: "PAVP Supported", help: "This setting determines if the Protected Audio Video Path (PAVP) feature will be permanently disabled in the FW image.", bits: 12...12, options: [0: "No", 1: "Yes"]),
@@ -67,6 +67,7 @@ extension MEConfigurationMap {
             Setting(name: "CryptoHwSupport", offset: 344, length: 4, label: "Crypto HW Support", help: "This setting can be used to disable crypto funtionality. This settings disables all crypto dependent features.", bits: 13...13, options: [0: "Yes", 1: "No"], auto: true),
             Setting(name: "EnableTDS", offset: 344, length: 4, label: "Enable TDS Capabilities", help: "This setting enables Intel(R) Trusted Device Setup on the platform", bits: 25...25, options: [0: "No", 1: "Yes"], auto: true),
             Setting(name: "OemTag", offset: 524, length: 4, label: "OEM Tag", help: "This is a free form 32bit field that allows the OEM to configure their own unique identifier in the firmware image.", auto: true, hex: true),
+            Setting(name: "PSRSupported", offset: 344, length: 4, label: "Platform Service Record supported", help: "This setting enables the Platform Support Record capability", options: [0: "No", 1: "Yes"], auto: true),
             Setting(name: "ProcMissingDetect", offset: 212, length: 4, label: "Missing Processor Detection Alert", help: "This setting determines if missing processor detection is enabled on Desktop / Workstation platforms.  Note: This feature will only work if the platform has the appropriate glue logic present.", bits: 0...7, options: [0: "Yes", 255: "No"], auto: true),
         ]),
         File(path: "/home/policy/msrmnt_sup", alias: "MeasurmentSupport", settings: [
@@ -151,6 +152,7 @@ extension MEConfigurationMap {
         ]),
         File(path: "/home/mca/icps", alias: "icps", settings: [
             Setting(name: "icpsSwSkuing", offset: 0, length: 8, label: "Intel(R) ICPS SW SKUing Eligible", help: "Set to enabled when Intel Connectivity Performance Suite is licensed on this platform", bits: 0...0, options: [0: "No", 1: "Yes"], auto: true),
+            Setting(name: "icmEntitlement", offset: 0, length: 8, label: "Intel(R) ICM Entitlement", help: "Set to enabled when Intel Connectivity Performance Suite is licensed on this platform.", bits: 31...31, options: [0: "No", 1: "Yes"]),
         ]),
         File(path: "/home/policy/Bist/auto_config", alias: "BistMeAutoBistConfAndStatus", settings: [
             Setting(name: "FwAutoBist", offset: 0, length: 4, label: "Automatic Built in Self Test", help: "This setting enables the firmware Automatic Built in Self Test which is executed during first platform boot after initial image flashing.", bits: 0...0, options: [0: "Disabled", 1: "Enabled"], auto: true),
@@ -164,6 +166,22 @@ extension MEConfigurationMap {
         ]),
         File(path: "/home/upid/platform_id_support", alias: "UpidPlatformIdSupport", settings: [
             Setting(name: "UniquePlatformIdSupportedFeature", offset: 0, length: 1, label: "UPID Supported", help: "This setting allows OEM to create their own unique platform identifier. If this setting is enabled, the below OEM ID should be set.", bits: 0...0, options: [0: "No", 1: "Yes"], auto: true),
+        ]),
+        File(path: "/home/rbe/binding_sig_type", alias: "BINDING_SIG_TYPE", settings: [
+            Setting(name: "BindingSigType", offset: 0, length: 1, label: "Binding Signature Type", help: "Defines the type of the Binding Signature that will be supported by FW.", bits: 0...0, options: [0: "PCH Based Signature", 1: "IFP based Signature"], auto: true),
+        ]),
+        File(path: "/home/mca/host_sw_sqnc_mode", alias: "HostSwSequencingMode", settings: [
+            Setting(name: "SpiSwSeqEnable", offset: 0, length: 1, label: "SPI Software Sequencing Enabled", help: "This setting will enable SPI software sequencing, in order to allow the host to write PCH binding information. Note: This setting is disabled b default and can be enabled until EOM.", bits: 0...0, options: [0: "No", 1: "Yes"], auto: true),
+        ]),
+        File(path: "/home/psr/genesis_info", alias: "psr_genesis_info", settings: [
+            Setting(name: "OEMInfo", offset: 4, length: 64, label: "OEM Name", help: "Genesis Record should include the OEM information feed from OEM specified information during manufacturing", auto: true, text: true),
+            Setting(name: "OEMMakeInfo", offset: 68, length: 64, label: "OEM Make", help: "Genesis Record should include the OEM Make information feed from OEM specified information during manufacturing", auto: true, text: true),
+            Setting(name: "OEMModelInfo", offset: 132, length: 64, label: "OEM Model", help: "Genesis Record should include the OEM Model information feed from OEM specified information during manufacturing", auto: true, text: true),
+            Setting(name: "MfgCountryOfOrigin", offset: 196, length: 64, label: "Country of Manufacturer", help: "Genesis Record should include the Manufacturing Country of Origin feed from OEM specified information", auto: true, text: true),
+            Setting(name: "OEMDataStore", offset: 260, length: 1024, label: "OEM Data", help: "Genesis Record should include the OEM Data Store binary for OEM defined information", auto: true),
+        ]),
+        File(path: "/home/mctp/ec_oob_smbus_addr", alias: "mctp_ec_oob_smbus_addr", settings: [
+            Setting(name: "ECOOBSmbusAddr", offset: 0, length: 1, label: "eSPI OOB EC SMBUs Address", help: "This setting determines the SMBUS address for eSPI OOB to be handled by EC.", auto: true, hex: true),
         ]),
         File(path: "/home/mctp/smt3_devices", alias: "Smt3Devices", settings: [
             Setting(name: "MctpEcAddress", offset: 4, length: 2, label: "MCTP EC Address", help: "Defines the 8-bits MCTP address and 7-bits SMBus address of the EC on SMLink2 or eSPI bus. This value is needed if EC is using the MCTP protocol. The SMBus (LS byte) must be from 0x01 to 0x7f (and should not overlap with any SMBus address in PCH Strap 11).  The EID (MS byte) must be outside 0x01 through 0x07.", hex: true),

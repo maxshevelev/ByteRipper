@@ -85,6 +85,21 @@ final class ConfigurationMapTests: XCTestCase {
         XCTAssertNil(map.file(at: "/home/icc/hash"))
     }
 
+    /// The 16 map is merged from three builds: the settings 16.1.42 adds are
+    /// there, and one whose lists disagree only on the `Auto` mark is kept.
+    func testTheSixteenMapCarriesEveryBuildsSettings() {
+        let settings = MEConfigurationMap.csme16.files.flatMap(\.settings)
+        for name in ["OEMInfo", "OEMMakeInfo", "OEMModelInfo", "OEMDataStore",
+                     "MfgCountryOfOrigin", "PSRSupported", "SpiSwSeqEnable",
+                     "ECOOBSmbusAddr", "BindingSigType", "icmEntitlement"] {
+            XCTAssertNotNil(settings.first { $0.name == name }, name)
+        }
+        XCTAssertNotNil(settings.first { $0.name == "icpsSwSkuing" },
+                        "the lists disagree only on Auto, which is not a place")
+        XCTAssertEqual(settings.filter { $0.name == "MctpEcAddress" }.count, 3,
+                       "a file a newer build's lists dropped is still read")
+    }
+
     /// The lists spell a label or a help text differently — one truncates the
     /// sentence — and that is not a layout conflict: the setting stays, with
     /// the fuller wording.

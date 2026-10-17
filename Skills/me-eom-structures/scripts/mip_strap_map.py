@@ -32,6 +32,7 @@ Stdlib only, read-only, no network; read the diff, don't paste blind.
 """
 
 import hashlib
+import os
 import re
 import sys
 import zlib
@@ -184,7 +185,7 @@ def main():
         print(__doc__)
         return 2
     tool = "MFIT"
-    version = re.search(r"(\d+\.\d+\.\d+\.\d+)", args[0])
+    version = re.search(r"(\d+(?:\.\d+){2,3})", os.path.basename(args[0]))
     if version:
         tool = version.group(1)
     blob = open(args[0], "rb").read()

@@ -60,7 +60,10 @@ what its panel says about a setting (`help`, on the `<UI>` element — shown
 behind the `?` beside a row) and
 its `Auto`/`Generic` marks, and the tool's own name for a setting where its panel
 shows something other than the identifier (`label` — "LAN Power Well" for
-`MELanPowerWell`). It merges the platform lists and reports what
+`MELanPowerWell`). **Several builds may be given at once**, and are merged with
+the same rules: the CSME 16 map is emitted from 16.0.15.1662, 16.1.25.2091 and
+16.1.42 together, so a file a newer build's lists dropped is still read out of
+the images the older ones wrote. It merges the platform lists and reports what
 it could not merge rather than guessing — a setting two lists lay out **differently**
 (different offset, width or bits) is dropped and named. A setting the lists give
 the same place but word differently — one truncates a label or a help sentence —
@@ -174,7 +177,9 @@ tool's own panel text where it has any: `label` ("RPMC Supported"), `section`
 (`RpmcConfiguration`, how its interface groups them) and `help`. MFIT names its
 settings in the interface; FIT 15 names only the identifiers for the low-level
 bits, and those rows show the identifier. The first array holds 56 settings in
-FIT 15's TGL LP documents and 71 in MFIT 16's.
+FIT 15's TGL LP documents and 76 in MFIT 16.1.42's (71 in 16.1.25's — the newer
+build adds `CPU_AAB_ENABLED`, `PCH_AAB_ENABLED`, `OEM_CIM_ARB_EN`,
+`OEM_PIM_ARB_EN` and `RpmcOverEc`).
 
 What a dump's array holds is the **state the build wrote**, not the fuses: most
 settings read zero on every dump at hand — `Design/ME_STRUCTURES.md` says why,

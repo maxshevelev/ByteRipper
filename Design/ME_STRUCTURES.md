@@ -368,9 +368,18 @@ byte), `policy/hmrfpo_state`'s `HmrfpoEnable`, `amt/rtfd/amt.wol`'s two-byte
 `AmtIdleTimeout`, and seven more. A file with several such settings —
 certificates, the ICC profiles, `pavp/hdcp_ports`' second port — is left to
 MFIT's plugin: a guess would put one setting's byte under another's name. The
-16.0.15 map holds **78 settings in 36 files** with these rules (it had 63 in 26
-before them) — every setting the database gives a place in the bytes, whole-file
-or bitfield, and nothing else.
+16 map holds **88 settings in 40 files** with these rules — every setting the
+database gives a place in the bytes, whole-file or bitfield, and nothing else.
+Since 2026-10-17 it is emitted from **three builds at once** (16.0.15.1662,
+16.1.25.2091 and 16.1.42), merged with the same rules as one build's lists: a
+file or a setting a newer build's lists dropped (a platform retired, a name
+changed) is still read out of the images the older builds wrote, and the three
+agree on every setting all of them carry. 16.1.42 adds ten settings the older
+builds lack — `OEMInfo` / `OEMMakeInfo` / `OEMModelInfo` / `OEMDataStore` /
+`MfgCountryOfOrigin`, `PSRSupported` (`/home/psr/genesis_info`), `SpiSwSeqEnable`
+(`/home/mca/host_sw_sqnc_mode`), `ECOOBSmbusAddr`
+(`/home/mctp/ec_oob_smbus_addr`), `BindingSigType` (`/home/rbe/binding_sig_type`)
+and `icmEntitlement`.
 
 **Two lists that word a setting differently are not a conflict.** Offset,
 width, bits and options make the setting; the label and the help text are the
@@ -415,7 +424,8 @@ placement and are the one thing here still unnamed.
 **The panel shows them anyway, as the FPF Settings group.** The 155 count is
 every array the tool writes; the settings the app reads are the ones placed in
 the **first** array — the one the Boot Guard word is in — 56 in FIT 15's TGL LP
-documents and 71 in MFIT 16's, and their map (`UEPMap`) is emitted from the same
+documents and 76 in MFIT 16.1.42's (71 in 16.1.25's), and their map (`UEPMap`)
+is emitted from the same
 `GetBitArrayValue` actions by
 `Skills/me-eom-structures/scripts/uep_map.py`. The engine reads each setting's
 bits out of the little-endian word at its offset (`UEPReader`, array 0 at

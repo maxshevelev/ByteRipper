@@ -17,6 +17,7 @@ value *means*: it copies MFIT's own labels, offsets and option numbers, and says
 on stderr what it left out.
 """
 
+import os
 import re
 import sys
 import zlib
@@ -68,7 +69,19 @@ FIRST = [
     "/home/policy/cfgmgr/cfg_rules",
 ]
 
-PROJECT = "16.0.15.1662"
+
+def build_name(path):
+    """What to call a build: the version its path states — `mfit-16.1.42.exe`,
+    `FITool 16.0.15.1662/mfit.exe` — or the file's own name where there is
+    none."""
+    directory = os.path.dirname(path)
+    for part in (os.path.basename(path),
+                 os.path.basename(directory),
+                 os.path.basename(os.path.dirname(directory))):
+        version = re.search(r"\d+(?:\.\d+){2,3}", part)
+        if version:
+            return version.group(0)
+    return os.path.basename(path)
 
 
 def documents(blob):
@@ -173,7 +186,7 @@ def settings_of(body):
 # it sits, how wide, which bits, its option words. The label and the help text
 # are the tool's prose and differ between lists — a truncated sentence is not a
 # different offset — so they are not compared here; `collect` keeps the fuller.
-LAYOUT_KEYS = ("offset", "length", "bits", "options", "hex", "text", "auto")
+LAYOUT_KEYS = ("offset", "length", "bits", "options", "hex", "text")
 
 
 def layout(setting):
@@ -221,6 +234,10 @@ def collect(texts):
                 # a label or a help text differently (one truncates the
                 # sentence). That is not a layout conflict — the value reads
                 # the same under both — so the fuller wording is kept.
+                # `auto` is not a place either: one list may mark a setting
+                # the tool works out and another not, and the mark stays if
+                # either says so — it is what the tool reports about itself.
+                kept["auto"] = kept["auto"] or setting["auto"]
                 for key in ("label", "help"):
                     if len(setting.get(key) or "") > len(kept.get(key) or ""):
                         kept[key] = setting[key]
@@ -302,22 +319,31 @@ def main():
     if len(sys.argv) < 2:
         print(__doc__)
         return 2
-    blob = open(sys.argv[1], "rb").read()
-    texts = list(documents(blob))
+    # More than one build may be given, and their databases are merged with the
+    # same rules as one build's lists: a setting either states keeps its place,
+    # and one they state differently is reported. That is how a map serves the
+    # whole generation — a file the newest build's lists dropped (a platform
+    # retired, a setting renamed) is still read out of the images the older
+    # builds wrote, where it is at the same place.
+    paths = [a for a in sys.argv[1:] if not a.startswith("-")]
+    texts = []
+    for path in paths:
+        texts.extend(documents(open(path, "rb").read()))
     if not texts:
-        print("no platform list found in this build", file=sys.stderr)
+        print("no platform list found in these builds", file=sys.stderr)
         return 1
     files, conflicts = collect(texts)
     readable = sum(len(f["settings"]) for f in files.values())
-    print("platform lists: %d  files with readable settings: %d  settings: %d"
-          % (len(texts), len(files), readable), file=sys.stderr)
+    print("builds: %d  platform lists: %d  files with readable settings: %d  settings: %d"
+          % (len(paths), len(texts), len(files), readable), file=sys.stderr)
     for path, name, there, here in conflicts:
         print("! dropped %s %s: the lists lay it out differently (%s / %s)" %
               (path, name, there, here), file=sys.stderr)
     print("// The CSME 16 map of the ME configuration — emitted by")
-    print("// `Skills/me-eom-structures/scripts/mfit_map.py` from Flash Image Tool")
-    print("// %s's own settings database, which is the build that wrote the CSME 16" % PROJECT)
-    print("// images this was verified against. Offsets, bits, the tool's own name for")
+    print("// `Skills/me-eom-structures/scripts/mfit_map.py` from the settings")
+    print("// databases of Flash Image Tool %s," % ", ".join(
+        build_name(p) for p in paths))
+    print("// merged as one: the offsets, bits, the tool's own name for")
     print("// each setting (`label`), its option labels and the")
     print("// `Auto` marks are Intel's, copied; nothing here is read out of a dump.")
     print("//")
@@ -332,7 +358,8 @@ def main():
     print('    /// policy and the settings an edit is usually about — and the rest in')
     print('    /// MFIT\'s own order, which is the order to diff a new build against.')
     print('    public static let csme16 = MEConfigurationMap(')
-    print('        name: "CSME 16 (Flash Image Tool %s)",' % PROJECT)
+    print('        name: "CSME 16 (Flash Image Tool %s)",' % ", ".join(
+        build_name(p) for p in paths))
     print('        files: [')
     print(swift(files))
     print('        ])')
