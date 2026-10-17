@@ -1021,6 +1021,27 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(tone("Manufacturing", in: tableRows(willNotClose)), .good)
     }
 
+    /// The Manufacturing finding is English in every language, as the tools'
+    /// own option words are: the row's name is translated, the value a
+    /// technician quotes is not.
+    func testTheManufacturingValueStaysEnglishInEveryLanguage() throws {
+        let a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+            "manufacturingState": "willNotClose",
+            "manufacturingBasis": ["flag": false, "flexible": 0,
+                                   "page": "imageConfiguration",
+                                   "descriptorOpen": true,
+                                   "liveFilesResolved": true],
+        ])
+        let rows = MEASummary.build(a, in: .russian)[0].rows
+        let value = try XCTUnwrap(rows.first {
+            $0.value.text(in: .russian) == "Will not close (EOM: off, descriptor: open)"
+        }?.value)
+        XCTAssertEqual(value, .verdict("Will not close",
+                                       evidence: "EOM: off, descriptor: open"))
+    }
+
     /// The three rows belong to CSME 11 and later. Manufacturing is decided
     /// there by the descriptor's access rights — which is how it was done
     /// before MFIT grew the flag, and CSME 12 is such a generation: it reads a

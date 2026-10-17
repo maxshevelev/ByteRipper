@@ -299,8 +299,8 @@ public enum MEASummary {
         if analysis.family == .csme, analysis.version.major >= 11 {
             if let state = analysis.manufacturingState {
                 let basis = analysis.manufacturingBasis
-                let verdict = MEAText.manufacturingState(state, basis: basis, in: language)
-                let evidence = MEAText.manufacturingEvidence(state, basis: basis, in: language)
+                let verdict = MEAText.manufacturingState(state, basis: basis)
+                let evidence = MEAText.manufacturingEvidence(state, basis: basis)
                 rows.append(MEASummaryRow(
                     L("Manufacturing", in: language),
                     evidence.isEmpty ? .value(verdict) : .verdict(verdict, evidence: evidence),

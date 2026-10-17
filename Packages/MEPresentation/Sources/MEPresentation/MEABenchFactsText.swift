@@ -3,39 +3,41 @@ import Localization
 import MEFirmware
 
 // help: panel.me.manufacturing
-/// The three facts a repair bench asks of a dump it is about to flash, in the
-/// reader's language: whether the image closes Manufacturing on its first boot,
-/// which Boot Guard profile it is built for, and which OEM public key hash it
-/// carries. Ours — MEAnalyzer prints none of them — so the words are ours too,
-/// and each of them says what the *dump* shows rather than what a vendor
-/// usually does.
+/// The three facts a repair bench asks of a dump it is about to flash: whether
+/// the image closes Manufacturing on its first boot, which Boot Guard profile
+/// it is built for, and which OEM public key hash it carries. Ours —
+/// MEAnalyzer prints none of them — and each of them says what the *dump*
+/// shows rather than what a vendor usually does.
+///
+/// Their **values** are English in every language, like the tools' own option
+/// words: "Will close on the EOM flag", "5 - FVME", `Disabled`. The row names
+/// around them are translated; the finding a technician quotes is not.
 extension MEAText {
     /// The Manufacturing verdict as one phrase, naming the mechanism that
     /// decided it: two of them do, and which one is at work is the difference
     /// between an image the workshop built to stay open and one straight from a
     /// manufacturer (`ManufacturingBasis.flag` is the one it turns on).
     public static func manufacturingState(_ state: ManufacturingState,
-                                          basis: ManufacturingBasis?,
-                                          in language: AppLanguage) -> String {
+                                          basis: ManufacturingBasis?) -> String {
         let byFlag = basis?.flag == true
         switch state {
         case .willClose:
             return byFlag
-                ? L("Will close on the EOM flag", in: language)
-                : L("Will close on the descriptor's rights", in: language)
+                ? "Will close on the EOM flag"
+                : "Will close on the descriptor's rights"
         case .willNotClose:
-            return L("Will not close", in: language)
+            return "Will not close"
         case .unexpectedCombination:
-            return L("Will close on the EOM flag, with the descriptor open", in: language)
+            return "Will close on the EOM flag, with the descriptor open"
         case .unknown:
-            return L("Not readable from this image", in: language)
+            return "Not readable from this image"
         case .noSwitch:
-            return L("No such switch in this firmware", in: language)
+            return "No such switch in this firmware"
         }
     }
 
     /// What the Manufacturing verdict was read from, as short as it can be
-    /// said: "EOM: off, descriptor: open" / «EOM выключен, дескриптор открыт».
+    /// said: "EOM: off, descriptor: open".
     /// The row puts it in brackets after the verdict, and draws it in the
     /// ordinary font and colour — it is evidence, not a second verdict, and the
     /// colour belongs to the answer alone.
@@ -45,18 +47,16 @@ extension MEAText {
     /// (`Not readable from this image`) and needs no "EOM: unknown" beside it.
     /// Returns "" when there is nothing to say.
     public static func manufacturingEvidence(_ state: ManufacturingState,
-                                             basis: ManufacturingBasis?,
-                                             in language: AppLanguage) -> String {
+                                             basis: ManufacturingBasis?) -> String {
         guard let basis else { return "" }
         var clauses: [String] = []
         if let flag = basis.flag {
-            clauses.append(flag ? L("EOM: on", in: language) : L("EOM: off", in: language))
+            clauses.append(flag ? "EOM: on" : "EOM: off")
         }
         // The verdict names the open descriptor in its own words, so the clause
         // would only repeat it.
         if state != .unexpectedCombination, let open = basis.descriptorOpen {
-            clauses.append(open ? L("descriptor: open", in: language)
-                                : L("descriptor: locked", in: language))
+            clauses.append(open ? "descriptor: open" : "descriptor: locked")
         }
         return clauses.joined(separator: ", ")
     }
