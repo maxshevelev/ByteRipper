@@ -1554,3 +1554,5 @@
 "%1$@, %2$@ bytes" = "%1$@, %2$@ байт";
 "No configuration read" = "Конфигурация не прочитана";
 "The settings are read on CSME 13 to 16, from the configuration files the image carries." = "Настройки читаются для CSME 13–16, из файлов конфигурации, которые есть в образе.";
+"Reading the configuration…" = "Чтение конфигурации…";
+"The settings appear when the analysis finishes." = "Настройки появятся, когда анализ закончится.";

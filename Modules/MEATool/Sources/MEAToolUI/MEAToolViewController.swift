@@ -118,6 +118,12 @@ import ToolModuleKit
         /// read from it — a generation with no map, or one whose files are not
         /// in the image. "No ME firmware" there contradicted the tab beside it.
         case noConfiguration
+        /// The Configuration tab while the reading is still on: the settings
+        /// come with the analysis, and on CSME 15 and 16 only with the file
+        /// table it fetches after the first reading. Until the reading is over,
+        /// an empty tab is a tab still being filled, not one that came back
+        /// empty.
+        case readingConfiguration
 
         /// The system symbol the state wears. A running analysis is the engine
         /// the panel is about; nothing found is a question; a failure is the
@@ -127,7 +133,7 @@ import ToolModuleKit
             case .waiting: return "cpu"
             case .empty: return "questionmark.circle"
             case .failed: return "exclamationmark.octagon.fill"
-            case .noConfiguration: return "list.bullet.rectangle"
+            case .noConfiguration, .readingConfiguration: return "list.bullet.rectangle"
             }
         }
 
@@ -137,6 +143,7 @@ import ToolModuleKit
             case .empty: return L("No ME firmware")
             case .failed: return L("The analysis did not finish")
             case .noConfiguration: return L("No configuration read")
+            case .readingConfiguration: return L("Reading the configuration…")
             }
         }
 
@@ -150,6 +157,8 @@ import ToolModuleKit
             case .failed: return L("The line below says what went wrong.")
             case .noConfiguration:
                 return L("The settings are read on CSME 13 to 16, from the configuration files the image carries.")
+            case .readingConfiguration:
+                return L("The settings appear when the analysis finishes.")
             }
         }
     }
@@ -358,11 +367,19 @@ import ToolModuleKit
     /// What the placeholder says on the tab that is open. The module's state
     /// is about the analysis; on the Configuration tab an analysis that found
     /// firmware but no configuration is a different answer from one that
-    /// found no firmware at all.
+    /// found no firmware at all — and while the reading is still on, neither
+    /// is an answer yet: the tab says it is being read.
     private var shownPlaceholder: Placeholder {
+        guard tabIndex == 1 else { return placeholderState }
         let analysed = !summaryBlocks.isEmpty || !roots.isEmpty
-        return tabIndex == 1 && placeholderState == .empty && analysed
-            ? .noConfiguration : placeholderState
+        switch placeholderState {
+        case .waiting:
+            return .readingConfiguration
+        case .empty where analysed:
+            return isBusy ? .readingConfiguration : .noConfiguration
+        default:
+            return placeholderState
+        }
     }
 
     /// The placeholder as the state and the current zoom make it. The icon is
@@ -637,17 +654,23 @@ import ToolModuleKit
     // MARK: - A parse's progress
 
     func showBusy() {
-        guard progressBar.superview == nil else { return }
+        guard !isBusy else { return }
         progressBar.startAnimation(nil)
         bottomRow.addArrangedSubview(progressBar)
+        if !placeholder.isHidden { applyPlaceholder() }
     }
 
     func endBusy() {
-        guard progressBar.superview != nil else { return }
+        guard isBusy else { return }
         progressBar.stopAnimation(nil)
         bottomRow.removeArrangedSubview(progressBar)
         progressBar.removeFromSuperview()
+        // An empty Configuration tab was "being read"; it is now an answer.
+        if !placeholder.isHidden { applyPlaceholder() }
     }
+
+    /// A reading is on: the bar under the panel is up.
+    private var isBusy: Bool { progressBar.superview != nil }
 
     /// A line under the content — what happened, or what to do next.
     func say(_ text: String, asProblem: Bool = false) {
