@@ -117,6 +117,10 @@ public enum MEACurator {
                                    tone: MEATones.manufacturingState(state),
                                    evidence: evidence))
         }
+        if let binding = a.hardwareBinding, a.version.major >= 13 {
+            fields.append(MEAField(L("RPMC", in: language),
+                                   MEAText.hardwareBinding(binding, in: language)))
+        }
         if a.family == .csme, a.version.major >= 11 {
             fields.append(MEAField(L("Boot Guard", in: language),
                                    a.bootGuardProfile.map(MEAText.bootGuardProfile)

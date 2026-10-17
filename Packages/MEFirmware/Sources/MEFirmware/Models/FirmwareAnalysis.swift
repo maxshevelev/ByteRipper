@@ -141,6 +141,15 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// of the four settings — an area never written, or a layout this does not
     /// read.
     public var bootGuardProfile: BootGuardProfile? = nil
+    /// Whether the platform binds its SPI part to the chipset — Flash Image
+    /// Tool's "Hardware Binding Enabled", whose own help calls it the FPF
+    /// hardware and RPMC / RPMB binding. Ours: MEAnalyzer prints nothing of the
+    /// kind, and the setting is not in any of its files: the state is one byte
+    /// of `/home/bup/bup_sku/hw_binding` (the path FIT's alias table gives for
+    /// `HwBinding`), read out of the ME file system and, where the volume has
+    /// no such file, out of the OEM Configuration partition's record of it.
+    /// Its value class is `DisabledEnabledValues`: 0 Disabled, 1 Enabled.
+    public var hardwareBinding: HardwareBinding? = nil
     /// The OEM public key hash the UEP area carries — 32 hex bytes on CSME 12
     /// to 14, 48 on 15 and later — and why it is not a value where it is not one
     /// (ours). `OEMKeyHash` says what each answer means;
@@ -600,6 +609,22 @@ public struct ConfigurationCondition: Codable, Sendable, Equatable {
         self.value = value
         self.assumed = assumed
     }
+}
+
+/// Whether the platform binds its SPI part to the chipset — the fact
+/// `FirmwareAnalysis.hardwareBinding` carries and `Design/ME_STRUCTURES.md`
+/// describes. A byte rather than a yes/no, because the file can hold what the
+/// tool's class does not name, and saying "No" of it would be a guess.
+public enum HardwareBinding: Codable, Sendable, Equatable {
+    /// 0x00 — the platform may take a new SPI part.
+    case disabled
+    /// 0x01 — the part is bound; Flash Image Tool calls rebinding it a
+    /// manufacturing step.
+    case enabled
+    /// A byte the value class `DisabledEnabledValues` does not name.
+    case other(UInt8)
+    /// Neither page carries the file: nothing is claimed about the binding.
+    case notInImage
 }
 
 /// The OEM public key hash an image carries — the SHA-384 of the manufacturer's
@@ -2637,6 +2662,13 @@ public enum EngineModelRevision {
     /// CDMD record, now answers the profile instead of "no profile record in
     /// this image"; an image that answers nothing still does.
     ///
+    /// 48 adds `hardwareBinding`: whether the platform binds its SPI part to
+    /// the chipset, one byte of `/home/bup/bup_sku/hw_binding` — the setting
+    /// Flash Image Tool calls "Hardware Binding Enabled", whose own help names
+    /// it the FPF hardware and RPMC / RPMB binding. Ours, as the rest of these;
+    /// it is a byte rather than a yes/no because the file can hold a value the
+    /// tool's class does not name.
+    ///
     /// 47 reads the tool's conditional places: `ConfigurationSetting.condition`
     /// says which branch of a setting the tool places only under another
     /// setting's value an image holds (the LP family's MCTP EC address is in
@@ -2658,5 +2690,5 @@ public enum EngineModelRevision {
     /// SHA-384 of 15 and later at 0xA0. Images of the older generations, which
     /// answered "layout not recognized" (they were being read as a newer one),
     /// now answer their key.
-    public static let current = 47
+    public static let current = 48
 }

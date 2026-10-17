@@ -1089,6 +1089,10 @@
 "Setting help" = "Hilfe zur Einstellung";
 "%1$@ = %2$@" = "%1$@ = %2$@";
 "disabled by %1$@" = "außer Kraft bei %1$@";
+"RPMC" = "RPMC";
+"Hardware binding: %1$@" = "Hardware-Bindung: %1$@";
+"Hardware binding: unexpected value %1$@" = "Hardware-Bindung: unerwarteter Wert %1$@";
+"Not recorded in this image" = "In diesem Abbild nicht aufgezeichnet";
 "Show what Flash Image Tool says about this setting" = "Zeigt, was Flash Image Tool zu dieser Einstellung sagt";
 "Default" = "Standard";
 "Unknown (code %1$@)" = "Unbekannt (Code %1$@)";
