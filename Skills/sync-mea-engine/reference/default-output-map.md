@@ -272,7 +272,7 @@ bumps `EngineModelRevision`, currently **41** — see `result-model.md`).
 Rows that are **not** upstream's are not in this table — the summary prints them
 above the size row, and `result-model.md` lists them with the revisions they
 arrived in: the File System State's **State basis** (revision 40), and
-**Manufacturing** with its basis, **Boot Guard** and **OEM Public Key Hash**
+**EOM on First Boot** with its basis, **Boot Guard** and **OEM Public Key Hash**
 (revision 41, `Skills/me-eom-structures/reference/structures.md`). A sync leaves
 all of them alone.
 

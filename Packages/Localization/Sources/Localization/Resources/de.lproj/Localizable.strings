@@ -244,7 +244,6 @@
 "Choose the folder to keep the pattern library in. Each Mac writes its own file there and reads the others. A folder your Mac syncs — iCloud Drive, Google Drive, Dropbox — puts the library on your other machines." = "Wählen Sie den Ordner, in dem die Musterbibliothek liegen soll. Jeder Mac schreibt dort seine eigene Datei und liest die der anderen. Ein Ordner, den Ihr Mac abgleicht — iCloud Drive, Google Drive, Dropbox —, stellt die Bibliothek auf Ihren übrigen Rechnern bereit.";
 "Close and Break Link" = "Schließen und Verbindung trennen";
 "Close and Break Links" = "Schließen und Verbindungen trennen";
-"Coming soon" = "Folgt später";
 "Compressed: what it holds is listed under it, decompressed" = "Komprimiert: der Inhalt steht darunter, dekomprimiert";
 "Could not be checked, or wants a second look" = "Ließ sich nicht prüfen oder verlangt einen zweiten Blick";
 "Could not duplicate the file." = "Die Datei konnte nicht dupliziert werden.";
@@ -548,7 +547,6 @@
 "Merge All?" = "Alle Segmente zusammenführen?";
 "Merging keeps both lists, which is usually what you want when setting up a second Mac." = "Beim Zusammenführen bleiben beide Listen erhalten — meist das, was man beim Einrichten eines zweiten Macs will.";
 "Message" = "Meldung";
-"Messages" = "Meldungen";
 "Mine" = "Lokale Fassung";
 "Minimap" = "Minimap";
 "Minimap Overview" = "Minimap: Gesamtübersicht";
@@ -1095,7 +1093,6 @@
 "Setting help" = "Hilfe zur Einstellung";
 "%1$@ = %2$@" = "%1$@ = %2$@";
 "disabled by %1$@" = "außer Kraft bei %1$@";
-"Not recorded in this image" = "In diesem Abbild nicht aufgezeichnet";
 "Show what Flash Image Tool says about this setting" = "Zeigt, was Flash Image Tool zu dieser Einstellung sagt";
 "Default" = "Standard";
 "Unknown (code %1$@)" = "Unbekannt (Code %1$@)";
@@ -1659,20 +1656,10 @@
 "Writing the project" = "Projekt wird geschrieben";
 "Writing the workspace" = "Arbeitsbereich wird geschrieben";
 /* ME Analyzer: End of Manufacturing, Boot Guard und der OEM-Schlüssel (Skills/me-eom-structures). */
-"Manufacturing" = "Manufacturing";
 "Boot Guard" = "Boot Guard";
 "No profile record in this image" = "Kein Profil-Eintrag in diesem Image";
 "OEM Public Key Hash" = "OEM Public Key Hash (SHA-384)";
 "No key material in this image" = "Kein Schlüsselmaterial in diesem Image";
-"Not set (all zeros)" = "Nicht gesetzt (nur Nullen)";
-"Not set (the area is erased)" = "Nicht gesetzt (Bereich gelöscht)";
-"Layout not recognized" = "Aufbau nicht erkannt";
-"EFS: holds files" = "EFS: enthält Dateien";
-"EFS: unreadable" = "EFS: nicht lesbar";
-"EFS: files not named" = "EFS: Dateien unbekannt (keine Datenbank)";
-"configuration: %1$@" = "Konfiguration: %1$@";
-"reserved files: %1$@" = "reservierte Dateien: %1$@";
-"nothing found" = "nichts gefunden";
 "Configuration" = "Konfiguration";
 "FITC" = "FITC";
 "MFS" = "MFS";
@@ -1687,9 +1674,4 @@
 "Other" = "Sonstige";
 "Processor straps" = "Prozessor-Straps";
 "OEM section" = "OEM-Section";
-"RPMC Hardware Binding" = "RPMC Hardware Binding";
-"Unexpected value %1$@" = "Unerwarteter Wert %1$@";
 "Manufacturing Lock" = "Manufacturing Lock";
-"Locked" = "Locked";
-"Not locked" = "Not locked";
-"Not readable from this image" = "Aus diesem Image nicht lesbar";

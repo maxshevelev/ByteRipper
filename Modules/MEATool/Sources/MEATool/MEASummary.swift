@@ -1,5 +1,4 @@
 import Foundation
-import Localization
 import MEFirmware
 import MEPresentation
 import ToolModuleKit
@@ -26,13 +25,18 @@ public enum MEASummaryValue: Sendable, Equatable {
     case pending
 
     /// What the row says — the one wording the panel and a copy of it share.
-    public func text(in language: AppLanguage) -> String {
+    ///
+    /// English in every language, as MEA's console table and the tools' own
+    /// option words are: the Summary is the table a technician quotes and
+    /// compares against a report, and a translated verdict cannot be compared
+    /// with one.
+    public var text: String {
         switch self {
         case .value(let shown): return shown
         case .verdict(let verdict, let evidence):
             return evidence.isEmpty ? verdict : "\(verdict) (\(evidence))"
-        case .comingSoon: return L("Coming soon", in: language)
-        case .pending: return L("Loading…", in: language)
+        case .comingSoon: return "Coming soon"
+        case .pending: return "Loading…"
         }
     }
 
@@ -89,7 +93,11 @@ public struct MEASummaryBlock: Sendable, Equatable {
 /// This is the pure target's summary entry point, mirroring `MEACurator`: the
 /// controller never reads the model, it only lays out what `build` returns.
 /// Every value is formatted here (with `MEAText`, the one shared voice) or
-/// flagged `.comingSoon` when the row's fact is not in the model yet.
+/// flagged `.comingSoon` when the row's fact is not in the model yet. The table
+/// is **English in every language** — row names, values and evidence alike:
+/// this is MEA's console table, which a technician quotes and compares against
+/// a report, and a translated verdict cannot be compared with one. The panel's
+/// own chrome (tabs, placeholders, status) is translated as everything else is.
 ///
 /// The honesty rule a row lives by: a row that is **always** answerable
 /// (Family / Version / Release / Size) shows its value; a row whose fact the
@@ -107,7 +115,7 @@ public enum MEASummary {
     /// that depends on it says so instead of giving a value the reading with
     /// it may change.
     public static func build(_ analysis: FirmwareAnalysis,
-                             pending: MEAPending = .nothing, in language: AppLanguage) -> [MEASummaryBlock] {
+                             pending: MEAPending = .nothing) -> [MEASummaryBlock] {
         var rows: [MEASummaryRow] = []
         let add = { (label: String, value: MEASummaryValue) in
             rows.append(MEASummaryRow(label, value))
@@ -273,7 +281,7 @@ public enum MEASummary {
             } else if let state = analysis.mfsState {
                 let name = MEAText.title(state.rawValue)
                 let evidence = analysis.mfsStateBasis.map {
-                    MEAText.fileSystemStateEvidence(state, $0, in: language)
+                    MEAText.fileSystemStateEvidence(state, $0)
                 } ?? ""
                 rows.append(MEASummaryRow(
                     "File System State",
@@ -302,11 +310,11 @@ public enum MEASummary {
                 let verdict = MEAText.manufacturingState(state, basis: basis)
                 let evidence = MEAText.manufacturingEvidence(state, basis: basis)
                 rows.append(MEASummaryRow(
-                    L("Manufacturing", in: language),
+                    "EOM on First Boot",
                     evidence.isEmpty ? .value(verdict) : .verdict(verdict, evidence: evidence),
                     tone: MEATones.manufacturingState(state)))
             } else if identified {
-                rows.append(MEASummaryRow(L("Manufacturing", in: language), .comingSoon))
+                rows.append(MEASummaryRow("EOM on First Boot", .comingSoon))
             }
         }
         // The board's own record, beside the image's verdict: the live
@@ -318,23 +326,15 @@ public enum MEASummary {
         if analysis.family == .csme, analysis.mfsVolume?.usesFTBL == true {
             if let lock = analysis.manufacturingLock {
                 rows.append(MEASummaryRow(
-                    L("Manufacturing Lock", in: language),
-                    .value(MEAText.manufacturingLock(lock, in: language)),
+                    "Manufacturing Lock",
+                    .value(MEAText.manufacturingLock(lock)),
                     tone: MEATones.manufacturingLock(lock)))
-            } else if pending.fileTable {
-                rows.append(MEASummaryRow(L("Manufacturing Lock", in: language), .pending))
-            } else if identified {
-                // Absent because the board never booted, or because the table
-                // that names the volume's files was not at hand: the first is
-                // a fact, the second is this reading's limit.
-                let files = analysis.mfsVolume?.files ?? []
-                let unreadable = !files.isEmpty
-                    && analysis.manufacturingBasis?.liveFilesResolved != true
+            } else {
+                // Not found is a dash, not a sentence: the row is the board's
+                // mark, and a board that has not made one simply has none.
                 rows.append(MEASummaryRow(
-                    L("Manufacturing Lock", in: language),
-                    .value(unreadable
-                        ? L("Not readable from this image", in: language)
-                        : L("Not recorded in this image", in: language))))
+                    "Manufacturing Lock",
+                    pending.fileTable ? .pending : .value("—")))
             }
         }
         // Boot Guard and the OEM public key hash — the two facts a dump carries
@@ -345,13 +345,13 @@ public enum MEASummary {
         // configured on some other machine.
         if analysis.family == .csme, analysis.version.major >= 11 {
             if let profile = analysis.bootGuardProfile {
-                rows.append(MEASummaryRow(L("Boot Guard", in: language),
+                rows.append(MEASummaryRow("Boot Guard",
                                           .value(MEAText.bootGuardProfile(profile)),
                                           tone: MEATones.bootGuardProfile(profile)))
             } else if identified {
                 rows.append(MEASummaryRow(
-                    L("Boot Guard", in: language),
-                    .value(L("No profile record in this image", in: language))))
+                    "Boot Guard",
+                    .value("No profile record in this image")))
             }
             // The reading says which of the four findings it is, so the row
             // shows wherever the engine has one; nil means a reading taken
@@ -367,19 +367,19 @@ public enum MEASummary {
             if let binding = analysis.hardwareBinding, analysis.version.major >= 13 {
                 let waits = pending.fileTable && binding == .notInImage
                 rows.append(MEASummaryRow(
-                    L("RPMC Hardware Binding", in: language),
+                    "RPMC Hardware Binding",
                     waits ? .pending
-                          : .value(MEAText.hardwareBinding(binding, in: language)),
+                          : .value(MEAText.hardwareBinding(binding)),
                     tone: waits ? .standard : MEATones.hardwareBinding(binding)))
             }
             if let key = analysis.oemPublicKeyHash {
-                rows.append(MEASummaryRow(L("OEM Public Key Hash", in: language),
-                                          .value(MEAText.oemPublicKeyHash(key, in: language)),
+                rows.append(MEASummaryRow("OEM Public Key Hash",
+                                          .value(MEAText.oemPublicKeyHash(key)),
                                           tone: .standard))
             } else if identified {
                 rows.append(MEASummaryRow(
-                    L("OEM Public Key Hash", in: language),
-                    .value(L("No key material in this image", in: language)),
+                    "OEM Public Key Hash",
+                    .value("No key material in this image"),
                     tone: .standard))
             }
         }
@@ -461,10 +461,10 @@ public enum MEASummary {
                           .value(issue.message))
         }
         if pending.huffman {
-            messages.append(MEASummaryRow(L("Module checks", in: language), .pending))
+            messages.append(MEASummaryRow("Module checks", .pending))
         }
         if !messages.isEmpty {
-            blocks.append(MEASummaryBlock(title: L("Messages", in: language), rows: messages))
+            blocks.append(MEASummaryBlock(title: "Messages", rows: messages))
         }
         return blocks
     }

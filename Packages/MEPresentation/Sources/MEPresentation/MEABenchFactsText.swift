@@ -41,12 +41,12 @@ extension MEAText {
     /// machine having been through End of Manufacturing, which is what
     /// committed the fuses; the value says which state, and the row's name
     /// says what it is about.
-    public static func manufacturingLock(_ lock: ManufacturingLock, in language: AppLanguage) -> String {
+    public static func manufacturingLock(_ lock: ManufacturingLock) -> String {
         switch lock {
-        case .locked: return L("Locked", in: language)
-        case .open: return L("Not locked", in: language)
+        case .locked: return "Locked"
+        case .open: return "Not locked"
         case .other(let byte):
-            return L("Unexpected value %1$@", in: language, String(format: "0x%02X", byte))
+            return String(format: "Unexpected value 0x%02X", byte)
         }
     }
 
@@ -106,7 +106,7 @@ extension MEAText {
     /// hardware and RPMC / RPMB binding. The value words are the tool's value
     /// class (`DisabledEnabledValues`), kept in every language as its option
     /// labels are.
-    public static func hardwareBinding(_ value: HardwareBinding, in language: AppLanguage) -> String {
+    public static func hardwareBinding(_ value: HardwareBinding) -> String {
         switch value {
         // The row is already named "RPMC Hardware Binding", so the value is
         // the finding alone: the tool's own option words, which stay English
@@ -114,22 +114,21 @@ extension MEAText {
         case .disabled: return "Disabled"
         case .enabled: return "Enabled"
         case .other(let byte):
-            return L("Unexpected value %1$@", in: language,
-                     String(format: "0x%02X", byte))
-        case .notInImage: return L("Not recorded in this image", in: language)
+            return String(format: "Unexpected value 0x%02X", byte)
+        case .notInImage: return "Not recorded in this image"
         }
     }
 
-    public static func oemPublicKeyHash(_ value: OEMKeyHash, in language: AppLanguage) -> String {
+    public static func oemPublicKeyHash(_ value: OEMKeyHash) -> String {
         switch value {
         case .hash(let hex):
             return spacedBytes(hex)
         case .allZeros:
-            return L("Not set (all zeros)", in: language)
+            return "Not set (all zeros)"
         case .erased:
-            return L("Not set (the area is erased)", in: language)
+            return "Not set (the area is erased)"
         case .unrecognized:
-            return L("Layout not recognized", in: language)
+            return "Layout not recognized"
         }
     }
 

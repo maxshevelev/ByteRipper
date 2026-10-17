@@ -637,7 +637,7 @@ import ToolModuleKit
                     .paragraphStyle: rowStyle,
                 ]))
                 // The words and the weight the panel gives the row.
-                let value = row.value.text(in: Localization.appLanguage)
+                let value = row.value.text
                 let emphasized = row.isEmphasized
                 text.append(NSAttributedString(string: value + "\n", attributes: [
                     .font: value.hasPrefix("0x")
@@ -994,7 +994,7 @@ import ToolModuleKit
     /// answer once the bridge reaches it, and so is a `.pending` one, which
     /// the reading under way will answer.
     private static func summaryField(_ row: MEASummaryRow) -> ToolFieldList.Field {
-        let text = row.value.text(in: Localization.appLanguage)
+        let text = row.value.text
         switch row.value {
         case .verdict(let verdict, let evidence):
             return .init(label: row.label,
