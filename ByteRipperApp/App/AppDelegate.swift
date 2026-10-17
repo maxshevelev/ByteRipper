@@ -72,6 +72,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // and so cannot know that a test run reads a suite of its own
         // (`AppDefaults`). Before anything draws, tell it.
         ToolPanelFont.defaults = AppDefaults.store
+        // A help popover is read beside a panel's rows and follows the same
+        // zoom; HelpUI sits under the panels' font and is told it here.
+        HelpPopoverLayout.textSize = { ToolPanelFont.size }
+        HelpPopoverLayout.textSizeDidChange = ToolPanelFont.zoomDidChangeNotification
         // Which language the app speaks, before anything says a word in it:
         // the menu bar below is built from translated strings, and so is every
         // window after it (`Design/LOCALIZATION.md`).
