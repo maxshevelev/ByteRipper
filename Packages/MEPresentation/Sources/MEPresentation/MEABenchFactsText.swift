@@ -36,6 +36,20 @@ extension MEAText {
         }
     }
 
+    /// The board's own record — the live `/home/mca/manuf_lock` — as the two
+    /// settled states or a byte this reading does not know. "Locked" is the
+    /// machine having been through End of Manufacturing, which is what
+    /// committed the fuses; the value says which state, and the row's name
+    /// says what it is about.
+    public static func manufacturingLock(_ lock: ManufacturingLock, in language: AppLanguage) -> String {
+        switch lock {
+        case .locked: return L("Locked", in: language)
+        case .open: return L("Not locked", in: language)
+        case .other(let byte):
+            return L("Unexpected value %1$@", in: language, String(format: "0x%02X", byte))
+        }
+    }
+
     /// What the Manufacturing verdict was read from, as short as it can be
     /// said: "EOM: off, descriptor: open".
     /// The row puts it in brackets after the verdict, and draws it in the

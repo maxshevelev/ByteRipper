@@ -40,13 +40,16 @@ import Foundation
 /// image a bench prepares for itself. The flag set with the descriptor open is
 /// the combination MFIT refuses to build.
 ///
-/// What the *board* has already done is deliberately not read. The live file
-/// system carries `/home/mca/eom` — MFIT's flag again, as a raw byte — and
-/// `/home/mca/manuf_lock`, which no MFIT settings database names; both read 1
-/// on a board whose engine has run and 0 in the image's own records, and what
-/// the platform meant by writing them is not documented (`Design/
-/// ME_STRUCTURES.md`). The question is about the machine the image is about to
-/// be written to, whose chipset is fresh, and neither byte bears on it.
+/// What the *board* has already done takes no part in this verdict: the
+/// question is about the machine the image is about to be written to. Two live
+/// bytes record it — `/home/mca/eom`, MFIT's flag as a raw byte, and
+/// `/home/mca/manuf_lock`, which no MFIT settings database names. The second
+/// is reported as its own fact (`ManufacturingLock`): on a board flashed an
+/// image whose first boot had nothing to close it read 0 after that boot, and
+/// on every factory dump at hand it reads 1, so it is the dump's one statement
+/// about whether the machine has been through End of Manufacturing
+/// (`reference/structures.md`, the live experiment). `eom` duplicates the flag
+/// and is read only to know the live records were found.
 ///
 /// The engine reads no fuses — those are burned into the chip and no dump
 /// carries them — and it never guesses: a firmware of a generation that does
@@ -66,7 +69,9 @@ enum ManufacturingDecoder {
         /// has been closed. Read only to tell that the file system was read at
         /// all; it takes no part in the verdict.
         static let eom = 0x1002_0000
-        /// `/home/mca/manuf_lock` — 1 byte, the manufacturing lock. Not read.
+        /// `/home/mca/manuf_lock` — 1 byte, the manufacturing lock: the
+        /// platform's record that it has been through End of Manufacturing.
+        /// `ManufacturingLock` says what it is taken to mean.
         static let manufLock = 0x1002_0100
     }
 
@@ -89,6 +94,16 @@ enum ManufacturingDecoder {
         /// image has an MFS volume but `FileTable.dat` is not in hand, so its
         /// files carry no File IDs. A missing database, not a finding.
         var liveFilesResolved: Bool = false
+    }
+
+    /// The board's own record (`/home/mca/manuf_lock`), as the model states
+    /// it: 1 locked, 0 open, any other byte one this reading does not know.
+    static func lock(_ byte: Int) -> ManufacturingLock {
+        switch byte {
+        case 0: return .open
+        case 1: return .locked
+        default: return .other(UInt8(truncatingIfNeeded: byte))
+        }
     }
 
     /// The verdict and what it was decided from.

@@ -309,6 +309,34 @@ public enum MEASummary {
                 rows.append(MEASummaryRow(L("Manufacturing", in: language), .comingSoon))
             }
         }
+        // The board's own record, beside the image's verdict: the live
+        // `/home/mca/manuf_lock`, which no build writes and no MFIT database
+        // names, says whether the machine the dump came from has been through
+        // End of Manufacturing — the state that committed its fuses. Shown on
+        // the file systems that carry such records; while the table that names
+        // its files is on the way, the row says it is loading.
+        if analysis.family == .csme, analysis.mfsVolume?.usesFTBL == true {
+            if let lock = analysis.manufacturingLock {
+                rows.append(MEASummaryRow(
+                    L("Manufacturing Lock", in: language),
+                    .value(MEAText.manufacturingLock(lock, in: language)),
+                    tone: MEATones.manufacturingLock(lock)))
+            } else if pending.fileTable {
+                rows.append(MEASummaryRow(L("Manufacturing Lock", in: language), .pending))
+            } else if identified {
+                // Absent because the board never booted, or because the table
+                // that names the volume's files was not at hand: the first is
+                // a fact, the second is this reading's limit.
+                let files = analysis.mfsVolume?.files ?? []
+                let unreadable = !files.isEmpty
+                    && analysis.manufacturingBasis?.liveFilesResolved != true
+                rows.append(MEASummaryRow(
+                    L("Manufacturing Lock", in: language),
+                    .value(unreadable
+                        ? L("Not readable from this image", in: language)
+                        : L("Not recorded in this image", in: language))))
+            }
+        }
         // Boot Guard and the OEM public key hash — the two facts a dump carries
         // about the boot chain, shown from CSME 11 on (Boot Guard's own
         // generation). The profile is a record the image either has or has not

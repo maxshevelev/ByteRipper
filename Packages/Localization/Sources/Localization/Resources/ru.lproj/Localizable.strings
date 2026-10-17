@@ -1689,3 +1689,7 @@
 "OEM section" = "OEM-секция";
 "RPMC Hardware Binding" = "RPMC Hardware Binding";
 "Unexpected value %1$@" = "Неожиданное значение %1$@";
+"Manufacturing Lock" = "Manufacturing Lock";
+"Locked" = "Locked";
+"Not locked" = "Not locked";
+"Not readable from this image" = "Из этого дампа не читается";
