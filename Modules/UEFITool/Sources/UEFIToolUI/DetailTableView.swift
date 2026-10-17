@@ -29,10 +29,13 @@ import UEFITool
 ///
 /// A table with sections (`UEFIDetailTable.Section`) draws each under a line
 /// of its own with a disclosure triangle, folded until the reader opens it;
-/// each section measures its columns over its own rows, so one long name
-/// widens its own section and not seventy others. Such a table has no header
-/// line of its own: each open section carries the column names over its
-/// rows, where a reader who has scrolled seventy words down still sees them.
+/// the rows of every section line up in the same columns, open or folded, so
+/// opening one never moves another. Such a table has no header line of its
+/// own: each open section carries the column names over its rows, where a
+/// reader who has scrolled seventy words down still sees them. Its first
+/// column is held to `firstColumnLimit(_:)`, and a name longer than that wraps
+/// onto a further line: one long name in seventy words would otherwise push
+/// every value of the table to the right.
 @MainActor final class DetailTableView: ToolSelectableRows {
     let table: UEFIDetailTable
     /// The header line, then the table's rows — under a section's line each,
@@ -50,6 +53,18 @@ import UEFITool
 
     static let columnSpacing: CGFloat = 14
     static let rowSpacing: CGFloat = 2
+
+    /// The widest a sectioned table's first column grows: as wide as nine
+    /// of its names in ten, measured as they are drawn — so it follows the
+    /// zoom and the table's own names. In a strap table the tenth is the long
+    /// tail (`CSME_CSE_SSS_EMUL_HVM_OVR_SOC_DEV_REUSE_PROHIBITED`) that
+    /// would otherwise set the width of all seventy words.
+    static func firstColumnLimit(_ widths: [CGFloat]) -> CGFloat {
+        let sorted = widths.sorted()
+        guard !sorted.isEmpty else { return 0 }
+        let index = Int((Double(sorted.count) * 0.9).rounded(.up)) - 1
+        return sorted[min(max(0, index), sorted.count - 1)]
+    }
 
     /// `openSections` are the sections drawn open; `onToggleSection` hears a
     /// section opened or folded, for the panel to keep it so.
@@ -97,6 +112,10 @@ import UEFITool
         widths = (0..<columns).map { column in
             rows.map { $0.naturalWidth(of: column) }.max() ?? 0
         }
+        if !table.sections.isEmpty, !widths.isEmpty {
+            widths[0] = min(widths[0], Self.firstColumnLimit(fieldRows.map { $0.naturalWidth(of: 0) }))
+            rows.forEach { $0.wrapFirstCell(at: widths[0]) }
+        }
         // Under sections the columns start where a section's words do, past
         // its triangle, so a section's rows read as inside it.
         let indent = table.sections.isEmpty ? 0 : DetailTableRow.disclosureWidth(for: body)
@@ -112,7 +131,7 @@ import UEFITool
 
         if !table.sections.isEmpty {
             buildSections(fieldRows: fieldRows, indent: indent, body: body, bold: bold,
-                          onFollow: onFollow)
+                          offsets: offsets, onFollow: onFollow)
         }
         rows.forEach(addSubview)
         applyOpenSections()
@@ -128,12 +147,11 @@ import UEFITool
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// The rows in order with a section's line before its rows, each
-    /// section's columns measured over its own rows, and the section lines'
-    /// own columns: the title, what the rows share, and the address, each as
-    /// wide as its widest so the addresses line up.
+    /// The rows in order with a section's line before its rows, and the
+    /// section lines' own columns: the title, what the rows share, and the
+    /// address, each as wide as its widest so the addresses line up.
     private func buildSections(fieldRows: [DetailTableRow], indent: CGFloat,
-                               body: NSFont, bold: NSFont,
+                               body: NSFont, bold: NSFont, offsets: [CGFloat],
                                onFollow: @escaping (UEFIDetailTable.Target) -> Void) {
         let header = rows[0]
         var ordered: [DetailTableRow] = []
@@ -156,19 +174,11 @@ import UEFITool
             // The column names, over this section's rows.
             let names = DetailTableRow(cells: header.cells, target: nil, linkColumn: nil,
                                        onFollow: onFollow)
-            let own = [names] + section.rows.filter { $0 < fieldRows.count }.map { fieldRows[$0] }
-            let ownWidths = (0..<header.cells.count).map { column in
-                own.map { $0.naturalWidth(of: column) }.max() ?? 0
-            }
-            var at = indent
-            let ownOffsets = ownWidths.map { width -> CGFloat in
-                defer { at += width + Self.columnSpacing }
-                return at
-            }
-            own.forEach { $0.setColumns(offsets: ownOffsets, widths: ownWidths) }
-            sectionWidths.append(at - Self.columnSpacing)
-            for row in own {
-                ordered.append(row)
+            names.setColumns(offsets: offsets, widths: widths)
+            ordered.append(names)
+            owners.append(index)
+            for row in section.rows where row < fieldRows.count {
+                ordered.append(fieldRows[row])
                 owners.append(index)
             }
         }
@@ -183,12 +193,13 @@ import UEFITool
         sectionRows.forEach { $0.setColumns(offsets: lineOffsets, widths: lineWidths) }
         rows = ordered
         sectionOfRow = owners
-        linesWidth = x - Self.columnSpacing
+        // The table is as wide as the wider of its columns and its lines.
+        let linesWidth = x - Self.columnSpacing
+        let columnsWidth = widths.reduce(0, +) + Self.columnSpacing * CGFloat(max(0, widths.count - 1))
+        if linesWidth > columnsWidth, !widths.isEmpty {
+            widths[widths.count - 1] += linesWidth - columnsWidth
+        }
     }
-
-    /// Each section's width, its columns laid side by side, and the lines'.
-    private var sectionWidths: [CGFloat] = []
-    private var linesWidth: CGFloat = 0
 
     /// Shows the rows of the open sections and hides the rest.
     private func applyOpenSections() {
@@ -224,16 +235,10 @@ import UEFITool
     override var selectableRows: [any ToolSelectableRow] { visibleRows }
 
     override var intrinsicContentSize: NSSize {
-        // Under sections, as wide as the lines and the open sections: a long
-        // name folded away does not widen the table.
-        let width = table.sections.isEmpty
-            ? widths.reduce(0, +) + Self.columnSpacing * CGFloat(max(0, widths.count - 1))
-            : table.sections.indices
-                .filter { openSections.contains(table.sections[$0].title) }
-                .map { sectionWidths[$0] }
-                .reduce(linesWidth, max)
-        let count = visibleRows.count
-        let height = CGFloat(count) * rowHeight + CGFloat(max(0, count - 1)) * Self.rowSpacing
+        let width = widths.reduce(0, +) + Self.columnSpacing * CGFloat(max(0, widths.count - 1))
+        let shown = visibleRows
+        let height = shown.map { $0.height(atLeast: rowHeight) }.reduce(0, +)
+            + CGFloat(max(0, shown.count - 1)) * Self.rowSpacing
         return NSSize(width: ceil(width), height: height)
     }
 
@@ -245,8 +250,9 @@ import UEFITool
         var y: CGFloat = 0
         for (index, row) in shown.enumerated() {
             let spacing = index == shown.count - 1 ? 0 : Self.rowSpacing
-            row.frame = NSRect(x: 0, y: y, width: bounds.width, height: rowHeight + spacing)
-            y += rowHeight + spacing
+            let height = row.height(atLeast: rowHeight)
+            row.frame = NSRect(x: 0, y: y, width: bounds.width, height: height + spacing)
+            y += height + spacing
         }
     }
 }
@@ -293,6 +299,26 @@ import UEFITool
     private let onFollow: (UEFIDetailTable.Target) -> Void
     private var offsets: [CGFloat] = []
     private var widths: [CGFloat] = []
+    /// The first cell laid out over several lines, where it is wider than
+    /// its column (`wrapFirstCell`). Nil on a row whose first cell fits.
+    private var wrapped: WrappedCell?
+
+    /// Lays the first cell out in `width`, over as many lines as it needs,
+    /// where it is wider than that; a cell that fits stays one line.
+    func wrapFirstCell(at width: CGFloat) {
+        guard !cells.isEmpty, naturalWidth(of: 0) > width else {
+            wrapped = nil
+            return
+        }
+        wrapped = WrappedCell(strings[0], width: width)
+        needsDisplay = true
+    }
+
+    /// How tall the row's text is: one line, or the lines its first cell
+    /// wraps onto.
+    func height(atLeast line: CGFloat) -> CGFloat {
+        max(line, wrapped?.height ?? 0)
+    }
 
     init(cells: [Cell], target: UEFIDetailTable.Target?, linkColumn: Int?,
          onFollow: @escaping (UEFIDetailTable.Target) -> Void) {
@@ -370,6 +396,10 @@ import UEFITool
         for column in cells.indices {
             let cellRect = rect(of: column)
             guard cellRect.width > 0, cellRect.intersects(dirtyRect) else { continue }
+            if column == 0, let wrapped {
+                wrapped.draw(at: NSPoint(x: cellRect.minX, y: 0))
+                continue
+            }
             strings[column].draw(with: cellRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
         }
     }
@@ -402,6 +432,18 @@ import UEFITool
         for column in selected.lowerBound.part...last {
             let cellRect = rect(of: column)
             let from = column == selected.lowerBound.part ? selected.lowerBound.index : 0
+            if column == 0, let wrapped {
+                let to = column == selected.upperBound.part ? selected.upperBound.index : length(0)
+                var rects = wrapped.rects(from: from, to: to, at: cellRect.origin)
+                // Running on into the next cell: the band reaches it, on the
+                // line the cell ends on.
+                if column < last, offsets.count > 1, let end = rects.last {
+                    rects[rects.count - 1] = NSRect(x: end.minX, y: end.minY,
+                                                    width: offsets[1] - end.minX, height: end.height)
+                }
+                rects.forEach { $0.fill() }
+                continue
+            }
             let x0 = cellRect.minX + offset(column, from)
             let x1: CGFloat
             if column < last, column + 1 < offsets.count {
@@ -428,6 +470,9 @@ import UEFITool
         let x = point.x
         guard !cells.isEmpty, !offsets.isEmpty else { return startMark }
         let column = cells.indices.last { $0 < offsets.count && x >= offsets[$0] } ?? 0
+        if column == 0, let wrapped {
+            return Mark(part: 0, index: wrapped.index(at: NSPoint(x: x - offsets[0], y: point.y)))
+        }
         let local = x - offsets[column]
         guard local > 0 else { return Mark(part: column, index: 0) }
         guard local < naturalWidth(of: column) else { return Mark(part: column, index: length(column)) }
@@ -546,6 +591,89 @@ import UEFITool
         guard let target else { return false }
         onFollow(target)
         return true
+    }
+}
+
+/// A cell too wide for its column, laid out by TextKit over several lines —
+/// which also says where each character it drew has landed, so a click
+/// selects the one it was on.
+///
+/// A strap field's name has no spaces to break at — `CSME_CSE_SSS_EMUL_EN` —
+/// so it is broken after an underscore, where its words end: what is laid out
+/// carries a zero-width space after each one, and the indices are mapped back
+/// to the cell's own text, which is what is selected and copied.
+@MainActor private final class WrappedCell {
+    private let text: String
+    private let storage: NSTextStorage
+    private let layout = NSLayoutManager()
+    private let container: NSTextContainer
+    /// Where each break opportunity was added, as an index into the cell's
+    /// own text: the place after each underscore.
+    private let breaks: [Int]
+
+    init(_ string: NSAttributedString, width: CGFloat) {
+        text = string.string
+        let shown = NSMutableAttributedString(attributedString: string)
+        var breaks: [Int] = []
+        let units = Array(text.utf16)
+        for (index, unit) in units.enumerated().reversed() where unit == 0x5F && index < units.count - 1 {
+            let attributes = shown.attributes(at: index, effectiveRange: nil)
+            shown.insert(NSAttributedString(string: "\u{200B}", attributes: attributes), at: index + 1)
+            breaks.append(index + 1)
+        }
+        self.breaks = breaks.reversed()
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byWordWrapping
+        shown.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: shown.length))
+        storage = NSTextStorage(attributedString: shown)
+        container = NSTextContainer(size: NSSize(width: width, height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = 0
+        layout.addTextContainer(container)
+        storage.addLayoutManager(layout)
+    }
+
+    var height: CGFloat {
+        layout.ensureLayout(for: container)
+        return ceil(layout.usedRect(for: container).height)
+    }
+
+    func draw(at origin: NSPoint) {
+        layout.drawGlyphs(forGlyphRange: layout.glyphRange(for: container), at: origin)
+    }
+
+    /// An index of the cell's text as an index of what is laid out.
+    private func shown(_ index: Int) -> Int {
+        index + breaks.filter { $0 <= index }.count
+    }
+
+    /// An index of what is laid out as one of the cell's text.
+    private func own(_ index: Int) -> Int {
+        index - breaks.enumerated().filter { $0.element + $0.offset < index }.count
+    }
+
+    /// The place nearest `point`, in the cell's own coordinates.
+    func index(at point: NSPoint) -> Int {
+        let count = (text as NSString).length
+        guard count > 0, point.y >= 0 else { return 0 }
+        guard point.y < height else { return count }
+        var fraction: CGFloat = 0
+        let glyph = layout.glyphIndex(for: point, in: container, fractionOfDistanceThroughGlyph: &fraction)
+        let index = layout.characterIndexForGlyph(at: glyph) + (fraction > 0.5 ? 1 : 0)
+        return min(max(0, own(index)), count)
+    }
+
+    /// What a selection from `from` to `to` covers, line by line, placed at
+    /// `origin`.
+    func rects(from: Int, to: Int, at origin: NSPoint) -> [NSRect] {
+        guard to > from else { return [] }
+        let range = NSRange(location: shown(from), length: shown(to) - shown(from))
+        let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        var rects: [NSRect] = []
+        layout.enumerateEnclosingRects(forGlyphRange: glyphs, withinSelectedGlyphRange: glyphs,
+                                       in: container) { rect, _ in
+            rects.append(rect.offsetBy(dx: origin.x, dy: origin.y))
+        }
+        return rects
     }
 }
 
