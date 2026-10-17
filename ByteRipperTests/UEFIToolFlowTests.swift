@@ -1837,6 +1837,21 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(shown("SPI_ec_max_freq")?.texts.prefix(2), ["SPI_ec_max_freq", "3–5"])
         XCTAssertNil(shown("SPI_DMI_REQID"), "another word stays folded")
 
+        // The first column is held to what nine names in ten need; a longer
+        // name wraps under itself, and is still one name to select and copy.
+        let csme = try XCTUnwrap(table.rows.first { $0.disclosure != nil && $0.texts[1] == "CSME_CSE" })
+        XCTAssertTrue(csme.accessibilityPerformPress())
+        window?.layoutIfNeeded()
+        let long = "CSME_CSE_SSS_EMUL_HVM_OVR_SOC_DEV_REUSE_PROHIBITED"
+        let wrapped = try XCTUnwrap(shown(long))
+        let plain = try XCTUnwrap(shown("CSME_CSE_SSS_EMUL_EN"))
+        XCTAssertGreaterThan(wrapped.frame.height, plain.frame.height * 1.5, "the long name takes two lines")
+        XCTAssertEqual(wrapped.text(in: wrapped.startMark..<ToolTextMark(part: 0, index: long.utf16.count)), long,
+                       "and copies as the name it is")
+        let fields = table.rows.filter { $0.disclosure == nil && $0.texts.count == 4 && $0.texts[0] != "Field" }
+        let fitting = fields.filter { $0.naturalWidth(of: 0) <= DetailTableView.firstColumnLimit(fields.map { $0.naturalWidth(of: 0) }) }
+        XCTAssertGreaterThanOrEqual(Double(fitting.count) / Double(fields.count), 0.9)
+
         outline.selectRowIndexes(IndexSet(integer: row + 1), byExtendingSelection: false)
         followUEFISelection(controller)
         outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
