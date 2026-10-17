@@ -1274,6 +1274,26 @@ public actor MEFirmwareAnalyzer {
         // reading needs the identity the engine already worked out.
         let oemPublicKeyHash = BootGuardReader.oemPublicKeyHash(in: uepArea ?? Data(),
                                                                 major: identity.major)
+        // The hardware binding — Flash Image Tool's "Hardware Binding Enabled",
+        // which its help calls the FPF hardware and RPMC / RPMB binding. It is
+        // not a setting of any map the panel reads: the tool keeps it in a file
+        // of its own, one byte of `DisabledEnabledValues`. The file system's
+        // copy is the state in force, the build's the fallback; a volume and a
+        // partition with neither leaves it `notInImage`, which is a finding and
+        // not a nil.
+        let bindingPath = "/home/bup/bup_sku/hw_binding"
+        let bindingBytes = Self.fileBytes(path: bindingPath, volume: mfsInfo, table: fileTable)
+            ?? Self.recordBytes(path: bindingPath, fitc: oemConfiguration, table: fileTable,
+                                mfsInfo: mfsInfo, region: region, baseOffset: baseOffset)
+        let hardwareBinding: HardwareBinding = bindingBytes.flatMap { bytes in
+            bytes.first.map { byte in
+                switch byte {
+                case 0x00: return .disabled
+                case 0x01: return .enabled
+                default: return .other(byte)
+                }
+            }
+        } ?? .notInImage
         let oemCustomized = OEMDetector.oemCustomized(
             fpt: fpt, bootPartitions: bootPartitions, codePartition: codePartition,
             in: region, baseOffset: baseOffset)
@@ -1415,6 +1435,7 @@ public actor MEFirmwareAnalyzer {
             platformFamily: platformFamily,
             configuration: configuration.isEmpty ? nil : configuration,
             bootGuardProfile: bootGuardProfile,
+            hardwareBinding: hardwareBinding,
             oemPublicKeyHash: oemPublicKeyHash,
             // Row 12a is CSME 11's alone, the way upstream gates it, so the
             // token is read only there — a later family's row cell 4 means
@@ -2125,5 +2146,50 @@ public actor MEFirmwareAnalyzer {
             skuPlatform: clientSystemInfo?.skuPlatform,
             fwSku: fwSku,
             databaseRow: identity.databaseName)) ?? ""
+    }
+
+    /// The bytes of one file the ME file system carries, by its path — the
+    /// file itself, not a setting of a map. Nil where the volume has none, or
+    /// the file table cannot name it.
+    private static func fileBytes(path: String, volume: MFSVolumeInfo?,
+                                  table: FileTable?) -> Data? {
+        guard let volume, let table, !volume.files.isEmpty else { return nil }
+        let resolution = table.resolve(platform: volume.ftblPlatform,
+                                       dictionary: volume.ftblDictionary)
+        let naming = table.records(namingFileIndices: Set(volume.files.map(\.index)),
+                                   platform: resolution.platform,
+                                   dictionary: resolution.dictionary)
+        for file in volume.files {
+            guard let entry = naming[file.index],
+                  let id = Int(entry.fileID, radix: 16),
+                  table.record(withFileID: id, platform: resolution.platform,
+                               dictionary: resolution.dictionary)?.path == path
+            else { continue }
+            // The file's own bytes; any integrity trailer follows them, and the
+            // byte this is read for is the first one.
+            return file.content
+        }
+        return nil
+    }
+
+    /// The bytes the OEM Configuration partition keeps of one file, by its
+    /// path — the build's copy of the same file `fileBytes` reads from the
+    /// volume.
+    private static func recordBytes(path: String, fitc: OEMConfiguration?,
+                                    table: FileTable?, mfsInfo: MFSVolumeInfo?,
+                                    region: Data, baseOffset: Int) -> Data? {
+        guard let fitc, let payload = fitc.payloadOffset,
+              let records = fitc.recordsByID, let table else { return nil }
+        let resolution = table.resolve(platform: mfsInfo?.ftblPlatform ?? -1,
+                                       dictionary: mfsInfo?.ftblDictionary ?? -1)
+        for record in records {
+            guard table.record(withFileID: record.fileID, platform: resolution.platform,
+                               dictionary: resolution.dictionary)?.path == path else { continue }
+            let at = payload - baseOffset + record.offset
+            guard at >= 0, record.size > 0, at + record.size <= region.count else { continue }
+            let start = region.startIndex + at
+            return region.subdata(in: start..<(start + record.size))
+        }
+        return nil
     }
 }
