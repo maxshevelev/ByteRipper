@@ -15,10 +15,11 @@ final class ConfigurationMapTests: XCTestCase {
         XCTAssertEqual(MEConfigurationMap.forME(major: 14)?.name, MEConfigurationMap.csme14.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 15)?.name, MEConfigurationMap.csme15.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 16)?.name, MEConfigurationMap.csme16.name)
+        XCTAssertEqual(MEConfigurationMap.forME(major: 18)?.name, MEConfigurationMap.csme18.name)
         // A generation nobody has mapped reads nothing rather than another
         // generation's offsets.
         XCTAssertNil(MEConfigurationMap.forME(major: 12))
-        XCTAssertNil(MEConfigurationMap.forME(major: 18))
+        XCTAssertNil(MEConfigurationMap.forME(major: 17))
         XCTAssertNil(MEConfigurationMap.forME(major: 7))
     }
 
@@ -83,6 +84,43 @@ final class ConfigurationMapTests: XCTestCase {
         let ports = try XCTUnwrap(map.file(at: "/home/pavp/hdcp_ports"))
         XCTAssertEqual(ports.settings.map(\.name), ["Hdcp5kedisp1"])
         XCTAssertNil(map.file(at: "/home/icc/hash"))
+    }
+
+    /// The 18 map is MFIT 18's rewritten database: `<nvar>` places and
+    /// `<ui_item>` words. Its whole-file settings — the ones the tool states
+    /// as `length="dynamic"` in a file that is one setting — are read at
+    /// offset 0, and a setting its platform documents call two different
+    /// kinds is dropped.
+    func testTheEighteenMapIsMfitsRewrittenDatabase() throws {
+        let map = MEConfigurationMap.csme18
+        XCTAssertEqual(map.files.count, 32)
+        XCTAssertEqual(map.files.flatMap(\.settings).count, 67)
+
+        let binding = try XCTUnwrap(map.file(at: "/home/bup/bup_sku/hw_binding")?
+            .settings.first { $0.name == "HwBindingEn" })
+        XCTAssertEqual(binding.offset, 0)
+        XCTAssertEqual(binding.length, 1, "the file is the setting")
+        XCTAssertEqual(binding.label, "Hardware Binding Enabled")
+        XCTAssertEqual(binding.options, [0: "Disabled", 1: "Enabled"])
+
+        let eom = try XCTUnwrap(map.file(at: "/home/mca/eom_config")?.settings
+            .first { $0.name.hasPrefix("EomFirstBootEnabled") })
+        XCTAssertEqual(eom.bits, 0...0)
+        XCTAssertEqual(eom.label, "EOM on First Boot Enabled")
+
+        let lan = try XCTUnwrap(map.file(at: "/home/policy/cfgmgr/cfg_rules")?.settings
+            .first { $0.name == "MELanPowerWell" })
+        XCTAssertEqual(lan.label, "LAN Power Well")
+        XCTAssertEqual(lan.options?[3], "SLP_LAN#")
+
+        XCTAssertNil(map.files.flatMap(\.settings).first { $0.name == "IshSupported" },
+                     "the platform documents call it two different kinds")
+        for file in map.files {
+            for setting in file.settings {
+                XCTAssertGreaterThan(setting.length, 0, setting.name)
+                XCTAssertGreaterThanOrEqual(setting.offset, 0, setting.name)
+            }
+        }
     }
 
     /// The 16 map is merged from three builds: the settings 16.1.42 adds are
@@ -203,9 +241,11 @@ final class ConfigurationMapTests: XCTestCase {
         XCTAssertNotEqual(MEConfigurationMap.forME(major: 14, family: .desktop)?.name,
                           MEConfigurationMap.forME(major: 14, family: .mobile)?.name)
 
-        // MFIT's 16 map serves both halves.
+        // MFIT's 16 map serves both halves, and 18's does too.
         XCTAssertEqual(MEConfigurationMap.forME(major: 16, family: .desktop)?.name,
                        MEConfigurationMap.forME(major: 16, family: .mobile)?.name)
+        XCTAssertEqual(MEConfigurationMap.forME(major: 18, family: .desktop)?.name,
+                       MEConfigurationMap.forME(major: 18, family: .mobile)?.name)
         // And a dump that did not say which half it is reads as the mobile one,
         // which is what every map was before the choice existed.
         XCTAssertEqual(MEConfigurationMap.forME(major: 15)?.name, mobile.name)

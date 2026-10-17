@@ -19,14 +19,15 @@ final class MFSTests: XCTestCase {
     /// One System page whose first chunk index de-obfuscates to 0 and carries a
     /// volume header, plus one Data page (first chunk index 1, all slots unused).
     /// Returns the MFS volume bytes with the volume chunk set from `volumeChunk`.
-    private static func makeVolume(_ volumeChunk: Data) -> Data {
+    private static func makeVolume(_ volumeChunk: Data,
+                                   signature: UInt32 = 0xAA55_7887) -> Data {
         let pageSize = 0x2000
         let pageHeaderSize = 0x12
         let chunkAllSize = 0x42
 
         // System page.
         var system = Data(repeating: 0xFF, count: pageSize)
-        system.replaceSubrange(0..<4, with: le32(0xAA55_7887))
+        system.replaceSubrange(0..<4, with: le32(signature))
         system.replaceSubrange(4..<8, with: le32(1))        // PageNumber
         system.replaceSubrange(8..<12, with: le32(0))       // EraseCount
         system.replaceSubrange(12..<14, with: le16(2))      // NextErasePage
@@ -101,6 +102,21 @@ final class MFSTests: XCTestCase {
         XCTAssertEqual(info.ftblReserved, 0xABCD)
         XCTAssertTrue(info.usesFTBL)
         XCTAssertEqual(info.computedVolumeSize, (1 + 122) * 0x40)
+    }
+
+    func testASystemPagesErasedTagStillGivesTheVolumeHeader() throws {
+        // CSME 18's first System page is written with its signature reading
+        // zero — page number, FirstChunkIndex and the index array are there,
+        // and its chunk 0 is the volume header (HP EliteBook 630 G11,
+        // 18.0.10.2288, MFS @0x3D9000). A scratch page's indexes are not
+        // trusted in general: only a page that turns out to carry the volume
+        // header is taken.
+        let region = Self.makeVolume(Self.makeVolumeChunk(), signature: 0)
+        let info = try XCTUnwrap(MFSParser.parse(in: region, offset: 0, size: region.count))
+        XCTAssertTrue(info.volumeSignatureValid)
+        XCTAssertEqual(info.systemPageCount, 1)
+        XCTAssertEqual(info.fileRecordCount, 7)
+        XCTAssertEqual(info.ftblDictionary, 0x0A)
     }
 
     func testLegacyVolumeWithoutFTBLFlags() throws {
