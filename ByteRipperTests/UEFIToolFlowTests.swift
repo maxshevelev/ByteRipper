@@ -1732,7 +1732,7 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertGreaterThan(lastOfOpen.frame.height, middle.frame.height + 2,
                              "the open section's last row keeps a gap under it")
 
-        // The first column is held to what nine names in ten need; a longer
+        // The first column is held to what nineteen names in twenty need; a longer
         // name wraps under itself, and is still one name to select and copy.
         // The width is a constant chosen from the tables' names, so this also
         // says it still fits them.
@@ -1747,7 +1747,7 @@ final class UEFIToolFlowTests: XCTestCase {
                        "and copies as the name it is")
         let fields = table.rows.filter { $0.disclosure == nil && $0.texts.count == 4 && $0.texts[0] != "Field" }
         let fitting = fields.filter { $0.naturalWidth(of: 0) <= DetailTableView.firstColumnLimit }
-        XCTAssertGreaterThanOrEqual(Double(fitting.count) / Double(fields.count), 0.9)
+        XCTAssertGreaterThanOrEqual(Double(fitting.count) / Double(fields.count), 0.95)
 
         outline.selectRowIndexes(IndexSet(integer: row + 1), byExtendingSelection: false)
         followUEFISelection(controller)
