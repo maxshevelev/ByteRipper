@@ -58,11 +58,29 @@ public enum MEATones {
     // verdict — so it is drawn as an ordinary value, exactly as the File System
     // State's basis is. The verdict's own colour sits on the row above it.
 
-    // The Boot Guard row has no tone of its own, deliberately: a profile is a
-    // number the image carries, not a state the platform is in — and green for
-    // "Boot Guard is off" read as a verdict about the board rather than about
-    // the setting, while whatever a level means for an edit has to be read in
-    // the help rather than guessed from a colour. It is an ordinary value, and
-    // "no profile record in this image" is the same ordinary value said with
-    // other words.
+    /// The RPMC Hardware Binding row's tone. The tool's two values are both
+    /// settled states, and they read as the bench needs them: **Disabled** —
+    /// the SPI part is not bound to the chipset, which is the state a part can
+    /// be replaced in — is green; **Enabled** is the caution the File System
+    /// State draws for `Initialized`, a state that has been committed to and
+    /// that the board now enforces. A byte the tool's class does not name, and
+    /// an image that does not record one, are ordinary values: neither says
+    /// which state the board is in.
+    public static func hardwareBinding(_ binding: HardwareBinding) -> ToolValueTone {
+        switch binding {
+        case .disabled: return .good
+        case .enabled: return .caution
+        case .other, .notInImage: return .standard
+        }
+    }
+
+    /// The Boot Guard row's tone. Profile 0 — `No_FVME`, the boot chain is not
+    /// verifying or measuring anything — is green. Every other profile is a
+    /// state the board has been committed to, and reads as the caution the
+    /// File System State draws for `Initialized`; the number itself still says
+    /// which, and what a level means for an edit is the help's to explain, not
+    /// the colour's. An image with no profile record keeps the ordinary tone.
+    public static func bootGuardProfile(_ profile: BootGuardProfile) -> ToolValueTone {
+        profile == .noFVME ? .good : .caution
+    }
 }

@@ -122,16 +122,19 @@ public enum MEACurator {
             // The file is found through `FileTable.dat`, so a reading taken
             // without it cannot have established that the image does not
             // record one — that row says it is still loading.
+            let waits = pending.fileTable && binding == .notInImage
             fields.append(MEAField(
                 L("RPMC Hardware Binding", in: language),
-                pending.fileTable && binding == .notInImage
-                    ? L("Loading…", in: language)
-                    : MEAText.hardwareBinding(binding, in: language)))
+                waits ? L("Loading…", in: language)
+                      : MEAText.hardwareBinding(binding, in: language),
+                tone: waits ? .standard : MEATones.hardwareBinding(binding)))
         }
         if a.family == .csme, a.version.major >= 11 {
-            fields.append(MEAField(L("Boot Guard", in: language),
-                                   a.bootGuardProfile.map(MEAText.bootGuardProfile)
-                                       ?? L("No profile record in this image", in: language)))
+            fields.append(MEAField(
+                L("Boot Guard", in: language),
+                a.bootGuardProfile.map(MEAText.bootGuardProfile)
+                    ?? L("No profile record in this image", in: language),
+                tone: a.bootGuardProfile.map(MEATones.bootGuardProfile) ?? .standard))
             if let key = a.oemPublicKeyHash {
                 fields.append(MEAField(L("OEM Public Key Hash", in: language),
                                        MEAText.oemPublicKeyHash(key, in: language)))

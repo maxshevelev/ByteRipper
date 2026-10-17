@@ -913,8 +913,14 @@ final class MEASummaryTests: XCTestCase {
                        .value("Unexpected value 0x02"))
         XCTAssertEqual(value("RPMC Hardware Binding", in: try rows(.notInImage, major: 16)),
                        .value("Not recorded in this image"))
-        // A reading, not a verdict: the row carries no tone either way.
-        XCTAssertEqual(tone("RPMC Hardware Binding", in: try rows(.enabled, major: 15)), .standard)
+        // The two settled states read as a bench needs them: Disabled — the
+        // part is not bound — is green, and Enabled is the caution the File
+        // System State draws for Initialized. A byte the tool does not name
+        // and an absence are ordinary values.
+        XCTAssertEqual(tone("RPMC Hardware Binding", in: try rows(.disabled, major: 15)), .good)
+        XCTAssertEqual(tone("RPMC Hardware Binding", in: try rows(.enabled, major: 15)), .caution)
+        XCTAssertEqual(tone("RPMC Hardware Binding", in: try rows(.other(0x02), major: 16)), .standard)
+        XCTAssertEqual(tone("RPMC Hardware Binding", in: try rows(.notInImage, major: 16)), .standard)
         // CSME 12 has no such setting: no row, rather than one that can only
         // say the image does not carry it.
         XCTAssertNil(value("RPMC Hardware Binding", in: try rows(.notInImage, major: 12)))
@@ -967,9 +973,9 @@ final class MEASummaryTests: XCTestCase {
         // It will close: the tone the File System State draws for Initialized.
         XCTAssertEqual(tone("Manufacturing", in: rows), .caution)
         XCTAssertEqual(value("Boot Guard", in: rows), .value("5 - FVME"))
-        // The row carries no tone: a profile is a number the image holds, not a
-        // state the platform is in.
-        XCTAssertEqual(tone("Boot Guard", in: rows), .standard)
+        // A profile the boot chain is committed to: the caution the File
+        // System State draws for Initialized.
+        XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
         XCTAssertEqual(value("OEM Public Key Hash", in: rows),
                        .value(Array(repeating: "05", count: 48).joined(separator: " ")))
         // One line for a copy: the verdict, then what it was read from in
@@ -995,9 +1001,8 @@ final class MEASummaryTests: XCTestCase {
                        .verdict("Will close on the EOM flag",
                                 evidence: "EOM: on, descriptor: locked"))
         XCTAssertEqual(tone("Manufacturing", in: tableRows(willClose)), .caution)
-        // Profile 0 and profile 5 read alike: the row is the image's setting,
-        // not a verdict about the board.
-        XCTAssertEqual(tone("Boot Guard", in: tableRows(willClose)), .standard)
+        // Profile 0 verifies nothing: the one green profile.
+        XCTAssertEqual(tone("Boot Guard", in: tableRows(willClose)), .good)
 
         let willNotClose = try analysis([
             "family": "csme", "manifest": manifestJSON(),
@@ -1040,7 +1045,8 @@ final class MEASummaryTests: XCTestCase {
                        "Will close on the descriptor's rights (descriptor: locked)")
         XCTAssertNil(a.manufacturingBasis?.flexible)
         XCTAssertEqual(value("Boot Guard", in: rows), .value("4 - FVE"))
-        XCTAssertEqual(tone("Boot Guard", in: rows), .standard)
+        // A profile the boot chain is committed to: the Initialized caution.
+        XCTAssertEqual(tone("Boot Guard", in: rows), .caution)
         // CSME 12 with a zeroed key field: a finding of its own, not silence.
         XCTAssertEqual(value("OEM Public Key Hash", in: rows), .value("Not set (all zeros)"))
 
