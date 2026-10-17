@@ -1675,6 +1675,55 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertTrue(strapsShown(), "and they stay open on the way back")
     }
 
+    /// Where the chipset's layout of the section is known, its fields fall
+    /// into a folded section per strap word, under a line that names the word
+    /// and what its fields share; a click opens one, and it stays open on the
+    /// next node and back.
+    func testTheStrapFieldsFoldUnderTheirWord() throws {
+        var image = UEFITestImage.intelImage()
+        image[0x1A] = 0x20                  // FPSBA: the strap words at 0x200
+        image[0x1B] = 70                    // seventy of them: a layout the tool has
+        let controller = try open(image)
+        let outline = try outline()
+        let panel = try XCTUnwrap(controller.tools.panel)
+        _ = try expandRow(0)
+        let row = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { (try? node(atRow: $0).kind) == .flashDescriptor })
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        followUEFISelection(controller)
+        window?.layoutIfNeeded()
+        try XCTUnwrap(descendants(of: panel, NSButton.self)
+            .first { $0.bezelStyle == .disclosure && $0.accessibilityLabel() == "PCH straps" })
+            .performClick(nil)
+        window?.layoutIfNeeded()
+
+        func shown(_ first: String) -> DetailTableRow? {
+            descendants(of: panel, DetailTableRow.self)
+                .first { $0.texts.first == first && !$0.isHiddenOrHasHiddenAncestor }
+        }
+        let line = try XCTUnwrap(shown("PCHSTRP22"), "a line per word")
+        XCTAssertEqual(line.texts, ["PCHSTRP22", "SPI", "0x258"])
+        XCTAssertEqual(line.disclosure, false)
+        XCTAssertNil(shown("SPI_ec_max_freq"), "its fields folded under it")
+        let table = try XCTUnwrap(descendants(of: panel, DetailTableView.self)
+            .first { $0.rows.contains { $0 === line } })
+        XCTAssertEqual(table.rows[0].texts, ["Field", "Bits", "Value", "Default"],
+                       "the word is the section's, not a column")
+
+        XCTAssertTrue(line.accessibilityPerformPress())
+        window?.layoutIfNeeded()
+        XCTAssertEqual(line.disclosure, true)
+        XCTAssertEqual(shown("SPI_ec_max_freq")?.texts.prefix(2), ["SPI_ec_max_freq", "3–5"])
+        XCTAssertNil(shown("SPI_DMI_REQID"), "another word stays folded")
+
+        outline.selectRowIndexes(IndexSet(integer: row + 1), byExtendingSelection: false)
+        followUEFISelection(controller)
+        outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        followUEFISelection(controller)
+        window?.layoutIfNeeded()
+        XCTAssertNotNil(shown("SPI_ec_max_freq"), "and it stays open on the way back")
+    }
+
     /// A store lists one row per variable: the copy that stands. The others
     /// are in its history, a click there shows one, and the tree keeps the
     /// standing copy's row selected; the toggle lists them all.

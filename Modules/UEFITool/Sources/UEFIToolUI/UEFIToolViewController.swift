@@ -145,6 +145,9 @@ import UEFITool
     /// stays open through a re-render, and folded again only at the next
     /// launch.
     private var unfoldedTables: Set<String> = []
+    /// The sections open inside each table (a descriptor's strap words), by
+    /// the table's title: kept as the tables are, across nodes.
+    private var openTableSections: [String: Set<String>] = [:]
     /// The folding tables on screen, by title.
     private var tableFolds: [String: TableFold] = [:]
 
@@ -1334,7 +1337,16 @@ import UEFITool
     /// The table's header line and rows, one view per row
     /// (`DetailTableView`); a row's link leads where its target says.
     private func makeGrid(_ table: UEFIDetailTable) -> NSView {
-        DetailTableView(table: table) { [weak self] target in self?.follow(target) }
+        DetailTableView(
+            table: table, openSections: openTableSections[table.title] ?? [],
+            onFollow: { [weak self] target in self?.follow(target) },
+            onToggleSection: { [weak self] section, open in
+                if open {
+                    self?.openTableSections[table.title, default: []].insert(section)
+                } else {
+                    self?.openTableSections[table.title]?.remove(section)
+                }
+            })
     }
 
     @objc private func tableFoldClicked(_ sender: NSButton) {
