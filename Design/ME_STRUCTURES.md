@@ -715,6 +715,25 @@ in the descriptor's MIP area:
   addresses 0/1/2. The analyzer reports the message as `cpuStraps` and the panel
   as the **CPU straps** group.
 
+**The MIP table's other containers.** The same table keeps the CSME (DBC),
+PMC IOE and IOE blocks of `MipDescNvar`; their block types and document
+layouts are the tool's, and the reading is checked the same way:
+
+| type | container | document | block | fields |
+|---|---|---|---|---|
+| 0 | CSME / DBC | `CSME_smip` | 8 bytes | 5 |
+| 2 | PMC IOE | `PMC_IOE_smip` | 0x40 | 249 |
+| 4 | IOE | `IOE_smip` | 0x3C (MTL-M) / 0xD0 (MTL-P, ARL-P) | 133 / 515 |
+
+`mip18_map.py` emits them into `MIPStrapMap+CSME18`. The IOE document has two
+layouts that place the shared names at different offsets, so a layout is
+chosen by the block's own length — the CSME 18 dump's block is 0xD0 and reads
+the MTL-P layout. The check: every field whose document states one value for
+every reference platform reads that value — 249/249 in PMC IOE, 5/5 in CSME,
+443/448 in IOE, where the five are board values the reference list does not
+carry (the 63 constant-valued IOE fields all match, and the block extent is
+exactly the document's).
+
 **The descriptor's strap section on Meteor Lake is the SoC block.** `FLMAP1`
 still places and counts it — 130 words at 0x100 on the HP dump — and the
 harness document's `SoC` block is its layout: `mfit_data id="SoC"`, 1185

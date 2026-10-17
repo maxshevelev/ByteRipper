@@ -1627,3 +1627,6 @@
 "OEM section" = "OEM-секция";
 "Manufacturing Lock" = "Manufacturing Lock";
 "CPU straps" = "Страпы CPU";
+"CSME straps" = "Страпы CSME";
+"IOE straps" = "Страпы IOE";
+"PMC IOE straps" = "Страпы PMC IOE";

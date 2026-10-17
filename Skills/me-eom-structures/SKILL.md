@@ -297,6 +297,32 @@ own. Placement is verified against the dump: all **250** fields whose document
 states a constant value read exactly that value in the image's section, and the
 eSPI clock and GPRD fields the panel's rows use are in the table.
 
+**The MIP table's other containers have their own map.** Beside the CPU
+message the table keeps the CSME (DBC), PMC IOE and IOE blocks —
+`MipDescNvar`'s children — and `mip18_map.py` emits their layouts:
+
+```bash
+python3 Skills/me-eom-structures/scripts/mip18_map.py ~/Downloads/1/mfit-18.1.exe > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/MIPStrapMap+CSME18.swift
+```
+
+The blocks' types are the MIP descriptor's: **0** CSME/DBC (`CSME_smip`,
+8 bytes), **2** PMC IOE (`PMC_IOE_smip`, 0x40), **4** IOE (`IOE_smip`). The
+IOE document exists in two layouts — MTL-M's 0x3C bytes and MTL-P/ARL-P's
+0xD0, which place the shared names at **different offsets** — so the map
+carries both and the reader picks one by the block's own length. A field's
+place is a bit range of its block (`offset*8 + bit_low … + bit_high`);
+PMC IOE and CSME are dword-aligned, IOE is byte-addressed. 5, 249 and 515
+fields (the last from the two agreeing documents; MTL-M's 133 are the 0x3C
+variant).
+
+Checked on the dump: the block lengths are exactly the documents' extents,
+and every field whose document states one value for every reference platform
+reads it — 249/249 in PMC IOE, 5/5 in CSME, 443/448 in IOE (the five are
+board values the reference list does not carry; the 63 constant-valued IOE
+fields all match). `CSME_smip_Strap_CSME_Early_USB_DbC_ME_Boot_Stall_Enable`
+is the one named setting of CSME's block.
+
 ## Emitting the descriptor's strap layout
 
 The same executables carry the chipset's own layout of the descriptor's PCH

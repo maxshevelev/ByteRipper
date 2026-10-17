@@ -50,6 +50,7 @@ public enum MEACurator {
         add(mfsVolume(analysis, mfsNames, configPaths, in: language))
         add(uepGroup(analysis, in: language))
         add(cpuStrapGroup(analysis, in: language))
+        mipStrapGroups(analysis, in: language).forEach(add)
 
         // Fact groups — everything else a dump carried, each only when present.
         add(chipsetInitGroup(analysis, in: language))
@@ -616,6 +617,40 @@ public enum MEACurator {
                      MEAField("CRC-16", String(format: "0x%04X", straps.crcStored)),
                      MEAField("CRC Valid", MEAText.yesNo(straps.crcValid))],
             children: rows)
+    }
+
+    /// The MIP table's other strap containers — CSME, PMC IOE and IOE — each a
+    /// group of its own under the tool's words (`MIPStrapMap`). A layout is
+    /// picked by the block's type and length, as the reading was.
+    private static func mipStrapGroups(_ a: FirmwareAnalysis,
+                                       in language: AppLanguage) -> [MEANode] {
+        guard let containers = a.mipStraps,
+              let map = MIPStrapMap.forME(major: a.version.major) else { return [] }
+        return containers.compactMap { container -> MEANode? in
+            guard let layout = map.containers.first(where: {
+                $0.blockType == container.blockType && $0.length == container.length
+            }) else { return nil }
+            let byName = Dictionary(uniqueKeysWithValues: layout.fields.map { ($0.name, $0) })
+            let rows = container.readings.map { reading -> MEANode in
+                let field = byName[reading.name]
+                let shown = field?.options?[reading.value].map { "\($0) (\(reading.value))" }
+                    ?? "\(reading.value)"
+                return MEANode(path: [], title: field?.label ?? reading.name,
+                               subtitle: shown)
+            }
+            let title: String
+            switch container.name {
+            case "CSME": title = L("CSME straps", in: language)
+            case "IOE": title = L("IOE straps", in: language)
+            case "PMC IOE": title = L("PMC IOE straps", in: language)
+            default: title = container.name
+            }
+            return MEANode(
+                path: [], title: title,
+                fields: [MEAField("Block type", "\(container.blockType)"),
+                         MEAField("Length", "\(container.length) bytes")],
+                children: rows)
+        }
     }
 
     private static func chipsetInitGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {

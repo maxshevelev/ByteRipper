@@ -79,6 +79,31 @@ final class MEACuratorTests: XCTestCase {
         XCTAssertEqual(group.children.map(\.subtitle), ["No (0)", "2 Cores Active (2)"])
     }
 
+    /// The MIP table's other containers — CSME and IOE — are groups of their
+    /// own, with the tool's words for their values.
+    func testTheMIPStrapContainersAreGroupsOfTheirOwn() throws {
+        let a = try analysis([
+            "version": ["major": 18, "minor": 0, "hotfix": 10, "build": 2288],
+            "mipStraps": [
+                ["name": "CSME", "blockType": 0, "length": 8, "readings": [
+                    ["name": "CSME_smip_Strap_CSME_Early_USB_DbC_ME_Boot_Stall_Enable",
+                     "value": 1],
+                ]],
+                ["name": "IOE", "blockType": 4, "length": 208, "readings": [
+                    ["name": "IOE_smip_Strap_IOEP_PCIED_LNREV", "value": 1],
+                ]],
+            ],
+        ])
+        let roots = MEACurator.present(a, in: .english)
+        let csme = try XCTUnwrap(find("CSME straps", in: roots))
+        XCTAssertEqual(csme.fields.map(\.value), ["0", "8 bytes"])
+        XCTAssertEqual(csme.children.map(\.title), ["Enable early USB2 DbC connection"])
+        XCTAssertEqual(csme.children.first?.subtitle, "Yes (1)")
+        let ioe = try XCTUnwrap(find("IOE straps", in: roots))
+        XCTAssertEqual(ioe.children.map(\.title), ["PCIe Controller 4 (Port 13-16)"])
+        XCTAssertEqual(ioe.children.first?.subtitle, "1x4 Lane Reversed (1)")
+    }
+
     // MARK: - Fixtures
 
     /// Decode an analysis whose top-level fields are `overrides` merged over

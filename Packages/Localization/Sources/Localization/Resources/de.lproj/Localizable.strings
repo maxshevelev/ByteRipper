@@ -1627,3 +1627,6 @@
 "OEM section" = "OEM-Section";
 "Manufacturing Lock" = "Manufacturing Lock";
 "CPU straps" = "CPU-Straps";
+"CSME straps" = "CSME-Straps";
+"IOE straps" = "IOE-Straps";
+"PMC IOE straps" = "PMC-IOE-Straps";
