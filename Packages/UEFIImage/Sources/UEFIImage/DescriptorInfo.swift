@@ -253,17 +253,51 @@ public extension DescriptorInfo {
             biosAccess: biosAccess(at: masterBase, isVersion1: isVersion1, reader: reader),
             chips: chips(at: base, reader: reader),
             straps: straps(at: base, map1: map1, generation: generation, reader: reader),
-            processorStraps: generation.hasProcessorStrapSection
-                ? processorStraps(at: base, reader: reader) : nil,
+            processorStraps: processorStraps(at: base, generation: generation,
+                                             isGenerationCertain: isCertain,
+                                             reader: reader),
             oemSection: reader.bytes(at: base + Descriptor.oemSectionOffset,
                                      count: Descriptor.oemSectionSize) ?? []
         )
     }
 
-    /// The processor strap section, at `FLMAP2`'s base and as long as its
-    /// count — the fields the classic map word carries, which Tiger Point
-    /// stopped writing. Cut at the descriptor's end, as the PCH section is.
+    /// The processor straps, where this generation's descriptor keeps them:
+    /// the section the classic third map word points at up to Cannon Point, or
+    /// — from Tiger Point on — the message in the MIP area, at `0xC00` plus
+    /// the offset the same word carries (`FLMAP2[2:11]`), as many words as
+    /// `FLMAP2[16:23]` says (§2.7). Nil where neither applies, where the
+    /// generation is only assumed (the MIP reading needs the map word's Tiger
+    /// Point meaning), or where a section lies outside the descriptor.
     private static func processorStraps(
+        at base: UInt64, generation: DescriptorGeneration,
+        isGenerationCertain: Bool, reader: ImageReader
+    ) -> ProcessorStraps? {
+        if generation.hasProcessorStrapSection {
+            return classicProcessorStraps(at: base, reader: reader)
+        }
+        guard generation.hasMIPProcessorStraps, isGenerationCertain,
+              let map2 = reader.uint32(at: base + Descriptor.map2Offset)
+        else { return nil }
+        let offset = UInt64((map2 >> 2) & 0x3FF)
+        let count = UInt64((map2 >> 16) & 0xFF)
+        guard count > 0, Descriptor.mipOffset + offset + count * 4 <= Descriptor.size
+        else { return nil }
+        let section = base + Descriptor.mipOffset + offset
+        var words: [UInt32] = []
+        for index in 0..<count {
+            guard let word = reader.uint32(at: section + index * 4) else { break }
+            words.append(word)
+        }
+        guard !words.isEmpty else { return nil }
+        let map = DescriptorStrapMap.forMIPProcessorSection(words: words.count)
+        return ProcessorStraps(base: section, words: words,
+                               fields: map?.readings(in: words))
+    }
+
+    /// The processor strap section of the classic map word, at its base and as
+    /// long as its count — the fields Tiger Point stopped writing. Cut at the
+    /// descriptor's end, as the PCH section is.
+    private static func classicProcessorStraps(
         at base: UInt64, reader: ImageReader
     ) -> ProcessorStraps? {
         guard let map2 = reader.uint32(at: base + Descriptor.map2Offset) else { return nil }

@@ -118,6 +118,20 @@ public enum DescriptorGeneration: Sendable, Equatable, CaseIterable {
         }
     }
 
+    /// Whether the descriptor's MIP area carries the CPU strap message — from
+    /// Tiger Point on, where the third map word names the message's place in
+    /// that area (`offset = FLMAP2[2:11]` from `0xC00`, its length
+    /// `FLMAP2[16:23]` words) instead of a strap section (§2.7).
+    public var hasMIPProcessorStraps: Bool {
+        switch self {
+        case .tigerPoint, .alderPoint, .elkhartLake, .jasperLake,
+             .meteorLake, .pantherLake, .wildcatLake, .novaLake:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// The PCH strap bit that soft-disables the ME, as ifdtool and me_cleaner
     /// set it: `ICH_MeDisable` in the first word up to ICH10, `AltMeDisable`
     /// in the eleventh from Ibex Peak to Wildcat Point, and HAP in the first
