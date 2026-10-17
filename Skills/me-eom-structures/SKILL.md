@@ -306,22 +306,23 @@ python3 Skills/me-eom-structures/scripts/mip18_map.py ~/Downloads/1/mfit-18.1.ex
     Packages/MEFirmware/Sources/MEFirmware/Configuration/MIPStrapMap+CSME18.swift
 ```
 
-The blocks' types are the MIP descriptor's: **0** CSME/DBC (`CSME_smip`,
-8 bytes), **2** PMC IOE (`PMC_IOE_smip`, 0x40), **4** IOE (`IOE_smip`). The
-IOE document exists in two layouts — MTL-M's 0x3C bytes and MTL-P/ARL-P's
-0xD0, which place the shared names at **different offsets** — so the map
-carries both and the reader picks one by the block's own length. A field's
-place is a bit range of its block (`offset*8 + bit_low … + bit_high`);
-PMC IOE and CSME are dword-aligned, IOE is byte-addressed. 5, 249 and 515
-fields (the last from the two agreeing documents; MTL-M's 133 are the 0x3C
-variant).
+The blocks' types are the MIP descriptor's: **1** PmcAndCpu — `PMC_SoC_smip`
+(253 PMC fields; the block also holds the CPU header and message, which are
+the CPU map's), **0** CSME/DBC (`CSME_smip`, 8 bytes), **2** PMC IOE
+(`PMC_IOE_smip`, 0x40), **4** IOE (`IOE_smip`). The IOE document exists in two
+layouts — MTL-M's 0x3C bytes and MTL-P/ARL-P's 0xD0, which place the shared
+names at **different offsets** — so the map carries both and the reader picks
+one by the block's own length. A field's place is a bit range of its block
+(`offset*8 + bit_low … + bit_high`); PMC SoC, PMC IOE and CSME are
+dword-aligned, IOE is byte-addressed. 253, 5, 249 and 515 fields (the last
+from the two agreeing documents; MTL-M's 133 are the 0x3C variant).
 
 Checked on the dump: the block lengths are exactly the documents' extents,
 and every field whose document states one value for every reference platform
-reads it — 249/249 in PMC IOE, 5/5 in CSME, 443/448 in IOE (the five are
-board values the reference list does not carry; the 63 constant-valued IOE
-fields all match). `CSME_smip_Strap_CSME_Early_USB_DbC_ME_Boot_Stall_Enable`
-is the one named setting of CSME's block.
+reads it — PMC SoC 223/227, PMC IOE 249/249, CSME 5/5, IOE 443/448. The
+PMC SoC and IOE mismatches are board values the reference lists do not carry
+(the four PMC SoC ones are debug messaging, ISH disable and two Type-C SMBus
+addresses — real differences of this board, not misalignment).
 
 ## Emitting the descriptor's strap layout
 

@@ -47,10 +47,15 @@ import zlib
 
 GENERATION = "18"
 
+# name, document block, block type, field-name prefix, block length in bytes
+# (nil = the fields' own extent). `PMC_SoC_smip` holds the CPU message header
+# and the CPU fields too; the prefix keeps the PMC ones, and the block is the
+# PMC straps (0x48) followed by the CPU header (4) and message (0xC).
 CONTAINERS = [
-    ("CSME", "CSME_smip", 0),
-    ("PMC IOE", "PMC_IOE_smip", 2),
-    ("IOE", "IOE_smip", 4),
+    ("PMC SoC", "PMC_SoC_smip", 1, "PMC_SoC_smip_Strap_", 0x58),
+    ("CSME", "CSME_smip", 0, None, None),
+    ("PMC IOE", "PMC_IOE_smip", 2, None, None),
+    ("IOE", "IOE_smip", 4, None, None),
 ]
 
 # The IOE container has two layouts at hand — MTL-M's 0x3C bytes and MTL-P /
@@ -118,7 +123,7 @@ def options_of(kind, params):
     return table or None
 
 
-def fields_of(text, block_id):
+def fields_of(text, block_id, prefix=None):
     start = text.find('<mfit_data id="%s">' % block_id)
     if start < 0:
         return []
@@ -143,6 +148,8 @@ def fields_of(text, block_id):
         offset = attribute(attrs, "offset")
         low, high = attribute(attrs, "bit_low"), attribute(attrs, "bit_high")
         if not (name and offset and low is not None and high is not None):
+            continue
+        if prefix and not name.startswith(prefix):
             continue
         start_bit = int(offset, 0) * 8 + int(low)
         count = int(high) - int(low) + 1
@@ -247,8 +254,8 @@ def main():
         print("no MIP strap documents found in this build", file=sys.stderr)
         return 1
     containers = []
-    for name, block_id, block_type in CONTAINERS:
-        per_document = [fields for fields in (fields_of(text, block_id)
+    for name, block_id, block_type, prefix, fixed_length in CONTAINERS:
+        per_document = [fields for fields in (fields_of(text, block_id, prefix)
                                               for _, text in docs) if fields]
         if not per_document:
             print("! %s: no fields in any document" % block_id, file=sys.stderr)
@@ -258,7 +265,8 @@ def main():
         # table per block length.
         variants = {}
         for fields in per_document:
-            extent = max((f["start"] + f["count"] + 7) // 8 for f in fields)
+            extent = fixed_length or max((f["start"] + f["count"] + 7) // 8
+                                         for f in fields)
             variants.setdefault(extent, []).append(fields)
         for extent in sorted(variants):
             found = variants[extent]
