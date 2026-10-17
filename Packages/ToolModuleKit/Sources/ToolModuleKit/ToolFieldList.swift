@@ -1,6 +1,5 @@
 import AppKit
 import HelpUI
-import Localization
 
 /// What a row's `?` opens: the identifier the row is about, and the words the
 /// tool it came from has for it.
@@ -10,13 +9,26 @@ import Localization
 /// (`MELanPowerWell`) is what a document, a report or another tool calls it: as
 /// the help's heading it is where a reader looks for it, and in the row's first
 /// column it read as the name.
+///
+/// The button's own words — what it is called and what a pointer resting on
+/// it says — come with the help, from the panel that laid the row out: only
+/// that panel knows whose words the button opens ("what Flash Image Tool
+/// says"), and a list shared by every panel must not claim one tool for all
+/// of them.
 public struct FieldHelp: Sendable, Equatable {
     public var identifier: String
     public var text: String
+    /// The button's name, for VoiceOver (`ControlHelp`).
+    public var buttonName: String
+    /// What the button does, as its tooltip; nil where the name says it all.
+    public var buttonTooltip: String?
 
-    public init(identifier: String, text: String) {
+    public init(identifier: String, text: String,
+                buttonName: String, buttonTooltip: String? = nil) {
         self.identifier = identifier
         self.text = text
+        self.buttonName = buttonName
+        self.buttonTooltip = buttonTooltip
     }
 }
 
@@ -218,7 +230,7 @@ public struct FieldHelp: Sendable, Equatable {
         ]))
         self.value = TextBlock(value)
         self.second = second.map(TextBlock.init)
-        infoButton = help.map { _ in ToolFieldRow.makeInfoButton() }
+        infoButton = help.map(ToolFieldRow.makeInfoButton)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = true
         autoresizingMask = []
@@ -230,9 +242,9 @@ public struct FieldHelp: Sendable, Equatable {
     }
 
     /// The `?` at the end of the name column: the same quiet glyph the panels'
-    /// own help buttons carry, and named by `ControlHelp` where it is created,
-    /// so the panel that knows what the words are sets them.
-    public static func makeInfoButton() -> NSButton {
+    /// own help buttons carry, named through `ControlHelp` with the words the
+    /// panel put on the help — it knows whose words the button opens.
+    public static func makeInfoButton(for help: FieldHelp) -> NSButton {
         let button = NSButton()
         button.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
         button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
@@ -240,8 +252,7 @@ public struct FieldHelp: Sendable, Equatable {
         button.imagePosition = .imageOnly
         button.contentTintColor = .secondaryLabelColor
         button.translatesAutoresizingMaskIntoConstraints = true
-        ControlHelp.describe(button, name: L("Setting help"),
-                             tooltip: L("Show what Flash Image Tool says about this setting"))
+        ControlHelp.describe(button, name: help.buttonName, tooltip: help.buttonTooltip)
         return button
     }
 

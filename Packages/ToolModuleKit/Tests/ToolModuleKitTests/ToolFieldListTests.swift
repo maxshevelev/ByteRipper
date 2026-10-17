@@ -63,7 +63,8 @@ final class ToolFieldListTests: XCTestCase {
     /// about it, and no button at all where it has nothing: a control that
     /// opens an empty popover is worse than no control.
     func testOnlyARowWithHelpCarriesAButton() {
-        let help = FieldHelp(identifier: "MELanPowerWell", text: "LAN Power Well.")
+        let help = FieldHelp(identifier: "MELanPowerWell", text: "LAN Power Well.",
+                             buttonName: "Setting help", buttonTooltip: "What the tool says")
         let list = helpList([("LAN Power Well", plain("Enabled"), help),
                              ("Auto", plain("No"), nil)])
 
@@ -72,15 +73,17 @@ final class ToolFieldListTests: XCTestCase {
         XCTAssertEqual(list.rows[0].fieldHelp, help)
         XCTAssertEqual(list.subviews.count, 2, "the rows, and no button on the list itself")
         XCTAssertEqual(list.rows[0].subviews.count, 1, "the button is the row's own")
-        XCTAssertEqual(list.rows[0].helpButton?.toolTip,
-                       "Show what Flash Image Tool says about this setting")
+        // The button's words are the panel's, carried on the help: the list
+        // is shared, and only the panel knows whose words the button opens.
+        XCTAssertEqual(list.rows[0].helpButton?.toolTip, "What the tool says")
         XCTAssertEqual(list.rows[0].helpButton?.accessibilityLabel(), "Setting help")
     }
 
     /// The button sits at the end of the name column, and the name is drawn in
     /// what is left of the column rather than under it.
     func testTheButtonTakesTheEndOfTheNameColumn() throws {
-        let help = FieldHelp(identifier: "MELanPowerWell", text: "LAN Power Well.")
+        let help = FieldHelp(identifier: "MELanPowerWell", text: "LAN Power Well.",
+                             buttonName: "Setting help", buttonTooltip: "What the tool says")
         let name = "LAN Power Well and then some more of it"
         let list = helpList([(name, plain("Enabled"), help)], nameWidth: 300)
         let row = list.rows[0]
@@ -101,7 +104,8 @@ final class ToolFieldListTests: XCTestCase {
     /// Pressing the button hands the panel the words and the button to hang a
     /// popover off.
     func testPressingTheButtonAsksThePanelForTheHelp() throws {
-        let help = FieldHelp(identifier: "MELanPowerWell", text: "LAN Power Well.")
+        let help = FieldHelp(identifier: "MELanPowerWell", text: "LAN Power Well.",
+                             buttonName: "Setting help", buttonTooltip: "What the tool says")
         let list = helpList([("LAN Power Well", plain("Enabled"), help)])
         var asked: [(FieldHelp, NSView)] = []
         list.onHelp = { asked.append(($0, $1)) }
