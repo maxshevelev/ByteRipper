@@ -61,7 +61,8 @@ import ToolModuleKit
         let body = HelpBodyView()
         body.show(HelpPopoverLayout.prose(help.text))
         let built = HelpPopoverLayout.build(title: HelpPopoverLayout.title(help.identifier),
-                                            body: body)
+                                            body: body,
+                                            note: help.note.map(HelpPopoverLayout.note))
         bodyHeight = built.bodyHeight
         return built.view
     }

@@ -1139,20 +1139,31 @@ final class MEASummaryTests: XCTestCase {
                                       name: "SmlinkBusSelection", number: 0,
                                       disabled: ConfigurationCondition(name: "eSpiEnabled", value: 1)),
                               ])),
+            ConfigurationFile(path: "/home/mca/eom_config", alias: "EOM_Config",
+                              mfs: .init(size: 2, settings: [
+                                  ConfigurationSetting(name: "EomFirstBootEnabled", number: 0),
+                              ])),
         ]
         let rows = MEAConfiguration.build(a, in: .english).flatMap(\.rows)
 
         let address = try XCTUnwrap(rows.first { $0.identifier == "MctpEcAddress" })
-        XCTAssertEqual(address.name, "MCTP EC Address · eSpiEnabled = No, assumed",
-                       "the tool's identifier and its own word for the value")
+        XCTAssertEqual(address.name, "MCTP EC Address",
+                       "the row's name stays the tool's name for it")
+        XCTAssertEqual(address.note, "eSpiEnabled = No, assumed",
+                       "the condition is the `?`'s subtitle, in the tool's own words")
         XCTAssertEqual(address.condition, ConfigurationCondition(name: "eSpiEnabled",
                                                                  value: 0, assumed: true))
         XCTAssertEqual(address.disabled, false)
 
         let bus = try XCTUnwrap(rows.first { $0.identifier == "SmlinkBusSelection" })
-        XCTAssertEqual(bus.name, "Bus Selection · disabled by eSpiEnabled = Yes")
+        XCTAssertEqual(bus.name, "Bus Selection")
+        XCTAssertEqual(bus.note, "disabled by eSpiEnabled = Yes")
         XCTAssertEqual(bus.disabled, true, "which is what the panel draws quiet")
         XCTAssertNil(bus.condition)
+
+        // A row with neither a condition nor a switch-off is not given a note,
+        // and one with no help at all still has none: no empty subtitle.
+        XCTAssertNil(try XCTUnwrap(rows.first { $0.identifier == "EomFirstBootEnabled" }).note)
     }
 
     /// The tab reads the board's own half of the generation's map: a file the
