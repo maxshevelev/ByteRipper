@@ -1171,11 +1171,12 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(unbootedRows.map(\.differs), [false, false])
         XCTAssertEqual(unbootedRows.map(\.fitc), ["No", "Lock Descriptor and OEM Configs"])
 
-        // A generation whose map has not been emitted yet reads nothing rather
-        // than a guess, even with the same files in hand.
+        // A generation whose map has not been emitted reads nothing rather
+        // than a guess, even with the same files in hand. (18 has a map —
+        // `MEConfigurationMap+CSME18`, emitted from MFIT 18.1 — 17 has none.)
         var unmapped = try analysis([
             "family": "csme", "manifest": manifestJSON(),
-            "version": ["major": 18, "minor": 0, "hotfix": 10, "build": 2285],
+            "version": ["major": 17, "minor": 0, "hotfix": 0, "build": 0],
         ])
         unmapped.configuration = a.configuration
         XCTAssertTrue(MEAConfiguration.build(unmapped, in: .english).isEmpty)

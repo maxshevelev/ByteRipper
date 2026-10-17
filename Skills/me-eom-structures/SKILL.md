@@ -80,6 +80,35 @@ several such settings in is left to its plugin and not read: a guess would put
 one setting's byte under another's name. Same rules as above: read the diff,
 don't paste blind.
 
+**MFIT 18 rewrites the database** (`mfit-18.1.exe`): no `<Files project>` lists
+and no `ProcessNvar` actions any more. The settings are one `<Files>` document
+of `<File name="POLICY_CFG_RULES">` elements, an `<nvar name="…">` per setting
+with its `<physical offset length bit_low bit_high>`, the panel's words in the
+platform documents' `<ui_item name label config_type config_params help_text>`,
+and a second document mapping each alias to its MFS path
+(`<FileName value="…"/><FilePath value="/home/policy/cfgmgr/cfg_rules"/>`). The
+generator for that shape:
+
+```bash
+python3 Skills/me-eom-structures/scripts/mfit18_map.py ~/Downloads/1/mfit-18.1.exe > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME18.swift
+```
+
+The same rules apply in the new shape: `length="dynamic"` is a place only the
+plugin knows and is read when the file is one setting of a numeric kind, the
+width taken from the kind; an `<nvar>` with no `<physical>` is a build input or
+a string, and is left out. MFIT names a setting inside a file with the file's
+suffix where one name serves several files
+(`EomFirstBootEnabled_eom_config`, `TypeCPortRetimerMCTPSmbusAddr_ncsi`), and
+the `ui_item` carries the bare name — the suffixes are stripped from the right
+until one answers. A setting two platform documents give a different
+`config_type` or option list for is dropped and named: its words would be
+another platform's. 18.1 yields 67 settings in 32 files; the CSME 18 dump at
+hand (HP EliteBook 630 G11, 18.0.10.2288) reads 17 of its configuration files
+through the map. The CPU strap layouts are **not** in the 18 database: they
+moved into the per-platform plugin data MFIT does not ship, so CSME 18 has no
+MIP strap table here.
+
 The older FIT carries the same material in its own shape, per platform:
 
 ```bash
