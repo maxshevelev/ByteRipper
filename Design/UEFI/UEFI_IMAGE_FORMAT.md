@@ -525,6 +525,17 @@ documents and the dumps at hand state. The table shows the tool's labels and
 option words, and no field is emphasised because there is no default to differ
 from.
 
+**Up to Alder Point and the embedded lines.** That is where the descriptor
+holds the message. **From Meteor Lake on it does not**: MFIT 18's layout puts
+the `MipDesc` nvar inside the **FITC partition**, and the CSME 18 dump's MIP
+area at `0xC00` is erased. `FLMAP2`'s bits 2–11 and 16–23 still tell the
+generation apart (§2.5), but they no longer name a CPU message — MFIT 18 reads
+the same word as the SoC soft straps (`Flmap2StructureV2`). Reading them as a
+message gives three erased words, which is why `hasMIPProcessorStraps` stops at
+Alder Point: the panel shows no CPU strap table for a descriptor that holds
+none. The CSME 18 straps are read on the ME side instead
+(`Design/ME_STRUCTURES.md`, "The CPU strap message").
+
 Which reading applies is `DescriptorGeneration.hasProcessorStrapSection`
 (classic) or `hasMIPProcessorStraps` (the message — read only where the
 generation is certain, since an assumed one may be a classic layout); the

@@ -119,13 +119,21 @@ public enum DescriptorGeneration: Sendable, Equatable, CaseIterable {
     }
 
     /// Whether the descriptor's MIP area carries the CPU strap message — from
-    /// Tiger Point on, where the third map word names the message's place in
-    /// that area (`offset = FLMAP2[2:11]` from `0xC00`, its length
-    /// `FLMAP2[16:23]` words) instead of a strap section (§2.7).
+    /// Tiger Point to Alder Point and the embedded lines, where the third map
+    /// word names the message's place in that area (`offset = FLMAP2[2:11]`
+    /// from `0xC00`, its length `FLMAP2[16:23]` words) instead of a strap
+    /// section (§2.7).
+    ///
+    /// **Not on Meteor Lake and later.** There the CPU straps moved into the
+    /// ME side of the image — the FITC partition's MIP table, which
+    /// `MEFirmware`'s `MIPTableReader` reads — and the descriptor's MIP area is
+    /// erased; the same map-word bits mean something else (the SoC soft straps
+    /// of MFIT 18's `Flmap2StructureV2`). Reading them as a CPU message on the
+    /// CSME 18 dump at hand yields three erased words, which is a section the
+    /// panel must not show.
     public var hasMIPProcessorStraps: Bool {
         switch self {
-        case .tigerPoint, .alderPoint, .elkhartLake, .jasperLake,
-             .meteorLake, .pantherLake, .wildcatLake, .novaLake:
+        case .tigerPoint, .alderPoint, .elkhartLake, .jasperLake:
             return true
         default:
             return false
