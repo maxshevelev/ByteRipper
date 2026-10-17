@@ -195,7 +195,26 @@ from and where the two fields the engine reads by name — `SPI_ec_max_freq` and
 the section's own: they move with the length, and the 69- and 74-word sections
 carry no clock field at all. A length is added by naming it in `--words` and running the script
 again; whatever the app does not carry stays a list of numbers in the panel.
-`--kind cpu` emits the processor strap section's table instead.
+`--kind cpu` emits the processor strap section's tables into
+`StrapMap+CPU.swift` instead:
+
+```bash
+python3 Skills/me-eom-structures/scripts/strap_map.py \
+    <fit-15.0.exe> <fit-14.0.exe> <fit-12.exe> --kind cpu \
+    --words 1,3,7,10,14,15,17,18,20,21,22,25 > \
+    Packages/UEFIImage/Sources/UEFIImage/StrapMap+CPU.swift
+```
+
+Their place and length are `FLMAP2`'s — up to Cannon Point, the only
+generations whose descriptor carries the section at all. From Tiger Point on
+that word names the strap message's place in the PMC's space instead
+(`Design/UEFI/UEFI_IMAGE_FORMAT.md` §2.7), and the panel then shows no
+processor strap table. **The length is a weaker key here**: documents of one
+length lay a field out differently (`Num_Active_Cores` is three bits in
+`cnp_lp_rvp.xml`, four in a nameless newer document of the same three words),
+so a processor table keeps only the fields every document of that length
+states alike — same name, offset and bits — and the script says how many it
+dropped.
 
 ## Checking against MFIT
 
