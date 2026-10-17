@@ -90,6 +90,52 @@ public struct DescriptorStrapMap: Sendable {
     public func fields(inWord word: Int) -> [Field] {
         fields.filter { $0.word == word }
     }
+
+    /// What the fields of one word have in common, as the tool spells it —
+    /// `GPCOM4_gpio_sstrap`, `SPI`, `CSME_SMT1` — or nil where they have
+    /// nothing.
+    ///
+    /// The tool gives a strap word no name of its own: its documents mark the
+    /// words with their offsets and nothing else (`<!--Strap: 0x04-->`). But
+    /// its field names are the block that owns the field, then the field —
+    /// `PCH_Strap_GPCOM4_gpio_sstrap_sataxpcie_0` — and a word's fields belong
+    /// to one block, so the words they share say what the word is. Reserved
+    /// and spare fields are left out: they are named after their place, not
+    /// their block. A word of one named field gives its block, the first word
+    /// of the name, and not the field's own name over again.
+    public func group(ofWord word: Int) -> String? {
+        Self.group(of: fields(inWord: word))
+    }
+
+    /// The same, for the fields of one word however they were come by — the
+    /// readings of a section carry their fields, not the table.
+    public static func group(of fields: [Field]) -> String? {
+        let names = fields.map { localName($0.name) }
+            .filter { !isReserved($0) }
+        guard !names.isEmpty else { return nil }
+        let parts = names.map { $0.split(separator: "_", omittingEmptySubsequences: false) }
+        guard parts.count > 1 else { return String(parts[0][0]) }
+        var shared = 0
+        while parts.allSatisfy({ shared < $0.count && $0[shared] == parts[0][shared] }) {
+            shared += 1
+        }
+        // A prefix that is a whole name is that field, not the word's block.
+        if parts.contains(where: { $0.count == shared }) { shared -= 1 }
+        guard shared > 0 else { return nil }
+        return parts[0].prefix(shared).joined(separator: "_")
+    }
+
+    /// A field's name without the section's namespace (`PCH_Strap_`).
+    static func localName(_ name: String) -> String {
+        guard let range = name.range(of: "_Strap_") else { return name }
+        return String(name[range.upperBound...])
+    }
+
+    /// A field the tool names after its place rather than its block.
+    static func isReserved(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        return lower.hasPrefix("rsvd") || lower.hasPrefix("reserved") || lower.hasPrefix("spare")
+    }
 }
 
 public extension DescriptorStrapMap {

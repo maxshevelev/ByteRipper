@@ -87,8 +87,37 @@ public struct UEFIDetailTable: Equatable, Sendable {
     /// sight, and read only now and then — a descriptor's strap words.
     public var startsFolded: Bool
 
+    /// A run of rows under a line of its own, folded until the reader opens
+    /// it: a descriptor's strap fields, under the word they are bits of.
+    public struct Section: Equatable, Sendable {
+        /// What the section is — `PCHSTRP1` — and what its rows have in
+        /// common, where they have anything (`GPCOM4_gpio_sstrap`).
+        public var title: String
+        public var subtitle: String?
+        /// The rows it holds, as indices into `rows`.
+        public var rows: Range<Int>
+        /// Where a click on the section's address goes, and the address as it
+        /// is shown. Nil for a section that stands for nothing in the dump.
+        public var target: Target?
+        public var address: String?
+
+        public init(title: String, subtitle: String? = nil, rows: Range<Int>,
+                    target: Target? = nil, address: String? = nil) {
+            self.title = title
+            self.subtitle = subtitle
+            self.rows = rows
+            self.target = target
+            self.address = address
+        }
+    }
+
+    /// The sections the rows fall into, in order, covering every row. Empty
+    /// for a table of plain rows.
+    public var sections: [Section]
+
     public init(title: String, symbol: String, columns: [String], rows: [[Cell]],
-                rowTargets: [Target?] = [], linkColumn: Int = 1, startsFolded: Bool = false) {
+                rowTargets: [Target?] = [], linkColumn: Int = 1, startsFolded: Bool = false,
+                sections: [Section] = []) {
         self.title = title
         self.symbol = symbol
         self.columns = columns
@@ -96,6 +125,7 @@ public struct UEFIDetailTable: Equatable, Sendable {
         self.rowTargets = rowTargets
         self.linkColumn = linkColumn
         self.startsFolded = startsFolded
+        self.sections = sections
     }
 }
 
@@ -1554,14 +1584,17 @@ public enum UEFIDetail {
     }
 
     /// The strap section, one row per field where the chipset's layout of the
-    /// section is at hand — the tool's name for the field, the word and bits it
-    /// takes, what this image holds there and what the tool builds it with —
-    /// and one row per word where it is not, the words then standing as the
-    /// numbers they are.
+    /// section is at hand — the tool's name for the field, the bits it takes,
+    /// what this image holds there and what the tool builds it with — and one
+    /// row per word where it is not, the words then standing as the numbers
+    /// they are.
     ///
-    /// Each row outlines its four bytes in the dump, which is where two boards'
-    /// straps are compared; on the layout's rows that outline is the word the
-    /// field belongs to, so several rows share it.
+    /// The fields fall into a section per word, folded: seventy words of a
+    /// dozen fields each are a list nobody reads whole, and the word is what a
+    /// reader looks for. A section's line names the word, what its fields
+    /// have in common (`DescriptorStrapMap.group(of:)` — the tool names its
+    /// words by offset only), and the word's address, which outlines its four
+    /// bytes in the dump, where two boards' straps are compared.
     private static func strapTable(_ straps: DescriptorInfo.Straps, in language: AppLanguage) -> UEFIDetailTable {
         guard let readings = straps.fields else {
             let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
@@ -1589,42 +1622,47 @@ public enum UEFIDetail {
         // the tool calls the bits around it spare or reserved — so its row is
         // added here, under the name ifdtool and me_cleaner give it, and it has
         // no default of the tool's to compare against.
-        struct Row { let word: Int; let bit: Int; let cells: [UEFIDetailTable.Cell]; let target: UEFIDetailTable.Target }
+        struct Row { let word: Int; let bit: Int; let cells: [UEFIDetailTable.Cell] }
         var rows: [Row] = readings.map { reading in
-            let word = reading.field.word
-            let name = "PCHSTRP\(word)"
-            let address = straps.base + UInt64(word) * 4
             let range = reading.field.bits
-            return Row(word: word, bit: range.lowerBound,
+            return Row(word: reading.field.word, bit: range.lowerBound,
                        cells: [.init(strapFieldName(reading.field.name)),
-                               .init(name),
                                .init(range.lowerBound == range.upperBound
                                      ? "\(range.lowerBound)"
                                      : "\(range.lowerBound)–\(range.upperBound)"),
                                .init(hex(reading.value)),
-                               .init(hex(reading.field.defaultValue))],
-                       target: .range(address..<address + 4, name: name))
+                               .init(hex(reading.field.defaultValue))])
         }
         if let bit = straps.meDisable, bit.word < straps.words.count {
-            let word = bit.word
-            let name = "PCHSTRP\(word)"
-            let address = straps.base + UInt64(word) * 4
             rows.append(Row(
-                word: word, bit: bit.bit,
-                cells: [.init(bit.name), .init(name), .init("\(bit.bit)"),
-                        .init(bit.isSet ? "0x1" : "0x0"), .init("")],
-                target: .range(address..<address + 4, name: name)))
+                word: bit.word, bit: bit.bit,
+                cells: [.init(bit.name), .init("\(bit.bit)"),
+                        .init(bit.isSet ? "0x1" : "0x0"), .init("")]))
         }
         rows.sort { ($0.word, $0.bit) < ($1.word, $1.bit) }
+
+        var sections: [UEFIDetailTable.Section] = []
+        var start = 0
+        while start < rows.count {
+            let word = rows[start].word
+            let end = rows[start...].firstIndex { $0.word != word } ?? rows.count
+            let name = "PCHSTRP\(word)"
+            let address = straps.base + UInt64(word) * 4
+            let fields = readings.filter { $0.field.word == word }.map(\.field)
+            sections.append(.init(title: name, subtitle: DescriptorStrapMap.group(of: fields),
+                                  rows: start..<end,
+                                  target: .range(address..<address + 4, name: name),
+                                  address: hex(address)))
+            start = end
+        }
         return UEFIDetailTable(
             title: L("PCH straps", in: language),
             symbol: "slider.horizontal.3",
-            columns: [L("Field", in: language), L("Strap", in: language), L("Bits", in: language),
+            columns: [L("Field", in: language), L("Bits", in: language),
                       L("Value", in: language), L("Default", in: language)],
             rows: rows.map(\.cells),
-            rowTargets: rows.map(\.target),
-            linkColumn: 1,
-            startsFolded: true
+            startsFolded: true,
+            sections: sections
         )
     }
 
