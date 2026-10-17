@@ -237,15 +237,26 @@ final class DescriptorDetailTests: XCTestCase {
         // Every field of the layout is a row of its own — 759 of them for this
         // section — with the ME-disable bit among them.
         let table = try XCTUnwrap(table(shown, "PCH straps"))
-        XCTAssertEqual(table.columns, ["Field", "Strap", "Bits", "Value", "Default"])
+        XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
         XCTAssertEqual(table.rows.count, 760)
         XCTAssertEqual(try XCTUnwrap(row(table, "SPI_GLOBAL_PROTECTED_RNG_DEF")).map(\.text),
-                       ["SPI_GLOBAL_PROTECTED_RNG_DEF", "PCHSTRP21", "0–31", "0x829B0001", "0x0"])
+                       ["SPI_GLOBAL_PROTECTED_RNG_DEF", "0–31", "0x829B0001", "0x0"])
         XCTAssertEqual(try XCTUnwrap(row(table, "SPI_ec_max_freq")).map(\.text),
-                       ["SPI_ec_max_freq", "PCHSTRP22", "3–5", "0x4", "0x0"])
+                       ["SPI_ec_max_freq", "3–5", "0x4", "0x0"])
+
+        // The rows fall into a section per word, which names the word, what
+        // its fields share, and where it is — its address outlines the word.
         let clock = try XCTUnwrap(table.rows.firstIndex { $0[0].text == "SPI_ec_max_freq" })
-        XCTAssertEqual(table.rowTargets[clock], .range(0x258..<0x25C, name: "PCHSTRP22"),
-                       "a field's row outlines the word it belongs to")
+        let section = try XCTUnwrap(table.sections.first { $0.rows.contains(clock) })
+        XCTAssertEqual(section.title, "PCHSTRP22")
+        XCTAssertEqual(section.subtitle, "SPI")
+        XCTAssertEqual(section.address, "0x258")
+        XCTAssertEqual(section.target, .range(0x258..<0x25C, name: "PCHSTRP22"))
+        XCTAssertEqual(table.sections.count, 70, "a section per word")
+        XCTAssertEqual(table.sections.map(\.rows.count).reduce(0, +), table.rows.count,
+                       "and every row in one")
+        XCTAssertTrue(zip(table.sections, table.sections.dropFirst())
+            .allSatisfy { $0.rows.upperBound == $1.rows.lowerBound }, "in order")
     }
 
     /// The bit that soft-disables the ME is a row among the fields — the chipset
@@ -258,9 +269,9 @@ final class DescriptorDetailTests: XCTestCase {
             return try XCTUnwrap(row(XCTUnwrap(self.table(shown, "PCH straps")), "HAP"))
         }
 
-        XCTAssertEqual(try hap([0]).map(\.text), ["HAP", "PCHSTRP0", "16", "0x0", ""])
-        XCTAssertEqual(try hap([0x0001_0000]).map(\.text), ["HAP", "PCHSTRP0", "16", "0x1", ""])
-        XCTAssertEqual(try hap([0]).count, 5)
+        XCTAssertEqual(try hap([0]).map(\.text), ["HAP", "16", "0x0", ""])
+        XCTAssertEqual(try hap([0x0001_0000]).map(\.text), ["HAP", "16", "0x1", ""])
+        XCTAssertEqual(try hap([0]).count, 4)
     }
 
     /// A zero GPRD is off, and a clock code nobody defines shows the code.

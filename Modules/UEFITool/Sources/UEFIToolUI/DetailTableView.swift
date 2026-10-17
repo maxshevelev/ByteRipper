@@ -26,18 +26,37 @@ import UEFITool
 /// The text is selected as the detail's own rows are (`ToolSelectableRows`):
 /// across cells and rows, and copied with a tab between cells and a line per
 /// row.
+///
+/// A table with sections (`UEFIDetailTable.Section`) draws each under a line
+/// of its own with a disclosure triangle, folded until the reader opens it;
+/// the rows of every section line up in the same columns, open or folded, so
+/// opening one never moves another.
 @MainActor final class DetailTableView: ToolSelectableRows {
     let table: UEFIDetailTable
-    /// The header line, then one row per table row.
+    /// The header line, then the table's rows — under a section's line each,
+    /// where the table has sections — in the order they are drawn.
     private(set) var rows: [DetailTableRow] = []
+    /// Each section's line, by section.
+    private(set) var sectionRows: [DetailTableRow] = []
+    /// The sections open, by title.
+    private(set) var openSections: Set<String>
+    /// Which section each row of `rows` belongs to; nil for the header line.
+    private var sectionOfRow: [Int?] = []
     private var widths: [CGFloat] = []
     private let rowHeight: CGFloat
+    private let onToggleSection: (String, Bool) -> Void
 
     static let columnSpacing: CGFloat = 14
     static let rowSpacing: CGFloat = 2
 
-    init(table: UEFIDetailTable, onFollow: @escaping (UEFIDetailTable.Target) -> Void) {
+    /// `openSections` are the sections drawn open; `onToggleSection` hears a
+    /// section opened or folded, for the panel to keep it so.
+    init(table: UEFIDetailTable, openSections: Set<String> = [],
+         onFollow: @escaping (UEFIDetailTable.Target) -> Void,
+         onToggleSection: @escaping (String, Bool) -> Void = { _, _ in }) {
         self.table = table
+        self.openSections = openSections
+        self.onToggleSection = onToggleSection
         let body = ToolPanelFont.body()
         let bold = ToolPanelFont.body(weight: .semibold)
         rowHeight = ceil(max(NSLayoutManager().defaultLineHeight(for: body),
@@ -48,6 +67,8 @@ import UEFITool
         rows.append(DetailTableRow(
             cells: table.columns.map { .init(text: $0, font: body, color: .secondaryLabelColor) },
             target: nil, linkColumn: nil, onFollow: onFollow))
+        sectionOfRow.append(nil)
+        var fieldRows: [DetailTableRow] = []
         for (index, row) in table.rows.enumerated() {
             let target = index < table.rowTargets.count ? table.rowTargets[index] : nil
             rows.append(DetailTableRow(
@@ -67,18 +88,30 @@ import UEFITool
                 },
                 target: target, linkColumn: target == nil ? nil : table.linkColumn, onFollow: onFollow))
         }
-        rows.forEach(addSubview)
+        fieldRows = Array(rows.dropFirst())
 
         let columns = table.columns.count
         widths = (0..<columns).map { column in
             rows.map { $0.naturalWidth(of: column) }.max() ?? 0
         }
-        var x: CGFloat = 0
+        // Under sections the columns start where a section's words do, past
+        // its triangle, so a section's rows read as inside it.
+        let indent = table.sections.isEmpty ? 0 : DetailTableRow.disclosureWidth(for: body)
+        var x: CGFloat = indent
         let offsets = widths.map { width -> CGFloat in
             defer { x += width + Self.columnSpacing }
             return x
         }
         rows.forEach { $0.setColumns(offsets: offsets, widths: widths) }
+        if indent > 0 {
+            widths[0] += indent
+        }
+
+        if !table.sections.isEmpty {
+            buildSections(fieldRows: fieldRows, indent: indent, body: body, bold: bold, onFollow: onFollow)
+        }
+        rows.forEach(addSubview)
+        applyOpenSections()
 
         // As wide as its columns, and no wider; narrower when the list is,
         // its last column giving way.
@@ -91,11 +124,87 @@ import UEFITool
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    override var selectableRows: [any ToolSelectableRow] { rows }
+    /// The rows in order with a section's line before its rows, and the
+    /// section lines' own columns: the title, what the rows share, and the
+    /// address, each as wide as its widest so the addresses line up.
+    private func buildSections(fieldRows: [DetailTableRow], indent: CGFloat,
+                               body: NSFont, bold: NSFont,
+                               onFollow: @escaping (UEFIDetailTable.Target) -> Void) {
+        var ordered: [DetailTableRow] = [rows[0]]
+        var owners: [Int?] = [nil]
+        for (index, section) in table.sections.enumerated() {
+            let line = DetailTableRow(
+                cells: [.init(text: section.title, font: bold, color: .labelColor),
+                        .init(text: section.subtitle ?? "", font: body, color: .secondaryLabelColor),
+                        .init(text: section.address ?? "", font: body,
+                              color: section.target == nil ? .labelColor : .linkColor)],
+                target: section.target, linkColumn: section.target == nil ? nil : 2,
+                onFollow: onFollow)
+            line.onToggle = { [weak self] in self?.toggle(section: index) }
+            sectionRows.append(line)
+            ordered.append(line)
+            owners.append(index)
+            for row in section.rows where row < fieldRows.count {
+                ordered.append(fieldRows[row])
+                owners.append(index)
+            }
+        }
+        let lineWidths = (0..<3).map { column in
+            sectionRows.map { $0.naturalWidth(of: column) }.max() ?? 0
+        }
+        var x = indent
+        let lineOffsets = lineWidths.map { width -> CGFloat in
+            defer { x += width + Self.columnSpacing }
+            return x
+        }
+        sectionRows.forEach { $0.setColumns(offsets: lineOffsets, widths: lineWidths) }
+        rows = ordered
+        sectionOfRow = owners
+        // The table is as wide as the wider of its columns and its lines.
+        let linesWidth = x - Self.columnSpacing
+        let columnsWidth = widths.reduce(0, +) + Self.columnSpacing * CGFloat(max(0, widths.count - 1))
+        if linesWidth > columnsWidth, !widths.isEmpty {
+            widths[widths.count - 1] += linesWidth - columnsWidth
+        }
+    }
+
+    /// Shows the rows of the open sections and hides the rest.
+    private func applyOpenSections() {
+        guard !table.sections.isEmpty else { return }
+        for (index, row) in rows.enumerated() {
+            guard let section = sectionOfRow[index] else { continue }
+            let title = table.sections[section].title
+            if row === sectionRows[section] {
+                row.disclosure = openSections.contains(title)
+            } else {
+                row.isHidden = !openSections.contains(title)
+            }
+        }
+        invalidateIntrinsicContentSize()
+        needsLayout = true
+    }
+
+    /// Opens a folded section or folds an open one.
+    func toggle(section index: Int) {
+        guard table.sections.indices.contains(index) else { return }
+        let title = table.sections[index].title
+        let open = !openSections.contains(title)
+        if open { openSections.insert(title) } else { openSections.remove(title) }
+        // The selection is kept by row number, and the rows have just changed.
+        select(nil)
+        applyOpenSections()
+        onToggleSection(title, open)
+    }
+
+    /// The rows on screen: a folded section's are not.
+    private var visibleRows: [DetailTableRow] { rows.filter { !$0.isHidden } }
+
+    override var selectableRows: [any ToolSelectableRow] { visibleRows }
 
     override var intrinsicContentSize: NSSize {
         let width = widths.reduce(0, +) + Self.columnSpacing * CGFloat(max(0, widths.count - 1))
-        let height = CGFloat(rows.count) * rowHeight + CGFloat(max(0, rows.count - 1)) * Self.rowSpacing
+        let count = visibleRows.count
+        let height = CGFloat(count) * rowHeight + CGFloat(max(0, count - 1)) * Self.rowSpacing
         return NSSize(width: ceil(width), height: height)
     }
 
@@ -103,9 +212,10 @@ import UEFITool
         super.layout()
         // A row takes the spacing under it, so that a selection running
         // through several rows is one band rather than stripes.
+        let shown = visibleRows
         var y: CGFloat = 0
-        for (index, row) in rows.enumerated() {
-            let spacing = index == rows.count - 1 ? 0 : Self.rowSpacing
+        for (index, row) in shown.enumerated() {
+            let spacing = index == shown.count - 1 ? 0 : Self.rowSpacing
             row.frame = NSRect(x: 0, y: y, width: bounds.width, height: rowHeight + spacing)
             y += rowHeight + spacing
         }
@@ -136,6 +246,19 @@ import UEFITool
 
     let cells: [Cell]
     let target: UEFIDetailTable.Target?
+
+    /// On a section's line, whether the section is open — the triangle drawn
+    /// before the line's words. Nil on any other row.
+    var disclosure: Bool? {
+        didSet { if disclosure != oldValue { needsDisplay = true } }
+    }
+    /// A click on a section's line, away from its link: opens or folds it.
+    var onToggle: (() -> Void)?
+
+    /// The room a section's triangle takes before its words, at `font`.
+    static func disclosureWidth(for font: NSFont) -> CGFloat {
+        ceil(font.pointSize * 1.1)
+    }
     /// The column the link is drawn in. Nil for a row that leads nowhere.
     let linkColumn: Int?
     private let onFollow: (UEFIDetailTable.Target) -> Void
@@ -214,12 +337,32 @@ import UEFITool
 
     override func draw(_ dirtyRect: NSRect) {
         drawSelection()
+        if let disclosure { drawDisclosure(open: disclosure) }
         for column in cells.indices {
             let cellRect = rect(of: column)
             guard cellRect.width > 0, cellRect.intersects(dirtyRect) else { continue }
             strings[column].draw(with: cellRect, options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
         }
     }
+
+    /// The triangle before a section's words: pointing right when folded,
+    /// down when open, as a disclosure triangle does.
+    private func drawDisclosure(open: Bool) {
+        guard let font = cells.first?.font else { return }
+        let side = font.pointSize * 0.75
+        let config = NSImage.SymbolConfiguration(pointSize: side, weight: .semibold)
+            .applying(.init(paletteColors: [.secondaryLabelColor]))
+        guard let image = NSImage(systemSymbolName: open ? "chevron.down" : "chevron.right",
+                                  accessibilityDescription: nil)?
+            .withSymbolConfiguration(config) else { return }
+        let size = image.size
+        let room = Self.disclosureWidth(for: font)
+        image.draw(in: NSRect(x: (room - size.width) / 2, y: (bounds.height - Self.spacing - size.height) / 2,
+                              width: size.width, height: size.height))
+    }
+
+    /// The spacing a row's frame carries under its text (`DetailTableView`).
+    private static let spacing = DetailTableView.rowSpacing
 
     /// The selection's band: through the gap after a cell when it runs on
     /// into the next one, as a text view's runs through a tab.
@@ -287,7 +430,13 @@ import UEFITool
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if !follow(at: point) { super.mouseDown(with: event) }
+        if follow(at: point) { return }
+        // A section's line is its switch, all of it but the link.
+        if let onToggle {
+            onToggle()
+            return
+        }
+        super.mouseDown(with: event)
     }
 
     /// Follows the link when `point` is in its zone. True when it was.
@@ -298,14 +447,16 @@ import UEFITool
         return true
     }
 
-    /// A pointing hand over the link, a text cursor over the rest of the row.
+    /// A pointing hand over the link, a text cursor over the rest of the row
+    /// — an arrow over a section's line, which is a switch, not text.
     override func resetCursorRects() {
-        guard let zone = linkZone else { return addCursorRect(bounds, cursor: .iBeam) }
+        let rest: NSCursor = onToggle == nil ? .iBeam : .arrow
+        guard let zone = linkZone else { return addCursorRect(bounds, cursor: rest) }
         addCursorRect(zone, cursor: .pointingHand)
         addCursorRect(NSRect(x: bounds.minX, y: 0, width: zone.minX - bounds.minX, height: bounds.height),
-                      cursor: .iBeam)
+                      cursor: rest)
         addCursorRect(NSRect(x: zone.maxX, y: 0, width: bounds.maxX - zone.maxX, height: bounds.height),
-                      cursor: .iBeam)
+                      cursor: rest)
     }
 
     override func layout() {
@@ -345,14 +496,24 @@ import UEFITool
     override func isAccessibilityElement() -> Bool { true }
 
     override func accessibilityRole() -> NSAccessibility.Role? {
-        target == nil ? .staticText : .link
+        if disclosure != nil { return .disclosureTriangle }
+        return target == nil ? .staticText : .link
     }
 
     override func accessibilityLabel() -> String? {
-        texts.joined(separator: ", ")
+        texts.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 
+    override func accessibilityValue() -> Any? {
+        disclosure.map { $0 ? 1 : 0 }
+    }
+
+    // help: panel.uefi.folding-table
     override func accessibilityPerformPress() -> Bool {
+        if let onToggle {
+            onToggle()
+            return true
+        }
         guard let target else { return false }
         onFollow(target)
         return true
