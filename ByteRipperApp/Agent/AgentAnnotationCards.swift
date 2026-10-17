@@ -693,7 +693,11 @@ final class AnnotationCardView: NSView {
     /// With ⌘ or ⇧ held the press selects, and nothing else: it lands on the
     /// card, never on the node's link, a relation, the pencil or the ✕. The
     /// ✕ standing out of the corner answers a click outside the card too.
+    /// A hidden card answers nothing: the collection keeps a removed card's
+    /// view hidden where it stood, for reuse, and its ✕ would take the click
+    /// meant for the card that moved into its place.
     func target(at point: NSPoint, for event: NSEvent?) -> NSView? {
+        guard !isHiddenOrHasHiddenAncestor else { return nil }
         let inside = convert(point, from: superview)
         let onRemove = header.map { !$0.remove.isHidden && $0.remove.frame.contains(inside) } ?? false
         if let event, event.type == .leftMouseDown,

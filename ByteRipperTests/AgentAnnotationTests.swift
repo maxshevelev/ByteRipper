@@ -788,6 +788,27 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(service.annotationTools.all().map(\.title), ["B"], "the second card is the older one")
     }
 
+    /// The card that moved up into a removed one's place takes the click on
+    /// its own ✕: the removed card's view, kept hidden by the collection for
+    /// reuse, does not answer for it.
+    func testTheCrossOnTheCardThatTookARemovedOnesPlaceRemovesIt() async throws {
+        try open()
+        _ = try await client.answer("annotate", ["offset": 0, "title": "A"])
+        _ = try await client.answer("annotate", ["offset": 2, "title": "B"])
+        _ = try await client.answer("annotate", ["offset": 4, "title": "C"])
+        let cards = try notes()
+        let first = try XCTUnwrap(cards.collection.item(at: IndexPath(item: 0, section: 0))?.view)
+        let corner = NSPoint(x: first.frame.maxX + 3, y: first.frame.minY - 3)
+        try XCTUnwrap(descendants(of: first, AnnotationRemoveBadge.self).first).click()
+        _ = await settle(0.6)
+        XCTAssertEqual(service.annotationTools.all().map(\.title), ["A", "B"])
+        let next = try XCTUnwrap(cards.collection.item(at: IndexPath(item: 0, section: 0))?.view)
+        let cross = try XCTUnwrap(descendants(of: next, AnnotationRemoveBadge.self).first)
+        XCTAssertTrue(cards.collection.hitTest(corner) === cross, "the card in that place now answers")
+        cross.click()
+        XCTAssertEqual(service.annotationTools.all().map(\.title), ["A"])
+    }
+
     /// The ✕'s disc is the paper the cards lie on, in either theme — a white
     /// disc was the brightest thing in a dark panel.
     @MainActor
