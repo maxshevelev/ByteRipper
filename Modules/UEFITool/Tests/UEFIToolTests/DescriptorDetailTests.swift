@@ -224,6 +224,26 @@ final class DescriptorDetailTests: XCTestCase {
                        ["SaPowerPlaneTopology", "0–3", "0x2", "0x2"])
     }
 
+    /// The OEM section's bytes, in rows of sixteen, with the address that
+    /// outlines them — shown only where a board's maker wrote something.
+    func testTheOEMSectionIsAGridWhereSomethingIsWritten() throws {
+        var oem = [UInt8](repeating: 0xFF, count: 0x20)
+        oem[0] = 0x4E
+        oem[1] = 0x31
+        let shown = detail(TestUEFI.flashDescriptor(oemSection: oem))
+        let table = try XCTUnwrap(table(shown, "OEM section"))
+
+        XCTAssertEqual(table.columns, ["Offset", "Bytes"])
+        XCTAssertEqual(table.rows.count, 16)
+        XCTAssertEqual(table.rows[0].map(\.text),
+                       ["0xF00", "4E 31 FF FF FF FF FF FF FF FF FF FF FF FF FF FF"])
+        XCTAssertEqual(table.rowTargets[0], .range(0xF00..<0xF10, name: "0xF00"))
+        XCTAssertEqual(table.linkColumn, 0)
+
+        XCTAssertNil(self.table(detail(TestUEFI.flashDescriptor()), "OEM section"),
+                     "an erased section is not a table")
+    }
+
     /// From Tiger Point on the descriptor names the straps' place in the PMC's
     /// space instead, so there is no section in it to show — and no table.
     func testATigerPointDescriptorCarriesNoProcessorStraps() throws {
@@ -322,12 +342,19 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(field(shown, "eSPI clock"), "Unknown (code 6)")
     }
 
-    /// The desktop layout's words are other fields, so neither row is shown.
-    func testADesktopLayoutHasNeitherRow() {
-        let shown = detail(TestUEFI.flashDescriptor(version1: false, straps: [0x2222_2222]))
+    /// The desktop layout keeps the two fields in words of its own: word 29 is
+    /// the eSPI clock and word 28 GPR0, while what the mobile layout calls
+    /// GPR0 — word 21 — is neither.
+    func testTheDesktopLayoutReadsItsOwnWords() {
+        var words = [UInt32](repeating: 0, count: 115)
+        words[21] = 0x2222_2222
+        words[28] = 0x801F_8001
+        words[29] = 4 << 3
+        let shown = detail(TestUEFI.flashDescriptor(
+            version1: false, straps: words, strapCount: 115))
 
-        XCTAssertNil(field(shown, "GPR0"))
-        XCTAssertNil(field(shown, "eSPI clock"))
+        XCTAssertEqual(field(shown, "GPR0"), "0x1000 – 0x1FFFF: reads and writes refused")
+        XCTAssertEqual(field(shown, "eSPI clock"), "60 MHz")
     }
 
     /// No strap section, no strap table and no bit row.

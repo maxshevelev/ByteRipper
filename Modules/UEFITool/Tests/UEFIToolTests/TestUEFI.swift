@@ -246,6 +246,7 @@ enum TestUEFI {
         processorStraps: [UInt32]? = nil,
         processorStrapBase: UInt32 = 0x22,
         map2: UInt32? = nil,
+        oemSection: [UInt8]? = nil,
         totalSize: UInt64 = 0x1000
     ) -> Built {
         var bytes = [UInt8](repeating: 0xFF, count: Int(totalSize))
@@ -317,6 +318,12 @@ enum TestUEFI {
 
         for (index, word) in (straps ?? []).enumerated() {
             put(word, at: Int(strapBase) << 4 + index * 4)
+        }
+
+        if let oemSection {
+            for (index, byte) in oemSection.enumerated() where 0x0F00 + index < bytes.count {
+                bytes[0x0F00 + index] = byte
+            }
         }
 
         put16(UInt16(truncatingIfNeeded: UInt32(chips.count) * 2 << 8 | vsccBase), at: 0x0EFC)

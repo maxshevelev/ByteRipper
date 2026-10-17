@@ -80,6 +80,19 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertNil(read.processorStraps)
     }
 
+    /// The OEM section is the fixed `0x100` bytes at `0xF00`, whatever a board
+    /// wrote there — and all `0xFF` reads as an erased one, not as absent.
+    func testTheOEMSectionIsTheFixedHundredBytes() throws {
+        var bytes = TestImage.descriptor(regions: [(.bios, 0x1000..<0x40_0000)])
+        bytes[0xF00] = 0x4E
+        bytes[0xFFF] = 0x45
+        let read = try info(bytes)
+
+        XCTAssertEqual(read.oemSection.count, 0x100)
+        XCTAssertEqual(read.oemSection.first, 0x4E)
+        XCTAssertEqual(read.oemSection.last, 0x45)
+    }
+
     /// A count of zero, or a base no descriptor has, is no section.
     func testNoProcessorStrapCountMeansNoSection() throws {
         XCTAssertNil(try info(TestImage.descriptor(
@@ -159,29 +172,38 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertEqual(straps.espiClock?.clock, DescriptorInfo.Clock(code: 6, megahertz: nil))
     }
 
-    /// The desktop layout puts other fields in the same words, so nothing is
-    /// read from them: Alder Point S's 115 words have no eSPI clock or GPR0.
-    func testTheDesktopLayoutReadsNeither() throws {
-        var words = [UInt32](repeating: 0, count: 23)
+    /// The desktop layout puts the two fields in words of its own: Alder Point
+    /// S's 115-word section keeps the eSPI clock in word 29 and GPR0 in word
+    /// 28, and what the mobile layout calls GPR0 — word 21 — is neither.
+    func testTheDesktopLayoutReadsItsOwnWords() throws {
+        var words = [UInt32](repeating: 0, count: 115)
         words[21] = 0x2222_2222
+        words[28] = 0x001F_8001                       // 0x1000–0x1FFFF, both refused
+        words[29] = 4 << 3
         let straps = try XCTUnwrap(info(TestImage.descriptor(
             regions: [(.bios, 0x1000..<0x40_0000)], straps: words)).straps)
 
-        XCTAssertEqual(straps.words.count, 0x73)
-        XCTAssertNil(straps.espiClock)
-        XCTAssertNil(straps.gpr0)
+        XCTAssertEqual(straps.words.count, 115)
+        XCTAssertEqual(straps.espiClock?.word, 29)
+        XCTAssertEqual(straps.espiClock?.clock, DescriptorInfo.Clock(code: 4, megahertz: [60]))
+        XCTAssertEqual(straps.gpr0?.word, 28)
+        XCTAssertEqual(straps.gpr0?.start, 0x1000)
+        XCTAssertEqual(straps.gpr0?.end, 0x1_FFFF)
+        XCTAssertEqual(straps.gpr0?.isOn, true)
     }
 
     /// Which layouts the two fields are read on: the length of the section,
-    /// which is what an image states about it. Tiger Point H's 101 words are
-    /// a layout of their own, and Alder Point S's desktop section is not one
-    /// the tools at hand carry.
+    /// which is what an image states about it. Tiger Point H's 101 words and
+    /// Alder Point S's desktop 114 and 115 are layouts of their own.
     func testTheStrapFieldsAreKeyedByTheSectionsLength() {
         XCTAssertEqual(DescriptorStrapMap.forSection(words: 70)?.espiClockField?.word, 22)
         XCTAssertEqual(DescriptorStrapMap.forSection(words: 70)?.protectedRangeField?.word, 21)
         XCTAssertEqual(DescriptorStrapMap.forSection(words: 101)?.espiClockField?.word, 20)
         XCTAssertEqual(DescriptorStrapMap.forSection(words: 101)?.protectedRangeField?.word, 19)
-        XCTAssertNil(DescriptorStrapMap.forSection(words: 115), "Alder Point S")
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 115)?.espiClockField?.word, 29)
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 115)?.protectedRangeField?.word, 28)
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 114)?.espiClockField?.word, 26)
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 114)?.protectedRangeField?.word, 25)
         XCTAssertNil(DescriptorStrapMap.forSection(words: 6))
     }
 

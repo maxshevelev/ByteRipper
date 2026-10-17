@@ -176,7 +176,7 @@ names the words in the UEFI Structure panel:
 
 ```bash
 python3 Skills/me-eom-structures/scripts/strap_map.py \
-    <fit-15.0.exe> <fit-14.0.exe> --words 69,70,74,90,101 > \
+    <fit-15.0.exe> <fit-14.0.exe> --words 69,70,74,90,101,114,115 > \
     Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH.swift
 ```
 
@@ -195,6 +195,11 @@ from and where the two fields the engine reads by name — `SPI_ec_max_freq` and
 the section's own: they move with the length, and the 69- and 74-word sections
 carry no clock field at all. A length is added by naming it in `--words` and running the script
 again; whatever the app does not carry stays a list of numbers in the panel.
+The 114- and 115-word tables are the Alder Point S desktop layouts, which FIT
+15 carries only as nameless documents; the check that a nameless one is the
+section's is a dump of that length — on `LENV_CSME 16.bin` (115 words,
+Consumer H) 1084 of the table's 1201 fields read the tool's default, and its
+eSPI clock code is 4, 60 MHz.
 `--kind cpu` emits the processor strap section's tables into
 `StrapMap+CPU.swift` instead:
 
