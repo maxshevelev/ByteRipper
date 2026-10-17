@@ -759,6 +759,11 @@ import UEFITool
             meOpening = nil
             supersededByStore.removeAll()
             listedChildren = nil
+            // A fold the last file's reader opened belongs to that file: every
+            // table of this one starts as its definition says — the strap
+            // tables, PCH and CPU alike, folded until asked for.
+            unfoldedTables.removeAll()
+            openTableSections.removeAll()
             // What the search opened was in the last file's tree.
             cancelSearch()
             searchOpenings.release()

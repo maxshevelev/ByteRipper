@@ -217,7 +217,7 @@ final class DescriptorDetailTests: XCTestCase {
         let table = try XCTUnwrap(table(shown, "CPU straps"))
 
         XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
-        XCTAssertTrue(table.startsFolded)
+        XCTAssertTrue(table.startsFolded, "the CPU straps start folded, as the PCH ones do")
         XCTAssertEqual(try XCTUnwrap(row(table, "Processor_max_frequency_boot")).map(\.text),
                        ["Processor_max_frequency_boot", "12", "0x1", "0x1"])
         XCTAssertEqual(try XCTUnwrap(row(table, "SaPowerPlaneTopology")).map(\.text),
@@ -252,6 +252,7 @@ final class DescriptorDetailTests: XCTestCase {
 
         XCTAssertEqual(table.sections.first?.title, "CPUSTRP0")
         XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
+        XCTAssertTrue(table.startsFolded, "the CPU straps start folded, as the PCH ones do")
     }
 
     /// The bit that soft-disables the ME is a row of its own, and set it reads
