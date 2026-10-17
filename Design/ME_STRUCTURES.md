@@ -641,13 +641,17 @@ by alias and without the project lists), 59 files and 127 settings in this
 build, with a second `<Files>` document listing the MFS paths
 (`<FileName>`/`<FilePath>`).
 
-Two things moved out. **The strap layouts are no longer in the executable**: the
-harness document imports them by name —
-`plugins/DescriptorPluginsCommon/data/straps/mtl_arl_p_a0_complex_straps.xml` —
-and the System Tools package ships `mfit.exe` alone, so the PCH and CPU strap
-tables for 18 are not readable from it (a handful of `CPU_Strap_…` fields are
-inlined). And the platform families are told by a new dictionary rather than by
-project attributes: **MTL, ARL, LNL, PTL**. The IFWI layout adds the ESE package
+**The strap layouts are still in the executable**, in the harness documents
+the layout imports by name (`DescriptorPluginsCommon/data/straps/`:
+`mtl_arl_p_a0_complex_straps.xml`, `mtl_m_…`, `mtl_p_…`). The packaging keeps
+each as `mfit_data` blocks of `serialized_item`s — `CPU_smip` (the 35 CPU
+strap fields, with the UI's labels and option words through `bind_action`s),
+`PMC_SoC_smip` (257 fields, the MIP-table header and the CPU message header
+among them), `CSME_smip`, `IOE_smip` and the PMC variants — so the CPU straps
+are readable from the package after all; the earlier note that they were not
+was looking at the `<import>` line rather than the document behind it. The
+platform families are told by a new dictionary rather than by project
+attributes: **MTL, ARL, LNL, PTL**. The IFWI layout adds the ESE package
 (ESE, DMU, PUNIT, AUNIT, SOC ESE, SOC SPHY, SOC PMC) and the ACE / SOCC / PCHC
 sub-partitions, and the descriptor's MIP area is restructured
 (`MipDescNvar`, `PlatformSoftStraps`, `DescriptorSoftStraps`).
@@ -685,8 +689,36 @@ measure:
   Guard profile of that image is therefore 5, and the analyzer reads it through
   the map.
 
-The strap tables still need the full MFIT 18 project data the System Tools
-package does not ship.
+**The CPU strap message.** `strap18_map.py` turns the `CPU_smip` document into
+`CPUStrapMap+CSME18` (35 fields), and the message itself is read out of the
+image's **MIP table**, which CSME 18 keeps in the FITC partition rather than
+in the descriptor's MIP area:
+
+- The FITC payload is a record table (`u32 count`, then 12-byte
+  `{FileID, offset, size, flags}` records whose values are packed in order).
+  One record is a MIP descriptor: `u16 NumberOfDescriptors`, `u16 SizeOfMip`,
+  then `{BlockType, BlockOffset, BlockLength, Reserved}` per block, contiguous
+  from the end of the header to the record's own last byte. On the HP dump it
+  is FileID `0x10023E00` — the `smip` nvar, which is not an MFS file and has
+  no FileTable name — with `NumberOfDescriptors` 4 and `SizeOfMip` 404.
+- The blocks on that dump: type 1 `PmcAndCpu` 0x58 bytes, type 2 0x40 bytes,
+  type 4 (CSME/DBC) 0xD0, and a type 0 terminator of 8 zero bytes. The first
+  block is the `PMC_SoC_smip` container (its 257 fields run to 0x47), then the
+  **CPU message header** at 0x48 — `Reserved_15_0`, `Interpretation_Num`
+  (bit 16), `Reserved_23_17`, `CPU_Strap_Length` (bits 24–31) — and the
+  message itself at 0x4C, `CPU_Strap_Length` words long.
+- On the HP dump the length is 3 and the message is `00801000 04002000
+  D6CE0000`; the stored CRC-16 `0xD6CE` is CCITT-FALSE over the words after
+  the first with the CRC field zeroed, and the fields decode to the tool's own
+  UI values: hyperthreading not disabled, all big cores active, BIST No, flex
+  ratio 0, boot at P1, compute small cores all and small cores 2, IA/GT/SA VR
+  addresses 0/1/2. The analyzer reports the message as `cpuStraps` and the panel
+  as the **CPU straps** group.
+
+The descriptor's own PCH strap tables (the classic and MIP sections the UEFI
+Structure panel names) are another document still: the layout's harness XML
+carries them in `DescriptorSoftStraps`/`PlatformSoftStraps` blocks with
+`block_type`s rather than field layouts.
 
 **The PCH fuses are not in a dump.** `pch_fuses.xml` names the seven fuses per
 platform and SKU — `CSME_FUSE_VALUE_BYTE_0…5` and

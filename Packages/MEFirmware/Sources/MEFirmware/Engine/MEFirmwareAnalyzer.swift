@@ -1283,6 +1283,19 @@ public actor MEFirmwareAnalyzer {
         let uepReadings = uepArea.flatMap { area in
             UEPMap.forME(major: identity.major).flatMap { UEPReader.readings(in: area, map: $0) }
         }
+        // The CPU strap message: on CSME 18 it is not in the descriptor's MIP
+        // area but in the FITC partition's MIP table (`smip` nvar), which the
+        // FITC payload's record table carries. Only the generations with a map
+        // are read (`CPUStrapMap.forME`).
+        let cpuStraps = regions.first(where: { $0.name == "FITC" })
+            .flatMap { (fitcRegion: FPTRegion) -> CPUStrapReadings? in
+            guard let map = CPUStrapMap.forME(major: identity.major),
+                  let payload = FITCParser.configPayload(in: region,
+                                                         offset: fitcRegion.offset - baseOffset,
+                                                         size: fitcRegion.size)
+            else { return nil }
+            return MIPTableReader.cpuStraps(in: payload, map: map)
+        }
         let uepProfile = uepArea.flatMap(profileFromUEP)
         let bootGuardProfile = Self.regionBytes("CDMD", regions: regions,
                                                 region: region, baseOffset: baseOffset)
@@ -1459,6 +1472,7 @@ public actor MEFirmwareAnalyzer {
             configuration: configuration.isEmpty ? nil : configuration,
             bootGuardProfile: bootGuardProfile,
             uepSettings: uepReadings,
+            cpuStraps: cpuStraps,
             hardwareBinding: hardwareBinding,
             oemPublicKeyHash: oemPublicKeyHash,
             // Row 12a is CSME 11's alone, the way upstream gates it, so the

@@ -49,6 +49,7 @@ public enum MEACurator {
         add(manifest(analysis, in: language))
         add(mfsVolume(analysis, mfsNames, configPaths, in: language))
         add(uepGroup(analysis, in: language))
+        add(cpuStrapGroup(analysis, in: language))
 
         // Fact groups — everything else a dump carried, each only when present.
         add(chipsetInitGroup(analysis, in: language))
@@ -592,6 +593,29 @@ public enum MEACurator {
                     children: sections[section] ?? [])
         }
         return MEANode(path: [], title: L("FPF Settings", in: language), children: groups)
+    }
+
+    /// The CPU strap message a CSME 18 image keeps in the FITC partition's MIP
+    /// table, under the tool's own words (`CPUStrapMap`) — with the message
+    /// length and its CRC-16, which say the reading is aligned. Shown for the
+    /// generations the engine has a map for and where the image carries a MIP
+    /// table.
+    private static func cpuStrapGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
+        guard let straps = a.cpuStraps,
+              let map = CPUStrapMap.forME(major: a.version.major) else { return nil }
+        let byName = Dictionary(uniqueKeysWithValues: map.fields.map { ($0.name, $0) })
+        let rows = straps.readings.map { reading -> MEANode in
+            let field = byName[reading.name]
+            let shown = field?.options?[reading.value].map { "\($0) (\(reading.value))" }
+                ?? "\(reading.value)"
+            return MEANode(path: [], title: field?.label ?? reading.name, subtitle: shown)
+        }
+        return MEANode(
+            path: [], title: L("CPU straps", in: language),
+            fields: [MEAField("Message length", "\(straps.messageLengthWords) words"),
+                     MEAField("CRC-16", String(format: "0x%04X", straps.crcStored)),
+                     MEAField("CRC Valid", MEAText.yesNo(straps.crcValid))],
+            children: rows)
     }
 
     private static func chipsetInitGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {

@@ -57,6 +57,28 @@ final class MEACuratorTests: XCTestCase {
         XCTAssertEqual(group.children[1].children.first?.subtitle, "4156")
     }
 
+    /// CSME 18's CPU straps are a group of their own, with the tool's words and
+    /// the message's length and CRC-16 beside them.
+    func testTheCPUStrapsAreAGroupWithTheToolsWords() throws {
+        let a = try analysis([
+            "version": ["major": 18, "minor": 0, "hotfix": 10, "build": 2288],
+            "cpuStraps": [
+                "messageLengthWords": 3,
+                "crcStored": 0xD6CE,
+                "crcValid": true,
+                "readings": [
+                    ["name": "CPU_smip_Strap_CPU_SMT_Disable", "value": 0],
+                    ["name": "CPU_smip_Strap_CPU_NUM_OF_SOC_ATOM_CORES", "value": 2],
+                ],
+            ],
+        ])
+        let group = try XCTUnwrap(find("CPU straps", in: MEACurator.present(a, in: .english)))
+        XCTAssertEqual(group.fields.map(\.value), ["3 words", "0xD6CE", "Yes"])
+        XCTAssertEqual(group.children.map(\.title),
+                       ["Disable Hyperthreading", "Number of Active Small Cores"])
+        XCTAssertEqual(group.children.map(\.subtitle), ["No (0)", "2 Cores Active (2)"])
+    }
+
     // MARK: - Fixtures
 
     /// Decode an analysis whose top-level fields are `overrides` merged over
