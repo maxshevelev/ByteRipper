@@ -1,6 +1,11 @@
 // The CSME 15 map of the ME configuration — emitted by
 // `Skills/me-eom-structures/scripts/fit_map.py` from Flash Image Tool 15.0's
 // own layout documents (the tgp_lp platform of ME 15).
+//
+// The family is the tool's own name for the platform half: `_lp`/`_p` is
+// the mobile one and `_h`/`_s` the desktop one, and a dump is read with
+// the one its descriptor's strap section length names
+// (`MEConfigurationMap.forME(major:family:)`).
 // Offsets, bits, the tool's own name for each setting (`label`), its option
 // labels and the file paths are FIT's, copied out of its
 // `ProcessNvar` bindings and value dictionaries; nothing here is read out of a
@@ -16,7 +21,7 @@ extension MEConfigurationMap {
     /// The ME 15 configuration, as FIT 15.0 lays it out. The files stand in the
     /// order a bench reads them, and the rest in the tool's own order.
     public static let csme15 = MEConfigurationMap(
-        name: "CSME 15 (Flash Image Tool 15.0)",
+        name: "CSME 15 (Flash Image Tool 15.0, tgp_lp)",
         files: [
         File(path: "/home/mca/eom_config", alias: "EOM_Config", settings: [
             Setting(name: "EomFirstBootEnabled", offset: 0, length: 1, label: "EOM on First Boot Enabled", help: "This setting detremines if End of Manufacturing will be triggered on first boot of the platform after flashing.\nNote: When this setting is enabled Intel(R) CSME will enter End of Manufacturing regardless of the descriptor settings.", bits: 0...0, options: [0: "No", 1: "Yes"]),

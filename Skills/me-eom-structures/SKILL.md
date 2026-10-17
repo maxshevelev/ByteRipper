@@ -90,17 +90,28 @@ python3 Skills/me-eom-structures/scripts/fit_map.py <fit-14.0.exe> \
     Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME14.swift
 ```
 
-ME 14's own family has to be picked per dump — `cml_lp` was, for the Lenovo
-Comet Lake board, by the CPUIDs in its BIOS region (`0x806EA`/`0x806EB`/`0x806EC`
-are Comet Lake U, `0xA0660` Comet Lake S) rather than by anything in the ME
-region. ME 13's family is `icl_lp`, Ice Lake U, and that is the board's own
-chipset string (`ICP-LP`) rather than an inference:
+**A generation has two maps, one for each half of it** — the mobile families
+(`_lp`, `_p`) and the desktop ones (`_h`, `_s`) lay a few settings out
+differently, so both are emitted, the mobile one under `csme<generation>` and
+the desktop one under `csme<generation>Desktop` (`--variable`). Which one a
+dump is read with is `MEConfigurationMap.forME(major:family:)`, and the family
+is the descriptor's answer: its PCH strap section is 69, 70 or 74 words on the
+mobile parts and 90, 101 or 115 on the desktop ones
+(`MEPlatformFamily(strapWords:)`). Nothing in the ME region says it — the
+manifest's platform name is the same for both halves.
 
 ```bash
-python3 Skills/me-eom-structures/scripts/fit_map.py <fit-13.0.exe> \
-    --straps icl_lp --generation 13 --tool 13.0 > \
-    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME13.swift
+python3 Skills/me-eom-structures/scripts/fit_map.py <fit-15.0.exe> \
+    --straps tgp_h --generation 15 --tool 15.0 --variable csme15Desktop > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME15Desktop.swift
 ```
+
+ME 14's families are `cml_lp` and `cml_h`, ME 13's `icl_lp` and `icl_h`
+(`icp_n_icl_h` is the same map with one setting fewer). MFIT needs neither:
+its database merges the eight platform lists it builds from, and conflicts are
+dropped and named. When a new family is added, run the generator twice and keep
+both files — the panel and the engine ask through `forME`, so a half without a
+map is a generation read with the other half's offsets.
 
 The tool lays the Boot Guard bits out per family as well, which is a fact about
 the *tool's documents* and not about where a vendor image keeps them: on both

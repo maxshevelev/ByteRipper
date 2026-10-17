@@ -88,6 +88,57 @@ final class ConfigurationMapTests: XCTestCase {
         XCTAssertFalse(help.contains("&#"), help)
     }
 
+    /// CSME 13, 14 and 15 have a map for each half of the generation — the
+    /// mobile parts and the desktop ones lay a few settings out differently —
+    /// and CSME 16 has one for both, MFIT's database merging the platform
+    /// lists it builds from.
+    func testEachGenerationHasAMapForEachHalfOfIt() throws {
+        XCTAssertTrue(try XCTUnwrap(MEConfigurationMap.forME(major: 15, family: .mobile))
+            .name.contains("tgp_lp"))
+        XCTAssertTrue(try XCTUnwrap(MEConfigurationMap.forME(major: 15, family: .desktop))
+            .name.contains("tgp_h"))
+
+        // The setting the two halves moved, and one only the desktop half has.
+        func offset(_ name: String, in map: MEConfigurationMap) -> Int? {
+            map.files.flatMap(\.settings).first { $0.name == name }?.offset
+        }
+        let mobile = try XCTUnwrap(MEConfigurationMap.forME(major: 15, family: .mobile))
+        let desktop = try XCTUnwrap(MEConfigurationMap.forME(major: 15, family: .desktop))
+        XCTAssertEqual(offset("SecureTouch", in: mobile), 8)
+        XCTAssertEqual(offset("SecureTouch", in: desktop), 18)
+        XCTAssertNil(offset("ProcMissingDetect", in: mobile))
+        XCTAssertEqual(offset("ProcMissingDetect", in: desktop), 212)
+
+        // 13 and 14 too, under the tool's own names for their desktop parts.
+        XCTAssertTrue(try XCTUnwrap(MEConfigurationMap.forME(major: 13, family: .desktop))
+            .name.contains("icl_h"))
+        XCTAssertTrue(try XCTUnwrap(MEConfigurationMap.forME(major: 14, family: .desktop))
+            .name.contains("cml_h"))
+        XCTAssertNotEqual(MEConfigurationMap.forME(major: 14, family: .desktop)?.name,
+                          MEConfigurationMap.forME(major: 14, family: .mobile)?.name)
+
+        // MFIT's 16 map serves both halves.
+        XCTAssertEqual(MEConfigurationMap.forME(major: 16, family: .desktop)?.name,
+                       MEConfigurationMap.forME(major: 16, family: .mobile)?.name)
+        // And a dump that did not say which half it is reads as the mobile one,
+        // which is what every map was before the choice existed.
+        XCTAssertEqual(MEConfigurationMap.forME(major: 15)?.name, mobile.name)
+    }
+
+    /// Which half a PCH strap section's length names: the lengths the two
+    /// halves use, measured on the dumps at hand, and no claim about others.
+    func testTheHalvesAreToldByTheStrapSectionsLength() {
+        for words in [69, 70, 74] {
+            XCTAssertEqual(MEConfigurationMap.MEPlatformFamily(strapWords: words), .mobile, "\(words)")
+        }
+        for words in [90, 101, 115] {
+            XCTAssertEqual(MEConfigurationMap.MEPlatformFamily(strapWords: words), .desktop, "\(words)")
+        }
+        for words in [0, 68, 75, 89, 128, 0xFF] {
+            XCTAssertNil(MEConfigurationMap.MEPlatformFamily(strapWords: words), "\(words)")
+        }
+    }
+
     /// The End of Manufacturing record: the one thing the newer layouts do not
     /// bind (the tool writes it through its own `EomNvar`), and the one record
     /// whose place every generation agrees on — bit 0 of the two bytes of

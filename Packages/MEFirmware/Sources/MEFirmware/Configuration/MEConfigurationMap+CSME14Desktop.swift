@@ -1,0 +1,64 @@
+// The CSME 14 map of the ME configuration — emitted by
+// `Skills/me-eom-structures/scripts/fit_map.py` from Flash Image Tool 14.0's
+// own layout documents (the cml_h platform of ME 14).
+//
+// The family is the tool's own name for the platform half: `_lp`/`_p` is
+// the mobile one and `_h`/`_s` the desktop one, and a dump is read with
+// the one its descriptor's strap section length names
+// (`MEConfigurationMap.forME(major:family:)`).
+// Offsets, bits, the tool's own name for each setting (`label`), its option
+// labels and the file paths are FIT's, copied out of its
+// `ProcessNvar` bindings and value dictionaries; nothing here is read out of a
+// dump. FIT 14.0 marks no setting `Auto` — it has no such attribute — so no
+// setting here carries that mark.
+//
+// A generation's map lives in a file of its own: see `MEConfigurationMap.swift`
+// for what a map is and why each generation has its own.
+
+import Foundation
+
+extension MEConfigurationMap {
+    /// The ME 14 configuration, as FIT 14.0 lays it out. The files stand in the
+    /// order a bench reads them, and the rest in the tool's own order.
+    public static let csme14Desktop = MEConfigurationMap(
+        name: "CSME 14 (Flash Image Tool 14.0, cml_h)",
+        files: [
+        File(path: "/home/mca/eom", alias: "EOM", settings: [
+            Setting(name: "EOM", offset: 0, length: 1, hex: true),
+        ]),
+        File(path: "/home/policy/cfgmgr/cfg_rules", alias: "ME_CONF_WRK", settings: [
+            Setting(name: "CryptoHwSupport", offset: 344, length: 2, label: "Crypto HW Support", help: "This setting can be used to disable crypto funtionality. This settings disables all crypto dependent features.", bits: 13...13, options: [0: "Yes", 1: "No"]),
+            Setting(name: "EnableTDS", offset: 344, length: 4, label: "Enable TDS Capabilities", help: "This setting enables Intel(R) Trusted Device Setup on the platform", bits: 25...25, options: [0: "No", 1: "Yes"]),
+            Setting(name: "IshPowerUpState", offset: 404, length: 2, label: "Integrated Sensor Hub Initial Power State", help: "This setting allows customers to determine the power up state for ISH.", bits: 10...10, options: [0: "Disabled", 1: "Enabled"]),
+            Setting(name: "MELanPowerWell", offset: 188, length: 1, label: "LAN Power Well", help: "This setting allows the customer to configure the powerwell that will be used by Intel(R) Integrated LAN.  Note: Recommended setting is SLP_LAN#.", bits: 0...2, options: [0: "Core Well", 1: "SUS Well", 2: "ME Well", 3: "SLP_LAN#"]),
+            Setting(name: "MEWlanPowerWell", offset: 200, length: 1, label: "WLAN Power Well", bits: 0...7, options: [128: "Disabled", 129: "Core Well || SLP_S3#", 130: "Primary Well || SLP_SUS#", 131: "ME Well || SLP_A#", 134: "SLP_WLAN#"]),
+            Setting(name: "MeClinkEnable", offset: 464, length: 1, label: "Intel(R) ME CLINK Signal Enabled", help: "This setting allows customers to enable / disable the Wireless LAN CLINK signal through Intel(R) ME firmware.  Note: For using Intel(R) vPro Wireless solutions this should be set to Yes.", bits: 0...0, options: [0: "No", 1: "Yes"]),
+            Setting(name: "ProcEmulation", offset: 488, length: 1, label: "Processor Emulation", bits: 0...3, options: [0: "No Emulation", 1: "EMULATE Intel (R) vPro (TM) capable Processor", 2: "EMULATE Intel (R) Core (TM) branded Processor", 3: "EMULATE Intel (R) Celeron (R) branded Processor", 4: "EMULATE Intel (R) Pentium (R) branded Processor", 5: "EMULATE Intel (R) Xeon (R) branded Processor", 6: "EMULATE Intel (R) Xeon (R) Manageability capable Processor"]),
+            Setting(name: "ProcMissingDetect", offset: 212, length: 1, label: "Missing Processor Detection Alert", help: "This setting determines if missing processor detection is enabled on Desktop / Workstation platforms.  Note: This feature will only work if the platform has the appropriate glue logic present.", bits: 0...7, options: [0: "Yes", 255: "No"]),
+            Setting(name: "PttPwrUpState", offset: 404, length: 4, label: "Intel(R) PTT initial power-up state", bits: 29...29, options: [0: "Disabled", 1: "Enabled"]),
+            Setting(name: "PttSupported", offset: 344, length: 4, label: "Intel(R) PTT Supported", help: "This setting permanently disables Intel(R) PTT in the firmware image.", bits: 29...29, options: [0: "No", 1: "Yes"]),
+            Setting(name: "TouchEnabled", offset: 344, length: 1, label: "Intel(R) Precise Touch and Stylus Enabled", bits: 4...4, options: [0: "No", 1: "Yes"]),
+        ]),
+        File(path: "/home/bup/si_features", alias: "KernFixedData", settings: [
+            Setting(name: "DbgOverridePreProdSi", offset: 12, length: 4, label: "Debug Override Pre-Production Silicon", help: "Allows the OEM to control FW features to assist with pre-production platform debugging.  This control has no effect if used on production silicon.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", hex: true),
+            Setting(name: "DbgOverrideProdSi", offset: 16, length: 4, label: "Debug Override Production Silicon", help: "Allows the OEM to control FW features to assist with production platform debugging.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", hex: true),
+        ]),
+        File(path: "/home/mctp/smt3_devices", alias: "Smt3Devices", settings: [
+            Setting(name: "MctpEcAddress", offset: 0, length: 2, label: "MCTP EC Address", help: "Defines the 8-bits MCTP address and 7-bits SMBus address of the EC on SMLink1 bus. This value is needed if EC is using the MCTP protocol. The SMBus (LS byte) must be from 0x01 to 0x7f (and should not overlap with any SMBus address in PCH Strap 11).  The EID (MS byte) must be outside 0x01 through 0x07.", hex: true),
+        ]),
+        File(path: "/home/amt/skip_rtfd/ncsi", alias: "AmtNetworkConfiguration", settings: [
+            Setting(name: "TypeCPort1RetimerI2cAddress", offset: 1, length: 1, label: "Type-C Port1 Re-Timer I2C Address", help: "This setting configures the Intel(R) SMBus I2C Address.\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", hex: true),
+            Setting(name: "TypeCPort2RetimerI2cAddress", offset: 2, length: 1, label: "Type-C Port2 Re-Timer I2C Address", help: "This setting configures the Intel(R) SMBus I2C Address.\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", hex: true),
+            Setting(name: "TypeCPort3RetimerI2cAddress", offset: 3, length: 1, label: "Type-C Port3 Re-Timer I2C Address", help: "This setting configures the Intel(R) SMBus I2C Address.\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", hex: true),
+            Setting(name: "TypeCPort4RetimerI2cAddress", offset: 4, length: 1, label: "Type-C Port4 Re-Timer I2C Address", help: "This setting configures the Intel(R) SMBus I2C Address.\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", hex: true),
+            Setting(name: "TypeCPortRetimerMCTPSmbusAddr", offset: 6, length: 1, label: "vPro NIC on dock slave SMBUS Address", help: "Dock NIC slave address\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", hex: true),
+            Setting(name: "vproDockEnabled", offset: 0, length: 1, label: "vPro Dock Enabled", help: "YES = Enables communication with, vPro supporting NIC, via TBT dock\nNO = No support for vPro dock solution", bits: 1...1, options: [0: "No", 1: "Yes"]),
+            Setting(name: "vproNicEnabled", offset: 0, length: 1, label: "Platform Discrete vPro NIC Enabled", help: "YES = Discrete NIC enabled in platform\nNO = Integrated GBE LAN enabled in platform", bits: 0...0, options: [0: "No", 1: "Yes"]),
+            Setting(name: "vproNicSMBusAddress", offset: 5, length: 1, label: "Platform Discrete vPro NIC SMBUS slave address", help: "Platform discrete NIC slave address\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", hex: true),
+        ]),
+        File(path: "/home/mctp/smt2_devices", alias: "Smt2Devices", settings: [
+            Setting(name: "TypeCPortRetimerMCTPSmbusAddr", offset: 2, length: 1, label: "vPro NIC on dock slave SMBUS Address", help: "Dock NIC slave address\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", hex: true),
+            Setting(name: "vproNicSMBusAddress", offset: 0, length: 1, label: "Platform Discrete vPro NIC SMBUS slave address", help: "Platform discrete NIC slave address\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", hex: true),
+        ]),
+        ])
+}

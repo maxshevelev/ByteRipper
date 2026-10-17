@@ -413,6 +413,19 @@ enum FlashDescriptor {
     ///
     /// `data` is the whole-flash image (or at least its first descriptor
     /// page); an extracted ME region has no descriptor and answers nil.
+    /// How long the descriptor says the PCH strap section is, in words — the
+    /// high byte of `FLMAP1`, the length the section is read with. Ours.
+    ///
+    /// It is the one thing a dump states about which half of its chipset
+    /// generation the board is: the mobile parts lay the section out over 69,
+    /// 70 or 74 words and the desktop ones over 90, 101 or 115
+    /// (`MEPlatformFamily`). Nil where no descriptor was handed in or it does
+    /// not read as one.
+    static func pchStrapWords(in data: Data) -> Int? {
+        guard data.count >= 0x1000, subrange(data, 0x10, 4) == signature else { return nil }
+        return Int(data[data.startIndex + 0x1B])
+    }
+
     static func biosMaster(in data: Data) -> (read: UInt32, write: UInt32)? {
         guard data.count >= 0x1000, subrange(data, 0x10, 4) == signature else { return nil }
         let masterAt = Int(data[data.startIndex + 0x18])

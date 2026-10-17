@@ -1,6 +1,11 @@
 // The CSME 14 map of the ME configuration — emitted by
 // `Skills/me-eom-structures/scripts/fit_map.py` from Flash Image Tool 14.0's
 // own layout documents (the cml_lp platform of ME 14).
+//
+// The family is the tool's own name for the platform half: `_lp`/`_p` is
+// the mobile one and `_h`/`_s` the desktop one, and a dump is read with
+// the one its descriptor's strap section length names
+// (`MEConfigurationMap.forME(major:family:)`).
 // Offsets, bits, the tool's own name for each setting (`label`), its option
 // labels and the file paths are FIT's, copied out of its
 // `ProcessNvar` bindings and value dictionaries; nothing here is read out of a
@@ -16,7 +21,7 @@ extension MEConfigurationMap {
     /// The ME 14 configuration, as FIT 14.0 lays it out. The files stand in the
     /// order a bench reads them, and the rest in the tool's own order.
     public static let csme14 = MEConfigurationMap(
-        name: "CSME 14 (Flash Image Tool 14.0)",
+        name: "CSME 14 (Flash Image Tool 14.0, cml_lp)",
         files: [
         File(path: "/home/mca/eom", alias: "EOM", settings: [
             Setting(name: "EOM", offset: 0, length: 1, hex: true),

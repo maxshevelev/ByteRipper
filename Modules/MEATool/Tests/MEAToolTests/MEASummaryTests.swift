@@ -1085,6 +1085,33 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(unknownRows.map(\.mfs), ["Yes", nil, "1"])
     }
 
+    /// The tab reads the board's own half of the generation's map: a file the
+    /// mobile map lays out and the desktop one does not is labelled from the
+    /// mobile map and reaches the desktop tab by its identifier alone — the
+    /// same map the engine read the values through.
+    func testTheConfigurationTabReadsTheBoardsOwnHalfOfTheMap() throws {
+        func rows(_ family: MEConfigurationMap.MEPlatformFamily?) throws -> [MEAConfigurationRow] {
+            var a = try analysis([
+                "family": "csme", "manifest": manifestJSON(),
+                "version": ["major": 15, "minor": 0, "hotfix": 1, "build": 100],
+            ])
+            a.platformFamily = family
+            a.configuration = [
+                ConfigurationFile(path: "/home/smbus/smlink_bus", alias: "SmlinkBus",
+                                  mfs: .init(size: 1, settings: [
+                                      ConfigurationSetting(name: "SmlinkBusSelection", number: 1),
+                                  ])),
+            ]
+            return MEAConfiguration.build(a, in: .english)[0].rows
+        }
+
+        XCTAssertEqual(try rows(.mobile).map(\.name), ["Bus Selection"])
+        XCTAssertEqual(try rows(.desktop).map(\.name), ["SmlinkBusSelection"],
+                       "the desktop map does not lay this file out: the identifier is all there is")
+        XCTAssertEqual(try rows(nil).map(\.name), ["Bus Selection"],
+                       "a dump that did not say which half reads as the mobile one")
+    }
+
     /// A row carries what the tool says about its setting, under the
     /// identifier the row itself does not show — the heading of the `?` beside
     /// the name. A setting the map does not list, or one MFIT has nothing to

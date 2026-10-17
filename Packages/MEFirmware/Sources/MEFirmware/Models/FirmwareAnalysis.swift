@@ -119,9 +119,19 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// two pages of the setting, and the descriptor's state. Ours; nil where
     /// `manufacturingState` is.
     public var manufacturingBasis: ManufacturingBasis? = nil
+    /// Which half of its chipset generation the board is (ours) — the mobile
+    /// parts or the desktop ones — told from the length of the descriptor's
+    /// PCH strap section, which is the one thing a dump states about it
+    /// (`MEConfigurationMap.MEPlatformFamily`). nil where no descriptor was
+    /// read with the region, or its section length is one neither half uses:
+    /// an extracted ME region carries no descriptor, and a section erased past
+    /// reading names no length.
+    public var platformFamily: MEConfigurationMap.MEPlatformFamily? = nil
     /// The ME configuration, file by file (ours): what MFIT's own settings
     /// database says lives in each MFS file of this image, read out of its
-    /// bytes. `ConfigurationFile` says which page each file's bytes came from.
+    /// bytes — through the map of `platformFamily` where the dump says which
+    /// half it is, and the mobile map where it does not.
+    /// `ConfigurationFile` says which page each file's bytes came from.
     /// nil where the analysis read no configuration at all — an image whose
     /// files carry no File IDs and whose OEM Configuration holds no records.
     public var configuration: [ConfigurationFile]? = nil
@@ -2593,11 +2603,18 @@ public enum EngineModelRevision {
     /// CDMD record, now answers the profile instead of "no profile record in
     /// this image"; an image that answers nothing still does.
     ///
+    /// 46 adds `platformFamily`: the half of its chipset generation the board
+    /// is, told from the descriptor's PCH strap section length — and the
+    /// configuration is now read through the map of that half (CSME 13, 14 and
+    /// 15 have one for the mobile parts and one for the desktop ones, which
+    /// lay a few settings out differently). A dump without a descriptor keeps
+    /// the mobile map, which is what every map was before.
+    ///
     /// 45 changes one field's answer the same way: `oemPublicKeyHash` is read
     /// from the record the image's **generation** keeps — the 32-byte SHA-256 of
     /// CSME 12 to 14, 0x90 bytes into the UEP container, and the 48-byte
     /// SHA-384 of 15 and later at 0xA0. Images of the older generations, which
     /// answered "layout not recognized" (they were being read as a newer one),
     /// now answer their key.
-    public static let current = 45
+    public static let current = 46
 }
