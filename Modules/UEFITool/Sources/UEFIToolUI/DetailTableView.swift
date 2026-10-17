@@ -29,10 +29,10 @@ import UEFITool
 ///
 /// A table with sections (`UEFIDetailTable.Section`) draws each under a line
 /// of its own with a disclosure triangle, folded until the reader opens it;
-/// the rows of every section line up in the same columns, open or folded, so
-/// opening one never moves another. Such a table has no header line of its
-/// own: each open section carries the column names over its rows, where a
-/// reader who has scrolled seventy words down still sees them.
+/// each section measures its columns over its own rows, so one long name
+/// widens its own section and not seventy others. Such a table has no header
+/// line of its own: each open section carries the column names over its
+/// rows, where a reader who has scrolled seventy words down still sees them.
 @MainActor final class DetailTableView: ToolSelectableRows {
     let table: UEFIDetailTable
     /// The header line, then the table's rows — under a section's line each,
@@ -112,7 +112,7 @@ import UEFITool
 
         if !table.sections.isEmpty {
             buildSections(fieldRows: fieldRows, indent: indent, body: body, bold: bold,
-                          offsets: offsets, onFollow: onFollow)
+                          onFollow: onFollow)
         }
         rows.forEach(addSubview)
         applyOpenSections()
@@ -128,11 +128,12 @@ import UEFITool
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-    /// The rows in order with a section's line before its rows, and the
-    /// section lines' own columns: the title, what the rows share, and the
-    /// address, each as wide as its widest so the addresses line up.
+    /// The rows in order with a section's line before its rows, each
+    /// section's columns measured over its own rows, and the section lines'
+    /// own columns: the title, what the rows share, and the address, each as
+    /// wide as its widest so the addresses line up.
     private func buildSections(fieldRows: [DetailTableRow], indent: CGFloat,
-                               body: NSFont, bold: NSFont, offsets: [CGFloat],
+                               body: NSFont, bold: NSFont,
                                onFollow: @escaping (UEFIDetailTable.Target) -> Void) {
         let header = rows[0]
         var ordered: [DetailTableRow] = []
@@ -155,11 +156,19 @@ import UEFITool
             // The column names, over this section's rows.
             let names = DetailTableRow(cells: header.cells, target: nil, linkColumn: nil,
                                        onFollow: onFollow)
-            names.setColumns(offsets: offsets, widths: widths)
-            ordered.append(names)
-            owners.append(index)
-            for row in section.rows where row < fieldRows.count {
-                ordered.append(fieldRows[row])
+            let own = [names] + section.rows.filter { $0 < fieldRows.count }.map { fieldRows[$0] }
+            let ownWidths = (0..<header.cells.count).map { column in
+                own.map { $0.naturalWidth(of: column) }.max() ?? 0
+            }
+            var at = indent
+            let ownOffsets = ownWidths.map { width -> CGFloat in
+                defer { at += width + Self.columnSpacing }
+                return at
+            }
+            own.forEach { $0.setColumns(offsets: ownOffsets, widths: ownWidths) }
+            sectionWidths.append(at - Self.columnSpacing)
+            for row in own {
+                ordered.append(row)
                 owners.append(index)
             }
         }
@@ -174,13 +183,12 @@ import UEFITool
         sectionRows.forEach { $0.setColumns(offsets: lineOffsets, widths: lineWidths) }
         rows = ordered
         sectionOfRow = owners
-        // The table is as wide as the wider of its columns and its lines.
-        let linesWidth = x - Self.columnSpacing
-        let columnsWidth = widths.reduce(0, +) + Self.columnSpacing * CGFloat(max(0, widths.count - 1))
-        if linesWidth > columnsWidth, !widths.isEmpty {
-            widths[widths.count - 1] += linesWidth - columnsWidth
-        }
+        linesWidth = x - Self.columnSpacing
     }
+
+    /// Each section's width, its columns laid side by side, and the lines'.
+    private var sectionWidths: [CGFloat] = []
+    private var linesWidth: CGFloat = 0
 
     /// Shows the rows of the open sections and hides the rest.
     private func applyOpenSections() {
@@ -216,7 +224,14 @@ import UEFITool
     override var selectableRows: [any ToolSelectableRow] { visibleRows }
 
     override var intrinsicContentSize: NSSize {
-        let width = widths.reduce(0, +) + Self.columnSpacing * CGFloat(max(0, widths.count - 1))
+        // Under sections, as wide as the lines and the open sections: a long
+        // name folded away does not widen the table.
+        let width = table.sections.isEmpty
+            ? widths.reduce(0, +) + Self.columnSpacing * CGFloat(max(0, widths.count - 1))
+            : table.sections.indices
+                .filter { openSections.contains(table.sections[$0].title) }
+                .map { sectionWidths[$0] }
+                .reduce(linesWidth, max)
         let count = visibleRows.count
         let height = CGFloat(count) * rowHeight + CGFloat(max(0, count - 1)) * Self.rowSpacing
         return NSSize(width: ceil(width), height: height)
