@@ -78,6 +78,13 @@ final class ConfigurationMapTests: XCTestCase {
         XCTAssertEqual(map.files.flatMap(\.settings)
             .filter { $0.name == "MctpEcAddress" }.count, 3,
                        "the conditional files the tool places it in")
+
+        // A bitfield is its offset and bits; the lists read different windows
+        // around it (8 bytes here, 32 in one list), and that is not a move.
+        let icps = try XCTUnwrap(map.file(at: "/home/mca/icps")?.settings.first)
+        XCTAssertEqual(icps.name, "icpsSwSkuing")
+        XCTAssertEqual(icps.offset, 0)
+        XCTAssertEqual(icps.bits, 0...0)
     }
 
     /// The tool's own name for a setting travels with it: the identifier is what
