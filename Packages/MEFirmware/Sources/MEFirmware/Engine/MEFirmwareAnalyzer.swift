@@ -1096,7 +1096,9 @@ public actor MEFirmwareAnalyzer {
                                        platform: resolution.platform,
                                        dictionary: resolution.dictionary)
             liveFilesResolved = !naming.isEmpty
-            let wanted = [ManufacturingDecoder.FileID.eomConfig]
+            let wanted = [ManufacturingDecoder.FileID.eomConfig,
+                          ManufacturingDecoder.FileID.eom,
+                          ManufacturingDecoder.FileID.manufLock]
             for file in info.files {
                 guard let entry = naming[file.index],
                       let fileID = Int(entry.fileID, radix: 16),
@@ -1119,6 +1121,11 @@ public actor MEFirmwareAnalyzer {
                 }
             }
         }
+        // The board's own record of having been through End of Manufacturing:
+        // read only where the file system's File IDs are, and nil where the
+        // volume is an image that never booted.
+        let manufacturingLock = liveFileIDs[ManufacturingDecoder.FileID.manufLock]
+            .map(ManufacturingDecoder.lock)
         let manufacturing = ManufacturingDecoder.decide(ManufacturingDecoder.Inputs(
             imageEOMConfig: imageEOMConfig,
             liveEOMConfig: liveFileIDs[ManufacturingDecoder.FileID.eomConfig],
@@ -1438,6 +1445,7 @@ public actor MEFirmwareAnalyzer {
             // them.
             manufacturingState: manufacturing.state,
             manufacturingBasis: manufacturing.basis,
+            manufacturingLock: manufacturingLock,
             platformFamily: platformFamily,
             configuration: configuration.isEmpty ? nil : configuration,
             bootGuardProfile: bootGuardProfile,

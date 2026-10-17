@@ -125,6 +125,54 @@ final class MEACuratorTests: XCTestCase {
                        ToolValueTone.standard)
     }
 
+    /// Manufacturing Lock: the board's own `manuf_lock`, beside the image's
+    /// verdict — Locked the committed state, Not locked the board that has not
+    /// been through End of Manufacturing; shown only on a file system whose
+    /// files carry File IDs, and loading while their table is on the way.
+    func testTheManufacturingLockIsTheBoardsOwnRecord() throws {
+        func volume(ftbl: Bool) -> [String: Any] {
+            var v = mfsJSON()
+            v["usesFTBL"] = ftbl
+            return v
+        }
+        var a = try analysis(["mfsVolume": volume(ftbl: true),
+                              "manifest": manifestJSON(),
+                              "manufacturingBasis": ["liveFilesResolved": true]])
+        a.manufacturingLock = .locked
+        let locked = try XCTUnwrap(MEACurator.present(a, in: .english).first)
+        XCTAssertEqual(field("Manufacturing Lock", in: locked), "Locked")
+        XCTAssertEqual(locked.fields.first { $0.label == "Manufacturing Lock" }?.tone,
+                       ToolValueTone.caution)
+
+        a.manufacturingLock = .open
+        let open = try XCTUnwrap(MEACurator.present(a, in: .english).first)
+        XCTAssertEqual(field("Manufacturing Lock", in: open), "Not locked")
+        XCTAssertEqual(open.fields.first { $0.label == "Manufacturing Lock" }?.tone,
+                       ToolValueTone.good)
+
+        a.manufacturingLock = nil
+        let waiting = try XCTUnwrap(MEACurator.present(
+            a, pending: MEAPending(fileTable: true), in: .english).first)
+        XCTAssertEqual(field("Manufacturing Lock", in: waiting), "Loading…")
+        let absent = try XCTUnwrap(MEACurator.present(a, in: .english).first)
+        XCTAssertEqual(field("Manufacturing Lock", in: absent), "Not recorded in this image")
+
+        // Files but no table naming them: the record may exist, and this
+        // reading cannot say the image has none.
+        var unread = try analysis(["mfsVolume": volume(ftbl: true),
+                                   "manifest": manifestJSON()])
+        unread.manufacturingLock = nil
+        let unreadNode = try XCTUnwrap(MEACurator.present(unread, in: .english).first)
+        XCTAssertEqual(field("Manufacturing Lock", in: unreadNode),
+                       "Not readable from this image")
+
+        var legacy = try analysis(["mfsVolume": volume(ftbl: false),
+                                   "manifest": manifestJSON()])
+        legacy.manufacturingLock = .locked
+        let none = try XCTUnwrap(MEACurator.present(legacy, in: .english).first)
+        XCTAssertNil(field("Manufacturing Lock", in: none))
+    }
+
     /// The Boot Guard profile is a number the image holds: profile 0 — nothing
     /// verified or measured — is green, every other profile the caution the
     /// File System State draws for Initialized.

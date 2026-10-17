@@ -84,6 +84,13 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   `other` byte the tool's class does not name, or `notInImage`. Ours; upstream
   has no such row. Its sibling settings in the tool's `RpmcConfiguration`
   section are UEP placements, read as such by revision 49.
+  Revision 50 adds `manufacturingLock`: what the board the dump came from has
+  done with End of Manufacturing, from the live file system's
+  `/home/mca/manuf_lock` — one byte the platform writes and no build does
+  (`locked`, `open`, or an `other` byte). `manufacturingState` above answers for
+  the image's next boot; this answers for the machine it was taken from. Ours;
+  the record is read by neither upstream nor the tools. It is nil where the
+  volume's files carry no File IDs or the table that names them was not read.
   Revision 49 adds `uepSettings`: the FPF/UEP settings an image's `$UEP` area
   holds, each as the tool's identifier and the value of its bits
   (`UEPReading`). The map of places is the tool's own (`UEPMap`, emitted from

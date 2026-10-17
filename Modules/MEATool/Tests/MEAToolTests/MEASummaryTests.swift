@@ -1021,6 +1021,47 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(tone("Manufacturing", in: tableRows(willNotClose)), .good)
     }
 
+    /// Manufacturing Lock: the board's own record (`manuf_lock`), beside the
+    /// image's verdict. Locked is the committed state — the caution the File
+    /// System State draws for Initialized — and Not locked the board that has
+    /// not been through End of Manufacturing. The record exists only on a
+    /// file system whose files carry File IDs; while the table that names them
+    /// is on the way, the row says it is loading.
+    func testTheManufacturingLockIsTheBoardsOwnRecord() throws {
+        func volume(ftbl: Bool) -> [String: Any] {
+            var v = mfsJSON(chipsets: nil)
+            v["usesFTBL"] = ftbl
+            return v
+        }
+        func rows(_ lock: ManufacturingLock?, ftbl: Bool = true) throws -> [MEASummaryRow] {
+            var a = try analysis(["manifest": manifestJSON(),
+                                  "mfsVolume": volume(ftbl: ftbl),
+                                  "manufacturingBasis": ["liveFilesResolved": true]])
+            a.manufacturingLock = lock
+            return tableRows(a)
+        }
+        XCTAssertEqual(value("Manufacturing Lock", in: try rows(.locked)), .value("Locked"))
+        XCTAssertEqual(tone("Manufacturing Lock", in: try rows(.locked)), .caution)
+        XCTAssertEqual(value("Manufacturing Lock", in: try rows(.open)), .value("Not locked"))
+        XCTAssertEqual(tone("Manufacturing Lock", in: try rows(.open)), .good)
+        XCTAssertEqual(value("Manufacturing Lock", in: try rows(.other(0x02))),
+                       .value("Unexpected value 0x02"))
+        XCTAssertEqual(value("Manufacturing Lock", in: try rows(nil)),
+                       .value("Not recorded in this image"))
+        XCTAssertNil(value("Manufacturing Lock", in: try rows(.locked, ftbl: false)),
+                     "a legacy volume carries no such record")
+
+        var a = try analysis(["manifest": manifestJSON(), "mfsVolume": volume(ftbl: true)])
+        a.manufacturingLock = nil
+        let waiting = MEASummary.build(a, pending: MEAPending(fileTable: true), in: .english)[0].rows
+        XCTAssertEqual(value("Manufacturing Lock", in: waiting), .pending)
+
+        // The volume has files but the table that names them was not read:
+        // the record may be there, and this reading cannot say there is none.
+        XCTAssertEqual(value("Manufacturing Lock", in: tableRows(a)),
+                       .value("Not readable from this image"))
+    }
+
     /// The Manufacturing finding is English in every language, as the tools'
     /// own option words are: the row's name is translated, the value a
     /// technician quotes is not.
