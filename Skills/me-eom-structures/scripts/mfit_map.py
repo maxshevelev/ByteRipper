@@ -30,6 +30,15 @@ AUTO = "Auto"
 # decimal is a value nobody reads twice.
 HEX_KINDS = {"byte", "word", "dword", "qword"}
 
+# How many bytes a file setting takes when the tool gives it no place and the
+# file *is* the setting — see `settings_of`. The enumerated kinds are one byte,
+# as FIT's own value classes are; the integer kinds say their width.
+WHOLE_WIDTH = {
+    "no_yes_options": 1, "yes_no_options": 1,
+    "disabled_enabled_options": 1, "enabled_disabled_options": 1,
+    "fixed_options": 1, "byte": 1, "word": 2, "dword": 4, "qword": 8,
+}
+
 # The enumerated kinds, with the words MFIT gives their two values. **The kind's
 # own name lists its members in value order** — `yes_no_options` is Yes at 0 and
 # No at 1, `no_yes_options` the other way round — which is how FIT's value
@@ -109,9 +118,17 @@ def settings_of(body):
     A setting with no place in the file (`length="0"` — most of the database:
     values the tool computes, certificates, the ICC profiles) is left out: it
     cannot be read out of bytes, and a row that is always empty is not a fact
-    about a dump.
+    about a dump. **The exception is a file that is one setting**: where the
+    tool gives a file exactly one logical setting, of a numeric kind, and
+    states no place for it, the value is the file's own first bytes —
+    `bup_sku/hw_binding`'s `HwBindingEn`, `policy/hmrfpo_state`'s
+    `HmrfpoEnable`, `amt/rtfd/amt.wol`'s two-byte `AmtIdleTimeout` — and the
+    width is the kind's (`WHOLE_WIDTH`). A file with several such settings is
+    not read: the tool leaves the plugin to place them, and a guess would put
+    one setting's byte under another's name.
     """
     found = []
+    logical_count = len(re.findall(r'<LogicalAccess ', body))
     for match in re.finditer(r'<LogicalAccess name="([^"]+)"([^>]*)>(.*?)</LogicalAccess>',
                              body, re.S):
         name, attrs, inner = match.group(1), match.group(2), match.group(3)
@@ -120,13 +137,20 @@ def settings_of(body):
         if not place:
             continue
         offset, length = int(place.group(1)), int(place.group(2))
-        if length <= 0 or offset < 0:
-            continue
         bits = (int(place.group(3)), int(place.group(4))) if place.group(3) is not None else None
         kind = re.search(r'config_type="([^"]*)"', inner)
         kind = kind.group(1) if kind else None
         physical = re.search(r'physical_type="([^"]*)"', inner)
         physical = physical.group(1) if physical else None
+        if length == 0:
+            guard_ok = (logical_count == 1 and physical == "Data"
+                        and kind in WHOLE_WIDTH)
+            if not guard_ok:
+                continue
+            length = WHOLE_WIDTH[kind]
+            offset = 0
+        if length < 0 or offset < 0:
+            continue
         ui = re.search(r'<UI\b[^>]*>', inner)
         label = re.search(r'\blabel="([^"]*)"', ui.group(0)) if ui else None
         help_text = re.search(r'\bhelp="([^"]*)"', ui.group(0)) if ui else None
@@ -143,6 +167,17 @@ def settings_of(body):
             "text": kind == "string" and physical == "String",
         })
     return found
+
+
+# What makes two lists' entries the same setting for reading purposes: where
+# it sits, how wide, which bits, its option words. The label and the help text
+# are the tool's prose and differ between lists — a truncated sentence is not a
+# different offset — so they are not compared here; `collect` keeps the fuller.
+LAYOUT_KEYS = ("offset", "length", "bits", "options", "hex", "text", "auto")
+
+
+def layout(setting):
+    return {key: setting.get(key) for key in LAYOUT_KEYS}
 
 
 def collect(texts):
@@ -170,9 +205,18 @@ def collect(texts):
             for setting in settings:
                 if setting["name"] not in known:
                     files[path]["settings"].append(setting)
-                elif known[setting["name"]] != setting:
-                    conflicts.append((path, setting["name"],
-                                      known[setting["name"]], setting))
+                    continue
+                kept = known[setting["name"]]
+                if layout(kept) != layout(setting):
+                    conflicts.append((path, setting["name"], kept, setting))
+                    continue
+                # The same place, said with different words: the lists spell
+                # a label or a help text differently (one truncates the
+                # sentence). That is not a layout conflict — the value reads
+                # the same under both — so the fuller wording is kept.
+                for key in ("label", "help"):
+                    if len(setting.get(key) or "") > len(kept.get(key) or ""):
+                        kept[key] = setting[key]
     for path, name, _, _ in conflicts:
         files[path]["settings"] = [s for s in files[path]["settings"]
                                    if s["name"] != name]
