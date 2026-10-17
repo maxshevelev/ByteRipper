@@ -248,7 +248,7 @@ public struct FieldHelp: Sendable, Equatable {
     /// own help buttons carry, named through `ControlHelp` with the words the
     /// panel put on the help — it knows whose words the button opens.
     public static func makeInfoButton(for help: FieldHelp) -> NSButton {
-        let button = NSButton()
+        let button = ToolInfoButton()
         button.image = NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
         button.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
         button.isBordered = false
@@ -317,7 +317,13 @@ public struct FieldHelp: Sendable, Equatable {
             let line = name.lastLine
             let x = min(line.maxX + Self.helpButtonGap, column - side)
             let y = line.isEmpty ? 1 : line.minY + max(0, (line.height - side) / 2)
-            infoButton.frame = NSRect(x: max(0, x), y: y, width: side, height: side)
+            let frame = NSRect(x: max(0, x), y: y, width: side, height: side)
+            if infoButton.frame != frame {
+                infoButton.frame = frame
+                // The text's I-beam is laid around the button: a button that
+                // moved has moved the hole in it.
+                window?.invalidateCursorRects(for: self)
+            }
         }
         let rest = max(1, width - column - Self.columnSpacing)
         if let second {
@@ -392,8 +398,21 @@ public struct FieldHelp: Sendable, Equatable {
         }.joined(separator: "\t")
     }
 
+    /// The I-beam over the row's text, and not over its `?`: a pointer on the
+    /// button is a pointer on something to press, not on text to select.
     public override func resetCursorRects() {
-        addCursorRect(bounds, cursor: .iBeam)
+        iBeamRects.forEach { addCursorRect($0, cursor: .iBeam) }
+    }
+
+    /// Where the row shows the I-beam: all of it, less its button.
+    var iBeamRects: [NSRect] {
+        guard let button = infoButton?.frame, bounds.intersects(button) else { return [bounds] }
+        return [
+            NSRect(x: bounds.minX, y: bounds.minY, width: button.minX - bounds.minX, height: bounds.height),
+            NSRect(x: button.maxX, y: bounds.minY, width: bounds.maxX - button.maxX, height: bounds.height),
+            NSRect(x: button.minX, y: bounds.minY, width: button.width, height: button.minY - bounds.minY),
+            NSRect(x: button.minX, y: button.maxY, width: button.width, height: bounds.maxY - button.maxY),
+        ].filter { $0.width > 0 && $0.height > 0 }
     }
 
     // help: panel.detail-select
@@ -412,6 +431,13 @@ public struct FieldHelp: Sendable, Equatable {
     public override func accessibilityLabel() -> String? { label }
     public override func accessibilityValue() -> Any? {
         secondText.map { "\(valueText), \($0)" } ?? valueText
+    }
+}
+
+/// A row's `?`: the arrow over it, whatever the row under it shows.
+@MainActor final class ToolInfoButton: NSButton {
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .arrow)
     }
 }
 
