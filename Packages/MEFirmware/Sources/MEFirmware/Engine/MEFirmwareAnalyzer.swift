@@ -1283,18 +1283,26 @@ public actor MEFirmwareAnalyzer {
         let uepReadings = uepArea.flatMap { area in
             UEPMap.forME(major: identity.major).flatMap { UEPReader.readings(in: area, map: $0) }
         }
-        // The CPU strap message: on CSME 18 it is not in the descriptor's MIP
-        // area but in the FITC partition's MIP table (`smip` nvar), which the
-        // FITC payload's record table carries. Only the generations with a map
-        // are read (`CPUStrapMap.forME`).
-        let cpuStraps = regions.first(where: { $0.name == "FITC" })
-            .flatMap { (fitcRegion: FPTRegion) -> CPUStrapReadings? in
-            guard let map = CPUStrapMap.forME(major: identity.major),
-                  let payload = FITCParser.configPayload(in: region,
-                                                         offset: fitcRegion.offset - baseOffset,
-                                                         size: fitcRegion.size)
-            else { return nil }
-            return MIPTableReader.cpuStraps(in: payload, map: map)
+        // The CPU strap message and the MIP table's other containers (CSME,
+        // PMC IOE, IOE): on CSME 18 they are not in the descriptor's MIP area
+        // but in the FITC partition's MIP table (`smip` nvar), which the FITC
+        // payload's record table carries. Only the generations with a map are
+        // read (`CPUStrapMap.forME`, `MIPStrapMap.forME`).
+        let fitcPayload = regions.first(where: { $0.name == "FITC" })
+            .flatMap { (fitcRegion: FPTRegion) -> Data? in
+                FITCParser.configPayload(in: region,
+                                         offset: fitcRegion.offset - baseOffset,
+                                         size: fitcRegion.size)
+            }
+        let cpuStraps = fitcPayload.flatMap { payload in
+            CPUStrapMap.forME(major: identity.major).flatMap {
+                MIPTableReader.cpuStraps(in: payload, map: $0)
+            }
+        }
+        let mipStraps = fitcPayload.flatMap { payload in
+            MIPStrapMap.forME(major: identity.major).flatMap {
+                MIPTableReader.containers(in: payload, map: $0)
+            }
         }
         let uepProfile = uepArea.flatMap(profileFromUEP)
         let bootGuardProfile = Self.regionBytes("CDMD", regions: regions,
@@ -1473,6 +1481,7 @@ public actor MEFirmwareAnalyzer {
             bootGuardProfile: bootGuardProfile,
             uepSettings: uepReadings,
             cpuStraps: cpuStraps,
+            mipStraps: mipStraps,
             hardwareBinding: hardwareBinding,
             oemPublicKeyHash: oemPublicKeyHash,
             // Row 12a is CSME 11's alone, the way upstream gates it, so the
