@@ -35,6 +35,23 @@ import Localization
     }
 
     public override func loadView() {
+        view = makeView()
+        // The zoom moving while the popover is open re-sets its words at the
+        // new size, as it does the rows beside it.
+        zoomObserver = HelpPopoverLayout.observeTextSize { [weak self] in
+            guard let self else { return }
+            self.view = self.makeView()
+            self.popover.contentSize = self.view.fittingSize
+        }
+    }
+
+    private var zoomObserver: NSObjectProtocol?
+
+    deinit {
+        if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
+    }
+
+    private func makeView() -> NSView {
         let body = HelpBodyView()
         body.show(HelpPopoverLayout.fitted(HelpText.renderBrief(term)))
         // Following a link inside a popover would be a second window inside a
@@ -48,7 +65,7 @@ import Localization
         more.bezelStyle = .rounded
         more.controlSize = .small
 
-        view = HelpPopoverLayout.build(title: HelpPopoverLayout.title(term.name),
+        return HelpPopoverLayout.build(title: HelpPopoverLayout.title(term.name),
                                        body: body, footer: more).view
     }
 

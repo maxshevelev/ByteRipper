@@ -6,19 +6,49 @@ import AppKit
 ///
 /// Shared because a term's popover and a setting's answer the same kind of
 /// question in the same place; two shapes for it read as two kinds of thing.
-/// The type is the panel's rather than the help window's: a popover is read
-/// beside a dump, at the size of the rows it explains, and the window's
-/// reading size made a paragraph of it fill the box.
+/// The type is a panel's detail list's rather than the help window's — its
+/// body size for the words, its heading size for the title — and it follows
+/// the app's Zoom with them: a popover is read beside the rows it explains,
+/// and at another size than theirs it reads as another thing.
 @MainActor public enum HelpPopoverLayout {
+    /// The size the words are drawn at: the panels' body size, which is the
+    /// app's Zoom. HelpUI cannot read it itself — the panels' font lives in
+    /// ToolModuleKit, which links HelpUI — so the app hands it in at launch,
+    /// with the notification that says it moved.
+    public static var textSize: @MainActor () -> CGFloat = { designSize }
+    public static var textSizeDidChange: Notification.Name?
+
+    /// The size the box below was drawn for; at any other the box grows or
+    /// shrinks with the type, so a line holds the same words at every zoom.
+    static let designSize: CGFloat = 13
+
+    /// The words' size, and the title's — one point over, as a detail's
+    /// heading is over its rows.
+    public static var bodySize: CGFloat { textSize() }
+    public static var titleSize: CGFloat { bodySize + 1 }
+
     /// The popover's width, and the margin its title and words keep from its
     /// edges.
-    public static let width: CGFloat = 340
+    public static var width: CGFloat { scaled(340) }
     public static let margin: CGFloat = 14
     /// The tallest the words get before they scroll: about twenty lines.
-    public static let maxBodyHeight: CGFloat = 320
-    /// The title's size and the words'.
-    public static let titleSize: CGFloat = 15
-    public static let bodySize: CGFloat = 12
+    public static var maxBodyHeight: CGFloat { scaled(320) }
+
+    private static func scaled(_ length: CGFloat) -> CGFloat {
+        (length * bodySize / designSize).rounded()
+    }
+
+    /// Calls `handler` whenever the size moves, for a popover on screen to
+    /// lay itself out again; the token is the caller's to keep. Nil where
+    /// nobody said which notification that is.
+    public static func observeTextSize(
+        _ handler: @escaping @Sendable @MainActor () -> Void
+    ) -> NSObjectProtocol? {
+        guard let name = textSizeDidChange else { return nil }
+        return NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { handler() }
+        }
+    }
 
     /// The title: what the popover is about.
     public static func title(_ words: String) -> NSTextField {

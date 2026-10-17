@@ -213,4 +213,39 @@ final class HelpTermPopoverTests: XCTestCase {
         XCTAssertEqual(popover.shownTerm, term.id)
         XCTAssertTrue(popover.view.subviews.contains { ($0 as? NSTextField)?.stringValue == term.name })
     }
+
+    /// The popover's type is the panels': their body size for the words, a
+    /// point over it for the title — and it moves with the zoom, the popover
+    /// on screen laying itself out again.
+    func testItFollowsTheZoom() throws {
+        var size: CGFloat = 13
+        let zoomed = Notification.Name("HelpPopoverTestZoom")
+        HelpPopoverLayout.textSize = { size }
+        HelpPopoverLayout.textSizeDidChange = zoomed
+        defer {
+            HelpPopoverLayout.textSize = { 13 }
+            HelpPopoverLayout.textSizeDidChange = nil
+        }
+        let term = try XCTUnwrap(Help.shared.term(HelpTermID("mfs")))
+        let popover = HelpTermPopover(term: term)
+
+        func fonts() throws -> (title: CGFloat, body: CGFloat, width: CGFloat) {
+            let title = try XCTUnwrap(popover.view.subviews.compactMap { $0 as? NSTextField }.first)
+            let body = try XCTUnwrap(popover.view.subviews.compactMap { $0 as? HelpBodyView }.first)
+            let text = try XCTUnwrap(body.documentView as? NSTextView)
+            let last = try XCTUnwrap(text.textStorage?.attribute(
+                .font, at: text.string.count - 1, effectiveRange: nil) as? NSFont)
+            return (title.font?.pointSize ?? 0, last.pointSize, popover.view.fittingSize.width)
+        }
+        let before = try fonts()
+        XCTAssertEqual(before.title, 14)
+        XCTAssertEqual(before.body, 13, accuracy: 0.01)
+
+        size = 18
+        NotificationCenter.default.post(name: zoomed, object: nil)
+        let after = try fonts()
+        XCTAssertEqual(after.title, 19)
+        XCTAssertEqual(after.body, 18, accuracy: 0.01)
+        XCTAssertGreaterThan(after.width, before.width, "the box grows with the type")
+    }
 }
