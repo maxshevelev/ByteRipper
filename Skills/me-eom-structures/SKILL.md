@@ -138,6 +138,35 @@ platform: the End of Manufacturing record, which the newer layouts do not bind
 at all (the tool writes it through `EomNvar`), so it is filled in from whichever
 document binds `EOM_Config` and marked as such in the file's header.
 
+## Emitting a generation's FPF/UEP settings
+
+The UEP area's bits the platform burns at End of Manufacturing are laid out by
+the tool's `GetBitArrayValue` actions, and the settings the actions name are
+declared in the same documents' `<CfgOpt>` lists:
+
+```bash
+python3 Skills/me-eom-structures/scripts/uep_map.py <mfit.exe> \
+    --generation 16 --tool "Modular Flash Image Tool 16.0.15.1662" > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME16.swift
+```
+
+The container keeps several arrays (`UepBitsArray0`, `…2`, `…4`) and the tool
+places most settings in more than one. **Only the first array is kept**: it is
+the one an image's reading takes (`UEPReader`, and the Boot Guard word is its
+first caller — `$UEP`+0x6E is array 0 +0x60 bit 16), and a setting the tool
+places only in another array is not in the map, which the script counts on
+stderr. Each kept setting carries the tool's identifier (`name`), the place
+(`offset`, `bit`, `count` in the little-endian word at that offset), and the
+tool's own panel text where it has any: `label` ("RPMC Supported"), `section`
+(`RpmcConfiguration`, how its interface groups them) and `help`. MFIT names its
+settings in the interface; FIT 15 names only the identifiers for the low-level
+bits, and those rows show the identifier. The first array holds 56 settings in
+FIT 15's TGL LP documents and 71 in MFIT 16's.
+
+What a dump's array holds is the **state the build wrote**, not the fuses: most
+settings read zero on every dump at hand — `Design/ME_STRUCTURES.md` says why,
+and that reading more of them from a dump is not a test of the map.
+
 ## Emitting the descriptor's strap layout
 
 The same executables carry the chipset's own layout of the descriptor's PCH

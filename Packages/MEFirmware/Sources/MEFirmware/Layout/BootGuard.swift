@@ -176,7 +176,7 @@ enum BootGuardReader {
     /// layout, and nothing is claimed.
     static func profile(inRecordUEPArea uep: Data, major: Int) -> BootGuardProfile? {
         let layout = major == 13 ? iceLakeRecordLayout : earlierRecordLayout
-        guard let container = uepContainerOffset(in: uep), container >= 0 else { return nil }
+        guard let container = containerOffset(in: uep), container >= 0 else { return nil }
         func block(at offset: Int, length: Int) -> Data? {
             let start = container + offset
             guard start >= 0, start + length <= uep.count else { return nil }
@@ -296,7 +296,7 @@ enum BootGuardReader {
     /// neighbouring field as if it were the key: a key is per vendor, and two
     /// vendors' images cannot carry the same one.
     static func oemPublicKeyHash(in uep: Data, major: Int) -> OEMKeyHash {
-        guard let container = uepContainerOffset(in: uep) else { return .unrecognized }
+        guard let container = containerOffset(in: uep) else { return .unrecognized }
         // The generations between 12 and 14 keep the shorter record; everything
         // else — including an image the engine could not name — is read as the
         // later one, which is what the layouts at hand do.
@@ -329,7 +329,10 @@ enum BootGuardReader {
     /// The ASCII container that opens the UEP area: `$UEPC`, or the `$UEP`
     /// inside one of those (`$UEPC` is `$UEP` plus its revision letter). Nil
     /// when the image has no such area in the bytes it handed over.
-    private static func uepContainerOffset(in uep: Data) -> Int? {
+    /// Where the `$UEP` container opens the area — `$UEPC` preferred, and the
+    /// `$UEP` spelling the older dumps use. Shared with `UEPReader`, which
+    /// reads the arrays past the same signature.
+    static func containerOffset(in uep: Data) -> Int? {
         if let at = uep.range(of: Data("$UEPC".utf8))?.lowerBound { return at }
         var from = uep.startIndex
         while let at = uep.range(of: Data("$UEP".utf8), options: [], in: from..<uep.endIndex) {
