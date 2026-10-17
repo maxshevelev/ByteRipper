@@ -209,6 +209,29 @@ final class DescriptorDetailTests: XCTestCase {
                        "the short tables are open")
     }
 
+    /// The processor strap section is a grid of the fields its layout names,
+    /// under the word they take — the same shape as the PCH section's.
+    func testTheProcessorStrapsAreAGridOfFields() throws {
+        let shown = detail(TestUEFI.flashDescriptor(
+            processorStraps: [0x0000_1000, 0x0010_8002, 0x0800_0210]))
+        let table = try XCTUnwrap(table(shown, "Processor straps"))
+
+        XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
+        XCTAssertTrue(table.startsFolded)
+        XCTAssertEqual(try XCTUnwrap(row(table, "Processor_max_frequency_boot")).map(\.text),
+                       ["Processor_max_frequency_boot", "12", "0x1", "0x1"])
+        XCTAssertEqual(try XCTUnwrap(row(table, "SaPowerPlaneTopology")).map(\.text),
+                       ["SaPowerPlaneTopology", "0–3", "0x2", "0x2"])
+    }
+
+    /// From Tiger Point on the descriptor names the straps' place in the PMC's
+    /// space instead, so there is no section in it to show — and no table.
+    func testATigerPointDescriptorCarriesNoProcessorStraps() throws {
+        let shown = detail(TestUEFI.flashDescriptor(version1: false, map2: 0x0011_01A0))
+
+        XCTAssertNil(table(shown, "Processor straps"))
+    }
+
     /// The bit that soft-disables the ME is a row of its own, and set it reads
     /// as a state — the reason an otherwise whole ME does not run.
     func testTheMEDisableBitIsARow() throws {

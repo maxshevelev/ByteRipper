@@ -1010,7 +1010,14 @@ public enum UEFIDetail {
                 fields.append(.init("PCH straps", "\((map1 >> 24) & 0xFF)"))
             }
             if let map2 = reader.uint32(at: h + 0x1C) {
-                fields.append(.init("PROC straps", "\((map2 >> 8) & 0xFF)"))
+                // Up to Cannon Point the same bits are the processor strap
+                // section's word count in the flash; from Tiger Point on they
+                // are the length of the strap message in the PMC's space, two
+                // bytes further up, and there is no flash section to count.
+                let classic = DescriptorInfo.read(at: h, in: reader)?
+                    .generation.hasProcessorStrapSection ?? true
+                fields.append(.init("PROC straps",
+                                    "\(classic ? (map2 >> 8) & 0xFF : (map2 >> 16) & 0xFF)"))
             }
 
         case .flashDescriptor:
@@ -1588,6 +1595,9 @@ public enum UEFIDetail {
         if let straps = descriptor.straps {
             tables.append(strapTable(straps, in: language))
         }
+        if let straps = descriptor.processorStraps {
+            tables.append(processorStrapTable(straps, in: language))
+        }
         return tables
     }
 
@@ -1677,6 +1687,82 @@ public enum UEFIDetail {
         return UEFIDetailTable(
             title: L("PCH straps", in: language),
             symbol: "slider.horizontal.3",
+            columns: [L("Field", in: language), L("Bits", in: language),
+                      L("Value", in: language), L("Default", in: language)],
+            rows: rows.map(\.cells),
+            startsFolded: true,
+            sections: sections
+        )
+    }
+
+    /// The processor strap section — the words the processor reads at
+    /// power-on before it lets the chipset go. Shown only where the descriptor
+    /// still carries it: from Tiger Point on its third map word points into
+    /// the PMC's space instead, and there is nothing in the descriptor to read.
+    ///
+    /// The rows are the PCH table's: fields where the tools state their
+    /// layout, one row per word where they do not. A field the processor
+    /// documents of one length lay out differently is not in the table at all,
+    /// so a section can have fewer named fields than it has bits.
+    private static func processorStrapTable(
+        _ straps: DescriptorInfo.ProcessorStraps, in language: AppLanguage
+    ) -> UEFIDetailTable {
+        let title = L("Processor straps", in: language)
+        guard let readings = straps.fields else {
+            let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
+                let name = "PROCSTRP\(index)"
+                let address = straps.base + UInt64(index) * 4
+                return ([.init(name), .init(hex(address)),
+                         .init(String(format: "0x%08X", straps.words[index])),
+                         .init(L("Unknown", in: language))],
+                        .range(address..<address + 4, name: name))
+            }
+            return UEFIDetailTable(
+                title: title,
+                symbol: "cpu",
+                columns: [L("Strap", in: language), L("Offset", in: language),
+                          L("Value", in: language), L("Meaning", in: language)],
+                rows: rows.map(\.cells),
+                rowTargets: rows.map(\.target),
+                linkColumn: 1,
+                startsFolded: true
+            )
+        }
+        struct Row { let word: Int; let bit: Int; let isSet: Bool; let cells: [UEFIDetailTable.Cell] }
+        var groups: [Int: String] = [:]
+        for word in Set(readings.map(\.field.word)) {
+            groups[word] = DescriptorStrapMap.group(of: readings.filter { $0.field.word == word }.map(\.field))
+        }
+        let rows = readings.map { reading -> Row in
+            let range = reading.field.bits
+            return Row(word: reading.field.word, bit: range.lowerBound, isSet: reading.isSet,
+                       cells: [.init(strapFieldName(reading.field.name)),
+                               .init(range.lowerBound == range.upperBound
+                                     ? "\(range.lowerBound)"
+                                     : "\(range.lowerBound)–\(range.upperBound)"),
+                               .init(hex(reading.value), isStrong: reading.isSet),
+                               .init(hex(reading.field.defaultValue))])
+        }.sorted { ($0.word, $0.bit) < ($1.word, $1.bit) }
+
+        var sections: [UEFIDetailTable.Section] = []
+        var start = 0
+        while start < rows.count {
+            let word = rows[start].word
+            let end = rows[start...].firstIndex { $0.word != word } ?? rows.count
+            let name = "PROCSTRP\(word)"
+            let address = straps.base + UInt64(word) * 4
+            let set = rows[start..<end].filter(\.isSet).count
+            sections.append(.init(title: name, subtitle: groups[word],
+                                  rows: start..<end,
+                                  target: .range(address..<address + 4, name: name),
+                                  address: hex(address),
+                                  note: set == 0 ? nil
+                                      : L("Non-default: %1$@", in: language, String(set))))
+            start = end
+        }
+        return UEFIDetailTable(
+            title: title,
+            symbol: "cpu",
             columns: [L("Field", in: language), L("Bits", in: language),
                       L("Value", in: language), L("Default", in: language)],
             rows: rows.map(\.cells),

@@ -47,6 +47,47 @@ final class DescriptorInfoTests: XCTestCase {
     /// The PCH straps are every word the map counts — `0x73` on this Alder
     /// Point layout — read where the map puts them, and HAP is bit 16 of the
     /// first.
+    /// The processor strap section, where the descriptor still holds it: the
+    /// third map word's base and count, up to Cannon Point.
+    func testTheProcessorStrapsOfACannonPointBoard() throws {
+        let read = try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], version1: true,
+            processorStraps: [0x0000_1000, 0x0010_8002, 0x0800_0210]))
+        let straps = try XCTUnwrap(read.processorStraps)
+
+        XCTAssertEqual(straps.base, 0x300)
+        XCTAssertEqual(straps.words, [0x0000_1000, 0x0010_8002, 0x0800_0210])
+        let boot = try XCTUnwrap(straps.fields?.first {
+            $0.field.name == "CPU_Strap_Processor_max_frequency_boot"
+        })
+        XCTAssertEqual(boot.value, 1)
+        XCTAssertFalse(boot.isSet, "the tool builds this section with the bit set")
+        let plane = try XCTUnwrap(straps.fields?.first {
+            $0.field.name == "CPU_Strap_SaPowerPlaneTopology"
+        })
+        XCTAssertEqual(plane.value, 2)
+    }
+
+    /// From Tiger Point on the third map word names the processor straps'
+    /// place in the PMC's space instead, and the section is not in the
+    /// descriptor — so there are none to read, and none is claimed.
+    func testTigerPointKeepsTheProcessorStrapsOutOfTheDescriptor() throws {
+        let read = try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], map2: 0x0011_01A0))
+
+        XCTAssertEqual(read.generation, .tigerPoint)
+        XCTAssertTrue(read.isGenerationCertain)
+        XCTAssertNil(read.processorStraps)
+    }
+
+    /// A count of zero, or a base no descriptor has, is no section.
+    func testNoProcessorStrapCountMeansNoSection() throws {
+        XCTAssertNil(try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], map2: 0x0021_0000)).processorStraps)
+        XCTAssertNil(try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], map2: 0x0021_01F1)).processorStraps)
+    }
+
     func testTheStrapsOfAnAlderPointBoardAndItsHAPBit() throws {
         let read = try info(TestImage.descriptor(
             regions: [(.bios, 0x1000..<0x40_0000)], straps: [0x0001_0000, 0x1234_5678]))

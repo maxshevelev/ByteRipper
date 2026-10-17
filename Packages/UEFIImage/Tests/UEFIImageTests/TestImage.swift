@@ -340,7 +340,10 @@ enum TestImage {
         chips: [UInt32] = [],
         component: (chips: Int, flcomp: UInt32, flill: UInt32, flill1: UInt32)? = nil,
         straps: [UInt32]? = nil,
-        strapCount: UInt32? = nil
+        strapCount: UInt32? = nil,
+        processorStraps: [UInt32]? = nil,
+        processorStrapBase: UInt32 = 0x30,
+        map2: UInt32? = nil
     ) -> [UInt8] {
         var bytes = [UInt8](repeating: 0xFF, count: Int(Descriptor.size))
         func put(_ value: UInt32, at offset: Int) {
@@ -363,7 +366,18 @@ enum TestImage {
         for (index, word) in (straps ?? []).enumerated() {
             put(word, at: Int(strapBase) << 4 + index * 4)
         }
-        put(UInt32(version1 ? 0x0021_0120 : 0x0014_01B0), at: Int(Descriptor.map2Offset))
+        // FLMAP2: the processor strap section's base and count up to Cannon
+        // Point — the builder's default when none is asked for — or a word
+        // the caller states, as a Tiger Point one does.
+        let processorBase: UInt32 = processorStraps == nil
+            ? (version1 ? 0x20 : 0xB0) : processorStrapBase
+        let processorCount = UInt32(processorStraps?.count ?? 1)
+        put(map2 ?? (processorBase | processorCount << 8
+                     | (version1 ? 0x0021_0000 : 0x0014_0000)),
+            at: Int(Descriptor.map2Offset))
+        for (index, word) in (processorStraps ?? []).enumerated() {
+            put(word, at: Int(processorBase) << 4 + index * 4)
+        }
         // The MIP table base, which a Cougar Point descriptor has none of.
         bytes[0x0EFF] = version1 ? 0x00 : 0xC0
         if let component {

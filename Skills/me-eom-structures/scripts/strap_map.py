@@ -28,7 +28,15 @@ reads by name — the tool's own `SPI_ec_max_freq` and
 neither names a generation whose straps say nothing about them.
 
 `--kind cpu` reads the processor strap section's table instead, whose entries
-are `CPU_Strap_*` and whose offsets are relative to that section's own base.
+are `CPU_Strap_*` and whose offsets are relative to that section's own base;
+its length is the one the descriptor's `FLMAP2` states, not `FLMAP1`.
+
+The processor layout is the weaker key: unlike the PCH section, two documents
+of one length can disagree — a field's width, or which bits are reserved — and
+a dump states nothing else about which of them it was built from. So a
+processor table keeps only the fields **every** document of that length states
+identically (same name, offset and bits), with the newest self-named document's
+default; a field the documents disagree about is left out rather than guessed.
 """
 
 import collections
@@ -104,6 +112,42 @@ def tables(blob, tool):
     return found
 
 
+def agreed(matches):
+    """The fields every table states alike, with the preferred table's defaults.
+
+    The processor section's length is a weaker key than the PCH one's: two
+    documents of one length can lay a field out differently or name the same
+    bits another way. What survives here is what all of them agree on —
+    identical name, offset and bit range — and a field they disagree about is
+    dropped rather than taken from one of them. `matches` is newest first, and
+    the first — the newest tool's, self-named where there is one — gives the
+    defaults.
+    """
+    preferred = matches[0][1]
+    defaults = {(f["name"], f["offset"], f["low"], f["high"]): f["default"]
+                for f in preferred["fields"]}
+    shared = None
+    for _, table in matches:
+        keys = {(f["name"], f["offset"], f["low"], f["high"]) for f in table["fields"]}
+        shared = keys if shared is None else shared & keys
+    fields = [{**field, "default": defaults.get(
+        (field["name"], field["offset"], field["low"], field["high"]), 0)}
+        for field in preferred["fields"]
+        if (field["name"], field["offset"], field["low"], field["high"]) in (shared or set())]
+    # The first table's order, deduplicated: the same field can be stated by
+    # two entries of one document.
+    seen, unique = set(), []
+    for field in fields:
+        key = (field["name"], field["offset"], field["low"], field["high"])
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(field)
+    return {"kind": preferred["kind"], "words": preferred["words"],
+            "fields": unique, "document": preferred["document"],
+            "tool": preferred["tool"]}
+
+
 def swift_literal(text):
     return '"%s"' % text.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -118,9 +162,17 @@ def swift(kind, chosen):
     lines.append("// tool's, copied; nothing here is read out of a dump.")
     lines.append("//")
     lines.append("// A table is picked by the length of the section it describes — the words the")
-    lines.append("// descriptor's own FLMAP1 states — because that is what an image states about")
+    lines.append("// descriptor's own %s states — because that is what an image states about"
+                 % ("FLMAP1" if kind == "PCH" else "FLMAP2"))
     lines.append("// itself. `StrapMap.swift` says what a table is and what the lookup does;")
     lines.append("// another length is added by running the script with it.")
+    if kind != "PCH":
+        lines.append("//")
+        lines.append("// A processor table keeps only the fields **every** document of that")
+        lines.append("// length states alike — the same name at the same offset and bits. Two")
+        lines.append("// documents of one length can differ (a field's width, which bits are")
+        lines.append("// reserved), and a field they disagree about is left out rather than")
+        lines.append("// taken from one of them.")
     lines.append("")
     lines.append("import Foundation")
     lines.append("")
@@ -181,7 +233,18 @@ def main():
         # among equals the newest tool wins, and among its own documents the
         # first is taken (a platform's two steppings agree on their fields).
         named = [t for t in matches if t[1]["document"]]
-        table = (named or matches)[0][1]
+        ordered = named + [t for t in matches if not t[1]["document"]]
+        table = ordered[0][1]
+        if kind == "CPU" and len(ordered) > 1:
+            stated = len(table["fields"])
+            table = agreed(ordered)
+            print("   %d documents of this length; %d fields they agree on "
+                  "(%d dropped)" % (len(ordered), len(table["fields"]),
+                                    stated - len(table["fields"])), file=sys.stderr)
+            if not table["fields"]:
+                print("the documents of %d words agree on no field at all" % wanted,
+                      file=sys.stderr)
+                return 1
         chosen.append((wanted, table))
         print("%s section of %d words: %d fields from %s%s"
               % (kind, wanted, len(table["fields"]), table["tool"],
