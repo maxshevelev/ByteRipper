@@ -569,4 +569,13 @@ final class BootGuardReaderTests: XCTestCase {
             in: Data(repeating: 0xFF, count: 0x2000), major: 15), .unrecognized)
         XCTAssertEqual(BootGuardReader.oemPublicKeyHash(in: Data(), major: 15), .unrecognized)
     }
+
+    /// The board's own byte: 1 locked, 0 open, anything else a layout the
+    /// reading does not know.
+    func testTheBoardsLockByteIsReadAsAState() {
+        XCTAssertEqual(ManufacturingDecoder.lock(0), .open)
+        XCTAssertEqual(ManufacturingDecoder.lock(1), .locked)
+        XCTAssertEqual(ManufacturingDecoder.lock(2), .other(2))
+        XCTAssertEqual(ManufacturingDecoder.lock(0xFF), .other(0xFF))
+    }
 }

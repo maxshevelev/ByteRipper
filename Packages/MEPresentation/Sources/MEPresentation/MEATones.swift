@@ -58,6 +58,19 @@ public enum MEATones {
     // verdict — so it is drawn as an ordinary value, exactly as the File System
     // State's basis is. The verdict's own colour sits on the row above it.
 
+    /// The Manufacturing Lock row's tone: **Locked** is the machine's End of
+    /// Manufacturing having run, the committed state the File System State
+    /// draws for `Initialized`; **Not locked** is a board that has not been
+    /// through it, green. A byte the reading does not know is an ordinary
+    /// value.
+    public static func manufacturingLock(_ lock: ManufacturingLock) -> ToolValueTone {
+        switch lock {
+        case .locked: return .caution
+        case .open: return .good
+        case .other: return .standard
+        }
+    }
+
     /// The RPMC Hardware Binding row's tone. The tool's two values are both
     /// settled states, and they read as the bench needs them: **Disabled** —
     /// the SPI part is not bound to the chipset, which is the state a part can

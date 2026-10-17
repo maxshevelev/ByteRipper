@@ -116,6 +116,29 @@ public enum MEACurator {
                                    tone: MEATones.manufacturingState(state),
                                    evidence: evidence))
         }
+        // The board's own record, beside the image's verdict — the live
+        // `manuf_lock`, which no build writes: 1 where the machine has been
+        // through End of Manufacturing, 0 where its first boot had nothing to
+        // close. Only a file system whose files carry File IDs has the record,
+        // and a reading taken without the table says it is still loading.
+        if a.family == .csme, a.mfsVolume?.usesFTBL == true {
+            if let lock = a.manufacturingLock {
+                fields.append(MEAField(L("Manufacturing Lock", in: language),
+                                       MEAText.manufacturingLock(lock, in: language),
+                                       tone: MEATones.manufacturingLock(lock)))
+            } else if pending.fileTable {
+                fields.append(MEAField(L("Manufacturing Lock", in: language),
+                                       L("Loading…", in: language)))
+            } else if a.manifest != nil {
+                let files = a.mfsVolume?.files ?? []
+                let unreadable = !files.isEmpty
+                    && a.manufacturingBasis?.liveFilesResolved != true
+                fields.append(MEAField(
+                    L("Manufacturing Lock", in: language),
+                    unreadable ? L("Not readable from this image", in: language)
+                               : L("Not recorded in this image", in: language)))
+            }
+        }
         if let binding = a.hardwareBinding, a.version.major >= 13 {
             // The file is found through `FileTable.dat`, so a reading taken
             // without it cannot have established that the image does not

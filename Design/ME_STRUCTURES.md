@@ -67,12 +67,19 @@ same setting twice, which is where a common misreading starts:
 carries `EomFirstBootEnabled` again as a **raw byte**. The panel prints both:
 the flag decides the Manufacturing row, and the flexible setting has a row of its
 own beside it, in those four values — it is stored whether or not the flag is
-set, so it says what an image would lock if it ever ran. Two further bytes on that
-row of the file system are **not** in any MFIT database: `/home/mca/manuf_lock`,
-and `/home/mca/eom`'s live value, which is 1 on every dump taken from a machine
-whose engine has run while the image's own record of the same byte reads 0. What
-the platform meant by writing them is not documented anywhere at hand, so the
-row reports neither — and neither is evidence of anything on its own.
+set, so it says what an image would lock if it ever ran.
+
+Two further bytes on that row of the file system are **not** in any MFIT
+database: `/home/mca/manuf_lock`, and `/home/mca/eom`'s live value. They record
+the *board*, not the image, and the controlled first boot settled what they say
+(below): a board flashed an image with the flag clear — nothing for End of
+Manufacturing to lock — has both at **0** after that boot, while every factory
+dump at hand has both at **1**. So `manuf_lock` is the one statement a dump
+makes about whether the machine has been through End of Manufacturing, and with
+it committed the fuses; the engine reports it as the row **Manufacturing Lock**
+(`Locked` / `Not locked`), and `/home/mca/eom` duplicates the flag and is not
+reported separately. The image's own question — what its next first boot will
+do — stays the Manufacturing row.
 
 **The UEP area** — an FPT region named `UEP` (0x2A0000 in the Z Flow dump,
 8 KiB), opened by the ASCII container `$UEPC`. It holds an entry that carries a
