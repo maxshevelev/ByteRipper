@@ -490,36 +490,45 @@ and reports `AltMeDisable` from the wrong word.
 
 ### 2.7. The processor straps
 
-At `ProcStrapsBase << 4`, `NumberOfProcStraps` `UINT32`s (`PROCSTRP0`,
-`PROCSTRP1`, …): the processor's own straps, read before it lets the chipset
-go. The third map word carries them only up to Cannon Point. **From Tiger
-Point on the same word means something else** — `FLMAP2` bits 2–11 are the
-strap message's offset in the PMC's space (`0x68` on Tiger Point, `0x5C` on
-Alder Point) and bits 16–23 its length, which is how §2.5 tells those
-generations apart. The section is then not in the descriptor at all, and
-ByteRipper reads none of it; the panel shows no processor strap table on those
-dumps rather than a table of unrelated words.
+**Up to Cannon Point**: at `ProcStrapsBase << 4`, `NumberOfProcStraps`
+`UINT32`s (`PROCSTRP0`, `PROCSTRP1`, …) — the processor's own straps, read
+before it lets the chipset go. Its layout is Flash Image Tool's
+`<LayoutEntry name="CPU_Strap_…">` entries, emitted per section length into
+`StrapMap+CPU.swift` by `strap_map.py --kind cpu`. **The length is a weak key
+here**: documents of one length can lay a field out differently —
+`Num_Active_Cores` is three bits in `cnp_lp_rvp.xml` and four in a nameless
+newer document of the same three words — so a table keeps only the fields
+every document of that length states alike. On the dumps at hand the section
+is 1 word on 23 of them and 3 on 10; `CSME 12.BIN`'s three words read
+`0x00001000 0x00108002 0x08000210`.
 
-The layout is again Flash Image Tool's, `<LayoutEntry name="CPU_Strap_…">`
-entries with `offset`, `bitfield_low` and `bitfield_high`, emitted per section
-length into `StrapMap+CPU.swift` by
-`Skills/me-eom-structures/scripts/strap_map.py --kind cpu`. **The length is a
-weaker key here than for the PCH section**: the tools carry documents of one
-length that lay a field out differently — `Num_Active_Cores` is three bits in
-`cnp_lp_rvp.xml` and four in a nameless newer document of the same three
-words — and a dump says nothing about which document it was built from. The
-tables therefore keep only the fields **every document of that length states
-alike** (same name, offset and bits), with the newest self-named document's
-default, and a field they disagree about is left out. On the dumps at hand the
-section is 1 word on 23 of them (reserved bits alone — the layout's only two
-fields) and 3 words on 10; `CSME 12.BIN`'s three words read
-`0x00001000 0x00108002 0x08000210`, whose `Processor_max_frequency_boot`
-(word 0, bit 12) is the tool's own default and whose
-`SaPowerPlaneTopology` (word 1, bits 0–3) is 2.
+**From Tiger Point on** the same map word means something else — `FLMAP2`
+bits 2–11 are an offset and bits 16–23 a length, which is how §2.5 tells those
+generations apart — and what they locate is the CPU strap **message** in the
+descriptor's MIP area: `MIP + offset`, where the MIP area opens at `0xC00`
+(the IFWI layout puts `MipDesc` there, after the FDV manifest at `0x800` and
+before the VSCC table at `0xDF0`), with `length` words. Verified on three
+dumps — `CSME 15.bin` (0x68, 17 words), `CSME 16.1.bin` (0x6C, 20) and
+`LENV_CSME 16` (0x5C, 20): each message opens with `0x00001000`, which is the
+layout's word 0 for an all-default build (Flex Ratio 0, boot at P1), and the
+rest decodes to the values MFIT's CPU Straps page shows — Hyperthreading No,
+all cores active, SVID addresses and VR types, the Type-C straps on the mobile
+part.
 
-Which generations still have the section is
-`DescriptorGeneration.hasProcessorStrapSection`; the reading is
-`DescriptorInfo.processorStraps`.
+The message's layout is MFIT's `CpuStrapsLayout` class, whose `<UI>` elements
+are the panel's own words ("Disable Hyperthreading", "All Cores Active") and
+whose entries carry no default — the values are stated per reference platform.
+`Skills/me-eom-structures/scripts/mip_strap_map.py` emits it into
+`StrapMap+MIP.swift`, keyed by message length and keeping the fields every
+document of that length agrees on; 17 and 20 words are the lengths the
+documents and the dumps at hand state. The table shows the tool's labels and
+option words, and no field is emphasised because there is no default to differ
+from.
+
+Which reading applies is `DescriptorGeneration.hasProcessorStrapSection`
+(classic) or `hasMIPProcessorStraps` (the message — read only where the
+generation is certain, since an assumed one may be a classic layout); the
+reading is `DescriptorInfo.processorStraps`.
 
 ---
 

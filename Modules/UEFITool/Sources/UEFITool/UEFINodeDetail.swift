@@ -1631,7 +1631,7 @@ public enum UEFIDetail {
                                      ? "\(range.lowerBound)"
                                      : "\(range.lowerBound)–\(range.upperBound)"),
                                .init(hex(reading.value), isStrong: reading.isSet),
-                               .init(hex(reading.field.defaultValue))])
+                               .init(reading.field.defaultValue.map(hex) ?? "")])
         }
         if let bit = straps.meDisable, bit.word < straps.words.count {
             rows.append(Row(
@@ -1668,22 +1668,24 @@ public enum UEFIDetail {
         )
     }
 
-    /// The processor strap section — the words the processor reads at
-    /// power-on before it lets the chipset go. Shown only where the descriptor
-    /// still carries it: from Tiger Point on its third map word points into
-    /// the PMC's space instead, and there is nothing in the descriptor to read.
+    /// The CPU straps — the words the processor reads at power-on before it
+    /// lets the chipset go: the strap section the classic third map word
+    /// points at, or the message in the descriptor's MIP area from Tiger
+    /// Point on. The message's fields carry the tool's own names ("Disable
+    /// Hyperthreading") and option words, so its values read as its panel
+    /// shows them; the older sections carry only identifiers.
     ///
     /// The rows are the PCH table's: fields where the tools state their
-    /// layout, one row per word where they do not. A field the processor
-    /// documents of one length lay out differently is not in the table at all,
-    /// so a section can have fewer named fields than it has bits.
+    /// layout, one row per word where they do not. A field the documents of
+    /// one length lay out differently is not in the table at all, so a section
+    /// can have fewer named fields than it has bits.
     private static func processorStrapTable(
         _ straps: DescriptorInfo.ProcessorStraps, in language: AppLanguage
     ) -> UEFIDetailTable {
-        let title = L("Processor straps", in: language)
+        let title = L("CPU straps", in: language)
         guard let readings = straps.fields else {
             let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
-                let name = "PROCSTRP\(index)"
+                let name = "CPUSTRP\(index)"
                 let address = straps.base + UInt64(index) * 4
                 return ([.init(name), .init(hex(address)),
                          .init(String(format: "0x%08X", straps.words[index])),
@@ -1708,13 +1710,16 @@ public enum UEFIDetail {
         }
         let rows = readings.map { reading -> Row in
             let range = reading.field.bits
+            // The tool's own word for the value where it states one — "Yes",
+            // "All Cores Active" — and the number otherwise.
+            let shown = reading.field.options?[Int(reading.value)] ?? hex(reading.value)
             return Row(word: reading.field.word, bit: range.lowerBound, isSet: reading.isSet,
-                       cells: [.init(strapFieldName(reading.field.name)),
+                       cells: [.init(reading.field.label ?? strapFieldName(reading.field.name)),
                                .init(range.lowerBound == range.upperBound
                                      ? "\(range.lowerBound)"
                                      : "\(range.lowerBound)–\(range.upperBound)"),
-                               .init(hex(reading.value), isStrong: reading.isSet),
-                               .init(hex(reading.field.defaultValue))])
+                               .init(shown, isStrong: reading.isSet),
+                               .init(reading.field.defaultValue.map(hex) ?? "")])
         }.sorted { ($0.word, $0.bit) < ($1.word, $1.bit) }
 
         var sections: [UEFIDetailTable.Section] = []
@@ -1722,7 +1727,7 @@ public enum UEFIDetail {
         while start < rows.count {
             let word = rows[start].word
             let end = rows[start...].firstIndex { $0.word != word } ?? rows.count
-            let name = "PROCSTRP\(word)"
+            let name = "CPUSTRP\(word)"
             let address = straps.base + UInt64(word) * 4
             let set = rows[start..<end].filter(\.isSet).count
             sections.append(.init(title: name, subtitle: groups[word],

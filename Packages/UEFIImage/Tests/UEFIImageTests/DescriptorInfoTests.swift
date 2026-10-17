@@ -68,16 +68,34 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertEqual(plane.value, 2)
     }
 
-    /// From Tiger Point on the third map word names the processor straps'
-    /// place in the PMC's space instead, and the section is not in the
-    /// descriptor — so there are none to read, and none is claimed.
-    func testTigerPointKeepsTheProcessorStrapsOutOfTheDescriptor() throws {
-        let read = try info(TestImage.descriptor(
-            regions: [(.bios, 0x1000..<0x40_0000)], map2: 0x0011_01A0))
+    /// From Tiger Point on the straps are the message in the descriptor's MIP
+    /// area: at `0xC00` plus the offset the third map word states
+    /// (`FLMAP2[2:11]`), as many words as `FLMAP2[16:23]` says.
+    func testTheProcessorStrapsOfATigerPointBoardAreTheMIPMessage() throws {
+        var bytes = TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], map2: 0x0011_01A0)
+        let base = 0xC00 + 0x68
+        for (index, word) in [UInt32(0x0000_1000), 0x0000_0001].enumerated() {
+            for byte in 0..<4 {
+                bytes[base + index * 4 + byte] = UInt8(truncatingIfNeeded: word >> (8 * byte))
+            }
+        }
+        let read = try info(bytes)
 
         XCTAssertEqual(read.generation, .tigerPoint)
         XCTAssertTrue(read.isGenerationCertain)
-        XCTAssertNil(read.processorStraps)
+        let straps = try XCTUnwrap(read.processorStraps)
+        XCTAssertEqual(straps.base, UInt64(base))
+        XCTAssertEqual(straps.words.count, 17)
+        XCTAssertEqual(straps.words.first, 0x0000_1000)
+        let boot = try XCTUnwrap(straps.fields?.first {
+            $0.field.name == "CPU_Strap_Fast_wakeup"
+        })
+        XCTAssertEqual(boot.value, 1)
+        XCTAssertEqual(boot.field.label, "Processor Boot at P1 Frequency")
+        XCTAssertEqual(boot.field.options?[1], "Yes")
+        XCTAssertNil(boot.field.defaultValue, "the message states no defaults")
+        XCTAssertFalse(boot.isSet, "and no field of it is emphasised")
     }
 
     /// The OEM section is the fixed `0x100` bytes at `0xF00`, whatever a board

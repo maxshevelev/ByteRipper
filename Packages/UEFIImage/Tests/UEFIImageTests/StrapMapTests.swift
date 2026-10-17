@@ -47,4 +47,21 @@ final class StrapMapGroupTests: XCTestCase {
             }
         }
     }
+
+    /// The MFIT CPU strap message's tables: the tool's labels and option
+    /// words travel with the fields, and no default is claimed — the documents
+    /// state values per reference platform, not a value the tool builds with.
+    func testTheMIPMessageTablesCarryLabelsAndNoDefault() throws {
+        let table = try XCTUnwrap(DescriptorStrapMap.forMIPProcessorSection(words: 17))
+        let hyperthreading = try XCTUnwrap(table.fields.first {
+            $0.name == "CPU_Strap_SMT_Disable"
+        })
+        XCTAssertEqual(hyperthreading.label, "Disable Hyperthreading")
+        XCTAssertEqual(hyperthreading.options, [0: "No", 1: "Yes"])
+        XCTAssertNil(hyperthreading.defaultValue)
+        XCTAssertTrue(table.fields.allSatisfy { $0.defaultValue == nil })
+        XCTAssertFalse(DescriptorStrapMap.Reading(field: hyperthreading, value: 1).isSet)
+        XCTAssertNil(DescriptorStrapMap.forMIPProcessorSection(words: 6))
+        XCTAssertNotNil(DescriptorStrapMap.forMIPProcessorSection(words: 20))
+    }
 }
