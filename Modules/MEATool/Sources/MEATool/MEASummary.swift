@@ -332,10 +332,16 @@ public enum MEASummary {
             // tool's "Hardware Binding Enabled", one byte of `bup_sku/hw_binding`
             // — so it reads on every generation whose tool has the setting
             // (CSME 13 and later) and says so where the image does not carry it.
+            // The file is found through `FileTable.dat`: until the reading
+            // with that table lands, "not recorded" is a claim the reading
+            // cannot have checked, and the row says it is still loading.
             if let binding = analysis.hardwareBinding, analysis.version.major >= 13 {
-                rows.append(MEASummaryRow(L("RPMC", in: language),
-                                          .value(MEAText.hardwareBinding(binding, in: language)),
-                                          tone: .standard))
+                let waits = pending.fileTable && binding == .notInImage
+                rows.append(MEASummaryRow(
+                    L("RPMC", in: language),
+                    waits ? .pending
+                          : .value(MEAText.hardwareBinding(binding, in: language)),
+                    tone: .standard))
             }
             if let key = analysis.oemPublicKeyHash {
                 rows.append(MEASummaryRow(L("OEM Public Key Hash", in: language),

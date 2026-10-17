@@ -93,6 +93,25 @@ final class MEACuratorTests: XCTestCase {
         XCTAssertEqual(field("File System State", in: kept), "Configured")
     }
 
+    /// RPMC's file is found through `FileTable.dat`, so a reading taken
+    /// without it says it is still loading rather than that the image does not
+    /// record one; a binding the image did show is a value already.
+    func testTheRPMCBindingWaitsForTheFileTable() throws {
+        var a = try analysis([:])
+        a.hardwareBinding = .notInImage
+        let waiting = try XCTUnwrap(MEACurator.present(
+            a, pending: MEAPending(fileTable: true), in: .english).first)
+        XCTAssertEqual(field("RPMC", in: waiting), "Loading…")
+
+        let read = try XCTUnwrap(MEACurator.present(a, in: .english).first)
+        XCTAssertEqual(field("RPMC", in: read), "Not recorded in this image")
+
+        a.hardwareBinding = .enabled
+        let carried = try XCTUnwrap(MEACurator.present(
+            a, pending: MEAPending(fileTable: true), in: .english).first)
+        XCTAssertEqual(field("RPMC", in: carried), "Hardware binding: Enabled")
+    }
+
     /// While `Huffman.dat` is on the way, the Issues group ends with a row
     /// that says the module checks are still to come — a group of its own
     /// when nothing else was raised, and none at all once they are done.

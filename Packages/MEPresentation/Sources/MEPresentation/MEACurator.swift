@@ -119,8 +119,14 @@ public enum MEACurator {
                                    evidence: evidence))
         }
         if let binding = a.hardwareBinding, a.version.major >= 13 {
-            fields.append(MEAField(L("RPMC", in: language),
-                                   MEAText.hardwareBinding(binding, in: language)))
+            // The file is found through `FileTable.dat`, so a reading taken
+            // without it cannot have established that the image does not
+            // record one — that row says it is still loading.
+            fields.append(MEAField(
+                L("RPMC", in: language),
+                pending.fileTable && binding == .notInImage
+                    ? L("Loading…", in: language)
+                    : MEAText.hardwareBinding(binding, in: language)))
         }
         if a.family == .csme, a.version.major >= 11 {
             fields.append(MEAField(L("Boot Guard", in: language),
