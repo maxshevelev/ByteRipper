@@ -81,6 +81,22 @@ it committed the fuses; the engine reports it as the row **Manufacturing Lock**
 `/home/mca/eom` duplicates the flag and is not reported separately. The image's own question — what its next first boot will
 do — stays the EOM on First Boot row.
 
+**Where a volume starts, and how CSME 18 writes its first page.** An FPT
+entry's offset is measured from the FPT partition's base, and on a whole image
+from CSME 12 to 18 the `$FPT` sits on a 4 KiB boundary and is that base itself.
+The CSME 18 dump's MFS, EFS, FITC, CDMD and UEP all begin 0x10 after the
+`$FPT − 0x10` reading would put them, and every aligned-anchor dump at hand
+reads its partitions only from the marker; the older layout — the region base
+holds a CSE Layout Table and the `$FPT` sits at +0x10 — is not aligned and
+keeps the `− 0x10` base. The CSME 18 volume also writes its **first System page
+with the page signature erased**: the page number, `FirstChunkIndex` and the
+chunk index array are all valid, and its chunk 0 is the volume header. So the
+parser takes an untagged page when the tagged pages do not yield the volume
+header (18.0.10.2288: MFS @0x3D9000, pages 1–15 System, the first Data page's
+`FirstChunkIndex` 717, 2048 file records, declared volume size 0x1512C0 — all
+of it checked against the parsed volume). The EFS region of that dump begins
+0x10 after its entry too, and its dictionary then matches the MFS volume's.
+
 **The UEP area** — an FPT region named `UEP` (0x2A0000 in the Z Flow dump,
 8 KiB), opened by the ASCII container `$UEPC`. It holds an entry that carries a
 window into the BIOS region (an address and a size), a 32-bit sum, a Key
@@ -640,9 +656,15 @@ The **UEP data survived** as `UEPs_Data` documents: a `serialized_item` per bit
 many arrays), the FPF settings beside them as `ui_item`s, and the bindings as
 `bind_action type="get_value"`. Four new ESE FPF bits sit beside the old ones
 (`ESE_CFG_DONE`, `ESE_TRC_EN`, `ESE_ROM_SVN_EN` and the ESE package's own FPF
-block). None of our generators reads this shape yet: a CSME 18 configuration
-map and UEP map are new parsers, and the strap tables need the full MFIT 18
-project data the System Tools package does not ship.
+block). The **configuration map** of this shape is read:
+`Skills/me-eom-structures/scripts/mfit18_map.py` turns the `<Files>` settings,
+the path document and the `<ui_item>` words into
+`MEConfigurationMap+CSME18` (67 settings in 32 files in 18.1), and the engine's
+CSME 18 dump at hand — HP EliteBook 630 13.3 inch G11, 18.0.10.2288 — reads 17
+of its configuration files through that map. The UEP map is still a new parser
+(`UEPs_Data` says `arrays_count` and a per-bit offset, but no array index), and
+the strap tables need the full MFIT 18 project data the System Tools package
+does not ship.
 
 **The PCH fuses are not in a dump.** `pch_fuses.xml` names the seven fuses per
 platform and SKU — `CSME_FUSE_VALUE_BYTE_0…5` and

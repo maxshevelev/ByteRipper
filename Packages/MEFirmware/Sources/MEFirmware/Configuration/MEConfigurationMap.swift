@@ -201,6 +201,7 @@ public struct MEConfigurationMap: Sendable, Equatable {
         case 14: map = desktop ? .csme14Desktop : .csme14
         case 15: map = desktop ? .csme15Desktop : .csme15
         case 16: map = .csme16
+        case 18: map = .csme18
         default: return nil
         }
         return map.addingManufacturingLock()
