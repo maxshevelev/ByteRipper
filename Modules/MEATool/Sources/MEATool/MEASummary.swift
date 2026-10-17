@@ -318,7 +318,8 @@ public enum MEASummary {
         if analysis.family == .csme, analysis.version.major >= 11 {
             if let profile = analysis.bootGuardProfile {
                 rows.append(MEASummaryRow(L("Boot Guard", in: language),
-                                          .value(MEAText.bootGuardProfile(profile))))
+                                          .value(MEAText.bootGuardProfile(profile)),
+                                          tone: MEATones.bootGuardProfile(profile)))
             } else if identified {
                 rows.append(MEASummaryRow(
                     L("Boot Guard", in: language),
@@ -341,7 +342,7 @@ public enum MEASummary {
                     L("RPMC Hardware Binding", in: language),
                     waits ? .pending
                           : .value(MEAText.hardwareBinding(binding, in: language)),
-                    tone: .standard))
+                    tone: waits ? .standard : MEATones.hardwareBinding(binding)))
             }
             if let key = analysis.oemPublicKeyHash {
                 rows.append(MEASummaryRow(L("OEM Public Key Hash", in: language),

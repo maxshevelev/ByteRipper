@@ -1,6 +1,7 @@
 import XCTest
 import HelpBook
 import MEFirmware
+import ToolModuleKit
 @testable import MEPresentation
 
 /// `MEACurator` / `MEAZones` — the pure, hand-curated tree over the engine's
@@ -110,6 +111,35 @@ final class MEACuratorTests: XCTestCase {
         let carried = try XCTUnwrap(MEACurator.present(
             a, pending: MEAPending(fileTable: true), in: .english).first)
         XCTAssertEqual(field("RPMC Hardware Binding", in: carried), "Enabled")
+        // The two settled states read as a bench needs them, the same tone
+        // the Summary row carries: Disabled green, Enabled the Initialized
+        // caution. A byte the tool does not name and the absence stay ordinary.
+        XCTAssertEqual(carried.fields.first { $0.label == "RPMC Hardware Binding" }?.tone,
+                       ToolValueTone.caution)
+        a.hardwareBinding = .disabled
+        let unbound = try XCTUnwrap(MEACurator.present(a, in: .english).first)
+        XCTAssertEqual(unbound.fields.first { $0.label == "RPMC Hardware Binding" }?.tone,
+                       ToolValueTone.good)
+        a.hardwareBinding = .notInImage
+        XCTAssertEqual(read.fields.first { $0.label == "RPMC Hardware Binding" }?.tone,
+                       ToolValueTone.standard)
+    }
+
+    /// The Boot Guard profile is a number the image holds: profile 0 — nothing
+    /// verified or measured — is green, every other profile the caution the
+    /// File System State draws for Initialized.
+    func testTheBootGuardProfileToneFollowsTheProfile() throws {
+        let none = try analysis(["bootGuardProfile": "0"])
+        let noneNode = try XCTUnwrap(MEACurator.present(none, in: .english).first)
+        let noneField = try XCTUnwrap(noneNode.fields.first { $0.label == "Boot Guard" })
+        XCTAssertEqual(noneField.value, "0 - No_FVME")
+        XCTAssertEqual(noneField.tone, ToolValueTone.good)
+
+        let fvme = try analysis(["bootGuardProfile": "5"])
+        let fvmeNode = try XCTUnwrap(MEACurator.present(fvme, in: .english).first)
+        let field = try XCTUnwrap(fvmeNode.fields.first { $0.label == "Boot Guard" })
+        XCTAssertEqual(field.value, "5 - FVME")
+        XCTAssertEqual(field.tone, ToolValueTone.caution)
     }
 
     /// While `Huffman.dat` is on the way, the Issues group ends with a row
