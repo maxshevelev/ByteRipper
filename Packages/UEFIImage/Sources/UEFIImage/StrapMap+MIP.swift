@@ -13,9 +13,9 @@
 import Foundation
 
 extension DescriptorStrapMap {
-    /// The 17-word message, as 16.1.25.2091 lays it out.
+    /// The 17-word message, as 16.1.42 lays it out.
     public static let mipCpu17 = DescriptorStrapMap(
-        name: "Flash Image Tool 16.1.25.2091, MIP CPU straps, 17 words",
+        name: "Flash Image Tool 16.1.42, MIP CPU straps, 17 words",
         words: 17,
         fields: [
             Field(name: "CPU_Strap_SMT_Disable", word: 0, bits: 0...0, label: "Disable Hyperthreading", options: [0: "No", 1: "Yes"]),
@@ -129,9 +129,9 @@ extension DescriptorStrapMap {
             Field(name: "CPU_Strap_RSVD_DW17_31_0", word: 15, bits: 0...31),
             Field(name: "CPU_Strap_RSVD_DW18_31_0", word: 16, bits: 0...31),
         ])
-    /// The 20-word message, as 16.1.25.2091 lays it out.
+    /// The 20-word message, as 16.1.42 lays it out.
     public static let mipCpu20 = DescriptorStrapMap(
-        name: "Flash Image Tool 16.1.25.2091, MIP CPU straps, 20 words",
+        name: "Flash Image Tool 16.1.42, MIP CPU straps, 20 words",
         words: 20,
         fields: [
             Field(name: "CPU_Strap_SMT_Disable", word: 0, bits: 0...0, label: "Disable Hyperthreading", options: [0: "No", 1: "Yes"]),
@@ -202,7 +202,6 @@ extension DescriptorStrapMap {
             Field(name: "CPU_Strap_xHCI_DVC_DESCR_SEL_STRAP", word: 14, bits: 25...25),
             Field(name: "CPU_Strap_xHCI_FORCE_P3_STRAP", word: 14, bits: 26...26),
             Field(name: "CPU_Strap_xHCI_RSVD_DW16_31_27", word: 14, bits: 27...31),
-            Field(name: "CPU_Strap_xHCI_RSVD_DW17_31_0", word: 15, bits: 0...31),
             Field(name: "CPU_Strap_xDCI_SPLIT_DIE_XDCI_UFP_SM_PRESENT", word: 16, bits: 0...0, label: "xDCI Split Die Configuration", options: [0: "xDCI Split Die Disabled", 1: "xDCI Split Die Enabled"]),
             Field(name: "CPU_Strap_xDCI_FORCE_XDCI_USB2_ONLY_MODE", word: 16, bits: 1...1),
             Field(name: "CPU_Strap_xDCI_RSVD_DW18_31_2", word: 16, bits: 2...31),
