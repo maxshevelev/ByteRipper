@@ -275,6 +275,28 @@ zeroed) — `0xD6CE` here — and the fields decode to the tool's defaults: All
 Cores Active, BIST No, flex ratio 0, boot at P1, compute/small cores all and
 2, IA/GT/SA VR addresses 0/1/2.
 
+**CSME 18's descriptor strap section is the SoC soft-strap block.** `FLMAP1`
+places and counts it like a PCH strap section (130 words at 0x100 on the dump
+at hand), and MFIT 18's `SoC` harness block lays it out — 1184 fields after
+merging the three platform documents:
+
+```bash
+python3 Skills/me-eom-structures/scripts/pch18_map.py ~/Downloads/1/mfit-18.1.exe > \
+    Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH18.swift
+```
+
+The document is **byte-addressed**: a `serialized_item`'s `offset` is a byte
+and `bit_low`/`bit_high` count from that byte's least significant bit, so the
+field's place in the section is the bit range `offset*8 + bit_low …
+offset*8 + bit_high` — not the dword at `offset`. The script converts that to
+the word and bits `DescriptorStrapMap` holds. A field that crosses a 32-bit
+word boundary (three 16-bit MPPHY pipe configs, three 32-bit CSME SMT IDs and
+four reserved spans) cannot be one `Field` and is left out, counted on stderr;
+the three words the 32-bit IDs partly cover therefore hold no field of their
+own. Placement is verified against the dump: all **250** fields whose document
+states a constant value read exactly that value in the image's section, and the
+eSPI clock and GPRD fields the panel's rows use are in the table.
+
 ## Emitting the descriptor's strap layout
 
 The same executables carry the chipset's own layout of the descriptor's PCH

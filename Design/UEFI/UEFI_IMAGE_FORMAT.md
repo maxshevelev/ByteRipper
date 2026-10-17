@@ -421,11 +421,29 @@ different words —
 — which is why no rule can name a strap field from the descriptor's generation
 alone.
 
+**From Meteor Lake the section is the SoC soft-strap block.** `FLMAP1` still
+places and counts it — 130 words at 0x100 on the CSME 18 dump at hand — but
+the fields are MFIT 18's `SoC` harness block (`PlatformSoftStraps name="SoC"`),
+and the document is **byte-addressed**: a `serialized_item`'s `offset` is a
+byte and its bits count from that byte's least significant bit, so a field's
+place is the bit range `offset*8 + bit_low … offset*8 + bit_high`. The three
+platform documents place 1184 fields alike and add one or two of their own;
+values are per reference platform, so no default is emitted. The table is
+`StrapMap+PCH18.swift`, emitted by `pch18_map.py`. Placement is checked: all
+250 fields whose document states a constant value read exactly that value in
+the dump's section, and the eSPI clock and GPRD fields are where the panel's
+rows look for them. The 13 fields the document lays across a 32-bit word
+boundary — the three 32-bit CSME SMT IDs, three 16-bit MPPHY pipe configs and
+four reserved spans — are one word's field in the model only if they are cut,
+so they are left out; the three words the SMT IDs partly cover (41, 46, 51)
+therefore hold no field of their own.
+
 ByteRipper carries the layouts of the lengths its dumps showed and checked —
-69, 70, 74, 90 and 101 words — emitted into
-`Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH.swift` by
-`Skills/me-eom-structures/scripts/strap_map.py` (the tool's names, offsets,
-bits and defaults copied, nothing added). The panel gives every field a row of
+69, 70, 74, 90, 101, 114, 115 and 130 words — emitted into
+`Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH.swift` and
+`StrapMap+PCH18.swift` by `Skills/me-eom-structures/scripts/strap_map.py` and
+`pch18_map.py` (the tool's names, offsets, bits and defaults copied, nothing
+added). The panel gives every field a row of
 its own — its name, the word it sits in, its bits, the value the image holds
 and the value the tool builds — so a row whose two values differ is a field the
 board's own build set; the bit that soft-disables the ME is a row there too,
