@@ -14,7 +14,12 @@ final class UEPMapTests: XCTestCase {
         XCTAssertEqual(rpMc.placement, .init(array: 0, offset: 0x74, bit: 4, count: 1))
         XCTAssertTrue(map.settings.allSatisfy { $0.placement.array == 0 },
                       "a setting the tool places only elsewhere is not in the map")
-        XCTAssertGreaterThan(map.settings.count, 60)
+        XCTAssertEqual(map.settings.count, 76, "16.1.42's first array")
+        // What 16.1.42 adds to the array.
+        for name in ["CPU_AAB_ENABLED", "PCH_AAB_ENABLED", "OEM_CIM_ARB_EN",
+                     "OEM_PIM_ARB_EN", "RpmcOverEc"] {
+            XCTAssertNotNil(map.settings.first { $0.name == name }, name)
+        }
 
         // Flash Image Tool 15 names the same bits by their identifiers alone.
         let fit = try XCTUnwrap(UEPMap.forME(major: 15))
