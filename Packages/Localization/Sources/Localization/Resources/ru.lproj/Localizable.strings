@@ -1611,24 +1611,14 @@
 "The configuration code is not the end of the serial, as it is on a Mac's own. The serial was written without its code, or is a placeholder." = "Код конфигурации не совпадает с концом серийного номера, как у штатного Mac. Серийный номер записан без своего кода либо является заглушкой.";
 "The serial does not begin as the board's serial does. On a Mac's own both begin with the code of the factory; the serial was changed, or came over from another machine." = "Серийный номер начинается не так, как серийный номер платы. У штатного Mac оба начинаются с кода завода; серийный номер изменён либо перенесён с другой машины.";
 /* ME Analyzer: конец производства, Boot Guard и ключ OEM (Skills/me-eom-structures). */
-"Will not close" = "Не закроет";
-"Not readable from this image" = "Из этого дампа не читается";
-"No such switch in this firmware" = "В этой прошивке такого переключателя нет";
 "Manufacturing" = "Manufacturing";
 "Boot Guard" = "Boot Guard";
 "No profile record in this image" = "В этом дампе записи о профиле нет";
 "OEM Public Key Hash" = "OEM Public Key Hash (SHA-384)";
 "No key material in this image" = "В этом дампе материала ключа нет";
-"Will close on the EOM flag" = "Закроет по флагу EOM";
-"Will close on the descriptor's rights" = "Закроет правами дескриптора";
-"Will close on the EOM flag, with the descriptor open" = "Закроет по флагу EOM, дескриптор открыт";
 "Not set (all zeros)" = "Не задан (все нули)";
 "Not set (the area is erased)" = "Не задан (область стёрта)";
 "Layout not recognized" = "Структура не распознана";
-"EOM: on" = "EOM включён";
-"EOM: off" = "EOM выключен";
-"descriptor: open" = "дескриптор открыт";
-"descriptor: locked" = "дескриптор закрыт";
 "EFS: holds files" = "EFS: есть файлы";
 "EFS: unreadable" = "EFS: прочитать не удалось";
 "EFS: files not named" = "EFS: файлы не опознаны (нет базы)";

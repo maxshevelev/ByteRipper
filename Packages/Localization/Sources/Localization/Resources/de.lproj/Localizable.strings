@@ -1611,24 +1611,14 @@
 "The configuration code is not the end of the serial, as it is on a Mac's own. The serial was written without its code, or is a placeholder." = "Der Konfigurationscode stimmt nicht mit dem Ende der Seriennummer überein, wie es bei einem original Mac der Fall ist. Die Seriennummer wurde ohne ihren Code geschrieben oder ist ein Platzhalter.";
 "The serial does not begin as the board's serial does. On a Mac's own both begin with the code of the factory; the serial was changed, or came over from another machine." = "Die Seriennummer beginnt nicht wie die der Platine. Bei einem original Mac beginnen beide mit dem Code des Werks; die Seriennummer wurde geändert oder stammt von einem anderen Gerät.";
 /* ME Analyzer: End of Manufacturing, Boot Guard und der OEM-Schlüssel (Skills/me-eom-structures). */
-"Will not close" = "Schließt nicht ab";
-"Not readable from this image" = "Aus diesem Image nicht lesbar";
-"No such switch in this firmware" = "Diese Firmware hat keinen solchen Schalter";
 "Manufacturing" = "Manufacturing";
 "Boot Guard" = "Boot Guard";
 "No profile record in this image" = "Kein Profil-Eintrag in diesem Image";
 "OEM Public Key Hash" = "OEM Public Key Hash (SHA-384)";
 "No key material in this image" = "Kein Schlüsselmaterial in diesem Image";
-"Will close on the EOM flag" = "Schließt über das EOM-Flag ab";
-"Will close on the descriptor's rights" = "Schließt über die Zugriffsrechte im Descriptor ab";
-"Will close on the EOM flag, with the descriptor open" = "Schließt über das EOM-Flag ab, Descriptor offen";
 "Not set (all zeros)" = "Nicht gesetzt (nur Nullen)";
 "Not set (the area is erased)" = "Nicht gesetzt (Bereich gelöscht)";
 "Layout not recognized" = "Aufbau nicht erkannt";
-"EOM: on" = "EOM: ein";
-"EOM: off" = "EOM: aus";
-"descriptor: open" = "Descriptor: offen";
-"descriptor: locked" = "Descriptor: gesperrt";
 "EFS: holds files" = "EFS: enthält Dateien";
 "EFS: unreadable" = "EFS: nicht lesbar";
 "EFS: files not named" = "EFS: Dateien unbekannt (keine Datenbank)";

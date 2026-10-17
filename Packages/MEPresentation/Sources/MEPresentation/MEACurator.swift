@@ -110,10 +110,8 @@ public enum MEACurator {
         // is in one and not the other sends the reader looking for a second
         // dump. Shown on the same gates as the Summary rows.
         if a.family == .csme, a.version.major >= 11, let state = a.manufacturingState {
-            let evidence = MEAText.manufacturingEvidence(state, basis: a.manufacturingBasis,
-                                                          in: language)
-            let verdict = MEAText.manufacturingState(state, basis: a.manufacturingBasis,
-                                                     in: language)
+            let evidence = MEAText.manufacturingEvidence(state, basis: a.manufacturingBasis)
+            let verdict = MEAText.manufacturingState(state, basis: a.manufacturingBasis)
             fields.append(MEAField(L("Manufacturing", in: language), verdict,
                                    tone: MEATones.manufacturingState(state),
                                    evidence: evidence))
