@@ -111,6 +111,22 @@ final class ToolFieldListTests: XCTestCase {
                        ToolFieldList.nameWidth(for: [name]))
     }
 
+    /// The pointer over the `?` is an arrow, not the text's I-beam.
+    func testTheButtonIsNotUnderTheIBeam() throws {
+        let help = FieldHelp(identifier: "MELanPowerWell", text: "LAN Power Well.",
+                             buttonName: "Setting help")
+        let row = helpList([("LAN Power Well", plain("Enabled"), help)], nameWidth: 300).rows[0]
+        let button = try XCTUnwrap(row.helpButton)
+
+        let rects = row.iBeamRects
+        XCTAssertFalse(rects.isEmpty)
+        XCTAssertFalse(rects.contains { $0.intersects(button.frame) },
+                       "no I-beam over the button")
+        XCTAssertTrue(rects.contains { $0.contains(NSPoint(x: 2, y: button.frame.midY)) },
+                      "the name keeps it")
+        XCTAssertTrue(button is ToolInfoButton, "and the button sets its own arrow")
+    }
+
     /// Pressing the button hands the panel the words and the button to hang a
     /// popover off.
     func testPressingTheButtonAsksThePanelForTheHelp() throws {
