@@ -59,6 +59,13 @@ FIRST = [
 
 HEX_TYPES = {"byte", "word", "dword", "qword"}
 
+# How wide a setting is where the tool names its place by a file alone. A value
+# class is an enumerated number (`DisabledEnabledValues`: 0 Disabled, 1
+# Enabled), one byte in every such file at hand; the numeric types state their
+# own width. `path`, `string` and `bitmap` say nothing this can read as a
+# number, and `target="this"` is the file itself, not a setting.
+WHOLE_WIDTH = {"byte": 1, "word": 2, "dword": 4, "qword": 8}
+
 
 def documents(blob):
     """Every zlib stream in the executable that holds a document."""
@@ -167,7 +174,12 @@ def bindings(texts):
             if not file.startswith("$"):
                 continue          # a file-writing action, not a setting's place
             if not {"cellIndex", "startOffset", "varSize"} & set(fields):
-                continue          # nor one that says nothing about where
+                # Nor one that names only its file: those are settings the file
+                # *is* (`/home/bup/bup_sku/hw_binding`), and the whole-file
+                # writes the tool does for certificates — `setting_of` sorts
+                # them out by the declaration's type, and names what it cannot
+                # read as a number.
+                fields["__whole"] = "true"
             places = found.setdefault(target.group(1), [])
             if all(place != (file, fields) for place in places):
                 places.append((file, fields))
@@ -228,25 +240,37 @@ def place(fields, warnings):
     return offset, length, bits
 
 
-def setting_of(name, fields, declarations_, classes, warnings):
+def setting_of(name, fields, declarations_, classes, warnings, skipped=None):
     """One setting of one file, as the map lays it out.
 
     `label` is the tool's own name for the setting — what its panel shows —
     where the declaration states one, which is where the two differ: the
     identifier is `name` (`MELanPowerWell`, `PttSupported`), the interface text
     is `label` ("LAN Power Well", "Intel(R) PTT Supported").
+
+    A place the tool names by its file alone is the file itself: its width comes
+    from the declaration's type, and a type this cannot read as a number is put
+    in `skipped`, for the caller to list.
     """
-    where = place(fields, warnings)
-    if where is None:
-        return None
-    offset, length, bits = where
+    declaration = declarations_.get(name, {})
+    kind = declaration.get("type", "")
+    if fields.get("__whole"):
+        width = WHOLE_WIDTH.get(kind) or (1 if kind.startswith("class:") else None)
+        if width is None:
+            if name != "this" and skipped is not None:
+                skipped[name] = kind or "no declaration"
+            return None
+        offset, length, bits = 0, width, None
+    else:
+        where = place(fields, warnings)
+        if where is None:
+            return None
+        offset, length, bits = where
     condition = None
     if fields.get("buildConditional") == "true":
         condition = condition_of(fields, name, declarations_, classes, warnings)
         if condition is None:
             return None
-    declaration = declarations_.get(name, {})
-    kind = declaration.get("type", "")
     options = classes.get(kind.split(":", 1)[1]) if kind.startswith("class:") else None
     return {
         "name": name,
@@ -423,6 +447,7 @@ def main():
     # `mca/eom` `EOM` and `EndOfManufacturing`, which are their words for one
     # field and not three.
     off = switched_off(chosen, declarations_, classes, warnings)
+    skipped = {}
     every = bindings(texts)
     record = {target for target, places in every.items()
               if any(file.endswith("EOM_Config") for file, _ in places)}
@@ -438,7 +463,7 @@ def main():
             if not path:
                 warnings.append("no path for %s (%s)" % (reference, target))
                 continue
-            setting = setting_of(target, fields, declarations_, classes, warnings)
+            setting = setting_of(target, fields, declarations_, classes, warnings, skipped)
             if setting is None:
                 continue
             if target in off:
@@ -458,6 +483,11 @@ def main():
           % (len(chosen), len(files), readable), file=sys.stderr)
     for warning in warnings:
         print("! %s" % warning, file=sys.stderr)
+    if skipped:
+        print("not read — places the tool names by a file alone, of a type this does not "
+              "read as a number: %s"
+              % ", ".join("%s (%s)" % (name, kind) for name, kind in sorted(skipped.items())),
+              file=sys.stderr)
 
     print("// The CSME %s map of the ME configuration — emitted by" % generation)
     print("// `Skills/me-eom-structures/scripts/fit_map.py` from Flash Image Tool %s's" % tool)

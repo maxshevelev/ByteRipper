@@ -27,8 +27,11 @@ final class ConfigurationMapTests: XCTestCase {
     /// the four maps only the CSME 16 one, which comes from MFIT, carries it.
     func testTheThirteenMapIsWhatFit13LaysOut() {
         let map = MEConfigurationMap.csme13
-        XCTAssertEqual(map.files.count, 10)
-        XCTAssertEqual(map.files.flatMap(\.settings).count, 35)
+        // 15 files and 40 settings since the places the tool names by a file
+        // alone (`hw_binding`, `amt.wol`, …) are read too; the extra files are
+        // the ones those settings are.
+        XCTAssertEqual(map.files.count, 15)
+        XCTAssertEqual(map.files.flatMap(\.settings).count, 40)
         for fit in [MEConfigurationMap.csme13, .csme14, .csme15] {
             XCTAssertFalse(fit.files.flatMap(\.settings).contains { $0.auto }, "\(fit.name)")
         }
@@ -137,6 +140,32 @@ final class ConfigurationMapTests: XCTestCase {
         for words in [0, 68, 75, 89, 128, 0xFF] {
             XCTAssertNil(MEConfigurationMap.MEPlatformFamily(strapWords: words), "\(words)")
         }
+    }
+
+    /// A setting the tool names by its file alone is the file: the value is
+    /// its first byte, and the width comes from the declaration's type — a
+    /// value class is one byte. The tool's own words for the values come with
+    /// the class, and their order is the class's (`DisabledEnabledValues` is
+    /// Disabled at 0, `EnabledDisabledValues` the other way round).
+    func testAPlaceTheToolNamesByAFileAloneIsTheFile() throws {
+        let map = MEConfigurationMap.csme13
+        let binding = try XCTUnwrap(map.file(at: "/home/bup/bup_sku/hw_binding")?
+            .settings.first { $0.name == "HwBindingEn" })
+        XCTAssertEqual(binding.offset, 0)
+        XCTAssertEqual(binding.length, 1)
+        XCTAssertEqual(binding.label, "Hardware Binding Enabled")
+        XCTAssertEqual(binding.options?[0], "Disabled")
+        XCTAssertEqual(binding.options?[1], "Enabled")
+        XCTAssertNil(binding.bits, "the whole byte, not a bitfield")
+
+        // CSME 15's own layout does not name it — the TGL family leaves the
+        // setting to the FPF — and the number type states its own width.
+        XCTAssertNil(MEConfigurationMap.csme15.files.flatMap(\.settings)
+            .first { $0.name == "HwBindingEn" })
+        let timeout = try XCTUnwrap(MEConfigurationMap.csme15.files.flatMap(\.settings)
+            .first { $0.name == "AmtIdleTimeout" })
+        XCTAssertEqual(timeout.offset, 0)
+        XCTAssertEqual(timeout.length, 2, "a `word`")
     }
 
     /// A place the tool gives only under another setting's value is kept, with

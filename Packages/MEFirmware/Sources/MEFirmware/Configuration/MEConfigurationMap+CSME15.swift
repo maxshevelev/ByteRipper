@@ -64,6 +64,15 @@ extension MEConfigurationMap {
             Setting(name: "PttSupported", offset: 344, length: 4, label: "Intel(R) PTT Supported", help: "This setting permanently disables Intel(R) PTT in the firmware image.", bits: 29...29, options: [0: "No", 1: "Yes"]),
             Setting(name: "TlsCryptoSupport", offset: 344, length: 3, label: "Transport Layer Security crypto support", help: "This setting allows customers to enable/ disable FW Transport Layer Security algorithm crypto fuse.  Note: if this is disabled, TLS is still operational but without crypto.", bits: 21...21, options: [0: "No", 1: "Yes"]),
         ]),
+        File(path: "/home/amt/rtfd/amt.wol", alias: "amt.wol", settings: [
+            Setting(name: "AmtIdleTimeout", offset: 0, length: 2, label: "Intel(R) AMT Idle Timeout", help: "This setting configures the idle timeout value before Intel(R) AMT enters into an off state.", hex: true),
+        ]),
+        File(path: "/home/amt/rtfd/WDResetState", alias: "AmtWdTimer", settings: [
+            Setting(name: "AmtWdAutoReset", offset: 0, length: 1, label: "Intel(R) AMT Watchdog Automatic Reset Enabled", help: "This setting allows customers to enable the Intel (R) ME firmware to trigger an automatic platform reset if either the MEI or Agent Presence are in a hung state.  Note: This feature only allows one reset at a time when the watchdog expires.  After this feature has triggered a reset it must be re-armed for re-use via management console.", options: [0: "No", 1: "Yes"]),
+        ]),
+        File(path: "/home/secureboot/brm_cfg", alias: "BrmEn", settings: [
+            Setting(name: "BiosRedAssistance", offset: 0, length: 1, label: "BIOS Redundancy Assistance", help: "In case of BIOS boot failure, CSME will configure the platform to boot with backup BIOS using Top Swap. Note: This option is only available when Boot Guard is enabled.", options: [0: "Disabled", 1: "Enabled"]),
+        ]),
         File(path: "/home/bup/si_features", alias: "KernFixedData", settings: [
             Setting(name: "DbgOverridePreProdSi", offset: 12, length: 4, label: "Debug Override Pre-Production Silicon", help: "Allows the OEM to control FW features to assist with pre-production platform debugging.  This control has no effect if used on production silicon.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", hex: true),
             Setting(name: "DbgOverrideProdSi", offset: 16, length: 4, label: "Debug Override Production Silicon", help: "Allows the OEM to control FW features to assist with production platform debugging.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", hex: true),
@@ -76,6 +85,9 @@ extension MEConfigurationMap {
         ]),
         File(path: "/home/pavp/guc_hash", alias: "GucHash", settings: [
             Setting(name: "GucHash", offset: 0, length: 32, label: "GuC Encryption Key", help: "This option is for entering the raw hash 256 bit string for the Graphics uController."),
+        ]),
+        File(path: "/home/policy/hmrfpo_state", alias: "HMRFPO_OEM_Enabled", settings: [
+            Setting(name: "HmrfpoEnable", offset: 0, length: 1, label: "Intel(R) ME Region Flash Protection Override", help: "This setting enables descriptor unlock of the ME Region when the HMRFPO message is sent to firmware prior to BIOS End of POST.", options: [0: "No", 1: "Yes"]),
         ]),
         File(path: "/home/amt/rtfd/rsb.state", alias: "KvmScreenBlnk", settings: [
             Setting(name: "KvmScreenBlnkEnable", offset: 0, length: 1, label: "Firmware KVM Screen Blanking", help: "This setting enables KVM Screen blanking capabilities in the firmware image.  Note: This feature is dependent on processor level support.", options: [0: "No", 1: "Yes"]),
@@ -103,6 +115,9 @@ extension MEConfigurationMap {
         File(path: "/home/policy/msrmnt_sup", alias: "MeasurmentSupport", settings: [
             Setting(name: "MeMeasuredBootState", offset: 0, length: 1, label: "Intel(R) ME Measured Boot State", help: "When measured boot is enabled firmware will use additional extended registers for all IUPs and Key Manifests that firmware loads and verifies from flash. \nNote: When measured boot is enabled any IUPs or firmware updates will require a global reset", options: [0: "Disabled", 1: "Enabled"]),
         ]),
+        File(path: "/home/rbe/MANAGEABILITY_HW_DIS", alias: "MngHwDis", settings: [
+            Setting(name: "MngHwStatusEfs", offset: 0, length: 1, label: "Manageability Application Hardware Status EFS", help: "This setting will disable Intel(R) AMT hardware.", options: [0: "Yes", 1: "No"]),
+        ]),
         File(path: "/home/amt/skip_rtfd/pki.suffix", alias: "PkiSuffix", settings: [
             Setting(name: "PkiDomainSuffix", offset: 0, length: 256, label: "PKI Domain Name Suffix", help: "This setting allows OEMs to pre-configure the Domain Name Suffix used for PKI provisioning in their firmware image.  Note: For normal out-of- box provisioning functionality this setting should be left empty.", text: true),
         ]),
@@ -115,8 +130,21 @@ extension MEConfigurationMap {
         File(path: "/home/iunit/iunit_privacy_mode", alias: "iunitPrivacyMode", settings: [
             Setting(name: "PrivacyFeatureControlDisabled", offset: 0, length: 1, label: "Camera privacy feature control disabled", help: "This NVAR enables/disables the camera privacy. Enabling this NVAR means that the Camera privacy GPIO Pin value is used to mask/unmask all cameras’ data from being used", options: [0: "false", 1: "true"]),
         ]),
+        File(path: "/home/amt/rtfd/PrivacyLvl", alias: "PrivacyLevel", settings: [
+            Setting(name: "RedirectionPrivSecLevel", offset: 0, length: 1, label: "Redirection Privacy / Security Level", help: "This setting allows customers to configure the Privacy and Security level for redirection operations.  Default enables all redirection ports (User consent is configurable).  Enhanced enables all redirection ports (User consent is required and cannot be disabled).  Extreme disables all redirection capabilities.", options: [1: "Default", 2: "Enhanced", 3: "Extreme"]),
+        ]),
+        File(path: "/home/ptt/ptt_smx_disable", alias: "PttSmxSupport", settings: [
+            Setting(name: "Rsa1KSupport", offset: 0, length: 1, label: "Rsa 1K State", options: [0: "Enabled", 1: "Disabled"]),
+            Setting(name: "SmxSupport", offset: 0, length: 1, label: "SMx State", options: [0: "Enabled", 1: "Disabled"]),
+        ]),
         File(path: "/home/amt/skip_rtfd/sfx.isSecure", alias: "SfxIsSecure", settings: [
             Setting(name: "SuffixIsSecure", offset: 0, length: 1, options: [0: "false", 1: "true"]),
+        ]),
+        File(path: "/home/tcss/tcss_ctrl", alias: "TcssControl", settings: [
+            Setting(name: "TcssAuthenticateEn", offset: 0, length: 1, options: [0: "Yes", 1: "No"]),
+        ]),
+        File(path: "/home/fwupdate/fwutcss", alias: "TCSS_PartialUpdate", settings: [
+            Setting(name: "TcssPartialUpdateEn", offset: 0, length: 1, label: "Tcss - Partial Update Enabled", help: "This setting enables partial update for TCSS partitions", options: [0: "Disabled", 1: "Enabled"]),
         ]),
         File(path: "/home/amt/skip_rtfd/ncsi", alias: "AmtNetworkConfiguration", settings: [
             Setting(name: "TypeCPort1RetimerI2cAddress", offset: 1, length: 1, label: "Type-C Port1 Re-Timer I2C Address", help: "This setting configures the Intel(R) SMBus I2C Address.\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", disabledBy: Condition(name: "vproDockEnabled", value: 0), hex: true),

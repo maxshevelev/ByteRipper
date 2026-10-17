@@ -46,6 +46,15 @@ extension MEConfigurationMap {
             Setting(name: "FWSecureMode", offset: 1, length: 1, label: "FW Secure Mode", help: "If enabled, access blockers in IS and PS are enabled, and FW is read from IMR. Must be enabled for FW authentication flow and execution of authenticated FW.", options: [0: "Disabled", 1: "Enabled"]),
             Setting(name: "RomTraceEnable", offset: 0, length: 1, label: "IPU Debugging Enabled", help: "If enabled, IPU Debugging is enabled, otherwise internal setup is checked to see if the IPU Debugging feature should be enabled or not.", options: [0: "Disabled", 1: "Enabled"]),
         ]),
+        File(path: "/home/bup/bup_sku/hw_binding", alias: "HwBinding", settings: [
+            Setting(name: "FpfHwBindingEn", offset: 0, length: 1, label: "FPF Hardware Binding Enabled", help: "This setting configures the FPF Hardware binding behavior for the platform image.  \n\n                                                                                                                                                     If this setting is enabled FPF Hardware binding will occur when platform close manufacturing flow is executed with Intel® FPT. \n\n                                                                                                                                                     If this setting is disabled FPF Hardware binding will not take place when close manufacturing flow is executed. \n\n                                                                                                                                                     Note: For Revenue parts this setting will be ignored and FPF Hardware binding will take place when close manufacturing flow is executed.", options: [0: "Disabled", 1: "Enabled"]),
+        ]),
+        File(path: "/home/icc/intlrec", alias: "IntelRecordTable", settings: [
+            Setting(name: "IntlRcrdBinary", offset: 0, length: 1, options: [0: "Enabled", 1: "Disabled"]),
+        ]),
+        File(path: "/home/pavp/lspcon_port", alias: "PavpLspcon", settings: [
+            Setting(name: "Lspcon4kdisp", offset: 0, length: 1, label: "LSPCON Internal Display Port 1 - LSPCON / 4K", help: "This setting determines which port for LSPCON will be connected to the HDCP 2.2 bridge adapter Display 1.", options: [0: "None", 2: "PortB", 4: "PortC", 8: "PortD"]),
+        ]),
         File(path: "/home/mctp/smt3_devices", alias: "Smt3Devices", settings: [
             Setting(name: "MctpEcAddress", offset: 0, length: 2, label: "MCTP EC Address", help: "Defines the 8-bits MCTP address and 7-bits SMBus address of the EC on SMLink1 bus. This value is needed if EC is using the MCTP protocol. The SMBus (LS byte) must be from 0x01 to 0x7f (and should not overlap with any SMBus address in PCH Strap 11).  The EID (MS byte) must be outside 0x01 through 0x07.", hex: true),
         ]),
