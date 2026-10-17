@@ -53,15 +53,18 @@ public enum MEAConfiguration {
                 var label = setting?.label ?? name
                 let auto = MEAText.configurationAuto(setting?.auto == true, in: language)
                 if !auto.isEmpty { label += " · " + auto }
-                // What placed the setting, and what switches it off: one mark
-                // each, in the tool's own identifiers and option words.
+                // What placed the setting, and what switches it off: the
+                // tool's own identifiers and option words, kept for the `?`'s
+                // popover — a row's name has no room for them, and a name
+                // three phrases long reads as no name at all.
                 let condition = (fitc + mfs).compactMap(\.condition).first
                 let disabled = (fitc + mfs).compactMap(\.disabled).first
+                var note: [String] = []
                 if let condition {
-                    label += " · " + MEAText.configurationCondition(condition, in: map, language: language)
+                    note.append(MEAText.configurationCondition(condition, in: map, language: language))
                 }
                 if let disabled {
-                    label += " · " + MEAText.configurationDisabled(disabled, in: map, language: language)
+                    note.append(MEAText.configurationDisabled(disabled, in: map, language: language))
                 }
                 return MEAConfigurationRow(
                     name: label,
@@ -69,6 +72,7 @@ public enum MEAConfiguration {
                     // Where the tool says nothing about a setting, there is no
                     // button to press and no popover to open.
                     help: setting?.help,
+                    note: note.isEmpty ? nil : note.joined(separator: " · "),
                     condition: condition,
                     disabled: disabled != nil,
                     fitc: MEAText.configurationValue(fitc.first { $0.name == name },
@@ -103,6 +107,11 @@ public struct MEAConfigurationRow: Sendable, Equatable {
     /// What the tool's panel says about the setting, where it says anything;
     /// nil there is no `?` beside the row at all.
     public let help: String?
+    /// What the row's `?` says under the identifier: what placed the setting,
+    /// and what switches it off — `eSpiEnabled = No, assumed · disabled by …`.
+    /// Nil for a row with nothing to add. The popover's subtitle, not the
+    /// row's: a name with three phrases after it reads as no name at all.
+    public let note: String?
     /// The condition the tool placed the setting under, where it placed it
     /// conditionally, and which branch this image holds.
     public let condition: ConfigurationCondition?
@@ -123,12 +132,13 @@ public struct MEAConfigurationRow: Sendable, Equatable {
         return fitc != mfs
     }
 
-    public init(name: String, identifier: String, help: String? = nil,
+    public init(name: String, identifier: String, help: String? = nil, note: String? = nil,
                 condition: ConfigurationCondition? = nil, disabled: Bool = false,
                 fitc: String?, mfs: String?) {
         self.name = name
         self.identifier = identifier
         self.help = help
+        self.note = note
         self.condition = condition
         self.disabled = disabled
         self.fitc = fitc
