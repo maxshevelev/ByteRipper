@@ -177,6 +177,28 @@ final class HelpBodyViewTests: XCTestCase {
         text.perform(copy)
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "Partition")
     }
+
+    /// A view that fits its words asks for their height: a line for a line,
+    /// more for more, and the insets on top of it.
+    func testTheContentHeightFollowsTheText() {
+        let font = NSFont.systemFont(ofSize: 13)
+        let body = HelpBodyView()
+        body.textInset = NSSize(width: 14, height: 0)
+        XCTAssertEqual(body.textInset.width, 14, accuracy: 0.01, "the inset is to the glyphs")
+
+        body.show(NSAttributedString(string: "One line.", attributes: [.font: font]))
+        let one = body.contentHeight(width: 340)
+        XCTAssertGreaterThan(one, 10)
+        XCTAssertLessThan(one, 25, "one line asks for one line")
+
+        let long = String(repeating: "A setting that takes several lines to explain. ", count: 10)
+        body.show(NSAttributedString(string: long, attributes: [.font: font]))
+        XCTAssertGreaterThan(body.contentHeight(width: 340), one * 4)
+
+        body.textInset = NSSize(width: 14, height: 10)
+        body.show(NSAttributedString(string: "One line.", attributes: [.font: font]))
+        XCTAssertEqual(body.contentHeight(width: 340), one + 20, accuracy: 0.5)
+    }
 }
 
 /// The popover a panel shows for one row's term.

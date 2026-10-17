@@ -79,21 +79,31 @@ final class ToolFieldListTests: XCTestCase {
         XCTAssertEqual(list.rows[0].helpButton?.accessibilityLabel(), "Setting help")
     }
 
-    /// The button sits at the end of the name column, and the name is drawn in
-    /// what is left of the column rather than under it.
-    func testTheButtonTakesTheEndOfTheNameColumn() throws {
+    /// The button follows the name, right after its last word, and the name is
+    /// drawn in what the column has less the button's room.
+    func testTheButtonFollowsTheName() throws {
         let help = FieldHelp(identifier: "MELanPowerWell", text: "LAN Power Well.",
                              buttonName: "Setting help", buttonTooltip: "What the tool says")
-        let name = "LAN Power Well and then some more of it"
+        let name = "LAN Power Well"
         let list = helpList([(name, plain("Enabled"), help)], nameWidth: 300)
         let row = list.rows[0]
         let button = try XCTUnwrap(row.helpButton)
+        let nameWidth = ToolFieldList.nameWidth(for: [name], atLeast: 0)
 
         XCTAssertGreaterThan(row.nameColumnWidth, ToolFieldList.helpButtonReserve)
-        XCTAssertEqual(button.frame.maxX, row.nameColumnWidth, accuracy: 0.5,
-                       "the button sits at the end of the name column")
+        XCTAssertEqual(button.frame.minX, nameWidth + ToolFieldRow.helpButtonGap, accuracy: 1,
+                       "the button sits right after the name")
+        XCTAssertLessThan(button.frame.maxX, row.nameColumnWidth - 20,
+                          "not at the far end of a wide column")
         XCTAssertEqual(row.nameLayoutWidth, row.nameColumnWidth - ToolFieldList.helpButtonReserve,
                        accuracy: 0.5, "and the name is laid out in what the button leaves")
+
+        // A name that wraps puts the button after its last line, inside the column.
+        let long = "LAN Power Well and then some more of it"
+        let wrapped = helpList([(long, plain("Enabled"), help)], nameWidth: 90).rows[0]
+        let wrappedButton = try XCTUnwrap(wrapped.helpButton)
+        XCTAssertGreaterThan(wrappedButton.frame.minY, 5, "on the name's last line")
+        XCTAssertLessThanOrEqual(wrappedButton.frame.maxX, wrapped.nameColumnWidth + 0.5)
         // A column measured for rows with buttons keeps their width back.
         XCTAssertEqual(ToolFieldList.nameWidth(for: [name], reservingHelp: true),
                        ToolFieldList.nameWidth(for: [name]) + ToolFieldList.helpButtonReserve)

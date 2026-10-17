@@ -57,6 +57,38 @@ import HelpBook
         reflectScrolledClipView(contentView)
     }
 
+    /// How far the prose sits from the view's edges — horizontally to where
+    /// the glyphs begin, the line's own padding included, so a label beside the
+    /// view can be lined up with the text by the same number.
+    public var textInset: NSSize {
+        get {
+            let padding = text.textContainer?.lineFragmentPadding ?? 0
+            return NSSize(width: text.textContainerInset.width + padding,
+                          height: text.textContainerInset.height)
+        }
+        set {
+            let padding = text.textContainer?.lineFragmentPadding ?? 0
+            text.textContainerInset = NSSize(width: max(0, newValue.width - padding),
+                                             height: newValue.height)
+        }
+    }
+
+    /// How tall the prose shown is at `width`, its insets included: what a
+    /// view that fits its text rather than a fixed box asks for.
+    public func contentHeight(width: CGFloat) -> CGFloat {
+        guard let storage = text.textStorage, let shown = text.textContainer else { return 0 }
+        let inset = text.textContainerInset
+        let copy = NSTextStorage(attributedString: storage)
+        let layout = NSLayoutManager()
+        let container = NSTextContainer(size: NSSize(width: max(1, width - 2 * inset.width),
+                                                     height: .greatestFiniteMagnitude))
+        container.lineFragmentPadding = shown.lineFragmentPadding
+        layout.addTextContainer(container)
+        copy.addLayoutManager(layout)
+        layout.ensureLayout(for: container)
+        return ceil(layout.usedRect(for: container).height) + 2 * inset.height
+    }
+
     /// What the view is showing, for the tests that read it.
     public var shownText: String { text.string }
 }
