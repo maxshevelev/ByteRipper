@@ -506,6 +506,7 @@ import ToolModuleKit
         splitter.isHidden = !showTree
         summaryScroll.isHidden = !showSummary
         configurationScroll.isHidden = !showConfiguration
+        if !showConfiguration { closeSettingHelp() }
         placeholder.isHidden = showSummary || showTree || showConfiguration
         // Nothing to copy and nothing to picture until the summary is up.
         summaryActions.isHidden = !showSummary
@@ -788,6 +789,9 @@ import ToolModuleKit
     /// nobody has booted has one column and no argument — and is drawn as the
     /// quiet dash it is.
     private func renderConfiguration() {
+        // The rows are about to go, and with them the button a setting's
+        // popover hangs off: one left open would point at nothing.
+        closeSettingHelp()
         let stack = configurationScroll.content
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         configurationScroll.placeholder.isHidden = true
@@ -820,7 +824,9 @@ import ToolModuleKit
                           // has them: the `?` beside the name opens them, with
                           // the identifier the row does not show at the top.
                           help: row.help.map {
-                              FieldHelp(identifier: row.identifier, text: $0)
+                              FieldHelp(identifier: row.identifier, text: $0,
+                                        buttonName: L("Setting help"),
+                                        buttonTooltip: L("Show what Flash Image Tool says about this setting"))
                           })
                 },
                 nameWidth: nameWidth)
@@ -836,6 +842,13 @@ import ToolModuleKit
     /// a transient popover closes itself on a click elsewhere, and one left
     /// open behind the next is two popovers over one tab.
     private var settingHelpPopover: MEASettingHelpPopover?
+
+    /// Closes a setting's popover, where one is open — when its rows are
+    /// rebuilt, and when the tab it belongs to goes off screen.
+    private func closeSettingHelp() {
+        settingHelpPopover?.close()
+        settingHelpPopover = nil
+    }
 
     /// Which of the tab's two value columns carry anything at all in this
     /// render. A copy the image does not carry in *any* file — no OEM
