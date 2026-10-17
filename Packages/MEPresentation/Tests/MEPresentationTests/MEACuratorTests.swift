@@ -101,15 +101,15 @@ final class MEACuratorTests: XCTestCase {
         a.hardwareBinding = .notInImage
         let waiting = try XCTUnwrap(MEACurator.present(
             a, pending: MEAPending(fileTable: true), in: .english).first)
-        XCTAssertEqual(field("RPMC", in: waiting), "Loading…")
+        XCTAssertEqual(field("RPMC Hardware Binding", in: waiting), "Loading…")
 
         let read = try XCTUnwrap(MEACurator.present(a, in: .english).first)
-        XCTAssertEqual(field("RPMC", in: read), "Not recorded in this image")
+        XCTAssertEqual(field("RPMC Hardware Binding", in: read), "Not recorded in this image")
 
         a.hardwareBinding = .enabled
         let carried = try XCTUnwrap(MEACurator.present(
             a, pending: MEAPending(fileTable: true), in: .english).first)
-        XCTAssertEqual(field("RPMC", in: carried), "Hardware binding: Enabled")
+        XCTAssertEqual(field("RPMC Hardware Binding", in: carried), "Enabled")
     }
 
     /// While `Huffman.dat` is on the way, the Issues group ends with a row

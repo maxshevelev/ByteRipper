@@ -94,10 +94,13 @@ extension MEAText {
     /// labels are.
     public static func hardwareBinding(_ value: HardwareBinding, in language: AppLanguage) -> String {
         switch value {
-        case .disabled: return L("Hardware binding: %1$@", in: language, "Disabled")
-        case .enabled: return L("Hardware binding: %1$@", in: language, "Enabled")
+        // The row is already named "RPMC Hardware Binding", so the value is
+        // the finding alone: the tool's own option words, which stay English
+        // in every language as every option label of the tool does.
+        case .disabled: return "Disabled"
+        case .enabled: return "Enabled"
         case .other(let byte):
-            return L("Hardware binding: unexpected value %1$@", in: language,
+            return L("Unexpected value %1$@", in: language,
                      String(format: "0x%02X", byte))
         case .notInImage: return L("Not recorded in this image", in: language)
         }

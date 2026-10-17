@@ -905,20 +905,20 @@ final class MEASummaryTests: XCTestCase {
             a.hardwareBinding = binding
             return tableRows(a)
         }
-        XCTAssertEqual(value("RPMC", in: try rows(.enabled, major: 15)),
-                       .value("Hardware binding: Enabled"))
-        XCTAssertEqual(value("RPMC", in: try rows(.disabled, major: 15)),
-                       .value("Hardware binding: Disabled"))
-        XCTAssertEqual(value("RPMC", in: try rows(.other(0x02), major: 16)),
-                       .value("Hardware binding: unexpected value 0x02"))
-        XCTAssertEqual(value("RPMC", in: try rows(.notInImage, major: 16)),
+        XCTAssertEqual(value("RPMC Hardware Binding", in: try rows(.enabled, major: 15)),
+                       .value("Enabled"))
+        XCTAssertEqual(value("RPMC Hardware Binding", in: try rows(.disabled, major: 15)),
+                       .value("Disabled"))
+        XCTAssertEqual(value("RPMC Hardware Binding", in: try rows(.other(0x02), major: 16)),
+                       .value("Unexpected value 0x02"))
+        XCTAssertEqual(value("RPMC Hardware Binding", in: try rows(.notInImage, major: 16)),
                        .value("Not recorded in this image"))
         // A reading, not a verdict: the row carries no tone either way.
-        XCTAssertEqual(tone("RPMC", in: try rows(.enabled, major: 15)), .standard)
+        XCTAssertEqual(tone("RPMC Hardware Binding", in: try rows(.enabled, major: 15)), .standard)
         // CSME 12 has no such setting: no row, rather than one that can only
         // say the image does not carry it.
-        XCTAssertNil(value("RPMC", in: try rows(.notInImage, major: 12)))
-        XCTAssertNil(value("RPMC", in: try rows(nil, major: 15)))
+        XCTAssertNil(value("RPMC Hardware Binding", in: try rows(.notInImage, major: 12)))
+        XCTAssertNil(value("RPMC Hardware Binding", in: try rows(nil, major: 15)))
     }
 
     /// The binding's file is found through `FileTable.dat`: until the reading
@@ -933,13 +933,13 @@ final class MEASummaryTests: XCTestCase {
         ])
         a.hardwareBinding = .notInImage
         let waiting = MEASummary.build(a, pending: MEAPending(fileTable: true), in: .english)[0].rows
-        XCTAssertEqual(value("RPMC", in: waiting), .pending)
-        XCTAssertEqual(tone("RPMC", in: waiting), .standard)
-        XCTAssertEqual(value("RPMC", in: tableRows(a)), .value("Not recorded in this image"))
+        XCTAssertEqual(value("RPMC Hardware Binding", in: waiting), .pending)
+        XCTAssertEqual(tone("RPMC Hardware Binding", in: waiting), .standard)
+        XCTAssertEqual(value("RPMC Hardware Binding", in: tableRows(a)), .value("Not recorded in this image"))
 
         a.hardwareBinding = .enabled
         let carried = MEASummary.build(a, pending: MEAPending(fileTable: true), in: .english)[0].rows
-        XCTAssertEqual(value("RPMC", in: carried), .value("Hardware binding: Enabled"))
+        XCTAssertEqual(value("RPMC Hardware Binding", in: carried), .value("Enabled"))
     }
 
 

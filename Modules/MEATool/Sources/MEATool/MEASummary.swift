@@ -338,7 +338,7 @@ public enum MEASummary {
             if let binding = analysis.hardwareBinding, analysis.version.major >= 13 {
                 let waits = pending.fileTable && binding == .notInImage
                 rows.append(MEASummaryRow(
-                    L("RPMC", in: language),
+                    L("RPMC Hardware Binding", in: language),
                     waits ? .pending
                           : .value(MEAText.hardwareBinding(binding, in: language)),
                     tone: .standard))
