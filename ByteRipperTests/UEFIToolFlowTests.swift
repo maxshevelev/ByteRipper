@@ -1836,6 +1836,14 @@ final class UEFIToolFlowTests: XCTestCase {
                        "the word is the section's, not a column")
         XCTAssertEqual(shown("SPI_ec_max_freq")?.texts.prefix(2), ["SPI_ec_max_freq", "3–5"])
         XCTAssertNil(shown("SPI_DMI_REQID"), "another word stays folded")
+        // The open section ends with a gap before the next word's line.
+        let next = try XCTUnwrap(shown("PCHSTRP23"))
+        let lastOfOpen = try XCTUnwrap(table.rows.filter { !$0.isHidden }
+            .last { $0.frame.maxY <= next.frame.minY + 0.5 })
+        let middle = try XCTUnwrap(shown("SPI_ec_max_freq"))
+        XCTAssertFalse(lastOfOpen === middle)
+        XCTAssertGreaterThan(lastOfOpen.frame.height, middle.frame.height + 2,
+                             "the open section's last row keeps a gap under it")
 
         // The first column is held to what nine names in ten need; a longer
         // name wraps under itself, and is still one name to select and copy.
