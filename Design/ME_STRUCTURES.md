@@ -612,6 +612,38 @@ to work out by hand:
 | `pch_fuses.xml` | the fuses by project, platform and SKU — `ADL` → `S` → `Q670`/`W680` → the seven fuse names each |
 | `AdditionalSMLinkConfFields.xml` | the SMLink fields |
 
+**MFIT 18 rewrote the database.** `mfit-18.1.exe` (CSME 18.1, the System Tools
+18.1.18.2749 package) carries its material in a new shape: `mfit_root`
+documents of `serialized_item`s — a name, `offset`, `bit_low`/`bit_high`, and a
+value that is a per-RVP expression (`?($rvp == MTL-P DDR5 … ? 0x3 : … )`) — with
+`ui_item`s carrying the panel's label, section and help and `bind_action`s tying
+the two together. The settings are `<Files>` documents of
+`<File name=ALIAS><nvar name="…"><physical offset length bit_low bit_high>` plus
+`<sku_support>` (identical in shape to what `Files.xml` gave until 16, but keyed
+by alias and without the project lists), 59 files and 127 settings in this
+build, with a second `<Files>` document listing the MFS paths
+(`<FileName>`/`<FilePath>`).
+
+Two things moved out. **The strap layouts are no longer in the executable**: the
+harness document imports them by name —
+`plugins/DescriptorPluginsCommon/data/straps/mtl_arl_p_a0_complex_straps.xml` —
+and the System Tools package ships `mfit.exe` alone, so the PCH and CPU strap
+tables for 18 are not readable from it (a handful of `CPU_Strap_…` fields are
+inlined). And the platform families are told by a new dictionary rather than by
+project attributes: **MTL, ARL, LNL, PTL**. The IFWI layout adds the ESE package
+(ESE, DMU, PUNIT, AUNIT, SOC ESE, SOC SPHY, SOC PMC) and the ACE / SOCC / PCHC
+sub-partitions, and the descriptor's MIP area is restructured
+(`MipDescNvar`, `PlatformSoftStraps`, `DescriptorSoftStraps`).
+
+The **UEP data survived** as `UEPs_Data` documents: a `serialized_item` per bit
+(offset plus `bit_low`/`bit_high`, no array index — `arrays_count` says how
+many arrays), the FPF settings beside them as `ui_item`s, and the bindings as
+`bind_action type="get_value"`. Four new ESE FPF bits sit beside the old ones
+(`ESE_CFG_DONE`, `ESE_TRC_EN`, `ESE_ROM_SVN_EN` and the ESE package's own FPF
+block). None of our generators reads this shape yet: a CSME 18 configuration
+map and UEP map are new parsers, and the strap tables need the full MFIT 18
+project data the System Tools package does not ship.
+
 **The PCH fuses are not in a dump.** `pch_fuses.xml` names the seven fuses per
 platform and SKU — `CSME_FUSE_VALUE_BYTE_0…5` and
 `MB_EN_AND_LPCDID_FUSE_VALUE_BYTE_0` — and the same binary carries their values
