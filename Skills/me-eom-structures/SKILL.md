@@ -79,7 +79,16 @@ for it (`label`) and what its panel says about it (`help`) beside the
 identifier. Both tools write the help as one attribute with their own breaks in
 it — FIT `&#60;br /&#62;`, MFIT `&#13;&#10;` — and the generator resolves the
 entities and turns a break into the line it stands for, so a map carries prose
-and no markup. A place the tool gives only under another setting's value — its
+and no markup. A place the tool names by **its file alone** (`{'filePath':'$FilePaths/HwBinding'}`,
+no offset or size) is a setting the file *is*: the value is its first byte. The
+width comes from the declaration's type — a value class is one byte, and
+`byte`/`word`/`dword`/`qword` state their own. The types that are not numbers
+(`path`, `string`, `bitmap`) and `target="this"` (the tool writing the whole
+file, certificates among them) are left out, and the generator prints them as
+one `not read — …` line, so what a map does not hold is a list rather than
+silence.
+
+A place the tool gives only under another setting's value — its
 `buildConditional` actions — is kept with that condition (`Condition(name:value:)`,
 the value resolved through the condition setting's own value class:
 `eSpiEnabled = No` is `NoYesValues`' 0), and a setting the tool switches off
