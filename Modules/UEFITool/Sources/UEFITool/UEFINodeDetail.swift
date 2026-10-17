@@ -1719,7 +1719,10 @@ public enum UEFIDetail {
                                      ? "\(range.lowerBound)"
                                      : "\(range.lowerBound)–\(range.upperBound)"),
                                .init(shown, isStrong: reading.isSet),
-                               .init(reading.field.defaultValue.map(hex) ?? "")])
+                               // The message states no default: the dash
+                               // says the column has nothing to compare
+                               // against, rather than leaving it blank.
+                               .init(reading.field.defaultValue.map(hex) ?? "—")])
         }.sorted { ($0.word, $0.bit) < ($1.word, $1.bit) }
 
         var sections: [UEFIDetailTable.Section] = []
