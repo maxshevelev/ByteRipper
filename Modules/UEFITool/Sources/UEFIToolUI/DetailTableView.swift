@@ -57,11 +57,12 @@ import UEFITool
     /// The widest a sectioned table's first column grows, following the
     /// zoom with the type. Chosen once from the names it holds rather than
     /// measured at every showing: in each of the strap tables at hand
-    /// (`DescriptorStrapMap.all`) nine names in ten are no wider than 261 to
-    /// 275 points at the default size, and the longest is 415 — the long
-    /// tail (`CSME_CSE_SSS_EMUL_HVM_OVR_SOC_DEV_REUSE_PROHIBITED`) that would
-    /// otherwise set the width of all seventy words.
-    static var firstColumnLimit: CGFloat { ToolPanelFont.scaled(234) }
+    /// (`DescriptorStrapMap.all`) nineteen names in twenty are no wider than
+    /// 290 to 302 points at the default size, and the longest is 415 — the
+    /// long tail (`CSME_CSE_SSS_EMUL_HVM_OVR_SOC_DEV_REUSE_PROHIBITED`) that
+    /// would otherwise set the width of all seventy words. 256 at the design
+    /// size is 303 at the default one.
+    static var firstColumnLimit: CGFloat { ToolPanelFont.scaled(256) }
 
     /// `openSections` are the sections drawn open; `onToggleSection` hears a
     /// section opened or folded, for the panel to keep it so.
