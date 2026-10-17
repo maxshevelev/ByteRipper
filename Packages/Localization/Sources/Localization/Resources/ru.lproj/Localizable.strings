@@ -1672,6 +1672,6 @@
 "The settings appear when the analysis finishes." = "Настройки появятся, когда анализ закончится.";
 "FPF Settings" = "Настройки FPF";
 "Other" = "Прочее";
-"Processor straps" = "Страпы процессора";
 "OEM section" = "OEM-секция";
 "Manufacturing Lock" = "Manufacturing Lock";
+"CPU straps" = "Страпы CPU";

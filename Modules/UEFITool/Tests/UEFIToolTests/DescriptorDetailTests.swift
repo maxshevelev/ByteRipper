@@ -214,7 +214,7 @@ final class DescriptorDetailTests: XCTestCase {
     func testTheProcessorStrapsAreAGridOfFields() throws {
         let shown = detail(TestUEFI.flashDescriptor(
             processorStraps: [0x0000_1000, 0x0010_8002, 0x0800_0210]))
-        let table = try XCTUnwrap(table(shown, "Processor straps"))
+        let table = try XCTUnwrap(table(shown, "CPU straps"))
 
         XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
         XCTAssertTrue(table.startsFolded)
@@ -244,12 +244,14 @@ final class DescriptorDetailTests: XCTestCase {
                      "an erased section is not a table")
     }
 
-    /// From Tiger Point on the descriptor names the straps' place in the PMC's
-    /// space instead, so there is no section in it to show — and no table.
-    func testATigerPointDescriptorCarriesNoProcessorStraps() throws {
+    /// From Tiger Point on the straps are the message in the descriptor's MIP
+    /// area — the third map word states its offset from 0xC00 and its length.
+    func testATigerPointDescriptorReadsTheMIPMessage() throws {
         let shown = detail(TestUEFI.flashDescriptor(version1: false, map2: 0x0011_01A0))
+        let table = try XCTUnwrap(self.table(shown, "CPU straps"))
 
-        XCTAssertNil(table(shown, "Processor straps"))
+        XCTAssertEqual(table.sections.first?.title, "CPUSTRP0")
+        XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
     }
 
     /// The bit that soft-disables the ME is a row of its own, and set it reads

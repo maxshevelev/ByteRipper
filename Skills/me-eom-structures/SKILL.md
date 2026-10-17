@@ -234,6 +234,22 @@ so a processor table keeps only the fields every document of that length
 states alike — same name, offset and bits — and the script says how many it
 dropped.
 
+**From Tiger Point on there is no such section: the straps are a message in
+the descriptor's MIP area**, at `0xC00` plus the offset `FLMAP2[2:11]` states,
+`FLMAP2[16:23]` words long (§2.7 of `Design/UEFI/UEFI_IMAGE_FORMAT.md`).
+MFIT lays it out as its `CpuStrapsLayout` class, and that is what this emits —
+keyed by message length, with the tool's own labels and option words and with
+**no defaults**, because the documents state values per reference platform:
+
+```bash
+python3 Skills/me-eom-structures/scripts/mip_strap_map.py <mfit.exe> > \
+    Packages/UEFIImage/Sources/UEFIImage/StrapMap+MIP.swift
+```
+
+The panel then reads the message with the table of its length and shows
+"Disable Hyperthreading: No" rather than a bit number. 17 and 20 words are
+the lengths MFIT 16.1's documents and the dumps at hand state.
+
 ## Checking against MFIT
 
 MFIT prints the same facts in its build report:

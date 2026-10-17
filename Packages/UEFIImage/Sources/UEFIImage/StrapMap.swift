@@ -29,14 +29,30 @@ public struct DescriptorStrapMap: Sendable {
         public var word: Int
         public var bits: ClosedRange<Int>
         /// What the tool builds the strap with: its default for the field, not
-        /// the chipset's reset value, which is not documented anywhere.
-        public var defaultValue: UInt32
+        /// the chipset's reset value, which is not documented anywhere. Nil
+        /// where the document states values per reference platform rather than
+        /// a default — the CPU strap message's layout does — and no value is
+        /// claimed for it.
+        public var defaultValue: UInt32?
+        /// What the tool's panel calls the field, where the document says —
+        /// "Disable Hyperthreading" for `CPU_Strap_SMT_Disable`. Nil for the
+        /// tables emitted from layout entries that carry no interface text,
+        /// and the panel then shows the identifier.
+        public var label: String?
+        /// The words a value may stand for, where the tool states them —
+        /// `0: No, 1: Yes` for a `no_yes_options` field. Nil otherwise, and
+        /// the panel shows the number.
+        public var options: [Int: String]?
 
-        public init(name: String, word: Int, bits: ClosedRange<Int>, defaultValue: UInt32) {
+        public init(name: String, word: Int, bits: ClosedRange<Int>,
+                    defaultValue: UInt32? = nil, label: String? = nil,
+                    options: [Int: String]? = nil) {
             self.name = name
             self.word = word
             self.bits = bits
             self.defaultValue = defaultValue
+            self.label = label
+            self.options = options
         }
 
         /// The bits of `word` this field takes, as the number they stand for.
@@ -53,8 +69,9 @@ public struct DescriptorStrapMap: Sendable {
         public var value: UInt32
 
         /// The image does not leave the field at the value the tool builds
-        /// with: its own build set it.
-        public var isSet: Bool { value != field.defaultValue }
+        /// with: its own build set it. A table that states no default has
+        /// nothing to compare against, and no field of it is emphasised.
+        public var isSet: Bool { field.defaultValue.map { value != $0 } ?? false }
 
         public init(field: Field, value: UInt32) {
             self.field = field
@@ -162,6 +179,21 @@ public extension DescriptorStrapMap {
     /// state none.
     static func forProcessorSection(words: Int) -> DescriptorStrapMap? {
         processorTables.first { $0.words == words }
+    }
+
+    /// The CPU strap **message**'s tables, by length — the form from Tiger
+    /// Point on, where the descriptor's MIP area carries the message instead
+    /// of a strap section (`StrapMap+MIP`, from MFIT's `CpuStrapsLayout`). A
+    /// message's fields say what they are ("Disable Hyperthreading") and what
+    /// their values mean, and state no default: the documents give values per
+    /// reference platform.
+    static var mipProcessorTables: [DescriptorStrapMap] {
+        [.mipCpu17, .mipCpu20]
+    }
+
+    /// The message's layout of `words` words, or nil where the tool states none.
+    static func forMIPProcessorSection(words: Int) -> DescriptorStrapMap? {
+        mipProcessorTables.first { $0.words == words }
     }
 
     /// The word the SPI controller loads its GPR0 register from — the flash
