@@ -98,11 +98,12 @@ of it checked against the parsed volume). The EFS region of that dump begins
 0x10 after its entry too, and its dictionary then matches the MFS volume's.
 
 **The UEP area** — an FPT region named `UEP` (0x2A0000 in the Z Flow dump,
-8 KiB), opened by the ASCII container `$UEPC`. It holds an entry that carries a
-window into the BIOS region (an address and a size), a 32-bit sum, a Key
-Manifest ID, and the **OEM public key hash**. The area's own layout is not
-documented anywhere that could be found, and the hash sits in **two different
-records, one per generation**:
+8 KiB), opened by the ASCII container `$UEPC` on 15 and 16 and by the bare
+`$UEP` on 18 (both spellings are found by `BootGuardReader.containerOffset`).
+It holds an entry that carries a window into the BIOS region (an address and a
+size), a 32-bit sum, a Key Manifest ID, and the **OEM public key hash**. The
+area's own layout is not documented anywhere that could be found, and the hash
+sits in **two different records, one per generation**:
 
 | generation | record | where |
 |---|---|---|
@@ -656,15 +657,36 @@ The **UEP data survived** as `UEPs_Data` documents: a `serialized_item` per bit
 many arrays), the FPF settings beside them as `ui_item`s, and the bindings as
 `bind_action type="get_value"`. Four new ESE FPF bits sit beside the old ones
 (`ESE_CFG_DONE`, `ESE_TRC_EN`, `ESE_ROM_SVN_EN` and the ESE package's own FPF
-block). The **configuration map** of this shape is read:
+block). Both maps of this shape are read now. The **configuration map**:
 `Skills/me-eom-structures/scripts/mfit18_map.py` turns the `<Files>` settings,
 the path document and the `<ui_item>` words into
 `MEConfigurationMap+CSME18` (67 settings in 32 files in 18.1), and the engine's
 CSME 18 dump at hand — HP EliteBook 630 13.3 inch G11, 18.0.10.2288 — reads 17
-of its configuration files through that map. The UEP map is still a new parser
-(`UEPs_Data` says `arrays_count` and a per-bit offset, but no array index), and
-the strap tables need the full MFIT 18 project data the System Tools package
-does not ship.
+of its configuration files through that map. The **UEP map**:
+`uep18_map.py` turns `UEPs_Data` (a `serialized_item` per bit, a `ui_item` and
+a `bind_action` for its words) into `UEPMap+CSME18`, 34 settings, and the tool's
+own layout is what settles the container question the 15/16 pages had to
+measure:
+
+- The container is an **8-byte `$UEP` header** — signature, CRC-16, reserved —
+  built by `UepHeader` in the tool's code and followed directly by
+  `arrays_count × 0x80` bytes of arrays (`FitByteArray(arrays_count * 0x80)`).
+  A `serialized_item`'s offset counts from the start of the arrays, so the
+  first array begins **8 bytes** into the container, where the 15/16 area's
+  measured start is 0x0C. `UEPMap.arrayStart` carries the generation's answer.
+- The header's CRC-16 is CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflection)
+  over the reserved word and every array: on the HP dump it reproduces the
+  stored 0x9D38 over bytes +6…+0x208 — reserved plus four arrays — which also
+  fixes the arrays' extent.
+- Read at +8, the MTL document's items are coherent on that dump: `OEM_ID`
+  0x103C (HP's PCI vendor ID), `KM_ID` 1, `FW_TYPE` 3, `BTG_PROFILE` 5,
+  `OEM_CFG_DONE`/`GLITCH_D_EN` 1, the validity bits set. Read at the 15/16
+  start they are not (`KM_ID` 15, `FW_TYPE` 0, `OEM_CFG_DONE` 0). The Boot
+  Guard profile of that image is therefore 5, and the analyzer reads it through
+  the map.
+
+The strap tables still need the full MFIT 18 project data the System Tools
+package does not ship.
 
 **The PCH fuses are not in a dump.** `pch_fuses.xml` names the seven fuses per
 platform and SKU — `CSME_FUSE_VALUE_BYTE_0…5` and

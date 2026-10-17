@@ -37,6 +37,26 @@ final class MEACuratorTests: XCTestCase {
                        "a bit the tool names by its identifier alone")
     }
 
+    /// CSME 18's map carries the tool's words for an enumerated value: the
+    /// profile's 5 is what MFIT calls "Verified and Measured Boot", while a
+    /// number its documents do not enumerate stays the number.
+    func testAnEnumeratedFPFSettingShowsTheToolsWord() throws {
+        let a = try analysis([
+            "version": ["major": 18, "minor": 0, "hotfix": 10, "build": 2288],
+            "uepSettings": [
+                ["name": "BTG_PROFILE", "value": 5],
+                ["name": "OEM_ID", "value": 0x103C],
+            ],
+        ])
+        let group = try XCTUnwrap(find("FPF Settings", in: MEACurator.present(a, in: .english)))
+        XCTAssertEqual(group.children.map(\.title),
+                       ["BootGuardConfiguration", "IntelUniquePlatformIdConfiguration"])
+        let profile = try XCTUnwrap(group.children[0].children.first)
+        XCTAssertEqual(profile.title, "Boot Guard Profile")
+        XCTAssertEqual(profile.subtitle, "Verified and Measured Boot (5)")
+        XCTAssertEqual(group.children[1].children.first?.subtitle, "4156")
+    }
+
     // MARK: - Fixtures
 
     /// Decode an analysis whose top-level fields are `overrides` merged over

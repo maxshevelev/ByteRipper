@@ -9,9 +9,9 @@ import Foundation
 /// "RPMC Supported", section `RpmcConfiguration`) and a `GetBitArrayValue`
 /// action giving its place — one of several arrays the container keeps
 /// (`UepBitsArray0`, `…2`, `…4`). **Only the first array is read**: it is the
-/// one `BootGuardReader` takes the Boot Guard profile from, on both
-/// generations whose container is one, and a setting the tool places only in
-/// another array is not in a map.
+/// one `BootGuardReader` takes the Boot Guard profile from, on the generations
+/// whose container is one, and a setting the tool places only in another array
+/// is not in a map.
 ///
 /// What an image's array holds is the state the build wrote. On the dumps at
 /// hand most settings read zero, and the profile's own bits are the ones that
@@ -53,38 +53,52 @@ public struct UEPMap: Sendable {
         public var section: String?
         /// What the tool's panel says about it, where it says anything.
         public var help: String?
+        /// The tool's words for the values of an enumerated setting (0 "No",
+        /// 1 "Yes"; the Boot Guard profile's 0/3/4/5), where it enumerates one.
+        /// A bit the tool leaves as a bare switch has none.
+        public var options: [Int: String]?
 
         public init(name: String, placement: Placement, label: String? = nil,
-                    section: String? = nil, help: String? = nil) {
+                    section: String? = nil, help: String? = nil,
+                    options: [Int: String]? = nil) {
             self.name = name
             self.placement = placement
             self.label = label
             self.section = section
             self.help = help
+            self.options = options
         }
     }
 
     /// What the map is — the generation and the tool it came from.
     public var name: String
     public var settings: [Setting]
+    /// How far past the container's signature the first bit array begins. The
+    /// CSME 15/16 area keeps it at 0x0C — measured off the Boot Guard word that
+    /// lands at +0x6E — while the CSME 18 container is the tool's own 8-byte
+    /// `$UEP` header (signature, CRC-16, reserved) followed directly by the
+    /// arrays, so its first array begins at +8.
+    public var arrayStart: Int
 
-    public init(name: String, settings: [Setting]) {
+    public init(name: String, settings: [Setting], arrayStart: Int = 0x0C) {
         self.name = name
         self.settings = settings
+        self.arrayStart = arrayStart
     }
 
     /// The map for a generation's major number, or nil where the area is not
     /// one the engine reads — CSME 12 to 14 keep the profile in a record, not
-    /// in these arrays, and no later generation has a map yet.
+    /// in these arrays, and 17 has no map of its own.
     public static func forME(major: Int) -> UEPMap? {
         switch major {
         case 15: return .csme15
         case 16: return .csme16
+        case 18: return .csme18
         default: return nil
         }
     }
 
-    public static var all: [UEPMap] { [.csme15, .csme16] }
+    public static var all: [UEPMap] { [.csme15, .csme16, .csme18] }
 }
 
 /// One setting of the area as an image holds it.
@@ -105,7 +119,8 @@ public struct UEPReading: Codable, Sendable, Equatable {
 /// its offset, little-endian. A field may run past the word it starts in, so
 /// up to eight bytes are read and the mask shifted out of them.
 public enum UEPReader {
-    /// How far past the container's signature the first array begins.
+    /// How far past the container's signature the first array begins in the
+    /// CSME 15/16 area — the default of `UEPMap.arrayStart`.
     public static let firstArrayOffset = 0x0C
 
     /// The values of every setting of `map` the area holds. Nil where the area
@@ -113,7 +128,7 @@ public enum UEPReader {
     /// area erased past reading answers nothing rather than zeros.
     public static func readings(in area: Data, map: UEPMap) -> [UEPReading]? {
         guard let container = BootGuardReader.containerOffset(in: area) else { return nil }
-        let array = container + firstArrayOffset
+        let array = container + map.arrayStart
         var readings: [UEPReading] = []
         for setting in map.settings {
             let place = setting.placement
