@@ -199,6 +199,21 @@ final class HelpBodyViewTests: XCTestCase {
         body.show(NSAttributedString(string: "One line.", attributes: [.font: font]))
         XCTAssertEqual(body.contentHeight(width: 340), one + 20, accuracy: 0.5)
     }
+
+    /// In a popover, words that fit do not scroll; words that do not, do.
+    func testAPopoverScrollsOnlyWhatDoesNotFit() {
+        let short = HelpBodyView()
+        short.show(HelpPopoverLayout.prose("One line."))
+        _ = HelpPopoverLayout.build(title: HelpPopoverLayout.title("Short"), body: short)
+        XCTAssertFalse(short.hasVerticalScroller)
+        XCTAssertEqual(short.verticalScrollElasticity, .none)
+
+        let long = HelpBodyView()
+        long.show(HelpPopoverLayout.prose(String(repeating: "A line of the tool's words.\n", count: 80)))
+        let built = HelpPopoverLayout.build(title: HelpPopoverLayout.title("Long"), body: long)
+        XCTAssertTrue(long.hasVerticalScroller)
+        XCTAssertEqual(built.bodyHeight, HelpPopoverLayout.maxBodyHeight)
+    }
 }
 
 /// The popover a panel shows for one row's term.

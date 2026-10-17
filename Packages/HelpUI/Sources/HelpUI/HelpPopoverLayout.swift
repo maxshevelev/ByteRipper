@@ -98,7 +98,14 @@ import AppKit
         // meant.
         body.drawsBackground = false
         body.textInset = NSSize(width: margin, height: 0)
-        let height = min(body.contentHeight(width: width), maxBodyHeight)
+        let needed = body.contentHeight(width: width)
+        let height = min(needed, maxBodyHeight)
+        // Words that fit do not scroll: no scroller, and no bounce that would
+        // say there was more to see.
+        let fits = needed <= maxBodyHeight
+        body.hasVerticalScroller = !fits
+        body.verticalScrollElasticity = fits ? .none : .automatic
+        body.horizontalScrollElasticity = .none
 
         for subview in [title, body] + (footer.map { [$0] } ?? []) { root.addSubview(subview) }
         var constraints = [
