@@ -253,6 +253,11 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(table.sections.first?.title, "CPUSTRP0")
         XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
         XCTAssertTrue(table.startsFolded, "the CPU straps start folded, as the PCH ones do")
+        // The message states no default, so the column says so with a dash
+        // rather than standing empty.
+        let fields = table.rows.filter { $0.first?.text != "Field" }
+        XCTAssertFalse(fields.isEmpty)
+        XCTAssertTrue(fields.allSatisfy { $0.count == 4 && $0[3].text == "—" })
     }
 
     /// The bit that soft-disables the ME is a row of its own, and set it reads
