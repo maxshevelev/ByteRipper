@@ -79,7 +79,14 @@ for it (`label`) and what its panel says about it (`help`) beside the
 identifier. Both tools write the help as one attribute with their own breaks in
 it — FIT `&#60;br /&#62;`, MFIT `&#13;&#10;` — and the generator resolves the
 entities and turns a break into the line it stands for, so a map carries prose
-and no markup. `--straps` picks the family whose layout
+and no markup. A place the tool gives only under another setting's value — its
+`buildConditional` actions — is kept with that condition (`Condition(name:value:)`,
+the value resolved through the condition setting's own value class:
+`eSpiEnabled = No` is `NoYesValues`' 0), and a setting the tool switches off
+(`DisableIf`) carries `disabledBy`. Both branches of a conditional setting are
+in the map, one in each of the two files; which one an image holds the engine
+decides from the pages, and `Skills/me-eom-structures/reference/structures.md`
+says how. `--straps` picks the family whose layout
 is wanted
 (`tgp_lp` is ME 15's own), and `--generation`/`--tool` name the map in the file
 it emits:

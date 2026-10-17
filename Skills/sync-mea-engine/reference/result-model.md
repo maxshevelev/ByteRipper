@@ -70,6 +70,13 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   and 15 lay a few settings out differently between the two. A dump with no
   descriptor keeps the mobile map, which is what every map was before. Ours,
   like the rest of these.
+  Revision 47 reads the tools' **conditional places**: `ConfigurationSetting
+  .condition` says which branch of a setting the tool places only under
+  another setting's value an image holds (the LP family's MCTP EC address is
+  in one of two files, by `eSpiEnabled`), with `assumed` where the branch had
+  to be told from the files present because the condition's own value was not
+  in the image; `.disabled` says the tool switches the setting off under such a
+  condition and the image holds it. Ours, as the rest.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct

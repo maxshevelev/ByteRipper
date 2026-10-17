@@ -96,4 +96,33 @@ extension MEAText {
     public static func configurationAuto(_ auto: Bool, in language: AppLanguage) -> String {
         auto ? L("auto", in: language) : ""
     }
+
+    /// What placed a setting the tool places conditionally — `eSpiEnabled = No`
+    /// — and `, assumed` where the branch was told from the files the image
+    /// carries rather than from the condition's own value. The identifier and
+    /// the option word are the tool's, as every other word in these rows is.
+    public static func configurationCondition(_ condition: ConfigurationCondition,
+                                              in map: MEConfigurationMap,
+                                              language: AppLanguage) -> String {
+        var text = L("%1$@ = %2$@", in: language, condition.name,
+                     conditionWord(condition, in: map))
+        if condition.assumed { text = L("%1$@, assumed", in: language, text) }
+        return text
+    }
+
+    /// What switches a setting off in this image: `disabled by eSpiEnabled = Yes`.
+    public static func configurationDisabled(_ condition: ConfigurationCondition,
+                                             in map: MEConfigurationMap,
+                                             language: AppLanguage) -> String {
+        L("disabled by %1$@", in: language,
+          configurationCondition(condition, in: map, language: language))
+    }
+
+    /// The word a condition's number stands for, where the tool's own value
+    /// class says — `NoYesValues`' `No` for 0 — and the number otherwise.
+    private static func conditionWord(_ condition: ConfigurationCondition,
+                                      in map: MEConfigurationMap) -> String {
+        let setting = map.files.flatMap(\.settings).first { $0.name == condition.name }
+        return setting?.options?[condition.value] ?? String(condition.value)
+    }
 }

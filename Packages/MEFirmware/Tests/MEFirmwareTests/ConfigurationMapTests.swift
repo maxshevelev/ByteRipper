@@ -139,6 +139,40 @@ final class ConfigurationMapTests: XCTestCase {
         }
     }
 
+    /// A place the tool gives only under another setting's value is kept, with
+    /// its condition — both branches of it — and a setting the tool switches off
+    /// says what switches it off. The desktop half's place is unconditional.
+    func testAConditionalPlaceIsKeptWithItsCondition() throws {
+        func setting(_ name: String, in path: String,
+                     of map: MEConfigurationMap) throws -> MEConfigurationMap.Setting {
+            try XCTUnwrap(map.file(at: path)?.settings.first { $0.name == name },
+                          "\(path) \(name) in \(map.name)")
+        }
+        let mobile = MEConfigurationMap.csme15
+        let smt2 = try setting("MctpEcAddress", in: "/home/mctp/smt2_devices", of: mobile)
+        XCTAssertEqual(smt2.condition, .init(name: "eSpiEnabled", value: 0))
+        XCTAssertEqual(smt2.offset, 4)
+        let eSpi = try setting("MctpEcAddress", in: "/home/mctp/espi_devices", of: mobile)
+        XCTAssertEqual(eSpi.condition, .init(name: "eSpiEnabled", value: 1))
+        XCTAssertEqual(eSpi.offset, 0)
+        // The mirrored place: it clears the copy in the file the address left.
+        let reset = try setting("ResetMctpEcAddress", in: "/home/mctp/smt2_devices", of: mobile)
+        XCTAssertEqual(reset.condition, .init(name: "eSpiEnabled", value: 1))
+
+        let bus = try setting("SmlinkBusSelection", in: "/home/smbus/smlink_bus", of: mobile)
+        XCTAssertEqual(bus.disabledBy, .init(name: "eSpiEnabled", value: 1))
+
+        // The condition is the tool's word resolved through its own value
+        // class: `eSpiEnabled` is `NoYesValues`, where No is 0.
+        let switchSetting = try setting("eSpiEnabled", in: "/home/mctp/espi_en", of: mobile)
+        XCTAssertEqual(switchSetting.options?[0], "No")
+        XCTAssertEqual(switchSetting.options?[1], "Yes")
+
+        let desktop = try XCTUnwrap(MEConfigurationMap.forME(major: 15, family: .desktop))
+        XCTAssertNil(try setting("MctpEcAddress", in: "/home/mctp/smt3_devices", of: desktop).condition,
+                     "the desktop half lays it out once, unconditionally")
+    }
+
     /// The End of Manufacturing record: the one thing the newer layouts do not
     /// bind (the tool writes it through its own `EomNvar`), and the one record
     /// whose place every generation agrees on — bit 0 of the two bytes of
@@ -255,5 +289,114 @@ final class ConfigurationMapTests: XCTestCase {
                                                  in: Data(repeating: 0xAB, count: 16))
         XCTAssertNil(long.first?.number)
         XCTAssertEqual(long.first?.bytes, String(repeating: "AB", count: 16))
+    }
+}
+
+/// The conditional places of a map, as an image's two pages answer them: a
+/// setting the tool lays out in one of two files, by another setting's value.
+final class ConfigurationConditionTests: XCTestCase {
+    /// `/a` holds the switch; `/b` and `/c` are the two branches of one setting.
+    private var map: MEConfigurationMap {
+        MEConfigurationMap(name: "test", files: [
+            .init(path: "/a", alias: "A", settings: [
+                .init(name: "Switch", offset: 0, length: 1, options: [0: "No", 1: "Yes"]),
+                .init(name: "Off", offset: 1, length: 1,
+                      disabledBy: .init(name: "Switch", value: 1)),
+            ]),
+            .init(path: "/b", alias: "B", settings: [
+                .init(name: "Address", offset: 4, length: 2,
+                      condition: .init(name: "Switch", value: 0)),
+            ]),
+            .init(path: "/c", alias: "C", settings: [
+                .init(name: "Address", offset: 0, length: 2,
+                      condition: .init(name: "Switch", value: 1)),
+            ]),
+        ])
+    }
+
+    private func bytes(_ values: [UInt8]) -> Data { Data(values) }
+
+    /// The condition's own value names the branch, and it is not assumed.
+    func testTheConditionsValueNamesTheBranch() {
+        let off = ConfigurationDecoder.conditions(of: map,
+            imageBytes: ["/a": bytes([0, 0]), "/b": bytes([0, 0, 0, 0, 0, 0])], liveBytes: [:])
+        XCTAssertEqual(off.branch["Address"], "/b")
+        XCTAssertEqual(off.placed["Address"], ConfigurationCondition(name: "Switch", value: 0))
+
+        let on = ConfigurationDecoder.conditions(of: map,
+            imageBytes: ["/a": bytes([1, 0]), "/c": bytes([0, 0])], liveBytes: [:])
+        XCTAssertEqual(on.branch["Address"], "/c")
+        XCTAssertEqual(on.placed["Address"]?.value, 1)
+        XCTAssertEqual(on.placed["Address"]?.assumed, false)
+    }
+
+    /// Not in the image: the branch is the one whose file is here, and the
+    /// reading says it was assumed.
+    func testAValueNotInTheImagePicksTheBranchWhoseFileIsHere() {
+        let assumed = ConfigurationDecoder.conditions(of: map,
+            imageBytes: ["/b": bytes([0, 0, 0, 0, 0, 0])], liveBytes: [:])
+        XCTAssertEqual(assumed.branch["Address"], "/b")
+        XCTAssertEqual(assumed.placed["Address"], ConfigurationCondition(name: "Switch", value: 0,
+                                                                         assumed: true))
+        // Both branch files here and no value: the map's first branch wins,
+        // and it is still assumed.
+        let both = ConfigurationDecoder.conditions(of: map,
+            imageBytes: ["/b": bytes([0, 0, 0, 0, 0, 0]), "/c": bytes([0, 0])], liveBytes: [:])
+        XCTAssertEqual(both.branch["Address"], "/b")
+        XCTAssertEqual(both.placed["Address"]?.assumed, true)
+        // Neither file: the image holds the setting nowhere, and no branch is
+        // claimed.
+        let none = ConfigurationDecoder.conditions(of: map, imageBytes: [:], liveBytes: [:])
+        XCTAssertNil(none.branch["Address"])
+        XCTAssertNil(none.placed["Address"])
+    }
+
+    /// A branch chosen per setting would let a setting and its mirror disagree
+    /// about one condition: the value is decided once, for the condition.
+    func testTheMirroredPlaceFollowsTheSameBranch() {
+        let mirrored = MEConfigurationMap(name: "test", files: [
+            .init(path: "/a", alias: "A", settings: [
+                .init(name: "Switch", offset: 0, length: 1),
+            ]),
+            .init(path: "/b", alias: "B", settings: [
+                .init(name: "Address", offset: 4, length: 2,
+                      condition: .init(name: "Switch", value: 0)),
+                .init(name: "Reset", offset: 4, length: 2,
+                      condition: .init(name: "Switch", value: 1)),
+            ]),
+            .init(path: "/c", alias: "C", settings: [
+                .init(name: "Address", offset: 0, length: 2,
+                      condition: .init(name: "Switch", value: 1)),
+                .init(name: "Reset", offset: 0, length: 2,
+                      condition: .init(name: "Switch", value: 0)),
+            ]),
+        ])
+        let assumed = ConfigurationDecoder.conditions(of: mirrored,
+            imageBytes: ["/b": bytes([0, 0, 0, 0, 0, 0])], liveBytes: [:])
+        XCTAssertEqual(assumed.branch["Address"], "/b", "the switch is off, so the address is here")
+        XCTAssertNotEqual(assumed.branch["Reset"], "/b",
+                          "and the reset copy is the one in the file that is not here")
+    }
+
+    /// A setting the tool switches off is marked where the image holds the
+    /// value the condition names, and not where the value is absent.
+    func testASwitchedOffSettingIsMarkedWhereTheValueSaysSo() {
+        let on = ConfigurationDecoder.conditions(of: map,
+            imageBytes: ["/a": bytes([1, 1])], liveBytes: [:])
+        XCTAssertEqual(on.disabled["Off"], ConfigurationCondition(name: "Switch", value: 1))
+        let off = ConfigurationDecoder.conditions(of: map,
+            imageBytes: ["/a": bytes([0, 1])], liveBytes: [:])
+        XCTAssertNil(off.disabled["Off"])
+        XCTAssertNil(ConfigurationDecoder.conditions(of: map, imageBytes: [:], liveBytes: [:])
+            .disabled["Off"], "no value, no claim")
+    }
+
+    /// The tool's `NoYesValues`: No is 0 and Yes is 1, which is what the
+    /// generated maps' conditions are stated in.
+    func testTheConditionWordsAreResolvedThroughTheToolsClasses() {
+        let map = MEConfigurationMap.csme15
+        let switchSetting = map.files.flatMap(\.settings).first { $0.name == "eSpiEnabled" }
+        XCTAssertEqual(switchSetting?.options?[0], "No")
+        XCTAssertEqual(switchSetting?.options?[1], "Yes")
     }
 }

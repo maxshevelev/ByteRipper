@@ -559,12 +559,46 @@ public struct ConfigurationSetting: Codable, Sendable, Equatable, Identifiable {
     /// Whether MFIT marks the setting `Auto`: the platform writes it, and a
     /// build carries only a placeholder.
     public var auto: Bool
+    /// The condition the tool placed the setting under, where it placed it
+    /// conditionally — and which branch this image holds (`MEConfigurationMap
+    /// .Setting.condition`). Nil for a place that always holds.
+    public var condition: ConfigurationCondition?
+    /// The condition the tool switches the setting off under, where the image
+    /// holds the value the condition names: the value is there and does not
+    /// apply. Nil where the tool says no such thing, or the condition's own
+    /// value is not in the image (nothing is claimed then).
+    public var disabled: ConfigurationCondition?
 
-    public init(name: String, number: Int?, bytes: String? = nil, auto: Bool = false) {
+    public init(name: String, number: Int?, bytes: String? = nil, auto: Bool = false,
+                condition: ConfigurationCondition? = nil,
+                disabled: ConfigurationCondition? = nil) {
         self.name = name
         self.number = number
         self.bytes = bytes
         self.auto = auto
+        self.condition = condition
+        self.disabled = disabled
+    }
+}
+
+/// A condition a configuration setting is placed — or switched off — by, as
+/// this image answers it: the other setting's identifier and the value it has.
+/// Ours: the tool's own conditional actions, read back from the dump.
+public struct ConfigurationCondition: Codable, Sendable, Equatable {
+    /// The identifier of the setting the condition is on (`eSpiEnabled`).
+    public var name: String
+    /// The number that setting has.
+    public var value: Int
+    /// The branch was chosen because the condition's own value was not in the
+    /// image — neither page carried the file it lives in — and the file that
+    /// carries the setting was. A branch this is true for is read, but the
+    /// reading rests on which files are there rather than on the condition.
+    public var assumed: Bool
+
+    public init(name: String, value: Int, assumed: Bool = false) {
+        self.name = name
+        self.value = value
+        self.assumed = assumed
     }
 }
 
@@ -2603,6 +2637,14 @@ public enum EngineModelRevision {
     /// CDMD record, now answers the profile instead of "no profile record in
     /// this image"; an image that answers nothing still does.
     ///
+    /// 47 reads the tool's conditional places: `ConfigurationSetting.condition`
+    /// says which branch of a setting the tool places only under another
+    /// setting's value an image holds (the LP family's MCTP EC address is in
+    /// one of two files, by `eSpiEnabled`), with `assumed` where the branch had
+    /// to be told from the files present because the condition's own value was
+    /// not in the image, and `.disabled` where the tool switches a setting off
+    /// under such a condition and the image holds it.
+    ///
     /// 46 adds `platformFamily`: the half of its chipset generation the board
     /// is, told from the descriptor's PCH strap section length — and the
     /// configuration is now read through the map of that half (CSME 13, 14 and
@@ -2616,5 +2658,5 @@ public enum EngineModelRevision {
     /// SHA-384 of 15 and later at 0xA0. Images of the older generations, which
     /// answered "layout not recognized" (they were being read as a newer one),
     /// now answer their key.
-    public static let current = 46
+    public static let current = 47
 }

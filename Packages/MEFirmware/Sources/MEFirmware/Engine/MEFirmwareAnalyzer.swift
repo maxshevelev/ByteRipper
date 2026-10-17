@@ -1199,15 +1199,36 @@ public actor MEFirmwareAnalyzer {
                 imageConfigurationBytes[path] = region.subdata(in: start..<(start + record.size))
             }
         }
-        let configuration = configurationMap.map { map in
-            map.files.compactMap { layout -> ConfigurationFile? in
+        let configuration = configurationMap.map { map -> [ConfigurationFile] in
+            // Which branch of each conditionally placed setting the image
+            // holds — read once, from the same two pages the files below are,
+            // so a setting's value and the place it was read from agree.
+            let conditions = ConfigurationDecoder.conditions(of: map,
+                imageBytes: imageConfigurationBytes, liveBytes: liveConfigurationBytes)
+            return map.files.compactMap { layout -> ConfigurationFile? in
+                // A conditional place the image does not hold is not a row of
+                // this file: the other branch's copy is the same setting, and
+                // the file's own page carries it there.
+                let settings = layout.settings.filter { conditions.holds($0, in: layout.path) }
+                guard !settings.isEmpty else { return nil }
+                let kept = MEConfigurationMap.File(path: layout.path, alias: layout.alias,
+                                                   settings: settings)
+                func marked(_ page: ConfigurationFile.Page?) -> ConfigurationFile.Page? {
+                    guard let page else { return nil }
+                    return ConfigurationFile.Page(size: page.size, settings: page.settings.map { setting in
+                        var setting = setting
+                        setting.condition = conditions.placed[setting.name]
+                        setting.disabled = conditions.disabled[setting.name]
+                        return setting
+                    })
+                }
                 let fitc = imageConfigurationBytes[layout.path]
-                    .flatMap { ConfigurationDecoder.page(of: layout, bytes: $0) }
+                    .flatMap { ConfigurationDecoder.page(of: kept, bytes: $0) }
                 let mfs = liveConfigurationBytes[layout.path]
-                    .flatMap { ConfigurationDecoder.page(of: layout, bytes: $0) }
+                    .flatMap { ConfigurationDecoder.page(of: kept, bytes: $0) }
                 guard fitc != nil || mfs != nil else { return nil }
                 return ConfigurationFile(path: layout.path, alias: layout.alias,
-                                         fitc: fitc, mfs: mfs)
+                                         fitc: marked(fitc), mfs: marked(mfs))
             }
         } ?? []
 
