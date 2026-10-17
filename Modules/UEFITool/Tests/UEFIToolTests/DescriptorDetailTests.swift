@@ -241,8 +241,15 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(table.rows.count, 760)
         XCTAssertEqual(try XCTUnwrap(row(table, "SPI_GLOBAL_PROTECTED_RNG_DEF")).map(\.text),
                        ["SPI_GLOBAL_PROTECTED_RNG_DEF", "0–31", "0x829B0001", "0x0"])
-        XCTAssertEqual(try XCTUnwrap(row(table, "SPI_ec_max_freq")).map(\.text),
-                       ["SPI_ec_max_freq", "3–5", "0x4", "0x0"])
+        let clockRow = try XCTUnwrap(row(table, "SPI_ec_max_freq"))
+        XCTAssertEqual(clockRow.map(\.text), ["SPI_ec_max_freq", "3–5", "0x4", "0x0"])
+
+        // A value the build set away from the default is drawn in bold; one
+        // left at it is not.
+        XCTAssertTrue(clockRow[2].isStrong)
+        XCTAssertFalse(clockRow[3].isStrong, "the default itself is not")
+        let plainRow = try XCTUnwrap(row(table, "SPI_ec_plch_dis"))
+        XCTAssertFalse(plainRow[2].isStrong)
 
         // The rows fall into a section per word, which names the word, what
         // its fields share, and where it is — its address outlines the word.
@@ -252,6 +259,14 @@ final class DescriptorDetailTests: XCTestCase {
         XCTAssertEqual(section.subtitle, "SPI")
         XCTAssertEqual(section.address, "0x258")
         XCTAssertEqual(section.target, .range(0x258..<0x25C, name: "PCHSTRP22"))
+        // The line says, folded, how many of its fields the build set.
+        let setHere = table.rows[section.rows].filter { $0[2].isStrong }.count
+        XCTAssertGreaterThan(setHere, 0)
+        XCTAssertEqual(section.note, "Not default: \(setHere)")
+        let quiet = try XCTUnwrap(table.sections.first { section in
+            !table.rows[section.rows].contains { $0[2].isStrong }
+        })
+        XCTAssertNil(quiet.note, "a word left at its defaults says nothing")
         XCTAssertEqual(table.sections.count, 70, "a section per word")
         XCTAssertEqual(table.sections.map(\.rows.count).reduce(0, +), table.rows.count,
                        "and every row in one")
