@@ -577,9 +577,14 @@ public enum MEACurator {
             let setting = byName[reading.name]
             let section = setting?.section ?? ""
             if sections[section] == nil { order.append(section) }
+            // The tool's word for an enumerated value where its documents give
+            // one ("Verified and Measured Boot" for the profile's 5), the
+            // number otherwise.
+            let shown = setting?.options?[reading.value].map { "\($0) (\(reading.value))" }
+                ?? "\(reading.value)"
             sections[section, default: []].append(MEANode(
                 path: [], title: setting?.label ?? reading.name,
-                subtitle: "\(reading.value)"))
+                subtitle: shown))
         }
         let groups = order.map { section in
             MEANode(path: [],

@@ -30,6 +30,53 @@ final class UEPMapTests: XCTestCase {
         XCTAssertNil(UEPMap.forME(major: 12))
     }
 
+    /// CSME 18's map is the tool's rewritten `UEPs_Data`, read from the array
+    /// that follows its own 8-byte `$UEP` header.
+    func testTheCSME18MapFollowsTheRewrittenDatabase() throws {
+        let map = try XCTUnwrap(UEPMap.forME(major: 18))
+        XCTAssertEqual(map.arrayStart, 8, "the tool's header is signature + CRC-16 + reserved")
+        XCTAssertEqual(map.settings.count, 34)
+        let profile = try XCTUnwrap(map.settings.first { $0.name == "BTG_PROFILE" })
+        XCTAssertEqual(profile.placement, .init(array: 0, offset: 0x48, bit: 30, count: 3))
+        XCTAssertEqual(profile.label, "Boot Guard Profile")
+        XCTAssertEqual(profile.section, "BootGuardConfiguration")
+        XCTAssertEqual(profile.options, [0: "Boot Guard Disabled", 3: "Debug Profile",
+                                         4: "Verified Boot", 5: "Verified and Measured Boot"])
+        let kmID = try XCTUnwrap(map.settings.first { $0.name == "KM_ID" })
+        XCTAssertEqual(kmID.placement, .init(array: 0, offset: 0x48, bit: 23, count: 4))
+        // The tool's validity bits are named by their identifiers and carry no
+        // UI words of their own.
+        let idSet = try XCTUnwrap(map.settings.first { $0.name == "OEM_ID_V" })
+        XCTAssertNil(idSet.label)
+        XCTAssertEqual(idSet.placement, .init(array: 0, offset: 0x4C, bit: 6, count: 1))
+        // What the tool places in a later array is not in the map, as in 15/16.
+        XCTAssertNil(map.settings.first { $0.name == "PLAT_ID" })
+        XCTAssertNil(map.settings.first { $0.name == "ESE_ROM_SVN_EN" })
+        // The 15/16 array start is the measured one, not a header size.
+        XCTAssertEqual(UEPMap.forME(major: 16)?.arrayStart, UEPReader.firstArrayOffset)
+        XCTAssertNil(UEPMap.forME(major: 17))
+    }
+
+    /// The CSME 18 array starts after the tool's 8-byte header: the profile's
+    /// bits 30–32 at offset 0x48 read the value the HP dump carries (5).
+    func testTheCSME18ArrayStartsAfterTheToolsHeader() throws {
+        let map = try XCTUnwrap(UEPMap.forME(major: 18))
+        var area = Data("$UEP".utf8)
+        area.append(Data(count: 4))                       // CRC-16 + reserved
+        area.append(Data(count: 0x80))                    // the first array
+        let word = area.startIndex + map.arrayStart + 0x48
+        area[word + 3] = 0x40                             // (5 << 30) little-endian
+        area[word + 4] = 0x01
+        let readings = try XCTUnwrap(UEPReader.readings(in: area, map: map))
+        XCTAssertEqual(readings.first { $0.name == "BTG_PROFILE" }?.value, 5)
+        // Read at the 15/16 array start the same bytes are another setting's
+        // (and not the profile): the placement is the tool's, not a guess.
+        let shifted = map
+        let atTwelve = UEPMap(name: "test", settings: shifted.settings, arrayStart: 0x0C)
+        XCTAssertNotEqual(UEPReader.readings(in: area, map: atTwelve)?
+                            .first { $0.name == "BTG_PROFILE" }?.value, 5)
+    }
+
     /// A setting's bits are read little-endian from its offset in the array,
     /// which begins 0x0C bytes past the container's signature — where the Boot
     /// Guard word sits, too — and a field may run past the word it starts in.

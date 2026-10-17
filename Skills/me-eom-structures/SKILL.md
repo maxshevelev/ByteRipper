@@ -214,6 +214,35 @@ What a dump's array holds is the **state the build wrote**, not the fuses: most
 settings read zero on every dump at hand — `Design/ME_STRUCTURES.md` says why,
 and that reading more of them from a dump is not a test of the map.
 
+**CSME 18's documents are the rewritten `UEPs_Data` shape**, and have their own
+generator:
+
+```bash
+python3 Skills/me-eom-structures/scripts/uep18_map.py ~/Downloads/1/mfit-18.1.exe > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME18.swift
+```
+
+A setting is a `<serialized_item name… type="BitfieldItem" offset bit_low
+bit_high>`, its words a `<ui_item>` bound to it by `<bind_action
+type="get_value" ui_controller=… serialized_item=…>`, and `arrays_count` says
+how many arrays the container keeps. The tool's own code builds the area as
+its 8-byte `$UEP` header (signature, CRC-16, reserved) followed by
+`arrays_count × 0x80` bytes, and an item's `offset` counts from the start of
+the arrays — so **the first array begins 8 bytes into the container**, not at
+the 0x0C the 15/16 area was measured at (`UEPMap.arrayStart` states which).
+Items at 0x80 and beyond are in a later array and are not kept; the script
+counts them. Enumerated settings keep the tool's option words (`options`: the
+profile's 0/3/4/5 as "Boot Guard Disabled" … "Verified and Measured Boot"), so
+the panel shows the word rather than the number.
+
+18.1 yields 34 settings: 32 from the MTL document (offsets 0x20–0x4C) and two
+ESE bits from the other. On the CSME 18 dump at hand the 8-byte-header reading
+is what makes the bits coherent — `OEM_ID` 0x103C (HP's PCI vendor ID),
+`KM_ID` 1, `FW_TYPE` 3, `BTG_PROFILE` 5, the validity bits set — while the
+15/16 array start gives `KM_ID` 15 and `FW_TYPE` 0; and the header's CRC-16
+(poly 0x1021, init 0xFFFF, no reflection) over reserved + four arrays
+reproduces the stored word exactly.
+
 ## Emitting the descriptor's strap layout
 
 The same executables carry the chipset's own layout of the descriptor's PCH

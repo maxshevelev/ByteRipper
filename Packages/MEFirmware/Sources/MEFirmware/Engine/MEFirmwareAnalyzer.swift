@@ -1256,8 +1256,11 @@ public actor MEFirmwareAnalyzer {
         // FIT 14.0 builds of a CSME 14 one, four FIT 13.0 builds of a CSME 13 one
         // — and each layout's guards reject the others, so a container whose
         // layout is not the expected one answers nothing rather than a profile.
-        // CSME 11 has no area at all; 18 and later are not read until a dump
-        // whose profile is known says what their containers hold.
+        // CSME 18 is read through the tool's own UEP layout (`UEPMap`): its
+        // `BTG_PROFILE` setting is the profile's own number (0, 3, 4 or 5), and
+        // the CSME 18 dump at hand reads 5 — beside `KM_ID` 1 and `OEM_ID`
+        // 0x103C, the vendor's PCI ID, which is what says the placement is
+        // aligned. CSME 11 has no area at all; no later generation has a map.
         func profileFromUEP(_ area: Data) -> BootGuardProfile? {
             guard identity.family == .csme else { return nil }
             if (12...14).contains(identity.major) {
@@ -1265,6 +1268,12 @@ public actor MEFirmwareAnalyzer {
             }
             if (15...16).contains(identity.major) {
                 return BootGuardReader.profile(inUEPArea: area)
+            }
+            if identity.major >= 18,
+               let map = UEPMap.forME(major: identity.major),
+               let readings = UEPReader.readings(in: area, map: map),
+               let value = readings.first(where: { $0.name == "BTG_PROFILE" })?.value {
+                return BootGuardProfile(rawValue: "\(value)")
             }
             return nil
         }
