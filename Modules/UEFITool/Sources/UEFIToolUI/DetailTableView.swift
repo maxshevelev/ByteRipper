@@ -83,7 +83,8 @@ import UEFITool
                     case .no: return .init(text: cell.text, font: bold, color: SemanticColors.bad)
                     case .plain:
                         let link = target != nil && column == table.linkColumn
-                        return .init(text: cell.text, font: body, color: link ? .linkColor : .labelColor)
+                        return .init(text: cell.text, font: cell.isStrong ? bold : body,
+                                     color: link ? .linkColor : .labelColor)
                     }
                 },
                 target: target, linkColumn: target == nil ? nil : table.linkColumn, onFollow: onFollow))
@@ -137,7 +138,10 @@ import UEFITool
                 cells: [.init(text: section.title, font: bold, color: .labelColor),
                         .init(text: section.subtitle ?? "", font: body, color: .secondaryLabelColor),
                         .init(text: section.address ?? "", font: body,
-                              color: section.target == nil ? .labelColor : .linkColor)],
+                              color: section.target == nil ? .labelColor : .linkColor),
+                        // What the folded rows hold that stands out, in the
+                        // weight those rows' values are drawn in.
+                        .init(text: section.note ?? "", font: bold, color: .labelColor)],
                 target: section.target, linkColumn: section.target == nil ? nil : 2,
                 onFollow: onFollow)
             line.onToggle = { [weak self] in self?.toggle(section: index) }
@@ -149,7 +153,7 @@ import UEFITool
                 owners.append(index)
             }
         }
-        let lineWidths = (0..<3).map { column in
+        let lineWidths = (0..<4).map { column in
             sectionRows.map { $0.naturalWidth(of: column) }.max() ?? 0
         }
         var x = indent
