@@ -399,7 +399,7 @@ struct MEAParkedState: PersistableToolSessionState {
         // being waited for. If the summary is still empty it is because this
         // file has no ME firmware, which is what the empty tab now says.
         controller.setPlaceholder(.empty)
-        controller.showSummary(MEASummary.build(analysis, pending: pending, in: Localization.appLanguage))
+        controller.showSummary(MEASummary.build(analysis, pending: pending))
         controller.showConfiguration(MEAConfiguration.build(analysis, in: Localization.appLanguage))
         show()
         loadFileNames()

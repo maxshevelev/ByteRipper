@@ -65,7 +65,7 @@ same setting twice, which is where a common misreading starts:
 `FlexibleEomSettings` in **bits 1–2** (its `config_params` are 0-based:
 `Lock Descriptor and OEM Configs` = 0 … `Do not lock` = 3), and `/home/mca/eom`
 carries `EomFirstBootEnabled` again as a **raw byte**. The panel prints both:
-the flag decides the Manufacturing row, and the flexible setting has a row of its
+the flag decides the EOM on First Boot row, and the flexible setting has a row of its
 own beside it, in those four values — it is stored whether or not the flag is
 set, so it says what an image would lock if it ever ran.
 
@@ -77,9 +77,9 @@ Manufacturing to lock — has both at **0** after that boot, while every factory
 dump at hand has both at **1**. So `manuf_lock` is the one statement a dump
 makes about whether the machine has been through End of Manufacturing, and with
 it committed the fuses; the engine reports it as the row **Manufacturing Lock**
-(`Locked` / `Not locked`), and `/home/mca/eom` duplicates the flag and is not
-reported separately. The image's own question — what its next first boot will
-do — stays the Manufacturing row.
+(`Locked` / `Not locked`, and a dash where the record is not in the image), and
+`/home/mca/eom` duplicates the flag and is not reported separately. The image's own question — what its next first boot will
+do — stays the EOM on First Boot row.
 
 **The UEP area** — an FPT region named `UEP` (0x2A0000 in the Z Flow dump,
 8 KiB), opened by the ASCII container `$UEPC`. It holds an entry that carries a
@@ -252,7 +252,7 @@ Manufacturing was closed, not on a board that has merely run.
 The other half of that pair — the same board flashed with the flag enabled — is
 **not** to be produced on a working machine: closing Manufacturing burns the
 key hashes into the chipset's fuses and cannot be undone, which is exactly why
-the Manufacturing row exists. The closed side of the comparison is available
+the EOM on First Boot row exists. The closed side of the comparison is available
 from the factory dumps instead (Z Flow, Legion, the Lenovo service images), and
 it is the side that matters for reading an image.
 
@@ -555,7 +555,7 @@ Ten files and 35 settings, and two things of its own beside the offsets:
   a newer-generation fact.
 
 The NM-C711 dump reads nine of the map's ten files: `/home/mca/eom_config` is
-laid out by FIT 13 but absent from that image, which is why its Manufacturing row
+laid out by FIT 13 but absent from that image, which is why its EOM on First Boot row
 leans on the descriptor — the same state a CSME 14 image is in for a different
 reason.
 
@@ -564,7 +564,7 @@ reason.
 Two differences from the newer maps hold for the family:
 
 - **No End of Manufacturing record.** FIT 14 binds `/home/mca/eom` and no
-  `eom_config`, which is why the panel's Manufacturing row for an image of this
+  `eom_config`, which is why the panel's EOM on First Boot row for an image of this
   generation leans on the descriptor's rights instead of on the flag.
 - **Its own iunit files.** `iunit/port_cfg`, `iunit/sec_ctl`, `iunit/sec_touch`
   and `iunit/camera_mask` are in the 14 map and in neither of the newer two,
