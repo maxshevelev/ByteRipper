@@ -1184,6 +1184,7 @@
 "Not in use" = "Nicht verwendet";
 "LENV block|In use" = "Verwendet";
 "Block in use" = "Verwendeter Block";
+"DMI" = "DMI";
 "Show DMI Area" = "DMI-Bereich zeigen";
 "Show in the tree where the image keeps the board's serial number, UUID and model" = "Im Baum zeigen, wo das Abbild Seriennummer, UUID und Modell der Platine hält";
 "Note" = "Hinweis";

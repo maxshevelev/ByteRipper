@@ -276,8 +276,9 @@ import UEFITool
     /// Goes to where the image keeps the board's identity — Lenovo's DMI
     /// store, ASUS's GPNV — however deep in the tree it lies. Left of the
     /// search, and there only when the image has one: a button that can only
-    /// say "none here" is a button on every dump of every other board.
-    private let dmiButton = NSButton()
+    /// say "none here" is a button on every dump of every other board. A
+    /// badge with the word, not a glyph.
+    private let dmiButton = UEFIDMIBadgeButton()
     private var dmiButtonWidth: NSLayoutConstraint?
     private var dmiButtonGap: NSLayoutConstraint?
     /// The stores the button goes to, in file order.
@@ -422,14 +423,6 @@ import UEFITool
         filterButton.translatesAutoresizingMaskIntoConstraints = false
 
         // help: panel.uefi.dmi-area
-        dmiButton.image = NSImage(
-            systemSymbolName: "person.text.rectangle",
-            accessibilityDescription: L("Show DMI Area")
-        )
-        dmiButton.symbolConfiguration = revealButton.symbolConfiguration
-        dmiButton.isBordered = false
-        dmiButton.imagePosition = .imageOnly
-        dmiButton.contentTintColor = .secondaryLabelColor
         ControlHelp.describe(dmiButton, name: L("Show DMI Area"),
                              tooltip: L("Show in the tree where the image keeps the board's serial number, UUID and model"))
         dmiButton.target = self
@@ -1387,7 +1380,7 @@ import UEFITool
     func showDMIStores(_ stores: [DMIStore]) {
         dmiStores = stores
         dmiButton.isHidden = stores.isEmpty
-        dmiButtonWidth?.constant = stores.isEmpty ? 0 : 18
+        dmiButtonWidth?.constant = stores.isEmpty ? 0 : dmiButton.intrinsicContentSize.width
         dmiButtonGap?.constant = stores.isEmpty ? 0 : -4
     }
 
