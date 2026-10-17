@@ -20,7 +20,11 @@ public enum MEAConfiguration {
     /// image's generation has no map.
     public static func build(_ analysis: FirmwareAnalysis,
                              in language: AppLanguage) -> [MEAConfigurationBlock] {
-        guard let map = MEConfigurationMap.forME(major: analysis.version.major) else {
+        // The map the engine read the values through: the same call with the
+        // same answer, so a row's labels and its values cannot come from two
+        // layouts.
+        guard let map = MEConfigurationMap.forME(major: analysis.version.major,
+                                                 family: analysis.platformFamily) else {
             return []
         }
         return (analysis.configuration ?? []).map { file in

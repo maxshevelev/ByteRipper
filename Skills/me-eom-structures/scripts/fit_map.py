@@ -337,6 +337,10 @@ def main():
     # emitted file names both, and the paths inside it are the tool's own.
     args, generation = option(args, "--generation", "15")
     args, tool = option(args, "--tool", "15.0")
+    # The Swift name the map is published under, where a generation has more
+    # than one: the mobile family keeps `csme15`, the desktop one is
+    # `csme15Desktop`.
+    args, variable = option(args, "--variable", "csme%s" % generation)
     blob = open(args[0], "rb").read()
 
     texts = list(documents(blob))
@@ -391,6 +395,11 @@ def main():
     print("// The CSME %s map of the ME configuration — emitted by" % generation)
     print("// `Skills/me-eom-structures/scripts/fit_map.py` from Flash Image Tool %s's" % tool)
     print("// own layout documents (the %s platform of ME %s)." % (straps, generation))
+    print("//")
+    print("// The family is the tool's own name for the platform half: `_lp`/`_p` is")
+    print("// the mobile one and `_h`/`_s` the desktop one, and a dump is read with")
+    print("// the one its descriptor's strap section length names")
+    print("// (`MEConfigurationMap.forME(major:family:)`).")
     print("// Offsets, bits, the tool's own name for each setting (`label`), its option")
     print("// labels and the file paths are FIT's, copied out of its")
     print("// `ProcessNvar` bindings and value dictionaries; nothing here is read out of a")
@@ -405,8 +414,8 @@ def main():
     print("extension MEConfigurationMap {")
     print("    /// The ME %s configuration, as FIT %s lays it out. The files stand in the" % (generation, tool))
     print("    /// order a bench reads them, and the rest in the tool's own order.")
-    print("    public static let csme%s = MEConfigurationMap(" % generation)
-    print('        name: "CSME %s (Flash Image Tool %s)",' % (generation, tool))
+    print("    public static let %s = MEConfigurationMap(" % variable)
+    print('        name: "CSME %s (Flash Image Tool %s, %s)",' % (generation, tool, straps))
     print("        files: [")
     print(swift(files))
     print("        ])")

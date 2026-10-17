@@ -41,6 +41,17 @@ public actor MEFirmwareAnalyzer {
     /// analyzer looking inside its own sub-firmware forever.
     private func analyze(region: Data, baseOffset: Int, descriptorBytes: Data?,
                          findsIndependentFirmware: Bool) async throws -> FirmwareAnalysis {
+        // Which half of the generation the board is — mobile or desktop — is
+        // the descriptor's answer: the PCH strap section is laid out over
+        // different lengths by the two halves, and nothing else in a dump says
+        // which it is. No descriptor (an extracted region) and an unknown
+        // length both leave the question open, and the configuration is then
+        // read with the mobile map, which is what every map was before the
+        // choice existed. It is a fact about the board rather than about the
+        // firmware, so it is answered even by the analysis with no manifest.
+        let platformFamily = descriptorBytes
+            .flatMap(FlashDescriptor.pchStrapWords(in:))
+            .flatMap(MEConfigurationMap.MEPlatformFamily.init(strapWords:))
         // ——— Stage 1: container decode that needs no database. ———
         // FPT and the $MN2/$MAN manifest are the ported links of the spine
         // (upstream-map "Flash & IFWI layout", "CSE manifest & partitions").
@@ -550,6 +561,7 @@ public actor MEFirmwareAnalyzer {
                 cseLayoutTable: cseLayoutTable, bootPartitions: bootPartitions,
                 mmeDirectory: nil, gscInfo: gscInfo,
                 efsVolume: efsVolume, oemConfiguration: oemConfiguration,
+                platformFamily: platformFamily,
                 issues: issues)
         }
 
@@ -1135,10 +1147,12 @@ public actor MEFirmwareAnalyzer {
         // (`ConfigurationDecoder`); the paths are the ones `FileTable.dat`
         // gives, so this reads on any generation whose files carry File IDs.
         //
-        // The map is the one this generation has: a generation nobody has
-        // mapped yet reads no configuration at all rather than another
-        // generation's offsets (`MEConfigurationMap.forME(major:)`).
-        let configurationMap = MEConfigurationMap.forME(major: identity.major)
+        // The map is the one this generation and this half of it have: a
+        // generation nobody has mapped yet reads no configuration at all rather
+        // than another generation's offsets, and a half a dump cannot name is
+        // read as the mobile one (`MEConfigurationMap.forME(major:family:)`).
+        let configurationMap = MEConfigurationMap.forME(major: identity.major,
+                                                        family: platformFamily)
         var imageConfigurationBytes: [String: Data] = [:]
         var liveConfigurationBytes: [String: Data] = [:]
         if let map = configurationMap, let info = mfsInfo, let table = fileTable,
@@ -1377,6 +1391,7 @@ public actor MEFirmwareAnalyzer {
             // them.
             manufacturingState: manufacturing.state,
             manufacturingBasis: manufacturing.basis,
+            platformFamily: platformFamily,
             configuration: configuration.isEmpty ? nil : configuration,
             bootGuardProfile: bootGuardProfile,
             oemPublicKeyHash: oemPublicKeyHash,
