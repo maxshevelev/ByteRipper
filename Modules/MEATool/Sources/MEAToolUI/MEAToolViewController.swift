@@ -805,12 +805,13 @@ import ToolModuleKit
     /// two value columns — which is what makes the columns of one file line up
     /// with the columns of the next, and with the heading row above them.
     ///
-    /// A pair that disagrees is drawn bold — the one emphasis the tab uses, and
-    /// no colour: a setting the platform rewrote is not a fault, and the
-    /// palette's greens and browns are verdicts about a state, which this is
-    /// not. A value one copy does not carry is not a disagreement — an image
-    /// nobody has booted has one column and no argument — and is drawn as the
-    /// quiet dash it is.
+    /// Where the two copies of a setting disagree, **the file system's value**
+    /// is drawn bold — the one emphasis the tab uses, and no colour: it is the
+    /// state in force, the build's copy beside it is what the row was meant to
+    /// be, and a setting the platform rewrote is not a fault, so the palette's
+    /// greens and browns stay out of it. A value one copy does not carry is not
+    /// a disagreement — an image nobody has booted has one column and no
+    /// argument — and is drawn as the quiet dash it is.
     private func renderConfiguration() {
         // The rows are about to go, and with them the button a setting's
         // popover hangs off: one left open would point at nothing.
@@ -838,8 +839,11 @@ import ToolModuleKit
             let rows = ToolFieldList(
                 fields: block.rows.map { row in
                     .init(label: row.name,
+                          // Where the copies disagree, only the file system's
+                          // value is drawn bold: it is the state in force, and
+                          // the build's copy is what the row was meant to be.
                           value: Self.configurationCell(columns.first(row),
-                                                        differs: row.differs,
+                                                        differs: false,
                                                         quiet: row.disabled),
                           second: columns.compares
                               ? Self.configurationCell(row.mfs, differs: row.differs,
@@ -963,11 +967,14 @@ import ToolModuleKit
         ])
     }
 
-    /// One value cell of a row. A pair that disagrees is drawn bold, in the
-    /// ordinary colour: the emphasis, without a verdict. A value one copy does
-    /// not carry is the quiet dash, in the colour of a thing that is not there.
-    /// A setting the tool switches off is quiet too, value and all: the value
-    /// is in the file and does nothing, and the row's name says what did it.
+    /// One value cell of a row. Where the two copies of a file disagree, the
+    /// **file system's** value — the second column — is drawn bold, in the
+    /// ordinary colour: it is the state in force, the emphasis carries no
+    /// verdict, and the build's copy beside it stays plain so the eye lands on
+    /// what the board holds. A value one copy does not carry is the quiet
+    /// dash, in the colour of a thing that is not there. A setting the tool
+    /// switches off is quiet too, value and all: the value is in the file and
+    /// does nothing, and the row's name says what did it.
     private static func configurationCell(_ text: String?, differs: Bool,
                                           quiet: Bool = false) -> NSAttributedString {
         guard let text else {
