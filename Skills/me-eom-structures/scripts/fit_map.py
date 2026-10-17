@@ -159,6 +159,10 @@ def bindings(texts):
             if not target or not params:
                 continue
             fields = dict(re.findall(r"'([A-Za-z0-9_]+)':'([^']*)'", params.group(1)))
+            # The action's own attributes, not its params: what a conditional
+            # place holds under (`source`, e.g. `eSpiEnabled`) is an attribute.
+            source = re.search(r'source="([^"]*)"', action)
+            fields["__source"] = source.group(1) if source else "null"
             file = fields.get("filePath", "")
             if not file.startswith("$"):
                 continue          # a file-writing action, not a setting's place
@@ -191,9 +195,8 @@ def place(fields, warnings):
     the bits counted in the field itself — which is how the EOM record is bound
     (bit 0 of a 2-byte `EOM_Config`).
     """
-    if "buildConditional" in fields:
-        warnings.append("conditional binding left out (it is one of several, "
-                        "and which holds is a build condition): %s" % fields)
+    if "buildConditional" in fields and not fields.get("conditionalVal"):
+        warnings.append("conditional binding without the value it holds under: %s" % fields)
         return None
     try:
         if "cellIndex" in fields:
@@ -237,6 +240,11 @@ def setting_of(name, fields, declarations_, classes, warnings):
     if where is None:
         return None
     offset, length, bits = where
+    condition = None
+    if fields.get("buildConditional") == "true":
+        condition = condition_of(fields, name, declarations_, classes, warnings)
+        if condition is None:
+            return None
     declaration = declarations_.get(name, {})
     kind = declaration.get("type", "")
     options = classes.get(kind.split(":", 1)[1]) if kind.startswith("class:") else None
@@ -244,6 +252,7 @@ def setting_of(name, fields, declarations_, classes, warnings):
         "name": name,
         "label": declaration.get("label"),
         "help": unescaped(declaration.get("help")),
+        "condition": condition,
         "offset": offset,
         "length": length,
         "bits": bits,
@@ -251,6 +260,53 @@ def setting_of(name, fields, declarations_, classes, warnings):
         "hex": kind in HEX_TYPES,
         "text": kind == "string" and "nullTerminate" in fields,
     }
+
+
+def condition_value(source, word, declarations_, classes, warnings, target):
+    """The number a condition's word stands for, off the condition setting's own
+    value class — `eSpiEnabled = No` is `NoYesValues`' 0, and `= Yes` is 1."""
+    declaration = declarations_.get(source, {})
+    kind = declaration.get("type", "")
+    options = classes.get(kind.split(":", 1)[1]) if kind.startswith("class:") else None
+    if options:
+        for number, label in options.items():
+            if label == word:
+                return number
+    warnings.append("condition %s = %r of %s has no number in its class %r"
+                    % (source, word, target, options))
+    return None
+
+
+def condition_of(fields, name, declarations_, classes, warnings):
+    """The condition a place holds under: the other setting, and the number its
+    word stands for. None where either cannot be stated — a place the map
+    cannot name the condition of is not a place it claims."""
+    source = fields.get("__source", "null")
+    word = fields.get("conditionalVal", "")
+    if not source or source == "null" or not word:
+        warnings.append("conditional place of %s without a condition: %s" % (name, fields))
+        return None
+    number = condition_value(source, word, declarations_, classes, warnings, name)
+    return (source, number) if number is not None else None
+
+
+def switched_off(texts, declarations_, classes, warnings):
+    """The settings the tool switches off under a condition — its `DisableIf`
+    actions, which are the `Fit` module's rather than `Nvar`'s: `SmlinkBusSelection`
+    does not apply where eSPI is on. Returns `target` → (source, number)."""
+    found = {}
+    for text in texts:
+        for action in re.findall(r"<Action[^>]*name=\"DisableIf\"[^>]*>", text):
+            source = re.search(r'source="([^"]*)"', action)
+            target = re.search(r'target="([^"]*)"', action)
+            word = re.search(r"'sourceVal':'([^']*)'", action)
+            if not (source and target and word):
+                continue
+            number = condition_value(source.group(1), word.group(1), declarations_,
+                                     classes, warnings, target.group(1))
+            if number is not None:
+                found.setdefault(target.group(1), (source.group(1), number))
+    return found
 
 
 def unescaped(text):
@@ -303,6 +359,14 @@ def swift(files):
                 args.append("label: %s" % swift_literal(s["label"]))
             if s.get("help"):
                 args.append("help: %s" % swift_literal(s["help"]))
+            # Where the place holds only under another setting's value, and
+            # where the tool switches the setting off.
+            if s.get("condition"):
+                args.append("condition: Condition(name: %s, value: %d)" % (
+                    swift_literal(s["condition"][0]), s["condition"][1]))
+            if s.get("disabledBy"):
+                args.append("disabledBy: Condition(name: %s, value: %d)" % (
+                    swift_literal(s["disabledBy"][0]), s["disabledBy"][1]))
             if s["bits"]:
                 args.append("bits: %d...%d" % s["bits"])
             if s["options"]:
@@ -358,6 +422,7 @@ def main():
     # `EOM_Config` — because the older layouts also name the single byte of
     # `mca/eom` `EOM` and `EndOfManufacturing`, which are their words for one
     # field and not three.
+    off = switched_off(chosen, declarations_, classes, warnings)
     every = bindings(texts)
     record = {target for target, places in every.items()
               if any(file.endswith("EOM_Config") for file, _ in places)}
@@ -376,6 +441,8 @@ def main():
             setting = setting_of(target, fields, declarations_, classes, warnings)
             if setting is None:
                 continue
+            if target in off:
+                setting["disabledBy"] = off[target]
             path = "/home/" + path
             entry = files.setdefault(path, {"alias": alias, "settings": [], "seen": set()})
             if setting["name"] in entry["seen"]:

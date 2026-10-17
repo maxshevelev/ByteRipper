@@ -839,9 +839,11 @@ import ToolModuleKit
                 fields: block.rows.map { row in
                     .init(label: row.name,
                           value: Self.configurationCell(columns.first(row),
-                                                        differs: row.differs),
+                                                        differs: row.differs,
+                                                        quiet: row.disabled),
                           second: columns.compares
-                              ? Self.configurationCell(row.mfs, differs: row.differs)
+                              ? Self.configurationCell(row.mfs, differs: row.differs,
+                                                       quiet: row.disabled)
                               : nil,
                           // The tool's own words about the setting, where it
                           // has them: the `?` beside the name opens them, with
@@ -960,7 +962,10 @@ import ToolModuleKit
     /// One value cell of a row. A pair that disagrees is drawn bold, in the
     /// ordinary colour: the emphasis, without a verdict. A value one copy does
     /// not carry is the quiet dash, in the colour of a thing that is not there.
-    private static func configurationCell(_ text: String?, differs: Bool) -> NSAttributedString {
+    /// A setting the tool switches off is quiet too, value and all: the value
+    /// is in the file and does nothing, and the row's name says what did it.
+    private static func configurationCell(_ text: String?, differs: Bool,
+                                          quiet: Bool = false) -> NSAttributedString {
         guard let text else {
             return NSAttributedString(
                 string: MEAText.configurationAbsent,
@@ -969,8 +974,9 @@ import ToolModuleKit
         }
         return NSAttributedString(
             string: text,
-            attributes: [.font: ToolPanelFont.body(weight: differs ? .semibold : .regular),
-                         .foregroundColor: NSColor.labelColor])
+            attributes: [.font: ToolPanelFont.body(weight: differs && !quiet ? .semibold : .regular),
+                         .foregroundColor: quiet ? NSColor.tertiaryLabelColor
+                                                 : NSColor.labelColor])
     }
 
     /// One Summary row as a field of the shared detail list: the label, and the

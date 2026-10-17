@@ -33,6 +33,22 @@ public struct MEConfigurationMap: Sendable, Equatable {
         self.files = files
     }
 
+    /// The value another setting must have for a place to hold, or for a
+    /// setting to be switched off — the tool's `source` and `conditionalVal` /
+    /// `sourceVal`, resolved through the source setting's own value class to
+    /// the number it stands for (`eSpiEnabled = No` is `NoYesValues`' 0).
+    public struct Condition: Sendable, Equatable {
+        /// The identifier of the setting the condition is on.
+        public var name: String
+        /// The number that setting must have.
+        public var value: Int
+
+        public init(name: String, value: Int) {
+            self.name = name
+            self.value = value
+        }
+    }
+
     /// One setting of one file, as MFIT lays it out.
     public struct Setting: Sendable, Equatable {
         /// The setting's identifier (`MELanPowerWell`), as the tool's own
@@ -80,9 +96,21 @@ public struct MEConfigurationMap: Sendable, Equatable {
         /// domain name. The bytes are decoded as characters rather than printed
         /// as hex.
         public var text: Bool
+        /// Where the tool places the setting here only under a condition — its
+        /// `buildConditional` actions. The other branch is the same setting in
+        /// the other file with the mirrored condition (`eSpiEnabled = Yes` puts
+        /// the MCTP EC address in the eSPI device file, `= No` in the SMT2
+        /// one), and an image holds one of them. Nil for a place that always
+        /// holds.
+        public var condition: Condition?
+        /// What the tool switches the setting off under — its `DisableIf`
+        /// action: the value is in the file and does not apply. Nil where the
+        /// tool says no such thing.
+        public var disabledBy: Condition?
 
         public init(name: String, offset: Int, length: Int, label: String? = nil,
                     help: String? = nil,
+                    condition: Condition? = nil, disabledBy: Condition? = nil,
                     bits: ClosedRange<Int>? = nil,
                     options: [Int: String]? = nil, auto: Bool = false,
                     hex: Bool = false, text: Bool = false) {
@@ -96,6 +124,8 @@ public struct MEConfigurationMap: Sendable, Equatable {
             self.auto = auto
             self.hex = hex
             self.text = text
+            self.condition = condition
+            self.disabledBy = disabledBy
         }
     }
 
