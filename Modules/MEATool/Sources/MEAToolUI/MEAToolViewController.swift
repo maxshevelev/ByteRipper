@@ -848,11 +848,15 @@ import ToolModuleKit
                           // The tool's own words about the setting, where it
                           // has them: the `?` beside the name opens them, with
                           // the identifier the row does not show at the top.
-                          help: row.help.map {
-                              FieldHelp(identifier: row.identifier, text: $0,
-                                        buttonName: L("Setting help"),
-                                        buttonTooltip: L("Show what Flash Image Tool says about this setting"))
-                          })
+                          // A row with a condition and no help has the
+                          // `?` too: the condition is the answer its name
+                          // has no room for.
+                          help: (row.help != nil || row.note != nil) ? FieldHelp(
+                              identifier: row.identifier,
+                              text: row.help ?? "",
+                              note: row.note,
+                              buttonName: L("Setting help"),
+                              buttonTooltip: L("Show what Flash Image Tool says about this setting")) : nil)
                 },
                 nameWidth: nameWidth)
             rows.onHelp = { [weak self] help, anchor in

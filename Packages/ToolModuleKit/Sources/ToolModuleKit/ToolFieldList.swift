@@ -18,15 +18,20 @@ import HelpUI
 public struct FieldHelp: Sendable, Equatable {
     public var identifier: String
     public var text: String
+    /// A line of the panel's own under the identifier — what placed the row,
+    /// or what switches it off — for the facts a row's name has no room for.
+    /// Nil for a row with nothing to add.
+    public var note: String?
     /// The button's name, for VoiceOver (`ControlHelp`).
     public var buttonName: String
     /// What the button does, as its tooltip; nil where the name says it all.
     public var buttonTooltip: String?
 
-    public init(identifier: String, text: String,
+    public init(identifier: String, text: String, note: String? = nil,
                 buttonName: String, buttonTooltip: String? = nil) {
         self.identifier = identifier
         self.text = text
+        self.note = note
         self.buttonName = buttonName
         self.buttonTooltip = buttonTooltip
     }

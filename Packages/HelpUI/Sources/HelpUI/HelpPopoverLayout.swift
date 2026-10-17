@@ -87,10 +87,24 @@ import AppKit
         return scaled
     }
 
-    /// The popover's view: `title` over `body`, and `footer` — a button that
-    /// takes the reader further — under them at the right, where there is
-    /// one. Returns the view and the height the words were given.
-    public static func build(title: NSTextField, body: HelpBodyView,
+    /// A line of the caller's own under the title: what a panel knows about
+    /// the row that the row's name has no room for — a setting's condition, the
+    /// thing that switches it off. Quiet, and as wide as the words up to the
+    /// popover's margin, wrapping onto a second line rather than being cut.
+    public static func note(_ words: String) -> NSTextField {
+        let note = NSTextField(wrappingLabelWithString: words)
+        note.font = .systemFont(ofSize: bodySize)
+        note.textColor = .secondaryLabelColor
+        note.isSelectable = true
+        note.translatesAutoresizingMaskIntoConstraints = false
+        return note
+    }
+
+    /// The popover's view: `title` over `body` — with `note`, where there is
+    /// one, between them — and `footer`, a button that takes the reader
+    /// further, under them at the right. Returns the view and the height the
+    /// words were given.
+    public static func build(title: NSTextField, body: HelpBodyView, note: NSTextField? = nil,
                              footer: NSView? = nil) -> (view: NSView, bodyHeight: CGFloat) {
         let root = NSView()
         // The words on the popover's background, not on a page of their own:
@@ -107,13 +121,23 @@ import AppKit
         body.verticalScrollElasticity = fits ? .none : .automatic
         body.horizontalScrollElasticity = .none
 
-        for subview in [title, body] + (footer.map { [$0] } ?? []) { root.addSubview(subview) }
+        for subview in [title, body] + (note.map { [$0] } ?? []) + (footer.map { [$0] } ?? []) {
+            root.addSubview(subview)
+        }
         var constraints = [
             title.topAnchor.constraint(equalTo: root.topAnchor, constant: 12),
             title.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: margin),
             title.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -margin),
-
-            body.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 6),
+        ]
+        if let note {
+            constraints += [
+                note.topAnchor.constraint(equalTo: title.bottomAnchor, constant: 2),
+                note.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: margin),
+                note.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -margin),
+            ]
+        }
+        constraints += [
+            body.topAnchor.constraint(equalTo: (note ?? title).bottomAnchor, constant: 6),
             body.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             body.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             body.heightAnchor.constraint(equalToConstant: height),

@@ -263,4 +263,24 @@ final class HelpTermPopoverTests: XCTestCase {
         XCTAssertEqual(after.body, 18, accuracy: 0.01)
         XCTAssertGreaterThan(after.width, before.width, "the box grows with the type")
     }
+
+    /// A note sits under the title, in the quiet colour and the popover's own
+    /// size: the caller's line about what the title alone does not say — a
+    /// setting's condition, in the panel that has one.
+    func testANoteSitsUnderTheTitle() throws {
+        let body = HelpBodyView()
+        body.show(HelpPopoverLayout.prose("The tool's words."))
+        let built = HelpPopoverLayout.build(
+            title: HelpPopoverLayout.title("MELanPowerWell"),
+            body: body,
+            note: HelpPopoverLayout.note("eSpiEnabled = No, assumed"))
+
+        let labels = built.view.subviews.compactMap { $0 as? NSTextField }
+        let note = try XCTUnwrap(labels.first { $0.stringValue == "eSpiEnabled = No, assumed" })
+        XCTAssertEqual(note.textColor, NSColor.secondaryLabelColor)
+        XCTAssertEqual(note.font?.pointSize, HelpPopoverLayout.bodySize)
+        XCTAssertTrue(note.isSelectable, "the panel's line is copied like the rest")
+        XCTAssertNotNil(built.view.subviews.compactMap { $0 as? HelpBodyView }.first,
+                        "the words stay under it")
+    }
 }
