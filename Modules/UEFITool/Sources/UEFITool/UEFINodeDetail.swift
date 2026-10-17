@@ -1628,7 +1628,7 @@ public enum UEFIDetail {
                                   target: .range(address..<address + 4, name: name),
                                   address: hex(address),
                                   note: set == 0 ? nil
-                                      : L("Not default: %1$@", in: language, String(set))))
+                                      : L("Non-default: %1$@", in: language, String(set))))
             start = end
         }
         return UEFIDetailTable(
