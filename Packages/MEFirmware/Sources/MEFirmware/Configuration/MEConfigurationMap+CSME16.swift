@@ -39,6 +39,8 @@ extension MEConfigurationMap {
             Setting(name: "FWSecureMode", offset: 17, length: 1, label: "FW Secure Mode", help: "If enabled, access blockers in IS and PS are enabled, and FW is read from IMR. Must be enabled for FW authentication flow and execution of authenticated FW.", options: [0: "Disabled", 1: "Enabled"], auto: true),
             Setting(name: "SecureTouchCameraMask", offset: 0, length: 4, label: "Secure Touch and Camera Mask", help: "Camera mask bits per CSI port. When SECURE_TOUCH is set each set bit masks a CSI port for secure touch. When SECURE_TOUCH is cleared this register has no impact on the CSI ports.", auto: true, hex: true),
             Setting(name: "RomTraceEnable", offset: 16, length: 1, label: "IPU Debugging Enabled", help: "If enabled, IPU Debugging is enabled, otherwise internal setup is checked to see if the IPU Debugging feature should be enabled or not.", options: [0: "Disabled", 1: "Enabled"], auto: true),
+            Setting(name: "PortConfigurationFor8LSBLanes", offset: 4, length: 4, label: "Port Configuration For 8 LSB Lanes", help: "When SW DRIVER CONTROLS PORT CONFIGURATION is cleared this determines the port configuration mapping between the lower 8 MIPI lanes and the CSI receiver ports the lanes can connect to.: \n\n               Bits[3:0] determine the configuration of Port A:\n\n                0x0: port is disabled \n\n                0x4: X1 (ICL only)\n\n                0x5: X2 (ICL only)\n\n                Others: reserved \n\n                Bits[8:4] determine the configuration of Port B: \n\n                0x0: port is disabled \n\n                Others: reserved \n\n               Bits[10:9] determine the configuration of Port C: \n\n                0x0: port is disabled \n\n                0x2: X1 \n\n                Others: reserved \n\n               Bits[13:11] determine the configuration of Port D: \n\n                0x0: port is disabled \n\n                0x5: X2 \n\n                0x7: X4 \n\n                Others: reserved", auto: true, hex: true),
+            Setting(name: "PortConfigurationFor8MSBLanes", offset: 8, length: 4, label: "Port Configuration For 8 MSB Lanes", help: "When SW DRIVER CONTROLS PORT CONFIGURATION is cleared this determines the port configuration mapping between the upper 8 MIPI lanes and the CSI receiver ports the lanes can connect to.: \n\n               Bits[3:0] determine the configuration of Port A: \n\n                0x0: port is disabled \n\n                0x4: X1 \n\n                0x5: X2 \n\n                Others: reserved \n\n               Bits[8:4] determine the configuration of Port B: \n\n                0x0: port is disabled \n\n                0x9: X2 \n\n                Others: reserved \n\n               Bits[10:9] determine the configuration of Port C: \n\n                0x0: port is disabled \n\n                0x2: X1 \n\n                Others: reserved \n\n               Bits[13:11] determine the configuration of Port D: \n\n                0x0: port is disabled \n\n                0x5: X2 \n\n                0x7: X4 \n\n                Others: reserved", auto: true, hex: true),
         ]),
         File(path: "/home/iunit/iunit_privacy_mode", alias: "IunitPrivacyControl", settings: [
             Setting(name: "PrivacyFeatureControlDisabled", offset: 0, length: 1, label: "Camera privacy feature control disabled", help: "This NVAR enables/disables the camera privacy. Enabling this NVAR means that the Camera privacy GPIO Pin value is used to mask/unmask all cameras’ data from being used", auto: true),
@@ -61,6 +63,7 @@ extension MEConfigurationMap {
             Setting(name: "MELanPowerWell", offset: 188, length: 4, label: "LAN Power Well", help: "This setting allows the customer to configure the powerwell that will be used by Intel(R) Integrated LAN.  Note: Recommended setting is SLP_LAN#.", bits: 0...2, options: [0: "Core Well", 1: "SUS Well", 2: "ME Well", 3: "SLP_LAN#"], auto: true),
             Setting(name: "PttSupported", offset: 344, length: 4, label: "Intel(R) PTT Supported", help: "This setting permanently disables Intel(R) PTT in the firmware image.", bits: 29...29, options: [0: "No", 1: "Yes"]),
             Setting(name: "PttPwrUpState", offset: 404, length: 4, label: "Intel(R) PTT initial power-up state", help: "This setting determines if Intel(R) PTT is enabled on platform power-up.", bits: 29...29, options: [0: "Disabled", 1: "Enabled"]),
+            Setting(name: "IshPowerUpState", offset: 404, length: 4, label: "Integrated Sensor Hub Initial Power Up State", help: "This setting allows customers to determine the power up state for ISH.", bits: 10...10, options: [0: "Disabled", 1: "Enabled"]),
             Setting(name: "CryptoHwSupport", offset: 344, length: 4, label: "Crypto HW Support", help: "This setting can be used to disable crypto funtionality. This settings disables all crypto dependent features.", bits: 13...13, options: [0: "Yes", 1: "No"], auto: true),
             Setting(name: "EnableTDS", offset: 344, length: 4, label: "Enable TDS Capabilities", help: "This setting enables Intel(R) Trusted Device Setup on the platform", bits: 25...25, options: [0: "No", 1: "Yes"], auto: true),
             Setting(name: "OemTag", offset: 524, length: 4, label: "OEM Tag", help: "This is a free form 32bit field that allows the OEM to configure their own unique identifier in the firmware image.", auto: true, hex: true),
@@ -71,6 +74,9 @@ extension MEConfigurationMap {
         ]),
         File(path: "/home/fwupdate/fwuoemid", alias: "OEM_ID_STRING", settings: [
             Setting(name: "FwUpdateOemId", offset: 0, length: 16, label: "Firmware Update OEM ID", help: "This setting allows configuration of an OEM unique ID to ensure that customers can only update their platform with images from the OEM of the platform.", auto: true),
+        ]),
+        File(path: "/home/policy/hmrfpo_state", alias: "HMRFPO_OEM_Enabled", settings: [
+            Setting(name: "HmrfpoEnable", offset: 0, length: 1, label: "Intel(R) ME Region Flash Protection Override", help: "This setting enables descriptor unlock of the ME Region when the HMRFPO message is sent to firmware prior to BIOS End of POST.", options: [0: "No", 1: "Yes"]),
         ]),
         File(path: "/home/mctp/eid_db", alias: "MctpStackConfig", settings: [
             Setting(name: "MctpStackConfig", offset: 2, length: 3, label: "MCTP Stack Configuration", help: "Defines the ME's 8-bits MCTP Endpoint IDs for each SMBus physical interface (SMBus, SMLink0 and SMLink1). These values are needed for FW to communicate with MCTP end points. For each of these 3 bytes, a value of 0x00 means not used, and values 0xFF or 0x01 - 0x07 or 0x20 - 0x2F are not allowed.", auto: true, hex: true),
@@ -91,6 +97,16 @@ extension MEConfigurationMap {
             Setting(name: "EspiEnabled", offset: 0, length: 1, label: "eSPI Enabled", help: "Enable Management Link over eSPI OOB. Note: in order to enable eSPI, OEM ID must be set.", options: [0: "No", 1: "Yes"]),
         ]),
         File(path: "/home/mctp/espi_devices", alias: "EspiDevices", settings: [
+            Setting(name: "MctpEcAddress", offset: 4, length: 2, label: "MCTP EC Address", help: "Defines the 8-bits MCTP address and 7-bits SMBus address of the EC on SMLink0 or SMLink0b or eSPI bus. This value is needed if EC is using the MCTP protocol. The SMBus (LS byte) must be from 0x01 to 0x7f (and should not overlap with any SMBus address in PCH Strap 11).  The EID (MS byte) must be outside 0x01 through 0x07.", hex: true),
+        ]),
+        File(path: "/home/rbe/MANAGEABILITY_HW_DIS", alias: "MngHwDis", settings: [
+            Setting(name: "MngHwStatusEfs", offset: 0, length: 1, label: "Manageability Application Hardware Status EFS", help: "This setting will disable Intel(R) AMT hardware.", options: [0: "Yes", 1: "No"]),
+        ]),
+        File(path: "/home/amt/rtfd/amt.wol", alias: "amt.wol", settings: [
+            Setting(name: "AmtIdleTimeout", offset: 0, length: 2, label: "Intel(R) AMT Idle Timeout", help: "This setting configures the idle timeout value before Intel(R) AMT enters into an off state.", auto: true, hex: true),
+        ]),
+        File(path: "/home/amt/rtfd/WDResetState", alias: "AmtWdTimer", settings: [
+            Setting(name: "AmtWdAutoReset", offset: 0, length: 1, label: "Intel(R) AMT Watchdog Automatic Reset Enabled", help: "This setting allows customers to enable the Intel (R) ME firmware to trigger an automatic platform reset if either the MEI or Agent Presence are in a hung state.  Note: This feature only allows one reset at a time when the watchdog expires.  After this feature has triggered a reset it must be re-armed for re-use via management console.", options: [0: "No", 1: "Yes"], auto: true),
         ]),
         File(path: "/home/amt/rtfd/rsb.state", alias: "KvmScreenBlnk", settings: [
             Setting(name: "KvmScreenBlnkEnable", offset: 0, length: 1, label: "Firmware KVM Screen Blanking", help: "This setting enables KVM Screen blanking capabilities in the firmware image.  Note: This feature is dependent on processor level support.", options: [0: "No", 1: "Yes"], auto: true),
@@ -104,9 +120,21 @@ extension MEConfigurationMap {
         File(path: "/home/amt/skip_rtfd/sfx.isSecure", alias: "SfxIsSecure", settings: [
             Setting(name: "SuffixIsSecure", offset: 0, length: 1),
         ]),
+        File(path: "/home/amt/rtfd/PrivacyLvl", alias: "PrivacyLevel", settings: [
+            Setting(name: "RedirectionPrivSecLevel", offset: 0, length: 1, label: "Redirection Privacy / Security Level", help: "This setting allows customers to configure the Privacy and Security level for redirection operations.  Default enables all redirection ports (User consent is configurable).  Enhanced enables all redirection ports (User consent is required and cannot be disabled).  Extreme disables all redirection capabilities.", options: [1: "Default", 2: "Enhanced", 3: "Extreme"]),
+        ]),
         File(path: "/home/bup/si_features", alias: "KernFixedData", settings: [
             Setting(name: "DbgOverridePreProdSi", offset: 12, length: 4, label: "Debug Override Pre-Production Silicon", help: "Allows the OEM to control FW features to assist with pre-production platform debugging.  This control has no effect if used on production silicon.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", auto: true, hex: true),
             Setting(name: "DbgOverrideProdSi", offset: 16, length: 4, label: "Debug Override Production Silicon", help: "Allows the OEM to control FW features to assist with production platform debugging.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", auto: true, hex: true),
+        ]),
+        File(path: "/home/secureboot/brm_cfg", alias: "BrmEn", settings: [
+            Setting(name: "BiosRedAssistance", offset: 0, length: 1, label: "BIOS Redundancy Assistance", help: "In case of BIOS boot failure, CSME will configure the platform to boot with backup BIOS using Top Swap. Note: This option is only available when Boot Guard is enabled.", options: [0: "Disabled", 1: "Enabled"], auto: true),
+        ]),
+        File(path: "/home/fwupdate/fwutcss", alias: "TCSS_PartialUpdate", settings: [
+            Setting(name: "TcssPartialUpdateEn", offset: 0, length: 1, label: "Tcss - Partial Update Enabled", help: "This setting enables partial update for TCSS partitions", options: [0: "Disabled", 1: "Enabled"], auto: true),
+        ]),
+        File(path: "/home/tcss/tcss_ctrl", alias: "TcssControl", settings: [
+            Setting(name: "TcssAuthenticateEn", offset: 0, length: 1, label: "Type-C SubSystem Authentication Enabled", help: "This setting enables / disables firmware authentication for the Type-C Subsystem on power-up", options: [0: "Yes", 1: "No"], auto: true),
         ]),
         File(path: "/home/amt/skip_rtfd/ncsi", alias: "AmtNetworkConfiguration", settings: [
             Setting(name: "vproNicSMBusAddress", offset: 5, length: 1, label: "Platform vPro 2.5G Wired LAN SMBUS slave address", help: "Platform discrete NIC slave address\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", hex: true),
@@ -118,10 +146,16 @@ extension MEConfigurationMap {
             Setting(name: "ThunderboltPort3SMBUSAddress", offset: 3, length: 1, label: "Thunderbolt Port3 SMBUS Address", help: "This setting configures the Intel(R) SMBus I2C Address.\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", hex: true),
             Setting(name: "ThunderboltPort4SMBUSAddress", offset: 4, length: 1, label: "Thunderbolt Port4 SMBUS Address", help: "This setting configures the Intel(R) SMBus I2C\n             Address.\nNote: Input needs to be in HEX format(OEM specific), e.g. 0x12", hex: true),
         ]),
+        File(path: "/home/bup/bup_sku/hw_binding", alias: "HwBinding", settings: [
+            Setting(name: "HwBindingEn", offset: 0, length: 1, label: "Hardware Binding Enabled", help: "This setting configures the FPF Hardware and RPMC / RPMB binding behavior for the platform image.\nIf this setting is enabled FPF Hardware and RPMC / RPMB binding behavior will occur when platform close manufacturing flow is executed with Intel(R) FPT. \nIf this setting is disabled FPF Hardware and RPMC / RPMB binding behavior will not take place when close manufacturing flow is executed.\nNote: For Revenue parts this setting will be ignored and FPF Hardware and RPMC / RPMB binding behavior will take place when close manufacturing flow is executed.", options: [0: "Disabled", 1: "Enabled"], auto: true),
+        ]),
         File(path: "/home/mca/icps", alias: "icps", settings: [
         ]),
         File(path: "/home/policy/Bist/auto_config", alias: "BistMeAutoBistConfAndStatus", settings: [
             Setting(name: "FwAutoBist", offset: 0, length: 4, label: "Automatic Built in Self Test", help: "This setting enables the firmware Automatic Built in Self Test which is executed during first platform boot after initial image flashing.", bits: 0...0, options: [0: "Disabled", 1: "Enabled"], auto: true),
+        ]),
+        File(path: "/home/hotham/dbg_dam_req", alias: "Dam", settings: [
+            Setting(name: "DelayedAuthMode", offset: 0, length: 1, label: "Delayed Authentication Mode Enabled", help: "This setting enables Delayed Authentication Mode on the platform.", options: [0: "No", 1: "Yes"], auto: true),
         ]),
         File(path: "/home/ptt/ptt_smx_disable", alias: "PttSmxSupport", settings: [
             Setting(name: "SmxSupport", offset: 0, length: 1, label: "SMx State", bits: 0...0, options: [0: "Enabled", 1: "Disabled"], auto: true),

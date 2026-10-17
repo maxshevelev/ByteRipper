@@ -39,6 +39,47 @@ final class ConfigurationMapTests: XCTestCase {
                       "MFIT's map is the one with the mark")
     }
 
+    /// A file MFIT gives no place to is read where the file **is** the setting
+    /// — one logical setting of a numeric kind, `bup_sku/hw_binding`'s
+    /// `HwBindingEn` — with the width its kind names; a file the tool keeps
+    /// several settings in is left to its plugin, and so is every file whose
+    /// setting has no numeric kind (certificates, the ICC profiles).
+    func testAFileThatIsOneSettingIsRead() throws {
+        let map = MEConfigurationMap.csme16
+        let binding = try XCTUnwrap(map.file(at: "/home/bup/bup_sku/hw_binding")?.settings
+            .first { $0.name == "HwBindingEn" })
+        XCTAssertEqual(binding.offset, 0)
+        XCTAssertEqual(binding.length, 1)
+        XCTAssertEqual(binding.label, "Hardware Binding Enabled")
+        XCTAssertEqual(binding.options, [0: "Disabled", 1: "Enabled"])
+
+        // The same rule gives the two-byte file its word.
+        let timeout = try XCTUnwrap(map.file(at: "/home/amt/rtfd/amt.wol")?.settings
+            .first { $0.name == "AmtIdleTimeout" })
+        XCTAssertEqual(timeout.length, 2, "the width its kind says")
+        XCTAssertTrue(timeout.hex)
+
+        // A file with several settings: only the one the tool places is read.
+        let ports = try XCTUnwrap(map.file(at: "/home/pavp/hdcp_ports"))
+        XCTAssertEqual(ports.settings.map(\.name), ["Hdcp5kedisp1"])
+        XCTAssertNil(map.file(at: "/home/icc/hash"))
+    }
+
+    /// The lists spell a label or a help text differently — one truncates the
+    /// sentence — and that is not a layout conflict: the setting stays, with
+    /// the fuller wording.
+    func testASettingTheListsWordDifferentlyKeepsItsPlace() throws {
+        let map = MEConfigurationMap.csme16
+        let ish = try XCTUnwrap(map.file(at: "/home/policy/cfgmgr/cfg_rules")?.settings
+            .first { $0.name == "IshPowerUpState" })
+        XCTAssertEqual(ish.offset, 404)
+        XCTAssertEqual(ish.length, 4)
+        XCTAssertEqual(ish.label, "Integrated Sensor Hub Initial Power Up State")
+        XCTAssertEqual(map.files.flatMap(\.settings)
+            .filter { $0.name == "MctpEcAddress" }.count, 3,
+                       "the conditional files the tool places it in")
+    }
+
     /// The tool's own name for a setting travels with it: the identifier is what
     /// a report and Intel's documents call it (`MELanPowerWell`), the label is
     /// what the tool's panel shows ("LAN Power Well"), and a setting whose tool
