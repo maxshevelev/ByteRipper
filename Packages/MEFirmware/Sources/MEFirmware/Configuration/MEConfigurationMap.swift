@@ -195,13 +195,38 @@ public struct MEConfigurationMap: Sendable, Equatable {
     /// layouts.
     public static func forME(major: Int, family: MEPlatformFamily? = nil) -> MEConfigurationMap? {
         let desktop = family == .desktop
+        let map: MEConfigurationMap
         switch major {
-        case 13: return desktop ? .csme13Desktop : .csme13
-        case 14: return desktop ? .csme14Desktop : .csme14
-        case 15: return desktop ? .csme15Desktop : .csme15
-        case 16: return .csme16
+        case 13: map = desktop ? .csme13Desktop : .csme13
+        case 14: map = desktop ? .csme14Desktop : .csme14
+        case 15: map = desktop ? .csme15Desktop : .csme15
+        case 16: map = .csme16
         default: return nil
         }
+        return map.addingManufacturingLock()
+    }
+
+    /// The live record of the board's End of Manufacturing, appended to every
+    /// map — the one file that is ours and not the tool's.
+    ///
+    /// `/home/mca/manuf_lock` is in **no** MFIT or FIT database: the build
+    /// writes its record with a zero and the platform sets it to 1 when it
+    /// closes End of Manufacturing (`Design/ME_STRUCTURES.md`). The
+    /// Configuration tab can show it like any other file — both copies side by
+    /// side, the build's zero and the platform's byte — which is why the entry
+    /// is added here rather than in a generated map: a regenerated map must not
+    /// lose it, and no generator can emit a setting its source does not have.
+    /// The identifier is ours; the label is the row the Summary gives it.
+    private func addingManufacturingLock() -> MEConfigurationMap {
+        let path = "/home/mca/manuf_lock"
+        guard file(at: path) == nil else { return self }
+        var map = self
+        map.files.append(File(path: path, alias: "ManufLock", settings: [
+            Setting(name: "ManufLock", offset: 0, length: 1,
+                    label: "Manufacturing Lock",
+                    options: [0: "Not locked", 1: "Locked"]),
+        ]))
+        return map
     }
 
     /// The map's entry for a path, where it has one.

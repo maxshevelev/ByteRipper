@@ -39,6 +39,26 @@ final class ConfigurationMapTests: XCTestCase {
                       "MFIT's map is the one with the mark")
     }
 
+    /// Every map carries the one file that is ours and no tool's: the board's
+    /// own `manuf_lock`, so the Configuration tab can show the build's zero and
+    /// the platform's byte side by side. It is appended by `forME`, not written
+    /// into a generated map — a regeneration must not lose it.
+    func testEveryMapCarriesTheBoardsLockRecord() throws {
+        for major in [13, 14, 15, 16] {
+            let map = try XCTUnwrap(MEConfigurationMap.forME(major: major), "\(major)")
+            let lock = try XCTUnwrap(map.file(at: "/home/mca/manuf_lock"), "\(major)")
+            XCTAssertEqual(lock.alias, "ManufLock")
+            XCTAssertEqual(lock.settings.map(\.name), ["ManufLock"])
+            let setting = try XCTUnwrap(lock.settings.first)
+            XCTAssertEqual(setting.offset, 0)
+            XCTAssertEqual(setting.length, 1)
+            XCTAssertEqual(setting.label, "Manufacturing Lock")
+            XCTAssertEqual(setting.options, [0: "Not locked", 1: "Locked"])
+        }
+        XCTAssertNil(MEConfigurationMap.csme16.file(at: "/home/mca/manuf_lock"),
+                     "the generated map itself does not carry the curated file")
+    }
+
     /// A file MFIT gives no place to is read where the file **is** the setting
     /// — one logical setting of a numeric kind, `bup_sku/hw_binding`'s
     /// `HwBindingEn` — with the width its kind names; a file the tool keeps
