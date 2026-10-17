@@ -921,6 +921,27 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertNil(value("RPMC", in: try rows(nil, major: 15)))
     }
 
+    /// The binding's file is found through `FileTable.dat`: until the reading
+    /// with it lands, "not recorded in this image" is an answer the reading has
+    /// not checked for, and the row says it is still loading. A binding the
+    /// image did show is a value already, and the absence is the answer once
+    /// the table is in.
+    func testTheRPMCBindingWaitsForTheFileTable() throws {
+        var a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 15, "minor": 0, "hotfix": 1, "build": 100],
+        ])
+        a.hardwareBinding = .notInImage
+        let waiting = MEASummary.build(a, pending: MEAPending(fileTable: true), in: .english)[0].rows
+        XCTAssertEqual(value("RPMC", in: waiting), .pending)
+        XCTAssertEqual(tone("RPMC", in: waiting), .standard)
+        XCTAssertEqual(value("RPMC", in: tableRows(a)), .value("Not recorded in this image"))
+
+        a.hardwareBinding = .enabled
+        let carried = MEASummary.build(a, pending: MEAPending(fileTable: true), in: .english)[0].rows
+        XCTAssertEqual(value("RPMC", in: carried), .value("Hardware binding: Enabled"))
+    }
+
 
     /// The four dumps whose answers are known, as the rows read them: the
     /// factory dump that closed Manufacturing already, the same image built
