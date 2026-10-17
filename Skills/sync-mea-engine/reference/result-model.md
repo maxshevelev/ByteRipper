@@ -77,6 +77,14 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   to be told from the files present because the condition's own value was not
   in the image; `.disabled` says the tool switches the setting off under such a
   condition and the image holds it. Ours, as the rest.
+  Revision 48 adds `hardwareBinding`: whether the platform binds its SPI part
+  to the chipset — Flash Image Tool's "Hardware Binding Enabled", one byte of
+  `/home/bup/bup_sku/hw_binding` (the file system's copy, then the OEM
+  Configuration partition's record of it), `disabled`, `enabled`, an
+  `other` byte the tool's class does not name, or `notInImage`. Ours; upstream
+  has no such row. Its sibling settings in the tool's `RpmcConfiguration`
+  section are UEP placements that read zero in every dump at hand, and are not
+  read.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct

@@ -87,6 +87,22 @@ extension MEAText {
     /// own "signing disabled", an erased one was never written, and one this
     /// reader cannot walk is a layout it does not know. Three different states
     /// of a boot chain, and the help explains what to do about each.
+    /// Whether the platform binds its SPI part to the chipset — the fact the
+    /// tool calls "Hardware Binding Enabled" and its own help names the FPF
+    /// hardware and RPMC / RPMB binding. The value words are the tool's value
+    /// class (`DisabledEnabledValues`), kept in every language as its option
+    /// labels are.
+    public static func hardwareBinding(_ value: HardwareBinding, in language: AppLanguage) -> String {
+        switch value {
+        case .disabled: return L("Hardware binding: %1$@", in: language, "Disabled")
+        case .enabled: return L("Hardware binding: %1$@", in: language, "Enabled")
+        case .other(let byte):
+            return L("Hardware binding: unexpected value %1$@", in: language,
+                     String(format: "0x%02X", byte))
+        case .notInImage: return L("Not recorded in this image", in: language)
+        }
+    }
+
     public static func oemPublicKeyHash(_ value: OEMKeyHash, in language: AppLanguage) -> String {
         switch value {
         case .hash(let hex):

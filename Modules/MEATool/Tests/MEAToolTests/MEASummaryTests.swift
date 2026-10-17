@@ -891,6 +891,37 @@ final class MEASummaryTests: XCTestCase {
 
     // MARK: - Our three rows (End of Manufacturing, Boot Guard, OEM key hash)
 
+    /// The RPMC row: whether the platform binds its SPI part to the chipset —
+    /// one byte the tool keeps in `bup_sku/hw_binding`, which its own help
+    /// names the FPF hardware and RPMC / RPMB binding. Read for the
+    /// generations whose tool has the setting, and saying so where the image
+    /// does not carry the file.
+    func testTheRPMCBindingIsARow() throws {
+        func rows(_ binding: HardwareBinding?, major: Int) throws -> [MEASummaryRow] {
+            var a = try analysis([
+                "family": "csme", "manifest": manifestJSON(),
+                "version": ["major": major, "minor": 0, "hotfix": 1, "build": 100],
+            ])
+            a.hardwareBinding = binding
+            return tableRows(a)
+        }
+        XCTAssertEqual(value("RPMC", in: try rows(.enabled, major: 15)),
+                       .value("Hardware binding: Enabled"))
+        XCTAssertEqual(value("RPMC", in: try rows(.disabled, major: 15)),
+                       .value("Hardware binding: Disabled"))
+        XCTAssertEqual(value("RPMC", in: try rows(.other(0x02), major: 16)),
+                       .value("Hardware binding: unexpected value 0x02"))
+        XCTAssertEqual(value("RPMC", in: try rows(.notInImage, major: 16)),
+                       .value("Not recorded in this image"))
+        // A reading, not a verdict: the row carries no tone either way.
+        XCTAssertEqual(tone("RPMC", in: try rows(.enabled, major: 15)), .standard)
+        // CSME 12 has no such setting: no row, rather than one that can only
+        // say the image does not carry it.
+        XCTAssertNil(value("RPMC", in: try rows(.notInImage, major: 12)))
+        XCTAssertNil(value("RPMC", in: try rows(nil, major: 15)))
+    }
+
+
     /// The four dumps whose answers are known, as the rows read them: the
     /// factory dump that closed Manufacturing already, the same image built
     /// with MFIT's flag set, the one built without it, and the pair of Boot

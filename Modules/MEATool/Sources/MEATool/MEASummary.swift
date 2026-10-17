@@ -328,6 +328,15 @@ public enum MEASummary {
             // shows wherever the engine has one; nil means a reading taken
             // before the model carried the field at all, and waits for
             // identification like every other absence on this table.
+            // RPMC's own state is a file, not a setting the maps lay out — the
+            // tool's "Hardware Binding Enabled", one byte of `bup_sku/hw_binding`
+            // — so it reads on every generation whose tool has the setting
+            // (CSME 13 and later) and says so where the image does not carry it.
+            if let binding = analysis.hardwareBinding, analysis.version.major >= 13 {
+                rows.append(MEASummaryRow(L("RPMC", in: language),
+                                          .value(MEAText.hardwareBinding(binding, in: language)),
+                                          tone: .standard))
+            }
             if let key = analysis.oemPublicKeyHash {
                 rows.append(MEASummaryRow(L("OEM Public Key Hash", in: language),
                                           .value(MEAText.oemPublicKeyHash(key, in: language)),

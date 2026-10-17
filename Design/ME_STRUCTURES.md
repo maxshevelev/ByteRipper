@@ -416,6 +416,22 @@ switch, and did, before that rule. `SmlinkBusSelection` carries the tool's other
 relation, `DisableIf eSpiEnabled = Yes` — its value is in the file and does not
 apply.
 
+**RPMC is a file, not a setting the maps lay out.** Flash Image Tool's
+"Hardware Binding Enabled" (`HwBindingEn`, `FpfHwBindingEn` on the Comet Point
+documents) is the FPF hardware and RPMC / RPMB binding, and the tool keeps it
+in `/home/bup/bup_sku/hw_binding` — one byte of `DisabledEnabledValues`, 0
+Disabled and 1 Enabled. Its *siblings* in the tool's `RpmcConfiguration`
+section, `RpmcSupported` and `RpmcRebindEn`, are placements in the UEP bit
+arrays (`UepBitsArray0` +0x74 bit 4, `UepBitsArray3` +0x20, `UepBitsArray4`
++0x10) and read zero on every dump at hand — FIT-built CSME 15 and MFIT-built
+CSME 16 alike — so nothing is claimed from them; the same conclusion the UEP
+section above reaches from the other side. Measured on the dumps at hand:
+`CSME 15.bin` Disabled, `1.bin` Enabled, `CSME 13.BIN` Enabled, `CSME 14.bin`
+Disabled, both CSME 16 dumps Enabled, and `CSME 12.BIN` has no such file at all
+— the setting is CSME 13's and later. The Summary's **RPMC** row reports that
+byte, the file system's copy first and the OEM Configuration partition's record
+of it as the fallback.
+
 **Each generation has two maps, one for each half of it.** The mobile families
 (`_lp`, `_p`) and the desktop ones (`_h`, `_s`) layout a few settings
 differently — TGL LP against TGL H: 56 settings against 52, 50 shared, one of
