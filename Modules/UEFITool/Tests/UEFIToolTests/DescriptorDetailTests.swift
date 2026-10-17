@@ -262,7 +262,7 @@ final class DescriptorDetailTests: XCTestCase {
         // The line says, folded, how many of its fields the build set.
         let setHere = table.rows[section.rows].filter { $0[2].isStrong }.count
         XCTAssertGreaterThan(setHere, 0)
-        XCTAssertEqual(section.note, "Not default: \(setHere)")
+        XCTAssertEqual(section.note, "Non-default: \(setHere)")
         let quiet = try XCTUnwrap(table.sections.first { section in
             !table.rows[section.rows].contains { $0[2].isStrong }
         })
