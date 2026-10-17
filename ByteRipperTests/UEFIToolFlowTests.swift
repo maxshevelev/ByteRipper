@@ -1820,12 +1820,20 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertNil(shown("SPI_ec_max_freq"), "its fields folded under it")
         let table = try XCTUnwrap(descendants(of: panel, DetailTableView.self)
             .first { $0.rows.contains { $0 === line } })
-        XCTAssertEqual(table.rows[0].texts, ["Field", "Bits", "Value", "Default"],
-                       "the word is the section's, not a column")
+        let columns = ["Field", "Bits", "Value", "Default"]
+        XCTAssertEqual(table.rows[0].texts.first, "PCHSTRP0",
+                       "no header line over the sections: each carries its own")
+        XCTAssertFalse(table.rows.contains { $0.texts == columns && !$0.isHidden },
+                       "and a folded section's is folded with it")
 
         XCTAssertTrue(line.accessibilityPerformPress())
         window?.layoutIfNeeded()
         XCTAssertEqual(line.disclosure, true)
+        let lineAt = try XCTUnwrap(table.rows.firstIndex { $0 === line })
+        XCTAssertEqual(table.rows[lineAt + 1].texts, columns, "the column names open with the section")
+        XCTAssertFalse(table.rows[lineAt + 1].isHidden)
+        XCTAssertFalse(table.rows[lineAt + 1].texts.contains("PCHSTRP22"),
+                       "the word is the section's, not a column")
         XCTAssertEqual(shown("SPI_ec_max_freq")?.texts.prefix(2), ["SPI_ec_max_freq", "3–5"])
         XCTAssertNil(shown("SPI_DMI_REQID"), "another word stays folded")
 
