@@ -48,6 +48,7 @@ public enum MEACurator {
         add(codePartition(analysis, in: language))
         add(manifest(analysis, in: language))
         add(mfsVolume(analysis, mfsNames, configPaths, in: language))
+        add(uepGroup(analysis, in: language))
 
         // Fact groups — everything else a dump carried, each only when present.
         add(chipsetInitGroup(analysis, in: language))
@@ -537,6 +538,33 @@ public enum MEACurator {
     /// there; a CSME 15/16 one has them from the FTPR `intl.cfg` and no volume
     /// node to put them under, and an image whose two copies disagree gets both
     /// rows, each where it came from.
+    /// The FPF/UEP settings the `$UEP` area's first bit array records, under the
+    /// tool's own sections — the bits the platform would burn at End of
+    /// Manufacturing. Shown for the generations the engine has a layout for
+    /// (`UEPMap.forME`) and where the image carries an area; the values are
+    /// what the build wrote, and most of them are zero.
+    private static func uepGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
+        guard let readings = a.uepSettings,
+              let map = UEPMap.forME(major: a.version.major) else { return nil }
+        let byName = Dictionary(uniqueKeysWithValues: map.settings.map { ($0.name, $0) })
+        var order: [String] = []
+        var sections: [String: [MEANode]] = [:]
+        for reading in readings {
+            let setting = byName[reading.name]
+            let section = setting?.section ?? ""
+            if sections[section] == nil { order.append(section) }
+            sections[section, default: []].append(MEANode(
+                path: [], title: setting?.label ?? reading.name,
+                subtitle: "\(reading.value)"))
+        }
+        let groups = order.map { section in
+            MEANode(path: [],
+                    title: section.isEmpty ? L("Other", in: language) : section,
+                    children: sections[section] ?? [])
+        }
+        return MEANode(path: [], title: L("FPF Settings", in: language), children: groups)
+    }
+
     private static func chipsetInitGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {
         guard let chipsetInit = a.chipsetInit,
               chipsetInit != a.mfsVolume?.pchInit else { return nil }

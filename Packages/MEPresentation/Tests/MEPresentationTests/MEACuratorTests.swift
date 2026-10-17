@@ -8,6 +8,34 @@ import MEFirmware
 /// need `MEFirmware`'s internal memberwise initializers nor any data source:
 /// a decoded `FirmwareAnalysis` is exactly what the engine hands the curator.
 final class MEACuratorTests: XCTestCase {
+    /// The FPF settings the area records are a group of the full tree, under
+    /// the tool's own sections: `RPMC Supported` sits in `RpmcConfiguration`
+    /// with the value the image holds, and the tool's identifiers stand in for
+    /// the bits it gives no label.
+    func testTheFPFSettingsAreAGroupOfTheirOwn() throws {
+        let a = try analysis([
+            "version": ["major": 16, "minor": 1, "hotfix": 25, "build": 1991],
+            "uepSettings": [
+                ["name": "RpmcSupported", "value": 0],
+                ["name": "RpmcRebindEn", "value": 1],
+                ["name": "comp_eom", "value": 1],
+            ],
+        ])
+        let roots = MEACurator.present(a, in: .english)
+        let group = try XCTUnwrap(find("FPF Settings", in: roots))
+        let sections = group.children.map(\.title)
+        XCTAssertEqual(sections, ["RpmcConfiguration", "Other"],
+                       "the tool's sections first, and the bits it does not file")
+        let rpMc = try XCTUnwrap(group.children[0].children.first)
+        XCTAssertEqual(rpMc.title, "RPMC Supported")
+        XCTAssertEqual(rpMc.subtitle, "0")
+        let rebind = try XCTUnwrap(group.children[0].children.last)
+        XCTAssertEqual(rebind.title, "RPMC Rebinding Enabled")
+        XCTAssertEqual(rebind.subtitle, "1")
+        XCTAssertEqual(group.children[1].children.first?.title, "comp_eom",
+                       "a bit the tool names by its identifier alone")
+    }
+
     // MARK: - Fixtures
 
     /// Decode an analysis whose top-level fields are `overrides` merged over
