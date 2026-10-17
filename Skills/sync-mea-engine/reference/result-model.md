@@ -83,8 +83,16 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   Configuration partition's record of it), `disabled`, `enabled`, an
   `other` byte the tool's class does not name, or `notInImage`. Ours; upstream
   has no such row. Its sibling settings in the tool's `RpmcConfiguration`
-  section are UEP placements that read zero in every dump at hand, and are not
-  read.
+  section are UEP placements, read as such by revision 49.
+  Revision 49 adds `uepSettings`: the FPF/UEP settings an image's `$UEP` area
+  holds, each as the tool's identifier and the value of its bits
+  (`UEPReading`). The map of places is the tool's own (`UEPMap`, emitted from
+  the `GetBitArrayValue` actions) and **only the container's first bit array**
+  is read — the one the Boot Guard word is in; a setting the tool places only
+  in another array is not in a map. The values are what the build wrote into
+  the image, not the fuses the platform later burns, and most of them are
+  zero. Ours; upstream reads none of the UEP bits. The Full Info tree shows
+  them under "FPF Settings", in the tool's sections.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct

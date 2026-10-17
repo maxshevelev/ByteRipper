@@ -365,7 +365,8 @@ repeating one. MFIT's `<UI>` element names a **panel section** the same way
 (`section="WiredLanConfiguration"`); the maps do not carry it — nothing on the
 panel groups by it yet.
 
-**The UEP arrays carry 155 settings and the images write one of them** — checked
+**The UEP arrays carry 155 settings and the images write almost none of them** —
+checked
 2026-10-17, over the FIT 15 layout of the TGL LP family and two CSME 15 dumps
 (`1.bin`, profile 0, and `CSME 15.bin`, profile 5). Every documented placement of
 every other setting reads zero in both, including ones that *must* be set on a
@@ -382,6 +383,21 @@ the platform burns at End of Manufacturing is computed there, which is also why
 region. Reading more of them from a dump is therefore not the next step; four
 bytes at array 0 +0x70 that differ between the two dumps match no documented
 placement and are the one thing here still unnamed.
+
+**The panel shows them anyway, as the FPF Settings group.** The 155 count is
+every array the tool writes; the settings the app reads are the ones placed in
+the **first** array — the one the Boot Guard word is in — 56 in FIT 15's TGL LP
+documents and 71 in MFIT 16's, and their map (`UEPMap`) is emitted from the same
+`GetBitArrayValue` actions by
+`Skills/me-eom-structures/scripts/uep_map.py`. The engine reads each setting's
+bits out of the little-endian word at its offset (`UEPReader`, array 0 at
+`$UEP`+0x0C) and the Full Info tree lists them under **FPF Settings**, in the
+tool's own sections (`RpmcConfiguration`, `PlatformIntegrity`) with the tool's
+label where it has one. The group is not a verdict about the fuses and the
+values are not the platform's state: they are what the build wrote into the
+image, which is what a dump can say, and most of them are zero. The rows are
+under the tool's sections rather than the configuration map's because no
+configuration map carries a section yet.
 
 ### The same material in FIT's own shape (ME 15)
 

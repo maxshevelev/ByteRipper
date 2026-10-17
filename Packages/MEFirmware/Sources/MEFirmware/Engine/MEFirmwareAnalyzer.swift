@@ -1261,6 +1261,12 @@ public actor MEFirmwareAnalyzer {
             }
             return nil
         }
+        // The FPF settings the area's first bit array records, through the
+        // tool's own layout for this generation (`UEPMap`). Most of them read
+        // zero on a vendor dump; that is the state the build wrote.
+        let uepReadings = uepArea.flatMap { area in
+            UEPMap.forME(major: identity.major).flatMap { UEPReader.readings(in: area, map: $0) }
+        }
         let uepProfile = uepArea.flatMap(profileFromUEP)
         let bootGuardProfile = Self.regionBytes("CDMD", regions: regions,
                                                 region: region, baseOffset: baseOffset)
@@ -1435,6 +1441,7 @@ public actor MEFirmwareAnalyzer {
             platformFamily: platformFamily,
             configuration: configuration.isEmpty ? nil : configuration,
             bootGuardProfile: bootGuardProfile,
+            uepSettings: uepReadings,
             hardwareBinding: hardwareBinding,
             oemPublicKeyHash: oemPublicKeyHash,
             // Row 12a is CSME 11's alone, the way upstream gates it, so the
