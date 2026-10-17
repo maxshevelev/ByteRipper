@@ -48,10 +48,14 @@ public struct UEFIDetailTable: Equatable, Sendable {
         public enum Tone: Equatable, Sendable { case plain, yes, no }
         public var text: String
         public var tone: Tone
+        /// Drawn in bold: a value that stands out from the ones around it —
+        /// a strap field this board's build set away from the tool's default.
+        public var isStrong: Bool
 
-        public init(_ text: String, tone: Tone = .plain) {
+        public init(_ text: String, tone: Tone = .plain, isStrong: Bool = false) {
             self.text = text
             self.tone = tone
+            self.isStrong = isStrong
         }
 
         /// A permission, as the word and the colour that go with it.
@@ -100,14 +104,18 @@ public struct UEFIDetailTable: Equatable, Sendable {
         /// is shown. Nil for a section that stands for nothing in the dump.
         public var target: Target?
         public var address: String?
+        /// What the folded line says about the rows it hides, where something
+        /// in them stands out: how many strap fields the build set.
+        public var note: String?
 
         public init(title: String, subtitle: String? = nil, rows: Range<Int>,
-                    target: Target? = nil, address: String? = nil) {
+                    target: Target? = nil, address: String? = nil, note: String? = nil) {
             self.title = title
             self.subtitle = subtitle
             self.rows = rows
             self.target = target
             self.address = address
+            self.note = note
         }
     }
 
@@ -1594,7 +1602,12 @@ public enum UEFIDetail {
     /// reader looks for. A section's line names the word, what its fields
     /// have in common (`DescriptorStrapMap.group(of:)` — the tool names its
     /// words by offset only), and the word's address, which outlines its four
-    /// bytes in the dump, where two boards' straps are compared.
+    /// bytes in the dump, where two boards' straps are compared. Inside it a
+    /// field keeps its whole name, the one the tool is searched by.
+    ///
+    /// A value the build set away from the tool's default is drawn in bold,
+    /// and a folded line says how many of its fields are so: those are the
+    /// fields that make this board's straps its own.
     private static func strapTable(_ straps: DescriptorInfo.Straps, in language: AppLanguage) -> UEFIDetailTable {
         guard let readings = straps.fields else {
             let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
@@ -1622,20 +1635,24 @@ public enum UEFIDetail {
         // the tool calls the bits around it spare or reserved — so its row is
         // added here, under the name ifdtool and me_cleaner give it, and it has
         // no default of the tool's to compare against.
-        struct Row { let word: Int; let bit: Int; let cells: [UEFIDetailTable.Cell] }
+        struct Row { let word: Int; let bit: Int; let isSet: Bool; let cells: [UEFIDetailTable.Cell] }
+        var groups: [Int: String] = [:]
+        for word in Set(readings.map(\.field.word)) {
+            groups[word] = DescriptorStrapMap.group(of: readings.filter { $0.field.word == word }.map(\.field))
+        }
         var rows: [Row] = readings.map { reading in
             let range = reading.field.bits
-            return Row(word: reading.field.word, bit: range.lowerBound,
+            return Row(word: reading.field.word, bit: range.lowerBound, isSet: reading.isSet,
                        cells: [.init(strapFieldName(reading.field.name)),
                                .init(range.lowerBound == range.upperBound
                                      ? "\(range.lowerBound)"
                                      : "\(range.lowerBound)–\(range.upperBound)"),
-                               .init(hex(reading.value)),
+                               .init(hex(reading.value), isStrong: reading.isSet),
                                .init(hex(reading.field.defaultValue))])
         }
         if let bit = straps.meDisable, bit.word < straps.words.count {
             rows.append(Row(
-                word: bit.word, bit: bit.bit,
+                word: bit.word, bit: bit.bit, isSet: false,
                 cells: [.init(bit.name), .init("\(bit.bit)"),
                         .init(bit.isSet ? "0x1" : "0x0"), .init("")]))
         }
@@ -1648,11 +1665,13 @@ public enum UEFIDetail {
             let end = rows[start...].firstIndex { $0.word != word } ?? rows.count
             let name = "PCHSTRP\(word)"
             let address = straps.base + UInt64(word) * 4
-            let fields = readings.filter { $0.field.word == word }.map(\.field)
-            sections.append(.init(title: name, subtitle: DescriptorStrapMap.group(of: fields),
+            let set = rows[start..<end].filter(\.isSet).count
+            sections.append(.init(title: name, subtitle: groups[word],
                                   rows: start..<end,
                                   target: .range(address..<address + 4, name: name),
-                                  address: hex(address)))
+                                  address: hex(address),
+                                  note: set == 0 ? nil
+                                      : L("Not default: %1$@", in: language, String(set))))
             start = end
         }
         return UEFIDetailTable(

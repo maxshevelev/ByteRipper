@@ -1815,7 +1815,7 @@ final class UEFIToolFlowTests: XCTestCase {
                 .first { $0.texts.first == first && !$0.isHiddenOrHasHiddenAncestor }
         }
         let line = try XCTUnwrap(shown("PCHSTRP22"), "a line per word")
-        XCTAssertEqual(line.texts, ["PCHSTRP22", "SPI", "0x258"])
+        XCTAssertEqual(line.texts.prefix(3), ["PCHSTRP22", "SPI", "0x258"])
         XCTAssertEqual(line.disclosure, false)
         XCTAssertNil(shown("SPI_ec_max_freq"), "its fields folded under it")
         let table = try XCTUnwrap(descendants(of: panel, DetailTableView.self)
