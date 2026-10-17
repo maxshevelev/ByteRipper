@@ -243,6 +243,38 @@ is what makes the bits coherent — `OEM_ID` 0x103C (HP's PCI vendor ID),
 (poly 0x1021, init 0xFFFF, no reflection) over reserved + four arrays
 reproduces the stored word exactly.
 
+**The CPU strap message has its own layout and its own place.** CSME 18 does
+not keep it in the descriptor's MIP area; it is in the FITC partition's MIP
+table (the `smip` nvar), and `strap18_map.py` emits the tool's `CPU_smip`
+document for it:
+
+```bash
+python3 Skills/me-eom-structures/scripts/strap18_map.py ~/Downloads/1/mfit-18.1.exe > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/CPUStrapMap+CSME18.swift
+```
+
+The document lives among the strap XMLs (`DescriptorPluginsCommon/data/straps/`,
+packaged in the executable as `mfit_data` blocks): a `serialized_item` per
+field with its byte `offset` into the message and its `bit_low`/`bit_high` in
+the little-endian dword there, plus the panel's words through `bind_action` —
+which is where "Disable Hyperthreading", "All Cores Active" and the rest of
+the CPU Straps page come from. The three platform documents at hand place the
+35 fields alike; a disagreement is dropped and named, and no default is
+emitted (the values are per reference platform, `$rvp`).
+
+Where the image keeps it: the FITC payload is a record table (12-byte
+`{FileID, offset, size, flags}` records), and one record — FileID `0x10023E00`
+on the dump at hand — is a **MIP descriptor**: `u16 NumberOfDescriptors`,
+`u16 SizeOfMip`, then a `{BlockType, BlockOffset, BlockLength, Reserved}` per
+block, contiguous. On the HP CSME 18 dump: 4 blocks (PMC_SoC 0x58, a 0x40
+block, CSME 0xD0, a terminator), the CPU message header at block 0 + 0x48
+(`Reserved`, `Interpretation_Num` bit 16, `CPU_Strap_Length` bits 24–31 = 3)
+and the message at 0x4C: `00801000 04002000 D6CE0000`. The last word's high
+half is the CRC-16 (CCITT-FALSE over the words after the first, its own field
+zeroed) — `0xD6CE` here — and the fields decode to the tool's defaults: All
+Cores Active, BIST No, flex ratio 0, boot at P1, compute/small cores all and
+2, IA/GT/SA VR addresses 0/1/2.
+
 ## Emitting the descriptor's strap layout
 
 The same executables carry the chipset's own layout of the descriptor's PCH

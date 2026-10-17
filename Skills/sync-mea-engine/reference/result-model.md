@@ -91,6 +91,13 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   the image's next boot; this answers for the machine it was taken from. Ours;
   the record is read by neither upstream nor the tools. It is nil where the
   volume's files carry no File IDs or the table that names them was not read.
+  Revision 51 adds `cpuStraps`: the CPU strap message a CSME 18 image keeps in
+  the FITC partition's MIP table (`smip` nvar) — the fields of the tool's
+  `CPU_smip` document (`CPUStrapMap`, emitted by `strap18_map.py`), plus the
+  message length and its CRC-16 (`CPUStrapReadings`). Ours; upstream reads no
+  strap. The older generations keep the message in the descriptor's MIP area,
+  which is not part of this model. The Full Info tree shows it under "CPU
+  straps", with the tool's words for the enumerated values.
   Revision 49 adds `uepSettings`: the FPF/UEP settings an image's `$UEP` area
   holds, each as the tool's identifier and the value of its bits
   (`UEPReading`). The map of places is the tool's own (`UEPMap`, emitted from
