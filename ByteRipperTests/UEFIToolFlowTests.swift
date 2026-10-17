@@ -1726,6 +1726,8 @@ final class UEFIToolFlowTests: XCTestCase {
 
         // The first column is held to what nine names in ten need; a longer
         // name wraps under itself, and is still one name to select and copy.
+        // The width is a constant chosen from the tables' names, so this also
+        // says it still fits them.
         let csme = try XCTUnwrap(table.rows.first { $0.disclosure != nil && $0.texts[1] == "CSME_CSE" })
         XCTAssertTrue(csme.accessibilityPerformPress())
         window?.layoutIfNeeded()
@@ -1736,7 +1738,7 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(wrapped.text(in: wrapped.startMark..<ToolTextMark(part: 0, index: long.utf16.count)), long,
                        "and copies as the name it is")
         let fields = table.rows.filter { $0.disclosure == nil && $0.texts.count == 4 && $0.texts[0] != "Field" }
-        let fitting = fields.filter { $0.naturalWidth(of: 0) <= DetailTableView.firstColumnLimit(fields.map { $0.naturalWidth(of: 0) }) }
+        let fitting = fields.filter { $0.naturalWidth(of: 0) <= DetailTableView.firstColumnLimit }
         XCTAssertGreaterThanOrEqual(Double(fitting.count) / Double(fields.count), 0.9)
 
         outline.selectRowIndexes(IndexSet(integer: row + 1), byExtendingSelection: false)

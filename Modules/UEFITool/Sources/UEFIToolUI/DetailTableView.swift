@@ -33,7 +33,7 @@ import UEFITool
 /// opening one never moves another. Such a table has no header line of its
 /// own: each open section carries the column names over its rows, where a
 /// reader who has scrolled seventy words down still sees them. Its first
-/// column is held to `firstColumnLimit(_:)`, and a name longer than that wraps
+/// column is held to `firstColumnLimit`, and a name longer than that wraps
 /// onto a further line: one long name in seventy words would otherwise push
 /// every value of the table to the right.
 @MainActor final class DetailTableView: ToolSelectableRows {
@@ -54,17 +54,14 @@ import UEFITool
     static let columnSpacing: CGFloat = 14
     static let rowSpacing: CGFloat = 2
 
-    /// The widest a sectioned table's first column grows: as wide as nine
-    /// of its names in ten, measured as they are drawn — so it follows the
-    /// zoom and the table's own names. In a strap table the tenth is the long
-    /// tail (`CSME_CSE_SSS_EMUL_HVM_OVR_SOC_DEV_REUSE_PROHIBITED`) that
-    /// would otherwise set the width of all seventy words.
-    static func firstColumnLimit(_ widths: [CGFloat]) -> CGFloat {
-        let sorted = widths.sorted()
-        guard !sorted.isEmpty else { return 0 }
-        let index = Int((Double(sorted.count) * 0.9).rounded(.up)) - 1
-        return sorted[min(max(0, index), sorted.count - 1)]
-    }
+    /// The widest a sectioned table's first column grows, following the
+    /// zoom with the type. Chosen once from the names it holds rather than
+    /// measured at every showing: in each of the strap tables at hand
+    /// (`DescriptorStrapMap.all`) nine names in ten are no wider than 261 to
+    /// 275 points at the default size, and the longest is 415 — the long
+    /// tail (`CSME_CSE_SSS_EMUL_HVM_OVR_SOC_DEV_REUSE_PROHIBITED`) that would
+    /// otherwise set the width of all seventy words.
+    static var firstColumnLimit: CGFloat { ToolPanelFont.scaled(234) }
 
     /// `openSections` are the sections drawn open; `onToggleSection` hears a
     /// section opened or folded, for the panel to keep it so.
@@ -113,7 +110,7 @@ import UEFITool
             rows.map { $0.naturalWidth(of: column) }.max() ?? 0
         }
         if !table.sections.isEmpty, !widths.isEmpty {
-            widths[0] = min(widths[0], Self.firstColumnLimit(fieldRows.map { $0.naturalWidth(of: 0) }))
+            widths[0] = min(widths[0], Self.firstColumnLimit)
             rows.forEach { $0.wrapFirstCell(at: widths[0]) }
         }
         // Under sections the columns start where a section's words do, past
@@ -299,18 +296,27 @@ import UEFITool
     private let onFollow: (UEFIDetailTable.Target) -> Void
     private var offsets: [CGFloat] = []
     private var widths: [CGFloat] = []
-    /// The first cell laid out over several lines, where it is wider than
-    /// its column (`wrapFirstCell`). Nil on a row whose first cell fits.
-    private var wrapped: WrappedCell?
+    /// The width the first cell wraps in, where it is wider than its
+    /// column (`wrapFirstCell`). Nil on a row whose first cell fits.
+    private var wrapWidth: CGFloat?
+    private var wrappedCache: WrappedCell?
+
+    /// The first cell laid out over several lines — built the first time the
+    /// row is laid out or drawn, so the rows of a folded section never pay
+    /// for it.
+    private var wrapped: WrappedCell? {
+        guard let wrapWidth else { return nil }
+        if let wrappedCache { return wrappedCache }
+        let cell = WrappedCell(strings[0], width: wrapWidth)
+        wrappedCache = cell
+        return cell
+    }
 
     /// Lays the first cell out in `width`, over as many lines as it needs,
     /// where it is wider than that; a cell that fits stays one line.
     func wrapFirstCell(at width: CGFloat) {
-        guard !cells.isEmpty, naturalWidth(of: 0) > width else {
-            wrapped = nil
-            return
-        }
-        wrapped = WrappedCell(strings[0], width: width)
+        wrappedCache = nil
+        wrapWidth = !cells.isEmpty && naturalWidth(of: 0) > width ? width : nil
         needsDisplay = true
     }
 
