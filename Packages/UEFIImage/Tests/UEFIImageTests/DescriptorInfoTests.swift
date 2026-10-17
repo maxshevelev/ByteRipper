@@ -98,6 +98,19 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertFalse(boot.isSet, "and no field of it is emphasised")
     }
 
+    /// From Meteor Lake the descriptor no longer carries the CPU straps: they
+    /// moved into the FITC partition's MIP table (what the ME analyzer reads),
+    /// and the map-word bits that name a Tiger Point message mean the SoC soft
+    /// straps there. The erased words the old reading would take for a section
+    /// are not one — the panel shows no CPU strap table for them.
+    func testAMeteorLakeDescriptorCarriesNoProcessorStraps() throws {
+        let read = try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], map2: 0x0003_01C0))
+        XCTAssertEqual(read.generation, .meteorLake)
+        XCTAssertTrue(read.isGenerationCertain)
+        XCTAssertNil(read.processorStraps)
+    }
+
     /// The OEM section is the fixed `0x100` bytes at `0xF00`, whatever a board
     /// wrote there — and all `0xFF` reads as an erased one, not as absent.
     func testTheOEMSectionIsTheFixedHundredBytes() throws {
