@@ -715,10 +715,18 @@ in the descriptor's MIP area:
   addresses 0/1/2. The analyzer reports the message as `cpuStraps` and the panel
   as the **CPU straps** group.
 
-The descriptor's own PCH strap tables (the classic and MIP sections the UEFI
-Structure panel names) are another document still: the layout's harness XML
-carries them in `DescriptorSoftStraps`/`PlatformSoftStraps` blocks with
-`block_type`s rather than field layouts.
+**The descriptor's strap section on Meteor Lake is the SoC block.** `FLMAP1`
+still places and counts it — 130 words at 0x100 on the HP dump — and the
+harness document's `SoC` block is its layout: `mfit_data id="SoC"`, 1185
+fields per document, **byte-addressed** (`offset` is a byte, bits count from
+its LSB). `pch18_map.py` emits the 1184 fields the three documents agree on as
+the 130-word table (`StrapMap+PCH18.swift`). The check is the dump itself: of
+the fields whose document states a constant value — no `$rvp` expression — all
+**250** read exactly that value in the image's section at 0x100. Thirteen
+fields cross a 32-bit word boundary (three 32-bit CSME SMT IDs, three 16-bit
+MPPHY pipe configs, four reserved spans) and cannot be a one-word field, so
+they are left out; the words 41, 46 and 51 they partly cover hold no field of
+their own.
 
 **The PCH fuses are not in a dump.** `pch_fuses.xml` names the seven fuses per
 platform and SKU — `CSME_FUSE_VALUE_BYTE_0…5` and

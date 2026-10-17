@@ -226,7 +226,7 @@ final class DescriptorInfoTests: XCTestCase {
     /// Which layouts the two fields are read on: the length of the section,
     /// which is what an image states about it. Tiger Point H's 101 words and
     /// Alder Point S's desktop 114 and 115 are layouts of their own.
-    func testTheStrapFieldsAreKeyedByTheSectionsLength() {
+    func testTheStrapFieldsAreKeyedByTheSectionsLength() throws {
         XCTAssertEqual(DescriptorStrapMap.forSection(words: 70)?.espiClockField?.word, 22)
         XCTAssertEqual(DescriptorStrapMap.forSection(words: 70)?.protectedRangeField?.word, 21)
         XCTAssertEqual(DescriptorStrapMap.forSection(words: 101)?.espiClockField?.word, 20)
@@ -236,6 +236,19 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertEqual(DescriptorStrapMap.forSection(words: 114)?.espiClockField?.word, 26)
         XCTAssertEqual(DescriptorStrapMap.forSection(words: 114)?.protectedRangeField?.word, 25)
         XCTAssertNil(DescriptorStrapMap.forSection(words: 6))
+        // Meteor Lake's 130-word section is the SoC soft-strap block, laid out
+        // by MFIT 18's `SoC` document — byte-addressed, so a field's place is
+        // the bit range `offset*8 + bit_low … + bit_high`.
+        let soc = try XCTUnwrap(DescriptorStrapMap.forSection(words: 130))
+        XCTAssertEqual(soc.fields.count, 1184)
+        let laneReverse = try XCTUnwrap(soc.fields.first { $0.name == "SoC_Strap_PCIE2_LNREV" })
+        XCTAssertEqual(laneReverse.word, 6)
+        XCTAssertEqual(laneReverse.bits, 0...0)
+        XCTAssertEqual(laneReverse.label, "PCIe Controller 3 (Port 9-12)")
+        XCTAssertEqual(laneReverse.options, [0: "1x4", 1: "1x4 Lane Reversed"])
+        XCTAssertNil(laneReverse.defaultValue, "the SoC values are per reference platform")
+        XCTAssertNotNil(soc.espiClockField)
+        XCTAssertNotNil(soc.protectedRangeField)
     }
 
     /// The section as its fields: every field of the layout, with what this
@@ -258,6 +271,23 @@ final class DescriptorInfoTests: XCTestCase {
                        "every field of the layout is read, not only the ones set")
         XCTAssertEqual(Set(fields.map(\.field.word)), Set(0..<70),
                        "every word of the section holds fields of the layout")
+    }
+
+    /// The 130-word SoC section reads through its layout: the field names are
+    /// the tool's, and the values are the image's own.
+    func testTheSoCStrapSectionIsReadThroughItsLayout() throws {
+        var words = [UInt32](repeating: 0, count: 130)
+        words[6] = 1                         // PCIe Controller 3, lanes reversed
+        words[65] = 3 << 3                   // eSPI / EC bus frequency, 50 MHz
+        let straps = try XCTUnwrap(info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], straps: words, strapCount: 130)).straps)
+        let fields = try XCTUnwrap(straps.fields)
+        let laneReverse = try XCTUnwrap(fields.first { $0.field.name == "SoC_Strap_PCIE2_LNREV" })
+        XCTAssertEqual(laneReverse.value, 1)
+        let clock = try XCTUnwrap(fields.first { $0.field.name == "SoC_Strap_SPI_ec_max_freq" })
+        XCTAssertEqual(clock.value, 3)
+        XCTAssertEqual(fields.count, DescriptorStrapMap.pch130.fields.count,
+                       "every field of the layout is read")
     }
 
     /// A section shorter than the table names the fields still inside it and
@@ -291,7 +321,11 @@ final class DescriptorInfoTests: XCTestCase {
                               "\(field.name) is in one table twice")
                 words.insert(field.word)
             }
-            XCTAssertEqual(words.count, map.words,
+            // The SoC block states three 32-bit CSME SMT IDs across a word
+            // boundary; a one-word field cannot hold those, so the three words
+            // they partly cover may hold no field of their own.
+            let crossing: Set<Int> = map.words == 130 ? [41, 46, 51] : []
+            XCTAssertEqual(Set(0..<map.words).subtracting(words), crossing,
                            "every word of the \(map.words)-word section holds fields")
         }
     }
