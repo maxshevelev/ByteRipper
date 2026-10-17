@@ -399,7 +399,24 @@ the setting, with its paragraphs as `&#13;&#10;` where FIT writes `&#60;br
 second behind the `?` beside a row, in the tool's English: it is the tool's
 documentation read where the row is. TGL LP gives **21 files and 60 settings**;
 two of the four TGL layouts (`tgp_lp_a1`, `tgp_lp_c0`) agree on every binding
-they share, and the H ones are another SKU's, so only the LP pair is read.
+they share, and the H ones are another SKU's, so the LP pair is read as one map.
+
+**Each generation has two maps, one for each half of it.** The mobile families
+(`_lp`, `_p`) and the desktop ones (`_h`, `_s`) layout a few settings
+differently — TGL LP against TGL H: 56 settings against 52, 50 shared, one of
+them moved (`SecureTouch` 8 → 18) and two the H half has alone — so the map
+followed is the board's own. **Which half a dump is, nothing in the ME region
+says**: the manifest's platform name is the same for both ("TGP" covers Tiger
+Lake LP and H), and MFIT's chipset init table names the chipset rather than the
+SKU. The descriptor does say: its PCH strap section is 69, 70 or 74 words on
+the mobile parts and 90, 101 or 115 on the desktop ones. So
+`FirmwareAnalysis.platformFamily` is read from that length
+(`MEPlatformFamily(strapWords:)`), and both the engine and the panel ask
+`MEConfigurationMap.forME(major:family:)` for the map — a dump with no
+descriptor (an extracted region) is read as the mobile half, which is what
+every map was before the choice existed. Measured on the dumps at hand:
+`CSME 14.bin` 69, `CSME 13.BIN` 74, `CSME 15.bin` 70, `1.bin` 101,
+`CSME 12.BIN` 90.
 
 Three things that came out of reading the two databases against each other:
 

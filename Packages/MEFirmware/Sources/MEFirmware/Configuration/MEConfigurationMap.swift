@@ -117,14 +117,58 @@ public struct MEConfigurationMap: Sendable, Equatable {
         }
     }
 
+    /// Which half of a chipset generation a board is: the mobile parts — the
+    /// tool's `_lp` and `_p` families — or the desktop ones, its `_h` and
+    /// `_s`. A few settings are laid out differently between the two, so the
+    /// map that reads them has to be the board's own.
+    ///
+    /// **The firmware does not say.** Both halves of a generation carry the
+    /// same platform name in their manifests ("TGP" is Tiger Lake LP and H
+    /// alike), and MFIT's chipset init table names the chipset rather than
+    /// the SKU. What does differ is the descriptor's PCH strap section, which
+    /// the two halves lay out over different lengths — `init(strapWords:)`.
+    /// Where no descriptor was read with the region nothing is claimed, and
+    /// the mobile map is used, which is what every map was before the choice
+    /// existed.
+    public enum MEPlatformFamily: String, Sendable, CaseIterable, Codable {
+        case mobile, desktop
+
+        /// The half a PCH strap section of `words` words belongs to, or nil
+        /// where the length is one neither half uses — a section from a
+        /// generation this does not know, or one erased past reading.
+        ///
+        /// 69, 70 and 74 are Cannon Point LP (a CSME 14 Comet Lake board), Tiger
+        /// Point LP (CSME 15) and Ice Point LP (CSME 13); 90, 101 and 115 are
+        /// Cannon Point H (CSME 12), Tiger Point H and Alder Point S. Measured
+        /// on the dumps at hand: `CSME 14.bin`, `CSME 15.bin`, `1.bin`,
+        /// `CSME 13.BIN`, `CSME 12.BIN` (`Design/UEFI/UEFI_IMAGE_FORMAT.md`
+        /// §2.6).
+        public init?(strapWords: Int) {
+            switch strapWords {
+            case 69, 70, 74: self = .mobile
+            case 90, 101, 115: self = .desktop
+            default: return nil
+            }
+        }
+    }
+
     /// The map for a ME generation's major number, or nil where none has been
     /// made for it yet. The number is the one the engine identifies the image
     /// by (`version.major`), which is what a map is verified against.
-    public static func forME(major: Int) -> MEConfigurationMap? {
+    ///
+    /// `family` names the half of the generation the board is, where the dump
+    /// says: CSME 13, 14 and 15 have a map for each, and CSME 16 has one for
+    /// both — MFIT's database merges the platform lists it builds from. nil is
+    /// a dump that did not say (no descriptor, or a section length neither
+    /// half uses), and is read as the mobile one: the engine and the panel
+    /// both ask through here, so the values they show cannot come from two
+    /// layouts.
+    public static func forME(major: Int, family: MEPlatformFamily? = nil) -> MEConfigurationMap? {
+        let desktop = family == .desktop
         switch major {
-        case 13: return .csme13
-        case 14: return .csme14
-        case 15: return .csme15
+        case 13: return desktop ? .csme13Desktop : .csme13
+        case 14: return desktop ? .csme14Desktop : .csme14
+        case 15: return desktop ? .csme15Desktop : .csme15
         case 16: return .csme16
         default: return nil
         }

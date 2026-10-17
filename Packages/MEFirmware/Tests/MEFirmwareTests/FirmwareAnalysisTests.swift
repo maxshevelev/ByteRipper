@@ -110,7 +110,7 @@ final class FirmwareAnalysisModelTests: XCTestCase {
     }
 
     func testEngineModelRevisionBumpsWithAdditiveChanges() {
-        XCTAssertEqual(EngineModelRevision.current, 45)
+        XCTAssertEqual(EngineModelRevision.current, 46)
     }
 
     /// The additive contract reaches *inside* the model too, and a Swift
@@ -577,5 +577,34 @@ final class RegionChecksumsTests: XCTestCase {
     func testAnEmptyRegionHasNothingToMeasure() async {
         let checks = await MEFirmwareAnalyzer.checksums(of: Data())
         XCTAssertEqual(checks, Checksums())
+    }
+
+    /// Which half of its chipset generation the board is comes from the
+    /// descriptor alone: the two halves lay the PCH strap section out over
+    /// different lengths, and nothing in the ME region says which it is. A
+    /// length neither half uses, and no descriptor at all, leave the question
+    /// open — an extracted region carries no descriptor.
+    func testThePlatformFamilyIsReadFromTheDescriptorsStrapSection() async throws {
+        func descriptor(strapWords: Int) -> Data {
+            var page = Data(repeating: 0, count: 0x1000)
+            page.replaceSubrange(0x10..<0x14, with: [0x5A, 0xA5, 0xF0, 0x0F])
+            page[0x1B] = UInt8(truncatingIfNeeded: strapWords)
+            return page
+        }
+        let analyzer = MEFirmwareAnalyzer(data: StubSource())
+        let region = Data(repeating: 0xFF, count: 64)
+        XCTAssertEqual(FlashDescriptor.pchStrapWords(in: descriptor(strapWords: 70)), 70)
+
+        let mobile = try await analyzer.analyze(region: region,
+                                                descriptorBytes: descriptor(strapWords: 70))
+        XCTAssertEqual(mobile.platformFamily, .mobile)
+        let desktop = try await analyzer.analyze(region: region,
+                                                 descriptorBytes: descriptor(strapWords: 101))
+        XCTAssertEqual(desktop.platformFamily, .desktop)
+        let unknown = try await analyzer.analyze(region: region,
+                                                 descriptorBytes: descriptor(strapWords: 64))
+        XCTAssertNil(unknown.platformFamily)
+        let none = try await analyzer.analyze(region: region)
+        XCTAssertNil(none.platformFamily)
     }
 }

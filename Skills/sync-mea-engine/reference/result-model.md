@@ -60,6 +60,16 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   JSON, which MFIT-built images carry, and the UEP area's Boot Guard bits, which
   every CSME 15 image carries instead — so images that used to answer "no
   profile record" now answer a profile. Upstream has no such row either way.
+  Revision 45 changes one more answer the same way: `oemPublicKeyHash` is read
+  from the record the image's **generation** keeps — the 32-byte SHA-256 of
+  CSME 12 to 14 and the 48-byte SHA-384 of 15 and later. Revision 46 adds
+  `platformFamily`: which half of its chipset generation the board is — the
+  mobile parts or the desktop ones — told from the length of the descriptor's
+  PCH strap section, the one thing a dump states about it; and the
+  configuration is now read through the map of that half, because CSME 13, 14
+  and 15 lay a few settings out differently between the two. A dump with no
+  descriptor keeps the mobile map, which is what every map was before. Ours,
+  like the rest of these.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct
