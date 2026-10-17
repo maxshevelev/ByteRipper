@@ -324,7 +324,13 @@ EC=0x20`.
   The base is again bits `[11:4]`; the size is in `UINT32`s.
 - The VSCC table: an array of `{UINT8 VendorId; UINT8 DeviceId0;
   UINT8 DeviceId1; UINT8 ReservedZero; UINT32 VsccRegisterValue;}`.
-- The OEM section: fixed at `0x0F00`, size `0x100`.
+- The OEM section: fixed at `0x0F00`, size `0x100`. Intel lays nothing out in
+  it; the board's maker fills it with what it likes, and the dumps at hand use
+  it for a serial and a BIOS version (`CSME 11.bin`: `N1CRM37W`, `11.0.16.1000`,
+  `16MB`, a signature) or leave it erased. Flash Image Tool names it in
+  `DescConfFields.xml` as the OEM binary it merges there. The panel shows the
+  section as sixteen-byte rows, with the address that outlines each, only when
+  something other than `0xFF` is written; an erased one is not shown.
 - The component section, at `ComponentBase << 4`:
   `{UINT32 FLCOMP; UINT32 FLILL; UINT32 FLPB;}`. `FLCOMP` holds each chip's
   density — three bits a chip up to Cougar Point, four from Lynx Point on;
@@ -467,9 +473,13 @@ one's offsets, which is why a Tiger Point H dump (`1.bin`, 101 words) used to
 give an eSPI clock code nobody defines from word 22 and an Alder Point S one
 (`SPI_EF4019`, 115 words) a "GPR0" of `0x22222222` from word 21. The 101-word
 section now has a table of its own: the clock is word 20 there — code 2 on
-`1.bin`, 25 MHz — and GPR0 word 19, off. Alder Point S's 115 words are a length
-no tool carries a document for, so on such a dump neither field is read, and
-that is the state of every length but the five.
+`1.bin`, 25 MHz — and GPR0 word 19, off. Alder Point S's desktop sections,
+114 and 115 words, have tables of their own too: the clock is word 26 and 29
+and GPR0 word 25 and 28. On the 115-word dump at hand (`LENV_CSME 16.bin`,
+Consumer H) 1084 of the table's 1201 fields read the tool's default, which is
+what says the document is that section's, and its clock code is 4 — 60 MHz.
+Seven lengths are covered; a section of any other length is words and nothing
+more.
 
 On the seven mobile dumps the clock and GPR0 (off on all of them) agree with
 ifdtool, and so do the two copies `ifdtool --gpr0-enable` was run on

@@ -164,6 +164,12 @@ public struct DescriptorInfo: Equatable, Sendable {
 
     public var processorStraps: ProcessorStraps?
 
+    /// The OEM section of §2.4: `0x100` bytes at `0xF00` in the descriptor,
+    /// where a board's maker keeps what it likes — a serial, a BIOS version, a
+    /// signature — and which is erased on many boards. Empty when the reader
+    /// does not reach it.
+    public var oemSection: [UInt8]
+
     /// The eSPI clock: bits 3–5 of its word.
     public struct ESPIClock: Equatable, Sendable {
         public var word: Int
@@ -248,7 +254,9 @@ public extension DescriptorInfo {
             chips: chips(at: base, reader: reader),
             straps: straps(at: base, map1: map1, generation: generation, reader: reader),
             processorStraps: generation.hasProcessorStrapSection
-                ? processorStraps(at: base, reader: reader) : nil
+                ? processorStraps(at: base, reader: reader) : nil,
+            oemSection: reader.bytes(at: base + Descriptor.oemSectionOffset,
+                                     count: Descriptor.oemSectionSize) ?? []
         )
     }
 

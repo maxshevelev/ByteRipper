@@ -1555,7 +1555,37 @@ public enum UEFIDetail {
         if let straps = descriptor.processorStraps {
             tables.append(processorStrapTable(straps, in: language))
         }
+        if descriptor.oemSection.contains(where: { $0 != 0xFF }) {
+            tables.append(oemSectionTable(descriptor, in: language))
+        }
         return tables
+    }
+
+    /// The OEM section — `0x100` bytes at `0xF00` — in rows of sixteen, where
+    /// the board's maker keeps a serial, a version string or a signature. It
+    /// is the one part of the descriptor Intel lays nothing out in, and erased
+    /// on most boards; the table is shown only where something is written.
+    private static func oemSectionTable(
+        _ descriptor: DescriptorInfo, in language: AppLanguage
+    ) -> UEFIDetailTable {
+        let base = (descriptor.regions.first { $0.type == .descriptor }?.base ?? 0) + 0x0F00
+        var rows: [(cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target)] = []
+        for start in stride(from: 0, to: descriptor.oemSection.count, by: 16) {
+            let end = min(start + 16, descriptor.oemSection.count)
+            let address = base + UInt64(start)
+            let bytes = Array(descriptor.oemSection[start..<end])
+            rows.append(([.init(hex(address)), .init(hexBytes(bytes))],
+                         .range(address..<address + UInt64(bytes.count),
+                                name: hex(address))))
+        }
+        return UEFIDetailTable(
+            title: L("OEM section", in: language),
+            symbol: "square.grid.4x3.fill",
+            columns: [L("Offset", in: language), L("Bytes", in: language)],
+            rows: rows.map(\.cells),
+            rowTargets: rows.map(\.target),
+            linkColumn: 0
+        )
     }
 
     /// The strap section, one row per field where the chipset's layout of the
