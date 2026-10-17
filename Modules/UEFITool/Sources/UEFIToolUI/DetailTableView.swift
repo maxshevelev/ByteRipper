@@ -30,7 +30,9 @@ import UEFITool
 /// A table with sections (`UEFIDetailTable.Section`) draws each under a line
 /// of its own with a disclosure triangle, folded until the reader opens it;
 /// the rows of every section line up in the same columns, open or folded, so
-/// opening one never moves another.
+/// opening one never moves another. Such a table has no header line of its
+/// own: each open section carries the column names over its rows, where a
+/// reader who has scrolled seventy words down still sees them.
 @MainActor final class DetailTableView: ToolSelectableRows {
     let table: UEFIDetailTable
     /// The header line, then the table's rows — under a section's line each,
@@ -109,7 +111,8 @@ import UEFITool
         }
 
         if !table.sections.isEmpty {
-            buildSections(fieldRows: fieldRows, indent: indent, body: body, bold: bold, onFollow: onFollow)
+            buildSections(fieldRows: fieldRows, indent: indent, body: body, bold: bold,
+                          offsets: offsets, onFollow: onFollow)
         }
         rows.forEach(addSubview)
         applyOpenSections()
@@ -129,10 +132,11 @@ import UEFITool
     /// section lines' own columns: the title, what the rows share, and the
     /// address, each as wide as its widest so the addresses line up.
     private func buildSections(fieldRows: [DetailTableRow], indent: CGFloat,
-                               body: NSFont, bold: NSFont,
+                               body: NSFont, bold: NSFont, offsets: [CGFloat],
                                onFollow: @escaping (UEFIDetailTable.Target) -> Void) {
-        var ordered: [DetailTableRow] = [rows[0]]
-        var owners: [Int?] = [nil]
+        let header = rows[0]
+        var ordered: [DetailTableRow] = []
+        var owners: [Int?] = []
         for (index, section) in table.sections.enumerated() {
             let line = DetailTableRow(
                 cells: [.init(text: section.title, font: bold, color: .labelColor),
@@ -147,6 +151,12 @@ import UEFITool
             line.onToggle = { [weak self] in self?.toggle(section: index) }
             sectionRows.append(line)
             ordered.append(line)
+            owners.append(index)
+            // The column names, over this section's rows.
+            let names = DetailTableRow(cells: header.cells, target: nil, linkColumn: nil,
+                                       onFollow: onFollow)
+            names.setColumns(offsets: offsets, widths: widths)
+            ordered.append(names)
             owners.append(index)
             for row in section.rows where row < fieldRows.count {
                 ordered.append(fieldRows[row])
