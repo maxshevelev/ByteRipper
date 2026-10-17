@@ -235,8 +235,22 @@ import UEFITool
         let width = widths.reduce(0, +) + Self.columnSpacing * CGFloat(max(0, widths.count - 1))
         let shown = visibleRows
         let height = shown.map { $0.height(atLeast: rowHeight) }.reduce(0, +)
-            + CGFloat(max(0, shown.count - 1)) * Self.rowSpacing
+            + shown.indices.map { spacing(after: $0, in: shown) }.reduce(0, +)
         return NSSize(width: ceil(width), height: height)
+    }
+
+    /// The gap that closes an open section, before the next section's line:
+    /// the rows a reader opened end, and the next word begins apart from
+    /// them. Follows the zoom with the type.
+    static var sectionGap: CGFloat { ToolPanelFont.scaled(5) }
+
+    /// The spacing under the row at `index` of `shown`: none under the last,
+    /// the section gap under the last row of an open section, the row
+    /// spacing under any other.
+    private func spacing(after index: Int, in shown: [DetailTableRow]) -> CGFloat {
+        guard index < shown.count - 1 else { return 0 }
+        let closesSection = shown[index].disclosure == nil && shown[index + 1].disclosure != nil
+        return Self.rowSpacing + (closesSection ? Self.sectionGap : 0)
     }
 
     override func layout() {
@@ -246,7 +260,7 @@ import UEFITool
         let shown = visibleRows
         var y: CGFloat = 0
         for (index, row) in shown.enumerated() {
-            let spacing = index == shown.count - 1 ? 0 : Self.rowSpacing
+            let spacing = spacing(after: index, in: shown)
             let height = row.height(atLeast: rowHeight)
             row.frame = NSRect(x: 0, y: y, width: bounds.width, height: height + spacing)
             y += height + spacing
