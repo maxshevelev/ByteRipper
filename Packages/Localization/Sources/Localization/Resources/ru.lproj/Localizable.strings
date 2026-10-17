@@ -1676,5 +1676,6 @@
 "Manufacturing Lock" = "Manufacturing Lock";
 "CPU straps" = "Страпы CPU";
 "CSME straps" = "Страпы CSME";
+"PMC SoC straps" = "Страпы PMC SoC";
 "IOE straps" = "Страпы IOE";
 "PMC IOE straps" = "Страпы PMC IOE";

@@ -8,16 +8,22 @@ final class MIPStrapMapTests: XCTestCase {
     /// 2, IOE at 4 — and both IOE layouts, chosen by the block's length.
     func testTheMapIsTheToolsContainers() throws {
         let map = try XCTUnwrap(MIPStrapMap.forME(major: 18))
-        XCTAssertEqual(map.containers.map(\.name), ["CSME", "PMC IOE", "IOE", "IOE"])
-        XCTAssertEqual(map.containers.map(\.blockType), [0, 2, 4, 4])
-        XCTAssertEqual(map.containers.map(\.length), [0x8, 0x40, 0x3C, 0xD0])
-        XCTAssertEqual(map.containers.map { $0.fields.count }, [5, 249, 133, 515])
-        let ioEP = try XCTUnwrap(map.containers[3].fields.first {
+        XCTAssertEqual(map.containers.map(\.name),
+                       ["PMC SoC", "CSME", "PMC IOE", "IOE", "IOE"])
+        XCTAssertEqual(map.containers.map(\.blockType), [1, 0, 2, 4, 4])
+        XCTAssertEqual(map.containers.map(\.length), [0x58, 0x8, 0x40, 0x3C, 0xD0])
+        XCTAssertEqual(map.containers.map { $0.fields.count }, [253, 5, 249, 133, 515])
+        // The PMC SoC block also carries the CPU message header and message,
+        // whose fields are the CPU map's, not this one's.
+        XCTAssertFalse(map.containers[0].fields.contains {
+            $0.name.hasPrefix("CPU_smip_")
+        })
+        let ioEP = try XCTUnwrap(map.containers[4].fields.first {
             $0.name == "IOE_smip_Strap_IOEP_PCIED_RPCFG"
         })
         XCTAssertEqual(ioEP.bitOffset, 1, "a field may start at any bit of the block")
         XCTAssertEqual(ioEP.count, 3)
-        let csme = try XCTUnwrap(map.containers[0].fields.first {
+        let csme = try XCTUnwrap(map.containers[1].fields.first {
             $0.name == "CSME_smip_Strap_CSME_Early_USB_DbC_ME_Boot_Stall_Enable"
         })
         XCTAssertEqual(csme.bitOffset, 48)
@@ -35,26 +41,31 @@ final class MIPStrapMapTests: XCTestCase {
             (type: 4, data: Data(repeating: 0, count: 0xD0)),
             (type: 0, data: Data(repeating: 0, count: 0x8)),
         ]
+        blocks[0].data[0] = 0x01                     // PMC SoC: CPWRG_STCH_WTDIS
         blocks[1].data[0] = 0x01                     // PMC IOE: CPWRG_STCH_WTDIS
         blocks[2].data[0] = 0x02                     // IOE: RPCFG = 1 (bits 1–3)
         blocks[3].data[6] = 0x01                     // CSME: Early USB DbC at bit 48
         let payload = Self.fitcPayload(blocks: blocks)
         let map = try XCTUnwrap(MIPStrapMap.forME(major: 18))
         let containers = try XCTUnwrap(MIPTableReader.containers(in: payload, map: map))
-        XCTAssertEqual(containers.map(\.name), ["CSME", "PMC IOE", "IOE"])
+        XCTAssertEqual(containers.map(\.name), ["PMC SoC", "CSME", "PMC IOE", "IOE"])
 
-        let csme = Dictionary(uniqueKeysWithValues: containers[0].readings.map { ($0.name, $0.value) })
+        let soc = Dictionary(uniqueKeysWithValues: containers[0].readings.map { ($0.name, $0.value) })
+        XCTAssertEqual(soc["PMC_SoC_smip_Strap_CPWRG_STCH_WTDIS"], 1)
+        XCTAssertEqual(containers[0].length, 0x58)
+
+        let csme = Dictionary(uniqueKeysWithValues: containers[1].readings.map { ($0.name, $0.value) })
         XCTAssertEqual(csme["CSME_smip_Strap_CSME_Early_USB_DbC_ME_Boot_Stall_Enable"], 1)
         XCTAssertEqual(csme["CSME_smip_Strap_CSME_DAM_EN"], 0)
 
-        let pmc = Dictionary(uniqueKeysWithValues: containers[1].readings.map { ($0.name, $0.value) })
+        let pmc = Dictionary(uniqueKeysWithValues: containers[2].readings.map { ($0.name, $0.value) })
         XCTAssertEqual(pmc["PMC_IOE_smip_Strap_pmc_ioem_smip_CPWRG_STCH_WTDIS"], 1)
-        XCTAssertEqual(containers[1].length, 0x40)
+        XCTAssertEqual(containers[2].length, 0x40)
 
-        let ioe = Dictionary(uniqueKeysWithValues: containers[2].readings.map { ($0.name, $0.value) })
+        let ioe = Dictionary(uniqueKeysWithValues: containers[3].readings.map { ($0.name, $0.value) })
         XCTAssertEqual(ioe["IOE_smip_Strap_IOEP_PCIED_RPCFG"], 1)
         XCTAssertEqual(ioe["IOE_smip_Strap_IOEP_PCIED_LNREV"], 0)
-        XCTAssertEqual(containers[2].length, 0xD0)
+        XCTAssertEqual(containers[3].length, 0xD0)
     }
 
     /// A 0x3C IOE block is MTL-M's layout, not the 0xD0 one: the block's
