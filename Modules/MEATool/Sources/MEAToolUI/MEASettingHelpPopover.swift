@@ -39,14 +39,31 @@ import ToolModuleKit
     }
 
     override func loadView() {
+        view = makeView()
+        // The zoom moving while the popover is open re-sets its words at the
+        // new size, as it does the rows beside it.
+        zoomObserver = HelpPopoverLayout.observeTextSize { [weak self] in
+            guard let self else { return }
+            self.view = self.makeView()
+            self.popover.contentSize = self.view.fittingSize
+        }
+    }
+
+    private var zoomObserver: NSObjectProtocol?
+
+    deinit {
+        if let zoomObserver { NotificationCenter.default.removeObserver(zoomObserver) }
+    }
+
+    private func makeView() -> NSView {
         // The tool's words with its own line breaks kept: they are where the
         // tool put its paragraphs.
         let body = HelpBodyView()
         body.show(HelpPopoverLayout.prose(help.text))
         let built = HelpPopoverLayout.build(title: HelpPopoverLayout.title(help.identifier),
                                             body: body)
-        view = built.view
         bodyHeight = built.bodyHeight
+        return built.view
     }
 
     /// The height the words were given, for the tests.
