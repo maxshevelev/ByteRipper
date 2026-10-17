@@ -11,7 +11,10 @@ import HelpBook
     /// A link in the text was clicked.
     public var onFollow: ((HelpLink) -> Void)?
 
-    private let text = HelpTextView()
+    /// TextKit 1, chosen rather than taken by default: TextKit 2 lays out
+    /// lazily, and a view sized to its text (`contentHeight`) drew its last
+    /// lines clipped at the height it had before it was sized.
+    private let text = HelpTextView(usingTextLayoutManager: false)
 
     public init() {
         super.init(frame: .zero)
