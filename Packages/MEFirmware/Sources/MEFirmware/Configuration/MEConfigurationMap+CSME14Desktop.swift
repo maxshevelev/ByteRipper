@@ -43,6 +43,15 @@ extension MEConfigurationMap {
             Setting(name: "DbgOverridePreProdSi", offset: 12, length: 4, label: "Debug Override Pre-Production Silicon", help: "Allows the OEM to control FW features to assist with pre-production platform debugging.  This control has no effect if used on production silicon.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", hex: true),
             Setting(name: "DbgOverrideProdSi", offset: 16, length: 4, label: "Debug Override Production Silicon", help: "Allows the OEM to control FW features to assist with production platform debugging.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", hex: true),
         ]),
+        File(path: "/home/bup/bup_sku/hw_binding", alias: "HwBinding", settings: [
+            Setting(name: "FpfHwBindingEn", offset: 0, length: 1, label: "FPF Hardware Binding Enabled", help: "This setting configures the FPF Hardware binding behavior for the platform image.  \n\n                                                                                                                                                     If this setting is enabled FPF Hardware binding will occur when platform close manufacturing flow is executed with Intel® FPT. \n\n                                                                                                                                                     If this setting is disabled FPF Hardware binding will not take place when close manufacturing flow is executed. \n\n                                                                                                                                                     Note: For Revenue parts this setting will be ignored and FPF Hardware binding will take place when close manufacturing flow is executed.", options: [0: "Disabled", 1: "Enabled"]),
+        ]),
+        File(path: "/home/icc/intlrec", alias: "IntelRecordTable", settings: [
+            Setting(name: "IntlRcrdBinary", offset: 0, length: 1, options: [0: "Enabled", 1: "Disabled"]),
+        ]),
+        File(path: "/home/pavp/lspcon_port", alias: "PavpLspcon", settings: [
+            Setting(name: "Lspcon4kdisp", offset: 0, length: 1, label: "LSPCON Internal Display Port 1 - LSPCON / 4K", help: "This setting determines which port for LSPCON will be connected to the HDCP 2.2 bridge adapter Display 1.", options: [0: "None", 2: "PortB", 4: "PortC", 8: "PortD"]),
+        ]),
         File(path: "/home/mctp/smt3_devices", alias: "Smt3Devices", settings: [
             Setting(name: "MctpEcAddress", offset: 0, length: 2, label: "MCTP EC Address", help: "Defines the 8-bits MCTP address and 7-bits SMBus address of the EC on SMLink1 bus. This value is needed if EC is using the MCTP protocol. The SMBus (LS byte) must be from 0x01 to 0x7f (and should not overlap with any SMBus address in PCH Strap 11).  The EID (MS byte) must be outside 0x01 through 0x07.", hex: true),
         ]),

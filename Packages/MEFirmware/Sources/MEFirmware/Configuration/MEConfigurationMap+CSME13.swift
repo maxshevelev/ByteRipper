@@ -51,6 +51,12 @@ extension MEConfigurationMap {
             Setting(name: "PttSupported", offset: 344, length: 4, label: "Intel(R) PTT Supported", help: "This setting permanently disables Intel(R) PTT in the firmware image.", bits: 29...29, options: [0: "No", 1: "Yes"]),
             Setting(name: "TouchEnabled", offset: 344, length: 1, label: "Intel(R) Precise Touch and Stylus Enabled", help: "This setting enables Intel(R) Precise Touch and Stylus on the platform,", bits: 4...4, options: [0: "No", 1: "Yes"]),
         ]),
+        File(path: "/home/amt/rtfd/amt.wol", alias: "amt.wol", settings: [
+            Setting(name: "AmtIdleTimeout", offset: 0, length: 2, label: "Intel(R) AMT Idle Timeout", help: "This setting configures the idle timeout value before Intel(R) AMT enters into an off state.", hex: true),
+        ]),
+        File(path: "/home/amt/rtfd/WDResetState", alias: "AmtWdTimer", settings: [
+            Setting(name: "AmtWdAutoReset", offset: 0, length: 1, label: "Intel(R) AMT Watchdog Automatic Reset Enabled", help: "This setting allows customers to enable the Intel (R) ME firmware to trigger an automatic platform reset if either the MEI or Agent Presence are in a hung state.  Note: This feature only allows one reset at a time when the watchdog expires.  After this feature has triggered a reset it must be re-armed for re-use via management console.", options: [0: "No", 1: "Yes"]),
+        ]),
         File(path: "/home/bup/si_features", alias: "KernFixedData", settings: [
             Setting(name: "DbgOverridePreProdSi", offset: 12, length: 4, label: "Debug Override Pre-Production Silicon", help: "Allows the OEM to control FW features to assist with pre-production platform debugging.  This control has no effect if used on production silicon.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", hex: true),
             Setting(name: "DbgOverrideProdSi", offset: 16, length: 4, label: "Debug Override Production Silicon", help: "Allows the OEM to control FW features to assist with production platform debugging.  Note: Certain options will do not work when the descriptor is locked (See FW Bring-up Guide for setting details).", hex: true),
@@ -58,6 +64,9 @@ extension MEConfigurationMap {
         File(path: "/home/iunit/sec_ctl", alias: "IUnitSecCtl", settings: [
             Setting(name: "FWSecureMode", offset: 1, length: 1, label: "FW Secure Mode", help: "If enabled, access blockers in IS and PS are enabled, and FW is read from IMR. Must be enabled for FW authentication flow and execution of authenticated FW.", options: [0: "Disabled", 1: "Enabled"]),
             Setting(name: "RomTraceEnable", offset: 0, length: 1, label: "IPU Debugging Enabled", help: "If enabled, IPU Debugging is enabled, otherwise internal setup is checked to see if the IPU Debugging feature should be enabled or not.", options: [0: "Disabled", 1: "Enabled"]),
+        ]),
+        File(path: "/home/bup/bup_sku/hw_binding", alias: "HwBinding", settings: [
+            Setting(name: "HwBindingEn", offset: 0, length: 1, label: "Hardware Binding Enabled", help: "This setting configures the FPF Hardware and RPMC / RPMB binding behavior for the platform image.   \n\n                                                                                                                                             If this setting is enabled FPF Hardware and RPMC / RPMB binding behavior will occur when platform close manufacturing flow is executed with Intel® FPT. \n\n                                                                                                                                             If this setting is disabled FPF Hardware and RPMC / RPMB binding behavior will not take place when close manufacturing flow is executed.\n\n                                                                                                                                             Note: For Revenue parts this setting will be ignored and FPF Hardware and RPMC / RPMB binding behavior will take place when close manufacturing flow is executed.", options: [0: "Disabled", 1: "Enabled"]),
         ]),
         File(path: "/home/loadmgr/arben", alias: "BootGuardArb", settings: [
             Setting(name: "IomArbEnable", offset: 0, length: 1, label: "IO Manageability Engine Manifest Anti-Rollback Enabled", help: "This setting enables Anti-Roll back for the Type-C Subsystem IO Manageability Engine binary.", bits: 6...6, options: [0: "No", 1: "Yes"]),
@@ -77,6 +86,12 @@ extension MEConfigurationMap {
         ]),
         File(path: "/home/iunit/camera_mask", alias: "IUnitCameraMask", settings: [
             Setting(name: "SecureTouchCameraMask", offset: 0, length: 1, label: "Secure Touch and Camera Mask", help: "Camera mask bits per CSI port. When SECURE_TOUCH is set each set bit masks a CSI port for secure touch. When SECURE_TOUCH is cleared this register has no impact on the CSI ports.", hex: true),
+        ]),
+        File(path: "/home/tcss/tcss_ctrl", alias: "TcssControl", settings: [
+            Setting(name: "TcssAuthenticateEn", offset: 0, length: 1, options: [0: "Yes", 1: "No"]),
+        ]),
+        File(path: "/home/fwupdate/fwutcss", alias: "TCSS_PartialUpdate", settings: [
+            Setting(name: "TcssPartialUpdateEn", offset: 0, length: 1, label: "Tcss - Partial Update Enabled", help: "This setting enables partial update for TCSS partitions", options: [0: "Disabled", 1: "Enabled"]),
         ]),
         ])
 }
