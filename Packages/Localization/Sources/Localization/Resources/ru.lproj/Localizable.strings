@@ -1075,9 +1075,6 @@
 "Setting help" = "Справка о настройке";
 "%1$@ = %2$@" = "%1$@ = %2$@";
 "disabled by %1$@" = "не действует при %1$@";
-"RPMC" = "RPMC";
-"Hardware binding: %1$@" = "Аппаратная привязка: %1$@";
-"Hardware binding: unexpected value %1$@" = "Аппаратная привязка: неожиданное значение %1$@";
 "Not recorded in this image" = "В образе не записана";
 "Show what Flash Image Tool says about this setting" = "Показать, что Flash Image Tool говорит об этой настройке";
 "Default" = "По умолчанию";
@@ -1567,3 +1564,5 @@
 "Other" = "Прочее";
 "Processor straps" = "Страпы процессора";
 "OEM section" = "OEM-секция";
+"RPMC Hardware Binding" = "RPMC Hardware Binding";
+"Unexpected value %1$@" = "Неожиданное значение %1$@";

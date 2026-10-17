@@ -444,7 +444,7 @@ CSME 16 alike — so nothing is claimed from them; the same conclusion the UEP
 section above reaches from the other side. Measured on the dumps at hand:
 `CSME 15.bin` Disabled, `1.bin` Enabled, `CSME 13.BIN` Enabled, `CSME 14.bin`
 Disabled, both CSME 16 dumps Enabled, and `CSME 12.BIN` has no such file at all
-— the setting is CSME 13's and later. The Summary's **RPMC** row reports that
+— the setting is CSME 13's and later. The Summary's **RPMC Hardware Binding** row reports that
 byte, the file system's copy first and the OEM Configuration partition's record
 of it as the fallback.
 
