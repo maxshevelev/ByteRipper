@@ -497,8 +497,9 @@ final class UEFIToolFlowTests: XCTestCase {
         pane.handleClickWhileShown(mouse(.leftMouseDown, at: filterPoint, window: window))
         XCTAssertTrue(pane.isQuickLookShown, "a click on the filter button")
 
-        // Beside the panel and the card, in the dump, it still closes.
-        let outside = NSPoint(x: panelFrame.maxX + 2, y: panelFrame.midY)
+        // Beside the panel and the card, in the gap between them — past the
+        // divider's grab, whose press moves it — it still closes.
+        let outside = NSPoint(x: panelFrame.maxX + 9, y: panelFrame.midY)
         pane.handleClickWhileShown(mouse(.leftMouseDown, at: outside, window: window))
         XCTAssertFalse(pane.isQuickLookShown, "a click beside both closes it")
         pane.finishTransitionForTesting()
@@ -587,7 +588,7 @@ final class UEFIToolFlowTests: XCTestCase {
             XCTAssertTrue(pane.isQuickLookShown, "the window's own buttons act on the window")
         }
 
-        let outside = NSPoint(x: panel.convert(panel.bounds, to: nil).maxX + 2, y: top / 2)
+        let outside = NSPoint(x: panel.convert(panel.bounds, to: nil).maxX + 9, y: top / 2)
         pane.handleClickWhileShown(mouse(.leftMouseDown, at: outside, window: window))
         XCTAssertFalse(pane.isQuickLookShown, "a click in the dump still folds it")
         pane.finishTransitionForTesting()
