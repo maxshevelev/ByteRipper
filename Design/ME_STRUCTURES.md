@@ -311,7 +311,8 @@ auto NVARs to CSC fitc partition"*, and whose settings are referred to as
 `CsePlugin:AutoNvars:<File>#<Setting>` rather than as a file. So `Auto` is not
 "the platform writes it after boot" — it is "**the tool works it out and writes
 it, not the builder**", and 67 of the 137 settings have no place in a file at
-all (`length="0"`): they are computed, not stored.
+all (`length="0"`): they are computed, not stored — except where the file holds
+nothing but that one setting, which the map reads (below).
 
 The 16.0.15 build's database holds **74 files and 137 settings** across its
 eight platform lists (four ADL-S of 63–72 files, three MTL, one ELG); of those,
@@ -349,6 +350,24 @@ it cannot merge**: `/home/mca/icps`'s `icpsSwSkuing` is 8 bytes in one list and
 32 in another, so the script drops it and says so rather than read one platform's
 length on another's board. A new generation is a rerun against its own
 `mfit.exe`.
+
+**A file that is one setting is read; a file the tool places itself is not.**
+Most `length="0"` settings are computed and are left alone. But where the tool
+gives a file exactly one logical setting, of a numeric kind, and no place in
+it, the file *is* the setting: the value is its first bytes, and the width is
+the kind's — `bup_sku/hw_binding`'s `HwBindingEn` (the RPMC / RPMB binding, one
+byte), `policy/hmrfpo_state`'s `HmrfpoEnable`, `amt/rtfd/amt.wol`'s two-byte
+`AmtIdleTimeout`, and seven more. A file with several such settings —
+certificates, the ICC profiles, `pavp/hdcp_ports`' second port — is left to
+MFIT's plugin: a guess would put one setting's byte under another's name. The
+16.0.15 map holds **77 settings in 36 files** with both rules (it had 63 in 26
+before them).
+
+**Two lists that word a setting differently are not a conflict.** Offset,
+width, bits and options make the setting; the label and the help text are the
+tool's prose and the lists truncate them differently (`IshPowerUpState`'s label,
+`MctpEcAddress`'s help). The generator keeps the fuller wording and drops a
+setting only where the *place* differs.
 
 **A setting has two names and the map carries both.** The identifier is what the
 tools' own layouts, reports and Intel's documents spell (`MELanPowerWell`); the

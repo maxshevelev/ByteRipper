@@ -61,8 +61,21 @@ behind the `?` beside a row) and
 its `Auto`/`Generic` marks, and the tool's own name for a setting where its panel
 shows something other than the identifier (`label` — "LAN Power Well" for
 `MELanPowerWell`). It merges the platform lists and reports what
-it could not merge rather than guessing — a setting two lists lay out differently is
-dropped and named. Same rules as above: read the diff, don't paste blind.
+it could not merge rather than guessing — a setting two lists lay out **differently**
+(different offset, width or bits) is dropped and named. A setting the lists give
+the same place but word differently — one truncates a label or a help sentence —
+is not a conflict: the setting stays, with the fuller wording.
+
+MFIT states no place for many settings (`length="0"`): values it computes,
+certificates, the ICC profiles. One case is readable and is read: **a file that
+is one setting** — the tool gives it exactly one logical setting, of a numeric
+kind, and no place — is the setting at offset 0, with the width its kind names
+(`disabled_enabled_options` one byte, `word` two). That is where
+`bup_sku/hw_binding`'s `HwBindingEn` (the RPMC / RPMB binding) comes from, and
+`policy/hmrfpo_state`, `amt/rtfd/amt.wol` and six more. A file the tool keeps
+several such settings in is left to its plugin and not read: a guess would put
+one setting's byte under another's name. Same rules as above: read the diff,
+don't paste blind.
 
 The older FIT carries the same material in its own shape, per platform:
 
