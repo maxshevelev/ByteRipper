@@ -1085,6 +1085,45 @@ final class MEASummaryTests: XCTestCase {
         XCTAssertEqual(unknownRows.map(\.mfs), ["Yes", nil, "1"])
     }
 
+    /// A setting the tool places conditionally carries what placed it, after
+    /// its name — and says so when the branch had to be told from the files the
+    /// image carries. A setting the tool switches off carries that too, and its
+    /// values are drawn quiet.
+    func testAConditionalSettingCarriesItsConditionInTheRow() throws {
+        var a = try analysis([
+            "family": "csme", "manifest": manifestJSON(),
+            "version": ["major": 15, "minor": 0, "hotfix": 1, "build": 100],
+        ])
+        a.configuration = [
+            ConfigurationFile(path: "/home/mctp/smt2_devices", alias: "Smt2Devices",
+                              mfs: .init(size: 6, settings: [
+                                  ConfigurationSetting(
+                                      name: "MctpEcAddress", number: 0,
+                                      condition: ConfigurationCondition(name: "eSpiEnabled",
+                                                                        value: 0, assumed: true)),
+                              ])),
+            ConfigurationFile(path: "/home/smbus/smlink_bus", alias: "SmlinkBus",
+                              mfs: .init(size: 1, settings: [
+                                  ConfigurationSetting(
+                                      name: "SmlinkBusSelection", number: 0,
+                                      disabled: ConfigurationCondition(name: "eSpiEnabled", value: 1)),
+                              ])),
+        ]
+        let rows = MEAConfiguration.build(a, in: .english).flatMap(\.rows)
+
+        let address = try XCTUnwrap(rows.first { $0.identifier == "MctpEcAddress" })
+        XCTAssertEqual(address.name, "MCTP EC Address · eSpiEnabled = No, assumed",
+                       "the tool's identifier and its own word for the value")
+        XCTAssertEqual(address.condition, ConfigurationCondition(name: "eSpiEnabled",
+                                                                 value: 0, assumed: true))
+        XCTAssertEqual(address.disabled, false)
+
+        let bus = try XCTUnwrap(rows.first { $0.identifier == "SmlinkBusSelection" })
+        XCTAssertEqual(bus.name, "Bus Selection · disabled by eSpiEnabled = Yes")
+        XCTAssertEqual(bus.disabled, true, "which is what the panel draws quiet")
+        XCTAssertNil(bus.condition)
+    }
+
     /// The tab reads the board's own half of the generation's map: a file the
     /// mobile map lays out and the desktop one does not is labelled from the
     /// mobile map and reaches the desktop tab by its identifier alone — the

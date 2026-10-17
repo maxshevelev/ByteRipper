@@ -34,7 +34,12 @@ public enum MEAConfiguration {
             // The map's own order first — it is the order a bench reads these
             // files in — then anything a copy carries that the map does not
             // know, which keeps a value on screen instead of dropping it.
-            var names = layout?.settings.map(\.name) ?? []
+            // A conditionally placed setting is a row of the file the image
+            // holds it in, and of no other: the map has both branches, and the
+            // other one belongs to a file this image does not read it from.
+            var names = layout?.settings.filter { setting in
+                setting.condition == nil || (fitc + mfs).contains { $0.name == setting.name }
+            }.map(\.name) ?? []
             for name in (fitc + mfs).map(\.name) where !names.contains(name) {
                 names.append(name)
             }
@@ -48,12 +53,24 @@ public enum MEAConfiguration {
                 var label = setting?.label ?? name
                 let auto = MEAText.configurationAuto(setting?.auto == true, in: language)
                 if !auto.isEmpty { label += " · " + auto }
+                // What placed the setting, and what switches it off: one mark
+                // each, in the tool's own identifiers and option words.
+                let condition = (fitc + mfs).compactMap(\.condition).first
+                let disabled = (fitc + mfs).compactMap(\.disabled).first
+                if let condition {
+                    label += " · " + MEAText.configurationCondition(condition, in: map, language: language)
+                }
+                if let disabled {
+                    label += " · " + MEAText.configurationDisabled(disabled, in: map, language: language)
+                }
                 return MEAConfigurationRow(
                     name: label,
                     identifier: name,
                     // Where the tool says nothing about a setting, there is no
                     // button to press and no popover to open.
                     help: setting?.help,
+                    condition: condition,
+                    disabled: disabled != nil,
                     fitc: MEAText.configurationValue(fitc.first { $0.name == name },
                                                      layout: setting, in: language),
                     mfs: MEAText.configurationValue(mfs.first { $0.name == name },
@@ -86,6 +103,12 @@ public struct MEAConfigurationRow: Sendable, Equatable {
     /// What the tool's panel says about the setting, where it says anything;
     /// nil there is no `?` beside the row at all.
     public let help: String?
+    /// The condition the tool placed the setting under, where it placed it
+    /// conditionally, and which branch this image holds.
+    public let condition: ConfigurationCondition?
+    /// The tool switches the setting off in this image: its value is there and
+    /// does not apply, and the row's values are drawn quiet.
+    public let disabled: Bool
     /// The build's copy — the OEM Configuration partition's record.
     public let fitc: String?
     /// The file system's copy — the state in force.
@@ -101,10 +124,13 @@ public struct MEAConfigurationRow: Sendable, Equatable {
     }
 
     public init(name: String, identifier: String, help: String? = nil,
+                condition: ConfigurationCondition? = nil, disabled: Bool = false,
                 fitc: String?, mfs: String?) {
         self.name = name
         self.identifier = identifier
         self.help = help
+        self.condition = condition
+        self.disabled = disabled
         self.fitc = fitc
         self.mfs = mfs
     }

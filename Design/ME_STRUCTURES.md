@@ -401,6 +401,21 @@ documentation read where the row is. TGL LP gives **21 files and 60 settings**;
 two of the four TGL layouts (`tgp_lp_a1`, `tgp_lp_c0`) agree on every binding
 they share, and the H ones are another SKU's, so the LP pair is read as one map.
 
+**A place can be conditional.** The tool binds a setting to a file only under
+another setting's value (`buildConditional`), and `MctpEcAddress` on the LP
+family is the case: `eSpiEnabled = No` puts it in `/home/mctp/smt2_devices`
+(+4, two bytes) and `= Yes` in `/home/mctp/espi_devices` (+0, two bytes), with
+`ResetMctpEcAddress` mirrored to clear the copy the address left behind. The
+desktop family binds it once, in `smt3_devices`. Both places are in the map with
+their condition, and the engine picks the branch the image holds: the
+condition's own value from the pages, or — where neither page carries the file
+it lives in, as on `CSME 15.bin` — the branch whose file is there, marked
+`assumed`. The value is decided once per condition, not per setting: a branch
+chosen per setting would let the address and its reset disagree about the same
+switch, and did, before that rule. `SmlinkBusSelection` carries the tool's other
+relation, `DisableIf eSpiEnabled = Yes` — its value is in the file and does not
+apply.
+
 **Each generation has two maps, one for each half of it.** The mobile families
 (`_lp`, `_p`) and the desktop ones (`_h`, `_s`) layout a few settings
 differently — TGL LP against TGL H: 56 settings against 52, 50 shared, one of
