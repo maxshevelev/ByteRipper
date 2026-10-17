@@ -574,6 +574,19 @@ to work out by hand:
 | `pch_fuses.xml` | the fuses by project, platform and SKU — `ADL` → `S` → `Q670`/`W680` → the seven fuse names each |
 | `AdditionalSMLinkConfFields.xml` | the SMLink fields |
 
+**The PCH fuses are not in a dump.** `pch_fuses.xml` names the seven fuses per
+platform and SKU — `CSME_FUSE_VALUE_BYTE_0…5` and
+`MB_EN_AND_LPCDID_FUSE_VALUE_BYTE_0` — and the same binary carries their values
+in a C header, `PCH_FUSES_H_` (`PREMIUM_RPP_P_CCG_CSME_FUSE_VALUE_BYTE_0 0x10`,
+with bit meanings in its comments: csme_fuse 8–15, PSVN removal, fusa disable,
+OEM IFP disable, ICC enhanced and SPI boot). They are the **SRAM-fuse
+emulation** values Flash Image Tool writes for a harness, not a field of the
+image: none of the 44 dumps at hand holds any SKU's seven-byte sequence
+(checked 2026-10-17). There is therefore nothing in a dump for a row to
+report, and no row is made. The bits a dump *does* carry next to them are the
+PCH soft straps, which the descriptor panel reads (§2.6 of
+`Design/UEFI/UEFI_IMAGE_FORMAT.md`).
+
 So the descriptor's straps and the fuse landscape are documented in the same
 place, in Intel's own naming — which is where a *descriptor* tool would read
 them, not an ME one. The master-access masks this project reads by hand
