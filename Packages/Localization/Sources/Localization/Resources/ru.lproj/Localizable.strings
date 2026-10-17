@@ -225,7 +225,6 @@
 "Choose the folder to keep the pattern library in. Each Mac writes its own file there and reads the others. A folder your Mac syncs — iCloud Drive, Google Drive, Dropbox — puts the library on your other machines." = "Выберите папку для хранения библиотеки шаблонов. Каждый Mac пишет в неё собственный файл и читает файлы остальных. Папка, которую Mac синхронизирует, — iCloud Drive, Google Drive, Dropbox — делает библиотеку доступной на других машинах.";
 "Close and Break Link" = "Закрыть и разорвать связь";
 "Close and Break Links" = "Закрыть и разорвать связи";
-"Coming soon" = "Появится позже";
 "Compressed: what it holds is listed under it, decompressed" = "Сжатые данные: их содержимое перечислено ниже в распакованном виде";
 "Could not be checked, or wants a second look" = "Проверить не удалось либо требуется дополнительная проверка";
 "Could not duplicate the file." = "Не удалось создать копию файла.";
@@ -528,7 +527,6 @@
 "Merge All?" = "Объединить все сегменты?";
 "Merging keeps both lists, which is usually what you want when setting up a second Mac." = "Объединение сохранит оба списка — обычно это то, что нужно при настройке второго Mac.";
 "Message" = "Сообщение";
-"Messages" = "Сообщения";
 "Mine" = "Локальную";
 "Minimap" = "Миникарта";
 "Minimap Overview" = "Миникарта: обзор всего файла";
@@ -1075,7 +1073,6 @@
 "Setting help" = "Справка о настройке";
 "%1$@ = %2$@" = "%1$@ = %2$@";
 "disabled by %1$@" = "не действует при %1$@";
-"Not recorded in this image" = "В образе не записана";
 "Show what Flash Image Tool says about this setting" = "Показать, что Flash Image Tool говорит об этой настройке";
 "Default" = "По умолчанию";
 "Unknown (code %1$@)" = "Неизвестно (код %1$@)";
@@ -1526,20 +1523,10 @@
 "Open the bytes this match is in as a panel, the match selected" = "Открыть байты, в которых лежит вхождение, панелью с выделенным вхождением";
 "Text or hex bytes" = "Текст или байты hex";
 /* ME Analyzer: конец производства, Boot Guard и ключ OEM (Skills/me-eom-structures). */
-"Manufacturing" = "Manufacturing";
 "Boot Guard" = "Boot Guard";
 "No profile record in this image" = "В этом дампе записи о профиле нет";
 "OEM Public Key Hash" = "OEM Public Key Hash (SHA-384)";
 "No key material in this image" = "В этом дампе материала ключа нет";
-"Not set (all zeros)" = "Не задан (все нули)";
-"Not set (the area is erased)" = "Не задан (область стёрта)";
-"Layout not recognized" = "Структура не распознана";
-"EFS: holds files" = "EFS: есть файлы";
-"EFS: unreadable" = "EFS: прочитать не удалось";
-"EFS: files not named" = "EFS: файлы не опознаны (нет базы)";
-"configuration: %1$@" = "конфигурация: %1$@";
-"reserved files: %1$@" = "зарезервированные файлы: %1$@";
-"nothing found" = "ничего не найдено";
 "Configuration" = "Конфигурация";
 "FITC" = "FITC";
 "MFS" = "MFS";
@@ -1554,9 +1541,4 @@
 "Other" = "Прочее";
 "Processor straps" = "Страпы процессора";
 "OEM section" = "OEM-секция";
-"RPMC Hardware Binding" = "RPMC Hardware Binding";
-"Unexpected value %1$@" = "Неожиданное значение %1$@";
 "Manufacturing Lock" = "Manufacturing Lock";
-"Locked" = "Locked";
-"Not locked" = "Not locked";
-"Not readable from this image" = "Из этого дампа не читается";

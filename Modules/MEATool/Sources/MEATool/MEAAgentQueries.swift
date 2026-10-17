@@ -54,7 +54,7 @@ public enum MEAAgentQueries {
             """
     ) { host, _ in
         let analysis = try await analysis(host)
-        let blocks = MEASummary.build(analysis, in: .english)
+        let blocks = MEASummary.build(analysis)
         return .json(["blocks": .array(blocks.map { block in
             var members: [String: JSONValue] = ["rows": .array(block.rows.map { summaryRow in
                 var entry = row(summaryRow)
@@ -285,7 +285,7 @@ public enum MEAAgentQueries {
     /// What the row itself reads: the state, then its evidence in brackets —
     /// the panel's own words in the English every agent call is answered in.
     static func explanation(state: MFSState, basis: MFSStateBasis) -> String {
-        MEAText.fileSystemState(state, basis: basis, in: .english)
+        MEAText.fileSystemState(state, basis: basis)
     }
 
     private nonisolated static func list(_ indices: [Int]) -> String {
@@ -295,7 +295,7 @@ public enum MEAAgentQueries {
     // MARK: - Shapes
 
     private static func row(_ row: MEASummaryRow) -> JSONValue {
-        var members: [String: JSONValue] = ["label": .string(row.label), "value": .string(row.value.text(in: .english))]
+        var members: [String: JSONValue] = ["label": .string(row.label), "value": .string(row.value.text)]
         if row.value.isValue, row.tone.isStatus { members["tone"] = .string(toneName(row.tone)) }
         return .object(members)
     }

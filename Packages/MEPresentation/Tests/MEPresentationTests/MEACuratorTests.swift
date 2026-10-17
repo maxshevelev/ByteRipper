@@ -155,16 +155,8 @@ final class MEACuratorTests: XCTestCase {
             a, pending: MEAPending(fileTable: true), in: .english).first)
         XCTAssertEqual(field("Manufacturing Lock", in: waiting), "Loading…")
         let absent = try XCTUnwrap(MEACurator.present(a, in: .english).first)
-        XCTAssertEqual(field("Manufacturing Lock", in: absent), "Not recorded in this image")
-
-        // Files but no table naming them: the record may exist, and this
-        // reading cannot say the image has none.
-        var unread = try analysis(["mfsVolume": volume(ftbl: true),
-                                   "manifest": manifestJSON()])
-        unread.manufacturingLock = nil
-        let unreadNode = try XCTUnwrap(MEACurator.present(unread, in: .english).first)
-        XCTAssertEqual(field("Manufacturing Lock", in: unreadNode),
-                       "Not readable from this image")
+        XCTAssertEqual(field("Manufacturing Lock", in: absent), "—",
+                       "a board that has made no mark is a dash")
 
         var legacy = try analysis(["mfsVolume": volume(ftbl: false),
                                    "manifest": manifestJSON()])

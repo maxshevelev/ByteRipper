@@ -102,7 +102,7 @@ public enum MEACurator {
             fields.append(MEAField("File System State", MEAText.title(state.rawValue),
                                    tone: MEATones.fileSystemState(state, basis: a.mfsStateBasis),
                                    evidence: a.mfsStateBasis.map {
-                                       MEAText.fileSystemStateEvidence(state, $0, in: language)
+                                       MEAText.fileSystemStateEvidence(state, $0)
                                    } ?? ""))
         }
         // The bench's own facts, under the same names the Summary tab gives
@@ -112,7 +112,7 @@ public enum MEACurator {
         if a.family == .csme, a.version.major >= 11, let state = a.manufacturingState {
             let evidence = MEAText.manufacturingEvidence(state, basis: a.manufacturingBasis)
             let verdict = MEAText.manufacturingState(state, basis: a.manufacturingBasis)
-            fields.append(MEAField(L("Manufacturing", in: language), verdict,
+            fields.append(MEAField("EOM on First Boot", verdict,
                                    tone: MEATones.manufacturingState(state),
                                    evidence: evidence))
         }
@@ -124,19 +124,13 @@ public enum MEACurator {
         if a.family == .csme, a.mfsVolume?.usesFTBL == true {
             if let lock = a.manufacturingLock {
                 fields.append(MEAField(L("Manufacturing Lock", in: language),
-                                       MEAText.manufacturingLock(lock, in: language),
+                                       MEAText.manufacturingLock(lock),
                                        tone: MEATones.manufacturingLock(lock)))
-            } else if pending.fileTable {
+            } else {
+                // Not found is a dash: the row is the board's mark, and a
+                // board that has not made one simply has none.
                 fields.append(MEAField(L("Manufacturing Lock", in: language),
-                                       L("Loading…", in: language)))
-            } else if a.manifest != nil {
-                let files = a.mfsVolume?.files ?? []
-                let unreadable = !files.isEmpty
-                    && a.manufacturingBasis?.liveFilesResolved != true
-                fields.append(MEAField(
-                    L("Manufacturing Lock", in: language),
-                    unreadable ? L("Not readable from this image", in: language)
-                               : L("Not recorded in this image", in: language)))
+                                       pending.fileTable ? L("Loading…", in: language) : "—"))
             }
         }
         if let binding = a.hardwareBinding, a.version.major >= 13 {
@@ -145,9 +139,9 @@ public enum MEACurator {
             // record one — that row says it is still loading.
             let waits = pending.fileTable && binding == .notInImage
             fields.append(MEAField(
-                L("RPMC Hardware Binding", in: language),
-                waits ? L("Loading…", in: language)
-                      : MEAText.hardwareBinding(binding, in: language),
+                "RPMC Hardware Binding",
+                waits ? "Loading…"
+                      : MEAText.hardwareBinding(binding),
                 tone: waits ? .standard : MEATones.hardwareBinding(binding)))
         }
         if a.family == .csme, a.version.major >= 11 {
@@ -158,7 +152,7 @@ public enum MEACurator {
                 tone: a.bootGuardProfile.map(MEATones.bootGuardProfile) ?? .standard))
             if let key = a.oemPublicKeyHash {
                 fields.append(MEAField(L("OEM Public Key Hash", in: language),
-                                       MEAText.oemPublicKeyHash(key, in: language)))
+                                       MEAText.oemPublicKeyHash(key)))
             } else if a.manifest != nil {
                 fields.append(MEAField(L("OEM Public Key Hash", in: language),
                                        L("No key material in this image", in: language)))
