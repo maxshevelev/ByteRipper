@@ -334,6 +334,29 @@ final class ToolDetailPaneTests: XCTestCase {
         XCTAssertFalse(pane.isQuickLookShown, "one in the gap between them closes it")
     }
 
+    /// The divider between the panel and the dump dragged while the card is
+    /// out: the press on it moves the divider and leaves the card open.
+    func testAPressOnASplittersDividerLeavesTheCardOpen() throws {
+        let root = window.contentView!
+        let panel = placeInPanel(width: 300)
+        panel.removeFromSuperview()
+        let split = ALSplitView(frame: root.bounds)
+        split.autoresizingMask = [.width, .height]
+        split.addPane(panel)
+        split.addPane(NSView())
+        split.setPaneLayout(.fixed(300), at: 0)
+        root.addSubview(split)
+        root.layoutSubtreeIfNeeded()
+        fill()
+        pane.showQuickLook()
+        pane.finishTransitionForTesting()
+
+        let divider = split.dividerPosition(at: 0)
+        XCTAssertTrue(root.hitTest(NSPoint(x: divider + 2, y: 300)) === split, "the press lands on the divider")
+        deliver(click(at: NSPoint(x: divider + 2, y: 300)))
+        XCTAssertTrue(pane.isQuickLookShown, "a press on the divider")
+    }
+
     /// Typing into the search field is the field's: Space is a space, Esc is
     /// the field's, and the arrows move its caret.
     func testTypingInAFieldDoesNotCloseTheCard() throws {

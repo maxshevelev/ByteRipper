@@ -567,7 +567,8 @@ extension Notification.Name {
     /// large view, and still does what it was for: nothing is dimmed or
     /// covered, so a click on the dump or the toolbar lands there. A click in
     /// the tool panel — a row, the triangle of one, a menu, the search, the
-    /// legend — is the panel's, and the card stays.
+    /// legend — is the panel's, and the card stays. So is a press on a
+    /// splitter's divider.
     func handleClickWhileShown(_ event: NSEvent) {
         guard isQuickLookShown, let card, event.window === window,
               let content = window?.contentView, let frame = content.superview
@@ -576,6 +577,10 @@ extension Notification.Name {
         let hit = frame.hitTest(point)
         guard hit?.isDescendant(of: card) != true else { return }
         if let panel = toolPanel, hit?.isDescendant(of: panel) == true { return }
+        // A splitter answers a press only on a divider: that press moves the
+        // divider, beside the panel or anywhere else, and the card follows
+        // the room it leaves, as it follows the window.
+        if hit is ALSplitView { return }
         // Moving or resizing the window is not a click on anything: the
         // title bar and the toolbar's bare ground drag it, the window's
         // buttons act on it, and a few points at its edges take hold of it
