@@ -2167,6 +2167,40 @@ final class UEFIToolFlowTests: XCTestCase {
         XCTAssertEqual(pane.zones.focus, "1/0")
     }
 
+    /// A click on an ME row's zone in the dump keeps its row selected and its
+    /// zone in focus, the detail on the row. The zone on screen is only ever
+    /// the selected row's own: folding the branch it sits in takes the
+    /// selection, the ME focus and the zone with it — so the click lands on
+    /// the row the table is already on.
+    func testClickingAnMEZoneInTheDumpKeepsItsRow() throws {
+        let outline = try openMERegion()
+        let pane = try XCTUnwrap(controller?.windowModel.pane1)
+        let regionsRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "Regions (FPT)" })
+        let regions = outline.item(atRow: regionsRow)
+        outline.expandItem(regions)
+        window?.layoutIfNeeded()
+        let ftpRow = try XCTUnwrap(
+            (0..<outline.numberOfRows).first { titleText(outline, row: $0) == "FTPR" })
+        outline.selectRowIndexes(IndexSet(integer: ftpRow), byExtendingSelection: false)
+        followUEFISelection(controller)
+        XCTAssertEqual(pane.zones.focus, "1/0", "the row's zone is in the dump")
+
+        controller?.tools.zoneSelected("1/0", in: pane)
+        followUEFISelection(controller)
+        window?.layoutIfNeeded()
+        XCTAssertEqual(outline.selectedRow, ftpRow, "the row stays selected")
+        XCTAssertEqual(pane.zones.zones.map(\.id), ["1/0"], "its zone is the one in the dump")
+        XCTAssertEqual(pane.zones.focus, "1/0", "and in focus")
+        let panel = try XCTUnwrap(controller?.tools.panel)
+        XCTAssertTrue(shownTexts(panel).contains("FTPR"), "the detail is the row's")
+
+        // Folded, the zone goes with the selection: nothing is left to click.
+        outline.collapseItem(regions)
+        followUEFISelection(controller)
+        XCTAssertTrue(pane.zones.zones.isEmpty, "folding the row's branch takes its zone")
+    }
+
     /// A row that stands for no bytes — the identity — publishes no zone and
     /// shows its fields in the detail only.
     func testSelectingAnInfoLeafMENodePublishesNoZone() throws {
