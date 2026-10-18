@@ -184,6 +184,20 @@ public extension DescriptorStrapMap {
         processorTables.first { $0.words == words }
     }
 
+    /// The PMC soft straps' tables, keyed by the words the MIP area's PMC and
+    /// CPU block holds before the CPU strap message — the block's length less
+    /// the message `FLMAP2` states. They are a list of their own: a PMC length
+    /// and a PCH one are the same number by accident, never the section.
+    static var pmcTables: [DescriptorStrapMap] {
+        [.pmc7, .pmc20, .pmc21, .pmc22]
+    }
+
+    /// The PMC block's layout of `words` words, or nil where no tool at hand
+    /// states one.
+    static func forPMC(words: Int) -> DescriptorStrapMap? {
+        pmcTables.first { $0.words == words }
+    }
+
     /// The CPU strap **message**'s tables, by length — the form from Tiger
     /// Point on, where the descriptor's MIP area carries the message instead
     /// of a strap section (`StrapMap+MIP`, from MFIT's `CpuStrapsLayout`). A

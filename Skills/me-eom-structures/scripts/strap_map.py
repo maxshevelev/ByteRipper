@@ -251,18 +251,24 @@ def swift_literal(text):
 def swift(kind, chosen):
     """One file for the tools at hand: a table per length asked for."""
     lines = []
+    label = {"PCH": "PCH", "CPU": "processor"}.get(kind, kind)
     lines.append("// The %s strap section, field by field, as Intel's Flash Image Tool"
-                 % ("PCH" if kind == "PCH" else "processor"))
+                 % label)
     lines.append("// lays it out — emitted by `Skills/me-eom-structures/scripts/strap_map.py`")
     lines.append("// from the tool's own resources. Names, offsets, bits and defaults are the")
     lines.append("// tool's, copied; nothing here is read out of a dump.")
     lines.append("//")
-    lines.append("// A table is picked by the length of the section it describes — the words the")
-    lines.append("// descriptor's own %s states — because that is what an image states about"
-                 % ("FLMAP1" if kind == "PCH" else "FLMAP2"))
+    if kind == "PMC":
+        lines.append("// A table is picked by the number of words the MIP area's PMC and CPU")
+        lines.append("// block holds less the CPU strap message FLMAP2 states — because that is")
+        lines.append("// what an image states about")
+    else:
+        lines.append("// A table is picked by the length of the section it describes — the words the")
+        lines.append("// descriptor's own %s states — because that is what an image states about"
+                     % ("FLMAP1" if kind == "PCH" else "FLMAP2"))
     lines.append("// itself. `StrapMap.swift` says what a table is and what the lookup does;")
     lines.append("// another length is added by running the script with it.")
-    if kind != "PCH":
+    if kind == "CPU":
         lines.append("//")
         lines.append("// A processor table keeps only the fields **every** document of that")
         lines.append("// length states alike — the same name at the same offset and bits. Two")

@@ -232,6 +232,20 @@ public struct DescriptorInfo: Equatable, Sendable {
 
     public var mip: MIPTable?
 
+    /// The PMC soft straps — the leading words of the MIP area's PMC and CPU
+    /// block, before the CPU strap message that ends it. The message's length
+    /// is what `FLMAP2` states (the processor section's words up to Cannon
+    /// Point, its message's from Tiger Point on), and the rest of the block is
+    /// the PMC section. Nil where the generation has no block, or no tool at
+    /// hand states a layout of the PMC words' length.
+    public struct PMCSection: Equatable, Sendable {
+        public var base: UInt64
+        public var words: [UInt32]
+        public var fields: [DescriptorStrapMap.Reading]
+    }
+
+    public var pmcStraps: PMCSection?
+
     /// The descriptor's registers read through Flash Image Tool's own layouts
     /// (`DescriptorRegisterMap`): FLMAP0/1/2, FLCOMP and FLIL at the component
     /// base, the masters' FLMSTR registers, FLDRPLCY and FLUMAP1. Empty where
@@ -300,6 +314,7 @@ public extension DescriptorInfo {
     static func read(at base: UInt64, in reader: ImageReader) -> DescriptorInfo? {
         guard let map = reader.uint32(at: base + Descriptor.mapOffset),
               let map1 = reader.uint32(at: base + Descriptor.map1Offset),
+              let map2 = reader.uint32(at: base + Descriptor.map2Offset),
               let (generation, isCertain) = DescriptorGeneration.read(at: base, in: reader),
               let vector = reader.bytes(at: base, count: 16)
         else { return nil }
@@ -315,6 +330,7 @@ public extension DescriptorInfo {
         let masterBase = (masterAt > 0 && masterAt <= Descriptor.maxBase)
             ? base + UInt64(masterAt) << 4
             : nil
+        let mip = mipTable(at: base, generation: generation, reader: reader)
 
         return DescriptorInfo(
             reservedVector: vector,
@@ -330,7 +346,9 @@ public extension DescriptorInfo {
             processorStraps: processorStraps(at: base, generation: generation,
                                              isGenerationCertain: isCertain,
                                              reader: reader),
-            mip: mipTable(at: base, generation: generation, reader: reader),
+            mip: mip,
+            pmcStraps: pmcStraps(at: base, map2: map2, generation: generation,
+                                 mip: mip),
             registerReadings: registerReadings(at: base, map: map, map1: map1,
                                                generation: generation, reader: reader),
             oemSection: reader.bytes(at: base + Descriptor.oemSectionOffset,
@@ -338,10 +356,6 @@ public extension DescriptorInfo {
         )
     }
 
-    /// The descriptor's registers through the tool's layout: each register's
-    /// place resolved (absolute, or the component/master base the map words
-    /// state) and its words read. A register whose base is out of range or
-    /// whose words do not fit is left out.
     /// The MIP area's block table: its place from the upper map's high byte,
     /// its count and size, and each block's payload. A table whose entries do
     /// not fit the area, or a payload past the reader's end, is no table —
@@ -386,6 +400,37 @@ public extension DescriptorInfo {
                         blocks: blocks)
     }
 
+    /// The PMC soft straps: the MIP area's PMC and CPU block less the CPU
+    /// strap message that ends it. Up to Cannon Point `FLMAP2` states the
+    /// processor section's words, which is the message's length in the block
+    /// too; from Tiger Point on it states the message's length directly. A
+    /// block whose remainder matches no table at hand answers none.
+    static func pmcStraps(at base: UInt64, map2: UInt32,
+                          generation: DescriptorGeneration,
+                          mip: MIPTable?) -> PMCSection? {
+        guard let mip,
+              let block = mip.blocks.first(where: { $0.type == 1 })
+        else { return nil }
+        let cpuWords: Int
+        if generation.hasMIPProcessorStraps {
+            cpuWords = Int(map2 >> 16 & 0xFF)
+        } else if generation.hasProcessorStrapSection {
+            cpuWords = Int(map2 >> 8 & 0xFF)
+        } else {
+            return nil
+        }
+        let pmcWords = block.words.count - cpuWords
+        guard pmcWords > 0, let map = DescriptorStrapMap.forPMC(words: pmcWords)
+        else { return nil }
+        let words = Array(block.words.prefix(pmcWords))
+        return PMCSection(base: block.base, words: words,
+                          fields: map.readings(in: words))
+    }
+
+    /// The descriptor's registers through the tool's layout: each register's
+    /// place resolved (absolute, or the component/master base the map words
+    /// state) and its words read. A register whose base is out of range or
+    /// whose words do not fit is left out.
     private static func registerReadings(
         at base: UInt64, map: UInt32, map1: UInt32,
         generation: DescriptorGeneration, reader: ImageReader

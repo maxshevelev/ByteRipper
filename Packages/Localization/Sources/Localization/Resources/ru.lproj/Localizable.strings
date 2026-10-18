@@ -1680,6 +1680,7 @@
 "DbC straps" = "Страпы DbC";
 "CSE DbC configuration" = "Конфигурация DbC CSE";
 "PMC and CPU soft straps" = "Программные страпы PMC и CPU";
+"PMC straps" = "Страпы PMC";
 "Block" = "Блок";
 "Block %1$d" = "Блок %1$d";
 "SPHY OEM configuration" = "Конфигурация SPHY OEM";

@@ -1680,6 +1680,7 @@
 "DbC straps" = "DbC-Straps";
 "CSE DbC configuration" = "CSE-DbC-Konfiguration";
 "PMC and CPU soft straps" = "PMC- und CPU-Softstraps";
+"PMC straps" = "PMC-Straps";
 "Block" = "Block";
 "Block %1$d" = "Block %1$d";
 "SPHY OEM configuration" = "SPHY-OEM-Konfiguration";

@@ -554,6 +554,26 @@ and 25 words; the **11-word** section is the LP one `cnp_lp_rvp.xml` names, and
 `CSME 13.BIN` (ICP LP) states it — its words at 0x300 decode with Fast wakeup
 and PEG_DEF set, SMT enabled and all cores active.
 
+**The PMC straps are a table too, keyed by what the MIP area leaves.** On
+Cannon Point and later, the MIP table's block type 1 is the PMC section
+followed by the CPU strap message; the message's length is `FLMAP2`'s (the
+processor section's words up to Cannon Point — the same words in the block —
+and the message's length from Tiger Point on). What remains is the PMC
+section:
+
+```bash
+python3 Skills/me-eom-structures/scripts/strap_map.py \
+    <fit-15.0.exe> <fit-14.0.exe> <fit-13.0.exe> <fit-12.exe> --kind PMC \
+    --words 7,20,21,22 > \
+    Packages/UEFIImage/Sources/UEFIImage/StrapMap+PMC.swift
+```
+
+The lengths at hand are 7 (CNP H and Comet Point), 20 (Ice Lake LP), 21
+(Tiger Point) and 22 (Alder Point). On the five dumps at hand the fields read
+the tool's default in 95%, 90%, 93%, 92% and 77% of cases — the check that
+the split and the table are the section's; the lower Alder Point figure is a
+more customised build, not a different layout.
+
 **From Tiger Point on there is no such section: the straps are a message in
 the descriptor's MIP area**, at `0xC00` plus the offset `FLMAP2[2:11]` states,
 `FLMAP2[16:23]` words long (§2.7 of `Design/UEFI/UEFI_IMAGE_FORMAT.md`).
