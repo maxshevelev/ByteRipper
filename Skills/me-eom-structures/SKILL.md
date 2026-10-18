@@ -309,13 +309,25 @@ python3 Skills/me-eom-structures/scripts/mip18_map.py ~/Downloads/1/mfit-18.1.ex
 The blocks' types are the MIP descriptor's: **1** PmcAndCpu — `PMC_SoC_smip`
 (253 PMC fields; the block also holds the CPU header and message, which are
 the CPU map's), **0** CSME/DBC (`CSME_smip`, 8 bytes), **2** PMC IOE
-(`PMC_IOE_smip`, 0x40), **4** IOE (`IOE_smip`). The IOE document exists in two
-layouts — MTL-M's 0x3C bytes and MTL-P/ARL-P's 0xD0, which place the shared
-names at **different offsets** — so the map carries both and the reader picks
-one by the block's own length. A field's place is a bit range of its block
-(`offset*8 + bit_low … + bit_high`); PMC SoC, PMC IOE and CSME are
-dword-aligned, IOE is byte-addressed. 253, 5, 249 and 515 fields (the last
-from the two agreeing documents; MTL-M's 133 are the 0x3C variant).
+(`PMC_IOE_smip`, 0x40), **4** IOE (`IOE_smip`), **3** PmcAndCpu_2 (MTL-P and
+ARL-P only) — `PMC_SOC_2_smip` (253 fields, 0x48) then `CPU_2_smip`
+(42 fields, 0x18) at 0x48, the block 0x60 bytes. The IOE document exists in
+two layouts — MTL-M's 0x3C bytes and MTL-P/ARL-P's 0xD0, which place the
+shared names at **different offsets** — so the map carries both and the
+reader picks one by the block's own length. A field's place is a bit range of
+its block (`offset*8 + bit_low … + bit_high`); PMC SoC, PMC IOE and CSME are
+dword-aligned, IOE is byte-addressed. 253, 5, 249, 515 and 253 + 42 fields
+(IOE's 515 from the two agreeing documents; MTL-M's 133 are the 0x3C
+variant).
+
+`PMC_SOC_2_smip` and `CPU_2_smip` bind their fields to another container's
+interface text (`ui_controller="$(ui_ref_container):HyperThreadingDisable"`,
+the layout's `ui_ref_container`), so the generator resolves those against
+`PMC_SoC_smip` and `CPU_smip` respectively. **No image at hand has a
+five-block table**: type 3 and the 0x60 length are the tool's struct defaults
+(`MipDescriptorHeader5Blocks`: 1, 2, 4, 3, 0) and the two documents' extents,
+stated as such — a dump whose block does not match reads nothing for these
+two rather than something wrong.
 
 Checked on the dump: the block lengths are exactly the documents' extents,
 and every field whose document states one value for every reference platform

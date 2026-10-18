@@ -725,6 +725,16 @@ layouts are the tool's, and the reading is checked the same way:
 | 0 | CSME / DBC | `CSME_smip` | 8 bytes | 5 |
 | 2 | PMC IOE | `PMC_IOE_smip` | 0x40 | 249 |
 | 4 | IOE | `IOE_smip` | 0x3C (MTL-M) / 0xD0 (MTL-P, ARL-P) | 133 / 515 |
+| 3 | PMC SOC 2 | `PMC_SOC_2_smip` | 0x60 (first 0x48) | 253 |
+| 3 | CPU 2 | `CPU_2_smip` | 0x60 (last 0x18, at 0x48) | 42 |
+
+The type-3 block is MTL-P / ARL-P only (`PmcAndCpu_2`). **No dump at hand
+has a five-block table**, so its type and 0x60 length are the tool's struct
+defaults (`MipDescriptorHeader5Blocks`: 1, 2, 4, 3, 0) and the two documents'
+extents rather than a reading; the reader matches block type and length, so a
+different shape simply reads nothing for those two. Their fields' UI text is
+borrowed from `PMC_SoC_smip`/`CPU_smip` through the layout's
+`ui_ref_container`.
 
 `PMC_SoC_smip` also declares the CPU message header and the CPU fields; the
 generator keeps only the `PMC_SoC_smip_Strap_` names, since the CPU message

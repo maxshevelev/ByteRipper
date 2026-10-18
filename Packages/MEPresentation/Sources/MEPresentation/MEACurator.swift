@@ -641,6 +641,8 @@ public enum MEACurator {
             let title: String
             switch container.name {
             case "PMC SoC": title = L("PMC SoC straps", in: language)
+            case "PMC SOC 2": title = L("PMC SOC 2 straps", in: language)
+            case "CPU 2": title = L("CPU 2 straps", in: language)
             case "CSME": title = L("CSME straps", in: language)
             case "IOE": title = L("IOE straps", in: language)
             case "PMC IOE": title = L("PMC IOE straps", in: language)

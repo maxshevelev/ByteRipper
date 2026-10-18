@@ -48,14 +48,26 @@ import zlib
 GENERATION = "18"
 
 # name, document block, block type, field-name prefix, block length in bytes
-# (nil = the fields' own extent). `PMC_SoC_smip` holds the CPU message header
-# and the CPU fields too; the prefix keeps the PMC ones, and the block is the
-# PMC straps (0x48) followed by the CPU header (4) and message (0xC).
+# (nil = the fields' own extent), the container's offset in the block and its
+# own length (nil = the block length). `PMC_SoC_smip` holds the CPU message
+# header and the CPU fields too; the prefix keeps the PMC ones.
+#
+# The `PmcAndCpu_2` block (type 3, MTL-P / ARL-P only) is the same shape one
+# size up: PMC_SOC_2's 0x48 bytes, then CPU_2's 0x18. No image at hand has a
+# five-block table, so its type and length are the tool's struct defaults
+# (`MipDescriptorHeader5Blocks`: 1, 2, 4, 3, 0) and the two documents'
+# extents, not a dump reading.
 CONTAINERS = [
-    ("PMC SoC", "PMC_SoC_smip", 1, "PMC_SoC_smip_Strap_", 0x58),
-    ("CSME", "CSME_smip", 0, None, None),
-    ("PMC IOE", "PMC_IOE_smip", 2, None, None),
-    ("IOE", "IOE_smip", 4, None, None),
+    dict(name="PMC SoC", block="PMC_SoC_smip", type=1,
+         prefix="PMC_SoC_smip_Strap_", block_length=0x58, length=0x48),
+    dict(name="CSME", block="CSME_smip", type=0),
+    dict(name="PMC IOE", block="PMC_IOE_smip", type=2),
+    dict(name="IOE", block="IOE_smip", type=4),
+    dict(name="PMC SOC 2", block="PMC_SOC_2_smip", type=3,
+         prefix="PMC_SOC_2_smip_Strap_", block_length=0x60, length=0x48,
+         ui_from="PMC_SoC_smip"),
+    dict(name="CPU 2", block="CPU_2_smip", type=3, prefix="CPU_2_smip_Strap_",
+         block_length=0x60, offset=0x48, length=0x18, ui_from="CPU_smip"),
 ]
 
 # The IOE container has two layouts at hand — MTL-M's 0x3C bytes and MTL-P /
@@ -123,12 +135,7 @@ def options_of(kind, params):
     return table or None
 
 
-def fields_of(text, block_id, prefix=None):
-    start = text.find('<mfit_data id="%s">' % block_id)
-    if start < 0:
-        return []
-    end = text.find('</mfit_data>', start)
-    block = text[start:end]
+def block_words(block):
     words = {}
     for match in UI.finditer(block):
         name, attrs = match.group(1), match.group(2)
@@ -139,6 +146,24 @@ def fields_of(text, block_id, prefix=None):
             "options": options_of(attribute(attrs, "config_type"),
                                   attribute(attrs, "config_params")),
         }
+    return words
+
+
+def fields_of(text, block_id, prefix=None, ui_from=None):
+    start = text.find('<mfit_data id="%s">' % block_id)
+    if start < 0:
+        return []
+    end = text.find('</mfit_data>', start)
+    block = text[start:end]
+    words = block_words(block)
+    # A container may bind its fields to another container's interface text —
+    # `ui_controller="$(ui_ref_container):HyperThreadingDisable"` — since the
+    # layout gives it that container's UI (`ui_ref_container`).
+    fallback = {}
+    if ui_from:
+        other_start = text.find('<mfit_data id="%s">' % ui_from)
+        if other_start >= 0:
+            fallback = block_words(text[other_start:text.find('</mfit_data>', other_start)])
     binds = {item: controller for _, controller, item in BIND.findall(block)}
     fields = []
     for attrs in ITEM.findall(block):
@@ -153,7 +178,10 @@ def fields_of(text, block_id, prefix=None):
             continue
         start_bit = int(offset, 0) * 8 + int(low)
         count = int(high) - int(low) + 1
-        entries = words.get(binds.get(name), {})
+        controller = binds.get(name)
+        if controller and controller.startswith("$(") and ":" in controller:
+            controller = controller.split(":", 1)[1]
+        entries = words.get(controller) or fallback.get(controller) or {}
         fields.append({
             "name": name,
             "start": start_bit,
@@ -217,9 +245,10 @@ def swift(tool, containers):
         "        name: %s," % swift_literal("CSME %s (%s)" % (GENERATION, tool)),
         "        containers: [",
     ]
-    for name, block_id, block_type, length, fields in containers:
-        lines.append("            Container(name: %s, blockType: %d, length: 0x%X, fields: ["
-                     % (swift_literal(name), block_type, length))
+    for name, block_id, block_type, block_length, offset, length, fields in containers:
+        lines.append("            Container(name: %s, blockType: %d, blockLength: 0x%X, "
+                     "offset: 0x%X, length: 0x%X, fields: ["
+                     % (swift_literal(name), block_type, block_length, offset, length))
         for field in fields:
             args = ["name: %s" % swift_literal(field["name"]),
                     "bitOffset: %d" % field["start"],
@@ -254,9 +283,15 @@ def main():
         print("no MIP strap documents found in this build", file=sys.stderr)
         return 1
     containers = []
-    for name, block_id, block_type, prefix, fixed_length in CONTAINERS:
-        per_document = [fields for fields in (fields_of(text, block_id, prefix)
-                                              for _, text in docs) if fields]
+    for spec in CONTAINERS:
+        name = spec["name"]
+        block_id = spec["block"]
+        block_type = spec["type"]
+        offset = spec.get("offset", 0)
+        per_document = [fields for fields in
+                        (fields_of(text, block_id, spec.get("prefix"),
+                                   spec.get("ui_from")) for _, text in docs)
+                        if fields]
         if not per_document:
             print("! %s: no fields in any document" % block_id, file=sys.stderr)
             continue
@@ -265,17 +300,19 @@ def main():
         # table per block length.
         variants = {}
         for fields in per_document:
-            extent = fixed_length or max((f["start"] + f["count"] + 7) // 8
-                                         for f in fields)
+            extent = spec.get("block_length") or \
+                max((f["start"] + f["count"] + 7) // 8 for f in fields)
             variants.setdefault(extent, []).append(fields)
         for extent in sorted(variants):
             found = variants[extent]
             fields = merged(found)
             fields.sort(key=lambda f: (f["start"], f["name"]))
-            containers.append((name, block_id, block_type, extent, fields))
-            print("%s (%s, block type %d, %d bytes): %d fields from %d document(s)"
-                  % (name, block_id, block_type, extent, len(fields), len(found)),
-                  file=sys.stderr)
+            size = spec.get("length") or extent
+            containers.append((name, block_id, block_type, extent, offset, size, fields))
+            print("%s (%s, block type %d, block %d bytes, at 0x%X, %d bytes): "
+                  "%d fields from %d document(s)"
+                  % (name, block_id, block_type, extent, offset, size,
+                     len(fields), len(found)), file=sys.stderr)
     print(swift(tool, containers))
     return 0
 
