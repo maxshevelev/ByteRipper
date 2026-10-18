@@ -249,7 +249,8 @@ final class AMDFirmwareTests: XCTestCase {
             return XCTFail("a change inside the PSP's BIOS image went through unasked")
         }
         XCTAssertEqual(refusal.caution, .pspBIOSImage(name: "BIOS"))
-        XCTAssertTrue(refusal.message.contains("the PSP decompresses itself"), refusal.message)
+        let message = refusal.message.text(in: .english)
+        XCTAssertTrue(message.contains("the PSP decompresses itself"), message)
     }
 
     /// Gone on past, the image is compressed again behind AMD's header, which
@@ -262,7 +263,8 @@ final class AMDFirmwareTests: XCTestCase {
         volume[at] = 0xA5
         let plan = try UEFIRebuild.plan(volume, at: .init(space: space), in: fixture.bytes,
                                         accepting: [.pspBIOSImage(name: "BIOS")]).get()
-        XCTAssertTrue(plan.warnings.contains { $0.contains("Whether the PSP accepts it is not known") }, "\(plan.warnings)")
+        let warnings = plan.warnings.map { $0.text(in: .english) }
+        XCTAssertTrue(warnings.contains { $0.contains("Whether the PSP accepts it is not known") }, "\(warnings)")
         var file = fixture.bytes
         file.replaceSubrange(Int(plan.offset)..<(Int(plan.offset) + plan.bytes.count), with: plan.bytes)
         let reader = try XCTUnwrap(SpaceReaders(file: ImageReader(file)).reader(for: space))
@@ -283,6 +285,7 @@ final class AMDFirmwareTests: XCTestCase {
             return XCTFail("an image of another size went back")
         }
         XCTAssertNil(refusal.caution)
-        XCTAssertTrue(refusal.message.contains("has to keep its size"), refusal.message)
+        let message = refusal.message.text(in: .english)
+        XCTAssertTrue(message.contains("has to keep its size"), message)
     }
 }

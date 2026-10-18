@@ -1,4 +1,5 @@
 import XCTest
+import Localization
 import FirmwareCompression
 import FirmwareCompressionTestSupport
 @testable import UEFIImage
@@ -54,7 +55,7 @@ final class UEFIRebuildTests: XCTestCase {
             XCTAssertTrue(plan.warnings.contains(UEFIRebuild.rangesNotChecked), line: line)
             var result = file
             result.replaceSubrange(Int(plan.offset)..<(Int(plan.offset) + plan.bytes.count), with: plan.bytes)
-            return (result, plan.warnings)
+            return (result, plan.warnings.map { $0.text(in: .english) })
         case .failure(let refusal):
             XCTFail("refused: \(refusal.message)", line: line)
             throw refusal
@@ -63,7 +64,7 @@ final class UEFIRebuildTests: XCTestCase {
 
     private func refusal(_ replacement: [UInt8], at target: UEFIRebuild.Target, in file: [UInt8]) -> String? {
         if case .failure(let refusal) = UEFIRebuild.plan(replacement, at: target, in: file) {
-            return refusal.message
+            return refusal.message.text(in: .english)
         }
         return nil
     }
@@ -463,11 +464,13 @@ final class UEFIRebuildTests: XCTestCase {
         guard case .success(let squeezed)? = fits(withFallback, fallback: true) else {
             return XCTFail("the maximum level fits")
         }
-        XCTAssertTrue(squeezed.warnings.contains { $0.contains("maximum level") }, "\(squeezed.warnings)")
+        let squeezedWarnings = squeezed.warnings.map { $0.text(in: .english) }
+        XCTAssertTrue(squeezedWarnings.contains { $0.contains("maximum level") }, "\(squeezedWarnings)")
         guard case .success(let roomy)? = fits(normalOnly, fallback: true) else {
             return XCTFail("the normal level fits")
         }
-        XCTAssertFalse(roomy.warnings.contains { $0.contains("maximum level") }, "\(roomy.warnings)")
+        let roomyWarnings = roomy.warnings.map { $0.text(in: .english) }
+        XCTAssertFalse(roomyWarnings.contains { $0.contains("maximum level") }, "\(roomyWarnings)")
     }
 
     // MARK: - What a link follows
@@ -549,11 +552,12 @@ final class UEFIRebuildTests: XCTestCase {
         let reports = reported.all
 
         guard case .success = result else { return XCTFail("refused") }
-        let phases = reports.map(\.phase).reduce(into: [String]()) { if $0.last != $1 { $0.append($1) } }
+        let phases = reports.map { $0.phase.text(in: .english) }.reduce(into: [String]()) { if $0.last != $1 { $0.append($1) } }
         XCTAssertEqual(phases.count, 3, "\(phases)")
         XCTAssertTrue(phases[0].hasPrefix("Reading"), phases[0])
         XCTAssertTrue(phases[1].contains("LZMA compressed section"), phases[1])
         XCTAssertTrue(phases[2].hasPrefix("Checking"), phases[2])
+        XCTAssertNotEqual(reports.last?.phase.text(in: .german), phases[2], "shown in the reader's language")
         XCTAssertEqual(reports.map(\.fraction), reports.map(\.fraction).sorted(), "never backwards")
         XCTAssertEqual(reports.last?.fraction, 1)
     }
@@ -577,7 +581,10 @@ final class UEFIRebuildTests: XCTestCase {
         guard case .failure(let refusal) = UEFIRebuild.plan(edited, at: target, in: image, protected: [ibb]) else {
             return XCTFail("a change inside the IBB was planned")
         }
-        XCTAssertTrue(refusal.message.contains("IBB segment 1"), refusal.message)
+        let message = refusal.message.text(in: .english)
+        XCTAssertTrue(message.contains("IBB segment 1"), message)
+        let russian = refusal.message.text(in: .russian)
+        XCTAssertTrue(russian.contains("«IBB segment 1»"), "shown in the reader's language: \(russian)")
     }
 
     func testAChangeInsideAVendorHashIsWarnedAbout() {
@@ -587,7 +594,10 @@ final class UEFIRebuildTests: XCTestCase {
         guard case .success(let plan) = UEFIRebuild.plan(edited, at: target, in: image, protected: [hash]) else {
             return XCTFail("refused")
         }
-        XCTAssertTrue(plan.warnings.contains { $0.contains("AMI hash of DXE") }, "\(plan.warnings)")
+        let warnings = plan.warnings.map { $0.text(in: .english) }
+        XCTAssertTrue(warnings.contains { $0.contains("AMI hash of DXE") }, "\(warnings)")
+        let german = plan.warnings.map { $0.text(in: .german) }
+        XCTAssertTrue(german.contains { $0.contains("„AMI hash of DXE“") }, "shown in the reader's language: \(german)")
         XCTAssertFalse(plan.warnings.contains(UEFIRebuild.rangesNotChecked), "they were checked")
     }
 
@@ -605,8 +615,8 @@ final class UEFIRebuildTests: XCTestCase {
 
         guard case .success(let plan) = UEFIRebuild.plan(edited, at: target, in: image, protected: ranges + [header])
         else { return XCTFail("refused") }
-        XCTAssertEqual(plan.warnings.filter { $0.contains("Insyde flash device map range") }.count, 1,
-                       "\(plan.warnings)")
+        let warnings = plan.warnings.map { $0.text(in: .english) }
+        XCTAssertEqual(warnings.filter { $0.contains("Insyde flash device map range") }.count, 1, "\(warnings)")
     }
 
     /// Ranges the change does not write into say nothing — nor does a range

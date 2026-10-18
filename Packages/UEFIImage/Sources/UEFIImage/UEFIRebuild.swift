@@ -36,7 +36,7 @@ public enum UEFIRebuild {
     public struct Plan: Equatable, Sendable {
         public var offset: UInt64
         public var bytes: [UInt8]
-        public var warnings: [String]
+        public var warnings: [LocalizedText]
         /// Where the part is held in the file once the plan is written: the
         /// node's new range, or the outermost compressed section's — which a
         /// link to the part follows from then on.
@@ -64,10 +64,10 @@ public enum UEFIRebuild {
             case pspBIOSImage(name: String)
         }
 
-        public var message: String
+        public var message: LocalizedText
         public var caution: Caution?
 
-        public init(_ message: String, caution: Caution? = nil) {
+        public init(_ message: LocalizedText, caution: Caution? = nil) {
             self.message = message
             self.caution = caution
         }
@@ -97,8 +97,8 @@ public enum UEFIRebuild {
     }
 
     /// Said with a plan the protected ranges were not given for (§6.4).
-    public static let rangesNotChecked =
-        "Boot Guard and vendor protected ranges were not checked: an edit inside one stops the platform starting."
+    public static let rangesNotChecked: LocalizedText =
+        L("Boot Guard and vendor protected ranges were not checked: an edit inside one stops the platform starting.")
 
     /// What writing `replacement` back at `target` takes, over the whole of
     /// `file`.
@@ -130,7 +130,7 @@ public enum UEFIRebuild {
         progress: (@Sendable (Progress) -> Void)? = nil
     ) -> Result<Plan, Refusal> {
         let report = Reporter(progress)
-        report.phase("Reading the structure of the image")
+        report.phase(L("Reading the structure of the image"))
         // The ranges are the caller's to give (`protected`), or — asked for
         // with `readsProtectedRanges` — this parse's own, so a caller with no
         // tree of its own does not parse the image twice.
@@ -164,13 +164,13 @@ public enum UEFIRebuild {
                     throw refusal
                 }
                 context.warnings.append(
-                    "The compressed data did not fit at the normal compression level, so it was compressed again at the maximum level."
+                    L("The compressed data did not fit at the normal compression level, so it was compressed again at the maximum level.")
                 )
             }
             guard rebuilt.count == file.count else {
-                throw Refusal("The rebuilt image is not the size of the file. Nothing was changed.")
+                throw Refusal(L("The rebuilt image is not the size of the file. Nothing was changed."))
             }
-            report.phase("Checking the rebuilt image")
+            report.phase(L("Checking the rebuilt image"))
             report.fraction(Reporter.checking)
             try verify(rebuilt, against: image, target: target, expected: context.targetBytes, limits: limits,
                        progress: { report.fraction(Reporter.checking + (1 - Reporter.checking) * $0) })
@@ -191,7 +191,7 @@ public enum UEFIRebuild {
         } catch let refusal as Refusal {
             return .failure(refusal)
         } catch {
-            return .failure(Refusal("\(error)"))
+            return .failure(Refusal(.verbatim("\(error)")))
         }
     }
 
@@ -216,20 +216,21 @@ public enum UEFIRebuild {
 
     /// A change inside the IBB refuses; one inside a vendor hash range is
     /// something the reader has to know.
-    static func protectionWarnings(_ runs: [Range<UInt64>], _ protected: [ProtectedRange]) throws -> [String] {
-        var warnings: [String] = []
+    static func protectionWarnings(_ runs: [Range<UInt64>], _ protected: [ProtectedRange]) throws -> [LocalizedText] {
+        var warnings: [LocalizedText] = []
         for range in protected {
             guard let hit = runs.first(where: { $0.overlaps(range.range) }) else { continue }
             switch range.kind {
             case .ibb:
                 throw Refusal(
-                    "The change writes at 0x\(hex(max(hit.lowerBound, range.range.lowerBound))) inside “\(range.name)”, part of the Boot Guard IBB: the processor checks it before the firmware runs, and an edit there stops the platform starting. Nothing was changed."
+                    L("The change writes at 0x%1$@ inside “%2$@”, part of the Boot Guard IBB: the processor checks it before the firmware runs, and an edit there stops the platform starting. Nothing was changed.",
+                      hex(max(hit.lowerBound, range.range.lowerBound)), range.name)
                 )
             case .vendorHash:
                 // A list names several ranges one way — every entry of an
                 // Insyde flash device map is its "range" — and a change
                 // through two of them is still one thing to say.
-                let warning = "The change writes inside “\(range.name)”: the hash the firmware checks it against no longer matches."
+                let warning: LocalizedText = L("The change writes inside “%1$@”: the hash the firmware checks it against no longer matches.", range.name)
                 if !warnings.contains(warning) { warnings.append(warning) }
             }
         }
@@ -241,7 +242,7 @@ public enum UEFIRebuild {
     /// What a rebuild is doing, and how far the whole of it has got, from 0
     /// to 1.
     public struct Progress: Equatable, Sendable {
-        public var phase: String
+        public var phase: LocalizedText
         public var fraction: Double
     }
 
@@ -255,13 +256,13 @@ public enum UEFIRebuild {
 
         private let sink: (@Sendable (Progress) -> Void)?
         private let lock = NSLock()
-        private var current = Progress(phase: "", fraction: 0)
+        private var current = Progress(phase: .verbatim(""), fraction: 0)
 
         init(_ sink: (@Sendable (Progress) -> Void)?) {
             self.sink = sink
         }
 
-        func phase(_ phase: String) {
+        func phase(_ phase: LocalizedText) {
             update { $0.phase = phase }
         }
 
@@ -313,7 +314,7 @@ public enum UEFIRebuild {
         ))
         for (kind, count) in after where count > before[kind, default: 0] {
             throw Refusal(
-                "Putting it back would leave the image with a new \(kind) — a fault in the rebuild, not in the edit. Nothing was changed."
+                L("Putting it back would leave the image with a new %1$@ — a fault in the rebuild, not in the edit. Nothing was changed.", kind)
             )
         }
         let readers = SpaceReaders(file: ImageReader(rebuilt), limits: limits)
@@ -322,7 +323,7 @@ public enum UEFIRebuild {
               reader.bytes(at: start, count: UInt64(expected.count)) == expected,
               target.range != nil || reader.count == UInt64(expected.count)
         else {
-            throw Refusal("The part does not read back from the rebuilt image. Nothing was changed.")
+            throw Refusal(L("The part does not read back from the rebuilt image. Nothing was changed."))
         }
     }
 
@@ -333,7 +334,7 @@ public enum UEFIRebuild {
         let image: UEFIImage
         let limits: UEFIParser.Limits
         let readers: SpaceReaders
-        var warnings: [String] = []
+        var warnings: [LocalizedText] = []
         /// The target's bytes as they will read back — the replacement with
         /// its own sizes and checksums put right.
         var targetBytes: [UInt8] = []
@@ -387,28 +388,30 @@ public enum UEFIRebuild {
             guard let section = compressedSection(holding: space) else {
                 // Nothing but the file itself is written as it comes.
                 guard space == .file else {
-                    throw Refusal("The compressed section the part came out of is not in the image any more.")
+                    throw Refusal(L("The compressed section the part came out of is not in the image any more."))
                 }
                 return newSpace
             }
             if section.kind == .biosGuardUpdate {
-                throw Refusal("“\(section.name)” is a BIOS region assembled from signed blocks. It is read here, and not written back: the blocks are the vendor's, and their signatures cannot be made again.")
+                throw Refusal(L("“%1$@” is a BIOS region assembled from signed blocks. It is read here, and not written back: the blocks are the vendor's, and their signatures cannot be made again.", section.name))
             }
             if section.kind == .amdFirmwareEntry {
                 // The BIOS directory gives the size the image inflates to, and
                 // nothing here rewrites the directory.
                 guard newSpace.count == original.count else {
                     throw Refusal(
-                        "“\(section.name)” would inflate to 0x\(hex(UInt64(newSpace.count))) bytes, and the BIOS directory gives 0x\(hex(UInt64(original.count))). The directory is not rewritten, so the image has to keep its size."
+                        L("“%1$@” would inflate to 0x%2$@ bytes, and the BIOS directory gives 0x%3$@. The directory is not rewritten, so the image has to keep its size.",
+                          section.name, hex(UInt64(newSpace.count)), hex(UInt64(original.count)))
                     )
                 }
                 let caution = Refusal.Caution.pspBIOSImage(name: section.name)
                 guard accepting.contains(caution) else {
                     throw Refusal(
-                        "“\(section.name)” is the BIOS image the PSP decompresses itself. It can be compressed again, but the properties of the PSP's decompressor and the way the PSP checks the integrity of the original zlib block are not known, so it is not known for certain whether the PSP will accept the changed image.",
+                        L("“%1$@” is the BIOS image the PSP decompresses itself. It can be compressed again, but the properties of the PSP's decompressor and the way the PSP checks the integrity of the original zlib block are not known, so it is not known for certain whether the PSP will accept the changed image.",
+                          section.name),
                         caution: caution)
                 }
-                warnings.append("“\(section.name)” was compressed again as a new zlib stream. Whether the PSP accepts it is not known: its decompressor and the check it makes of the original block are not documented.")
+                warnings.append(L("“%1$@” was compressed again as a new zlib stream. Whether the PSP accepts it is not known: its decompressor and the check it makes of the original block are not documented.", section.name))
             }
             let parentBytes = try bytes(of: section.space)
             let rebuilt = try recompressed(section, holding: newSpace, parentBytes: parentBytes)
@@ -420,7 +423,7 @@ public enum UEFIRebuild {
         func bytes(of space: ByteSpace) throws -> [UInt8] {
             if space == .file { return file }
             guard let reader = readers.reader(for: space), let bytes = reader.bytes(reader.all) else {
-                throw Refusal("A compressed section on the way to the part no longer decompresses.")
+                throw Refusal(L("A compressed section on the way to the part no longer decompresses."))
             }
             return bytes
         }
@@ -438,7 +441,7 @@ public enum UEFIRebuild {
         func topNodes(in space: ByteSpace) throws -> [UEFINode] {
             guard space != .file else { return image.roots }
             guard let section = compressedSection(holding: space) else {
-                throw Refusal("The compressed section the part came out of is not in the image any more.")
+                throw Refusal(L("The compressed section the part came out of is not in the image any more."))
             }
             return section.children.filter { $0.space == space }
         }
@@ -456,7 +459,7 @@ public enum UEFIRebuild {
                 nodes = node.children
             }
             guard let exact = path.lastIndex(where: { $0.range == range }) else {
-                throw Refusal("The part is not a whole structure of the image, so it cannot be laid out again.")
+                throw Refusal(L("The part is not a whole structure of the image, so it cannot be laid out again."))
             }
             return Array(path[...exact])
         }
@@ -483,7 +486,7 @@ public enum UEFIRebuild {
             }
             guard space != .file else {
                 return try settled(child, with: current, among: image.roots, end: UInt64(bytes.count),
-                                   endName: "the end of the file", bytes: bytes)
+                                   endName: L("the end of the file"), bytes: bytes)
             }
             // A buffer is a run of sections from its first byte.
             return run(try topNodes(in: space), replacing: child, with: current, bytes: bytes)
@@ -550,7 +553,7 @@ public enum UEFIRebuild {
             default:
                 guard UInt64(new.count) == child.range.count else {
                     let result = try settled(child, with: new, among: parent.children, end: parent.range.upperBound,
-                                             endName: "the end of “\(parent.name)”", bytes: bytes)
+                                             endName: L("the end of “%1$@”", parent.name), bytes: bytes)
                     return Array(result[Int(parent.range.lowerBound)..<Int(parent.range.upperBound)])
                 }
                 var result = Array(bytes[Int(parent.range.lowerBound)..<Int(parent.range.upperBound)])
@@ -568,14 +571,15 @@ public enum UEFIRebuild {
         /// region's contents — stays at its offset.
         func settled(
             _ child: UEFINode, with new: [UInt8], among siblings: [UEFINode],
-            end: UInt64, endName: String, bytes: [UInt8]
+            end: UInt64, endName: LocalizedText, bytes: [UInt8]
         ) throws -> [UInt8] {
             let old = child.range
             let oldLength = old.upperBound - old.lowerBound
             let newLength = UInt64(new.count)
             if child.flattened.contains(where: isVolumeTop) {
                 throw Refusal(
-                    "“\(child.name)” holds the Volume Top File, which has to end at the top of the address space, so it keeps its size of 0x\(hex(oldLength)) bytes and this one is 0x\(hex(newLength))."
+                    L("“%1$@” holds the Volume Top File, which has to end at the top of the address space, so it keeps its size of 0x%2$@ bytes and this one is 0x%3$@.",
+                      child.name, hex(oldLength), hex(newLength))
                 )
             }
             let next = siblings.first {
@@ -590,9 +594,15 @@ public enum UEFIRebuild {
                 var room: UInt64 = 0
                 while old.upperBound + room < limit, bytes[Int(old.upperBound + room)] == empty { room += 1 }
                 guard room >= needed else {
-                    let before = next.map { "“\($0.name)”" } ?? endName
+                    guard let next else {
+                        throw Refusal(
+                            L("“%1$@” is 0x%2$@ bytes longer than before, and only 0x%3$@ empty bytes follow it before %4$@.",
+                              child.name, hex(needed), hex(room), endName)
+                        )
+                    }
                     throw Refusal(
-                        "“\(child.name)” is 0x\(hex(needed)) bytes longer than before, and only 0x\(hex(room)) empty bytes follow it before \(before), which stays where it is."
+                        L("“%1$@” is 0x%2$@ bytes longer than before, and only 0x%3$@ empty bytes follow it before “%4$@”, which stays where it is.",
+                          child.name, hex(needed), hex(room), next.name)
                     )
                 }
                 result.replaceSubrange(Int(old.lowerBound)..<Int(old.upperBound + needed), with: new)
@@ -600,12 +610,14 @@ public enum UEFIRebuild {
                 let freed = [UInt8](repeating: empty, count: Int(oldLength - newLength))
                 result.replaceSubrange(Int(old.lowerBound)..<Int(old.upperBound), with: new + freed)
             }
-            let change = newLength > oldLength
-                ? "0x\(hex(newLength - oldLength)) bytes longer, taken from the empty space after it"
-                : "0x\(hex(oldLength - newLength)) bytes shorter, given back to the empty space after it"
-            var warning = "“\(child.name)” is now 0x\(hex(newLength)) bytes, \(change); what follows stays where it was."
+            var warning: LocalizedText = newLength > oldLength
+                ? L("“%1$@” is now 0x%2$@ bytes, 0x%3$@ bytes longer, taken from the empty space after it; what follows stays where it was.",
+                    child.name, hex(newLength), hex(newLength - oldLength))
+                : L("“%1$@” is now 0x%2$@ bytes, 0x%3$@ bytes shorter, given back to the empty space after it; what follows stays where it was.",
+                    child.name, hex(newLength), hex(oldLength - newLength))
             if child.kind == .volume {
-                warning += " The flash map the firmware carries (PCDs, vendor tables, an Insyde FDM) still gives its old size."
+                warning = .joined([warning, L("The flash map the firmware carries (PCDs, vendor tables, an Insyde FDM) still gives its old size.")],
+                                  separator: " ")
             }
             warnings.append(warning)
             return result
@@ -629,7 +641,7 @@ public enum UEFIRebuild {
         /// a whole number of that entry's blocks.
         func volumeSized(_ volume: [UInt8], name: String) throws -> [UInt8] {
             guard volume.count >= Int(FV.headerSize) else {
-                throw Refusal("“\(name)” is shorter than a volume header.")
+                throw Refusal(L("“%1$@” is shorter than a volume header.", name))
             }
             let length = UInt64(volume.count)
             var declared: UInt64 = 0
@@ -639,13 +651,14 @@ public enum UEFIRebuild {
                   length % blockLength == 0, length / blockLength <= UInt64(UInt32.max)
             else {
                 throw Refusal(
-                    "“\(name)” is 0x\(hex(length)) bytes, and its header says 0x\(hex(declared)): a volume is whole blocks of its block map, and this one cannot be made to say the new length."
+                    L("“%1$@” is 0x%2$@ bytes, and its header says 0x%3$@: a volume is whole blocks of its block map, and this one cannot be made to say the new length.",
+                      name, hex(length), hex(declared))
                 )
             }
             var bytes = volume
             Bytes.put(length, count: 8, at: 0x20, in: &bytes)
             Bytes.put32(UInt32(length / blockLength), at: Int(FV.headerSize), in: &bytes)
-            warnings.append("“\(name)” said it was 0x\(hex(declared)) bytes: its header now gives 0x\(hex(length)).")
+            warnings.append(L("“%1$@” said it was 0x%2$@ bytes: its header now gives 0x%3$@.", name, hex(declared), hex(length)))
             return bytes
         }
 
@@ -686,7 +699,7 @@ public enum UEFIRebuild {
             let ffs = volume.guid.flatMap(KnownGUIDs.ffsVersion(ofFileSystem:)) ?? 2
             let children = volume.children.filter { $0.space == space }
             guard let index = children.firstIndex(where: { $0.id == child.id }) else {
-                throw Refusal("“\(child.name)” is not laid out in “\(volume.name)”.")
+                throw Refusal(L("“%1$@” is not laid out in “%2$@”.", child.name, volume.name))
             }
 
             let old = child.range
@@ -734,12 +747,12 @@ public enum UEFIRebuild {
                 for node in moving {
                     if node.flattened.contains(where: \.isFixed) {
                         throw Refusal(
-                            "“\(node.name)” would move, and it is fixed at its address — the Volume Top File, a FIT target or a file marked fixed."
+                            L("“%1$@” would move, and it is fixed at its address — the Volume Top File, a FIT target or a file marked fixed.", node.name)
                         )
                     }
                     if let type = node.subtype, [0x03, 0x04, 0x06, 0x08].contains(type) {
                         throw Refusal(
-                            "“\(node.name)” would move, and it is code that runs in place from flash: moving it needs a rebase this editor does not do."
+                            L("“%1$@” would move, and it is code that runs in place from flash: moving it needs a rebase this editor does not do.", node.name)
                         )
                     }
                 }
@@ -775,13 +788,14 @@ public enum UEFIRebuild {
                                            saysSo: growth == .inSection)
                 }
                 throw Refusal(
-                    "“\(volume.name)” has 0x\(hex(absorbEnd - absorbStart)) bytes free where it can take room, and the change needs 0x\(hex(UInt64(newAbsorbStart - Int64(absorbStart))))."
+                    L("“%1$@” has 0x%2$@ bytes free where it can take room, and the change needs 0x%3$@.",
+                      volume.name, hex(absorbEnd - absorbStart), hex(UInt64(newAbsorbStart - Int64(absorbStart))))
                 )
             }
             if let pad = padBeforeTop {
                 let size = Int64(absorbEnd) - newAbsorbStart
                 guard size == 0 || size >= Int64(FFS.headerSize) else {
-                    throw Refusal("There is no room left for the pad file in front of the Volume Top File in “\(volume.name)”.")
+                    throw Refusal(L("There is no room left for the pad file in front of the Volume Top File in “%1$@”.", volume.name))
                 }
                 _ = pad
             }
@@ -807,7 +821,7 @@ public enum UEFIRebuild {
             }
             out += Array(bytes[Int(absorbEnd)..<Int(volume.range.upperBound)])
             guard UInt64(out.count) == volume.range.count else {
-                throw Refusal("“\(volume.name)” did not come out its own size — a fault in the rebuild. Nothing was changed.")
+                throw Refusal(L("“%1$@” did not come out its own size — a fault in the rebuild. Nothing was changed.", volume.name))
             }
             return out
         }
@@ -824,19 +838,21 @@ public enum UEFIRebuild {
             let end = Int(volume.range.upperBound)
             guard let blockLength = Bytes.oneBlockLength(bytes, at: start, end: end) else {
                 throw Refusal(
-                    "“\(volume.name)” has no room for 0x\(hex(needed)) more bytes, and its block map is not one a new size can be written into."
+                    L("“%1$@” has no room for 0x%2$@ more bytes, and its block map is not one a new size can be written into.",
+                      volume.name, hex(needed))
                 )
             }
             let length = UInt64(volume.range.count)
             guard length % blockLength == 0 else {
                 throw Refusal(
-                    "“\(volume.name)” has no room for 0x\(hex(needed)) more bytes, and its size is not a whole number of its blocks."
+                    L("“%1$@” has no room for 0x%2$@ more bytes, and its size is not a whole number of its blocks.",
+                      volume.name, hex(needed))
                 )
             }
             let extra = (needed + blockLength - 1) / blockLength * blockLength
             let newLength = length + extra
             guard newLength / blockLength <= UInt64(UInt32.max) else {
-                throw Refusal("“\(volume.name)” would need more blocks than its block map can count.")
+                throw Refusal(L("“%1$@” would need more blocks than its block map can count.", volume.name))
             }
             let empty: UInt8 = (Bytes.u32(bytes, start + 0x2C) & FV.erasePolarity) != 0 ? 0xFF : 0x00
 
@@ -861,7 +877,7 @@ public enum UEFIRebuild {
             }
             // A volume growing into the empty space after it is said by
             // `settled`, with what that means for the flash map.
-            if saysSo { warnings.append("“\(volume.name)” grew by 0x\(hex(extra)) bytes to make room.") }
+            if saysSo { warnings.append(L("“%1$@” grew by 0x%2$@ bytes to make room.", volume.name, hex(extra))) }
             return try rebuildVolume(bigger, replacing: child, with: new, bytes: grownBytes, space: space,
                                      growth: .none)
         }
@@ -893,7 +909,7 @@ public enum UEFIRebuild {
                   case .success(let decoded) = CompressedSection.decode(located, in: reader,
                                                                         limit: limits.maxDecompressedSize)
             else {
-                throw Refusal("“\(section.name)” no longer decompresses, so it cannot be compressed again the same way.")
+                throw Refusal(L("“%1$@” no longer decompresses, so it cannot be compressed again the same way.", section.name))
             }
             // The stretch of the bar between reading and checking that this
             // section's encode, one of `compressions`, has to itself.
@@ -902,8 +918,8 @@ public enum UEFIRebuild {
             compressed += 1
             let size = ByteCountFormatter.string(fromByteCount: Int64(buffer.count), countStyle: .file)
             report.phase(effort == .maximum
-                ? "Compressing “\(section.name)” again at the maximum level (\(size))"
-                : "Compressing “\(section.name)” (\(size))")
+                ? L("Compressing “%1$@” again at the maximum level (%2$@)", section.name, size)
+                : L("Compressing “%1$@” (%2$@)", section.name, size))
             let report = self.report
             let stream: [UInt8]
             do {
@@ -914,7 +930,7 @@ public enum UEFIRebuild {
                     progress: { report.fraction(low + share * $0) }
                 )
             } catch {
-                throw Refusal("“\(section.name)” could not be compressed again: \(error).")
+                throw Refusal(L("“%1$@” could not be compressed again: %2$@.", section.name, "\(error)"))
             }
             var header = Array(parentBytes[Int(section.header.lowerBound)..<Int(located.body.lowerBound)])
             if section.kind == .section, section.subtype == Section.compression {
@@ -941,7 +957,7 @@ public enum UEFIRebuild {
         func noteSigned(_ section: UEFINode) {
             guard section.subtype == Section.guidDefined, let guid = section.guid else { return }
             if guid == Bytes.signedGUID {
-                warnings.append("“\(section.name)” is signed, and its signature no longer matches what it holds.")
+                warnings.append(L("“%1$@” is signed, and its signature no longer matches what it holds.", section.name))
             }
         }
 
@@ -1002,12 +1018,12 @@ public enum UEFIRebuild {
             var bytes = section
             if u24(bytes, 0) == Section.extendedSizeMarker, bytes.count >= 8 {
                 guard bytes.count <= Int(UInt32.max) else {
-                    throw Refusal("“\(name)” would be larger than a section can say.")
+                    throw Refusal(L("“%1$@” would be larger than a section can say.", name))
                 }
                 put32(UInt32(bytes.count), at: 4, in: &bytes)
             } else {
                 guard bytes.count < Int(Section.extendedSizeMarker) else {
-                    throw Refusal("“\(name)” would grow past 16 MiB, which its short header cannot say.")
+                    throw Refusal(L("“%1$@” would grow past 16 MiB, which its short header cannot say.", name))
                 }
                 put(UInt64(bytes.count), count: 3, at: 0, in: &bytes)
             }
@@ -1018,7 +1034,7 @@ public enum UEFIRebuild {
         static func file(_ file: [UInt8], name: String, volumeRevision: UInt8, ffsVersion: Int) throws -> [UInt8] {
             var bytes = file
             guard bytes.count >= Int(FFS.headerSize) else {
-                throw Refusal("“\(name)” is shorter than a file header.")
+                throw Refusal(L("“%1$@” is shorter than a file header.", name))
             }
             let attributes = bytes[0x13]
             let isLarge = attributes & FFS.largeFile != 0
@@ -1032,7 +1048,7 @@ public enum UEFIRebuild {
             } else {
                 headerSize = Int(FFS.headerSize)
                 guard bytes.count <= 0xFF_FFFF else {
-                    throw Refusal("“\(name)” would grow past 16 MiB in a file with no large-file header.")
+                    throw Refusal(L("“%1$@” would grow past 16 MiB in a file with no large-file header.", name))
                 }
                 put(UInt64(bytes.count), count: 3, at: 0x14, in: &bytes)
             }

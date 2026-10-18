@@ -81,18 +81,18 @@ public struct UEFIPartCodec: PartCodec {
         let accepting = Set(parent.overrides.compactMap(Self.caution(token:)))
         let result = UEFIRebuild.plan(part, at: target, in: file, readsProtectedRanges: true,
                                       accepting: accepting) {
-            progress?($0.phase, $0.fraction)
+            progress?($0.phase.text, $0.fraction)
         }
         switch result {
         case .failure(let refusal):
             if let caution = refusal.caution { throw Self.refusal(for: caution) }
-            throw PartRefusal(title: L("“%1$@” cannot be put back", parent.partName), message: .verbatim(refusal.message))
+            throw PartRefusal(title: L("“%1$@” cannot be put back", parent.partName), message: refusal.message)
         case .success(let plan):
             return PartUpdate(
                 offset: plan.offset, bytes: plan.bytes, source: plan.source,
                 notes: plan.warnings.isEmpty
                     ? [L("Nothing was written inside a Boot Guard or vendor protected range.") as LocalizedText]
-                    : plan.warnings.map(LocalizedText.verbatim)
+                    : plan.warnings
             )
         }
     }
