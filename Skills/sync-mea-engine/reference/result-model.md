@@ -117,12 +117,15 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   Revision 49 adds `uepSettings`: the FPF/UEP settings an image's `$UEP` area
   holds, each as the tool's identifier and the value of its bits
   (`UEPReading`). The map of places is the tool's own (`UEPMap`, emitted from
-  the `GetBitArrayValue` actions) and **only the container's first bit array**
-  is read — the one the Boot Guard word is in; a setting the tool places only
-  in another array is not in a map. The values are what the build wrote into
+  the `GetBitArrayValue` actions). The values are what the build wrote into
   the image, not the fuses the platform later burns, and most of them are
   zero. Ours; upstream reads none of the UEP bits. The Full Info tree shows
   them under "FPF Settings", in the tool's sections.
+  Revision 54 changes what that field answers on CSME 18: the tool's rewritten
+  database places `PLAT_ID`, `DNX`, `RPMC_RB`, `ESE_ROM_SVN_EN`, the CSE FVC
+  states and the validity bits beside them in the container's **second** array,
+  and the map now says which array each setting is in (`arraySize` 0x80), so
+  they are read too. The 15/16 map keeps to the first array, as before.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct

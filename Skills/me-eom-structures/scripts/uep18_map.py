@@ -17,10 +17,11 @@ container keeps.
 **The place.** The tool builds the area as `UepHeader` — 8 bytes: signature
 `$UEP`, a CRC-16, a reserved word — followed by `arrays_count × 0x80` bytes of
 arrays (`FitByteArray(arrays_count * 0x80)` in its own code), and a
-`serialized_item`'s `offset` counts from the start of the arrays. `UEPMap`
-reads the **first** array, offsets 0x00–0x7F, so an item at 0x80 or beyond is
-in a later array and is left out — as the older tool's settings placed only in
-another array are.
+`serialized_item`'s `offset` counts from the start of the arrays. An item at
+0x80 or beyond is in a later array: it is emitted as `Placement(array: at //
+0x80, offset: at % 0x80, …)` and the map says `arraySize: 0x80`, so `UEPMap`
+reads it where the tool puts it. An item past the container's own
+`arrays_count` is left out and named.
 
 The 8-byte header is confirmed on the CSME 18 dump at hand: its CRC-16 (poly
 0x1021, init 0xFFFF, no reflection) over bytes +6…+0x208 — reserved through
@@ -33,8 +34,8 @@ FW_TYPE 0).
 Settings are merged across the documents that hold them; a name two documents
 place differently is dropped and named. Wording is the fuller one, as in the
 configuration map. The ESE document (`ESE_CFG_DONE`, `ESE_TRC_EN`,
-`ESE_ROM_SVN_EN`) is part of the same merge: its first two are in the first
-array, the third is not.
+`ESE_ROM_SVN_EN`) is part of the same merge; its three settings do not all sit
+in the same array.
 
     python3 uep18_map.py <mfit-18.1.exe> > \\
         Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME18.swift
@@ -50,7 +51,8 @@ import sys
 import zlib
 
 GENERATION = "18"
-FIRST_ARRAY = 0x80
+ARRAY_SIZE = 0x80
+DEFAULT_ARRAYS = 4
 
 TWO_KINDS = {
     "no_yes_options": {0: "No", 1: "Yes"},
@@ -139,23 +141,26 @@ def options_of(entry):
 
 
 def settings_of(text):
-    """The first-array settings of one document: name, place, words."""
+    """The settings of one document that the container's arrays hold."""
     binds = {item: controller for _, controller, item in BIND.findall(text)}
     words = ui_words(text)
     arrays = re.search(r'<ui_item name="arrays_count"[^>]*value="([^"]+)"', text)
     count = int(arrays.group(1)) if arrays else None
+    extent = (count if count is not None else DEFAULT_ARRAYS) * ARRAY_SIZE
     found, left_out = [], 0
     for name, kind, value, offset, low, high in ITEM.findall(text):
         if kind != "BitfieldItem":
             continue
         at = int(offset, 0)
-        if at + (int(high) // 8) >= FIRST_ARRAY:
+        if at + (int(high) // 8) >= extent:
             left_out += 1
             continue
         entry = words.get(binds.get(name))
         found.append({
             "name": name,
             "offset": at,
+            "array": at // ARRAY_SIZE,
+            "in_array": at % ARRAY_SIZE,
             "bit": int(low),
             "count": int(high) - int(low) + 1,
             "label": entry["label"] if entry else None,
@@ -203,9 +208,9 @@ def swift(tool, entries):
         "// `UEPs_Data` documents. Names, labels, sections, option words and places",
         "// are the tool's; nothing here is read out of a dump.",
         "//",
-        "// A setting's place is in the **first** bit array, offsets 0x00–0x7F of",
-        "// the arrays that follow the container's 8-byte `$UEP` header (signature,",
-        "// CRC-16, reserved). An item the tool places in a later array is not here.",
+        "// A setting's place is an array and an offset into it, in the arrays that",
+        "// follow the container's 8-byte `$UEP` header (signature, CRC-16,",
+        "// reserved). Each array is `arraySize` bytes.",
         "//",
         "// What the arrays hold on a vendor dump is the state the build wrote, not",
         "// the fuses the platform will burn: see `Design/ME_STRUCTURES.md`.",
@@ -220,8 +225,8 @@ def swift(tool, entries):
     ]
     for entry in entries:
         args = ["name: %s" % swift_literal(entry["name"]),
-                "placement: Placement(array: 0, offset: 0x%X, bit: %d, count: %d)"
-                % (entry["offset"], entry["bit"], entry["count"])]
+                "placement: Placement(array: %d, offset: 0x%X, bit: %d, count: %d)"
+                % (entry["array"], entry["in_array"], entry["bit"], entry["count"])]
         if entry["label"]:
             args.append("label: %s" % swift_literal(entry["label"]))
         if entry["section"]:
@@ -234,7 +239,8 @@ def swift(tool, entries):
             args.append("options: [%s]" % pairs)
         lines.append("            Setting(%s)," % ", ".join(args))
     lines += ["        ],",
-              "        arrayStart: 8)",
+              "        arrayStart: 8,",
+              "        arraySize: 0x%X)" % ARRAY_SIZE,
               "}", ""]
     return "\n".join(lines)
 
@@ -252,9 +258,11 @@ def main():
     for digest, text in documents(blob):
         found, left_out, arrays = settings_of(text)
         documents_found.append((digest, found))
-        print("document %s: %d settings in the first array, %d in a later one, "
-              "arrays_count %s" % (digest[:8], len(found), left_out,
-                                   arrays if arrays is not None else "?"),
+        later = sum(1 for entry in found if entry["array"] > 0)
+        print("document %s: %d settings (%d past the first array), %d past "
+              "the container's arrays, arrays_count %s"
+              % (digest[:8], len(found), later, left_out,
+                 arrays if arrays is not None else "?"),
               file=sys.stderr)
     if not documents_found:
         print("no UEPs_Data document found in this build", file=sys.stderr)

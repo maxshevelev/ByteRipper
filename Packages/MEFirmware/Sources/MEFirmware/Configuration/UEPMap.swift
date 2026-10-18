@@ -8,10 +8,12 @@ import Foundation
 /// only statement of it. Each setting has a declaration (`RpmcSupported`,
 /// "RPMC Supported", section `RpmcConfiguration`) and a `GetBitArrayValue`
 /// action giving its place — one of several arrays the container keeps
-/// (`UepBitsArray0`, `…2`, `…4`). **Only the first array is read**: it is the
-/// one `BootGuardReader` takes the Boot Guard profile from, on the generations
-/// whose container is one, and a setting the tool places only in another array
-/// is not in a map.
+/// (`UepBitsArray0`, `…2`, `…4`). The first array is the one
+/// `BootGuardReader` takes the Boot Guard profile from, on the generations
+/// whose container is one. A map says whether it names later arrays:
+/// Flash Image Tool 15/16 place every setting in the first, while CSME 18's
+/// rewritten database puts a few in the second (`PLAT_ID`, `DNX`,
+/// `RPMC_RB` and the validity bits beside them).
 ///
 /// What an image's array holds is the state the build wrote. On the dumps at
 /// hand most settings read zero, and the profile's own bits are the ones that
@@ -23,7 +25,8 @@ public struct UEPMap: Sendable {
     /// the tool's action states. A field may run past the 32-bit word it
     /// starts in: `sb_bsmm_svn` is bit 30, 15 bits long.
     public struct Placement: Sendable, Equatable {
-        /// Which of the container's arrays; always the first in a map.
+        /// Which of the container's arrays — zero where the map keeps to the
+        /// first, which is every setting of 15/16 and most of 18's.
         public var array: Int
         /// Byte offset into the array.
         public var offset: Int
@@ -79,11 +82,18 @@ public struct UEPMap: Sendable {
     /// `$UEP` header (signature, CRC-16, reserved) followed directly by the
     /// arrays, so its first array begins at +8.
     public var arrayStart: Int
+    /// The size of one array where the container's arrays are laid
+    /// contiguously and a map names later ones (CSME 18: 0x80). Zero where a
+    /// map keeps to the first array and the tool's offsets are already places
+    /// in it — the 15/16 area.
+    public var arraySize: Int
 
-    public init(name: String, settings: [Setting], arrayStart: Int = 0x0C) {
+    public init(name: String, settings: [Setting], arrayStart: Int = 0x0C,
+                arraySize: Int = 0) {
         self.name = name
         self.settings = settings
         self.arrayStart = arrayStart
+        self.arraySize = arraySize
     }
 
     /// The map for a generation's major number, or nil where the area is not
@@ -112,12 +122,13 @@ public struct UEPReading: Codable, Sendable, Equatable {
     }
 }
 
-/// Reading the area's first bit array: the container's `$UEP` signature, its
-/// first array 0x0C bytes past it (measured — the Boot Guard word's
-/// `offset 0x60, startBit 16` lands at byte 0x6E, which is where
-/// `BootGuardReader` reads the profile from), and each setting's bits from
-/// its offset, little-endian. A field may run past the word it starts in, so
-/// up to eight bytes are read and the mask shifted out of them.
+/// Reading the area's bit arrays: the container's `$UEP` signature, its
+/// first array `arrayStart` bytes past it (0x0C for 15/16, measured — the
+/// Boot Guard word's `offset 0x60, startBit 16` lands at byte 0x6E, which is
+/// where `BootGuardReader` reads the profile from; 8 for 18, the tool's own
+/// header), and each setting's bits from its array and offset,
+/// little-endian. A field may run past the word it starts in, so up to eight
+/// bytes are read and the mask shifted out of them.
 public enum UEPReader {
     /// How far past the container's signature the first array begins in the
     /// CSME 15/16 area — the default of `UEPMap.arrayStart`.
@@ -128,13 +139,15 @@ public enum UEPReader {
     /// area erased past reading answers nothing rather than zeros.
     public static func readings(in area: Data, map: UEPMap) -> [UEPReading]? {
         guard let container = BootGuardReader.containerOffset(in: area) else { return nil }
-        let array = container + map.arrayStart
+        let arrays = container + map.arrayStart
         var readings: [UEPReading] = []
         for setting in map.settings {
             let place = setting.placement
             guard place.count > 0, place.count <= 64, place.bit >= 0,
                   place.bit + place.count <= 64 else { continue }
-            let at = array + place.offset
+            let at = arrays
+                + (map.arraySize > 0 ? place.array * map.arraySize : 0)
+                + place.offset
             // The bytes the field's last bit touches, no more: an offset near
             // the area's end still reads where the field fits.
             let touched = (place.bit + place.count + 7) / 8
