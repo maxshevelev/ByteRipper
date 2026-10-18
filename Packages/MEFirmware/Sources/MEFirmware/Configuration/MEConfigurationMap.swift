@@ -187,8 +187,9 @@ public struct MEConfigurationMap: Sendable, Equatable {
     /// by (`version.major`), which is what a map is verified against.
     ///
     /// `family` names the half of the generation the board is, where the dump
-    /// says: CSME 12, 13, 14 and 15 have a map for each, and CSME 16 has one
-    /// for both — MFIT's database merges the platform lists it builds from. nil is
+    /// says: CSME 12, 13, 14 and 15 have a map for each, and CSME 11 and 16
+    /// have one for both — FIT 11's SPT layout is one set of documents, and
+    /// MFIT 16's database merges the platform lists it builds from. nil is
     /// a dump that did not say (no descriptor, or a section length neither
     /// half uses), and is read as the mobile one: the engine and the panel
     /// both ask through here, so the values they show cannot come from two
@@ -197,6 +198,7 @@ public struct MEConfigurationMap: Sendable, Equatable {
         let desktop = family == .desktop
         let map: MEConfigurationMap
         switch major {
+        case 11: map = .csme11
         case 12: map = desktop ? .csme12Desktop : .csme12
         case 13: map = desktop ? .csme13Desktop : .csme13
         case 14: map = desktop ? .csme14Desktop : .csme14

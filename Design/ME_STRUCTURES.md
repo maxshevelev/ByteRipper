@@ -472,7 +472,15 @@ documentation read where the row is. TGL LP gives **21 files and 60 settings**;
 two of the four TGL layouts (`tgp_lp_a1`, `tgp_lp_c0`) agree on every binding
 they share, and the H ones are another SKU's, so the LP pair is read as one map.
 
-**ME 12 is the oldest generation with a map of its own.** FIT 12's CNP
+**ME 11 has one too, and it is FIT 11's SPT layout**: one set of documents for
+both platform halves — `--straps spt_fit_layout` — 11 files and 28 settings in
+`MEConfigurationMap+CSME11`, read for either family. Its volumes carry no
+`FileTable.dat`, the same home-directory rule resolves the paths, and the
+CSME 11 dump at hand (11.8.92.4222, Corporate LP) reads eight files: the EOM
+record, the policy file, `bup/si_features`, `pavp/lspcon_port`, the PTT
+records and `manuf_lock`.
+
+**ME 12 is the next generation with a map of its own.** FIT 12's CNP
 documents give `cnp_lp_rvp` and `cnp_h_rvp`: 9 files and 21 settings for the
 mobile half, 15 and 39 for the desktop one (the H documents add AMT, MCTP and
 manageability settings), emitted as `MEConfigurationMap+CSME12` and

@@ -151,6 +151,13 @@ python3 Skills/me-eom-structures/scripts/fit_map.py <fit-14.0.exe> \
     Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME14.swift
 ```
 
+ME 11's is FIT 11's SPT layout (`--straps spt_fit_layout`): one set of
+documents for both halves, so one map serves either family and there is no
+desktop twin. Its volumes carry no `FileTable.dat` either, and the CSME 11
+dump at hand (11.8.92.4222, Corporate LP) reads eight of its files through
+the home directory — the EOM record, the policy file, `bup/si_features`,
+`pavp/lspcon_port`, the PTT records and `manuf_lock`.
+
 ME 12's are `cnp_lp_rvp` and `cnp_h_rvp` (the strap include the CNP layout
 names; the older tool calls its strap files `*_rvp`, not `*_straps`). Its
 volumes carry **no `FileTable.dat`** — the names live in the MFS home
