@@ -211,25 +211,35 @@ public struct MEConfigurationMap: Sendable, Equatable {
     }
 
     /// The live record of the board's End of Manufacturing, appended to every
-    /// map — the one file that is ours and not the tool's.
+    /// map — the one entry whose words are ours, not the tool's.
     ///
-    /// `/home/mca/manuf_lock` is in **no** MFIT or FIT database: the build
-    /// writes its record with a zero and the platform sets it to 1 when it
-    /// closes End of Manufacturing (`Design/ME_STRUCTURES.md`). The
-    /// Configuration tab can show it like any other file — both copies side by
-    /// side, the build's zero and the platform's byte — which is why the entry
-    /// is added here rather than in a generated map: a regenerated map must not
-    /// lose it, and no generator can emit a setting its source does not have.
-    /// The identifier is ours; the label is the row the Summary gives it.
+    /// The build writes `/home/mca/manuf_lock` with a zero and the platform
+    /// sets it to 1 when it closes End of Manufacturing
+    /// (`Design/ME_STRUCTURES.md`). The Configuration tab shows it like any
+    /// other file — both copies side by side, the build's zero and the
+    /// platform's byte — which is why the entry is added here rather than left
+    /// to a generated map: a regenerated map must not lose it.
+    ///
+    /// **FIT binds the same byte too, since its common layouts were followed**
+    /// (`fit_map.py`): FIT 11's `EOMManufLock` and FIT 13-15's `PostManuf` put
+    /// `NvarPostManUnLckd` there, with the tool's labels for the *other* side
+    /// of the record ("Post Manufacturing NVAR Configuration Enabled", 1 = No).
+    /// The tool's entry is replaced where a map has one: the byte is one fact,
+    /// and a bench reads it by the name the Summary uses. MFIT's maps name no
+    /// file there, so theirs is still appended.
     private func addingManufacturingLock() -> MEConfigurationMap {
         let path = "/home/mca/manuf_lock"
-        guard file(at: path) == nil else { return self }
-        var map = self
-        map.files.append(File(path: path, alias: "ManufLock", settings: [
+        let entry = File(path: path, alias: "ManufLock", settings: [
             Setting(name: "ManufLock", offset: 0, length: 1,
                     label: "Manufacturing Lock",
                     options: [0: "Not locked", 1: "Locked"]),
-        ]))
+        ])
+        var map = self
+        if let index = map.files.firstIndex(where: { $0.path == path }) {
+            map.files[index] = entry
+        } else {
+            map.files.append(entry)
+        }
         return map
     }
 

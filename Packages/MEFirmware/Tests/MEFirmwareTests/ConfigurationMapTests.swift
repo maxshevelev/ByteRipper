@@ -29,11 +29,12 @@ final class ConfigurationMapTests: XCTestCase {
     /// the four maps only the CSME 16 one, which comes from MFIT, carries it.
     func testTheThirteenMapIsWhatFit13LaysOut() {
         let map = MEConfigurationMap.csme13
-        // 15 files and 40 settings since the places the tool names by a file
-        // alone (`hw_binding`, `amt.wol`, …) are read too; the extra files are
-        // the ones those settings are.
-        XCTAssertEqual(map.files.count, 15)
-        XCTAssertEqual(map.files.flatMap(\.settings).count, 40)
+        // The platform document and the common one it includes: the settings
+        // the family shares — the FPF hardware binding, the ICC profile keys,
+        // Boot Guard's files — are bound in the common document, so the map
+        // reads both.
+        XCTAssertEqual(map.files.count, 31)
+        XCTAssertEqual(map.files.flatMap(\.settings).count, 67)
         for fit in [MEConfigurationMap.csme11, .csme12, .csme13, .csme14, .csme15] {
             XCTAssertFalse(fit.files.flatMap(\.settings).contains { $0.auto }, "\(fit.name)")
         }
@@ -44,10 +45,10 @@ final class ConfigurationMapTests: XCTestCase {
     /// FIT 12's map: the older class shape, one document per platform half, so
     /// the mobile and desktop halves are two maps with different file lists.
     func testTheTwelveMapIsWhatFit12LaysOut() throws {
-        XCTAssertEqual(MEConfigurationMap.csme12.files.count, 9)
-        XCTAssertEqual(MEConfigurationMap.csme12.files.flatMap(\.settings).count, 21)
-        XCTAssertEqual(MEConfigurationMap.csme12Desktop.files.count, 15)
-        XCTAssertEqual(MEConfigurationMap.csme12Desktop.files.flatMap(\.settings).count, 39)
+        XCTAssertEqual(MEConfigurationMap.csme12.files.count, 25)
+        XCTAssertEqual(MEConfigurationMap.csme12.files.flatMap(\.settings).count, 52)
+        XCTAssertEqual(MEConfigurationMap.csme12Desktop.files.count, 31)
+        XCTAssertEqual(MEConfigurationMap.csme12Desktop.files.flatMap(\.settings).count, 70)
         let eom = try XCTUnwrap(MEConfigurationMap.csme12.file(at: "/home/mca/eom_config"))
         XCTAssertEqual(eom.settings.map(\.name),
                        ["EomFirstBootEnabled", "FlexibleEomSettings"])
@@ -56,10 +57,14 @@ final class ConfigurationMapTests: XCTestCase {
     /// FIT 11's SPT layout: one set of documents for both halves, so one map
     /// serves either family and there is no desktop twin.
     func testTheElevenMapIsWhatFit11LaysOut() throws {
-        XCTAssertEqual(MEConfigurationMap.csme11.files.count, 11)
-        XCTAssertEqual(MEConfigurationMap.csme11.files.flatMap(\.settings).count, 28)
+        // FIT 11's SPT layout is one set of documents for both halves, and the
+        // map reads its common documents too: Boot Guard's policy files, the
+        // OEM key hash and the OEM certificates are bound there.
+        XCTAssertEqual(MEConfigurationMap.csme11.files.count, 43)
+        XCTAssertEqual(MEConfigurationMap.csme11.files.flatMap(\.settings).count, 82)
         let policy = try XCTUnwrap(MEConfigurationMap.csme11.file(at: "/home/policy/cfgmgr/cfg_rules"))
-        XCTAssertEqual(policy.settings.first?.name, "MELanPowerWell")
+        let lan = try XCTUnwrap(policy.settings.first { $0.name == "MELanPowerWell" })
+        XCTAssertEqual(lan.offset, 188)
         XCTAssertEqual(MEConfigurationMap.forME(major: 11, family: .desktop)?.name,
                        MEConfigurationMap.forME(major: 11, family: .mobile)?.name)
     }
@@ -310,10 +315,13 @@ final class ConfigurationMapTests: XCTestCase {
         XCTAssertEqual(binding.options?[1], "Enabled")
         XCTAssertNil(binding.bits, "the whole byte, not a bitfield")
 
-        // CSME 15's own layout does not name it — the TGL family leaves the
-        // setting to the FPF — and the number type states its own width.
-        XCTAssertNil(MEConfigurationMap.csme15.files.flatMap(\.settings)
+        // Every FIT map that reads its family's common document has it: the
+        // binding lives there, not in the platform document, which is why the
+        // 15 map lacked it before the includes were followed.
+        let tgp = try XCTUnwrap(MEConfigurationMap.csme15.files.flatMap(\.settings)
             .first { $0.name == "HwBindingEn" })
+        XCTAssertEqual(tgp.offset, 0)
+        XCTAssertEqual(tgp.length, 1)
         let timeout = try XCTUnwrap(MEConfigurationMap.csme15.files.flatMap(\.settings)
             .first { $0.name == "AmtIdleTimeout" })
         XCTAssertEqual(timeout.offset, 0)

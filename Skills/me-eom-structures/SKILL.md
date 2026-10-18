@@ -133,6 +133,21 @@ file, certificates among them) are left out, and the generator prints them as
 one `not read — …` line, so what a map does not hold is a list rather than
 silence.
 
+**A layout is more than the platform document `--straps` selects.** FIT splits
+it: that document carries the build's straps and the settings that differ,
+while what every platform of the family shares is bound in a **common document
+it includes** — Boot Guard's policy, key-manifest-id and OEM-key-hash files on
+CSME 11, the FPF hardware binding, the ICC profile keys, the OEM certificates,
+BIST, MCTP and the OEM tag on the newer generations. The generator follows
+`<Include>` transitively and reads the bindings of the whole closure; reading
+the selected document alone loses those settings without a warning. An include
+names a file, and a document states its own name only in the licence header —
+which most of them carry over from another file — so a name resolves an include
+only where it is unique. FIT 15 packs two documents called
+`lkf_fit_layout_1_7_common.xml`; the one that defines more of the classes the
+including layout refers to is the one it was written against (114 of 191
+against 55), and that is how the ambiguous name is settled.
+
 A place the tool gives only under another setting's value — its
 `buildConditional` actions — is kept with that condition (`Condition(name:value:)`,
 the value resolved through the condition setting's own value class:
@@ -154,17 +169,20 @@ python3 Skills/me-eom-structures/scripts/fit_map.py <fit-14.0.exe> \
 ME 11's is FIT 11's SPT layout (`--straps spt_fit_layout`): one set of
 documents for both halves, so one map serves either family and there is no
 desktop twin. Its volumes carry no `FileTable.dat` either, and the CSME 11
-dump at hand (11.8.92.4222, Corporate LP) reads eight of its files through
-the home directory — the EOM record, the policy file, `bup/si_features`,
-`pavp/lspcon_port`, the PTT records and `manuf_lock`.
+dump at hand (11.8.92.4222, Corporate LP) reads 37 of the map's 43 files
+through the home directory — the EOM record, the policy file,
+`bup/si_features`, `pavp/lspcon_port`, the PTT records, `manuf_lock`, and,
+from the common document, **Boot Guard's own records**: `secureboot/bootpoltype`
+(measured/verified boot), `bootpolres`, `kmid`, `pubkeyhash` (the OEM public
+key hash), `enfpolicy`, `selftestres` and `s3optdis`.
 
 ME 12's are `cnp_lp_rvp` and `cnp_h_rvp` (the strap include the CNP layout
 names; the older tool calls its strap files `*_rvp`, not `*_straps`). Its
 volumes carry **no `FileTable.dat`** — the names live in the MFS home
 directory — so the engine walks that tree for the paths when the table is
-absent (`MEFirmwareAnalyzer`). The two maps have 9 and 15 files, and the CSME
-12 dump at hand reads 11 of them, among them the EOM records, the policy file
-and `bup/si_features`.
+absent (`MEFirmwareAnalyzer`). The two maps have 25 and 31 files, and the CSME
+12 dump at hand reads 19 of the mobile map's 25, among them the EOM records,
+the policy file, `bup/si_features` and `bup/bup_sku/hw_binding`.
 
 ```bash
 python3 Skills/me-eom-structures/scripts/fit_map.py <fit-12.exe> \

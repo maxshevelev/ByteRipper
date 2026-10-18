@@ -2796,5 +2796,12 @@ public enum EngineModelRevision {
     /// too, through Flash Image Tool 11's SPT map (`MEConfigurationMap.csme11`),
     /// which serves both platform halves. That generation's volumes carry no
     /// `FileTable.dat` either, and the home directory resolves the paths.
-    public static let current = 58
+    /// 59 does not grow the shape either: the FIT maps now read the documents
+    /// their platform layout includes, so `configuration` carries the settings
+    /// the family binds in `*_common.xml` — Boot Guard's policy, key-manifest
+    /// id and OEM key hash files on CSME 11, the FPF hardware binding, the ICC
+    /// profile keys, the OEM certificates and the MCTP and BIST files on every
+    /// generation FIT 11-15 maps. A dump shows more rows; nothing in the model
+    /// moved.
+    public static let current = 59
 }

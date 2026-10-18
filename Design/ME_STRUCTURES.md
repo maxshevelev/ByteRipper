@@ -69,8 +69,12 @@ the flag decides the EOM on First Boot row, and the flexible setting has a row o
 own beside it, in those four values — it is stored whether or not the flag is
 set, so it says what an image would lock if it ever ran.
 
-Two further bytes on that row of the file system are **not** in any MFIT
-database: `/home/mca/manuf_lock`, and `/home/mca/eom`'s live value. They record
+Two further bytes on that row of the file system describe the **board**, not
+the image: `/home/mca/manuf_lock`, which no MFIT database names at all, and
+`/home/mca/eom`'s live value. (FIT binds both — `EOMManufLock` / `PostManuf`
+and `EndOfManufacturing` — and MFIT binds `eom` too. Where a map carries FIT's
+entry for the lock file, the curated `ManufLock` entry replaces it, because the
+byte is reported here by the lock's meaning.) They record
 the *board*, not the image, and the controlled first boot settled what they say
 (below): a board flashed an image with the flag clear — nothing for End of
 Manufacturing to lock — has both at **0** after that boot, while every factory
@@ -468,29 +472,53 @@ panel says about it (`help` — MFIT has the same words on the `<UI>` element of
 the setting, with its paragraphs as `&#13;&#10;` where FIT writes `&#60;br
 /&#62;`). Both are copied into the map and the Configuration tab shows the
 second behind the `?` beside a row, in the tool's English: it is the tool's
-documentation read where the row is. TGL LP gives **21 files and 60 settings**;
+documentation read where the row is. TGL LP gives **38 files and 85 settings**;
 two of the four TGL layouts (`tgp_lp_a1`, `tgp_lp_c0`) agree on every binding
 they share, and the H ones are another SKU's, so the LP pair is read as one map.
 
+**The platform document is not the whole layout.** FIT splits one family's
+layout across files: the document `--straps` selects carries that build's straps
+and the settings that differ, and a **common document it includes**
+(`lkf_fit_layout_1_7_common.xml` for the 1.7 family, `cnp_fit_layout_1_6_common.xml`
+for the older one) binds what every platform of the family shares. There are the
+FPF hardware binding, the ICC profile keys, the OEM tag, BIST, MCTP and the OEM
+certificates; on CSME 11's older common document, Boot Guard's whole set of
+policy records. `fit_map.py` follows `<Include>` transitively and reads the
+bindings of the closure. Before it did, every one of those settings was absent
+from the maps: the TGL LP map had 31 files and 74 settings, and CSME 11's
+eleven files did not include a single Boot Guard record. An include names a
+file, and a document states its own name only in the licence header — which
+most of them carry over from another file — so a name settles an include only
+where it is unique. FIT 15 packs two `lkf_fit_layout_1_7_common.xml`; the larger
+one defines 114 of the 191 classes the including layout refers to against 55,
+and is the one it was written against.
+
 **ME 11 has one too, and it is FIT 11's SPT layout**: one set of documents for
-both platform halves — `--straps spt_fit_layout` — 11 files and 28 settings in
+both platform halves — `--straps spt_fit_layout` — 43 files and 82 settings in
 `MEConfigurationMap+CSME11`, read for either family. Its volumes carry no
 `FileTable.dat`, the same home-directory rule resolves the paths, and the
-CSME 11 dump at hand (11.8.92.4222, Corporate LP) reads eight files: the EOM
-record, the policy file, `bup/si_features`, `pavp/lspcon_port`, the PTT
-records and `manuf_lock`.
+CSME 11 dump at hand (11.8.92.4222, Corporate LP) reads 37 of those files: the
+EOM record, the policy file, `bup/si_features`, `pavp/lspcon_port`, the PTT
+records, `manuf_lock`, and — from the common document the SPT layout includes —
+**Boot Guard's own records**: `secureboot/bootpoltype` (verified boot 1,
+measured boot 0 on that dump), `bootpolres`, `kmid`, `enfpolicy`,
+`selftestres`, `s3optdis`, and `secureboot/pubkeyhash`, the 32-byte **OEM
+public key hash** (`B81780CA…`). The hash is a file of the MFS on this
+generation, which has no UEP area at all — the place the newer generations keep
+it differs, and a CSME 11 image must be read here.
 
 **ME 12 is the next generation with a map of its own.** FIT 12's CNP
-documents give `cnp_lp_rvp` and `cnp_h_rvp`: 9 files and 21 settings for the
-mobile half, 15 and 39 for the desktop one (the H documents add AMT, MCTP and
+documents give `cnp_lp_rvp` and `cnp_h_rvp`: 25 files and 52 settings for the
+mobile half, 31 and 70 for the desktop one (the H documents add AMT, MCTP and
 manageability settings), emitted as `MEConfigurationMap+CSME12` and
 `…+CSME12Desktop` by `fit_map.py --generation 12`. Its volumes carry no
 `FileTable.dat`, so the engine walks the MFS **home directory** for the paths
 when the table is absent (`MEFirmwareAnalyzer`) — the part's own names, which
-are the map's `/home/...` paths — and the CSME 12 dump at hand reads 11 files
-through it: the EOM records, the policy file, `bup/si_features`,
-`bup/bup_sku/hw_binding`, the HCI IDs, the live `manuf_lock` record appended
-to every map, and others its build wrote.
+are the map's `/home/...` paths — and the CSME 12 dump at hand reads 19 of the
+mobile map's 25 files through it: the EOM records, the policy file,
+`bup/si_features`, `bup/bup_sku/hw_binding`, the HCI IDs, the ICC profile
+selections, the live `manuf_lock` record appended to every map, and others its
+build wrote.
 
 **A place can be conditional.** The tool binds a setting to a file only under
 another setting's value (`buildConditional`), and `MctpEcAddress` on the LP
@@ -525,9 +553,9 @@ of it as the fallback.
 
 **Each generation has two maps, one for each half of it.** The mobile families
 (`_lp`, `_p`) and the desktop ones (`_h`, `_s`) layout a few settings
-differently — TGL LP against TGL H: 56 settings against 52, 50 shared, one of
-them moved (`SecureTouch` 8 → 18) and two the H half has alone — so the map
-followed is the board's own. **Which half a dump is, nothing in the ME region
+differently — TGL LP against TGL H: 79 setting names against 73, 72 shared,
+four of them moved (`SecureTouch` 8 → 18 among them) and seven the LP half has
+alone — so the map followed is the board's own. **Which half a dump is, nothing in the ME region
 says**: the manifest's platform name is the same for both ("TGP" covers Tiger
 Lake LP and H), and MFIT's chipset init table names the chipset rather than the
 SKU. The descriptor does say: its PCH strap section is 69, 70 or 74 words on
