@@ -197,27 +197,31 @@ final class HoverCalloutTests: XCTestCase {
 
     // MARK: - Notes on the bytes
 
-    /// A note's words come up over its bytes at once, with its author's dashed
-    /// frame for a glyph, following the pointer — and nothing over a byte no
-    /// note holds.
-    func testANoteSaysItselfOverItsBytes() throws {
+    /// A note speaks on its outline, at once, with its author's dashed frame
+    /// for a glyph, and follows the pointer along the line — and says nothing
+    /// over the bytes inside it, which it would otherwise keep covering.
+    func testANoteSpeaksOnItsOutlineOnly() throws {
         let (hexView, window) = try makeAnnotatedPane(by: .person)
         let layout = hexView.hexLayout
-        func hoverByte(row: Int, column: Int) {
-            self.hoverByte(hexView, row: row, column: column, window: window)
-        }
-
-        hoverByte(row: 4, column: 3)
         let callout = hexView.hoverCallout
-        XCTAssertTrue(callout.isShowing)
+
+        let edge = try XCTUnwrap(topEdgeY(hexView, column: 3), "the note's top edge is somewhere near row 4's top")
+        hover(hexView, at: NSPoint(x: byteX(layout, column: 3), y: edge), window: window)
+        XCTAssertTrue(callout.isShowing, "on the outline the note speaks")
         XCTAssertEqual(callout.text, "Signature\nMagic.")
         XCTAssertEqual(callout.mark, .annotation(HexTheme.personMark), "in the person's hue")
+
         let first = callout.capsuleFrame
-        hoverByte(row: 5, column: 3)
-        XCTAssertEqual(callout.capsuleFrame.midY - first.midY, -layout.rowHeight, accuracy: 1,
-                       "it follows the pointer down a row (the window's y runs up)")
-        hoverByte(row: 6, column: 3)
-        XCTAssertFalse(callout.isShowing, "a byte no note holds has nothing to say")
+        hover(hexView, at: NSPoint(x: byteX(layout, column: 10), y: edge), window: window)
+        XCTAssertTrue(callout.isShowing)
+        XCTAssertEqual(callout.capsuleFrame.midX - first.midX,
+                       byteX(layout, column: 10) - byteX(layout, column: 3), accuracy: 1,
+                       "it follows the pointer along the line")
+
+        hover(hexView, at: NSPoint(x: byteX(layout, column: 7), y: 5 * layout.rowHeight), window: window)
+        XCTAssertFalse(callout.isShowing, "inside the note, over its bytes, nothing covers them")
+        hover(hexView, at: NSPoint(x: byteX(layout, column: 7), y: 8.5 * layout.rowHeight), window: window)
+        XCTAssertFalse(callout.isShowing, "and nothing outside it either")
     }
 
     /// An agent's note wears the agent's hue, not the person's: the two are
@@ -225,7 +229,8 @@ final class HoverCalloutTests: XCTestCase {
     func testAnAgentsNoteWearsTheAgentsHue() throws {
         let (hexView, window) = try makeAnnotatedPane(by: .agent)
 
-        hoverByte(hexView, row: 4, column: 3, window: window)
+        let edge = try XCTUnwrap(topEdgeY(hexView, column: 3))
+        hover(hexView, at: NSPoint(x: byteX(hexView.hexLayout, column: 3), y: edge), window: window)
         XCTAssertTrue(hexView.hoverCallout.isShowing)
         XCTAssertEqual(hexView.hoverCallout.mark, .annotation(HexTheme.agentMark))
         XCTAssertNotEqual(HexTheme.agentMark, HexTheme.personMark, "and the two hues are different colours")
@@ -248,11 +253,26 @@ final class HoverCalloutTests: XCTestCase {
         return (made.hexView, made.window)
     }
 
-    /// The pointer arriving over the hex byte at `row`, `column`.
-    private func hoverByte(_ hexView: HexView, row: Int, column: Int, window: NSWindow) {
-        let layout = hexView.hexLayout
-        let point = NSPoint(x: layout.hexByteX(column: column) + layout.charWidth,
-                            y: CGFloat(row) * layout.rowHeight + layout.rowHeight / 2)
+    /// The middle of the hex byte in `column`.
+    private func byteX(_ layout: HexLayout, column: Int) -> CGFloat {
+        layout.hexByteX(column: column) + layout.charWidth
+    }
+
+    /// The pointer arriving at `point`, in the hex view's coordinates.
+    private func hover(_ hexView: HexView, at point: NSPoint, window: NSWindow) {
         hexView.mouseMoved(with: mouse(.mouseMoved, at: hexView.convert(point, to: nil), window: window))
+    }
+
+    /// The y of the note's top edge above `column`: the middle of the band
+    /// round row 4's top that `noteContour` answers in — found rather than
+    /// computed, so the test holds whatever padding the outline is drawn with.
+    private func topEdgeY(_ hexView: HexView, column: Int) -> CGFloat? {
+        let layout = hexView.hexLayout
+        let x = byteX(layout, column: column)
+        let top = 4 * layout.rowHeight
+        let hits = stride(from: top - 10, through: top + 10, by: 0.5)
+            .filter { hexView.noteContour(at: NSPoint(x: x, y: $0)) != nil }
+        guard let low = hits.first, let high = hits.last else { return nil }
+        return (low + high) / 2
     }
 }

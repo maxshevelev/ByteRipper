@@ -1373,14 +1373,13 @@ final class PaneViewModel: HexViewDataSource {
         }
     }
 
-    /// What was said about the byte at `offset` — the innermost annotation
-    /// holding it — and whether the person said it, or nil for none.
-    func hexAgentMarkHover(at offset: UInt64) -> (text: String, byPerson: Bool)? {
-        let titles = Self.annotationTitles?() ?? [:]
-        guard let innermost = agentAnnotations.filter({ $0.range?.contains(offset) == true })
-            .min(by: { ($0.range?.count ?? 0) < ($1.range?.count ?? 0) }) else { return nil }
-        let text = innermost.hoverText(titles: titles)
-        return text.isEmpty ? nil : (text, innermost.author == .person)
+    /// What was said in the note on `range` — the outline the pointer is on —
+    /// and whether the person said it, or nil for none. Two notes on the same
+    /// bytes draw one outline; the first made is the one that speaks.
+    func hexAgentMarkHover(for range: Range<UInt64>) -> (text: String, byPerson: Bool)? {
+        guard let note = agentAnnotations.first(where: { $0.range == range }) else { return nil }
+        let text = note.hoverText(titles: Self.annotationTitles?() ?? [:])
+        return text.isEmpty ? nil : (text, note.author == .person)
     }
 
     func hexZoneSpans(in range: Range<UInt64>) -> [HexZoneSpan] {

@@ -2964,10 +2964,12 @@ height in both, which is the whole point of it in a comparison.
   of dragging the mark, and no callout shows while one is dragged, §20.6), an
   edit, the bookmark list changing, and the window stopping being key.
 - A **note** on the bytes (an annotation, the person's or an agent's) is named
-  by the same callout when the pointer is over a byte it holds: its title, its
-  note and the annotations it is about — the innermost note's, where two
-  overlap. That callout follows the pointer, since a note can cover a region,
-  and goes with the same events, the annotations changing among them. (The
+  by the same callout when the pointer is **on its dashed outline** — within a
+  few points of the line: its title, its note and the annotations it is about;
+  where two outlines meet, the inner note's. Only on the outline: a note can
+  cover a whole region, and a callout up over every byte inside it would keep
+  covering the bytes being read. The callout follows the pointer along the
+  line and goes with the same events, the annotations changing among them. (The
   minimap's marks do say the address, because there the arrow only approximates
   it, §19.4.3.) The pane's accessibility value reads the name out with the
   caret's offset (§15).

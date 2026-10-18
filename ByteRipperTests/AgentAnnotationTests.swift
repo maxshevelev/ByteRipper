@@ -165,15 +165,15 @@ final class AgentAnnotationTests: XCTestCase {
 
     // MARK: - On screen
 
-    /// The note is what the pointer resting on the bytes shows — the
-    /// innermost annotation's, where two overlap.
-    func testTheTooltipIsTheInnermostAnnotationsTitleAndNote() async throws {
+    /// Each outline says its own note: the title and the note of the
+    /// annotation it outlines, the inner one's on the inner outline.
+    func testEachOutlineSaysItsOwnTitleAndNote() async throws {
         try open()
         _ = try await client.answer("annotate", ["offset": 0, "length": 0x100, "title": "Region"])
         _ = try await client.answer("annotate", ["offset": 0x10, "length": 4, "title": "Signature", "note": "Magic."])
-        XCTAssertEqual(pane.hexAgentMarkHover(at: 0x11)?.text, "Signature\nMagic.")
-        XCTAssertEqual(pane.hexAgentMarkHover(at: 0x80)?.text, "Region")
-        XCTAssertNil(pane.hexAgentMarkHover(at: 0x200))
+        XCTAssertEqual(pane.hexAgentMarkHover(for: 0x10..<0x14)?.text, "Signature\nMagic.")
+        XCTAssertEqual(pane.hexAgentMarkHover(for: 0..<0x100)?.text, "Region")
+        XCTAssertNil(pane.hexAgentMarkHover(for: 0x200..<0x210))
     }
 
     /// An annotation belongs to the file: another file in the pane does not
@@ -246,7 +246,7 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertLessThanOrEqual(link.frame.maxY, pointer.bounds.height - AnnotationCardView.padding + 0.5)
         list.select("a1")
         XCTAssertEqual(list.selectedIDs, ["a1"])
-        XCTAssertEqual(pane.hexAgentMarkHover(at: 0x20)?.text, "Pointer\nRelated Annotations: a1 Table")
+        XCTAssertEqual(pane.hexAgentMarkHover(for: 0x20..<0x24)?.text, "Pointer\nRelated Annotations: a1 Table")
 
         XCTAssertTrue(notesWindow.emptyView.isHidden)
         XCTAssertTrue(controller.fragments.isEmpty, "nothing in the tab's dock")

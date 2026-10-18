@@ -61,10 +61,9 @@ protocol HexViewDataSource: AnyObject {
     func hexZoneSpans(in range: Range<UInt64>) -> [HexZoneSpan]
     /// The ranges an agent annotated that reach `range` (`AgentAnnotation`).
     func hexAgentMarkSpans(in range: Range<UInt64>) -> [HexZoneSpan]
-    /// What the innermost note holding the byte at `offset` says, and whether
-    /// the person wrote it rather than the agent — or nil over a byte no note
-    /// holds.
-    func hexAgentMarkHover(at offset: UInt64) -> (text: String, byPerson: Bool)?
+    /// What the note on exactly `range` says, and whether the person wrote it
+    /// rather than the agent — or nil when no note has that range.
+    func hexAgentMarkHover(for range: Range<UInt64>) -> (text: String, byPerson: Bool)?
     /// The matches of the active search that overlap `range`, for the dump's
     /// grey match highlight (§11). A list per range rather than a call per row,
     /// the same shape as `hexSegmentSpans`; a match starting before the range
@@ -789,12 +788,17 @@ final class HexView: NSView {
     /// cursor hangs below and to the right of its hot spot.
     static let pointerClearance = NSSize(width: 12, height: 12)
 
+    /// How near a note's dashed outline the pointer has to be for the note to
+    /// speak: either side of the line.
+    static let noteContourReach: CGFloat = 4
+
     /// Shows the callout for what is under `point`, or hides it over anything
     /// with nothing to say. On an address it is the row's bookmark, standing
     /// beside the mark — over the start of the row's bytes, never over the
-    /// address itself (§20.3). On a byte it is the innermost note holding it,
-    /// following the pointer, since a note can cover a whole region and the
-    /// part being pointed at is the part under the pointer.
+    /// address itself (§20.3). On a note's outline it is that note, following
+    /// the pointer along the line. Only on the outline: a note can cover a
+    /// whole region, and a callout up over every byte inside it would keep
+    /// covering the bytes being read.
     func updateHoverCallout(at point: NSPoint) {
         guard draggingBookmarkRow == nil, let dataSource else {
             hoverCallout.hide()
@@ -809,18 +813,7 @@ final class HexView: NSView {
             hoverCallout.show(text, mark: .bookmark, near: bookmarkMarkRect(forRowContaining: offset), of: self)
             return
         }
-        let layout = currentLayout
-        var note: (text: String, byPerson: Bool)?
-        if let hit = layout.hitTest(point: point, rowCount: layout.rowCount(fileSize: dataSource.fileSize)) {
-            switch hit.column {
-            case .hex(let column), .ascii(let column):
-                let offset = layout.byteOffset(row: hit.row, column: column)
-                if offset < dataSource.fileSize { note = dataSource.hexAgentMarkHover(at: offset) }
-            case .offset:
-                break
-            }
-        }
-        guard let note else {
+        guard let range = noteContour(at: point), let note = dataSource.hexAgentMarkHover(for: range) else {
             hoverCallout.hide()
             return
         }
@@ -829,6 +822,25 @@ final class HexView: NSView {
                                width: 2 * clearance.width, height: 2 * clearance.height)
         hoverCallout.show(note.text, mark: .annotation(note.byPerson ? HexTheme.personMark : HexTheme.agentMark),
                           near: atPointer, of: self)
+    }
+
+    /// The note whose outline runs under `point`, by its range — the innermost
+    /// one where two outlines meet there. Only the rows round the point are
+    /// looked at: an outline further off cannot reach it.
+    func noteContour(at point: NSPoint) -> Range<UInt64>? {
+        guard let dataSource else { return nil }
+        let layout = currentLayout
+        let fileSize = dataSource.fileSize
+        guard layout.rowHeight > 0, fileSize > 0 else { return nil }
+        let row = Int(floor(point.y / layout.rowHeight))
+        let rows = max(0, row - 1)..<max(0, row + 2)
+        let reach = Self.noteContourReach
+        return agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows)
+            .filter { shape in
+                shape.path.cgPath.copy(strokingWithWidth: 2 * reach, lineCap: .round,
+                                       lineJoin: .round, miterLimit: 1).contains(point)
+            }
+            .min { $0.range.count < $1.range.count }?.range
     }
 
     /// The pane leaving its window, or being hidden, takes the callout with it:
@@ -2243,7 +2255,7 @@ final class HexView: NSView {
     /// and never taken for a difference or a selection.
     private func drawAgentMarkContours(layout: HexLayout, fileSize: UInt64, rows: Range<Int>) {
         let dash: [CGFloat] = [4, 3]
-        for (path, byPerson) in agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows) {
+        for (path, byPerson, _) in agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows) {
             (byPerson ? HexTheme.personMark : HexTheme.agentMark).withAlphaComponent(Self.zoneFocusedAlpha).setStroke()
             path.lineWidth = Self.mirrorContourLineWidth
             path.setLineDash(dash, count: dash.count, phase: 0)
@@ -2253,14 +2265,14 @@ final class HexView: NSView {
 
     /// And a wash as light as a focused zone's, under the bytes.
     private func drawAgentMarkFills(layout: HexLayout, fileSize: UInt64, rows: Range<Int>) {
-        for (path, byPerson) in agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows) {
+        for (path, byPerson, _) in agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows) {
             (byPerson ? HexTheme.personMark : HexTheme.agentMark).withAlphaComponent(Self.zoneFillAlpha).setFill()
             path.fill()
         }
     }
 
     private func agentMarkShapes(layout: HexLayout, fileSize: UInt64,
-                                 rows: Range<Int>) -> [(path: NSBezierPath, byPerson: Bool)] {
+                                 rows: Range<Int>) -> [(path: NSBezierPath, byPerson: Bool, range: Range<UInt64>)] {
         guard let dataSource, !rows.isEmpty, fileSize > 0 else { return [] }
         let lower = UInt64(rows.lowerBound) * UInt64(HexLayout.bytesPerRow)
         let upper = UInt64(rows.upperBound) * UInt64(HexLayout.bytesPerRow)
@@ -2270,7 +2282,8 @@ final class HexView: NSView {
             let span = SelectionModel(start: mark.range.lowerBound, end: end, fileSize: fileSize)
             let loops = contour(of: span, layout: layout, region: .hex)
                 + contour(of: span, layout: layout, region: .ascii)
-            return loops.isEmpty ? nil : (roundedContourPath(loops: loops, radius: Self.mirrorContourRadius), mark.byPerson)
+            return loops.isEmpty
+                ? nil : (roundedContourPath(loops: loops, radius: Self.mirrorContourRadius), mark.byPerson, mark.range)
         }
     }
 
