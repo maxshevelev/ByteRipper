@@ -528,13 +528,32 @@ panel shows such a word as its raw value rather than dropping it.
 
 ```bash
 python3 Skills/me-eom-structures/scripts/strap_map.py ~/Downloads/1/fit-11.exe \
-    --words 66,88,139 > \
-    Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH11.swift
+    --words 66,88,90,139 --prefix sptPch > \
+    Packages/UEFIImage/Sources/UEFIImage/StrapMap+SPT.swift
 ```
 
-The CSME 11 dump at hand (Corporate LP) states 66 words, and its `PCHSTRP0`
-`0x00100000` reads Deep Sx support set and every other bit clear — the same
-word ifdtool prints.
+The `sptPch` constants are a set of their own: 90 words is a section in both
+sets without being the same section, so Sunrise Point and Lewisburg read this
+set (only when their generation is certain) and every other generation the
+shared tables. The same applies to the processor section's 3 words:
+
+```bash
+python3 Skills/me-eom-structures/scripts/strap_map.py ~/Downloads/1/fit-11.exe \
+    --kind cpu --words 3 --prefix sptCpu > \
+    Packages/UEFIImage/Sources/UEFIImage/StrapMap+SPTCpu.swift
+```
+
+FIT 11's class is `FMSBA` rather than `CpuStrapsLayout`; its word 0 names
+Hyperthreading, the active cores, BIST and the flex ratio, where the newer
+3-word table has another layout. The fields a length keeps are now those **at
+least half** its documents state identically, so a document that names only
+part of one word (FIT 11's common file names one word-0 field where the
+platform files name six) does not erase the rest.
+
+The CSME 11 dump at hand (Corporate LP) states 66 words and 3 processor words;
+its `PCHSTRP0` `0x00100000` reads Deep Sx support set and every other bit
+clear — the same word ifdtool prints — and the processor words read
+`CpuStrapCpuMaxFreqBoot` 1 (boot at P1) with the rest at the defaults.
 
 `--kind cpu` emits the processor strap section's tables into
 `StrapMap+CPU.swift` instead:

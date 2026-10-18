@@ -19,6 +19,13 @@ import Foundation
 /// tool's documents carry no platform name of their own. So a length that the
 /// tools do not agree on is not here at all rather than guessed at — the
 /// sections a bench meets are the ones the dumps at hand showed.
+///
+/// **The one generation-keyed set is FIT 11's SPT tables.** Its lengths overlap
+/// the shared ones — 90 words is a PCH section in both, 3 words a processor
+/// section — without being the same section, and the fields carry their
+/// CamelCase names. Sunrise Point and Lewisburg read those, and only where the
+/// descriptor's generation is certain: an uncertain one is read with the
+/// shared tables, which is what every generation had before.
 public struct DescriptorStrapMap: Sendable {
     /// One named field of the section: where it sits and what the tool writes
     /// there by default. The name is the tool's own identifier —
@@ -158,8 +165,39 @@ public struct DescriptorStrapMap: Sendable {
 public extension DescriptorStrapMap {
     /// The tables at hand, one per section length.
     static var all: [DescriptorStrapMap] {
-        [.pch66, .pch69, .pch70, .pch74, .pch88, .pch90, .pch101, .pch114,
-         .pch115, .pch130, .pch139]
+        [.pch69, .pch70, .pch74, .pch90, .pch101, .pch114, .pch115, .pch130,
+         .sptPch66, .sptPch88, .sptPch90, .sptPch139]
+    }
+
+    /// SPT's own tables — FIT 11's SPT documents, which name the straps in
+    /// CamelCase with no underscore after the prefix and lay some words out
+    /// differently from the newer builds (`Num_Active_Cores` is three bits
+    /// here, four there). Sunrise Point and Lewisburg read these; every other
+    /// generation reads the tables above, keyed by length alone.
+    static var sptTables: [DescriptorStrapMap] {
+        [.sptPch66, .sptPch88, .sptPch90, .sptPch139]
+    }
+
+    /// Whether the generation's straps are FIT 11's SPT spellings — the
+    /// Sunrise Point boards, whose descriptor is the one FIT 11 builds.
+    static func usesSPTLayout(_ generation: DescriptorGeneration) -> Bool {
+        switch generation {
+        case .sunrisePoint, .lewisburg: return true
+        default: return false
+        }
+    }
+
+    /// The PCH table for a section of `words` words on `generation`: SPT's
+    /// table set where the board is Sunrise Point or Lewisburg, the shared
+    /// ones otherwise. The two sets are kept apart because their lengths
+    /// overlap (90 words is a section in both) without being the section.
+    static func forSection(words: Int,
+                           generation: DescriptorGeneration,
+                           generationIsCertain: Bool = true) -> DescriptorStrapMap? {
+        if generationIsCertain, usesSPTLayout(generation) {
+            return sptTables.first { $0.words == words }
+        }
+        return forSection(words: words)
     }
 
     /// The layout of a strap section of `words` words, or nil where no tool at
@@ -182,6 +220,25 @@ public extension DescriptorStrapMap {
     /// state none.
     static func forProcessorSection(words: Int) -> DescriptorStrapMap? {
         processorTables.first { $0.words == words }
+    }
+
+    /// SPT's processor table: three words, the Skylake/Kaby section, whose
+    /// fields (`CpuStrapHtDisable`, `CpuStrapFlexRatio`) are not the newer
+    /// three-word table's.
+    static var sptProcessorTables: [DescriptorStrapMap] { [.sptCpu3] }
+
+    /// The processor table for a section of `words` words on `generation`:
+    /// SPT's where the board is Sunrise Point or Lewisburg, the shared ones
+    /// otherwise. Three words is a section in both sets without being the
+    /// same section.
+    static func forProcessorSection(
+        words: Int, generation: DescriptorGeneration,
+        generationIsCertain: Bool = true
+    ) -> DescriptorStrapMap? {
+        if generationIsCertain, usesSPTLayout(generation) {
+            return sptProcessorTables.first { $0.words == words }
+        }
+        return forProcessorSection(words: words)
     }
 
     /// The PMC soft straps' tables, keyed by the words the MIP area's PMC and
