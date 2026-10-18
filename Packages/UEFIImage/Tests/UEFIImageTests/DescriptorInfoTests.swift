@@ -166,6 +166,40 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertEqual(value("Early_USB_DbC_ME_Boot_Stall_Enable"), 0)
     }
 
+    /// The PMC soft straps are the MIP block's leading words: its length less
+    /// the CPU message `FLMAP2` states. Tiger Point states the message's
+    /// length in bits 16–23; here 17 words of a 24-word block leave 7 for the
+    /// PMC section, which is the CNP H table.
+    func testThePMCStrapsAreTheMIPBlockBeforeItsCPUWords() throws {
+        var bytes = TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], map2: 0x0011_01A0)
+        let table = 0xC00
+        func put(_ value: UInt16, at offset: Int) {
+            bytes[offset] = UInt8(truncatingIfNeeded: value)
+            bytes[offset + 1] = UInt8(truncatingIfNeeded: value >> 8)
+        }
+        let block1Words = 24                   // 17 CPU + 7 PMC
+        put(2, at: table)                      // NumberOfDescriptors
+        put(124, at: table + 2)                // SizeOfMip
+        put(0, at: table + 4)                  // block 0: DbC, 8 bytes
+        put(20, at: table + 6)
+        put(8, at: table + 8)
+        put(0, at: table + 10)
+        put(1, at: table + 12)                 // block 1: PMC + CPU
+        put(28, at: table + 14)
+        put(UInt16(block1Words * 4), at: table + 16)
+        put(0, at: table + 18)
+
+        let read = try info(bytes)
+        XCTAssertEqual(read.generation, .tigerPoint)
+        let pmc = try XCTUnwrap(read.pmcStraps)
+        XCTAssertEqual(pmc.base, UInt64(table + 28))
+        XCTAssertEqual(pmc.words.count, 7)
+        XCTAssertEqual(pmc.fields.count, 135)
+        XCTAssertNotNil(DescriptorStrapMap.forPMC(words: 21))
+        XCTAssertNil(DescriptorStrapMap.forPMC(words: 99))
+    }
+
     /// The MIP area is erased on Meteor Lake and later, where the map word's
     /// high byte means the SoC soft straps: the erased words are no table.
     func testAMeteorLakeDescriptorCarriesNoMIPTable() throws {

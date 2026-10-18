@@ -607,9 +607,17 @@ the PMC and CPU soft straps (40 bytes on the CSME 12 and 14 dumps, 124 on 13,
 through the three masks every FIT document states alike in the block's second
 word — bits 23:16 the ME boot stall, 15:8 the USB3 port enable, 7:0 the USB2
 one. On `CSME 12.BIN` the block's words are `0x00000000 0x0000FFFF`: every
-port enabled, no stall. The PMC and CPU block's fields are not named yet —
-their layouts are in the FIT builds' **common** documents, which the builds at
-hand carry only for their own platform overrides.
+port enabled, no stall. The PMC and CPU block's **leading words are the PMC
+soft straps**: the block's length less the CPU strap message `FLMAP2` states
+(the processor section's words up to Cannon Point, which is the message's
+length in the block too, and the message's length from Tiger Point on). They
+are read through the FIT builds' PMC tables, keyed by what remains — 7 words
+on the CSME 12 and 14 dumps, 20 on 13, 21 on 15 and 22 on 16 — and on every
+dump at hand most fields read the tool's default (128/135, 174/194, 125/135,
+212/230, 179/232), which is what says the split and the table are the
+section's. The CPU message that ends the block is the same one
+`processorStraps` reads through `FLMAP2` from Tiger Point on; on the classic
+generations the block's copy is not named separately.
 
 ---
 

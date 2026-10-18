@@ -1555,6 +1555,9 @@ public enum UEFIDetail {
         if let straps = descriptor.processorStraps {
             tables.append(processorStrapTable(straps, in: language))
         }
+        if let pmc = descriptor.pmcStraps {
+            tables.append(pmcTable(pmc, in: language))
+        }
         if let mip = descriptor.mip {
             tables.append(mipTable(mip, in: language))
             if let dbc = mip.dbc {
@@ -1615,6 +1618,34 @@ public enum UEFIDetail {
     /// A value the build set away from the tool's default is drawn in bold,
     /// and a folded line says how many of its fields are so: those are the
     /// fields that make this board's straps its own.
+    /// The PMC soft straps — the MIP area's PMC and CPU block before the CPU
+    /// message that ends it — under the tool's own names for the length the
+    /// block's remainder states.
+    private static func pmcTable(_ pmc: DescriptorInfo.PMCSection,
+                                 in language: AppLanguage) -> UEFIDetailTable {
+        let rows = pmc.fields.map { reading -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
+            let range = reading.field.bits
+            let shown = reading.field.options?[Int(reading.value)] ?? hex(reading.value)
+            let address = pmc.base + UInt64(reading.field.word) * 4
+            return ([.init(reading.field.label ?? strapFieldName(reading.field.name)),
+                     .init(range.lowerBound == range.upperBound
+                           ? "\(range.lowerBound)"
+                           : "\(range.lowerBound)–\(range.upperBound)"),
+                     .init(shown, isStrong: reading.isSet),
+                     .init(reading.field.defaultValue.map(hex) ?? "")],
+                    .range(address..<address + 4, name: reading.field.name))
+        }
+        return UEFIDetailTable(
+            title: L("PMC straps", in: language),
+            symbol: "cpu",
+            columns: [L("Field", in: language), L("Bits", in: language),
+                      L("Value", in: language), L("Default", in: language)],
+            rows: rows.map(\.cells),
+            rowTargets: rows.map(\.target),
+            startsFolded: true
+        )
+    }
+
     /// The MIP area's block table: what each block is and where the entry
     /// places it. The payload's own fields are in the tables after it, under
     /// the names the same tool gives them.
