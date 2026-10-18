@@ -68,6 +68,20 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertEqual(plane.value, 2)
     }
 
+    /// The 11-word processor section is the Ice Lake LP table FIT 12 to 15
+    /// carry as `cnp_lp_rvp.xml`; `CSME 13.BIN` states a section of that
+    /// length and it decodes with the table.
+    func testTheElevenWordProcessorSectionHasATable() throws {
+        let map = try XCTUnwrap(DescriptorStrapMap.forProcessorSection(words: 11))
+        XCTAssertEqual(map.words, 11)
+        XCTAssertEqual(map.fields.count, 78)
+        XCTAssertNotNil(map.fields.first { $0.name == "CPU_Strap_FlexRatio" })
+        XCTAssertEqual(map.fields.first { $0.name == "CPU_Strap_Fast_wakeup" }?
+                        .defaultValue, 1)
+        XCTAssertNil(DescriptorStrapMap.forProcessorSection(words: 12),
+                     "no tool at hand states a 12-word section")
+    }
+
     /// From Tiger Point on the straps are the message in the descriptor's MIP
     /// area: at `0xC00` plus the offset the third map word states
     /// (`FLMAP2[2:11]`), as many words as `FLMAP2[16:23]` says.

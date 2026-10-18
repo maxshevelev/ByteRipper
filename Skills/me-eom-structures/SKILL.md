@@ -536,7 +536,7 @@ word ifdtool prints.
 ```bash
 python3 Skills/me-eom-structures/scripts/strap_map.py \
     <fit-15.0.exe> <fit-14.0.exe> <fit-12.exe> --kind cpu \
-    --words 1,3,7,10,14,15,17,18,20,21,22,25 > \
+    --words 1,3,7,10,11,14,15,17,18,20,21,22,25 > \
     Packages/UEFIImage/Sources/UEFIImage/StrapMap+CPU.swift
 ```
 
@@ -549,7 +549,10 @@ length lay a field out differently (`Num_Active_Cores` is three bits in
 `cnp_lp_rvp.xml`, four in a nameless newer document of the same three words),
 so a processor table keeps only the fields every document of that length
 states alike — same name, offset and bits — and the script says how many it
-dropped.
+dropped. The lengths at hand are 1, 3, 7, 10, 11, 14, 15, 17, 18, 20, 21, 22
+and 25 words; the **11-word** section is the LP one `cnp_lp_rvp.xml` names, and
+`CSME 13.BIN` (ICP LP) states it — its words at 0x300 decode with Fast wakeup
+and PEG_DEF set, SMT enabled and all cores active.
 
 **From Tiger Point on there is no such section: the straps are a message in
 the descriptor's MIP area**, at `0xC00` plus the offset `FLMAP2[2:11]` states,
