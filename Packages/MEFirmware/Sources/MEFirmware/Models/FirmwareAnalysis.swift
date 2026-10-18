@@ -166,6 +166,11 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// layouts (`MIPStrapMap`). Ours; no upstream reading exists. nil where
     /// the image has no MIP table, or none of the map's blocks is in it.
     public var mipStraps: [MIPStrapContainerReadings]? = nil
+    /// The SPHY OEM configuration the image's `phy_oem_cfg` nvar holds — the
+    /// PHY tuning block of the FITC partition, read through the tool's own
+    /// `SphyNvar` layout (`SphyNvarMap`). Ours. nil where the nvar is not
+    /// there, or its anchors are another SPHY variant's.
+    public var sphyNvar: [MIPStrapReading]? = nil
     /// Whether the platform binds its SPI part to the chipset — Flash Image
     /// Tool's "Hardware Binding Enabled", whose own help calls it the FPF
     /// hardware and RPMC / RPMB binding. Ours: MEAnalyzer prints nothing of the
@@ -2762,5 +2767,9 @@ public enum EngineModelRevision {
     /// (`MIPStrapMap`). Ours. A layout is chosen by the block's type and
     /// length, because the IOE container's MTL-M and MTL-P documents place the
     /// same names at different offsets.
-    public static let current = 52
+    /// 53 adds `sphyNvar`: the SPHY OEM configuration the FITC partition's
+    /// `phy_oem_cfg` nvar holds, read through the tool's `SphyNvar` layout
+    /// (`SphyNvarMap`). Ours. The reader verifies the layout's anchors, since
+    /// the package carries several SPHY variants with identical headers.
+    public static let current = 53
 }

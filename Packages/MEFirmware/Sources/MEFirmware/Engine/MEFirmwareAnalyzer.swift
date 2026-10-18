@@ -1304,6 +1304,11 @@ public actor MEFirmwareAnalyzer {
                 MIPTableReader.containers(in: payload, map: $0)
             }
         }
+        let sphyNvar = fitcPayload.flatMap { payload in
+            SphyNvarMap.forME(major: identity.major).flatMap {
+                SphyNvarReader.readings(in: payload, map: $0)
+            }
+        }
         let uepProfile = uepArea.flatMap(profileFromUEP)
         let bootGuardProfile = Self.regionBytes("CDMD", regions: regions,
                                                 region: region, baseOffset: baseOffset)
@@ -1482,6 +1487,7 @@ public actor MEFirmwareAnalyzer {
             uepSettings: uepReadings,
             cpuStraps: cpuStraps,
             mipStraps: mipStraps,
+            sphyNvar: sphyNvar,
             hardwareBinding: hardwareBinding,
             oemPublicKeyHash: oemPublicKeyHash,
             // Row 12a is CSME 11's alone, the way upstream gates it, so the

@@ -1628,6 +1628,7 @@
 "Manufacturing Lock" = "Manufacturing Lock";
 "CPU straps" = "Страпы CPU";
 "Descriptor registers" = "Регистры дескриптора";
+"SPHY OEM configuration" = "Конфигурация SPHY OEM";
 "CSME straps" = "Страпы CSME";
 "PMC SoC straps" = "Страпы PMC SoC";
 "CPU 2 straps" = "Страпы CPU 2";

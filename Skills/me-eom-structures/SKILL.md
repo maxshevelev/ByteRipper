@@ -359,6 +359,25 @@ Note that MFIT names FLMAP0's region-count bits (24–26) reserved: the panel's
 own "Regions" row still counts them, and the register table shows the tool's
 word.
 
+**The SPHY OEM configuration is a nvar of its own.** `phy_oem_cfg`
+(`/home/bup/phy_oem_cfg`, FileID 0x1001F200) carries the PHY tuning block in
+the FITC partition, and MFIT 18 lays it out as `SphyNvar`:
+
+```bash
+python3 Skills/me-eom-structures/scripts/sphy18_map.py ~/Downloads/1/mfit-18.1.exe > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/SphyNvarMap+CSME18.swift
+```
+
+Fields are `offset*8 + bitfield_low … + bitfield_high`; a `ValidByte`/
+`EnableBit` takes the byte at `offset`. The package carries four SPHY
+documents (522, 542, 967 fields and an API-table variant) and the nvar's
+header does not name which one an image used. The script emits the layout the
+CSME 18 dump verifies — **522/522** of its constant values read exactly — and
+the map states **anchors**: the common header and `Sub_Section_Entry2_Header_8`
+(0x5 here, 0x19 in the 542-field variant). The reader refuses an nvar whose
+anchors differ, so another variant answers nothing rather than wrong names.
+The panel shows the fields under "SPHY OEM configuration".
+
 ## Emitting the descriptor's strap layout
 
 The same executables carry the chipset's own layout of the descriptor's PCH
