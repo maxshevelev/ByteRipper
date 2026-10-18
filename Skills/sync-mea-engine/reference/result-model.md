@@ -92,8 +92,11 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   the record is read by neither upstream nor the tools. It is nil where the
   volume's files carry no File IDs or the table that names them was not read.
   Revision 52 adds `mipStraps`: the MIP table's other strap containers — PMC
-  SoC, CSME (DBC), PMC IOE and IOE — each a `MIPStrapContainerReadings` read
-  through the tool's own layout (`MIPStrapMap`, emitted by `mip18_map.py`). A layout is
+  SoC, CSME (DBC), PMC IOE, IOE, and the five-block table's PMC SOC 2 and
+  CPU 2 — each a `MIPStrapContainerReadings` read through the tool's own
+  layout (`MIPStrapMap`, emitted by `mip18_map.py`). A container is matched
+  by its block's type and length and may start inside that block
+  (`PmcAndCpu_2` carries PMC SOC 2 at 0 and CPU 2 at 0x48). A layout is
   chosen by the block's type and length: the IOE document's MTL-M and MTL-P
   variants place the same names at different offsets. Ours; upstream reads no
   strap. The Full Info tree shows each container under its own title ("CSME

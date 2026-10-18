@@ -9,10 +9,15 @@ final class MIPStrapMapTests: XCTestCase {
     func testTheMapIsTheToolsContainers() throws {
         let map = try XCTUnwrap(MIPStrapMap.forME(major: 18))
         XCTAssertEqual(map.containers.map(\.name),
-                       ["PMC SoC", "CSME", "PMC IOE", "IOE", "IOE"])
-        XCTAssertEqual(map.containers.map(\.blockType), [1, 0, 2, 4, 4])
-        XCTAssertEqual(map.containers.map(\.length), [0x58, 0x8, 0x40, 0x3C, 0xD0])
-        XCTAssertEqual(map.containers.map { $0.fields.count }, [253, 5, 249, 133, 515])
+                       ["PMC SoC", "CSME", "PMC IOE", "IOE", "IOE", "PMC SOC 2", "CPU 2"])
+        XCTAssertEqual(map.containers.map(\.blockType), [1, 0, 2, 4, 4, 3, 3])
+        XCTAssertEqual(map.containers.map(\.blockLength),
+                       [0x58, 0x8, 0x40, 0x3C, 0xD0, 0x60, 0x60])
+        XCTAssertEqual(map.containers.map(\.offset), [0, 0, 0, 0, 0, 0, 0x48])
+        XCTAssertEqual(map.containers.map(\.length),
+                       [0x48, 0x8, 0x40, 0x3C, 0xD0, 0x48, 0x18])
+        XCTAssertEqual(map.containers.map { $0.fields.count },
+                       [253, 5, 249, 133, 515, 253, 42])
         // The PMC SoC block also carries the CPU message header and message,
         // whose fields are the CPU map's, not this one's.
         XCTAssertFalse(map.containers[0].fields.contains {
@@ -52,7 +57,7 @@ final class MIPStrapMapTests: XCTestCase {
 
         let soc = Dictionary(uniqueKeysWithValues: containers[0].readings.map { ($0.name, $0.value) })
         XCTAssertEqual(soc["PMC_SoC_smip_Strap_CPWRG_STCH_WTDIS"], 1)
-        XCTAssertEqual(containers[0].length, 0x58)
+        XCTAssertEqual(containers[0].length, 0x48)
 
         let csme = Dictionary(uniqueKeysWithValues: containers[1].readings.map { ($0.name, $0.value) })
         XCTAssertEqual(csme["CSME_smip_Strap_CSME_Early_USB_DbC_ME_Boot_Stall_Enable"], 1)
@@ -66,6 +71,28 @@ final class MIPStrapMapTests: XCTestCase {
         XCTAssertEqual(ioe["IOE_smip_Strap_IOEP_PCIED_RPCFG"], 1)
         XCTAssertEqual(ioe["IOE_smip_Strap_IOEP_PCIED_LNREV"], 0)
         XCTAssertEqual(containers[3].length, 0xD0)
+    }
+
+    /// The five-block table's `PmcAndCpu_2` block (type 3): PMC SOC 2 from the
+    /// block's first byte, CPU 2 from its 0x48. No image at hand has one; the
+    /// shape is the tool's struct defaults and the two documents' extents.
+    func testReadsPmcAndCpu2OfAFiveBlockTable() throws {
+        var blocks = [
+            (type: 4, data: Data(repeating: 0, count: 0xD0)),
+            (type: 0, data: Data(repeating: 0, count: 0x8)),
+            (type: 3, data: Data(repeating: 0, count: 0x60)),
+        ]
+        blocks[2].data[0] = 0x01                     // PMC SOC 2: CPWRG_STCH_WTDIS
+        blocks[2].data[0x48 + 4] = 0x01              // CPU 2: SMT_Disable
+        let payload = Self.fitcPayload(blocks: blocks)
+        let map = try XCTUnwrap(MIPStrapMap.forME(major: 18))
+        let containers = try XCTUnwrap(MIPTableReader.containers(in: payload, map: map))
+        XCTAssertEqual(containers.map(\.name), ["CSME", "IOE", "PMC SOC 2", "CPU 2"])
+        let soc2 = Dictionary(uniqueKeysWithValues: containers[2].readings.map { ($0.name, $0.value) })
+        XCTAssertEqual(soc2["PMC_SOC_2_smip_Strap_pmc_soc_smip2_CPWRG_STCH_WTDIS"], 1)
+        let cpu2 = Dictionary(uniqueKeysWithValues: containers[3].readings.map { ($0.name, $0.value) })
+        XCTAssertEqual(cpu2["CPU_2_smip_Strap_CPU2_SMT_Disable"], 1)
+        XCTAssertEqual(containers[3].length, 0x18)
     }
 
     /// A 0x3C IOE block is MTL-M's layout, not the 0xD0 one: the block's

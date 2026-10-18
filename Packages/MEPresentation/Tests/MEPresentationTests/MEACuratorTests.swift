@@ -92,8 +92,15 @@ final class MEACuratorTests: XCTestCase {
                 ["name": "IOE", "blockType": 4, "length": 208, "readings": [
                     ["name": "IOE_smip_Strap_IOEP_PCIED_LNREV", "value": 1],
                 ]],
-                ["name": "PMC SoC", "blockType": 1, "length": 88, "readings": [
+                ["name": "PMC SoC", "blockType": 1, "length": 72, "readings": [
                     ["name": "PMC_SoC_smip_Strap_T573_TIMING", "value": 3],
+                ]],
+                ["name": "CPU 2", "blockType": 3, "length": 24, "readings": [
+                    ["name": "CPU_2_smip_Strap_CPU2_SMT_Disable", "value": 1],
+                ]],
+                ["name": "PMC SOC 2", "blockType": 3, "length": 72, "readings": [
+                    ["name": "PMC_SOC_2_smip_Strap_pmc_soc_smip2_CPWRG_STCH_WTDIS",
+                     "value": 1],
                 ]],
             ],
         ])
@@ -102,6 +109,10 @@ final class MEACuratorTests: XCTestCase {
         XCTAssertEqual(soc.children.map(\.title),
                        ["PCH clock output stable to PROCPWRGD high (tPCH45)"])
         XCTAssertEqual(soc.children.first?.subtitle, "1ms (3)")
+        let cpu2 = try XCTUnwrap(find("CPU 2 straps", in: roots))
+        XCTAssertEqual(cpu2.children.map(\.title), ["Disable Hyperthreading"])
+        XCTAssertEqual(cpu2.children.first?.subtitle, "Yes (1)")
+        XCTAssertNotNil(find("PMC SOC 2 straps", in: roots))
         let csme = try XCTUnwrap(find("CSME straps", in: roots))
         XCTAssertEqual(csme.fields.map(\.value), ["0", "8 bytes"])
         XCTAssertEqual(csme.children.map(\.title), ["Enable early USB2 DbC connection"])

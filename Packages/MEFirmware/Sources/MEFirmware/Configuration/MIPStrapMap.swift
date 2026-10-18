@@ -8,14 +8,21 @@ import Foundation
 /// the nvar. The block types are the tool's, and the layouts are its harness
 /// documents:
 ///
-///     type 0   CSME / DBC    CSME_smip      8 bytes
-///     type 2   PMC IOE       PMC_IOE_smip   0x40
-///     type 4   IOE           IOE_smip       0x3C (MTL-M) or 0xD0 (MTL-P / ARL-P)
+///     type 1   PMC SoC       PMC_SoC_smip     0x58 (PMC 0x48 + CPU message)
+///     type 0   CSME / DBC    CSME_smip        8 bytes
+///     type 2   PMC IOE       PMC_IOE_smip     0x40
+///     type 4   IOE           IOE_smip         0x3C (MTL-M) or 0xD0 (MTL-P / ARL-P)
+///     type 3   PMC SOC 2     PMC_SOC_2_smip   0x60 (first 0x48)
+///     type 3   CPU 2         CPU_2_smip       0x60 (last 0x18, at 0x48)
 ///
 /// The IOE container has two layouts at hand and they place the shared names
 /// at different offsets, so a layout is chosen by the block's own length —
-/// which the MIP descriptor states — and both are in the map. The CPU message
-/// is a container too, but its own map (`CPUStrapMap`) reads it.
+/// which the MIP descriptor states — and both are in the map. A container may
+/// also start inside a block rather than at its first byte (`PmcAndCpu` and
+/// `PmcAndCpu_2` carry two). The CPU message is a container too, but its own
+/// map (`CPUStrapMap`) reads it; so is CPU 2, which needs no CRC check of its
+/// own here. **No image at hand has a five-block table**: the type-3 block's
+/// type and length are the tool's struct defaults and the documents' extents.
 ///
 /// A field's place is a **bit range of its block**: `offset*8 + bit_low …
 /// offset*8 + bit_high` in the document's terms, kept here as `bitOffset` and
@@ -50,13 +57,23 @@ public struct MIPStrapMap: Sendable {
     public struct Container: Sendable, Equatable {
         public var name: String
         public var blockType: Int
-        /// The block's length in bytes, as the MIP descriptor states it.
+        /// The MIP block's length in bytes, as the MIP descriptor states it —
+        /// what chooses the layout.
+        public var blockLength: Int
+        /// Where the container begins in that block. The `PmcAndCpu` and
+        /// `PmcAndCpu_2` blocks carry two containers each: the PMC straps,
+        /// then the CPU message (or the CPU_2 one) at their tail.
+        public var offset: Int
+        /// The container's own length in bytes.
         public var length: Int
         public var fields: [Field]
 
-        public init(name: String, blockType: Int, length: Int, fields: [Field]) {
+        public init(name: String, blockType: Int, blockLength: Int,
+                    offset: Int = 0, length: Int, fields: [Field]) {
             self.name = name
             self.blockType = blockType
+            self.blockLength = blockLength
+            self.offset = offset
             self.length = length
             self.fields = fields
         }
@@ -121,10 +138,13 @@ extension MIPTableReader {
         var results: [MIPStrapContainerReadings] = []
         for container in map.containers {
             guard let block = table.blocks.first(where: {
-                $0.type == container.blockType && $0.length == container.length
-            }), block.offset >= 0, block.offset + block.length <= payload.count
+                $0.type == container.blockType && $0.length == container.blockLength
+            }), block.offset >= 0, block.offset + block.length <= payload.count,
+                  container.offset >= 0,
+                  container.offset + container.length <= block.length
             else { continue }
-            let data = payload.subdata(in: block.offset..<(block.offset + block.length))
+            let start = block.offset + container.offset
+            let data = payload.subdata(in: start..<(start + container.length))
             var readings: [MIPStrapReading] = []
             for field in container.fields {
                 guard field.count > 0, field.count <= 32, field.bitOffset >= 0 else { continue }
