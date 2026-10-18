@@ -166,7 +166,7 @@ final class BookmarkSpaceTests: XCTestCase {
         let dump = part.controller.windowModel.pane1
         dump.bookmarks?.add(rowContaining: 0x110, name: "ME region")
 
-        XCTAssertEqual(dump.hexBookmarkTooltip(atRowContaining: 0x115), "ME region")
+        XCTAssertEqual(dump.hexBookmarkHoverText(atRowContaining: 0x115), "ME region")
     }
 
     /// In a panel it also says where the row is in the file the mark belongs
@@ -176,7 +176,7 @@ final class BookmarkSpaceTests: XCTestCase {
         let part = try makePart(at: 0x100, length: 0x40)
         part.pane.bookmarks?.add(rowContaining: 0x10, name: "ME region")
 
-        let tooltip = part.pane.hexBookmarkTooltip(atRowContaining: 0x1B)
+        let tooltip = part.pane.hexBookmarkHoverText(atRowContaining: 0x1B)
 
         XCTAssertTrue(tooltip.hasPrefix("ME region\n"), tooltip)
         XCTAssertTrue(tooltip.contains(UInt64(0x110).hexAddress), tooltip)
@@ -189,7 +189,7 @@ final class BookmarkSpaceTests: XCTestCase {
         let part = try makePart(at: 0x100, length: 0x40)
         part.pane.bookmarks?.add(rowContaining: 0x10)
 
-        let tooltip = part.pane.hexBookmarkTooltip(atRowContaining: 0x10)
+        let tooltip = part.pane.hexBookmarkHoverText(atRowContaining: 0x10)
 
         XCTAssertFalse(tooltip.contains("\n"), "nothing to say twice: \(tooltip)")
         XCTAssertTrue(tooltip.contains(UInt64(0x110).hexAddress), tooltip)
@@ -199,7 +199,7 @@ final class BookmarkSpaceTests: XCTestCase {
     func testAnUnmarkedRowHasNoTooltip() throws {
         let part = try makePart(at: 0x100, length: 0x40)
 
-        XCTAssertEqual(part.pane.hexBookmarkTooltip(atRowContaining: 0x10), "")
+        XCTAssertEqual(part.pane.hexBookmarkHoverText(atRowContaining: 0x10), "")
     }
 
     // MARK: - A decompressed body
@@ -211,7 +211,7 @@ final class BookmarkSpaceTests: XCTestCase {
 
         XCTAssertNil(part.pane.bookmarks)
         XCTAssertTrue(part.pane.hexBookmarkedRows(in: 0..<0x40).isEmpty)
-        XCTAssertEqual(part.pane.hexBookmarkTooltip(atRowContaining: 0x10), "")
+        XCTAssertEqual(part.pane.hexBookmarkHoverText(atRowContaining: 0x10), "")
     }
 
     /// ⌘D is off there, and so is ⇧⌘D: there is no row in this pane the file's

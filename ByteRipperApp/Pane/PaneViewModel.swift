@@ -1373,12 +1373,14 @@ final class PaneViewModel: HexViewDataSource {
         }
     }
 
-    /// What the agent said about the byte at `offset` — the innermost
-    /// annotation holding it — or "" for none.
-    func hexAgentMarkTooltip(at offset: UInt64) -> String {
+    /// What was said about the byte at `offset` — the innermost annotation
+    /// holding it — and whether the person said it, or nil for none.
+    func hexAgentMarkHover(at offset: UInt64) -> (text: String, byPerson: Bool)? {
         let titles = Self.annotationTitles?() ?? [:]
-        return agentAnnotations.filter { $0.range?.contains(offset) == true }
-            .min { ($0.range?.count ?? 0) < ($1.range?.count ?? 0) }?.tooltip(titles: titles) ?? ""
+        guard let innermost = agentAnnotations.filter({ $0.range?.contains(offset) == true })
+            .min(by: { ($0.range?.count ?? 0) < ($1.range?.count ?? 0) }) else { return nil }
+        let text = innermost.hoverText(titles: titles)
+        return text.isEmpty ? nil : (text, innermost.author == .person)
     }
 
     func hexZoneSpans(in range: Range<UInt64>) -> [HexZoneSpan] {
@@ -1404,24 +1406,24 @@ final class PaneViewModel: HexViewDataSource {
     }
 
     /// The bookmark on the row containing `offset` (§20.2) — what the mark's
-    /// tooltip and VoiceOver read, and what tells a right-clicked address from
+    /// callout and VoiceOver read, and what tells a right-clicked address from
     /// an unmarked one.
     func hexBookmark(atRowContaining offset: UInt64) -> Bookmark? {
         bookmarks?.bookmark(atRowContaining: offset)
     }
 
-    /// What the mark's tooltip says on the row containing `offset`, and "" when
+    /// What the mark's callout says on the row containing `offset`, and "" when
     /// there is nothing to say (§20.2, §20.7).
     ///
     /// In a pane showing a file whole that is the mark's name and nothing else:
-    /// the address is drawn on the mark, right under the pointer, and a tooltip
+    /// the address is drawn on the mark, right under the pointer, and a callout
     /// repeating it would explain a thing to itself. In a fragment panel the
-    /// address under the pointer is the *part's*, so the tooltip adds the one
+    /// address under the pointer is the *part's*, so the callout adds the one
     /// the same row has in the file the mark belongs to — which is the address
     /// the user will come back to it by, and the only place the panel says it.
     /// That line shows for an unnamed mark too, because there it is not a
     /// repetition of anything.
-    func hexBookmarkTooltip(atRowContaining offset: UInt64) -> String {
+    func hexBookmarkHoverText(atRowContaining offset: UInt64) -> String {
         guard let bookmarks, let mark = bookmarks.bookmark(atRowContaining: offset) else { return "" }
         guard bookmarks.isShifted else { return mark.name }
         let there = bookmarks.storeRow(forRowContaining: offset).hexAddress

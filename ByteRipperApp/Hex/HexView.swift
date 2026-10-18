@@ -61,8 +61,10 @@ protocol HexViewDataSource: AnyObject {
     func hexZoneSpans(in range: Range<UInt64>) -> [HexZoneSpan]
     /// The ranges an agent annotated that reach `range` (`AgentAnnotation`).
     func hexAgentMarkSpans(in range: Range<UInt64>) -> [HexZoneSpan]
-    /// What the agent said about the byte at `offset`, or "".
-    func hexAgentMarkTooltip(at offset: UInt64) -> String
+    /// What the innermost note holding the byte at `offset` says, and whether
+    /// the person wrote it rather than the agent — or nil over a byte no note
+    /// holds.
+    func hexAgentMarkHover(at offset: UInt64) -> (text: String, byPerson: Bool)?
     /// The matches of the active search that overlap `range`, for the dump's
     /// grey match highlight (§11). A list per range rather than a call per row,
     /// the same shape as `hexSegmentSpans`; a match starting before the range
@@ -74,15 +76,15 @@ protocol HexViewDataSource: AnyObject {
     func hexCurrentMatch() -> Range<UInt64>?
     /// The bookmark on the row containing `offset`, if any (§20.2). One row, not
     /// a range: this answers the questions about a single row — what the mark's
-    /// tooltip says, what VoiceOver reads, whether a right-clicked address
+    /// callout says, what VoiceOver reads, whether a right-clicked address
     /// carries a mark — where the per-range set above serves the drawing.
     func hexBookmark(atRowContaining offset: UInt64) -> Bookmark?
-    /// What the mark's tooltip says on the row containing `offset`, and "" for
-    /// a row that has nothing to say (§20.2). The view asks rather than
+    /// What the mark's callout says on the row containing `offset`, and "" for
+    /// a row that has nothing to say (§20.3). The view asks rather than
     /// composing it from the bookmark, because what is worth saying depends on
     /// what the pane's offsets are — in a fragment panel a mark's row has an
     /// address in the file it belongs to as well (§20.7).
-    func hexBookmarkTooltip(atRowContaining offset: UInt64) -> String
+    func hexBookmarkHoverText(atRowContaining offset: UInt64) -> String
     func hexSelection() -> SelectionModel
     /// The byte the caret logically occupies for reveal purposes: the moving
     /// edge of the selection (last byte when extended forward, first byte when
@@ -132,7 +134,7 @@ protocol HexEditorDelegate: AnyObject {
 /// so arbitrarily large files scroll without materializing their rows (§6,
 /// §13.8). Rendered from a `HexViewDataSource` and driven by a
 /// `HexEditorDelegate`.
-final class HexView: NSView, NSViewToolTipOwner {
+final class HexView: NSView {
     weak var dataSource: HexViewDataSource?
     weak var delegate: HexEditorDelegate?
 
@@ -453,7 +455,8 @@ final class HexView: NSView, NSViewToolTipOwner {
     func reloadData() {
         currentLayout = makeLayout()
         updateContentFrame()
-        refreshBookmarkTooltipRect()
+        // An edit can rename, move or remove the mark the callout is naming.
+        hoverCallout.hide()
         // A full redraw repaints everything, so the diff baselines catch up to
         // the current state — otherwise a later `reloadSelection` would
         // invalidate rows this redraw already made current.
@@ -703,6 +706,8 @@ final class HexView: NSView, NSViewToolTipOwner {
             queue: .main
         ) { [weak self] _ in
             self?.notifyVisibleRangeChanged()
+            // The row the callout stood beside has scrolled away from the pointer.
+            self?.hoverCallout.hide()
         }
         notifyVisibleRangeChanged()
     }
@@ -747,83 +752,95 @@ final class HexView: NSView, NSViewToolTipOwner {
         onVisibleRangeChanged?(visibleByteRange())
     }
 
-    // MARK: - Bookmark tooltips (§20.2)
+    // MARK: - Naming a mark on hover (§20.3)
 
-    /// The tooltip tag covering the Offset column. Internal so a test can see
-    /// that the rect is registered at all — the hover itself cannot be driven.
-    private(set) var bookmarkTooltipTag: NSView.ToolTipTag?
+    /// The capsule that names what the pointer is on: the bookmark of the
+    /// marked row whose address it is over, or the note on the byte it is over.
+    /// Readable so tests can see what it says and where.
+    private(set) lazy var hoverCallout = HoverCallout()
 
-    /// The rect that tag covers, so an unchanged geometry re-registers nothing:
-    /// `reloadData` runs on every edit, and there is no reason to churn AppKit's
-    /// tooltip bookkeeping per typed byte.
-    private var bookmarkTooltipRect: CGRect?
+    /// The tracking area that brings the pointer's moves here.
+    private var hoverTrackingArea: NSTrackingArea?
 
-    /// One tooltip rect over the hex and text columns, answering with what an
-    /// agent said about the byte under the pointer — or nothing, over a byte
-    /// no mark holds. Registered the way the bookmark column's is, so marks
-    /// coming and going re-register nothing.
-    private(set) var agentMarkTooltipTag: NSView.ToolTipTag?
-    private var agentMarkTooltipRect: CGRect?
-
-    private func refreshAgentMarkTooltipRect() {
-        let layout = currentLayout
-        let left = layout.leftPadding + layout.offsetColumnWidth + layout.gapAfterOffset
-        let columns = CGRect(x: left, y: 0,
-                             width: layout.asciiX(column: 0) + layout.asciiColumnWidth - left,
-                             height: max(frame.height, bounds.height))
-        guard columns.width > 0, columns.height > 0, columns != agentMarkTooltipRect else { return }
-        if let agentMarkTooltipTag { removeToolTip(agentMarkTooltipTag) }
-        agentMarkTooltipTag = addToolTip(columns, owner: self, userData: nil)
-        agentMarkTooltipRect = columns
-    }
-
-    /// Registers one tooltip rect over the whole Offset column rather than one
-    /// per marked row: AppKit asks the owner for the string at the hovered
-    /// point, so a single rect answers for every row and nothing has to be
-    /// re-registered when a bookmark is added, renamed or removed — only when
-    /// the column itself moves or the content grows.
-    private func refreshBookmarkTooltipRect() {
-        refreshAgentMarkTooltipRect()
-        let layout = currentLayout
-        let column = CGRect(x: layout.leftPadding, y: 0,
-                            width: layout.offsetColumnWidth + layout.gapAfterOffset,
-                            height: max(frame.height, bounds.height))
-        guard column.width > 0, column.height > 0 else { return }
-        guard column != bookmarkTooltipRect else { return }
-        if let bookmarkTooltipTag {
-            removeToolTip(bookmarkTooltipTag)
+    /// One area over the visible part of the view; `.inVisibleRect` keeps it
+    /// there through a scroll and a resize.
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea {
+            removeTrackingArea(hoverTrackingArea)
         }
-        bookmarkTooltipTag = addToolTip(column, owner: self, userData: nil)
-        bookmarkTooltipRect = column
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self, userInfo: nil)
+        addTrackingArea(area)
+        hoverTrackingArea = area
     }
 
-    /// What the marked row under the pointer has to say — its name in a pane
-    /// showing a file whole, since the address is right there on the mark and a
-    /// tooltip repeating it would explain a thing to itself; its address in the
-    /// parent file as well in a fragment panel, where the one on the mark is the
-    /// part's (§20.7). An unmarked row, and a marked row with nothing to add,
-    /// return "" — no tooltip at all (§20.3). The minimap's marks say the
-    /// address in every pane, because there the arrow's position only
-    /// approximates it (§19.4.3).
-    func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag,
-              point: NSPoint, userData data: UnsafeMutableRawPointer?) -> String {
-        guard let dataSource else { return "" }
-        if tag == agentMarkTooltipTag {
-            let layout = currentLayout
-            guard let hit = layout.hitTest(point: point, rowCount: layout.rowCount(fileSize: dataSource.fileSize))
-            else { return "" }
-            let column: Int
-            switch hit.column {
-            case .hex(let index), .ascii(let index): column = index
-            case .offset: return ""
+    override func mouseMoved(with event: NSEvent) {
+        updateHoverCallout(at: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hoverCallout.hide()
+    }
+
+    /// How far round the pointer a note's callout keeps clear: the arrow
+    /// cursor hangs below and to the right of its hot spot.
+    static let pointerClearance = NSSize(width: 12, height: 12)
+
+    /// Shows the callout for what is under `point`, or hides it over anything
+    /// with nothing to say. On an address it is the row's bookmark, standing
+    /// beside the mark — over the start of the row's bytes, never over the
+    /// address itself (§20.3). On a byte it is the innermost note holding it,
+    /// following the pointer, since a note can cover a whole region and the
+    /// part being pointed at is the part under the pointer.
+    func updateHoverCallout(at point: NSPoint) {
+        guard draggingBookmarkRow == nil, let dataSource else {
+            hoverCallout.hide()
+            return
+        }
+        if let offset = offsetColumnOffset(at: point) {
+            let text = dataSource.hexBookmarkHoverText(atRowContaining: offset)
+            guard !text.isEmpty else {
+                hoverCallout.hide()
+                return
             }
-            return dataSource.hexAgentMarkTooltip(at: layout.byteOffset(row: hit.row, column: column))
+            hoverCallout.show(text, mark: .bookmark, near: bookmarkMarkRect(forRowContaining: offset), of: self)
+            return
         }
-        let hoveredRow = Int(floor(point.y / currentLayout.rowHeight))
-        guard hoveredRow >= 0 else { return "" }
-        let offset = currentLayout.byteOffset(row: hoveredRow, column: 0)
-        guard offset < dataSource.scrollExtent else { return "" }
-        return dataSource.hexBookmarkTooltip(atRowContaining: offset)
+        let layout = currentLayout
+        var note: (text: String, byPerson: Bool)?
+        if let hit = layout.hitTest(point: point, rowCount: layout.rowCount(fileSize: dataSource.fileSize)) {
+            switch hit.column {
+            case .hex(let column), .ascii(let column):
+                let offset = layout.byteOffset(row: hit.row, column: column)
+                if offset < dataSource.fileSize { note = dataSource.hexAgentMarkHover(at: offset) }
+            case .offset:
+                break
+            }
+        }
+        guard let note else {
+            hoverCallout.hide()
+            return
+        }
+        let clearance = Self.pointerClearance
+        let atPointer = NSRect(x: point.x - clearance.width, y: point.y - clearance.height,
+                               width: 2 * clearance.width, height: 2 * clearance.height)
+        hoverCallout.show(note.text, mark: .annotation(note.byPerson ? HexTheme.personMark : HexTheme.agentMark),
+                          near: atPointer, of: self)
+    }
+
+    /// The pane leaving its window, or being hidden, takes the callout with it:
+    /// no exit event will come to do it.
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        hoverCallout.hide()
+    }
+
+    override func viewDidHide() {
+        super.viewDidHide()
+        hoverCallout.hide()
     }
 
     // MARK: - Accessibility (§15)
@@ -2062,14 +2079,17 @@ final class HexView: NSView, NSViewToolTipOwner {
 
     /// The mark's outline: the pentagon of `body` with a `tipReach` point on its
     /// right, corners rounded like the right-click focus ring's (§20.4). Shared
-    /// by the fill and the stroke, and by the tests, so the shape is stated once.
+    /// by the fill and the stroke, by the hover callout's small copy of the mark
+    /// (which passes a radius to suit its size), and by the tests, so the shape
+    /// is stated once.
     ///
     /// The path starts halfway along the top edge rather than at a corner.
     /// `appendArc` leaves the path on the edge *after* the corner it rounds, so a
     /// path beginning at the top-left vertex ended with `close()` drawing a spur
     /// back into that sharp vertex — a visible notch on the outlined mark.
     /// Starting mid-edge, the closing line runs along the edge itself.
-    static func bookmarkMarkPath(body: CGRect, tipReach: CGFloat) -> NSBezierPath {
+    static func bookmarkMarkPath(body: CGRect, tipReach: CGFloat,
+                                 radius: CGFloat = mirrorContourRadius) -> NSBezierPath {
         let (top, bottom, left, right) = (body.minY, body.maxY, body.minX, body.maxX)
         // Pentagon vertices, clockwise from top-left; the tip is the rightmost.
         let points = [
@@ -2084,7 +2104,7 @@ final class HexView: NSView, NSViewToolTipOwner {
         for i in 1...points.count {
             path.appendArc(from: points[i % points.count],
                            to: points[(i + 1) % points.count],
-                           radius: mirrorContourRadius)
+                           radius: radius)
         }
         path.close()
         return path
@@ -2899,6 +2919,9 @@ final class HexView: NSView, NSViewToolTipOwner {
 
     override func mouseDown(with event: NSEvent) {
         window?.makeFirstResponder(self)
+        // A press may take hold of the mark the callout is beside, and a mark
+        // being dragged is on another row a moment later (§20.6).
+        hoverCallout.hide()
         // Recorded before anything can return: the press is this view's whether
         // or not this view does something with it (a double click on an address
         // only marks the row), and the drag that continues it belongs here too.
@@ -3056,6 +3079,7 @@ final class HexView: NSView, NSViewToolTipOwner {
     /// loop synchronously, so the frame stays up for the whole time the menu is
     /// visible and clears once it is dismissed (§10.2).
     override func rightMouseDown(with event: NSEvent) {
+        hoverCallout.hide()
         guard let anchor = contextMenuAnchor(for: event) else {
             super.rightMouseDown(with: event)
             return

@@ -171,9 +171,9 @@ final class AgentAnnotationTests: XCTestCase {
         try open()
         _ = try await client.answer("annotate", ["offset": 0, "length": 0x100, "title": "Region"])
         _ = try await client.answer("annotate", ["offset": 0x10, "length": 4, "title": "Signature", "note": "Magic."])
-        XCTAssertEqual(pane.hexAgentMarkTooltip(at: 0x11), "Signature\nMagic.")
-        XCTAssertEqual(pane.hexAgentMarkTooltip(at: 0x80), "Region")
-        XCTAssertEqual(pane.hexAgentMarkTooltip(at: 0x200), "")
+        XCTAssertEqual(pane.hexAgentMarkHover(at: 0x11)?.text, "Signature\nMagic.")
+        XCTAssertEqual(pane.hexAgentMarkHover(at: 0x80)?.text, "Region")
+        XCTAssertNil(pane.hexAgentMarkHover(at: 0x200))
     }
 
     /// An annotation belongs to the file: another file in the pane does not
@@ -246,7 +246,7 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertLessThanOrEqual(link.frame.maxY, pointer.bounds.height - AnnotationCardView.padding + 0.5)
         list.select("a1")
         XCTAssertEqual(list.selectedIDs, ["a1"])
-        XCTAssertEqual(pane.hexAgentMarkTooltip(at: 0x20), "Pointer\nRelated Annotations: a1 Table")
+        XCTAssertEqual(pane.hexAgentMarkHover(at: 0x20)?.text, "Pointer\nRelated Annotations: a1 Table")
 
         XCTAssertTrue(notesWindow.emptyView.isHidden)
         XCTAssertTrue(controller.fragments.isEmpty, "nothing in the tab's dock")

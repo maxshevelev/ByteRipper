@@ -3661,17 +3661,19 @@ final class MinimapTests: XCTestCase {
         let strip = try XCTUnwrap(panel.segmentStripRect(forMapAt: 0))
         // The middle of S1 (the piece [64, 128)).
         let y = stripY(96, strip: strip, topRow: panel.topRow)
-        let text = panel.segmentStripTooltipText(at: NSPoint(x: strip.midX, y: y))
+        let text = panel.segmentStripHoverText(at: NSPoint(x: strip.midX, y: y))
         XCTAssertTrue(text.contains("S1"), "the hover names the piece: \(text)")
         XCTAssertTrue(text.contains("0x40"), "it gives the piece's start: \(text)")
         // The range is first-to-last byte: S1 = [64, 128) → 0x40…0x7F.
         XCTAssertTrue(text.contains("0x7F"), "and its last byte: \(text)")
         XCTAssertTrue(text.contains("64"), "and its size: \(text)")
+        XCTAssertEqual(panel.segmentStripMark(at: NSPoint(x: strip.midX, y: y)),
+                       .segment(HexTheme.segmentTints[1]), "and wears S1's tint")
         // The name is asked for live at hover time (a rename fires no
         // invalidation, so the strip cannot store a copy). A fresh cut's piece
         // is unnamed; rename S1 and the hover picks up the new name.
         pane.segmentStore.rename(1, to: "testpiece")
-        let named = panel.segmentStripTooltipText(at: NSPoint(x: strip.midX, y: y))
+        let named = panel.segmentStripHoverText(at: NSPoint(x: strip.midX, y: y))
         XCTAssertTrue(named.contains("testpiece"),
                       "the hover names the piece's live name: \(named)")
     }
@@ -3685,10 +3687,13 @@ final class MinimapTests: XCTestCase {
         let strip = try XCTUnwrap(panel.segmentStripRect(forMapAt: 0))
         // Dead on the cut at 64.
         let y = stripY(64, strip: strip, topRow: panel.topRow)
-        let text = panel.segmentStripTooltipText(at: NSPoint(x: strip.midX, y: y))
+        let text = panel.segmentStripHoverText(at: NSPoint(x: strip.midX, y: y))
         XCTAssertTrue(text == "0x40" || text.hasPrefix("0x40"),
                       "a boundary names the cut's offset, got: \(text)")
         XCTAssertFalse(text.contains("S1"), "and not a piece's label")
+        XCTAssertEqual(panel.segmentStripMark(at: NSPoint(x: strip.midX, y: y)),
+                       .cut(above: HexTheme.segmentTints[0], below: HexTheme.segmentTints[1]),
+                       "its glyph is the two pieces it separates, the earlier one on top")
     }
 
     /// Hovering a strip block paints it a more saturated shade of its own tint —

@@ -339,14 +339,16 @@ final class MinimapZoneTests: XCTestCase {
         let (_, window, panel, host) = try makeWindow()
         publish(ZoneMap(zones: [zone("bios", "BIOS region", 0x100..<0x300)]), to: host, window)
         let gutter = try XCTUnwrap(panel.zoneGutterRect(forMapAt: 0))
-        let text = panel.zoneBracketTooltipText(
+        let text = panel.zoneBracketHoverText(
             at: NSPoint(x: gutter.minX, y: mapY(0x200, in: panel)))
         XCTAssertTrue(text.contains("BIOS region"), "the hover names the zone: \(text)")
         XCTAssertTrue(text.contains("0x100"), "and gives its start: \(text)")
         XCTAssertTrue(text.contains("0x2FF"), "and its last byte, not the bound: \(text)")
         XCTAssertTrue(text.contains("512"), "and its size: \(text)")
+        XCTAssertEqual(panel.zoneBracketMark(at: NSPoint(x: gutter.minX, y: mapY(0x200, in: panel))),
+                       .zone(HexTheme.zoneFrameInactive), "a bracket in the colour of a zone not in focus")
 
-        let offBracket = panel.zoneBracketTooltipText(
+        let offBracket = panel.zoneBracketHoverText(
             at: NSPoint(x: gutter.minX, y: mapY(0x380, in: panel)))
         XCTAssertEqual(offBracket, "", "and says nothing off every bracket")
     }
@@ -357,7 +359,7 @@ final class MinimapZoneTests: XCTestCase {
         let (_, window, panel, host) = try makeWindow()
         publish(ZoneMap(zones: [zone("x", "", 0x100..<0x180)]), to: host, window)
         let gutter = try XCTUnwrap(panel.zoneGutterRect(forMapAt: 0))
-        let text = panel.zoneBracketTooltipText(
+        let text = panel.zoneBracketHoverText(
             at: NSPoint(x: gutter.minX, y: mapY(0x140, in: panel)))
         XCTAssertTrue(text.hasPrefix("0x100"), "the range is all there is to say: \(text)")
         XCTAssertFalse(text.contains("—"), "and there is no empty name in front of it: \(text)")
@@ -378,7 +380,7 @@ final class MinimapZoneTests: XCTestCase {
         let gutter = try XCTUnwrap(panel.zoneGutterRect(forMapAt: 0))
         let innermostLaneX = gutter.minX + CGFloat(MinimapView.zoneMaxLanes - 1)
             * MinimapView.zoneLaneStep
-        let text = panel.zoneBracketTooltipText(
+        let text = panel.zoneBracketHoverText(
             at: NSPoint(x: innermostLaneX, y: mapY(0x180, in: panel)))
         XCTAssertTrue(text.hasPrefix("D"),
                       "the smallest zone sharing the lane is the one named: \(text)")
@@ -396,9 +398,9 @@ final class MinimapZoneTests: XCTestCase {
         // A height both brackets cover, so only the x can tell them apart.
         let y = mapY(0x200, in: panel)
 
-        let outer = panel.zoneBracketTooltipText(at: NSPoint(x: gutter.minX, y: y))
+        let outer = panel.zoneBracketHoverText(at: NSPoint(x: gutter.minX, y: y))
         XCTAssertTrue(outer.hasPrefix("Outer"), "lane 0's column names the parent: \(outer)")
-        let inner = panel.zoneBracketTooltipText(
+        let inner = panel.zoneBracketHoverText(
             at: NSPoint(x: gutter.minX + MinimapView.zoneLaneStep, y: y))
         XCTAssertTrue(inner.hasPrefix("Inner"), "lane 1's names the child: \(inner)")
     }
@@ -415,7 +417,7 @@ final class MinimapZoneTests: XCTestCase {
         let gutter = try XCTUnwrap(panel.zoneGutterRect(forMapAt: 0))
         // 0x200 is inside Outer and far below Inner, so lane 1's column is
         // empty there.
-        let text = panel.zoneBracketTooltipText(
+        let text = panel.zoneBracketHoverText(
             at: NSPoint(x: gutter.minX + MinimapView.zoneLaneStep, y: mapY(0x200, in: panel)))
         XCTAssertTrue(text.hasPrefix("Outer"),
                       "the only bracket at that height answers: \(text)")

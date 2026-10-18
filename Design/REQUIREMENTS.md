@@ -2473,6 +2473,33 @@ without opening anything.
   name shows on the map — and the address belongs here even for a named bookmark,
   because on a map the arrow's position only approximates it (a row of the
   overview is kilobytes). Hovering anywhere else on the panel shows nothing.
+- The name is shown in a **callout**, not a system tooltip: a small capsule
+  beside the mark, up the moment the pointer reaches the mark and gone the moment
+  it leaves. "Point at each mark in turn" is the gesture the margin is read with,
+  and a tooltip's delay — a second or more per mark, and not adjustable — makes
+  that unusable. The callout opens toward the middle of the panel (right of a
+  left-margin mark, left of a right-margin one), turns to the other side when
+  that one has no room, and never leaves the window. It is drawn over the
+  window's content and takes no clicks.
+- It looks like the system tooltip it replaces — the tooltip's own grey
+  material, in either theme, lifted a little lighter, with a firmer edge than a
+  separator so it holds its shape over bytes of any colour; the text at the
+  regular system size (13 pt), with a little more room round it than a
+  tooltip's; a long note wrapped at a fixed width — with one addition: a **glyph** before
+  the words saying what kind of thing is named, in the shape and colour that
+  thing is drawn in, so the callout reads as a legend. A bookmark wears the
+  Offset column's purple pentagon with its blunt point (§20.4); a segment
+  piece a swatch of its tint; a cut the two pieces it separates, the earlier
+  one on top, either side of a line; a zone its bracket in the gutter's colour
+  (§19.4.5); a note on the bytes its dashed frame in its author's hue. A tint
+  that is a wash under bytes is shown in the louder shade the strip hovers
+  with, or it would not read on the grey.
+- The callout goes with every event after which it would be wrong: the pointer
+  leaving the panel, a scroll of the panes or the wheel over the panel, a press,
+  the bookmark list changing (a mark added, moved, renamed or removed), the
+  render mode or the layout changing, a resize, the minimap being hidden, the
+  window stopping being key. It comes back on the next move of the pointer, not
+  by itself.
 - Which margin depends on the layout. Side by side the two maps meet at the
   gutter with no padding between them, so the second map marks its rows in its
   right margin, pointing left; everywhere else the mark sits on the left.
@@ -2513,6 +2540,8 @@ its map, so the whole of it is legible at a glance without opening anything.
   0x400000…0xC00000, 8 MB · W25Q…bin` — the label, the range, the size, and the
   piece's name. The name is read from the store at hover time, so a rename shows
   without a repaint. Hovering a boundary near a cut names the cut instead. The
+  words are shown in the same callout a bookmark's mark uses (§19.4.3), at once
+  and following the pointer along the strip, clear of the cursor. The
   hovered block is also painted a more saturated shade of its own tint — the same
   colour, just louder — so the piece under the cursor reads as the one being
   pointed at.
@@ -2560,7 +2589,8 @@ parse found is legible at a glance beside the bytes it found it in.
   looks. The viewport band runs edge to edge and is painted over the gutter, as
   it is over the strip (§19.5).
 - **Hovering a bracket names its zone**: `BIOS region — 0x100…0x2FF, 512 B` — the
-  name, the range and the size, the shape the strip's own hover text takes. A
+  name, the range and the size, the shape the strip's own hover text takes, in
+  the same callout, following the pointer (§19.4.3). A
   zone with no name is named by its range alone. The bracket under the pointer is
   painted at full strength — the same colour, just louder — the way the strip's
   hovered block is. Each lane owns the column around its own stem, so pointing at
@@ -2925,9 +2955,19 @@ height in both, which is the whole point of it in a comparison.
   title is the ROW's, because a right-click on a byte marks that byte's row, and
   the title is what makes that visible.
 - Hovering a marked row's address shows the bookmark's **name**, and nothing
-  else: the address is drawn under the pointer, on the mark itself, so a tooltip
-  repeating it would explain a thing to itself. An unmarked row shows no tooltip,
-  and neither does a marked row with no name — there is nothing to add. (The
+  else: the address is drawn under the pointer, on the mark itself, so a callout
+  repeating it would explain a thing to itself. An unmarked row shows nothing,
+  and neither does a marked row with no name — there is nothing to add. The name
+  is in the minimap's callout (§19.4.3), not a system tooltip: up at once, beside
+  the mark over the start of the row's bytes, never over the address. It goes
+  with the pointer leaving the address, a scroll, a press (which may be the start
+  of dragging the mark, and no callout shows while one is dragged, §20.6), an
+  edit, the bookmark list changing, and the window stopping being key.
+- A **note** on the bytes (an annotation, the person's or an agent's) is named
+  by the same callout when the pointer is over a byte it holds: its title, its
+  note and the annotations it is about — the innermost note's, where two
+  overlap. That callout follows the pointer, since a note can cover a region,
+  and goes with the same events, the annotations changing among them. (The
   minimap's marks do say the address, because there the arrow only approximates
   it, §19.4.3.) The pane's accessibility value reads the name out with the
   caret's offset (§15).
@@ -3118,12 +3158,12 @@ window onto that file, not a different one.
   taken out of a part is at the sum, and the addresses are the file's throughout.
 - A mark on a row the part does not cover is simply not in the part. It stays in
   the window's list: the panel is a window onto the list, never a copy of it.
-- The mark's tooltip in a panel says the row's address in the file the mark
+- The mark's callout in a panel says the row's address in the file the mark
   belongs to, and which file that is. That is the address the mark has everywhere
   else and the one thing the panel's own Offset column cannot show, so it is said
   for an unnamed mark too — there it is not a repetition of the address drawn on
-  the mark, it is the other one. In a pane showing a file whole the tooltip stays
-  the bare name (§20.2).
+  the mark, it is the other one. In a pane showing a file whole the callout stays
+  the bare name (§20.3).
 - Everything else about a mark is unchanged in a panel: the Offset column mark,
   the minimap's margin, ⌘D and ⇧⌘D, the offset menu, dragging, and the form's
   list, all in the part's own addresses.

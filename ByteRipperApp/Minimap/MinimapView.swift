@@ -35,7 +35,7 @@ import ToolModuleKit
 /// at the file's start and at its bottom at the file's end — so the band is
 /// always fully on the map, and the map doubles as a proportional scrollbar the
 /// band can be dragged along (`mouseDown`/`mouseDragged`, `onScrollToOffset`).
-final class MinimapView: NSView, NSViewToolTipOwner {
+final class MinimapView: NSView {
     /// How the panel is divided into maps for the open file(s).
     enum MapLayout {
         /// One map over the whole panel (single-file mode, or nothing open).
@@ -418,6 +418,7 @@ final class MinimapView: NSView, NSViewToolTipOwner {
         // position is stale: clear it (the next mouse move re-establishes it).
         hoveredStripBlock = nil
         hoveredZoneBracket = nil
+        hoverCallout.hide()
         updateTopRow()
         invalidateAll()
     }
@@ -427,6 +428,8 @@ final class MinimapView: NSView, NSViewToolTipOwner {
     func setRenderMode(_ mode: RenderMode) {
         guard renderMode != mode else { return }
         renderMode = mode
+        // Every mark and legend moves to the other scale.
+        hoverCallout.hide()
         // A fresh mode starts with a fresh viewport look; the first height
         // decides it.
         overviewUsesRectangle = false
@@ -613,9 +616,8 @@ final class MinimapView: NSView, NSViewToolTipOwner {
     func setSegmentBlocks(_ blocks: [[SegmentBlock]]) {
         guard segmentBlocks != blocks else { return }
         segmentBlocks = blocks
-        // A first cut makes the strip appear, and with it something for a hover
-        // to name.
-        refreshHoverTooltip()
+        // The pieces under the pointer may have moved or gone.
+        hoverCallout.hide()
         invalidateAll()
     }
 
@@ -641,7 +643,7 @@ final class MinimapView: NSView, NSViewToolTipOwner {
         // A hover on a map that has just been republished names a bracket that
         // may not exist any more; the next mouse move re-establishes it.
         hoveredZoneBracket = nil
-        refreshHoverTooltip()
+        hoverCallout.hide()
         invalidateAll()
     }
 
@@ -684,6 +686,7 @@ final class MinimapView: NSView, NSViewToolTipOwner {
         let newExtent = maps.map(\.fileSize).max() ?? 0
         let extentChanged = newExtent != oldExtent
         self.maps = maps
+        hoverCallout.hide()
         updateTopRow()
         // A repaint only if the picture can actually look different. In overview
         // mode a typed byte moves the extent by one, which moves every row's
@@ -785,6 +788,9 @@ final class MinimapView: NSView, NSViewToolTipOwner {
         // the new one lands anywhere near it, so it is measured before the move.
         let vacated = viewportDamage()
         self.viewports = viewports
+        // A scroll slides the window the marks are drawn in: the mark the
+        // callout was naming is somewhere else now, or gone.
+        hoverCallout.hide()
         if updateTopRow() {
             invalidateAll()
         } else {
@@ -806,14 +812,14 @@ final class MinimapView: NSView, NSViewToolTipOwner {
     /// Replaces the bookmarks. Only the margins the marks live in are repainted:
     /// a bookmark changes nothing about the file's picture, and repainting a
     /// full-dump overview to add one arrow is what §19.9 is about. A name that
-    /// changed repaints nothing at all — the arrows have not moved — but the
-    /// tooltip is re-registered, since it is the name that it reads out.
+    /// changed repaints nothing at all — the arrows have not moved — but it
+    /// does take a callout away, since the name is what the callout says.
     func setBookmarks(_ marks: [Bookmark]) {
         let sorted = marks.sorted { $0.row < $1.row }
         guard sorted != bookmarks else { return }
         let rowsMoved = sorted.map(\.row) != bookmarks.map(\.row)
         bookmarks = sorted
-        refreshHoverTooltip()
+        hoverCallout.hide()
         guard rowsMoved else { return }
         invalidate(maps.indices.compactMap { bookmarkMargin(forMapAt: $0)?.strip })
     }
@@ -986,38 +992,52 @@ final class MinimapView: NSView, NSViewToolTipOwner {
 
     // MARK: - Naming a mark on hover (§19.4.3)
 
-    /// The one tooltip rect over the whole panel: the answer is computed from the
-    /// pointer's position, so a mark that moves with a scroll, a mode switch or a
-    /// resize needs no re-registration — only a change of the panel's own bounds
-    /// or of the list does.
-    private var bookmarkTooltipTag: NSView.ToolTipTag?
+    /// The capsule that names what the pointer is on — a mark, a piece of the
+    /// segment strip, a zone. Readable so tests can see what it says and where.
+    private(set) lazy var hoverCallout = HoverCallout()
 
-    /// Registers (or drops) that one rect. It covers the panel whenever the
-    /// panel has anything to name — a bookmark's mark, a segment strip, a zone
-    /// gutter — because all three answer from the pointer's position through
-    /// the same `stringForToolTip`, and none of them can answer without a rect
-    /// registered.
-    private func refreshHoverTooltip() {
-        if let tag = bookmarkTooltipTag {
-            removeToolTip(tag)
-            bookmarkTooltipTag = nil
+    /// Shows the callout for what is under `point`, or hides it over anything
+    /// with nothing to say. A mark's callout stands beside the mark, which is
+    /// what it names; a legend's follows the pointer, because a strip or a
+    /// bracket is long and the part being named is the part under the pointer.
+    private func updateHoverCallout(at point: NSPoint) {
+        guard let (text, mark, anchor) = hoverCallout(at: point) else {
+            hoverCallout.hide()
+            return
         }
-        let hasNameableChrome = !bookmarks.isEmpty
-            || maps.indices.contains { segmentStripVisible(forMapAt: $0) }
-            || zoneBrackets.contains { !$0.isEmpty }
-        guard hasNameableChrome, !bounds.isEmpty else { return }
-        bookmarkTooltipTag = addToolTip(bounds, owner: self, userData: nil)
+        hoverCallout.show(text, mark: mark, near: anchor, of: self)
+    }
+
+    /// How far round the pointer a legend's callout keeps clear: the arrow
+    /// cursor hangs below and to the right of its hot spot.
+    static let pointerClearance = NSSize(width: 12, height: 12)
+
+    /// A panel leaving its window, or being hidden with the minimap toggle,
+    /// takes its callout with it: no exit event will come to do it.
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        super.viewWillMove(toWindow: newWindow)
+        hoverCallout.hide()
+    }
+
+    override func viewDidHide() {
+        super.viewDidHide()
+        hoverCallout.hide()
     }
 
     /// The bookmark whose mark is under `point`, if any. The mark's own box is
     /// the target, grown a little: a 6 pt arrow in a 10 pt margin is a small
-    /// thing to hit, and a tooltip that only answers on the pixel is a tooltip
+    /// thing to hit, and a callout that only answers on the pixel is a callout
     /// nobody sees.
     func bookmark(atMarkPoint point: NSPoint) -> Bookmark? {
+        bookmarkMark(at: point)?.bookmark
+    }
+
+    /// The bookmark whose mark is under `point`, and the mark's box.
+    private func bookmarkMark(at point: NSPoint) -> (bookmark: Bookmark, box: NSRect)? {
         for index in maps.indices {
             for bookmark in bookmarks {
                 guard let box = bookmarkMarkRect(row: bookmark.row, forMapAt: index) else { continue }
-                if box.insetBy(dx: -2, dy: -2).contains(point) { return bookmark }
+                if box.insetBy(dx: -2, dy: -2).contains(point) { return (bookmark, box) }
             }
         }
         return nil
@@ -1032,7 +1052,7 @@ final class MinimapView: NSView, NSViewToolTipOwner {
     /// within the snap distance of a cut names the boundary (the offset); a point
     /// over a piece names the piece — its label, range, size and name, the shape
     /// the form's list writes (§19.4.4, §21.4).
-    func segmentStripTooltipText(at point: NSPoint) -> String {
+    func segmentStripHoverText(at point: NSPoint) -> String {
         for index in maps.indices {
             guard let strip = segmentStripRect(forMapAt: index), strip.contains(point) else { continue }
             // A cut within the snap distance names the boundary, not the piece:
@@ -1061,7 +1081,7 @@ final class MinimapView: NSView, NSViewToolTipOwner {
     /// takes, because the two are the same kind of legend (§19.4.5, §19.4.4).
     /// A zone with no name is named by its range alone, which is the only thing
     /// there is to say about it.
-    func zoneBracketTooltipText(at point: NSPoint) -> String {
+    func zoneBracketHoverText(at point: NSPoint) -> String {
         for index in zoneBrackets.indices {
             guard let bracketIndex = zoneBracket(at: point, onMapAt: index) else { continue }
             let bracket = zoneBrackets[index][bracketIndex]
@@ -1074,25 +1094,64 @@ final class MinimapView: NSView, NSViewToolTipOwner {
         return ""
     }
 
-    /// What hovering the panel says: the segment strip's answer for a point on
-    /// it, the zone gutter's for a point on a bracket, else a bookmark's for a
-    /// point on its mark, else nothing (no tooltip). The two legends are
-    /// checked before the marks: they are what the user reads, and theirs is the
-    /// more specific answer where a mark's grown hit box could reach one of them
-    /// (§19.4.4, §19.4.5, §19.4.3).
-    func view(_ view: NSView, stringForToolTip tag: NSView.ToolTipTag,
-              point: NSPoint, userData data: UnsafeMutableRawPointer?) -> String {
-        let stripText = segmentStripTooltipText(at: point)
-        if !stripText.isEmpty {
-            return stripText
+    /// What hovering the panel says, the glyph that says what kind of thing it
+    /// is, and what the callout stands beside: the
+    /// segment strip's answer for a point on it, the zone gutter's for a point
+    /// on a bracket, else a bookmark's for a point on its mark, else nothing.
+    /// The two legends are checked before the marks: they are what the user
+    /// reads, and theirs is the more specific answer where a mark's grown hit
+    /// box could reach one of them (§19.4.4, §19.4.5, §19.4.3).
+    func hoverCallout(at point: NSPoint) -> (text: String, mark: HoverCallout.Mark, anchor: NSRect)? {
+        let clearance = Self.pointerClearance
+        let atPointer = NSRect(x: point.x - clearance.width, y: point.y - clearance.height,
+                               width: 2 * clearance.width, height: 2 * clearance.height)
+        let stripText = segmentStripHoverText(at: point)
+        if !stripText.isEmpty, let mark = segmentStripMark(at: point) {
+            return (stripText, mark, atPointer)
         }
-        let zoneText = zoneBracketTooltipText(at: point)
-        if !zoneText.isEmpty {
-            return zoneText
+        let zoneText = zoneBracketHoverText(at: point)
+        if !zoneText.isEmpty, let mark = zoneBracketMark(at: point) {
+            return (zoneText, mark, atPointer)
         }
-        guard let bookmark = bookmark(atMarkPoint: point) else { return "" }
+        guard let (bookmark, box) = bookmarkMark(at: point) else { return nil }
         let address = bookmark.row.bareAddress
-        return bookmark.name.isEmpty ? address : "\(address): \(bookmark.name)"
+        return (bookmark.name.isEmpty ? address : "\(address): \(bookmark.name)", .bookmark, box)
+    }
+
+    /// The glyph for a point on the segment strip, decided the way
+    /// `segmentStripHoverText` decides its words: a cut in reach is the two
+    /// pieces it separates, the one before it on top, as the strip draws them;
+    /// otherwise the piece under the point, in its own tint (§19.4.4).
+    func segmentStripMark(at point: NSPoint) -> HoverCallout.Mark? {
+        let tints = HexTheme.segmentTints
+        for index in maps.indices {
+            guard let strip = segmentStripRect(forMapAt: index), strip.contains(point) else { continue }
+            let blocks = segmentBlocks[index]
+            if let (_, offset) = nearestCut(to: point, in: index),
+               let after = blocks.firstIndex(where: { $0.range.lowerBound == offset }), after > 0 {
+                return .cut(above: tints[blocks[after - 1].colorIndex % tints.count],
+                            below: tints[blocks[after].colorIndex % tints.count])
+            }
+            guard let piece = segmentPiece(at: point, onMapAt: index) else { continue }
+            return .segment(tints[blocks[piece].colorIndex % tints.count])
+        }
+        return nil
+    }
+
+    /// The glyph for a point on a zone gutter: the bracket in the colour the
+    /// gutter draws it in — the focused zone's, or every other one's (§19.4.5).
+    func zoneBracketMark(at point: NSPoint) -> HoverCallout.Mark? {
+        for index in zoneBrackets.indices {
+            guard let bracketIndex = zoneBracket(at: point, onMapAt: index) else { continue }
+            return .zone(zoneBrackets[index][bracketIndex].isFocused
+                         ? HexTheme.zoneFrame : HexTheme.zoneFrameInactive)
+        }
+        return nil
+    }
+
+    /// Just the words of `hoverCallout(at:)`, "" where it has none.
+    func hoverText(at point: NSPoint) -> String {
+        hoverCallout(at: point)?.text ?? ""
     }
 
     /// Marks only these rectangles for repaint. Scrolling calls into the panel
@@ -1254,7 +1313,7 @@ final class MinimapView: NSView, NSViewToolTipOwner {
 
     /// The strip block under `point`, if any — the map and piece whose strip the
     /// pointer is on. Reuses the strip's own hit-test, so the highlight names the
-    /// same piece the tooltip and the menu do (§19.4.4).
+    /// same piece the callout and the menu do (§19.4.4).
     private func stripBlock(at point: NSPoint) -> (mapIndex: Int, pieceIndex: Int)? {
         for index in maps.indices {
             if let pieceIndex = segmentPiece(at: point, onMapAt: index) {
@@ -1283,8 +1342,6 @@ final class MinimapView: NSView, NSViewToolTipOwner {
 
     override func layout() {
         super.layout()
-        // The tooltip covers the panel, so its rect follows the bounds.
-        refreshHoverTooltip()
         // A resize changes how many rows fit, which moves the window, and
         // re-derives the divider's position from the new bounds.
         updateTopRow()
@@ -2301,6 +2358,8 @@ final class MinimapView: NSView, NSViewToolTipOwner {
     override func setFrameSize(_ newSize: NSSize) {
         let changed = newSize != frame.size
         super.setFrameSize(newSize)
+        // A resize moves the window and with it every mark.
+        if changed { hoverCallout.hide() }
         guard changed, renderMode == .overview else { return }
         geometryIsSettling = true
         settleTimer?.invalidate()
@@ -2808,15 +2867,21 @@ final class MinimapView: NSView, NSViewToolTipOwner {
         let point = convert(event.locationInWindow, from: nil)
         setHoveredStripBlock(stripBlock(at: point))
         setHoveredZoneBracket(zoneBracketHit(at: point))
+        updateHoverCallout(at: point)
     }
 
-    /// The pointer left the panel: clear both legends' hover highlights.
+    /// The pointer left the panel: clear both legends' hover highlights, and
+    /// the callout with them.
     override func mouseExited(with event: NSEvent) {
         setHoveredStripBlock(nil)
         setHoveredZoneBracket(nil)
+        hoverCallout.hide()
     }
 
     override func mouseDown(with event: NSEvent) {
+        // A press is the start of a jump or a drag; either moves what the
+        // callout was standing beside.
+        hoverCallout.hide()
         let point = convert(event.locationInWindow, from: nil)
         // The segment strip positions like the map does: a click on it means
         // "take me here" — the pane goes to the byte the click's y stands for,
@@ -3100,6 +3165,8 @@ final class MinimapView: NSView, NSViewToolTipOwner {
     /// right-click elsewhere on the panel does nothing: the map has no other
     /// context menu.
     override func rightMouseDown(with event: NSEvent) {
+        // The menu says what the piece is; a callout beside it would say it twice.
+        hoverCallout.hide()
         let point = convert(event.locationInWindow, from: nil)
         for index in maps.indices {
             guard let pieceIndex = segmentPiece(at: point, onMapAt: index) else { continue }
@@ -3168,6 +3235,7 @@ final class MinimapView: NSView, NSViewToolTipOwner {
     /// hex row per `rowStep` of scrolling) — the map has no scroll position of
     /// its own to move.
     override func scrollWheel(with event: NSEvent) {
+        hoverCallout.hide()
         guard let onScrollToOffset, let visible = unifiedViewport() else {
             super.scrollWheel(with: event)
             return

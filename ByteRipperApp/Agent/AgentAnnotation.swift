@@ -115,9 +115,9 @@ struct AgentAnnotation: Equatable {
                         relatedTo: ids, site: site, author: author)
     }
 
-    /// What the pointer resting on the bytes shows: the title, the note and
+    /// What the callout over the bytes says: the title, the note and
     /// the annotations this one is about, named by `titles` where it knows them.
-    func tooltip(titles: [String: String]) -> String {
+    func hoverText(titles: [String: String]) -> String {
         [title, note, relations(titles: titles)].filter { !$0.isEmpty }.joined(separator: "\n")
     }
 

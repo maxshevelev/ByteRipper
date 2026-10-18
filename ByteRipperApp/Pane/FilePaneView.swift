@@ -929,6 +929,9 @@ final class FilePaneView: NSView {
         // repaint per parse rather than per keystroke.
         viewModel.onFullInvalidationOfZones = { [weak self] in
             self?.hexView.needsDisplay = true
+            // Notes are among what this repaints, and a callout may be saying
+            // one that has just changed or gone.
+            self?.hexView.hoverCallout.hide()
         }
         // The running search's index reached further into the file: the greys
         // for that stretch are known now. Only that stretch repaints, and only
@@ -958,9 +961,11 @@ final class FilePaneView: NSView {
         }
         // A bookmark mark appeared or disappeared on a row (§20). The list is
         // shared by both panes, so the same row repaints in each — a redraw
-        // only; the bytes, selection, and scroll are untouched.
+        // only; the bytes, selection, and scroll are untouched. A callout
+        // naming a mark may be naming one that has moved, been renamed or gone.
         viewModel.onBookmarksChanged = { [weak self] row in
             self?.hexView.redrawRow(startingAt: row)
+            self?.hexView.hoverCallout.hide()
         }
         // Dragging a mark moves the bookmark itself (§20.6) — the store decides
         // where it lands, since it is the one that knows which rows are taken.

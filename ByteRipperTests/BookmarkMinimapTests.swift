@@ -245,11 +245,11 @@ final class BookmarkMinimapTests: XCTestCase {
         panel.display()
         let box = try XCTUnwrap(panel.bookmarkMarkRect(row: 0x400, forMapAt: 0))
 
-        XCTAssertEqual(panel.view(panel, stringForToolTip: 0, point: centre(of: box), userData: nil),
+        XCTAssertEqual(panel.hoverText(at: centre(of: box)),
                        "00000400", "an unnamed bookmark is its address")
 
         store.rename(rowContaining: 0x400, to: "EC table")
-        XCTAssertEqual(panel.view(panel, stringForToolTip: 0, point: centre(of: box), userData: nil),
+        XCTAssertEqual(panel.hoverText(at: centre(of: box)),
                        "00000400: EC table",
                        "a named one says offset: name")
     }
@@ -262,10 +262,10 @@ final class BookmarkMinimapTests: XCTestCase {
         let box = try XCTUnwrap(panel.bookmarkMarkRect(row: 0x400, forMapAt: 0))
 
         let inTheMap = NSPoint(x: panel.bounds.midX, y: box.midY)
-        XCTAssertEqual(panel.view(panel, stringForToolTip: 0, point: inTheMap, userData: nil), "",
+        XCTAssertEqual(panel.hoverText(at: inTheMap), "",
                        "the map's own content is not a mark")
         let belowIt = NSPoint(x: box.midX, y: box.maxY + 3 * box.height)
-        XCTAssertEqual(panel.view(panel, stringForToolTip: 0, point: belowIt, userData: nil), "",
+        XCTAssertEqual(panel.hoverText(at: belowIt), "",
                        "and an unmarked row's margin is not either")
     }
 
@@ -277,12 +277,148 @@ final class BookmarkMinimapTests: XCTestCase {
         panel.display()
         let box = try XCTUnwrap(panel.bookmarkMarkRect(row: 0x800, forMapAt: 1))
 
-        XCTAssertEqual(panel.view(panel, stringForToolTip: 0, point: centre(of: box), userData: nil),
+        XCTAssertEqual(panel.hoverText(at: centre(of: box)),
                        "00000800: NVRAM")
     }
 
     private func centre(of rect: NSRect) -> NSPoint {
         NSPoint(x: rect.midX, y: rect.midY)
+    }
+
+    // MARK: - The callout (§19.4.3)
+
+    /// The pointer arriving at `point` on the panel, as AppKit delivers it.
+    private func hover(_ panel: MinimapView, at point: NSPoint) throws {
+        let window = try XCTUnwrap(panel.window)
+        panel.mouseMoved(with: mouse(.mouseMoved, at: panel.convert(point, to: nil), window: window))
+    }
+
+    /// The callout's capsule in the panel's coordinates.
+    private func capsule(of panel: MinimapView) throws -> NSRect {
+        let host = try XCTUnwrap(panel.hoverCallout.superview)
+        return panel.convert(panel.hoverCallout.capsuleFrame, from: host)
+    }
+
+    /// The name is up the moment the pointer reaches the mark — no tooltip
+    /// delay — beside the arrow and opening into the map, and it goes the
+    /// moment the pointer leaves the mark.
+    func testTheCalloutNamesAMarkAtOnceAndGoesWhenThePointerLeaves() throws {
+        let (controller, panel) = try makeWindow(sizes: (0x4000, nil))
+        controller.windowModel.bookmarkStore.add(rowContaining: 0x400, name: "EC table")
+        panel.display()
+        let box = try XCTUnwrap(panel.bookmarkMarkRect(row: 0x400, forMapAt: 0))
+
+        try hover(panel, at: centre(of: box))
+        XCTAssertTrue(panel.hoverCallout.isShowing, "it is up on the first move, not after a wait")
+        XCTAssertEqual(panel.hoverCallout.text, "00000400: EC table")
+        XCTAssertEqual(panel.hoverCallout.mark, .bookmark)
+        let shown = try capsule(of: panel)
+        XCTAssertFalse(shown.insetBy(dx: -1, dy: 0).intersects(box), "beside the mark, never over it")
+        XCTAssertEqual(shown.midY, box.midY, accuracy: 1, "level with the mark it names")
+        let host = try XCTUnwrap(panel.window?.contentView)
+        XCTAssertTrue(panel.hoverCallout.superview === host,
+                      "drawn over the window's content, not inside the narrow panel")
+        XCTAssertTrue(host.bounds.contains(panel.hoverCallout.capsuleFrame), "and inside the window")
+
+        try hover(panel, at: NSPoint(x: box.midX, y: box.maxY + 3 * box.height))
+        XCTAssertFalse(panel.hoverCallout.isShowing, "an unmarked row's margin has nothing to say")
+    }
+
+    /// The second map of a comparison marks its rows in the right margin, so
+    /// its callout opens to the left — into its own map, not out of the window.
+    func testASecondMapsCalloutOpensToTheLeft() throws {
+        let (controller, panel) = try makeWindow(sizes: (0x4000, 0x4000))
+        controller.windowModel.bookmarkStore.add(rowContaining: 0x800, name: "NVRAM")
+        panel.display()
+        let box = try XCTUnwrap(panel.bookmarkMarkRect(row: 0x800, forMapAt: 1))
+
+        try hover(panel, at: centre(of: box))
+        XCTAssertEqual(panel.hoverCallout.text, "00000800: NVRAM")
+        XCTAssertLessThan(try capsule(of: panel).maxX, box.minX)
+    }
+
+    /// Every event after which the callout would be naming the wrong thing, or
+    /// a thing that is no longer under the pointer, takes it away. Each is
+    /// tried from a fresh hover, so one rule cannot pass on another's account.
+    func testTheCalloutGoesWithEveryEventThatWouldMakeItWrong() throws {
+        let (controller, panel) = try makeWindow(sizes: (0x40000, nil))
+        let store = controller.windowModel.bookmarkStore
+        store.add(rowContaining: 0x400, name: "EC table")
+        panel.display()
+        let window = try XCTUnwrap(panel.window)
+
+        func showThen(_ what: String, _ act: () throws -> Void) throws {
+            // Back to the top, where the mark is: a rule tried before may have
+            // scrolled it out of the map's window.
+            panel.setViewports([0..<0x800])
+            panel.display()
+            let box = try XCTUnwrap(panel.bookmarkMarkRect(row: 0x400, forMapAt: 0), what)
+            try hover(panel, at: centre(of: box))
+            XCTAssertTrue(panel.hoverCallout.isShowing, "shown before: \(what)")
+            try act()
+            XCTAssertFalse(panel.hoverCallout.isShowing, "hidden after: \(what)")
+            XCTAssertEqual(panel.hoverCallout.text, "", "and says nothing: \(what)")
+        }
+
+        try showThen("the pointer leaving the panel") {
+            panel.mouseExited(with: mouse(.mouseMoved, at: .zero, window: window))
+        }
+        try showThen("a scroll of the panes") {
+            panel.setViewports([0x1000..<0x2000])
+        }
+        try showThen("the wheel over the panel") {
+            let wheel = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .line,
+                                              wheelCount: 1, wheel1: -3, wheel2: 0, wheel3: 0))
+            panel.scrollWheel(with: try XCTUnwrap(NSEvent(cgEvent: wheel)))
+        }
+        try showThen("a press on the panel") {
+            panel.mouseDown(with: mouse(.leftMouseDown, at: .zero, window: window))
+            panel.mouseUp(with: mouse(.leftMouseUp, at: .zero, window: window))
+        }
+        try showThen("the bookmark being renamed") {
+            store.rename(rowContaining: 0x400, to: "EC firmware")
+        }
+        try showThen("a bookmark being added elsewhere") {
+            store.add(rowContaining: 0x2000)
+        }
+        try showThen("a switch of render mode") {
+            controller.setMinimapRenderModeForTesting(.overview)
+            controller.setMinimapRenderModeForTesting(.detail)
+        }
+        try showThen("the window stopping being key") {
+            NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: window)
+        }
+        try showThen("the window being resized") {
+            window.setContentSize(NSSize(width: 960, height: 640))
+            window.layoutIfNeeded()
+        }
+        try showThen("the minimap being put away") {
+            controller.surface.minimap.setPanelVisible(false, animated: false)
+            window.layoutIfNeeded()
+            controller.surface.minimap.setPanelVisible(true, animated: false)
+            window.layoutIfNeeded()
+        }
+    }
+
+    /// A strip or a bracket is long, so its callout follows the pointer along
+    /// it rather than standing at one end — and stays clear of the cursor.
+    func testALegendsCalloutFollowsThePointer() throws {
+        let (controller, panel) = try makeWindow(sizes: (0x4000, nil))
+        controller.windowModel.pane1.segmentStore.addCut(at: 0x2000)
+        panel.window?.layoutIfNeeded()
+        panel.display()
+        let strip = try XCTUnwrap(panel.segmentStripRect(forMapAt: 0))
+        let high = NSPoint(x: strip.midX, y: strip.minY + strip.height * 0.2)
+        let low = NSPoint(x: strip.midX, y: strip.minY + strip.height * 0.4)
+
+        try hover(panel, at: high)
+        XCTAssertTrue(panel.hoverCallout.isShowing)
+        XCTAssertEqual(panel.hoverCallout.mark, .segment(HexTheme.segmentTints[0]), "S0 wears its own tint")
+        let first = try capsule(of: panel)
+        try hover(panel, at: low)
+        let second = try capsule(of: panel)
+        XCTAssertEqual(second.midY - first.midY, low.y - high.y, accuracy: 1, "it moved with the pointer")
+        XCTAssertFalse(second.contains(low), "and is never under the pointer it follows")
     }
 
     // MARK: - Clicking near a mark (§19.6)

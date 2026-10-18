@@ -1282,13 +1282,13 @@ final class BookmarkTests: XCTestCase {
         XCTAssertEqual(requests().count, 1, "removing asks nothing")
     }
 
-    // MARK: - Where a name shows (§20.2)
+    // MARK: - Where a name shows (§20.3)
 
     /// Hovering a marked row's address shows what the bookmark is called — and
     /// only that. A row with no mark, and a mark with no name, show nothing: the
-    /// address is already drawn under the pointer, so a tooltip repeating it
-    /// would explain a thing to itself.
-    func testTheMarkShowsItsNameAsATooltip() throws {
+    /// address is already drawn under the pointer, so a callout repeating it
+    /// would explain a thing to itself. (The callout itself: `HoverCalloutTests`.)
+    func testTheMarkSaysItsNameOnHover() throws {
         let url = try tempFile([UInt8](repeating: 0x11, count: 64))
         defer { try? FileManager.default.removeItem(at: url) }
         let pane = PaneViewModel()
@@ -1296,26 +1296,12 @@ final class BookmarkTests: XCTestCase {
         let store = BookmarkStore()
         pane.bookmarks = BookmarkSpace(store: store)
 
-        let hex = HexView()
-        hex.dataSource = pane
-        hex.delegate = pane
-        hex.reloadData()
-
-        let layout = hex.hexLayout
-        func tooltip(row: Int) -> String {
-            let point = NSPoint(x: layout.offsetColumnFrame(row: row).midX,
-                                y: layout.rowFrame(row: row).midY)
-            return hex.view(hex, stringForToolTip: 0, point: point, userData: nil)
-        }
-
-        XCTAssertNotNil(hex.bookmarkTooltipTag,
-                        "the Offset column is registered for tooltips, or none of this is asked")
-        XCTAssertEqual(tooltip(row: 1), "", "an unmarked row has nothing to say")
+        XCTAssertEqual(pane.hexBookmarkHoverText(atRowContaining: 0x10), "", "an unmarked row has nothing to say")
         store.add(rowContaining: 16, name: "ME region")
-        XCTAssertEqual(tooltip(row: 1), "ME region")
-        XCTAssertEqual(tooltip(row: 2), "", "the name belongs to its own row")
+        XCTAssertEqual(pane.hexBookmarkHoverText(atRowContaining: 0x1F), "ME region")
+        XCTAssertEqual(pane.hexBookmarkHoverText(atRowContaining: 0x20), "", "the name belongs to its own row")
         store.rename(rowContaining: 16, to: "")
-        XCTAssertEqual(tooltip(row: 1), "",
+        XCTAssertEqual(pane.hexBookmarkHoverText(atRowContaining: 0x10), "",
                        "an unnamed mark has nothing to add to the address it is drawn on")
     }
 
