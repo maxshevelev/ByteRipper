@@ -1,8 +1,8 @@
 import XCTest
 @testable import MEFirmware
 
-/// The FPF/UEP settings: the tool's own layout of the `$UEP` area's first bit
-/// array, and reading an image's area through it.
+/// The FPF/UEP settings: the tool's own layout of the `$UEP` area's bit
+/// arrays, and reading an image's area through it.
 final class UEPMapTests: XCTestCase {
     /// The map is the tool's: identifiers, its own names and sections, and the
     /// places in the first array — the array the engine reads.
@@ -35,7 +35,8 @@ final class UEPMapTests: XCTestCase {
     func testTheCSME18MapFollowsTheRewrittenDatabase() throws {
         let map = try XCTUnwrap(UEPMap.forME(major: 18))
         XCTAssertEqual(map.arrayStart, 8, "the tool's header is signature + CRC-16 + reserved")
-        XCTAssertEqual(map.settings.count, 34)
+        XCTAssertEqual(map.arraySize, 0x80)
+        XCTAssertEqual(map.settings.count, 41)
         let profile = try XCTUnwrap(map.settings.first { $0.name == "BTG_PROFILE" })
         XCTAssertEqual(profile.placement, .init(array: 0, offset: 0x48, bit: 30, count: 3))
         XCTAssertEqual(profile.label, "Boot Guard Profile")
@@ -49,26 +50,45 @@ final class UEPMapTests: XCTestCase {
         let idSet = try XCTUnwrap(map.settings.first { $0.name == "OEM_ID_V" })
         XCTAssertNil(idSet.label)
         XCTAssertEqual(idSet.placement, .init(array: 0, offset: 0x4C, bit: 6, count: 1))
-        // What the tool places in a later array is not in the map, as in 15/16.
-        XCTAssertNil(map.settings.first { $0.name == "PLAT_ID" })
-        XCTAssertNil(map.settings.first { $0.name == "ESE_ROM_SVN_EN" })
+        // The tool places some settings in the second array; the map says so
+        // rather than dropping them.
+        let platformID = try XCTUnwrap(map.settings.first { $0.name == "PLAT_ID" })
+        XCTAssertEqual(platformID.placement, .init(array: 1, offset: 0x4, bit: 0, count: 16))
+        XCTAssertEqual(platformID.label, "DnX OEM Platform ID")
+        XCTAssertNotNil(map.settings.first { $0.name == "ESE_ROM_SVN_EN" })
+        // 15/16 keep to the first array, so size 0 leaves the place as the
+        // tool's own offset.
+        XCTAssertEqual(UEPMap.forME(major: 16)?.arraySize, 0)
         // The 15/16 array start is the measured one, not a header size.
         XCTAssertEqual(UEPMap.forME(major: 16)?.arrayStart, UEPReader.firstArrayOffset)
         XCTAssertNil(UEPMap.forME(major: 17))
     }
 
-    /// The CSME 18 array starts after the tool's 8-byte header: the profile's
-    /// bits 30–32 at offset 0x48 read the value the HP dump carries (5).
+    /// The CSME 18 arrays start after the tool's 8-byte header: the profile's
+    /// bits 30–32 at offset 0x48 read the value the HP dump carries (5), and a
+    /// setting the tool places in the second array reads the word the dump
+    /// carries there.
     func testTheCSME18ArrayStartsAfterTheToolsHeader() throws {
         let map = try XCTUnwrap(UEPMap.forME(major: 18))
         var area = Data("$UEP".utf8)
         area.append(Data(count: 4))                       // CRC-16 + reserved
-        area.append(Data(count: 0x80))                    // the first array
+        area.append(Data(count: 4 * 0x80))                // arrays_count 4
         let word = area.startIndex + map.arrayStart + 0x48
         area[word + 3] = 0x40                             // (5 << 30) little-endian
         area[word + 4] = 0x01
+        // PLAT_ID | DNX | RPMC_RB | PLAT_ID_V | CSE_BOOTSTRAP_SVN_EN |
+        // CSE_FW_SVN_EN at array 1, offset 4 — the HP dump's 0x001D0000.
+        let second = area.startIndex + map.arrayStart + map.arraySize + 0x4
+        area[second + 2] = 0x1D
         let readings = try XCTUnwrap(UEPReader.readings(in: area, map: map))
         XCTAssertEqual(readings.first { $0.name == "BTG_PROFILE" }?.value, 5)
+        XCTAssertEqual(readings.first { $0.name == "PLAT_ID" }?.value, 0)
+        XCTAssertEqual(readings.first { $0.name == "DNX" }?.value, 1)
+        XCTAssertEqual(readings.first { $0.name == "RPMC_RB" }?.value, 0)
+        XCTAssertEqual(readings.first { $0.name == "PLAT_ID_V" }?.value, 1)
+        XCTAssertEqual(readings.first { $0.name == "CSE_BOOTSTRAP_SVN_EN" }?.value, 1)
+        XCTAssertEqual(readings.first { $0.name == "CSE_FW_SVN_EN" }?.value, 1)
+        XCTAssertEqual(readings.first { $0.name == "ESE_ROM_SVN_EN" }?.value, 0)
         // Read at the 15/16 array start the same bytes are another setting's
         // (and not the profile): the placement is the tool's, not a guess.
         let shifted = map

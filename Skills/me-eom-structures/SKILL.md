@@ -230,18 +230,24 @@ its 8-byte `$UEP` header (signature, CRC-16, reserved) followed by
 `arrays_count × 0x80` bytes, and an item's `offset` counts from the start of
 the arrays — so **the first array begins 8 bytes into the container**, not at
 the 0x0C the 15/16 area was measured at (`UEPMap.arrayStart` states which).
-Items at 0x80 and beyond are in a later array and are not kept; the script
-counts them. Enumerated settings keep the tool's option words (`options`: the
-profile's 0/3/4/5 as "Boot Guard Disabled" … "Verified and Measured Boot"), so
-the panel shows the word rather than the number.
+An item at 0x80 or beyond is in a later array: it is emitted as
+`Placement(array: at // 0x80, offset: at % 0x80)` and the map states
+`arraySize: 0x80`, so the reader takes it where the tool puts it. An item past
+the document's own `arrays_count` is not kept, and the script counts those.
+Enumerated settings keep the tool's option words (`options`: the profile's
+0/3/4/5 as "Boot Guard Disabled" … "Verified and Measured Boot"), so the panel
+shows the word rather than the number.
 
-18.1 yields 34 settings: 32 from the MTL document (offsets 0x20–0x4C) and two
-ESE bits from the other. On the CSME 18 dump at hand the 8-byte-header reading
-is what makes the bits coherent — `OEM_ID` 0x103C (HP's PCI vendor ID),
-`KM_ID` 1, `FW_TYPE` 3, `BTG_PROFILE` 5, the validity bits set — while the
-15/16 array start gives `KM_ID` 15 and `FW_TYPE` 0; and the header's CRC-16
-(poly 0x1021, init 0xFFFF, no reflection) over reserved + four arrays
-reproduces the stored word exactly.
+18.1 yields 41 settings: 34 in the first array (32 from the MTL document,
+offsets 0x20–0x4C, and two ESE bits) and seven in the second at offset 0x04 —
+`ESE_ROM_SVN_EN`, `PLAT_ID`, `DNX`, `RPMC_RB`, `PLAT_ID_V`,
+`CSE_BOOTSTRAP_SVN_EN`, `CSE_FW_SVN_EN`. On the CSME 18 dump at hand the
+8-byte-header reading is what makes the bits coherent — `OEM_ID` 0x103C (HP's
+PCI vendor ID), `KM_ID` 1, `FW_TYPE` 3, `BTG_PROFILE` 5, the validity bits set
+— while the 15/16 array start gives `KM_ID` 15 and `FW_TYPE` 0; the second
+array's word reads 0x001D0000 (`PLAT_ID` 0, `DNX` 1 — disabled, `RPMC_RB` 0,
+the three FVC states 1); and the header's CRC-16 (poly 0x1021, init 0xFFFF, no
+reflection) over reserved + four arrays reproduces the stored word exactly.
 
 **The CPU strap message has its own layout and its own place.** CSME 18 does
 not keep it in the descriptor's MIP area; it is in the FITC partition's MIP

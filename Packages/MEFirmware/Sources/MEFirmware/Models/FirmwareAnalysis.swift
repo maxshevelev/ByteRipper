@@ -2771,5 +2771,10 @@ public enum EngineModelRevision {
     /// `phy_oem_cfg` nvar holds, read through the tool's `SphyNvar` layout
     /// (`SphyNvarMap`). Ours. The reader verifies the layout's anchors, since
     /// the package carries several SPHY variants with identical headers.
-    public static let current = 53
+    /// 54 does not grow the shape: a CSME 18 image's `uepSettings` now includes
+    /// the settings the tool places in the container's second array
+    /// (`PLAT_ID`, `DNX`, `RPMC_RB`, `ESE_ROM_SVN_EN`, the CSE FVC states and
+    /// the validity bits beside them) — seven more rows on such an image, where
+    /// revision 49 read the first array alone.
+    public static let current = 54
 }

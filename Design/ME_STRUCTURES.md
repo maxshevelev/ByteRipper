@@ -668,7 +668,7 @@ the path document and the `<ui_item>` words into
 CSME 18 dump at hand — HP EliteBook 630 13.3 inch G11, 18.0.10.2288 — reads 17
 of its configuration files through that map. The **UEP map**:
 `uep18_map.py` turns `UEPs_Data` (a `serialized_item` per bit, a `ui_item` and
-a `bind_action` for its words) into `UEPMap+CSME18`, 34 settings, and the tool's
+a `bind_action` for its words) into `UEPMap+CSME18`, 41 settings, and the tool's
 own layout is what settles the container question the 15/16 pages had to
 measure:
 
@@ -678,6 +678,13 @@ measure:
   A `serialized_item`'s offset counts from the start of the arrays, so the
   first array begins **8 bytes** into the container, where the 15/16 area's
   measured start is 0x0C. `UEPMap.arrayStart` carries the generation's answer.
+  An item at 0x80 or beyond is in a later array: the generator emits
+  `Placement(array: at // 0x80, offset: at % 0x80)` and the map says
+  `arraySize: 0x80`, so seven settings the MTL document places in the second
+  array are read too (`PLAT_ID`, `DNX`, `RPMC_RB`, `ESE_ROM_SVN_EN`, the CSE
+  FVC states and `PLAT_ID_V`). On the HP dump that array's word at +0x84 is
+  0x001D0000 — `DNX` disabled, rebinding off, platform ID 0, the three FVC
+  states set — and the readings agree.
 - The header's CRC-16 is CCITT-FALSE (poly 0x1021, init 0xFFFF, no reflection)
   over the reserved word and every array: on the HP dump it reproduces the
   stored 0x9D38 over bytes +6…+0x208 — reserved plus four arrays — which also
