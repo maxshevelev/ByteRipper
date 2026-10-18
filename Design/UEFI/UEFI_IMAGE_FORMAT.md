@@ -1715,6 +1715,44 @@ is an `acerDMIStore`, fixed, named `Acer DMI` with the serial its row carries,
 classified as UEFITool's padding. A wiped block is all `FF`, its signature is
 not there, and it leaves no row.
 
+**HP's identity** (`HPDMIArea.swift`) is not a block of its own: it is
+NVRAM variables in the main VSS2 store, which HP BIOS Configuration Utility
+(BCU) reads and writes through the firmware. A driver of the firmware lists
+`HP_MUD`, `BuildId`, `FactoryConfig` and `FactoryConfigFlags` under one GUID,
+`20AB3EB1-3C8F-4A4C-B87E-372426066D97`; `HP_TAGS` is a Setup variable under
+`FB3B9ECE-4ABA-4933-B49D-B4D67D892351`. Every one is written with the
+authenticated VSS2 header, attributes `07`. The layout is read off five HP
+dumps at hand — EliteBook 455 G10, 630 G11, 645 G11, 6 G1a (2023–2025, AMD
+and Intel) and a ProDesk 600 G4 image with an empty store — and nothing is
+published.
+
+| Variable | Offset | Field (UTF-16, NUL-padded) |
+|---|---|---|
+| `HP_MUD`, 430 bytes | `0x000` | the serial number |
+| | `0x042` | the SKU |
+| | `0x0A4` | the product family, `103C_5336AN HP EliteBook` |
+| | `0x106` | the CT number |
+| | `0x124` | the product name |
+| | `0x19E` | the UUID, 16 bytes, as SMBIOS stores one |
+| `BuildId`, 112 bytes | `0x000` | the build ID, `24WWROBZ602#SABD#DABD` |
+| `FactoryConfig`, 500 bytes | `0x000` | the feature byte, two-character codes ending in `.XX` |
+| `HP_TAGS`, 324 bytes | `0x000` | the asset tracking number; the rest blank in every dump |
+
+On the three AMD boards the store marks every copy of `HP_MUD`, `BuildId`
+and `FactoryConfig` deleted (state `3C`) and keeps no current one; on the
+Intel board they are current (`3F`). The copies are whole either way, so the
+area is read from the copy that stands for the variable: the current one,
+else the last. Where the firmware of a board with only marked copies takes
+the identity from is not in the dump. The SMBIOS strings it publishes turn up
+again in the Intel board's ME file system, which the BIOS writes at boot;
+that copy is not read.
+
+The area is found only with the bytes — a marked entry's name is not on its
+node — and is no node of its own: the DMI search (`DMIStore.all(in:reader:)`)
+returns the `HP_MUD` entry, kind `vssEntry`, and the details and the row
+read the store around it. A `HP_MUD` of another size, or whose fields are
+not printable text, is not read.
+
 **The AMD PSP's map** (`AMDFirmware.swift`) is read from the Embedded
 Firmware Structure: `0x55AA55AA` at one of `0x20000`, `0xFA0000`, `0xF20000`,
 `0xE20000`, `0xC20000`, `0x820000`, `0x120000`, tried in that order, with at

@@ -916,7 +916,9 @@ private struct ChecksumPass: Sendable {
         }
         // An ME row carries its own term (the curator named it); a UEFI
         // node's comes from its kind. Whichever of the two is in focus.
-        let helpTerm = meNode?.helpTerm ?? node.flatMap { UEFIHelpTerms.term(for: $0, in: image) }
+        let helpTerm = meNode?.helpTerm ?? node.flatMap {
+            UEFIHelpTerms.term(for: $0, in: image, reader: readers.reader(for: $0.space))
+        }
         if !selectionOnly || !controller.showSelection(
             of: tree, focus: focus, detail: detail, helpTerm: helpTerm, meFocus: meFocus
         ) {

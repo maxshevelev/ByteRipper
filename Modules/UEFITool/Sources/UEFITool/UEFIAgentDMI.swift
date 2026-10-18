@@ -19,8 +19,10 @@ public enum UEFIAgentDMI {
     /// What an answer says about what the parser can and cannot find.
     nonisolated static let scope = """
         The parser finds a DMI area only by its algorithms for the dump layouts it knows: Lenovo's \
-        DMI store (an LDBG change log and two LENV blocks), AMI's GPNV store as ASUS writes it, and \
-        Acer's 8 KiB DMI area. An area that is not found is not therefore absent from the dump: it may \
+        DMI store (an LDBG change log and two LENV blocks), AMI's GPNV store as ASUS writes it, \
+        Acer's 8 KiB DMI area, and HP's HP_MUD variable in the main VSS2 store, with BuildId, \
+        FactoryConfig (the feature byte) and HP_TAGS (the asset tracking number) beside it — what HP's \
+        BCU reports. An area that is not found is not therefore absent from the dump: it may \
         be in a layout the parser does not know, or a known one that is damaged, wiped or moved so its \
         checks fail.
         """
@@ -31,8 +33,9 @@ public enum UEFIAgentDMI {
         description: """
             The image's DMI areas — where the firmware keeps the board's identity: serial numbers, UUID, \
             model — as the UEFI Structure panel's DMI button finds them. It opens every container in the \
-            file, but no compressed section. Each area: `layout` ("Lenovo DMI store", "GPNV store" or "Acer \
-            DMI" — the Type column calls them all Padding), its node as `uefi_tree` gives it (`id`, `label`, \
+            file, but no compressed section. Each area: `layout` ("Lenovo DMI store", "GPNV store", "Acer \
+            DMI" — the Type column calls these Padding — or "HP DMI", a VSS entry that may be one the \
+            store marks deleted, as most HP boards keep it), its node as `uefi_tree` gives it (`id`, `label`, \
             `link`, `start`, `end`, `encoded` for an XORed LENV block), `size`, `path`, and the panel's \
             `fields` and `tables` for it; `uefi_node` on its children reads further, `uefi_node_data` \
             reads the bytes. \(scope) So an empty `areas` means only that the parser recognised none — \
@@ -85,6 +88,7 @@ public enum UEFIAgentDMI {
         case .lenovoDMIStore: return "Lenovo DMI store"
         case .gpnvStore: return "GPNV store"
         case .acerDMIStore: return "Acer DMI"
+        case .vssEntry: return "HP DMI"
         default: return "Unknown"
         }
     }

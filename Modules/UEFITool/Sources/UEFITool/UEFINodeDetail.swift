@@ -358,6 +358,13 @@ public enum UEFIDetail {
             fields += acer.fields
             tables += acer.tables
         }
+        // HP's identity, on the `HP_MUD` entry: its fields and the variables
+        // beside it in the store, as BCU reports them.
+        if node.kind == .vssEntry {
+            let hp = UEFIHPDMIDetail.build(for: node, image: image, reader: reader, in: language)
+            fields += hp.fields
+            tables += hp.tables
+        }
         // A GPNV record's data is fields nobody has published: the text in
         // it is what can be read, at its offset in the data.
         if node.kind == .gpnvRecord, let body = reader.bytes(node.body) {

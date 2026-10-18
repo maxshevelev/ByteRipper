@@ -362,7 +362,7 @@ enum TreeMaterialization {
 
     /// The stores of the board's identity in the image `roots` are the top of
     /// (`DMIStore`), over a copy of the tree with every container in the file
-    /// opened and no compressed section: neither store is ever inside one.
+    /// opened and no compressed section: no store is ever inside one.
     static func dmiStores(
         roots: [UEFINode],
         reader: ImageReader,
@@ -373,7 +373,7 @@ enum TreeMaterialization {
         var discarded: [UEFIDiagnostic] = []
         materializeAll(&nodes, reader: reader, limits: limits, buffers: buffers,
                        diagnostics: &discarded, opensCompressed: false)
-        return DMIStore.all(in: nodes)
+        return DMIStore.all(in: nodes, reader: reader)
     }
 
     /// Which drivers ask for which entries of the Lenovo stores among

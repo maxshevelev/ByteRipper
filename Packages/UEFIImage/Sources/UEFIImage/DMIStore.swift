@@ -3,11 +3,14 @@ import Foundation
 /// Where an image keeps the board's identity — the serial numbers, the UUID,
 /// the model, the Windows key — in a store the tree reads as a row of its
 /// own: Lenovo's DMI store (`LenovoDMIStore`), AMI's GPNV store, ASUS's
-/// (`GPNVRecord`), or Acer's DMI area (`AcerDMIStore`). What a bench looks
+/// (`GPNVRecord`), Acer's DMI area (`AcerDMIStore`), or HP's `HP_MUD`
+/// variable (`HPDMIArea`), the one store that is an NVRAM entry rather than a
+/// row of its own. What a bench looks
 /// for first in a dump, and what can sit several levels down: in padding
 /// inside a region, or after a volume's free space.
 public struct DMIStore: Equatable, Sendable {
-    /// The row's kind: `.lenovoDMIStore`, `.gpnvStore` or `.acerDMIStore`.
+    /// The row's kind: `.lenovoDMIStore`, `.gpnvStore`, `.acerDMIStore`, or
+    /// `.vssEntry` for HP's `HP_MUD`.
     public var kind: UEFINodeKind
     /// Where the row is in the file — what tells the row apart from the
     /// others of its kind on the way to it.
@@ -24,11 +27,20 @@ public struct DMIStore: Equatable, Sendable {
     }
 
     /// Every store in `nodes` and below, in file order. Only in the file:
-    /// none of the formats turns up inside a compressed section.
-    public static func all(in nodes: [UEFINode]) -> [DMIStore] {
-        nodes.flatMap(\.flattened)
-            .filter { isStore($0.kind) && $0.space == .file }
+    /// none of the formats turns up inside a compressed section. HP's is
+    /// found only with `reader`: a VSS entry is told for one by its name, and
+    /// a marked entry's name is in its bytes, not on the node.
+    public static func all(in nodes: [UEFINode], reader: ImageReader? = nil) -> [DMIStore] {
+        let inFile = nodes.flatMap(\.flattened).filter { $0.space == .file }
+        let rows = inFile
+            .filter { isStore($0.kind) }
             .map { DMIStore(kind: $0.kind, range: $0.range) }
-            .sorted { $0.range.lowerBound < $1.range.lowerBound }
+        let hp = reader.map { reader in
+            inFile
+                .filter { $0.kind == .vssStore || $0.kind == .vss2Store }
+                .compactMap { HPDMIArea.read(store: $0, reader: reader) }
+                .map { DMIStore(kind: .vssEntry, range: $0.entry) }
+        } ?? []
+        return (rows + hp).sorted { $0.range.lowerBound < $1.range.lowerBound }
     }
 }

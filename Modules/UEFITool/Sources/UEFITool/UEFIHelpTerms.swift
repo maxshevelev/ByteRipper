@@ -17,8 +17,13 @@ public enum UEFIHelpTerms {
     /// With `image`, a node at the top of a Top Swap copy goes to the page
     /// about Top Swap: what a reader asks of it is why the volumes are there
     /// twice.
-    public static func term(for node: UEFINode, in image: UEFIImage) -> HelpTermID? {
+    /// With `reader`, HP's `HP_MUD` entry goes to the page about HP's DMI:
+    /// it is told from the other VSS entries only by its bytes.
+    public static func term(for node: UEFINode, in image: UEFIImage, reader: ImageReader? = nil) -> HelpTermID? {
         if case .copy = UEFITopSwap.role(of: node, in: image) { return HelpTermID("top-swap") }
+        if let reader, UEFIHPDMIDetail.area(for: node, image: image, reader: reader) != nil {
+            return HelpTermID("hp-dmi")
+        }
         return term(for: node)
     }
 

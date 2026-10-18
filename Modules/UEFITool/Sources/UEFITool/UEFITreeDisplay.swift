@@ -317,6 +317,12 @@ public enum UEFITreeDisplay {
         if node.kind == .acerDMIStore, let reader {
             return acerDMIRow(node, reader: reader, in: language)
         }
+        // HP's `HP_MUD` says whose it is: the serial, the rest in the detail —
+        // on a copy the store marks deleted as well, which is where most HP
+        // boards keep it.
+        if let text = UEFIHPDMIDetail.row(for: node, store: store, image: image, reader: reader, in: language) {
+            return text
+        }
         guard let guid = node.guid else {
             return node.name.isEmpty ? kindLabel(node.kind, in: language) : node.displayName(in: language)
         }
@@ -366,7 +372,9 @@ public enum UEFITreeDisplay {
     /// A store of the board's identity as the panel's DMI menu lists it:
     /// what it is and where — "Lenovo DMI store at 0x00630000".
     public static func dmiStoreTitle(_ store: DMIStore, in language: AppLanguage) -> String {
-        L("%1$@ at %2$@", in: language, kindLabel(store.kind, in: language), String(format: "0x%08llX", store.range.lowerBound))
+        // HP's is a VSS entry, and what it is to the bench is HP's DMI.
+        let kind = store.kind == .vssEntry ? L("HP DMI", in: language) : kindLabel(store.kind, in: language)
+        return L("%1$@ at %2$@", in: language, kind, String(format: "0x%08llX", store.range.lowerBound))
     }
 
     /// `Baseboard serial number = PF0TEST1`, `LENV block 2 · generation 84`,

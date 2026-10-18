@@ -1527,3 +1527,13 @@
 "The node that holds the match, after the node above it and the codecs its bytes came through" = "Der Knoten, der die Fundstelle enthält; davor der Knoten darüber und die Codecs, durch die ihre Bytes gegangen sind";
 "Open the bytes this match is in as a panel, the match selected" = "Die Bytes, in denen die Fundstelle liegt, als Bereich mit ausgewählter Fundstelle öffnen";
 "Text or hex bytes" = "Text oder Hex-Bytes";
+"HP DMI" = "HP DMI";
+"Serial number" = "Seriennummer";
+"SKU" = "SKU";
+"Product family" = "Produktfamilie";
+"CT number" = "CT-Nummer";
+"Build ID" = "Build ID";
+"Feature byte" = "Feature Byte";
+"Asset tracking number" = "Inventarnummer (Asset Tracking Number)";
+"The store marks this copy deleted and keeps no current one. The values are whole, and on most HP boards read so far the store holds them this way; where the firmware takes them from on such a board, the dump does not show." = "Der Speicher markiert diese Kopie als gelöscht und hält keine gültige. Die Werte sind vollständig, und auf den meisten bisher untersuchten HP-Platinen liegen sie so vor; woher die Firmware einer solchen Platine sie tatsächlich nimmt, zeigt der Dump nicht.";
+"The asset tracking number is not the serial number. HP writes the serial number there by default: the owner set another value, or it came over from another machine." = "Die Inventarnummer ist nicht die Seriennummer. HP schreibt dort standardmäßig die Seriennummer ein: Entweder hat der Besitzer einen anderen Wert gesetzt, oder die Nummer stammt von einem anderen Gerät.";
