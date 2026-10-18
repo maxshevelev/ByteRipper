@@ -146,6 +146,12 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   rest of `configuration`. Revision 58 adds **CSME 11** to the same field:
   Flash Image Tool 11's SPT map (`MEConfigurationMap.csme11`), one set of
   documents for both platform halves, its paths read the same way. Ours.
+  Revision 59 does not add a field: the FIT maps now follow the `<Include>`s of
+  the platform layout and read the family's common document too, so the same
+  `configuration` carries the settings it binds — Boot Guard's policy records
+  and the OEM public key hash on CSME 11, the FPF hardware binding, ICC profile
+  keys, OEM tag and certificates on the newer generations. More rows, same
+  shape.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct

@@ -16,6 +16,11 @@ so the offset is `cellIndex × cellSize + cellOffset` for a bitfield, or
 `startOffset` with `varSize` for a plain field, and the file is reached through
 an alias table (`$FilePaths/ME_CONF_WRK` → `policy/cfgmgr/cfg_rules`).
 
+The bindings are read from the platform layout and every document it includes,
+transitively: the platform document carries that build's straps, while the
+settings the family shares are bound in its `*_common.xml` — Boot Guard's
+policy files, the EOM record and the FPF hardware binding among them.
+
 Run it, read the diff and the notes it prints, and paste the file into
 `Packages/MEFirmware/Sources/MEFirmware/Configuration/`:
 
@@ -99,6 +104,77 @@ def layout_documents(texts, straps):
     if not chosen:
         raise SystemExit("no layout document for straps %r in this build" % straps)
     return chosen
+
+
+# A document's own file name is in the licence comment at its head, where the
+# tool's build left it. Most documents carry a copy-paste name that is not
+# theirs (`cnp_fit_layout_lp_1_6.xml` is written in 26 of FIT 12's documents),
+# so a name never identifies a document on its own; it is used to resolve an
+# include, and a name several documents share is settled by
+# `included_layout_documents` from what the including layout refers to.
+DECLARED_NAME = re.compile(r"File Name:\s*\n+\s*([^\s<]+)")
+
+
+def declared_name(text):
+    """The file name a document gives itself, lower-cased, or None."""
+    match = DECLARED_NAME.search(text[:8000])
+    return match.group(1).lower() if match else None
+
+
+def class_names(text):
+    return set(re.findall(r'<Class name="([^"]+)"', text))
+
+
+def class_references(text):
+    """The classes a document names as types or parents — what its includes
+    are for. A layout defines some of its classes itself and depends on the
+    files it includes for the rest, so the references say which include
+    document the layout was written against."""
+    found = set(re.findall(r'type="class:([A-Za-z0-9_]+)"', text))
+    found |= set(re.findall(r'<ParentCandidate value="([^"]+)"', text))
+    return found
+
+
+def included_layout_documents(texts, chosen):
+    """The chosen layouts and everything they include, transitively.
+
+    A layout is one document only at the top: the platform document carries
+    the strap differences of one build, while the settings every platform of
+    the family has — the FPF hardware binding, the ICC profile keys, Boot
+    Guard's policy files — are bound in the `*_common.xml` it includes.
+    Reading the bindings of the chosen document alone leaves those settings
+    out of the map, so the closure is what the bindings are read from.
+
+    An include names a file, and the packed documents do not always carry
+    unique names: FIT 15 holds two documents called
+    `lkf_fit_layout_1_7_common.xml`, a Braswell-era one and the real 1.7
+    common. Where a name is shared, the document that defines the most
+    classes the including layout refers to is the one it was written against
+    (114 of 191 against 55); a tie keeps the tool's own order.
+    """
+    by_name = {}
+    for text in texts:
+        name = declared_name(text)
+        if name:
+            by_name.setdefault(name, []).append(text)
+    closure, seen = [], set()
+    queue = list(chosen)
+    while queue:
+        text = queue.pop(0)
+        if id(text) in seen:
+            continue
+        seen.add(id(text))
+        closure.append(text)
+        references = class_references(text)
+        for href in includes(text):
+            candidates = [c for c in by_name.get(href.split("/")[-1].lower(), [])
+                          if id(c) not in seen]
+            if not candidates:
+                continue    # a strap or UEP document, or one whose name is not its own
+            candidates.sort(key=lambda c: len(references & class_names(c)),
+                            reverse=True)
+            queue.append(candidates[0])
+    return closure
 
 
 def class_members(text, name):
@@ -433,10 +509,13 @@ def main():
 
     texts = list(documents(blob))
     chosen = layout_documents(texts, straps)
+    # The chosen layout and the common documents it includes: the bindings of
+    # both, or every setting the family shares is missing from the map.
+    layout = included_layout_documents(texts, chosen)
     warnings = []
     members, conflicts = collect_members(texts, PATH_CLASSES)
     classes = value_classes(texts)
-    rules = bindings(chosen)
+    rules = bindings(layout)
     declarations_ = declarations(texts)
 
     # The End of Manufacturing record is the one thing a layout of the newer
@@ -446,7 +525,7 @@ def main():
     # `EOM_Config` — because the older layouts also name the single byte of
     # `mca/eom` `EOM` and `EndOfManufacturing`, which are their words for one
     # field and not three.
-    off = switched_off(chosen, declarations_, classes, warnings)
+    off = switched_off(layout, declarations_, classes, warnings)
     skipped = {}
     every = bindings(texts)
     record = {target for target, places in every.items()
@@ -479,8 +558,9 @@ def main():
     for entry in files.values():
         del entry["seen"]
     readable = sum(len(f["settings"]) for f in files.values())
-    print("layout documents: %d  files: %d  settings: %d"
-          % (len(chosen), len(files), readable), file=sys.stderr)
+    print("layout documents: %d (+%d included)  files: %d  settings: %d"
+          % (len(chosen), len(layout) - len(chosen), len(files), readable),
+          file=sys.stderr)
     for warning in warnings:
         print("! %s" % warning, file=sys.stderr)
     if skipped:
