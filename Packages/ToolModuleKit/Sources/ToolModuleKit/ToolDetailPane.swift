@@ -592,7 +592,14 @@ extension Notification.Name {
             var isControl = false
             var view = hit
             while let current = view, !isControl {
-                isControl = current is NSControl
+                // The window's title is a text field, but a press on it
+                // drags the window like the bar around it: a label is no
+                // control.
+                if let label = current as? NSTextField {
+                    isControl = label.isEditable || label.isSelectable
+                } else {
+                    isControl = current is NSControl
+                }
                 view = current.superview
             }
             if isWindowButton || !isControl { return }
