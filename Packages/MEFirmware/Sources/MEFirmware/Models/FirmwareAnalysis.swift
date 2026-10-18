@@ -2782,5 +2782,10 @@ public enum EngineModelRevision {
     /// tool's 8-byte header and four 0x80-byte arrays; the Boot Guard profile
     /// proper is still the record this generation keeps, and the array's bits
     /// are read alongside it. Ours; upstream reads none of the UEP bits.
-    public static let current = 55
+    /// 56 does not grow the shape: `configuration` is now filled on CSME 12
+    /// too — Flash Image Tool 12's CNP maps, `MEConfigurationMap.csme12` and
+    /// `.csme12Desktop` — and the engine resolves their paths from the MFS
+    /// home directory on images that carry no `FileTable.dat`, which is every
+    /// volume of that generation. Ours, as the rest of the field.
+    public static let current = 56
 }

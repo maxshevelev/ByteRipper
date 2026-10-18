@@ -1162,13 +1162,7 @@ public actor MEFirmwareAnalyzer {
                                                         family: platformFamily)
         var imageConfigurationBytes: [String: Data] = [:]
         var liveConfigurationBytes: [String: Data] = [:]
-        if let map = configurationMap, let info = mfsInfo, let table = fileTable,
-           !info.files.isEmpty {
-            let resolution = table.resolve(platform: info.ftblPlatform,
-                                           dictionary: info.ftblDictionary)
-            let naming = table.records(namingFileIndices: Set(info.files.map(\.index)),
-                                       platform: resolution.platform,
-                                       dictionary: resolution.dictionary)
+        if let map = configurationMap, let info = mfsInfo, !info.files.isEmpty {
             // How long each file's content is, where the Integrity split said:
             // the raw chain carries the trailer and the table after it, and a
             // setting is never read out of those.
@@ -1176,13 +1170,43 @@ public actor MEFirmwareAnalyzer {
             for recorded in mfsVolume?.files ?? [] {
                 if let size = recorded.contentSize { contentSizes[recorded.index] = size }
             }
+            // The tool's path for each file: the image's file table where it
+            // has one, and otherwise the volume's own home directory. A CSME 12
+            // volume keeps its names there and carries no `FileTable.dat`, so
+            // without this the configuration would read nothing on that
+            // generation however good its map is.
+            var pathByIndex: [Int: String] = [:]
+            if let table = fileTable {
+                let resolution = table.resolve(platform: info.ftblPlatform,
+                                               dictionary: info.ftblDictionary)
+                let naming = table.records(namingFileIndices: Set(info.files.map(\.index)),
+                                           platform: resolution.platform,
+                                           dictionary: resolution.dictionary)
+                for file in info.files {
+                    guard let entry = naming[file.index],
+                          let fileID = Int(entry.fileID, radix: 16),
+                          let path = table.record(withFileID: fileID,
+                                                  platform: resolution.platform,
+                                                  dictionary: resolution.dictionary)?.path
+                    else { continue }
+                    pathByIndex[file.index] = path
+                }
+            } else if let home = mfsVolume?.homeDirectory {
+                func walk(_ records: [MFSHomeRecord], prefix: String) {
+                    for record in records {
+                        let path = prefix + "/" + record.name
+                        if record.isFolder {
+                            walk(record.children, prefix: path)
+                        } else {
+                            pathByIndex[record.fileIndex] = path
+                        }
+                    }
+                }
+                walk(home.entries, prefix: "/home")
+            }
             for file in info.files {
-                guard let entry = naming[file.index],
-                      let fileID = Int(entry.fileID, radix: 16),
-                      let path = table.record(withFileID: fileID,
-                                              platform: resolution.platform,
-                                              dictionary: resolution.dictionary)?.path,
-                      map.file(at: path) != nil else { continue }
+                guard let path = pathByIndex[file.index], map.file(at: path) != nil
+                else { continue }
                 if let size = contentSizes[file.index] {
                     liveConfigurationBytes[path] = Data(file.content.prefix(size))
                 } else {

@@ -11,6 +11,7 @@ import XCTest
 /// places two generations *disagree* about.
 final class ConfigurationMapTests: XCTestCase {
     func testEachMappedGenerationReadsItsOwnMap() {
+        XCTAssertEqual(MEConfigurationMap.forME(major: 12)?.name, MEConfigurationMap.csme12.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 13)?.name, MEConfigurationMap.csme13.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 14)?.name, MEConfigurationMap.csme14.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 15)?.name, MEConfigurationMap.csme15.name)
@@ -18,7 +19,6 @@ final class ConfigurationMapTests: XCTestCase {
         XCTAssertEqual(MEConfigurationMap.forME(major: 18)?.name, MEConfigurationMap.csme18.name)
         // A generation nobody has mapped reads nothing rather than another
         // generation's offsets.
-        XCTAssertNil(MEConfigurationMap.forME(major: 12))
         XCTAssertNil(MEConfigurationMap.forME(major: 17))
         XCTAssertNil(MEConfigurationMap.forME(major: 7))
     }
@@ -33,11 +33,23 @@ final class ConfigurationMapTests: XCTestCase {
         // the ones those settings are.
         XCTAssertEqual(map.files.count, 15)
         XCTAssertEqual(map.files.flatMap(\.settings).count, 40)
-        for fit in [MEConfigurationMap.csme13, .csme14, .csme15] {
+        for fit in [MEConfigurationMap.csme12, .csme13, .csme14, .csme15] {
             XCTAssertFalse(fit.files.flatMap(\.settings).contains { $0.auto }, "\(fit.name)")
         }
         XCTAssertTrue(MEConfigurationMap.csme16.files.flatMap(\.settings).contains { $0.auto },
                       "MFIT's map is the one with the mark")
+    }
+
+    /// FIT 12's map: the older class shape, one document per platform half, so
+    /// the mobile and desktop halves are two maps with different file lists.
+    func testTheTwelveMapIsWhatFit12LaysOut() throws {
+        XCTAssertEqual(MEConfigurationMap.csme12.files.count, 9)
+        XCTAssertEqual(MEConfigurationMap.csme12.files.flatMap(\.settings).count, 21)
+        XCTAssertEqual(MEConfigurationMap.csme12Desktop.files.count, 15)
+        XCTAssertEqual(MEConfigurationMap.csme12Desktop.files.flatMap(\.settings).count, 39)
+        let eom = try XCTUnwrap(MEConfigurationMap.csme12.file(at: "/home/mca/eom_config"))
+        XCTAssertEqual(eom.settings.map(\.name),
+                       ["EomFirstBootEnabled", "FlexibleEomSettings"])
     }
 
     /// Every map carries the one file that is ours and no tool's: the board's
@@ -45,7 +57,7 @@ final class ConfigurationMapTests: XCTestCase {
     /// the platform's byte side by side. It is appended by `forME`, not written
     /// into a generated map — a regeneration must not lose it.
     func testEveryMapCarriesTheBoardsLockRecord() throws {
-        for major in [13, 14, 15, 16] {
+        for major in [12, 13, 14, 15, 16] {
             let map = try XCTUnwrap(MEConfigurationMap.forME(major: major), "\(major)")
             let lock = try XCTUnwrap(map.file(at: "/home/mca/manuf_lock"), "\(major)")
             XCTAssertEqual(lock.alias, "ManufLock")
@@ -212,7 +224,7 @@ final class ConfigurationMapTests: XCTestCase {
         XCTAssertFalse(help.contains("&#"), help)
     }
 
-    /// CSME 13, 14 and 15 have a map for each half of the generation — the
+    /// CSME 12, 13, 14 and 15 have a map for each half of the generation — the
     /// mobile parts and the desktop ones lay a few settings out differently —
     /// and CSME 16 has one for both, MFIT's database merging the platform
     /// lists it builds from.
@@ -233,7 +245,12 @@ final class ConfigurationMapTests: XCTestCase {
         XCTAssertNil(offset("ProcMissingDetect", in: mobile))
         XCTAssertEqual(offset("ProcMissingDetect", in: desktop), 212)
 
-        // 13 and 14 too, under the tool's own names for their desktop parts.
+        // 12, 13 and 14 too, under the tool's own names for their desktop
+        // parts.
+        XCTAssertTrue(try XCTUnwrap(MEConfigurationMap.forME(major: 12, family: .desktop))
+            .name.contains("cnp_h"))
+        XCTAssertNotEqual(MEConfigurationMap.forME(major: 12, family: .desktop)?.name,
+                          MEConfigurationMap.forME(major: 12, family: .mobile)?.name)
         XCTAssertTrue(try XCTUnwrap(MEConfigurationMap.forME(major: 13, family: .desktop))
             .name.contains("icl_h"))
         XCTAssertTrue(try XCTUnwrap(MEConfigurationMap.forME(major: 14, family: .desktop))
