@@ -1598,6 +1598,10 @@ public enum UEFIDetail {
         if let straps = descriptor.processorStraps {
             tables.append(processorStrapTable(straps, in: language))
         }
+        if !descriptor.registerReadings.isEmpty {
+            tables.append(descriptorRegisterTable(descriptor.registerReadings,
+                                                  in: language))
+        }
         if descriptor.oemSection.contains(where: { $0 != 0xFF }) {
             tables.append(oemSectionTable(descriptor, in: language))
         }
@@ -1807,6 +1811,53 @@ public enum UEFIDetail {
             startsFolded: true,
             sections: sections
         )
+    }
+
+    /// The descriptor's own registers as Flash Image Tool names them — the map
+    /// words, the flash component's registers, the masters' access masks, the
+    /// recovery policy and the VSCC/MIP map. One section per register, its
+    /// address in the section's head; a field with a plain 32-bit value shows
+    /// as hex, and a setting the tool enumerates in its own words.
+    private static func descriptorRegisterTable(
+        _ readings: [DescriptorRegisterReading], in language: AppLanguage
+    ) -> UEFIDetailTable {
+        var rows: [[UEFIDetailTable.Cell]] = []
+        var sections: [UEFIDetailTable.Section] = []
+        for reading in readings {
+            let start = rows.count
+            for field in reading.register.fields {
+                let word = field.bitOffset / 32
+                let inWord = field.bitOffset % 32
+                guard word < reading.words.count, field.count > 0, field.count <= 32,
+                      inWord + field.count <= 32 else { continue }
+                let mask: UInt32 = field.count >= 32 ? .max : (1 << UInt32(field.count)) - 1
+                let value = reading.words[word] >> UInt32(inWord) & mask
+                let shown = field.options?[Int(value)] ?? hex(value)
+                let bits = field.count == 1
+                    ? "\(inWord)"
+                    : "\(inWord)–\(inWord + field.count - 1)"
+                rows.append([.init(field.label ?? strapFieldName(field.name)),
+                             .init(bits), .init(shown)])
+            }
+            let end = rows.count
+            guard end > start else { continue }
+            let length = UInt64(reading.register.words * 4)
+            let count = reading.register.words == 1
+                ? "1 word" : "\(reading.register.words) words"
+            sections.append(.init(title: reading.register.name, subtitle: count,
+                                  rows: start..<end,
+                                  target: .range(reading.base..<(reading.base + length),
+                                                 name: reading.register.name),
+                                  address: hex(reading.base)))
+        }
+        return UEFIDetailTable(
+            title: L("Descriptor registers", in: language),
+            symbol: "cpu",
+            columns: [L("Field", in: language), L("Bits", in: language),
+                      L("Value", in: language)],
+            rows: rows,
+            startsFolded: true,
+            sections: sections)
     }
 
     /// A mask as the descriptor writes it: a byte on an old one, twelve bits on

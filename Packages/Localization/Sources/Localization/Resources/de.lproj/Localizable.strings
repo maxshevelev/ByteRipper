@@ -1675,6 +1675,7 @@
 "OEM section" = "OEM-Section";
 "Manufacturing Lock" = "Manufacturing Lock";
 "CPU straps" = "CPU-Straps";
+"Descriptor registers" = "Deskriptor-Register";
 "CSME straps" = "CSME-Straps";
 "PMC SoC straps" = "PMC-SoC-Straps";
 "CPU 2 straps" = "CPU-2-Straps";

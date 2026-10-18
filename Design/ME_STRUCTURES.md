@@ -749,6 +749,16 @@ PMC IOE, 5/5 in CSME, 443/448 in IOE. The PMC SoC four are this board's own
 values (debug messaging off, ISH disabled, two Type-C SMBus addresses unset);
 the IOE five likewise, and its 63 constant-valued fields all match.
 
+**The descriptor's registers.** The same harness documents lay out FLMAP0/1/2,
+FLCOMP, FLIL, FLMSTR, FLDRPLCY and FLUMAP1 bit by bit; `descriptor18_map.py`
+emits them into `DescriptorRegisterMap+CSME18`, and the UEFI Structure panel
+shows each register with the tool's field names. Places: absolute for
+FLMAP0/1/2 (0x14/0x18/0x1C), FLDRPLCY (0x340) and FLUMAP1 (0xEFC); `FCBA << 4`
+for FLCOMP/FLIL and `FMBA << 4` for FLMSTR. Verified on the CSME 18 dump:
+FLMAP0 `00040003`, FLMAP1 `82100208` (two masters, strap section 0x100/130),
+FLCOMP `0930F0F6`, FLUMAP1 `C0FF00FF`. The map is used from Meteor Lake on,
+since FLCOMP's density and clock fields are that generation's.
+
 **The descriptor's strap section on Meteor Lake is the SoC block.** `FLMAP1`
 still places and counts it — 130 words at 0x100 on the HP dump — and the
 harness document's `SoC` block is its layout: `mfit_data id="SoC"`, 1185

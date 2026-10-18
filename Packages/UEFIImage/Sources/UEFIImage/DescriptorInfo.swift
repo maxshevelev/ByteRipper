@@ -164,6 +164,12 @@ public struct DescriptorInfo: Equatable, Sendable {
 
     public var processorStraps: ProcessorStraps?
 
+    /// The descriptor's registers read through Flash Image Tool's own layouts
+    /// (`DescriptorRegisterMap`): FLMAP0/1/2, FLCOMP and FLIL at the component
+    /// base, the masters' FLMSTR registers, FLDRPLCY and FLUMAP1. Empty where
+    /// the generation has no map emitted, or a register's base is not readable.
+    public var registerReadings: [DescriptorRegisterReading]
+
     /// The OEM section of §2.4: `0x100` bytes at `0xF00` in the descriptor,
     /// where a board's maker keeps what it likes — a serial, a BIOS version, a
     /// signature — and which is erased on many boards. Empty when the reader
@@ -256,9 +262,49 @@ public extension DescriptorInfo {
             processorStraps: processorStraps(at: base, generation: generation,
                                              isGenerationCertain: isCertain,
                                              reader: reader),
+            registerReadings: registerReadings(at: base, map: map, map1: map1,
+                                               generation: generation, reader: reader),
             oemSection: reader.bytes(at: base + Descriptor.oemSectionOffset,
                                      count: Descriptor.oemSectionSize) ?? []
         )
+    }
+
+    /// The descriptor's registers through the tool's layout: each register's
+    /// place resolved (absolute, or the component/master base the map words
+    /// state) and its words read. A register whose base is out of range or
+    /// whose words do not fit is left out.
+    private static func registerReadings(
+        at base: UInt64, map: UInt32, map1: UInt32,
+        generation: DescriptorGeneration, reader: ImageReader
+    ) -> [DescriptorRegisterReading] {
+        guard let registerMap = DescriptorRegisterMap.forGeneration(generation) else { return [] }
+        let componentAt = map & 0xFF
+        let masterAt = map1 & 0xFF
+        func address(_ place: DescriptorRegisterMap.Place) -> UInt64? {
+            switch place {
+            case .absolute(let offset):
+                return base + UInt64(offset)
+            case .flashComponent(let offset):
+                guard componentAt > 0, componentAt <= Descriptor.maxBase else { return nil }
+                return base + (UInt64(componentAt) << 4) + UInt64(offset)
+            case .flashMaster(let offset):
+                guard masterAt > 0, masterAt <= Descriptor.maxBase else { return nil }
+                return base + (UInt64(masterAt) << 4) + UInt64(offset)
+            }
+        }
+        var readings: [DescriptorRegisterReading] = []
+        for register in registerMap.registers {
+            guard let start = address(register.place) else { continue }
+            var words: [UInt32] = []
+            for index in 0..<register.words {
+                guard let word = reader.uint32(at: start + UInt64(index) * 4) else { break }
+                words.append(word)
+            }
+            guard words.count == register.words else { continue }
+            readings.append(DescriptorRegisterReading(register: register,
+                                                      base: start, words: words))
+        }
+        return readings
     }
 
     /// The processor straps, where this generation's descriptor keeps them:

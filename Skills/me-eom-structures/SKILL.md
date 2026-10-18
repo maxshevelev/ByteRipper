@@ -336,6 +336,29 @@ PMC SoC and IOE mismatches are board values the reference lists do not carry
 (the four PMC SoC ones are debug messaging, ISH disable and two Type-C SMBus
 addresses — real differences of this board, not misalignment).
 
+**The descriptor's registers are in the same documents.** MFIT 18 lays out
+FLMAP0/1/2, FLCOMP, FLIL, FLMSTR, FLDRPLCY and FLUMAP1 as `mfit_data`
+bitfields, and `descriptor18_map.py` emits them for the UEFI Structure panel:
+
+```bash
+python3 Skills/me-eom-structures/scripts/descriptor18_map.py ~/Downloads/1/mfit-18.1.exe > \
+    Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMap+CSME18.swift
+```
+
+A register is placed absolutely (FLMAP0/1/2 at 0x14, FLDRPLCY at 0x340,
+FLUMAP1 at 0xEFC) or at a base the descriptor states (`FCBA << 4` for
+FLCOMP/FLIL, `FMBA << 4` for the six FLMSTR words); a field is a bit range of
+its register, the tool's name stripped of `Base_Descriptor_SOC_Strap_`, with
+its labels and option words. The map is used from Meteor Lake on: FLCOMP's
+density and clock bits are that generation's. Checked on the CSME 18 dump —
+FLMAP0 `00040003` (FCBA 0x30, FRBA 0x40), FLMAP1 `82100208` (FMBA 0x80, 2
+masters, PCH section 0x100/130), FLCOMP `0930F0F6`, FLDRPLCY `20000000`,
+FLUMAP1 `C0FF00FF` (VSCC at 0xFF, MIP table at 0xC0).
+
+Note that MFIT names FLMAP0's region-count bits (24–26) reserved: the panel's
+own "Regions" row still counts them, and the register table shows the tool's
+word.
+
 ## Emitting the descriptor's strap layout
 
 The same executables carry the chipset's own layout of the descriptor's PCH
