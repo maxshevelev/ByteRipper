@@ -140,6 +140,35 @@ final class MEACuratorTests: XCTestCase {
         XCTAssertEqual(group.children.map(\.subtitle), ["3", "5"])
     }
 
+    /// The feature pins the image configures are a group of their own: one row
+    /// per pin, named by what the pin is for (its usage) and located by group
+    /// and pad, with the file and the copy the bytes came from beside them.
+    func testTheGPIOPinsAreAGroup() throws {
+        let a = try analysis([
+            "version": ["major": 11, "minor": 8, "hotfix": 92, "build": 4222],
+            "gpioPins": [
+                "path": "/home/gpio/csme_pins",
+                "fromImage": false,
+                "pins": [
+                    ["usage": "NFC_RST", "usageID": 0,
+                     "group": "GPP_E", "groupID": 4, "pad": 4,
+                     "ownership": "HOST_MODE", "ownershipID": 0,
+                     "padMode": "DEFAULT_MODE", "padModeID": 4],
+                    ["usage": "FWUPDATE", "usageID": 8,
+                     "group": "GPP_B", "groupID": 1, "pad": 15,
+                     "ownership": "CSME_MODE", "ownershipID": 1,
+                     "padMode": "GPIO_MODE", "padModeID": 0],
+                ],
+            ],
+        ])
+        let group = try XCTUnwrap(find("GPIO Pins", in: MEACurator.present(a, in: .english)))
+        XCTAssertEqual(group.fields.map(\.value), ["/home/gpio/csme_pins", "ME file system"])
+        XCTAssertEqual(group.children.map(\.title), ["NFC_RST", "FWUPDATE"])
+        XCTAssertEqual(group.children.map(\.subtitle), ["GPP_E_4", "GPP_B_15"])
+        XCTAssertEqual(group.children[1].fields.map(\.value),
+                       ["GPP_B_15", "FWUPDATE", "CSME_MODE", "GPIO_MODE"])
+    }
+
     // MARK: - Fixtures
 
     /// Decode an analysis whose top-level fields are `overrides` merged over

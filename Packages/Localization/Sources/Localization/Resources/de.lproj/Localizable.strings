@@ -1690,3 +1690,12 @@
 "PMC SOC 2 straps" = "PMC-SOC-2-Straps";
 "IOE straps" = "IOE-Straps";
 "PMC IOE straps" = "PMC-IOE-Straps";
+"GPIO Pins" = "GPIO-Pins";
+"Pin" = "Pin";
+"Usage" = "Verwendung";
+"Feature" = "Funktion";
+"Ownership" = "Besitzer";
+"Pad Mode" = "Pad-Modus";
+"Read from" = "Gelesen aus";
+"OEM Configuration partition" = "OEM-Konfigurationspartition";
+"ME file system" = "ME-Dateisystem";

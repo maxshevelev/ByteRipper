@@ -1690,3 +1690,12 @@
 "PMC SOC 2 straps" = "Страпы PMC SOC 2";
 "IOE straps" = "Страпы IOE";
 "PMC IOE straps" = "Страпы PMC IOE";
+"GPIO Pins" = "Выводы GPIO";
+"Pin" = "Вывод";
+"Usage" = "Назначение";
+"Feature" = "Функция";
+"Ownership" = "Владелец";
+"Pad Mode" = "Режим контакта";
+"Read from" = "Откуда прочитано";
+"OEM Configuration partition" = "Раздел OEM-конфигурации";
+"ME file system" = "Файловая система ME";

@@ -1162,6 +1162,10 @@ public actor MEFirmwareAnalyzer {
                                                         family: platformFamily)
         var imageConfigurationBytes: [String: Data] = [:]
         var liveConfigurationBytes: [String: Data] = [:]
+        // The feature pins the tool built into `/home/gpio/csme_pins`, if any:
+        // read below with the value classes of this generation.
+        var gpioReadings: GPIOPinReadings? = nil
+        let gpioPath = "/home/gpio/csme_pins"
         if let map = configurationMap, let info = mfsInfo, !info.files.isEmpty {
             // How long each file's content is, where the Integrity split said:
             // the raw chain carries the trailer and the table after it, and a
@@ -1213,6 +1217,48 @@ public actor MEFirmwareAnalyzer {
                     liveConfigurationBytes[path] = file.content
                 }
             }
+
+            // `/home/gpio/csme_pins` is not a setting of the configuration map:
+            // it is the file the tool's `MeFeaturePins` settings are built into,
+            // and its records are read on their own. On CSME 11 and 12 it is a
+            // record of the MFS's Intel Configuration stream, whose content
+            // lives inside the owning low-level file at the record's offset;
+            // where the volume names its files by ID, it is a file of its own.
+            var gpioBytes: Data?
+            // The OEM Configuration stream (owning file 7) overrides the
+            // Intel one (6) where both name the file, as it does for every
+            // configuration record; an image that carries only the Intel copy
+            // is read from that.
+            let pinStreams = (mfsVolume?.configurations ?? []).filter {
+                $0.records.contains { $0.name == "csme_pins" && !$0.isFolder }
+            }
+            let pinConfiguration = pinStreams.first { $0.owningFile == 7 }
+                ?? pinStreams.first
+            if let pinConfiguration,
+               let pin = pinConfiguration.records.first(where: {
+                    $0.name == "csme_pins" && !$0.isFolder
+               }),
+               let owning = info.files.first(where: {
+                    $0.index == pinConfiguration.owningFile
+               }),
+               pin.size > 0, pin.offset >= 0,
+               pin.offset + pin.size <= owning.content.count {
+                let start = owning.content.startIndex + pin.offset
+                gpioBytes = owning.content.subdata(in: start..<(start + pin.size))
+            } else if let pinIndex = pathByIndex.first(where: { $0.value == gpioPath })?.key,
+                      let file = info.files.first(where: { $0.index == pinIndex }),
+                      !file.content.isEmpty {
+                let size = contentSizes[pinIndex] ?? file.content.count
+                gpioBytes = Data(file.content.prefix(size))
+            }
+            if let bytes = gpioBytes, !bytes.isEmpty,
+               let pinMap = GPIOPinMap.forME(major: identity.major),
+               let pins = GPIOPinReader.pins(in: bytes, map: pinMap,
+                                             major: identity.major),
+               !pins.isEmpty {
+                gpioReadings = GPIOPinReadings(path: gpioPath, fromImage: false,
+                                               pins: pins)
+            }
         }
         if let map = configurationMap, let fitc = oemConfiguration,
            let payload = fitc.payloadOffset,
@@ -1228,6 +1274,32 @@ public actor MEFirmwareAnalyzer {
                 guard at >= 0, record.size > 0, at + record.size <= region.count else { continue }
                 let start = region.startIndex + at
                 imageConfigurationBytes[path] = region.subdata(in: start..<(start + record.size))
+            }
+        }
+        // Where the live file system does not carry the pin file — an empty
+        // copy, or an image never through its first boot — the build's own copy
+        // in the OEM Configuration partition is read, as the configuration
+        // files are.
+        if gpioReadings == nil, let pinMap = GPIOPinMap.forME(major: identity.major),
+           let fitc = oemConfiguration, let payload = fitc.payloadOffset,
+           let records = fitc.recordsByID, let table = fileTable {
+            let resolution = table.resolve(platform: mfsInfo?.ftblPlatform ?? -1,
+                                           dictionary: mfsInfo?.ftblDictionary ?? -1)
+            for record in records {
+                guard let path = table.record(withFileID: record.fileID,
+                                              platform: resolution.platform,
+                                              dictionary: resolution.dictionary)?.path,
+                      path == gpioPath else { continue }
+                let at = payload - baseOffset + record.offset
+                guard at >= 0, record.size > 0, at + record.size <= region.count else { break }
+                let start = region.startIndex + at
+                let bytes = region.subdata(in: start..<(start + record.size))
+                if let pins = GPIOPinReader.pins(in: bytes, map: pinMap,
+                                                 major: identity.major), !pins.isEmpty {
+                    gpioReadings = GPIOPinReadings(path: gpioPath, fromImage: true,
+                                                   pins: pins)
+                }
+                break
             }
         }
         let configuration = configurationMap.map { map -> [ConfigurationFile] in
@@ -1507,6 +1579,7 @@ public actor MEFirmwareAnalyzer {
             manufacturingLock: manufacturingLock,
             platformFamily: platformFamily,
             configuration: configuration.isEmpty ? nil : configuration,
+            gpioPins: gpioReadings,
             bootGuardProfile: bootGuardProfile,
             uepSettings: uepReadings,
             cpuStraps: cpuStraps,
