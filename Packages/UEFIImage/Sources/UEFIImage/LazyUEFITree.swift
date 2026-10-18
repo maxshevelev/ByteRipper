@@ -44,6 +44,12 @@ public final class LazyUEFITree {
         SpaceReaders(file: imageReader, buffers: buffers, limit: limits.maxDecompressedSize)
     }
 
+    /// How many bytes the compressed sections opened so far decompressed to
+    /// and are still held — what this tree weighs beyond its nodes.
+    public nonisolated var decompressedByteCount: Int {
+        buffers.byteCount
+    }
+
     private let reader: ImageReader
     private nonisolated let limits: UEFIParser.Limits
     /// What the compressed sections opened so far decompressed to, shared by

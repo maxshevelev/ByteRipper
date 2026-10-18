@@ -22,8 +22,10 @@ final class AgentDesk {
     private let ids = NSMapTable<BinaryDocument, NSString>.weakToStrongObjects()
     /// A background document keeps its id when it is read again after a
     /// change on disk, which makes a new `BinaryDocument`: so its id is the
-    /// entry's, not the document's.
-    private var backgroundIDs: [ObjectIdentifier: String] = [:]
+    /// entry's, not the document's. And when it was let go to stay inside the
+    /// bounds: the agent still holds the id, and naming it reads the file
+    /// again. By id, the file each let-go one was.
+    private var released: [String: URL] = [:]
     private var nextID = 1
 
     /// The files an agent opened by path, with no window.
@@ -33,6 +35,9 @@ final class AgentDesk {
          keyController: @escaping () -> MainViewController?) {
         self.controllers = controllers
         self.keyController = keyController
+        background.onRelease = { [unowned self] entry in
+            if let id = entry.id { released[id] = entry.url }
+        }
     }
 
     /// Every tab, frontmost first.
@@ -80,9 +85,9 @@ final class AgentDesk {
     }
 
     func id(of entry: AgentBackgroundDocuments.Entry) -> String {
-        if let id = backgroundIDs[ObjectIdentifier(entry)] { return id }
+        if let id = entry.id { return id }
         let id = mint()
-        backgroundIDs[ObjectIdentifier(entry)] = id
+        entry.id = id
         return id
     }
 
@@ -184,7 +189,7 @@ final class AgentDesk {
     /// The document an agent named, or the focused one when it named none.
     func place(named id: String?) throws -> Place {
         if let id {
-            guard let place = places().first(where: { $0.id == id }) else {
+            guard let place = places().first(where: { $0.id == id }) ?? reopened(id) else {
                 throw AgentDeskError.noSuchDocument(id)
             }
             // A background file changed on disk is read again before it is
@@ -194,6 +199,19 @@ final class AgentDesk {
         }
         guard let place = focused() else { throw AgentDeskError.nothingOpen }
         return place
+    }
+
+    /// A background document let go to stay inside the bounds, read again
+    /// under the id it had — or under the one it has now, when the agent
+    /// opened the same path again meanwhile. Nil when it was never one, or
+    /// the file can no longer be read.
+    private func reopened(_ id: String) -> Place? {
+        guard let url = released[id] else { return nil }
+        if let place = onScreenPlace(of: url) { return place }
+        guard let entry = try? background.open(url) else { return nil }
+        if entry.id == nil { entry.id = id }
+        if entry.id == id { released[id] = nil }
+        return places().first { $0.pane === entry.pane }
     }
 
     // MARK: - Moving the view

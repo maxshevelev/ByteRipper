@@ -50,6 +50,11 @@ final class DecompressedBuffers: @unchecked Sendable {
         lock.withLock { entries.count }
     }
 
+    /// How many bytes the held buffers come to.
+    var byteCount: Int {
+        lock.withLock { held }
+    }
+
     /// A reader over the bytes of `space`: the file itself, or the buffer at
     /// the end of its chain, decoding whatever on the way is not held.
     func reader(

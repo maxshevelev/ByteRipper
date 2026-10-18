@@ -122,6 +122,8 @@ final class AgentSettingsViewController: NSViewController {
     private let enableCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let editsCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private let launchCheckbox = NSButton(checkboxWithTitle: "", target: nil, action: nil)
+    private let filesPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let memoryPopup = NSPopUpButton(frame: .zero, pullsDown: false)
     private let statusLabel = NSTextField(labelWithString: "")
     private let clientMenu = NSPopUpButton(frame: .zero, pullsDown: false)
     private let destinationLabel = NSTextField(wrappingLabelWithString: "")
@@ -162,6 +164,32 @@ final class AgentSettingsViewController: NSViewController {
         launchCaption.font = .systemFont(ofSize: 11)
         launchCaption.textColor = .secondaryLabelColor
 
+        // help: settings.agent.background
+        let filesLabel = NSTextField(labelWithString: L("Dumps kept open:"))
+        for count in AgentBackgroundLimits.fileChoices {
+            filesPopup.addItem(withTitle: "\(count)")
+            filesPopup.lastItem?.representedObject = NSNumber(value: count)
+        }
+        filesPopup.target = self
+        filesPopup.action = #selector(filesChanged(_:))
+        ControlHelp.describe(filesPopup, L("How many dumps an agent opened by path stay read and parsed at once"))
+        let memoryLabel = NSTextField(labelWithString: L("Memory for them:"))
+        for mib in AgentService.memoryChoicesMiB {
+            memoryPopup.addItem(withTitle: Self.memoryTitle(mib: mib))
+            memoryPopup.lastItem?.representedObject = NSNumber(value: mib)
+        }
+        memoryPopup.target = self
+        memoryPopup.action = #selector(memoryChanged(_:))
+        ControlHelp.describe(memoryPopup, L("How much memory the dumps an agent opened by path may hold between them"))
+        let limitsGrid = NSGridView(views: [[filesLabel, filesPopup], [memoryLabel, memoryPopup]])
+        limitsGrid.rowSpacing = 8
+        limitsGrid.columnSpacing = 8
+        limitsGrid.column(at: 0).xPlacement = .trailing
+        let limitsCaption = NSTextField(wrappingLabelWithString:
+            L("An agent can open a dump by its path, without a window. The dumps it opened last stay parsed, so another question about one of them is answered without reading it again. Past either limit, the dump not asked about for the longest time is closed; named again, it is read again. Counted are the bytes read from the files and what their compressed sections decompressed to. At most a quarter of this Mac's memory is offered."))
+        limitsCaption.font = .systemFont(ofSize: 11)
+        limitsCaption.textColor = .secondaryLabelColor
+
         let clientLabel = NSTextField(labelWithString: L("Configuration for:"))
         clientMenu.addItems(withTitles: AgentClientConfiguration.Client.allCases.map(\.title))
         clientMenu.target = self
@@ -201,7 +229,7 @@ final class AgentSettingsViewController: NSViewController {
         let help = HelpButton.standard(for: .topic(.agent))
 
         for subview in [enableCheckbox, caption, statusLabel, editsCheckbox, editsCaption,
-                        launchCheckbox, launchCaption, clientLabel, clientMenu,
+                        launchCheckbox, launchCaption, limitsGrid, limitsCaption, clientLabel, clientMenu,
                         destinationLabel, previewScroll, copyButton, help] {
             subview.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(subview)
@@ -237,7 +265,14 @@ final class AgentSettingsViewController: NSViewController {
             launchCaption.leadingAnchor.constraint(equalTo: caption.leadingAnchor),
             launchCaption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
 
-            clientMenu.topAnchor.constraint(equalTo: launchCaption.bottomAnchor, constant: 20),
+            limitsGrid.topAnchor.constraint(equalTo: launchCaption.bottomAnchor, constant: 16),
+            limitsGrid.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+
+            limitsCaption.topAnchor.constraint(equalTo: limitsGrid.bottomAnchor, constant: 8),
+            limitsCaption.leadingAnchor.constraint(equalTo: caption.leadingAnchor),
+            limitsCaption.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+
+            clientMenu.topAnchor.constraint(equalTo: limitsCaption.bottomAnchor, constant: 20),
             clientMenu.leadingAnchor.constraint(equalTo: clientLabel.trailingAnchor, constant: 8),
 
             destinationLabel.topAnchor.constraint(equalTo: clientMenu.bottomAnchor, constant: 8),
@@ -282,6 +317,12 @@ final class AgentSettingsViewController: NSViewController {
         editsCheckbox.state = service?.editsAllowed == true ? .on : .off
         editsCheckbox.isEnabled = service != nil
         launchCheckbox.state = AgentClientConfiguration.launchesApp ? .on : .off
+        filesPopup.isEnabled = service != nil
+        memoryPopup.isEnabled = service != nil
+        if let service {
+            filesPopup.selectItem(at: filesPopup.indexOfItem(withRepresentedObject: NSNumber(value: service.backgroundFileLimit)))
+            memoryPopup.selectItem(at: memoryPopup.indexOfItem(withRepresentedObject: NSNumber(value: service.backgroundMemoryLimitMiB)))
+        }
         statusLabel.stringValue = Self.statusText(of: service)
         statusLabel.textColor = service?.failure == nil ? .secondaryLabelColor : SemanticColors.bad
     }
@@ -333,6 +374,21 @@ final class AgentSettingsViewController: NSViewController {
         showClient()
     }
 
+    @objc private func filesChanged(_ sender: NSPopUpButton) {
+        guard let count = (sender.selectedItem?.representedObject as? NSNumber)?.intValue else { return }
+        service?.backgroundFileLimit = count
+    }
+
+    @objc private func memoryChanged(_ sender: NSPopUpButton) {
+        guard let mib = (sender.selectedItem?.representedObject as? NSNumber)?.intValue else { return }
+        service?.backgroundMemoryLimitMiB = mib
+    }
+
+    /// "256 MB", "1 GB": in the units the Mac's own memory is told in.
+    static func memoryTitle(mib: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(mib) << 20, countStyle: .memory)
+    }
+
     @objc private func enableChanged(_ sender: NSButton) {
         service?.isEnabled = sender.state == .on
         refresh()
@@ -360,6 +416,18 @@ final class AgentSettingsViewController: NSViewController {
 
     func toggleLaunchForTesting() {
         launchCheckbox.performClick(nil)
+    }
+
+    /// The two limits as the popups show them, and a choice in each.
+    var limitsShown: (files: String?, memory: String?) {
+        (filesPopup.titleOfSelectedItem, memoryPopup.titleOfSelectedItem)
+    }
+
+    func chooseLimits(files: Int, memoryMiB: Int) {
+        filesPopup.selectItem(at: filesPopup.indexOfItem(withRepresentedObject: NSNumber(value: files)))
+        filesChanged(filesPopup)
+        memoryPopup.selectItem(at: memoryPopup.indexOfItem(withRepresentedObject: NSNumber(value: memoryMiB)))
+        memoryChanged(memoryPopup)
     }
 
     /// Picks `client` in the menu, as a click would.

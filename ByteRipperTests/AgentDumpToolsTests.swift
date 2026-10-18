@@ -145,12 +145,76 @@ final class AgentDumpToolsTests: XCTestCase {
 
     func testOnlyTheMostRecentlyUsedAreKept() async throws {
         try openWindow()
-        service.desk.background.limit = 2
+        service.desk.background.fileLimit = 2
         for name in ["a.bin", "b.bin", "c.bin"] {
             let url = try write([0], name)
             _ = try await client.answer("open_dump", ["path": .string(url.path)])
         }
         XCTAssertEqual(service.desk.background.entries.map { $0.url.lastPathComponent }, ["b.bin", "c.bin"])
+    }
+
+    /// Past the memory bound the least recently used file is let go after
+    /// the call that grew the set — and the one asked about last stays,
+    /// though it alone is over the bound.
+    func testTheMemoryBoundLetsGoOfTheLeastRecentlyUsed() async throws {
+        try openWindow()
+        service.desk.background.memoryLimit = 6
+        for name in ["a.bin", "b.bin"] {
+            let url = try write([1, 2, 3, 4], name)
+            let opened = try await client.answer("open_dump", ["path": .string(url.path)])
+            _ = try await client.answer("read", ["document": opened["document"]!, "offset": 0, "length": 4])
+        }
+        XCTAssertEqual(service.desk.background.entries.map { $0.url.lastPathComponent }, ["b.bin"])
+        XCTAssertEqual(service.desk.background.heldBytes, 4, "what was read of b.bin")
+
+        service.desk.background.memoryLimit = 1
+        XCTAssertEqual(service.desk.background.entries.count, 1, "the last one asked about is kept")
+    }
+
+    /// A file let go to stay inside the bounds keeps its id: named again,
+    /// it is read again, and answers under the same id.
+    func testAFileLetGoIsReadAgainUnderItsId() async throws {
+        try openWindow()
+        service.desk.background.fileLimit = 1
+        let first = try await client.answer("open_dump", ["path": .string(try write([7, 7], "a.bin").path)])
+        let id = try XCTUnwrap(first["document"]?.stringValue)
+        _ = try await client.answer("open_dump", ["path": .string(try write([0], "b.bin").path)])
+        XCTAssertEqual(service.desk.background.entries.map { $0.url.lastPathComponent }, ["b.bin"])
+
+        let read = try await client.answer("read", ["document": .string(id), "offset": 0, "length": 2, "format": "u8"])
+        XCTAssertEqual(read["values"], ["0x07", "0x07"])
+        XCTAssertEqual(read["document"]?.stringValue, id)
+        XCTAssertEqual(service.desk.background.entries.map { $0.url.lastPathComponent }, ["a.bin"])
+
+        // One closed on purpose is gone.
+        _ = try await client.answer("close_dump", ["document": .string(id)])
+        let refused = try await client.call("read", ["document": .string(id), "offset": 0, "length": 1])
+        XCTAssertTrue(refused.isError)
+    }
+
+    /// The bounds are kept in the settings and reach the open set.
+    func testTheBoundsAreKeptAndApplied() {
+        XCTAssertEqual(service.backgroundFileLimit, AgentBackgroundLimits.defaultFiles)
+        service.backgroundFileLimit = 16
+        service.backgroundMemoryLimitMiB = 256
+        XCTAssertEqual(defaults.integer(forKey: AgentService.backgroundFilesKey), 16)
+        XCTAssertEqual(service.desk.background.fileLimit, 16)
+        XCTAssertEqual(service.desk.background.memoryLimit, 256 << 20)
+
+        defaults.set(1000, forKey: AgentService.backgroundFilesKey)
+        XCTAssertEqual(service.backgroundFileLimit, 64, "a value past the choices is the largest choice")
+    }
+
+    func testTheMemoryChoicesFollowTheMac() {
+        let gib: UInt64 = 1 << 30
+        XCTAssertEqual(AgentBackgroundLimits.memoryChoicesMiB(physicalMemory: 8 * gib), [256, 512, 1024, 2048])
+        XCTAssertEqual(AgentBackgroundLimits.memoryChoicesMiB(physicalMemory: 128 * gib).last, 16384)
+        XCTAssertEqual(AgentBackgroundLimits.memoryChoicesMiB(physicalMemory: gib / 2), [256], "the smallest is always offered")
+        XCTAssertEqual(AgentBackgroundLimits.defaultMemoryMiB(physicalMemory: 16 * gib), 1024)
+        XCTAssertEqual(AgentBackgroundLimits.defaultMemoryMiB(physicalMemory: 2 * gib), 512)
+        XCTAssertEqual(AgentBackgroundLimits.snapped(3000, to: [256, 1024, 4096], fallback: 1024), 1024)
+        XCTAssertEqual(AgentBackgroundLimits.snapped(100, to: [256, 1024], fallback: 1024), 256)
+        XCTAssertEqual(AgentBackgroundLimits.snapped(nil, to: [256, 1024], fallback: 1024), 1024)
     }
 
     func testCloseDumpClosesABackgroundFileAndRefusesATab() async throws {

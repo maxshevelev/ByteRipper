@@ -298,7 +298,11 @@ open file is — not a second way of reading a file — held by `AgentService`
 instead of a pane, with a `PaneUEFIState`-like object beside it for the tree.
 Re-opening the same path with the same modification date returns the same
 handle; a changed file is read again. Documents are let go least recently used
-first, past a memory budget.
+first, past either of two bounds set in Settings ▸ Agent: how many files (8
+until changed, up to 64), and how many bytes they hold between them — what was
+read of the files and what their compressed sections decompressed to (1 GiB
+until changed, up to a quarter of the Mac's memory). The one asked about last
+is kept; one let go keeps its id, and naming it reads the file again.
 
 `survey(paths | folder, query, group_by, limit)` runs one module query over
 many files and returns the aggregate, not fifty answers: for each distinct

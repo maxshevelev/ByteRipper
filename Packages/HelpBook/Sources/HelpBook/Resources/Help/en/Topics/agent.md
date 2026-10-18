@@ -13,6 +13,7 @@
 @covers menubar.agent
 @covers settings.agent.edits
 @covers settings.agent.launch
+@covers settings.agent.background
 
 The agent works on the same windows as the user. When it is asked about "this" byte, it reads the position of the caret and the selection; when it refers to a place in the dump, it moves the view there and selects it. The two therefore point at the same bytes rather than describing addresses to each other in words.
 
@@ -107,6 +108,19 @@ The agent's annotations are not listed in this window: the **Annotations** windo
 ## Files outside the open windows
 
 When the agent first reads a folder that macOS protects — Desktop, Documents, Downloads — macOS asks whether ByteRipper may access it. The agent's request waits for the answer; the rest of the program does not. The answer is remembered for ByteRipper, as for any other access the program asks for.
+
+## Dumps opened by path
+
+A dump the agent opens by its path, without a tab, is read and parsed once: further questions about it — the ME version, then the DMI serial number — are answered from what was parsed. A question about every dump in a folder opens each of them in the same way.
+
+Such dumps are not all kept. **Settings ▸ Agent** sets two limits:
+
+- **Dumps kept open:** — from 1 to 64; 8 after installation.
+- **Memory for them:** — from 256 MB to a quarter of this Mac's memory, at most 16 GB; 1 GB after installation.
+
+Counted are the bytes read from the files and what their compressed sections decompressed to. The tree of the structure and the ME analysis are not counted; beside those buffers they are small. Past either limit, the dump not asked about for the longest time is closed. The dump asked about last stays open even when it alone exceeds the memory limit. When the agent names a closed dump again, it is read and parsed again under the same name; this takes time, but the answer is the same. A dump changed on disk is read again the next time it is asked about.
+
+To ask several questions about every dump in a large folder, it is quicker to ask them dump by dump than question by question: with more dumps than the limits keep, a second pass over the folder reads most of them again.
 
 ## When the service does not start
 

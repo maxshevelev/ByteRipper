@@ -117,6 +117,21 @@ public final class EditOverlayStorage: EditableByteStorage, @unchecked Sendable 
         return try readLocked(at: offset, length: length)
     }
 
+    /// The bytes this storage holds in memory now: what its base has cached
+    /// of the file — or the whole base, when that lives in memory — and the
+    /// add buffer. What a holder of many documents weighs them by.
+    public var residentByteCount: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        let held: Int
+        switch base {
+        case let file as FileBackedStorage: held = file.cache.cachedByteCount
+        case let memory as MemoryBackedStorage: held = Int(memory.size)
+        default: held = 0
+        }
+        return held + added.count
+    }
+
     // MARK: - EditableByteStorage
 
     public func overwrite(range: Range<UInt64>, with bytes: [UInt8]) throws {

@@ -134,6 +134,20 @@ final class AgentUITests: XCTestCase {
         XCTAssertTrue(tab.previewText.contains("--env BYTERIPPER_LAUNCH=1"), "the preview follows: \(tab.previewText)")
     }
 
+    /// The two bounds on the dumps an agent opened by path: shown as kept,
+    /// and a choice is kept.
+    func testTheTabSetsTheBoundsOnDumpsOpenedByPath() {
+        let tab = AgentSettingsViewController()
+        tab.service = service
+        _ = tab.view
+        XCTAssertEqual(tab.limitsShown.files, "\(service.backgroundFileLimit)")
+        XCTAssertEqual(tab.limitsShown.memory, AgentSettingsViewController.memoryTitle(mib: service.backgroundMemoryLimitMiB))
+        tab.chooseLimits(files: 32, memoryMiB: 512)
+        XCTAssertEqual(service.backgroundFileLimit, 32)
+        XCTAssertEqual(service.backgroundMemoryLimitMiB, 512)
+        XCTAssertEqual(service.desk.background.memoryLimit, 512 << 20)
+    }
+
     /// The relay the button hands out is the one inside the app's bundle.
     func testTheRelayIsInsideTheAppBundle() {
         XCTAssertTrue(AgentClientConfiguration.relayPath.hasSuffix(".app/Contents/Helpers/byteripper-mcp"),

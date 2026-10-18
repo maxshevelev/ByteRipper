@@ -27,6 +27,12 @@ final class AgentService {
     /// Where the edit switch is kept: whether an agent may change an open
     /// file. Off after an install, and independent of the service's switch.
     static let editsKey = "AgentEditsAllowed"
+    /// Where the bounds on the files an agent opened by path are kept: how
+    /// many, and how many MiB between them (`AgentBackgroundLimits`).
+    static let backgroundFilesKey = "AgentBackgroundFileLimit"
+    static let backgroundMemoryKey = "AgentBackgroundMemoryLimitMiB"
+    /// The Mac's memory, which the memory bound offered is a share of.
+    static let physicalMemory = ProcessInfo.processInfo.physicalMemory
     /// How many calls the log keeps.
     static let logLimit = 500
 
@@ -51,7 +57,7 @@ final class AgentService {
     private(set) lazy var server = AgentServer(
         info: AgentServerInfo(name: "byteripper", version: Self.appVersion, title: "ByteRipper"),
         instructions: Self.instructions,
-        tools: catalogue.map { linking(noted($0.tool)) })
+        tools: catalogue.map { trimming(linking(noted($0.tool))) })
 
     /// Every tool, in the order `tools/list` gives them, with where it comes
     /// from and what it does — what the Agent window's Tools page lists.
@@ -85,6 +91,23 @@ final class AgentService {
     /// How each tool has been used since the app started, by name. Kept
     /// apart from the log, which keeps only its last calls.
     private(set) var toolStats: [String: AgentToolStats] = [:]
+
+    /// `tool`, bringing the background files back inside their bounds once
+    /// it has answered: a file grows as it is asked about, and whatever the
+    /// call opened or parsed is counted now.
+    private func trimming(_ tool: AgentTool) -> AgentTool {
+        AgentTool(name: tool.name, title: tool.title, description: tool.description,
+                  inputSchema: tool.inputSchema, annotations: tool.annotations) { [weak self] call in
+            do {
+                let answer = try await tool.run(call)
+                await self?.desk.background.trim()
+                return answer
+            } catch {
+                await self?.desk.background.trim()
+                throw error
+            }
+        }
+    }
 
     /// `tool`, with a `link` beside every UEFI node's `label` in its answer
     /// when the answer's `document` is a file on disk (`AgentNodeURLs`).
@@ -259,6 +282,8 @@ final class AgentService {
         AgentAnnotationTools.current = annotationTools
         PaneViewModel.annotationSource = { [weak annotationTools] pane in annotationTools?.annotations(for: pane) ?? [] }
         PaneViewModel.annotationTitles = { [weak annotationTools] in annotationTools?.titles() ?? [:] }
+        desk.background.fileLimit = backgroundFileLimit
+        desk.background.memoryLimit = backgroundMemoryLimitMiB << 20
         // A survey runs the other tools; it finds them in the finished list.
         dumpTools.toolNamed = { [weak self] name in self?.server.tools.first { $0.name == name } }
     }
@@ -278,6 +303,39 @@ final class AgentService {
         get { defaults.bool(forKey: Self.editsKey) }
         set {
             defaults.set(newValue, forKey: Self.editsKey)
+            changed()
+        }
+    }
+
+    /// How many files an agent opened by path stay parsed at once.
+    var backgroundFileLimit: Int {
+        get {
+            AgentBackgroundLimits.snapped(defaults.object(forKey: Self.backgroundFilesKey) as? Int,
+                                          to: AgentBackgroundLimits.fileChoices,
+                                          fallback: AgentBackgroundLimits.defaultFiles)
+        }
+        set {
+            defaults.set(newValue, forKey: Self.backgroundFilesKey)
+            desk.background.fileLimit = backgroundFileLimit
+            changed()
+        }
+    }
+
+    /// The memory bounds this Mac is offered, in MiB.
+    static var memoryChoicesMiB: [Int] {
+        AgentBackgroundLimits.memoryChoicesMiB(physicalMemory: physicalMemory)
+    }
+
+    /// How many MiB those files may hold between them.
+    var backgroundMemoryLimitMiB: Int {
+        get {
+            AgentBackgroundLimits.snapped(defaults.object(forKey: Self.backgroundMemoryKey) as? Int,
+                                          to: Self.memoryChoicesMiB,
+                                          fallback: AgentBackgroundLimits.defaultMemoryMiB(physicalMemory: Self.physicalMemory))
+        }
+        set {
+            defaults.set(newValue, forKey: Self.backgroundMemoryKey)
+            desk.background.memoryLimit = backgroundMemoryLimitMiB << 20
             changed()
         }
     }

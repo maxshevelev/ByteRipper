@@ -1,4 +1,4 @@
-@source-sha 1cb3393aff020e07221dcc0224274c61292dff42e80664bd693b0cdaa1b832bc
+@source-sha 9dc09c9176f2a70155fd115d5f1302bae37e3576216c7af6b281e93b6b9dfac0
 # Mit einem Agenten arbeiten
 
 > An ByteRipper lässt sich ein Agent anbinden: Claude Code, Claude Desktop oder ein anderes Programm, das das Protokoll MCP unterstützt. Der angebundene Agent hat Zugriff auf die in ByteRipper geöffneten Dateien, liest deren Inhalt und zeigt die betreffenden Stellen im Dump an. Die Unterhaltung mit dem Agenten selbst findet im Fenster seines eigenen Programms statt.
@@ -126,6 +126,19 @@ Die Anmerkungen des Agenten werden in diesem Fenster nicht aufgeführt: Das Fens
 ## Zugriff auf Ordner außerhalb der geöffneten Fenster
 
 Greift der Agent erstmals auf einen von macOS geschützten Ordner zu — „Schreibtisch“, „Dokumente“, „Downloads“ —, fragt macOS, ob ByteRipper darauf zugreifen darf. Die Anfrage des Agenten wartet auf die Antwort, das übrige Programm bleibt währenddessen bedienbar. macOS speichert die Antwort für ByteRipper wie jede andere vom Programm erfragte Berechtigung.
+
+## Über ihren Pfad geöffnete Dumps
+
+Ein Dump, den der Agent über seinen Pfad öffnet, ohne Tab, wird einmal gelesen und analysiert: Weitere Fragen dazu — die ME-Version, danach die Seriennummer aus DMI — beantwortet der Agent aus den bereits analysierten Daten. Eine Frage an alle Dumps eines Ordners öffnet jeden von ihnen auf dieselbe Weise.
+
+Nicht alle diese Dumps bleiben erhalten. Unter **Einstellungen ▸ Agent** werden zwei Grenzen festgelegt:
+
+- **Höchstens offene Dumps:** — von 1 bis 64; im Auslieferungszustand 8.
+- **Höchstens Arbeitsspeicher dafür:** — von 256 MB bis zu einem Viertel des Arbeitsspeichers dieses Mac, höchstens 16 GB; im Auslieferungszustand 1 GB.
+
+Gezählt werden die aus den Dateien gelesenen Bytes und der entpackte Inhalt ihrer komprimierten Abschnitte. Der Strukturbaum und das Ergebnis der ME-Analyse werden nicht gezählt; neben diesen Puffern belegen sie wenig. Wird eine der beiden Grenzen überschritten, wird der Dump geschlossen, der am längsten nicht abgefragt wurde. Der zuletzt abgefragte Dump bleibt geöffnet, auch wenn er allein die Speichergrenze überschreitet. Fragt der Agent erneut nach einem geschlossenen Dump, wird dieser unter derselben Bezeichnung neu gelesen und analysiert; das kostet Zeit, die Antwort bleibt dieselbe. Ein auf der Festplatte geänderter Dump wird bei der nächsten Abfrage neu gelesen.
+
+Sollen an alle Dumps eines großen Ordners mehrere Fragen gestellt werden, ist es schneller, sie Dump für Dump zu stellen statt Frage für Frage: Sind es mehr Dumps, als die Grenzen erhalten, liest ein zweiter Durchgang durch den Ordner die meisten von ihnen erneut.
 
 ## Wenn der Dienst nicht startet
 
