@@ -551,7 +551,10 @@ here**: documents of one length can lay a field out differently —
 `Num_Active_Cores` is three bits in `cnp_lp_rvp.xml` and four in a nameless
 newer document of the same three words — so a table keeps only the fields
 every document of that length states alike. On the dumps at hand the section
-is 1 word on 23 of them and 3 on 10; `CSME 12.BIN`'s three words read
+is 1 word on 23 of them, 3 on 10 and 11 on one — `CSME 13.BIN` (ICP LP),
+whose words at 0x300 decode through FIT 12–15's `cnp_lp_rvp.xml` table:
+Fast wakeup and PEG_DEF set, SMT enabled, all cores active, the rest at the
+tool's defaults. `CSME 12.BIN`'s three words read
 `0x00001000 0x00108002 0x08000210`.
 
 **From Tiger Point on** the same map word means something else — `FLMAP2`

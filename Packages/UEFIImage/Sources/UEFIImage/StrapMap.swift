@@ -174,7 +174,7 @@ public extension DescriptorStrapMap {
     /// disagree, and a table carries only what they agree on (`StrapMap+CPU`)
     /// — so they are kept apart from the PCH tables above.
     static var processorTables: [DescriptorStrapMap] {
-        [.cpu1, .cpu3, .cpu7, .cpu10, .cpu14, .cpu15,
+        [.cpu1, .cpu3, .cpu7, .cpu10, .cpu11, .cpu14, .cpu15,
          .cpu17, .cpu18, .cpu20, .cpu21, .cpu22, .cpu25]
     }
 
