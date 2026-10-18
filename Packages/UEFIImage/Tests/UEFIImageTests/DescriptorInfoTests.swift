@@ -533,6 +533,123 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertNotNil(sharedCPU.fields.first { $0.name == "CPU_Strap_FlexRatio" })
     }
 
+    /// The generations before FIT's documents read the tables written from
+    /// Intel's SPI Programming Guides: 16 words on Ibex Peak, 18 on Cougar
+    /// Point and 21 on Lynx Point. The length is only theirs on the generation
+    /// that states it, and an uncertain generation claims nothing.
+    func testTheLegacyTablesAreReadOnTheirOwnGenerations() {
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 16, generation: .ibexPeak)?.name,
+                       DescriptorStrapMap.pch16.name)
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 18, generation: .cougarPoint)?.name,
+                       DescriptorStrapMap.pch18.name)
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 21, generation: .lynxPoint)?.name,
+                       DescriptorStrapMap.pch21.name)
+        XCTAssertNil(DescriptorStrapMap.forSection(words: 18, generation: .cannonPoint),
+                     "the length is not shared with a later generation's section")
+        XCTAssertNil(DescriptorStrapMap.forSection(words: 18, generation: .cougarPoint,
+                                                   generationIsCertain: false),
+                     "an uncertain generation claims nothing")
+        XCTAssertNil(DescriptorStrapMap.forSection(words: 18),
+                     "the legacy lengths are not in the tables read by length alone")
+    }
+
+    /// The legacy tables state the guide's fields at the guide's bits, and a
+    /// word the guide calls reserved is left unnamed rather than guessed at.
+    /// Lynx Point's own guide is not public: its table carries the Cougar
+    /// Point fields for the first 18 of its 21 words, and words 18-20 stay raw.
+    func testTheLegacyTablesNameTheFieldsTheGuidesName() throws {
+        for map in DescriptorStrapMap.legacyTables {
+            var names = Set<String>()
+            for field in map.fields {
+                XCTAssertLessThan(field.word, map.words, field.name)
+                XCTAssertLessThan(field.bits.upperBound, 32, field.name)
+                XCTAssertTrue(names.insert(field.name).inserted, field.name)
+            }
+        }
+        let cougar = try XCTUnwrap(DescriptorStrapMap.forSection(
+            words: 18, generation: .cougarPoint))
+        let smb = try XCTUnwrap(cougar.fields.first { $0.name == "PCHSTRP0_SMB_EN" })
+        XCTAssertEqual(smb.bits, 7...7)
+        XCTAssertEqual(smb.options?[1], "Enabled")
+        let bbbs = try XCTUnwrap(cougar.fields.first { $0.name == "PCHSTRP0_BBBS" })
+        XCTAssertEqual(bbbs.bits, 29...30)
+        XCTAssertEqual(bbbs.options?[0], "64 KB")
+        let deepSx = try XCTUnwrap(cougar.fields.first { $0.name == "PCHSTRP10_Deep_SX_EN" })
+        XCTAssertEqual(deepSx.word, 10)
+        XCTAssertEqual(deepSx.bits, 23...23)
+        let profile = try XCTUnwrap(cougar.fields.first { $0.name == "PCHSTRP10_ICC_PRO_SEL" })
+        XCTAssertEqual(profile.bits, 22...22)
+        XCTAssertEqual(profile.options?[1], "Soft strap")
+        XCTAssertEqual(Set(0..<cougar.words)
+            .subtracting(Set(cougar.fields.map(\.word))), Set([3, 5, 6, 8, 12, 13, 14, 16]),
+                       "the words the guide calls reserved")
+
+        let ibex = try XCTUnwrap(DescriptorStrapMap.pch16)
+        XCTAssertEqual(ibex.words, 16)
+        XCTAssertNotNil(ibex.fields.first { $0.name == "PCHSTRP10_VE_EN" })
+        XCTAssertNil(ibex.fields.first { $0.name == "PCHSTRP10_Deep_SX_EN" },
+                     "Deep SX is Cougar Point's field")
+
+        let lynx = try XCTUnwrap(DescriptorStrapMap.pch21)
+        XCTAssertEqual(lynx.words, 21)
+        XCTAssertTrue(lynx.fields.allSatisfy { $0.word < 18 },
+                      "words 18-20 have no public layout")
+        XCTAssertNotNil(lynx.fields.first { $0.name == "PCHSTRP0_SMB_EN" })
+    }
+
+    /// Three boards' strap words through the tables, as the guide reads them:
+    /// the MacBook Pro 15 2010 (Ibex Peak), the MacBook Pro 15 2011 and
+    /// `ME 7` (Cougar Point) and the MacBook Air 13 (Lynx Point, 21 words).
+    func testTheOldBoardsStrapsReadAsTheGuideSays() throws {
+        func values(_ map: DescriptorStrapMap, _ words: [UInt32]) -> [String: UInt32] {
+            Dictionary(uniqueKeysWithValues: map.readings(in: words)
+                .map { ($0.field.name, $0.value) })
+        }
+        let ibex = try XCTUnwrap(DescriptorStrapMap.forSection(
+            words: 16, generation: .ibexPeak))
+        let mpb2010 = values(ibex, [
+            0x00205682, 0x0000000F, 0, 0, 0x00C8E000, 0, 0, 0,
+            0, 0x0000050C, 0x00010044, 0x00000091, 0, 0, 0x00030000, 0x00000318,
+        ])
+        XCTAssertEqual(mpb2010["PCHSTRP0_SMB_EN"], 1)
+        XCTAssertEqual(mpb2010["PCHSTRP0_SML1_EN"], 1)
+        XCTAssertEqual(mpb2010["PCHSTRP0_SMB0FRQ"], 1)
+        XCTAssertEqual(mpb2010["PCHSTRP0_BBBS"], 0)
+        XCTAssertEqual(mpb2010["PCHSTRP4_PHYCON"], 0)
+        XCTAssertEqual(mpb2010["PCHSTRP4_GBEMAC_SMBUS_ADDR"], 0x70)
+        XCTAssertEqual(mpb2010["PCHSTRP4_GBEPHY_SMBUS_ADDR"], 0x64)
+
+        let cougar = try XCTUnwrap(DescriptorStrapMap.forSection(
+            words: 18, generation: .cougarPoint))
+        let mpb2011 = values(cougar, [
+            0x0920D682, 0x0000010F, 0, 0, 0x00C8E000, 0, 0, 0,
+            0, 0x0000058C, 0x00810044, 0x87000089, 0, 0, 0, 0x0000833E, 0, 2,
+        ])
+        XCTAssertEqual(mpb2011["PCHSTRP0_SMB_EN"], 1)
+        XCTAssertEqual(mpb2011["PCHSTRP0_SML0_EN"], 0)
+        XCTAssertEqual(mpb2011["PCHSTRP0_SML1_EN"], 1)
+        XCTAssertEqual(mpb2011["PCHSTRP0_LINKSEC_DIS"], 1)
+        XCTAssertEqual(mpb2011["PCHSTRP0_DMI_REQID_DIS"], 1)
+        XCTAssertEqual(mpb2011["PCHSTRP10_Deep_SX_EN"], 1)
+        XCTAssertEqual(mpb2011["PCHSTRP10_ICC_PRO_SEL"], 0)
+        XCTAssertEqual(mpb2011["PCHSTRP10_ME_BOOT_FLASH"], 0)
+
+        let lynx = try XCTUnwrap(DescriptorStrapMap.forSection(
+            words: 21, generation: .lynxPoint))
+        let air2013 = values(lynx, [
+            0x2030D7A0, 0x040001FF, 0, 0, 0x00C8E000, 0, 0, 0,
+            0, 0x30444480, 0x00C00004, 0x00000089, 0, 0, 0x592A3D55, 0x0018433E,
+            0, 2, 0, 0, 0,
+        ])
+        XCTAssertEqual(air2013["PCHSTRP0_SMB_EN"], 1)
+        XCTAssertEqual(air2013["PCHSTRP0_SML0_EN"], 1)
+        XCTAssertEqual(air2013["PCHSTRP0_SML1_EN"], 1)
+        XCTAssertEqual(air2013["PCHSTRP0_BBBS"], 1, "128 KB boot block")
+        XCTAssertEqual(air2013["PCHSTRP0_LANPHYPC_GP12_SEL"], 1)
+        XCTAssertEqual(air2013["PCHSTRP10_ICC_PRO_SEL"], 1)
+        XCTAssertEqual(air2013["PCHSTRP10_Deep_SX_EN"], 1)
+    }
+
     /// No strap base, no section — the bytes at offset zero are not straps.
     func testNoStrapBaseMeansNoStraps() throws {
         XCTAssertNil(try info(TestImage.descriptor(regions: [(.bios, 0x1000..<0x40_0000)])).straps)

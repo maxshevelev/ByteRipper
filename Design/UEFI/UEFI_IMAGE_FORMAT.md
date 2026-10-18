@@ -546,6 +546,23 @@ writes refused). ifdtool also needs `-p` to read any descriptor
 from Sunrise Point on as one: without it, it takes the layout for version 1
 and reports `AltMeDisable` from the wrong word.
 
+**The generations before FIT's layout documents read Intel's own guides.**
+Ibex Peak, Cougar Point/Panther Point and Lynx Point have no strap XML inside
+their FIT Classic builds, but flashrom's `ich_descriptors.h` carries the
+`ibex` and `cougar` unions written from Intel's SPI Programming Guides, and
+`intel_strap_map.py` emits them into `StrapMap+IBX` / `+CPT` / `+LPT`. The
+sections are **16 words on Ibex Peak, 18 on Cougar Point and 21 on Lynx
+Point**, and each table is read only on the generation that states its length.
+Intel's 7 Series/C216 SPI Programming Guide (document 475653, Appendix A)
+states the same fields and bits for the `cougar` union. **Lynx Point's own
+guide (487990) is not public**: its table carries the Cougar Point fields over
+the first 18 of the 21 words — the MacBook Air 13 dump corroborates the shared
+bits (`SMB_EN`, `SML1_EN`, `Deep_SX_EN` and `ICC_PRO_SEL` read where the
+7-series layout puts them) — and words 18–20 have no public layout and stay
+raw. Measured on the dumps at hand: `MacBook Pro 15 2010` 16 words, `ME 7` and
+`MacBook Pro 15 2011` 18, `MacBook Air 13` 21. The words the guides call
+reserved are not named, and the panel shows them as their raw values.
+
 ### 2.7. The processor straps
 
 **Up to Cannon Point**: at `ProcStrapsBase << 4`, `NumberOfProcStraps`

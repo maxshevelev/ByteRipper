@@ -195,18 +195,43 @@ final class DescriptorDetailTests: XCTestCase {
     func testTheStrapsAreAGridOfWordsWhereNoLayoutIsAtHand() throws {
         var words = [UInt32](repeating: 0, count: 11)
         words[1] = 0x1234_5678
-        let shown = detail(TestUEFI.flashDescriptor(straps: words))
+        // Eleven words is a length no table states, on a generation whose own
+        // section (16, 18 or 21 words) is another length.
+        let shown = detail(TestUEFI.flashDescriptor(straps: words, strapCount: 11))
         let table = try XCTUnwrap(table(shown, "PCH straps"))
 
         XCTAssertEqual(table.columns, ["Strap", "Offset", "Value", "Meaning"])
-        XCTAssertEqual(table.rows.count, 0x12, "every word the Cougar Point map counts")
+        XCTAssertEqual(table.rows.count, 11, "one row per word of the section")
         XCTAssertEqual(table.rows[1].map(\.text), ["PCHSTRP1", "0x204", "0x12345678", "Unknown"])
         XCTAssertEqual(table.rows[10][3].text, "AltMeDisable in bit 7; the other bits unknown")
         XCTAssertEqual(table.rowTargets[1], .range(0x204..<0x208, name: "PCHSTRP1"))
         XCTAssertEqual(table.linkColumn, 1)
-        XCTAssertTrue(table.startsFolded, "seventy words and more stay folded until asked for")
+        XCTAssertTrue(table.startsFolded, "the grid stays folded until asked for")
         XCTAssertFalse(try XCTUnwrap(self.table(shown, "Region table")).startsFolded,
                        "the short tables are open")
+    }
+
+    /// On Cougar Point the 18-word section reads as the fields Intel's SPI
+    /// Programming Guide names, with the words the guide calls reserved left
+    /// as raw rows; the values here are `ME 7`'s.
+    func testTheCougarPointStrapsAreFields() throws {
+        var words = [UInt32](repeating: 0, count: 18)
+        words[0] = 0x0920_D682
+        words[10] = 0x0081_0044
+        let shown = detail(TestUEFI.flashDescriptor(straps: words))
+        let table = try XCTUnwrap(table(shown, "PCH straps"))
+
+        XCTAssertEqual(table.columns, ["Field", "Bits", "Value", "Default"])
+        XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP0_SMB_EN")).map(\.text),
+                       ["PCHSTRP0_SMB_EN", "7", "0x1", ""])
+        XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP0_BBBS")).map(\.text),
+                       ["PCHSTRP0_BBBS", "29–30", "0x0", ""])
+        XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP10_Deep_SX_EN")).map(\.text),
+                       ["PCHSTRP10_Deep_SX_EN", "23", "0x1", ""])
+        XCTAssertEqual(try XCTUnwrap(row(table, "PCHSTRP3")).map(\.text),
+                       ["PCHSTRP3", "", "0x0", ""],
+                       "a reserved word keeps its raw row")
+        XCTAssertEqual(table.sections.count, 18, "a section per word")
     }
 
     /// The processor strap section is a grid of the fields its layout names,

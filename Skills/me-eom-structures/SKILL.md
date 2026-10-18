@@ -635,6 +635,46 @@ and 25 words; the **11-word** section is the LP one `cnp_lp_rvp.xml` names, and
 `CSME 13.BIN` (ICP LP) states it — its words at 0x300 decode with Fast wakeup
 and PEG_DEF set, SMT enabled and all cores active.
 
+**The generations before FIT's layout documents** — Ibex Peak, Cougar Point
+and Lynx Point — have no layout XML inside their Flash Image Tool Classic
+builds: that tool keeps its strap map in code, and its executables carry no
+`LayoutEntry` documents (fitc-8 names the 6/7-series straps in its UI and
+accepts `/ich_straps`, but states no offsets). What does state the map, bit by
+bit, is flashrom's `include/ich_descriptors.h`, whose `ibex` and `cougar`
+unions were written from Intel's SPI Programming Guides. `intel_strap_map.py`
+reads those structs — names, widths and declaration order — into the tables,
+and Intel's 7 Series/C216 SPI Programming Guide (document 475653, Appendix A)
+is the public check on the `cougar` union: it names the same fields at the
+same bits.
+
+```bash
+python3 Skills/me-eom-structures/scripts/intel_strap_map.py \
+    --header <flashrom>/include/ich_descriptors.h \
+    --kind ibex --generation ibexPeak --words 16 --variable pch16 > \
+    Packages/UEFIImage/Sources/UEFIImage/StrapMap+IBX.swift
+python3 Skills/me-eom-structures/scripts/intel_strap_map.py \
+    --header <flashrom>/include/ich_descriptors.h \
+    --kind cougar --generation cougarPoint --words 18 --variable pch18 > \
+    Packages/UEFIImage/Sources/UEFIImage/StrapMap+CPT.swift
+```
+
+The sections are **16 words on Ibex Peak, 18 on Cougar Point/Panther Point and
+21 on Lynx Point**, and each table is read only on the generation that states
+that length — as SPT's are — so an uncertain generation claims nothing. The
+7-series guide's fields carry through Panther Point; the tables' option words
+(64/128/256 KB boot block, the SMBus frequencies, the PCIe port configurations
+and the rest) are the guide's.
+
+**Lynx Point's own guide is not public** (Intel document 487990), so `pch21`
+is the Cougar Point field set carried forward over the first 18 of the 21
+words: the MacBook Air 13 dump corroborates the shared bits there (`SMB_EN`,
+`SML1_EN`, `Deep_SX_EN` and `ICC_PRO_SEL` read where the 7-series layout puts
+them), and words 18-20 have no public layout and stay raw. The `cougar`
+union's `STRP1` adds up to 37 bits in flashrom — a reserved tail five bits too
+wide — and the script trims that tail to the 32 bits a word is. On the dumps
+at hand `MacBook Pro 15 2010` states 16 words, `ME 7` and `MacBook Pro 15
+2011` 18, and `MacBook Air 13` 21.
+
 **The PMC straps are a table too, keyed by what the MIP area leaves.** On
 Cannon Point and later, the MIP table's block type 1 is the PMC section
 followed by the CPU strap message; the message's length is `FLMAP2`'s (the
