@@ -1598,6 +1598,12 @@ public enum UEFIDetail {
         if let straps = descriptor.processorStraps {
             tables.append(processorStrapTable(straps, in: language))
         }
+        if let mip = descriptor.mip {
+            tables.append(mipTable(mip, in: language))
+            if let dbc = mip.dbc {
+                tables.append(dbcTable(dbc, in: language))
+            }
+        }
         if !descriptor.registerReadings.isEmpty {
             tables.append(descriptorRegisterTable(descriptor.registerReadings,
                                                   in: language))
@@ -1652,6 +1658,58 @@ public enum UEFIDetail {
     /// A value the build set away from the tool's default is drawn in bold,
     /// and a folded line says how many of its fields are so: those are the
     /// fields that make this board's straps its own.
+    /// The MIP area's block table: what each block is and where the entry
+    /// places it. The payload's own fields are in the tables after it, under
+    /// the names the same tool gives them.
+    private static func mipTable(_ mip: DescriptorInfo.MIPTable,
+                                 in language: AppLanguage) -> UEFIDetailTable {
+        UEFIDetailTable(
+            title: L("MIP table", in: language),
+            symbol: "list.bullet.rectangle",
+            columns: [L("Block", in: language), L("Offset", in: language),
+                      L("Length", in: language)],
+            rows: mip.blocks.map { block in
+                [.init(mipBlockName(block.type, in: language)),
+                 .init(hex(UInt64(block.offset))),
+                 .init("\(block.length)")]
+            }
+        )
+    }
+
+    /// The tool's names for the two block types a MIP table carries on the
+    /// generations at hand; a type it has not named is shown as its number.
+    private static func mipBlockName(_ type: Int, in language: AppLanguage) -> String {
+        switch type {
+        case 0: return L("CSE DbC configuration", in: language)
+        case 1: return L("PMC and CPU soft straps", in: language)
+        default: return L("Block %1$d", in: language, type)
+        }
+    }
+
+    private static func dbcTable(_ dbc: DescriptorInfo.DBCStraps,
+                                 in language: AppLanguage) -> UEFIDetailTable {
+        let rows = dbc.fields.map { reading -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in
+            let range = reading.field.bits
+            let address = dbc.base + UInt64(reading.field.word) * 4
+            return ([.init(reading.field.label ?? strapFieldName(reading.field.name)),
+                     .init(range.lowerBound == range.upperBound
+                           ? "\(range.lowerBound)"
+                           : "\(range.lowerBound)–\(range.upperBound)"),
+                     .init(hex(reading.value)),
+                     .init(hex(address))],
+                    .range(address..<address + 4, name: reading.field.name))
+        }
+        return UEFIDetailTable(
+            title: L("DbC straps", in: language),
+            symbol: "cable.connector",
+            columns: [L("Field", in: language), L("Bits", in: language),
+                      L("Value", in: language), L("Offset", in: language)],
+            rows: rows.map(\.cells),
+            rowTargets: rows.map(\.target),
+            linkColumn: 3
+        )
+    }
+
     private static func strapTable(_ straps: DescriptorInfo.Straps, in language: AppLanguage) -> UEFIDetailTable {
         guard let readings = straps.fields else {
             let rows = straps.words.indices.map { index -> (cells: [UEFIDetailTable.Cell], target: UEFIDetailTable.Target) in

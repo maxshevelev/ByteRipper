@@ -164,6 +164,74 @@ public struct DescriptorInfo: Equatable, Sendable {
 
     public var processorStraps: ProcessorStraps?
 
+    /// The MIP area's descriptor table, which Cannon Point introduced: a count
+    /// and the area's size, then one eight-byte entry per block — type, offset,
+    /// length, reserved — whose payload the entry's offset places after the
+    /// table. Block type 1 is the PMC and CPU soft straps, type 0 the CSE DbC
+    /// configuration. Nil before Cannon Point, and on Meteor Lake and later,
+    /// where the area is erased and the byte the table's place came from means
+    /// the SoC soft straps instead.
+    public struct MIPTable: Equatable, Sendable {
+        public struct Block: Equatable, Sendable {
+            /// The tool's block type: 0 is the CSE DbC configuration and 1 the
+            /// PMC and CPU soft straps.
+            public var type: Int
+            /// The block's first byte, in the file's own offsets.
+            public var base: UInt64
+            /// Its place, in bytes, from the table's first byte.
+            public var offset: Int
+            public var length: Int
+            public var words: [UInt32]
+        }
+
+        /// The table's first byte, in the file's own offsets.
+        public var base: UInt64
+        /// `NumberOfDescriptors`.
+        public var count: Int
+        /// `SizeOfMip`: the area's length in bytes.
+        public var size: Int
+        public var blocks: [Block]
+
+        /// The CSE DbC configuration, where the table carries one.
+        public var dbc: DBCStraps? {
+            guard let block = blocks.first(where: { $0.type == 0 }),
+                  block.words.count >= 2 else { return nil }
+            return DBCStraps(base: block.base, words: block.words)
+        }
+    }
+
+    /// The CSE DbC configuration — block type 0's two dwords. Every Flash
+    /// Image Tool document that states the block agrees on these three masks
+    /// in its second word; the variants add the eHAP and DAM bits or the USB2
+    /// AFE signal strengths above them, which the documents do not agree on
+    /// and which are therefore not claimed here.
+    public struct DBCStraps: Equatable, Sendable {
+        public var base: UInt64
+        public var words: [UInt32]
+        public var fields: [DescriptorStrapMap.Reading]
+
+        static let layout: [DescriptorStrapMap.Field] = [
+            .init(name: "DbC_Strap_CSME_Early_USB_DbC_ME_Boot_Stall_Enable",
+                  word: 1, bits: 16...23, label: "Early USB DbC ME boot stall"),
+            .init(name: "DbC_Strap_CSME_USB3_DbC_port_enable",
+                  word: 1, bits: 8...15, label: "USB3 DbC port enable"),
+            .init(name: "DbC_Strap_CSME_USB2_DbC_port_enable",
+                  word: 1, bits: 0...7, label: "USB2 DbC port enable"),
+        ]
+
+        init(base: UInt64, words: [UInt32]) {
+            self.base = base
+            self.words = words
+            self.fields = Self.layout.compactMap { field in
+                guard field.word < words.count else { return nil }
+                return DescriptorStrapMap.Reading(
+                    field: field, value: field.value(in: words[field.word]))
+            }
+        }
+    }
+
+    public var mip: MIPTable?
+
     /// The descriptor's registers read through Flash Image Tool's own layouts
     /// (`DescriptorRegisterMap`): FLMAP0/1/2, FLCOMP and FLIL at the component
     /// base, the masters' FLMSTR registers, FLDRPLCY and FLUMAP1. Empty where
@@ -262,6 +330,7 @@ public extension DescriptorInfo {
             processorStraps: processorStraps(at: base, generation: generation,
                                              isGenerationCertain: isCertain,
                                              reader: reader),
+            mip: mipTable(at: base, generation: generation, reader: reader),
             registerReadings: registerReadings(at: base, map: map, map1: map1,
                                                generation: generation, reader: reader),
             oemSection: reader.bytes(at: base + Descriptor.oemSectionOffset,
@@ -273,6 +342,50 @@ public extension DescriptorInfo {
     /// place resolved (absolute, or the component/master base the map words
     /// state) and its words read. A register whose base is out of range or
     /// whose words do not fit is left out.
+    /// The MIP area's block table: its place from the upper map's high byte,
+    /// its count and size, and each block's payload. A table whose entries do
+    /// not fit the area, or a payload past the reader's end, is no table —
+    /// the erased area of Meteor Lake reads `0xFFFF` throughout and answers
+    /// nil by the count check alone.
+    static func mipTable(at base: UInt64, generation: DescriptorGeneration,
+                         reader: ImageReader) -> MIPTable? {
+        guard generation.hasMIPDescriptorTable,
+              let upper = reader.uint32(at: base + UpperMap.offset)
+        else { return nil }
+        let area = Int(upper >> 24)
+        guard area > 0, area <= Int(Descriptor.maxBase) else { return nil }
+        let tableAt = base + UInt64(area) << 4
+        guard let count = reader.uint16(at: tableAt),
+              let size = reader.uint16(at: tableAt + 2),
+              count > 0, count <= 8
+        else { return nil }
+        var blocks: [MIPTable.Block] = []
+        for index in 0..<Int(count) {
+            let entry = tableAt + 4 + UInt64(index) * 8
+            guard let type = reader.uint16(at: entry),
+                  let offset = reader.uint16(at: entry + 2),
+                  let length = reader.uint16(at: entry + 4),
+                  let reserved = reader.uint16(at: entry + 6),
+                  reserved == 0, offset >= 4 + count * 8, length > 0,
+                  length % 4 == 0
+            else { return nil }
+            let payload = tableAt + UInt64(offset)
+            var words: [UInt32] = []
+            for word in 0..<(length / 4) {
+                guard let value = reader.uint32(at: payload + UInt64(word) * 4)
+                else { return nil }
+                words.append(value)
+            }
+            blocks.append(MIPTable.Block(type: Int(type), base: payload,
+                                         offset: Int(offset), length: Int(length),
+                                         words: words))
+        }
+        let end = blocks.map { $0.offset + $0.length }.max() ?? 0
+        guard Int(size) >= end else { return nil }
+        return MIPTable(base: tableAt, count: Int(count), size: Int(size),
+                        blocks: blocks)
+    }
+
     private static func registerReadings(
         at base: UInt64, map: UInt32, map1: UInt32,
         generation: DescriptorGeneration, reader: ImageReader

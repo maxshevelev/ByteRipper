@@ -98,6 +98,69 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertFalse(boot.isSet, "and no field of it is emphasised")
     }
 
+    /// Cannon Point put a block table in the MIP area: a count, the area's
+    /// size, then one type/offset/length/reserved entry per block, whose
+    /// payload follows the table. The block types are the CSE DbC
+    /// configuration (0) and the PMC and CPU soft straps (1); the DbC block's
+    /// three masks are what every tool document agrees on.
+    func testTheMIPTableNamesItsBlocksAndTheDbCWords() throws {
+        var bytes = TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], version1: false)
+        let table = 0xC00
+        func put(_ value: UInt16, at offset: Int) {
+            bytes[offset] = UInt8(truncatingIfNeeded: value)
+            bytes[offset + 1] = UInt8(truncatingIfNeeded: value >> 8)
+        }
+        put(2, at: table)              // NumberOfDescriptors
+        put(0x44, at: table + 2)       // SizeOfMip
+        put(1, at: table + 4)          // block 0: PMC and CPU soft straps
+        put(0x14, at: table + 6)
+        put(0x28, at: table + 8)
+        put(0, at: table + 10)
+        put(0, at: table + 12)         // block 1: CSE DbC configuration
+        put(0x3C, at: table + 14)
+        put(8, at: table + 16)
+        put(0, at: table + 18)
+        // The DbC block's second word: the CSME 12 dump's own, USB3 ports
+        // 2, 5 and 6 enabled and nothing else.
+        put(0x0002, at: table + 0x3C)
+        put(0x0002, at: table + 0x3E)
+        put(0x6400, at: table + 0x40)
+        put(0x0000, at: table + 0x42)
+
+        let read = try info(bytes)
+        // The builder's default map words read as Alder Point; the table is
+        // the one Cannon Point introduced, and the same in every generation
+        // that carries it.
+        XCTAssertEqual(read.generation, .alderPoint)
+        let mip = try XCTUnwrap(read.mip)
+        XCTAssertEqual(mip.base, UInt64(table))
+        XCTAssertEqual(mip.count, 2)
+        XCTAssertEqual(mip.size, 0x44)
+        XCTAssertEqual(mip.blocks.map(\.type), [1, 0])
+        XCTAssertEqual(mip.blocks.map(\.length), [0x28, 8])
+        XCTAssertEqual(mip.blocks[0].words.count, 10)
+
+        let dbc = try XCTUnwrap(mip.dbc)
+        XCTAssertEqual(dbc.base, UInt64(table + 0x3C))
+        XCTAssertEqual(dbc.words, [0x0002_0002, 0x0000_6400])
+        func value(_ name: String) -> UInt32? {
+            dbc.fields.first { $0.field.name.contains(name) }?.value
+        }
+        XCTAssertEqual(value("USB2_DbC_port_enable"), 0)
+        XCTAssertEqual(value("USB3_DbC_port_enable"), 0x64)
+        XCTAssertEqual(value("Early_USB_DbC_ME_Boot_Stall_Enable"), 0)
+    }
+
+    /// The MIP area is erased on Meteor Lake and later, where the map word's
+    /// high byte means the SoC soft straps: the erased words are no table.
+    func testAMeteorLakeDescriptorCarriesNoMIPTable() throws {
+        let read = try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)], map2: 0x0003_01C0))
+        XCTAssertEqual(read.generation, .meteorLake)
+        XCTAssertNil(read.mip)
+    }
+
     /// From Meteor Lake the descriptor no longer carries the CPU straps: they
     /// moved into the FITC partition's MIP table (what the ME analyzer reads),
     /// and the map-word bits that name a Tiger Point message mean the SoC soft
