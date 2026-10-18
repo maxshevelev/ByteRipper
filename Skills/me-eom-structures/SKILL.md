@@ -151,6 +151,23 @@ python3 Skills/me-eom-structures/scripts/fit_map.py <fit-14.0.exe> \
     Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME14.swift
 ```
 
+ME 12's are `cnp_lp_rvp` and `cnp_h_rvp` (the strap include the CNP layout
+names; the older tool calls its strap files `*_rvp`, not `*_straps`). Its
+volumes carry **no `FileTable.dat`** — the names live in the MFS home
+directory — so the engine walks that tree for the paths when the table is
+absent (`MEFirmwareAnalyzer`). The two maps have 9 and 15 files, and the CSME
+12 dump at hand reads 11 of them, among them the EOM records, the policy file
+and `bup/si_features`.
+
+```bash
+python3 Skills/me-eom-structures/scripts/fit_map.py <fit-12.exe> \
+    --straps cnp_lp_rvp --generation 12 --tool 12.0 > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME12.swift
+python3 Skills/me-eom-structures/scripts/fit_map.py <fit-12.exe> \
+    --straps cnp_h_rvp --generation 12 --tool 12.0 --variable csme12Desktop > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/MEConfigurationMap+CSME12Desktop.swift
+```
+
 **A generation has two maps, one for each half of it** — the mobile families
 (`_lp`, `_p`) and the desktop ones (`_h`, `_s`) lay a few settings out
 differently, so both are emitted, the mobile one under `csme<generation>` and

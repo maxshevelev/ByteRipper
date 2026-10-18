@@ -133,6 +133,12 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   what the build wrote; the Boot Guard profile proper on this generation is
   still the record `bootGuardProfile` reads, and the array's individual profile
   bits appear among the readings. Ours, as the rest of the UEP field.
+  Revision 56 fills another field on CSME 12: `configuration` is read through
+  Flash Image Tool 12's CNP maps (`MEConfigurationMap.csme12` and
+  `.csme12Desktop`, emitted by `fit_map.py --generation 12`). That generation's
+  volumes carry no `FileTable.dat`, so the engine resolves the map's
+  `/home/...` paths by walking the MFS home directory instead. Ours, as the
+  rest of `configuration`.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct

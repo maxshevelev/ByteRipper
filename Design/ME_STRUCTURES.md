@@ -472,6 +472,18 @@ documentation read where the row is. TGL LP gives **21 files and 60 settings**;
 two of the four TGL layouts (`tgp_lp_a1`, `tgp_lp_c0`) agree on every binding
 they share, and the H ones are another SKU's, so the LP pair is read as one map.
 
+**ME 12 is the oldest generation with a map of its own.** FIT 12's CNP
+documents give `cnp_lp_rvp` and `cnp_h_rvp`: 9 files and 21 settings for the
+mobile half, 15 and 39 for the desktop one (the H documents add AMT, MCTP and
+manageability settings), emitted as `MEConfigurationMap+CSME12` and
+`…+CSME12Desktop` by `fit_map.py --generation 12`. Its volumes carry no
+`FileTable.dat`, so the engine walks the MFS **home directory** for the paths
+when the table is absent (`MEFirmwareAnalyzer`) — the part's own names, which
+are the map's `/home/...` paths — and the CSME 12 dump at hand reads 11 files
+through it: the EOM records, the policy file, `bup/si_features`,
+`bup/bup_sku/hw_binding`, the HCI IDs, the live `manuf_lock` record appended
+to every map, and others its build wrote.
+
 **A place can be conditional.** The tool binds a setting to a file only under
 another setting's value (`buildConditional`), and `MctpEcAddress` on the LP
 family is the case: `eSpiEnabled = No` puts it in `/home/mctp/smt2_devices`
