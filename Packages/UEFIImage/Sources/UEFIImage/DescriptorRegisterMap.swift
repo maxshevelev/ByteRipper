@@ -5,8 +5,9 @@ import Foundation
 /// the VSCC/MIP map.
 ///
 /// No published document names these bits; the layouts here are Intel's own,
-/// taken from the harness documents Flash Image Tool carries
-/// (`Skills/me-eom-structures/scripts/descriptor18_map.py`). A register is
+/// taken from the documents Flash Image Tool carries — MFIT 18's serialized
+/// items (`descriptor18_map.py`) and the older builds' platform classes
+/// (`descriptor_fit_map.py`). A register is
 /// placed either absolutely in the descriptor (`FLMAP0/1/2` at 0x14, `FLDRPLCY`
 /// at 0x340, `FLUMAP1` at 0xEFC) or at a base the descriptor itself states —
 /// `FLCOMP`/`FLIL` at `FCBA << 4`, `FLMSTR` at `FMBA << 4`.
@@ -71,14 +72,28 @@ public struct DescriptorRegisterMap: Sendable {
     }
 
     /// The map for a generation, or nil where none has been emitted.
+    ///
+    /// The older maps are partial: a FIT build states only the registers its
+    /// platform documents carry, and some of those sit in a common document
+    /// the build does not embed (the CNP build's `FLMAP0`, Tiger Point's
+    /// masters 1, 2 and 4). What a map does not hold is not named, rather
+    /// than named from another generation's layout.
     public static func forGeneration(_ generation: DescriptorGeneration) -> DescriptorRegisterMap? {
         switch generation {
+        case .sunrisePoint: return .sunrisePoint
+        case .cannonPoint: return .cannonPoint
+        case .tigerPoint: return .tigerPoint
+        case .elkhartLake: return .elkhartLake
+        case .jasperLake: return .jasperLake
         case .meteorLake, .pantherLake, .wildcatLake, .novaLake: return .csme18
         default: return nil
         }
     }
 
-    public static var all: [DescriptorRegisterMap] { [.csme18] }
+    public static var all: [DescriptorRegisterMap] {
+        [.sunrisePoint, .cannonPoint, .elkhartLake, .jasperLake, .tigerPoint,
+         .csme18]
+    }
 }
 
 /// One register as an image holds it: where it is and its words.

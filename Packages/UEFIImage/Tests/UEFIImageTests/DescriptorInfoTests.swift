@@ -206,6 +206,40 @@ final class DescriptorInfoTests: XCTestCase {
             regions: [(.bios, 0x1000..<0x40_0000)])).registerReadings.isEmpty)
     }
 
+    /// The older generations' maps are the FIT builds' own platform documents,
+    /// and partial where those documents are. Tiger Point states the map
+    /// words, the component and two masters; Cannon Point only FLMAP1 and the
+    /// component; Sunrise Point FLMAP1 and FLMAP2. A generation no build
+    /// states answers nothing rather than another one's bits.
+    func testTheOlderGenerationsReadTheirFITBuildsRegisters() throws {
+        let tiger = try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)],
+            component: (chips: 1, flcomp: 0, flill: 0, flill1: 0),
+            map2: 0x0011_01A0))
+        XCTAssertEqual(tiger.generation, .tigerPoint)
+        XCTAssertEqual(tiger.registerReadings.map(\.register.name),
+                       ["FLMAP0", "FLMAP1", "FLMAP2", "FLCOMP"],
+                       "FLMSTR3/5 are absent: the test's master base is 0xFF")
+        XCTAssertEqual(tiger.registerReadings.last?.base, 0x30,
+                       "FLCOMP sits at FCBA << 4")
+        let map1 = try XCTUnwrap(tiger.registerReadings.first {
+            $0.register.name == "FLMAP1"
+        })
+        XCTAssertEqual(map1.base, 0x18)
+        let fields = Dictionary(uniqueKeysWithValues: map1.readings.map {
+            ($0.field.name, $0.value)
+        })
+        XCTAssertEqual(fields["Flmap1_PCH_Strap_Length"], 0x73)
+        XCTAssertEqual(fields["Flmap1_Flash_Master_Base_Address"], 0xFF)
+
+        XCTAssertEqual(DescriptorRegisterMap.forGeneration(.cannonPoint)?
+                        .registers.map(\.name), ["FLMAP1", "FLCOMP"],
+                       "the CNP build's FLMAP0 is in a document it does not carry")
+        XCTAssertEqual(DescriptorRegisterMap.forGeneration(.sunrisePoint)?
+                        .registers.map(\.name), ["FLMAP1", "FLMAP2"])
+        XCTAssertNil(DescriptorRegisterMap.forGeneration(.alderPoint))
+    }
+
     /// The OEM section is the fixed `0x100` bytes at `0xF00`, whatever a board
     /// wrote there — and all `0xFF` reads as an erased one, not as absent.
     func testTheOEMSectionIsTheFixedHundredBytes() throws {

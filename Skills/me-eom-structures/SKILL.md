@@ -431,6 +431,33 @@ Note that MFIT names FLMAP0's region-count bits (24–26) reserved: the panel's
 own "Regions" row still counts them, and the register table shows the tool's
 word.
 
+**The older builds state the same registers in their platform documents**, as
+`<Class name="FLMAP1">` bodies of `LayoutEntry` bitfields, one set per
+platform. `descriptor_fit_map.py --platform` selects the platform by the
+strap include its layout names and keeps only the fields every one of its
+documents states identically:
+
+```bash
+python3 Skills/me-eom-structures/scripts/descriptor_fit_map.py \
+    ~/Downloads/1/fit-15.0.exe --platform tgp_lp --generation tigerPoint \
+    --tool 15.0 > \
+    Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMap+TigerPoint.swift
+python3 Skills/me-eom-structures/scripts/descriptor_fit_map.py \
+    ~/Downloads/1/fit-12.exe --platform cnp --generation cannonPoint \
+    --tool 12.0 > \
+    Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMap+CannonPoint.swift
+```
+
+and the same for FIT 11's `spt` (Sunrise Point) and FIT 13's `ehl`/`jsl`.
+**The maps are partial where the builds are**: CNP states FLMAP1 and FLCOMP
+only, Tiger Point adds FLMAP0/1/2 and masters 3 and 5 — the rest are in a
+common document the build names but does not embed, so a register a map does
+not hold stays unnamed rather than taking another generation's bits. Labels
+and option words come from the configuration classes the register's `Action`s
+bind each field to. Checked against `ifdtool`: CSME 11's FLMAP1 `42100208`
+reads PSL 0x42 (66 words), FPSBA 0x100, 2 masters and FMBA 0x80; CSME 15's
+`46100208` reads PSL 70 and its FLMAP0 `00040003` states FCBA 0x30/FRBA 0x40.
+
 **The SPHY OEM configuration is a nvar of its own.** `phy_oem_cfg`
 (`/home/bup/phy_oem_cfg`, FileID 0x1001F200) carries the PHY tuning block in
 the FITC partition, and MFIT 18 lays it out as `SphyNvar`:
