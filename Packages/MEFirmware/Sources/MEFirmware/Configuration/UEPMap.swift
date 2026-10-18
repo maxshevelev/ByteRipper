@@ -13,9 +13,10 @@ import Foundation
 /// whose container is one. A map says whether it names later arrays:
 /// Flash Image Tool 15/16 place every setting in the first; CSME 18's
 /// rewritten database puts a few in the second (`PLAT_ID`, `DNX`,
-/// `RPMC_RB` and the validity bits beside them); and Flash Image Tool 12's
-/// CNP document fills four arrays of 0x80 bytes, a few settings (the SB
-/// SVNs, the TPM seed bits) in the later ones only.
+/// `RPMC_RB` and the validity bits beside them). Flash Image Tool 12's CNP
+/// document fills four arrays of 0x80 bytes and its 13 and 14 builds six
+/// (Ice Lake) and four (Comet Lake), a few settings — the SB SVNs, the TPM
+/// seed bits — in the later ones only.
 ///
 /// What an image's array holds is the state the build wrote. On the dumps at
 /// hand most settings read zero, and the profile's own bits are the ones that
@@ -101,11 +102,13 @@ public struct UEPMap: Sendable {
     /// The map for a generation's major number, or nil where the area is not
     /// one the engine reads. CSME 12 to 14 keep the Boot Guard profile in a
     /// record rather than these arrays, but the area still holds the other
-    /// FPF settings; 12's places are Flash Image Tool 12's own. 13, 14 and 17
-    /// have no map of their own yet.
+    /// FPF settings; each reads through its own FIT build's platform document
+    /// (CNP, Ice Lake, Comet Lake). 17 has no map of its own yet.
     public static func forME(major: Int) -> UEPMap? {
         switch major {
         case 12: return .csme12
+        case 13: return .csme13
+        case 14: return .csme14
         case 15: return .csme15
         case 16: return .csme16
         case 18: return .csme18
@@ -113,7 +116,9 @@ public struct UEPMap: Sendable {
         }
     }
 
-    public static var all: [UEPMap] { [.csme12, .csme15, .csme16, .csme18] }
+    public static var all: [UEPMap] {
+        [.csme12, .csme13, .csme14, .csme15, .csme16, .csme18]
+    }
 }
 
 /// One setting of the area as an image holds it.

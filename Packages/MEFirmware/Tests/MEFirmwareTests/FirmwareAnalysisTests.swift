@@ -110,7 +110,7 @@ final class FirmwareAnalysisModelTests: XCTestCase {
     }
 
     func testEngineModelRevisionBumpsWithAdditiveChanges() {
-        XCTAssertEqual(EngineModelRevision.current, 56)
+        XCTAssertEqual(EngineModelRevision.current, 57)
     }
 
     /// The additive contract reaches *inside* the model too, and a Swift

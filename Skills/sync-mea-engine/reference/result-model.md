@@ -127,12 +127,17 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   and the map now says which array each setting is in (`arraySize` 0x80), so
   they are read too. The 15/16 map keeps to the first array, as before.
   Revision 55 fills the field on **CSME 12** as well: Flash Image Tool 12's CNP
-  `Uep` document (`UEPMap.csme12`, emitted by `uep12_map.py`) places 42
+  `Uep` document (`UEPMap.csme12`, emitted by `uep_fit_map.py`) places 42
   settings in the container's four 0x80-byte arrays, eight of them only in the
   later arrays (the SB SVNs, the TPM seed bits, the IDLM SVN). The values are
   what the build wrote; the Boot Guard profile proper on this generation is
   still the record `bootGuardProfile` reads, and the array's individual profile
   bits appear among the readings. Ours, as the rest of the UEP field.
+  Revision 57 fills the same field on **CSME 13 and 14**, from Flash Image
+  Tool 13's Ice Lake and 14's Comet Lake `Uep` documents (`UEPMap.csme13`,
+  `.csme14`): 43 and 44 settings in six and four arrays. The profile bits read
+  what the four FIT builds of each generation set — 0, 3, 4 and 5 — and agree
+  with the record. Ours, as the rest.
   Revision 56 fills another field on CSME 12: `configuration` is read through
   Flash Image Tool 12's CNP maps (`MEConfigurationMap.csme12` and
   `.csme12Desktop`, emitted by `fit_map.py --generation 12`). That generation's

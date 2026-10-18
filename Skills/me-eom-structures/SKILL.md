@@ -266,32 +266,47 @@ array's word reads 0x001D0000 (`PLAT_ID` 0, `DNX` 1 — disabled, `RPMC_RB` 0,
 the three FVC states 1); and the header's CRC-16 (poly 0x1021, init 0xFFFF, no
 reflection) over reserved + four arrays reproduces the stored word exactly.
 
-**CSME 12's documents are FIT 12's class documents**, in the older shape:
-`<Class name="Uep">` with `LayoutEntry`s, `CfgOpt`s and `GetBitArrayValue`
-actions, one document per platform (`cnp_uep`, `cml_uep`, `icl_uep`, …):
+**CSME 12, 13 and 14's documents are the FIT class documents**, in the older
+shape: `<Class name="Uep">` with `LayoutEntry`s, `CfgOpt`s and
+`GetBitArrayValue` actions, one document per platform. A build carries many —
+Ice Lake, Comet Lake, CNP, TGL, EHL, JSL, LKF, EGS — and `uep_fit_map.py`
+takes the generation's own, told by the document's shape because FIT keeps
+the resource names to itself:
+
+| generation | document | arrays | marker |
+|---|---|---|---|
+| 12 | CNP | 4 | `fw_type`, no RPMC option |
+| 13 | Ice Lake | 6 | `PttRpmcSupported`, no ISIF setting |
+| 14 | Comet Lake | 4 | `PttRpmcSupported`, no ISIF setting |
 
 ```bash
-python3 Skills/me-eom-structures/scripts/uep12_map.py ~/Downloads/1/fit-12.exe > \
+python3 Skills/me-eom-structures/scripts/uep_fit_map.py ~/Downloads/1/fit-12.exe \
+    --generation 12 > \
     Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME12.swift
+python3 Skills/me-eom-structures/scripts/uep_fit_map.py ~/Downloads/1/fit-13.0.exe \
+    --generation 13 > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME13.swift
+python3 Skills/me-eom-structures/scripts/uep_fit_map.py ~/Downloads/1/fit-14.0.exe \
+    --generation 14 > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME14.swift
 ```
 
-The CNP document is the one to take: exactly four arrays, `fw_type` among its
-settings, and none of the RPMC options CML and later add. Its `Uep` class also
-states the container — signature, CRC-16, reserved, then the arrays — so the
-first array is again 8 bytes in (`arrayStart: 8`, `arraySize: 0x80`). A name
-the tool repeats in a later array is kept once, where it first appears; the
-256-bit key hash is left out because the reader takes at most 64 bits. The
-tool's words come from the configuration classes a source names
-(`$OEMandPlatformIDs/OemVendorId` → "OEM Vendor ID") and from its value
-classes (`SupportedFpfValues`: 0xC "No", 0xF "Yes"); a bare bit takes the
-document's own `<!--NAME-->` comment.
+The `Uep` class also states the container — signature, CRC-16, reserved, then
+the arrays — so the first array is again 8 bytes in (`arrayStart: 8`,
+`arraySize: 0x80`). A name the tool repeats in a later array is kept once,
+where it first appears; the 256-bit key hash is left out because the reader
+takes at most 64 bits. The tool's words come from the configuration classes a
+source names (`$OEMandPlatformIDs/OemVendorId` → "OEM Vendor ID") and from its
+value classes (`SupportedFpfValues`: 0xC "No", 0xF "Yes"); a bare bit takes
+the document's own `<!--NAME-->` comment.
 
-12.0 yields 42 settings: 34 in the first array and eight only the later ones
-hold (`SB_ACM_SVN`, `SB_KM_SVN`, `SB_BSMM_SVN`, the TPM seed bits,
-`IDLM_M_SVN`). The CSME 12 dump at hand (12.0.3.1091, Consumer H) confirms
-the layout: the container's CRC-16 covers +6…+0x208 (stored 0xE216) — header
-and four arrays — and array 0's word at +0x40 reads 0x0058E080, `FW_TYPE` 3
-with its valid bit set, the tool's own default.
+12.0 yields 42 settings (34 in the first array, 8 only later), 13.0 43 (42 +
+1) and 14.0 44 (36 + 8). The dumps at hand confirm each: the container's
+CRC-16 covers header and arrays — +6…+0x208 on CSME 12, +6…+0x302 on CSME 13
+(six arrays) and +6…+0x202 on CSME 14 — `FW_TYPE` reads 3 with its valid bit,
+and on the four Boot Guard builds of 13 and of 14 the profile bits at array 0
++0x5C (13) and +0x44 (14) read 0, 0b0111_1000, 0b0110_1001 and 0b0111_1001:
+profiles 0, 3, 4 and 5, exactly what each build's record says.
 
 **The CPU strap message has its own layout and its own place.** CSME 18 does
 not keep it in the descriptor's MIP area; it is in the FITC partition's MIP

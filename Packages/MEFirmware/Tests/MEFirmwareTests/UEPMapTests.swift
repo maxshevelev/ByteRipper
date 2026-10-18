@@ -25,10 +25,12 @@ final class UEPMapTests: XCTestCase {
         let fit = try XCTUnwrap(UEPMap.forME(major: 15))
         XCTAssertGreaterThan(fit.settings.count, 50)
         XCTAssertNil(fit.settings.first?.label)
-        // CSME 14 has no map of its own; 12 has, since Flash Image Tool 12
-        // lays its FPF settings out (the profile itself is still a record).
-        XCTAssertNil(UEPMap.forME(major: 14))
+        // 12, 13 and 14 have maps too — each FIT build's own platform
+        // document — although the profile itself is still a record there.
         XCTAssertNotNil(UEPMap.forME(major: 12))
+        XCTAssertNotNil(UEPMap.forME(major: 13))
+        XCTAssertNotNil(UEPMap.forME(major: 14))
+        XCTAssertNil(UEPMap.forME(major: 17))
     }
 
     /// CSME 18's map is the tool's rewritten `UEPs_Data`, read from the array
@@ -111,6 +113,53 @@ final class UEPMapTests: XCTestCase {
         XCTAssertEqual(readings.first { $0.name == "fw_type" }?.value, 3)
         XCTAssertEqual(readings.first { $0.name == "fw_type_v" }?.value, 1)
         XCTAssertEqual(readings.first { $0.name == "OemVendorId" }?.value, 0)
+    }
+
+    /// CSME 13 and 14's maps are their FIT builds' Ice Lake and Comet Lake
+    /// `Uep` documents, with the profile bits where the four builds of each
+    /// generation put profiles 0, 3, 4 and 5.
+    func testTheCSME13And14MapsAreTheirPlatformsDocuments() throws {
+        let thirteen = try XCTUnwrap(UEPMap.forME(major: 13))
+        XCTAssertEqual(thirteen.settings.count, 43)
+        XCTAssertEqual(thirteen.arrayStart, 8, "signature + CRC-16 + reserved")
+        XCTAssertEqual(thirteen.arraySize, 0x80)
+        let verified13 = try XCTUnwrap(thirteen.settings.first { $0.name == "VerifiedBoot" })
+        XCTAssertEqual(verified13.placement, .init(array: 0, offset: 0x5C, bit: 5, count: 1))
+        XCTAssertEqual(verified13.section, "BootGuardProfileSettings")
+        XCTAssertEqual(verified13.options, [0: "false", 1: "true"])
+        XCTAssertEqual(thirteen.settings.first { $0.name == "fw_type" }?.placement,
+                       .init(array: 0, offset: 0x58, bit: 19, count: 3))
+
+        let fourteen = try XCTUnwrap(UEPMap.forME(major: 14))
+        XCTAssertEqual(fourteen.settings.count, 44)
+        let verified14 = try XCTUnwrap(fourteen.settings.first { $0.name == "VerifiedBoot" })
+        XCTAssertEqual(verified14.placement, .init(array: 0, offset: 0x44, bit: 5, count: 1))
+        XCTAssertEqual(fourteen.settings.first { $0.name == "fw_type" }?.placement,
+                       .init(array: 0, offset: 0x40, bit: 19, count: 3))
+    }
+
+    /// The four FIT builds of CSME 13's dump differ exactly where the tool
+    /// says the profile lives: array 0 +0x5C reads 0x40, 0x78, 0x69 and 0x79
+    /// — profiles 0, 3, 4 and 5 in the bits the map names.
+    func testTheCSME13ProfileBitsReadTheBuilds() throws {
+        let map = try XCTUnwrap(UEPMap.forME(major: 13))
+        func readings(_ byte: UInt8) -> [String: Int] {
+            var area = Data("$UEP".utf8)
+            area.append(Data(count: 4))                   // CRC-16 + reserved
+            area.append(Data(count: 6 * 0x80))            // six arrays
+            area[area.startIndex + map.arrayStart + 0x5C] = byte
+            let list = UEPReader.readings(in: area, map: map) ?? []
+            return Dictionary(uniqueKeysWithValues: list.map { ($0.name, $0.value) })
+        }
+        XCTAssertEqual(readings(0x40)["VerifiedBoot"], 0)
+        XCTAssertEqual(readings(0x40)["MeasuredBoot"], 0)
+        XCTAssertEqual(readings(0x78)["VerifiedBoot"], 1)
+        XCTAssertEqual(readings(0x78)["MeasuredBoot"], 1)
+        XCTAssertEqual(readings(0x69)["VerifiedBoot"], 1)
+        XCTAssertEqual(readings(0x69)["MeasuredBoot"], 0)
+        XCTAssertEqual(readings(0x79)["VerifiedBoot"], 1)
+        XCTAssertEqual(readings(0x79)["MeasuredBoot"], 1)
+        XCTAssertEqual(readings(0x79)["ProtectBiosEnvironment"], 1)
     }
 
     /// The CSME 18 arrays start after the tool's 8-byte header: the profile's
