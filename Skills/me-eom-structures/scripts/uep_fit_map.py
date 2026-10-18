@@ -1,6 +1,6 @@
-"""Emit CSME 12's FPF/UEP layout from Flash Image Tool 12's class documents.
+"""Emit CSME 12, 13 or 14's FPF/UEP layout from a FIT build's class documents.
 
-FIT 12 states the area as a `Uep` class of `LayoutEntry`s, `CfgOpt`s and
+A FIT build states the area as a `Uep` class of `LayoutEntry`s, `CfgOpt`s and
 `GetBitArrayValue` actions:
 
     <Class name="Uep">
@@ -20,12 +20,23 @@ FIT 12 states the area as a `Uep` class of `LayoutEntry`s, `CfgOpt`s and
               params="{'offset':'0x3c','startBit':0,'bitCount':16}"/>
 
 The container is the class's own eight-byte header — signature, CRC-16,
-reserved — followed by arrays of 0x80 bytes; the CSME 12 map has four of
-them. The CNP document is the one with exactly those four arrays, `fw_type`
-among its settings and none of the RPMC options CML and later add. Its
-placement of `fw_type` is confirmed by the CSME 12 dump at hand: the
-container's CRC-16 covers header and arrays (+6…+0x208) and the word at
-array 0 +0x40 reads 3 with its valid bit set, the tool's own default.
+reserved — followed by arrays of 0x80 bytes. One build carries a `Uep`
+document per platform, and the generator takes the one for the generation
+asked for, told by its shape alone (FIT keeps the resource names to itself):
+
+- CSME 12, the CNP document: four arrays, `fw_type`, and none of the RPMC
+  options CML and later add.
+- CSME 13, Ice Lake's: six arrays and `PttRpmcSupported`, without the ISIF
+  settings the embedded platforms have.
+- CSME 14, Comet Lake's: four arrays and `PttRpmcSupported`, the same way.
+
+The generation's own dumps confirm each. CSME 12's container CRC-16 covers
+header and four arrays (+6…+0x208) and array 0 +0x40 reads `FW_TYPE` 3 with
+its valid bit, the tool's default. CSME 13's covers six arrays (+6…+0x302)
+and CSME 14's four (+6…+0x202); on the three Boot Guard builds of each, the
+profile bits at array 0 +0x5C read 0 (profile 0), verified and measured
+(3), verified (4), and both (5) — exactly the profile the record says and the
+build's file name promises.
 
 Later arrays repeat several of the first's names at other offsets. A name is
 taken once, from the first array that holds it, so the readings carry no
@@ -38,8 +49,12 @@ that class's `CfgOpt` — its label, help and, for a `class:…` type, the value
 words the class defines (`SupportedFpfValues`' 0xC "No", 0xF "Yes"). A bare
 bit has the UEP document's own `<!--NAME-->` comment.
 
-    python3 uep12_map.py <fit-12.exe> > \\
+    python3 uep_fit_map.py <fit-12.exe> --generation 12 > \\
         Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME12.swift
+    python3 uep_fit_map.py <fit-13.0.exe> --generation 13 > \\
+        Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME13.swift
+    python3 uep_fit_map.py <fit-14.0.exe> --generation 14 > \\
+        Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME14.swift
 
 Stdlib only, read-only, no network; read the diff, don't paste blind.
 """
@@ -51,9 +66,22 @@ import re
 import sys
 import zlib
 
-GENERATION = "12"
 ARRAY_SIZE = 0x80
 MAX_BITS = 64
+
+# The `Uep` document each generation's map is taken from, as the shape that
+# tells it apart without the resource names FIT keeps to itself: the arrays
+# the document writes, the options its platform has and the ones it has not.
+SELECTORS = {
+    "12": {"platform": "cnp", "arrays": {0, 1, 2, 3},
+           "has": ("fw_type",), "lacks": ("PttRpmc", "RpmcConfiguration")},
+    "13": {"platform": "icl", "arrays": {0, 1, 2, 3, 4, 5},
+           "has": ("fw_type", "PttRpmcSupported"),
+           "lacks": ("IsifSubPartitionData",)},
+    "14": {"platform": "cml", "arrays": {0, 1, 2, 3},
+           "has": ("fw_type", "PttRpmcSupported"),
+           "lacks": ("IsifSubPartitionData",)},
+}
 
 TAG = re.compile(r'<([A-Za-z_][\w:.-]*)([^>]*?)/?>')
 ATTR = re.compile(r'([A-Za-z_][\w:.-]*)="([^"]*)"')
@@ -174,26 +202,39 @@ def settings_words(documents_found):
     return words
 
 
-def uep_body(documents_found):
-    """The CNP `Uep` class: four arrays, `fw_type`, no RPMC options."""
+def uep_body(documents_found, generation):
+    """The `Uep` class of the generation's own platform, by its shape."""
+    rule = SELECTORS[generation]
     chosen = []
     for text in documents_found:
         for name, body in classes(text):
             if name != "Uep":
                 continue
+            # The arrays the document builds (`InitBlob`), which is the
+            # container's extent: it may initialize a last array no setting is
+            # placed in (CSME 13's does). A document without the initialization
+            # is told by the arrays its settings target.
             arrays = set()
             for action in elements(body, "Action"):
-                if action.get("name") != "GetBitArrayValue":
+                if action.get("name") != "InitBlob":
                     continue
                 target = re.search(r"UepBitsArray(\d+)",
                                    action.get("target", ""))
                 if target:
                     arrays.add(int(target.group(1)))
-            rpMc = "PttRpmc" in body or "RpmcConfiguration" in body
-            if arrays == {0, 1, 2, 3} and "fw_type" in body and not rpMc:
-                chosen.append(body)
+            if not arrays:
+                arrays = {int(x) for x in re.findall(
+                    r'target="UepBitsArray(\d+)"', body)}
+            if arrays != rule["arrays"]:
+                continue
+            if any(token not in body for token in rule["has"]):
+                continue
+            if any(token in body for token in rule["lacks"]):
+                continue
+            chosen.append(body)
     if len(chosen) != 1:
-        raise SystemExit("expected one CNP Uep class, found %d" % len(chosen))
+        raise SystemExit("expected one %s Uep class, found %d"
+                         % (rule["platform"], len(chosen)))
     return chosen[0]
 
 
@@ -284,16 +325,20 @@ def swift_literal(text):
     return '"%s"' % escaped
 
 
-def swift(tool, entries):
+def swift(generation, platform, tool, entries):
+    rule = SELECTORS[generation]
+    count = len(rule["arrays"])
     lines = [
         "// The FPF/UEP settings of CSME %s, as %s lays them out — emitted by"
-        % (GENERATION, tool),
-        "// `Skills/me-eom-structures/scripts/uep12_map.py` from the tool's own",
-        "// `Uep` and configuration class documents. Names, labels, sections,",
-        "// option words and places are the tool's; nothing here is read out of a",
-        "// dump.",
+        % (generation, tool),
+        "// `Skills/me-eom-structures/scripts/uep_fit_map.py` from the tool's own",
+        "// `Uep` and configuration class documents, the %s one. Names, labels,"
+        % platform,
+        "// sections, option words and places are the tool's; nothing here is read",
+        "// out of a dump.",
         "//",
-        "// A setting's place is an array and an offset into it, in the four 0x80-",
+        "// A setting's place is an array and an offset into it, in the %d 0x80-"
+        % count,
         "// byte arrays that follow the container's 8-byte `$UEP` header",
         "// (signature, CRC-16, reserved). A name the tool places in several arrays",
         "// is kept once, where it first appears.",
@@ -305,8 +350,9 @@ def swift(tool, entries):
         "",
         "extension UEPMap {",
         "    /// The FPF settings, as the tool lays them out.",
-        "    public static let csme%s = UEPMap(" % GENERATION,
-        "        name: %s," % swift_literal("CSME %s (%s)" % (GENERATION, tool)),
+        "    public static let csme%s = UEPMap(" % generation,
+        "        name: %s," % swift_literal("CSME %s (%s, %s)"
+                                            % (generation, tool, platform)),
         "        settings: [",
     ]
     for entry in entries:
@@ -332,7 +378,20 @@ def swift(tool, entries):
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    argv = sys.argv[1:]
+    generation = "12"
+    if "--generation" in argv:
+        at = argv.index("--generation")
+        if at + 1 >= len(argv):
+            print("--generation needs a number", file=sys.stderr)
+            return 2
+        generation = argv[at + 1]
+        del argv[at:at + 2]
+    if generation not in SELECTORS:
+        print("no selector for generation %s (have %s)"
+              % (generation, ", ".join(sorted(SELECTORS))), file=sys.stderr)
+        return 2
+    args = [a for a in argv if not a.startswith("-")]
     if not args:
         print(__doc__)
         return 2
@@ -345,7 +404,7 @@ def main():
     if not documents_found:
         print("no XML documents found in this build", file=sys.stderr)
         return 1
-    body = uep_body(documents_found)
+    body = uep_body(documents_found, generation)
     values = value_classes(documents_found)
     words = settings_words(documents_found)
     entries, skipped, _ = settings(body, words, values)
@@ -361,7 +420,7 @@ def main():
              sum(1 for e in entries if e["label"]),
              sum(1 for e in entries if e["section"])),
           file=sys.stderr)
-    print(swift(tool, entries))
+    print(swift(generation, SELECTORS[generation]["platform"], tool, entries))
     return 0
 
 

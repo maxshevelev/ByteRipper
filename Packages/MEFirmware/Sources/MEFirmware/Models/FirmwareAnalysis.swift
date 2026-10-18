@@ -2778,7 +2778,7 @@ public enum EngineModelRevision {
     /// revision 49 read the first array alone.
     /// 55 does not grow the shape either: `uepSettings` is now filled on
     /// CSME 12 too, from Flash Image Tool 12's CNP `Uep` document
-    /// (`UEPMap.csme12`, emitted by `uep12_map.py`). The container is the
+    /// (`UEPMap.csme12`, emitted by `uep_fit_map.py`). The container is the
     /// tool's 8-byte header and four 0x80-byte arrays; the Boot Guard profile
     /// proper is still the record this generation keeps, and the array's bits
     /// are read alongside it. Ours; upstream reads none of the UEP bits.
@@ -2787,5 +2787,10 @@ public enum EngineModelRevision {
     /// `.csme12Desktop` — and the engine resolves their paths from the MFS
     /// home directory on images that carry no `FileTable.dat`, which is every
     /// volume of that generation. Ours, as the rest of the field.
-    public static let current = 56
+    /// 57 does not grow the shape: `uepSettings` is now filled on CSME 13 and
+    /// 14 as well, from Flash Image Tool 13's Ice Lake and 14's Comet Lake
+    /// `Uep` documents (`UEPMap.csme13`, `.csme14`). The profile bits there
+    /// read what the four FIT builds of each generation set (0, 3, 4, 5) and
+    /// agree with the record `bootGuardProfile` reads. Ours, as the rest.
+    public static let current = 57
 }
