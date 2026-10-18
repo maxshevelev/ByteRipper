@@ -449,14 +449,20 @@ python3 Skills/me-eom-structures/scripts/descriptor_fit_map.py \
 ```
 
 and the same for FIT 11's `spt` (Sunrise Point) and FIT 13's `ehl`/`jsl`.
-**The maps are partial where the builds are**: CNP states FLMAP1 and FLCOMP
-only, Tiger Point adds FLMAP0/1/2 and masters 3 and 5 — the rest are in a
-common document the build names but does not embed, so a register a map does
-not hold stays unnamed rather than taking another generation's bits. Labels
-and option words come from the configuration classes the register's `Action`s
-bind each field to. Checked against `ifdtool`: CSME 11's FLMAP1 `42100208`
-reads PSL 0x42 (66 words), FPSBA 0x100, 2 masters and FMBA 0x80; CSME 15's
-`46100208` reads PSL 70 and its FLMAP0 `00040003` states FCBA 0x30/FRBA 0x40.
+A generation's documents can be spread over several builds, so several
+executables and several platform tokens may be named —
+`--platform cnp_lp_rvp,cnp_h_rvp` takes both halves, and FIT 12–15 together
+state all four Cannon Point registers (the CNP build FLMAP1 and FLCOMP, FIT
+13's CNP documents FLMAP0, FIT 14's FLMAP2).
+**The maps are partial where the builds are**: masters 1, 2 and 4 and the
+region registers are in a common document the builds name but do not embed,
+so a register a map does not hold stays unnamed rather than taking another
+generation's bits. Labels and option words come from the configuration
+classes the register's `Action`s bind each field to. Checked against `ifdtool`:
+CSME 11's FLMAP1 `42100208` reads PSL 0x42 (66 words), FPSBA 0x100, 2 masters
+and FMBA 0x80; CSME 12's FLMAP0 `00040003` states FCBA 0x30/FRBA 0x40 and its
+FLMAP2 `00340330` the 3-word section at 0x30; CSME 15's `46100208` reads PSL
+70 and FLMAP0 `00040003` states FCBA 0x30/FRBA 0x40.
 
 **The SPHY OEM configuration is a nvar of its own.** `phy_oem_cfg`
 (`/home/bup/phy_oem_cfg`, FileID 0x1001F200) carries the PHY tuning block in

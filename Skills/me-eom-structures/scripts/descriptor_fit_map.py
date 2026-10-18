@@ -24,9 +24,13 @@ the configuration classes the class's `Action`s bind each field to
 (`$HostCpuBiosMasterAccess/HostCpuReadAccess` → "BIOS Region Write Access"),
 as they do for the UEP map.
 
-    python3 descriptor_fit_map.py <fit-15.0.exe> --platform tgp_lp \\
-        --generation tigerPoint --tool 15.0 > \\
+    python3 descriptor_fit_map.py <fit-15.0.exe> [<fit-14.0.exe> …] \\
+        --platform tgp_lp --generation tigerPoint --tool 15.0 > \\
         Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMap+TigerPoint.swift
+
+`--platform` takes a comma-separated list of strap tokens (a generation's two
+halves are two documents), and several executables may be named: one
+generation's documents are spread over its builds.
 
 Stdlib only, read-only, no network.
 """
@@ -103,11 +107,16 @@ def includes(text):
     return re.findall(r'<Include href=":/res/xml/([^"]+)"', text)
 
 
-def layout_documents(texts, platform):
+def layout_documents(texts, platforms):
+    """The documents of the platform(s) named, by the strap includes they
+    state. A comma-separated list takes several (`cnp_lp_rvp,cnp_h_rvp`):
+    a generation's two halves are two layout documents, and its registers may
+    be spread over them."""
+    tokens = [token.strip() for token in platforms.split(",") if token.strip()]
     chosen = [t for t in texts if "<FtoolLayout" in t
-              and platform in " ".join(includes(t))]
+              and any(token in " ".join(includes(t)) for token in tokens)]
     if not chosen:
-        raise SystemExit("no layout document for platform %r" % platform)
+        raise SystemExit("no layout document for platform(s) %r" % platforms)
     return chosen
 
 
@@ -229,9 +238,16 @@ def main():
     if not platform or not generation or not args:
         print(__doc__)
         return 2
-    tool = tool or os.path.splitext(os.path.basename(args[0]))[0]
-    blob = open(args[0], "rb").read()
-    texts = list(documents(blob))
+    paths = [a for a in args if not a.startswith("-")]
+    tool = tool or " + ".join(os.path.splitext(os.path.basename(p))[0]
+                              for p in paths)
+    # Several builds may be named: one platform's documents are spread over
+    # them (the CNP build at hand states FLMAP1 and FLCOMP, FIT 13's CNP
+    # documents FLMAP0, FIT 14's FLMAP2), and a field is kept only where every
+    # document that states its register states it the same way.
+    texts = []
+    for path in paths:
+        texts.extend(documents(open(path, "rb").read()))
     chosen = layout_documents(texts, platform)
     values = value_classes(texts)
     words = setting_words(texts)
