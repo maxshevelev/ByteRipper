@@ -1267,11 +1267,16 @@ final class AgentAnnotationTests: XCTestCase {
         XCTAssertEqual(cards.collection.item(at: IndexPath(item: 0, section: 0))?.view.frame.origin, first.origin)
 
         service.annotationTools.remove { $0.id == "a1" }
-        _ = await settle(AgentAnnotationCards.moveDuration + 0.3)
         XCTAssertEqual(cards.rows.map(\.id), ["a2"])
         XCTAssertEqual(cards.shownTexts(of: "a2").last?.hasPrefix("→"), false, "the relation went with it")
+        // At once, not when the move ends: the words are the model's, and an
+        // animation that is slow to finish — or never drawn — must not keep a
+        // removed card named.
         let shown = try XCTUnwrap(card("B", in: cards))
-        XCTAssertFalse(shown.texts.contains { $0.hasPrefix("→") }, "and the card on screen says so")
+        XCTAssertFalse(shown.texts.contains { $0.hasPrefix("→") }, "and the card on screen says so at once")
+        _ = await settle(AgentAnnotationCards.moveDuration + 0.3)
+        let settled = try XCTUnwrap(card("B", in: cards))
+        XCTAssertFalse(settled.texts.contains { $0.hasPrefix("→") }, "and still does once the move is over")
     }
 
     private func treeState(_ tools: ToolController) -> String {

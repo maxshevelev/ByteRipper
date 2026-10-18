@@ -124,11 +124,12 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
 
     /// Takes the cards at `gone` out, the others moving up to close the gaps;
     /// a card that named a removed one among its relations is said again
-    /// without it once they have.
+    /// without it at once, and takes its new height in the same move.
     private func remove(_ gone: [Int], leaving annotations: [AgentAnnotation], selected chosen: Set<String>) {
         let before = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         rows = annotations
         heights = [:]
+        resay(changedFrom: before)
         let paths = Set(gone.map { IndexPath(item: $0, section: 0) })
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Self.moveDuration
@@ -137,13 +138,7 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
                 layout.invalidateLayout()
                 collection.animator().deleteItems(at: paths)
             }, completionHandler: { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self, self.settled() else { return }
-                    let changed = self.rows.indices.filter { before[self.rows[$0].id] != self.rows[$0] }
-                    if !changed.isEmpty {
-                        self.collection.reloadItems(at: Set(changed.map { IndexPath(item: $0, section: 0) }))
-                    }
-                }
+                MainActor.assumeIsolated { self?.settled() }
             })
         }
         collection.selectionIndexPaths = Set(rows.indices.filter { chosen.contains(rows[$0].id) }
@@ -152,11 +147,12 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
     }
 
     /// Puts in the cards at `added`, the others moving aside to make room; a
-    /// card whose relations changed with them is said again once they have.
+    /// card whose relations changed with them is said again at once.
     private func insert(_ added: [Int], into annotations: [AgentAnnotation], selected chosen: Set<String>) {
         let before = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         rows = annotations
         heights = [:]
+        resay(changedFrom: before)
         let paths = Set(added.map { IndexPath(item: $0, section: 0) })
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Self.moveDuration
@@ -165,32 +161,22 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
                 layout.invalidateLayout()
                 collection.animator().insertItems(at: paths)
             }, completionHandler: { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self, self.settled() else { return }
-                    let changed = self.rows.indices.filter { index in
-                        before[self.rows[index].id].map { $0 != self.rows[index] } ?? false
-                    }
-                    if !changed.isEmpty {
-                        self.collection.reloadItems(at: Set(changed.map { IndexPath(item: $0, section: 0) }))
-                    }
-                }
+                MainActor.assumeIsolated { self?.settled() }
             })
         }
         collection.selectionIndexPaths = Set(rows.indices.filter { chosen.contains(rows[$0].id) }
             .map { IndexPath(item: $0, section: 0) })
     }
 
-    /// An animated update is done. False when the cards were said again
-    /// meanwhile — said once more now, every view with them — so the caller
-    /// has nothing left to say.
-    private func settled() -> Bool {
+    /// An animated update is done. When the cards were said again meanwhile,
+    /// they are said once more now, every view with them.
+    private func settled() {
         animating = max(0, animating - 1)
-        guard animating == 0, reloadWhenSettled else { return true }
+        guard animating == 0, reloadWhenSettled else { return }
         reloadWhenSettled = false
         let chosen = collection.selectionIndexPaths
         collection.reloadData()
         collection.selectionIndexPaths = chosen
-        return false
     }
 
     /// Selects the cards of `ids`, and nothing else, and scrolls to the first.
@@ -240,7 +226,13 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
     func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
         let item = collectionView.makeItem(withIdentifier: AnnotationCardItem.identifier, for: indexPath)
         guard let card = item as? AnnotationCardItem else { return item }
-        let annotation = rows[indexPath.item]
+        configure(card, with: rows[indexPath.item])
+        return card
+    }
+
+    /// Says `annotation` on `card`, and wires its controls to it.
+    private func configure(_ card: AnnotationCardItem, with annotation: AgentAnnotation) {
+        card.annotationID = annotation.id
         card.card.show(content(of: annotation))
         card.card.onDoubleClick = { [weak self] in self?.onShow(annotation.id) }
         card.card.onSite = { [weak self] in self?.onOpenSite(annotation) }
@@ -249,7 +241,21 @@ final class AgentAnnotationCards: NSObject, NSCollectionViewDataSource, NSCollec
         card.card.onEdit = { [weak self] in self?.onEdit(annotation) }
         card.card.onPress = { [weak self] event in self?.dragIfDragged(annotation.id, from: event) ?? false }
         card.card.onSelectClick = { [weak self] flags in self?.click(annotation.id, with: flags) }
-        return card
+    }
+
+    /// Says again, where they stand, the cards on screen whose annotation is
+    /// not what it was in `before` — a relation to a card just removed, or
+    /// to one just put back. Done at once rather than when the move ends: the
+    /// move is the animation's, the words are the model's, and a card must
+    /// not go on naming a removed one for as long as an animation takes —
+    /// or for ever, if the window is never drawn to finish it.
+    private func resay(changedFrom before: [String: AgentAnnotation]) {
+        let now = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        for case let card as AnnotationCardItem in collection.visibleItems() {
+            guard let id = card.annotationID, let annotation = now[id],
+                  let old = before[id], old != annotation else { continue }
+            configure(card, with: annotation)
+        }
     }
 
     func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt indexPaths: Set<IndexPath>) {
@@ -513,6 +519,9 @@ final class AnnotationCollectionView: NSCollectionView {
 final class AnnotationCardItem: NSCollectionViewItem {
     static let identifier = NSUserInterfaceItemIdentifier("AnnotationCard")
     let card = AnnotationCardView()
+    /// The annotation the card says, so an update can find the card again
+    /// whatever index it has at that moment.
+    var annotationID: String?
 
     override func loadView() {
         view = card
