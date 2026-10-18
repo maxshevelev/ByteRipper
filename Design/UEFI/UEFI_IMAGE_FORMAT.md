@@ -528,13 +528,16 @@ section now has a table of its own: the clock is word 20 there — code 2 on
 and GPR0 word 25 and 28. On the 115-word dump at hand (`LENV_CSME 16.bin`,
 Consumer H) 1084 of the table's 1201 fields read the tool's default, which is
 what says the document is that section's, and its clock code is 4 — 60 MHz.
-**Sunrise Point's sections are FIT 11's SPT documents**: 66, 88 and 139 words,
-with the older build's `PchStrap…` spelling and whole-word `dword` entries for
-the CPM soft straps and the protected range. The CSME 11 dump at hand
-(Corporate LP) states 66 words; its PCHSTRP0 `0x00100000` reads Deep Sx
-support set and every other bit clear, as ifdtool prints. A section of any
-length not in the tables is words and nothing more; a word a table names no
-field of is shown as its raw value rather than dropped.
+**Sunrise Point's sections are FIT 11's SPT documents**: 66, 88, 90 and 139
+words, with the older build's `PchStrap…` spelling and whole-word `dword`
+entries for the CPM soft straps and the protected range. A length both sets
+carry — 90 words — is chosen by the generation: Sunrise Point and Lewisburg
+read the SPT table, every other generation the shared one; an uncertain
+generation reads the shared one, as every generation did before. The CSME 11
+dump at hand (Corporate LP) states 66 words; its PCHSTRP0 `0x00100000` reads
+Deep Sx support set and every other bit clear, as ifdtool prints. A section of
+any length not in the tables is words and nothing more; a word a table names
+no field of is shown as its raw value rather than dropped.
 
 On the seven mobile dumps the clock and GPR0 (off on all of them) agree with
 ifdtool, and so do the two copies `ifdtool --gpr0-enable` was run on
@@ -559,6 +562,15 @@ whose words at 0x300 decode through FIT 12–15's `cnp_lp_rvp.xml` table:
 Fast wakeup and PEG_DEF set, SMT enabled, all cores active, the rest at the
 tool's defaults. `CSME 12.BIN`'s three words read
 `0x00001000 0x00108002 0x08000210`.
+
+**The 3-word section has two layouts.** FIT 11's SPT documents name it
+`CpuStrapHtDisable`, `CpuStrapNumActiveCores`, `CpuStrapFlexRatio` and so on
+and give SMT three bits where the newer `CPU_Strap_…` table gives one, so the
+generation chooses: Sunrise Point and Lewisburg read SPT's, every other
+generation the shared one, and an uncertain generation the shared one.
+`CSME 11.BIN`'s three words at 0x300 state `CpuStrapCpuMaxFreqBoot` 1 (boot at
+P1) with the rest at the defaults — the fields the newer table had read as
+another layout's.
 
 **From Tiger Point on** the same map word means something else — `FLMAP2`
 bits 2–11 are an offset and bits 16–23 a length, which is how §2.5 tells those

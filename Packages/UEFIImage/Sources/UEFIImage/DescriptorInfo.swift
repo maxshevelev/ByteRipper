@@ -342,7 +342,8 @@ public extension DescriptorInfo {
             maskDigits: isVersion1 ? 2 : 3,
             biosAccess: biosAccess(at: masterBase, isVersion1: isVersion1, reader: reader),
             chips: chips(at: base, reader: reader),
-            straps: straps(at: base, map1: map1, generation: generation, reader: reader),
+            straps: straps(at: base, map1: map1, generation: generation,
+                           isGenerationCertain: isCertain, reader: reader),
             processorStraps: processorStraps(at: base, generation: generation,
                                              isGenerationCertain: isCertain,
                                              reader: reader),
@@ -480,7 +481,9 @@ public extension DescriptorInfo {
         isGenerationCertain: Bool, reader: ImageReader
     ) -> ProcessorStraps? {
         if generation.hasProcessorStrapSection {
-            return classicProcessorStraps(at: base, reader: reader)
+            return classicProcessorStraps(at: base, generation: generation,
+                                          isGenerationCertain: isGenerationCertain,
+                                          reader: reader)
         }
         guard generation.hasMIPProcessorStraps, isGenerationCertain,
               let map2 = reader.uint32(at: base + Descriptor.map2Offset)
@@ -505,7 +508,8 @@ public extension DescriptorInfo {
     /// long as its count — the fields Tiger Point stopped writing. Cut at the
     /// descriptor's end, as the PCH section is.
     private static func classicProcessorStraps(
-        at base: UInt64, reader: ImageReader
+        at base: UInt64, generation: DescriptorGeneration,
+        isGenerationCertain: Bool, reader: ImageReader
     ) -> ProcessorStraps? {
         guard let map2 = reader.uint32(at: base + Descriptor.map2Offset) else { return nil }
         let strapAt = map2 & 0xFF
@@ -520,7 +524,9 @@ public extension DescriptorInfo {
             words.append(word)
         }
         guard !words.isEmpty else { return nil }
-        let map = DescriptorStrapMap.forProcessorSection(words: words.count)
+        let map = DescriptorStrapMap.forProcessorSection(
+            words: words.count, generation: generation,
+            generationIsCertain: isGenerationCertain)
         return ProcessorStraps(base: section, words: words,
                                fields: map?.readings(in: words))
     }
@@ -529,7 +535,8 @@ public extension DescriptorInfo {
     /// the map's strap length says — cut at the descriptor's end, past which
     /// nothing is a strap however long an erased length claims to be.
     private static func straps(
-        at base: UInt64, map1: UInt32, generation: DescriptorGeneration, reader: ImageReader
+        at base: UInt64, map1: UInt32, generation: DescriptorGeneration,
+        isGenerationCertain: Bool, reader: ImageReader
     ) -> Straps? {
         let strapAt = map1 >> 16 & 0xFF
         guard strapAt > 0, strapAt <= Descriptor.maxBase else { return nil }
@@ -549,7 +556,9 @@ public extension DescriptorInfo {
         }
         // The chipset's layout of this length, where one is at hand: what
         // names the words and says which of them the two fields below are.
-        let map = DescriptorStrapMap.forSection(words: words.count)
+        let map = DescriptorStrapMap.forSection(
+            words: words.count, generation: generation,
+            generationIsCertain: isGenerationCertain)
         var straps = Straps(base: section, words: words, meDisable: meDisable,
                             fields: map?.readings(in: words))
         if let field = map?.espiClockField, field.word < words.count {

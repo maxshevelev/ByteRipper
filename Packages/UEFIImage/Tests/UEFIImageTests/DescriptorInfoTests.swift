@@ -511,6 +511,28 @@ final class DescriptorInfoTests: XCTestCase {
         }
     }
 
+    /// SPT's straps read through FIT 11's tables on a Sunrise Point board and
+    /// the shared ones elsewhere: 90 words is a PCH section in both sets, and
+    /// 3 words a processor section in both, without being the same section.
+    func testSPTsTablesAreReadOnItsOwnGeneration() throws {
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 66, generation: .sunrisePoint)?.name,
+                       DescriptorStrapMap.sptPch66.name)
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 90, generation: .sunrisePoint)?.name,
+                       DescriptorStrapMap.sptPch90.name)
+        XCTAssertEqual(DescriptorStrapMap.forSection(words: 90, generation: .cannonPoint)?.name,
+                       DescriptorStrapMap.pch90.name)
+        XCTAssertNil(DescriptorStrapMap.forSection(words: 69, generation: .sunrisePoint),
+                     "the shared 69-word table is not Sunrise Point's")
+
+        let sptCPU = try XCTUnwrap(DescriptorStrapMap.forProcessorSection(
+            words: 3, generation: .sunrisePoint))
+        XCTAssertEqual(sptCPU.name, DescriptorStrapMap.sptCpu3.name)
+        XCTAssertNotNil(sptCPU.fields.first { $0.name == "CpuStrapFlexRatio" })
+        let sharedCPU = try XCTUnwrap(DescriptorStrapMap.forProcessorSection(
+            words: 3, generation: .cannonPoint))
+        XCTAssertNotNil(sharedCPU.fields.first { $0.name == "CPU_Strap_FlexRatio" })
+    }
+
     /// No strap base, no section — the bytes at offset zero are not straps.
     func testNoStrapBaseMeansNoStraps() throws {
         XCTAssertNil(try info(TestImage.descriptor(regions: [(.bios, 0x1000..<0x40_0000)])).straps)

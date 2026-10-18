@@ -154,7 +154,8 @@ def tables(blob, tool):
             # named straps — FIT 11's 139-word table has 44, the rest reserved
             # words its group comments cover. Any other class has to look like
             # a table to be one.
-            named_section = match.group(1) in ("FPSBA", "CpuStrapsLayout")
+            named_section = match.group(1) in ("FPSBA", "FMSBA",
+                                               "CpuStrapsLayout")
             if len(named) < (10 if named_section else 50):
                 continue
             offsets = []
@@ -204,7 +205,8 @@ def tables(blob, tool):
                 words = max(max(field["offset"] for field in fields) // 4 + 1,
                             extent_words)
                 found.append({"kind": kind, "words": words, "fields": unique,
-                              "document": name, "tool": tool})
+                              "document": name, "tool": tool,
+                              "class": match.group(1)})
     return found
 
 
@@ -220,16 +222,26 @@ def agreed(matches):
     defaults.
     """
     preferred = matches[0][1]
-    defaults = {(f["name"], f["offset"], f["low"], f["high"]): f["default"]
-                for f in preferred["fields"]}
-    shared = None
+    # A field is kept where most documents state it identically — a document
+    # that states only part of one word (FIT 11's SPT common file names a
+    # single word-0 field where the platform files name six) does not erase
+    # the others.
+    counts = collections.Counter()
     for _, table in matches:
-        keys = {(f["name"], f["offset"], f["low"], f["high"]) for f in table["fields"]}
-        shared = keys if shared is None else shared & keys
-    fields = [{**field, "default": defaults.get(
-        (field["name"], field["offset"], field["low"], field["high"]), 0)}
-        for field in preferred["fields"]
-        if (field["name"], field["offset"], field["low"], field["high"]) in (shared or set())]
+        for key in {(f["name"], f["offset"], f["low"], f["high"])
+                    for f in table["fields"]}:
+            counts[key] += 1
+    needed = (len(matches) + 1) // 2
+    shared = {key for key, count in counts.items() if count >= needed}
+    fields = []
+    seen_keys = set()
+    for _, table in matches:
+        for field in table["fields"]:
+            key = (field["name"], field["offset"], field["low"], field["high"])
+            if key not in shared or key in seen_keys:
+                continue
+            seen_keys.add(key)
+            fields.append(field)
     # The first table's order, deduplicated: the same field can be stated by
     # two entries of one document.
     seen, unique = set(), []
@@ -241,14 +253,14 @@ def agreed(matches):
         unique.append(field)
     return {"kind": preferred["kind"], "words": preferred["words"],
             "fields": unique, "document": preferred["document"],
-            "tool": preferred["tool"]}
+            "tool": preferred["tool"], "class": preferred["class"]}
 
 
 def swift_literal(text):
     return '"%s"' % text.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def swift(kind, chosen):
+def swift(kind, chosen, prefix=None):
     """One file for the tools at hand: a table per length asked for."""
     lines = []
     label = {"PCH": "PCH", "CPU": "processor"}.get(kind, kind)
@@ -284,7 +296,8 @@ def swift(kind, chosen):
             table["tool"], table["document"])
         lines.append("    /// The %d-word section, as Flash Image Tool %s lays it out."
                      % (words, source))
-        lines.append("    public static let %s%d = DescriptorStrapMap(" % (kind.lower(), words))
+        lines.append("    public static let %s%d = DescriptorStrapMap("
+                     % (prefix or kind.lower(), words))
         lines.append("        name: %s," % swift_literal(
             table["document"] or "Flash Image Tool %s, %d words" % (table["tool"], words)))
         lines.append("        words: %d," % words)
@@ -305,6 +318,7 @@ def main():
         return 2
     args, words = option(args, "--words")
     args, kind = option(args, "--kind", "PCH")
+    args, prefix = option(args, "--prefix", None)
     kind = kind.upper()
     paths = [a for a in args if not a.startswith("-")]
     if not words or not paths:
@@ -338,6 +352,22 @@ def main():
         ordered = named + [t for t in matches if not t[1]["document"]]
         table = ordered[0][1]
         if kind == "CPU" and len(ordered) > 1:
+            # Documents can state a processor table in more than one class;
+            # the section's own class is the one most of them agree on
+            # (`CpuStrapsLayout` in the newer builds, `FMSBA` in FIT 11's
+            # SPT ones). A stray class of the same length is not merged in.
+            by_class = collections.defaultdict(list)
+            for item in ordered:
+                by_class[item[1]["class"]].append(item)
+            chosen_class = max(by_class, key=lambda name: (
+                len(by_class[name]),
+                sum(len(t["fields"]) for _, t in by_class[name])))
+            if len(by_class) > 1:
+                print("   classes of this length: %s; taking %s"
+                      % (", ".join(sorted(by_class)), chosen_class),
+                      file=sys.stderr)
+            ordered = by_class[chosen_class]
+            table = ordered[0][1]
             stated = len(table["fields"])
             table = agreed(ordered)
             print("   %d documents of this length; %d fields they agree on "
@@ -361,7 +391,7 @@ def main():
                 "%s word %d bits %d..%d" % (f["name"], f["offset"] // 4, f["low"], f["high"])
                 for f in found) or "—"), file=sys.stderr)
 
-    print(swift(kind, chosen))
+    print(swift(kind, chosen, prefix))
     return 0
 
 
