@@ -525,8 +525,13 @@ section now has a table of its own: the clock is word 20 there — code 2 on
 and GPR0 word 25 and 28. On the 115-word dump at hand (`LENV_CSME 16.bin`,
 Consumer H) 1084 of the table's 1201 fields read the tool's default, which is
 what says the document is that section's, and its clock code is 4 — 60 MHz.
-Seven lengths are covered; a section of any other length is words and nothing
-more.
+**Sunrise Point's sections are FIT 11's SPT documents**: 66, 88 and 139 words,
+with the older build's `PchStrap…` spelling and whole-word `dword` entries for
+the CPM soft straps and the protected range. The CSME 11 dump at hand
+(Corporate LP) states 66 words; its PCHSTRP0 `0x00100000` reads Deep Sx
+support set and every other bit clear, as ifdtool prints. A section of any
+length not in the tables is words and nothing more; a word a table names no
+field of is shown as its raw value rather than dropped.
 
 On the seven mobile dumps the clock and GPR0 (off on all of them) agree with
 ifdtool, and so do the two copies `ifdtool --gpr0-enable` was run on

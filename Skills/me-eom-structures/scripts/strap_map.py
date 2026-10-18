@@ -4,7 +4,9 @@ The Flash Image Tool executables carry the chipset's strap layout as their own
 resources — `<LayoutEntry name="PCH_Strap_SPI_ec_max_freq" type="bitfield32"
 value="0x4" offset="0x50" bitfield_high="5" bitfield_low="3"/>` — a name, the
 byte offset of the word the field sits in, the bits it takes, and the value the
-tool builds the strap with. That is the specification the panel has been
+tool builds the strap with. The older FIT 11 build writes the same straps with
+no underscore after the prefix more often (`PchStrapGlobalProtectedRangeDefault`),
+and both spellings are read. That is the specification the panel has been
 missing: the descriptor's strap section is a list of words, and until now only
 two of its fields could be named.
 
@@ -78,37 +80,131 @@ def documents(blob):
         yield text, (named.group(1) if named else None)
 
 
-ENTRY = re.compile(
-    r"<LayoutEntry name=\"((?:CPU|PCH|PMC|SA)_Strap_[^\"]+)\" type=\"(\w+)\" value=\"([^\"]*)\" "
-    r"offset=\"([^\"]*)\" bitfield_high=\"(\d+)\" bitfield_low=\"(\d+)\"")
+STRAP_NAME = re.compile(
+    r"^(?:(?:CPU|PCH|PMC|SA)_Strap_|(?:Pch|Cpu|Pmc|Sa)Strap)")
+ATTR = re.compile(r'([A-Za-z_][\w:.-]*)="([^"]*)"')
+
+
+def entries_of(body):
+    """The class's bitfields, whatever order it writes the attributes in —
+    FIT 11's SPT documents put `bitfield_low` before `bitfield_high` where the
+    newer ones do the reverse. The last item says whether the name is a strap
+    name: a reserved field of the same class is part of the section too, and
+    the caller gives it the class's own kind."""
+    out = []
+    for tag in ENTRY_TAG.finditer(body):
+        attributes = dict(ATTR.findall(tag.group(1)))
+        name = attributes.get("name", "")
+        try:
+            if "bitfield_high" in attributes:
+                high = int(attributes["bitfield_high"])
+                low = int(attributes["bitfield_low"])
+            elif attributes.get("type") == "dword" and "offset" in attributes:
+                # A whole strap word: the SPT documents keep a few — the CPM
+                # soft straps and the protected range — as one dword each.
+                high, low = 31, 0
+            else:
+                continue
+            offset = attributes.get("offset", "0")
+            offset = int(offset, 0) if offset.startswith("0x") else int(offset)
+            value = attributes.get("value", "0")
+            default = int(value, 16) if value.startswith("0x") else int(value or 0)
+        except (KeyError, ValueError):
+            continue
+        out.append((name, attributes.get("type", ""), attributes.get("value", ""),
+                    attributes.get("offset", "0"), high, low,
+                    bool(STRAP_NAME.match(name))))
+    return out
+
+
+def kind_of(name):
+    """The section a field belongs to, from either naming the tools use.
+
+    The newer builds write `PCH_Strap_…`, `CPU_Strap_…`; FIT 11's SPT
+    documents write `PchStrap…`, `CpuStrap…` with no underscore.
+    """
+    for kind in ("CPU", "PCH", "PMC", "SA"):
+        if name.startswith(kind + "_Strap_") or name.startswith(kind.title() + "Strap"):
+            return kind
+    return name.split("_")[0]
+
+
+CLASS = re.compile(r'<Class name="([^"]+)"[^>]*>(.*?)</Class>', re.S)
+ENTRY_TAG = re.compile(r"<LayoutEntry ([^>]*)/?>")
 
 
 def tables(blob, tool):
     """Every strap table in the executable: its entries and the section it spans.
 
-    A document holds one CPU, one PCH and one PMC table at once — the three
-    sections the descriptor keeps separately — so they are split by their name
-    prefix, and a table's length is what its own entries reach, in words.
+    A class holds one section's table — `FPSBA` the PCH section,
+    `CpuStrapsLayout` the processor one — and the entries are split by their
+    name prefix in any case. **A section's length is the class's own extent**,
+    from every bitfield it lays out and the word groups it comments
+    (`<!-- Group offset: 0x218 size: 0x4 -->`), not from the named strap fields
+    alone: FIT 11's SPT desktop class ends with five words no `PchStrap…` field
+    reaches, and the descriptor still states the section's full length.
     """
     found = []
     for text, name in documents(blob):
-        entries = ENTRY.findall(text)
-        if len(entries) < 50:
-            continue
-        by_kind = collections.defaultdict(list)
-        for entry_name, kind, default, offset, high, low in entries:
-            by_kind[entry_name.split("_")[0]].append({
-                "name": entry_name,
-                "type": kind,
-                "default": int(default, 16) if default.startswith("0x") else int(default or 0),
-                "offset": int(offset, 16) if offset.startswith("0x") else int(offset),
-                "high": int(high),
-                "low": int(low),
-            })
-        for kind, fields in by_kind.items():
-            words = max(field["offset"] for field in fields) // 4 + 1
-            found.append({"kind": kind, "words": words, "fields": fields,
-                          "document": name, "tool": tool})
+        for match in CLASS.finditer(text):
+            body = match.group(2)
+            entries = entries_of(body)
+            named = [entry for entry in entries if entry[6]]
+            # A section's own class is taken however few of its fields are
+            # named straps — FIT 11's 139-word table has 44, the rest reserved
+            # words its group comments cover. Any other class has to look like
+            # a table to be one.
+            named_section = match.group(1) in ("FPSBA", "CpuStrapsLayout")
+            if len(named) < (10 if named_section else 50):
+                continue
+            offsets = []
+            for tag in ENTRY_TAG.finditer(body):
+                attributes = dict(re.findall(
+                    r'([A-Za-z_][\w:.-]*)="([^"]*)"', tag.group(1)))
+                if "offset" in attributes and "bitfield_low" in attributes:
+                    try:
+                        offsets.append(int(attributes["offset"], 0))
+                    except ValueError:
+                        pass
+            groups = re.findall(
+                r"Group offset:\s*(0x[0-9a-fA-F]+)\s*size:\s*(0x[0-9a-fA-F]+)",
+                body)
+            extent = max((int(o, 0) + int(s, 0) for o, s in groups), default=0)
+            if offsets:
+                extent = max(extent, max(offsets) + 4)
+            extent_words = (extent + 3) // 4
+            # A class that names straps of one kind holds that section; its
+            # other bitfields — `reserved_0x0_…`, `csme_…`, `GBE…` — are words
+            # of the same section and are read with it.
+            kinds = {kind_of(entry[0]) for entry in named}
+            primary = kinds.pop() if len(kinds) == 1 else None
+            by_kind = collections.defaultdict(list)
+            for entry_name, kind, default, offset, high, low, is_named in entries:
+                section = kind_of(entry_name) if is_named else primary
+                if section is None:
+                    continue
+                by_kind[section].append({
+                    "name": entry_name,
+                    "type": kind,
+                    "default": int(default, 16) if default.startswith("0x") else int(default or 0),
+                    "offset": int(offset, 16) if offset.startswith("0x") else int(offset),
+                    "high": int(high),
+                    "low": int(low),
+                })
+            for kind, fields in by_kind.items():
+                # A document may state one name twice at different offsets (a
+                # twin the tables do not distinguish); the first place is kept,
+                # as the table's names are its identity.
+                seen_names, unique = set(), []
+                for field in fields:
+                    if field["name"] in seen_names:
+                        continue
+                    seen_names.add(field["name"])
+                    unique.append(field)
+                words = max(max(field["offset"] for field in fields) // 4 + 1,
+                            extent_words)
+                found.append({"kind": kind, "words": words, "fields": unique,
+                              "document": name, "tool": tool})
     return found
 
 

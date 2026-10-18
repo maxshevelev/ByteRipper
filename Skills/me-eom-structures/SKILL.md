@@ -510,6 +510,26 @@ The 114- and 115-word tables are the Alder Point S desktop layouts, which FIT
 section's is a dump of that length — on `LENV_CSME 16.bin` (115 words,
 Consumer H) 1084 of the table's 1201 fields read the tool's default, and its
 eSPI clock code is 4, 60 MHz.
+
+**FIT 11's SPT documents use their own spelling** — `PchStrap…` without the
+underscore, `bitfield_low` written before `bitfield_high`, and whole-word
+`dword` entries for the CPM soft straps and the protected range — and the
+script reads them too. Their section length comes from the class's own extent
+(every bitfield it lays out and its `Group offset` comments), not from the
+last named field: the 139-word desktop table ends with words no `PchStrap…`
+field reaches, and its document states no field at all for two of them. The
+panel shows such a word as its raw value rather than dropping it.
+
+```bash
+python3 Skills/me-eom-structures/scripts/strap_map.py ~/Downloads/1/fit-11.exe \
+    --words 66,88,139 > \
+    Packages/UEFIImage/Sources/UEFIImage/StrapMap+PCH11.swift
+```
+
+The CSME 11 dump at hand (Corporate LP) states 66 words, and its `PCHSTRP0`
+`0x00100000` reads Deep Sx support set and every other bit clear — the same
+word ifdtool prints.
+
 `--kind cpu` emits the processor strap section's tables into
 `StrapMap+CPU.swift` instead:
 
