@@ -52,6 +52,7 @@ public enum MEACurator {
         add(cpuStrapGroup(analysis, in: language))
         mipStrapGroups(analysis, in: language).forEach(add)
         add(sphyGroup(analysis, in: language))
+        add(gpioGroup(analysis, in: language))
 
         // Fact groups — everything else a dump carried, each only when present.
         add(chipsetInitGroup(analysis, in: language))
@@ -669,6 +670,40 @@ public enum MEACurator {
         return MEANode(
             path: [], title: L("SPHY OEM configuration", in: language),
             fields: [MEAField("Fields", "\(readings.count)")], children: rows)
+    }
+
+    /// The feature pins the image configures (ours): `/home/gpio/csme_pins`,
+    /// the file Flash Image Tool writes from its `MeFeaturePins` settings,
+    /// read through the tool's own value classes (`GPIOPinMap`). One row per
+    /// pin, named by what the pin is for — the usage — and where it is on the
+    /// board.
+    private static func gpioGroup(_ a: FirmwareAnalysis,
+                                  in language: AppLanguage) -> MEANode? {
+        guard let readings = a.gpioPins, !readings.pins.isEmpty else { return nil }
+        let rows = readings.pins.map { pin -> MEANode in
+            var fields: [MEAField] = []
+            append(&fields, L("Pin", in: language), pin.pinName)
+            append(&fields, L("Usage", in: language),
+                   pin.usage ?? "\(pin.usageID)")
+            if let feature = pin.feature {
+                append(&fields, L("Feature", in: language), feature)
+            }
+            append(&fields, L("Ownership", in: language), pin.ownership)
+            append(&fields, L("Pad Mode", in: language), pin.padMode)
+            return MEANode(path: [],
+                           title: pin.usage ?? "\(pin.usageID)",
+                           subtitle: pin.pinName,
+                           fields: fields)
+        }
+        let source = readings.fromImage
+            ? L("OEM Configuration partition", in: language)
+            : L("ME file system", in: language)
+        return MEANode(
+            path: [], title: L("GPIO Pins", in: language),
+            subtitle: "\(readings.pins.count)",
+            fields: [MEAField(L("File", in: language), readings.path),
+                     MEAField(L("Read from", in: language), source)],
+            children: rows)
     }
 
     private static func chipsetInitGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {

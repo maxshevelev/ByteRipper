@@ -568,6 +568,48 @@ every map was before the choice existed. Measured on the dumps at hand:
 `CSME 14.bin` 69, `CSME 13.BIN` 74, `CSME 15.bin` 70, `1.bin` 101,
 `CSME 12.BIN` 90.
 
+### The GPIO feature pins and their file
+
+`/home/gpio/csme_pins` is the file Flash Image Tool writes from its
+`MeFeaturePins` settings — the pins the CSME firmware may drive for a feature
+(touch reset and interrupt, SMLink, CPU detection, fingerprint and the rest).
+Neither the file nor its record layout is in any published specification; the
+layout below was settled on the dumps at hand and is anchored on values the
+tool itself states.
+
+**The shape is the generation's.** CSME 11 writes **20-byte records of five
+little-endian dwords** — usage, group, pad, ownership, pad mode, the fields its
+`GpioCsmeFeature` class declares. On the Lenovo CSME 11 image (11.8.92.4222)
+all eight records match FIT 11's own defaults for their usage, which is what
+fixes the field order: `NFC_RST` at GPP_E_4, `NFC_IRQ` at GPP_E_12, `FWUPDATE`
+at GPP_B_15 — the records `(0, 4, 4, 0, 4)`, `(1, 4, 12, 0, 4)` and
+`(8, 1, 15, 0, 4)` read as usage, group, pad, ownership and pad mode
+(ownership 0 = `HOST_MODE`, pad mode 4 = `DEFAULT_MODE`). CSME 12 and
+later write **12-byte records of packed bytes** — feature id, group, pad,
+reserved, usage, reserved, ownership, pad mode, four reserved bytes. The four
+CSME 12 images at hand carry three kinds of set: touch (feature
+`GPIO_TOUCH_FEATURE_ID`, usage `INTEGRATED_TOUCH_1/2`, GPP_B_14 and GPP_E_7,
+host-owned, default mode), SMT (feature `GPIO_SMT_FEATURE_ID`, usage
+`SMT_SMLINK1_CLK/DATA` = 12/13, GPP_C_6/7, CSME-owned, native function 1) and
+CPU detection (feature `GPIO_CPU_DETECT_FEATURE_ID`, usage `CPU_DETECTION`,
+GPP_I_11, CSME-owned, GPIO mode).
+
+**Where the bytes are read differs by generation.** On CSME 11 and 12 the file
+is a record of the MFS's Intel or OEM Configuration stream (owning file 6 or 7),
+and its content lives inside that stream at the record's offset — the OEM copy
+overrides the Intel one, as it does for every configuration record. On CSME 13
+and later the volume names its files by ID and the pin file is a file of its
+own; every image at hand has it empty (no feature pins configured), and an empty
+file is not decoded.
+
+The names come from the tool's five value classes, emitted per generation by
+`Skills/me-eom-structures/scripts/gpio_map.py` (`GPIOPinMap`); the reader is
+`GPIOPinReader`, and the Full Info tree shows the pins in a **GPIO Pins** group.
+A group number the tool's documents disagree about — GPP_J and GPD both take 9
+— is left unnamed and shown as the number. MFIT's generations carry no
+`GpioCsme*` classes, so CSME 16 and 18 have no map and their pin file is not
+read.
+
 Three things that came out of reading the two databases against each other:
 
 - **A kind's name lists its members in value order.** `yes_no_options` is Yes at

@@ -142,6 +142,13 @@ public struct FirmwareAnalysis: Codable, Sendable, Equatable, Identifiable {
     /// nil where the analysis read no configuration at all — an image whose
     /// files carry no File IDs and whose OEM Configuration holds no records.
     public var configuration: [ConfigurationFile]? = nil
+    /// The feature pins the firmware drives (ours), out of
+    /// `/home/gpio/csme_pins` — the file Flash Image Tool writes from its
+    /// `MeFeaturePins` settings — read through the tool's own value classes
+    /// (`GPIOPinMap`). `GPIOPinReadings` says which copy of the file was read.
+    /// nil where the image carries none, the file is empty (no feature pins
+    /// configured), or the generation has no map.
+    public var gpioPins: GPIOPinReadings? = nil
     /// The Boot Guard profile this image is built for (ours), out of the CDMD
     /// configuration's JSON record where the image has one and the UEP area's
     /// Boot Guard bits where it does not. `nil` when neither says a combination
@@ -548,6 +555,24 @@ public struct ManufacturingBasis: Codable, Sendable, Equatable {
         self.page = page
         self.descriptorOpen = descriptorOpen
         self.liveFilesResolved = liveFilesResolved
+    }
+}
+
+/// The feature pins `/home/gpio/csme_pins` records (ours): the file Flash
+/// Image Tool writes from its `MeFeaturePins` settings, decoded through the
+/// tool's own value classes (`GPIOPinMap`, `GPIOPinReader`). `fromImage` says
+/// which copy the bytes came from — the OEM Configuration partition's record
+/// of the file (what the build wrote) or the live MFS (what the platform holds
+/// now).
+public struct GPIOPinReadings: Codable, Sendable, Equatable {
+    public var path: String
+    public var fromImage: Bool
+    public var pins: [GPIOPin]
+
+    public init(path: String, fromImage: Bool, pins: [GPIOPin]) {
+        self.path = path
+        self.fromImage = fromImage
+        self.pins = pins
     }
 }
 
@@ -2803,5 +2828,13 @@ public enum EngineModelRevision {
     /// profile keys, the OEM certificates and the MCTP and BIST files on every
     /// generation FIT 11-15 maps. A dump shows more rows; nothing in the model
     /// moved.
-    public static let current = 59
+    /// 60 adds `gpioPins`: the feature pins `/home/gpio/csme_pins` records —
+    /// the file Flash Image Tool writes from its `MeFeaturePins` settings —
+    /// read through the tool's own value classes (`GPIOPinMap`, emitted by
+    /// `gpio_map.py`). CSME 11 writes 20-byte records of five dwords and
+    /// CSME 12+ 12-byte records of packed bytes; both shapes are settled
+    /// against FIT's own defaults and the field sets of its `GpioCsmeFeature`
+    /// class. Ours: no upstream reading exists, and the file is not in any
+    /// published specification.
+    public static let current = 60
 }

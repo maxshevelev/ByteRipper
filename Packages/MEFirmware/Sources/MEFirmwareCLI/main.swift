@@ -214,6 +214,16 @@ struct MEFirmwareCLI {
                 print("    \(name)\(auto): FITC = \(cell(file.fitc))   MFS = \(cell(file.mfs))")
             }
         }
+        if let pins = result.gpioPins, !pins.pins.isEmpty {
+            // The feature pins the tool built into the image: what each pin
+            // is for, where it is, and who owns it.
+            print("gpio pins: \(pins.path)  [\(pins.fromImage ? "image" : "MFS")]")
+            for pin in pins.pins {
+                let feature = pin.feature.map { "  \($0)" } ?? ""
+                print("    \(pin.pinName)  \(pin.usage ?? String(pin.usageID))"
+                      + "  \(pin.ownership)  \(pin.padMode)\(feature)")
+            }
+        }
         if result.regions.isEmpty {
             print("FPT regions: none found")
         } else {

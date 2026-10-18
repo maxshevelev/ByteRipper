@@ -152,6 +152,13 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   and the OEM public key hash on CSME 11, the FPF hardware binding, ICC profile
   keys, OEM tag and certificates on the newer generations. More rows, same
   shape.
+  Revision 60 adds **`gpioPins`**: the pins `/home/gpio/csme_pins` records —
+  the file Flash Image Tool writes from its `MeFeaturePins` settings. The map
+  of names is emitted from the tool's `GpioCsme*` value classes
+  (`GPIOPinMap`, `gpio_map.py`); CSME 11's records are five dwords, CSME 12+'s
+  are packed bytes, both shapes settled against the tool's own defaults. nil
+  when the image carries no file, the file is empty, or the generation has no
+  map (MFIT's 16 and 18). Ours; upstream reads none of it.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct

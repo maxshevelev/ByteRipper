@@ -1,6 +1,6 @@
 ---
 name: me-eom-structures
-description: Read the End-of-Manufacturing, Boot Guard and OEM-key facts out of an ME dump — the MFS/configuration records behind them, the UEP area, and how they compare with MFIT's own report. Use when working on the ME Analyzer's manufacturing/Boot Guard rows, when a dump's EOM or Boot Guard state has to be established, or when MFIT's build report has to be checked against the bytes.
+description: Read the End-of-Manufacturing, Boot Guard and OEM-key facts out of an ME dump — the MFS/configuration records behind them, the UEP area, and how they compare with MFIT's own report. Also the home of the generators that turn a tool's own layouts into the engine's maps — descriptor registers, PCH/PMC/CPU straps, configuration settings, UEP bits and GPIO feature pins. Use when working on the ME Analyzer's manufacturing/Boot Guard rows, when a dump's EOM or Boot Guard state has to be established, when MFIT's build report has to be checked against the bytes, or when one of those maps has to be emitted or extended.
 ---
 
 # ME EOM / Boot Guard / OEM key structures
@@ -224,6 +224,44 @@ record, not through the array those layouts name (see the end of
 platform: the End of Manufacturing record, which the newer layouts do not bind
 at all (the tool writes it through `EomNvar`), so it is filled in from whichever
 document binds `EOM_Config` and marked as such in the file's header.
+
+## Emitting the GPIO feature pin map
+
+Flash Image Tool names the pins the CSME firmware may drive in five value
+classes — the feature set (`GPIO_TOUCH_FEATURE_ID`), the usage
+(`INTEGRATED_TOUCH_1`), the owner (`CSME_MODE`), the pad mode
+(`NATIVE_FUNCTION_1`) and the GPIO group (`GPP_E`) — and writes the configured
+pins to `/home/gpio/csme_pins`, the file the `MeFeaturePins` class's
+`ProcessFeatureGpios` action names. `gpio_map.py` emits the dictionaries, and
+`GPIOPinReader` reads the file's records through them:
+
+```bash
+python3 Skills/me-eom-structures/scripts/gpio_map.py <fit-11.exe> \
+    --generation 11 --tool 11.0 --variable csme11 > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/GPIOPinMap+CSME11.swift
+```
+
+Neither the file nor its records are in any published specification. Both
+shapes were settled on the images at hand, and each field is anchored on
+something the tool itself states:
+
+- **CSME 11** writes **20-byte records of five dwords** — usage, group, pad,
+  ownership, pad mode. Every record of the Lenovo CSME 11 image matches the
+  default FIT 11 gives the same usage in its documents: `NFC_RST` = GPP_E_4,
+  `NFC_IRQ` = GPP_E_12, `FWUPDATE` = GPP_B_15. That is what fixes the order.
+- **CSME 12 and later** write **12-byte records of packed bytes** — feature id,
+  group, pad, reserved, usage, reserved, ownership, pad mode, then four
+  reserved bytes. The CSME 12 images at hand show a touch set (feature 1, usage
+  0/1, group B/E), an SMT set (feature 3, usage 12/13, group C, native
+  function 1) and a CPU detection pin (feature 2, usage 5).
+
+The **OEM Configuration** stream (owning file 7) overrides the Intel one (6)
+where both name the file, as it does for every configuration record, so the
+reader prefers it. An empty file is a platform with no feature pins — what the
+CSME 13-15 images carry — and is not decoded. MFIT's generations have no
+`GpioCsme*` classes, so they have no map and their pin file is not read.
+A group value the tool's own documents disagree about (GPP_J and GPD both take
+9 in one family) is emitted unnamed, and the reading shows the number.
 
 ## Emitting a generation's FPF/UEP settings
 
