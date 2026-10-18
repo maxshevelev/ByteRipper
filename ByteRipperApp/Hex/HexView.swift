@@ -2250,11 +2250,46 @@ final class HexView: NSView {
 
     // MARK: - Agent marks
 
+    /// Rectilinear outlines with the parts beyond `band` brought in toward it:
+    /// every vertex above the band moves down, and every one below it moves
+    /// up, by the same whole number of dash periods, so they still lie outside
+    /// the band but no more than a period from it.
+    ///
+    /// What is drawn inside the band does not change, dashes included. The
+    /// outline's edges are horizontal or vertical, so the only edges this
+    /// shortens are the vertical ones crossing the band's edge, and each by a
+    /// whole number of `period`s: the length of path before any point inside
+    /// the band changes by whole periods, which leaves the dash phase there
+    /// where it was. The edges beyond the band are moved, never drawn — they
+    /// are outside the rect being painted.
+    static func outlinesFolded(_ loops: [[CGPoint]], into band: ClosedRange<CGFloat>,
+                               period: CGFloat) -> [[CGPoint]] {
+        guard period > 0 else { return loops }
+        return loops.map { loop in
+            var loop = loop
+            if let deepest = loop.lazy.map(\.y).filter({ $0 < band.lowerBound }).max() {
+                // Whole periods, stopping short of the band: the moved vertices
+                // stay strictly above it.
+                let shift = (ceil((band.lowerBound - deepest) / period) - 1) * period
+                if shift > 0 {
+                    loop = loop.map { $0.y < band.lowerBound ? CGPoint(x: $0.x, y: $0.y + shift) : $0 }
+                }
+            }
+            if let highest = loop.lazy.map(\.y).filter({ $0 > band.upperBound }).min() {
+                let shift = (ceil((highest - band.upperBound) / period) - 1) * period
+                if shift > 0 {
+                    loop = loop.map { $0.y > band.upperBound ? CGPoint(x: $0.x, y: $0.y - shift) : $0 }
+                }
+            }
+            return loop
+        }
+    }
+
     /// Notes (`AgentAnnotation`): the zone's own rounded outline, dashed and
     /// in the agent's hue or the person's, so they are told from a tool's map at a glance
     /// and never taken for a difference or a selection.
     private func drawAgentMarkContours(layout: HexLayout, fileSize: UInt64, rows: Range<Int>) {
-        let dash: [CGFloat] = [4, 3]
+        let dash = Self.noteDash
         for (path, byPerson, _) in agentMarkShapes(layout: layout, fileSize: fileSize, rows: rows) {
             (byPerson ? HexTheme.personMark : HexTheme.agentMark).withAlphaComponent(Self.zoneFocusedAlpha).setStroke()
             path.lineWidth = Self.mirrorContourLineWidth
@@ -2271,17 +2306,30 @@ final class HexView: NSView {
         }
     }
 
+    /// A note's dash: four points drawn, three left out.
+    static let noteDash: [CGFloat] = [4, 3]
+
+    /// The outlines of the notes that reach `rows`, cut down to the band round
+    /// those rows (`outlinesFolded`): a note of a few megabytes is an outline
+    /// millions of points tall, and Core Graphics lays its dashes along the
+    /// whole of it on every draw — over half a second per scroll step for
+    /// 8 MB — however little of it the dirty rect shows.
     private func agentMarkShapes(layout: HexLayout, fileSize: UInt64,
                                  rows: Range<Int>) -> [(path: NSBezierPath, byPerson: Bool, range: Range<UInt64>)] {
         guard let dataSource, !rows.isEmpty, fileSize > 0 else { return [] }
         let lower = UInt64(rows.lowerBound) * UInt64(HexLayout.bytesPerRow)
         let upper = UInt64(rows.upperBound) * UInt64(HexLayout.bytesPerRow)
+        // Two rows of slack each side: the padding, the rounded corners and
+        // the line's own width all stay well inside it.
+        let band = (layout.rowFrame(row: rows.lowerBound).minY - 2 * layout.rowHeight)
+            ... (layout.rowFrame(row: rows.upperBound - 1).maxY + 2 * layout.rowHeight)
+        let period = Self.noteDash.reduce(0, +)
         return dataSource.hexAgentMarkSpans(in: lower..<upper).compactMap { mark in
             let end = min(mark.range.upperBound, fileSize)
             guard mark.range.lowerBound < end else { return nil }
             let span = SelectionModel(start: mark.range.lowerBound, end: end, fileSize: fileSize)
-            let loops = contour(of: span, layout: layout, region: .hex)
-                + contour(of: span, layout: layout, region: .ascii)
+            let loops = Self.outlinesFolded(contour(of: span, layout: layout, region: .hex)
+                + contour(of: span, layout: layout, region: .ascii), into: band, period: period)
             return loops.isEmpty
                 ? nil : (roundedContourPath(loops: loops, radius: Self.mirrorContourRadius), mark.byPerson, mark.range)
         }
