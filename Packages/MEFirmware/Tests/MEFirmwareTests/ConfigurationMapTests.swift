@@ -11,6 +11,7 @@ import XCTest
 /// places two generations *disagree* about.
 final class ConfigurationMapTests: XCTestCase {
     func testEachMappedGenerationReadsItsOwnMap() {
+        XCTAssertEqual(MEConfigurationMap.forME(major: 11)?.name, MEConfigurationMap.csme11.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 12)?.name, MEConfigurationMap.csme12.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 13)?.name, MEConfigurationMap.csme13.name)
         XCTAssertEqual(MEConfigurationMap.forME(major: 14)?.name, MEConfigurationMap.csme14.name)
@@ -33,7 +34,7 @@ final class ConfigurationMapTests: XCTestCase {
         // the ones those settings are.
         XCTAssertEqual(map.files.count, 15)
         XCTAssertEqual(map.files.flatMap(\.settings).count, 40)
-        for fit in [MEConfigurationMap.csme12, .csme13, .csme14, .csme15] {
+        for fit in [MEConfigurationMap.csme11, .csme12, .csme13, .csme14, .csme15] {
             XCTAssertFalse(fit.files.flatMap(\.settings).contains { $0.auto }, "\(fit.name)")
         }
         XCTAssertTrue(MEConfigurationMap.csme16.files.flatMap(\.settings).contains { $0.auto },
@@ -52,12 +53,23 @@ final class ConfigurationMapTests: XCTestCase {
                        ["EomFirstBootEnabled", "FlexibleEomSettings"])
     }
 
+    /// FIT 11's SPT layout: one set of documents for both halves, so one map
+    /// serves either family and there is no desktop twin.
+    func testTheElevenMapIsWhatFit11LaysOut() throws {
+        XCTAssertEqual(MEConfigurationMap.csme11.files.count, 11)
+        XCTAssertEqual(MEConfigurationMap.csme11.files.flatMap(\.settings).count, 28)
+        let policy = try XCTUnwrap(MEConfigurationMap.csme11.file(at: "/home/policy/cfgmgr/cfg_rules"))
+        XCTAssertEqual(policy.settings.first?.name, "MELanPowerWell")
+        XCTAssertEqual(MEConfigurationMap.forME(major: 11, family: .desktop)?.name,
+                       MEConfigurationMap.forME(major: 11, family: .mobile)?.name)
+    }
+
     /// Every map carries the one file that is ours and no tool's: the board's
     /// own `manuf_lock`, so the Configuration tab can show the build's zero and
     /// the platform's byte side by side. It is appended by `forME`, not written
     /// into a generated map — a regeneration must not lose it.
     func testEveryMapCarriesTheBoardsLockRecord() throws {
-        for major in [12, 13, 14, 15, 16] {
+        for major in [11, 12, 13, 14, 15, 16] {
             let map = try XCTUnwrap(MEConfigurationMap.forME(major: major), "\(major)")
             let lock = try XCTUnwrap(map.file(at: "/home/mca/manuf_lock"), "\(major)")
             XCTAssertEqual(lock.alias, "ManufLock")

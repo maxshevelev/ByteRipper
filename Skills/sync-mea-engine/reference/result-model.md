@@ -143,7 +143,9 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   `.csme12Desktop`, emitted by `fit_map.py --generation 12`). That generation's
   volumes carry no `FileTable.dat`, so the engine resolves the map's
   `/home/...` paths by walking the MFS home directory instead. Ours, as the
-  rest of `configuration`.
+  rest of `configuration`. Revision 58 adds **CSME 11** to the same field:
+  Flash Image Tool 11's SPT map (`MEConfigurationMap.csme11`), one set of
+  documents for both platform halves, its paths read the same way. Ours.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct

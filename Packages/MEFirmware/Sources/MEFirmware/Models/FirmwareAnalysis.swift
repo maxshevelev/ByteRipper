@@ -2792,5 +2792,9 @@ public enum EngineModelRevision {
     /// `Uep` documents (`UEPMap.csme13`, `.csme14`). The profile bits there
     /// read what the four FIT builds of each generation set (0, 3, 4, 5) and
     /// agree with the record `bootGuardProfile` reads. Ours, as the rest.
-    public static let current = 57
+    /// 58 does not grow the shape: `configuration` is now filled on CSME 11
+    /// too, through Flash Image Tool 11's SPT map (`MEConfigurationMap.csme11`),
+    /// which serves both platform halves. That generation's volumes carry no
+    /// `FileTable.dat` either, and the home directory resolves the paths.
+    public static let current = 58
 }
