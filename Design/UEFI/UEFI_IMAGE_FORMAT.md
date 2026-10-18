@@ -374,6 +374,21 @@ regions with flashrom's `ich_descriptors_tool` and coreboot's `ifdtool -d`,
 and the chip densities with the dump's length — `SPI_ALL_192Mbit` is
 8 MB + 16 MB.
 
+**MFIT's own register names.** MFIT 18 lays the registers out field by field —
+FLMAP0/1/2, FLCOMP, FLIL, FLMSTR (six master words), FLDRPLCY and FLUMAP1 —
+and `Packages/UEFIImage/Sources/UEFIImage/DescriptorRegisterMap+CSME18.swift`
+carries them (emitted by `descriptor18_map.py`); the UEFI Structure panel shows
+them as a "Descriptor registers" table, one section per register. A register's
+place is absolute or stated by the map words themselves (`FCBA << 4`,
+`FMBA << 4`). The map applies from Meteor Lake on: FLCOMP's density and clock
+bits are that generation's. On the CSME 18 dump the table reads FLMAP0
+`00040003` (FCBA 0x30, FRBA 0x40), FLMAP1 `82100208` (FMBA 0x80, two masters,
+the strap section at 0x100 with 130 words), FLCOMP `0930F0F6`, FLDRPLCY
+`20000000` and FLUMAP1 `C0FF00FF` (VSCC table base 0xFF, MIP descriptor table
+base 0xC0 → 0xC00). MFIT calls FLMAP0 bits 24–26 reserved where the classic
+descriptor counts regions; the panel's own "Regions" row keeps the classic
+reading.
+
 ### 2.6. The PCH straps
 
 At `PchStrapsBase << 4`, `NumberOfPchStraps` `UINT32`s (`PCHSTRP0`,

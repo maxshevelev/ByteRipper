@@ -111,6 +111,38 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertNil(read.processorStraps)
     }
 
+    /// The descriptor's own registers, through Flash Image Tool's layout: the
+    /// map words at 0x14, the component's at `FCBA << 4`, the recovery policy
+    /// and the VSCC/MIP map. Meteor Lake and later only — the map's FLCOMP is
+    /// that generation's density and clock bits.
+    func testTheDescriptorRegistersAreReadThroughTheToolsLayout() throws {
+        let read = try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)],
+            component: (chips: 1, flcomp: 0, flill: 0, flill1: 0),
+            map2: 0x0003_01C0))
+        XCTAssertEqual(read.generation, .meteorLake)
+        XCTAssertEqual(read.registerReadings.map(\.register.name),
+                       ["FLMAP0", "FLMAP1", "FLMAP2", "FLCOMP", "FLIL",
+                        "FLDRPLCY", "FLUMAP1"],
+                       "FLMSTR is absent: the test's master base is 0xFF, out of range")
+        let map0 = try XCTUnwrap(read.registerReadings.first)
+        XCTAssertEqual(map0.base, 0x14)
+        XCTAssertEqual(map0.words, [0x0004_0003])
+        let fields = Dictionary(uniqueKeysWithValues: map0.readings.map {
+            ($0.field.name, $0.value)
+        })
+        XCTAssertEqual(fields["FLMAP0_Flash_Component_Base_Address"], 3)
+        XCTAssertEqual(fields["FLMAP0_Flash_Region_Base_Address"], 4)
+        // FLCOMP sits at FCBA << 4, which the map word states.
+        let component = try XCTUnwrap(read.registerReadings.first {
+            $0.register.name == "FLCOMP"
+        })
+        XCTAssertEqual(component.base, 0x30)
+        // The map on an Alder Point descriptor is not this tool's.
+        XCTAssertTrue(try info(TestImage.descriptor(
+            regions: [(.bios, 0x1000..<0x40_0000)])).registerReadings.isEmpty)
+    }
+
     /// The OEM section is the fixed `0x100` bytes at `0xF00`, whatever a board
     /// wrote there — and all `0xFF` reads as an erased one, not as absent.
     func testTheOEMSectionIsTheFixedHundredBytes() throws {
