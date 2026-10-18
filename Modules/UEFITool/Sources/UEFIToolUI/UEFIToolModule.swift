@@ -1028,14 +1028,27 @@ private struct ChecksumPass: Sendable {
     private func selectME(_ path: [Int]?) {
         meFocus = path
         focus = nil
-        followSelection { [weak self] in
-            // Looking at the checksums row is what asks for the checksums: the
-            // engine leaves them out of a parse because they are three passes
-            // over the whole region, and until now nothing was going to read
-            // them.
-            guard let self, let path, path == MEACurator.checksumsPath(in: self.meRoots) else { return }
-            self.loadChecksums()
-        }
+        followSelection { [weak self] in self?.loadChecksumsIfShown(path) }
+    }
+
+    /// The ME half of `showUEFIFocus`: a row the panel picked rather than the
+    /// reader, so the table has not moved to it yet. `selectME` follows a
+    /// reader who already put the selection there and only draws the detail;
+    /// a reveal or a zone click through it left the table on whatever row it
+    /// was on.
+    private func showMEFocus(_ path: [Int]) {
+        meFocus = path
+        focus = nil
+        show(publish: true)
+        loadChecksumsIfShown(path)
+    }
+
+    /// Looking at the checksums row is what asks for the checksums: the engine
+    /// leaves them out of a parse because they are three passes over the whole
+    /// region, and until now nothing was going to read them.
+    private func loadChecksumsIfShown(_ path: [Int]?) {
+        guard let path, path == MEACurator.checksumsPath(in: meRoots) else { return }
+        loadChecksums()
     }
 
     // MARK: - The ME sub-tree
@@ -1375,7 +1388,7 @@ private struct ChecksumPass: Sendable {
         if meFocus != nil {
             let path = id.split(separator: "/").compactMap { Int($0) }
             guard !path.isEmpty, MEATree.node(at: path, in: meRoots) != nil else { return }
-            selectME(path)
+            showMEFocus(path)
             return
         }
         guard let nodeID = UEFIPresenter.nodeID(ofZone: id) else { return }
@@ -1469,7 +1482,7 @@ private struct ChecksumPass: Sendable {
         // two halves route by the same rule `zoneSelected` uses.
         if let path = mePath(covering: offset) {
             host.noteNavigationStep()
-            selectME(path)
+            showMEFocus(path)
             return
         }
         // The presented sub-tree placed the byte in no row of its own — or there
