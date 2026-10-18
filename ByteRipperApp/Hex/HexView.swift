@@ -3667,6 +3667,27 @@ enum HexTheme {
     /// but the green is the exception: a pale green reads as near-white at full
     /// brightness, so its hover dips the brightness and pushes the saturation a
     /// little further, so the band reads as a weighty green rather than a wash.
+    /// The colour a zone's bracket goes to under the pointer, and the colour
+    /// the callout's bracket glyph wears (§19.4.5): the same hue, pushed to a
+    /// vivid saturation — and, in dark theme, lifted as well, where a
+    /// saturated colour that is not also brighter sinks into the paper. The
+    /// zone colours are already mid-strength lines, not pastels, so this is a
+    /// step of its own rather than `saturatedHighlight`'s.
+    static func zoneHoverHighlight(of color: NSColor, in appearance: NSAppearance) -> NSColor {
+        var resolved: NSColor?
+        appearance.performAsCurrentDrawingAppearance {
+            resolved = color.usingColorSpace(.sRGB)
+        }
+        guard let rgb = resolved else { return color }
+        let isDark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        return NSColor(colorSpace: .sRGB,
+                       hue: rgb.hueComponent,
+                       saturation: min(1, rgb.saturationComponent + 0.4),
+                       brightness: isDark ? min(1, rgb.brightnessComponent + 0.15)
+                                          : max(0, rgb.brightnessComponent - 0.05),
+                       alpha: 1)
+    }
+
     static func saturatedHighlight(of color: NSColor, in appearance: NSAppearance) -> NSColor {
         // The tint is a dynamic (catalog) colour, and the HSB component
         // accessors are not valid on a catalog colour — it must first be

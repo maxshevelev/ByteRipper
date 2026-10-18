@@ -285,6 +285,10 @@ final class MinimapView: NSView {
     /// be told apart by their looks.
     static let zoneBracketLineWidth: CGFloat = 2
 
+    /// The stem's width under the pointer: a point thicker, so the bracket
+    /// being named stands out of a column of stems.
+    static let zoneBracketHoverLineWidth: CGFloat = 3
+
     private(set) var mapLayout: MapLayout = .single
     /// The maps currently drawn (file sizes + selections). Readable so tests can
     /// inspect them.
@@ -1806,9 +1810,11 @@ final class MinimapView: NSView {
     /// both at `HexView.zoneFocusedAlpha` and the same width — a zone in the
     /// map and the same zone in the dump are one statement about the file and
     /// must not be told apart by their looks. The bracket under the pointer
-    /// goes to full strength, keeping its own colour: the same statement, just
-    /// louder, which is how the segment strip says "this is the one you are
-    /// pointing at" (§19.4.4).
+    /// keeps its hue but goes vivid and a point thicker
+    /// (`HexTheme.zoneHoverHighlight`): the same statement, just louder, which
+    /// is how the segment strip says "this is the one you are pointing at"
+    /// (§19.4.4). Full strength alone was a tenth more opacity, which nobody
+    /// could see.
     ///
     /// Drawn in the dump's order — unfocused first, the focused bracket last —
     /// so the focused one is never crossed by a neighbour's: zones nest, and
@@ -1828,8 +1834,13 @@ final class MinimapView: NSView {
                 let isHovered = hoveredZoneBracket?.mapIndex == index
                     && hoveredZoneBracket?.bracketIndex == bracketIndex
                 let colour = bracket.isFocused ? HexTheme.zoneFrame : HexTheme.zoneFrameInactive
-                colour.withAlphaComponent(isHovered ? 1 : HexView.zoneFocusedAlpha).setStroke()
-                path.lineWidth = Self.zoneBracketLineWidth
+                if isHovered {
+                    HexTheme.zoneHoverHighlight(of: colour, in: effectiveAppearance).setStroke()
+                    path.lineWidth = Self.zoneBracketHoverLineWidth
+                } else {
+                    colour.withAlphaComponent(HexView.zoneFocusedAlpha).setStroke()
+                    path.lineWidth = Self.zoneBracketLineWidth
+                }
                 path.stroke()
             }
         }

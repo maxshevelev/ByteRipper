@@ -2591,9 +2591,10 @@ parse found is legible at a glance beside the bytes it found it in.
 - **Hovering a bracket names its zone**: `BIOS region — 0x100…0x2FF, 512 B` — the
   name, the range and the size, the shape the strip's own hover text takes, in
   the same callout, following the pointer (§19.4.3). A
-  zone with no name is named by its range alone. The bracket under the pointer is
-  painted at full strength — the same colour, just louder — the way the strip's
-  hovered block is. Each lane owns the column around its own stem, so pointing at
+  zone with no name is named by its range alone. The bracket under the pointer
+  keeps its hue but goes vivid — saturated, and in dark theme brighter — and a
+  point thicker, the way the strip's hovered block goes louder; the callout's
+  bracket glyph wears that same vivid shade, so the two read as one. Each lane owns the column around its own stem, so pointing at
   a parent's stem names the parent even where a child's bracket runs alongside
   it; within one lane the smallest zone under the pointer wins, and a lane with
   no bracket at that height falls back to whichever one is beside it.

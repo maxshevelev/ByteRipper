@@ -41,7 +41,8 @@ final class HoverCallout: NSView {
         /// A cut (§21.2): the piece before it above the line, the one after it
         /// below — the boundary between two colours that it is.
         case cut(above: NSColor, below: NSColor)
-        /// A tool-module's zone (§19.4.5), in its bracket's colour.
+        /// A tool-module's zone (§19.4.5), in its bracket's colour — drawn in
+        /// the vivid shade the bracket itself goes to under the pointer.
         case zone(NSColor)
         /// A note on the bytes (`AgentAnnotation`), in its author's hue.
         case annotation(NSColor)
@@ -321,7 +322,7 @@ private final class CalloutContentView: NSView {
             bracket.line(to: NSPoint(x: midX - 2, y: midY + 5))
             bracket.line(to: NSPoint(x: midX + 2.5, y: midY + 5))
             bracket.lineWidth = 1.6
-            color.setStroke()
+            HexTheme.zoneHoverHighlight(of: color, in: effectiveAppearance).setStroke()
             bracket.stroke()
         case .annotation(let color):
             // The note's own look in the dump: a light wash in a dashed frame.

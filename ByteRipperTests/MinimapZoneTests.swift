@@ -444,10 +444,34 @@ final class MinimapZoneTests: XCTestCase {
         panel.displayIfNeeded()
         let after = try render(panel)
         let stem = NSPoint(x: gutter.minX + 0.5, y: mapY(0x200, in: panel))
-        XCTAssertGreaterThan(distance(try colour(after, at: stem, of: panel),
-                                      try colour(before, at: stem, of: panel)),
-                             0.02,
-                             "the hovered bracket is painted louder")
+        let hovered = try colour(after, at: stem, of: panel)
+        let plain = try colour(before, at: stem, of: panel)
+        XCTAssertGreaterThan(distance(hovered, plain), 0.1,
+                             "the hovered bracket is plainly louder, not a tenth more opaque")
+        let vivid = try XCTUnwrap(hovered.usingColorSpace(.sRGB))
+        let calm = try XCTUnwrap(plain.usingColorSpace(.sRGB))
+        XCTAssertGreaterThan(vivid.saturationComponent, calm.saturationComponent + 0.15,
+                             "and louder by saturation, keeping its hue")
+        XCTAssertEqual(vivid.hueComponent, calm.hueComponent, accuracy: 0.05)
+    }
+
+    /// The vivid shade is the zone colour pushed, not another colour, in both
+    /// themes — and it is what the callout's bracket glyph is drawn in, so the
+    /// glyph matches the bracket it names.
+    func testTheHoverShadeKeepsTheHueAndIsMoreSaturated() throws {
+        for name in [NSAppearance.Name.aqua, .darkAqua] {
+            let appearance = try XCTUnwrap(NSAppearance(named: name))
+            for colour in [HexTheme.zoneFrame, HexTheme.zoneFrameInactive] {
+                var base: NSColor?
+                appearance.performAsCurrentDrawingAppearance { base = colour.usingColorSpace(.sRGB) }
+                let plain = try XCTUnwrap(base)
+                let vivid = try XCTUnwrap(HexTheme.zoneHoverHighlight(of: colour, in: appearance)
+                    .usingColorSpace(.sRGB))
+                XCTAssertEqual(vivid.hueComponent, plain.hueComponent, accuracy: 0.01, "\(name)")
+                XCTAssertGreaterThan(vivid.saturationComponent, plain.saturationComponent + 0.3, "\(name)")
+                XCTAssertEqual(vivid.alphaComponent, 1, "\(name)")
+            }
+        }
     }
 
     // MARK: - Click
