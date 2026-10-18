@@ -392,16 +392,19 @@ reading.
 The older builds state the same registers in their platform class documents —
 one set per platform, selected by the strap include it names
 (`descriptor_fit_map.py --platform`) — and what those documents agree on is a
-map: Sunrise Point (FIT 11: FLMAP1/2), Cannon Point (FIT 12: FLMAP1 and
-FLCOMP), Elkhart Lake and Jasper Lake (FIT 13), and Tiger Point (FIT 15:
-FLMAP0/1/2, FLCOMP and masters 3 and 5). **The maps are partial where the
-build's own documents are**: CNP's FLMAP0 and master words, and Tiger Point's
-masters 1, 2 and 4, live in a common document the build names but does not
-embed, so a register no map holds stays unnamed rather than taking another
-generation's bits. Verified against `ifdtool`: CSME 11's FLMAP1 `42100208`
-reads PSL `0x42` (66 words), FPSBA 0x100, two masters and FMBA 0x80; CSME 15's
-`46100208` reads PSL 70, and its FLMAP0 `00040003` states FCBA 0x30, FRBA 0x40
-— the values ifdtool prints.
+map: Sunrise Point (FIT 11: FLMAP1/2), Cannon Point (four registers spread
+over FIT 12–15's CNP documents — the CNP build states FLMAP1 and FLCOMP, FIT
+13's CNP documents FLMAP0, FIT 14's FLMAP2), Elkhart Lake and Jasper Lake
+(FIT 13), and Tiger Point (FIT 15: FLMAP0/1/2, FLCOMP and masters 3 and 5).
+**The maps are partial where the build's own documents are**: the masters 1,
+2 and 4, and the region registers, live in a common document the builds name
+but do not embed, so a register no map holds stays unnamed rather than taking
+another generation's bits. Verified against `ifdtool`: CSME 11's FLMAP1
+`42100208` reads PSL `0x42` (66 words), FPSBA 0x100, two masters and FMBA
+0x80; CSME 12's FLMAP0 `00040003` states FCBA 0x30 and FRBA 0x40, and its
+FLMAP2 `00340330` the 3-word processor section at 0x30; CSME 15's
+`46100208` reads PSL 70, and its FLMAP0 states FCBA 0x30, FRBA 0x40 — the
+values ifdtool prints.
 
 ### 2.6. The PCH straps
 

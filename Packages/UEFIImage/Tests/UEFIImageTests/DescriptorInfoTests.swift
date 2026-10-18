@@ -281,8 +281,9 @@ final class DescriptorInfoTests: XCTestCase {
         XCTAssertEqual(fields["Flmap1_Flash_Master_Base_Address"], 0xFF)
 
         XCTAssertEqual(DescriptorRegisterMap.forGeneration(.cannonPoint)?
-                        .registers.map(\.name), ["FLMAP1", "FLCOMP"],
-                       "the CNP build's FLMAP0 is in a document it does not carry")
+                        .registers.map(\.name),
+                       ["FLMAP0", "FLMAP1", "FLMAP2", "FLCOMP"],
+                       "the four registers FIT 12–15's CNP documents state")
         XCTAssertEqual(DescriptorRegisterMap.forGeneration(.sunrisePoint)?
                         .registers.map(\.name), ["FLMAP1", "FLMAP2"])
         XCTAssertNil(DescriptorRegisterMap.forGeneration(.alderPoint))
