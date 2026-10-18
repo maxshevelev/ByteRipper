@@ -696,6 +696,25 @@ measure:
   Guard profile of that image is therefore 5, and the analyzer reads it through
   the map.
 
+**CSME 12's UEP layout is Flash Image Tool 12's class documents.** FIT 12
+states the same area as a `Class name="Uep"` of `LayoutEntry`s, `CfgOpt`s and
+`GetBitArrayValue` actions, one document per platform (`cnp_uep`, `cml_uep`,
+`icl_uep`, …). `uep12_map.py` takes the CNP document — the one with exactly
+four arrays that has `fw_type` and none of the RPMC options CML and later add
+— and emits `UEPMap+CSME12`, 42 settings: the first array's 34 and eight that
+only the later arrays hold (`SB_ACM_SVN`, `SB_KM_SVN`, `SB_BSMM_SVN`, the TPM
+seed bits, `IDLM_M_SVN`). The container is the class's own 8-byte header and
+four 0x80-byte arrays, and the CSME 12 dump at hand confirms both: its CRC-16
+over +6…+0x208 (0xE216) covers header and four arrays, and array 0's word at
++0x40 reads 0x0058E080 — `FW_TYPE` 3 with its valid bit, the ID validity bits
+set. A setting's words are the tool's: a `$Class/Option` source takes that
+class's label, help and value class (`SupportedFpfValues`' 0xC "No", 0xF
+"Yes" — which is why `SPI`/`EMMC`/`UFS` read 12 or 15 rather than 0 or 1); a
+bare bit takes the document's own `<!--NAME-->` comment. The 256-bit key hash
+is left out, the reader taking at most 64 bits. The Boot Guard profile proper
+is still the record this generation keeps; the array's bits are read beside
+it.
+
 **The CPU strap message.** `strap18_map.py` turns the `CPU_smip` document into
 `CPUStrapMap+CSME18` (35 fields), and the message itself is read out of the
 image's **MIP table**, which CSME 18 keeps in the FITC partition rather than

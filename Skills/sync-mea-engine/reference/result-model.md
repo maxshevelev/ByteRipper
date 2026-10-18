@@ -126,6 +126,13 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   states and the validity bits beside them in the container's **second** array,
   and the map now says which array each setting is in (`arraySize` 0x80), so
   they are read too. The 15/16 map keeps to the first array, as before.
+  Revision 55 fills the field on **CSME 12** as well: Flash Image Tool 12's CNP
+  `Uep` document (`UEPMap.csme12`, emitted by `uep12_map.py`) places 42
+  settings in the container's four 0x80-byte arrays, eight of them only in the
+  later arrays (the SB SVNs, the TPM seed bits, the IDLM SVN). The values are
+  what the build wrote; the Boot Guard profile proper on this generation is
+  still the record `bootGuardProfile` reads, and the array's individual profile
+  bits appear among the readings. Ours, as the rest of the UEP field.
 - **An added field has to be optional, not defaulted.** A Swift property
   default does *not* satisfy the additive contract: the synthesized decoder
   asks for every non-optional key regardless of a default, so a nested struct
