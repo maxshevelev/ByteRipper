@@ -249,6 +249,33 @@ array's word reads 0x001D0000 (`PLAT_ID` 0, `DNX` 1 — disabled, `RPMC_RB` 0,
 the three FVC states 1); and the header's CRC-16 (poly 0x1021, init 0xFFFF, no
 reflection) over reserved + four arrays reproduces the stored word exactly.
 
+**CSME 12's documents are FIT 12's class documents**, in the older shape:
+`<Class name="Uep">` with `LayoutEntry`s, `CfgOpt`s and `GetBitArrayValue`
+actions, one document per platform (`cnp_uep`, `cml_uep`, `icl_uep`, …):
+
+```bash
+python3 Skills/me-eom-structures/scripts/uep12_map.py ~/Downloads/1/fit-12.exe > \
+    Packages/MEFirmware/Sources/MEFirmware/Configuration/UEPMap+CSME12.swift
+```
+
+The CNP document is the one to take: exactly four arrays, `fw_type` among its
+settings, and none of the RPMC options CML and later add. Its `Uep` class also
+states the container — signature, CRC-16, reserved, then the arrays — so the
+first array is again 8 bytes in (`arrayStart: 8`, `arraySize: 0x80`). A name
+the tool repeats in a later array is kept once, where it first appears; the
+256-bit key hash is left out because the reader takes at most 64 bits. The
+tool's words come from the configuration classes a source names
+(`$OEMandPlatformIDs/OemVendorId` → "OEM Vendor ID") and from its value
+classes (`SupportedFpfValues`: 0xC "No", 0xF "Yes"); a bare bit takes the
+document's own `<!--NAME-->` comment.
+
+12.0 yields 42 settings: 34 in the first array and eight only the later ones
+hold (`SB_ACM_SVN`, `SB_KM_SVN`, `SB_BSMM_SVN`, the TPM seed bits,
+`IDLM_M_SVN`). The CSME 12 dump at hand (12.0.3.1091, Consumer H) confirms
+the layout: the container's CRC-16 covers +6…+0x208 (stored 0xE216) — header
+and four arrays — and array 0's word at +0x40 reads 0x0058E080, `FW_TYPE` 3
+with its valid bit set, the tool's own default.
+
 **The CPU strap message has its own layout and its own place.** CSME 18 does
 not keep it in the descriptor's MIP area; it is in the FITC partition's MIP
 table (the `smip` nvar), and `strap18_map.py` emits the tool's `CPU_smip`

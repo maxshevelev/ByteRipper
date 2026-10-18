@@ -25,9 +25,10 @@ final class UEPMapTests: XCTestCase {
         let fit = try XCTUnwrap(UEPMap.forME(major: 15))
         XCTAssertGreaterThan(fit.settings.count, 50)
         XCTAssertNil(fit.settings.first?.label)
-        // CSME 12 to 14 keep the profile in a record, not in these arrays.
+        // CSME 14 has no map of its own; 12 has, since Flash Image Tool 12
+        // lays its FPF settings out (the profile itself is still a record).
         XCTAssertNil(UEPMap.forME(major: 14))
-        XCTAssertNil(UEPMap.forME(major: 12))
+        XCTAssertNotNil(UEPMap.forME(major: 12))
     }
 
     /// CSME 18's map is the tool's rewritten `UEPs_Data`, read from the array
@@ -62,6 +63,54 @@ final class UEPMapTests: XCTestCase {
         // The 15/16 array start is the measured one, not a header size.
         XCTAssertEqual(UEPMap.forME(major: 16)?.arrayStart, UEPReader.firstArrayOffset)
         XCTAssertNil(UEPMap.forME(major: 17))
+    }
+
+    /// CSME 12's map is Flash Image Tool 12's CNP `Uep` class: four arrays
+    /// after its own 8-byte header, with the tool's labels and value words.
+    func testTheCSME12MapFollowsFlashImageToolsClassDocuments() throws {
+        let map = try XCTUnwrap(UEPMap.forME(major: 12))
+        XCTAssertEqual(map.arrayStart, 8, "signature + CRC-16 + reserved")
+        XCTAssertEqual(map.arraySize, 0x80)
+        XCTAssertEqual(map.settings.count, 42)
+        let vendor = try XCTUnwrap(map.settings.first { $0.name == "OemVendorId" })
+        XCTAssertEqual(vendor.placement, .init(array: 0, offset: 0x3C, bit: 0, count: 16))
+        XCTAssertEqual(vendor.label, "OEM Vendor ID")
+        XCTAssertEqual(vendor.section, "OEMandPlatformIDs")
+        // The Boot Guard profile proper is a record on this generation; the
+        // array holds its individual bits.
+        let verified = try XCTUnwrap(map.settings.first { $0.name == "VerifiedBoot" })
+        XCTAssertEqual(verified.placement, .init(array: 0, offset: 0x44, bit: 5, count: 1))
+        XCTAssertEqual(verified.options, [0: "false", 1: "true"])
+        // A value class's words: `SupportedFpfValues` is 0xC "No", 0xF "Yes".
+        let ptt = try XCTUnwrap(map.settings.first { $0.name == "PttSupportedFpf" })
+        XCTAssertEqual(ptt.options, [12: "No", 15: "Yes"])
+        // What only a later array holds is kept, once.
+        let bsmm = try XCTUnwrap(map.settings.first { $0.name == "sb_bsmm_svn" })
+        XCTAssertEqual(bsmm.placement, .init(array: 1, offset: 0x40, bit: 30, count: 15))
+        XCTAssertEqual(map.settings.filter { $0.name == "sb_bsmm_svn" }.count, 1)
+        // The 256-bit key hash is not a row the reader could fill.
+        XCTAssertNil(map.settings.first { $0.name == "OemPublicKeyHash" })
+    }
+
+    /// CSME 12's first array reads where the tool places its bits: the word
+    /// the CSME 12 dump carries at array 0 +0x40 is 0x0058E080 — FW_TYPE 3
+    /// with its valid bit, and the ID validity bits set.
+    func testTheCSME12ArrayReadsWhereTheToolPlacesItsBits() throws {
+        let map = try XCTUnwrap(UEPMap.forME(major: 12))
+        var area = Data("$UEP".utf8)
+        area.append(Data(count: 4))                       // CRC-16 + reserved
+        area.append(Data(count: 4 * 0x80))                // arrays_count 4
+        let word = area.startIndex + map.arrayStart + 0x40
+        area[word] = 0x80
+        area[word + 1] = 0xE0
+        area[word + 2] = 0x58
+        let readings = try XCTUnwrap(UEPReader.readings(in: area, map: map))
+        XCTAssertEqual(readings.first { $0.name == "lo_id_v" }?.value, 1)
+        XCTAssertEqual(readings.first { $0.name == "oem_id_v" }?.value, 1)
+        XCTAssertEqual(readings.first { $0.name == "plat_id_v" }?.value, 1)
+        XCTAssertEqual(readings.first { $0.name == "fw_type" }?.value, 3)
+        XCTAssertEqual(readings.first { $0.name == "fw_type_v" }?.value, 1)
+        XCTAssertEqual(readings.first { $0.name == "OemVendorId" }?.value, 0)
     }
 
     /// The CSME 18 arrays start after the tool's 8-byte header: the profile's

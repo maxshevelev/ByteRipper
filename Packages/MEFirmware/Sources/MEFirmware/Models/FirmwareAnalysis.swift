@@ -2776,5 +2776,11 @@ public enum EngineModelRevision {
     /// (`PLAT_ID`, `DNX`, `RPMC_RB`, `ESE_ROM_SVN_EN`, the CSE FVC states and
     /// the validity bits beside them) — seven more rows on such an image, where
     /// revision 49 read the first array alone.
-    public static let current = 54
+    /// 55 does not grow the shape either: `uepSettings` is now filled on
+    /// CSME 12 too, from Flash Image Tool 12's CNP `Uep` document
+    /// (`UEPMap.csme12`, emitted by `uep12_map.py`). The container is the
+    /// tool's 8-byte header and four 0x80-byte arrays; the Boot Guard profile
+    /// proper is still the record this generation keeps, and the array's bits
+    /// are read alongside it. Ours; upstream reads none of the UEP bits.
+    public static let current = 55
 }
