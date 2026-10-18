@@ -20,12 +20,16 @@ import Foundation
 /// tools do not agree on is not here at all rather than guessed at — the
 /// sections a bench meets are the ones the dumps at hand showed.
 ///
-/// **The one generation-keyed set is FIT 11's SPT tables.** Its lengths overlap
-/// the shared ones — 90 words is a PCH section in both, 3 words a processor
-/// section — without being the same section, and the fields carry their
-/// CamelCase names. Sunrise Point and Lewisburg read those, and only where the
-/// descriptor's generation is certain: an uncertain one is read with the
-/// shared tables, which is what every generation had before.
+/// **The generation-keyed sets are FIT 11's SPT tables and the legacy
+/// guides'.** SPT's lengths overlap the shared ones — 90 words is a PCH section
+/// in both, 3 words a processor section — without being the same section, and
+/// the fields carry their CamelCase names. Sunrise Point and Lewisburg read
+/// those, and only where the descriptor's generation is certain: an uncertain
+/// one is read with the shared tables, which is what every generation had
+/// before. The generations before FIT's layout documents — Ibex Peak, Cougar
+/// Point and Lynx Point — read flashrom's structures written from Intel's SPI
+/// Programming Guides (`intel_strap_map.py`): their sections are 16, 18 and 21
+/// words, and a length is only theirs on the generation that states it.
 public struct DescriptorStrapMap: Sendable {
     /// One named field of the section: where it sits and what the tool writes
     /// there by default. The name is the tool's own identifier —
@@ -138,7 +142,13 @@ public struct DescriptorStrapMap: Sendable {
             .filter { !isReserved($0) }
         guard !names.isEmpty else { return nil }
         let parts = names.map { $0.split(separator: "_", omittingEmptySubsequences: false) }
-        guard parts.count > 1 else { return String(parts[0][0]) }
+        // A word of one field gives its block, the first word of the name —
+        // but only where the name is underscore-separated. FIT 11's CamelCase
+        // spellings (`PchStrapSMB0RQ`) have no block to give, and the word
+        // gets no group rather than its field's name over again.
+        if parts.count == 1 {
+            return parts[0].count > 1 ? String(parts[0][0]) : nil
+        }
         var shared = 0
         while parts.allSatisfy({ shared < $0.count && $0[shared] == parts[0][shared] }) {
             shared += 1
@@ -188,16 +198,44 @@ public extension DescriptorStrapMap {
     }
 
     /// The PCH table for a section of `words` words on `generation`: SPT's
-    /// table set where the board is Sunrise Point or Lewisburg, the shared
-    /// ones otherwise. The two sets are kept apart because their lengths
-    /// overlap (90 words is a section in both) without being the section.
+    /// table set where the board is Sunrise Point or Lewisburg, the legacy
+    /// guides' own table where the board is Ibex Peak, Cougar Point or Lynx
+    /// Point, the shared ones otherwise. The sets are kept apart because their
+    /// lengths overlap (90 words is a section in both) without being the
+    /// section, and because the legacy tables are keyed by generation as well
+    /// as length: 16, 18 and 21 words belong to those boards' sections, and a
+    /// section of one of those lengths is only read when the generation is
+    /// certain.
     static func forSection(words: Int,
                            generation: DescriptorGeneration,
                            generationIsCertain: Bool = true) -> DescriptorStrapMap? {
         if generationIsCertain, usesSPTLayout(generation) {
             return sptTables.first { $0.words == words }
         }
+        if generationIsCertain, let table = legacyTable(for: generation),
+           table.words == words {
+            return table
+        }
         return forSection(words: words)
+    }
+
+    /// The tables of the generations before FIT's layout documents: flashrom's
+    /// descriptor structures, written from Intel's SPI Programming Guides
+    /// (`intel_strap_map.py`). A section of another length is not theirs.
+    static var legacyTables: [DescriptorStrapMap] { [.pch16, .pch18, .pch21] }
+
+    /// The legacy table of a generation, or nil where the generations at hand
+    /// have none. Lynx Point's 21-word section is read with the Cougar Point
+    /// field set carried forward — `StrapMap+LPT` says why, and which words
+    /// that covers.
+    static func legacyTable(for generation: DescriptorGeneration)
+        -> DescriptorStrapMap? {
+        switch generation {
+        case .ibexPeak: return .pch16
+        case .cougarPoint: return .pch18
+        case .lynxPoint: return .pch21
+        default: return nil
+        }
     }
 
     /// The layout of a strap section of `words` words, or nil where no tool at
