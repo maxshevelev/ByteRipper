@@ -804,14 +804,16 @@ final class HexView: NSView {
             hoverCallout.hide()
             return
         }
+        // A named mark has the address. An address with nothing to say goes on
+        // to the notes: the Offset column runs right up to the first byte, and
+        // the outer half of a note's left edge lies in it — the same reach the
+        // right edge has over the gap before the decoded text.
         if let offset = offsetColumnOffset(at: point) {
             let text = dataSource.hexBookmarkHoverText(atRowContaining: offset)
-            guard !text.isEmpty else {
-                hoverCallout.hide()
+            if !text.isEmpty {
+                hoverCallout.show(text, mark: .bookmark, near: bookmarkMarkRect(forRowContaining: offset), of: self)
                 return
             }
-            hoverCallout.show(text, mark: .bookmark, near: bookmarkMarkRect(forRowContaining: offset), of: self)
-            return
         }
         guard let range = noteContour(at: point), let note = dataSource.hexAgentMarkHover(for: range) else {
             hoverCallout.hide()

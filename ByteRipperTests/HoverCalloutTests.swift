@@ -224,6 +224,37 @@ final class HoverCalloutTests: XCTestCase {
         XCTAssertFalse(callout.isShowing, "and nothing outside it either")
     }
 
+    /// The outline answers the same distance either side of it on both of its
+    /// edges: the left one lies against the Offset column, and the part of its
+    /// reach over that column is the note's as much as the part over the
+    /// bytes — the right edge has the same reach over the gap before the
+    /// decoded text.
+    func testBothEdgesOfANoteAnswerAsFarOut() throws {
+        let (hexView, window) = try makeAnnotatedPane(by: .person)
+        let layout = hexView.hexLayout
+        // Halfway down the note's two rows, on its vertical edges.
+        let y = 5 * layout.rowHeight
+        // Measured round each line only: the decoded text's own outline starts
+        // a few points past the hex column's right edge, and is another edge.
+        let pad = HexView.mirrorContourPadding
+        func reach(around x: CGFloat) -> [CGFloat] {
+            stride(from: x - 5.5, through: x + 5.5, by: 0.5)
+                .filter { hexView.noteContour(at: NSPoint(x: $0, y: y)) != nil }
+        }
+        let left = reach(around: layout.hexByteX(column: 0) - pad)
+        let right = reach(around: layout.hexByteX(column: 15) + layout.hexByteWidth + pad)
+        XCTAssertFalse(left.isEmpty)
+        XCTAssertEqual(left.count, right.count, "the two edges reach as far")
+
+        for x in left + right {
+            hover(hexView, at: NSPoint(x: x, y: y), window: window)
+            XCTAssertTrue(hexView.hoverCallout.isShowing, "the note answers at x = \(x)")
+        }
+        let outside = try XCTUnwrap(left.first) - 2
+        hover(hexView, at: NSPoint(x: outside, y: y), window: window)
+        XCTAssertFalse(hexView.hoverCallout.isShowing, "and an address beyond its reach says nothing")
+    }
+
     /// An agent's note wears the agent's hue, not the person's: the two are
     /// told apart in the callout as they are in the dump.
     func testAnAgentsNoteWearsTheAgentsHue() throws {
