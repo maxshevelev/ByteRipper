@@ -452,8 +452,11 @@ final class DescriptorInfoTests: XCTestCase {
             }
             // The SoC block states three 32-bit CSME SMT IDs across a word
             // boundary; a one-word field cannot hold those, so the three words
-            // they partly cover may hold no field of their own.
-            let crossing: Set<Int> = map.words == 130 ? [41, 46, 51] : []
+            // they partly cover may hold no field of their own. FIT 11's
+            // 139-word desktop table states no field at all for two of its
+            // words; the panel shows those two as raw values.
+            let crossing: Set<Int> = map.words == 130 ? [41, 46, 51]
+                : map.words == 139 ? [14, 57] : []
             XCTAssertEqual(Set(0..<map.words).subtracting(words), crossing,
                            "every word of the \(map.words)-word section holds fields")
         }

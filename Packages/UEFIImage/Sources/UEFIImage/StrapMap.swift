@@ -158,7 +158,8 @@ public struct DescriptorStrapMap: Sendable {
 public extension DescriptorStrapMap {
     /// The tables at hand, one per section length.
     static var all: [DescriptorStrapMap] {
-        [.pch69, .pch70, .pch74, .pch90, .pch101, .pch114, .pch115, .pch130]
+        [.pch66, .pch69, .pch70, .pch74, .pch88, .pch90, .pch101, .pch114,
+         .pch115, .pch130, .pch139]
     }
 
     /// The layout of a strap section of `words` words, or nil where no tool at

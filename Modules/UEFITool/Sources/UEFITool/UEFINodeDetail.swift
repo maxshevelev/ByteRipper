@@ -1758,6 +1758,15 @@ public enum UEFIDetail {
                 cells: [.init(bit.name), .init("\(bit.bit)"),
                         .init(bit.isSet ? "0x1" : "0x0"), .init("")]))
         }
+        // A word the table names no field of still has its value: the section
+        // belongs to the descriptor, not to the table, and a table that states
+        // only part of one must not hide the rest.
+        let covered = Set(rows.map(\.word))
+        for word in 0..<straps.words.count where !covered.contains(word) {
+            rows.append(Row(word: word, bit: -1, isSet: false,
+                            cells: [.init("PCHSTRP\(word)"), .init(""),
+                                    .init(hex(straps.words[word])), .init("")]))
+        }
         rows.sort { ($0.word, $0.bit) < ($1.word, $1.bit) }
 
         var sections: [UEFIDetailTable.Section] = []
