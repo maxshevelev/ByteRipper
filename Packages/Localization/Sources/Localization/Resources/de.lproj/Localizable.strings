@@ -1628,6 +1628,12 @@
 "Manufacturing Lock" = "Manufacturing Lock";
 "CPU straps" = "CPU-Straps";
 "Descriptor registers" = "Deskriptor-Register";
+"MIP table" = "MIP-Tabelle";
+"DbC straps" = "DbC-Straps";
+"CSE DbC configuration" = "CSE-DbC-Konfiguration";
+"PMC and CPU soft straps" = "PMC- und CPU-Softstraps";
+"Block" = "Block";
+"Block %1$d" = "Block %1$d";
 "SPHY OEM configuration" = "SPHY-OEM-Konfiguration";
 "CSME straps" = "CSME-Straps";
 "PMC SoC straps" = "PMC-SoC-Straps";

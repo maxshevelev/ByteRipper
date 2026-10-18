@@ -574,6 +574,21 @@ Which reading applies is `DescriptorGeneration.hasProcessorStrapSection`
 generation is certain, since an assumed one may be a classic layout); the
 reading is `DescriptorInfo.processorStraps`.
 
+**The MIP area also carries a block table**, which Cannon Point introduced
+(`MipDescNvar`) and Meteor Lake erases: at `UpperMap[31:24] << 4` — `0xC00` on
+every dump at hand — a `u16` count and a `u16` area size, then one eight-byte
+entry per block, `{type, offset, length, reserved}`, whose payload follows the
+table. Every dump from Cannon Point to Alder Point states two blocks: type 1,
+the PMC and CPU soft straps (40 bytes on the CSME 12 and 14 dumps, 124 on 13,
+152 on 15, 168 on 16), and type 0, the CSE DbC configuration (8 bytes). It is
+`DescriptorInfo.mip`, and the panel lists the blocks and reads the DbC one
+through the three masks every FIT document states alike in the block's second
+word — bits 23:16 the ME boot stall, 15:8 the USB3 port enable, 7:0 the USB2
+one. On `CSME 12.BIN` the block's words are `0x00000000 0x0000FFFF`: every
+port enabled, no stall. The PMC and CPU block's fields are not named yet —
+their layouts are in the FIT builds' **common** documents, which the builds at
+hand carry only for their own platform overrides.
+
 ---
 
 ## 3. The firmware volume (FV)

@@ -140,6 +140,20 @@ public enum DescriptorGeneration: Sendable, Equatable, CaseIterable {
         }
     }
 
+    /// Whether the descriptor's MIP area carries the block table Cannon Point
+    /// introduced (`MipDescNvar`): the PMC and CPU soft straps and the CSE DbC
+    /// configuration, with their places in the area's first bytes. Meteor Lake
+    /// and later erase the area, and the upper map's high byte means the SoC
+    /// soft straps there instead (`DescriptorInfo.MIPTable`).
+    var hasMIPDescriptorTable: Bool {
+        switch self {
+        case .cannonPoint, .tigerPoint, .alderPoint, .elkhartLake, .jasperLake:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// The PCH strap bit that soft-disables the ME, as ifdtool and me_cleaner
     /// set it: `ICH_MeDisable` in the first word up to ICH10, `AltMeDisable`
     /// in the eleventh from Ibex Peak to Wildcat Point, and HAP in the first
