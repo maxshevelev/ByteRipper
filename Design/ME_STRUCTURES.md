@@ -749,6 +749,17 @@ PMC IOE, 5/5 in CSME, 443/448 in IOE. The PMC SoC four are this board's own
 values (debug messaging off, ISH disabled, two Type-C SMBus addresses unset);
 the IOE five likewise, and its 63 constant-valued fields all match.
 
+**The SPHY OEM configuration nvar.** The FITC partition's `phy_oem_cfg`
+(`/home/bup/phy_oem_cfg`, FileID 0x1001F200) carries the PHY tuning block, and
+the `SphyNvar` document lays it out (`offset*8 + bitfield_low … + bitfield_high`;
+`ValidByte`/`EnableBit` are the byte at `offset`). The package carries four SPHY
+variants (522, 542, 967 fields and an API-table form) with identical headers;
+the emitted layout is the one the CSME 18 dump verifies — all **522** constant
+values read exactly — and it carries anchors (the common header, plus
+`Sub_Section_Entry2_Header_8` = 0x5 against the 542-field variant's 0x19) so
+another variant answers nothing. The panel shows the fields under "SPHY OEM
+configuration".
+
 **The descriptor's registers.** The same harness documents lay out FLMAP0/1/2,
 FLCOMP, FLIL, FLMSTR, FLDRPLCY and FLUMAP1 bit by bit; `descriptor18_map.py`
 emits them into `DescriptorRegisterMap+CSME18`, and the UEFI Structure panel

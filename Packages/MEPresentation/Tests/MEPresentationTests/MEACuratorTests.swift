@@ -122,6 +122,24 @@ final class MEACuratorTests: XCTestCase {
         XCTAssertEqual(ioe.children.first?.subtitle, "1x4 Lane Reversed (1)")
     }
 
+    /// The SPHY OEM configuration is a group of its own: the tool's field
+    /// names with the image's values, shown flat.
+    func testTheSphyNvarIsAGroup() throws {
+        let a = try analysis([
+            "version": ["major": 18, "minor": 0, "hotfix": 10, "build": 2288],
+            "sphyNvar": [
+                ["name": "SPHY_OEM_NVAR_Common_Header_1", "value": 3],
+                ["name": "Sub_Section_Entry0_Header_1", "value": 5],
+            ],
+        ])
+        let group = try XCTUnwrap(find("SPHY OEM configuration",
+                                       in: MEACurator.present(a, in: .english)))
+        XCTAssertEqual(group.fields.map(\.value), ["2"])
+        XCTAssertEqual(group.children.map(\.title),
+                       ["SPHY_OEM_NVAR_Common_Header_1", "Sub_Section_Entry0_Header_1"])
+        XCTAssertEqual(group.children.map(\.subtitle), ["3", "5"])
+    }
+
     // MARK: - Fixtures
 
     /// Decode an analysis whose top-level fields are `overrides` merged over

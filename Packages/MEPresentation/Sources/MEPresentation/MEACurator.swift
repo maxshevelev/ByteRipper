@@ -51,6 +51,7 @@ public enum MEACurator {
         add(uepGroup(analysis, in: language))
         add(cpuStrapGroup(analysis, in: language))
         mipStrapGroups(analysis, in: language).forEach(add)
+        add(sphyGroup(analysis, in: language))
 
         // Fact groups — everything else a dump carried, each only when present.
         add(chipsetInitGroup(analysis, in: language))
@@ -654,6 +655,20 @@ public enum MEACurator {
                          MEAField("Length", "\(container.length) bytes")],
                 children: rows)
         }
+    }
+
+    /// The SPHY OEM configuration the image's `phy_oem_cfg` nvar holds — the
+    /// PHY tuning block, in the tool's own field names. Shown flat: the names
+    /// carry their section (`Common_Header`, `Sub_Section_Entry…`).
+    private static func sphyGroup(_ a: FirmwareAnalysis,
+                                  in language: AppLanguage) -> MEANode? {
+        guard let readings = a.sphyNvar, !readings.isEmpty else { return nil }
+        let rows = readings.map { reading in
+            MEANode(path: [], title: reading.name, subtitle: "\(reading.value)")
+        }
+        return MEANode(
+            path: [], title: L("SPHY OEM configuration", in: language),
+            fields: [MEAField("Fields", "\(readings.count)")], children: rows)
     }
 
     private static func chipsetInitGroup(_ a: FirmwareAnalysis, in language: AppLanguage) -> MEANode? {

@@ -91,6 +91,12 @@ File: `Packages/MEFirmware/Sources/MEFirmware/Models/FirmwareAnalysis.swift`
   the image's next boot; this answers for the machine it was taken from. Ours;
   the record is read by neither upstream nor the tools. It is nil where the
   volume's files carry no File IDs or the table that names them was not read.
+  Revision 53 adds `sphyNvar`: the SPHY OEM configuration the FITC partition's
+  `phy_oem_cfg` nvar holds, read through the tool's `SphyNvar` layout
+  (`SphyNvarMap`, emitted by `sphy18_map.py`) as name/value readings. The
+  layout's anchors are verified first: the package carries several SPHY
+  variants with identical headers. Ours; upstream reads none of it. Full Info
+  shows it under "SPHY OEM configuration".
   Revision 52 adds `mipStraps`: the MIP table's other strap containers — PMC
   SoC, CSME (DBC), PMC IOE, IOE, and the five-block table's PMC SOC 2 and
   CPU 2 — each a `MIPStrapContainerReadings` read through the tool's own
