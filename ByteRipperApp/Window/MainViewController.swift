@@ -5062,12 +5062,34 @@ final class MainViewController: NSViewController {
 
     // MARK: - Edit commands (§7, §12)
 
-    @objc func undoEdit() {
+    /// Edit ▸ Undo (⌘Z), the standard `undo:`. This controller sits in the
+    /// chain ahead of the window, which is what answers `undo:` for text, so
+    /// it reaches here for a field being typed in too: that field's typing is
+    /// undone, through its own undo manager, and only otherwise the active
+    /// pane's last edit.
+    @objc func undo(_ sender: Any?) {
+        if let text = editedText {
+            text.undoManager?.undo()
+            return
+        }
         _ = try? activePane.undo()
     }
 
-    @objc func redoEdit() {
+    /// Edit ▸ Redo (⇧⌘Z), the standard `redo:` — routed as Undo is.
+    @objc func redo(_ sender: Any?) {
+        if let text = editedText {
+            text.undoManager?.redo()
+            return
+        }
         _ = try? activePane.redo()
+    }
+
+    /// The text being edited in this window — a field's editor, or any
+    /// editable text view — when it has the focus, or nil when it does not.
+    private var editedText: NSTextView? {
+        guard let text = viewIfLoaded?.window?.firstResponder as? NSTextView,
+              text.isEditable else { return nil }
+        return text
     }
 
     /// Edit ▸ Select All (⌘A) with a dump in focus: every byte of the active
@@ -5078,26 +5100,11 @@ final class MainViewController: NSViewController {
         focusActiveHexView()
     }
 
-    /// Edit > Copy (⌘C): copies the text selected in a tool panel's details,
-    /// else the ACTIVE pane's selection.
-    ///
-    /// The details rows answer ⌘C themselves while they have the focus, but
-    /// the menu is the other way to the same command — the item, or a key
-    /// that reaches the menu first — and it used to copy the dump's bytes, or
-    /// sit dimmed, with text selected beside it.
-    @objc func copySelection() {
-        if let rows = detailTextSelection {
-            rows.copy(nil)
-            return
-        }
+    /// Edit ▸ Copy (⌘C), the standard `copy:`, with the dump in focus: the
+    /// ACTIVE pane's selection. Text in focus — a field, a tool panel's
+    /// details rows — answers `copy:` itself first and copies its own text.
+    @objc func copy(_ sender: Any?) {
         copySelectionBytes(of: activePane)
-    }
-
-    /// The tool panel's rows holding the focus with text selected in them.
-    private var detailTextSelection: ToolSelectableRows? {
-        guard let rows = viewIfLoaded?.window?.firstResponder as? ToolSelectableRows,
-              rows.selectedText != nil else { return nil }
-        return rows
     }
 
     /// Context menu > Copy: copies the RIGHT-CLICKED pane's selection (§10.2).
@@ -7928,13 +7935,21 @@ extension MainViewController: NSMenuItemValidation {
             // open.
             menuItem.state = activePane.isInsertMode ? .on : .off
             return true
-        case #selector(undoEdit):
+        case #selector(undo(_:)) where editedText != nil:
+            let undo = editedText?.undoManager
+            menuItem.title = undo?.undoMenuItemTitle ?? L("Undo")
+            return undo?.canUndo ?? false
+        case #selector(redo(_:)) where editedText != nil:
+            let undo = editedText?.undoManager
+            menuItem.title = undo?.redoMenuItemTitle ?? L("Redo")
+            return undo?.canRedo ?? false
+        case #selector(undo(_:)):
             // A step made on the user's behalf by something with a name of its
             // own says what it was — "Undo Add Microcode" (§26). Ordinary
             // editing has no name, and the item stays the bare verb.
             menuItem.title = activePane.undoLabel.map { L("Undo %1$@", $0) } ?? L("Undo")
             return activePane.isOpen
-        case #selector(redoEdit):
+        case #selector(redo(_:)):
             menuItem.title = activePane.redoLabel.map { L("Redo %1$@", $0) } ?? L("Redo")
             return activePane.isOpen
         case #selector(saveDocument),
@@ -8097,9 +8112,7 @@ extension MainViewController: NSMenuItemValidation {
         case #selector(copyPaneSelectionToOtherPane(_:)):
             guard let target = menuItem.representedObject as? OffsetContextTarget else { return false }
             return canCopyToOtherPane(from: target.pane)
-        case #selector(copySelection) where detailTextSelection != nil:
-            return true
-        case #selector(copySelection),
+        case #selector(copy(_:)),
              #selector(useSelectionForFind):
             // Both act on the selection, so both are dimmed without one: ⌘E
             // with nothing selected would have nothing to take (§11).

@@ -1175,30 +1175,33 @@ final class AgentAnnotationTests: XCTestCase {
         let store = try XCTUnwrap(service.annotationTools)
         store.arrange(["a2", "a3", "a1"])
         let original = store.all()
-        let undo = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit), keyEquivalent: "z")
-        let redo = NSMenuItem(title: "Redo", action: #selector(MainViewController.redoEdit), keyEquivalent: "Z")
-        XCTAssertFalse(notesWindow.validateMenuItem(undo), "nothing to undo yet")
+        // The window's own undo manager: Edit ▸ Undo is the standard `undo:`,
+        // which the window answers from it.
+        let window = try XCTUnwrap(notesWindow.window)
+        let undo = try XCTUnwrap(window.undoManager)
+        XCTAssertTrue(undo === notesWindow.removals)
+        XCTAssertFalse(undo.canUndo, "nothing to undo yet")
 
         cards.onRemove(["a3"])
         cards.onRemove(["a1"])
         XCTAssertEqual(store.ordered().map(\.id), ["a2"])
-        XCTAssertTrue(notesWindow.validateMenuItem(undo))
+        XCTAssertTrue(undo.canUndo)
 
-        notesWindow.undoEdit()
+        undo.undo()
         XCTAssertEqual(store.ordered().map(\.id), ["a2", "a1"], "the last removal first, in its place")
         XCTAssertEqual(cards.selectedIDs, ["a1"], "and selected")
-        notesWindow.undoEdit()
+        undo.undo()
         XCTAssertEqual(store.ordered().map(\.id), ["a2", "a3", "a1"])
         XCTAssertEqual(store.all(), original, "as they were, the relation to A too")
-        XCTAssertFalse(notesWindow.validateMenuItem(undo))
+        XCTAssertFalse(undo.canUndo)
         _ = await settle(AgentAnnotationCards.moveDuration + 0.3)
         XCTAssertEqual(cards.rows.map(\.id), ["a2", "a3", "a1"])
         XCTAssertEqual(cards.shownTexts(of: "a3").last, "→ a1 A", "the card says the relation again")
 
-        XCTAssertTrue(notesWindow.validateMenuItem(redo))
-        notesWindow.redoEdit()
+        XCTAssertTrue(undo.canRedo)
+        undo.redo()
         XCTAssertEqual(store.ordered().map(\.id), ["a2", "a1"])
-        notesWindow.undoEdit()
+        undo.undo()
         XCTAssertEqual(store.ordered().map(\.id), ["a2", "a3", "a1"])
     }
 

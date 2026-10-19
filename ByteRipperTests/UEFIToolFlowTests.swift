@@ -545,14 +545,15 @@ final class UEFIToolFlowTests: XCTestCase {
             XCTAssertTrue(window.performKeyEquivalent(with: try commandC(in: window)), "⌘C is answered, large \(large)")
             XCTAssertEqual(NSPasteboard.general.string(forType: .string), expected, "the selected text is copied, large \(large)")
 
-            // The same through the Edit menu's Copy: enabled with text
-            // selected whatever the dump holds, and it copies that text.
-            let item = NSMenuItem(title: "Copy", action: #selector(MainViewController.copySelection), keyEquivalent: "c")
-            let target = try XCTUnwrap(controller)
-            XCTAssertTrue(target.validateMenuItem(item), "Copy is enabled with details text selected, large \(large)")
+            // The same through the Edit menu's Copy, the standard `copy:`: the
+            // rows hold the focus, so they answer it ahead of the dump, and it
+            // copies their text.
+            let copy = #selector(NSText.copy(_:))
+            XCTAssertTrue(window.firstResponder === rows)
+            XCTAssertTrue(rows.responds(to: copy), "the rows answer Copy, large \(large)")
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString("untouched", forType: .string)
-            target.copySelection()
+            XCTAssertTrue(try XCTUnwrap(window.firstResponder).tryToPerform(copy, with: nil))
             XCTAssertEqual(NSPasteboard.general.string(forType: .string), expected, "the menu copies the text, large \(large)")
         }
         pane.closeQuickLook()

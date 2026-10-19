@@ -73,9 +73,9 @@ final class ToolEditTests: XCTestCase {
     /// made is still identifiable afterwards.
     func testTheUndoItemNamesTheTransaction() throws {
         let (host, controller) = try makeHost()
-        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit),
+        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undo(_:)),
                               keyEquivalent: "z")
-        let redoItem = NSMenuItem(title: "Redo", action: #selector(MainViewController.redoEdit),
+        let redoItem = NSMenuItem(title: "Redo", action: #selector(MainViewController.redo(_:)),
                                   keyEquivalent: "Z")
 
         try host.apply(ToolTransaction(name: "Add Microcode", offset: 0x10, bytes: [0xAB]))
@@ -91,7 +91,7 @@ final class ToolEditTests: XCTestCase {
     /// Ordinary editing has no name, and the item stays the bare verb.
     func testTypingLeavesTheUndoItemUnnamed() throws {
         let (_, controller) = try makeHost()
-        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit),
+        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undo(_:)),
                               keyEquivalent: "z")
 
         try controller.windowModel.pane1.pasteWrite([0x01])

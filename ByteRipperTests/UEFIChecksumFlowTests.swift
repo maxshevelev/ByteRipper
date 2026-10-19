@@ -196,7 +196,7 @@ final class UEFIChecksumFlowTests: XCTestCase {
                        "the write restored the value the fixture computed")
 
         // One named undo step takes it back.
-        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit),
+        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undo(_:)),
                               keyEquivalent: "z")
         _ = controller.validateMenuItem(item)
         XCTAssertEqual(item.title, "Undo Fix Checksum")

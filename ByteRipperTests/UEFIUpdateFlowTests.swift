@@ -165,7 +165,7 @@ final class UEFIUpdateFlowTests: XCTestCase {
         XCTAssertEqual(try storage.read(at: 0x1900, length: 1), [image[0x1900]], "the board's NVRAM is kept")
         XCTAssertEqual(controller.lastAlertTitle, "Written from the update file")
 
-        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit), keyEquivalent: "z")
+        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undo(_:)), keyEquivalent: "z")
         _ = controller.validateMenuItem(item)
         XCTAssertEqual(item.title, "Undo Write from Update File")
     }

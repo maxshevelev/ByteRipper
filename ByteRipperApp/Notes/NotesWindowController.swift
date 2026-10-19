@@ -57,10 +57,21 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     /// Whether the window was in view when last asked: coming into view
     /// marks the notes made meanwhile new, going out of it takes the marks off.
     private var wasInView = false
-    /// The removals made here, the last last: ⌘Z puts the cards back where
-    /// they stood, ⇧⌘Z removes them again. Kept while the app runs, not
-    /// from one launch to the next.
-    private var undoable: [AgentAnnotationTools.Removal] = []
+    /// The removals made here: ⌘Z puts the cards back where they stood, the
+    /// last first, ⇧⌘Z removes them again. Kept while the app runs, not from
+    /// one launch to the next.
+    ///
+    /// It is the window's own undo manager (`windowWillReturnUndoManager`), so
+    /// Edit ▸ Undo — the standard `undo:`, which the window answers — reaches
+    /// it with no action of this window's own.
+    ///
+    /// One removal is one step whatever else happened in the same event, so
+    /// the steps are grouped by hand rather than by event.
+    let removals: UndoManager = {
+        let manager = UndoManager()
+        manager.groupsByEvent = false
+        return manager
+    }()
     /// A place in a tab the window was come to from, or goes on to.
     struct Stop {
         weak var controller: MainViewController?
@@ -77,7 +88,6 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
     /// The zoom, so the cards re-measure and re-draw while the window is open
     /// rather than on the next open.
     private var zoomObserver: NSObjectProtocol?
-    private var redoable: [AgentAnnotationTools.Removal] = []
 
     private init() {
         let window = NSWindow(
@@ -324,8 +334,7 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         cards.onRemove = { [weak self] ids in
             let chosen = Set(ids)
             guard let removal = AgentAnnotationTools.current?.removal(where: { chosen.contains($0.id) }) else { return }
-            self?.undoable.append(removal)
-            self?.redoable = []
+            self?.recordRemoval(removal)
         }
         cards.onArrange = { ids in AgentAnnotationTools.current?.arrange(ids) }
         // help: window.notes.edit
@@ -373,27 +382,38 @@ final class NotesWindowController: NSWindowController, NSWindowDelegate {
         window?.makeFirstResponder(cards.collection)
     }
 
-    /// Edit ▸ Undo (⌘Z): the last removal made here undone — the cards back
-    /// where they stood, selected.
-    @objc func undoEdit() {
-        guard let removal = undoable.popLast(), let store = AgentAnnotationTools.current else { return }
+    func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
+        removals
+    }
+
+    /// A removal made here becomes one undo step: undoing it puts the cards
+    /// back (`putBack`), which registers removing them again as the redo.
+    private func recordRemoval(_ removal: AgentAnnotationTools.Removal) {
+        removals.beginUndoGrouping()
+        removals.registerUndo(withTarget: self) { $0.putBack(removal) }
+        removals.endUndoGrouping()
+    }
+
+    /// Edit ▸ Undo (⌘Z): a removal undone — the cards back where they stood,
+    /// selected.
+    private func putBack(_ removal: AgentAnnotationTools.Removal) {
+        guard let store = AgentAnnotationTools.current else { return }
         store.restore(removal)
-        redoable.append(removal)
         cards.select(removal.ids)
+        let ids = Set(removal.ids)
+        removals.registerUndo(withTarget: self) { $0.removeAgain(ids) }
     }
 
     /// Edit ▸ Redo (⇧⌘Z): the removal undone made again.
-    @objc func redoEdit() {
-        guard let undone = redoable.popLast(), let store = AgentAnnotationTools.current else { return }
-        let ids = Set(undone.ids)
-        if let removal = store.removal(where: { ids.contains($0.id) }) { undoable.append(removal) }
+    private func removeAgain(_ ids: Set<String>) {
+        guard let store = AgentAnnotationTools.current,
+              let removal = store.removal(where: { ids.contains($0.id) }) else { return }
+        removals.registerUndo(withTarget: self) { $0.putBack(removal) }
     }
 
     @objc func validateMenuItem(_ item: NSMenuItem) -> Bool {
         switch item.action {
         case #selector(selectAll(_:)): return !cards.isEmpty
-        case #selector(undoEdit): return !undoable.isEmpty
-        case #selector(redoEdit): return !redoable.isEmpty
         case #selector(navigateBack): return canNavigateBack
         case #selector(navigateForward): return canNavigateForward
         default: return true

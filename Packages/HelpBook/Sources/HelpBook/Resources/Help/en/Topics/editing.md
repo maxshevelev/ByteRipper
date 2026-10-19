@@ -4,6 +4,7 @@
 
 @covers menu.edit.undo
 @covers menu.edit.redo
+@covers menu.edit.cut
 @covers menu.edit.copy
 @covers menu.edit.paste
 @covers menu.edit.paste-insert
@@ -49,3 +50,9 @@ The confirmations can be switched off in [[topic:settings|Settings ▸ General]]
 ## Undo
 
 Every edit is one undo step (⌘Z), including the large ones: a join, a fill, a write made by a [[topic:tools-overview|tool panel]], a fragment written back into its parent. Undo is held per document.
+
+## In a text field
+
+While a text field has the focus — the search bar, a form, a dialog — the editing keys act on its text, as anywhere in macOS: ⌘A selects the text of the field, ⌘C, ⌘X and ⌘V copy, cut and paste text, and ⌘Z undoes the typing. They act on the bytes only while the dump has the focus.
+
+**Edit ▸ Cut** (⌘X) works only in a text field. Bytes are not cut, since cutting would shorten the file; the item is unavailable while the dump has the focus.

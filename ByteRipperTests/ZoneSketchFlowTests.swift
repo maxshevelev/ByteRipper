@@ -139,7 +139,7 @@ final class ZoneSketchFlowTests: XCTestCase {
         try button("Fill FF").performClick(nil)
 
         XCTAssertEqual(try pane.byteStorage?.read(at: 0x40, length: 4), [0xFF, 0xFF, 0xFF, 0xFF])
-        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit),
+        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undo(_:)),
                               keyEquivalent: "z")
         _ = controller.validateMenuItem(item)
         XCTAssertEqual(item.title, "Undo Fill Zone 1")

@@ -660,7 +660,7 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertTrue(display.problems.filter { $0.severity == .error }.isEmpty,
                       "\(display.problems.map(\.message))")
 
-        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit),
+        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undo(_:)),
                               keyEquivalent: "z")
         _ = controller.validateMenuItem(item)
         XCTAssertEqual(item.title, "Undo Add Microcode")
@@ -691,7 +691,7 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(try pane.byteStorage?.read(at: 0x2100, length: 4),
                        [0xFF, 0xFF, 0xFF, 0xFF], "nothing was written past it")
 
-        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit),
+        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undo(_:)),
                               keyEquivalent: "z")
         _ = controller.validateMenuItem(item)
         XCTAssertEqual(item.title, "Undo Replace Microcode")
@@ -810,7 +810,7 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertTrue(display.problems.filter { $0.severity == .error }.isEmpty,
                       "\(display.problems.map(\.message))")
 
-        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit),
+        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undo(_:)),
                               keyEquivalent: "z")
         _ = controller.validateMenuItem(item)
         XCTAssertEqual(item.title, "Undo Remove Microcode")
@@ -974,7 +974,7 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(try pane.byteStorage?.read(at: 0x200C, length: 4),
                        Array(other[0x0C..<0x10]), "the new component is where the old one was")
 
-        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit),
+        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undo(_:)),
                               keyEquivalent: "z")
         _ = controller.validateMenuItem(item)
         XCTAssertEqual(item.title, "Undo Replace Microcode")
@@ -1094,7 +1094,7 @@ final class FITToolFlowTests: XCTestCase {
         XCTAssertEqual(try pane.byteStorage?.read(at: 0x100F, length: 1), [0x5C])
         XCTAssertNil(try session().display.checksumFix)
 
-        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undoEdit),
+        let item = NSMenuItem(title: "Undo", action: #selector(MainViewController.undo(_:)),
                               keyEquivalent: "z")
         _ = controller.validateMenuItem(item)
         XCTAssertEqual(item.title, "Undo Fix FIT Checksum")

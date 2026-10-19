@@ -1,4 +1,4 @@
-@source-sha 8a27c718caa186c967098e3026a16ae759d4a8afc9226d60a0c4d0be132e5e37
+@source-sha 7e19307501ba33166b2710ed8101f4ae62eeae6fe018c20738589f82ee10f0c3
 # Bytes bearbeiten
 
 > Tippen überschreibt die vorhandenen Bytes. Jeder Vorgang, der die Länge der Datei ändert, fragt vorher nach.
@@ -39,3 +39,9 @@ Die Rückfragen lassen sich in den [[topic:settings|Einstellungen ▸ Allgemein]
 ## Widerrufen
 
 Jede Änderung ist ein Widerrufsschritt (⌘Z), auch die großen: ein Zusammenfügen, ein Füllen, ein von einem [[topic:tools-overview|Werkzeug]] geschriebener Vorgang, ein in die Quelle zurückgeschriebenes Fragment. Widerrufen wird je Dokument geführt.
+
+## In einem Eingabefeld
+
+Solange ein Eingabefeld den Fokus hat — die Suchleiste, ein Formular, ein Dialog —, wirken die Bearbeitungstasten auf dessen Text, wie überall in macOS: ⌘A wählt den Text des Feldes aus, ⌘C, ⌘X und ⌘V kopieren, schneiden aus und fügen Text ein, ⌘Z widerruft die Eingabe. Auf die Bytes wirken sie nur, solange der Dump den Fokus hat.
+
+**Bearbeiten ▸ Ausschneiden** (⌘X) funktioniert nur in einem Eingabefeld. Bytes werden nicht ausgeschnitten, da dies die Datei verkürzen würde; solange der Dump den Fokus hat, ist der Menüpunkt nicht verfügbar.

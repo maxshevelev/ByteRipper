@@ -366,14 +366,22 @@ enum MainMenu {
     /// `paste:` action (responder chain), never paste-write.
     static func makeEditMenu() -> NSMenu {
         let editMenu = NSMenu(title: L("Edit", context: "menu"))
+        // Undo, Redo, Cut, Copy, Paste and Select All send the standard
+        // actions, never the dump's own: the menu dispatches them down the
+        // responder chain, so a text field being typed in — the find bar, a
+        // form, a dialog — acts on its own text, and only a dump with the focus
+        // acts on bytes (MainViewController answers them there).
         // help: menu.edit.undo
-        editMenu.addItem(withTitle: L("Undo"), action: #selector(MainViewController.undoEdit), keyEquivalent: "z")
+        editMenu.addItem(withTitle: L("Undo"), action: #selector(MainViewController.undo(_:)), keyEquivalent: "z")
         // help: menu.edit.redo
-        editMenu.addItem(withTitle: L("Redo"), action: #selector(MainViewController.redoEdit), keyEquivalent: "Z")
+        editMenu.addItem(withTitle: L("Redo"), action: #selector(MainViewController.redo(_:)), keyEquivalent: "Z")
         editMenu.addItem(.separator())
-        editMenu.addItem(withTitle: L("Cut"), action: nil, keyEquivalent: "")
+        // Text only: a dump answers no `cut:`, since cutting bytes would
+        // shorten the file, so the item is dimmed there.
+        // help: menu.edit.cut
+        editMenu.addItem(withTitle: L("Cut"), action: #selector(NSText.cut(_:)), keyEquivalent: "x")
         // help: menu.edit.copy
-        editMenu.addItem(withTitle: L("Copy"), action: #selector(MainViewController.copySelection), keyEquivalent: "c")
+        editMenu.addItem(withTitle: L("Copy"), action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         // ⌘V is the standard Paste (§11): the menu item dispatches `paste:`
         // down the responder chain, so a focused text field's editor pastes
         // text, while a focused hex view routes to MainViewController.paste(_:)
