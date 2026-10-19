@@ -131,6 +131,10 @@ final class MainViewController: NSViewController {
     /// built on its own never closes its window by itself.
     var hasOtherTabs: (() -> Bool)?
 
+    /// Opens a project in place of everything open. Set by the app delegate,
+    /// which owns the windows a project replaces.
+    var openProject: ((URL) -> Void)?
+
     /// File ▸ New Tab (⌘T): an empty tab beside this window.
     ///
     /// It lands on the key window's controller, which is the window the tab
@@ -1711,8 +1715,15 @@ final class MainViewController: NSViewController {
         }
     }
 
+    /// The open project's name, which every window of it carries after its
+    /// own title — the tab bar and the Window menu say which job a tab is
+    /// part of (`Design/WORKSPACE_PLAN.md`, "Projects"). Set by the app.
+    var projectName: String? {
+        didSet { updateWindowTitle() }
+    }
+
     private func updateWindowTitle() {
-        viewIfLoaded?.window?.title = windowTitle
+        viewIfLoaded?.window?.title = projectName.map { "\(windowTitle) — \($0)" } ?? windowTitle
     }
 
     private func setContentView(_ newView: NSView) {
@@ -3600,6 +3611,13 @@ final class MainViewController: NSViewController {
     }
 
     private func openableFiles(from urls: [URL]) -> [URL] {
+        // A project is not a dump: whichever way it arrived — the Open panel,
+        // a drop — it opens as a project, in place of everything, and what
+        // was being opened here stops (`Design/WORKSPACE_PLAN.md`, "Projects").
+        if let project = urls.first(where: \.isByteRipperProject), let openProject {
+            openProject(project)
+            return []
+        }
         let files = urls.filter(isOpenableFile)
         if files.count < urls.count {
             presentAlert(title: L("Some files could not be opened"),

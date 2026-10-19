@@ -83,9 +83,13 @@ extension MainViewController {
                                ids: WorkspacePaneIDs) -> PaneState? {
         guard pane.isOpen, let document = pane.document else { return nil }
         let source: DocumentSource
+        var edits: String?
         if !pane.isUntitled {
-            source = .file(FileStamp(url: document.url)
-                ?? FileStamp(path: document.url.standardizedFileURL.path, size: pane.fileSize, modified: nil))
+            var stamp = FileStamp(url: document.url)
+                ?? FileStamp(path: document.url.standardizedFileURL.path, size: pane.fileSize, modified: nil)
+            stamp.relativePath = keeper?.relativeBase.flatMap { FileStamp.relativePath(of: stamp.path, to: $0) }
+            source = .file(stamp)
+            edits = keeper?.editsStamp(for: pane)
         } else if let origin = partOrigin(of: pane, keeper: keeper, ids: ids) {
             source = .part(origin)
         } else {
@@ -102,7 +106,8 @@ extension MainViewController {
             topOffset: filePaneView(for: pane)?.firstVisibleOffset ?? 0,
             segments: pane.workspaceSegments(),
             uefiOpenRows: pane.uefiState.openUEFIRows.isEmpty
-                ? nil : pane.uefiState.openUEFIRows.map(\.path).sorted { $0.lexicographicallyPrecedes($1) })
+                ? nil : pane.uefiState.openUEFIRows.map(\.path).sorted { $0.lexicographicallyPrecedes($1) },
+            edits: edits)
     }
 
     /// A part whose parent is still open. Changes its parent has not got are
@@ -131,22 +136,37 @@ extension MainViewController {
     /// unchanged since the workspace was written, or nil when it could not be
     /// opened. A part is not opened here: it waits for its parent
     /// (`openWorkspacePart`).
-    func openWorkspaceDocument(_ document: DocumentSource, in pane: PaneViewModel, keeper: UntitledKeeper?,
+    ///
+    /// A file is looked for at its path, then — inside a project — at its
+    /// path relative to the project; its kept changes are laid over it again
+    /// when it is the file they were made on.
+    func openWorkspaceDocument(_ state: PaneState, in pane: PaneViewModel, keeper: UntitledKeeper?,
                                issues: inout [RestoreIssue]) -> Bool? {
-        switch document {
+        switch state.document {
         case let .file(stamp):
-            guard let current = FileStamp(url: stamp.url) else {
+            guard let url = stamp.locate(relativeTo: keeper?.relativeBase),
+                  let current = FileStamp(url: url) else {
                 issues.append(.missing(path: stamp.path))
                 return nil
             }
             do {
-                try pane.open(url: stamp.url)
+                try pane.open(url: url)
             } catch {
                 issues.append(.missing(path: stamp.path))
                 return nil
             }
             let unchanged = stamp.isUnchanged(comparedWith: current)
-            if !unchanged { issues.append(.changed(path: stamp.path)) }
+            if !unchanged {
+                issues.append(.changed(path: url.path))
+            } else if let id = state.edits, let edits = keeper?.edits(id) {
+                do {
+                    try pane.applyKeptEdits(edits)
+                    keeper?.adoptEdits(pane, as: id)
+                } catch {
+                    issues.append(.changed(path: url.path))
+                    return false
+                }
+            }
             return unchanged
         case let .untitled(stamp):
             guard let bytes = keeper?.bytes(for: stamp) else {

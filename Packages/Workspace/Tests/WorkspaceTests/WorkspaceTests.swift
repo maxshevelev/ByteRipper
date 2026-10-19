@@ -169,3 +169,37 @@ extension WorkspaceTests {
         XCTAssertEqual(folder.readUntitled("b"), Data([4]))
     }
 }
+
+extension WorkspaceTests {
+    func testARelativePathClimbsOutOfTheProjectsFolder() {
+        let folder = URL(fileURLWithPath: "/Users/me/Jobs/1234")
+        XCTAssertEqual(FileStamp.relativePath(of: "/Users/me/Jobs/1234/dumps/a.bin", to: folder), "dumps/a.bin")
+        XCTAssertEqual(FileStamp.relativePath(of: "/Users/me/Jobs/shared/b.bin", to: folder), "../shared/b.bin")
+        XCTAssertNil(FileStamp.relativePath(of: "/Volumes/USB/c.bin", to: folder))
+    }
+
+    func testAFileMovedWithItsProjectIsFoundByItsRelativePath() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("Move-\(UUID().uuidString)")
+        addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+        let moved = root.appendingPathComponent("new/dumps")
+        try FileManager.default.createDirectory(at: moved, withIntermediateDirectories: true)
+        try Data([1]).write(to: moved.appendingPathComponent("a.bin"))
+        var stamp = FileStamp(path: root.appendingPathComponent("old/dumps/a.bin").path, size: 1, modified: nil)
+        stamp.relativePath = "dumps/a.bin"
+        XCTAssertEqual(stamp.locate(relativeTo: root.appendingPathComponent("new"))?.lastPathComponent, "a.bin")
+        XCTAssertNil(stamp.locate(relativeTo: root.appendingPathComponent("elsewhere")))
+    }
+
+    func testAProjectKeepsChangesBesideItsFile() throws {
+        let folder = WorkspaceFolder.project(at: FileManager.default.temporaryDirectory
+            .appendingPathComponent("Job-\(UUID().uuidString).brp"))
+        addTeardownBlock { folder.remove() }
+        try folder.write(Workspace(windows: []))
+        XCTAssertEqual(folder.fileURL.lastPathComponent, "Project.json")
+        try folder.writeEdits("e1", data: Data([1, 2]))
+        try folder.writeEdits("e2", data: Data([3]))
+        folder.removeEdits(except: ["e2"])
+        XCTAssertNil(folder.readEdits("e1"))
+        XCTAssertEqual(folder.readEdits("e2"), Data([3]))
+    }
+}

@@ -678,6 +678,35 @@ final class PaneViewModel: HexViewDataSource {
         notifyCompanionContentFullyChanged()
     }
 
+    /// Lays the unsaved changes a project kept for this file over it, as they
+    /// were when the project was left (`Design/WORKSPACE_PLAN.md`, "Projects"):
+    /// the bytes read changed again, red against the file, and closing asks.
+    /// Throws when they do not fit the file — it changed since.
+    func applyKeptEdits(_ edits: OverlayEdits) throws {
+        guard let doc = document, let overlay = doc.storage as? EditOverlayStorage else {
+            throw StorageError.readFailed
+        }
+        try overlay.applyEdits(edits)
+        // Changes nobody saved, with no history to undo them by: the state a
+        // join leaves a document in, and what makes a close ask.
+        doc.undoHistory.clearKeepingDirty()
+        resetEditingState()
+        resetSegments(for: doc)
+        doc.setSelection(.empty(at: min(doc.selection.start, doc.size), fileSize: doc.size))
+        signalFullInvalidation()
+        notify(reveal: .stay)
+        notifyCompanionContentFullyChanged()
+    }
+
+    /// The unsaved changes of a file this pane holds, as a project keeps them;
+    /// nil for an untitled document, a clean file, or a storage that cannot
+    /// say.
+    func exportKeptEdits() -> OverlayEdits? {
+        guard !isUntitled, let doc = document, doc.isDirty,
+              let overlay = doc.storage as? EditOverlayStorage else { return nil }
+        return try? overlay.exportEdits()
+    }
+
     /// Opens a brand-new empty document in memory (File > New File). Nothing is
     /// written to disk until the first Save As; until then the pane reports
     /// `isUntitled` so the UI can show "Untitled" and route Save to Save As.

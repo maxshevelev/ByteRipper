@@ -9,11 +9,17 @@ import Workspace
 /// folder compares the encoded bytes with what it last wrote, so a quiet
 /// session writes nothing.
 ///
-/// Records only while **Reopen the workspace at launch** is on; finding it off
-/// deletes the folder, so a workspace from months ago never comes back.
+/// The session without a project is recorded only while **Reopen the
+/// workspace at launch** is on; finding it off deletes the folder, so a
+/// workspace from months ago never comes back. A project is recorded always:
+/// it is a file the person made to keep (`Design/WORKSPACE_PLAN.md`,
+/// "Projects").
 @MainActor
 final class WorkspaceRecorder {
+    /// The session the app keeps by itself, under Application Support.
     private let folder: WorkspaceFolder
+    /// The open project, when there is one: what is recorded instead.
+    private(set) var project: WorkspaceFolder?
     /// Every window controller the app has, in any order.
     private let controllers: () -> [MainWindowController]
     private var timer: Timer?
@@ -24,8 +30,9 @@ final class WorkspaceRecorder {
 
     static let interval: TimeInterval = 2
 
-    /// The untitled documents' bytes, beside the workspace.
-    let keeper: UntitledKeeper
+    /// The untitled documents' bytes, beside the workspace — and inside a
+    /// project, the files' unsaved changes too.
+    private(set) var keeper: UntitledKeeper
 
     /// The Annotations window, if it has been made.
     private let notes: @MainActor () -> NotesWindowController?
@@ -44,6 +51,22 @@ final class WorkspaceRecorder {
         guard !AppDefaults.isUnderTest else { return nil }
         return WorkspaceFolder(url: FavoritesFile.directory(in: FavoritesFile.applicationSupport)
             .appendingPathComponent("Workspace", isDirectory: true))
+    }
+
+    /// Records into `project` from now on, or — nil — into the session the
+    /// app keeps by itself. The keeper starts afresh: what it knows was
+    /// written is in the folder it leaves.
+    func switchTo(project: WorkspaceFolder?) {
+        self.project = project
+        keeper = project.map { UntitledKeeper(folder: $0, keepsFileEdits: true) }
+            ?? UntitledKeeper(folder: folder)
+        removedWhileOff = false
+    }
+
+    /// Forgets the session the app keeps by itself: it was saved as a
+    /// project, or discarded for one.
+    func discardSession() {
+        folder.remove()
     }
 
     /// The workspace written last, if the switch is on and there is one.
@@ -77,6 +100,13 @@ final class WorkspaceRecorder {
     /// documents and the parts' changes included, at quit as at every other
     /// time: quitting does not ask about them, they come back.
     func record() {
+        if let project {
+            guard !isPaused else { return }
+            keeper.beginSnapshot()
+            guard (try? project.write(snapshot())) != nil else { return }
+            keeper.endSnapshot()
+            return
+        }
         guard WorkspaceSettings.restoresWorkspace else {
             if !removedWhileOff { folder.remove() }
             removedWhileOff = true

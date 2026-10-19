@@ -234,7 +234,24 @@ targets:
         CFBundleURLTypes:
           - CFBundleURLName: dev.maxik.ByteRipper.node
             CFBundleURLSchemes: [byteripper]
+        # A ByteRipper project (`Design/WORKSPACE_PLAN.md`, "Projects"): a
+        # package — a folder Finder shows and copies as one file — that the app
+        # declares and owns, so a double-click on one opens it here.
+        UTExportedTypeDeclarations:
+          - UTTypeIdentifier: dev.maxik.byteripper.project
+            UTTypeDescription: ByteRipper Project
+            UTTypeConformsTo: [com.apple.package, public.composite-content]
+            UTTypeTagSpecification:
+              public.filename-extension: [brp]
         CFBundleDocumentTypes:
+          # The project: Editor, since the app writes it; a package, so Finder
+          # treats the folder as one document.
+          - CFBundleTypeName: ByteRipper Project
+            CFBundleTypeRole: Editor
+            LSItemContentTypes: [dev.maxik.byteripper.project]
+            LSTypeIsPackage: true
+            CFBundleTypeIconSystemGenerated: true
+            LSHandlerRank: Owner
           # The dump extensions the app is about (§25.2). The icon is generated
           # by the system from the app icon, so a dump on the desktop is
           # recognisable as ours — and an icon comes from DECLARING a type, not

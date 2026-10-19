@@ -137,11 +137,15 @@ public struct PaneState: Codable, Equatable, Sendable {
     public var segments: SegmentationState?
     /// The rows the UEFI panel had open, each a node's path in the tree.
     public var uefiOpenRows: [[Int]]?
+    /// The unsaved changes of a file on disk, kept in a project's `Edits/`
+    /// under this name. Nil for a clean file, and always outside a project.
+    public var edits: String?
 
     public init(id: String? = nil, document: DocumentSource,
                 selectionStart: UInt64, selectionEnd: UInt64,
                 inputRegion: InputRegion = .hex, insertMode: Bool = false,
-                topOffset: UInt64, segments: SegmentationState? = nil, uefiOpenRows: [[Int]]? = nil) {
+                topOffset: UInt64, segments: SegmentationState? = nil, uefiOpenRows: [[Int]]? = nil,
+                edits: String? = nil) {
         self.id = id
         self.document = document
         self.selectionStart = selectionStart
@@ -151,6 +155,7 @@ public struct PaneState: Codable, Equatable, Sendable {
         self.topOffset = topOffset
         self.segments = segments
         self.uefiOpenRows = uefiOpenRows
+        self.edits = edits
     }
 }
 
@@ -245,6 +250,10 @@ public struct UntitledStamp: Codable, Equatable, Sendable {
 /// whether it is still the file the rest of the pane's state was measured on.
 public struct FileStamp: Codable, Equatable, Sendable {
     public var path: String
+    /// The same file's path relative to the folder a project sits in — so a
+    /// job folder of a project and its dumps can be moved or copied whole.
+    /// Nil outside a project.
+    public var relativePath: String?
     public var size: UInt64
     /// The modification date, to the whole second.
     public var modified: Date?
@@ -269,6 +278,30 @@ public struct FileStamp: Codable, Equatable, Sendable {
     }
 
     public var url: URL { URL(fileURLWithPath: path) }
+
+    /// Where the file is now: at its path, or — moved together with the
+    /// project — at its relative path from `folder`. Nil when it is at
+    /// neither.
+    public func locate(relativeTo folder: URL?, fileManager: FileManager = .default) -> URL? {
+        if fileManager.fileExists(atPath: path) { return url }
+        guard let relativePath, let folder else { return nil }
+        let moved = folder.appendingPathComponent(relativePath).standardizedFileURL
+        return fileManager.fileExists(atPath: moved.path) ? moved : nil
+    }
+
+    /// `path` relative to `folder`, climbing out of it with `..` where it has
+    /// to. Nil for a file on another volume's root, where a relative path
+    /// would say nothing a move keeps.
+    public static func relativePath(of path: String, to folder: URL) -> String? {
+        let target = URL(fileURLWithPath: path).standardizedFileURL.pathComponents
+        let base = folder.standardizedFileURL.pathComponents
+        var common = 0
+        while common < min(target.count, base.count), target[common] == base[common] { common += 1 }
+        // Sharing only "/" is no relation worth keeping.
+        guard common > 1 else { return nil }
+        let up = Array(repeating: "..", count: base.count - common)
+        return (up + target[common...]).joined(separator: "/")
+    }
 
     /// Whether `current` is the same file content as far as size and
     /// modification date tell. A file rewritten with the same bytes reads as

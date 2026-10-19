@@ -236,6 +236,44 @@ writes a tab with its panels half restored.
 - At quit a torn-off part is kept, like a panel: Save / Don't Save has been
   answered for it, so what is left is what its parent holds.
 
+## Projects
+
+A project is a named workspace the person switches between: everything open
+for one job, kept in a file of its own, `.brp`, and opened again as one
+thing.
+
+- **A package.** `Job.brp/` holds `Project.json` (the `Workspace` value, a few
+  kilobytes), `Untitled/` (untitled documents and parts' changes, as in the
+  session) and `Edits/` (the unsaved changes of files on disk). A project with
+  no unsaved work is as small as its JSON. The bytes live with the project,
+  not in Application Support: deleting a project deletes them, copying it
+  copies them, and a job folder moved whole takes them along.
+- **Files by two paths.** A file is written by its path and by its path
+  relative to the folder the project is in (`FileStamp.relativePath`), and is
+  looked for at the first, then the second (`FileStamp.locate`).
+- **Unsaved changes of files on disk** are kept as runs over the file
+  (`OverlayEdits`: stretches of the file, and the bytes editing added), about
+  the size of the changes, binary plist in `Edits/`. They are laid over the
+  file again at open (`PaneViewModel.applyKeptEdits`) only when the file is
+  the one they were made on; a file changed outside the project opens without
+  them, and the warning says so.
+- **Live.** While a project is open the recorder writes into it rather than
+  into Application Support (`WorkspaceRecorder.switchTo(project:)`), always,
+  whatever the restore switch says. Leaving a project — another project,
+  **Close Project**, quitting — asks nothing: everything it holds is written.
+- **The session without a project** behaves as before. Opening a project
+  from it, when it holds anything, asks whether to save it as a project
+  (Save… / Don't Save / Cancel); Don't Save closes it the ordinary way.
+- **At launch**, with the restore switch on, the project open at quit is
+  opened again (`RecentProjectsStore.lastProject`); a `.brp` handed to the
+  launch opens instead.
+- **Opening.** **File ▸ Open…**, a drop and the Finder route a `.brp` to the
+  project rather than into a pane (`MainViewController.openableFiles`,
+  `AppDelegate.application(_:open:)`). The type is exported by the app
+  (`dev.maxik.byteripper.project`, a package) and owned by it.
+- **File menu:** **Open Recent Project ▸**, **Save as Project…**, **Close
+  Project**. Every window's title carries the project's name.
+
 ## Phases
 
 Each phase is a commit, and each leaves the app working with the setting on.

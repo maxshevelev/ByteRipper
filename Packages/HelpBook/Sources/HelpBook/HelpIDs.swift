@@ -89,4 +89,5 @@ extension HelpTopicID {
     // Settings
     public static let settings = HelpTopicID("settings")
     public static let workspace = HelpTopicID("workspace")
+    public static let projects = HelpTopicID("projects")
 }

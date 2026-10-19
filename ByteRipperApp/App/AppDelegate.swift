@@ -11,7 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// its windows rather than being one window's owner: ⇧⌘N adds one, closing
     /// one drops it, and a file handed to the app has to be routed to one of
     /// them rather than to "the" window.
-    private var windowControllers: [MainWindowController] = []
+    private(set) var windowControllers: [MainWindowController] = []
 
     /// Drops a window from `windowControllers` when it closes, so a closed
     /// window is neither kept alive nor offered a file to open.
@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// Node links that came before the first window: opened once it is up.
     private var pendingNodeLinks: [(file: URL, node: String?)] = []
     private var isReady = false
+    private var switchingProjects = false
     /// Observes theme changes so a Settings change re-themes the running app
     /// without a relaunch (§3.2).
     private var themeObserver: NSObjectProtocol?
@@ -31,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// Keeps the workspace on disk while the app runs, and hands back the one
     /// written last (`Design/WORKSPACE_PLAN.md`). Nil under test, where the
     /// Application Support folder is the user's own.
-    private(set) lazy var workspaceRecorder: WorkspaceRecorder? = WorkspaceRecorder.defaultFolder().map { folder in
+    lazy var workspaceRecorder: WorkspaceRecorder? = WorkspaceRecorder.defaultFolder().map { folder in
         WorkspaceRecorder(folder: folder, controllers: { [weak self] in self?.windowControllers ?? [] })
     }
 
@@ -51,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// delegate is wired on while the menu bar is built, but building it costs
     /// nothing and this keeps it next to the windows it serves.
     private lazy var openRecentMenuController = OpenRecentMenuController()
+    private lazy var openRecentProjectMenuController = OpenRecentProjectMenuController()
 
     /// The agent service (`Design/AGENT_PLAN.md`): the socket an agent's
     /// client reaches the app on. The application's, like the windows it reads:
@@ -131,9 +133,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         // The File menu's Open Recent submenu is built empty (its rows depend
         // on what has been opened, which the build cannot know); hand it the
         // delegate that rebuilds the rows before each display.
-        if let fileMenu = mainMenu.items.compactMap(\.submenu).first(where: { $0.title == L("File", context: "menu") }),
-           let openRecentMenu = fileMenu.items.first(where: { $0.title == L("Open Recent") })?.submenu {
-            openRecentMenu.delegate = openRecentMenuController
+        if let fileMenu = mainMenu.items.compactMap(\.submenu).first(where: { $0.title == L("File", context: "menu") }) {
+            fileMenu.items.first { $0.title == L("Open Recent") }?.submenu?.delegate = openRecentMenuController
+            fileMenu.items.first { $0.title == L("Open Recent Project") }?.submenu?.delegate =
+                openRecentProjectMenuController
         }
         // Handing AppKit the Window submenu is what puts the open windows in it,
         // with Bring All to Front above them — worth having the moment there is
@@ -165,7 +168,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
                 self.workspaceRecorder?.record()
             }
         }
-        let restored = restoreWorkspace()
+        // A project handed to the launch is the session; otherwise the one
+        // open when the app last stood, when the workspace is to be restored;
+        // otherwise the session the app kept by itself.
+        let launchProject = pendingOpenURLs.first(where: \.isByteRipperProject)
+            ?? (WorkspaceSettings.restoresWorkspace ? RecentProjectsStore.lastProject : nil)
+        pendingOpenURLs.removeAll(where: \.isByteRipperProject)
+        let restored: Bool
+        if let launchProject, workspaceRecorder != nil {
+            openProject(at: launchProject)
+            restored = !windowControllers.isEmpty
+        } else {
+            restored = restoreWorkspace()
+        }
         if !restored {
             makeWindow()
         }
@@ -196,6 +211,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     private func restoreWorkspace() -> Bool {
         guard let recorder = workspaceRecorder, let workspace = recorder.savedWorkspace(),
               !workspace.isEmpty else { return false }
+        return rebuild(workspace, with: recorder)
+    }
+
+    /// Builds the windows of `workspace` — the session's at launch, or a
+    /// project's — with `recorder` paused until every part is back. Returns
+    /// false when nothing was opened.
+    @discardableResult
+    func rebuild(_ workspace: Workspace, with recorder: WorkspaceRecorder) -> Bool {
         // Nothing is written while the workspace is being rebuilt: a window
         // closed on the way, or a snapshot between the two passes, would
         // otherwise write a workspace of what had been rebuilt so far.
@@ -341,7 +364,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// window, so every later one is cascaded off the window in front of it
     /// instead — which is also where a new window belongs on screen.
     @discardableResult
-    private func makeWindow(tabbedWith anchor: NSWindow? = nil) -> MainWindowController {
+    func makeWindow(tabbedWith anchor: NSWindow? = nil) -> MainWindowController {
         // Only the launch window saves a frame: one autosave name can serve one
         // window, and a second window writing to the same key would fight the
         // first over one saved size.
@@ -359,6 +382,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
         controller.mainViewController.hasOtherTabs = { [weak self] in
             (self?.windowControllers.count ?? 0) > 1
         }
+        controller.mainViewController.openProject = { [weak self] url in
+            // After the open that got here has unwound: the project closes
+            // the window it was asked from.
+            DispatchQueue.main.async { self?.openProject(at: url) }
+        }
+        controller.mainViewController.projectName = currentProjectName
         windowControllers.append(controller)
         // A tab takes its place from the window it joins, so it is added before
         // being shown; a window on its own is placed by `NSWindowController`,
@@ -402,7 +431,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     func application(_ application: NSApplication, open urls: [URL]) {
         // A node link an agent wrote: the file, then the node in its tree.
         let links = urls.compactMap(AgentNodeURLs.parse)
-        let files = urls.filter { AgentNodeURLs.parse($0) == nil }
+        var files = urls.filter { AgentNodeURLs.parse($0) == nil }
+        // A project double-clicked in the Finder opens as a project.
+        if isReady, let project = files.first(where: \.isByteRipperProject) {
+            openProject(at: project)
+        }
+        if isReady { files.removeAll(where: \.isByteRipperProject) }
         if isReady {
             openNodeLinks(links)
         } else {
@@ -564,7 +598,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        // Not while one project's windows give way to another's.
+        !isSwitchingProjects
+    }
+
+    /// True while the windows of one project close for another's to open.
+    var isSwitchingProjects: Bool {
+        get { switchingProjects }
+        set { switchingProjects = newValue }
     }
 
     /// ⌘Q. Every window is asked what closing it would ask — the parts it
@@ -620,9 +661,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
     /// A snapshot is taken first, so "as they are now" is true; a document
     /// whose bytes could not be written is asked about as before.
     private func keptAtQuit() -> (PaneViewModel) -> Bool {
-        guard WorkspaceSettings.restoresWorkspace, let recorder = workspaceRecorder else { return { _ in false } }
+        // A project keeps everything, the switch or not: it is a file the
+        // person made to keep. The session keeps what never had a file.
+        guard let recorder = workspaceRecorder,
+              recorder.project != nil || WorkspaceSettings.restoresWorkspace else { return { _ in false } }
         recorder.record()
-        return { pane in pane.isUntitled && recorder.keeper.holdsCurrentBytes(of: pane) }
+        let keeper = recorder.keeper
+        return { pane in keeper.holdsCurrentBytes(of: pane) }
     }
 
     /// The one question asked before the queue of them: review, throw it all
@@ -641,7 +686,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuItemValidation {
 
     /// Asks the windows in `queue` one at a time, stopping at the first that
     /// says no.
-    private func askToClose(_ queue: [MainWindowController],
+    func askToClose(_ queue: [MainWindowController],
                             keeping kept: @escaping (PaneViewModel) -> Bool,
                             then done: @escaping (Bool) -> Void) {
         var rest = queue

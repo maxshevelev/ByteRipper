@@ -29,6 +29,7 @@ public enum HelpContents {
             .overview,
             .firstComparison,
             .openingFiles,
+            .projects,
             .largeFiles
         ]),
         ("reading", [

@@ -304,6 +304,13 @@ enum MainMenu {
         let openRecent = NSMenuItem(title: L("Open Recent"), action: nil, keyEquivalent: "")
         openRecent.submenu = NSMenu(title: L("Open Recent"))
         fileMenu.addItem(openRecent)
+        // The projects opened lately (`Design/WORKSPACE_PLAN.md`, "Projects"):
+        // a list of their own beside the dumps', filled the same way, by a
+        // delegate wired on at launch.
+        // help: menu.file.open-recent-project
+        let openRecentProject = NSMenuItem(title: L("Open Recent Project"), action: nil, keyEquivalent: "")
+        openRecentProject.submenu = NSMenu(title: L("Open Recent Project"))
+        fileMenu.addItem(openRecentProject)
         // help: menu.file.compare-with
         let compareWith = fileMenu.addItem(withTitle: L("Compare with…"),
                                            action: #selector(MainViewController.presentCompareWithPanel),
@@ -321,6 +328,10 @@ enum MainMenu {
         // Saves, because it is the third place a document's changes can go.
         // help: menu.file.update-in-parent
         add(L("Update in Parent"), #selector(MainViewController.updateInParent), "")
+        // The project commands are the app's: a project is every window at
+        // once, so they travel the responder chain to the app delegate.
+        add(L("Save as Project…"), #selector(AppDelegate.saveAsProject(_:)), "")
+        add(L("Close Project"), #selector(AppDelegate.closeProject(_:)), "")
         fileMenu.addItem(.separator())
         // The join commands (§22.1): bring a second file's bytes into the active
         // pane, at one end or the other. They act on the active pane, like the

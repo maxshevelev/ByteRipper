@@ -8,17 +8,30 @@ import Foundation
 /// with the last ones written keeps the disk quiet.
 public final class WorkspaceFolder {
     public let url: URL
+    /// What the workspace file inside is called: `Workspace.json` for the
+    /// session the app keeps, `Project.json` inside a project.
+    public let fileName: String
     private let fileManager: FileManager
     /// What was last written or read, so an identical snapshot is not written
     /// again.
     private var lastWritten: Data?
 
-    public init(url: URL, fileManager: FileManager = .default) {
+    public init(url: URL, fileName: String = "Workspace.json", fileManager: FileManager = .default) {
         self.url = url
+        self.fileName = fileName
         self.fileManager = fileManager
     }
 
-    public var fileURL: URL { url.appendingPathComponent("Workspace.json") }
+    /// A project: a package whose workspace file is `Project.json`.
+    public static func project(at url: URL) -> WorkspaceFolder {
+        WorkspaceFolder(url: url, fileName: "Project.json")
+    }
+
+    public var fileURL: URL { url.appendingPathComponent(fileName) }
+
+    /// The folder the workspace sits in, which a project's files are found
+    /// relative to.
+    public var enclosingFolder: URL { url.deletingLastPathComponent() }
 
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -78,7 +91,34 @@ public final class WorkspaceFolder {
     /// Deletes the bytes of every untitled document `ids` does not name: a
     /// document that was saved, discarded or closed takes its copy with it.
     public func removeUntitled(except ids: Set<String>) {
-        guard let files = try? fileManager.contentsOfDirectory(at: untitledFolder, includingPropertiesForKeys: nil) else { return }
+        remove(in: untitledFolder, except: ids)
+    }
+
+    // MARK: - Unsaved changes to files on disk (projects)
+
+    private var editsFolder: URL { url.appendingPathComponent("Edits", isDirectory: true) }
+
+    public func editsURL(_ id: String) -> URL {
+        editsFolder.appendingPathComponent(id).appendingPathExtension("plist")
+    }
+
+    public func writeEdits(_ id: String, data: Data) throws {
+        try fileManager.createDirectory(at: editsFolder, withIntermediateDirectories: true)
+        try data.write(to: editsURL(id), options: .atomic)
+    }
+
+    public func readEdits(_ id: String) -> Data? {
+        try? Data(contentsOf: editsURL(id))
+    }
+
+    /// Deletes the changes of every file `ids` does not name: one saved,
+    /// reverted or closed takes them with it.
+    public func removeEdits(except ids: Set<String>) {
+        remove(in: editsFolder, except: ids)
+    }
+
+    private func remove(in folder: URL, except ids: Set<String>) {
+        guard let files = try? fileManager.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return }
         for file in files where !ids.contains(file.deletingPathExtension().lastPathComponent) {
             try? fileManager.removeItem(at: file)
         }

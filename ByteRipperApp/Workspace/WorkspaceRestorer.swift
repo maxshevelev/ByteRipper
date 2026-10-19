@@ -51,7 +51,7 @@ import Workspace
                 continue
             }
             let pane = controller.workspaceSlot(slot)
-            guard let unchanged = controller.openWorkspaceDocument(saved.document, in: pane, keeper: keeper,
+            guard let unchanged = controller.openWorkspaceDocument(saved, in: pane, keeper: keeper,
                                                                     issues: &issues) else { continue }
             register(saved, RestoredPane(pane: pane, unchanged: unchanged), in: tab, slot: slot)
         }

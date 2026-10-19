@@ -150,6 +150,7 @@
 "Build date" = "Build-Datum";
 "Changed on disk since the last session. Opened without their segments, parts and tool state:" = "Seit der letzten Sitzung auf dem Datenträger geändert. Ohne Segmente, Teile und Werkzeugzustand geöffnet:";
 "Click to change the background" = "Klicken, um den Hintergrund zu wechseln";
+"Close Project" = "Projekt schließen";
 "Copied at %1$@–%2$@; %3$@" = "Kopie bei %1$@–%2$@; %3$@";
 "Copy of" = "Kopie des Abbilds bei";
 "Copy of %1$@–%2$@; %3$@" = "Kopie des Blocks %1$@–%2$@; %3$@";
@@ -176,9 +177,12 @@
 "No longer found, not opened:" = "Nicht mehr gefunden, nicht geöffnet:";
 "OEM" = "OEM";
 "Open Decompressed Variable" = "Entpackte Variable öffnen";
+"Open Recent Project" = "Benutzte Projekte";
+"Opening a project closes what is open now. Saved as a project, it can be opened again as it is." = "Das Öffnen eines Projekts schließt alles, was jetzt geöffnet ist. Als Projekt gesichert, lässt es sich später unverändert wieder öffnen.";
 "Picture" = "Bild";
 "Picture preview" = "Bildvorschau";
 "Picture size" = "Bildgröße";
+"Project" = "Projekt";
 "Put this tab's changes back into the document it was opened from, as one undo step there. Nothing is written to disk." = "Die Änderungen dieses Tabs zurück in das Dokument schreiben, aus dem er geöffnet wurde, als ein Widerrufsschritt dort. Auf den Datenträger wird nichts geschrieben.";
 "Reading the file…" = "Datei wird gelesen …";
 "Removing a microcode" = "Microcode wird entfernt";
@@ -188,8 +192,13 @@
 "Save Body of “%1$@” as…" = "Rumpf von „%1$@“ sichern unter…";
 "Save Node Body as…" = "Knotenrumpf sichern unter…";
 "Save Node as…" = "Knoten sichern unter…";
+"Save as Project…" = "Als Projekt sichern…";
+"Save the current session as a project?" = "Die aktuelle Sitzung als Projekt sichern?";
 "Save “%1$@” as…" = "„%1$@“ sichern unter…";
 "Saved %1$@ bytes." = "%1$@ Bytes gesichert.";
+"Save…" = "Sichern…";
+"The project could not be read." = "Das Projekt konnte nicht gelesen werden.";
+"The project could not be written." = "Das Projekt konnte nicht geschrieben werden.";
 "The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Documents never saved come back unsaved, and quitting does not ask about them; changes to files on disk are asked about as before." = "Die Tabs und die darin geöffneten Dateien kehren so zurück, wie sie beim Beenden waren: die angezeigte Adresse, Cursor und Auswahl, Lesezeichen, Segmente und Werkzeugbereiche. Nie gesicherte Dokumente kehren ungesichert zurück, und beim Beenden fragt das Programm nicht nach ihnen; nach Änderungen an Dateien auf dem Datenträger fragt es wie bisher.";
 "The variable does not decompress." = "Die Variable lässt sich nicht entpacken.";
 "The workspace was not restored in full" = "Der Arbeitsbereich wurde nicht vollständig wiederhergestellt";

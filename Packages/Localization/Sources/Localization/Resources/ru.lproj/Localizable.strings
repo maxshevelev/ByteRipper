@@ -150,6 +150,7 @@
 "Build date" = "Дата сборки";
 "Changed on disk since the last session. Opened without their segments, parts and tool state:" = "Изменились на диске после прошлой сессии. Открыты без сегментов, частей и состояния инструментов:";
 "Click to change the background" = "Кликните, чтобы сменить фон";
+"Close Project" = "Закрыть проект";
 "Copied at %1$@–%2$@; %3$@" = "Копия расположена по адресу %1$@–%2$@; %3$@";
 "Copy of" = "Копия образа по адресу";
 "Copy of %1$@–%2$@; %3$@" = "Копия блока %1$@–%2$@; %3$@";
@@ -176,9 +177,12 @@
 "No longer found, not opened:" = "Больше не найдены и не открыты:";
 "OEM" = "OEM";
 "Open Decompressed Variable" = "Открыть распакованную переменную";
+"Open Recent Project" = "Недавние проекты";
+"Opening a project closes what is open now. Saved as a project, it can be opened again as it is." = "Открытие проекта закрывает всё, что открыто сейчас. Сохранённое как проект, его можно будет открыть снова в том же виде.";
 "Picture" = "Изображение";
 "Picture preview" = "Предпросмотр изображения";
 "Picture size" = "Размер изображения";
+"Project" = "Проект";
 "Put this tab's changes back into the document it was opened from, as one undo step there. Nothing is written to disk." = "Записать изменения этой вкладки обратно в документ, из которого она открыта, одним шагом отмены в нём. На диск ничего не пишется.";
 "Reading the file…" = "Чтение файла…";
 "Removing a microcode" = "Удаление микрокода";
@@ -188,8 +192,13 @@
 "Save Body of “%1$@” as…" = "Сохранить тело «%1$@» как…";
 "Save Node Body as…" = "Сохранить тело узла как…";
 "Save Node as…" = "Сохранить узел как…";
+"Save as Project…" = "Сохранить как проект…";
+"Save the current session as a project?" = "Сохранить текущую сессию как проект?";
 "Save “%1$@” as…" = "Сохранить «%1$@» как…";
 "Saved %1$@ bytes." = "Сохранено байт: %1$@.";
+"Save…" = "Сохранить…";
+"The project could not be read." = "Не удалось прочитать проект.";
+"The project could not be written." = "Не удалось записать проект.";
 "The tabs and the files in them come back as they were at quit: addresses on screen, cursor and selection, bookmarks, segments and tool panels. Documents never saved come back unsaved, and quitting does not ask about them; changes to files on disk are asked about as before." = "Вкладки и открытые в них файлы возвращаются такими, какими были при выходе: адрес на экране, курсор и выделение, закладки, сегменты и панели инструментов. Ни разу не сохранённые документы возвращаются несохранёнными, и при выходе программа о них не спрашивает; о правках в файлах на диске она спрашивает, как и прежде.";
 "The variable does not decompress." = "Переменная не распаковывается.";
 "The workspace was not restored in full" = "Рабочая сессия восстановлена не полностью";
