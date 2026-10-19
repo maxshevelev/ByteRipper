@@ -52,6 +52,15 @@ final class ComparisonCoordinator {
     /// True while a full-file index is not yet available.
     private(set) var isBuilding = false
 
+    /// True while the index is about to change: a build is running, or edits
+    /// are waiting to be absorbed or being absorbed. While this holds, `index`
+    /// may describe bytes the files no longer have, so a consumer that takes
+    /// "same" in it as a promise about the bytes (the overview, which copies
+    /// one file's picture of a stretch to the other, §19.9) waits for it.
+    var isSettling: Bool {
+        isBuilding || applying || !queuedEdits.isEmpty || !pendingEdits.isEmpty
+    }
+
     /// The active build operation ("Indexing…"), or nil when idle. Its
     /// progress is fed from the builder's actor; `finish()` hides the status
     /// bar indicator on every completion path.

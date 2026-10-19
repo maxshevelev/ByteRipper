@@ -2723,6 +2723,21 @@ The panes' visible slice is drawn as a translucent band over the map.
   drawing them cell by cell put a full repaint of two maps at 138 ms on the main
   thread, once per rebuild, which is felt as the typing stuttering. Rows the
   file's end falls in are drawn on their own, so a fill never runs past it.
+- In a comparison the overview's picture is built once per stretch both files
+  hold the same. A row whose bytes the comparison index calls the same in both
+  files, and which lies inside both, is binned from one file and its density
+  copied to the other. Those rows are split between the files, half each, so the
+  two files' passes — one task each, run together — read about half the shared
+  rows plus their own differing ones. More tasks per file do not help: a
+  storage serves its reads under one lock, and on two 16 MB dumps eight chunks
+  per file were slower than one. Measured on two 16 MB ME dumps differing in
+  1.2 % of their bytes (release build): 5.3 ms → 3.1 ms per full picture.
+  - The copy is only as right as the index, so the picture waits for an index
+    that is being built or is absorbing edits; building it takes less than the
+    picture does. An index whose file sizes do not match the files is not
+    used. Modified and difference marks stay per file.
+  - An edit that lands while a pass is running restarts the pass rather than
+    patching rows the pass will overwrite with what it read before the edit.
 - An edit must not rebuild the overview's picture. A byte lands in one row of
   a thousand, so the rows its range falls in are recomputed — from the file for
   their density, from the edit overlay for their modified marks, from the

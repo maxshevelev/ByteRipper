@@ -27,6 +27,12 @@ import UEFIImage
     /// overview can tell when the index has moved under it.
     var comparisonIndexBuild: Int { get }
 
+    /// Whether the comparison index is being built or is absorbing edits, so
+    /// that what it calls "same" may not be what the bytes are any more. The
+    /// overview of a comparison waits it out: it copies one file's picture of a
+    /// stretch the index calls the same to the other file (§19.9).
+    var comparisonIndexIsSettling: Bool { get }
+
     /// Makes the pane behind map `index` the active one — what clicking the
     /// second map of a comparison means, as clicking its dump does.
     func activatePane(showingMapAt index: Int)
@@ -150,34 +156,93 @@ import UEFIImage
     /// flicker, unreadable as progress.
     static var overviewProgressMinimumVisible: Duration = .milliseconds(300)
 
-    /// Bins one file into `rowCount` rows of 16 cells: how full each cell's slice
-    /// of bytes is, and which cells hold a modified or differing byte.
+    /// Bins the open files into `rowCount` rows of 16 cells each: how full each
+    /// cell's slice of bytes is, and which cells hold a modified or differing
+    /// byte. One summary per source, in the sources' order; nil when cancelled.
     ///
     /// Rows are binned over `extent` — the longest open file — so the same row
-    /// means the same absolute offset on both maps (§9); rows past this file's
-    /// own end stay empty. One read per row keeps the pass sequential and bounded
-    /// by the file's size.
-    nonisolated private static func overviewSummary(
-        source: OverviewSource, extent: UInt64, rowCount: Int,
-        shouldCancel: () -> Bool,
-        rowsDone: (Int) -> Void = { _ in }
-    ) -> MinimapView.OverviewSummary {
+    /// means the same absolute offset on both maps (§9); rows past a file's own
+    /// end stay empty.
+    ///
+    /// One task per file, run together. More tasks per file do not help: a
+    /// storage serves its reads under one lock, so a file's rows read in
+    /// parallel queue on it, and measured on two 16 MB dumps eight chunks were
+    /// slower than one. Two files are two locks.
+    ///
+    /// Given `sameBytes` — a comparison index that is current for these exact
+    /// files — a row the index calls the same in both is binned from one file
+    /// only and its density copied to the other (§19.9). Those rows are split
+    /// between the files, half each, so both tasks read about half of the
+    /// shared rows plus their own differing ones, and the pass takes about half
+    /// as long. Modified and difference marks stay per file: an edit can paint
+    /// a byte red in one file that the other holds unchanged.
+    nonisolated static func overviewSummaries(
+        sources: [OverviewSource], extent: UInt64, rowCount: Int,
+        sameBytes: DiffBlockIndex?,
+        rowsDone: @escaping @Sendable (Int) -> Void = { _ in }
+    ) async -> [MinimapView.OverviewSummary]? {
+        guard !sources.isEmpty else { return [] }
+        guard rowCount > 0, extent > 0 else {
+            return sources.map { _ in
+                MinimapView.OverviewSummary(extent: extent, rowCount: rowCount,
+                                            density: [], modified: [], different: [])
+            }
+        }
+        let rows = 0...(rowCount - 1)
+        // Which file bins each shared row; nil for a row each file bins itself.
+        // The index has to describe these files, not ones they used to be: a
+        // size that disagrees means it does not, and nothing is shared.
+        var owner = [Int?](repeating: nil, count: rowCount)
+        if let index = sameBytes, sources.count == 2, index.maxSize == extent,
+           Set([index.leftSize, index.rightSize]) == Set(sources.map(\.size)) {
+            let same = OverviewBinning(extent: extent, rowCount: rowCount)
+                .rowsWithSameBytes(in: index, rows: rows)
+            // The first half of the shared rows to the first file, the rest to
+            // the second: each file reads one contiguous stretch of them.
+            let half = same.lazy.filter { $0 }.count / 2
+            var seen = 0
+            for row in rows where same[row] {
+                owner[row] = seen < half ? 0 : 1
+                seen += 1
+            }
+        }
+        let skips = sources.indices.map { file in owner.map { $0 != nil && $0 != file } }
+
+        typealias Rows = (density: [UInt8], modified: [UInt16], different: [UInt16])
+        let built = await withTaskGroup(of: (Int, Rows?).self) { group -> [Rows]? in
+            for (file, source) in sources.enumerated() {
+                group.addTask {
+                    (file, overviewRows(source: source, extent: extent, rowCount: rowCount,
+                                        rows: rows, skipping: skips[file],
+                                        shouldCancel: { Task.isCancelled },
+                                        rowsDone: rowsDone))
+                }
+            }
+            var ordered = [Rows?](repeating: nil, count: sources.count)
+            for await (file, part) in group {
+                guard let part else {
+                    group.cancelAll()
+                    return nil
+                }
+                ordered[file] = part
+            }
+            return ordered.compactMap { $0 }
+        }
+        guard var built, built.count == sources.count, !Task.isCancelled else { return nil }
+
+        // Hand each shared row to the file that skipped it.
         let columns = Int(MinimapView.bytesPerRow)
-        let rows = max(0, rowCount)
-        let empty = MinimapView.OverviewSummary(
-            extent: extent, rowCount: rowCount,
-            density: [UInt8](repeating: 0, count: rows * columns),
-            modified: [UInt16](repeating: 0, count: rows),
-            different: [UInt16](repeating: 0, count: rows)
-        )
-        guard rowCount > 0, extent > 0,
-              let all = overviewRows(source: source, extent: extent, rowCount: rowCount,
-                                     rows: 0...(rowCount - 1),
-                                     shouldCancel: shouldCancel, rowsDone: rowsDone)
-        else { return empty }
-        return MinimapView.OverviewSummary(extent: extent, rowCount: rowCount,
-                                          density: all.density, modified: all.modified,
-                                          different: all.different)
+        for row in rows {
+            guard let from = owner[row] else { continue }
+            let to = 1 - from
+            let cells = (row * columns)..<((row + 1) * columns)
+            built[to].density.replaceSubrange(cells, with: built[from].density[cells])
+        }
+        return built.map {
+            MinimapView.OverviewSummary(extent: extent, rowCount: rowCount,
+                                        density: $0.density, modified: $0.modified,
+                                        different: $0.different)
+        }
     }
 
     /// The overview's values for `rows` alone: the density of their cells and
@@ -185,9 +250,13 @@ import UEFIImage
     /// byte edit is this over the one or two rows it lands in, which is why the
     /// engine takes a row range rather than always walking the file (§19.9).
     ///
+    /// A row `skipping` marks (indexed from the first of `rows`) is not read:
+    /// its density is left empty for the caller to fill from the other file.
+    ///
     /// Returns nil when cancelled or when `rows` is not inside the picture.
     nonisolated static func overviewRows(
         source: OverviewSource, extent: UInt64, rowCount: Int, rows: ClosedRange<Int>,
+        skipping: [Bool]? = nil,
         shouldCancel: () -> Bool = { false },
         rowsDone: (Int) -> Void = { _ in }
     ) -> (density: [UInt8], modified: [UInt16], different: [UInt16])? {
@@ -241,6 +310,9 @@ import UEFIImage
                 rowsDone(row - reportedRow)
                 reportedRow = row
             }
+            if let skipping, skipping.indices.contains(row - rows.lowerBound),
+               skipping[row - rows.lowerBound] { continue }
+            let base = (row - rows.lowerBound) * columns
             let rowStart = start(ofRow: row)
             let rowEnd = start(ofRow: row + 1)
             let span = rowEnd - rowStart
@@ -251,7 +323,6 @@ import UEFIImage
             guard rowStart < readEnd else { continue }
             guard let bytes = try? storage.read(at: rowStart, length: Int(readEnd - rowStart)),
                   !bytes.isEmpty else { continue }
-            let base = (row - rows.lowerBound) * columns
             bytes.withUnsafeBufferPointer { buffer in
                 guard span >= UInt64(columns) else {
                     // Fewer bytes than cells: each byte fills the cells it
@@ -774,6 +845,15 @@ import UEFIImage
             view.setOverviewSummaries([])
             return
         }
+        // A comparison's picture is built against a settled index: the second
+        // file copies the first one's picture wherever the index calls the
+        // bytes the same, and an index still being built, or still absorbing
+        // an edit, would make that copy wrong. The index finishes well before
+        // a picture would (it compares, the picture also counts), and its
+        // landing calls `followIndexChange`, which asks again (§19.9).
+        let comparing = sources.count > 1
+        if comparing, host?.comparisonIndexIsSettling == true { return }
+        let sameBytes = comparing ? sources.first?.differences : nil
         overviewPassTask?.cancel()
         overviewPassRowCount = rowCount
         overviewRebuilds += 1
@@ -783,25 +863,12 @@ import UEFIImage
         }
         // Deliberately below the interface's priority: the picture is worth
         // waiting a little longer for, and nothing about it is worth competing
-        // with the keystroke being typed. The two files are independent passes
-        // and run together, which halves the wait on a comparison.
+        // with the keystroke being typed. The two files run together.
         overviewPassTask = Task.detached(priority: .utility) { [weak self] in
-            let summaries = await withTaskGroup(
-                of: (Int, MinimapView.OverviewSummary).self
-            ) { group -> [MinimapView.OverviewSummary] in
-                for (index, source) in sources.enumerated() {
-                    group.addTask {
-                        (index, Self.overviewSummary(source: source, extent: extent,
-                                                     rowCount: rowCount,
-                                                     shouldCancel: { Task.isCancelled },
-                                                     rowsDone: { progress.advance($0) }))
-                    }
-                }
-                var built: [(Int, MinimapView.OverviewSummary)] = []
-                for await pair in group { built.append(pair) }
-                return built.sorted { $0.0 < $1.0 }.map(\.1)
-            }
-            guard !Task.isCancelled else { return }
+            guard let summaries = await Self.overviewSummaries(
+                sources: sources, extent: extent, rowCount: rowCount,
+                sameBytes: sameBytes, rowsDone: { progress.advance($0) }),
+                !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
                 guard let self else { return }
                 self.reportOverviewProgress(nil)
@@ -1122,6 +1189,15 @@ import UEFIImage
     /// would be (a resize or a new file landed in between).
     private func patchOverviewRows(covering range: Range<UInt64>) {
         guard isPanelVisible, view.renderMode == .overview else { return }
+        // A pass in flight read some rows before this edit and will hand over
+        // its picture after this patch, putting those rows back. In a
+        // comparison it may also have copied the edited file's new bytes to the
+        // other map under an index that called them the same. It is restarted
+        // instead.
+        guard overviewPassTask == nil else {
+            scheduleOverviewRebuild()
+            return
+        }
         let summaries = view.overviewSummaries
         let sources = overviewSources()
         guard !summaries.isEmpty, summaries.count == sources.count,

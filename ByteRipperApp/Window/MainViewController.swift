@@ -7866,6 +7866,8 @@ extension MainViewController: MinimapHost {
 
     var comparisonIndexBuild: Int { comparisonCoordinator.indexBuildCount }
 
+    var comparisonIndexIsSettling: Bool { comparisonCoordinator.isSettling }
+
     func activatePane(showingMapAt index: Int) {
         guard mode == .comparison, index != windowModel.activePaneIndex else { return }
         activatePane(at: index)

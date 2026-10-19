@@ -1,3 +1,4 @@
+import ByteRipperCore
 import Foundation
 
 /// The overview's byte↔cell mapping (§19.4.2): which row, and which of that
@@ -20,6 +21,49 @@ struct OverviewBinning {
     func start(ofRow row: Int) -> UInt64 {
         guard rowCount > 0 else { return 0 }
         return extent * UInt64(row) / UInt64(rowCount)
+    }
+
+    /// The end of the bytes a row's picture is computed from, before clamping
+    /// to the file: its slice, or the one byte its position falls in when the
+    /// slice is thinner than a byte.
+    func readEnd(ofRow row: Int) -> UInt64 {
+        max(start(ofRow: row + 1), start(ofRow: row) + 1)
+    }
+
+    /// For each of `rows`, whether its picture is the same in both files of
+    /// `index`: the bytes it is computed from lie inside both files and the
+    /// index calls every one of them the same (§19.9).
+    ///
+    /// Such a row is computed once and its density copied to the other map;
+    /// on a typical pair of dumps that is nearly every row. A row the shorter
+    /// file's end falls in reads a shorter slice there, so it is not one of
+    /// them. Errs towards "different": a row it is unsure of costs a read, a
+    /// row wrongly called the same would draw the other file's bytes.
+    func rowsWithSameBytes(in index: DiffBlockIndex, rows: ClosedRange<Int>) -> [Bool] {
+        let shorter = min(index.leftSize, index.rightSize)
+        var same = rows.map { readEnd(ofRow: $0) <= shorter }
+        guard rowCount > 0, extent > 0 else { return same }
+        func row(containing offset: UInt64) -> Int {
+            min(rowCount - 1, Int(offset * UInt64(rowCount) / extent))
+        }
+        let window = start(ofRow: rows.lowerBound)..<readEnd(ofRow: rows.upperBound)
+        for block in index.blocks(in: window) where block.kind == .different {
+            // The rows whose bytes reach into the block. A row's end only grows
+            // with the row, so the first is found by walking back from the row
+            // the block starts in (thin rows can share that byte), and the last
+            // by walking on while a row still starts inside the block.
+            var first = max(rows.lowerBound, row(containing: block.range.lowerBound))
+            while first > rows.lowerBound, readEnd(ofRow: first - 1) > block.range.lowerBound {
+                first -= 1
+            }
+            var last = min(rows.upperBound, row(containing: block.range.upperBound - 1))
+            while last < rows.upperBound, start(ofRow: last + 1) < block.range.upperBound {
+                last += 1
+            }
+            guard first <= last else { continue }
+            for row in first...last { same[row - rows.lowerBound] = false }
+        }
+        return same
     }
 
     /// The cells one byte of a row's slice occupies, when the slice is thinner
@@ -114,9 +158,14 @@ struct OverviewBinning {
         let columns = Self.columns
         let lower = max(range.lowerBound, start(ofRow: rows.lowerBound))
         let upper = min(range.upperBound, min(start(ofRow: rows.upperBound + 1), extent))
-        guard lower < upper,
-              let first = cells(of: lower, within: rows),
+        // The offset→row division is not the exact inverse of `start(ofRow:)`:
+        // a row's first byte can come out in the row before. When `lower` was
+        // clipped to the first of `rows` that row is outside them, and refusing
+        // it dropped the whole block from every run of rows but the first.
+        guard lower < upper, rowCount > 0,
+              let located = cells(of: lower, within: 0...(rowCount - 1)),
               let last = cells(of: upper - 1, within: rows) else { return }
+        let first = located.row < rows.lowerBound ? (row: rows.lowerBound, columns: 0...0) : located
         func set(_ row: Int, _ columnRange: ClosedRange<Int>) {
             let index = row - rows.lowerBound
             guard bits.indices.contains(index) else { return }
